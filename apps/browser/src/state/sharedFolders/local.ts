@@ -1,6 +1,6 @@
 import type { BrowserState } from "../browser/store";
 import type { Tab, TabGroup } from "../browser/types";
-import { pinKeyOf } from "../browser/model";
+import { pinHomeOf, pinKeyOf } from "../browser/model";
 import { displayHostOf } from "../../lib/url";
 import { isShareableUrl } from "./remote";
 import type { BaseEntry, LocalEntry } from "./tree";
@@ -14,9 +14,7 @@ export type LocalFolder = {
   others: Map<string, string[]>;
 };
 
-export const linkUrl = (t: Tab) => t.pinnedUrl || t.url;
-
-export const linkName = (t: Tab, known: string | undefined) => t.customTitle?.trim() || known || t.title.trim() || displayHostOf(linkUrl(t)) || "Link";
+const linkName = (t: Tab, known: string | undefined) => t.customTitle?.trim() || known || t.title.trim() || displayHostOf(pinHomeOf(t)) || "Link";
 
 export const groupName = (g: TabGroup) => g.name.trim() || "Folder";
 
@@ -55,7 +53,7 @@ export function localFolder(s: Pick<BrowserState, "groups" | "tabs" | "windows">
       }
       const t = s.tabs[id];
       if (!t) continue;
-      const url = linkUrl(t);
+      const url = pinHomeOf(t);
       if (!isShareableUrl(url)) {
         extra.push(id);
         continue;

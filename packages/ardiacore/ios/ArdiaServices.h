@@ -29,15 +29,11 @@ typedef void (^ArdiaServiceReply)(id _Nullable value, NSString *_Nullable error)
 + (void)exportPasswords:(NSString *)profile path:(nullable NSString *)path reply:(ArdiaServiceReply)reply
     NS_SWIFT_NAME(exportPasswords(profile:path:reply:));
 
-typedef NS_ENUM(NSInteger, ArdiaProfileToggle) {
-  ArdiaProfileTogglePasswordsOffered,
-  ArdiaProfileToggleAddressesAutofilled,
-  ArdiaProfileToggleCardsAutofilled,
-};
++ (void)profileToggles:(NSString *)profile set:(nullable NSDictionary<NSString *, NSNumber *> *)values reply:(ArdiaServiceReply)reply
+    NS_SWIFT_NAME(profileToggles(profile:set:reply:));
 
-+ (BOOL)profileToggle:(ArdiaProfileToggle)toggle profile:(NSString *)profile NS_SWIFT_NAME(profileToggle(_:profile:));
-+ (void)setProfileToggle:(ArdiaProfileToggle)toggle value:(BOOL)value profile:(NSString *)profile
-    NS_SWIFT_NAME(setProfileToggle(_:value:profile:));
++ (void)preloadPages:(NSString *)profile reply:(ArdiaServiceReply)reply NS_SWIFT_NAME(preloadPages(profile:reply:));
++ (void)setPreloadPages:(BOOL)on profile:(NSString *)profile reply:(ArdiaServiceReply)reply NS_SWIFT_NAME(setPreloadPages(_:profile:reply:));
 
 + (void)addresses:(NSString *)profile reply:(ArdiaServiceReply)reply NS_SWIFT_NAME(addresses(profile:reply:));
 + (void)saveAddress:(NSDictionary<NSString *, id> *)address profile:(NSString *)profile reply:(ArdiaServiceReply)reply
@@ -89,7 +85,7 @@ typedef NS_ENUM(NSInteger, ArdiaProfileToggle) {
 + (void)tasks:(ArdiaServiceReply)reply NS_SWIFT_NAME(tasks(_:));
 + (void)components:(ArdiaServiceReply)reply NS_SWIFT_NAME(components(_:));
 
-+ (void)clearBrowsingData:(NSString *)profile types:(NSArray<NSString *> *)types since:(double)sinceMs completion:(void (^)(void))completion
++ (void)clearBrowsingData:(NSString *)profile types:(NSArray<NSString *> *)types since:(double)sinceMs completion:(void (^)(NSString * _Nullable))completion
     NS_SWIFT_NAME(clearBrowsingData(profile:types:since:completion:));
 
 @end

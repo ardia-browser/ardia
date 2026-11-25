@@ -1,19 +1,129 @@
-import { memo } from "react";
-import type { ViewStyle } from "react-native";
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { AccessibilityInfo, Animated, View, type ViewStyle } from "react-native";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { withLivePage } from "../../state/tabs/livePage";
 import { newTab } from "../../state/tabs/actions";
 import type { Tab } from "../../state/browser/types";
-import { Button, MouseArea, type ButtonHit } from "../ui";
+import { useScopedTheme } from "../ui/theme";
+import { noteStopBreathing } from "../../state/telemetry/stopBreathing";
+import { Breathe, Button, curve, drawnSymbol, MouseArea, reduceMotion, reduceMotionKnown, type ButtonHit } from "../ui";
 
-export type NavPlace = { style?: ViewStyle; hit?: ButtonHit };
+type NavPlace = { style?: ViewStyle; hit?: ButtonHit };
 import type { ClickModifiers } from "../../lib/keys";
 import { closeHistoryMenu, goBack, goForward, historyItems, toggleHistoryMenu } from "../../state/tabs/navigation";
 import { openModeFor, openUrl } from "../../state/bookmarks/actions";
 import type { ToolbarPalette } from "../ui/toolbarColors";
-import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
-import { GLYPH } from "./tokens";
+import { withShortcut } from "../../state/commands/commandShortcuts";
+import { GLYPH, HISTORY_GLYPH, HISTORY_BUTTON_MOTION, RELOAD_BUTTON_MOTION, SYMBOL_BOX } from "./tokens";
 import { showReloadMenu } from "../../state/site/reloadMenu";
+import { useStableHandler } from "./useStableHandler";
+
+const ICON_CENTER = { width: GLYPH, height: GLYPH, alignItems: "center" as const, justifyContent: "center" as const };
+const ICON_LAYER = { ...ICON_CENTER, position: "absolute" as const };
+const SYMBOL_FRAME = { width: SYMBOL_BOX, height: SYMBOL_BOX };
+
+const ReloadGlyphColor = createContext("");
+const ReloadGlyphBreathing = createContext(false);
+
+function ReloadSymbol({ name }: { name: "arrow.clockwise" | "xmark" }) {
+  useScopedTheme();
+  return drawnSymbol({ name, size: GLYPH, weight: "regular", color: useContext(ReloadGlyphColor), style: SYMBOL_FRAME });
+}
+
+function BreathingStop() {
+  return (
+    <Breathe
+      running={useContext(ReloadGlyphBreathing)}
+      cycleMs={RELOAD_BUTTON_MOTION.breatheCycle}
+      opacityRange={RELOAD_BUTTON_MOTION.breatheOpacity}
+      scaleRange={RELOAD_BUTTON_MOTION.breatheScale}
+      style={ICON_CENTER}
+    >
+      <ReloadSymbol name="xmark" />
+    </Breathe>
+  );
+}
+
+const ReloadGlyph = memo(function ReloadGlyph({ loading, color }: { loading: boolean; color: string }) {
+  const stateMotion = useRef(new Animated.Value(loading ? 1 : 0)).current;
+  const returnMotion = useRef(new Animated.Value(0)).current;
+  const previousLoading = useRef(loading);
+  const [motionReady, setMotionReady] = useState(() => reduceMotion() !== null);
+  const [motionReduced, setMotionReduced] = useState(() => reduceMotion() === true);
+  useEffect(() => {
+    let live = true;
+    void reduceMotionKnown.then((reduced) => {
+      if (!live) return;
+      setMotionReduced(reduced);
+      setMotionReady(true);
+    });
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", (reduced) => {
+      setMotionReduced(reduced);
+      setMotionReady(true);
+    });
+    return () => {
+      live = false;
+      subscription.remove();
+    };
+  }, []);
+  useEffect(() => {
+    const changed = previousLoading.current !== loading;
+    previousLoading.current = loading;
+    if (motionReduced) {
+      stateMotion.stopAnimation();
+      returnMotion.stopAnimation();
+      stateMotion.setValue(loading ? 1 : 0);
+      returnMotion.setValue(0);
+      return;
+    }
+    if (!changed) return;
+    stateMotion.stopAnimation();
+    if (loading) {
+      stateMotion.setValue(0);
+      returnMotion.stopAnimation();
+      returnMotion.setValue(0);
+      Animated.timing(stateMotion, { toValue: 1, duration: RELOAD_BUTTON_MOTION.stateIn, easing: curve.enter, useNativeDriver: true }).start();
+      return;
+    }
+    stateMotion.setValue(1);
+    returnMotion.setValue(1);
+    Animated.parallel([
+      Animated.timing(stateMotion, { toValue: 0, duration: RELOAD_BUTTON_MOTION.stateOut, easing: curve.enter, useNativeDriver: true }),
+      Animated.timing(returnMotion, { toValue: 0, duration: RELOAD_BUTTON_MOTION.stateOut, easing: curve.enter, useNativeDriver: true }),
+    ]).start();
+  }, [loading, motionReduced, returnMotion, stateMotion]);
+  const breathing = loading && motionReady && !motionReduced;
+  useEffect(() => {
+    if (!breathing) return;
+    noteStopBreathing(true);
+    return () => noteStopBreathing(false);
+  }, [breathing]);
+  const layers = useMemo(() => {
+    const reload = {
+      opacity: stateMotion.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+      transform: [
+        { scale: stateMotion.interpolate({ inputRange: [0, 1], outputRange: [1, RELOAD_BUTTON_MOTION.hiddenScale] }) },
+        { rotate: returnMotion.interpolate({ inputRange: [0, 1], outputRange: ["0deg", `${RELOAD_BUTTON_MOTION.returnRotation}deg`] }) },
+      ],
+    };
+    const stop = { opacity: stateMotion, transform: [{ scale: stateMotion.interpolate({ inputRange: [0, 1], outputRange: [RELOAD_BUTTON_MOTION.hiddenScale, 1] }) }] };
+    return (
+      <View style={ICON_CENTER}>
+        <Animated.View pointerEvents="none" style={[ICON_LAYER, reload]}>
+          <ReloadSymbol name="arrow.clockwise" />
+        </Animated.View>
+        <Animated.View pointerEvents="none" style={[ICON_LAYER, stop]}>
+          <BreathingStop />
+        </Animated.View>
+      </View>
+    );
+  }, [stateMotion, returnMotion]);
+  return (
+    <ReloadGlyphColor.Provider value={color}>
+      <ReloadGlyphBreathing.Provider value={breathing}>{layers}</ReloadGlyphBreathing.Provider>
+    </ReloadGlyphColor.Provider>
+  );
+});
 
 export const ReloadButton = memo(function ReloadButton({
   tab,
@@ -21,35 +131,40 @@ export const ReloadButton = memo(function ReloadButton({
   palette,
   place,
   onFocus,
+  reloadHint,
 }: {
   tab: Pick<Tab, "id" | "url" | "windowId">;
   loading: boolean;
   palette: ToolbarPalette;
   place?: NavPlace;
   onFocus: () => void;
+  reloadHint: string | undefined;
 }) {
-  const web = () => webviews.get(tab.id);
-  const reloadHint = useShortcutHint("reload");
+  const onPress = useStableHandler((m: ClickModifiers) => {
+    onFocus();
+    if (loading) return void webviews.get(tab.id)?.stopLoading();
+    if (m.metaKey) return void newTab(tab.windowId, { url: tab.url, background: true, openerId: tab.id });
+    void withLivePage(tab.id, (page) => (m.shiftKey ? page.forceReload() : page.reload()));
+  });
+  const onContextMenu = useStableHandler(() => {
+    onFocus();
+    void showReloadMenu(tab.id);
+  });
+  const color = tab.url ? palette.icon : palette.iconDisabled;
+  const glyph = useMemo(() => <ReloadGlyph loading={loading} color={color} />, [loading, color]);
   return (
     <Button variant="icon" toolbar
       style={place?.style}
       palette={palette}
-      icon={loading ? "xmark" : "arrow.clockwise"}
       glyph={GLYPH}
       hit={place?.hit}
       disabled={!tab.url}
-      onPress={(m) => {
-        onFocus();
-        if (loading) return void web()?.stopLoading();
-        if (m.metaKey) return void newTab(tab.windowId, { url: tab.url, background: true, openerId: tab.id });
-        void withLivePage(tab.id, (page) => (m.shiftKey ? page.forceReload() : page.reload()));
-      }}
-      onContextMenu={() => {
-        onFocus();
-        void showReloadMenu(tab.id);
-      }}
+      onPress={onPress}
+      onContextMenu={onContextMenu}
       tooltip={loading ? "Stop Loading This Page" : withShortcut("Refresh", reloadHint)}
-    />
+    >
+      {glyph}
+    </Button>
   );
 });
 
@@ -61,6 +176,8 @@ export const HistoryButton = memo(function HistoryButton({
   palette,
   place,
   onFocus,
+  closesTab = false,
+  historyHint,
 }: {
   tabId: string;
   windowId: string;
@@ -69,33 +186,89 @@ export const HistoryButton = memo(function HistoryButton({
   palette: ToolbarPalette;
   place?: NavPlace;
   onFocus: () => void;
+  closesTab?: boolean;
+  historyHint: string | undefined;
 }) {
-  const historyHint = useShortcutHint(direction < 0 ? "back" : "forward");
-  const openMenu = () => {
+  const handoffMotion = useRef(new Animated.Value(0)).current;
+  const [handingOff, setHandingOff] = useState(false);
+  const icon = direction < 0 ? "chevron.left" : "chevron.right";
+  const iconColor = disabled ? palette.iconDisabled : palette.icon;
+  const handoff = useMemo(
+    () => ({
+      fadeOut: handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.duration], outputRange: [1, 0] }),
+      fadeIn: handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.incomingDelay, HISTORY_BUTTON_MOTION.duration], outputRange: [0, 0, 1] }),
+      outX: handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.duration], outputRange: [0, direction * HISTORY_BUTTON_MOTION.travel] }),
+      inX: handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.duration], outputRange: [-direction * HISTORY_BUTTON_MOTION.travel, 0] }),
+    }),
+    [handoffMotion, direction],
+  );
+  useEffect(() => {
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", (reduced) => {
+      if (!reduced) return;
+      handoffMotion.stopAnimation();
+      handoffMotion.setValue(0);
+      setHandingOff(false);
+    });
+    return () => {
+      subscription.remove();
+      handoffMotion.stopAnimation();
+    };
+  }, [handoffMotion]);
+  const animateHandoff = () => {
+    if (reduceMotion() !== false) return;
+    handoffMotion.stopAnimation();
+    handoffMotion.setValue(0);
+    setHandingOff(true);
+    Animated.timing(handoffMotion, { toValue: HISTORY_BUTTON_MOTION.duration, duration: HISTORY_BUTTON_MOTION.duration, easing: curve.enter, useNativeDriver: true }).start(({ finished }) => {
+      if (!finished) return;
+      handoffMotion.setValue(0);
+      setHandingOff(false);
+    });
+  };
+  const openMenu = useStableHandler(() => {
     onFocus();
     toggleHistoryMenu(tabId, direction);
-  };
-  const onPress = async (m: ClickModifiers & { middle?: boolean }) => {
+  });
+  const onPress = useStableHandler(async (m: ClickModifiers & { middle?: boolean }) => {
     onFocus();
+    animateHandoff();
     closeHistoryMenu();
     const mode = openModeFor(m);
     if (mode === "current" || mode === "split") return direction < 0 ? goBack(tabId) : goForward(tabId);
     const [target] = await historyItems(tabId, direction, 1);
     if (target?.url) openUrl(target.url, windowId, mode);
-  };
+  });
+  const onMiddleClick = useStableHandler((e: ClickModifiers) => !disabled && void onPress({ ...e, middle: true }));
+  const face = useMemo(
+    () =>
+      handingOff ? (
+        <View style={ICON_CENTER}>
+          <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoff.fadeOut, transform: [{ translateX: handoff.outX }] }]}>
+            {drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })}
+          </Animated.View>
+          <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoff.fadeIn, transform: [{ translateX: handoff.inX }] }]}>
+            {drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })}
+          </Animated.View>
+        </View>
+      ) : (
+        drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })
+      ),
+    [handingOff, handoff, icon, iconColor],
+  );
   return (
-    <MouseArea style={place?.style} onMiddleClick={(e) => !disabled && void onPress({ ...e, middle: true })}>
+    <MouseArea style={place?.style} onMiddleClick={onMiddleClick}>
       <Button variant="icon" toolbar
         palette={palette}
-        icon={direction < 0 ? "chevron.left" : "chevron.right"}
         glyph={GLYPH}
         hit={place?.hit}
         disabled={disabled}
         onPress={onPress}
         onLongPress={openMenu}
         onContextMenu={openMenu}
-        tooltip={withShortcut(direction < 0 ? "Go Back" : "Go Forward", historyHint)}
-      />
+        tooltip={withShortcut(direction > 0 ? "Go Forward" : closesTab ? "Close Tab and Go Back" : "Go Back", historyHint)}
+      >
+        {face}
+      </Button>
     </MouseArea>
   );
 });

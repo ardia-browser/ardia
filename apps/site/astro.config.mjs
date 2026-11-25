@@ -73,11 +73,10 @@ function dist() {
 
 export default defineConfig({
   site: process.env.SITE_URL ?? "https://ardia.dev",
-  base: process.env.SITE_BASE ?? "/",
   output: "static",
   trailingSlash: "ignore",
   build: { inlineStylesheets: "always", assets: "_assets" },
-  image: { responsiveStyles: false },
+  image: { responsiveStyles: false, domains: ["avatars.githubusercontent.com"] },
   devToolbar: { enabled: false },
   integrations: [demo(), dist()],
 });

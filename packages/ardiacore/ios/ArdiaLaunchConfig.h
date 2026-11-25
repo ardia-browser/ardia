@@ -16,12 +16,12 @@ NS_SWIFT_NAME(LaunchConfig)
 @property(readonly) BOOL background;
 @property(readonly, nullable) NSNumber *remoteDebuggingPort;
 @property(readonly) BOOL prewarm;
+@property(readonly, nullable) NSString *feedbackURL;
 @property(readonly) BOOL isolated;
 @property(readonly) BOOL testInstance;
 
 - (nullable NSString *)instance:(NSString *)key NS_SWIFT_NAME(instance(_:));
 - (BOOL)instanceFlag:(NSString *)key NS_SWIFT_NAME(instanceFlag(_:));
-- (nullable NSNumber *)switchOverride:(NSString *)name NS_SWIFT_NAME(switchOverride(_:));
 - (BOOL)switchOn:(NSString *)name NS_SWIFT_NAME(switchOn(_:));
 - (BOOL)experimentOn:(NSString *)name NS_SWIFT_NAME(experimentOn(_:));
 - (BOOL)traced:(NSString *)area NS_SWIFT_NAME(traced(_:));

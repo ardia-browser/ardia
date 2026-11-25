@@ -91,11 +91,26 @@ ARDIACORE_EXPORT
                      origin:(nullable NSString*)origin
                       audio:(nullable NSString*)audio;
 @property(class, readonly) NSDictionary<NSString*, NSNumber*>* desktopCaptureAudio;
+@property(class) BOOL pagesPickDisplayMedia;
 - (void)offTheRecordProfileFor:(ArdiaCoreProfile*)profile
                     completion:(void (^)(ArdiaCoreProfile* _Nullable offTheRecord,
                                          NSString* _Nullable error))completion;
 @property(readonly) NSString* chromiumVersion;
 @property(readonly) NSString* keepAliveState;
+@property(readonly) NSString* pictureInPictureCloses;
+@end
+
+@interface ArdiaCoreEngine (IdleProfiles)
+- (nullable NSString*)sleepIdleProfile:(ArdiaCoreProfile*)profile
+                           hostedTabs:(NSArray<ArdiaCoreTab*>*)tabs;
+- (NSString*)unloadIdleProfile:(ArdiaCoreProfile*)profile;
+@end
+
+@interface ArdiaCoreEngine (CliHolds)
++ (NSInteger)holdTabsForCli:(NSArray<ArdiaCoreTab*>*)tabs
+                      until:(NSArray<NSNumber*>*)untilMs
+                       live:(NSArray<NSNumber*>*)live
+                     marked:(NSMutableIndexSet*)marked;
 @end
 
 @interface ArdiaCoreEngine (Tracing)
@@ -120,6 +135,7 @@ ARDIACORE_EXPORT
 @property BOOL passwordsOffered;
 @property BOOL addressesAutofilled;
 @property BOOL cardsAutofilled;
+@property BOOL preloadPages;
 - (void)clearBrowsingData:(NSArray<NSString*>*)types
                     since:(nullable NSDate*)since
                completion:(nullable void (^)(void))completion;
@@ -130,6 +146,12 @@ ARDIACORE_EXPORT
          maxBytes:(NSUInteger)maxBytes
        completion:(void (^)(NSData* _Nullable body))completion;
 @end
+
+typedef NS_ENUM(NSInteger, ArdiaCoreAdoption) {
+  ArdiaCoreAdoptionRefused,
+  ArdiaCoreAdoptionAdopted,
+  ArdiaCoreAdoptionBusy,
+};
 
 @protocol ArdiaCoreWindowDelegate <NSObject>
 @optional
@@ -151,13 +173,10 @@ ARDIACORE_EXPORT
 - (void)window:(ArdiaCoreWindow*)window
     autofillPrompt:(NSDictionary<NSString*, id>*)prompt
             forTab:(ArdiaCoreTab*)tab;
-- (void)window:(ArdiaCoreWindow*)window
-    passwordSavePromptForTab:(ArdiaCoreTab*)tab
-                    username:(NSString*)username
-                      origin:(NSString*)origin;
 - (void)window:(ArdiaCoreWindow*)window showRequestedActive:(BOOL)active;
 - (BOOL)windowShouldClose:(ArdiaCoreWindow*)window;
 - (void)windowDidCancelClose:(ArdiaCoreWindow*)window;
+- (void)windowCanTakeTabs:(ArdiaCoreWindow*)window;
 - (void)window:(ArdiaCoreWindow*)window
     confirmCloseWithDownloads:(int)count
                    completion:(void (^)(BOOL closeAnyway))completion;
@@ -191,7 +210,8 @@ ARDIACORE_EXPORT
 - (void)close;
 
 - (void)prepareProfile:(ArdiaCoreProfile*)profile;
-- (void)adoptTab:(ArdiaCoreTab*)tab;
+- (ArdiaCoreAdoption)adoptTab:(ArdiaCoreTab*)tab;
+- (ArdiaCoreAdoption)canAdoptTab:(ArdiaCoreTab*)tab;
 - (nullable ArdiaCoreTab*)restoreTab:(nullable NSString*)state
                           profile:(ArdiaCoreProfile*)profile
                        foreground:(BOOL)foreground;
@@ -200,6 +220,12 @@ ARDIACORE_EXPORT
                          foreground:(BOOL)foreground;
 - (void)placeTab:(ArdiaCoreTab*)tab index:(int)index pinned:(BOOL)pinned;
 @property(nonatomic) BOOL internal;
+@property(nonatomic) BOOL automation;
+@end
+
+@interface ArdiaCoreWindow (Picture)
++ (void)copyPictureOfChromeWindow:(NSWindow*)window
+                       completion:(void (^)(CGImageRef _Nullable picture))completion;
 @end
 
 @protocol ArdiaCoreTabDelegate <NSObject>
@@ -294,7 +320,10 @@ ARDIACORE_EXPORT
 - (void)deliverHeldPageMessages;
 @property(readonly) NSDictionary<NSString*, id>* securityInfo;
 - (BOOL)discard;
+- (NSArray<NSNumber*>*)sleepIfHiddenFor:(NSTimeInterval)seconds;
 @property(readonly) BOOL discarded;
+- (BOOL)unloadKeepingHistory;
+@property(readonly, nullable) NSString* discardReason;
 @property(nonatomic) BOOL frozen;
 - (void)resolveUnresponsive:(BOOL)terminate;
 - (BOOL)showAutofillSuggestions:(BOOL)passwords;
@@ -335,6 +364,7 @@ ARDIACORE_EXPORT
 - (BOOL)executeChromeCommand:(int)command;
 - (void)openBlockedPopup:(NSString*)popupId always:(BOOL)always;
 - (void)showDevTools;
+- (void)showDevToolsPanel:(NSString*)panel;
 - (void)closeDevTools;
 @property(readonly, nullable) NSView* devToolsView;
 - (void)devToolsLayoutForSize:(NSSize)size
@@ -352,13 +382,13 @@ ARDIACORE_EXPORT
 - (void)copyPicture:(NSTimeInterval)timeout completion:(void (^)(CGImageRef _Nullable picture))completion;
 - (BOOL)stopCapture;
 - (void)noteShownByHost:(BOOL)shown;
+- (void)noteInShownSlot;
 - (void)exitFullscreen;
 - (void)exitExclusiveAccess;
 - (void)tracePictureInPicture:(NSString*)line withInputs:(BOOL)withInputs;
 - (void)exitPictureInPicture;
 - (void)enterPictureInPictureForClickAt:(NSTimeInterval)clickTime
                              completion:(void (^)(NSString* route, BOOL opened))completion;
-- (BOOL)canShareThisTabInsteadFor:(ArdiaCoreTab*)capturer;
 - (BOOL)shareThisTabInsteadFor:(ArdiaCoreTab*)capturer;
 - (BOOL)showCastDialog;
 - (BOOL)devShowBluetoothChooser:(BOOL)unauthorized;

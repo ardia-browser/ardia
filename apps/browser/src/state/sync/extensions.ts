@@ -3,6 +3,9 @@ import { applyExtensionsSync, extensionsSyncState, onExtensionsSync, type Extens
 import { readDocument, writeDocument } from "../../platform/documents";
 import { extensionsAdapter, type ExtensionChange, type ExtensionIntent, type ExtensionsAdapter, type LocalExtensions } from "../../platform/sync";
 import { engineProfile } from "../browser/model";
+import { profileOpened } from "../profiles/profileLoading";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 
 const DOC = "sync-extensions.json";
@@ -53,11 +56,12 @@ export const onSyncedExtensionChange = (listener: (profile: string) => void) => 
 async function change(profile: string, c: ExtensionChange): Promise<boolean> {
   const apply: ExtensionsSyncApply =
     c.kind === "cancel" ? { id: c.id, record: { removed: true } } : { id: c.id, record: c.record, ...(c.approval ? { approval: c.approval } : {}) };
+  const consent = consentToken();
   try {
     await applyExtensionsSync(profile, apply);
     return true;
   } catch (error) {
-    console.warn(`[sync] extension ${c.kind} ${c.id} failed`, error);
+    warnFor(consent, `[sync] extension ${c.kind} ${c.id} failed`, error);
     return false;
   } finally {
     for (const listener of changeListeners) listener(profile);
@@ -67,7 +71,7 @@ async function change(profile: string, c: ExtensionChange): Promise<boolean> {
 export function extensionsAdapterFor(profileId: string): ExtensionsAdapter {
   const profile = () => engineProfile(useBrowser.getState(), profileId);
   return extensionsAdapter({
-    read: () => readLocal(profile()),
+    read: async () => (profileOpened(profile()) ? readLocal(profile()) : null),
     change: (c) => change(profile(), c),
     intents: () => ({ ...stored().profiles[profile()] }),
     settleIntents: (published) => {

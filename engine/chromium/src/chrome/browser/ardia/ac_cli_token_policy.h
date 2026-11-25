@@ -6,11 +6,11 @@
 #include <memory>
 
 #include "ardia/core/ac_content_hooks.h"
+#include "base/values.h"
 
 namespace content {
 class DevToolsAgentHost;
 class DevToolsAgentHostClient;
-class RenderFrameHost;
 }
 
 namespace ardia {
@@ -19,11 +19,9 @@ std::unique_ptr<ArdiaDevToolsTokenClient> CreateTokenClient(
     content::DevToolsAgentHostClient* client,
     content::DevToolsAgentHost* host);
 
-bool TokenClientMayAttach(content::DevToolsAgentHostClient* root_client,
-                          content::DevToolsAgentHost* host);
+bool IsTokenClient(content::DevToolsAgentHostClient* root_client);
 
-bool TokenClientMayInput(content::DevToolsAgentHostClient* root_client,
-                         content::RenderFrameHost* frame);
+base::DictValue TokenCommandTotals();
 
 }
 

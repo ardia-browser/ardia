@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, test } from "node:test";
 
 globalThis.__DEV__ = false;
 const stub = await import("../../test-native/index.ts");
@@ -10,20 +10,21 @@ stub.docs.set("telemetry-queue.json", JSON.stringify({ version: 1, events: [kept
 globalThis.fetch = async () => ({ status: 200 });
 
 const client = await import("./client.ts");
+after(() => client.setSharing(false, "settings"));
 
 test("sharing saved without an install id reads as not sharing, so neither events nor logs are queued", () => {
   client.loadChoice();
   assert.equal(client.isSharing(), false);
-  client.queueLog("error", "should stay local", {});
-  client.capture("should_stay_local");
+  client.queueLog("error", "should stay local", {}, client.consentNow());
+  client.capture("should_stay_local", {}, client.consentNow());
   assert.deepEqual(client.devState().queued, { events: 0, logs: 0 });
 });
 
-test("a damaged queue on disk keeps its well-formed events and drops the rest without throwing", async () => {
+test("a damaged queue on disk from before sharing was turned on is dropped without throwing", async () => {
   client.setSharing(true, "settings");
-  assert.deepEqual(client.devState().queued, { events: 2, logs: 0 });
+  assert.deepEqual(client.devState().queued, { events: 1, logs: 0 });
   await client.saveQueueNow();
   const saved = JSON.parse(stub.docs.get("telemetry-queue.json"));
-  assert.deepEqual(saved.events.map((e) => (e.uuid === "kept" ? "kept" : e.event)), ["kept", "sharing_turned_on"]);
+  assert.deepEqual(saved.events.map((e) => (e.uuid === "kept" ? "kept" : e.event)), ["sharing_turned_on"]);
   assert.deepEqual(saved.logs, []);
 });

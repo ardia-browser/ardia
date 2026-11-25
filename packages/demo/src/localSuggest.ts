@@ -17,7 +17,7 @@ const SUGGEST_HOSTS = new Set(
   }),
 );
 
-export function localSuggestions(raw: string): string[] {
+function localSuggestions(raw: string): string[] {
   const query = raw.trim().toLowerCase();
   if (!query) return [];
   const math = calculate(raw);

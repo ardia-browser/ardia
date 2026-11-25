@@ -92,20 +92,22 @@ test("one drop vocabulary: each zone gives the same drop to the sidebar and the 
   assert.deepEqual(drops.resolveDrop(S(), { kind: "group", groupId: g }, { zone: "list", beforeId: b }), { type: "group", groupId: g, placement: { pinned: false, parentId: null, beforeId: b } });
   assert.deepEqual(drops.resolveDrop(S(), { kind: "live" }, { zone: "pinnedRows", beforeId: null }), { type: "live" });
   assert.equal(drops.resolveDrop(S(), { kind: "split" }, { zone: "tiles", beforeId: null }).type, "none", "a split never becomes a tile");
-  assert.equal(drops.resolveDrop(S(), { kind: "split" }, { zone: "onto", targetId: b }).type, "none");
+  assert.deepEqual(drops.resolveDrop(S(), tab, { zone: "split", targetId: b, side: "left" }), { type: "split", targetId: b, side: "left" });
+  assert.equal(drops.resolveDrop(S(), { kind: "split" }, { zone: "split", targetId: b, side: "right" }).type, "none", "a split row never splits another row");
+  assert.equal(drops.resolveDrop(S(), { kind: "tab", external: true }, { zone: "split", targetId: b, side: "right" }).type, "none", "a dropped file never splits");
+  assert.equal(drops.resolveDrop(S(), { kind: "tab", folderId: "f" }, { zone: "split", targetId: b, side: "right" }).type, "none", "a folder tile never splits");
   assert.equal(drops.resolveDrop(S(), { kind: "tab", external: true }, { zone: "folder", ontoId: b }).type, "none");
   assert.equal(drops.resolveDrop(S(), { kind: "live" }, { zone: "list", beforeId: null }).type, "none");
   assert.equal(drops.resolveDrop(S(), { kind: "group", groupId: g }, { zone: "group", groupId: g, beforeId: null }).type, "none", "a group can't nest in itself");
   assert.equal(drops.resolveDrop(S(), tab, null).type, "none");
 });
 
-test("dropping a tab onto another groups them, and an unchanged drop reports nothing moved", () => {
+test("a split drop never groups or moves tabs through the store's drop, and an unchanged drop reports nothing moved", () => {
   reset();
   const { w, ids: [a, b, c] } = windowWith("a", "b", "c");
-  assert.equal(S().dropTabs([c], drops.resolveDrop(S(), { kind: "tab" }, { zone: "onto", targetId: a })), true);
-  const group = Object.values(S().groups)[0];
-  assert.deepEqual(group.tabIds, [a, c]);
-  assert.deepEqual(S().windows[w].tabIds, [a, c, b]);
+  assert.equal(S().dropTabs([c], drops.resolveDrop(S(), { kind: "tab" }, { zone: "split", targetId: a, side: "right" })), false);
+  assert.deepEqual(Object.values(S().groups), []);
+  assert.deepEqual(S().windows[w].tabIds, [a, b, c]);
   assert.equal(S().dropTabs([c], drops.NO_DROP), false);
 });
 
@@ -127,9 +129,47 @@ test("clicks: ⌘ adds to the selection from the shown tab, ⇧ selects the rang
   assert.deepEqual(S().selection[w], [], "⌘-clicking the shown tab alone selects nothing");
 });
 
+test("⇧-click ranges from the shown tab once it changed without a click: never from a tile clicked before (#1074)", () => {
+  const ways = {
+    "a keyboard switch": (w, u) => S().activate(u),
+    "⌘W on the tile": (w, u, t1) => S().closeTab(t1),
+    "⌘T": (w) => S().newTab(w, { url: "https://n.com/" }),
+  };
+  for (const [way, showAnother] of Object.entries(ways)) {
+    const { w, ids } = dockWith();
+    const [t1, , , , , u] = ids;
+    const v = S().newTab(w, { url: "https://v.com/", background: true });
+    const x = S().newTab(w, { url: "https://x.com/", background: true });
+    S().clickTab(w, t1);
+    showAnother(w, u, t1);
+    const shown = S().windows[w].activeTabIds[S().windows[w].profileId];
+    assert.ok(shown !== t1 && !S().tabs[shown].pin, `${way} shows a regular tab`);
+    const target = shown === x ? u : x;
+    S().clickTab(w, target, { shiftKey: true });
+    const view = S().windows[w].tabIds;
+    const [from, to] = [view.indexOf(shown), view.indexOf(target)].sort((a, b) => a - b);
+    assert.deepEqual(S().selection[w].map(host), view.slice(from, to + 1).map(host), `after ${way}`);
+    assert.ok(!S().selection[w].some((id) => S().tabs[id].pin), `no pinned tab after ${way}`);
+    S().clickTab(w, v, { shiftKey: true });
+    assert.ok(S().selection[w].includes(shown) && S().selection[w].includes(v), `the next ⇧-click keeps the same start after ${way}`);
+  }
+});
+
 const shape = (w) => S().windows[w].tabIds.map((id) => {
   const g = Object.values(S().groups).find((x) => x.tabIds.includes(id));
   return g ? `${host(id)}{${g.name}}` : host(id);
+});
+
+test("⇧-click after switching away and back by keyboard ranges from the shown tab, not from a ⌘-click made before", () => {
+  reset();
+  const { w, ids: [a, , c, d, e] } = windowWith("a", "b", "c", "d", "e");
+  S().clickTab(w, a);
+  S().clickTab(w, d, { metaKey: true });
+  S().setSelection(w, []);
+  S().activate(e);
+  S().activate(a);
+  S().clickTab(w, c, { shiftKey: true });
+  assert.deepEqual(S().selection[w].map(host), ["a", "b", "c"]);
 });
 
 test("⌃⇧⇞/⇟: a tab steps over a whole group, a member steps inside its group and leaves it at the edge, a split moves as one", () => {
@@ -191,4 +231,20 @@ test("⌃⇧⇞/⇟: a pinned row steps over a pinned group beside it, one block
   assert.deepEqual(pinnedArea(), ["g{G}", "r2", "r1"]);
   S().moveTabBy(r2, -1);
   assert.deepEqual(pinnedArea(), ["r2", "g{G}", "r1"]);
+});
+
+test("a ⇧-click that ranges from the shown tab because it changed since the last click counts as one (#1074 telemetry)", async () => {
+  const { clickTab } = await import("../sidebar/actions.ts");
+  const { devTabPresses } = await import("../telemetry/tabPresses.ts");
+  reset();
+  const { w, ids: [a, , c, , e] } = windowWith("a", "b", "c", "d", "e");
+  const before = devTabPresses();
+  clickTab(w, a);
+  S().activate(e);
+  clickTab(w, c, { shiftKey: true });
+  assert.deepEqual(S().selection[w].map(host), ["c", "d", "e"]);
+  clickTab(w, a, { shiftKey: true });
+  const after = devTabPresses();
+  assert.equal(after.range_selects - before.range_selects, 2);
+  assert.equal(after.range_from_shown - before.range_from_shown, 1, "only the first ⇧-click came after the shown tab changed");
 });

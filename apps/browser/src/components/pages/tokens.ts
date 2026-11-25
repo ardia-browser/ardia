@@ -2,7 +2,7 @@ import { duration } from "../ui/motion";
 import type { Theme } from "../ui/theme";
 import { capsule, font, space, withAlpha, type Space } from "../ui/tokens";
 
-export type PagesColors = { rowSelected: string; dropTarget: string };
+type PagesColors = { rowSelected: string; dropTarget: string };
 
 const ROW_SELECTED_ALPHA = { dark: 0x59 / 255, light: 0x33 / 255 };
 const DROP_TARGET_ALPHA = 0x40 / 255;
@@ -17,7 +17,7 @@ export function pagesColors(theme: Theme): PagesColors {
   return colors;
 }
 
-export const pageType = { fileName: font.body, dayHeader: font.small } as const;
+export const pageType = { get fileName() { return font.body; }, get dayHeader() { return font.small; } } as const;
 
 export const pageHeader = { sideWidth: 200, searchMaxWidth: 480 } as const;
 

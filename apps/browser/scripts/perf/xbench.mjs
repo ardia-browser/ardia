@@ -6,7 +6,7 @@
 //
 //   node apps/browser/scripts/perf/xbench.mjs run    --out <dir> [options]   measure (resumable: done items are skipped)
 //   node apps/browser/scripts/perf/xbench.mjs check  --out <dir> [options]   one quick look per browser, nothing kept
-//   node apps/browser/scripts/perf/xbench.mjs report --out <dir> [--json <file>] [--md <file>]
+//   node apps/browser/scripts/perf/xbench.mjs report --out <dir> [--json <file>] [--md <file>] [--rivals-from <bench.json>]
 //   node apps/browser/scripts/perf/xbench.mjs clean  --out <dir>             quit leftovers, unregister the copies, delete runs
 //   node apps/browser/scripts/perf/xbench.mjs signin --browsers dia --base dia=<home>   open the browser on that HOME, in
 //                        view, for the owner to sign in by hand; returns when they quit it (or at --deadline)
@@ -24,6 +24,10 @@
 //     --idle <secs>        each idle window (default 60)
 //     --port <n>           the instances' CDP port (default 9461). One instance runs at a time
 //     --page-port <n>      the test pages' server port (default 9462); templates restore pages from it, so keep it fixed
+//     --template-cache <dir>  where finished template profiles are kept between out dirs (default <apps>/.templates),
+//                          keyed by the copy's version, build, code signature hash, bundled uBO and JS bundle, the page
+//                          port, window, screen height, --env and --launch-tab; a browser with --base is never cached
+//     --template-max-age <hours>  a cached template older than this is made again (default 12; 0 never caches)
 //     --deadline <mins>    stop starting items after this long (default 100); run again to resume
 //     --gate away|off      away (default): every item waits until the owner is away (screen locked with no input for
 //                          60 s, or no keyboard, mouse or trackpad input for --away secs) and is thrown away, its browser quit at once, the
@@ -40,6 +44,11 @@
 //     --dmg <name>=<file|url>  repeatable: the download whose size the size row reports
 //     --version-label <name>=<text>  report: show this instead of the app's version (a dev build, say)
 //     --json <file>, --md <file>  report: where the results JSON and the markdown table go (default <out>/bench.json, stdout)
+//     --rivals-from <file> report: measure only some browsers (--browsers ardia) and take every other browser's rows from
+//                          this bench.json, each keeping its own version and measured date. Refuses when the machine's
+//                          model or chip, or the harness revision, differ from the file's; warns (never fails) when a kept
+//                          rival is over 60 days old or the copy in /Applications is a new major or minor version
+//     --force              report: merge with --rivals-from despite a different machine or harness (recorded as forced)
 //
 // What every instance gets: its own copy of a template profile (made once per browser by one launch that opens the
 // test page, settles 90 s and quits), HOME and CFFIXED_USER_HOME pointed into it (nothing reaches the real
@@ -61,13 +70,18 @@
 //   download, on disk             size     the DMG's bytes; du of the bundle
 // Results: <out>/samples.jsonl (one line per finished item), report → bench.json and the table.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { accessSync, appendFileSync, constants as fsConstants, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { accessSync, appendFileSync, constants as fsConstants, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { cpus, loadavg, totalmem } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { appEnv, launchVariables, mergeLaunchEnv } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
+import { mergeRivals, rivalWarnings, RivalsRefused } from "./xbench-rivals.mjs";
+import { appIdentity, copyCachedTemplate, fileSha256, keyProblems, lookupTemplate, storeTemplate, TEMPLATE_MAX_AGE_HOURS, templateKey } from "./template-cache.mjs";
+import { templateSizes } from "./template-state.mjs";
+import { median } from "./median.mjs";
+import { kindOf, processRows } from "./processes.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../../..");
@@ -84,6 +98,8 @@ const { values: opt, positionals } = parseArgs({
     idle: { type: "string", default: "60" },
     port: { type: "string", default: "9461" },
     "page-port": { type: "string", default: "9462" },
+    "template-cache": { type: "string" },
+    "template-max-age": { type: "string", default: String(TEMPLATE_MAX_AGE_HOURS) },
     deadline: { type: "string", default: "100" },
     gate: { type: "string", default: "away" },
     window: { type: "string", default: "40,80" },
@@ -96,6 +112,8 @@ const { values: opt, positionals } = parseArgs({
     dmg: { type: "string", multiple: true, default: [] },
     json: { type: "string" },
     md: { type: "string" },
+    "rivals-from": { type: "string" },
+    force: { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -105,18 +123,12 @@ if (opt.help || !positionals[0]) {
   process.exit(opt.help ? 0 : 64);
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.error(`[xbench ${new Date().toISOString().slice(11, 19)}]`, ...a);
-const median = (xs) => {
-  const s = xs.filter(Number.isFinite).sort((a, b) => a - b);
-  if (!s.length) return NaN;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 const out = resolve(opt.out);
 const port = +opt.port;
 const WIN = { x: +opt.window.split(",")[0], y: +opt.window.split(",")[1], w: 1280, h: 800 };
 const SETTLE_TEMPLATE_MS = 90_000;
+const HARNESS = 1;
 
 const BROWSERS = {
   ardia: { name: "Ardia", bundle: "ardia/Ardia.app", hidden: true },
@@ -354,20 +366,6 @@ class Cdp {
     this.root?.close();
     this.root = null;
   }
-}
-
-function processRows() {
-  return execFileSync("ps", ["-axww", "-o", "pid=,ppid=,command="], { encoding: "utf8", maxBuffer: 64 << 20 })
-    .split("\n").map((l) => l.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean)
-    .map(([, pid, ppid, command]) => ({ pid: +pid, ppid: +ppid, command }));
-}
-
-function kindOf(command) {
-  const type = command.match(/--type=(\S+)/)?.[1];
-  if (!type) return /crashpad_handler/.test(command) ? "crashpad" : "browser";
-  if (type === "utility") return `utility:${command.match(/--utility-sub-type=([\w.]+)/)?.[1]?.split(".")[0] ?? "?"}`;
-  if (type === "renderer" && command.includes("--extension-process")) return "extension";
-  return type;
 }
 
 function info(app) {
@@ -616,8 +614,37 @@ class PrefsGuard {
   }
 }
 
+const templateCacheDir = () => resolve(opt["template-cache"] ?? join(opt.apps, ".templates"));
+const cachedTemplateSizes = (name) => (dir) => (isArdia(name) ? templateSizes(join(dir, "home/data")) : null);
+const validTemplate = (record) => (record?.pages?.length ? [] : ["it restores no page"]);
+
+function cachedTemplateKey(name) {
+  if (!(+opt["template-max-age"] > 0) || opt.base.some((b) => b.startsWith(`${name}=`))) return null;
+  const app = bundleOf(name);
+  const identity = appIdentity(app);
+  const key = templateKey({
+    identity: { ...identity, ubo: identity.ubo ?? "none" }, bundleSha: fileSha256(join(app, "Contents/Resources/main.jsbundle")) ?? "none",
+    pagePort: +opt["page-port"], recipe: `xbench-${name}`, harness: HARNESS, launchTab: opt["launch-tab"], window: opt.window,
+    screen: probe("screen").h, env: opt.env.filter((e) => e.startsWith(`${name}=`)).join(" ") || "none",
+  });
+  const problems = keyProblems(key);
+  if (problems.length) log(`${name}: not caching its template (${problems.join("; ")})`);
+  return problems.length ? null : key;
+}
+
 async function makeTemplate(name) {
   const dir = templateDir(name);
+  const key = cachedTemplateKey(name);
+  if (key) {
+    const checks = { validate: validTemplate, sizesOf: cachedTemplateSizes(name) };
+    const found = lookupTemplate(templateCacheDir(), key, { maxAgeHours: +opt["template-max-age"], ...checks });
+    const copied = found.hit ? copyCachedTemplate(found, dir, checks) : null;
+    if (copied?.ok) {
+      log(`${name} template: cached ${found.entry.made} in ${found.dir}`);
+      return;
+    }
+    log(`${name}: making its template (${(copied?.problems ?? found.problems).join("; ")})`);
+  }
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   const baseHome = opt.base.find((b) => b.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -645,6 +672,10 @@ async function makeTemplate(name) {
   if (isArdia(name)) fixArdiaSession(join(dir, "home/data/session.json"));
   for (const f of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) rmSync(join(dir, "home/udd", f), { force: true });
   log(`${name} template: ${version.Browser}`);
+  if (key) {
+    const record = { ...JSON.parse(readFileSync(join(dir, "template.json"), "utf8")), sizes: cachedTemplateSizes(name)(dir) };
+    log(`${name} template stored in ${storeTemplate(templateCacheDir(), key, dir, record)}`);
+  }
 }
 
 function fixArdiaSession(file) {
@@ -692,11 +723,39 @@ async function launchItem(name, item, kind) {
   } finally {
     await app.quit();
     keepLogs(item, dir);
-    rmSync(dir, { recursive: true, force: true });
+    await removeRunDir(dir);
   }
 }
 
 const STEADY_MS = 120_000;
+
+function pidsUsing(dir) {
+  const found = spawnSync("pgrep", ["-f", dir], { encoding: "utf8" }).stdout.split("\n").map(Number).filter((pid) => pid && pid !== process.pid);
+  return [...new Set(found)];
+}
+
+async function removeRunDir(dir) {
+  for (const signal of ["SIGTERM", "SIGKILL"]) {
+    for (const pid of pidsUsing(dir)) try {
+      process.kill(pid, signal);
+    } catch {}
+    for (const end = Date.now() + 3000; Date.now() < end && pidsUsing(dir).length; ) await sleep(200);
+  }
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (e) {
+      if (e.code !== "ENOTEMPTY" && e.code !== "EBUSY" && e.code !== "EACCES" && e.code !== "EPERM") throw e;
+      spawnSync("chmod", ["-R", "u+w", dir], { stdio: "ignore" });
+      await sleep(300);
+    }
+  }
+  const aside = join(out, "runs-aside", `${dir.split("/").pop()}-${Date.now()}`);
+  mkdirSync(dirname(aside), { recursive: true });
+  renameSync(dir, aside);
+  log(`${dir} couldn't be removed after its browser quit; moved to ${aside}`);
+}
 
 function keepLogs(item, dir) {
   const log = join(dir, "home/data/Chromium/chrome_debug.log");
@@ -835,7 +894,7 @@ async function sessionItem(name, item) {
   } finally {
     await app.quit();
     keepLogs(item, dir);
-    rmSync(dir, { recursive: true, force: true });
+    await removeRunDir(dir);
   }
   return r;
 }
@@ -1081,6 +1140,7 @@ function report(names) {
   const result = {
     date: new Date().toISOString().slice(0, 10),
     machine: machine(),
+    harness: HARNESS,
     browsers,
     rows,
     method: "docs/perf/vs-browsers.md",
@@ -1255,7 +1315,27 @@ if (command === "report") {
     row.browsers = Object.fromEntries(Object.entries(row.browsers).map(([n, b]) => [keyOf(n), b]));
     row.best = row.best && keyOf(row.best);
   }
-  writeFileSync(file, JSON.stringify(json, null, 2) + "\n");
+  let written = json;
+  if (opt["rivals-from"]) {
+    const stored = JSON.parse(readFileSync(resolve(opt["rivals-from"]), "utf8"));
+    try {
+      written = mergeRivals(json, stored, { force: opt.force });
+    } catch (e) {
+      if (!(e instanceof RivalsRefused)) throw e;
+      log(e.message);
+      process.exit(65);
+    }
+    if (written.forced) log(`merged with --force despite: ${written.forced.join("; ")}`);
+    if (written.machine.macOS !== stored.machine?.macOS) log(`note: macOS was ${stored.machine?.macOS} for the stored rivals, ${written.machine.macOS} now`);
+    for (const [key, b] of Object.entries(written.browsers)) log(`${b.name} ${b.version}: measured ${b.measured}${key in json.browsers ? " (this run)" : " (kept)"}`);
+    const installed = Object.fromEntries(Object.keys(written.browsers).filter((k) => !(k in json.browsers) && spec(k))
+      .map((k) => [k, join("/Applications", basename(spec(k).bundle), "Contents/Info.plist")]).filter(([, plist]) => existsSync(plist))
+      .map(([k, plist]) => [k, spawnSync("plutil", ["-extract", "CFBundleShortVersionString", "raw", plist], { encoding: "utf8" }).stdout.trim()]));
+    const warnings = rivalWarnings(written, { installed });
+    for (const w of warnings) log(`full rerun due: ${w}`);
+    if (!warnings.length) log("stored rivals are current: no full rerun due");
+  }
+  writeFileSync(file, JSON.stringify(written, null, 2) + "\n");
   if (opt.md) writeFileSync(resolve(opt.md), md);
   else console.log(md);
   log(`wrote ${file}`);

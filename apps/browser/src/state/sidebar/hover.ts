@@ -1,13 +1,27 @@
 import { hoverHeld } from "../app/transientUi";
+import { noteTabHoverCardShown } from "../telemetry/hoverCardCounts";
+import { consentToken } from "../telemetry/client";
+import { noteSidebarHoverHeld, noteSidebarScrolled, noteSidebarTeardownHeld } from "../telemetry/sidebarScrollCounts";
+import { sidebarSliding, useDockMotion } from "../windows/dockMotion";
 import { cardReach, pointInRect, type Point, type Rect } from "./hoverAim";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
+import { releaseLaunchRows } from "./launchRows";
 
 export type HoverPointerEvent = { nativeEvent?: { screenX?: unknown; screenY?: unknown } } | undefined;
 type Row = { windowId: string; id: string };
 type Waiting = { windowId: string; target: Target | null; arrive: () => void };
 type Card = { frame: Rect | null; pointerOn: boolean; exit: Point | null; waiting: Waiting | null; held: boolean };
 
-const DELAY_MS = { show: 500, hide: 160, aim: 200 };
+const DELAY_MS = { show: 800, hide: 160, aim: 200 };
+const EXIT_SLOP = 1;
+const PEEK_ARRIVAL_MS = 400;
+const peekArrivedAt = new Map<string, number>();
+useDockMotion.subscribe((m, prev) => {
+  if (m.peeks === prev.peeks) return;
+  for (const id of Object.keys(m.peeks)) if (!(id in prev.peeks)) peekArrivedAt.set(id, Date.now());
+  for (const id of [...peekArrivedAt.keys()]) if (!(id in m.peeks)) peekArrivedAt.delete(id);
+});
+const sliding = (windowId: string) => sidebarSliding(windowId) || Date.now() - (peekArrivedAt.get(windowId) ?? -Infinity) < PEEK_ARRIVAL_MS;
 const timers: Record<keyof typeof DELAY_MS, ReturnType<typeof setTimeout> | undefined> = { show: undefined, hide: undefined, aim: undefined };
 const card: Card = { frame: null, pointerOn: false, exit: null, waiting: null, held: false };
 const contentHeights = new Map<string, number>();
@@ -100,6 +114,15 @@ export function setRowsCovered(windowId: string, on: boolean) {
 
 export const rowsCovered = (windowId: string) => covered.has(windowId);
 
+type PanelDraw = { open: boolean; newTab: boolean; centred: boolean; hasActiveTab: boolean; sidebarAnchor: boolean };
+
+export const panelCoversRows = (p: PanelDraw) => p.open && p.hasActiveTab && !p.newTab && !p.centred && p.sidebarAnchor;
+
+export function holdRowsCovered(windowId: string, on: boolean) {
+  setRowsCovered(windowId, on);
+  return () => setRowsCovered(windowId, false);
+}
+
 export function watchCovered(windowId: string, refresh: () => void, on: boolean) {
   let rows = pointedRows.get(windowId);
   if (on) {
@@ -114,34 +137,37 @@ export function suppressHover(value: boolean) {
 }
 
 async function show(windowId: string, target: Target, mine: number) {
+  const consent = consentToken();
   const anchor = await measureRow(windowId, target.id);
-  if (mine !== ticket || suppressed || !anchor || hoverHeld(windowId)) return;
+  if (mine !== ticket || suppressed || !anchor || hoverHeld(windowId) || sliding(windowId)) return;
   if (card.pointerOn && sidebarUi().hover) return;
   card.exit = null;
   setSidebarUi({ hover: { windowId, ...target, anchor } });
+  if (target.kind === "tab" || target.kind === "folder") noteTabHoverCardShown(consent);
 }
 
-export function hoverEnter(windowId: string, target: Target) {
-  if (suppressed || hoverHeld(windowId)) return;
+function hoverEnter(windowId: string, target: Target) {
+  if (suppressed || hoverHeld(windowId) || sliding(windowId)) return;
   stop("show", "hide", "aim");
   card.waiting = null;
   const current = sidebarUi().hover;
   owner = { windowId, id: target.id };
   if (current?.id === target.id) return;
+  if (current && !card.held) hideCard();
   const mine = ++ticket;
-  if (current) void show(windowId, target, mine);
-  else start("show", () => void show(windowId, target, mine));
+  start("show", () => void show(windowId, target, mine));
 }
 
-export function hoverLeave(from?: unknown) {
+function hoverLeave(from?: unknown, now = false) {
   if (card.held || (typeof from === "string" && from !== owner?.id)) return;
   owner = null;
   ticket++;
   stop("show", "hide");
-  start("hide", hideCard);
+  if (now) hideCard();
+  else start("hide", hideCard);
 }
 
-export const keepHover = () => stop("hide", "aim");
+const keepHover = () => stop("hide", "aim");
 
 export function holdHover(on: boolean) {
   if (on === card.held) return;
@@ -184,14 +210,78 @@ export function rowEntered(windowId: string, target: Target | null, event: Hover
 export function rowShown(windowId: string, target: Target | null) {
   underPointer = target?.id ?? null;
   if (target) hoverEnter(windowId, target);
+  else hoverLeave(undefined, true);
+}
+
+function leftAwayFromCard(): boolean {
+  const hover = sidebarUi().hover;
+  if (!hover || !card.exit || !card.frame) return false;
+  const { x, y, width } = hover.anchor;
+  const cardOnRight = card.frame.x >= x + width;
+  const behind = cardOnRight ? card.exit.x <= x + EXIT_SLOP : card.exit.x >= x + width - EXIT_SLOP;
+  return behind || card.exit.y <= y + EXIT_SLOP;
 }
 
 export function rowLeft(windowId: string, target: Target | null, event: HoverPointerEvent, onPage: boolean) {
   forgetWaiting(windowId, target?.id);
   if (underPointer === target?.id) underPointer = null;
-  if (target && isShown(windowId, target.id)) card.exit = pointerIn(windowId, event);
-  if (target && onPage) hoverLeave(target.id);
+  const shownHere = !!target && isShown(windowId, target.id);
+  if (shownHere) card.exit = pointerIn(windowId, event);
+  if (target && onPage) hoverLeave(target.id, shownHere && leftAwayFromCard());
 }
+
+const SCROLL_SETTLE_MS = 150;
+const scrolledAt = new Map<string, number>();
+const settleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const heldEnters = new Map<string, Map<object, () => void>>();
+
+const stillFor = (windowId: string) => Date.now() - (scrolledAt.get(windowId) ?? -Infinity);
+
+function settleWhenStill(windowId: string) {
+  const left = SCROLL_SETTLE_MS - stillFor(windowId);
+  if (left > 0) return void settleTimers.set(windowId, setTimeout(() => settleWhenStill(windowId), left));
+  settleTimers.delete(windowId);
+  scrolledAt.delete(windowId);
+  const held = heldEnters.get(windowId);
+  heldEnters.delete(windowId);
+  for (const enter of held?.values() ?? []) enter();
+}
+
+export function noteRowsScrolled(windowId: string) {
+  releaseLaunchRows(windowId, "scroll");
+  const now = Date.now();
+  noteSidebarScrolled(now);
+  scrolledAt.set(windowId, now);
+}
+
+export const forgetRowsScrolled = (windowId: string) => void scrolledAt.delete(windowId);
+
+export function whenRowsStill(windowId: string, run: () => void): () => void {
+  const consent = consentToken();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let held = false;
+  const check = () => {
+    const left = SCROLL_SETTLE_MS - stillFor(windowId);
+    if (left <= 0) return run();
+    if (!held) noteSidebarTeardownHeld(consent);
+    held = true;
+    timer = setTimeout(check, left);
+  };
+  check();
+  return () => clearTimeout(timer);
+}
+
+export function holdEnterWhileScrolling(windowId: string, row: object, enter: () => void): boolean {
+  if (stillFor(windowId) >= SCROLL_SETTLE_MS) return false;
+  let held = heldEnters.get(windowId);
+  if (!held) heldEnters.set(windowId, (held = new Map()));
+  if (!held.has(row)) noteSidebarHoverHeld();
+  held.set(row, enter);
+  if (!settleTimers.has(windowId)) settleWhenStill(windowId);
+  return true;
+}
+
+export const dropHeldEnter = (windowId: string, row: object) => !!heldEnters.get(windowId)?.delete(row);
 
 const pointedGroups = new Set<string>();
 

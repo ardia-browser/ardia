@@ -9,7 +9,7 @@ export type ExtensionCandidate = {
   options: boolean;
 };
 
-export type ExtensionRows = { rows: Suggestion[]; exact: boolean };
+type ExtensionRows = { rows: Suggestion[]; exact: boolean };
 
 const NONE: ExtensionRows = { rows: [], exact: false };
 const MIN_PARTIAL_QUERY = 3;

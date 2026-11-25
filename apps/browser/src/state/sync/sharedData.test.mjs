@@ -1,3 +1,4 @@
+import { asSecret } from "@ardia/core";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -7,6 +8,7 @@ globalThis.__DEV__ = false;
 
 const folder = new Map();
 const downloading = new Set();
+const unreadable = new Set();
 let ids = 0;
 globalThis.acTestNativeModules = {
   ArdiaSync: {
@@ -25,8 +27,10 @@ globalThis.acTestNativeModules = {
     },
     read: async (_folder, scope, known) => {
       const here = [...folder].filter(([, f]) => f.scope === scope);
-      const files = here.filter(([id]) => !known.includes(id) && !downloading.has(id)).map(([id, f]) => ({ id, payload: f.payload }));
-      return { files, pending: here.map(([id]) => id).filter((id) => downloading.has(id)), damaged: [], present: here.map(([id]) => id) };
+      const unknown = here.map(([id]) => id).filter((id) => !known.includes(id));
+      const files = here.filter(([id]) => unknown.includes(id) && !downloading.has(id) && !unreadable.has(id)).map(([id, f]) => ({ id, payload: f.payload }));
+      const damaged = unknown.filter((id) => unreadable.has(id) && !downloading.has(id)).map((id) => ({ id, age: 0 }));
+      return { files, pending: unknown.filter((id) => downloading.has(id)), damaged, present: here.map(([id]) => id) };
     },
     remove: async (_folder, _scope, list) => list.forEach((id) => folder.delete(id)),
     sealLocal: async (text) => `sealed:${text}`,
@@ -90,7 +94,7 @@ test("a profile that shares data on one Mac shares the same profile's data on th
   await b.with(async () => {
     S().createProfile({ name: "Home" });
     engineB.startSync();
-    assert.ok("ok" in (await engineB.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engineB.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engineB.syncNow();
     await engineB.syncNow();
 
@@ -130,7 +134,7 @@ test("adding a profile whose owner isn't on this Mac adds the owner too, sharing
 
   await c.with(async () => {
     engineC.startSync();
-    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engineC.syncNow();
     await engineC.syncNow();
     const homework = engineC.useSync.getState().remoteProfiles.find((p) => p.name === "Homework");
@@ -171,7 +175,7 @@ async function join(mac, engine, before = () => {}) {
   await mac.with(async () => {
     before();
     engine.startSync();
-    assert.ok("ok" in (await engine.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engine.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engine.syncNow();
     await engine.syncNow();
   });
@@ -655,4 +659,119 @@ test("a Mac that joins a folder whose other devices sync no profiles pairs on it
     assert.equal(engineB.useSync.getState().joining, false);
     assert.ok(syncIdOf(engineB, "Personal"), "Personal syncs under its own id");
   });
+});
+
+test("a Mac that joined while the other Mac's files couldn't be read for over a day lists its profiles once they can", async () => {
+  folder.clear();
+  const a = new Mac("A");
+  const b = new Mac("B");
+  const engineA = await import("./engine.ts?unreadableA");
+  const engineB = await import("./engine.ts?unreadableB");
+  await a.with(() => {
+    S().createProfile({ name: "Work" });
+    S().createProfile({ name: "Side Project" });
+  });
+  await turnOn(a, engineA);
+  for (const [id, f] of folder) if (f.scope === "app") unreadable.add(id);
+  const realNow = Date.now;
+  try {
+    await join(b, engineB);
+    await b.with(() => assert.equal(engineB.useSync.getState().joining, true));
+    Date.now = () => realNow() + 86_400_001;
+    await b.with(async () => {
+      await engineB.syncNow();
+      await engineB.syncNow();
+      assert.equal(engineB.useSync.getState().joining, false, "a day on, B pairs on its own");
+      assert.deepEqual(engineB.useSync.getState().remoteProfiles, []);
+    });
+    await a.with(async () => {
+      await engineA.syncNow();
+      assert.deepEqual(engineA.useSync.getState().remoteProfiles.map((p) => p.name), ["Personal"], "A lists B's Personal");
+    });
+    unreadable.clear();
+    await b.with(async () => {
+      await engineB.syncNow();
+      assert.deepEqual(
+        engineB.useSync.getState().remoteProfiles.map((p) => p.name),
+        ["Personal", "Work", "Side Project"],
+        "the files given up on are read once they can be, so B lists A's profiles too",
+      );
+      for (const p of engineB.useSync.getState().remoteProfiles) if (p.name !== "Personal") assert.ok(engineB.addRemoteProfile(p.syncId));
+      assert.deepEqual(S().profileOrder.map((id) => S().profiles[id].name), ["Personal", "Work", "Side Project"]);
+    });
+  } finally {
+    Date.now = realNow;
+    unreadable.clear();
+  }
+});
+
+test("share: a Mac offline past the tombstone lifetime after another Mac removed its sharing profile brings the link and both profiles back", async () => {
+  const { Clock, emptyScope, syncScope, compact } = await import("@ardia/sync");
+  const { appAdapters } = await import("./scopeAdapters.ts");
+  const { emptyDoc } = await import("./syncDoc.ts");
+  const DAY = 86_400_000;
+  const files = new Map();
+  let wall = 1_900_000_000_000;
+  const transport = {
+    write: async (scope, payload) => {
+      const id = `c${files.size + 1}-${wall}`;
+      files.set(id, { scope, payload });
+      return id;
+    },
+    read: async (scope, known) => {
+      const here = [...files].filter(([, f]) => f.scope === scope);
+      return { files: here.filter(([id]) => !known.includes(id)).map(([id, f]) => ({ id, payload: f.payload })), pending: [], damaged: [], present: here.map(([id]) => id) };
+    },
+    remove: async (_scope, ids) => ids.forEach((id) => files.delete(id)),
+  };
+  const macOf = (device, profiles) => {
+    S().hydrate({});
+    const ids = {};
+    if (profiles) {
+      ids.owner = S().createProfile({ name: "Home" });
+      ids.work = S().createProfile({ name: "Work", shareWith: ids.owner });
+    }
+    const doc = { ...emptyDoc(), deviceId: device, enabled: true, profiles: profiles ? { [ids.owner]: { syncId: "sHome", enabled: true }, [ids.work]: { syncId: "sWork", enabled: true } } : {} };
+    doc.scopes = { app: { ...emptyScope(), joined: true } };
+    return { device, doc, ids, browser: S(), clock: new Clock(device, null, () => ++wall) };
+  };
+  const run = async (m, times = 2) => {
+    for (let i = 0; i < times; i++) {
+      useBrowser.setState(m.browser, true);
+      await syncScope({ scope: "app", state: m.doc.scopes.app, transport, adapters: appAdapters(m.doc, false), clock: m.clock, device: m.device, now: () => wall });
+      m.browser = S();
+    }
+  };
+  const liveIn = (m, key) => m.doc.scopes.app.records[key]?.v != null;
+  const a = macOf("A", true);
+  const c = macOf("C", true);
+  await run(a);
+  await run(c);
+  await run(a);
+  c.doc.profiles[c.ids.owner] = { ...c.doc.profiles[c.ids.owner], enabled: false };
+  await run(c);
+  assert.ok(liveIn(c, "share:sWork") && liveIn(c, "prof:sWork") && liveIn(c, "prof:sHome"), "both profiles and the link are in sync");
+
+  useBrowser.setState(a.browser, true);
+  S().deleteProfile(a.ids.work);
+  S().deleteProfile(a.ids.owner);
+  a.browser = S();
+  a.doc.profiles = {};
+  a.doc.removing = ["sWork", "sHome"];
+  await run(a);
+  assert.ok(!liveIn(a, "share:sWork") && !liveIn(a, "prof:sWork") && !liveIn(a, "prof:sHome"), "A removed both");
+
+  wall += 46 * DAY;
+  await run(a);
+  await compact(a.doc.scopes.app, transport, "app", "A", wall, {}, true);
+  wall += 3 * DAY;
+  await compact(a.doc.scopes.app, transport, "app", "A", wall, {}, true);
+  assert.ok(!("share:sWork" in a.doc.scopes.app.records), "the removal's tombstone is gone from A's snapshot");
+
+  await run(c, 3);
+  const n = macOf("N", false);
+  await run(n);
+  assert.ok(liveIn(n, "share:sWork"), "C restores the link a Mac joining now reads");
+  assert.ok(liveIn(n, "prof:sWork"), "and the sharing profile");
+  assert.ok(liveIn(n, "prof:sHome"), "and its owner's details");
 });

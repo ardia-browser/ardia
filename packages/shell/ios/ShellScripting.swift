@@ -3,7 +3,37 @@ import AppKit
 public enum ShellScripting {
   static let appDescription = NSScriptClassDescription(for: NSApplication.self)
 
-  static var state = ScriptState()
+  private static let stateLock = NSLock()
+  private static var sentState: [String: Any] = [:]
+  private static var readState: ScriptState?
+  private static var toldOfReadAt: CFTimeInterval = -.infinity
+  private static let tellsOfReadsEvery: CFTimeInterval = 10
+
+  static func setState(_ sent: [String: Any]) {
+    stateLock.lock()
+    sentState = sent
+    readState = nil
+    stateLock.unlock()
+  }
+
+  static var state: ScriptState {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    tellOfRead()
+    if let readState { return readState }
+    let read = ScriptState(sentState)
+    readState = read
+    return read
+  }
+
+  private static func tellOfRead() {
+    let now = CACurrentMediaTime()
+    guard now - toldOfReadAt >= tellsOfReadsEvery else { return }
+    toldOfReadAt = now
+    DispatchQueue.main.async {
+      if ShellEvents.isAttached(.scriptCommand) { ShellEvents.send(.scriptCommand, ["id": "reading", "command": "reading"]) }
+    }
+  }
 
   private static var pending: [String: (Any?, String?) -> Void] = [:]
   private static var seq = 0

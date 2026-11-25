@@ -7,7 +7,7 @@ import { pinnedAreaKeys } from "../pins/pinnedArea";
 import { findLast, isPinnedRow, pinKeyOf } from "../browser/model";
 import { splitRowPanes, splitTabIdsOf } from "../splits/splits";
 import { mainWindowFor } from "../windows/small";
-import { sidebarEntries } from "../sidebar/entries";
+import { sidebarEntries } from "./entries";
 import { entryId, entryKey, parseEntry } from "./entryKey";
 
 export function anchorKey(s: Pick<BrowserState, "tabs" | "groups" | "splits" | "windows">, entry: string): string {
@@ -76,7 +76,7 @@ export function moveLiveFolder(windowId: string, folderId: string, delta: -1 | 1
   arrangeLive(sequence);
 }
 
-export function keepLiveAnchors(s: BrowserState, prev: BrowserState) {
+function keepLiveAnchors(s: BrowserState, prev: BrowserState) {
   if (s.tabs === prev.tabs && s.groups === prev.groups && s.windows === prev.windows) return;
   const { folders, folderOrder } = live();
   for (const profileId of new Set(folderOrder.map((id) => folders[id]?.profileId))) {

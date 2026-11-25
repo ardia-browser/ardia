@@ -1,7 +1,7 @@
 import { nearestPreset, PROFILE_COLORS, themeFor, type Theme } from "../../ui/theme";
 import { opaqueCard } from "../../ui/opaqueCard";
 import { toolbarPalette, type ToolbarPalette } from "../../ui/toolbarColors";
-import { backdropTint, opaqueTint, tintForHue } from "../../../lib/windowTint";
+import { backdropTint, NEUTRAL_FILL, opaqueTint, tintForHue } from "../../../lib/windowTint";
 import type { ProfileColor } from "../../../state/browser/types";
 import { SITE } from "./content";
 import type { BasePalette } from "../../../lib/themeFile";
@@ -35,7 +35,7 @@ export function lookFor(dark: boolean, accent: string, palette: BasePalette | nu
   const mode = dark ? "dark" : "light";
   const exact = (Object.keys(PROFILE_COLORS) as ProfileColor[]).find((c) => PROFILE_COLORS[c].swatch.toLowerCase() === accent.toLowerCase());
   const t = themeFor(`${exact ?? nearestPreset(accent)}:${mode}`, palette);
-  const tint = exact ? t.windowTint : opaqueTint(backdropTint(tintForHue(accent), false), dark);
+  const tint = opaqueTint(exact ? t.backdrop : backdropTint(tintForHue(accent), false), dark, NEUTRAL_FILL);
   const look: Look = {
     dark,
     t,

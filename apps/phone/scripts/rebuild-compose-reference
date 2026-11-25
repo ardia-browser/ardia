@@ -1,0 +1,63 @@
+#!/bin/bash
+# rebuild-compose-reference <release|upgrade17>
+# Rebuilds one of the old Compose app's pinned reference APKs on corex, in the bots container, from the commit it was
+# built from, after apps/android has left the branch:
+#   release    ardia-compose-release.apk   01a149d87  :app:assembleRelease (R8, resources shrunk, not debuggable)
+#   upgrade17  ardia-compose-upgrade17.apk 1e343bb81  :app:assembleDebug (debuggable: the upgrade pair's Compose half)
+# It exports that commit's apps/android, the sync bundle it compiles (apps/ios/.../ArdiaShared/Scripts) and the sync
+# fixtures with git archive from corex-build's build-only clone into ~/Developer/compose-rebuild/<name>, runs the
+# Compose app's own Gradle wrapper there without a daemon under the Android Gradle lock, and writes
+# ~/Developer/ardia-phone-apks/reference/<file>-rebuilt.apk and .txt. It then compares it with the pinned APK beside it:
+# package, versions, debuggable, ABIs, the manifest's components and the dex's classes. A rebuild is signed with
+# corex's debug key, not the Compose app's (that key is only on the Mac; re-sign there with apksigner and
+# ~/.android/debug.keystore when an install over the pinned one matters). The scratch tree is removed afterwards. In
+# the export only, the wrapper prefers IPv4 and waits 5 minutes, since Java on corex reaches Gradle's host only so.
+set -euo pipefail
+if [ $# -ne 1 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+  [ $# -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; } && exit 0
+  exit 64
+fi
+case "$1" in
+  release) commit=01a149d87330a8478870ca1b6efb3506b9134168 task=:app:assembleRelease variant=release file=ardia-compose-release ;;
+  upgrade17) commit=1e343bb814f6df6c0316547c4fcb798a6c13649e task=:app:assembleDebug variant=debug file=ardia-compose-upgrade17 ;;
+  *) echo "rebuild-compose-reference: release or upgrade17" >&2; exit 64 ;;
+esac
+[ "$(uname)" = "Linux" ] || { echo "rebuild-compose-reference runs on corex" >&2; exit 64; }
+gib=$((1024 * 1024 * 1024))
+limit="$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)"
+if [ "$limit" = "max" ] || [ "$limit" -lt $((14 * gib)) ]; then
+  echo "this isn't the bots container (memory limit $limit)" >&2
+  exit 64
+fi
+clone="$HOME/Developer/ardia-android-build/src"
+scratch="$HOME/Developer/compose-rebuild/$1"
+out="$HOME/Developer/ardia-phone-apks/reference"
+[ -d "$clone/.git" ] || { echo "no build clone at $clone: run corex-build once" >&2; exit 64; }
+git -C "$clone" cat-file -e "$commit^{commit}" 2>/dev/null || git -C "$clone" fetch --quiet origin "$commit"
+rm -rf "$scratch"
+mkdir -p "$scratch" "$out"
+trap 'rm -rf "$scratch"' EXIT
+git -C "$clone" archive "$commit" apps/android apps/ios/Packages/ArdiaKit/Sources/ArdiaShared/Scripts packages/sync/tests/fixtures | tar -x -C "$scratch"
+sed -i 's/^networkTimeout=.*/networkTimeout=300000/' "$scratch/apps/android/gradle/wrapper/gradle-wrapper.properties"
+export GRADLE_OPTS="${GRADLE_OPTS:-} -Djava.net.preferIPv4Stack=true"
+started=$(date +%s)
+(cd "$scratch/apps/android" && flock -w 1800 /tmp/ardia-android-gradle.lock ./gradlew --no-daemon --console=plain -q "$task") > "$scratch/gradle.log" 2>&1 || { tail -40 "$scratch/gradle.log"; exit 1; }
+built="$(ls "$scratch/apps/android/app/build/outputs/apk/$variant/"*.apk | head -1)"
+cp "$built" "$out/$file-rebuilt.apk"
+tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+badging() { "$tools/aapt2" dump badging "$1" | grep -E "^package:|^application-debuggable|^native-code" | sed "s/ platformBuild.*//"; }
+components() { "$tools/aapt2" dump xmltree --file AndroidManifest.xml "$1" | grep -E "E: (activity|activity-alias|service|receiver|provider)" -A1 | grep -o 'name(0x01010003)="[^"]*"' | sort; }
+classes() { unzip -Z1 "$1" | grep -E '^classes[0-9]*\.dex$' | while read -r dex; do unzip -p "$1" "$dex" > "$scratch/one.dex"; "$tools/dexdump" "$scratch/one.dex" 2>/dev/null | sed -n "s/^  Class descriptor  : 'L\(.*\);'/\1/p"; done | sort; }
+same() { [ "$($1 "$out/$file.apk")" = "$($1 "$out/$file-rebuilt.apk")" ] && echo same || echo DIFFERENT; }
+{
+  echo "apk: $file-rebuilt.apk"
+  echo "rebuilt from: $commit, $task, $(git -C "$clone" log -1 --format=%cs "$commit")"
+  echo "built on: corex, bots container, $(( $(date +%s) - started )) s"
+  echo "sha256: $(sha256sum "$out/$file-rebuilt.apk" | cut -d' ' -f1)"
+  echo "size: $(wc -c < "$out/$file-rebuilt.apk" | tr -d ' ')"
+  echo "against the pinned $file.apk:"
+  echo "  package, versions, debuggable and ABIs: $(same badging)"
+  echo "  manifest components: $(same components)"
+  echo "  dex classes: $(same classes) ($(classes "$out/$file-rebuilt.apk" | wc -l) rebuilt, $(classes "$out/$file.apk" | wc -l) pinned)"
+} | tee "$out/$file-rebuilt.txt"

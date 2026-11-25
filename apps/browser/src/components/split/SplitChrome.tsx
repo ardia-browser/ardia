@@ -1,17 +1,22 @@
+import { useShallow } from "zustand/react/shallow";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { updateSplit } from "../../state/splits/actions";
 import { useDragFallbackPane } from "../../state/splits/hooks";
 import type { SplitView } from "../../state/browser/types";
-import { resize, type Divider, type Rect } from "../window/geometry";
-import { capsule, space, Symbol, Text, Toast, withAlpha } from "../ui";
+import { evenPair, resize, type Divider, type Rect } from "../window/geometry";
+import { capsule, OverPage, space, Symbol, Text, Toast, withAlpha } from "../ui";
 import { hideToast, useToasts } from "../../state/app/toasts";
-import { useWindowId } from "../../state/browser/hooks";
+import { noteSplit } from "../../state/telemetry/usage";
+import { useTab, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
+import { useCardFrame } from "../window/cardFrame";
+import type { Size } from "../ui/useSettled";
 import { overPeek } from "../../state/windows/dockMotion";
 import { zoneHit, zoneRect, type ZoneStage } from "./splitDrop";
 import { setDropTarget, setOnPage, setTargetResolver, useTabDrag } from "../../state/drag/tabDrag";
-import { SPLIT_MOTION, splitColors, TOAST_ACTION_MS, TOAST_MS, ZONE_ACCENT_ALPHA, ZONE_DASH_INSET, ZONE_DASH_RADIUS, ZONE_RADIUS, ZONE_SLIDE_MS } from "./tokens";
+import { splitViewAvailable } from "../../state/splits/splits";
+import { FOCUS_RING, SPLIT_MOTION, splitColors, TOAST_ACTION_MS, TOAST_MS, ZONE_ACCENT_ALPHA, ZONE_DASH_INSET, ZONE_SLIDE_MS, zoneDashRadius, zoneRadius } from "./tokens";
 
 export function SplitDividers({ split, dividers, width, height }: { split: SplitView; dividers: Divider[]; width: number; height: number }) {
   return (
@@ -23,13 +28,67 @@ export function SplitDividers({ split, dividers, width, height }: { split: Split
   );
 }
 
+export type WindowShape = Size & { radius: number };
+
+type Corners = { topLeft: number; topRight: number; bottomLeft: number; bottomRight: number };
+
+export const SplitFocusRing = memo(function SplitFocusRing({ rect, origin, windowShape }: { rect: Rect; origin: { x: number; y: number } | null; windowShape: WindowShape | null }) {
+  const theme = useTheme();
+  const { inset, radius, splitGap } = useCardFrame();
+  const framed = inset > 0;
+  const room = framed ? splitGap / 2 : 0;
+  const width = framed ? Math.min(FOCUS_RING.width, room) : FOCUS_RING.width;
+  const outset = Math.min(FOCUS_RING.width + FOCUS_RING.gap, room);
+  const corners = framed ? uniformCorners(radius > 0 ? radius + outset : 0) : windowCorners(rect, origin, windowShape);
+  const box = { x: rect.x - outset, y: rect.y - outset, width: rect.width + outset * 2, height: rect.height + outset * 2 };
+  const color = theme.powerUpColor ?? theme.accent;
+  const edge = (style: { left: number; top: number; width: number; height: number }) => <View style={{ position: "absolute", backgroundColor: color, ...style }} />;
+  const corner = (r: number, left: number, top: number, dx: number, dy: number) =>
+    r > 0 && (
+      <View style={{ position: "absolute", left, top, width: r, height: r, overflow: "hidden" }}>
+        <View style={{ position: "absolute", left: dx, top: dy, width: r * 2, height: r * 2, borderRadius: r, borderWidth: width, borderColor: color, overflow: "hidden" }} />
+      </View>
+    );
+  const { topLeft, topRight, bottomLeft, bottomRight } = corners;
+  const right = box.x + box.width;
+  const bottom = box.y + box.height;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {edge({ left: box.x + topLeft, top: box.y, width: box.width - topLeft - topRight, height: width })}
+      {edge({ left: box.x + bottomLeft, top: bottom - width, width: box.width - bottomLeft - bottomRight, height: width })}
+      {edge({ left: box.x, top: box.y + topLeft, width, height: box.height - topLeft - bottomLeft })}
+      {edge({ left: right - width, top: box.y + topRight, width, height: box.height - topRight - bottomRight })}
+      {corner(topLeft, box.x, box.y, 0, 0)}
+      {corner(topRight, right - topRight, box.y, -topRight, 0)}
+      {corner(bottomLeft, box.x, bottom - bottomLeft, 0, -bottomLeft)}
+      {corner(bottomRight, right - bottomRight, bottom - bottomRight, -bottomRight, -bottomRight)}
+    </View>
+  );
+});
+
+const uniformCorners = (r: number): Corners => ({ topLeft: r, topRight: r, bottomLeft: r, bottomRight: r });
+
+function windowCorners(rect: Rect, origin: { x: number; y: number } | null, windowShape: WindowShape | null): Corners {
+  if (!origin || !windowShape || windowShape.radius <= 0) return uniformCorners(0);
+  const r = windowShape.radius;
+  const touches = (a: number, b: number) => Math.abs(a - b) < 0.5;
+  const left = touches(origin.x + rect.x, 0);
+  const top = touches(origin.y + rect.y, 0);
+  const right = touches(origin.x + rect.x + rect.width, windowShape.width);
+  const bottom = touches(origin.y + rect.y + rect.height, windowShape.height);
+  return { topLeft: left && top ? r : 0, topRight: right && top ? r : 0, bottomLeft: left && bottom ? r : 0, bottomRight: right && bottom ? r : 0 };
+}
+
 const sizesOf = (split: SplitView) => ({ sizes: split.slots.map((slot) => slot.size), stack: split.slots.find((slot) => "stack" in slot)?.stackSizes });
+
+const CLICK_SLOP = 3;
 
 function DividerHandle({ split, divider, width, height }: { split: SplitView; divider: Divider; width: number; height: number }) {
   const theme = useTheme();
   const [hovered, setHovered] = useState(false);
   const [dragging, setDragging] = useState(false);
   const start = useRef<{ sizes: number[]; stack?: [number, number] }>(sizesOf(split));
+  const dragged = useRef(false);
   const latest = useRef({ split, divider, width, height });
   latest.current = { split, divider, width, height };
 
@@ -40,15 +99,18 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
         onPanResponderGrant: () => {
           const { split: v } = latest.current;
           start.current = sizesOf(v);
+          dragged.current = false;
           setDragging(true);
         },
         onPanResponderMove: (_, g) => {
           const { split: v, divider: d, width: w, height: h } = latest.current;
           const delta = d.vertical ? g.dx : g.dy;
+          if (Math.abs(delta) > CLICK_SLOP) dragged.current = true;
+          const gap = d.vertical ? d.rect.width : d.rect.height;
           if (d.kind === "root") {
-            updateSplit(v.id, { sizes: resize(start.current.sizes, d.index, delta, d.vertical ? w : h) });
+            updateSplit(v.id, { sizes: resize(start.current.sizes, d.index, delta, d.vertical ? w : h, gap) });
           } else if (start.current.stack) {
-            const next = resize(start.current.stack, 0, delta, d.vertical ? w : h) as [number, number];
+            const next = resize(start.current.stack, 0, delta, d.vertical ? w : h, gap) as [number, number];
             updateSplit(v.id, { stackSizes: next });
           }
         },
@@ -58,11 +120,22 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
     [],
   );
 
+  const evenOut = () => {
+    if (dragged.current) return;
+    const { split: v, divider: d } = latest.current;
+    const now = sizesOf(v);
+    if (d.kind === "root") updateSplit(v.id, { sizes: evenPair(now.sizes, d.index) });
+    else if (now.stack) updateSplit(v.id, { stackSizes: [0.5, 0.5] });
+    noteSplit("splitDividerResets");
+  };
+
   const { rect, vertical } = divider;
   const active = hovered || dragging;
+  const cursor = vertical ? "col-resize" : "row-resize";
   return (
     <View
       {...responder.panHandlers}
+      onDoubleClick={evenOut}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -73,11 +146,13 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
         height: rect.height + (vertical ? 0 : 4),
         alignItems: "center",
         justifyContent: "center",
-        cursor: vertical ? "col-resize" : "row-resize",
+        cursor,
       }}
     >
       <View
+        pointerEvents="none"
         style={{
+          cursor,
           width: vertical ? HANDLE_THICKNESS : HANDLE_LENGTH,
           height: vertical ? HANDLE_LENGTH : HANDLE_THICKNESS,
           borderRadius: capsule(HANDLE_THICKNESS),
@@ -92,14 +167,20 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
 const HANDLE_THICKNESS = 4;
 const HANDLE_LENGTH = 36;
 
+const NOT_DRAGGING = { dragging: null, x: -1, y: -1, lifted: null, outside: false, target: null } as const;
+
 export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; origin: { x: number; y: number } | null }) {
   const windowId = useWindowId();
-  const dragging = useTabDrag((s) => (s.phase === "tab" && s.windowId === windowId ? s.tabId : null));
-  const x = useTabDrag((s) => (s.phase === "tab" ? s.x : -1));
-  const y = useTabDrag((s) => (s.phase === "tab" ? s.y : -1));
-  const lifted = useTabDrag((s) => (s.phase === "tab" ? s.lifted : null));
-  const outside = useTabDrag((s) => s.phase === "tab" && s.outside);
-  const target = useTabDrag((s) => (s.phase === "tab" ? s.target : null));
+  const { dragging, x, y, lifted, outside, target } = useTabDrag(
+    useShallow((s) =>
+      s.phase === "tab"
+        ? { dragging: s.windowId === windowId ? s.tabId : null, x: s.x, y: s.y, lifted: s.lifted, outside: s.outside, target: s.target }
+        : NOT_DRAGGING,
+    ),
+  );
+  const draggedProfile = useTab(dragging ?? undefined, (t) => t?.profileId);
+  const windowProfile = useWindowProfileId();
+  const foreign = !!dragging && draggedProfile !== windowProfile;
   const full = Object.keys(panes).length >= 3;
   const fallback = useDragFallbackPane(dragging, panes, windowId);
   const candidates = useMemo((): [string, Rect][] => {
@@ -110,7 +191,7 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   const px = origin ? x - origin.x : -1;
   const py = origin ? y - origin.y : -1;
   const overPage = !!origin && x >= 0 && !overPeek(windowId, x) && Object.values(panes).some((r) => px >= r.x && px <= r.x + r.width && py >= r.y && py <= r.y + r.height);
-  const shown = !!dragging && !!origin && !full && !outside && candidates.length > 0 && (lifted ?? overPage);
+  const shown = !!dragging && !foreign && !!origin && !full && !outside && candidates.length > 0 && (lifted ?? overPage);
   const [grown, setGrown] = useState(false);
   useEffect(() => {
     setGrown(false);
@@ -119,10 +200,10 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
     return () => clearTimeout(timer);
   }, [shown]);
 
-  const hit = shown && grown && overPage ? zoneHit(candidates, px, py, target) : null;
+  const hit = splitViewAvailable && shown && grown && overPage ? zoneHit(candidates, px, py, target) : null;
   const preview = shown && overPage;
   const resolver = useRef({ candidates, origin, panes, ready: false });
-  resolver.current = { candidates, origin, panes, ready: !!dragging && !!origin && !full && candidates.length > 0 && grown && lifted !== false };
+  resolver.current = { candidates, origin, panes, ready: !!dragging && !foreign && !!origin && !full && candidates.length > 0 && grown && lifted !== false };
   useEffect(() => {
     if (!dragging) return;
     setTargetResolver((x, y, current, outside) => {
@@ -145,7 +226,7 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   );
   const [mounted, setMounted] = useState<[string, Rect][]>([]);
   useEffect(() => {
-    if (shown) setMounted(candidates);
+    if (shown && splitViewAvailable) setMounted(candidates);
   }, [shown, candidates]);
 
   if (!mounted.length) return null;
@@ -173,7 +254,7 @@ const ZONE_SPRING = { ...SPLIT_MOTION.zoneSpring, useNativeDriver: false } as co
 function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect; side: "left" | "right"; shown: boolean; stage: ZoneStage; pointerX: number; onHidden(): void }) {
   const theme = useTheme();
   const rect = zoneRect(pane, side, stage, pointerX);
-  const anim = useRef({ x: new Animated.Value(rect.x), y: new Animated.Value(rect.y), w: new Animated.Value(rect.width), h: new Animated.Value(rect.height) }).current;
+  const [anim] = useState(() => ({ x: new Animated.Value(rect.x), y: new Animated.Value(rect.y), w: new Animated.Value(rect.width), h: new Animated.Value(rect.height) }));
   const glow = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(0)).current;
   const active = stage === "active";
@@ -205,7 +286,7 @@ function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect
         top: anim.y,
         width: anim.w,
         height: anim.h,
-        borderRadius: ZONE_RADIUS,
+        borderRadius: zoneRadius(),
         borderWidth: 0.5,
         borderColor: colors.zoneBorder,
         backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: [colors.zoneFill, withAlpha(theme.accent, dark ? ZONE_ACCENT_ALPHA.dark : ZONE_ACCENT_ALPHA.light)] }),
@@ -214,6 +295,7 @@ function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect
         transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [away, 0] }) }],
       }}
     >
+      <OverPage radius={zoneRadius()} />
       <View
         style={{
           position: "absolute",
@@ -221,7 +303,7 @@ function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect
           right: ZONE_DASH_INSET,
           top: ZONE_DASH_INSET,
           bottom: ZONE_DASH_INSET,
-          borderRadius: ZONE_DASH_RADIUS,
+          borderRadius: zoneDashRadius(),
           borderStyle: "dashed",
           borderWidth: active ? 2.33 : 2,
           borderColor: active ? theme.accent : colors.zoneDash,
@@ -237,17 +319,23 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
   const toast = useToasts((s) => s.toasts[windowId] ?? null);
   const [shown, setShown] = useState(toast);
   const [closing, setClosing] = useState(false);
+  const [held, setHeld] = useState(false);
   if (toast && toast !== shown) {
     setShown(toast);
     setClosing(false);
   } else if (!toast && shown && !closing) setClosing(true);
   useEffect(() => {
-    if (!toast || toast.sticky) return;
-    const timer = setTimeout(() => setClosing(true), toast.action ? TOAST_ACTION_MS : TOAST_MS);
+    if (!toast || toast.sticky || (held && toast.secondary)) return;
+    const timer = setTimeout(() => setClosing(true), toast.holdMs ?? (toast.action ? TOAST_ACTION_MS : TOAST_MS));
     return () => clearTimeout(timer);
-  }, [toast?.id]);
+  }, [toast?.id, held && !!toast?.secondary]);
   if (!shown) return null;
-  const action = shown.action;
+  const { action, secondary } = shown;
+  const pick = (chosen: typeof action) => () => {
+    chosen?.run();
+    setShown(null);
+    hideToast(windowId, shown.id);
+  };
   return (
     <Toast
       key={shown.id}
@@ -255,11 +343,11 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
       message={shown.message ?? undefined}
       icon={shown.icon ?? "rectangle.split.3x1"}
       action={action?.title}
-      onAction={() => {
-        action?.run();
-        setShown(null);
-        hideToast(windowId, shown.id);
-      }}
+      onAction={pick(action)}
+      secondary={secondary?.title}
+      onSecondary={pick(secondary)}
+      onHeld={secondary ? setHeld : undefined}
+      titleLines={shown.titleLines}
       closing={closing}
       onClosed={() => {
         setShown(null);

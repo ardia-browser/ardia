@@ -1,4 +1,4 @@
-import { COMMANDS, staticShortcutSources } from "../commands/commandCatalog";
+import { COMMANDS, shortcutSources, staticShortcutSources } from "../commands/commandCatalog";
 import { formatShortcut, parseShortcut, sameShortcut, type Shortcut } from "../commands/shortcuts";
 
 const MODIFIER_WORDS: Record<string, string> = {
@@ -80,18 +80,36 @@ export function shortcutCatalog(): ReadonlyMap<string, CommandEntry> {
   return catalog;
 }
 
+export const PER_PROFILE_SHORTCUT_PATTERN = "^(?:switchProfile|newLittleArdia):[A-Za-z0-9_-]{1,64}$";
+const PER_PROFILE_SHORTCUT = new RegExp(PER_PROFILE_SHORTCUT_PATTERN);
+
+export type ShortcutProfiles = { order: readonly string[]; mustExist: boolean };
+
+function perProfileEntry(id: string, profiles: ShortcutProfiles): CommandEntry | "noProfile" | undefined {
+  if (!PER_PROFILE_SHORTCUT.test(id)) return undefined;
+  const [command, profileId] = id.split(":") as [string, string];
+  const known = profiles.order.includes(profileId);
+  if (!known && profiles.mustExist) return "noProfile";
+  const defaults = known ? (shortcutSources(profiles.order, []).find((source) => source.id === id)?.keys ?? []) : [];
+  return { title: titleOf(command), defaults };
+}
+
 export const shortcutDescription = (entry: CommandEntry): string =>
   entry.defaults.length ? `${entry.title} (default ${entry.defaults.map(formatShortcut).join(", ")})` : `${entry.title} (no default)`;
 
-export type ShortcutsResult = { overrides: Record<string, string[]>; problems: string[] };
+type ShortcutsResult = { overrides: Record<string, string[]>; problems: string[] };
 
-export function configShortcuts(file: string, given: unknown, current: Readonly<Record<string, string[]>>): ShortcutsResult {
+export function configShortcuts(file: string, given: unknown, current: Readonly<Record<string, string[]>>, profiles: ShortcutProfiles = { order: [], mustExist: false }): ShortcutsResult {
   if (typeof given !== "object" || given === null || Array.isArray(given)) return { overrides: { ...current }, problems: [`${file}: shortcuts must be an object of command id to shortcut`] };
   const overrides = { ...current };
   const problems: string[] = [];
   const commands = shortcutCatalog();
   for (const [id, value] of Object.entries(given)) {
-    const entry = commands.get(id);
+    const entry = commands.get(id) ?? perProfileEntry(id, profiles);
+    if (entry === "noProfile") {
+      problems.push(`${file}: shortcuts.${id} names a profile that doesn't exist`);
+      continue;
+    }
     if (!entry) {
       problems.push(id.startsWith("system:") ? `${file}: shortcuts.${id} can't be rebound` : `${file}: shortcuts.${id} isn't a command`);
       continue;

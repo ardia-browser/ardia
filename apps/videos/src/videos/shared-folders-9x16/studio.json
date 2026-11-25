@@ -159,62 +159,114 @@
   ],
   "objects": [
     {
-      "id": "chat-window",
+      "id": "chat-app",
       "definition": "window",
-      "label": "chat · window",
+      "label": "chat · app",
       "parentId": null,
       "values": {
-        "x": 40,
-        "y": 560,
-        "width": 1000,
-        "height": 900,
+        "x": 30,
+        "y": 190,
+        "width": 1020,
+        "height": 1140,
         "rotation": 0
       }
     },
     {
-      "id": "chat-not",
+      "id": "chat-lost",
       "definition": "type",
-      "label": "chat · THE GROUP CHAT IS NOT A FOLD",
+      "label": "chat · Links get lost.",
       "parentId": null,
       "values": {
-        "text": "THE GROUP CHAT\nIS NOT A FOLDER.",
-        "size": 130,
-        "color": "#16130F",
+        "text": "Links get lost.",
+        "size": 64,
+        "color": "#1D1D1F",
         "fill": "#00000000",
         "x": 60,
-        "y": 225,
+        "y": 1365,
         "width": 960,
-        "height": 300,
+        "height": 110,
         "rotation": 0
       }
     },
     {
-      "id": "folder-window",
+      "id": "turn-priya",
       "definition": "window",
-      "label": "folder · window",
+      "label": "turn · priya",
       "parentId": null,
       "values": {
         "x": 40,
-        "y": 440,
+        "y": 250,
         "width": 1000,
-        "height": 1000,
+        "height": 1080,
         "rotation": 0
       }
     },
     {
-      "id": "folder-share",
-      "definition": "type",
-      "label": "folder · SHARE A FOLDER FROM YOUR SID",
+      "id": "grid-priya",
+      "definition": "window",
+      "label": "grid · priya",
       "parentId": null,
       "values": {
-        "text": "SHARE A FOLDER\nFROM YOUR SIDEBAR.",
-        "size": 110,
-        "color": "#F1ECE2",
-        "fill": "#16130F",
+        "x": 40,
+        "y": 290,
+        "width": 490,
+        "height": 500,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "grid-tomas",
+      "definition": "window",
+      "label": "grid · tomas",
+      "parentId": null,
+      "values": {
+        "x": 550,
+        "y": 290,
+        "width": 490,
+        "height": 500,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "grid-jun",
+      "definition": "window",
+      "label": "grid · jun",
+      "parentId": null,
+      "values": {
+        "x": 40,
+        "y": 870,
+        "width": 490,
+        "height": 500,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "grid-ava",
+      "definition": "window",
+      "label": "grid · ava",
+      "parentId": null,
+      "values": {
+        "x": 550,
+        "y": 870,
+        "width": 490,
+        "height": 500,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "grid-title",
+      "definition": "type",
+      "label": "grid · Shared Folders",
+      "parentId": null,
+      "values": {
+        "text": "Shared Folders",
+        "size": 84,
+        "color": "#1D1D1F",
+        "fill": "#00000000",
         "x": 60,
-        "y": 225,
+        "y": 1390,
         "width": 960,
-        "height": 120,
+        "height": 90,
         "rotation": 0
       }
     },
@@ -225,43 +277,26 @@
       "parentId": null,
       "values": {
         "x": 40,
-        "y": 440,
+        "y": 250,
         "width": 1000,
-        "height": 1000,
+        "height": 1080,
         "rotation": 0
       }
     },
     {
-      "id": "share-name",
+      "id": "share-apple",
       "definition": "type",
-      "label": "share · SHARED FOLDERS",
+      "label": "share · Invite any Apple ID.",
       "parentId": null,
       "values": {
-        "text": "SHARED FOLDERS",
-        "size": 44,
-        "color": "#B0617F",
+        "text": "Invite any Apple ID.",
+        "size": 64,
+        "color": "#1D1D1F",
         "fill": "#00000000",
         "x": 60,
-        "y": 232,
+        "y": 1365,
         "width": 960,
-        "height": 56,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "share-invite",
-      "definition": "type",
-      "label": "share · INVITE ANY APPLE ID.",
-      "parentId": null,
-      "values": {
-        "text": "INVITE ANY APPLE ID.",
-        "size": 90,
-        "color": "#F1ECE2",
-        "fill": "#C3371F",
-        "x": 60,
-        "y": 300,
-        "width": 960,
-        "height": 120,
+        "height": 110,
         "rotation": 0
       }
     },
@@ -272,382 +307,225 @@
       "parentId": null,
       "values": {
         "x": 40,
-        "y": 440,
-        "width": 1000,
-        "height": 1000,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "accept-his",
-      "definition": "type",
-      "label": "accept · NOW IT’S HIS TOO.",
-      "parentId": null,
-      "values": {
-        "text": "NOW IT’S HIS TOO.",
-        "size": 170,
-        "color": "#F1ECE2",
-        "fill": "#3F7DB0",
-        "x": 60,
-        "y": 225,
-        "width": 960,
-        "height": 200,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "duo-priya",
-      "definition": "window",
-      "label": "duo · priya",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 360,
-        "width": 1000,
-        "height": 520,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "duo-tomas",
-      "definition": "window",
-      "label": "duo · tomas",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 950,
-        "width": 1000,
-        "height": 520,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "duo-here",
-      "definition": "type",
-      "label": "duo · DROP IT HERE.",
-      "parentId": null,
-      "values": {
-        "text": "DROP IT HERE.",
-        "size": 120,
-        "color": "#F1ECE2",
-        "fill": "#B0617F",
-        "x": 60,
-        "y": 225,
-        "width": 960,
-        "height": 120,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "duo-there",
-      "definition": "type",
-      "label": "duo · IT LANDS THERE.",
-      "parentId": null,
-      "values": {
-        "text": "IT LANDS THERE.",
-        "size": 120,
-        "color": "#F1ECE2",
-        "fill": "#3F7DB0",
-        "x": 60,
-        "y": 225,
-        "width": 960,
-        "height": 120,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "back-cause-window",
-      "definition": "window",
-      "label": "back-cause · window",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 360,
+        "y": 250,
         "width": 1000,
         "height": 1080,
         "rotation": 0
       }
     },
     {
-      "id": "back-both",
-      "definition": "type",
-      "label": "back-cause · BOTH WAYS.",
-      "parentId": null,
-      "values": {
-        "text": "BOTH WAYS.",
-        "size": 120,
-        "color": "#F1ECE2",
-        "fill": "#16130F",
-        "x": 60,
-        "y": 225,
-        "width": 960,
-        "height": 125,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "back-effect-window",
+      "id": "files-card",
       "definition": "window",
-      "label": "back-effect · window",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 360,
-        "width": 1000,
-        "height": 1080,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "rename-cause-window",
-      "definition": "window",
-      "label": "rename-cause · window",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 360,
-        "width": 1000,
-        "height": 1080,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "rename-effect-window",
-      "definition": "window",
-      "label": "rename-effect · window",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 360,
-        "width": 1000,
-        "height": 1080,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "rename-word",
-      "definition": "type",
-      "label": "rename-effect · RENAMES.",
-      "parentId": null,
-      "values": {
-        "text": "RENAMES.",
-        "size": 120,
-        "color": "#F1ECE2",
-        "fill": "#3F7DB0",
-        "x": 60,
-        "y": 225,
-        "width": 960,
-        "height": 125,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "reorder-cause-window",
-      "definition": "window",
-      "label": "reorder-cause · window",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 360,
-        "width": 1000,
-        "height": 1080,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "reorder-effect-window",
-      "definition": "window",
-      "label": "reorder-effect · window",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 360,
-        "width": 1000,
-        "height": 1080,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "reorder-word",
-      "definition": "type",
-      "label": "reorder-effect · REORDERS.",
-      "parentId": null,
-      "values": {
-        "text": "REORDERS.",
-        "size": 120,
-        "color": "#F1ECE2",
-        "fill": "#B0617F",
-        "x": 60,
-        "y": 225,
-        "width": 960,
-        "height": 125,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "sub-cause-window",
-      "definition": "window",
-      "label": "sub-cause · window",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 360,
-        "width": 1000,
-        "height": 1080,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "sub-effect-window",
-      "definition": "window",
-      "label": "sub-effect · window",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 360,
-        "width": 1000,
-        "height": 1080,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "sub-word",
-      "definition": "type",
-      "label": "sub-effect · SUBFOLDERS.",
-      "parentId": null,
-      "values": {
-        "text": "SUBFOLDERS.",
-        "size": 120,
-        "color": "#F1ECE2",
-        "fill": "#3F7DB0",
-        "x": 60,
-        "y": 225,
-        "width": 960,
-        "height": 125,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "same-priya",
-      "definition": "window",
-      "label": "same · priya",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 360,
-        "width": 1000,
-        "height": 520,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "same-tomas",
-      "definition": "window",
-      "label": "same · tomas",
-      "parentId": null,
-      "values": {
-        "x": 40,
-        "y": 950,
-        "width": 1000,
-        "height": 520,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "same-line",
-      "definition": "type",
-      "label": "same · SAME FOLDER. EVERY SIDEBAR.",
-      "parentId": null,
-      "values": {
-        "text": "SAME FOLDER.\nEVERY SIDEBAR.",
-        "size": 110,
-        "color": "#16130F",
-        "fill": "#00000000",
-        "x": 60,
-        "y": 225,
-        "width": 960,
-        "height": 120,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "nos-folder",
-      "definition": "window",
-      "label": "nos · folder",
+      "label": "files · card",
       "parentId": null,
       "values": {
         "x": 90,
-        "y": 900,
+        "y": 400,
         "width": 900,
-        "height": 560,
+        "height": 820,
         "rotation": 0
       }
     },
     {
-      "id": "nos-account",
+      "id": "files-icloud",
       "definition": "type",
-      "label": "nos · NO ACCOUNT.",
+      "label": "files · Just iCloud Drive. No new ac",
       "parentId": null,
       "values": {
-        "text": "NO\nACCOUNT.",
-        "size": 400,
-        "color": "#F1ECE2",
+        "text": "Just iCloud Drive. No new account.",
+        "size": 64,
+        "color": "#1D1D1F",
         "fill": "#00000000",
         "x": 60,
-        "y": 420,
+        "y": 1365,
         "width": 960,
-        "height": 760,
+        "height": 110,
         "rotation": 0
       }
     },
     {
-      "id": "nos-signup",
-      "definition": "type",
-      "label": "nos · NO SIGN-UP.",
+      "id": "drop-priya",
+      "definition": "window",
+      "label": "drop · priya",
       "parentId": null,
       "values": {
-        "text": "NO\nSIGN-UP.",
-        "size": 400,
-        "color": "#F1ECE2",
+        "x": 40,
+        "y": 250,
+        "width": 1000,
+        "height": 520,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "drop-tomas",
+      "definition": "window",
+      "label": "drop · tomas",
+      "parentId": null,
+      "values": {
+        "x": 40,
+        "y": 840,
+        "width": 1000,
+        "height": 490,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "edits-priya",
+      "definition": "window",
+      "label": "edits · priya",
+      "parentId": null,
+      "values": {
+        "x": 40,
+        "y": 250,
+        "width": 1000,
+        "height": 520,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "edits-tomas",
+      "definition": "window",
+      "label": "edits · tomas",
+      "parentId": null,
+      "values": {
+        "x": 40,
+        "y": 840,
+        "width": 1000,
+        "height": 490,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "edits-live",
+      "definition": "type",
+      "label": "edits · Live, both ways.",
+      "parentId": null,
+      "values": {
+        "text": "Live, both ways.",
+        "size": 64,
+        "color": "#1D1D1F",
         "fill": "#00000000",
         "x": 60,
-        "y": 420,
+        "y": 1365,
         "width": 960,
-        "height": 760,
+        "height": 110,
         "rotation": 0
       }
     },
     {
-      "id": "nos-icloud",
-      "definition": "type",
-      "label": "nos · JUST ICLOUD DRIVE.",
+      "id": "v-lab-okafor",
+      "definition": "window",
+      "label": "v-lab-cause · v-lab-okafor",
       "parentId": null,
       "values": {
-        "text": "JUST\nICLOUD DRIVE.",
-        "size": 230,
-        "color": "#16130F",
-        "fill": "#00000000",
-        "x": 60,
-        "y": 260,
-        "width": 960,
-        "height": 560,
+        "x": 40,
+        "y": 270,
+        "width": 1000,
+        "height": 1180,
         "rotation": 0
       }
     },
     {
-      "id": "nos-path",
-      "definition": "type",
-      "label": "nos · ICLOUD DRIVE › ARDIA SHARED ",
+      "id": "v-lab-sam",
+      "definition": "window",
+      "label": "v-lab-effect · v-lab-sam",
       "parentId": null,
       "values": {
-        "text": "ICLOUD DRIVE › ARDIA SHARED ›\nTHESIS READING",
-        "size": 28,
-        "color": "#57524A",
-        "fill": "#00000000",
-        "x": 64,
-        "y": 820,
-        "width": 960,
-        "height": 80,
+        "x": 40,
+        "y": 270,
+        "width": 1000,
+        "height": 1180,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "v-trip-kai",
+      "definition": "window",
+      "label": "v-trip-cause · v-trip-kai",
+      "parentId": null,
+      "values": {
+        "x": 40,
+        "y": 270,
+        "width": 1000,
+        "height": 1180,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "v-trip-noor",
+      "definition": "window",
+      "label": "v-trip-effect · v-trip-noor",
+      "parentId": null,
+      "values": {
+        "x": 40,
+        "y": 270,
+        "width": 1000,
+        "height": 1180,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "v-class-ruiz",
+      "definition": "window",
+      "label": "v-class-cause · v-class-ruiz",
+      "parentId": null,
+      "values": {
+        "x": 40,
+        "y": 270,
+        "width": 1000,
+        "height": 1180,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "v-class-ana",
+      "definition": "window",
+      "label": "v-class-effect · v-class-ana",
+      "parentId": null,
+      "values": {
+        "x": 40,
+        "y": 270,
+        "width": 1000,
+        "height": 330,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "v-class-ben",
+      "definition": "window",
+      "label": "v-class-effect · v-class-ben",
+      "parentId": null,
+      "values": {
+        "x": 40,
+        "y": 670,
+        "width": 1000,
+        "height": 330,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "v-class-cleo",
+      "definition": "window",
+      "label": "v-class-effect · v-class-cleo",
+      "parentId": null,
+      "values": {
+        "x": 40,
+        "y": 1070,
+        "width": 1000,
+        "height": 330,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "callback-app",
+      "definition": "window",
+      "label": "callback · app",
+      "parentId": null,
+      "values": {
+        "x": 30,
+        "y": 190,
+        "width": 1020,
+        "height": 1140,
         "rotation": 0
       }
     },
@@ -657,78 +535,78 @@
       "label": "end · icon",
       "parentId": null,
       "values": {
-        "x": 100,
-        "y": 330,
-        "width": 220,
-        "height": 220,
+        "x": 440,
+        "y": 520,
+        "width": 200,
+        "height": 200,
         "rotation": 0
       }
     },
     {
-      "id": "end-name",
+      "id": "end-feature",
       "definition": "type",
-      "label": "end · ARDIA",
+      "label": "end · Shared Folders",
       "parentId": null,
       "values": {
-        "text": "ARDIA",
-        "size": 220,
-        "color": "#16130F",
+        "text": "Shared Folders",
+        "size": 104,
+        "color": "#1D1D1F",
         "fill": "#00000000",
-        "x": 360,
-        "y": 330,
-        "width": 660,
-        "height": 220,
+        "x": 60,
+        "y": 820,
+        "width": 960,
+        "height": 140,
         "rotation": 0
       }
     },
     {
-      "id": "end-mac",
+      "id": "end-ardia",
       "definition": "type",
-      "label": "end · THE SIDEBAR BROWSER FOR MAC",
+      "label": "end · Ardia",
       "parentId": null,
       "values": {
-        "text": "THE SIDEBAR\nBROWSER FOR MAC",
-        "size": 70,
-        "color": "#2150D9",
+        "text": "Ardia",
+        "size": 112,
+        "color": "#1D1D1F",
         "fill": "#00000000",
-        "x": 100,
-        "y": 620,
-        "width": 880,
-        "height": 150,
+        "x": 60,
+        "y": 755,
+        "width": 960,
+        "height": 130,
         "rotation": 0
       }
     },
     {
-      "id": "end-download",
+      "id": "end-category",
       "definition": "type",
-      "label": "end · DOWNLOAD",
+      "label": "end · The sidebar browser for Mac",
       "parentId": null,
       "values": {
-        "text": "DOWNLOAD",
-        "size": 90,
-        "color": "#16130F",
+        "text": "The sidebar browser for Mac",
+        "size": 56,
+        "color": "#6E6E73",
         "fill": "#00000000",
-        "x": 100,
-        "y": 850,
-        "width": 880,
-        "height": 100,
+        "x": 60,
+        "y": 895,
+        "width": 960,
+        "height": 84,
         "rotation": 0
       }
     },
     {
       "id": "end-url",
       "definition": "type",
-      "label": "end · ARDIA.DEV",
+      "label": "end · Download at ardia.dev",
       "parentId": null,
       "values": {
-        "text": "ARDIA.DEV",
-        "size": 230,
-        "color": "#C3371F",
+        "text": "Download at ardia.dev",
+        "size": 60,
+        "color": "#2150D9",
         "fill": "#00000000",
-        "x": 100,
-        "y": 960,
-        "width": 880,
-        "height": 200,
+        "x": 60,
+        "y": 1000,
+        "width": 960,
+        "height": 90,
         "rotation": 0
       }
     }

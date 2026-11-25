@@ -9,6 +9,9 @@ final class MagnifyArea: ExpoView {
   private static weak var owner: MagnifyArea?
   private static var claimed = false
   private static var total = 0.0
+  static var seen = 0
+  static var claimedCount = 0
+  private static weak var peek: PeekStage?
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -27,16 +30,18 @@ final class MagnifyArea: ExpoView {
 
   static func route(window: NSWindow?, location: NSPoint, phase: NSEvent.Phase, magnification: Double) -> Bool {
     if phase.contains(.began) {
-      owner = window.flatMap { area(at: location, in: $0) }
-      claimed = owner != nil
+      peek = window.flatMap { PeekStage.under(location, in: $0) }
+      owner = peek == nil ? window.flatMap { area(at: location, in: $0) } : nil
+      claimed = peek != nil || owner != nil
       total = 0
     }
     guard claimed else { return false }
     total += magnification
     let finished = phase.contains(.ended) || phase.contains(.cancelled)
     let name = phase.contains(.ended) ? "ended" : phase.contains(.cancelled) ? "cancelled" : phase.contains(.began) ? "began" : "changed"
-    owner?.onMagnify(["phase": name, "magnification": total])
+    if let peek { peek.magnify(phase: name, total: total) } else { owner?.onMagnify(["phase": name, "magnification": total]) }
     if finished {
+      peek = nil
       owner = nil
       claimed = false
     }
@@ -45,7 +50,7 @@ final class MagnifyArea: ExpoView {
 
   static func devMagnify(windowId: String, x: Double, y: Double, steps: [[String: Any]]) -> [String: Any] {
     guard let window = WindowManager.shared.window(windowId), let content = window.contentView else { return ["error": "no window \(windowId)"] }
-    let location = content.convert(SyntheticInput.contentPoint(x: x, top: y, in: content), to: nil)
+    let location = SyntheticInput.windowPoint(x: x, top: y, in: window)
     let hit = content.superview?.hitTest(location)
     let phases: [String: NSEvent.Phase] = ["began": .began, "changed": .changed, "ended": .ended, "cancelled": .cancelled]
     var claims: [Bool] = []
@@ -59,6 +64,15 @@ final class MagnifyArea: ExpoView {
 
 let installMagnifyMonitor: Void = {
   _ = NSEvent.addLocalMonitorForEvents(matching: [.magnify]) { event in
-    MagnifyArea.route(window: event.window, location: event.locationInWindow, phase: event.phase, magnification: Double(event.magnification)) ? nil : event
+    #if DEBUG
+    MagnifyArea.seen += 1
+    #endif
+    let window = event.window ?? NSApp.orderedWindows.first { $0.isVisible && $0.frame.contains(event.locationInWindow) }
+    let location = event.window == nil ? window.map { $0.convertPoint(fromScreen: event.locationInWindow) } ?? event.locationInWindow : event.locationInWindow
+    let claimed = MagnifyArea.route(window: window, location: location, phase: event.phase, magnification: Double(event.magnification))
+    #if DEBUG
+    if claimed { MagnifyArea.claimedCount += 1 }
+    #endif
+    return claimed ? nil : event
   }
 }()

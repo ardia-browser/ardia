@@ -1,0 +1,134 @@
+#!/bin/bash
+# corex-build <name> <commit> [build-apk options]
+# Builds the Android app on corex, in the bots container (14 GB), from a pushed commit, with build-apk unchanged, into
+# ~/Developer/ardia-phone-apks/<name>.apk with its stamp <name>.txt. ~/Developer/ardia-android-build/src is a build-only
+# clone: fetched, detached at the commit and reset to it every time, never edited or committed from; all work happens
+# in the main checkout. The scripts come from the branch head, so an older commit builds with today's build-apk.
+# Waits (up to ARDIA_BUILD_WAIT seconds, default 1800) while another Gradle build is busy in the container (more than
+# half a second of CPU in 5 s: an idle daemon left by another project only counts against memory) or less than
+# 8 GB of its memory is free. Gradle runs without a daemon and Kotlin in-process, so nothing of ours stays resident.
+# pnpm is the version apps/phone/package.json pins, first on the path, since bundle-export runs it too, and TMPDIR
+# sits beside the clone, so the export's offline install finds pnpm's store on the same filesystem.
+# apkanalyzer for check-names.py is cmdline-tools 23.0 (the Mac's), pinned by checksum, in sdk-view/ beside the clone:
+# it must sit in an SDK layout, so the view links the shared SDK's build-tools, platform-tools and platforms and
+# nothing is added to the shared SDK. Keeps the newest 8 APKs. --compose-key is refused: the upgrade pair is built on the Mac.
+set -euo pipefail
+if [ $# -lt 2 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+  [ $# -ge 1 ] && [ "$1" != "--help" ] && [ "$1" != "-h" ] && exit 64
+  exit 0
+fi
+name="$1"
+wanted="$2"
+shift 2
+for argument in "$@"; do
+  [ "$argument" = "--compose-key" ] && { echo "--compose-key signs with the Compose app's key, which only the Mac holds" >&2; exit 64; }
+done
+base="$HOME/Developer/ardia-android-build"
+src="$base/src"
+tools="$base/tools"
+out="$HOME/Developer/ardia-phone-apks"
+branch="${ARDIA_BUILD_BRANCH:-t3/unify-expo-architecture}"
+remote="https://github.com/ardia-browser/ardia.git"
+keep=8
+gib=$((1024 * 1024 * 1024))
+
+[ "$(uname)" = "Linux" ] || { echo "corex-build runs on corex" >&2; exit 64; }
+limit="$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)"
+if [ "$limit" = "max" ] || [ "$limit" -lt $((14 * gib)) ]; then
+  echo "this isn't the bots container (memory limit $limit): run it with ssh corex docker exec bots bash -lc '…'" >&2
+  exit 64
+fi
+
+cpuTicks() { local total=0 pid; for pid in "$@"; do [ -r "/proc/$pid/stat" ] && total=$(( total + $(awk '{ print $14 + $15 }' "/proc/$pid/stat" 2>/dev/null || echo 0) )); done; echo "$total"; }
+others() {
+  local pids before
+  pids="$(pgrep -f 'org.gradle.launcher.daemon|GradleWrapperMain|org.gradle.launcher.GradleMain|KotlinCompileDaemon' || true)"
+  [ -n "$pids" ] || return 0
+  before="$(cpuTicks $pids)"
+  sleep 5
+  [ $(( $(cpuTicks $pids) - before )) -gt 50 ] && echo "$pids"
+  return 0
+}
+spare() { echo $(( (limit - $(cat /sys/fs/cgroup/memory.current) + $(awk '$1 == "inactive_file" || $1 == "slab_reclaimable" { sum += $2 } END { printf "%.0f", sum }' /sys/fs/cgroup/memory.stat)) / gib )); }
+deadline=$(( $(date +%s) + ${ARDIA_BUILD_WAIT:-1800} ))
+while true; do
+  busy="$(others)"
+  free="$(spare)"
+  [ -z "$busy" ] && [ "$free" -ge 8 ] && break
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    echo "bots stayed busy: Gradle processes [${busy//$'\n'/ }], ${free} GB free; not building" >&2
+    exit 75
+  fi
+  echo "waiting: Gradle processes [${busy//$'\n'/ }], ${free} GB of bots free"
+  sleep 30
+done
+echo "bots: ${free} GB free, no other Gradle build"
+
+mkdir -p "$base" "$out"
+exec 9> "$base/clone.lock"
+flock -w "${ARDIA_BUILD_WAIT:-1800}" 9 || { echo "the build clone stayed busy (corex-test?)" >&2; exit 75; }
+cat > "$base/README.md" <<'README'
+# Build-only clone for corex-build
+
+`src/` is a clone of ardia used only to build the Android app on corex (`apps/phone/scripts/corex-build`).
+Every build fetches, detaches it at the requested commit and resets it there; untracked files are removed, and only
+the build outputs Git ignores stay. Never edit, commit or push from here: all work happens in the main checkout on
+the Mac. `apps/phone/scripts/corex-test` runs the Kotlin unit tests here too: it may apply a diff from the main
+checkout for one run and resets the clone when it ends. Both hold `clone.lock`. `tools/` holds the branch head's `apps/phone/scripts` and `apps/phone/test/r8`, rewritten every build.
+`pnpm-<version>/` is the pinned pnpm, `sdk-view/` the pinned apkanalyzer in an SDK layout that links the shared
+SDK's parts, and `tmp/` holds the bundle exports.
+APKs go to `~/Developer/ardia-phone-apks/`.
+README
+if [ ! -d "$src/.git" ]; then
+  git clone --quiet --no-checkout "$remote" "$src"
+fi
+git -C "$src" fetch --quiet origin "$branch"
+head="$(git -C "$src" rev-parse FETCH_HEAD)"
+commit="$(git -C "$src" rev-parse --verify --quiet "$wanted^{commit}" || true)"
+[ -n "$commit" ] || { echo "$wanted isn't on origin/$branch: push it first" >&2; exit 64; }
+git -C "$src" merge-base --is-ancestor "$commit" "$head" || { echo "$commit isn't on origin/$branch" >&2; exit 64; }
+git -C "$src" checkout --quiet --detach --force "$commit"
+git -C "$src" reset --quiet --hard "$commit"
+git -C "$src" clean -ffdq
+[ -z "$(git -C "$src" status --porcelain)" ] || { echo "the build clone isn't clean at $commit" >&2; exit 1; }
+rm -rf "$tools"
+mkdir -p "$tools"
+git -C "$src" archive "$head" apps/phone/scripts apps/phone/test/r8 | tar -x -C "$tools"
+sdkView="$base/sdk-view"
+mkdir -p "$sdkView/cmdline-tools"
+for part in build-tools platform-tools platforms; do
+  ln -sfn "$ANDROID_HOME/$part" "$sdkView/$part"
+done
+if [ ! -x "$sdkView/cmdline-tools/latest/bin/apkanalyzer" ]; then
+  curl -fsSL -o "$sdkView/cmdline-tools.zip" https://dl.google.com/android/repository/commandlinetools-linux-16111833_latest.zip
+  echo "e025545c62a8e64c7559119566a569fb1dec5f60  $sdkView/cmdline-tools.zip" | sha1sum -c --quiet
+  unzip -q -o "$sdkView/cmdline-tools.zip" -d "$sdkView/cmdline-tools/unpacked"
+  mv "$sdkView/cmdline-tools/unpacked/cmdline-tools" "$sdkView/cmdline-tools/latest"
+  rmdir "$sdkView/cmdline-tools/unpacked"
+  rm -f "$sdkView/cmdline-tools.zip"
+fi
+export ARDIA_APKANALYZER="$sdkView/cmdline-tools/latest/bin/apkanalyzer"
+
+pinned="$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "$src/apps/phone/package.json")"
+pnpmHome="$base/pnpm-$pinned"
+[ -x "$pnpmHome/node_modules/.bin/pnpm" ] || npm install --silent --prefix "$pnpmHome" "pnpm@$pinned"
+export PATH="$pnpmHome/node_modules/.bin:$PATH"
+export TMPDIR="$base/tmp"
+export GRADLE_OPTS="${GRADLE_OPTS:-} -Djava.net.preferIPv4Stack=true"
+mkdir -p "$TMPDIR"
+[ "$(pnpm --version)" = "$pinned" ] || { echo "pnpm on the path is $(pnpm --version), not $pinned" >&2; exit 1; }
+started=$(date +%s)
+(cd "$src/apps/phone" && pnpm install --frozen-lockfile --reporter=append-only > "$base/install.log" 2>&1) || { tail -20 "$base/install.log" >&2; exit 1; }
+installed=$(date +%s)
+ARDIA_BUILD_ROOT="$src" ARDIA_APK_DIR="$out" ARDIA_GRADLE_EPHEMERAL=1 bash "$tools/apps/phone/scripts/build-apk" "$name" --commit "$commit" "$@"
+finished=$(date +%s)
+echo "built on: corex, bots container, scripts from $head; install $((installed - started)) s, build $((finished - installed)) s" | tee -a "$out/$name.txt"
+
+left="$(others)"
+[ -z "$left" ] || echo "warning: Gradle or Kotlin processes still running after the build: ${left//$'\n'/ }" >&2
+ls -1t "$out"/*.apk 2>/dev/null | tail -n +$((keep + 1)) | while read -r old; do
+  stem="${old%.apk}"
+  rm -rf "$old" "$stem.txt" "$stem-r8" "${stem%-universal}.aab"
+  echo "pruned $(basename "$old")"
+done

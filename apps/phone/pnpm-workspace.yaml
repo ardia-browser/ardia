@@ -1,0 +1,17 @@
+packages:
+  - "."
+  - "../../packages/phone"
+
+nodeLinker: hoisted
+
+autoInstallPeers: false
+
+ignoreWorkspaceRootCheck: true
+
+allowBuilds:
+  '@parcel/watcher': false
+  esbuild: false
+
+patchedDependencies:
+  '@expo/ui@58.0.28': patches/@expo__ui@58.0.28.patch
+  expo-file-system@58.0.13: patches/expo-file-system@58.0.13.patch

@@ -1,10 +1,12 @@
 #import "ArdiaChromeWindowInternal.h"
+#import "ArdiaRuntime.h"
 #import "ArdiaWebViewInternal.h"
 
 using namespace ardia_window;
 
 @interface ArdiaPopupWindow : NSObject <ArdiaCoreWindowDelegate, ArdiaCoreTabDelegate>
 @property(nonatomic, readonly) ArdiaCoreTab *tab;
+@property(nonatomic, readonly) ArdiaCoreWindow *coreWindow;
 - (void)askPermission:(NSDictionary *)request;
 - (BOOL)dropPermission:(NSString *)requestId;
 @end
@@ -12,6 +14,20 @@ using namespace ardia_window;
 namespace {
 
 constexpr CGFloat kPopupOriginStripHeight = 28;
+
+BOOL gChromeAppWindowJoinsFullScreenSpace = NO;
+
+NSWindowCollectionBehavior JoiningFullScreenSpace(NSWindowCollectionBehavior behavior) {
+  return (behavior & ~NSWindowCollectionBehaviorFullScreenPrimary) | NSWindowCollectionBehaviorFullScreenAuxiliary;
+}
+
+NSWindow *_Nullable FrontWindowOfProfile(ArdiaCoreProfile *profile) {
+  for (NSWindow *window in NSApp.orderedWindows) {
+    ArdiaWindowController *c = [ArdiaWindowController forNSWindow:window];
+    if (c && !c.stray && c.coreWindow.activeProfile == profile) return window;
+  }
+  return nil;
+}
 
 NSMutableSet<ArdiaPopupWindow *> *PopupWindows() {
   static NSMutableSet *windows = [NSMutableSet set];
@@ -25,6 +41,32 @@ NSMapTable<ArdiaWebView *, NSPointerArray *> *PasswordPromptSources() {
 
 NSString *HostOf(NSString *url) {
   return [NSURL URLWithString:url ?: @""].host ?: @"";
+}
+
+NSString *KeySystemFamily(NSString *keySystem) {
+  if (!keySystem.length) return @"none";
+  if ([keySystem hasPrefix:@"com.widevine.alpha"]) return @"widevine";
+  if ([keySystem hasPrefix:@"com.microsoft.playready"]) return @"playready";
+  if ([keySystem hasPrefix:@"com.apple.fps"]) return @"fairplay";
+  return @"other";
+}
+
+BOOL OnProtectedVideoSite(NSString *url) {
+  static NSArray<NSString *> *domains = @[
+    @"netflix.com", @"disneyplus.com", @"max.com", @"hbomax.com", @"primevideo.com", @"hulu.com", @"tv.apple.com", @"music.apple.com",
+    @"open.spotify.com", @"peacocktv.com", @"paramountplus.com", @"crunchyroll.com", @"hotstar.com", @"jiohotstar.com", @"v.qq.com",
+    @"audible.com", @"audible.co.uk", @"audible.ca", @"audible.com.au", @"audible.de", @"audible.fr", @"audible.it", @"audible.es",
+    @"audible.co.jp", @"audible.in", @"audible.com.br",
+    @"canalplus.com", @"mycanal.fr",
+    @"tv.youtube.com",
+    @"osnplus.com", @"anghami.com"
+  ];
+  NSURL *parsed = [NSURL URLWithString:url ?: @""];
+  if (![parsed.scheme.lowercaseString isEqualToString:@"https"]) return NO;
+  NSString *host = parsed.host.lowercaseString ?: @"";
+  for (NSString *domain in domains)
+    if ([host isEqualToString:domain] || [host hasSuffix:[@"." stringByAppendingString:domain]]) return YES;
+  return NO;
 }
 
 NSDictionary<NSString *, NSArray<NSString *> *> *PermissionKinds() {
@@ -100,13 +142,30 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   ArdiaPopupOriginStrip *_strip;
   id _closeObserver;
   BOOL _adopting;
+  BOOL _showInactive;
+  BOOL _shown;
   NSMutableArray<NSDictionary *> *_permissionQueue;
   NSDictionary *_shownPermission;
   NSAlert *_permissionAlert;
 }
 
++ (void)load {
+  Class chromeWindow = NSClassFromString(@"NativeWidgetMacNSWindow");
+  ardia_runtime::ReplaceMethod(chromeWindow, @selector(setCollectionBehavior:), ^id(IMP original) {
+    return ^(NSWindow *window, NSWindowCollectionBehavior behavior) {
+      if (gChromeAppWindowJoinsFullScreenSpace && !window.visible && (behavior & NSWindowCollectionBehaviorFullScreenPrimary))
+        behavior = JoiningFullScreenSpace(behavior);
+      ((void (*)(id, SEL, NSWindowCollectionBehavior))original)(window, @selector(setCollectionBehavior:), behavior);
+    };
+  });
+}
+
 - (ArdiaCoreTab *)tab {
   return _tab;
+}
+
+- (ArdiaCoreWindow *)coreWindow {
+  return _coreWindow;
 }
 
 - (void)askPermission:(NSDictionary *)request {
@@ -213,11 +272,28 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   [window setFrame:frame display:NO];
 }
 
+- (void)closeIfNeverGivenTab {
+  if (!_tab) [_coreWindow close];
+}
+
 - (void)takeTab {
   if (_tab.closed) return [_coreWindow close];
   _adopting = YES;
-  [_coreWindow adoptTab:_tab];
+  const ArdiaCoreAdoption adoption = [_coreWindow adoptTab:_tab];
   _adopting = NO;
+  if (adoption == ArdiaCoreAdoptionBusy) {
+    __weak ArdiaPopupWindow *weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [weakSelf takeTab];
+    });
+    return;
+  }
+  if (adoption == ArdiaCoreAdoptionRefused) return [_coreWindow close];
+  [self showTab];
+}
+
+- (void)showTab {
+  if (!_tab || _tab.closed) return [_coreWindow close];
   if (ArdiaCoreProfile *profile = _tab.profile) _coreWindow.activeProfile = profile;
   _tab.delegate = self;
   NSView *page = _tab.view, *host = _coreWindow.hostView;
@@ -227,6 +303,7 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   const BOOL flipped = host.isFlipped;
   page.frame = NSMakeRect(0, flipped ? kPopupOriginStripHeight : 0, NSWidth(bounds), pageHeight);
   page.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+  [_tab noteInShownSlot];
   [host addSubview:page];
   _strip = [[ArdiaPopupOriginStrip alloc]
       initWithFrame:NSMakeRect(0, flipped ? 0 : pageHeight, NSWidth(bounds), kPopupOriginStripHeight)];
@@ -234,7 +311,10 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   [host addSubview:_strip positioned:NSWindowAbove relativeTo:page];
   [self updateTitle];
   [self updateOrigin];
-  if (ardia_host::Background()) [_coreWindow showInactive];
+  _shown = YES;
+  NSWindow *window = _coreWindow.window;
+  if (IsWindowFullScreen(_opener.window)) window.collectionBehavior = JoiningFullScreenSpace(window.collectionBehavior);
+  if (ardia_host::Background() || _showInactive) [_coreWindow showInactive];
   else [_coreWindow.window makeKeyAndOrderFront:nil];
   [_tab focus];
 }
@@ -279,12 +359,41 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   if (!ardia_host::Background()) [_coreWindow.window makeKeyAndOrderFront:nil];
 }
 
+- (void)tab:(ArdiaCoreTab *)tab
+    didReceivePageMessage:(NSString *)kind
+                     json:(NSString *)json
+                    frame:(NSString *)frameId
+                     main:(BOOL)main
+                   origin:(NSString *)verifiedOrigin {
+  if (![kind isEqualToString:@"drm"]) return;
+  id data = ardia_runtime::JSONObject(json);
+  if (![data isKindOfClass:NSDictionary.class]) return;
+  id keySystem = ((NSDictionary *)data)[@"keySystem"];
+  NSString *family = KeySystemFamily([keySystem isKindOfClass:NSString.class] ? keySystem : nil);
+  NSLog(@"[ardiacore] popup protected media %@: %@", [family isEqualToString:@"none"] ? @"stalled" : @"refused", family);
+  [ArdiaEvents emit:@"engine.popupProtectedMedia" data:[ArdiaConsentStamp.begin onto:@{@"family" : family, @"listed" : @(OnProtectedVideoSite(tab.url))}]];
+}
+
+- (ArdiaWebView *)promptHost {
+  return _opener ?: [ArdiaWindowController hostingViewForProfile:_tab.profile];
+}
+
 - (void)tab:(ArdiaCoreTab *)tab externalAppRequest:(NSDictionary<NSString *, id> *)request {
-  [_opener tab:tab externalAppRequest:request];
+  [[self promptHost] tab:tab externalAppRequest:request];
+}
+
+- (void)window:(ArdiaCoreWindow *)window showRequestedActive:(BOOL)active {
+  if (!_shown) _showInactive = !active;
 }
 
 - (void)window:(ArdiaCoreWindow *)window didInsertTab:(ArdiaCoreTab *)tab opener:(ArdiaCoreTab *)opener disposition:(NSString *)disposition {
   if (_adopting || tab == _tab) return;
+  if (!_tab) {
+    _tab = tab;
+    __weak ArdiaPopupWindow *weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf showTab]; });
+    return;
+  }
   if ([disposition isEqualToString:@"popup"]) return ardia_host::OpenPopupWindow(tab, _opener);
   ArdiaWebView *view = _opener ?: [ArdiaWindowController hostingViewForProfile:tab.profile];
   if (view) [view openedTab:tab adoptId:[ArdiaTabRegistry offerTab:tab] disposition:ardia_host::AppDisposition(disposition)];
@@ -292,10 +401,10 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 }
 
 - (void)window:(ArdiaCoreWindow *)window passwordPrompt:(NSDictionary<NSString *, id> *)prompt forTab:(ArdiaCoreTab *)tab {
-  ArdiaWebView *opener = _opener;
   if (tab != _tab) return;
+  ArdiaWebView *opener = [self promptHost];
   if (!opener) {
-    NSLog(@"[ardiacore] dropped a popup's password prompt: its opener is gone");
+    NSLog(@"[ardiacore] dropped a popup's password prompt: no window of its profile is open");
     return;
   }
   ardia_host::NotePasswordPromptSource(opener, tab);
@@ -323,6 +432,7 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 namespace ardia_host {
 
 void OpenPopupWindow(ArdiaCoreTab *tab, ArdiaWebView *opener) {
+  if ([opener opensPopupsAsTabs]) return [opener openedPopupTab:tab];
   ArdiaPopupWindow *popup = [[ArdiaPopupWindow alloc] initWithTab:tab opener:opener];
   if (!popup) {
     if (opener) [opener openedTab:tab adoptId:[ArdiaTabRegistry offerTab:tab] disposition:@"foreground"];
@@ -331,6 +441,20 @@ void OpenPopupWindow(ArdiaCoreTab *tab, ArdiaWebView *opener) {
   [PopupWindows() addObject:popup];
   __weak ArdiaPopupWindow *weakPopup = popup;
   dispatch_async(dispatch_get_main_queue(), ^{ [weakPopup takeTab]; });
+}
+
+ArdiaCoreWindow *PopupWindowForChromeBrowser(ArdiaCoreProfile *profile) {
+  ArdiaPopupWindow *popup = [[ArdiaPopupWindow alloc] initWithTab:nil opener:[ArdiaWindowController hostingViewForProfile:profile]];
+  if (!popup) return nil;
+  [PopupWindows() addObject:popup];
+  __weak ArdiaPopupWindow *weakPopup = popup;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [weakPopup closeIfNeverGivenTab]; });
+  return popup.coreWindow;
+}
+
+void ChromeMakesAppWindow(ArdiaCoreProfile *profile) {
+  gChromeAppWindowJoinsFullScreenSpace = IsWindowFullScreen(FrontWindowOfProfile(profile));
+  dispatch_async(dispatch_get_main_queue(), ^{ gChromeAppWindowJoinsFullScreenSpace = NO; });
 }
 
 NSUInteger PopupWindowCount() {

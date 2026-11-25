@@ -1,0 +1,85 @@
+#!/bin/bash
+# check-release-apk <apk> --commit SHA --version RELEASE --signer SHA256 [--abis arm64-v8a] [--orientation portrait]
+# Checks an Android release APK before it leaves CI, reports every check, and exits 1 if any fails. It checks:
+# - the signer's certificate SHA-256 against --signer, and that the signature verifies;
+# - the package name;
+# - the versionName and versionCode android-version.ts gives for --version;
+# - no debuggable flag, and exactly --abis as the native code;
+# - the stamps: the commit, a clean tree, the JS from the commit's export;
+# - no sync offered, no profiling by the shell (the lab's), and the release version stamped;
+# - the main window locked to --orientation (portrait until landscape ships; "free to turn" for none);
+# - check-names.py on it.
+# Uses ANDROID_HOME's newest build-tools.
+set -euo pipefail
+if [ $# -lt 1 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+  [ $# -ge 1 ] && [ "$1" != "--help" ] && [ "$1" != "-h" ] && exit 64
+  exit 0
+fi
+apk="$1"
+shift
+commit="" release="" signer="" abis="arm64-v8a" orientation="portrait"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --commit) commit="$2"; shift ;;
+    --version) release="$2"; shift ;;
+    --signer) signer="$2"; shift ;;
+    --abis) abis="$2"; shift ;;
+    --orientation) orientation="$2"; shift ;;
+    *) echo "unknown option $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+[ -n "$commit" ] && [ -n "$release" ] && [ -n "$signer" ] || { echo "--commit, --version and --signer are needed" >&2; exit 64; }
+here="$(cd "$(dirname "$0")" && pwd)"
+root="${ARDIA_BUILD_ROOT:-$(cd "$here/../../.." && pwd)}"
+sdk="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+tools="$(ls -d "$sdk"/build-tools/* | sort -V | tail -1)"
+failed=0
+check() {
+  if [ "$2" = "$3" ]; then
+    echo "ok: $1 is $2"
+  else
+    echo "FAILED: $1 is ${2:-nothing}, expected $3"
+    failed=1
+  fi
+}
+plain() { tr -d ': ' | tr '[:upper:]' '[:lower:]'; }
+
+planned="$(node --no-warnings "$here/android-version.ts" "$release")"
+"$tools/apksigner" verify "$apk" > /dev/null && echo "ok: the signature verifies" || { echo "FAILED: the signature doesn't verify"; failed=1; }
+check "the signer" "$("$tools/apksigner" verify --print-certs "$apk" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1 | plain)" "$(printf '%s' "$signer" | plain)"
+badging="$("$tools/aapt2" dump badging "$apk")"
+check "the package" "$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" <<<"$badging")" "com.ardia.browser.android"
+check "versionName" "$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<<"$badging" | head -1)" "$(sed -n 's/^name=//p' <<<"$planned")"
+check "versionCode" "$(sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" <<<"$badging" | head -1)" "$(sed -n 's/^code=//p' <<<"$planned")"
+check "debuggable" "$(grep -c "^application-debuggable" <<<"$badging" || true)" "0"
+check "the native code" "$(sed -n "s/^native-code: //p" <<<"$badging" | tr -d "'" | tr ' ' ',')" "$abis"
+resources="$("$tools/aapt2" dump resources "$apk")"
+stamp() { printf '%s\n' "$resources" | grep -A1 "$1" | sed -n 's/.*"\(.*\)".*/\1/p' | head -1; }
+boolean() { printf '%s\n' "$resources" | grep -A1 "bool/$1" | tail -1 | sed -n 's/.*(\(true\|false\)).*/\1/p; s/^ *\(true\|false\) *$/\1/p' | head -1; }
+check "the commit stamp" "$(stamp string/ardia_build_commit)" "$commit"
+check "the tree" "$(stamp string/ardia_build_dirty)" "no"
+check "the JS source" "$(stamp string/ardia_build_source)" "export of the commit"
+check "the release version stamp" "$(stamp string/ardia_release_version)" "$release"
+offered="$(printf '%s\n' "$resources" | grep -A1 "bool/ardia_sync_offered" | tail -1)"
+check "sync offered" "$(grep -o -E 'true|false|0x[0-9a-f]+' <<<"$offered" | head -1 | sed 's/^0x0*$/false/; s/^0xffffffff$/true/')" "false"
+manifest="$("$tools/aapt2" dump xmltree --file AndroidManifest.xml "$apk")"
+main_orientation="$(awk '/E: activity /{inside=0} /android:name\(0x01010003\)="com.ardia.browser.android.MainActivity"/{inside=1} inside && /android:screenOrientation/{sub(/.*=/, ""); print; exit}' <<<"$manifest")"
+orientation_named() {
+  case "$1" in
+    1 | 0x1 | 0x00000001) echo portrait ;;
+    "") echo "free to turn" ;;
+    *) echo "$1" ;;
+  esac
+}
+check "the main window's orientation" "$(orientation_named "$main_orientation")" "$orientation"
+check "the shell's profiling" "$(grep -A1 -E "E: profileable" <<<"$manifest" | grep -o -E 'shell[^=]*=(true|false|0x[0-9a-f]+)' | head -1 | sed 's/.*=//; s/^0x0*$/false/; s/^0xffffffff$/true/')" "false"
+if names="$(ARDIA_BUILD_ROOT="$root" python3 "$root/apps/phone/test/r8/check-names.py" "$apk" 2>&1)"; then
+  echo "ok: check-names.py"
+else
+  printf '%s\n' "$names" | tail -20
+  echo "FAILED: check-names.py"
+  failed=1
+fi
+[ "$failed" = 0 ] && echo "all checks passed" || { echo "the release APK failed its checks"; exit 1; }

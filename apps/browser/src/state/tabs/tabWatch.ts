@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { linkedChangedIds } from "../browser/changes";
 import { useBrowser, type BrowserState } from "../browser/store";
 import type { Tab } from "../browser/types";
 import { currentBasePalette, useBasePalette } from "../config/basePalette";
@@ -8,11 +9,28 @@ type Readable<S> = { getState(): S; subscribe(listener: (s: S, prev: S) => void)
 
 const subscribeOf = <S,>(store: Readable<S>): Readable<S>["subscribe"] => (store.subscribe as { unprobed?: Readable<S>["subscribe"] }).unprobed ?? store.subscribe;
 
+export const watchBrowser = (listener: (s: BrowserState, prev: BrowserState) => void): (() => void) => subscribeOf(useBrowser)(listener);
+
 const watchers = new Map<string, Set<() => void>>();
 let listening = false;
 
+function wakeTab(id: string) {
+  let listeners = watchers.get(id);
+  while (listeners) {
+    for (const listener of [...listeners]) listener();
+    const remade = watchers.get(id);
+    if (remade === listeners) return;
+    listeners = remade;
+  }
+}
+
 function wake(s: BrowserState, prev: BrowserState) {
   if (s.tabs === prev.tabs) return;
+  const changed = linkedChangedIds(s.tabs, prev.tabs);
+  if (changed && changed.length <= 1) {
+    if (changed.length) wakeTab(changed[0]!);
+    return;
+  }
   for (const [id, listeners] of watchers) {
     if (s.tabs[id] === prev.tabs[id]) continue;
     for (const listener of [...listeners]) listener();

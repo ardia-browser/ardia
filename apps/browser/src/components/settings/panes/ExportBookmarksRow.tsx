@@ -1,12 +1,9 @@
 import { useState } from "react";
 import { exportBookmarks } from "../../../state/bookmarks/exportHtml";
-import { profileOfWindow } from "../../../state/bookmarks/bookmarkGroups";
-import { settingsBrowserWindow } from "../../../state/settings/settingsWindows";
 import { Button } from "../../ui";
-import { ProfilePicker, Row } from "../Form";
+import { Row } from "../Form";
 
-export function ExportBookmarksRow() {
-  const [profileId, setProfileId] = useState(() => profileOfWindow(settingsBrowserWindow()));
+export function ExportBookmarksRow({ profileId }: { profileId: string }) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const run = async () => {
@@ -14,7 +11,10 @@ export function ExportBookmarksRow() {
     setStatus("");
     try {
       const path = await exportBookmarks(profileId);
-      if (path) setStatus(`Saved “${path.split("/").pop()}” to “${path.split("/").slice(-2, -1)[0] ?? ""}”.`);
+      if (path) {
+        const parts = path.split(/[\\/]/);
+        setStatus(`Saved “${parts.at(-1) ?? path}” to “${parts.at(-2) ?? ""}”.`);
+      }
     } catch (error) {
       setStatus(`Couldn't export: ${(error as Error).message}`);
     } finally {
@@ -22,8 +22,7 @@ export function ExportBookmarksRow() {
     }
   };
   return (
-    <Row anchor="general.exportBookmarks" description={status || undefined}>
-      <ProfilePicker value={profileId} onChange={setProfileId} />
+    <Row anchor="profiles.exportBookmarks" description={status || undefined}>
       <Button title="Export…" disabled={busy} onPress={() => void run()} />
     </Row>
   );

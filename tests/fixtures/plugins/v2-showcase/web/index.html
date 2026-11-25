@@ -1,0 +1,229 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>V2 Showcase</title>
+<style>
+:root {
+  --gap: var(--ardia-space-m, 12px);
+  --gap-s: var(--ardia-space-s, 8px);
+  --gap-xs: var(--ardia-space-xs, 4px);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--ardia-panel, Canvas);
+  color: var(--ardia-text-primary, CanvasText);
+  font-family: var(--ardia-font-family, -apple-system, system-ui, sans-serif);
+  font-size: var(--ardia-font-size-body, 13px);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+main { display: flex; flex-direction: column; gap: var(--gap); padding: var(--gap); max-width: 560px; margin: 0 auto; }
+header { display: flex; align-items: center; gap: var(--gap-s); }
+header h1 { font-size: var(--ardia-font-size-title, 15px); font-weight: var(--ardia-font-weight-semibold, 600); margin: 0; flex: 1; }
+.glyph {
+  width: 28px; height: 28px; border-radius: var(--ardia-radius-tile, 8px);
+  display: grid; place-items: center;
+  background: var(--ardia-accent, AccentColor); color: var(--ardia-on-primary, white);
+  font-size: 15px;
+}
+.card {
+  background: var(--ardia-card, rgba(127,127,127,0.08));
+  border: 1px solid var(--ardia-card-edge, rgba(127,127,127,0.18));
+  border-radius: var(--ardia-radius-panel, 12px);
+  padding: var(--gap);
+  display: flex; flex-direction: column; gap: var(--gap-s);
+}
+.label { font-size: var(--ardia-font-size-caption, 11px); color: var(--ardia-text-tertiary, GrayText); text-transform: uppercase; letter-spacing: 0.04em; }
+.title { font-weight: var(--ardia-font-weight-medium, 500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.muted { color: var(--ardia-text-secondary, GrayText); font-size: var(--ardia-font-size-small, 12px); overflow-wrap: anywhere; }
+form { display: flex; gap: var(--gap-s); }
+input {
+  flex: 1; min-width: 0;
+  font: inherit; color: inherit;
+  background: var(--ardia-url-pill, rgba(127,127,127,0.1));
+  border: 1px solid var(--ardia-chip-border, transparent);
+  border-radius: var(--ardia-radius-tile, 8px);
+  padding: 6px 10px; outline: none;
+}
+input::placeholder { color: var(--ardia-placeholder, GrayText); }
+input:focus { border-color: var(--ardia-accent, AccentColor); }
+button {
+  font: inherit; cursor: default;
+  border: 0; border-radius: var(--ardia-radius-tile, 8px);
+  padding: 6px 12px;
+  background: var(--ardia-accent, AccentColor); color: var(--ardia-on-primary, white);
+}
+button.secondary { background: var(--ardia-row-hover, rgba(127,127,127,0.14)); color: var(--ardia-text-primary, CanvasText); }
+button:active { filter: brightness(0.92); }
+button:disabled { opacity: 0.5; }
+.stats { display: flex; gap: var(--gap-s); flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: var(--gap-xs);
+  padding: 2px 8px; border-radius: var(--ardia-radius-control, 4px);
+  background: var(--ardia-row-selected, rgba(127,127,127,0.14));
+  font-size: var(--ardia-font-size-small, 12px); font-variant-numeric: tabular-nums;
+}
+.chip.accent { background: var(--ardia-accent, AccentColor); color: var(--ardia-on-primary, white); }
+.error { color: var(--ardia-destructive, #d33); font-size: var(--ardia-font-size-small, 12px); }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: var(--gap-xs); }
+.swatch { display: flex; align-items: center; gap: var(--gap-xs); font-size: var(--ardia-font-size-caption, 11px); color: var(--ardia-text-secondary, GrayText); }
+.swatch i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--ardia-divider, rgba(127,127,127,0.3)); flex: none; }
+hr { border: 0; border-top: 1px solid var(--ardia-divider, rgba(127,127,127,0.2)); margin: 0; width: 100%; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="glyph">✦</div>
+  <h1 id="heading">V2 Showcase</h1>
+  <span class="chip" id="version">sidecar</span>
+</header>
+
+<section class="card">
+  <span class="label">Beside</span>
+  <span class="title" id="context-title">Opened on its own</span>
+  <span class="muted" id="context-url"></span>
+</section>
+
+<section class="card">
+  <span class="label">Active page</span>
+  <span class="title" id="page-title">Asking the plugin…</span>
+  <span class="muted" id="page-url"></span>
+</section>
+
+<section class="card">
+  <span class="label">GitHub repository</span>
+  <form id="lookup">
+    <input id="repo" placeholder="owner/name" autocomplete="off" spellcheck="false" value="nodejs/node">
+    <button id="check" type="submit">Check</button>
+  </form>
+  <div class="stats" id="stats" hidden>
+    <span class="chip accent" id="stars"></span>
+    <span class="chip" id="forks"></span>
+    <span class="chip" id="issues"></span>
+    <button class="secondary" id="star" type="button">Star</button>
+  </div>
+  <span class="muted" id="description"></span>
+  <span class="error" id="error" hidden></span>
+</section>
+
+<section class="card">
+  <span class="label">Theme</span>
+  <div class="swatches" id="swatches"></div>
+</section>
+</main>
+<script>
+(() => {
+  const host = window.ardia;
+  const $ = (id) => document.getElementById(id);
+  const pending = new Map();
+  let nextRequest = 0;
+
+  const format = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n));
+
+  const ask = (type, body) =>
+    new Promise((resolve, reject) => {
+      if (!host) return reject(new Error("This page runs inside Ardia."));
+      const requestId = "q" + ++nextRequest;
+      pending.set(requestId, { resolve, reject });
+      host.send(Object.assign({ type, requestId }, body || {}));
+    });
+
+  const showError = (error) => {
+    $("error").hidden = !error;
+    $("error").textContent = error ? String(error.message || error) : "";
+  };
+
+  const showContext = () => {
+    const context = host && host.context;
+    $("context-title").textContent = context ? context.title || "Untitled" : "Opened on its own";
+    $("context-url").textContent = context ? context.url : "";
+  };
+
+  const showSwatches = () => {
+    const roles = ["accent", "panel", "card", "text-primary", "text-secondary", "divider", "row-selected", "selection"];
+    const styles = getComputedStyle(document.documentElement);
+    $("swatches").replaceChildren(
+      ...roles.map((role) => {
+        const item = document.createElement("span");
+        item.className = "swatch";
+        const dot = document.createElement("i");
+        dot.style.background = "var(--ardia-" + role + ", transparent)";
+        item.append(dot, document.createTextNode(styles.getPropertyValue("--ardia-" + role).trim() ? role : role + " ·"));
+        return item;
+      }),
+    );
+  };
+
+  const showStats = (stats) => {
+    $("stats").hidden = false;
+    $("stars").textContent = "★ " + format(stats.stars);
+    $("forks").textContent = format(stats.forks) + " forks";
+    $("issues").textContent = stats.openIssues + " open issues";
+    $("description").textContent = stats.description || "No description.";
+    $("star").dataset.repo = stats.fullName;
+  };
+
+  $("lookup").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const repo = $("repo").value.trim();
+    if (!repo) return;
+    $("check").disabled = true;
+    showError(null);
+    try {
+      showStats((await ask("stats", { repo })).stats);
+    } catch (error) {
+      $("stats").hidden = true;
+      $("description").textContent = "";
+      showError(error);
+    } finally {
+      $("check").disabled = false;
+    }
+  });
+
+  $("star").addEventListener("click", async () => {
+    const repo = $("star").dataset.repo;
+    if (!repo) return;
+    try {
+      const { starred } = await ask("star", { repo });
+      $("star").textContent = starred.includes(repo) ? "Unstar" : "Star";
+    } catch (error) {
+      showError(error);
+    }
+  });
+
+  if (host) {
+    host.addEventListener("message", (event) => {
+      const data = event.data || {};
+      const waiter = pending.get(data.requestId);
+      if (!waiter) return;
+      pending.delete(data.requestId);
+      if (data.type === "error") waiter.reject(new Error(data.message));
+      else waiter.resolve(data);
+    });
+    host.addEventListener("context", showContext);
+    host.addEventListener("theme", showSwatches);
+  }
+
+  showContext();
+  showSwatches();
+  ask("hello")
+    .then(({ page, plugin }) => {
+      $("page-title").textContent = page ? page.title || "Untitled" : "No page is open";
+      $("page-url").textContent = page ? page.url : "";
+      if (plugin && plugin.version) $("version").textContent = "Ardia " + plugin.version;
+    })
+    .catch((error) => {
+      $("page-title").textContent = "Couldn't reach the plugin";
+      showError(error);
+    });
+  document.title = "V2 Showcase";
+})();
+</script>
+</body>
+</html>

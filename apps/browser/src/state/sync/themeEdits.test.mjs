@@ -43,7 +43,7 @@ globalThis.acTestNativeModules = {
 
 const shell = await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
-const { setProfileTheme } = await import("../profiles/themeActions.ts");
+const { choosePresetColor, setProfileTheme } = await import("../profiles/themeActions.ts");
 const quit = await import("../app/quit.ts");
 const S = () => useBrowser.getState();
 const settle = async (rounds = 30) => {
@@ -115,4 +115,31 @@ test("a profile's own theme that was never picked still gives way to a theme tha
   await engine.syncNow();
   await engine.syncNow();
   assert.deepEqual(S().profiles.default.theme, THEME_B, "a look set without a pick doesn't publish over the arrived theme");
+});
+
+test("V3: a pick and an edit made while a pull reads end as main's custom-theme case does, and the edit stays this Mac's own look", async () => {
+  shell.docs.clear();
+  folder.clear();
+  S().hydrate({});
+  useBrowser.setState({ bookmarksReady: { "": true } });
+  S().setProfileLook("default", { color: "plum", theme: THEME_A });
+  const engine = await import("./engine.ts?pickDuringRead");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  await engine.syncNow();
+  await engine.syncNow();
+  const key = `pth:${engine.useSync.getState().profiles.default.syncId}`;
+  remoteTheme(key, justAfter(opsFor(key).at(-1).h), THEME_B);
+  heldScope = "app";
+  releaseRead = null;
+  const cycle = engine.syncNow();
+  await until(() => releaseRead);
+  clockOffset += 1_000;
+  choosePresetColor("default", "green", engine.adoptProfileTheme);
+  setProfileTheme("default", THEME_C, engine.adoptProfileTheme);
+  releaseRead();
+  await cycle;
+  assert.equal(S().profiles.default.color, "green");
+  assert.deepEqual(S().profiles.default.theme, THEME_B, "the newer synced look wins, as in the known issue above for a custom theme");
+  assert.deepEqual(S().profiles.default.presetThemes, { green: THEME_C }, "the edit made during the read stays this Mac's own look of green");
 });

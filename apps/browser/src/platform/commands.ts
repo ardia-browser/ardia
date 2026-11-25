@@ -1,10 +1,10 @@
 import { nativeModule, type CommandEvent, type MenuState } from "@ardia/shell";
 
-export type { CommandEvent, BrowserCommand, MenuShortcut, ShortcutModifier, MenuState, MenuBookmark } from "@ardia/shell";
+export type { CommandEvent, MouseShortcutButton, BrowserCommand, MenuShortcut, ShortcutModifier, MenuState, MenuBookmark } from "@ardia/shell";
 
 const Menus = nativeModule("ArdiaMenus");
 
-export const onCommand = (listener: (e: CommandEvent) => void) => Menus.addListener("onCommand", listener);
+export const onCommand = (listener: (e: CommandEvent) => void) => Menus.addListener("onCommand", (e) => e.command !== "menu.pick" && listener(e));
 export const menuShortcuts = () => Menus.menuShortcuts();
 export const recordShortcut = () => Menus.recordShortcut();
 export const cancelShortcutRecording = () => Menus.cancelRecording();

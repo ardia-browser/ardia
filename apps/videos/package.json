@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "render": "scripts/deliver.sh",
-    "studio": "remotion studio"
+    "studio": "remotion studio",
+    "test": "node --no-warnings --test scripts/beats.test.mts",
+    "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.529",
@@ -25,6 +27,6 @@
     "@fontsource-variable/newsreader": "^5.3.0",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "typescript": "5.9.3"
+    "tsrs": "7.1.0-beta.tsrs4"
   }
 }

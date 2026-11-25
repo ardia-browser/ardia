@@ -5,9 +5,9 @@ import {
   recordDefaultBrowserCheckInDone,
 } from "./onboarding";
 import { useBrowser } from "../browser/store";
-import { sendFeedback } from "../commands/appCommands";
+import { reportProblem } from "../commands/appCommands";
 
-export const CHECK_IN_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+const CHECK_IN_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const CHECK_IN_COPY = { title: "How are you liking Ardia?", action: "Leave us feedback" } as const;
 
@@ -15,11 +15,11 @@ type CheckIn = { trialStartedAt: number | null; doneAt: number | null };
 
 const useCheckIn = create<CheckIn>()(() => ({ trialStartedAt: defaultBrowserTrialStartedAt(), doneAt: defaultBrowserCheckInDoneAt() }));
 
-export function checkInDue({ trialStartedAt, doneAt }: CheckIn, now = Date.now()): boolean {
+function checkInDue({ trialStartedAt, doneAt }: CheckIn, now = Date.now()): boolean {
   return trialStartedAt !== null && doneAt === null && now - trialStartedAt >= CHECK_IN_AFTER_MS;
 }
 
-export function dismissDefaultBrowserCheckIn() {
+function dismissDefaultBrowserCheckIn() {
   recordDefaultBrowserCheckInDone();
   useCheckIn.setState({ doneAt: Date.now() });
 }
@@ -31,7 +31,7 @@ export function useDefaultBrowserCheckIn(windowId: string) {
     visible: due && !incognito,
     leaveFeedback() {
       dismissDefaultBrowserCheckIn();
-      void sendFeedback(windowId);
+      reportProblem(windowId, "check_in");
     },
     dismiss: dismissDefaultBrowserCheckIn,
   };

@@ -9,6 +9,7 @@
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "chrome/browser/ui/recently_audible_helper.h"
 #include "components/favicon/content/content_favicon_driver.h"
 #include "components/find_in_page/find_notification_details.h"
 #include "components/find_in_page/find_tab_helper.h"
@@ -294,8 +295,16 @@ void TabBridge::OnWebContentsFocused(
   [tab_ notify:@selector(tabDidGainFocus:)];
 }
 
+blocked_content::PopupBlockerTabHelper* TabBridge::LivePopups() {
+  if (popups_ && popups_ != blocked_content::PopupBlockerTabHelper::FromWebContents(
+                                web_contents())) {
+    popups_ = nullptr;
+  }
+  return popups_;
+}
+
 void TabBridge::EnsurePopupsObserved() {
-  if (popups_) {
+  if (LivePopups()) {
     return;
   }
   popups_ = blocked_content::PopupBlockerTabHelper::FromWebContents(web_contents());
@@ -314,8 +323,8 @@ void TabBridge::BlockedUrlAdded(int32_t popup_id, const GURL& url) {
       FROM_HERE, base::BindOnce(
                      [](base::WeakPtr<TabBridge> bridge, int32_t popup_id,
                         NSDictionary* popup) {
-                       if (!bridge || !bridge->popups_ ||
-                           !bridge->popups_->GetBlockedPopupRequests().contains(
+                       if (!bridge || !bridge->LivePopups() ||
+                           !bridge->LivePopups()->GetBlockedPopupRequests().contains(
                                popup_id)) {
                          return;
                        }
@@ -328,7 +337,26 @@ void TabBridge::BlockedUrlAdded(int32_t popup_id, const GURL& url) {
                      weak_factory_.GetWeakPtr(), popup_id, popup));
 }
 
+void TabBridge::EnsureAudibleObserved() {
+  if (audible_subscription_) {
+    return;
+  }
+  if (auto* helper = RecentlyAudibleHelper::FromWebContents(web_contents())) {
+    audible_subscription_ = helper->RegisterRecentlyAudibleChangedCallback(
+        base::BindRepeating(&TabBridge::OnRecentlyAudibleChanged,
+                            base::Unretained(this)));
+  }
+}
+
+void TabBridge::OnRecentlyAudibleChanged(bool was_recently_audible) {
+  [tab_ notify:@selector(tabDidChangeAudio:)];
+}
+
 void TabBridge::OnAudioStateChanged(bool audible) {
+  if (audible_subscription_) {
+    return;
+  }
+  EnsureAudibleObserved();
   [tab_ notify:@selector(tabDidChangeAudio:)];
 }
 
@@ -337,10 +365,11 @@ void TabBridge::DidUpdateAudioMutingState(bool muted) {
 }
 
 void TabBridge::WebContentsDestroyed() {
-  if (popups_) {
+  audible_subscription_ = {};
+  if (LivePopups()) {
     popups_->manager()->RemoveObserver(this);
-    popups_ = nullptr;
   }
+  popups_ = nullptr;
   if (zoom_) {
     zoom_->RemoveObserver(this);
     zoom_ = nullptr;

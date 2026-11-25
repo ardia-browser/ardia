@@ -1,24 +1,36 @@
 import { useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useBrowser } from "../browser/store";
-import { activeTabId } from "../browser/model";
-import type { SplitView, Tab } from "../browser/types";
-import { tabEngine } from "../engines/engines";
+import { useBrowser, type BrowserState } from "../browser/store";
+import { fieldWatch, useKeyed } from "../browser/keyedWatch";
+import { activeTabId, engineProfile } from "../browser/model";
+import type { AdoptKind, SplitView, Tab } from "../browser/types";
+import { tabEngine, type PageEngine } from "../engines/engines";
 import { holderOf } from "../pins/pinShare";
 import { splitOf } from "../splits/splits";
 import { adoptOf, frozenOn, needsPage, wokenPage } from "../tabs/pageSession";
+import { adoptKind } from "../tabs/adoptIds";
 import { pageOf, patchPage } from "../tabs/pageState";
 import { wantsPage } from "../tabs/tabPages";
+import { useTabState } from "../tabs/tabStateWatch";
 import { removeTabs } from "../tabs/tabs";
 import { isSmallWindow } from "./small";
 import type { PagerPage } from "./profilePager";
 import { isWebPageUrl } from "../../lib/url";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { webviews } from "../../platform/webviews";
+import { notePageOverlay } from "../telemetry/usage";
+import { liveOf } from "../tabs/tabLive";
+import { warmOrder } from "../tabs/sleepPolicy";
 
 export const useSplitOf = (tabId: string | undefined) => useBrowser((s) => splitOf(s, tabId));
 
+const watchSplits = fieldWatch(() => useBrowser, (s: BrowserState) => s.splits);
+
+export const useInSplit = (tabId: string) => useKeyed(watchSplits, tabId, () => !!splitOf(useBrowser.getState(), tabId));
+
 export const useIsSmallWindow = (windowId: string) => useBrowser((s) => isSmallWindow(s.windows[windowId]));
 
-export const useTabEngine = (tabId: string) => useBrowser((s) => tabEngine(s, tabId));
+export const useTabEngine = (tabId: string) => useTabState(tabId, (s) => tabEngine(s, tabId));
 
 export const currentTabEngine = (tabId: string) => tabEngine(useBrowser.getState(), tabId);
 
@@ -31,18 +43,18 @@ export function useMountedTabIds(windowId: string): string[] {
       if (memo.tabIds === tabIds && memo.tabs === s.tabs) return memo.ids;
       if (tabIds && memo.tabIds === tabIds) {
         let same = true;
-        const seen = memo.seen.slice();
-        const wants = memo.wants.slice();
-        for (let i = 0; i < tabIds.length; i++) {
+        let seen = memo.seen;
+        for (let i = 0; i < tabIds.length && same; i++) {
           const t = s.tabs[tabIds[i]!];
           if (t === seen[i]) continue;
-          seen[i] = t;
-          const want = wantsPage(t);
-          if (want !== wants[i]) same = false;
-          wants[i] = want;
+          if (wantsPage(t) !== memo.wants[i]) same = false;
+          else {
+            if (seen === memo.seen) seen = seen.slice();
+            seen[i] = t;
+          }
         }
         if (same) {
-          mountedMemo.current = { ...memo, tabs: s.tabs, seen, wants };
+          mountedMemo.current = { ...memo, tabs: s.tabs, seen };
           return memo.ids;
         }
       }
@@ -71,51 +83,58 @@ export function successorWhenLeaving(leaving: string[], windowId: string): strin
   return next && next !== activeTabId(s, windowId) ? next : undefined;
 }
 
-export const useWarmTabIds = (windowId: string, pagerPages: PagerPage[] | null, successor: string | undefined) =>
-  useBrowser(
+export function useWarmTabIds(windowId: string, pagerPages: PagerPage[] | null, successor: string | undefined) {
+  return useBrowser(
     useShallow((s) => {
       const w = s.windows[windowId];
       const ids = !w || !pagerPages ? [] : pagerPages.map((p) => (p.id === w.profileId ? undefined : w.activeTabIds[p.id])).filter((id): id is string => !!id);
-      return successor && s.tabs[successor]?.windowId === windowId && !ids.includes(successor) ? [...ids, successor] : ids;
+      return warmOrder(ids, successor && s.tabs[successor]?.windowId === windowId ? successor : undefined);
     }),
   );
+}
 
 export const useSplitsOf = (tabIds: string[]) => useBrowser(useShallow((s) => tabIds.map((id) => splitOf(s, id)).filter((v): v is SplitView => !!v)));
 
-export function useShownPaneKeys(mounted: string[], panes: object): string[] {
-  const shownMemo = useRef<{ mounted?: string[]; panes?: object; tabs?: object; keys: string[]; ids: string[]; found: (Tab | undefined)[] }>({ keys: [], ids: [], found: [] });
-  return useBrowser(
-    useShallow((s) => {
-      const memo = shownMemo.current;
-      if (memo.mounted === mounted && memo.panes === panes) {
-        if (memo.tabs === s.tabs) return memo.keys;
-        let same = true;
-        let found = memo.found;
-        for (let i = 0; i < memo.ids.length && same; i++) {
-          const t = s.tabs[memo.ids[i]!];
-          const was = found[i];
-          if (t === was) continue;
-          if (!t || !was || t.createdAt !== was.createdAt || t.profileId !== was.profileId) same = false;
-          else {
-            if (found === memo.found) found = found.slice();
-            found[i] = t;
-          }
-        }
-        if (same) {
-          shownMemo.current = { ...memo, tabs: s.tabs, found };
-          return memo.keys;
-        }
+type ShownMemo = { mounted?: string[]; panes?: object; tabs?: object; profiles?: object; keys: string[]; ids: string[]; found: (Tab | undefined)[] };
+
+export const newShownMemo = (): ShownMemo => ({ keys: [], ids: [], found: [] });
+
+export const paneKeyOf = (s: Pick<BrowserState, "profiles">, t: Pick<Tab, "id" | "profileId">) => `${t.id}|${engineProfile(s, t.profileId)}`;
+
+export function shownPaneKeys(shownMemo: { current: ShownMemo }, s: BrowserState, mounted: string[], panes: object): string[] {
+  const memo = shownMemo.current;
+  if (memo.mounted === mounted && memo.panes === panes && memo.profiles === s.profiles) {
+    if (memo.tabs === s.tabs) return memo.keys;
+    let same = true;
+    let found = memo.found;
+    for (let i = 0; i < memo.ids.length && same; i++) {
+      const t = s.tabs[memo.ids[i]!];
+      const was = found[i];
+      if (t === was) continue;
+      if (!t || !was || t.createdAt !== was.createdAt || paneKeyOf(s, t) !== paneKeyOf(s, was)) same = false;
+      else {
+        if (found === memo.found) found = found.slice();
+        found[i] = t;
       }
-      const ids = [...new Set([...mounted, ...Object.keys(panes)])];
-      const found = ids.map((id) => s.tabs[id]);
-      const keys = found
-        .filter((t): t is Tab => !!t)
-        .sort((a, b) => a.createdAt - b.createdAt)
-        .map((t) => `${t.id}|${t.profileId}`);
-      shownMemo.current = { mounted, panes, tabs: s.tabs, keys, ids, found };
-      return keys;
-    }),
-  );
+    }
+    if (same) {
+      shownMemo.current = { ...memo, tabs: s.tabs, found };
+      return memo.keys;
+    }
+  }
+  const ids = [...new Set([...mounted, ...Object.keys(panes)])];
+  const found = ids.map((id) => s.tabs[id]);
+  const keys = found
+    .filter((t): t is Tab => !!t)
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .map((t) => paneKeyOf(s, t));
+  shownMemo.current = { mounted, panes, tabs: s.tabs, profiles: s.profiles, keys, ids, found };
+  return keys;
+}
+
+export function useShownPaneKeys(mounted: string[], panes: object): string[] {
+  const shownMemo = useRef<ShownMemo>(newShownMemo());
+  return useBrowser(useShallow((s) => shownPaneKeys(shownMemo, s, mounted, panes)));
 }
 
 export function downloadNavigated(tabId: string, committedUrl: string | null | undefined, skipped: boolean | undefined) {
@@ -129,7 +148,7 @@ export function downloadNavigated(tabId: string, committedUrl: string | null | u
   }
   const others = s.windows[t.windowId]?.tabIds.some((id) => id !== tabId && s.tabs[id]?.profileId === t.profileId);
   const opened = !!(t.openerId || adoptOf(t)) && !pageOf(tabId).wasNewTab;
-  if (!skipped && opened && !s.live[tabId]?.canGoBack && others) return useBrowser.getState().closeTab(tabId);
+  if (!skipped && opened && !liveOf(tabId).canGoBack && others) return useBrowser.getState().closeTab(tabId);
   patchPage(tabId, { backToNewTab: false, newTabShown: null });
   useBrowser.getState().updateTab(tabId, { url: "", title: "", favicon: null });
 }
@@ -142,8 +161,22 @@ export function newTabLingeringOver(windowId: string, from: string | undefined, 
   const next = s.tabs[to];
   if (!was || !next || was.url || was.windowId !== windowId || next.windowId !== windowId || !isWebPageUrl(next.url)) return undefined;
   if (isSmallWindow(s.windows[windowId]) || splitOf(s, from) || splitOf(s, to)) return undefined;
+  if (!holdsForFirstFrame(tabEngine(s, to))) {
+    notePageOverlay("newTabLeftForWebKit");
+    return undefined;
+  }
+  if (!PLATFORM_FEATURES.newTabWaitsForFirstFrame) {
+    notePageOverlay("newTabLeftWithoutLinger");
+    return undefined;
+  }
+  if (PLATFORM_FEATURES.holdsColdPagesUntilPainted && !webviews.has(to) && heldUntilPainted(adoptKind(adoptOf(next))?.kind)) return undefined;
+  notePageOverlay("newTabLingered");
   return from;
 }
+
+const holdsForFirstFrame = (engine: PageEngine) => engine === "chromium";
+
+const heldUntilPainted = (adopted: AdoptKind | undefined) => !adopted || adopted === "restore" || adopted === "clone";
 
 export function activateFocusedPane(tabId: string) {
   const s = useBrowser.getState();

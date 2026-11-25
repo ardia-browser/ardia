@@ -1,7 +1,9 @@
+import { changedIds } from "../browser/changes";
 import { Clock, type HLC } from "../../platform/sync";
 import { pinKeyOf } from "../browser/model";
 import type { BrowserState } from "../browser/store";
 import { editClock, editStamp } from "../sync/editClock";
+import { notePinChoicesRepaired } from "../telemetry/sessionWrites";
 import { isFields, isString } from "../../lib/decode";
 import type { SavedObject } from "../../lib/savedDocument";
 
@@ -11,7 +13,7 @@ export const nextPinChoice = editStamp;
 export const groupChoiceKey = (key: string) => `group:${key}`;
 export const placeChoiceKey = (key: string) => `place:${key}`;
 export const orderChoiceKey = (key: string) => `order:${key}`;
-export const tabChoiceKey = (key: string) => key;
+const tabChoiceKey = (key: string) => key;
 
 export function markPinned(choices: PinChoices, profileId: string, marks: { groups?: readonly string[]; tabs?: readonly string[]; placed?: readonly string[] }): PinChoices {
   const mine = { ...choices[profileId] };
@@ -27,14 +29,35 @@ export function notePinChoices(choices: PinChoices) {
 
 const choiceStamp = (choice: unknown) => (typeof choice === "number" ? new Clock("", null, () => choice).tick() : choice);
 
-export const sessionWithPinChoiceStamps = (doc: SavedObject): SavedObject => {
-  if (!isFields(doc.pinChoices)) return doc;
-  const byProfile = Object.entries(doc.pinChoices).map(([profileId, mine]) => [
+export function stampedPinChoices(saved: unknown): PinChoices {
+  if (!isFields(saved)) return {};
+  const byProfile = Object.entries(saved).map(([profileId, mine]) => [
     profileId,
     isFields(mine) ? Object.fromEntries(Object.entries(mine).map(([key, choice]) => [key, choiceStamp(choice)]).filter(([, choice]) => isString(choice))) : {},
   ]);
-  return { ...doc, pinChoices: Object.fromEntries(byProfile) };
-};
+  return Object.fromEntries(byProfile);
+}
+
+const everyChoice = (saved: SavedObject, ok: (choice: unknown) => boolean) =>
+  Object.values(saved).every((mine) => isFields(mine) && Object.values(mine).every(ok));
+
+export function sessionWithPinChoiceStamps(doc: SavedObject): SavedObject {
+  if (!isFields(doc.pinChoices)) return doc;
+  if (!everyChoice(doc.pinChoices, (choice) => isString(choice) || typeof choice === "number")) notePinChoicesRepaired();
+  return { ...doc, pinChoices: stampedPinChoices(doc.pinChoices) };
+}
+
+export const isPinChoices = (saved: unknown): saved is PinChoices => isFields(saved) && everyChoice(saved, isString);
+
+export function pinChoicesFromDisk(saved: unknown = {}): PinChoices {
+  if (isPinChoices(saved)) return saved;
+  notePinChoicesRepaired();
+  if (!isFields(saved)) return {};
+  const byProfile = Object.entries(saved).flatMap(([profileId, mine]) =>
+    isFields(mine) ? [[profileId, Object.fromEntries(Object.entries(mine).filter(([, choice]) => isString(choice)))]] : [],
+  );
+  return Object.fromEntries(byProfile);
+}
 
 export type PinSyncEntry = { g?: string; w?: number };
 export type PinSync = Record<string, Record<string, PinSyncEntry>>;
@@ -76,8 +99,15 @@ function livePinTable<T>(table: Record<string, Record<string, T>>, s: Pick<Brows
   return changed ? out : table;
 }
 
+const pinTableTabsAlike = (tabs: BrowserState["tabs"], was: BrowserState["tabs"]) =>
+  changedIds(tabs, was).every((id) => {
+    const t = tabs[id];
+    const b = was[id];
+    return !!t && !!b && !!t.pin === !!b.pin && t.profileId === b.profileId && t.pinKey === b.pinKey;
+  });
+
 export function livePinTables(s: BrowserState, prev: BrowserState): Pick<BrowserState, "pinChoices" | "pinSync"> | null {
-  if (s.pinChoices === prev.pinChoices && s.pinSync === prev.pinSync && s.tabs === prev.tabs && s.groups === prev.groups && s.parkedPins === prev.parkedPins && s.profiles === prev.profiles) return null;
+  if (s.pinChoices === prev.pinChoices && s.pinSync === prev.pinSync && s.groups === prev.groups && s.parkedPins === prev.parkedPins && s.profiles === prev.profiles && pinTableTabsAlike(s.tabs, prev.tabs)) return null;
   const pinChoices = livePinTable(s.pinChoices, s);
   const pinSync = livePinTable(s.pinSync, s);
   return pinChoices !== s.pinChoices || pinSync !== s.pinSync ? { pinChoices, pinSync } : null;

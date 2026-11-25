@@ -10,7 +10,13 @@ import { everySlowly } from "../../platform/slowTimers";
 import { webviews } from "../../platform/webviews";
 import { useLifecycle } from "./sleepingTabs";
 import { startMemorySaver } from "./memorySaver";
+import { noteTabGone, noteTabWoke, pressureChanged, startLoadedTabBudget } from "./loadedTabBudget";
+import { pressureOf } from "./sleepPolicy";
 import { focusedWindowOf } from "../windows/ui";
+import { noteMemoryPressure, noteTabSlept } from "../telemetry/tabSleepCounts";
+import { noteTabLoaded } from "./busyTabWatch";
+import { consentToken } from "../telemetry/client";
+import type { ConsentToken } from "../telemetry/choice";
 
 export { useIsSleeping, useLifecycle } from "./sleepingTabs";
 
@@ -27,14 +33,18 @@ const currentSystem = () => (system ? { ...system, ...systemOverride } : null);
 export function noteReady(tabId: string) {
   const tab = store().tabs[tabId];
   if (tab) loadedProfiles.add(engineProfile(useBrowser.getState(), tab.profileId));
+  noteTabWoke(tabId);
   forget(tabId);
+  noteTabLoaded(tabId);
 }
 
-export function noteDiscarded(tabId: string) {
+export function noteDiscarded(tabId: string, reason: string | null = null) {
+  noteTabSlept(!!store().tabs[tabId]?.pin, reason);
   useLifecycle.setState((l) => ({ discarded: { ...l.discarded, [tabId]: true } }));
 }
 
 export function noteGone(tabId: string) {
+  noteTabGone(tabId);
   forget(tabId);
 }
 
@@ -74,6 +84,14 @@ export function batterySaverWanted(when: BatterySaverWhen, sys: SystemState | nu
 
 let lowBatteryHeld = false;
 
+function updateMemoryPressure(consent: ConsentToken | null) {
+  const pressure = pressureOf(currentSystem()?.memoryPressure);
+  if (pressure === useLifecycle.getState().memoryPressure) return;
+  useLifecycle.setState({ memoryPressure: pressure });
+  if (pressure !== "normal") noteMemoryPressure(pressure, consent);
+  pressureChanged(consent);
+}
+
 function updateBatterySaver(announce: boolean) {
   const wanted = batterySaverWanted(store().settings.batterySaverWhen, currentSystem(), lowBatteryHeld);
   lowBatteryHeld = wanted.lowBatteryHeld;
@@ -100,7 +118,8 @@ export function startTabLifecycle() {
   started = true;
 
   startMemorySaver();
-  useBrowser.subscribe((s: BrowserState, prev: BrowserState) => {
+  startLoadedTabBudget(currentSystem);
+  useBrowser.subscribeTo(["settings"], (s: BrowserState, prev: BrowserState) => {
     if (s.settings.batterySaverWhen !== prev.settings.batterySaverWhen) {
       lowBatteryHeld = false;
       updateBatterySaver(false);
@@ -113,10 +132,13 @@ export function startTabLifecycle() {
       (state) => {
         system = state;
         updateBatterySaver(false);
+        updateMemoryPressure(consentToken());
         syncBatterySaver();
         onSystemState((next) => {
+          const consent = consentToken();
           system = next;
           updateBatterySaver(true);
+          updateMemoryPressure(consent);
         });
         setTimeout(() => {
           const sys = currentSystem();
@@ -141,6 +163,7 @@ export function startTabLifecycle() {
       simulate: (patch: Partial<SystemState> | null) => {
         systemOverride = patch;
         updateBatterySaver(true);
+        updateMemoryPressure(consentToken());
       },
     };
   }

@@ -16,9 +16,11 @@
 #include "base/time/time.h"
 #include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/ardia/ac_engine.h"
+#include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/favicon/core/favicon_service.h"
 #include "components/favicon_base/favicon_types.h"
+#include "components/history/core/browser/history_service.h"
 #include "components/keyed_service/core/service_access_type.h"
 #include "ui/gfx/image/image.h"
 #include "url/gurl.h"
@@ -36,6 +38,8 @@ constexpr int kDefaultSize = 32;
 constexpr size_t kMaxPerCall = 500;
 constexpr base::TimeDelta kTouchAgainAfter = base::Days(1);
 
+enum class Use { kMarkUsed, kReadOnly };
+
 base::CancelableTaskTracker& Tracker() {
   static base::NoDestructor<base::CancelableTaskTracker> tracker;
   return *tracker;
@@ -46,6 +50,21 @@ favicon::FaviconService* FaviconsFor(Profile* profile) {
              ? FaviconServiceFactory::GetForProfile(
                    profile, ServiceAccessType::EXPLICIT_ACCESS)
              : nullptr;
+}
+
+favicon::FaviconService* LoadedFaviconsFor(Profile* profile) {
+  if (!profile || profile->IsOffTheRecord() || profile->ShutdownStarted()) {
+    return nullptr;
+  }
+  history::HistoryService* history =
+      HistoryServiceFactory::GetForProfileIfExists(
+          profile, ServiceAccessType::EXPLICIT_ACCESS);
+  return history && history->BackendLoaded() ? FaviconsFor(profile) : nullptr;
+}
+
+favicon::FaviconService* ServiceFor(Profile* profile, Use use) {
+  return use == Use::kReadOnly ? LoadedFaviconsFor(profile)
+                               : FaviconsFor(profile);
 }
 
 std::vector<std::string> Strings(const base::ListValue* list) {
@@ -145,15 +164,79 @@ void LookUpSite(favicon::FaviconService* service,
           },
           r, std::move(page), lookup, std::move(done)));
   const favicon_base::IconTypeSet types = {favicon_base::IconType::kFavicon};
-  service->GetRawFaviconForPageURL(home, types, size,
-                                   false,
+  service->GetRawFaviconForPageURL(home, types, size, false,
                                    Into(lookup, 0, all), &Tracker());
   service->GetRawFavicon(home.Resolve("/favicon.ico"),
                          favicon_base::IconType::kFavicon, size,
                          Into(lookup, 1, all), &Tracker());
-  service->GetRawFaviconForPageURL(url, types, size,
-                                   true,
-                                   Into(lookup, 2, all), &Tracker());
+  service->GetRawFaviconForPageURL(url, types, size, true, Into(lookup, 2, all),
+                                   &Tracker());
+}
+
+void LookUp(Call& call, Profile* profile, Use use) {
+  favicon::FaviconService* service = ServiceFor(profile, use);
+  if (!service) {
+    return call.TakeReply().Error(use == Use::kReadOnly ? "favicons not loaded"
+                                                        : "no favicons");
+  }
+  const int size = static_cast<int>(call.Double("size", kDefaultSize));
+  std::vector<std::string> pages = Strings(call.args().FindList("pages"));
+  std::vector<std::string> icons = Strings(call.args().FindList("icons"));
+  auto results =
+      std::make_shared<Results>(call.TakeReply(), profile->GetWeakPtr());
+  base::RepeatingClosure done = base::BarrierClosure(
+      pages.size() + icons.size(),
+      base::BindOnce(
+          [](std::shared_ptr<Results> r, Use use) {
+            if (use == Use::kMarkUsed) {
+              MarkUsed(*r);
+            }
+            r->reply.Send(base::DictValue()
+                              .Set("pages", std::move(r->pages))
+                              .Set("icons", std::move(r->icons)));
+          },
+          results, use));
+  const favicon_base::IconTypeSet types = {favicon_base::IconType::kFavicon};
+  for (const std::string& page : pages) {
+    const GURL url(page);
+    const bool site = url.SchemeIsHTTPOrHTTPS();
+    service->GetRawFaviconForPageURL(
+        url, types, size, !site,
+        base::BindOnce(
+            [](base::WeakPtr<Profile> profile, Use use, bool site, GURL url,
+               int size, std::shared_ptr<Results> r, std::string page,
+               base::RepeatingClosure done,
+               const favicon_base::FaviconRawBitmapResult& result) {
+              favicon::FaviconService* service =
+                  site && !result.is_valid() ? ServiceFor(profile.get(), use)
+                                             : nullptr;
+              if (service) {
+                LookUpSite(service, url, size, std::move(r), std::move(page),
+                           std::move(done));
+                return;
+              }
+              Found(*r, page, result);
+              done.Run();
+            },
+            profile->GetWeakPtr(), use, site, url, size, results, page, done),
+        &Tracker());
+  }
+  for (const std::string& icon : icons) {
+    service->GetRawFavicon(
+        GURL(icon), favicon_base::IconType::kFavicon, size,
+        base::BindOnce(
+            [](std::shared_ptr<Results> r, std::string icon,
+               base::RepeatingClosure done,
+               const favicon_base::FaviconRawBitmapResult& result) {
+              if (result.is_valid()) {
+                r->used.push_back(result.icon_url);
+                r->icons.Set(icon, base::DictValue().Set("png", Png(result)));
+              }
+              done.Run();
+            },
+            results, icon, done),
+        &Tracker());
+  }
 }
 
 }
@@ -164,69 +247,12 @@ using ardia::Call;
 using ardia::Reply;
 
 AC_PROFILE_CALL(ac_favicons_get) {
-  favicon::FaviconService* service = ardia::FaviconsFor(call.profile());
-  if (!service) {
-    return call.TakeReply().Error("no favicons");
-  }
-  const int size = static_cast<int>(call.Double("size", ardia::kDefaultSize));
-  std::vector<std::string> pages = ardia::Strings(call.args().FindList("pages"));
-  std::vector<std::string> icons = ardia::Strings(call.args().FindList("icons"));
-  auto results = std::make_shared<ardia::Results>(
-      call.TakeReply(), call.profile()->GetWeakPtr());
-  base::RepeatingClosure done = base::BarrierClosure(
-      pages.size() + icons.size(), base::BindOnce(
-                                       [](std::shared_ptr<ardia::Results> r) {
-                                         ardia::MarkUsed(*r);
-                                         r->reply.Send(
-                                             base::DictValue()
-                                                 .Set("pages", std::move(r->pages))
-                                                 .Set("icons", std::move(r->icons)));
-                                       },
-                                       results));
-  const favicon_base::IconTypeSet types = {favicon_base::IconType::kFavicon};
-  for (const std::string& page : pages) {
-    const GURL url(page);
-    const bool site = url.SchemeIsHTTPOrHTTPS();
-    service->GetRawFaviconForPageURL(
-        url, types, size, !site,
-        base::BindOnce(
-            [](base::WeakPtr<Profile> profile, bool site, GURL url, int size,
-               std::shared_ptr<ardia::Results> r, std::string page,
-               base::RepeatingClosure done,
-               const favicon_base::FaviconRawBitmapResult& result) {
-              favicon::FaviconService* service =
-                  site && !result.is_valid()
-                      ? ardia::FaviconsFor(profile.get())
-                      : nullptr;
-              if (service) {
-                ardia::LookUpSite(service, url, size, std::move(r),
-                                  std::move(page), std::move(done));
-                return;
-              }
-              ardia::Found(*r, page, result);
-              done.Run();
-            },
-            call.profile()->GetWeakPtr(), site, url, size, results, page,
-            done),
-        &ardia::Tracker());
-  }
-  for (const std::string& icon : icons) {
-    service->GetRawFavicon(
-        GURL(icon), favicon_base::IconType::kFavicon, size,
-        base::BindOnce(
-            [](std::shared_ptr<ardia::Results> r, std::string icon,
-               base::RepeatingClosure done,
-               const favicon_base::FaviconRawBitmapResult& result) {
-              if (result.is_valid()) {
-                r->used.push_back(result.icon_url);
-                r->icons.Set(icon, base::DictValue().Set(
-                                       "png", ardia::Png(result)));
-              }
-              done.Run();
-            },
-            results, icon, done),
-        &ardia::Tracker());
-  }
+  ardia::LookUp(call, call.profile(), ardia::Use::kMarkUsed);
+}
+
+AC_PROFILE_CALL(ac_favicons_peek, ardia::OffTheRecord::kAllow) {
+  ardia::LookUp(call, call.profile()->GetOriginalProfile(),
+                ardia::Use::kReadOnly);
 }
 
 AC_PROFILE_CALL(ac_favicons_set) {

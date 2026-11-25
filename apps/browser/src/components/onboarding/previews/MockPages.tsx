@@ -9,7 +9,7 @@ import { Favicon, Glyph, Label } from "./Kit";
 import { pick, type Look } from "./look";
 import { mockNtp } from "./tokens";
 
-export function Hero({ g, look, a, height }: { g: Geo; look: Look; a: Article; height: number }) {
+function Hero({ g, look, a, height }: { g: Geo; look: Look; a: Article; height: number }) {
   const h = a.hero;
   return (
     <View style={{ height: height * g.s, borderRadius: radius.panel * g.s, overflow: "hidden", backgroundColor: pick(look, h.sky) }}>

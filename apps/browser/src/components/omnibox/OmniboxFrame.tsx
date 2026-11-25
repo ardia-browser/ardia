@@ -1,7 +1,7 @@
 import type { SearchScope } from "@ardia/core";
-import type { ReactNode, RefObject } from "react";
+import { memo, type ReactNode, type RefObject } from "react";
 import { View } from "react-native";
-import { Button, capsule, ContextMenuArea, useHover, useTheme } from "../ui";
+import { Button, capsule, ContextMenuArea, ink, useHover, useTheme } from "../ui";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { GoButton } from "./GoButton";
 import { ScopeChip } from "./ScopeChip";
@@ -14,14 +14,17 @@ type FrameProps = {
   scope: SearchScope | null;
   field: ReactNode;
   list: ReactNode;
+  rowsHover: ReturnType<typeof useHover>["hoverProps"];
+  pulse: ReactNode;
 };
 
 const ICON_SLOT = { width: BAR.iconSlot, alignItems: "center" } as const;
 
-export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, onSiteControls }: FrameProps & { onSiteControls: (() => void) | null }) {
+export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, rowsHover, pulse, onSiteControls }: FrameProps & { onSiteControls: (() => void) | null }) {
   const theme = useTheme();
   return (
     <View ref={rootRef}>
+      {pulse}
       <ContextMenuArea captureDescendants onContextMenu={onContextMenu}>
         <View style={{ flexDirection: "row", alignItems: "center", height: BAR.dropdown.height, paddingLeft: BAR.dropdown.left, paddingRight: BAR.dropdown.right, gap: BAR.dropdown.gap }}>
           <View style={ICON_SLOT}>{leadingIcon}</View>
@@ -40,14 +43,17 @@ export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, fiel
           ) : null}
         </View>
       </ContextMenuArea>
-      {list}
+      <View collapsable={false} {...rowsHover}>
+        {list}
+      </View>
     </View>
   );
 }
 
-export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, hero, rowHeight, bottom }: FrameProps & { hero: boolean; rowHeight: number; bottom: ReactNode }) {
+export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, rowsHover, pulse, hero, rowHeight, bottom }: FrameProps & { hero: boolean; rowHeight: number; bottom: ReactNode }) {
   return (
     <View ref={rootRef}>
+      {pulse}
       <ContextMenuArea captureDescendants onContextMenu={onContextMenu}>
         <View
           style={{
@@ -64,14 +70,15 @@ export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, 
           {field}
         </View>
       </ContextMenuArea>
-      {list}
-      {bottom}
+      <View collapsable={false} {...rowsHover}>
+        {list}
+        {bottom}
+      </View>
     </View>
   );
 }
 
-export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { hero: boolean; addChip: ReactNode; onDictate(): void; label: string; enabled: boolean; onGo(): void }) {
-  const theme = useTheme();
+export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { hero: boolean; addChip: ReactNode; onDictate?: () => void; label: string; enabled: boolean; onGo(): void }) {
   return (
     <View
       style={{
@@ -85,13 +92,13 @@ export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { 
     >
       {addChip}
       <View style={{ flex: 1 }} />
-      <DictateButton onPress={onDictate} />
+      {onDictate && <DictateButton onPress={onDictate} />}
       <GoButton label={label} enabled={enabled} onPress={onGo} />
     </View>
   );
 }
 
-function DictateButton({ onPress }: { onPress(): void }) {
+const DictateButton = memo(function DictateButton({ onPress }: { onPress(): void }) {
   const theme = useTheme();
   const glass = useGlass();
   const { hovered, hoverProps } = useHover();
@@ -106,10 +113,10 @@ function DictateButton({ onPress }: { onPress(): void }) {
         capsule
         glyph={BAR.bottom.mic}
         color={theme.textTertiary}
-        palette={{ icon: theme.textTertiary, iconDisabled: theme.iconDisabled, hover: "transparent", pressed: theme.toolbarPressed }}
+        palette={{ icon: theme.textTertiary, iconDisabled: theme.iconDisabled, hover: ink.clear, pressed: theme.toolbarPressed }}
         tooltip="Dictate"
         onPress={onPress}
       />
     </View>
   );
-}
+});

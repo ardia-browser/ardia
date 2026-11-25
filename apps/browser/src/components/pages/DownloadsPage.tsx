@@ -1,9 +1,11 @@
 import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Download } from "../../state/downloads/actions";
-import { openFile, revealFile } from "../../state/app/system";
+import { revealFile } from "../../state/app/system";
+import { openDownload } from "../../state/downloads/openDownload";
 import { useState } from "react";
 import { FlatList, Pressable, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { useDownloads, useTab } from "../../state/browser/hooks";
+import { useDownload } from "../../state/downloads/hooks";
 import { clearDownloads, removeDownload } from "../../state/windows/actions";
 import { openUrl } from "../../state/bookmarks/actions";
 import { FileIcon } from "../downloads/Downloads";
@@ -13,6 +15,7 @@ import { downloadStatus } from "../../state/downloads/status";
 import { Box, Button, EmptyState, MouseArea, opacity, ProgressTrack, space, Text, useHover } from "../ui";
 import { hostLabel, matchesQuery, PAGE_WIDTH, PageHeader } from "./PageLayout";
 import { downloadCard, pageList, pageType } from "./tokens";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 export function DownloadsPage({ tabId }: { tabId: string }) {
   const windowId = useTab(tabId, (t) => t?.windowId ?? "");
@@ -52,7 +55,8 @@ const CARD_TEXT = { flex: 1, gap: downloadCard.textGap } as const;
 const ROW_BUTTONS = { flexDirection: "row", gap: space.m } as const;
 const PROGRESS = { marginTop: downloadCard.progressTop } as const;
 
-function DownloadCard({ d, windowId }: { d: Download; windowId: string }) {
+function DownloadCard({ d: listed, windowId }: { d: Download; windowId: string }) {
+  const d = useDownload(listed.id) ?? listed;
   const { hovered, hoverProps } = useHover();
   const { exists, done, progress, blocked } = useDownloadView(d);
   return (
@@ -63,7 +67,7 @@ function DownloadCard({ d, windowId }: { d: Download; windowId: string }) {
             <FileIcon path={d.path || d.filename} size={downloadCard.iconSize} />
           </View>
           <View style={CARD_TEXT}>
-            <Pressable disabled={!done} onPress={() => void openFile(d.path)}>
+            <Pressable disabled={!done} onPress={() => void openDownload(d.path)}>
               <Text
                 lines={1}
                 weight="medium"
@@ -101,9 +105,9 @@ function DownloadCard({ d, windowId }: { d: Download; windowId: string }) {
               <Button title="Cancel" onPress={() => void cancelDownload(d.id)} />
             </View>
           ) : done ? (
-            <Button title="Show in Finder" onPress={() => void revealFile(d.path)} />
+            <Button title={`Show in ${PLATFORM_TERMS.fileManager}`} onPress={() => void revealFile(d.path)} />
           ) : null}
-          <Button variant="icon" icon="ellipsis" size="l" onPress={() => void downloadMenu(d, windowId)} tooltip="More actions" />
+          <Button variant="icon" icon="ellipsis" size="l" onPress={() => void downloadMenu(d)} tooltip="More actions" />
           {d.state !== "downloading" && (
             <Button variant="icon" icon="xmark" size="l" onPress={() => removeDownload(d.id)} tooltip="Remove from List" />
           )}

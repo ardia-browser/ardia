@@ -1,4 +1,5 @@
 import type { EventSubscription } from "expo-modules-core";
+import type { ScriptingNative } from "./generated/native";
 
 export type ScriptState = {
   windows: {
@@ -21,10 +22,7 @@ export type ScriptCommand = { id: string } & (
   | { command: "setActiveTabIndex"; windowId: string; index: number }
   | { command: "execute"; tabId: string; code: string }
   | { command: "focusProfile"; profileId: string }
+  | { command: "reading" }
 );
 
-export type ScriptingNative = {
-  addListener(name: "onScriptCommand", listener: (e: ScriptCommand) => void): EventSubscription;
-  setScriptState(state: ScriptState): Promise<void>;
-  replyToScript(id: string, result: Record<string, unknown> | null, error: string | null): Promise<void>;
-};
+export type { ScriptingNative };

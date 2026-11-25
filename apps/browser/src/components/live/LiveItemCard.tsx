@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, Text as Span, View, type TextStyle } from "react-native";
 import { FadeLabel } from "../ui/native";
 import { openLiveItem } from "../../state/live/engine";
@@ -7,7 +7,7 @@ import { ago } from "../../state/live/meetings";
 import { useLive } from "../../state/live/store";
 import type { LiveItem, PullRequestCheck } from "../../state/live/types";
 import { newTab } from "../../state/tabs/actions";
-import { Badge, Box, Button, capsule, curve, Divider, font, HoverCard, space, Symbol, Text, useHover, useTheme, weight } from "../ui";
+import { Badge, Box, Button, capsule, curve, Divider, font, HoverCard, nativeLoop, space, Symbol, Text, useHover, useTheme, weight } from "../ui";
 import { dismissHover } from "../../state/sidebar/hover";
 import { cardHoverProps } from "../sidebar/hoverController";
 import { useHoverCardOrigin } from "../sidebar/hoverMotion";
@@ -160,22 +160,21 @@ function CIProgressBar({ checks, colors }: { checks: PullRequestCheck[]; colors:
   const success = checks.filter((c) => c.state === "success" || c.state === "neutral").length;
   const pending = checks.filter((c) => c.state === "pending" || c.state === "queued").length;
   const failure = checks.filter((c) => c.state === "failure").length;
-  const pulse = useRef(new Animated.Value(1)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
+  const pulseOpacity = useMemo(() => pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.45] }), [pulse]);
   useEffect(() => {
     if (!pending) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.45, duration: liveMotion.ciPulse, easing: curve.move, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: liveMotion.ciPulse, easing: curve.move, useNativeDriver: true }),
-      ]),
-    );
+    const loop = nativeLoop(pulse, [
+      { to: 1, ms: liveMotion.ciPulse, easing: curve.move },
+      { to: 0, ms: liveMotion.ciPulse, easing: curve.move },
+    ]);
     loop.start();
     return () => loop.stop();
   }, [pending]);
   return (
     <View style={[CI_TRACK, { backgroundColor: colors.ciTrack }]}>
       {success ? <View style={{ flex: success, backgroundColor: colors.success }} /> : null}
-      {pending ? <Animated.View style={{ flex: pending, backgroundColor: colors.pending, opacity: pulse }} /> : null}
+      {pending ? <Animated.View style={{ flex: pending, backgroundColor: colors.pending, opacity: pulseOpacity }} /> : null}
       {failure ? <View style={{ flex: failure, backgroundColor: colors.failure }} /> : null}
     </View>
   );

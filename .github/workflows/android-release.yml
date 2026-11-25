@@ -1,0 +1,185 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run builds, signs and checks the APK and keeps it as a workflow artifact; draft does the same and attaches it to a new draft prerelease android-v<version>, which only the owner publishes
+        type: choice
+        options: [dry-run, draft]
+        default: dry-run
+      commit:
+        description: The commit to build (empty takes the head of the ref the run is dispatched on)
+        type: string
+        default: ""
+      version:
+        description: The release version, 0.2.47 or 0.2.47-nightly.2 (empty takes the Mac app's MARKETING_VERSION at that commit, as the iPhone release does)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_SIGNER: "8A:B5:0E:90:D9:09:5D:F3:6A:0C:C7:EA:61:AD:AD:2B:DD:58:26:27:52:D2:9F:1B:83:D9:EA:69:62:41:98:BC"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    env:
+      MODE: ${{ inputs.mode }}
+      VERSION_INPUT: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.commit || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The release scripts are at this commit
+        run: |
+          set -euo pipefail
+          missing=""
+          for needed in apps/phone/scripts/android-version.ts apps/phone/scripts/build-apk apps/phone/scripts/sign-release-apk apps/phone/scripts/check-release-apk apps/phone/test/release/sign-release-apk.test.sh apps/phone/test/r8/check-names.py; do
+            [ -f "$needed" ] || missing="$missing $needed"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::This commit doesn't have the Android release scripts (missing:$missing). They arrive with the Expo phone app; until it is merged, dispatch with --ref t3/unify-expo-architecture."
+            exit 1
+          fi
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - id: plan
+        name: Commit, version and tag
+        run: |
+          set -euo pipefail
+          commit="$(git rev-parse HEAD)"
+          planned="$(node --no-warnings apps/phone/scripts/android-version.ts ${VERSION_INPUT:+"$VERSION_INPUT"})"
+          version="$(sed -n 's/^name=//p' <<<"$planned")"
+          code="$(sed -n 's/^code=//p' <<<"$planned")"
+          channel="$(sed -n 's/^channel=//p' <<<"$planned")"
+          tag="android-v$version"
+          if [ "$MODE" = draft ] && gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::$tag already exists: a release version is built once"
+            exit 1
+          fi
+          {
+            echo "commit=$commit"
+            echo "version=$version"
+            echo "code=$code"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "### Ardia for Android $version ($channel, versionCode $code) from $commit, $MODE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Room for the build
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
+      - name: The Android SDK parts the build pins
+        run: |
+          set -euo pipefail
+          manager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$manager" --licenses > /dev/null || true
+          "$manager" --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;27.1.12297006" "cmake;3.22.1" > /dev/null
+      - name: The phone app's dependencies
+        run: (cd apps/phone && pnpm install --frozen-lockfile)
+      - name: Build the release APK (lab off, sync not offered)
+        env:
+          COMMIT: ${{ steps.plan.outputs.commit }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          ARDIA_APK_DIR="$RUNNER_TEMP/android-release" ARDIA_GRADLE_EPHEMERAL=1 \
+            apps/phone/scripts/build-apk "android-$VERSION" --store --commit "$COMMIT" --version "$VERSION"
+      - name: The signing script loads a PKCS12 keystore (a throwaway key)
+        run: apps/phone/test/release/sign-release-apk.test.sh
+      - name: Sign with the release key
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          [ -n "$ANDROID_RELEASE_KEYSTORE_B64" ] && [ -n "$ANDROID_RELEASE_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_RELEASE_KEY_ALIAS" ] \
+            || { echo "::error::missing the secrets ANDROID_RELEASE_KEYSTORE_B64, ANDROID_RELEASE_KEYSTORE_PASSWORD and ANDROID_RELEASE_KEY_ALIAS"; exit 1; }
+          out="$RUNNER_TEMP/android-release"
+          mkdir -p "$RUNNER_TEMP/release-keys"
+          TMPDIR="$RUNNER_TEMP/release-keys" apps/phone/scripts/sign-release-apk "$out/android-$VERSION.apk" "$out/Ardia-$VERSION.apk" > /dev/null
+          rm -f "$out/android-$VERSION.apk"
+      - name: Check the signed APK
+        env:
+          COMMIT: ${{ steps.plan.outputs.commit }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          apps/phone/scripts/check-release-apk "$RUNNER_TEMP/android-release/Ardia-$VERSION.apk" --commit "$COMMIT" --version "$VERSION" --signer "$RELEASE_SIGNER" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Stamp and checksum
+        env:
+          COMMIT: ${{ steps.plan.outputs.commit }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          CODE: ${{ steps.plan.outputs.code }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/android-release"
+          apk="Ardia-$VERSION.apk"
+          sum="$(sha256sum "$out/$apk" | cut -d' ' -f1)"
+          {
+            echo "apk: $apk"
+            echo "release version: $VERSION (versionCode $CODE)"
+            grep -v -E '^(apk|sha256|size|signer sha256):' "$out/android-$VERSION.txt"
+            echo "signer sha256: $(printf '%s' "$RELEASE_SIGNER" | tr -d ':' | tr '[:upper:]' '[:lower:]') (the release key)"
+            echo "sha256: $sum"
+            echo "size: $(wc -c < "$out/$apk" | tr -d ' ')"
+            echo "built on: GitHub Actions run $GITHUB_RUN_ID"
+          } > "$out/$apk.txt"
+          echo "$sum  $apk" > "$out/$apk.sha256"
+          cat "$out/$apk.txt" >> "$GITHUB_STEP_SUMMARY"
+      - if: inputs.mode == 'dry-run'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: android-release-${{ steps.plan.outputs.version }}
+          path: |
+            ${{ runner.temp }}/android-release/Ardia-${{ steps.plan.outputs.version }}.apk
+            ${{ runner.temp }}/android-release/Ardia-${{ steps.plan.outputs.version }}.apk.txt
+            ${{ runner.temp }}/android-release/Ardia-${{ steps.plan.outputs.version }}.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
+      - if: inputs.mode == 'draft'
+        name: Attach to a draft prerelease (never published here)
+        env:
+          COMMIT: ${{ steps.plan.outputs.commit }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/android-release"
+          apk="Ardia-$VERSION.apk"
+          {
+            echo "Ardia for Android $VERSION, built from $COMMIT."
+            echo
+            echo "For Android 10 or newer on a 64-bit Arm phone. Download $apk, check it against $apk.sha256, and let your browser install it."
+            echo "This release doesn't sync with Ardia for Mac yet."
+            echo "A test build of Ardia installed before this one was signed with another key: uninstall it first."
+          } > "$out/notes.md"
+          gh release create "$TAG" -R "$GITHUB_REPOSITORY" --draft --prerelease --latest=false --target "$COMMIT" \
+            --title "Ardia for Android $VERSION" --notes-file "$out/notes.md" "$out/$apk" "$out/$apk.txt" "$out/$apk.sha256"
+          state="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isDraft,isPrerelease -q '"\(.isDraft) \(.isPrerelease)"')"
+          [ "$state" = "true true" ] || { echo "::error::$TAG isn't a draft prerelease ($state)"; exit 1; }
+          echo "Draft prerelease $TAG made; the owner publishes it." >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        name: No key left behind
+        run: |
+          rm -rf "$RUNNER_TEMP/release-keys"
+          [ ! -e "$RUNNER_TEMP/release-keys" ] || { echo "::error::couldn't remove the release key"; exit 1; }

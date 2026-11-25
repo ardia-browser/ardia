@@ -9,7 +9,7 @@ const STAGES = {
 export type ZoneStage = keyof typeof STAGES;
 const LEAN = 0.43;
 
-export const PREVIEW = { width: 209, height: 110 };
+const PREVIEW = { width: 209, height: 110 };
 
 export function zoneRect(pane: Rect, side: SplitSide, stage: ZoneStage, pointerX = 0): Rect {
   const s = STAGES[stage];

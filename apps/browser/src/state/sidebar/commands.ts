@@ -1,18 +1,38 @@
 import type { BrowserCommand } from "../../platform/commands";
 import type { MenuEntry } from "../../platform/menus";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { activeTabId, pinSection, plural } from "../browser/model";
+import { activeTabId, isPinnedRow, pinSection, plural, tabLayoutOf } from "../browser/model";
+import { groupIndex } from "../browser/structure";
+import { live } from "../live/store";
+import { recentlyClosedIn } from "../windows/recentlyClosedList";
 import { awayFromPin, selectedTabIds } from "../pins/organize";
 import { groupOf } from "../pins/tabGrouping";
 import { newGroupWithSelection, openIconPicker, startRename } from "./actions";
-import { closeAllTabs } from "./clearTabs";
+import { cleanUpWithUndo, closeAllTabs } from "./clearTabs";
 import { toggleNewTabBar } from "../omnibox/newTabBar";
+import { hiddenEmptyCard, newTabOpensBar } from "../omnibox/newTabBarPolicy";
 import { movePinnedTitle, togglePinnedRows } from "./movePinned";
+import { PINNED_FOLD_TITLES, pinnedCollapsed, togglePinnedFold } from "./pinnedFold";
 import { setSidebarUi } from "./sidebarUi";
-import { tidyPins } from "./tidyPinsUi";
+import { tidy } from "./tidyUi";
 import { switcherStep } from "./switcher";
+import type { ByUser } from "../tabs/closeActivation";
 
-export function runSidebarCommand(command: BrowserCommand, arg: string | null, windowId: string): boolean {
+function hasCollapsiblePinned(s: BrowserState, w: BrowserState["windows"][string] | undefined): boolean {
+  if (!w || !s.profiles[w.profileId] || tabLayoutOf(s, w.id) !== "sidebar") return false;
+  if (w.kind !== "private" && live().folderOrder.some((id) => live().folders[id]?.profileId === w.profileId)) return true;
+  const rootGroups = groupIndex(s.groups);
+  const hideEmpty = newTabOpensBar(s);
+  for (const id of w.tabIds) {
+    const t = s.tabs[id];
+    if (!t || t.profileId !== w.profileId) continue;
+    if (isPinnedRow(t)) return true;
+    if (!t.pin && rootGroups.get(id)?.pinned && !t.liveItem && (!hideEmpty || !hiddenEmptyCard(s, t))) return true;
+  }
+  return false;
+}
+
+export function runSidebarCommand(command: BrowserCommand, arg: string | null, windowId: string, user?: ByUser): boolean {
   const s = useBrowser.getState();
   const tabId = activeTabId(s, windowId);
   switch (command) {
@@ -27,13 +47,13 @@ export function runSidebarCommand(command: BrowserCommand, arg: string | null, w
       newGroupWithSelection(windowId);
       return true;
     case "cleanUpTabs":
-      s.cleanUpTabs(windowId);
+      cleanUpWithUndo(windowId);
       return true;
     case "closeAllTabs":
-      closeAllTabs(windowId);
+      closeAllTabs(windowId, user);
       return true;
     case "tidyPins":
-      tidyPins(windowId);
+      tidy(windowId, "pins");
       return true;
     case "searchTabs":
       setSidebarUi({ searchTabs: windowId, hover: null });
@@ -53,6 +73,11 @@ export function runSidebarCommand(command: BrowserCommand, arg: string | null, w
     case "tabSwitcher":
       switcherStep(windowId, arg === "backward");
       return true;
+    case "togglePinnedFold": {
+      const w = s.windows[windowId];
+      if (hasCollapsiblePinned(s, w)) togglePinnedFold(w!.profileId);
+      return true;
+    }
   }
   return false;
 }
@@ -64,12 +89,18 @@ export function sidebarMenuState(s: BrowserState, windowId: string | undefined) 
   if (windowId) {
     if (!tab || !awayFromPin(tab)) disabled.push("returnToPinnedUrl");
     titles.togglePinnedRow = movePinnedTitle(s, tab);
-    const selected = selectedTabIds(s, windowId).filter((id) => pinSection(s.tabs[id]) !== "tile");
-    if (!selected.length) disabled.push("newGroupWithTabs");
-    if (selected.length > 1) titles.newGroupWithTabs = `New Group with ${plural(selected.length, "Tab")}`;
+    const selected = selectedTabIds(s, windowId);
+    const forGroup = selected.filter((id) => pinSection(s.tabs[id]) !== "tile");
+    if (!forGroup.length) disabled.push("newGroupWithTabs");
+    if (forGroup.length > 1) titles.newGroupWithTabs = `New Group with ${plural(forGroup.length, "Tab")}`;
+    const bar = s.windowUi[windowId]?.panel;
+    if (selected.length > 1 && !bar?.open && !bar?.newTab) titles.closeTab = `Close ${plural(selected.length, "Tab")}`;
   }
-  const recentlyClosedGroups: MenuEntry[] = [...s.closedGroups]
-    .reverse()
+  const w = windowId ? s.windows[windowId] : undefined;
+  if (!hasCollapsiblePinned(s, w)) disabled.push("togglePinnedFold");
+  else if (w && pinnedCollapsed(s, w.profileId)) titles.togglePinnedFold = PINNED_FOLD_TITLES.expand;
+  const recentlyClosedGroups: MenuEntry[] = recentlyClosedIn(s, w)
+    .groups.reverse()
     .slice(0, 10)
     .map((c) => ({ id: c.id, title: `${c.group.name} (${plural(c.tabs.length, "Tab")})` }));
   return { disabled, titles, recentlyClosedGroups };

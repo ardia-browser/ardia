@@ -1,10 +1,10 @@
 import type { View } from "react-native";
 import { create } from "zustand";
 import { currentProfile } from "../browser/current";
-import { setSwitcherIcon, updateProfile } from "./actions";
+import { chooseIcon } from "./actions";
 import type { ProfileMenuPlace } from "./profileMenu";
 
-export type IconPickerAnchor = { x: number; y: number; width: number; height: number };
+type IconPickerAnchor = { x: number; y: number; width: number; height: number };
 export type ProfileIconPicker = { profileId: string; windowId: string; place: ProfileMenuPlace; anchor: IconPickerAnchor | null };
 
 export const useProfileIconPicker = create<{ picker: ProfileIconPicker | null }>()(() => ({ picker: null }));
@@ -32,8 +32,7 @@ export function closeProfileIconPickerIn(windowId: string) {
   if (profileIconPickerIn(windowId)) closeProfileIconPicker();
 }
 
-export function chooseProfileIcon({ profileId, place }: ProfileIconPicker, icon: string | null) {
-  if (place === "sidebar") setSwitcherIcon(profileId, icon);
-  else updateProfile(profileId, { icon });
+export function chooseProfileIcon({ profileId }: ProfileIconPicker, icon: string | null) {
+  chooseIcon(profileId, icon);
   closeProfileIconPicker();
 }

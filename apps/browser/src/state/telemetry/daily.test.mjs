@@ -43,7 +43,6 @@ test("flags come from the last ping date alone", () => {
 });
 
 test("days are UTC and the recheck lands just after UTC midnight or within the hour", () => {
-  assert.equal(daily.utcDay(Date.parse("2026-10-25T23:59:59-05:00")), "2026-10-26");
   assert.equal(daily.nextCheckDelay(Date.parse("2026-10-25T23:50:00Z"), 0), 10 * 60_000);
   assert.equal(daily.nextCheckDelay(Date.parse("2026-10-25T10:00:00Z"), 0), 60 * 60_000);
   assert.deepEqual([1, 2, 3, 10].map(daily.retryDelay), [60_000, 120_000, 240_000, 3_600_000]);

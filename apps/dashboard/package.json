@@ -6,8 +6,8 @@
     "dev": "vite dev",
     "build": "vite build",
     "start": "node server.mjs",
-    "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test 'src/**/*.test.ts'"
+    "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test 'src/**/*.test.ts'",
+    "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
     "@fontsource-variable/martian-mono": "^5.3.0",
@@ -37,7 +37,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
-    "typescript": "^7.0.2",
+    "tsrs": "7.1.0-beta.tsrs4",
     "vite": "^8.3.4"
   }
 }

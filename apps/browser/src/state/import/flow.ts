@@ -2,17 +2,19 @@ import { AppState } from "react-native";
 import { create } from "zustand";
 import { orWarn } from "../../lib/fallback";
 import { IMPORT_WINDOW_ID, takePreferredImportSource } from "../settings/settingsWindows";
-import { closeWindow } from "../windows/nativeWindow";
-import { defaultTarget, openInWebStore, type BrowserSource, type ImportCounts, type ImportedExtension, type ImportKind } from "./apply";
+import { requestWindowClose } from "../windows/windowClose";
+import { defaultTarget, openInWebStore, type BrowserSource, type ImportCounts, type ImportedExtension, type ImportedSearchEngine, type ImportKind } from "./apply";
+import type { ExtensionListing } from "./extensionListing";
 import { importModule } from "./importApi";
 
 export type KindStatus = "pending" | "active" | "done" | "failed";
-export type ImportStatus = Partial<Record<ImportKind, KindStatus>>;
-export type ImportFailure = { kind: ImportKind; profiles: string[] };
-export type FoundExtensions = { profileId: string; list: ImportedExtension[]; opened: boolean };
-export type ImportResults = { counts: ImportCounts; failures: ImportFailure[]; notes: string[]; extensions: FoundExtensions };
+type ImportStatus = Partial<Record<ImportKind, KindStatus>>;
+type ImportFailure = { kind: ImportKind; profiles: string[] };
+type FoundExtensions = { profileId: string; list: ImportedExtension[]; opened: boolean; listing: ExtensionListing | null };
+export type EngineNotice = { name: string; offered: boolean; engine: ImportedSearchEngine };
+type ImportResults = { counts: ImportCounts; failures: ImportFailure[]; notes: string[]; extensions: FoundExtensions; searchEngine?: EngineNotice };
 
-export type ImportStep =
+type ImportStep =
   | { name: "loading" }
   | { name: "choose"; error: string | null }
   | { name: "profiles" }
@@ -35,10 +37,12 @@ export type ImportFlow = {
   step: ImportStep;
 };
 
-export const IMPORT_KINDS: ImportKind[] = ["bookmarks", "history", "passwords", "cookies", "autofill", "tabs", "spaces", "pinnedTabs", "favorites"];
+export const IMPORT_KINDS: ImportKind[] = ["bookmarks", "history", "passwords", "cookies", "autofill", "tabs", "spaces", "pinnedTabs", "favorites", "linkRules", "archive"];
 export const ENCRYPTED_KINDS: ImportKind[] = ["passwords", "cookies", "autofill"];
 export const APP_TAB_KINDS: ImportKind[] = ["tabs", "pinnedTabs"];
-export const NO_EXTENSIONS: FoundExtensions = { profileId: "", list: [], opened: false };
+export const DIA_SIDEBAR_KINDS: ImportKind[] = ["tabs", "pinnedTabs", "favorites"];
+export const ARC_ONCE_KINDS: ImportKind[] = ["linkRules", "archive"];
+export const NO_EXTENSIONS: FoundExtensions = { profileId: "", list: [], opened: false, listing: null };
 
 const freshFlow = (target: string): ImportFlow => ({
   browsers: [],
@@ -104,7 +108,7 @@ export function chooseSource(b: BrowserSource) {
   const available: ImportKind[] = b.requiresExport ? ["bookmarks", "history", "passwords"] : b.profiles.flatMap((p) => p.available);
   patchImport({
     source: b,
-    sourceProfiles: (defaults.length ? defaults : b.profiles.slice(0, 1)).map((p) => p.id),
+    sourceProfiles: (b.asksAppForTabs ? b.profiles : defaults.length ? defaults : b.profiles.slice(0, 1)).map((p) => p.id),
     spaces: spaceProfiles.flatMap((p) => p.spaces ?? []).map((sp) => sp.id),
     kinds: new Set(available),
     ...(b.family === "safari" ? { fullDiskAccess: importModule().safariHasFullDiskAccess() } : {}),
@@ -127,11 +131,8 @@ export const toggleImportSpace = (id: string, on: boolean) => patchImport({ spac
 export const setImportTarget = (target: string) => patchImport({ target });
 export const setSafariCookies = (safariCookies: boolean) => patchImport({ safariCookies });
 export const backTo = (name: "choose" | "profiles") => patchImport({ step: name === "choose" ? { name, error: null } : { name } });
-export const closeImport = () => void closeWindow(IMPORT_WINDOW_ID);
-export function cancelImport() {
-  session.abort();
-  closeImport();
-}
+export const closeImport = () => requestWindowClose(IMPORT_WINDOW_ID);
+export const cancelImport = () => requestWindowClose(IMPORT_WINDOW_ID, () => session.abort());
 
 export async function recheckAccess() {
   const api = importModule();

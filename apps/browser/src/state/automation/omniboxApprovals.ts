@@ -4,7 +4,7 @@ import { approveRule, isApproved, removeRule, useAutomationApprovals, type Appro
 
 const keyOf = (key: string) => `omniboxProvider:${key}`;
 
-export type PendingProviderRow = ApprovalRule & { providerKey: string };
+type PendingProviderRow = ApprovalRule & { providerKey: string };
 
 export function pendingProviderRows(): PendingProviderRow[] {
   return pendingOmniboxProviders().map((p) => ({

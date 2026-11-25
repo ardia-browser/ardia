@@ -9,9 +9,11 @@ import { useBookmarks } from "../../state/bookmarks/hooks";
 import { currentBookmarkRoots, currentBookmarks } from "../../state/browser/current";
 import { FolderPicker } from "./DialogParts";
 import { bookmarkDialog } from "./tokens";
-import { useAddressBarInSidebar } from "../../state/windows/layout";
 import { useToolbarRow } from "../toolbar/useToolbarRow";
-import { SIDEBAR_HEADER_WITH_FIELD } from "../sidebar/geometry";
+import { useSidebarField } from "../../state/sidebar/chrome";
+import { sidebarHeaderWithField } from "../sidebar/geometry";
+import { useCardFrame } from "../window/cardFrame";
+import { useSidebarControlsRowIn } from "../../state/windows/layout";
 
 export function BookmarkDialog() {
   const windowId = useWindowId();
@@ -21,11 +23,13 @@ export function BookmarkDialog() {
 }
 
 function DialogPanel({ state }: { state: BookmarkDialogState }) {
-  const addressBar = useAddressBarInSidebar();
+  const addressBar = useSidebarField() === "top";
   const sidebarRight = useSidebarSide(state.windowId) === "right";
+  const controlsRow = useSidebarControlsRowIn(state.windowId);
   const sidebarOpen = useSidebarOpen();
   const sidebarWidth = useSidebarWidth(state.windowId);
-  const cardRight = sidebarRight && sidebarOpen ? sidebarWidth + layout.sidebarCardGap : layout.cardInset;
+  const frame = useCardFrame();
+  const cardRight = sidebarRight && sidebarOpen ? sidebarWidth + frame.dockGap : frame.inset;
   const toolbarHeight = useToolbarRow().height;
   const bookmark = useBookmarks((b) => (state.kind === "page" ? b.nodes[state.bookmarkId] : undefined));
   const profileId = state.kind === "page" ? profileOfBookmark(state.bookmarkId) : state.profileId;
@@ -73,9 +77,9 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
       place={
         addressBar
           ? sidebarRight
-            ? { top: SIDEBAR_HEADER_WITH_FIELD + bookmarkDialog.belowField, right: layout.sidebarInset }
-            : { top: SIDEBAR_HEADER_WITH_FIELD + bookmarkDialog.belowField, left: layout.sidebarInset }
-          : { top: layout.cardInset + toolbarHeight - bookmarkDialog.belowToolbar, right: cardRight + bookmarkDialog.rightInset }
+            ? { top: sidebarHeaderWithField() + bookmarkDialog.belowField, right: layout.sidebarInset }
+            : { top: controlsRow + sidebarHeaderWithField() + bookmarkDialog.belowField, left: layout.sidebarInset }
+          : { top: frame.inset + toolbarHeight - bookmarkDialog.belowToolbar, right: cardRight + bookmarkDialog.rightInset }
       }
     >
       <Text weight="semibold">{heading}</Text>

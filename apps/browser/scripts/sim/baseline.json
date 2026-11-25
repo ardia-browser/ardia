@@ -1,0 +1,13 @@
+{
+  "wholeStoreRowHooks": [
+    "state/browser/hooks#useGroup",
+    "state/groups/hooks#useGroupLabel",
+    "state/pins/hooks#useShownFolderTab",
+    "state/pins/hooks#useTileFolderMembers",
+    "state/sidebar/closeControl#useTabCloseControl",
+    "state/sidebar/closeControl#useTabCloseControlWhile",
+    "state/sidebar/hooks#useSplitRowPanes",
+    "state/tabs/hooks#useTabGroupColor",
+    "state/tabs/topStrip#useShownTabIdFor"
+  ]
+}

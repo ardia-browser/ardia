@@ -1,0 +1,1 @@
+@{author}, from outside the team we take bug fixes only, and this issue is not labelled `bug`, so it stays free. The rule is in [CONTRIBUTING.md](https://github.com/{owner}/{repo}/blob/{default_branch}/CONTRIBUTING.md#claiming-an-issue).

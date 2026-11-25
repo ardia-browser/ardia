@@ -1,0 +1,3127 @@
+{
+ "about": "Recorded by tests/conformance/record.py: 'mac' from ArdiaPluginHost (JavaScriptCore + Foundation, macOS 27.2, swiftc -O, hardened runtime without the JIT entitlement), 'whatwg' from Node 24.22.2's URL and base64 (tests/conformance/node.mjs). The Rust host must match 'whatwg' for URL parsing and base64, except the 'preludeLimits' inputs, where the shared prelude composes the href and both hosts must match 'mac'. Every other section must match 'mac' exactly.",
+ "mac": {
+  "base64": {
+   "atob": [
+    {
+     "input": "\"\"",
+     "result": {
+      "ok": ""
+     }
+    },
+    {
+     "input": "\"YQ==\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YQ\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YWI=\"",
+     "result": {
+      "ok": "ab"
+     }
+    },
+    {
+     "input": "\"YWJj\"",
+     "result": {
+      "ok": "abc"
+     }
+    },
+    {
+     "input": "\" Y Q = = \"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YQ==\\n\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YQ==\\r\\n\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"YQ==\\t\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YR==\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"Y\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"YQ=\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"Y===\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"YQ==YQ==\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"Y-Q=\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"Y_Q=\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"//4=\"",
+     "result": {
+      "ok": "\u00ff\u00fe"
+     }
+    },
+    {
+     "input": "\"Y\u00a0Q\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"YWJj\\fZA==\"",
+     "result": {
+      "ok": "abcd"
+     }
+    }
+   ],
+   "btoa": [
+    {
+     "input": "\"\"",
+     "result": {
+      "ok": ""
+     }
+    },
+    {
+     "input": "\"a\"",
+     "result": {
+      "ok": "YQ=="
+     }
+    },
+    {
+     "input": "\"ab\"",
+     "result": {
+      "ok": "YWI="
+     }
+    },
+    {
+     "input": "\"abc\"",
+     "result": {
+      "ok": "YWJj"
+     }
+    },
+    {
+     "input": "\"hello world\"",
+     "result": {
+      "ok": "aGVsbG8gd29ybGQ="
+     }
+    },
+    {
+     "input": "\"\u00ff\u00fe\u00fd\"",
+     "result": {
+      "ok": "//79"
+     }
+    },
+    {
+     "input": "\"\u0100\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"\ud83d\ude00\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"\\ud800\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    }
+   ]
+  },
+  "misc": {
+   "globals": [],
+   "headers": [
+    [
+     "content-type",
+     "text/plain"
+    ],
+    [
+     "x-a",
+     "1, 2"
+    ]
+   ],
+   "noLoaders": [],
+   "random": 65536,
+   "randomFloat": "TypeError",
+   "randomOver": "QuotaExceededError",
+   "response": true,
+   "u32": 4,
+   "uuid": true
+  },
+  "params": [
+   "a=1&b=2&a=3&c=+x+y&d=",
+   "1",
+   "1,3",
+   " x y",
+   "",
+   true,
+   5,
+   "a=9&c=+x+y&d=&e=%C3%A9%26%3D",
+   "a=9&c=+x+y&d=&e=%C3%A9%26%3D",
+   "x=1&y=two+words",
+   "k=v&k=w",
+   "https://example.com/?z=1&y=2"
+  ],
+  "setters": [
+   {
+    "field": "pathname",
+    "href": "https://example.com/x%20y?b#c",
+    "start": "https://example.com/a?b#c",
+    "value": "/x y"
+   },
+   {
+    "field": "search",
+    "href": "https://example.com/a?q=1%202#c",
+    "start": "https://example.com/a?b#c",
+    "value": "q=1 2"
+   },
+   {
+    "field": "search",
+    "href": "https://example.com/a#c",
+    "start": "https://example.com/a?b#c",
+    "value": ""
+   },
+   {
+    "field": "hash",
+    "href": "https://example.com/a?b#frag",
+    "start": "https://example.com/a?b#c",
+    "value": "frag"
+   },
+   {
+    "field": "hash",
+    "href": "https://example.com/a?b",
+    "start": "https://example.com/a?b#c",
+    "value": ""
+   },
+   {
+    "field": "host",
+    "href": "https://other.org:8080/a",
+    "start": "https://example.com/a",
+    "value": "other.org:8080"
+   },
+   {
+    "field": "hostname",
+    "href": "https://other.org/a",
+    "start": "https://example.com/a",
+    "value": "other.org"
+   },
+   {
+    "field": "port",
+    "href": "https://example.com:8443/a",
+    "start": "https://example.com/a",
+    "value": "8443"
+   },
+   {
+    "field": "port",
+    "href": "https://example.com/a",
+    "start": "https://example.com:8443/a",
+    "value": ""
+   },
+   {
+    "field": "port",
+    "href": "https://example.com/a",
+    "start": "https://example.com/a",
+    "value": "443"
+   },
+   {
+    "field": "protocol",
+    "href": "http://example.com/a",
+    "start": "https://example.com/a",
+    "value": "http"
+   },
+   {
+    "field": "username",
+    "href": "https://us%20er@example.com/a",
+    "start": "https://example.com/a",
+    "value": "us er"
+   },
+   {
+    "field": "password",
+    "href": "https://example.com/a",
+    "start": "https://example.com/a",
+    "value": "p@ss"
+   },
+   {
+    "field": "href",
+    "href": "http://new.org/z",
+    "start": "https://example.com/a",
+    "value": "http://new.org/z"
+   }
+  ],
+  "text": [
+   [
+    97,
+    195,
+    169,
+    226,
+    130,
+    172,
+    240,
+    159,
+    152,
+    128
+   ],
+   [
+    239,
+    191,
+    189,
+    120
+   ],
+   {
+    "read": 2,
+    "written": 4
+   },
+   [
+    97,
+    226,
+    130,
+    172,
+    0
+   ],
+   "a\u00e9",
+   2,
+   "a\ufffdb\ufffd",
+   "TypeError",
+   "RangeError"
+  ],
+  "timers": [
+   "sync-start",
+   "async-sync",
+   "sync-end",
+   "micro-1",
+   "micro-2",
+   "async-after-await",
+   "micro-nested",
+   "timeout-0-a",
+   "timeout-0-b",
+   "timeout-20",
+   "micro-in-timeout-20",
+   "timeout-nested-0",
+   "interval-1",
+   "timeout-args:1,2",
+   "interval-2",
+   "interval-3",
+   "end"
+  ],
+  "url": [
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://example.com",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/",
+     "json": "\"https://example.com/\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://example.com/",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/",
+     "json": "\"https://example.com/\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "HTTPS://EXAMPLE.COM/A/B?C=D#E",
+    "result": {
+     "hash": "#E",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/A/B?C=D#E",
+     "json": "\"https://example.com/A/B?C=D#E\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/A/B",
+     "port": "",
+     "protocol": "https:",
+     "search": "?C=D",
+     "searchParams": [
+      [
+       "C",
+       "D"
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://user:pass@example.com:8443/p/a/t/h?query=string#hash",
+    "result": {
+     "hash": "#hash",
+     "host": "example.com:8443",
+     "hostname": "example.com",
+     "href": "https://user:pass@example.com:8443/p/a/t/h?query=string#hash",
+     "json": "\"https://user:pass@example.com:8443/p/a/t/h?query=string#hash\"",
+     "origin": "https://example.com:8443",
+     "password": "pass",
+     "pathname": "/p/a/t/h",
+     "port": "8443",
+     "protocol": "https:",
+     "search": "?query=string",
+     "searchParams": [
+      [
+       "query",
+       "string"
+      ]
+     ],
+     "username": "user"
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://user@example.com/",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://user@example.com/",
+     "json": "\"https://user@example.com/\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": "user"
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://:pass@example.com/",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/",
+     "json": "\"https://example.com/\"",
+     "origin": "https://example.com",
+     "password": "pass",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com:80/",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/",
+     "json": "\"http://example.com/\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://example.com:443/",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/",
+     "json": "\"https://example.com/\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com:8080",
+    "result": {
+     "hash": "",
+     "host": "example.com:8080",
+     "hostname": "example.com",
+     "href": "http://example.com:8080/",
+     "json": "\"http://example.com:8080/\"",
+     "origin": "http://example.com:8080",
+     "password": "",
+     "pathname": "/",
+     "port": "8080",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "ws://example.com:80/socket",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "ws://example.com/socket",
+     "json": "\"ws://example.com/socket\"",
+     "origin": "ws://example.com",
+     "password": "",
+     "pathname": "/socket",
+     "port": "",
+     "protocol": "ws:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "wss://example.com:443/socket",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "wss://example.com/socket",
+     "json": "\"wss://example.com/socket\"",
+     "origin": "wss://example.com",
+     "password": "",
+     "pathname": "/socket",
+     "port": "",
+     "protocol": "wss:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "ftp://example.com:21/file",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "ftp://example.com/file",
+     "json": "\"ftp://example.com/file\"",
+     "origin": "ftp://example.com",
+     "password": "",
+     "pathname": "/file",
+     "port": "",
+     "protocol": "ftp:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/a/../b/./c",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/a/../b/./c",
+     "json": "\"http://example.com/a/../b/./c\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/a/../b/./c",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/a/%2e%2E/b",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/a/%2e%2E/b",
+     "json": "\"http://example.com/a/%2e%2E/b\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/a/%2e%2E/b",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/path with spaces",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/path%20with%20spaces",
+     "json": "\"http://example.com/path%20with%20spaces\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/path%20with%20spaces",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/?q=a b&r=\u00fc",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/?q=a%20b&r=%C3%BC",
+     "json": "\"http://example.com/?q=a%20b&r=%C3%BC\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "?q=a%20b&r=%C3%BC",
+     "searchParams": [
+      [
+       "q",
+       "a b"
+      ],
+      [
+       "r",
+       "\u00fc"
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/#frag ment",
+    "result": {
+     "hash": "#frag%20ment",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/#frag%20ment",
+     "json": "\"http://example.com/#frag%20ment\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/?",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/",
+     "json": "\"http://example.com/\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/#",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/",
+     "json": "\"http://example.com/\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/?#",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/",
+     "json": "\"http://example.com/\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://[::1]:3000/x",
+    "result": {
+     "hash": "",
+     "host": "[::1]:3000",
+     "hostname": "[::1]",
+     "href": "http://[::1]:3000/x",
+     "json": "\"http://[::1]:3000/x\"",
+     "origin": "http://[::1]:3000",
+     "password": "",
+     "pathname": "/x",
+     "port": "3000",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://[2001:DB8::1]/",
+    "result": {
+     "hash": "",
+     "host": "[2001:db8::1]",
+     "hostname": "[2001:db8::1]",
+     "href": "http://[2001:db8::1]/",
+     "json": "\"http://[2001:db8::1]/\"",
+     "origin": "http://[2001:db8::1]",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://127.0.0.1:8080/",
+    "result": {
+     "hash": "",
+     "host": "127.0.0.1:8080",
+     "hostname": "127.0.0.1",
+     "href": "http://127.0.0.1:8080/",
+     "json": "\"http://127.0.0.1:8080/\"",
+     "origin": "http://127.0.0.1:8080",
+     "password": "",
+     "pathname": "/",
+     "port": "8080",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://0x7f.1/",
+    "result": {
+     "hash": "",
+     "host": "0x7f.1",
+     "hostname": "0x7f.1",
+     "href": "http://0x7f.1/",
+     "json": "\"http://0x7f.1/\"",
+     "origin": "http://0x7f.1",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://b\u00fccher.de/",
+    "result": {
+     "hash": "",
+     "host": "xn--bcher-kva.de",
+     "hostname": "xn--bcher-kva.de",
+     "href": "http://xn--bcher-kva.de/",
+     "json": "\"http://xn--bcher-kva.de/\"",
+     "origin": "http://xn--bcher-kva.de",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://EXAMPLE.com./",
+    "result": {
+     "hash": "",
+     "host": "example.com.",
+     "hostname": "example.com.",
+     "href": "http://example.com./",
+     "json": "\"http://example.com./\"",
+     "origin": "http://example.com.",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http:\\\\example.com\\a\\b",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "http:%5C%5Cexample.com%5Ca%5Cb",
+     "json": "\"http:%5C%5Cexample.com%5Ca%5Cb\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "%5C%5Cexample.com%5Ca%5Cb",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "  https://example.com/trim  ",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/trim",
+     "json": "\"https://example.com/trim\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/trim",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "https://exa\tmple.com/\n",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "file:///etc/hosts",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "file:///etc/hosts",
+     "json": "\"file:///etc/hosts\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/etc/hosts",
+     "port": "",
+     "protocol": "file:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "file://localhost/etc/hosts",
+    "result": {
+     "hash": "",
+     "host": "localhost",
+     "hostname": "localhost",
+     "href": "file://localhost/etc/hosts",
+     "json": "\"file://localhost/etc/hosts\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/etc/hosts",
+     "port": "",
+     "protocol": "file:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "file:///C:/Windows/",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "file:///C:/Windows/",
+     "json": "\"file:///C:/Windows/\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/C:/Windows/",
+     "port": "",
+     "protocol": "file:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "mailto:someone@example.com",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "mailto:someone@example.com",
+     "json": "\"mailto:someone@example.com\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "someone@example.com",
+     "port": "",
+     "protocol": "mailto:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "mailto:someone@example.com?subject=hi",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "mailto:someone@example.com?subject=hi",
+     "json": "\"mailto:someone@example.com?subject=hi\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "someone@example.com",
+     "port": "",
+     "protocol": "mailto:",
+     "search": "?subject=hi",
+     "searchParams": [
+      [
+       "subject",
+       "hi"
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "data:text/plain,hello%20world",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "data:text/plain,hello%20world",
+     "json": "\"data:text/plain,hello%20world\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "text/plain,hello%20world",
+     "port": "",
+     "protocol": "data:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "javascript:alert(1)",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "javascript:alert(1)",
+     "json": "\"javascript:alert(1)\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "alert(1)",
+     "port": "",
+     "protocol": "javascript:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "about:blank",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "about:blank",
+     "json": "\"about:blank\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "blank",
+     "port": "",
+     "protocol": "about:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "blob:https://example.com/uuid",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "blob:https://example.com/uuid",
+     "json": "\"blob:https://example.com/uuid\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "https://example.com/uuid",
+     "port": "",
+     "protocol": "blob:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "foo://Host.Example/Path?Q#F",
+    "result": {
+     "hash": "#F",
+     "host": "host.example",
+     "hostname": "host.example",
+     "href": "foo://host.example/Path?Q#F",
+     "json": "\"foo://host.example/Path?Q#F\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/Path",
+     "port": "",
+     "protocol": "foo:",
+     "search": "?Q",
+     "searchParams": [
+      [
+       "Q",
+       ""
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "foo:/path",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "foo:/path",
+     "json": "\"foo:/path\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/path",
+     "port": "",
+     "protocol": "foo:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "urn:isbn:0451450523",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "urn:isbn:0451450523",
+     "json": "\"urn:isbn:0451450523\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "isbn:0451450523",
+     "port": "",
+     "protocol": "urn:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "ardia://plugin/page.html",
+    "result": {
+     "hash": "",
+     "host": "plugin",
+     "hostname": "plugin",
+     "href": "ardia://plugin/page.html",
+     "json": "\"ardia://plugin/page.html\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/page.html",
+     "port": "",
+     "protocol": "ardia:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "chrome://settings",
+    "result": {
+     "hash": "",
+     "host": "settings",
+     "hostname": "settings",
+     "href": "chrome://settings",
+     "json": "\"chrome://settings\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "",
+     "port": "",
+     "protocol": "chrome:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://example.com:65536/",
+    "result": {
+     "hash": "",
+     "host": "example.com:65536",
+     "hostname": "example.com",
+     "href": "https://example.com:65536/",
+     "json": "\"https://example.com:65536/\"",
+     "origin": "https://example.com:65536",
+     "password": "",
+     "pathname": "/",
+     "port": "65536",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "https://example.com:abc/",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "https://exa mple.com/",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "http:///",
+     "json": "\"http:///\"",
+     "origin": "http://",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https:",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "https:",
+     "json": "\"https:\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "not a url",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "//example.com/x",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "/absolute",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "relative/path",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": "https://example.com/a/b/c",
+    "canParse": true,
+    "input": "../up",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a/up",
+     "json": "\"https://example.com/a/up\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a/up",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a/b/c",
+    "canParse": true,
+    "input": "./same",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a/b/same",
+     "json": "\"https://example.com/a/b/same\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a/b/same",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a/b?x#y",
+    "canParse": true,
+    "input": "/root",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/root",
+     "json": "\"https://example.com/root\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/root",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a/b?x#y",
+    "canParse": true,
+    "input": "?only=query",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a/b?only=query",
+     "json": "\"https://example.com/a/b?only=query\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a/b",
+     "port": "",
+     "protocol": "https:",
+     "search": "?only=query",
+     "searchParams": [
+      [
+       "only",
+       "query"
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a/b?x#y",
+    "canParse": true,
+    "input": "#only-hash",
+    "result": {
+     "hash": "#only-hash",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a/b?x#only-hash",
+     "json": "\"https://example.com/a/b?x#only-hash\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a/b",
+     "port": "",
+     "protocol": "https:",
+     "search": "?x",
+     "searchParams": [
+      [
+       "x",
+       ""
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a/b?x#y",
+    "canParse": false,
+    "input": "",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": "https://example.com/a",
+    "canParse": true,
+    "input": "//other.org/x",
+    "result": {
+     "hash": "",
+     "host": "other.org",
+     "hostname": "other.org",
+     "href": "https://other.org/x",
+     "json": "\"https://other.org/x\"",
+     "origin": "https://other.org",
+     "password": "",
+     "pathname": "/x",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a",
+    "canParse": true,
+    "input": "https://absolute.org/",
+    "result": {
+     "hash": "",
+     "host": "absolute.org",
+     "hostname": "absolute.org",
+     "href": "https://absolute.org/",
+     "json": "\"https://absolute.org/\"",
+     "origin": "https://absolute.org",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/dir/",
+    "canParse": true,
+    "input": "sibling",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/dir/sibling",
+     "json": "\"https://example.com/dir/sibling\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/dir/sibling",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "mailto:a@b.c",
+    "canParse": true,
+    "input": "x",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "mailto:x",
+     "json": "\"mailto:x\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "x",
+     "port": "",
+     "protocol": "mailto:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "not a base",
+    "canParse": false,
+    "input": "x",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": "file:///home/user/doc.txt",
+    "canParse": true,
+    "input": "path",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "file:///home/user/path",
+     "json": "\"file:///home/user/path\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/home/user/path",
+     "port": "",
+     "protocol": "file:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/%zz",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/%25zz",
+     "json": "\"http://example.com/%25zz\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/%25zz",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/\u00e9t\u00e9",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/%C3%A9t%C3%A9",
+     "json": "\"http://example.com/%C3%A9t%C3%A9\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/%C3%A9t%C3%A9",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://example.com/a?b=%41",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a?b=%41",
+     "json": "\"https://example.com/a?b=%41\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a",
+     "port": "",
+     "protocol": "https:",
+     "search": "?b=%41",
+     "searchParams": [
+      [
+       "b",
+       "A"
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "HTTP://user:p%40ss@Ex.com:8080/",
+    "result": {
+     "hash": "",
+     "host": "ex.com:8080",
+     "hostname": "ex.com",
+     "href": "http://user:p%40ss@ex.com:8080/",
+     "json": "\"http://user:p%40ss@ex.com:8080/\"",
+     "origin": "http://ex.com:8080",
+     "password": "p%40ss",
+     "pathname": "/",
+     "port": "8080",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": "user"
+    }
+   }
+  ]
+ },
+ "preludeLimits": [
+  "https://:pass@example.com/",
+  "blob:https://example.com/uuid"
+ ],
+ "whatwg": {
+  "base64": {
+   "atob": [
+    {
+     "input": "\"\"",
+     "result": {
+      "ok": ""
+     }
+    },
+    {
+     "input": "\"YQ==\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YQ\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YWI=\"",
+     "result": {
+      "ok": "ab"
+     }
+    },
+    {
+     "input": "\"YWJj\"",
+     "result": {
+      "ok": "abc"
+     }
+    },
+    {
+     "input": "\" Y Q = = \"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YQ==\\n\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YQ==\\r\\n\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YQ==\\t\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"YR==\"",
+     "result": {
+      "ok": "a"
+     }
+    },
+    {
+     "input": "\"Y\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"YQ=\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"Y===\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"YQ==YQ==\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"Y-Q=\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"Y_Q=\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"//4=\"",
+     "result": {
+      "ok": "\u00ff\u00fe"
+     }
+    },
+    {
+     "input": "\"Y\u00a0Q\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"YWJj\\fZA==\"",
+     "result": {
+      "ok": "abcd"
+     }
+    }
+   ],
+   "btoa": [
+    {
+     "input": "\"\"",
+     "result": {
+      "ok": ""
+     }
+    },
+    {
+     "input": "\"a\"",
+     "result": {
+      "ok": "YQ=="
+     }
+    },
+    {
+     "input": "\"ab\"",
+     "result": {
+      "ok": "YWI="
+     }
+    },
+    {
+     "input": "\"abc\"",
+     "result": {
+      "ok": "YWJj"
+     }
+    },
+    {
+     "input": "\"hello world\"",
+     "result": {
+      "ok": "aGVsbG8gd29ybGQ="
+     }
+    },
+    {
+     "input": "\"\u00ff\u00fe\u00fd\"",
+     "result": {
+      "ok": "//79"
+     }
+    },
+    {
+     "input": "\"\u0100\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"\ud83d\ude00\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    },
+    {
+     "input": "\"\\ud800\"",
+     "result": {
+      "throws": "InvalidCharacterError"
+     }
+    }
+   ]
+  },
+  "url": [
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://example.com",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/",
+     "json": "\"https://example.com/\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://example.com/",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/",
+     "json": "\"https://example.com/\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "HTTPS://EXAMPLE.COM/A/B?C=D#E",
+    "result": {
+     "hash": "#E",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/A/B?C=D#E",
+     "json": "\"https://example.com/A/B?C=D#E\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/A/B",
+     "port": "",
+     "protocol": "https:",
+     "search": "?C=D",
+     "searchParams": [
+      [
+       "C",
+       "D"
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://user:pass@example.com:8443/p/a/t/h?query=string#hash",
+    "result": {
+     "hash": "#hash",
+     "host": "example.com:8443",
+     "hostname": "example.com",
+     "href": "https://user:pass@example.com:8443/p/a/t/h?query=string#hash",
+     "json": "\"https://user:pass@example.com:8443/p/a/t/h?query=string#hash\"",
+     "origin": "https://example.com:8443",
+     "password": "pass",
+     "pathname": "/p/a/t/h",
+     "port": "8443",
+     "protocol": "https:",
+     "search": "?query=string",
+     "searchParams": [
+      [
+       "query",
+       "string"
+      ]
+     ],
+     "username": "user"
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://user@example.com/",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://user@example.com/",
+     "json": "\"https://user@example.com/\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": "user"
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://:pass@example.com/",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://:pass@example.com/",
+     "json": "\"https://:pass@example.com/\"",
+     "origin": "https://example.com",
+     "password": "pass",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com:80/",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/",
+     "json": "\"http://example.com/\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://example.com:443/",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/",
+     "json": "\"https://example.com/\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com:8080",
+    "result": {
+     "hash": "",
+     "host": "example.com:8080",
+     "hostname": "example.com",
+     "href": "http://example.com:8080/",
+     "json": "\"http://example.com:8080/\"",
+     "origin": "http://example.com:8080",
+     "password": "",
+     "pathname": "/",
+     "port": "8080",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "ws://example.com:80/socket",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "ws://example.com/socket",
+     "json": "\"ws://example.com/socket\"",
+     "origin": "ws://example.com",
+     "password": "",
+     "pathname": "/socket",
+     "port": "",
+     "protocol": "ws:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "wss://example.com:443/socket",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "wss://example.com/socket",
+     "json": "\"wss://example.com/socket\"",
+     "origin": "wss://example.com",
+     "password": "",
+     "pathname": "/socket",
+     "port": "",
+     "protocol": "wss:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "ftp://example.com:21/file",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "ftp://example.com/file",
+     "json": "\"ftp://example.com/file\"",
+     "origin": "ftp://example.com",
+     "password": "",
+     "pathname": "/file",
+     "port": "",
+     "protocol": "ftp:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/a/../b/./c",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/b/c",
+     "json": "\"http://example.com/b/c\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/b/c",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/a/%2e%2E/b",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/b",
+     "json": "\"http://example.com/b\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/b",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/path with spaces",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/path%20with%20spaces",
+     "json": "\"http://example.com/path%20with%20spaces\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/path%20with%20spaces",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/?q=a b&r=\u00fc",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/?q=a%20b&r=%C3%BC",
+     "json": "\"http://example.com/?q=a%20b&r=%C3%BC\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "?q=a%20b&r=%C3%BC",
+     "searchParams": [
+      [
+       "q",
+       "a b"
+      ],
+      [
+       "r",
+       "\u00fc"
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/#frag ment",
+    "result": {
+     "hash": "#frag%20ment",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/#frag%20ment",
+     "json": "\"http://example.com/#frag%20ment\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/?",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/?",
+     "json": "\"http://example.com/?\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/#",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/#",
+     "json": "\"http://example.com/#\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/?#",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/?#",
+     "json": "\"http://example.com/?#\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://[::1]:3000/x",
+    "result": {
+     "hash": "",
+     "host": "[::1]:3000",
+     "hostname": "[::1]",
+     "href": "http://[::1]:3000/x",
+     "json": "\"http://[::1]:3000/x\"",
+     "origin": "http://[::1]:3000",
+     "password": "",
+     "pathname": "/x",
+     "port": "3000",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://[2001:DB8::1]/",
+    "result": {
+     "hash": "",
+     "host": "[2001:db8::1]",
+     "hostname": "[2001:db8::1]",
+     "href": "http://[2001:db8::1]/",
+     "json": "\"http://[2001:db8::1]/\"",
+     "origin": "http://[2001:db8::1]",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://127.0.0.1:8080/",
+    "result": {
+     "hash": "",
+     "host": "127.0.0.1:8080",
+     "hostname": "127.0.0.1",
+     "href": "http://127.0.0.1:8080/",
+     "json": "\"http://127.0.0.1:8080/\"",
+     "origin": "http://127.0.0.1:8080",
+     "password": "",
+     "pathname": "/",
+     "port": "8080",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://0x7f.1/",
+    "result": {
+     "hash": "",
+     "host": "127.0.0.1",
+     "hostname": "127.0.0.1",
+     "href": "http://127.0.0.1/",
+     "json": "\"http://127.0.0.1/\"",
+     "origin": "http://127.0.0.1",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://b\u00fccher.de/",
+    "result": {
+     "hash": "",
+     "host": "xn--bcher-kva.de",
+     "hostname": "xn--bcher-kva.de",
+     "href": "http://xn--bcher-kva.de/",
+     "json": "\"http://xn--bcher-kva.de/\"",
+     "origin": "http://xn--bcher-kva.de",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://EXAMPLE.com./",
+    "result": {
+     "hash": "",
+     "host": "example.com.",
+     "hostname": "example.com.",
+     "href": "http://example.com./",
+     "json": "\"http://example.com./\"",
+     "origin": "http://example.com.",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http:\\\\example.com\\a\\b",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/a/b",
+     "json": "\"http://example.com/a/b\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/a/b",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "  https://example.com/trim  ",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/trim",
+     "json": "\"https://example.com/trim\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/trim",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://exa\tmple.com/\n",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/",
+     "json": "\"https://example.com/\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "file:///etc/hosts",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "file:///etc/hosts",
+     "json": "\"file:///etc/hosts\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/etc/hosts",
+     "port": "",
+     "protocol": "file:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "file://localhost/etc/hosts",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "file:///etc/hosts",
+     "json": "\"file:///etc/hosts\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/etc/hosts",
+     "port": "",
+     "protocol": "file:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "file:///C:/Windows/",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "file:///C:/Windows/",
+     "json": "\"file:///C:/Windows/\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/C:/Windows/",
+     "port": "",
+     "protocol": "file:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "mailto:someone@example.com",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "mailto:someone@example.com",
+     "json": "\"mailto:someone@example.com\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "someone@example.com",
+     "port": "",
+     "protocol": "mailto:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "mailto:someone@example.com?subject=hi",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "mailto:someone@example.com?subject=hi",
+     "json": "\"mailto:someone@example.com?subject=hi\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "someone@example.com",
+     "port": "",
+     "protocol": "mailto:",
+     "search": "?subject=hi",
+     "searchParams": [
+      [
+       "subject",
+       "hi"
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "data:text/plain,hello%20world",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "data:text/plain,hello%20world",
+     "json": "\"data:text/plain,hello%20world\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "text/plain,hello%20world",
+     "port": "",
+     "protocol": "data:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "javascript:alert(1)",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "javascript:alert(1)",
+     "json": "\"javascript:alert(1)\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "alert(1)",
+     "port": "",
+     "protocol": "javascript:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "about:blank",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "about:blank",
+     "json": "\"about:blank\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "blank",
+     "port": "",
+     "protocol": "about:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "blob:https://example.com/uuid",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "blob:https://example.com/uuid",
+     "json": "\"blob:https://example.com/uuid\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "https://example.com/uuid",
+     "port": "",
+     "protocol": "blob:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "foo://Host.Example/Path?Q#F",
+    "result": {
+     "hash": "#F",
+     "host": "Host.Example",
+     "hostname": "Host.Example",
+     "href": "foo://Host.Example/Path?Q#F",
+     "json": "\"foo://Host.Example/Path?Q#F\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/Path",
+     "port": "",
+     "protocol": "foo:",
+     "search": "?Q",
+     "searchParams": [
+      [
+       "Q",
+       ""
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "foo:/path",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "foo:/path",
+     "json": "\"foo:/path\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/path",
+     "port": "",
+     "protocol": "foo:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "urn:isbn:0451450523",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "urn:isbn:0451450523",
+     "json": "\"urn:isbn:0451450523\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "isbn:0451450523",
+     "port": "",
+     "protocol": "urn:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "ardia://plugin/page.html",
+    "result": {
+     "hash": "",
+     "host": "plugin",
+     "hostname": "plugin",
+     "href": "ardia://plugin/page.html",
+     "json": "\"ardia://plugin/page.html\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/page.html",
+     "port": "",
+     "protocol": "ardia:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "chrome://settings",
+    "result": {
+     "hash": "",
+     "host": "settings",
+     "hostname": "settings",
+     "href": "chrome://settings",
+     "json": "\"chrome://settings\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "",
+     "port": "",
+     "protocol": "chrome:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "https://example.com:65536/",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "https://example.com:abc/",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "https://exa mple.com/",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "http://",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "https:",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "not a url",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "//example.com/x",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "/absolute",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": null,
+    "canParse": false,
+    "input": "relative/path",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": "https://example.com/a/b/c",
+    "canParse": true,
+    "input": "../up",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a/up",
+     "json": "\"https://example.com/a/up\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a/up",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a/b/c",
+    "canParse": true,
+    "input": "./same",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a/b/same",
+     "json": "\"https://example.com/a/b/same\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a/b/same",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a/b?x#y",
+    "canParse": true,
+    "input": "/root",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/root",
+     "json": "\"https://example.com/root\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/root",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a/b?x#y",
+    "canParse": true,
+    "input": "?only=query",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a/b?only=query",
+     "json": "\"https://example.com/a/b?only=query\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a/b",
+     "port": "",
+     "protocol": "https:",
+     "search": "?only=query",
+     "searchParams": [
+      [
+       "only",
+       "query"
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a/b?x#y",
+    "canParse": true,
+    "input": "#only-hash",
+    "result": {
+     "hash": "#only-hash",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a/b?x#only-hash",
+     "json": "\"https://example.com/a/b?x#only-hash\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a/b",
+     "port": "",
+     "protocol": "https:",
+     "search": "?x",
+     "searchParams": [
+      [
+       "x",
+       ""
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a/b?x#y",
+    "canParse": true,
+    "input": "",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a/b?x",
+     "json": "\"https://example.com/a/b?x\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a/b",
+     "port": "",
+     "protocol": "https:",
+     "search": "?x",
+     "searchParams": [
+      [
+       "x",
+       ""
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a",
+    "canParse": true,
+    "input": "//other.org/x",
+    "result": {
+     "hash": "",
+     "host": "other.org",
+     "hostname": "other.org",
+     "href": "https://other.org/x",
+     "json": "\"https://other.org/x\"",
+     "origin": "https://other.org",
+     "password": "",
+     "pathname": "/x",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/a",
+    "canParse": true,
+    "input": "https://absolute.org/",
+    "result": {
+     "hash": "",
+     "host": "absolute.org",
+     "hostname": "absolute.org",
+     "href": "https://absolute.org/",
+     "json": "\"https://absolute.org/\"",
+     "origin": "https://absolute.org",
+     "password": "",
+     "pathname": "/",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "https://example.com/dir/",
+    "canParse": true,
+    "input": "sibling",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/dir/sibling",
+     "json": "\"https://example.com/dir/sibling\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/dir/sibling",
+     "port": "",
+     "protocol": "https:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": "mailto:a@b.c",
+    "canParse": false,
+    "input": "x",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": "not a base",
+    "canParse": false,
+    "input": "x",
+    "result": {
+     "throws": "TypeError"
+    }
+   },
+   {
+    "base": "file:///home/user/doc.txt",
+    "canParse": true,
+    "input": "path",
+    "result": {
+     "hash": "",
+     "host": "",
+     "hostname": "",
+     "href": "file:///home/user/path",
+     "json": "\"file:///home/user/path\"",
+     "origin": "null",
+     "password": "",
+     "pathname": "/home/user/path",
+     "port": "",
+     "protocol": "file:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/%zz",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/%zz",
+     "json": "\"http://example.com/%zz\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/%zz",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "http://example.com/\u00e9t\u00e9",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "http://example.com/%C3%A9t%C3%A9",
+     "json": "\"http://example.com/%C3%A9t%C3%A9\"",
+     "origin": "http://example.com",
+     "password": "",
+     "pathname": "/%C3%A9t%C3%A9",
+     "port": "",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "https://example.com/a?b=%41",
+    "result": {
+     "hash": "",
+     "host": "example.com",
+     "hostname": "example.com",
+     "href": "https://example.com/a?b=%41",
+     "json": "\"https://example.com/a?b=%41\"",
+     "origin": "https://example.com",
+     "password": "",
+     "pathname": "/a",
+     "port": "",
+     "protocol": "https:",
+     "search": "?b=%41",
+     "searchParams": [
+      [
+       "b",
+       "A"
+      ]
+     ],
+     "username": ""
+    }
+   },
+   {
+    "base": null,
+    "canParse": true,
+    "input": "HTTP://user:p%40ss@Ex.com:8080/",
+    "result": {
+     "hash": "",
+     "host": "ex.com:8080",
+     "hostname": "ex.com",
+     "href": "http://user:p%40ss@ex.com:8080/",
+     "json": "\"http://user:p%40ss@ex.com:8080/\"",
+     "origin": "http://ex.com:8080",
+     "password": "p%40ss",
+     "pathname": "/",
+     "port": "8080",
+     "protocol": "http:",
+     "search": "",
+     "searchParams": [],
+     "username": "user"
+    }
+   }
+  ]
+ }
+}

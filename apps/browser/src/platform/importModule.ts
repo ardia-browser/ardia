@@ -1,21 +1,6 @@
 import type * as ImportApi from "@ardia/import";
 
-export type {
-  BookmarkNode,
-  BrowserProfile,
-  BrowserSource,
-  Credential,
-  DiaTabsProfile,
-  DiaTabsResult,
-  ImportedExtension,
-  ImportedFavicon,
-  ImportedTab,
-  ImportKind,
-  ImportResult,
-  SafariExport,
-  SpaceSuggestion,
-  SpaceSummary,
-} from "@ardia/import";
+export type { ArcArchive, ArcLinkDestination, ArcLinkRule, ArcRouting, BookmarkNode, BrowserProfile, BrowserSource, Credential, DiaTabsProfile, DiaTabsResult, ImportedExtension, ImportedExtensionSkip, ImportedFavicon, ImportedSearchEngine, ImportedTab, ImportKind, ImportResult, SafariExport, SpaceSuggestion, SpaceSummary } from "@ardia/import";
 
 let api: typeof ImportApi | undefined;
 

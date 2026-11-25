@@ -1,0 +1,30 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+ardia-crypto = { path = "crates/ardia-crypto", default-features = false }
+ardia-sync-core = { path = "crates/ardia-sync-core", default-features = false }
+ardia-update-core = { path = "crates/ardia-update-core", default-features = false }
+aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc", "zeroize"] }
+aes = { version = "0.8", features = ["zeroize"] }
+hkdf = "0.12"
+hmac = "0.12"
+sha2 = { version = "0.10", default-features = false }
+ed25519-dalek = { version = "2", default-features = false }
+getrandom = "0.2"
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zeroize = { version = "1", features = ["zeroize_derive"] }
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1

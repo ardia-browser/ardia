@@ -82,7 +82,7 @@ export function framingFor(aspect: number, clear = 0, horizon = 0): Framing {
     sunCeiling: ceiling,
     sunRadius,
     hillScale: STACKED_HILL_SCALE,
-    sunSweep: Math.min(1, Math.max(0.3, Math.atan(0.38 * tanHalf * aspect) / degrees(10))),
+    sunSweep: Math.min(1, Math.max(0.3, Math.atan(0.38 * tanHalf * aspect) / degrees(15))),
     moonRise: Math.atan(0.78 * tanHalf * aspect),
     moonSet: Math.atan(0.3 * tanHalf * aspect),
     moonPeak: Math.min(LIGHT_MOON_PEAK, ceiling),
@@ -92,7 +92,7 @@ export function framingFor(aspect: number, clear = 0, horizon = 0): Framing {
 export function sunPath(p: number, peak: number, ceiling = peak, sweep = 1) {
   const arc = Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, p))));
   return {
-    azimuth: (degrees(16.2) + (degrees(-4.6) - degrees(16.2)) * p) * sweep,
+    azimuth: (degrees(24.5) + (degrees(-9.5) - degrees(24.5)) * p) * sweep,
     elevation: Math.min(ceiling, -SUN_SET_DEPTH + peak * arc ** 0.8),
   };
 }

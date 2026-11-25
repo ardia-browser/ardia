@@ -10,7 +10,7 @@ export type LaunchFavicons = {
 
 const LAUNCH_ICON_LIMIT = 240;
 const LAUNCH_URI_LIMIT = 16 * 1024;
-export const LAUNCH_FAVICONS_LIMIT = 1024 * 1024;
+const LAUNCH_FAVICONS_LIMIT = 1024 * 1024;
 
 const serialized = (value: unknown) => JSON.stringify(value).length + 1;
 

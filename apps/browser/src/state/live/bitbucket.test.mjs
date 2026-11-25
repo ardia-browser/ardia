@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 const { SOURCES, connectBitbucket } = await import("./sources.ts");
-const { errorText, folderErrorText, folderErrorTexts, refreshFolder } = await import("./engine.ts");
+const { errorText, refreshFolder } = await import("./engine.ts");
 const { applyFetch, createFolder, live, useLive } = await import("./store.ts");
 const { PartialFetch } = await import("./types.ts");
 
@@ -53,7 +53,7 @@ test("open pull requests come from every workspace the user is in, following eac
 
 test("a 404 and a 403 from Bitbucket each get their own message instead of the generic one", async () => {
   for (const [status, kind, text] of [
-    [404, "notFound", "Bitbucket doesn't recognize this request. Ardia may need an update."],
+    [404, "notFound", "Bitbucket couldn't find something this folder needs. Check your access in Settings, or update Ardia."],
     [403, "forbidden", "Your Bitbucket token can't access this. Check its scopes and workspace access in Settings."],
   ]) {
     serve({ [`${API}/user/workspaces?pagelen=100`]: status });
@@ -97,21 +97,7 @@ test("a folder shows the pull requests that loaded and the error of the workspac
   await refreshFolder(id);
   assert.deepEqual(live().items[id].map((it) => it.id), ["bitbucket:acme/web#1"]);
   assert.equal(live().status[id].state, "error");
-  assert.deepEqual(live().status[id].errors.map((e) => e.kind), ["forbidden"]);
-});
-
-test("a folder shows each kind of error its failing workspaces hit", async () => {
-  serve({
-    [`${API}/user/workspaces?pagelen=100`]: { values: [{ workspace: { slug: "acme" } }, { workspace: { slug: "locked" } }, { workspace: { slug: "busy" } }] },
-    [workspacePRs("acme")]: { values: [prJson(1, "acme/web")] },
-    [workspacePRs("locked")]: 403,
-    [workspacePRs("busy")]: 429,
-  });
-  await connectBitbucket("me@example.com", "token");
-  const id = createFolder("p", "pullRequests", ["bitbucket"]);
-  await refreshFolder(id);
-  assert.deepEqual(live().items[id].map((it) => it.id), ["bitbucket:acme/web#1"]);
-  assert.deepEqual(live().status[id].errors.map((e) => e.kind).sort(), ["forbidden", "rateLimited"]);
+  assert.equal(live().status[id].error?.kind, "forbidden");
 });
 
 test("when every workspace fails, the folder shows that error", async () => {
@@ -166,7 +152,7 @@ test("workspaces and statuses are asked at most ten at a time", async () => {
   let most = 0;
   globalThis.fetch = async (url) => {
     most = Math.max(most, ++inFlight);
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     return stubbed(url).finally(() => inFlight--);
   };
   const items = await SOURCES.bitbucket.fetch(authored);
@@ -205,20 +191,5 @@ test("a refresh keeps a failed workspace's pull requests in the folder", async (
   await connectBitbucket("me@example.com", "token");
   await refreshFolder(id);
   assert.deepEqual(live().items[id].map((it) => it.id).sort(), ["bitbucket:acme/web#1", "bitbucket:locked/app#9"]);
-  assert.deepEqual(live().status[id].errors.map((e) => e.source), ["bitbucket"]);
-});
-
-test("a source that fails outright doesn't hide another source's partial failure", async () => {
-  serve({
-    [`${API}/user/workspaces?pagelen=100`]: { values: [{ workspace: { slug: "acme" } }, { workspace: { slug: "locked" } }] },
-    [workspacePRs("acme")]: { values: [prJson(1, "acme/web")] },
-    [workspacePRs("locked")]: 403,
-  });
-  await connectBitbucket("me@example.com", "token");
-  const id = createFolder("p", "pullRequests", ["github", "bitbucket"]);
-  await refreshFolder(id);
-  const errors = live().status[id].errors;
-  assert.deepEqual(errors.map((e) => `${e.source}:${e.kind}`).sort(), ["bitbucket:forbidden", "github:notConfigured"]);
-  assert.equal(folderErrorText(errors), "Connect GitHub in Settings · Your Bitbucket token can't access this. Check its scopes and workspace access in Settings.");
-  assert.deepEqual(folderErrorTexts([...errors, ...errors]), ["Connect GitHub in Settings", "Your Bitbucket token can't access this. Check its scopes and workspace access in Settings."]);
+  assert.equal(live().status[id].error?.source, "bitbucket");
 });

@@ -1,7 +1,7 @@
 import { assignPositions, type Adapter, type Extraction } from "@ardia/sync";
 import { useBrowser, type BrowserState } from "../../browser/store";
 import { ancestorIds, depthOf, leaveGroups, syncGroupOrder, withParent } from "../../groups/groups";
-import { isPinnedRow, makeTab, newId, pinKeyOf, pinSection, ROW_PIN, TILE_PIN, without } from "../../browser/model";
+import { isPinnedRow, makeTab, newId, pinKeyOf, pinSection, ROW_PIN, TILE_PIN } from "../../browser/model";
 import { groupChoiceKey, placeChoiceKey, type PinSyncEntry } from "../../pins/pinChoices";
 import { adoptParkedPins, parkWindowPins } from "../../pins/parkedPins";
 import { removeTabs } from "../../tabs/tabs";
@@ -158,7 +158,7 @@ export function pinnedAdapter(profileId: string): Adapter {
       const PARK = `park:${profileId}`;
       const shown = home.tabIds.some((id) => s.tabs[id]?.profileId === profileId);
       if (s.parkedPins[profileId] || !shown) {
-        const stand: Window = { id: PARK, profileId, kind: "main", tabIds: [], activeTabIds: {}, sidebarOpen: true, frame: null, createdAt: 0 };
+        const stand: Window = { id: PARK, profileId, kind: "main", tabIds: [], activeTabIds: {}, frame: null, createdAt: 0 };
         s = { ...s, windows: { ...s.windows, [PARK]: stand } };
         if (s.parkedPins[profileId]) s = adoptParkedPins(s, PARK, profileId);
       }
@@ -395,18 +395,17 @@ export function pinnedAdapter(profileId: string): Adapter {
         windows[w.id] = window;
         groups = syncGroupOrder(groups, window);
       }
-      let { live, parkedPins } = s;
+      let { parkedPins } = s;
       const parkWindow = windows[PARK];
       if (parkWindow) {
         parkedPins = parkWindowPins(parkedPins, parkWindow, { tabs, groups, history: s.history, profiles: s.profiles });
         for (const id of parkWindow.tabIds) delete tabs[id];
-        live = without(live, parkWindow.tabIds);
         groups = Object.fromEntries(Object.entries(groups).filter(([, g]) => g.windowId !== PARK));
         delete windows[PARK];
       }
       const { find, splits, selection, windowOrder, windowUi } = s;
       const pinSync = noted.size ? { ...s.pinSync, [profileId]: { ...s.pinSync[profileId], ...Object.fromEntries(noted) } } : s.pinSync;
-      useBrowser.setState({ tabs, windows, groups, live, find, splits, selection, windowOrder, windowUi, parkedPins, pinSync });
+      useBrowser.setState({ tabs, windows, groups, find, splits, selection, windowOrder, windowUi, parkedPins, pinSync });
     },
   };
 }

@@ -9,7 +9,7 @@ A release is: notes → version bump → `scripts/release.sh` → smoke test →
 The build and the publishing run in GitHub Actions: the **Release** workflow (`.github/workflows/release.yml`,
 `docs/releasing.md` › CI releases) runs `release.sh`, signs, notarizes and publishes.
 Locally you write the notes, bump the version, publish the engine when `engine/` changed, smoke-test, run the
-stable perf gate, and update the site.
+stable perf gate and the site's Ardia-only benchmarks, and update the site.
 Users get it through Sparkle (Ardia › Check for Updates…), and the first launch of the new version
 opens `https://ardia.dev/release-notes#<version>`. So the release isn't done until the site is
 deployed with the new entry — otherwise that tab opens on a page that doesn't mention the update.
@@ -19,10 +19,14 @@ There are two channels (`docs/releasing.md` › Channels):
 - **Nightly** (`0.2.37-nightly.1`): fast iteration, one fix at a time. Only the focused checks for what changed run;
   no perf ratchet, no perf gate, no landing-page refresh. It's a GitHub prerelease, so the site's download,
   the README and fetch-engine (all on `releases/latest`) keep pointing at stable.
-- **Stable** (`0.2.37`): everything below, about 1.5 h with the smoke test, the update test, the ratchet and the
-  perf gate. Its perf is compared with the previous **stable** release, never a nightly.
+- **Stable** (`0.2.37`): everything below. From the candidate to publish, the checks take about 45 min: the smoke
+  test, the update test, the ratchet and the perf gate's preparation side by side (about 5 min), then the gate's two
+  timed rounds (about 19 min each), all in `apps/browser/scripts/perf/gate.sh` under one perflab lock.
+  The site's benchmarks run on the Mac mini beside them or after publishing, never in front of it. Its perf is
+  compared with the previous **stable** release, never a nightly.
 
-When the owner asks for a nightly, or a fix is ready and nobody said stable, run the nightly loop.
+When the owner asks for a nightly, or asks for a release without saying stable, run the nightly loop. A fix being
+ready is not a request: never start a nightly or a stable unless the owner asks for a release in that request.
 
 ## The nightly loop
 
@@ -48,16 +52,20 @@ For each fix:
      All of it must pass, as for stable. To test CI's own build instead of a local one, see "Smoke-testing CI's build"
      in step 5.
    - Publish: commit and push the bump and notes, then
-     `gh workflow run release.yml -R mantrakp04/ardia -f version=<version> -f dry_run=false` and
+     `gh workflow run release.yml -R ardia-browser/ardia -f version=<version> -f dry_run=false` and
      watch it (`gh run watch <id> --exit-status`, in pieces under 10 minutes). It builds, tags, and runs
      `.claude/skills/release/scripts/publish.sh <version>` (a prerelease with the DMG, zip, appcast and CLI
-     tarball; the merged feed onto the latest stable release; `Ardia-Nightly.dmg` behind https://ardia.dev/nightly;
-     it checks all of them), and the Homebrew tap's `ardia@nightly` cask when the `HOMEBREW_TAP_TOKEN` secret is set
+     tarball, plus the Linux and Windows files when their jobs passed; the merged feed onto the latest stable release;
+     `Ardia-Nightly.dmg` behind https://ardia.dev/nightly; it checks all of them), then refreshes the Windows update
+     feed (step 5e), and the Homebrew tap's `ardia@nightly` cask when the `HOMEBREW_TAP_TOKEN` secret is set
      (otherwise run `update-tap.sh <version>` yourself, step 5c). Locally the same is `git tag v<version> && git push
      origin main v<version>` and `publish.sh <version>` after `release.sh`.
    - Site: pushing the notes redeploys it (`.github/workflows/deploy.yml`), so the after-update tab finds the nightly's
-     entry; check the deploy run finished (no `release.ts` change, no claims or screenshots). The nightly download link
-     never changes.
+     entry; check the deploy run finished (no claims or screenshots). The Mac nightly link and the Windows installers
+     (`windows-alpha`) never change. The Linux download is versioned: once the release is published, run
+     `.claude/skills/release/scripts/site-version.mjs <version>`. It points `release.json`'s `linux` at the nightly when
+     the release carries `Ardia-<version>-linux-x64.tar.xz` and leaves it on the last one that did otherwise; commit it
+     as "Site: Linux download <version>" and push (another deploy).
    - Report in two lines: the version, the fix, the smoke result.
 
 Batch nightlies when fixes land close together; never hold a fix back for a stable. A stable release's notes cover
@@ -79,7 +87,8 @@ everything since the previous stable, nightlies included.
   plain `open`. The smoke script does this for you.
 - **Build from a clean tree.** release.sh archives the working tree, so another agent's half-finished
   edit would ship. Check `git status` first (below).
-- **Commits** go to `main` with the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Commits** go to `main` with no attribution lines: no `Co-Authored-By: Claude…`, "Generated with …" or session
+  links (`AGENTS.md` › No attribution lines).
 
 ## 1. Check the tree
 
@@ -125,7 +134,12 @@ update themselves from the network, as uBO's do everywhere):
 ```bash
 scripts/update-ubo.sh     # "uBO <x> is the latest release", or "uBO <old> -> <new> (sha256 …)"
 git add packages/ardiacore/scripts/ubo.sh && git commit -m "Content blocker: uBlock Origin <new>"   # only if it moved
+scripts/update-ubol.sh    # WebKit pages: uBlock Origin Lite's Safari rulesets, converted to WebKit content rules
+git add packages/ardiacore/scripts/ubol.sh && git commit -m "WebKit content blocker: uBlock Origin Lite <new>"   # only if it moved
 ```
+
+WebKit pages block with uBlock Origin Lite's rulesets (its Safari build), which, like uBOL everywhere, change only
+with a new uBOL release, so they are as fresh as the last Ardia release that moved `UBOL_VERSION`.
 
 It checks the zip against GitHub's SHA-256 digest and the manifest's version, rewrites the pin in
 `packages/ardiacore/scripts/ubo.sh` and installs it into `packages/ardiacore/vendor/ubo`. Verify after release.sh
@@ -145,6 +159,21 @@ scripts/release.sh <version>     # ~15–25 min with notarization; run it in the
 
 For a nightly, set `MARKETING_VERSION` to `<version>` (`0.2.37-nightly.1`) the same way, commit as "Nightly <version>",
 and run `scripts/release.sh <version>`: the version alone makes it a nightly.
+
+Before any of that, check the commit in about a second:
+
+```bash
+scripts/release/preflight.mjs <version>    # --mode dry-run as the CI dry run checks it
+```
+
+It reads the published appcast once and fails on everything that would stop the release later: a version that fits
+no channel, missing, empty or unreadable notes, `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` with more than one
+value across the project's configurations or a version that isn't `<version>`, an `Info.plist` that stopped reading
+them from the build settings, an Arch `pkgver` that `update-pkgbuild.sh` wouldn't derive from `<version>`, a stable
+that isn't above the latest stable in the feed, and a build number that isn't above every build in it (stable and
+nightly share one feed). `release.sh` and the
+Release workflow's `preflight` job run it first, so a stale build number fails in seconds instead of after the engine
+fetch and `pod install`.
 
 `release.sh` checks everything first, then runs the stages in `scripts/release/` in order: `archive.sh`,
 `export-sign.sh`, `verify.sh`, `launch-check.sh`, `notarize.sh`, `package.sh`, `notes.sh`, `appcast.sh`. When one
@@ -173,6 +202,26 @@ Notarization adds a few minutes per submission.
 
 ## 4. Smoke test the build
 
+For a stable, run the gate script as soon as the candidate exists (`run_in_background`; it ends in about 45 min):
+
+```bash
+apps/browser/scripts/perf/gate.sh <version> <previous>    # --out $HOME/ardia-scratch/gate-<version> by default
+```
+
+It takes the perflab lock for the whole run, so no other agent's timing shares the Mac. While another job holds it,
+it waits up to `GATE_LOCK_WAIT` seconds (default 3600), then gives up with exit 75 without starting anything. Inside
+the lock it runs this step's smoke test, 4b's ratchet and 4c's preparation side by side (none of them is a timing;
+logs in `<out>/smoke.log`, `ratchet.log`, `prep.log`), then 4c's two timed rounds and the verdict. Its exit status is
+0 pass, 1 a row fails, 2 a round is invalid, or the step that failed: 10 smoke, 11 ratchet, 12 prepare, 13 and 14 the
+rounds, 15 the verdict didn't run, 71 an app instance it launched is still running after cleanup, whatever the
+verdict (`gate.sh --help` lists them all; each step's own status is in its output). A ^C, a
+TERM to it or its process group, or a timeout stops every job it started and waits for them; the lock stays held
+until they've exited. Fix what failed and run the script again. When the fix means a new candidate (a rebuild, a new
+`--rc`), the next run prepares it afresh: `--prepared` refuses copies made from an older build of the same path, and
+the templates are keyed by the copy's code signature. A new candidate also means running 4d again on it: the site's
+benchmarks must be the build that ships. Start 4d on the Mac mini at the same time. A nightly runs only the smoke
+test:
+
 ```bash
 .claude/skills/release/scripts/smoke.sh <version> <previous>     # --rc for dist/<version>-rc
 ```
@@ -195,6 +244,10 @@ and a session whose window was left on its second profile, and checks, over CDP 
 
 - the engine and chrome://version are the Chromium version `engine/patches/build/env.sh` names, and the after-update release-notes tab opened exactly once;
 - the browser's child processes are the bundle's own helpers (Chrome's process checks pass under Developer ID);
+- a fresh profile is offered the built-in Command Line plugin and gets no `ardia`; an installed one gets `ardia` from
+  the signed copy, at the pinned version (`scripts/release/cli-bootstrap-smoke.sh`);
+- `ardia browse read <url>`, `open <url>` and `read` work over the real token connection, with the app's built-in
+  `ardia` (`scripts/release/token-smoke.sh`, in a second hidden instance with no DevTools port);
 - pages load, uBlock blocks an ad script, H.264/AAC/WebGL2;
 - no hidden full-size Chrome window (since 0.2.0 the app window is Chrome's own; before, a hidden "ghost"
   sat behind it), and the window restores as the Work profile's Chrome window, alone on screen, its pages
@@ -228,42 +281,103 @@ don't publish) or the check itself going stale after an intended change (fix the
 `.claude/skills/release/scripts/smoke.mjs`, and say so). When a release fixes a new class of bug that can be observed over CDP or
 the window list, add a check for it to `smoke.mjs` so the next release guards it.
 
-**After a fix mid-release, test only the fix.** When the smoke test, the ratchet or the perf gate fails and you fix it,
-rebuild and re-run only what covers that fix: the failed rows (a launch-only native-bench for a launch row, the
-ratchet for counts), plus the smoke test when the fix touches what it checks. Don't repeat the checks that already
-passed on the earlier candidate; move on to publishing.
+**After a fix mid-release, test only the fix, except for the perf gate.** When the smoke test or the ratchet fails and
+you fix it, rebuild and re-run only what covers that fix: the failed checks (the ratchet for counts), plus the smoke
+test when the fix touches what it checks. Don't repeat the checks that already passed on the earlier candidate. A
+perf-gate failure is different: its verdict is read from two whole rounds pooled, so no partial run (a launch-only
+native-bench, say) stands in for it. Rerun `gate.sh` in full, both rounds and the verdict, and publish only on its
+pass. A launch-only native-bench is for finding the cause, not for clearing the gate. Any fix that rebuilds the
+candidate also needs the full `gate.sh` before publishing, because its rounds measured the old build.
 
 ### 4b. Perf ratchet (stable only)
 
-Check the candidate's counts against the ceilings before publishing (about two minutes, no perflab lock needed: they
-are counts, not timings):
+Check the candidate's counts against the ceilings before publishing, beside the smoke test (about two minutes, four
+with a retry; no perflab lock needed: they are counts, not timings):
 
 ```bash
 node apps/browser/scripts/perf/ratchet.mjs run --own --app dist/<version>-rc/export/Ardia.app   # dist/<version>/export without an rc
 ```
 
 `--own` runs the app's own `main.jsbundle`, so it checks what ships. It must print `ratchet: ok`. It runs the launch,
-idle, command bar, tab switch, navigate, scroll and hover scenarios in a hidden instance, and a count over its ceiling
-gets one more run (a stray window event isn't a regression; a count over in both is). A failure is a real regression
+idle, command bar, tab switch, navigate, scroll, hover and native-node churn scenarios in one hidden instance and a
+one-tab launch in a second one beside it (report `ratchet-small.json`). A count over its ceiling gets one more run of
+the journeys up to that scenario, and a one-tab count gets its own one-tab rerun (a stray window event isn't a
+regression; a count over in both is). Native nodes left behind by the churn are never rerun: one run with any left
+fails. To check its verdict again from the saved reports, use the `check` line it prints last (the reports, `--retry`
+for a retry, `--micro` for the Node counts), not the retry report listed as a plain one: that drops the scenarios it
+didn't rerun. A failure is a real regression
 (find the commit that added the commit, render, store update or timer, and fix it) or an intended increase: raise that
 one ceiling by hand in `apps/browser/scripts/perf/ratchet.json` and say why in the commit and the release report. When
-the release made counts go down, run `ratchet.mjs lower <the run's report>` (`$TMPDIR/ac-ratchet/ratchet.json`), commit
+the release made counts go down, run `ratchet.mjs lower` with the arguments of the `check` line the run printed last: both
+sessions' reports (`ratchet.json` and `ratchet-small.json` in `$TMPDIR/ac-ratchet`), a `--retry` for each retry report it
+produced, and `--micro` (under `gate.sh`, `TMPDIR` is the gate's scratch folder, `/tmp/ac-gate.XXXXXX`, named in its
+output). Then commit
 the lowered ceilings, and say which counts dropped. The wall-clock gate is a separate step: `docs/perf/README.md`.
 
 ### 4c. Perf gate: the RC against the previous stable release (stable only)
 
 Every stable release is timed against the previous stable one before it publishes (never against a nightly: the
-control is `dist/<previous stable>/export/Ardia.app`), and ships only when every row is the same or
-better (`docs/perf/README.md` › Gating a release: native-bench with `--control dist/<previous>/export/Ardia.app`,
-interleaved, launch x6+ and session x2, then js-bench alternating the two apps). It runs alone on a quiet Mac, holding
-the perflab lock, after the smoke test and the ratchet. Call a row a regression only when the ranges separate.
-Afterwards read `scripts/agent/cpu-cap`'s log (`cpu-cap.log`): a pause of the bench or its instances during the run
-invalidates it, so rerun. Put the numbers in `docs/perf/<previous>-to-<version>.md`.
+control is `dist/<previous stable>/export/Ardia.app`), and ships only when every row passes
+(`docs/perf/README.md` › Gating a release). The copies and both templates were made beside the smoke test (step 4);
+the timed part is two rounds of native-bench on the prepared copies, interleaved, launch x6, session x2 and windows x2
+each, about 19 minutes a round, both run by `gate.sh` (step 4) under its lock. Each round gets a new empty folder, and
+the verdict runs only when both rounds exited 0, so a retry never scores an earlier round or build.
+`gate-verdict.mjs` reads the two rounds pooled: a row fails when the pooled ranges separate, or when it's worse in
+both rounds by more than the previous release's own round-to-round spread. It exits 1 on a failed row, and 2 on an
+invalid round, before scoring anything: a phase, run or sample missing, samples left out with the screen locked or
+the display asleep, or the rounds measuring different builds (version, build or code signature hash). Rerun the gate
+for a 2.
+
+js-bench is triage, not a gate step, when the ratchet passed: run its alternating loop (`docs/perf/README.md`) only
+when a gate row fails or needs explaining. Afterwards read `scripts/agent/cpu-cap`'s log (`cpu-cap.log`): a pause of
+the bench or its instances during the run invalidates it, so rerun. Put the verdict table and both rounds' tables in
+`docs/perf/<previous>-to-<version>.md`.
 
 The notes get a `## Faster` section only when the release is measurably faster: a short table of the rows that
 moved (old, new, change) and one sentence naming the biggest win. A release that's the same within noise has no
 Faster section. (0.2.28 and 0.2.29 were also timed against 0.2.17, the last CEF release, with
 `scripts/release-compare-0.2.17.sh`, now in git history: `docs/perf/README.md`.)
+
+### 4d. The site's benchmarks: Ardia again, rivals kept (stable only)
+
+Measure the same build against the stored Dia and Helium rows, so ardia.dev's Benchmarks section and `/benchmarks`
+show this release. Only Ardia runs; the rivals' figures, versions and dates come from `apps/site/src/data/bench.json`
+(`docs/perf/vs-browsers.md` › Running it). Nightlies skip it, as they skip the perf gate.
+
+It never blocks the binary: publishing (step 5) doesn't wait for it. It has to run on the Mac mini, the machine
+bench.json was measured on (xbench refuses any other), and it's a timing run, so it takes the mini's perflab lock
+itself and never runs beside another timing on the same Mac. When the gate runs on the MacBook, start it on the mini
+as soon as the candidate exists. When the gate is on the mini, run it there after publishing. Its template is cached
+in `$X/apps/.templates` (`--template-cache`), so a rerun after exit 75 or a `clean` skips the 90 s settle. Step 6's site
+deploy ships bench.json with the release notes when it's ready by then; otherwise deploy the notes without it and
+ship it with the next site deploy. Never hold the notes for it.
+
+```bash
+V=<version>; A=dist/$V-rc/export/Ardia.app   # dist/$V/export without an rc
+X=$HOME/ardia-scratch/xbench-$V-$(plutil -extract CFBundleVersion raw $A/Contents/Info.plist)-$(codesign -dvvv $A 2>&1 | sed -n 's/^CDHash=//p' | cut -c1-12)
+mkdir -p $X/apps/ardia && { [ -e $X/apps/ardia/Ardia.app ] || cp -Rc $A $X/apps/ardia/; }
+codesign --force --deep --sign - $X/apps/ardia/Ardia.app   # ad hoc, as the stored rows' Ardia and Helium ran
+node apps/browser/scripts/perf/xbench.mjs run --out $X/out --apps $X/apps --browsers ardia --rounds 3 --launches 2 \
+  --gate off --deadline 60   # run_in_background, about 35 min; exit 75 means items are left: run it again
+node apps/browser/scripts/perf/xbench.mjs report --out $X/out --apps $X/apps --browsers ardia \
+  --rivals-from apps/site/src/data/bench.json --json apps/site/src/data/bench.json --md $X/table.md
+node apps/browser/scripts/perf/xbench.mjs clean --out $X/out --apps $X/apps --browsers ardia && rm -rf $X
+```
+
+- The folder is named after the candidate's version, build and code signature hash, so running it again after exit 75
+  resumes only that same candidate. A rebuilt candidate gets a new folder and starts over, never reusing the old
+  build's samples.
+- **Refused** (exit 65, bench.json untouched): this Mac's model or chip, or xbench's harness revision, differ from the
+  stored file. Leave the site's numbers as they are and tell the owner a full rerun is needed; don't `--force` it.
+- **`full rerun due: …`** in the report's output: a stored rival is over 60 days old, or Dia or Helium in
+  `/Applications` is a new major or minor version (1.53 → 1.54, 0.19 → 0.20). Put the line in the release report so
+  the owner can schedule the full rerun (`docs/perf/vs-browsers.md` › Every browser: it needs Dia's sign-in). It
+  never blocks the release.
+- Check `git diff apps/site/src/data/bench.json`: Ardia's figures, `date`, `machine` and `best` change; no rival's
+  figure, version or `measured` date does (the first merge also stamps `measured` on every entry). Read `$X/table.md` against the perf gate's numbers; a row that moved by more than the ranges deserves a look before
+  it goes on the site.
+- Commit it as "Site bench: <version> against the stored rivals", and step 6's `pnpm -C apps/site run deploy` ships it
+  with the rest of the site.
 
 ## 5. Publish
 
@@ -271,26 +385,36 @@ Both channels publish with `publish.sh` (`docs/releasing.md` › Cutting a relea
 and, for a stable, the perf gate passed:
 
 ```bash
-gh workflow run release.yml -R mantrakp04/ardia -f version=<version> -f dry_run=false
-gh run list -R mantrakp04/ardia -w release.yml -L 1        # its id; then gh run watch <id> --exit-status, in pieces
+gh workflow run release.yml -R ardia-browser/ardia -f version=<version> -f dry_run=false
+gh run list -R ardia-browser/ardia -w release.yml -L 1        # its id; then gh run watch <id> --exit-status, in pieces
 .claude/skills/release/scripts/feed.sh <version>           # with a local dist/<version>/export, or curl ardia.dev/appcast.xml
 ```
 
 `publish.sh` runs in the workflow's last job: it tags nothing itself (the job pushes `v<version>`), merges the appcast
-onto the published feed, creates the release as latest with the DMG, zip, appcast and CLI tarball, checks
+onto the published feed, creates the release as latest with the DMG, zip and appcast (the `ardia` command is released from ardia-browser/plugins, `docs/cli.md`), checks
 `releases/latest/download/appcast.xml` and `https://ardia.dev/appcast.xml` list the version, and updates the tap when it has `HOMEBREW_TAP_TOKEN` (else run `update-tap.sh <version>`). Locally:
 `git tag v<version> && git push origin main v<version>`, then `.claude/skills/release/scripts/publish.sh <version>`.
+The release also ships up to three Sparkle deltas (`Ardia<build>-<earlier build>.delta`) that `appcast.sh` builds
+from the newest earlier zips; when none come out the sign job warns and the release goes on, so mention it in the
+report (`docs/releasing.md` › Deltas). `publish.sh` stops when the live feed is listed but won't download, and when the
+latest stable has no `appcast.xml` unless `PUBLISH_NEW_FEED=1`. If it stops on a missing feed, re-upload the last good
+`appcast.xml` (the last publishing run's `release` artifact) to the latest stable release with
+`gh release upload <tag> --clobber`, then re-run the publish (`docs/releasing.md` › Feed recovery).
+`PUBLISH_NEW_FEED=1`, with a local `publish.sh`, is only for a genuinely new feed. A dry run only notes a missing feed.
 It holds the `release-lock` branch while it publishes, so
 it refuses to run alongside another publish, local or CI, naming the holder; `--break-lock` clears a lock older than
 2 h left by a publish that died. The build job has no secrets; a separate sign job, which installs nothing, holds the
 keys and deletes them before the launch check (`docs/releasing.md` › CI releases).
 
-**Smoke-testing CI's build.** Dispatch with `dry_run=true` (the default): the same build as a release candidate
-(`release.sh --rc`: the next build number, signed and notarized), published nowhere. Download it and run the smoke test
+**Smoke-testing CI's build.** Commit the bump and the notes first, then dispatch with `dry_run=true` (the default):
+the same build as a release candidate (`release.sh --rc`, signed and notarized), published nowhere. Its preflight
+fails on everything a real run would, except a nightly that's already released at the checkout's build and still the
+newest build (the feed must list it; a published tag alone fails), which
+only warns (`publish.sh --dry-run` refuses an already released stable anyway). Download it and run the smoke test
 on it:
 
 ```bash
-gh run download <id> -R mantrakp04/ardia -n release -D dist/<version>-rc
+gh run download <id> -R ardia-browser/ardia -n release -D dist/<version>-rc
 mnt="$(mktemp -d)" && hdiutil attach -nobrowse -readonly -mountpoint "$mnt" dist/<version>-rc/Ardia-<version>.dmg
 mkdir -p dist/<version>-rc/export && ditto "$mnt/Ardia.app" dist/<version>-rc/export/Ardia.app && hdiutil detach "$mnt"
 .claude/skills/release/scripts/smoke.sh <version> <previous> --rc
@@ -298,9 +422,16 @@ mkdir -p dist/<version>-rc/export && ditto "$mnt/Ardia.app" dist/<version>-rc/ex
 
 The release itself is then a second run with `dry_run=false` on the same commit.
 
+**iPhone TestFlight.** Add `-f iphone=true` to both desktop runs only when the owner asks for TestFlight as part of the
+release. Both use the iPhone version pinned in `ios-release.yml`, and the real run uploads to Internal. Use the
+separate `public-link` run for public testers. A request to get a build on the owner's phone means installing a local
+Xcode development build or the iOS Release `device` IPA over USB or Xcode's paired wireless connection. See
+`docs/phone.md` for both paths.
+
 The engine is never packed by a release: when engine/ changed since the last prebuilt engine, release.sh stops and
-asks for `scripts/publish-engine.sh` first, which publishes `engine-<tree:12>` (with the Helium source) and appends
-its line to `packages/ardiacore/prebuilt-engines.tsv`; commit that line before the release. Every release's notes end
+asks for `scripts/publish-engine.sh` first, which publishes `engine-<tree:12>` (with the Helium source and the unstripped
+symbols that `scripts/symbolicate-crash.sh` reads) and appends its line to `packages/ardiacore/prebuilt-engines.tsv`;
+commit that line before the release. Every release's notes end
 with a Source section linking its tag, so never delete or move a published tag (`docs/releasing.md` › Source and
 licenses).
 
@@ -343,14 +474,64 @@ A release without `--phased` goes to everyone at once, as before.
 
 ### 5c. Homebrew tap
 
-https://github.com/mantrakp04/homebrew-tap holds `Casks/ardia.rb` (stable) and `Casks/ardia@nightly.rb`, so
-`brew install mantrakp04/tap/ardia` installs the latest DMG. `update-tap.sh <version>` clones the tap into a temp dir,
+https://github.com/ardia-browser/homebrew-tap holds `Casks/ardia.rb` (stable) and `Casks/ardia@nightly.rb`, so
+`brew install ardia-browser/tap/ardia` installs the latest DMG. `update-tap.sh <version>` clones the tap into a temp dir,
 sets the matching cask's `version` and `sha256` (GitHub's digest of the published DMG, checked against
 `dist/<version>/`), and pushes; `--dry-run` prints the diff instead. It refuses a version older than the cask's and
 does nothing when the cask is already there. `publish.sh` runs it for both channels (in CI only with the
 `HOMEBREW_TAP_TOKEN` secret; otherwise run it yourself after the workflow). The casks have `auto_updates true`: Sparkle updates installed copies and `brew upgrade`
 skips them, so a late tap push only delays new installs. Lint after a cask edit by hand (never `brew install` it: that
-writes `/Applications/Ardia.app`): `brew audit --cask --online mantrakp04/tap/ardia` and `brew style mantrakp04/tap`.
+writes `/Applications/Ardia.app`): `brew audit --cask --online ardia-browser/tap/ardia` and `brew style ardia-browser/tap`.
+
+### 5d. Linux package
+
+The Release workflow builds it in its `linux` job (`scripts/linux/release.sh <version> --engine exact`, smoke gate
+included, then the `.deb` installed and purged on Debian 13 and Ubuntu 24.04), and `publish.sh` attaches
+`Ardia-<version>-linux-x64.tar.xz`, `.deb` and `.AppImage`, `ardia-bin-<version>.src.tar.gz` (the Arch PKGBUILD),
+`ardia-cli-<version>-linux-x64.tar.gz` (the pinned `ardia` command, renamed for this version) and their `.sha256` files to the release, nightly or stable. A `.deb` that
+fails the install test is dropped (`deb dropped` in `provenance.txt`) and the rest still ships. That needs the Linux engine for the release commit's engine
+key (`engine/engine-key.sh --platform linux`) published in ardia-browser/ardia. Without it the `linux` job fails, the Mac release
+still ships, and `publish` warns that Linux was skipped. After a stable release the `aur` job moves the AUR package
+`ardia-bin` to it (`scripts/linux/arch/publish-aur.sh`) when the `AUR_SSH_PRIVATE_KEY` secret is set; a dry run, or a
+missing secret, only shows the commit it would push.
+
+Linux engines are built on a Boat VM (boat.dev, `boat new --type xlarge --ttl 21600`, or resumed from a saved
+builder snapshot and stopped right after publishing — never `--no-auto-stop`, and never in GitHub Actions). On the
+VM, at the commit whose engine key needs one:
+
+```bash
+scripts/linux/build.sh --apply
+source engine/patches/build/env.sh
+scripts/linux/publish-engine.sh --out "$CB/chromium_git/chromium/src/out/$GN_OUT_CONFIGS" --source <ardia checkout> --upload
+```
+
+`--upload` creates the `engine-<key12>` prerelease in ardia-browser/ardia and adds the row to
+`packages/ardiacore/prebuilt-engines-linux.tsv` without committing it. Commit that row on `main` (stage it, then a
+bare `git commit`) before dispatching the release; fetches also read the table on `main`, so older commits find it.
+
+To add Linux to a release that shipped without it: publish the engine, then on a Linux machine at the release commit
+run `scripts/linux/release.sh <version>` and the `gh release upload` line it prints, then for a stable
+`scripts/linux/arch/publish-aur.sh <version> --package <tarball>`. `--engine nearest` or
+`--allow-dirty` make test builds, never releases (`docs/linux-ci.md` › Linux releases).
+
+### 5e. Windows installers
+
+The Release workflow's `windows` job calls `windows.yml` at the release commit with the version: the x64 and arm64
+builds with the engine pinned in `scripts/windows/engine/prebuilt.json` (a draft release in ardia-browser/ardia, read
+with the run's token), the same launch, tour and install checks as CI, and `Ardia-<version>-windows-<cpu>-setup.exe`
+with a `.sha256` for each, and the engine's source `Ardia-<version>-windows-source.tar.xz` with its `.sha256`
+(`scripts/windows/engine-source.sh`). `publish.sh` attaches the six files to the release, nightly or stable, and
+refuses the installers without their source. After `publish`, the
+`windows-update` job runs `scripts/windows/publish-alpha.sh --installers` on them, which puts them on the
+`windows-alpha` prerelease and points `windows-update.json` at them, so installed Windows apps offer the release. A dry
+run checks the files in `publish.sh --dry-run` and packs the feed with `publish-alpha.sh --dry-run`; nothing goes up.
+
+A failed `windows` job never blocks the Mac: `publish` warns, the release ships without Windows and the feed stays on
+the build before. Say so in the report. Don't re-run the release's failed jobs for it (that re-runs `publish`). If the
+cause is outside the code, dispatch `windows.yml` at `v<version>` with `-f version=<version>`, then upload its
+`windows-release-*` files and run `publish-alpha.sh --installers` (`docs/windows.md` › Releases has the four lines). If it's
+in the code, fix it on `main` and Windows ships with the next release. If only `windows-update` failed, re-run that
+job alone.
 
 ## 6. Deploy the site
 
@@ -363,7 +544,7 @@ older version until this step. After a stable publish, point both at it:
 ```
 
 It reads the published DMG's size from GitHub, writes `apps/site/src/data/release.json` (`VERSION` and `DMG_SIZE`
-in `release.ts` come from it) and rewrites the README's links, labels and sizes. Commit both. If a release changes a
+in `release.ts` come from it, and `linux`, the Linux download, when the release has its tarball) and rewrites the README's links, labels and sizes. Commit both. If a release changes a
 claim on the landing page (below), change the README's matching line too.
 
 **Bring the landing page's claims up to date.** The home page makes specific promises; a release can make
@@ -383,8 +564,7 @@ app (listed in `apps/site/README.md` › Screenshots):
 | Asset | Shows |
 |---|---|
 | `src/assets/shots/window.webp` | the whole window: sidebar, pinned tiles, tabs, a page (Fig. 2, `Showcase.astro`) |
-| `shots/address-{toolbar,sidebar}.webp` | the address bar feature's before and after |
-| `shots/profile-*.webp` | the profiles feature, one window per profile |
+| `shots/address-sidebar.webp` | the address bar in the sidebar |
 | `shots/split.webp`, `extensions.webp`, `privacy.webp` | split view, the Web Store, Settings › Privacy & Security |
 | `src/assets/app-icon.png` | the header, the favicon source |
 | `src/assets/game/crowd.webp` | the offline game; its hotspot is in `Game.astro` |
@@ -426,14 +606,29 @@ The SEO data follows `release.json` and the notes by itself, with no extra step;
   `description` in `src/pages/index.astro`: ~150 characters, and it is also the share text.
 - If `og.png` changes, its URL's `?v=` hash changes with it, so X and others fetch the new card.
 
-Deploying makes things public. The user has asked for releases to go all the way through, so deploy as
-part of a release; for site changes outside a release, ask first.
+Deploying makes things public. Never cut or publish a nightly or stable release unless the owner explicitly asks for
+a release in that request; scheduled and background jobs open a PR with the `full-stop` skill and stop for the owner.
+Once the owner has asked for the release, deploy the site as part of it; for site changes outside a release, ask
+first.
 
 ### 6b. The before-and-after film (every release, nightlies included)
 
 Each release gets a Remotion film of its fixes: the same clicks on the previous release and on this one, side by side
-(`apps/videos/src/videos/fixes-<id>`, like `fixes-0243n1`; footage in `apps/videos/public/footage/<id>`, filmed in
-hidden instances, captured by pid). Once the release is published:
+(composition `fixes-<id>`, like `fixes-0245n3`; footage in `apps/videos/public/footage/fixes-<id>`, filmed in hidden
+instances, captured by pid). A film is data, never a copied folder. In `apps/videos/scripts/fixes`:
+
+1. `sessions-<id>.mjs` writes the sessions the scenes start from, with `writeSession` and the shared tabs, profiles and
+   titles from `sessions-lib.mjs`.
+2. `fixes-<id>.json` lists the segments (scene, title, body, cam, lead, tail; `dropEvents` for recorded event kinds the
+   film shouldn't draw). Scenes are `scenes/<name>.mjs`; `run.mjs <scene>…` films them on both builds.
+3. `python3 gen.py fixes-<id>` writes `src/videos/fixes-<id>/segments.json`. A film that needs more than the shared
+   overlays adds `hooks/fixes-<id>.py` with `clip(seg, side, clip, video_id)`.
+4. `src/videos/fixes-<id>/index.tsx` is six lines: `fixesFilm({ id, release, before, channel, segments })` from
+   `src/lib/fixes-film/Film.tsx`, which draws the intro, cards, panels, pointer, keycaps, dialogs, notes, banners,
+   menus, overlays and outro from the segment data (`fixes-0245n3/index.tsx` is the model). New drawing goes in
+   `src/lib/fixes-film`, driven by a segment field, so every film can use it.
+
+Once the release is published:
 
 ```bash
 pnpm -C apps/videos render fixes-<id>
@@ -449,9 +644,9 @@ redeploys and plays it above the notes. `release.sh` links it in the GitHub body
 the build, so for a film made after publishing add the same section by hand:
 
 ```bash
-gh release view v<version> -R mantrakp04/ardia --json body -q .body > /tmp/body.md
+gh release view v<version> -R ardia-browser/ardia --json body -q .body > /tmp/body.md
 printf '\n## Before and after\n\nThe fixes, filmed on the previous release and on this one: https://ardia.dev/release-videos/fixes-<id>.mp4\n' >> /tmp/body.md
-gh release edit v<version> -R mantrakp04/ardia --notes-file /tmp/body.md
+gh release edit v<version> -R ardia-browser/ardia --notes-file /tmp/body.md
 ```
 
 The section goes before `## Install` when release.sh writes it; appended at the end is fine by hand. Keep the footage
@@ -461,4 +656,5 @@ until the film is on the site: without it the film can't be rendered again.
 
 Tell the user, briefly: the version and headline, what's in it (from the notes), any landing-page claims changed, the smoke result
 (N/N), that it's live (release URL, appcast, site), how to get it (Check for Updates…), anything not
-verified (real trackpad/mouse input, notarization), and what they need to try by hand.
+verified (real trackpad/mouse input, notarization), and what they need to try by hand. For a stable, also whether the
+site's benchmarks were refreshed, and any `full rerun due` line from step 4d.

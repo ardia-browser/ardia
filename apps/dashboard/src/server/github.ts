@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { isDev, serverEnv } from "./env";
 
-const REPO = "mantrakp04/ardia";
+const REPO = "ardia-browser/ardia";
 const TTL_MS = 10 * 60_000;
 const DAY_MS = 86_400_000;
 
@@ -46,7 +46,7 @@ function token(): Promise<string | undefined> {
   return devToken;
 }
 
-async function gh(path: string, accept = "application/vnd.github+json") {
+export async function gh(path: string, accept = "application/vnd.github+json") {
   const auth = await token();
   const res = await fetch(`https://api.github.com/${path}`, {
     headers: {

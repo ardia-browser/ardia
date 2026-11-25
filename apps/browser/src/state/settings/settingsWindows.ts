@@ -1,6 +1,7 @@
 import { focusWindow, openWindow } from "../../platform/windows";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 
 export const SETTINGS_WINDOW_ID = "settings";
 export const IMPORT_WINDOW_ID = "import";
@@ -8,25 +9,10 @@ export const IMPORT_WINDOW_ID = "import";
 export const isUtilityWindowId = (id: string | null | undefined) =>
   id === SETTINGS_WINDOW_ID || id === IMPORT_WINDOW_ID;
 
-export const SETTINGS_PANES = [
-  "general",
-  "profiles",
-  "sync",
-  "tabs",
-  "appearance",
-  "privacy",
-  "passwords",
-  "autofill",
-  "extensions",
-  "search",
-  "engines",
-  "shortcuts",
-  "liveFolders",
-  "calendar",
-  "advanced",
-] as const;
+export const SETTINGS_PANES = ["general", "profiles", "tabs", "appearance", "automations", "plugins", "shortcuts", "advanced"] as const;
 
 export type SettingsPane = (typeof SETTINGS_PANES)[number];
+
 
 export type SettingsPlace = { pane: SettingsPane; profileId: string | null; detail: string | null };
 
@@ -61,12 +47,48 @@ export function settingsForward() {
   if (next) useSettingsNav.setState({ ...next, forward: current.forward.slice(1), back: [...current.back, placeOf(current)] });
 }
 
-export function openSettings(pane?: SettingsPane, profileId?: string | null) {
-  if (pane) goToSettingsPane(pane, profileId ?? null);
-  void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
+export const SETTINGS_DETAIL = {
+  filterLists: "filterLists",
+  crashDetails: "crashDetails",
+  sites: "sites",
+  passwords: "passwords",
+  addresses: "addresses",
+  cards: "cards",
+  otherEngines: "otherEngines",
+  site: (origin: string) => `site:${origin}`,
+  extension: (id: string) => `extension:${id}`,
+} as const;
+
+export const detailValue = (detail: string | null, kind: "site" | "extension") => (detail?.startsWith(`${kind}:`) ? detail.slice(kind.length + 1) : null);
+
+const targetedOpenListeners = new Set<(consent: ConsentToken | null) => void>();
+const openListeners = new Set<(pane: SettingsPane, profileId: string | null) => void>();
+let pendingOpenAt: number | null = null;
+const OPEN_CLAIM_MS = 5_000;
+
+export const onTargetedSettingsOpen = (listener: (consent: ConsentToken | null) => void) => void targetedOpenListeners.add(listener);
+export const onSettingsOpen = (listener: (pane: SettingsPane, profileId: string | null) => void) => void openListeners.add(listener);
+export function claimSettingsOpenAt(): number | null {
+  const at = pendingOpenAt;
+  pendingOpenAt = null;
+  return at !== null && Date.now() - at < OPEN_CLAIM_MS ? at : null;
 }
 
-export const useImportRequest = create<{ source: string | null }>()(() => ({ source: null }));
+export function openSettings(pane?: SettingsPane, profileId?: string | null, detail?: string | null) {
+  if (pane) {
+    const consent = consentToken();
+    targetedOpenListeners.forEach((listener) => listener(consent));
+    goToSettingsPane(pane, profileId ?? null, detail ?? null);
+  }
+  const nav = useSettingsNav.getState();
+  pendingOpenAt = Date.now();
+  void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
+  openListeners.forEach((listener) => listener(nav.pane, nav.profileId));
+}
+
+export const openSiteSettings = (origin: string, profileId: string) => openSettings("profiles", profileId, SETTINGS_DETAIL.site(origin));
+
+const useImportRequest = create<{ source: string | null }>()(() => ({ source: null }));
 
 export function takePreferredImportSource() {
   const { source } = useImportRequest.getState();

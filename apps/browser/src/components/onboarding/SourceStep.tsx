@@ -5,78 +5,72 @@ import { Checkbox, IconTile, Symbol, Text } from "../ui";
 import { radius, space } from "../ui/tokens";
 import { isWebDemo } from "../../state/onboarding/demoSteps";
 import { openImport } from "../../state/settings/settingsWindows";
-import { chooseSource, confirmAnswer, PRESET_NAMES, presetFor, presetPatch, skipStep, useOnboarding, type BrowserSourceId } from "../../state/onboarding/onboarding";
+import { noteOnboardingImport } from "../../state/telemetry/usage";
+import { chooseSource, confirmAnswer, PRESET_NAMES, presetFor, skipStep, sourcePatch, useOnboarding, type BrowserSourceId } from "../../state/onboarding/onboarding";
 import { StepActions, StepLayout } from "./StepLayout";
 import { SecondaryButton } from "./Buttons";
-import { SectionLabel, SelectTile, Tag, useOnboardingColors } from "./Parts";
+import { SectionLabel, SelectTile, Tag, useOnboardingCard, useOnboardingColors } from "./Parts";
 import { ChoiceCard } from "./ChoiceCard";
 import { SetupCodeLink, SetupCodeStep } from "./SetupCodeStep";
 import { browserIcon } from "./browserIcons";
 import { useImageRing } from "./GlassBacking";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { importModule } from "../../state/import/importApi";
+import { sourceTiles, type SourceCandidate, type SourceTile } from "./sourceTiles";
 
 const ICON = require("../../../assets/app-icon.png");
 
-type Candidate = { id: Exclude<BrowserSourceId, "fresh">; name: string; app: string; importId?: string };
+type Tile = SourceTile;
 
-const CANDIDATES: Candidate[][] = [
-  [{ id: "arc", name: "Arc", app: "/Applications/Arc.app" }],
-  [{ id: "dia", name: "Dia", app: "/Applications/Dia.app" }],
-  [{ id: "chrome", name: "Chrome", app: "/Applications/Google Chrome.app" }],
-  [
-    { id: "safari", name: "Safari", app: "/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app" },
-    { id: "safari", name: "Safari", app: "/Applications/Safari.app" },
-  ],
-  [{ id: "firefox", name: "Firefox", app: "/Applications/Firefox.app" }],
-  [
-    { id: "zen", name: "Zen", app: "/Applications/Zen.app" },
-    { id: "zen", name: "Zen", app: "/Applications/Zen Browser.app" },
-    { id: "zen", name: "Zen Twilight", app: "/Applications/Zen Twilight.app" },
-  ],
-  [
-    { id: "brave", name: "Brave", app: "/Applications/Brave Browser.app" },
-    { id: "brave", name: "Brave Beta", app: "/Applications/Brave Browser Beta.app", importId: "braveBeta" },
-    { id: "brave", name: "Brave Nightly", app: "/Applications/Brave Browser Nightly.app", importId: "braveNightly" },
-    { id: "edge", name: "Edge", app: "/Applications/Microsoft Edge.app" },
-    { id: "edge", name: "Edge Beta", app: "/Applications/Microsoft Edge Beta.app", importId: "edgeBeta" },
-  ],
-];
+const BY_APP_BUNDLE = PLATFORM_FEATURES.findsBrowsersBy === "appBundle";
 
-type Tile = { id: BrowserSourceId; name: string; app: string | null; icon: string | null; importId?: string };
+const detect = (isFound: (c: SourceCandidate) => boolean) => sourceTiles(isFound, PLATFORM_FEATURES);
 
-function detect(): Tile[] {
-  return CANDIDATES.map((group) => {
-    const found = group.find((c) => fileExists(c.app));
-    if (found) return { id: found.id, name: found.name, app: found.app, icon: null, importId: found.importId };
-    const names = [...new Set(group.filter((c) => !c.importId).map((c) => c.name))];
-    const families = names.filter((name) => !names.some((other) => other !== name && name.startsWith(`${other} `)));
-    return { id: group[0]!.id, name: families.join(" or "), app: null, icon: null };
-  });
-}
+const detectByAppBundle = () => detect((c) => BY_APP_BUNDLE && fileExists(c.app));
 
 export function SourceStep() {
   const colors = useOnboardingColors();
   const source = useOnboarding((s) => s.source);
-  const [tiles, setTiles] = useState<Tile[]>(detect);
+  const redo = useOnboarding((s) => s.redo);
+  const redoSource = useOnboarding((s) => s.redoSource);
+  const [tiles, setTiles] = useState<Tile[]>(detectByAppBundle);
   const [importing, setImporting] = useState<BrowserSourceId | null>(null);
   const [pastingCode, setPastingCode] = useState(false);
 
   useEffect(() => {
+    if (!BY_APP_BUNDLE) {
+      void importModule()
+        .listBrowsers()
+        .then((list) => {
+          const ids = new Set(list.map((b) => b.id));
+          setTiles(detect((c) => ids.has(c.importId ?? c.id)));
+        })
+        .catch(() => {});
+      return;
+    }
     void Promise.all(tiles.map(async (t) => ({ ...t, icon: t.app ? ((await fileIcon(t.app, 64)) ?? null) : null }))).then(setTiles);
   }, []);
 
-  const found = tiles.filter((t) => t.app);
-  const others = tiles.filter((t) => !t.app);
+  const found = tiles.filter((t) => t.found);
+  const others = tiles.filter((t) => !t.found);
   const chosen = tiles.find((t) => t.id === source);
-  const canImport = !isWebDemo && !!chosen?.app;
+  const canImport = !isWebDemo && !!chosen?.found;
   const choose = (id: BrowserSourceId) => chooseSource(id);
 
   const startImport = () => {
     if (!chosen) return;
     openImport(chosen.importId ?? chosen.id);
+    noteOnboardingImport(chosen.id);
     setImporting(chosen.id);
   };
 
-  const done = () => confirmAnswer("source", presetPatch(source), chosen ? [`Coming from ${chosen.name}`] : source === "fresh" ? ["Starting fresh"] : []);
+  const skip = () => {
+    chooseSource(redo ? redoSource : null);
+    skipStep();
+  };
+
+  const done = () => confirmAnswer("source", sourcePatch(), chosen ? [`Coming from ${chosen.name}`] : source === "fresh" ? ["Starting fresh"] : []);
 
   if (pastingCode) return <SetupCodeStep onBack={() => setPastingCode(false)} />;
 
@@ -89,16 +83,32 @@ export function SourceStep() {
           <StepActions
             disabled={!source}
             onContinue={done}
-            onSkip={() => skipStep()}
+            onSkip={skip}
           />
           {isWebDemo ? null : <SetupCodeLink onPress={() => setPastingCode(true)} />}
         </>
       }
+      footer={
+        canImport && chosen ? (
+          <ChoiceCard radius={radius.panel} style={{ flexDirection: "row", alignItems: "center", gap: space.l, padding: space.l }}>
+            <View style={{ flex: 1, gap: space.xxs }}>
+              <Text weight="medium" color={colors.title}>
+                {importing === chosen.id ? `Importing from ${chosen.name}` : `Bring your stuff from ${chosen.name}`}
+              </Text>
+              <Text size="small" color={colors.rowSubtitle}>
+                {importing === chosen.id ? "It runs in its own window. Carry on here." : "Bookmarks, history, passwords and tabs."}
+              </Text>
+            </View>
+            {importing === chosen.id ? <Checkbox look="ring" size="m" value /> : <SecondaryButton title="Import…" filled onPress={startImport} />}
+          </ChoiceCard>
+        ) : null
+      }
       preview={<SourcePreview tile={chosen ?? null} fresh={source === "fresh"} found={found} />}
+      previewOptional
     >
       {found.length ? (
         <View style={{ gap: space.m }}>
-          <SectionLabel title="Found on this Mac" />
+          <SectionLabel title={`Found on this ${PLATFORM_TERMS.computer}`} />
           <TileGrid tiles={found} selected={source} onPress={choose} />
         </View>
       ) : null}
@@ -106,19 +116,6 @@ export function SourceStep() {
         <SectionLabel title={found.length ? "Others" : "Browsers"} />
         <TileGrid tiles={others} selected={source} onPress={choose} fresh />
       </View>
-      {canImport && chosen ? (
-        <ChoiceCard radius={radius.panel} style={{ flexDirection: "row", alignItems: "center", gap: space.l, padding: space.l }}>
-          <View style={{ flex: 1, gap: space.xxs }}>
-            <Text weight="medium" color={colors.title}>
-              {importing === chosen.id ? `Importing from ${chosen.name}` : `Bring your stuff from ${chosen.name}`}
-            </Text>
-            <Text size="small" color={colors.rowSubtitle}>
-              {importing === chosen.id ? "It runs in its own window. Carry on here." : "Bookmarks, history, passwords and tabs."}
-            </Text>
-          </View>
-          {importing === chosen.id ? <Checkbox look="ring" size="m" value /> : <SecondaryButton title="Import…" filled onPress={startImport} />}
-        </ChoiceCard>
-      ) : null}
     </StepLayout>
   );
 }
@@ -134,14 +131,17 @@ function TileGrid({ tiles, selected, onPress, fresh }: { tiles: Tile[]; selected
   );
 }
 
+const SOURCE_TILE = { regular: { height: 68, icon: 30 }, compact: { height: 56, icon: 26 } } as const;
+
 function SourceTile({ title, icon, symbol, selected, onPress }: { title: string; icon: ImageSourcePropType | null; symbol: string; selected: boolean; onPress: () => void }) {
   const colors = useOnboardingColors();
   const ring = useImageRing(icon, selected);
+  const tile = useOnboardingCard().compact ? SOURCE_TILE.compact : SOURCE_TILE.regular;
   return (
-    <SelectTile title={title} height={68} selected={selected} role="radio" titlePad={space.xs} titleLines={1} ring={ring} onPress={onPress}>
+    <SelectTile title={title} height={tile.height} selected={selected} role="radio" titlePad={space.xs} titleLines={1} ring={ring} onPress={onPress}>
       {() =>
         icon ? (
-          <Image source={icon} style={{ width: 30, height: 30 }} />
+          <Image source={icon} style={{ width: tile.icon, height: tile.icon }} />
         ) : (
           <View style={{ margin: space.xxs }}>
             <IconTile symbol={symbol} size="s" fill={colors.iconContainer} glyph={colors.subtitle} />
@@ -155,7 +155,7 @@ function SourceTile({ title, icon, symbol, selected, onPress }: { title: string;
 function SourcePreview({ tile, fresh, found }: { tile: Tile | null; fresh: boolean; found: Tile[] }) {
   const colors = useOnboardingColors();
   const preset = presetFor(tile?.id ?? (fresh ? "fresh" : null));
-  const from = tile ? [tile] : fresh ? [] : found.filter((t) => t.app).slice(0, 6);
+  const from = tile ? [tile] : fresh ? [] : found.filter((t) => t.found).slice(0, 6);
   return (
     <View style={{ alignItems: "center", gap: space.xxxl }}>
       {from.length ? (

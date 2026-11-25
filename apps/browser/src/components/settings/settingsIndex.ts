@@ -1,57 +1,79 @@
+import { ADVANCED_PANE_SYMBOL } from "../../lib/platformChrome";
 import { prepare, type Searchable } from "./searchMatch";
+import type { paneTints } from "./tokens";
 import { SETTINGS_PANES, type SettingsPane } from "../../state/settings/settingsWindows";
 import type { Settings } from "../../state/settings/settings";
+import { advancedRows } from "./rows/advancedRows";
+import { appearanceRows } from "./rows/appearanceRows";
+import { automationRows } from "./rows/automationRows";
 import { generalRows } from "./rows/generalRows";
-import { privacyRows } from "./rows/privacyRows";
-import { toolRows } from "./rows/toolRows";
+import { pluginRows, SETTING_ALIASES } from "./rows/pluginRows";
+import { profileRows } from "./rows/profileRows";
+import { shortcutRows } from "./rows/shortcutRows";
+import { tabRows } from "./rows/tabRows";
 import type { SettingSection, SettingsEnv } from "./rows/types";
 
-const PANE_LOOKS: Record<SettingsPane, { title: string; icon: string }> = {
-  general: { title: "General", icon: "gearshape" },
-  profiles: { title: "Profiles", icon: "person.2" },
-  sync: { title: "Sync", icon: "arrow.triangle.2.circlepath" },
-  tabs: { title: "Tabs", icon: "square.on.square" },
-  appearance: { title: "Appearance", icon: "circle.lefthalf.filled" },
-  privacy: { title: "Privacy & Security", icon: "hand.raised" },
-  passwords: { title: "Passwords", icon: "key" },
-  autofill: { title: "Autofill", icon: "creditcard" },
-  extensions: { title: "Extensions", icon: "puzzlepiece.extension" },
-  search: { title: "Search Engine", icon: "magnifyingglass" },
-  engines: { title: "Engines", icon: "safari" },
-  shortcuts: { title: "Keyboard Shortcuts", icon: "keyboard" },
-  liveFolders: { title: "Live Folders", icon: "dot.radiowaves.left.and.right" },
-  calendar: { title: "Calendar", icon: "calendar" },
-  advanced: { title: "Advanced", icon: "slider.horizontal.3" },
+type PaneTint = Exclude<keyof typeof paneTints, "ink">;
+
+const PANE_LOOKS: Record<SettingsPane, { title: string; icon: string; tint: PaneTint }> = {
+  general: { title: "General", icon: "gearshape.fill", tint: "gray" },
+  profiles: { title: "Profiles", icon: "person.2.fill", tint: "blue" },
+  tabs: { title: "Tabs", icon: "square.on.square.fill", tint: "orange" },
+  appearance: { title: "Appearance", icon: "circle.lefthalf.filled", tint: "indigo" },
+  automations: { title: "Automations", icon: "wand.and.rays", tint: "purple" },
+  plugins: { title: "Plugins", icon: "puzzlepiece.fill", tint: "teal" },
+  shortcuts: { title: "Shortcuts", icon: "keyboard.fill", tint: "pink" },
+  advanced: { title: "Advanced", icon: ADVANCED_PANE_SYMBOL, tint: "gray" },
 };
 
-export const PANES: { id: SettingsPane; title: string; icon: string }[] = SETTINGS_PANES.map((id) => ({ id, ...PANE_LOOKS[id] }));
+export const PANES: { id: SettingsPane; title: string; icon: string; tint: PaneTint }[] = SETTINGS_PANES.map((id) => ({ id, ...PANE_LOOKS[id] }));
 
-const ROWS = { ...generalRows, ...privacyRows, ...toolRows };
+const ROWS = { ...generalRows, ...profileRows, ...tabRows, ...appearanceRows, ...automationRows, ...pluginRows, ...shortcutRows, ...advancedRows };
+const SECTIONS = ROWS as unknown as Record<SettingsPane, SettingSection[]>;
 
 type RowKeysOf<P extends SettingsPane> = (typeof ROWS)[P][number] extends infer S ? (S extends { rows: infer R } ? keyof R & string : never) : never;
 export type SettingId = { [P in SettingsPane]: `${P}.${RowKeysOf<P>}` }[SettingsPane];
 
-export type SettingEntry = Searchable & { id: SettingId; pane: SettingsPane; section: string; advanced: boolean; shown?: (settings: Settings, env: SettingsEnv) => boolean };
+export type SettingEntry = Searchable & { id: SettingId; pane: SettingsPane; section: string; explained?: boolean; needs?: string; shown?: (settings: Settings, env: SettingsEnv) => boolean };
 
-const paneTitle = (pane: SettingsPane) => PANE_LOOKS[pane].title;
+export const paneTitle = (pane: SettingsPane) => PANE_LOOKS[pane].title;
 
-export const SETTINGS: SettingEntry[] = PANES.flatMap(({ id: pane }) =>
-  (ROWS[pane] as SettingSection[]).flatMap(({ section, rows }) =>
-    Object.entries(rows).map(([key, row]) => ({ ...row, id: `${pane}.${key}` as SettingId, pane, paneTitle: paneTitle(pane), section, advanced: !!row.advanced })),
+export const SETTINGS: SettingEntry[] = SETTINGS_PANES.flatMap((pane) =>
+  SECTIONS[pane].flatMap(({ section, rows }) =>
+    Object.entries(rows).map(([key, row]) => ({
+      ...row,
+      id: `${pane}.${key}` as SettingId,
+      pane,
+      paneTitle: paneTitle(pane),
+      section,
+    })),
   ),
 );
 
 const byId = new Map(SETTINGS.map((s) => [s.id, s]));
 
-export const findSetting = (id: string): SettingEntry | undefined => byId.get(id as SettingId);
+export const resolveSettingId = (id: string): string => SETTING_ALIASES[id] ?? id;
+
+export const findSetting = (id: string): SettingEntry | undefined => byId.get(resolveSettingId(id) as SettingId);
 
 export function setting(id: SettingId): SettingEntry {
-  const entry = byId.get(id);
+  const entry = byId.get(resolveSettingId(id) as SettingId);
   if (!entry) throw new Error(`no setting ${id}`);
   return entry;
 }
 
 export const SETTINGS_INDEX = prepare(SETTINGS);
+
+let withKeywords: { key: string; index: typeof SETTINGS_INDEX } = { key: "{}", index: SETTINGS_INDEX };
+
+export function settingsIndexWith(keywords: Readonly<Record<string, readonly string[]>>): typeof SETTINGS_INDEX {
+  const key = JSON.stringify(keywords);
+  if (key === withKeywords.key) return withKeywords.index;
+  const ids = new Set(Object.keys(keywords));
+  const merged = (s: SettingEntry): SettingEntry => ({ ...s, keywords: [...new Set([...(s.keywords ?? []), ...keywords[s.id]!])] });
+  withKeywords = { key, index: SETTINGS_INDEX.map((p) => (ids.has(p.entry.id) ? prepare([merged(p.entry)])[0]! : p)) };
+  return withKeywords.index;
+}
 
 export const unshownSettings = (settings: Settings, env: SettingsEnv) =>
   SETTINGS.filter((e) => e.shown && !e.shown(settings, env))
@@ -59,5 +81,3 @@ export const unshownSettings = (settings: Settings, env: SettingsEnv) =>
     .join("\n");
 
 export const sectionEntries = (pane: SettingsPane, section: string) => SETTINGS.filter((s) => s.pane === pane && s.section === section);
-
-export const ADVANCED_PANES = new Set(PANES.map((p) => p.id).filter((pane) => SETTINGS.some((s) => s.pane === pane) && SETTINGS.every((s) => s.pane !== pane || s.advanced)));

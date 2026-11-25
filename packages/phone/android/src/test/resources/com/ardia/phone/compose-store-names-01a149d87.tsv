@@ -1,0 +1,4 @@
+apps/android/store/src/main/kotlin/com/ardia/store/BrowserDatabase.kt	const val FILE_NAME = "browser.db"
+apps/android/store/src/main/kotlin/com/ardia/store/BrowserStore.kt	const val PREFERENCES_NAME = "ardia.browser"
+apps/android/appmodel/src/main/kotlin/com/ardia/appmodel/AppEnvironment.kt	const val BLOCKING_PREFERENCES = "ardia.blocking"
+apps/android/browsing/src/main/kotlin/com/ardia/browsing/ReaderView.kt	const val STORE = "ardia.reader"

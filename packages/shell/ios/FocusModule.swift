@@ -1,16 +1,67 @@
 import AppKit
+import ArdiaCore
 import ExpoModulesCore
 
-public class FocusModule: Module {
+public class FocusModule: Module, FocusNative {
   private static var pendingUIOwner: ObjectIdentifier?
 
   private let lifetime = ModuleLifetime()
   private var switcherMonitor: Any?
   private var dragEscapeMonitor: Any?
+  private var unclaimedEscapeMonitor: Any?
   private let switcherPointer = SwitcherPointer()
 
+  static func pressesWithoutRelease() -> Int { PressRelease.pressesWithoutRelease }
+
+  static func takeFocusHandoffCounts() -> [String: [String: Int]] { FocusHandoff.shared.takeOutcomes() }
+
+  static func setConsentEpoch(_ epoch: String) {
+    ArdiaEvents.consentEpoch = epoch
+    FocusHandoff.shared.setConsentEpoch(epoch)
+    let setEpoch = NSSelectorFromString("ardia_setConsentEpoch:")
+    if let view = NSClassFromString("RCTView") as AnyObject?, view.responds(to: setEpoch) { _ = view.perform(setEpoch, with: epoch) }
+    PressRelease.forgetPresses()
+  }
+
+  static func pressRepeated() -> [String: Any]? { PressRelease.pressRepeated }
+
+  static func takeEditKeyAcks() -> [String: Int] { FocusHandoff.shared.takeEditKeyAcks() }
+
+  static func takeInputSourceKeys() -> Int { InputSourceKeys.takeWebKitTabKeys() }
+
+  static func cancelFocusMove(_ generation: Int, _ restoringSource: Bool) { FocusHandoff.shared.cancel(generation, restoringSource: restoringSource) }
+
+  func claimFocus(_ generation: Int, _ tag: Int) {
+    guard let view = appContext?.findView(withTag: tag, ofType: NSView.self) else { return }
+    FocusHandoff.shared.claim(generation, destination: view)
+  }
+
+  static func saveKeyResponder(_ windowId: String) -> Int { SavedKeyResponders.shared.save(WindowManager.shared.window(windowId)) }
+
+  static func restoreKeyResponder(_ token: Int) -> Bool { SavedKeyResponders.shared.restore(token) }
+
+  static func discardKeyResponder(_ token: Int) { SavedKeyResponders.shared.discard(token) }
+
+  func setSwitcherCapture(_ active: Bool) {
+    lifetime.run { self.applySwitcherCapture(active) }
+  }
+
+  func setDragEscapeCapture(_ active: Bool) {
+    lifetime.run { self.applyDragEscapeCapture(active) }
+  }
+
+  static func takeHoverCounts() -> [String: [String: Int]] {
+    let take = NSSelectorFromString("ardia_takeHoverCounts")
+    guard let view = NSClassFromString("RCTView") as AnyObject?, view.responds(to: take),
+      let taken = view.perform(take)?.takeUnretainedValue() as? [String: [String: NSNumber]]
+    else { return [:] }
+    return taken.mapValues { $0.mapValues(\.intValue) }
+  }
+
+  func switcherPointerMoved() -> Bool { switcherPointer.moved(to: SwitcherPointer.location) }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaFocus")
+    Name(Self.moduleName)
 
     OnCreate {
       self.lifetime.begin(self) {
@@ -18,6 +69,8 @@ public class FocusModule: Module {
         self.switcherMonitor = nil
         if let monitor = self.dragEscapeMonitor { NSEvent.removeMonitor(monitor) }
         self.dragEscapeMonitor = nil
+        if let monitor = self.unclaimedEscapeMonitor { NSEvent.removeMonitor(monitor) }
+        self.unclaimedEscapeMonitor = nil
         if Self.pendingUIOwner == ObjectIdentifier(self) {
           Self.pendingUIOwner = nil
           FocusHandoff.shared.afterPendingUI = { DispatchQueue.main.async(execute: $0) }
@@ -26,7 +79,8 @@ public class FocusModule: Module {
       self.lifetime.onMain { [weak self] in
         guard let self else { return }
         FocusHandoff.shared.install()
-        if let queue = self.appContext?.reactBridge?.uiManager.methodQueue {
+        self.watchUnclaimedEscape()
+        if let queue = self.appContext?.reactBridge?.uiManager?.methodQueue {
           FocusHandoff.shared.afterPendingUI = { block in queue.async { DispatchQueue.main.async(execute: block) } }
           Self.pendingUIOwner = ObjectIdentifier(self)
         }
@@ -35,40 +89,30 @@ public class FocusModule: Module {
 
     OnDestroy { self.lifetime.end() }
 
-    AsyncFunction("cancelFocusMove") { (generation: Int, restoringSource: Bool) in
-      FocusHandoff.shared.cancel(generation, restoringSource: restoringSource)
-    }.runOnQueue(.main)
-    AsyncFunction("claimFocus") { [weak self] (generation: Int, tag: Int) in
-      guard let view = self?.appContext?.findView(withTag: tag, ofType: NSView.self) else { return }
-      FocusHandoff.shared.claim(generation, destination: view)
-    }.runOnQueue(.main)
-    AsyncFunction("saveKeyResponder") { (windowId: String) -> Int in
-      SavedKeyResponders.shared.save(WindowManager.shared.window(windowId))
-    }.runOnQueue(.main)
-    AsyncFunction("restoreKeyResponder") { (token: Int) -> Bool in
-      SavedKeyResponders.shared.restore(token)
-    }.runOnQueue(.main)
-    AsyncFunction("discardKeyResponder") { (token: Int) in
-      SavedKeyResponders.shared.discard(token)
-    }.runOnQueue(.main)
+    Self.pressesWithoutReleaseFunction
+    Self.takeFocusHandoffCountsFunction
+    Self.setConsentEpochFunction
+    Self.pressRepeatedFunction
+    Self.takeEditKeyAcksFunction
+    Self.takeInputSourceKeysFunction
+    Self.cancelFocusMoveFunction
+    claimFocusFunction
+    Self.saveKeyResponderFunction
+    Self.restoreKeyResponderFunction
+    Self.discardKeyResponderFunction
 
-    AsyncFunction("setSwitcherCapture") { [weak self] (active: Bool) in
-      guard let self else { return }
-      self.lifetime.run { self.setSwitcherCapture(active) }
-    }.runOnQueue(.main)
+    setSwitcherCaptureFunction
 
-    AsyncFunction("setDragEscapeCapture") { [weak self] (active: Bool) in
-      guard let self else { return }
-      self.lifetime.run { self.setDragEscapeCapture(active) }
-    }.runOnQueue(.main)
+    setDragEscapeCaptureFunction
 
-    Function("switcherPointerMoved") { [weak self] () -> Bool in self?.switcherPointer.moved(to: NSEvent.mouseLocation) ?? true }
+    Self.takeHoverCountsFunction
+    switcherPointerMovedFunction
   }
 
-  private func setSwitcherCapture(_ active: Bool) {
+  private func applySwitcherCapture(_ active: Bool) {
     if let monitor = switcherMonitor { NSEvent.removeMonitor(monitor) }
     switcherMonitor = nil
-    switcherPointer.start(active ? NSEvent.mouseLocation : nil)
+    switcherPointer.start(active ? SwitcherPointer.location : nil)
     guard active else { return }
     let emit: ([String: Any]) -> Void = { ShellEvents.send(.app, $0) }
     switcherMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseUp, .rightMouseUp, .otherMouseUp]) { event in
@@ -81,13 +125,27 @@ public class FocusModule: Module {
       case 53: emit(["type": "switcherKey", "key": "escape"])
       case 124: emit(["type": "switcherKey", "key": "next"])
       case 123: emit(["type": "switcherKey", "key": "previous"])
+      case _ where event.charactersIgnoringModifiers?.lowercased() == "w" && !event.isARepeat && !event.modifierFlags.intersection([.control, .command]).isEmpty:
+        emit(["type": "switcherKey", "key": "close"])
       default: break
       }
       return nil
     }
   }
 
-  private func setDragEscapeCapture(_ active: Bool) {
+  private func watchUnclaimedEscape() {
+    guard unclaimedEscapeMonitor == nil else { return }
+    unclaimedEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+      let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+      guard let self, event.keyCode == 53, modifiers.isEmpty, !event.isARepeat, self.dragEscapeMonitor == nil, self.switcherMonitor == nil,
+        let window = event.window, window.firstResponder === window, let id = WindowManager.shared.id(of: window)
+      else { return event }
+      ShellEvents.send(.app, ["type": "unclaimedEscape", "windowId": id])
+      return event
+    }
+  }
+
+  private func applyDragEscapeCapture(_ active: Bool) {
     if let monitor = dragEscapeMonitor { NSEvent.removeMonitor(monitor) }
     dragEscapeMonitor = nil
     guard active else { return }

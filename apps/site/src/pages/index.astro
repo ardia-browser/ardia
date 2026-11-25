@@ -7,7 +7,10 @@ import Showcase from "../components/Showcase.astro";
 import Bench from "../components/Bench.astro";
 import Game from "../components/Game.astro";
 import Faq from "../components/Faq.astro";
+import Voices from "../components/Voices.astro";
 import Closing from "../components/Closing.astro";
+import Contributors from "../components/Contributors.astro";
+import ComputerUse from "../components/ComputerUse.astro";
 import Footer from "../components/Footer.astro";
 import { DMG, DMG_SIZE, MIN_MACOS, REPO, VERSION } from "../data/release";
 import { HERO_POSTERS } from "../data/heroPoster";
@@ -15,7 +18,7 @@ import { faqJsonLd } from "../data/faq";
 
 const home = homeUrl(Astro.site);
 const description =
-  "A Mac browser with Arc's sidebar and Dia's polish, built on real Chromium. Free, open source and notarized by Apple, with ads and trackers kept out.";
+  "A free, open-source Mac browser with Arc’s sidebar and Dia’s look, built on Chromium. Notarized by Apple, with uBlock Origin built in.";
 const jsonLd = [
   {
     "@context": "https://schema.org",
@@ -39,12 +42,12 @@ const jsonLd = [
 ---
 
 <Base
-  title="Ardia · a free Arc alternative for Mac, with Dia’s polish"
+  title="Ardia · a free Arc alternative for Mac, built on Chromium"
   description={description}
   jsonLd={jsonLd}
 >
   {
-    HERO_POSTERS.map((poster) => (
+    HERO_POSTERS.filter((poster) => poster.media.includes("prefers-reduced-motion: reduce")).map((poster) => (
       <link
         slot="head"
         rel="preload"
@@ -58,13 +61,16 @@ const jsonLd = [
     ))
   }
   <Header />
-  <main>
+  <main id="main">
     <Hero />
     <Showcase />
+    <ComputerUse />
     <Bench />
     <Game />
+    <Voices />
     <Faq />
     <Closing />
+    <Contributors />
   </main>
   <Footer />
 </Base>

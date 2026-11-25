@@ -1,0 +1,844 @@
+{
+ "traceEvents": [
+  {
+   "name": "thread_name",
+   "ph": "M",
+   "pid": 2,
+   "tid": 3,
+   "ts": 0,
+   "args": {
+    "name": "CrRendererMain"
+   }
+  },
+  {
+   "name": "thread_name",
+   "ph": "M",
+   "pid": 1,
+   "tid": 1,
+   "ts": 0,
+   "args": {
+    "name": "CrBrowserMain"
+   }
+  },
+  {
+   "name": "TracingStartedInBrowser",
+   "ph": "I",
+   "pid": 1,
+   "tid": 1,
+   "ts": 999990000,
+   "cat": "disabled-by-default-devtools.timeline",
+   "args": {
+    "data": {
+     "frameTreeNodeId": 1,
+     "persistentIds": true,
+     "frames": [
+      {
+       "frame": "F1",
+       "url": "https://shop.example/",
+       "name": "",
+       "processId": 2,
+       "isOutermostMainFrame": true
+      },
+      {
+       "frame": "F2",
+       "url": "https://ads.example/frame",
+       "parent": "F1",
+       "processId": 5
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "navigationStart",
+   "ph": "R",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1000000000,
+   "cat": "blink.user_timing",
+   "args": {
+    "frame": "F1",
+    "data": {
+     "documentLoaderURL": "https://shop.example/",
+     "isLoadingMainFrame": true,
+     "isOutermostMainFrame": true,
+     "navigationId": "N1"
+    }
+   }
+  },
+  {
+   "name": "ResourceSendRequest",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1000005000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R1",
+     "url": "https://shop.example/",
+     "priority": "VeryHigh",
+     "requestMethod": "GET",
+     "frame": "F1"
+    }
+   }
+  },
+  {
+   "name": "ResourceReceiveResponse",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1000655050,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R1",
+     "statusCode": 200,
+     "mimeType": "text/html",
+     "encodedDataLength": 300,
+     "frame": "F1",
+     "timing": {
+      "requestTime": 1000.005,
+      "dnsStart": 0,
+      "dnsEnd": 5,
+      "connectStart": 5,
+      "connectEnd": 40,
+      "sendStart": 41,
+      "sendEnd": 42,
+      "receiveHeadersEnd": 650
+     }
+    }
+   }
+  },
+  {
+   "name": "ResourceFinish",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1000700080,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R1",
+     "finishTime": 1000.7,
+     "encodedDataLength": 24000,
+     "decodedBodyLength": 72000,
+     "didFail": false
+    }
+   }
+  },
+  {
+   "name": "ResourceSendRequest",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1000680000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R2",
+     "url": "https://shop.example/site.css",
+     "priority": "High",
+     "requestMethod": "GET",
+     "frame": "F1",
+     "renderBlocking": "blocking"
+    }
+   }
+  },
+  {
+   "name": "ResourceReceiveResponse",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1000800050,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R2",
+     "statusCode": 200,
+     "mimeType": "text/css",
+     "encodedDataLength": 300,
+     "frame": "F1",
+     "timing": {
+      "requestTime": 1000.68,
+      "dnsStart": 0,
+      "dnsEnd": 5,
+      "connectStart": 5,
+      "connectEnd": 40,
+      "sendStart": 41,
+      "sendEnd": 42,
+      "receiveHeadersEnd": 120
+     }
+    }
+   }
+  },
+  {
+   "name": "ResourceFinish",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1000900080,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R2",
+     "finishTime": 1000.9,
+     "encodedDataLength": 40000,
+     "decodedBodyLength": 120000,
+     "didFail": false
+    }
+   }
+  },
+  {
+   "name": "ResourceSendRequest",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1000950000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R3",
+     "url": "https://shop.example/font.woff2",
+     "priority": "High",
+     "requestMethod": "GET",
+     "frame": "F1"
+    }
+   }
+  },
+  {
+   "name": "ResourceReceiveResponse",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001050050,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R3",
+     "statusCode": 200,
+     "mimeType": "font/woff2",
+     "encodedDataLength": 300,
+     "frame": "F1",
+     "timing": {
+      "requestTime": 1000.95,
+      "dnsStart": 0,
+      "dnsEnd": 5,
+      "connectStart": 5,
+      "connectEnd": 40,
+      "sendStart": 41,
+      "sendEnd": 42,
+      "receiveHeadersEnd": 100
+     }
+    }
+   }
+  },
+  {
+   "name": "ResourceFinish",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001300080,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R3",
+     "finishTime": 1001.3,
+     "encodedDataLength": 30000,
+     "decodedBodyLength": 90000,
+     "didFail": false
+    }
+   }
+  },
+  {
+   "name": "ResourceSendRequest",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001200000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R4",
+     "url": "https://cdn.shop.example/hero.jpg",
+     "priority": "Low",
+     "requestMethod": "GET",
+     "frame": "F1"
+    }
+   }
+  },
+  {
+   "name": "ResourceReceiveResponse",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001400050,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R4",
+     "statusCode": 200,
+     "mimeType": "image/jpeg",
+     "encodedDataLength": 300,
+     "frame": "F1",
+     "timing": {
+      "requestTime": 1001.2,
+      "dnsStart": 0,
+      "dnsEnd": 5,
+      "connectStart": 5,
+      "connectEnd": 40,
+      "sendStart": 41,
+      "sendEnd": 42,
+      "receiveHeadersEnd": 200
+     }
+    }
+   }
+  },
+  {
+   "name": "ResourceFinish",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1002400080,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R4",
+     "finishTime": 1002.4,
+     "encodedDataLength": 800000,
+     "decodedBodyLength": 2400000,
+     "didFail": false
+    }
+   }
+  },
+  {
+   "name": "ResourceSendRequest",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1000690000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R5",
+     "url": "https://shop.example/app.js",
+     "priority": "High",
+     "requestMethod": "GET",
+     "frame": "F1",
+     "renderBlocking": "non_blocking"
+    }
+   }
+  },
+  {
+   "name": "ResourceReceiveResponse",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1000780050,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R5",
+     "statusCode": 200,
+     "mimeType": "application/javascript",
+     "encodedDataLength": 300,
+     "frame": "F1",
+     "timing": {
+      "requestTime": 1000.69,
+      "dnsStart": 0,
+      "dnsEnd": 5,
+      "connectStart": 5,
+      "connectEnd": 40,
+      "sendStart": 41,
+      "sendEnd": 42,
+      "receiveHeadersEnd": 90
+     }
+    }
+   }
+  },
+  {
+   "name": "ResourceFinish",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001050080,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "requestId": "R5",
+     "finishTime": 1001.05,
+     "encodedDataLength": 120000,
+     "decodedBodyLength": 360000,
+     "didFail": false
+    }
+   }
+  },
+  {
+   "name": "firstContentfulPaint",
+   "ph": "R",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001000000,
+   "cat": "loading,rail,devtools.timeline",
+   "args": {
+    "frame": "F1",
+    "data": {
+     "navigationId": "N1"
+    }
+   }
+  },
+  {
+   "name": "largestContentfulPaint::Candidate",
+   "ph": "R",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001050000,
+   "cat": "loading,rail,devtools.timeline",
+   "args": {
+    "frame": "F1",
+    "data": {
+     "candidateIndex": 1,
+     "isOutermostMainFrame": true,
+     "isMainFrame": true,
+     "navigationId": "N1",
+     "nodeId": 17,
+     "size": 12000,
+     "type": "text"
+    }
+   }
+  },
+  {
+   "name": "LargestImagePaint::Candidate",
+   "ph": "R",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1002600000,
+   "cat": "loading",
+   "args": {
+    "frame": "F1",
+    "data": {
+     "DOMNodeId": 42,
+     "imageUrl": "https://cdn.shop.example/hero.jpg",
+     "size": 50000,
+     "candidateIndex": 2
+    }
+   }
+  },
+  {
+   "name": "largestContentfulPaint::Candidate",
+   "ph": "R",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1002600000,
+   "cat": "loading,rail,devtools.timeline",
+   "args": {
+    "frame": "F1",
+    "data": {
+     "candidateIndex": 2,
+     "isOutermostMainFrame": true,
+     "isMainFrame": true,
+     "navigationId": "N1",
+     "nodeId": 42,
+     "size": 50000,
+     "type": "image"
+    }
+   }
+  },
+  {
+   "name": "LayoutShift",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001320000,
+   "cat": "loading",
+   "args": {
+    "frame": "F1",
+    "data": {
+     "score": 0.08,
+     "weighted_score_delta": 0.08,
+     "had_recent_input": false,
+     "impacted_nodes": [
+      {
+       "node_id": 7,
+       "old_rect": [
+        0,
+        0,
+        100,
+        20
+       ],
+       "new_rect": [
+        0,
+        40,
+        100,
+        20
+       ]
+      },
+      {
+       "node_id": 9,
+       "old_rect": [
+        0,
+        0,
+        100,
+        20
+       ],
+       "new_rect": [
+        0,
+        40,
+        100,
+        20
+       ]
+      }
+     ],
+     "navigationId": "N1"
+    }
+   }
+  },
+  {
+   "name": "LayoutShift",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001500000,
+   "cat": "loading",
+   "args": {
+    "frame": "F1",
+    "data": {
+     "score": 0.05,
+     "weighted_score_delta": 0.05,
+     "had_recent_input": false,
+     "impacted_nodes": [
+      {
+       "node_id": 11,
+       "old_rect": [
+        0,
+        0,
+        100,
+        20
+       ],
+       "new_rect": [
+        0,
+        40,
+        100,
+        20
+       ]
+      }
+     ],
+     "navigationId": "N1"
+    }
+   }
+  },
+  {
+   "name": "LayoutShift",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1003000000,
+   "cat": "loading",
+   "args": {
+    "frame": "F1",
+    "data": {
+     "score": 0.3,
+     "weighted_score_delta": 0.3,
+     "had_recent_input": true,
+     "impacted_nodes": [
+      {
+       "node_id": 7,
+       "old_rect": [
+        0,
+        0,
+        100,
+        20
+       ],
+       "new_rect": [
+        0,
+        40,
+        100,
+        20
+       ]
+      }
+     ],
+     "navigationId": "N1"
+    }
+   }
+  },
+  {
+   "name": "LayoutShift",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1008000000,
+   "cat": "loading",
+   "args": {
+    "frame": "F1",
+    "data": {
+     "score": 0.02,
+     "weighted_score_delta": 0.02,
+     "had_recent_input": false,
+     "impacted_nodes": [
+      {
+       "node_id": 7,
+       "old_rect": [
+        0,
+        0,
+        100,
+        20
+       ],
+       "new_rect": [
+        0,
+        40,
+        100,
+        20
+       ]
+      }
+     ],
+     "navigationId": "N1"
+    }
+   }
+  },
+  {
+   "name": "LayoutShift",
+   "ph": "I",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001400000,
+   "cat": "loading",
+   "args": {
+    "frame": "F2",
+    "data": {
+     "score": 0.4,
+     "weighted_score_delta": 0.4,
+     "had_recent_input": false,
+     "impacted_nodes": [
+      {
+       "node_id": 7,
+       "old_rect": [
+        0,
+        0,
+        100,
+        20
+       ],
+       "new_rect": [
+        0,
+        40,
+        100,
+        20
+       ]
+      }
+     ],
+     "navigationId": "N1"
+    }
+   }
+  },
+  {
+   "name": "EventTiming",
+   "ph": "b",
+   "id": "0x62",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1003000000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "duration": 120,
+     "interactionId": 7,
+     "nodeId": 55,
+     "processingStart": 3010,
+     "processingEnd": 3050,
+     "timeStamp": 3000,
+     "type": "pointerdown",
+     "frame": "F1"
+    }
+   }
+  },
+  {
+   "name": "EventTiming",
+   "ph": "e",
+   "id": "0x62",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1003120000,
+   "cat": "devtools.timeline",
+   "args": {}
+  },
+  {
+   "name": "EventTiming",
+   "ph": "b",
+   "id": "0x64",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1003000000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "duration": 320,
+     "interactionId": 7,
+     "nodeId": 55,
+     "processingStart": 3150,
+     "processingEnd": 3280,
+     "timeStamp": 3000,
+     "type": "click",
+     "frame": "F1"
+    }
+   }
+  },
+  {
+   "name": "EventTiming",
+   "ph": "e",
+   "id": "0x64",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1003320000,
+   "cat": "devtools.timeline",
+   "args": {}
+  },
+  {
+   "name": "EventTiming",
+   "ph": "b",
+   "id": "0x70",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1005000000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "duration": 80,
+     "interactionId": 8,
+     "nodeId": 55,
+     "processingStart": 5004,
+     "processingEnd": 5040,
+     "timeStamp": 5000,
+     "type": "keydown",
+     "frame": "F1"
+    }
+   }
+  },
+  {
+   "name": "EventTiming",
+   "ph": "e",
+   "id": "0x70",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1005080000,
+   "cat": "devtools.timeline",
+   "args": {}
+  },
+  {
+   "name": "EventTiming",
+   "ph": "b",
+   "id": "0x22",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1005500000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "duration": 16,
+     "interactionId": 0,
+     "nodeId": 55,
+     "processingStart": 5501,
+     "processingEnd": 5502,
+     "timeStamp": 5500,
+     "type": "mousemove",
+     "frame": "F1"
+    }
+   }
+  },
+  {
+   "name": "EventTiming",
+   "ph": "e",
+   "id": "0x22",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1005516000,
+   "cat": "devtools.timeline",
+   "args": {}
+  },
+  {
+   "name": "RunTask",
+   "ph": "X",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001100000,
+   "dur": 180000,
+   "cat": "disabled-by-default-devtools.timeline",
+   "args": {}
+  },
+  {
+   "name": "EvaluateScript",
+   "ph": "X",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1001100500,
+   "dur": 170000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "url": "https://shop.example/app.js",
+     "lineNumber": 1,
+     "columnNumber": 1,
+     "frame": "F1"
+    }
+   }
+  },
+  {
+   "name": "RunTask",
+   "ph": "X",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1003100000,
+   "dur": 90000,
+   "cat": "disabled-by-default-devtools.timeline",
+   "args": {}
+  },
+  {
+   "name": "FunctionCall",
+   "ph": "X",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1003100500,
+   "dur": 85000,
+   "cat": "devtools.timeline",
+   "args": {
+    "data": {
+     "functionName": "onBuyClick",
+     "url": "https://shop.example/app.js",
+     "lineNumber": 10,
+     "columnNumber": 4,
+     "scriptId": "31"
+    }
+   }
+  },
+  {
+   "name": "RunTask",
+   "ph": "X",
+   "pid": 2,
+   "tid": 3,
+   "ts": 1004000000,
+   "dur": 30000,
+   "cat": "disabled-by-default-devtools.timeline",
+   "args": {}
+  },
+  {
+   "name": "RunTask",
+   "ph": "X",
+   "pid": 9,
+   "tid": 3,
+   "ts": 1000500000,
+   "dur": 400000,
+   "cat": "disabled-by-default-devtools.timeline",
+   "args": {}
+  },
+  {
+   "name": "RunTask",
+   "ph": "X",
+   "pid": 2,
+   "tid": 4,
+   "ts": 1006000000,
+   "dur": 300000,
+   "args": {}
+  }
+ ],
+ "metadata": {
+  "source": "fixture"
+ }
+}

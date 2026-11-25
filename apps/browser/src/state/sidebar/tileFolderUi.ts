@@ -3,9 +3,9 @@ import { showMenu, type MenuItem } from "../../platform/menus";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { activeTabId, plural } from "../browser/model";
-import { dissolveTileFolder, folderIn, folderLabel, folderMembers, leaveTileFolder, newTileFolder, renameTileFolder } from "../pins/tileFolders";
-import { dismissHover } from "../sidebar/hover";
-import { measureRow } from "../sidebar/sidebarUi";
+import { dissolveTileFolder, folderIn, folderMembers, leaveTileFolder, newTileFolder, renameTileFolder } from "../pins/tileFolders";
+import { dismissHover } from "./hover";
+import { measureRow } from "./sidebarUi";
 
 type Open = { windowId: string; folderId: string; anchor: { x: number; y: number; width: number; height: number } };
 
@@ -45,8 +45,9 @@ export async function toggleFolderPanel(windowId: string, folderId: string) {
   const open = folderPanel();
   if (open?.windowId === windowId && open.folderId === folderId) return closeFolderPanel();
   dismissHover();
+  const profileId = store().windows[windowId]?.profileId;
   const anchor = await measureRow(windowId, folderId);
-  if (anchor) useFolderPanel.setState({ open: { windowId, folderId, anchor } });
+  if (anchor && store().windows[windowId]?.profileId === profileId) useFolderPanel.setState({ open: { windowId, folderId, anchor } });
 }
 
 const store = () => useBrowser.getState();
@@ -71,10 +72,9 @@ export function removeFromFolder(tabId: string) {
 
 export function tileFolderContextItems(count: number): MenuItem[] {
   return [
-    { id: "unpin", title: `Unpin ${plural(count, "Tab")}`, symbol: "pin.slash" },
-    { separator: true },
     { id: "rename", title: "Rename…", symbol: "pencil" },
     { separator: true },
+    { id: "unpin", title: `Unpin ${plural(count, "Tab")}`, symbol: "pin.slash" },
     { id: "remove", title: "Remove Folder", symbol: "folder.badge.minus" },
   ];
 }
@@ -90,4 +90,3 @@ export async function openTileFolderMenu(windowId: string, folderId: string) {
   if (choice) closeFolderPanel();
 }
 
-export const folderTitle = (windowId: string, folderId: string) => folderLabel(folderIn(store(), windowId, folderId));

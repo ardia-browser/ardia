@@ -3,8 +3,9 @@ import { orderSections } from "../groups/groups";
 import { arrangeParked, arrangePinnedArea } from "../pins/pinnedArea";
 import type { Tab } from "../browser/types";
 import { PIN_TAB, anchorIn, PIN_ORDER, PIN_ROW, ROW, TILE, type PinValue } from "./pinRecords";
-import { choiceStillOut, commitPinnedEdit, homeWindow, openWindows, settleChoices, store, windowsHomeFirst } from "./pinnedSyncState";
+import { choiceStillOut, commitPinnedEdit, homeWindow, settleChoices, store, windowsHomeFirst } from "./pinnedSyncState";
 import { isPinnedRow, pinKeyOf, ROW_PIN, TILE_PIN } from "../browser/model";
+import { regularWindows } from "../windows/small";
 
 export function pinnedRowsAdapter(profileId: string): Adapter {
   const keyOf = (k: string) => k.slice(PIN_ROW.length);
@@ -51,7 +52,7 @@ export function pinnedRowsAdapter(profileId: string): Adapter {
       const tabs = { ...s.tabs };
       const windows = { ...s.windows };
       let edited = false;
-      for (const w of openWindows(s)) {
+      for (const w of regularWindows(s)) {
         let moved = false;
         for (const id of w.tabIds) {
           const t = tabs[id];

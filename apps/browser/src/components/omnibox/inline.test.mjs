@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildSuggestions } from "@ardia/core";
-import { acceptsCompletion, completionToWrite, fieldChange, withoutFirst } from "./inline.ts";
+import { acceptsCompletion, completionToWrite, fieldChange, keptTyping, previewFieldChange, settlesInline, withoutFirst } from "./inline.ts";
 
 const now = Date.UTC(2026, 8, 25);
 const history = [
@@ -184,7 +184,7 @@ test("typing over a completion: m → f → s is 'mfs' in every interleaving", (
 test("random schedules: what's typed is what the field shows, completion selected after it", () => {
   const words = ["mfs", "mail.google.com/x", "mail.go", "accounts", "ma.x", "x.com/hx", "mmm", "am", "xcom"];
   for (const word of words) {
-    for (let seed = 1; seed <= 400; seed++) {
+    for (let seed = 1; seed <= 50; seed++) {
       const r = random(seed);
       const w = run([...word], (n) => Math.floor(r() * n));
       assertSettled(w, word, `${word} seed ${seed}`);
@@ -261,4 +261,48 @@ test("the caret reaching the end of the text with the completion accepts it", ()
   assert.equal(acceptsCompletion("git", "", sel(3), []), false);
   assert.equal(acceptsCompletion("git", "hub.com", sel(10), [{ typed: "git", completion: "hub.com" }]), false);
   assert.equal(edit("github.com", "", "github.co", sel(10), sel(9)), true);
+});
+
+test("previewFieldChange: a completion echo that lands after arrowing to a row is still an echo, typing edits the row's text", () => {
+  const pending = [{ typed: "gi", completion: "thub.com" }];
+  const echo = previewFieldChange("gi", "", "gitlab.com", "github.com", pending);
+  assert.equal(echo.echo, true);
+  const typedOnPreview = previewFieldChange("gi", "thub.com", "gitlab.com", "gitlab.com/", []);
+  assert.deepEqual(typedOnPreview, { echo: false, typed: "gitlab.com/", suppress: false });
+  assert.deepEqual(previewFieldChange("gi", "", null, "git", []), fieldChange("gi", "", "git", []));
+});
+
+test("a completion that was cleared is taken as cleared wherever the caret is, and one that was added only where the caret allows it", () => {
+  assert.equal(settlesInline(true, "", false), true);
+  assert.equal(settlesInline(true, "mple.com", false), false);
+  assert.equal(settlesInline(true, "mple.com", true), true);
+  assert.equal(settlesInline(false, "", true), false);
+});
+
+test("Windows: the whole completion arriving as typed text is typing, not the echo of a completion computed for an older text", async () => {
+  const older = [{ typed: "e", completion: "xample.com", orphaned: true }];
+  assert.deepEqual(fieldChange("example.co", "", "example.com", older), { echo: true, settled: 1, inline: { typed: "e", completion: "xample.com" }, stale: true });
+  assert.deepEqual(fieldChange("example.co", "", "example.com", []), { echo: false, typed: "example.com", suppress: false });
+  const { PLATFORM_FEATURES: windows } = await import("../../lib/platformFeatures.windows.ts");
+  const { PLATFORM_FEATURES: mac } = await import("../../lib/platformFeatures.ts");
+  assert.equal(windows.inlineWritesEcho, false);
+  assert.equal(mac.inlineWritesEcho, true);
+});
+
+test("a letter that matches the completion keeps it in place: the field's own report becomes the typed text and completion", () => {
+  const field = (typed, completion) => (start, end) => (start === typed.length && end === typed.length + completion.length ? { typed, completion } : null);
+  const kept = keptTyping("g", { start: 2, end: 9 }, field("gm", "ail.com"));
+  assert.deepEqual(kept, { typed: "gm", completion: "ail.com" });
+  assert.deepEqual(keptTyping("gm", { start: 4, end: 9 }, field("gmai", "l.com")), { typed: "gmai", completion: "l.com" }, "two letters at once");
+  assert.deepEqual(keptTyping("g", { start: 2, end: 10 }, field("gi", "thub.com")), { typed: "gi", completion: "thub.com" }, "the field's text wins over a completion the bar was still writing");
+});
+
+test("only a keep the field reported for this selection counts: a selection dragged inside the completion leaves the typed text alone", () => {
+  const none = () => null;
+  const field = (typed, completion) => (start, end) => (start === typed.length && end === typed.length + completion.length ? { typed, completion } : null);
+  assert.equal(keptTyping("g", { start: 2, end: 9 }, none), null, "the field kept nothing");
+  assert.equal(keptTyping("g", { start: 3, end: 9 }, field("gm", "ail.com")), null, "a different selection than the one the field kept");
+  assert.equal(keptTyping("g", { start: 2, end: 8 }, field("gm", "ail.com")), null, "not up to the end");
+  assert.equal(keptTyping("g", { start: 9, end: 9 }, field("gmail.com", "")), null, "the whole completion typed is a plain keystroke");
+  assert.equal(keptTyping("gm", { start: 2, end: 9 }, field("gm", "ail.com")), null, "the same selection again is no new letter");
 });

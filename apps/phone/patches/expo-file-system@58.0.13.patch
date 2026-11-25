@@ -1,0 +1,260 @@
+diff --git a/ios/Legacy/EXFileSystemAssetLibraryHandler.m b/ios/Legacy/EXFileSystemAssetLibraryHandler.m
+index e6789a88a3df598037b165ec3fa1daf0da0b950f..eb3e4adc8428b2fdacc4107a001c6471728b711f 100644
+--- a/ios/Legacy/EXFileSystemAssetLibraryHandler.m
++++ b/ios/Legacy/EXFileSystemAssetLibraryHandler.m
+@@ -1,8 +1,4 @@
+-
+ #import <ExpoFileSystem/EXFileSystemAssetLibraryHandler.h>
+-#import <ExpoFileSystem/NSData+EXFileSystem.h>
+-
+-#import <Photos/Photos.h>
+ 
+ @implementation EXFileSystemAssetLibraryHandler
+ 
+@@ -11,34 +7,7 @@ + (void)getInfoForFile:(NSURL *)fileUri
+               resolver:(EXPromiseResolveBlock)resolve
+               rejecter:(EXPromiseRejectBlock)reject
+ {
+-  NSError *error;
+-  PHFetchResult<PHAsset *> *fetchResult = [self fetchResultForUri:fileUri error:&error];
+-  if (error) {
+-    reject(@"E_UNSUPPORTED_ARG", error.description, error);
+-    return;
+-  }
+-  if (fetchResult.count > 0) {
+-    PHAsset *asset = fetchResult[0];
+-    NSMutableDictionary *result = [NSMutableDictionary dictionary];
+-    result[@"exists"] = @(YES);
+-    result[@"isDirectory"] = @(NO);
+-    result[@"uri"] = fileUri;
+-    // Uses required reason API based on the following reason: 3B52.1
+-    result[@"modificationTime"] = @(asset.modificationDate.timeIntervalSince1970);
+-    if (options[@"md5"] || options[@"size"]) {
+-      [[PHImageManager defaultManager] requestImageDataAndOrientationForAsset:asset options:nil resultHandler:^(NSData * _Nullable imageData, NSString * _Nullable dataUTI, CGImagePropertyOrientation orientation, NSDictionary * _Nullable info) {
+-        result[@"size"] = @(imageData.length);
+-        if (options[@"md5"]) {
+-          result[@"md5"] = [imageData md5String];
+-        }
+-        resolve(result);
+-      }];
+-    } else {
+-      resolve(result);
+-    }
+-  } else {
+-    resolve(@{@"exists": @(NO), @"isDirectory": @(NO)});
+-  }
++  [self rejectPhotoLibraryUrl:fileUri rejecter:reject];
+ }
+ 
+ + (void)copyFrom:(NSURL *)from
+@@ -46,102 +15,16 @@ + (void)copyFrom:(NSURL *)from
+         resolver:(EXPromiseResolveBlock)resolve
+         rejecter:(EXPromiseRejectBlock)reject
+ {
+-  NSString *toPath = [to.path stringByStandardizingPath];
+-  
+-  // NOTE: The destination-delete and the copy should happen atomically, but we hope for the best for now
+-  NSError *error;
+-  if ([[NSFileManager defaultManager] fileExistsAtPath:toPath]) {
+-    if (![[NSFileManager defaultManager] removeItemAtPath:toPath error:&error]) {
+-      reject(@"E_FILE_NOT_COPIED",
+-             [NSString stringWithFormat:@"File '%@' could not be copied to '%@' because a file already exists at "
+-              "the destination and could not be deleted.", from, to],
+-             error);
+-      return;
+-    }
+-  }
+-
+-  PHFetchResult<PHAsset *> *fetchResult = [self fetchResultForUri:from error:&error];
+-  if (error) {
+-    reject(@"E_UNSUPPORTED_ARG", error.description, error);
+-    return;
+-  }
+-
+-  if (fetchResult.count > 0) {
+-    PHAsset *asset = fetchResult[0];
+-    if (asset.mediaType == PHAssetMediaTypeVideo) {
+-      [[PHImageManager defaultManager] requestAVAssetForVideo:asset options:nil resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
+-        if (![asset isKindOfClass:[AVURLAsset class]]) {
+-          reject(@"ERR_INCORRECT_ASSET_TYPE",
+-                 [NSString stringWithFormat:@"File '%@' has incorrect asset type.", from],
+-                 nil);
+-          return;
+-        }
+-       
+-        AVURLAsset* urlAsset = (AVURLAsset*)asset;
+-        NSNumber *size;
+-        [urlAsset.URL getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
+-        NSData *data = [NSData dataWithContentsOfURL:urlAsset.URL];
+-         
+-        [EXFileSystemAssetLibraryHandler copyData:data toPath:toPath resolver:resolve rejecter:reject];
+-      }];
+-    } else {
+-      [[PHImageManager defaultManager] requestImageDataAndOrientationForAsset:asset options:nil resultHandler:^(NSData * _Nullable imageData, NSString * _Nullable dataUTI, CGImagePropertyOrientation orientation, NSDictionary * _Nullable info) {
+-        [EXFileSystemAssetLibraryHandler copyData:imageData toPath:toPath resolver:resolve rejecter:reject];
+-      }];
+-    }
+-  } else {
+-    reject(@"E_FILE_NOT_COPIED",
+-           [NSString stringWithFormat:@"File '%@' could not be found.", from],
+-           error);
+-  }
++  [self rejectPhotoLibraryUrl:from rejecter:reject];
+ }
+ 
+-// adapted from RCTImageLoader.m
+-+ (PHFetchResult<PHAsset *> *)fetchResultForUri:(NSURL *)url error:(NSError **)error
+-{
+-  if ([url.scheme caseInsensitiveCompare:@"ph"] == NSOrderedSame) {
+-    // Fetch assets using PHAsset localIdentifier (recommended)
+-    NSString *const localIdentifier = [url.absoluteString substringFromIndex:@"ph://".length];
+-    return [PHAsset fetchAssetsWithLocalIdentifiers:@[localIdentifier] options:nil];
+-  } else if ([url.scheme caseInsensitiveCompare:@"assets-library"] == NSOrderedSame) {
+-#if TARGET_OS_MACCATALYST
+-    static BOOL hasWarned = NO;
+-    if (!hasWarned) {
+-      NSLog(@"assets-library:// URLs have been deprecated and cannot be accessed in macOS Catalyst. Returning nil (future warnings will be suppressed).");
+-      hasWarned = YES;
+-    }
+-    return nil;
+-#elif TARGET_OS_IOS || TARGET_OS_TV
+-    // This is the older, deprecated way of fetching assets from assets-library
+-    // using the "assets-library://" protocol
+-    return [PHAsset fetchAssetsWithALAssetURLs:@[url] options:nil];
+-#elif TARGET_OS_OSX
+-    return nil;
+-#endif
+-  }
+-
+-  NSString *description = [NSString stringWithFormat:@"Invalid URL provided, expected scheme to be either 'ph' or 'assets-library', was '%@'.", url.scheme];
+-  if (error != NULL) {
+-    *error = [[NSError alloc] initWithDomain:NSURLErrorDomain
+-                                        code:NSURLErrorUnsupportedURL
+-                                    userInfo:@{NSLocalizedDescriptionKey: description}];
+-  }
+-  return nil;
+-}
+-
+-
+-+ (void)copyData:(NSData *)data
+-          toPath:(NSString *)path
+-        resolver:(EXPromiseResolveBlock)resolve
+-        rejecter:(EXPromiseRejectBlock)reject
+++ (void)rejectPhotoLibraryUrl:(NSURL *)url rejecter:(EXPromiseRejectBlock)reject
+ {
+-  if ([data writeToFile:path atomically:YES]) {
+-    resolve(nil);
+-  } else {
+-    reject(@"E_FILE_NOT_COPIED",
+-           [NSString stringWithFormat:@"File could not be copied to '%@'.", path],
+-           nil);
+-  }
++  NSString *description = [NSString stringWithFormat:@"Photo library URLs aren't supported in this app: '%@'.", url.scheme];
++  NSError *error = [[NSError alloc] initWithDomain:NSURLErrorDomain
++                                              code:NSURLErrorUnsupportedURL
++                                          userInfo:@{NSLocalizedDescriptionKey: description}];
++  reject(@"E_UNSUPPORTED_ARG", description, error);
+ }
+ 
+ @end
+diff --git a/ios/Legacy/FileSystemHelpers.swift b/ios/Legacy/FileSystemHelpers.swift
+index 79c37f1c19937f082586018a3b82b713b45e1984..fc57a91b2576446f443c656a359d916f836df1c6 100644
+--- a/ios/Legacy/FileSystemHelpers.swift
++++ b/ios/Legacy/FileSystemHelpers.swift
+@@ -1,7 +1,6 @@
+ // Copyright 2023-present 650 Industries. All rights reserved.
+ 
+ import ExpoModulesCore
+-import Photos
+ 
+ private let assetIdentifier = "ph://"
+ 
+@@ -85,54 +84,3 @@ internal func ensurePathPermission(_ appContext: AppContext?, path: String, flag
+ internal func isPHAsset(path: String) -> Bool {
+   return path.contains(assetIdentifier)
+ }
+-
+-internal func copyPHAsset(fromUrl: URL, toUrl: URL, with resourceManager: PHAssetResourceManager, promise: Promise) {
+-  if isPhotoLibraryStatusAuthorized() {
+-    if FileManager.default.fileExists(atPath: toUrl.path) {
+-      promise.reject(FileAlreadyExistsException(toUrl.path))
+-      return
+-    }
+-
+-    let identifier = fromUrl.absoluteString.replacingOccurrences(of: assetIdentifier, with: "")
+-
+-    guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject else {
+-      promise.reject(FailedToFindAssetException(fromUrl.absoluteString))
+-      return
+-    }
+-
+-    // An edited asset carries both its original resource (`.photo`/`.video`) and the
+-    // rendered current version (`.fullSizePhoto`/`.fullSizeVideo`). Prefer the
+-    // rendition matching the asset's media type, since an edited video can also
+-    // include a `.fullSizePhoto` poster image.
+-    let resources = PHAssetResource.assetResources(for: asset)
+-    let isVideo = asset.mediaType == .video
+-    let editedResourceType: PHAssetResourceType = isVideo ? .fullSizeVideo : .fullSizePhoto
+-    let originalResourceType: PHAssetResourceType = isVideo ? .video : .photo
+-    let resource =
+-      resources.first { $0.type == editedResourceType }
+-      ?? resources.first { $0.type == originalResourceType }
+-      ?? resources.first
+-    if let resource {
+-      let resourceOptions = PHAssetResourceRequestOptions()
+-      // Assets that only exist in iCloud have no local resource data to write.
+-      resourceOptions.isNetworkAccessAllowed = true
+-      resourceManager.writeData(for: resource, toFile: toUrl, options: resourceOptions) { error in
+-        if error != nil {
+-          promise.reject(FailedToCopyAssetException(fromUrl.absoluteString))
+-          return
+-        }
+-        promise.resolve()
+-      }
+-    } else {
+-      promise.reject(FailedToCopyAssetException(fromUrl.absoluteString))
+-    }
+-  }
+-}
+-
+-internal func isPhotoLibraryStatusAuthorized() -> Bool {
+-  if #available(iOS 14, tvOS 14, *) {
+-    let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+-    return status == .authorized || status == .limited
+-  }
+-  return PHPhotoLibrary.authorizationStatus() == .authorized
+-}
+diff --git a/ios/Legacy/FileSystemLegacyModule.swift b/ios/Legacy/FileSystemLegacyModule.swift
+index 0db6a3f9c25b0344fddc793bfc5e66460ace8bc3..7dc62dbd81a7493ceb0c3022b0c88888df12c6b6 100644
+--- a/ios/Legacy/FileSystemLegacyModule.swift
++++ b/ios/Legacy/FileSystemLegacyModule.swift
+@@ -1,7 +1,6 @@
+ // Copyright 2023-present 650 Industries. All rights reserved.
+ 
+ import ExpoModulesCore
+-import Photos
+ 
+ private let EVENT_DOWNLOAD_PROGRESS = "expo-file-system.downloadProgress"
+ private let EVENT_UPLOAD_PROGRESS = "expo-file-system.uploadProgress"
+@@ -9,7 +8,6 @@ private let EVENT_UPLOAD_PROGRESS = "expo-file-system.uploadProgress"
+ public final class FileSystemLegacyModule: Module {
+   private var sessionTaskDispatcher: EXSessionTaskDispatcher!
+   private lazy var taskHandlersManager = EXTaskHandlersManager()
+-  private lazy var resourceManager = PHAssetResourceManager()
+ 
+   private lazy var backgroundSession = createUrlSession(type: .background, delegate: sessionTaskDispatcher)
+   private lazy var foregroundSession = createUrlSession(type: .foreground, delegate: sessionTaskDispatcher)
+@@ -145,7 +143,12 @@ public final class FileSystemLegacyModule: Module {
+       let (fromUrl, toUrl) = try options.asTuple()
+ 
+       if isPHAsset(path: fromUrl.absoluteString) {
+-        copyPHAsset(fromUrl: fromUrl, toUrl: toUrl, with: resourceManager, promise: promise)
++        EXFileSystemAssetLibraryHandler.copy(
++          from: fromUrl,
++          to: toUrl,
++          resolver: promise.legacyResolver,
++          rejecter: promise.legacyRejecter
++        )
+         return
+       }
+ 

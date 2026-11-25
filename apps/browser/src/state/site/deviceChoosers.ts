@@ -13,6 +13,7 @@ const useChoosers = create<{ byTab: Record<string, DeviceChooser> }>()(() => ({ 
 if (__DEV__) (globalThis as { acDeviceChoosers?: unknown }).acDeviceChoosers = { useChoosers, selectDevice, cancelDeviceChooser };
 
 export const useDeviceChooser = (tabId: string): DeviceChooser | undefined => useChoosers((s) => s.byTab[tabId]);
+export const useDeviceChooserOpen = (tabId: string): boolean => useChoosers((s) => !!s.byTab[tabId]);
 
 export const chooseDevice = (chooserId: number, index: number) => void selectDevice(chooserId, index);
 export const cancelChooser = (chooserId: number) => void cancelDeviceChooser(chooserId);
@@ -36,7 +37,7 @@ export function startDeviceChoosers() {
       return { byTab };
     });
   });
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs === prev.tabs) return;
     const { byTab } = useChoosers.getState();
     const gone = Object.keys(byTab).filter((id) => !s.tabs[id]);

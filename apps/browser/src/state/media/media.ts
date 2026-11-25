@@ -5,12 +5,17 @@ import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
+import { ALL, useKeyed, watchSettings, watchTabRecord } from "../browser/keyedWatch";
 import type { BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { peekTabId } from "../peek/peek";
 import { splitOf, splitTabIdsOf } from "../splits/splits";
-import { hostOf } from "@ardia/core";
+import { capture } from "../telemetry/client";
+import { nativeConsent } from "../telemetry/nativeConsent";
+import { noteMediaPositionReport, noteNowPlayingLoopRestart } from "../telemetry/mediaCardCounts";
 import { isSleeping } from "../tabs/sleepingTabs";
+import { notePictureInPictureClosed } from "../telemetry/pictureInPictureCloses";
+import { liveOf, watchLive } from "../tabs/tabLive";
 
 export type Session = NowPlaying & {
   playedAt: number;
@@ -24,6 +29,7 @@ type Store = {
   pipOpen: Record<string, PictureInPictureState["kind"]>;
   displayRequests: Record<string, DisplayMediaRequest>;
   tabShares: Record<string, TabShare>;
+  sharedTabs: Record<string, true>;
 };
 
 export type TabShare = {
@@ -32,12 +38,15 @@ export type TabShare = {
   dismissed: Record<string, true>;
 };
 
-const noMedia = (): Store => ({ sessions: {}, dismissed: {}, leftPaused: {}, pip: {}, pipOpen: {}, displayRequests: {}, tabShares: {} });
+const noMedia = (): Store => ({ sessions: {}, dismissed: {}, leftPaused: {}, pip: {}, pipOpen: {}, displayRequests: {}, tabShares: {}, sharedTabs: {} });
 const PER_TAB = Object.keys(noMedia()) as (keyof Store)[];
 
 export const useMedia = create<Store>()(noMedia);
 
-export function setPictureInPictureState(tabId: string, { kind, active }: PictureInPictureState) {
+export function setPictureInPictureState(tabId: string, state: PictureInPictureState) {
+  const { kind, active } = state;
+  if (!active && "closedBy" in state && state.closedBy) notePictureInPictureClosed(state.closedBy, !!state.auto);
+  if ("fullScreenSpaces" in state && state.active) capture("pip_shown", { kind, full_screen_spaces: state.fullScreenSpaces, left_app: !!state.leftApp, left_tab: !!state.leftTab }, nativeConsent(state));
   useMedia.setState((s) => {
     if (active ? s.pipOpen[tabId] === kind : !s.pipOpen[tabId]) return s;
     const pipOpen = { ...s.pipOpen };
@@ -50,9 +59,18 @@ export function setPictureInPictureState(tabId: string, { kind, active }: Pictur
 }
 
 export function setNowPlaying(tabId: string, state: NowPlaying | null) {
+  if (state) notePositionReport(useMedia.getState().sessions[tabId], state);
+  applyNowPlaying(tabId, state);
+}
+
+function notePositionReport(before: Session | undefined, report: NowPlaying) {
+  if (isLoopRestart(before, report)) noteNowPlayingLoopRestart();
+  else noteMediaPositionReport(before, report);
+}
+
+function applyNowPlaying(tabId: string, state: NowPlaying | null) {
   useMedia.setState((s) => {
     const sessions = { ...s.sessions };
-    const dismissed = { ...s.dismissed };
     if (!state) {
       if (!sessions[tabId]) return s;
       delete sessions[tabId];
@@ -61,9 +79,21 @@ export function setNowPlaying(tabId: string, state: NowPlaying | null) {
     const before = sessions[tabId];
     const started = isControllablyPlaying(state) && !(before && isControllablyPlaying(before));
     sessions[tabId] = { ...state, playedAt: started ? Date.now() : (before?.playedAt ?? 0) };
-    if (started) delete dismissed[tabId];
-    return { sessions, dismissed };
+    if (!started) return { sessions };
+    const leftPaused = { ...s.leftPaused };
+    for (const id of pausedPeers(sessions, tabId)) leftPaused[id] = true;
+    if (!s.dismissed[tabId]) return { sessions, leftPaused };
+    const { [tabId]: _, ...dismissed } = s.dismissed;
+    return { sessions, dismissed, leftPaused };
   });
+}
+
+function pausedPeers(sessions: Store["sessions"], tabId: string): string[] {
+  const s = useBrowser.getState();
+  const tab = s.tabs[tabId];
+  if (!tab) return [];
+  const across = s.settings.playingNowAcrossProfiles;
+  return Object.keys(sessions).filter((id) => id !== tabId && !isPlaying(sessions[id]) && s.tabs[id]?.windowId === tab.windowId && (across || s.tabs[id]?.profileId === tab.profileId));
 }
 
 const isControllablyPlaying = (state: NowPlaying) => state.controllable && state.playbackState === "playing";
@@ -72,11 +102,17 @@ export const useSession = (tabId: string | undefined): Session | undefined => us
 
 export const isPlaying = (session: Session | undefined) => session?.playbackState === "playing";
 
-export function positionOf(session: Session, now = Date.now()): number {
-  const elapsed = isPlaying(session) ? ((now - session.timestamp) / 1000) * (session.playbackRate || 1) : 0;
-  const position = session.position + elapsed;
-  return session.duration ? Math.min(Math.max(0, position), session.duration) : Math.max(0, position);
+export function positionOf(session: Pick<Session, "playbackState" | "position" | "timestamp" | "playbackRate" | "duration" | "loop">, now = Date.now()): number {
+  const elapsed = session.playbackState === "playing" ? ((now - session.timestamp) / 1000) * (session.playbackRate || 1) : 0;
+  const position = Math.max(0, session.position + elapsed);
+  if (!session.duration) return position;
+  return session.loop && position >= session.duration ? position % session.duration : Math.min(position, session.duration);
 }
+
+const LOOP_RESTART_MIN_SECONDS = 1;
+
+export const isLoopRestart = (before: NowPlaying | undefined, after: NowPlaying) =>
+  !!before && !!after.loop && before.playbackState === "playing" && after.position + LOOP_RESTART_MIN_SECONDS < before.position + ((after.timestamp - before.timestamp) / 1000) * (before.playbackRate || 1);
 
 export function useTicker(active: boolean, ms = 500) {
   const [, setTick] = useState(0);
@@ -129,9 +165,9 @@ function wakeToPlay(tabId: string) {
       const after = m.sessions[tabId];
       if (after && after !== before && after.playbackState !== "none") resume(after);
     }),
-    useBrowser.subscribe((s) => {
+    watchLive(tabId, () => {
       if (loaded || isSleeping(tabId)) return;
-      if (s.live[tabId]?.isLoading) sawLoading = true;
+      if (liveOf(tabId).isLoading) sawLoading = true;
       else if (sawLoading) loaded = setTimeout(() => resume(null), LOADED_WITHOUT_SESSION_MS);
     }),
   );
@@ -148,17 +184,17 @@ export function resumeCommands(before: Session | undefined, after: NowPlaying | 
 
 export const hasTrackControls = (session: Session) => session.actions.includes("nexttrack") || session.actions.includes("previoustrack");
 
-export const SKIP_SECONDS = 15;
+const SKIP_SECONDS = 15;
 
-export function skipBy(tabId: string, session: Session, seconds: number) {
+function skipBy(tabId: string, session: Session, seconds: number) {
   const now = Date.now();
   const position = Math.max(0, Math.min(session.duration ?? Infinity, positionOf(session, now) + seconds));
-  setNowPlaying(tabId, { ...session, position, timestamp: now });
+  applyNowPlaying(tabId, { ...session, position, timestamp: now });
   mediaCommand(tabId, "seekBy", seconds);
 }
 
 export function seekTo(tabId: string, session: Session, seconds: number) {
-  setNowPlaying(tabId, { ...session, position: seconds, timestamp: Date.now() });
+  applyNowPlaying(tabId, { ...session, position: seconds, timestamp: Date.now() });
   mediaCommand(tabId, "seekTo", seconds);
 }
 
@@ -172,7 +208,7 @@ export const transportIcons = (session: Session) =>
     ? { back: "backward.end.fill", ahead: "forward.end.fill", backTip: "Play Previous Track", aheadTip: "Play Next Track" }
     : { back: `gobackward.${SKIP_SECONDS}`, ahead: `goforward.${SKIP_SECONDS}`, backTip: `Skip back ${SKIP_SECONDS} seconds`, aheadTip: `Skip ahead ${SKIP_SECONDS} seconds` };
 
-export function isTabShown(s: BrowserState, tabId: string, profileId?: string): boolean {
+function isTabShown(s: BrowserState, tabId: string, profileId?: string): boolean {
   const windowId = s.tabs[tabId]?.windowId;
   if (!windowId) return false;
   const active = activeTabId(s, windowId, profileId);
@@ -187,7 +223,8 @@ export function hasPlayer(m: Pick<Store, "sessions" | "dismissed">, tabId: strin
 
 function isHiddenPlayerTab(s: BrowserState, tabId: string): boolean {
   const tab = s.tabs[tabId];
-  return !!tab && !!s.windows[tab.windowId] && s.settings.sidebarMediaControls && !isTabShown(s, tabId, tab.profileId);
+  const w = tab && s.windows[tab.windowId];
+  return !!w && s.settings.sidebarMediaControls && !isTabShown(s, tabId, s.settings.playingNowAcrossProfiles ? w.profileId : tab.profileId);
 }
 
 let hiddenBefore = new Set<string>();
@@ -223,6 +260,15 @@ export function playerTabFor(m: Pick<Store, "sessions" | "dismissed">, tabIds: s
     }
   }
   return bestId;
+}
+
+const sharedPlayerTabs = new Map<string, string | undefined>();
+
+export function sidebarPlayerTabFor(m: Pick<Store, "sessions" | "dismissed">, tabIds: string[], windowId: string, own: string | undefined, acrossProfiles: boolean): string | undefined {
+  const tabId = playerTabFor(m, tabIds, acrossProfiles ? sharedPlayerTabs.get(windowId) : own);
+  if (acrossProfiles) sharedPlayerTabs.set(windowId, tabId);
+  else sharedPlayerTabs.delete(windowId);
+  return tabId;
 }
 
 const PIP_STATE = 'post("result", JSON.stringify(!!document.pictureInPictureElement || !!window.documentPictureInPicture?.window))';
@@ -274,7 +320,7 @@ export function usePictureInPicture(tabId: string): [boolean, (press: GestureRes
   return [on, (press) => void togglePictureInPicture(tabId, controlPress(press))];
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["tabs"], (s, prev) => {
   if (s.tabs === prev.tabs) return;
   const m = useMedia.getState();
   const gone = [...new Set(PER_TAB.flatMap((k) => Object.keys(m[k])))].filter((id) => !s.tabs[id]);
@@ -292,14 +338,24 @@ export const dismissPlayer = (tabId: string) => useMedia.setState((m) => ({ dism
 
 const NO_HIDDEN: string[] = [];
 
-export const useHiddenPlayerTabs = (windowId: string, profileId: string, sessions: string[]) =>
-  useBrowser(
-    useShallow((s) => {
-      const w = s.windows[windowId];
-      if (!sessions.length || !w) return NO_HIDDEN;
-      const ids = sessions.filter((id) => s.tabs[id]?.windowId === windowId && s.tabs[id]!.profileId === profileId && isHiddenPlayerTab(s, id));
-      return ids.length > 1 ? ids.sort((a, b) => w.tabIds.indexOf(a) - w.tabIds.indexOf(b)) : ids;
-    }),
-  );
+export function hiddenPlayerTabs(s: BrowserState, windowId: string, profileId: string, sessions: string[]): string[] {
+  const w = s.windows[windowId];
+  if (!sessions.length || !w) return NO_HIDDEN;
+  const across = s.settings.playingNowAcrossProfiles;
+  const ids = sessions.filter((id) => s.tabs[id]?.windowId === windowId && (across || s.tabs[id]!.profileId === profileId) && isHiddenPlayerTab(s, id));
+  return ids.length > 1 ? ids.sort((a, b) => w.tabIds.indexOf(a) - w.tabIds.indexOf(b)) : ids;
+}
 
-export const usePinnedWithMediaControls = (tabId: string | undefined) => useBrowser((s) => !!tabId && !!s.tabs[tabId]?.pin && s.settings.sidebarMediaControls);
+export const useHiddenPlayerTabs = (windowId: string, profileId: string, sessions: string[]) =>
+  useBrowser(useShallow((s) => hiddenPlayerTabs(s, windowId, profileId, sessions)));
+
+export const sidebarPlayerCandidates = (m: Pick<Store, "leftPaused">, hidden: string[]) => hidden.filter((id) => !m.leftPaused[id]);
+
+export const pinnedWithMediaControls = (s: BrowserState, tabId: string | undefined) => !!tabId && !!s.tabs[tabId]?.pin && s.settings.sidebarMediaControls;
+
+export function usePinnedWithMediaControls(tabId: string | undefined): boolean {
+  const read = () => pinnedWithMediaControls(useBrowser.getState(), tabId);
+  const byTab = useKeyed(watchTabRecord, tabId, read);
+  const bySetting = useKeyed(watchSettings, tabId == null ? null : ALL, read);
+  return byTab && bySetting;
+}

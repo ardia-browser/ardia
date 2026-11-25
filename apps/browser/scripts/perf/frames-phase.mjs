@@ -2,8 +2,9 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { median } from "./median.mjs";
 
-const CAP_LOG = process.env.AC_CPU_CAP_LOG ?? "/private/tmp/claude-501/-Users-barreloflube-Documents-ardia/a6e87140-35e6-4a65-85e0-018a5c019c75/scratchpad/cpu-cap.log";
+const CAP_LOG = process.env.AC_CPU_CAP_LOG;
 const capRunning = () => spawnSync("pgrep", ["-f", "scripts/agent/cpu-cap"]).status === 0;
 const capSize = () => {
   try {
@@ -20,12 +21,6 @@ const capPauses = (from, app, pid) => {
   }
 };
 
-const median = (xs) => {
-  const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
-  if (!s.length) return NaN;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 
 export function framesLibrary(toolDir, here) {
   const lib = join(toolDir, "acframes.dylib");
@@ -126,7 +121,8 @@ export function windowStats(rec, a, b, refresh) {
 }
 
 function interactions(c) {
-  const { app, key, sleep, run, W, probe, base } = c;
+  const { app, key, sleep, run, W, probe, base, acperf } = c;
+  let pointer = null;
   const seedTab = `(() => { const s = ac.store.getState(); return Object.keys(s.tabs).find((id) => s.tabs[id].url.includes("id=seed")); })()`;
   const reset = () => run(`const s = ac.store.getState(); const w = ${W};
     if (s.windowUi[w]?.panel.open) s.closePanel(w);
@@ -136,7 +132,7 @@ function interactions(c) {
   const store = (code) => run(`globalThis.acPerf?.reset(); const t = ac.now(); ${code}; return t;`);
   let k = 0;
   const want = async (open) => {
-    if ((await run(`return ${"ac.store.getState().windows[" + W + "].sidebarOpen"};`)) !== open) {
+    if ((await run(`return !ac.store.getState().settings.autoHideTabs;`)) !== open) {
       await run(`ac.store.getState().toggleSidebar(${W}); return 1;`);
       await sleep(2500);
     }
@@ -158,14 +154,27 @@ function interactions(c) {
     { name: "tab switch", window: 500, verify: `const s = ac.store.getState(); return s.windows[${W}].activeTabIds[s.windows[${W}].profileId] === globalThis.__frameTarget;`, before: reset, go: () => run(`globalThis.acPerf?.reset(); const t = ac.now(); const s = ac.store.getState(); const w = ${W};
         const ids = s.windows[w].tabIds.filter((id) => !s.tabs[id].pin); const id = ids[(${k++} * 7 + 3) % ids.length];
         globalThis.__frameTarget = id; ac.actions.switchToTab(id); return t;`) },
-    { name: "sidebar collapse", window: 800, verify: `return !${win}.sidebarOpen;`, before: async () => { await reset(); await want(true); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`) },
-    { name: "sidebar expand", window: 800, verify: `return ${win}.sidebarOpen;`, before: async () => { await reset(); await want(false); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`), after: () => sleep(300) },
-    { name: "sidebar collapse (address bar in the sidebar)", window: 800, verify: `return !${win}.sidebarOpen;`, before: async () => { await reset(); await arcLayout(true); await want(true); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`) },
-    { name: "sidebar expand (address bar in the sidebar)", window: 800, verify: `return ${win}.sidebarOpen;`, before: async () => { await reset(); await arcLayout(true); await want(false); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`), after: async () => { await sleep(300); await arcLayout(false); } },
+    { name: "sidebar collapse", window: 800, verify: `return ac.store.getState().settings.autoHideTabs;`, before: async () => { await reset(); await want(true); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`) },
+    { name: "sidebar expand", window: 800, verify: `return !ac.store.getState().settings.autoHideTabs;`, before: async () => { await reset(); await want(false); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`), after: () => sleep(300) },
+    { name: "sidebar collapse (address bar in the sidebar)", window: 800, verify: `return ac.store.getState().settings.autoHideTabs;`, before: async () => { await reset(); await arcLayout(true); await want(true); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`) },
+    { name: "sidebar expand (address bar in the sidebar)", window: 800, verify: `return !ac.store.getState().settings.autoHideTabs;`, before: async () => { await reset(); await arcLayout(true); await want(false); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`), after: async () => { await sleep(300); await arcLayout(false); } },
     { name: "profile swipe (next profile)", window: 1200, verify: `return ${win}.profileId !== globalThis.__frameProfile;`, before: async () => { await reset(); await run(`globalThis.__frameProfile = ${win}.profileId; return 1;`); }, go: () => store(`ac.runCommand({ command: "nextProfile", arg: null, windowId: ${W} })`), after: () => sleep(600) },
     { name: "profile swipe (previous profile)", window: 1200, verify: `return ${win}.profileId !== globalThis.__frameProfile;`, before: () => run(`globalThis.__frameProfile = ${win}.profileId; return 1;`), go: () => store(`ac.runCommand({ command: "previousProfile", arg: null, windowId: ${W} })`), after: () => sleep(600) },
     { name: "sidebar scroll (200 tabs, flick down and back)", window: 2300, before: reset,
       go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true }, false); return t; } },
+    { name: "sidebar scroll, pointer on the rows (200 tabs, flick down and back)", window: 2300, before: async () => { await reset(); await probe("pointer", { over: "list" }); },
+      go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true }, false); return t; },
+      after: () => probe("pointer", { over: "real" }) },
+    { name: "sidebar scroll, pointer on the rows (200 tabs, trackpad flick)", window: 2300,
+      before: async () => { await reset(); await probe("scroll", { distance: 1, seconds: 0.05 }); pointer = await probe("pointer", { over: "list" }); },
+      go: async () => {
+        await run(`globalThis.acPerf?.reset(); return 1;`);
+        const t = Date.now();
+        const flick = acperf("postscroll", String(app.pid), String(pointer.window), String(pointer.x), String(pointer.y), String(pointer.windowX), String(pointer.windowY), "trackpad");
+        if (flick.code !== 0) throw new Error(`acperf postscroll failed (${flick.code}) ${flick.out}`);
+        return t;
+      },
+      after: () => probe("pointer", { over: "real" }) },
     { name: "sidebar hover (20 rows, 60 ms apart)", window: 1500, before: reset, go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("hover", { rows: 20, gapMs: 60 }, false); return t; } },
     { name: "new window", window: 1200, verify: `return ac.store.getState().windowOrder.length > globalThis.__frameWindows;`, before: async () => { await reset(); await run(`globalThis.__frameWindows = ac.store.getState().windowOrder.length; return 1;`); },
       go: () => store(`ac.actions.openWindow({ url: "${base()}/static?id=fw${k++}" })`),
@@ -244,7 +253,7 @@ export async function framesRun(c, side, i, { counts }) {
     log(`${side.tag}frames ${i}${counts ? " (counts)" : ""}: ${info.screen} ${info.maxFPS} Hz, JS thread ${info.js ? "observed" : "NOT found"}; ${out.settled ? "quiet" : "never quiet"} after ${Math.round(out.settleMs / 1000)} s`);
     const reps = counts ? Math.min(3, +opt["frames-n"]) : +opt["frames-n"];
     const only = opt["frames-only"] ? new RegExp(opt["frames-only"], "i") : null;
-    const list = interactions({ app, key, sleep, run, W: WINDOW, probe, base }).filter((it) => !only || only.test(it.name));
+    const list = interactions({ app, key, sleep, run, W: WINDOW, probe, base, acperf }).filter((it) => !only || only.test(it.name));
     for (const it of list) {
       const rows = [];
       const taken = [];

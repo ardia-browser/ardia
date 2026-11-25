@@ -169,26 +169,22 @@ Commit [`5db40e8fe26785c256845a5bb38921b2654a887f`](https://github.com/MckAudio/
 
 Every file the Shared Folders mix (`scripts/music/shared-folders.py`) reads or writes. All of it was generated
 with ElevenLabs on 2026-11-03 under the account's paid **Creator** plan, whose terms include a commercial licence
-for the output (no attribution required). No recorded voice of a real person is used: the narrator is a voice
-designed from a text description (Voice Design), not a clone. Files live in the gitignored
-`public/music/shared-folders/`.
+for the output (no attribution required). No recorded voice of a real person is used: the narrator and the voice
+candidates were designed from text descriptions with Voice Design (`eleven_ttv_v3`), not cloned. Files live in the
+gitignored `public/music/shared-folders/`.
 
 | File | What it is | Source |
 | --- | --- | --- |
-| `music-take1.mp3` | Raw music generation, not used (drop lands at 8 s, no end hit) | Eleven Music, `music_v2_5`, composition plan |
-| `music-take2.mp3` | Raw music generation, **used**: 120.00 BPM, edited on the beat grid by the mix script | Eleven Music, `music_v2_5`, composition plan |
-| `music-take3.mp3` | Raw music generation, not used (six-chunk plan; no end hit) | Eleven Music, `music_v2_5`, composition plan |
-| `sfx-chatPop.wav` | Soft bubble pop | Sound Effects, `eleven_text_to_sound_v2` |
-| `sfx-slam.wav` | Punchy title thud | Sound Effects, `eleven_text_to_sound_v2` |
-| `sfx-whoosh.wav` | Short air whoosh (aligned on its loudest point) | Sound Effects, `eleven_text_to_sound_v2` |
-| `sfx-click.wav` | Trackpad click | Sound Effects, `eleven_text_to_sound_v2` |
-| `sfx-tick.wav` | Menu tick (one tick cut from a generation) | Sound Effects, `eleven_text_to_sound_v2` |
-| `sfx-sheet.wav` | Soft panel-open swoosh | Sound Effects, `eleven_text_to_sound_v2` |
-| `sfx-lift.wav` | Soft pick-up | Sound Effects, `eleven_text_to_sound_v2` |
-| `sfx-drag.wav` | Subtle slide | Sound Effects, `eleven_text_to_sound_v2` |
-| `sfx-thud.wav` | Soft drop commit | Sound Effects, `eleven_text_to_sound_v2` |
-| `sfx-type.wav` | Three keyboard taps (cut from a generation) | Sound Effects, `eleven_text_to_sound_v2` |
-| `sfx-arrive.wav` | Signature arrival chime, a marimba/bell pop on D5 (the track is in D) | Sound Effects, `eleven_text_to_sound_v2` |
-| `vo-vo1.wav` … `vo-vo6.wav` | The six voiceover lines in `cuts.json`, one file each, silence trimmed; `vo-vo5.wav` has its three phrases re-spaced to about 1 s apart | Text to Speech, `eleven_v3`, voice "Ardia Narrator (designed)" (`UaGUd7CqoCVmNU5Aiahi`), made with Voice Design `eleven_ttv_v3` |
+| `music-take4.mp3` | **Used.** Instrumental score, 100.00 BPM, 62.4 s, from a composition plan with instrumental-only section labels. The mix shifts it 26.5 ms onto the grid, edits it on beat boundaries and time-stretches the final chord's tail (ffmpeg `atempo`) to ring for 6 s | Eleven Music, `music_v2_5` |
+| `music-take5.mp3` | Not used: prompt mode with `force_instrumental`, but 84 s long and static (no swell, montage or resolve) | Eleven Music, `music_v2_5` |
+| `music-take6.mp3` | Not used: swell lands on beat 24, but no montage lift, and the voice isolator found more residue at 26–30 s and 51–61 s | Eleven Music, `music_v2_5` |
+| `music-take1.mp3` … `music-take3.mp3` | Not used: first-cut takes (120 BPM grid) that had vocals | Eleven Music, `music_v2_5` |
+| `vo-<id>.wav` for the 18 ids in `cuts.json` (`vo1a` … `vo9b`, `vo8`) | One clip per sentence of the voiceover, silence trimmed; `vo-vo2.wav` slowed 12%. Files whose ids are no longer in `cuts.json` (`vo-vo1.wav`, `vo-vo4.wav`, `vo-vo5a.wav`, `vo-vo5b.wav`, `vo-vo6.wav`, `vo-vo7.wav`) are unused leftovers | Text to Speech, `eleven_multilingual_v2` (stability 0.5, speed 0.9–1.05), voice "Ardia Warm Baritone" (`j9kn16hLvKzxumeflEAU`) |
+| `voice-candidates/ardia-warm-baritone.wav` | Narrator candidate reading vo3 (picked) | Text to Speech, `eleven_multilingual_v2`, "Ardia Warm Baritone" (`j9kn16hLvKzxumeflEAU`) |
+| `voice-candidates/ardia-deep-baritone.wav` | Narrator candidate reading vo3 | Text to Speech, `eleven_multilingual_v2`, "Ardia Deep Baritone" (`xIoYWOdGw6lEPoeAjpMl`) |
+| `voice-candidates/ardia-warm-alto.wav` | Narrator candidate reading vo3 | Text to Speech, `eleven_multilingual_v2`, "Ardia Warm Alto" (`T1Zf1ZVxdHgsn5BqWUGD`) |
+| `voice-candidates/README.txt` | Names and voice ids of the candidates | Written by hand |
+| `sfx-*.wav` | Foley (chat pops, clicks, ticks, lifts, thuds, the arrival chime), each cue levelled 20–26 LU under the music (the arrival chime about 16 LU under) | Sound Effects, `eleven_text_to_sound_v2` |
+| (no file) | The first-cut narrator, "Ardia Narrator (designed)" (`UaGUd7CqoCVmNU5Aiahi`, `eleven_v3`), was rejected as thin; its `vo-*.wav` files were overwritten by the lines above | Text to Speech, `eleven_v3` |
 | `shared-folders-16x9.wav`, `shared-folders-9x16.wav` | The mix: music, sound effects and voiceover (the two files are identical) | Rendered by `shared-folders.py` from the files above |
 | `shared-folders-16x9-novo.wav` | The mix without voiceover | Rendered by `shared-folders.py` from the files above |

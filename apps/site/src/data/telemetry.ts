@@ -29,6 +29,8 @@ export const SITE_EVENTS = [
   "game_solved",
   "release_notes_viewed",
   "send_to_mac_clicked",
+  "testflight_clicked",
+  "android_apk_clicked",
   "mac_link_visit",
   "non_mac_visit",
 ] as const;

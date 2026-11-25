@@ -1,0 +1,523 @@
+#!/usr/bin/env node
+// The machine-wide app cache and build slots behind scripts/agent/build-app (logic: scripts/lib/build-cache.mjs).
+//
+//   scripts/agent/build-cache stamp        --repo R --config C --framework F [--signing default|adhoc] [--require-receipt]
+//   scripts/agent/build-cache xcframework  --repo R
+//   scripts/agent/build-cache stage-engine --framework F
+//   scripts/agent/build-cache restore      --repo R --stamp S --config C --out DIR [--bundle]
+//   scripts/agent/build-cache finish       --repo R --app APP --config C --out DIR [--bundle]
+//   scripts/agent/build-cache engine       --repo R
+//   scripts/agent/build-cache slots        --repo R [--wait SECS]
+//   scripts/agent/build-cache reserve      --owner PID
+//   scripts/agent/build-cache slot-run     --repo R --slot DIR --stamp S --config C --framework F --out DIR
+//                                          [--signing S] [--bundle] -- <xcodebuild args…>
+//   scripts/agent/build-cache slot-evict [--protect DIR]
+//   scripts/agent/build-cache status | evict
+//   scripts/agent/build-cache -h | --help
+//
+// stamp    the native stamp: the content of every file that changes the app's binary (apps/browser/macos,
+//          packages/*/ios, the Pods' inputs, patches, pnpm-lock.yaml, packages/core-rs, the ArdiaCore header,
+//          scripts/lib/paths.sh), every file of the engine framework, the config, the signing, the Xcode toolchain
+//          and SDK, and the build-affecting environment (RCT_*, EXPO_*, TOOLCHAINS, CC, …). JS files are not in it.
+//          Exits 3 (no reuse) when the build can't be fingerprinted: XCODE_XCCONFIG_FILE or a bundling override
+//          (SKIP_BUNDLING, FORCE_BUNDLING, BUNDLE_*, NODE_ARGS, CLI_PATH, …) set, an .xcode.env.local that isn't
+//          exactly the one absolute NODE_BINARY line pod install writes (its bytes are in the stamp), no framework,
+//          no toolchain.
+// xcframework  builds packages/core-rs's ArdiaCoreRS.xcframework, with --force when the receipt beside it doesn't
+//          name the current Rust build identity (rustc -vV, cargo -V, Rust variables, Cargo home config, Xcode/SDK;
+//          the rustup toolchain path and rustc -vV pin the target libraries), then writes that receipt. The stamp
+//          carries the same identity; --require-receipt exits 3 unless the receipt matches it.
+// stage-engine  clones the framework into an immutable folder named by its content digest and prints it; builds
+//          use that copy, so the engine Xcode embeds is always the one the stamp hashed.
+// restore  on a cache hit, APFS-clones the entry and checks the copy against the content digest recorded when it
+//          was published, then makes DIR/Ardia.app from it (exit 0, prints the app); a miss, or an entry that went
+//          away or doesn't match, exits 2. Release (or --bundle) swaps in this tree's JS: a fresh main.jsbundle
+//          (Hermes for Release, dev JS for Debug, which then ignores Metro) and its assets, and re-signs the app as
+//          it was signed. A bundling override makes --bundle fail rather than bundle without it.
+// finish   the same bundling for an app built in place (build-app --plain --bundle).
+// engine   the prebuilt engine for this tree's engine key, kept once per machine under the cache (fetched on a miss).
+// slots    the attempts to make, as "<wait> <slot>": every free slot (fewest files differing first) without waiting,
+//          then the best one again for at most min(60 s, --wait); `reserve` makes a new one after that.
+// slot-run run under `scripts/agent/locked xcodebuild` (the slot's derived data is its lock): syncs this tree into the
+//          slot (only changed files are written, so Xcode stays incremental; a journal keeps an interrupted sync's
+//          files managed), runs pnpm install and pod install there when their inputs changed, copies this tree's
+//          .xcode.env.local in, stamps the slot as synced, builds, clones the fresh app into DIR, and publishes it
+//          only when that stamp equals --stamp. An entry is never replaced: a stamp names its content. Children run
+//          in a process group recorded in the slot; while any of it runs, the slot is busy, for everyone.
+// Cache: $AC_APP_CACHE (default ~/ardia-scratch/app-cache): apps (at most $AC_APP_CACHE_MAX_GB 40 GB and
+// $AC_APP_CACHE_MAX_ENTRIES 16), engines and engine copies ($AC_APP_CACHE_MAX_ENGINES 3 each) and Xcode's
+// compilation cache; least recently used evicted first, nothing used in the last $AC_APP_CACHE_GRACE_MIN (15) minutes.
+// Slots: $AC_BUILD_SLOTS (default ~/ardia-scratch/build-slots/<n>), $AC_BUILD_SLOTS_KEEP (3) idle ones kept.
+import { execFileSync, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const lib = await import(join(here, "../lib/build-cache.mjs"));
+const { signingIdentity } = await import(join(here, "../lib/app-copy.mjs"));
+
+const argv = process.argv.slice(2);
+const dash = argv.indexOf("--");
+const passthrough = dash >= 0 ? argv.slice(dash + 1) : [];
+const [command, ...rest] = dash >= 0 ? argv.slice(0, dash) : argv;
+const flags = {};
+for (let i = 0; i < rest.length; i++) {
+  if (rest[i] === "--bundle" || rest[i] === "--require-receipt") flags[rest[i].slice(2)] = true;
+  else if (rest[i].startsWith("--")) flags[rest[i].slice(2)] = rest[++i];
+}
+const help = () => {
+  const lines = fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1);
+  console.log(lines.slice(0, lines.findIndex((l) => !l.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+};
+if (!command || command === "-h" || command === "--help") {
+  help();
+  process.exit(command ? 0 : 64);
+}
+const cfg = lib.defaults();
+const repo = flags.repo ? resolve(flags.repo) : resolve(here, "../..");
+const signing = flags.signing || "default";
+const need = (...names) => {
+  for (const n of names) if (!flags[n]) throw new Error(`${command} needs --${n}`);
+};
+const LSREGISTER = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+const NO_METRO = "127.0.0.1:1";
+const hashCache = new lib.HashCache(join(cfg.cacheRoot, ".file-hashes.json"));
+const quiet = { stdio: ["ignore", "ignore", "inherit"] };
+
+class Miss extends Error {}
+
+function hermescFor(entryDir) {
+  for (const path of [entryDir && join(entryDir, "hermesc"), join(repo, "apps/browser/macos/Pods/hermes-engine/destroot/bin/hermesc")]) {
+    if (path && fs.existsSync(path)) return path;
+  }
+  throw new Error("no hermesc: neither the cache entry nor this tree's Pods have one");
+}
+
+function bundleInto(outDir, { dev, hermesc }) {
+  const overrides = Object.keys(process.env).filter((name) => lib.BUNDLING_ENV.test(name));
+  if (overrides.length) throw new Error(`${overrides.join(", ")} set: this bundling can't honour it; unset it or build without --bundle`);
+  const rn = join(repo, "node_modules/react-native-macos");
+  if (!fs.existsSync(join(rn, "scripts/bundle.js"))) throw new Miss(`${repo} has no node_modules to bundle its JS with`);
+  fs.rmSync(outDir, { recursive: true, force: true });
+  fs.mkdirSync(outDir, { recursive: true });
+  const js = join(outDir, "main.js");
+  const r = spawnSync(
+    process.execPath,
+    [
+      join(rn, "scripts/bundle.js"), "bundle", "--entry-file", "index.js", "--platform", "macos", "--dev", String(dev),
+      "--minify", "false", "--bundle-output", js, "--assets-dest", join(outDir, "assets"),
+      "--config-cmd", `'${process.execPath}' '${join(rn, "cli.js")}' config`,
+    ],
+    { cwd: join(repo, "apps/browser"), encoding: "utf8", stdio: ["ignore", "ignore", "pipe"] },
+  );
+  if (r.status !== 0) throw new Error(`bundling the JS failed:\n${r.stderr.split("\n").slice(-30).join("\n")}`);
+  const out = join(outDir, "main.jsbundle");
+  if (dev) fs.renameSync(js, out);
+  else execFileSync(hermesc, ["-emit-binary", "-max-diagnostic-width=80", "-O", "-out", out, js], quiet);
+  return outDir;
+}
+
+const signInfo = (path) => spawnSync("codesign", ["-dv", path], { encoding: "utf8" }).stderr;
+const hardened = (info) => /flags=0x[0-9a-f]*\([^)]*runtime/.test(info);
+
+function resign(path, scratch, { identity, runtime }) {
+  const granted = spawnSync("codesign", ["-d", "--entitlements", "-", "--xml", path], { encoding: "utf8" }).stdout;
+  const args = ["--force", "--sign", identity, "--timestamp=none"];
+  if (granted && granted.includes("<key>")) {
+    fs.mkdirSync(scratch, { recursive: true });
+    const plist = join(scratch, `entitlements-${Math.random().toString(36).slice(2)}.plist`);
+    fs.writeFileSync(plist, granted);
+    args.push("--entitlements", plist);
+  }
+  if (runtime) args.push("--options", "runtime");
+  execFileSync("codesign", [...args, path], quiet);
+}
+
+function clearStale(out) {
+  const parent = dirname(out);
+  const base = out.split("/").pop();
+  try {
+    for (const name of fs.readdirSync(parent)) {
+      if (name.startsWith(`${base}.tmp-`) || name.startsWith(`${base}.snap-`)) fs.rmSync(join(parent, name), { recursive: true, force: true });
+    }
+  } catch {}
+}
+
+function prepare(source, out, opts) {
+  const tmp = `${out}.tmp-${process.pid}`;
+  try {
+    return prepareIn(tmp, source, out, opts);
+  } catch (e) {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    throw e;
+  }
+}
+
+function prepareIn(tmp, source, out, { config, bundle, hermesc, move = false }) {
+  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.mkdirSync(tmp, { recursive: true });
+  const app = join(tmp, "Ardia.app");
+  if (move) fs.renameSync(source, app);
+  else {
+    const r = lib.cloneTree(source, app);
+    if (r.status !== 0) throw new Error(`copying ${source} failed: ${r.stderr.trim()}`);
+  }
+  if (bundle) {
+    const dev = config !== "Release";
+    if (!fs.existsSync(join(repo, "node_modules/react-native-macos/scripts/bundle.js"))) throw new Miss(`${repo} has no node_modules to bundle its JS with`);
+    const built = bundleInto(join(tmp, ".bundle"), { dev, hermesc: dev ? null : hermesc() });
+    const resources = join(app, "Contents/Resources");
+    fs.copyFileSync(join(built, "main.jsbundle"), join(resources, "main.jsbundle"));
+    const assets = join(built, "assets");
+    fs.rmSync(join(resources, "assets"), { recursive: true, force: true });
+    if (fs.existsSync(assets) && fs.readdirSync(assets).length) {
+      const c = lib.cloneTree(assets, join(resources, "assets"));
+      if (c.status !== 0) throw new Error(`copying the assets failed: ${c.stderr.trim()}`);
+    }
+    if (dev) fs.writeFileSync(join(resources, "ip.txt"), `${NO_METRO}\n`);
+    fs.rmSync(built, { recursive: true, force: true });
+    resign(app, join(tmp, ".sign"), { identity: signingIdentity(app), runtime: hardened(signInfo(app)) });
+    fs.rmSync(join(tmp, ".sign"), { recursive: true, force: true });
+  }
+  fs.rmSync(out, { recursive: true, force: true });
+  fs.renameSync(tmp, out);
+  const final = join(out, "Ardia.app");
+  spawnSync(LSREGISTER, ["-u", final], { stdio: "ignore" });
+  return final;
+}
+
+function inputsFor(framework, root = repo, rust = undefined) {
+  const inputs = lib.stampInputs({ framework, hashCache, repo: root, ...(rust === undefined ? {} : { rust }) });
+  hashCache.save();
+  return inputs;
+}
+
+function stampFor(manifest, inputs) {
+  return lib.stampOf({ manifest, config: flags.config, signing, ...inputs });
+}
+
+let groupSlot = null;
+
+function sh(cmd, args, opts) {
+  console.log(`build-cache: ${[cmd, ...args].join(" ")}`);
+  const wrapped = groupSlot ? lib.groupCommand(groupSlot, cmd, args) : [cmd, args];
+  if (!wrapped) {
+    console.log(`build-cache: ${groupSlot} is busy: process group ${lib.slotGroup(groupSlot)} from an earlier command is still running`);
+    process.exit(75);
+  }
+  const r = spawnSync(wrapped[0], wrapped[1], { stdio: "inherit", ...opts });
+  return r.status ?? 1;
+}
+
+function pnpmCommand() {
+  const r = spawnSync("sh", ["-c", "command -v pnpm"], { encoding: "utf8" });
+  return r.status === 0 ? [r.stdout.trim()] : ["corepack", "pnpm"];
+}
+
+function removeNodeModules(tree) {
+  for (const rel of lib.nodeModulesRoots(tree)) fs.rmSync(join(tree, rel), { recursive: true, force: true });
+}
+
+function syncDeps(slot, state, manifest) {
+  const tree = lib.slotTree(slot);
+  const deps = lib.depsHash(manifest);
+  const pods = lib.podsHash(manifest);
+  const next = { ...state };
+  const modules = join(tree, "node_modules/.modules.yaml");
+  const modulesChanged = fs.existsSync(modules) && fs.statSync(modules).mtimeMs > (state.linksCheckedAt ?? 0);
+  const escaping = lib.escapingLinks(tree, { deep: modulesChanged });
+  if (escaping.length) {
+    console.log(`build-cache: the slot's node_modules links outside it (${escaping[0]}); reinstalling it from the pnpm store`);
+    removeNodeModules(tree);
+    next.deps = null;
+  }
+  if (next.deps !== deps || !fs.existsSync(join(tree, "node_modules/.modules.yaml"))) {
+    lib.writeSlotState(slot, { ...lib.readSlotState(slot), deps: null, pods: null });
+    if (!fs.existsSync(join(tree, "node_modules")) && fs.existsSync(join(repo, "node_modules"))) {
+      const roots = lib.nodeModulesRoots(repo);
+      console.log(`build-cache: seeding node_modules from ${repo} (${roots.length} folders, APFS clones)`);
+      for (const rel of roots) {
+        const r = lib.cloneTree(join(repo, rel), join(tree, rel));
+        if (r.status !== 0) throw new Error(`seeding ${rel} failed: ${r.stderr.trim()}`);
+      }
+      const outside = lib.escapingLinks(tree, { deep: true, limit: 1 });
+      if (outside.length) {
+        console.log(`build-cache: the seeded node_modules links outside the slot (${outside[0]}); installing from the pnpm store instead`);
+        removeNodeModules(tree);
+      }
+    }
+    const [pnpm, ...pre] = pnpmCommand();
+    const base = [...pre, "install", "--frozen-lockfile", "--config.confirmModulesPurge=false"];
+    if (sh(pnpm, [...base, "--offline"], { cwd: tree }) !== 0 && sh(pnpm, base, { cwd: tree }) !== 0) {
+      throw new Error("pnpm install failed in the slot");
+    }
+    const after = lib.escapingLinks(tree, { deep: true, limit: 1 });
+    if (after.length) throw new Error(`the slot's node_modules links outside it after pnpm install (${after[0]})`);
+    next.deps = deps;
+    next.pods = null;
+    next.linksCheckedAt = Date.now();
+  } else if (modulesChanged) next.linksCheckedAt = Date.now();
+  if (next.pods !== pods || !fs.existsSync(join(tree, "apps/browser/macos/Pods/Manifest.lock"))) {
+    next.pods = null;
+    lib.writeSlotState(slot, { ...lib.readSlotState(slot), deps: next.deps, pods: null });
+    if (sh("pod", ["install"], { cwd: join(tree, "apps/browser/macos") }) !== 0) throw new Error("pod install failed in the slot");
+    next.pods = pods;
+  }
+  return next;
+}
+
+function ensureXcframework(tree, identity, run) {
+  const script = join(tree, "packages/core-rs/scripts/build-xcframework.sh");
+  if (!fs.existsSync(script)) return;
+  const fresh = identity && lib.receiptMatches(tree, identity);
+  if (run(script, fresh ? [] : ["--force"]) !== 0) throw new Error("building ArdiaCoreRS.xcframework failed");
+  if (identity) lib.writeReceipt(tree, identity);
+}
+
+function headOf(dir) {
+  const r = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" });
+  return r.status === 0 ? r.stdout.trim() : null;
+}
+
+function judgeSyncedEngine(manifest) {
+  const recorded = process.env.AC_ENGINE_RECORD;
+  if (!recorded) return;
+  const line = lib.judgeSyncedEngine(repo, recorded, manifest);
+  if (line !== process.env.ARDIACORE_ENGINE_MATCH) console.log(`build-cache: the synced tree's engine is "${line}", not the "${process.env.ARDIACORE_ENGINE_MATCH ?? ""}" judged before syncing; stamping that`);
+  process.env.ARDIACORE_ENGINE_MATCH = line;
+}
+
+function slotRun() {
+  need("slot", "stamp", "config", "out", "framework");
+  const slot = resolve(flags.slot);
+  const tree = lib.slotTree(slot);
+  lib.releaseReservation(slot);
+  if (lib.settleGroup(slot)) {
+    console.log(`build-cache: ${slot} is busy: process group ${lib.slotGroup(slot)} from an earlier build is still running`);
+    process.exit(75);
+  }
+  groupSlot = slot;
+  let manifest;
+  for (let attempt = 1; ; attempt++) {
+    const started = Date.now();
+    manifest = lib.manifestOf(repo, lib.listFiles(repo));
+    const { changed, removed, drifted, mismatched } = lib.syncTree(repo, slot, manifest);
+    console.log(`build-cache: synced ${repo} into ${tree}: ${changed.length} written, ${removed.length} removed, ${drifted.length} drifted (${Date.now() - started} ms)`);
+    for (const rel of changed.slice(0, 20)) console.log(`  + ${rel}`);
+    if (!mismatched.length) break;
+    if (attempt === 3) throw new Error(`${mismatched.length} files kept changing while they were synced (${mismatched[0]})`);
+  }
+  judgeSyncedEngine(manifest);
+  const state = syncDeps(slot, lib.readSlotState(slot), manifest);
+  const rust = lib.rustIdentity(tree);
+  const localEnv = { ...process.env };
+  delete localEnv.CARGO_TARGET_DIR;
+  ensureXcframework(tree, rust, (script, args) => sh(script, args, { cwd: tree, env: localEnv }));
+  for (const rel of lib.UNFINGERPRINTABLE_FILES) {
+    if (fs.existsSync(join(repo, rel))) fs.copyFileSync(join(repo, rel), join(tree, rel));
+    else fs.rmSync(join(tree, rel), { force: true });
+  }
+  lib.writeSlotState(slot, { ...lib.readSlotState(slot), deps: state.deps, pods: state.pods, linksCheckedAt: state.linksCheckedAt, repo, head: headOf(repo) });
+  const inputs = inputsFor(flags.framework, tree, rust);
+  const synced = inputs.blocked ? null : stampFor(manifest, inputs);
+  console.log(`build-cache: stamp ${synced ?? "none"}${inputs.blocked ? ` (${inputs.blocked})` : ""}`);
+  const status = sh("xcodebuild", passthrough, { cwd: join(tree, "apps/browser") });
+  lib.settleGroup(slot);
+  if (status !== 0) process.exit(status);
+  const product = join(lib.slotDerivedData(slot), "Build/Products", flags.config, "Ardia.app");
+  clearStale(resolve(flags.out));
+  const app = prepare(product, resolve(flags.out), {
+    config: flags.config,
+    bundle: flags.bundle && flags.config !== "Release",
+    hermesc: () => hermescFor(null),
+  });
+  console.log(`build-cache: app ${app}`);
+  if (synced && !lib.receiptMatches(tree, inputs.rust)) {
+    console.log("build-cache: not recorded: the slot's ArdiaCoreRS.xcframework wasn't built by the Rust toolchain stamped");
+    return;
+  }
+  const reason = !synced
+    ? inputs.blocked
+    : synced !== flags.stamp
+      ? `the synced tree's stamp ${synced.slice(0, 12)} isn't the requested ${flags.stamp.slice(0, 12)} (the tree changed while waiting)`
+      : null;
+  if (reason) {
+    console.log(`build-cache: not cached: ${reason}`);
+    return;
+  }
+  try {
+    const entry = lib.store(cfg.cacheRoot, synced, product, { config: flags.config, repo, head: headOf(repo), slot }, {
+      hermesc: join(tree, "apps/browser/macos/Pods/hermes-engine/destroot/bin/hermesc"),
+    });
+    lib.evict(cfg.cacheRoot, { maxBytes: cfg.maxBytes, maxEntries: cfg.maxEntries, keepEngines: cfg.keepEngines, graceMs: cfg.graceMs, protect: [synced] });
+    console.log(`build-cache: ${entry.existed ? "already cached" : "cached"} ${entry.dir}`);
+  } catch (e) {
+    console.log(`build-cache: not cached: publishing failed (${e.message}); the app above is fine`);
+  }
+}
+
+function engine() {
+  const commit = pinnedCommit();
+  const key = engineKey(commit);
+  const dir = join(cfg.cacheRoot, "engines", key.slice(0, 12));
+  const framework = join(dir, "Chromium Framework.framework");
+  const fetchEngine = join(repo, "packages/ardiacore/scripts/fetch-engine.sh");
+  const record = join(dir, "engine-match");
+  if (lib.engineRecordNamesAnotherKey(record, key)) {
+    const discarded = `${dir}.discard-${process.pid}`;
+    fs.rmSync(discarded, { recursive: true, force: true });
+    fs.renameSync(dir, discarded);
+    fs.rmSync(discarded, { recursive: true, force: true });
+    console.error(`build-cache: ${dir} held an engine recorded for another key; fetching ${key.slice(0, 12)}'s again`);
+  }
+  if (!fs.existsSync(join(dir, ".complete"))) {
+    const fetched = execFileSync(fetchEngine, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], env: { ...process.env, ARDIACORE_ENGINE_COMMIT: commit } }).trim();
+    if (!lib.engineRecordComplete(join(dirname(fetched), "engine-match"), key)) {
+      throw new Error(`fetch-engine.sh recorded another engine than ${key.slice(0, 12)}'s for ${fetched}; nothing was cached`);
+    }
+    const tmp = `${dir}.tmp-${process.pid}`;
+    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.mkdirSync(tmp, { recursive: true });
+    const r = lib.cloneTree(fetched, join(tmp, "Chromium Framework.framework"));
+    if (r.status !== 0) throw new Error(`copying the engine failed: ${r.stderr.trim()}`);
+    fs.copyFileSync(join(dirname(fetched), "engine-match"), join(tmp, "engine-match"));
+    fs.writeFileSync(join(tmp, ".complete"), "");
+    try {
+      fs.renameSync(tmp, dir);
+    } catch {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+    if (!fs.existsSync(join(dir, ".complete")) || !fs.existsSync(join(framework, "Versions/Current/Chromium Framework"))) {
+      throw new Error(`the engine store ${dir} is incomplete after fetching`);
+    }
+  }
+  if (!lib.engineRecordComplete(record, key)) {
+    const tmp = join(dir, `engine-match.tmp-${process.pid}`);
+    fs.writeFileSync(tmp, `${lib.describeEngineOffline(fetchEngine, key, commit)}\n`);
+    fs.renameSync(tmp, record);
+  }
+  lib.touch(dir);
+  lib.evict(cfg.cacheRoot, { maxBytes: cfg.maxBytes, maxEntries: cfg.maxEntries, keepEngines: cfg.keepEngines, graceMs: cfg.graceMs, protectEngines: [dir] });
+  return framework;
+}
+
+function pinnedCommit() {
+  const r = spawnSync("git", ["-C", repo, "rev-parse", "--verify", "HEAD^{commit}"], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`${repo} has no commit to match a prebuilt engine to`);
+  return r.stdout.trim();
+}
+
+function engineKey(commit) {
+  const r = spawnSync(join(repo, "engine/engine-key.sh"), ["--platform", "macos", commit], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error("engine/engine-key.sh failed");
+  return r.stdout.trim();
+}
+
+function slotEvict() {
+  const locked = join(here, "locked");
+  const protect = flags.protect ? [resolve(flags.protect)] : [];
+  for (const slot of lib.slotsToEvict(cfg.slotRoot, { keep: cfg.keepSlots, protect })) {
+    const trash = join(cfg.slotRoot, `.trash-${process.pid}-${slot.split("/").pop()}`);
+    const r = spawnSync(locked, ["xcodebuild", "--wait", "2", "--", process.execPath, fileURLToPath(import.meta.url), "slot-drop", "--slot", slot, "--trash", trash, "-derivedDataPath", lib.slotDerivedData(slot)], { encoding: "utf8" });
+    if (r.status === 0 && fs.existsSync(trash)) {
+      spawnSync("rm", ["-rf", trash]);
+      console.log(`build-cache: dropped idle slot ${slot}`);
+    }
+  }
+}
+
+try {
+  if (command === "stamp") {
+    need("config");
+    const inputs = inputsFor(flags.framework);
+    if (inputs.blocked) {
+      console.error(`build-cache: no reuse: ${inputs.blocked}`);
+      process.exit(3);
+    }
+    if (flags["require-receipt"] && !lib.receiptMatches(repo, inputs.rust)) {
+      console.error("build-cache: no reuse: ArdiaCoreRS.xcframework wasn't built by the Rust toolchain stamped");
+      process.exit(3);
+    }
+    console.log(stampFor(lib.manifestOf(repo, lib.listFiles(repo).filter(lib.isNative)), inputs));
+  } else if (command === "xcframework") {
+    ensureXcframework(repo, lib.rustIdentity(repo), (script, args) => spawnSync(script, args, { cwd: repo, stdio: "inherit" }).status ?? 1);
+  } else if (command === "restore") {
+    need("stamp", "config", "out");
+    const out = resolve(flags.out);
+    clearStale(out);
+    const entry = lib.lookup(cfg.cacheRoot, flags.stamp);
+    if (!entry || !lib.touch(entry.dir)) throw new Miss("no cache entry");
+    const snapDir = `${out}.snap-${process.pid}`;
+    const snap = lib.snapshotEntry(entry, snapDir);
+    if (!snap) {
+      fs.rmSync(snapDir, { recursive: true, force: true });
+      throw new Miss("the cache entry changed or went away while it was copied");
+    }
+    const bundle = flags.bundle || flags.config === "Release";
+    try {
+      console.log(prepare(snap.app, out, { config: flags.config, bundle, move: true, hermesc: () => snap.hermesc ?? hermescFor(null) }));
+    } finally {
+      fs.rmSync(snapDir, { recursive: true, force: true });
+    }
+    console.log(`from ${snap.meta.head?.slice(0, 10) ?? "?"} built ${snap.meta.created}`);
+  } else if (command === "stage-engine") {
+    need("framework");
+    const chromiumSrc = process.env.CHROMIUM_SRC || join(process.env.HOME, "chromium-build/chromium_git/chromium/src");
+    if (!process.env.AC_STAGE_ENGINE_LOCKED && lib.isInside(flags.framework, chromiumSrc)) {
+      const r = spawnSync(join(here, "locked"), ["chromium", "--wait", flags.wait || "1500", ...(flags.as ? ["--as", flags.as] : []), "--", process.execPath, fileURLToPath(import.meta.url), "stage-engine", "--framework", flags.framework], {
+        stdio: ["ignore", "inherit", "inherit"],
+        env: { ...process.env, AC_STAGE_ENGINE_LOCKED: "1" },
+      });
+      process.exit(r.status ?? 1);
+    }
+    const { copy } = lib.stageEngine(cfg.cacheRoot, resolve(flags.framework), hashCache);
+    hashCache.save();
+    lib.evict(cfg.cacheRoot, { maxBytes: cfg.maxBytes, maxEntries: cfg.maxEntries, keepEngines: cfg.keepEngines, graceMs: cfg.graceMs, protectEngines: [dirname(copy)] });
+    console.log(copy);
+  } else if (command === "finish") {
+    need("app", "config", "out");
+    console.log(prepare(resolve(flags.app), resolve(flags.out), { config: flags.config, bundle: !!flags.bundle && flags.config !== "Release", hermesc: () => hermescFor(null) }));
+  } else if (command === "engine") {
+    console.log(engine());
+  } else if (command === "slots") {
+    const manifest = lib.manifestOf(repo, lib.listFiles(repo));
+    for (const { slot, wait } of lib.attemptPlan(lib.freeSlots(cfg.slotRoot, manifest), Number(flags.wait || 1500))) console.log(`${wait} ${slot}`);
+  } else if (command === "reserve") {
+    need("owner");
+    console.log(lib.reserveSlot(cfg.slotRoot, Number(flags.owner)));
+  } else if (command === "slot-run") {
+    slotRun();
+  } else if (command === "slot-drop") {
+    need("slot", "trash");
+    const slot = resolve(flags.slot);
+    const idle = lib.slotsToEvict(cfg.slotRoot, { keep: cfg.keepSlots, busy: (s) => !lib.slotDroppable(s) });
+    if (lib.slotDroppable(slot) && idle.includes(slot)) fs.renameSync(slot, resolve(flags.trash));
+  } else if (command === "runnable") {
+    need("app");
+    process.exit(lib.appRunnable(resolve(flags.app)) ? 0 : 1);
+  } else if (command === "slot-evict") {
+    slotEvict();
+  } else if (command === "evict") {
+    const plan = lib.evict(cfg.cacheRoot, { maxBytes: cfg.maxBytes, maxEntries: cfg.maxEntries, keepEngines: cfg.keepEngines, graceMs: cfg.graceMs });
+    console.log(`kept ${plan.keep.length} (${(plan.bytes / 1024 ** 3).toFixed(1)} GB), evicted ${plan.evict.length} apps and ${plan.engines.length} engines`);
+  } else if (command === "status") {
+    for (const e of lib.entries(cfg.cacheRoot)) {
+      console.log(`app  ${e.stamp}  ${e.meta.config}  ${(e.bytes / 1024 ** 3).toFixed(2)} GB  ${e.meta.head?.slice(0, 10) ?? "?"}  used ${new Date(e.usedAt).toISOString()}`);
+    }
+    for (const slot of lib.listSlots(cfg.slotRoot)) {
+      const s = lib.readSlotState(slot);
+      console.log(`slot ${slot}  ${lib.slotBusy(slot) ? "busy" : "free"}  ${s.head?.slice(0, 10) ?? "?"}  synced ${s.syncedAt ? new Date(s.syncedAt).toISOString() : "never"}`);
+    }
+  } else {
+    help();
+    process.exit(64);
+  }
+} catch (e) {
+  if (e instanceof Miss) {
+    console.error(`build-cache: ${e.message}`);
+    process.exit(2);
+  }
+  console.error(`build-cache: error: ${e.message}`);
+  process.exit(1);
+}

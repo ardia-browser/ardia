@@ -8,7 +8,7 @@ import type { BookmarkNode, HistoryEntry } from "../../browser/types";
 
 type Bookmarks = { nodes: Record<string, BookmarkNode>; roots: Record<string, { bar: string; other: string }> };
 
-export type ProfileDataState = {
+type ProfileDataState = {
   bookmarks: Bookmarks;
   bookmarksReady: Record<string, true>;
   history: Record<string, HistoryEntry[]>;

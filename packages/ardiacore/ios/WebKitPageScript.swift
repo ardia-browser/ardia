@@ -1,5 +1,25 @@
+import Foundation
+
 enum WebKitPageScript {
-  static let source = #"""
+  static let fieldProviderKit: String = {
+    let start = "  const fieldProviderKit = "
+    let end = "  const nativeMutationObserver = "
+    guard let path = Bundle(for: WebKitHub.self).path(forResource: "page_script", ofType: "js"),
+      let script = try? String(contentsOfFile: path, encoding: .utf8),
+      let from = script.range(of: start),
+      let to = script.range(of: end, range: from.upperBound..<script.endIndex)
+    else {
+      NSLog("[webkit] field provider kit not found in page_script.js")
+      return "  const fieldProviderKit = () => ({ configure() {}, focusQuery() {} });\n  const fieldProviderIntrinsics = () => ({});\n"
+    }
+    return String(script[from.lowerBound..<to.lowerBound])
+  }()
+
+  static let source = [media, theme, scroll, selection, fieldProviders, commands].joined(separator: "\n\n")
+
+  static let mediaBridge = mediaSessionBridge + appBadgeBridge
+
+  static let media = #"""
 (() => {
   if (window.__ardia) return;
   const isTop = window === window.top;
@@ -19,6 +39,7 @@ enum WebKitPageScript {
   let lastHeard = null;
   let pageActions = [];
   let pagePosition = null;
+  const handlers = Object.create(null);
   const allMedia = () => {
     const list = Array.from(document.querySelectorAll("video, audio"));
     for (const m of detached) if (!list.includes(m)) list.push(m);
@@ -84,6 +105,7 @@ enum WebKitPageScript {
       hasVideo: m.tagName === "VIDEO" && m.videoWidth > 0,
       actions: pageActions,
       controllable: fromSession !== "none" || !(m.duration > 0 && m.duration <= 5),
+      loop: !pagePosition && m.loop,
     });
   };
   const schedule = () => {
@@ -132,6 +154,18 @@ enum WebKitPageScript {
     },
     true,
   );
+  const mediaFaultSites = \#(WebKitMediaFaults.sitesJSON);
+  if (location.protocol === "https:" && mediaFaultSites.some((site) => location.hostname === site || location.hostname.endsWith("." + site))) {
+    let faultsRelayed = 0;
+    document.addEventListener(
+      "ardia:media-fault",
+      (e) => {
+        if (typeof e.detail !== "string" || e.detail.length > 64 || ++faultsRelayed > 200) return;
+        post("mediaFault", { reason: e.detail });
+      },
+      true,
+    );
+  }
   const knownActions = ["play", "pause", "stop", "seekbackward", "seekforward", "seekto", "previoustrack", "nexttrack", "skipad", "enterpictureinpicture"];
   document.addEventListener(
     "ardia:media-session",
@@ -161,6 +195,18 @@ enum WebKitPageScript {
     },
     true,
   );
+  if (isTop)
+    document.addEventListener(
+      "ardia:app-badge",
+      (e) => {
+        let data = null;
+        try {
+          data = typeof e.detail === "string" ? JSON.parse(e.detail) : null;
+        } catch (error) {}
+        if (data && typeof data === "object") post("appBadge", data);
+      },
+      true,
+    );
   const pip = (on) => post("pip", { active: on });
   document.addEventListener("enterpictureinpicture", () => pip(true), true);
   document.addEventListener("leavepictureinpicture", () => pip(false), true);
@@ -169,6 +215,12 @@ enum WebKitPageScript {
     (e) => e.target instanceof HTMLVideoElement && pip(e.target.webkitPresentationMode === "picture-in-picture"),
     true,
   );
+  addEventListener("pagehide", () => {
+    if (isTop) return;
+    post("media", { playing: false, muted });
+    post("nowPlaying", null);
+  });
+  addEventListener("pageshow", (e) => e.persisted && schedule());
 
   let hovered = "";
   document.addEventListener(
@@ -178,105 +230,115 @@ enum WebKitPageScript {
       const href = link ? link.href : "";
       if (href === hovered) return;
       hovered = href;
-      post("status", href);
+      post("status", { text: href.slice(0, 8192), y: e.clientY, height: innerHeight });
     },
     true,
   );
-  document.addEventListener("mouseleave", () => hovered && post("status", (hovered = "")), true);
+  document.addEventListener("mouseleave", () => hovered && post("status", { text: (hovered = "") }), true);
 
+  let sentIcons = "";
   const sendIcons = () => {
     if (!isTop) return;
     const links = Array.from(document.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"], link[rel~="apple-touch-icon"]'));
-    const urls = links.map((l) => l.href).filter((h) => /^(https?|data):/.test(h));
+    const urls = links.map((l) => l.href).filter((h) => /^(https?|data):/.test(h)).slice(0, 32);
     if (!urls.length && /^https?:$/.test(location.protocol)) urls.push(location.origin + "/favicon.ico");
-    if (urls.length) post("icons", { urls });
+    const key = urls.join("\n");
+    if (!urls.length || key === sentIcons) return;
+    const changed = !!sentIcons;
+    sentIcons = key;
+    post("icons", { urls, changed });
   };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", sendIcons, { once: true });
-  else sendIcons();
+  let iconsQueued = false;
+  const queueIcons = () => {
+    if (iconsQueued) return;
+    iconsQueued = true;
+    setTimeout(() => {
+      iconsQueued = false;
+      sendIcons();
+    }, 0);
+  };
+  const touchesIcon = (records) => {
+    for (const r of records) {
+      if (r.type === "attributes") {
+        if (r.target.nodeName === "LINK") return true;
+        continue;
+      }
+      for (const n of r.addedNodes) if (n.nodeName === "LINK") return true;
+      for (const n of r.removedNodes) if (n.nodeName === "LINK") return true;
+    }
+    return false;
+  };
+  const watchIcons = () => {
+    sendIcons();
+    if (!isTop || !document.head) return;
+    new MutationObserver((records) => touchesIcon(records) && queueIcons()).observe(document.head, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["href", "rel"],
+    });
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watchIcons, { once: true });
+  else watchIcons();
   addEventListener("load", sendIcons, { once: true });
+  addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+    sentIcons = "";
+    sendIcons();
+  });
+"""#
 
-  if (isTop) {
-    const scrollDirection = () => {
-      const DOWN = 24, UP = 12, MIN_RANGE = 120, SETTLE = 300, GESTURE = 300;
-      let anchor = 0, last = 0, lastAt = -1e9, settleUntil = -1e9, budget = 0, height = 0, sent = null, gestureSent = false;
-      const resized = (viewport, now) => {
-        if (now >= settleUntil) budget = 0;
-        if (height && viewport !== height) {
-          settleUntil = now + SETTLE;
-          budget += Math.abs(viewport - height) + 2;
-        }
-        height = viewport;
-      };
-      return {
-        resized,
-        rebase(y) {
-          anchor = last = y;
-        },
-        scrolled(y, range, viewport, now, user) {
-          resized(viewport, now);
-          if (now - lastAt > GESTURE) {
-            gestureSent = false;
-            anchor = last;
-          }
-          lastAt = now;
-          const moved = y - last;
-          last = y;
-          if (budget > 0 && moved) {
-            const absorbed = Math.min(budget, Math.abs(moved));
-            budget -= absorbed;
-            anchor += moved > 0 ? absorbed : -absorbed;
-          }
-          let state = null;
-          if (y <= 2) state = "top";
-          else if (!user) anchor = y;
-          else if (y - anchor >= DOWN) {
-            if (range >= MIN_RANGE) state = "down";
-            else anchor = y;
-          } else if (anchor - y >= UP) state = "up";
-          else if (sent === "down" ? gestureSent && y > anchor : y < anchor) anchor = y;
-          if (state) anchor = y;
-          if (!state || (state === sent && (state !== "down" || gestureSent))) return null;
-          sent = state;
-          if (state === "down") gestureSent = true;
-          return state;
-        },
-      };
-    };
-    const direction = scrollDirection();
-    let scroller = null;
-    let scrollTarget = null;
-    let inputAt = -1e9;
-    const noteInput = () => {
-      inputAt = performance.now();
-      if (!scroller && document.scrollingElement) direction.rebase((scroller = document.scrollingElement).scrollTop);
-    };
-    for (const type of ["wheel", "keydown", "mousedown", "touchstart"]) addEventListener(type, noteInput, { passive: true, capture: true });
-    addEventListener("mousemove", (e) => e.buttons && noteInput(), { passive: true, capture: true });
-    const measureScroll = () => {
+  static let fieldProviders = #"""
+  const guard = (fn) =>
+    function () {
       try {
-        const target = scrollTarget;
-        scrollTarget = null;
-        const doc = document.scrollingElement || document.documentElement;
-        const el = target === document || target === doc ? doc : target;
-        if (!el || !doc || (el !== doc && (el.clientHeight < innerHeight * 0.5 || el.clientWidth < innerWidth * 0.5))) return;
-        if (el !== scroller) direction.rebase((scroller = el).scrollTop);
-        const now = performance.now();
-        const state = direction.scrolled(el.scrollTop, el.scrollHeight - el.clientHeight, innerHeight, now, now - inputAt < 1000);
-        if (state) post("scroll", { state });
+        return Reflect.apply(fn, this, arguments);
       } catch (e) {}
     };
-    addEventListener(
-      "scroll",
-      (e) => {
-        if (!scrollTarget) requestAnimationFrame(measureScroll);
-        scrollTarget = e.target;
-      },
-      { passive: true, capture: true },
-    );
-    addEventListener("resize", () => direction.resized(innerHeight, performance.now()));
-  }
+  const later = (fn, ms) => {
+    let queued = false;
+    return () => {
+      if (queued) return;
+      queued = true;
+      setTimeout(() => {
+        queued = false;
+        guard(fn)();
+      }, ms);
+    };
+  };
+  const onReady = (fn) => (document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", fn, { once: true }) : fn());
+\#(fieldProviderKit)
+  const fieldProviders = fieldProviderKit({
+    document,
+    send: post,
+    guard,
+    later,
+    onReady,
+    revealed: () => null,
+    addListener: EventTarget.prototype.addEventListener,
+    apply: Reflect.apply,
+    FrameMutationObserver: window.MutationObserver,
+    setTimeout,
+    addEventListener,
+    requestAnimationFrame,
+    isTop,
+    intrinsics: fieldProviderIntrinsics(window),
+  });
+  post("fieldProviderHello", null);
+  addEventListener("pageshow", (e) => e.isTrusted && e.persisted && post("fieldProviderHello", null));
+"""#
 
+  static let commands = #"""
   window.__ardia = {
+    fieldProvider(state) {
+      fieldProviders.configure(state);
+    },
+    fieldFocusQuery(query) {
+      fieldProviders.focusQuery(query);
+    },
+    fieldProviderHint(state) {
+      fieldProviders.hint(state);
+    },
     mute(on) {
       muted = !!on;
       for (const m of allMedia()) {
@@ -315,19 +377,23 @@ enum WebKitPageScript {
       schedule();
       return !!m || pageActions.length > 0;
     },
-    pictureInPicture(on) {
+    pictureInPicture(on, automatic) {
       if (!on) {
         if (document.pictureInPictureElement) document.exitPictureInPicture();
         for (const v of document.querySelectorAll("video")) if (v.webkitPresentationMode === "picture-in-picture") v.webkitSetPresentationMode("inline");
         return true;
       }
       const videos = Array.from(document.querySelectorAll("video"));
-      const v = videos.find((x) => !x.paused) || videos.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
-      if (!v) return false;
+      const largest = () => videos.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
+      const v = videos.find(playing) || (automatic ? null : largest());
+      if (!v) return automatic ? "nothingPlaying" : false;
       if (v.webkitSupportsPresentationMode && v.webkitSupportsPresentationMode("picture-in-picture")) v.webkitSetPresentationMode("picture-in-picture");
       else if (v.requestPictureInPicture) v.requestPictureInPicture();
       else return false;
       return true;
+    },
+    selectionPopover(on) {
+      if (handlers.selectionPopover) handlers.selectionPopover(on);
     },
     count(text) {
       if (!text || !document.body) return 0;
@@ -338,98 +404,6 @@ enum WebKitPageScript {
       return n;
     },
   };
-})();
-"""#
-
-  static let mediaBridge = #"""
-(() => {
-  const apply = Reflect.apply;
-  const dispatch = EventTarget.prototype.dispatchEvent;
-  const listen = EventTarget.prototype.addEventListener;
-  const preventDefault = Event.prototype.preventDefault;
-  const detailOf = Object.getOwnPropertyDescriptor(CustomEvent.prototype, "detail").get;
-  const connected = Object.getOwnPropertyDescriptor(Node.prototype, "isConnected").get;
-  const { stringify, parse } = JSON;
-  const Custom = CustomEvent;
-  const Mouse = MouseEvent;
-  const now = Date.now;
-  const doc = document;
-  const handedOver = new WeakSet();
-  const mediaProto = HTMLMediaElement.prototype;
-  const play = mediaProto.play;
-  mediaProto.play = function () {
-    if (!handedOver.has(this) && !apply(connected, this, [])) {
-      handedOver.add(this);
-      try {
-        apply(dispatch, doc, [new Mouse("ardia:media-element", { relatedTarget: this })]);
-      } catch (e) {}
-    }
-    return apply(play, this, arguments);
-  };
-
-  const session = navigator.mediaSession;
-  const proto = session && Object.getPrototypeOf(session);
-  if (!proto) return;
-  const handlers = new Map();
-  let position = null;
-  let samples = 0;
-  const notify = () => {
-    try {
-      apply(dispatch, doc, [new Custom("ardia:media-session", { detail: stringify({ actions: Array.from(handlers.keys()), position }) })]);
-    } catch (e) {}
-  };
-  const setActionHandler = proto.setActionHandler;
-  if (typeof setActionHandler === "function") {
-    proto.setActionHandler = function (action, handler) {
-      const result = apply(setActionHandler, this, arguments);
-      if (typeof handler === "function") handlers.set(String(action), handler);
-      else handlers.delete(String(action));
-      notify();
-      return result;
-    };
-  }
-  const setPositionState = proto.setPositionState;
-  if (typeof setPositionState === "function") {
-    proto.setPositionState = function (state) {
-      const result = apply(setPositionState, this, arguments);
-      position =
-        state && typeof state === "object"
-          ? { duration: +state.duration, position: +(state.position || 0), playbackRate: +(state.playbackRate || 1), at: now(), id: ++samples, playing: this.playbackState === "playing" }
-          : null;
-      notify();
-      return result;
-    };
-  }
-  for (const name of ["metadata", "playbackState"]) {
-    const d = Object.getOwnPropertyDescriptor(proto, name);
-    if (!d || !d.set) continue;
-    Object.defineProperty(proto, name, {
-      ...d,
-      set(value) {
-        apply(d.set, this, [value]);
-        notify();
-      },
-    });
-  }
-  apply(listen, doc, [
-    "ardia:media-action",
-    (e) => {
-      let request = null;
-      try {
-        request = parse(apply(detailOf, e, []));
-      } catch (error) {}
-      const handler = request && typeof request.action === "string" ? handlers.get(request.action) : null;
-      if (typeof handler !== "function") return;
-      apply(preventDefault, e, []);
-      const details = { action: request.action };
-      if (typeof request.seekOffset === "number") details.seekOffset = request.seekOffset;
-      if (typeof request.seekTime === "number") details.seekTime = request.seekTime;
-      try {
-        handler(details);
-      } catch (error) {}
-    },
-    true,
-  ]);
 })();
 """#
 }

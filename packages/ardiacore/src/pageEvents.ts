@@ -3,15 +3,22 @@ import type { NativeSyntheticEvent } from "react-native";
 import type { ExternalAppRequest } from "./permissions";
 import type {
   ActivateRequest,
+  AppBadge,
   AutofillPrompt,
   BlockedPopup,
   ContentBlockedState,
   CrashInfo,
+  DiscardReason,
   DisplayMediaRequest,
   DownloadNavigation,
+  FieldProviderHint,
+  FieldProviderOpened,
+  FieldProviderPanelRefusal,
   FindResult,
+  FocusRestoreOutcome,
   LoadError,
   MediaAccess,
+  MediaFault,
   MediaState,
   NavigationState,
   NowPlaying,
@@ -20,9 +27,17 @@ import type {
   PageSelection,
   PasswordPrompt,
   PictureInPictureState,
+  PictureInPictureDrag,
+  PictureInPictureResize,
+  PictureInPictureSkip,
+  PictureInPictureStandIn,
+  PictureInPictureActivation,
+  PictureInPictureUnstash,
+  PictureInPictureRelease,
   ProtectedMediaRequest,
   ScrollState,
   SecurityInfo,
+  VerificationCodeFound,
   WebNotification,
   WebViewProps,
   ZoomState,
@@ -39,7 +54,7 @@ type NativeEvents = {
   onPopupBlocked: BlockedPopup;
   onFindResult: FindResult;
   onFullscreen: { fullscreen: boolean };
-  onStatus: { text: string };
+  onStatus: { text: string; fromBottom?: number };
   onCrashed: CrashInfo;
   onUnresponsive: object;
   onResponsive: object;
@@ -51,25 +66,44 @@ type NativeEvents = {
   onNotification: WebNotification;
   onNotificationClose: { id: string };
   onPictureInPicture: PictureInPictureState;
+  onAutoPictureInPictureKept: { appSwitch?: boolean; reason?: string; epoch?: string };
+  onPictureInPictureDragged: PictureInPictureDrag;
+  onPictureInPictureResized: PictureInPictureResize;
+  onPictureInPictureSkip: PictureInPictureSkip;
+  onPictureInPictureStandIn: PictureInPictureStandIn;
+  onPictureInPictureUnstashed: PictureInPictureUnstash;
+  onPictureInPictureReleased: PictureInPictureRelease;
+  onPictureInPictureActivated: PictureInPictureActivation;
+  onMediaFault: MediaFault;
   onActivateRequest: ActivateRequest;
   onDisplayMediaRequest: DisplayMediaRequest;
   onWindowClose: object;
   onCommand: PageCommand;
   onPageFocus: object;
-  onPagePress: object;
+  onPagePress: { refused?: boolean };
+  onFocusRestore: { outcome?: string };
   onSelection: { selection: PageSelection | null };
   onScroll: { state: ScrollState };
   onProtectedMedia: ProtectedMediaRequest;
+  onAutoplayBlocked: { count?: number };
   onReady: object;
-  onDiscarded: { url: string };
+  onDiscarded: { url: string; reason?: DiscardReason | "" };
   onPasswordPrompt: PasswordPrompt;
   onAutofillPrompt: AutofillPrompt | { id: number; closed: true };
   onExternalApp: ExternalAppRequest;
   onPreferredSize: { width: number; height: number };
+  onTransferRefused: { from: string };
+  onAppBadge: AppBadge;
+  onFieldProviderOpened: FieldProviderOpened;
+  onFieldProviderHint: { state?: string };
+  onVerificationCodeFound: VerificationCodeFound;
 };
-export type Handlers = keyof NativeEvents;
+type Handlers = keyof NativeEvents;
 export type PageEvent = { name: string; data: unknown };
 export type NativeProps = Omit<WebViewProps, Handlers> & { pageEvents: string[]; onPageEvent: (e: NativeSyntheticEvent<PageEvent>) => void };
+
+const FIELD_PROVIDER_REFUSALS: readonly FieldProviderPanelRefusal[] = ["hidden", "notFocused", "unavailable", "notKey", "notEditing", "throttled", "refused", "noPanel"];
+const FOCUS_RESTORE_OUTCOMES: readonly FocusRestoreOutcome[] = ["focused", "kept", "refused", "gaveUp"];
 
 const PAGE_EVENTS = {
   onNavigationChange: "navigation",
@@ -94,21 +128,37 @@ const PAGE_EVENTS = {
   onNotification: "notification",
   onNotificationClose: "notificationClose",
   onPictureInPicture: "pictureInPicture",
+  onAutoPictureInPictureKept: "autoPictureInPictureKept",
+  onPictureInPictureDragged: "pictureInPictureDragged",
+  onPictureInPictureResized: "pictureInPictureResized",
+  onPictureInPictureSkip: "pictureInPictureSkip",
+  onPictureInPictureStandIn: "pictureInPictureStandIn",
+  onPictureInPictureUnstashed: "pictureInPictureUnstashed",
+  onPictureInPictureReleased: "pictureInPictureReleased",
+  onPictureInPictureActivated: "pictureInPictureActivated",
+  onMediaFault: "mediaFault",
   onActivateRequest: "activateRequest",
   onDisplayMediaRequest: "displayMediaRequest",
   onWindowClose: "windowClose",
   onCommand: "command",
   onPageFocus: "focus",
   onPagePress: "pagePress",
+  onFocusRestore: "focusRestore",
   onSelection: "selection",
   onScroll: "scroll",
   onProtectedMedia: "protectedMedia",
+  onAutoplayBlocked: "autoplayBlocked",
   onReady: "ready",
   onDiscarded: "discarded",
   onPasswordPrompt: "passwordPrompt",
   onAutofillPrompt: "autofillPrompt",
   onExternalApp: "externalApp",
   onPreferredSize: "preferredSize",
+  onTransferRefused: "transferRefused",
+  onAppBadge: "appBadge",
+  onFieldProviderOpened: "fieldProviderOpened",
+  onFieldProviderHint: "fieldProviderHint",
+  onVerificationCodeFound: "verificationCodeFound",
 } as const satisfies Record<Handlers, string>;
 export type PageEventName = (typeof PAGE_EVENTS)[Handlers];
 export const pageEventOf = (handler: Handlers): PageEventName => PAGE_EVENTS[handler];
@@ -125,7 +175,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onPopupBlocked: (e) => [{ ...e, url: toAppUrl(e.url) }],
   onFindResult: (e) => [e],
   onFullscreen: (e) => [e.fullscreen],
-  onStatus: (e) => [e.text],
+  onStatus: (e) => [e.text, typeof e.fromBottom === "number" ? e.fromBottom : null],
   onCrashed: (e) => [e],
   onUnresponsive: () => [],
   onResponsive: () => [],
@@ -137,21 +187,44 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onNotification: (e) => [e],
   onNotificationClose: (e) => [e.id],
   onPictureInPicture: (e) => [e],
+  onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" ? "nothingPlaying" : e.appSwitch ? "appSwitch" : "onScreen", typeof e.epoch === "string" ? e.epoch : ""],
+  onPictureInPictureDragged: (e) => [{ offCursor: !!e.offCursor, slowMove: !!e.slowMove, epoch: e.epoch }],
+  onPictureInPictureResized: (e) => [{ inside: !!e.inside, cursorShown: !!e.cursorShown, epoch: e.epoch }],
+  onPictureInPictureSkip: (e) => [{ seconds: e.seconds, epoch: e.epoch }],
+  onPictureInPictureStandIn: (e) => [{ pinch: !!e.pinch, timedOut: !!e.timedOut, unfocused: !!e.unfocused, fromOtherApp: !!e.fromOtherApp, epoch: e.epoch }],
+  onPictureInPictureUnstashed: (e) => [{ epoch: e.epoch }],
+  onPictureInPictureReleased: (e) => [{ outcome: e.outcome, epoch: e.epoch }],
+  onPictureInPictureActivated: (e) => [{ move: !!e.move, activated: !!e.activated, epoch: e.epoch }],
+  onMediaFault: (e) => [e],
   onActivateRequest: (e) => [e],
   onDisplayMediaRequest: (e) => [e],
   onWindowClose: () => [],
   onCommand: (e) => [e],
   onPageFocus: () => [],
-  onPagePress: () => [],
+  onPagePress: (e) => [e.refused === true],
+  onFocusRestore: (e) => [FOCUS_RESTORE_OUTCOMES.find((o) => o === e.outcome) ?? "unknown"],
   onSelection: (e) => [e.selection],
   onScroll: (e) => [e.state],
   onProtectedMedia: (e) => [e],
+  onAutoplayBlocked: (e) => [Number.isInteger(e.count) ? Math.min(Math.max(e.count!, 1), 20) : 1],
   onReady: () => [],
-  onDiscarded: (e) => [toAppUrl(e.url)],
+  onDiscarded: (e) => [toAppUrl(e.url), e.reason || null],
   onPasswordPrompt: (e) => [e],
   onAutofillPrompt: (e) => ("closed" in e ? [null, e.id] : [e, e.id]),
   onExternalApp: (e) => [e],
   onPreferredSize: (e) => [e],
+  onTransferRefused: (e) => [e.from],
+  onAppBadge: (e) => [e],
+  onFieldProviderOpened: (e) => [
+    {
+      via: e.via === "menu" ? "menu" : "badge",
+      shown: e.shown === true,
+      ...(e.shown !== true && FIELD_PROVIDER_REFUSALS.includes(e.reason as FieldProviderPanelRefusal) ? { reason: e.reason } : {}),
+      ...(e.shown === true && (e.panel === "above" || e.panel === "below") ? { panel: e.panel } : {}),
+    },
+  ],
+  onFieldProviderHint: (e) => [{ state: e.state === "dismissed" ? "dismissed" : "shown" } as FieldProviderHint],
+  onVerificationCodeFound: (e) => [{ token: String(e.token), app: String(e.app ?? ""), main: e.main === true }],
 };
 
 export const isPageEventProp = (key: string): key is Handlers => key in unwrap;

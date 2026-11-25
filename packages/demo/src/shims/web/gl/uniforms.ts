@@ -4,7 +4,7 @@ import type { Uniforms } from "./surface";
 
 const f32 = Math.fround;
 
-export type BackdropParams = { colors: [string, string] | string[]; angle?: number; grainOpacity?: number; grainScale?: number };
+type BackdropParams = { colors: [string, string] | string[]; angle?: number; grainOpacity?: number; grainScale?: number };
 
 export function backdropUniforms({ colors, angle = 180, grainOpacity = 0.09, grainScale = 1 }: BackdropParams, viewSize: [number, number]): Uniforms {
   const rgba = colors.map(parseHex).filter((c): c is Vec4 => !!c);
@@ -30,7 +30,7 @@ export function powerUpPalette(palette: string | string[] | undefined): Vec4[] {
   return (paletteColors(value) ?? PALETTES.pink!.map((h) => parseHex(h)!)).slice(0, MAX_POWER_UP_COLORS);
 }
 
-export type PowerUpParams = { srgb: Vec4[]; speed: number; origin: number };
+type PowerUpParams = { srgb: Vec4[]; speed: number; origin: number };
 
 export function powerUpUniforms({ srgb, speed, origin }: PowerUpParams, time: number): Uniforms {
   const lab = srgb.map(oklab);
@@ -47,7 +47,7 @@ export function powerUpUniforms({ srgb, speed, origin }: PowerUpParams, time: nu
   };
 }
 
-export type HaloParams = { srgb: Vec4[]; speed: number; cornerRadius: number; dark: boolean };
+type HaloParams = { srgb: Vec4[]; speed: number; cornerRadius: number; dark: boolean };
 
 export function haloUniforms({ srgb, speed, cornerRadius, dark }: HaloParams, resolution: [number, number], time: number): Uniforms {
   const first = srgb[0] ?? [1, 0.5176, 0.3098, 1];

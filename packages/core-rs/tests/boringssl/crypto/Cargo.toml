@@ -1,0 +1,27 @@
+[package]
+name = "ardia-crypto-boringssl"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+name = "ardia_crypto"
+path = "../../../crates/ardia-crypto/src/lib.rs"
+
+[[test]]
+name = "known_answers"
+path = "../../../crates/ardia-crypto/tests/known_answers.rs"
+
+[features]
+default = ["boringssl", "ed25519"]
+boringssl = []
+ed25519 = []
+rustcrypto = []
+
+[dependencies]
+bssl-crypto = { path = "../../../target/boringssl-src/rust/bssl-crypto" }
+zeroize = { version = "1", features = ["zeroize_derive"] }
+
+[dev-dependencies]
+ed25519-dalek = { version = "2", default-features = false }

@@ -1,7 +1,7 @@
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { menuSections } from "../app/menuSections";
 import { addFolderToSidebar, makesGroup, restorableArcHolder, restoreArcFolders } from "./bookmarkGroups";
-import { folderChildren, folderLinks, type BookmarkOwners } from "./bookmarks";
+import { folderLinks, type BookmarkOwners } from "./bookmarks";
 import { editBookmark } from "./edit";
 import { copyLinkItems, openAllItems, openLinkItems, runLinkChoice, type Link } from "./linkMenus";
 import { FOLDER_MANY } from "./actions";
@@ -9,16 +9,19 @@ import { currentBookmarks } from "../browser/current";
 import { useBrowser } from "../browser/store";
 import type { BookmarkNode, Bookmarks } from "../browser/types";
 import { openImport } from "../settings/settingsWindows";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { exportBookmarksFromWindow } from "./exportHtml";
 
+export const organizeMenuItems = (): MenuItem[] => [
+  { id: "bookmark", title: "Add Page…", symbol: "bookmark" },
+  { id: "folder", title: "New Folder…", symbol: "folder.badge.plus" },
+  { separator: true },
+  { id: "import", title: "Import Bookmarks…", symbol: "square.and.arrow.down" },
+  ...(PLATFORM_FEATURES.exportsBookmarksAndPasswords ? [{ id: "export", title: "Export Bookmarks…", symbol: "square.and.arrow.up" }] : []),
+];
+
 export async function openOrganizeMenu(windowId: string, profileId: string, folderId: string | null) {
-  const choice = await showMenu([
-    { id: "bookmark", title: "Add Page…", symbol: "bookmark" },
-    { id: "folder", title: "New Folder…", symbol: "folder.badge.plus" },
-    { separator: true },
-    { id: "import", title: "Import Bookmarks…", symbol: "square.and.arrow.down" },
-    { id: "export", title: "Export Bookmarks…", symbol: "square.and.arrow.up" },
-  ]);
+  const choice = await showMenu(organizeMenuItems());
   const parentId = folderId ?? undefined;
   if (choice === "bookmark") editBookmark(null, windowId, { profileId, parentId });
   if (choice === "folder") editBookmark(null, windowId, { profileId, parentId, folder: true });
@@ -26,7 +29,7 @@ export async function openOrganizeMenu(windowId: string, profileId: string, fold
   if (choice === "export") void exportBookmarksFromWindow(windowId);
 }
 
-export type RowMenuTarget =
+type RowMenuTarget =
   | { kind: "url"; showPath: boolean }
   | { kind: "folder"; links: number; makesGroup: boolean; restoresArc: boolean; showPath: boolean }
   | { kind: "several"; links: number; items: number; noun: string };
@@ -38,15 +41,13 @@ export function bookmarkRowMenuItems(target: RowMenuTarget): MenuItem[] {
     return menuSections([...openLinkItems(), showInFolder(target.showPath)], copyLinkItems(), [{ id: "edit", title: "Edit…", symbol: "pencil" }], [{ id: "delete", title: "Delete", symbol: "trash" }]);
   if (target.kind === "folder")
     return menuSections(
-      [...openAllItems(target.links), showInFolder(target.showPath)],
       [
+        ...openAllItems(target.links, "All", { elsewhere: false }),
         { id: "addGroup", title: "Add to Sidebar as Group", symbol: "sidebar.left", enabled: target.makesGroup },
-        target.restoresArc && { id: "restoreArc", title: "Restore Arc Folders as Groups" },
+        target.restoresArc && { id: "restoreArc", title: "Restore Arc Folders as Groups", symbol: "arrow.uturn.backward" },
+        showInFolder(target.showPath),
       ],
-      [
-        { id: "edit", title: "Rename…", symbol: "pencil" },
-        { id: "newFolder", title: "New Folder…", symbol: "folder.badge.plus" },
-      ],
+      [{ id: "edit", title: "Rename…", symbol: "pencil" }],
       [{ id: "delete", title: "Delete Folder", symbol: "trash" }],
     );
   return menuSections(openAllItems(target.links, target.links), copyLinkItems(target.links), [
@@ -88,11 +89,6 @@ export async function openBookmarkRowMenu(
   if (!choice) return;
   if (runLinkChoice(choice, linksOf(currentBookmarks(), nodes), windowId, target.kind === "folder" ? FOLDER_MANY : undefined)) return;
   if (choice === "edit") editBookmark(node.id, windowId, { profileId });
-  if (choice === "newFolder") {
-    const parentId = node.parentId ?? undefined;
-    const index = parentId ? folderChildren(currentBookmarks(), parentId).findIndex((n) => n.id === node.id) + 1 : undefined;
-    editBookmark(null, windowId, { profileId, parentId, index, folder: true });
-  }
   if (choice === "addGroup") addFolderToSidebar(node.id, windowId);
   if (choice === "restoreArc") restoreArcFolders(node.id, windowId);
   if (choice === "show" && node.parentId) onOpenFolder(node.parentId);

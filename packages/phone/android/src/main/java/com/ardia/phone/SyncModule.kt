@@ -1,0 +1,257 @@
+package com.ardia.phone
+
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import com.ardia.sync.ConnectResult
+import com.ardia.sync.SyncController
+import com.ardia.sync.SyncFolderPick
+import expo.modules.kotlin.Promise
+import expo.modules.kotlin.exception.CodedException
+import expo.modules.kotlin.functions.Coroutine
+import expo.modules.kotlin.functions.Queues
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.modules.ModuleDefinition
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+
+class SyncModule : Module() {
+    private var scope: CoroutineScope? = null
+    private var picking: ((String?) -> Unit)? = null
+
+    private val context: Context get() = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "The app context is gone", null)
+
+    private val folderPicks: FolderPicks by lazy {
+        val app = context.applicationContext
+        val resolver = app.contentResolver
+        FolderPicks(
+            java.io.File(java.io.File(app.noBackupFilesDir, "PhoneSync"), "folder-picks.json"),
+            object : FolderPicks.Grants {
+                override fun take(tree: String): Boolean = runCatching {
+                    resolver.takePersistableUriPermission(android.net.Uri.parse(tree), com.ardia.sync.AndroidSyncFolderAccess.READ_AND_WRITE)
+                }.isSuccess
+
+                override fun release(tree: String) {
+                    runCatching { resolver.releasePersistableUriPermission(android.net.Uri.parse(tree), com.ardia.sync.AndroidSyncFolderAccess.READ_AND_WRITE) }
+                }
+
+                override fun connected(): String? =
+                    (com.ardia.sync.SyncFiles(java.io.File(app.noBackupFilesDir, "Sync")).loadMeta().folder as? com.ardia.sync.SyncFolderLocation.Tree)?.treeUri
+            },
+        )
+    }
+
+    private var watched: SyncController? = null
+    private var route: SyncEventRoute? = null
+
+    private val controller: SyncController
+        get() {
+            val launch = appContext.currentActivity?.intent
+            val demo = launch?.let { PhoneLab.isOn && LaunchExtras.isDemo(LaunchExtras.of(it)) }
+            val sync = try {
+                PhoneSync.controller(context, demo)
+            } catch (pending: UpgradeGate.Pending) {
+                throw CodedException("ERR_IMPORT_PENDING", "The import from the previous Ardia app has not finished", null)
+            }
+            if (watched !== sync) watch(sync)
+            return sync
+        }
+
+    override fun definition() = ModuleDefinition {
+        Name("ArdiaPhoneSync")
+
+        Events("onSyncEvent")
+
+        OnCreate {
+            val resumed = (appContext.currentActivity as? androidx.lifecycle.LifecycleOwner)?.lifecycle?.currentState?.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) == true
+            if (resumed) PhoneSync.enteredForeground()
+            appContext.backgroundCoroutineScope.launch { runCatching { folderPicks.sweep() } }
+            route = SyncEventRoute(PhoneSync.inbox(context), { event -> sendEvent("onSyncEvent", event) }) { problem ->
+                PhoneSync.current()?.let { sync -> SyncPayloads.status(sync.state.value, problem) }
+            }
+        }
+
+        OnDestroy {
+            route?.close()
+            route = null
+            scope?.cancel()
+            scope = null
+            watched = null
+        }
+
+        OnActivityEntersForeground {
+            PhoneSync.enteredForeground()
+        }
+
+        OnActivityEntersBackground {
+            PhoneSync.enteredBackground()
+        }
+
+        OnActivityResult { _, payload ->
+            if (payload.requestCode != PICK_FOLDER_REQUEST) return@OnActivityResult
+            val done = picking ?: return@OnActivityResult
+            picking = null
+            done(payload.data?.data?.takeIf { payload.resultCode == Activity.RESULT_OK }?.toString())
+        }
+
+        AsyncFunction("status") { -> SyncPayloads.status(controller.state.value, PhoneSync.inbox(context).problem) }
+
+        AsyncFunction("view") { ->
+            val sync = controller
+            SyncPayloads.view(sync.snapshot.value, sync.state.value.selectedProfileId, sync.receivers.value, PhoneSync.pins.waiting(sync.snapshot.value))
+        }
+
+        AsyncFunction("incoming") { -> controller.incoming.value.map(SyncPayloads::received) }
+
+        Function("check") { phrase: String -> SyncPayloads.check(com.ardia.sync.SyncJoin.check(phrase)) }
+
+        Function("deviceId") { -> PhoneSync.ownDeviceId(context) }
+
+        AsyncFunction("connect") { phrase: String, promise: Promise ->
+            pickFolder(promise) { tree ->
+                SyncPayloads.connect(tree?.let { controller.connect(phrase, SyncFolderPick.Tree(it)) })
+            }
+        }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("pickFolder") { promise: Promise ->
+            requestTree(onBusy = { promise.resolve(null) }) { tree ->
+                appContext.backgroundCoroutineScope.launch {
+                    val picked = tree?.takeIf { folderPicks.picked(it) }
+                    promise.resolve(picked?.let { mapOf("folder" to it, "name" to FolderNames.of(context.contentResolver, it)) })
+                }
+            }
+        }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("connectWithFolder") Coroutine { phrase: String, folder: String ->
+            val result = controller.connect(phrase, SyncFolderPick.Tree(folder))
+            if (result == ConnectResult.Connected) folderPicks.connected(folder)
+            SyncPayloads.connect(result)
+        }
+
+        AsyncFunction("forgetFolder") Coroutine { folder: String -> folderPicks.forget(folder) }
+
+        AsyncFunction("changeFolder") { promise: Promise ->
+            pickFolder(promise) { tree ->
+                SyncPayloads.connect(tree?.let { controller.changeFolder(SyncFolderPick.Tree(it)) })
+            }
+        }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("stopSyncing") Coroutine { ->
+            controller.stopSyncing()
+            PhoneSync.pins.clear()
+        }
+
+        AsyncFunction("acknowledgeReset") Coroutine { -> controller.acknowledgeReset() }
+
+        AsyncFunction("syncNow") Coroutine { -> controller.syncNow() }
+
+        AsyncFunction("isCycleRunning") { -> controller.isCycleRunning }
+
+        AsyncFunction("setDeviceName") { name: String -> controller.setDeviceName(name) }
+
+        AsyncFunction("selectProfile") { profileSyncId: String? -> controller.selectProfile(profileSyncId) }
+
+        AsyncFunction("receivers") { profileSyncId: String? -> controller.receivers(profileSyncId).map(SyncPayloads::device) }
+
+        AsyncFunction("send") Coroutine { url: String, title: String, deviceId: String, profileSyncId: String?, fromPrivateTab: Boolean ->
+            val sync = controller
+            val target = sync.snapshot.value.devices.firstOrNull { it.id == deviceId } ?: return@Coroutine false
+            sync.send(url, title, target, profileSyncId, fromPrivateTab = fromPrivateTab)
+        }
+
+        AsyncFunction("pinToMac") Coroutine { url: String, title: String, profileSyncId: String?, fromPrivateTab: Boolean ->
+            val sync = controller
+            val pinned = sync.pinToMac(url, title, profileSyncId, fromPrivateTab)
+            val profile = profileSyncId ?: sync.state.value.selectedProfileId ?: sync.snapshot.value.defaultProfile?.syncId
+            if (pinned && profile != null) PhoneSync.pins.pinned(profile, url)
+            pinned
+        }
+
+        AsyncFunction("clearIncoming") { -> controller.clearIncoming() }
+
+        Function("localDidChange") { PhoneSync.current()?.localDidChange() }
+
+        AsyncFunction("inbox") { -> SyncPayloads.inbox(PhoneSync.inbox(context).entries()) }
+
+        AsyncFunction("damageInbox") Coroutine { ->
+            check(PhoneLab.isOn) { "the inbox can be damaged only in lab builds" }
+            val inbox = PhoneSync.inbox(context)
+            inbox.damageForLab()
+            runCatching { controller.syncNow() }
+            inbox.entries()
+            mapOf("inboxProblem" to inbox.problem)
+        }
+
+        AsyncFunction("runtimeChecks") { ->
+            SyncRuntimeChecks.run(context.assets).map { mapOf("name" to it.name, "pass" to it.pass, "actual" to it.actual, "expected" to it.expected) }
+        }
+
+        AsyncFunction("inboxApplied") { ids: List<Double> -> PhoneSync.inbox(context).applied(ids.map { it.toLong() }.toSet()) }
+    }
+
+    private fun watch(sync: SyncController) {
+        scope?.cancel()
+        watched = sync
+        val events = route ?: return
+        val inbox = PhoneSync.inbox(context)
+        val running = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        scope = running
+        running.launch {
+            sync.state.collectLatest { state ->
+                events.emit(mapOf("name" to "sync.status", "status" to SyncPayloads.status(state, inbox.problem)))
+                while (SyncPayloads.wordsAge(state)) {
+                    delay(AGE_REFRESH_MILLIS)
+                    events.emit(mapOf("name" to "sync.status", "status" to SyncPayloads.status(state, inbox.problem)))
+                }
+            }
+        }
+        running.launch {
+            combine(sync.snapshot, sync.state, sync.receivers, PhoneSync.pins.pending) { snapshot, state, receivers, _ ->
+                SyncPayloads.view(snapshot, state.selectedProfileId, receivers, PhoneSync.pins.waiting(snapshot))
+            }.distinctUntilChanged()
+                .collect { events.emit(mapOf("name" to "sync.view", "view" to it)) }
+        }
+        running.launch {
+            sync.incoming.collect { tabs ->
+                if (tabs.isNotEmpty()) events.emit(mapOf("name" to "sync.incoming", "tabs" to tabs.map(SyncPayloads::received)))
+            }
+        }
+    }
+
+    private fun pickFolder(promise: Promise, then: suspend (String?) -> Map<String, Any?>) =
+        requestTree(onBusy = { promise.resolve(SyncPayloads.connect(ConnectResult.Busy)) }, onMissing = { promise.resolve(SyncPayloads.connect(ConnectResult.FolderUnavailable)) }) { tree ->
+            appContext.backgroundCoroutineScope.launch {
+                runCatching { then(tree) }.fold(promise::resolve) { error -> promise.reject(SyncFailure.forScript(error)) }
+            }
+        }
+
+    private fun requestTree(onBusy: () -> Unit, onMissing: () -> Unit = { onBusy() }, picked: (String?) -> Unit) {
+        val activity = appContext.currentActivity
+        if (activity == null || picking != null) {
+            onBusy()
+            return
+        }
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        picking = picked
+        try {
+            activity.startActivityForResult(intent, PICK_FOLDER_REQUEST)
+        } catch (missing: ActivityNotFoundException) {
+            picking = null
+            onMissing()
+        }
+    }
+
+    companion object {
+        private const val PICK_FOLDER_REQUEST = 47_202
+        private const val AGE_REFRESH_MILLIS = 60_000L
+    }
+}

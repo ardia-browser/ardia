@@ -1,4 +1,6 @@
-import { pagerState, selectPager, stepPager, switchPager, type NativePagerConfig, type PagerStateEvent, type SwipeEvent } from "../../platform/pager";
+import { pagerState, selectPager, stepPager, switchPager, type NativePagerConfig, type PagerSnapshot, type PagerStateEvent, type SwipeEvent } from "../../platform/pager";
+import { notePagerRestSeenByWatch, notePagerSettle, notePagerSwitchAfterRest } from "../telemetry/pagerCounts";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { useEffect, useLayoutEffect, useMemo } from "react";
 import { Animated, unstable_batchedUpdates } from "react-native";
 import { create } from "zustand";
@@ -15,13 +17,24 @@ function restPages(current: string | null, order: string[]): PagerPage[] {
   return [...(before ? [{ id: before, slot: -1 }] : []), { id: current, slot: 0 }, ...(after ? [{ id: after, slot: 1 }] : [])];
 }
 
+const HOLD_WATCH_MS = 50;
+const IDLE_OFF_TARGET_LOOKS = 20;
+const MOVING_PHASES = new Set<string>(["tracking", "holding", "settling"]);
+const atRest = (snapshot: PagerSnapshot) => !MOVING_PHASES.has(snapshot.phase) && Math.abs(snapshot.position - snapshot.selected) < 0.001;
+
+const samePages = (a: PagerPage[] | null, b: PagerPage[] | null) =>
+  a === b || (!!a && !!b && a.length === b.length && a.every((p, i) => p.id === b[i]!.id && p.slot === b[i]!.slot));
+
 const WHEEL_THRESHOLD = 1;
 const WHEEL_BURST_MS = 49;
 const WHEEL_COOLDOWN_MS = 250;
 
+type NativeReport = PagerSnapshot | PagerStateEvent;
+const selectionOf = (r: NativeReport) => ("selectionSequence" in r ? r.selectionSequence : r.sequence);
+
 class ProfilePager {
   readonly pos: Animated.Value;
-  readonly state = create<{ pages: PagerPage[] | null; ack: number }>()(() => ({ pages: null, ack: 0 }));
+  readonly state = create<{ pages: PagerPage[] | null; ack: number; held: string | null; bypassed: boolean }>()(() => ({ pages: null, ack: 0, held: null, bypassed: false }));
   private surfaces = 0;
   private switching = false;
   private unsubscribe: () => void;
@@ -29,19 +42,30 @@ class ProfilePager {
   private wheelState = { sum: 0, last: 0, trigger: 0 };
   private external = 0;
   private externalGeneration = 0;
+  private seen = 0;
+  private switchedSinceBegan = false;
+  private holdWatch: ReturnType<typeof setInterval> | null = null;
+  private idleOffTarget = 0;
+  private holdConsent: ConsentToken | null = null;
 
   readonly windowId: string;
 
-  constructor(windowId: string) {
+  constructor(windowId: string, watchesWindow = true) {
     this.windowId = windowId;
     this.pos = new Animated.Value(Math.max(0, this.index()), { useNativeDriver: true });
     this.state.setState({ pages: this.warmPages() });
-    this.unsubscribe = useBrowser.subscribe((s, prev) => {
+    this.unsubscribe = watchesWindow ? this.watchWindow(windowId) : () => {};
+  }
+
+  private watchWindow(windowId: string) {
+    return useBrowser.subscribe((s, prev) => {
       const w = s.windows[windowId];
       if (!w) return this.dispose();
       const was = prev.windows[windowId];
-      if (w.profileId !== was?.profileId || (w.kind === "private") !== (was?.kind === "private") || s.profileOrder !== prev.profileOrder) {
-        this.state.setState({ pages: this.warmPages() });
+      const flipped = w.profileId !== was?.profileId;
+      if (flipped || (w.kind === "private") !== (was?.kind === "private") || s.profileOrder !== prev.profileOrder) {
+        if (flipped && this.state.getState().held && s.profileOrder === prev.profileOrder) this.keepWarm(was?.profileId, s.profileOrder);
+        else this.setWarm(this.warmPages());
       }
       if (!this.switching && w.kind !== "private" && w.profileId !== was?.profileId) this.selectExternal(w.profileId, s.profileOrder);
     });
@@ -53,9 +77,61 @@ class ProfilePager {
   }
 
   readonly onNativeState = (event: PagerStateEvent) => {
+    const snapshot = pagerState(this.windowId);
+    this.noteMotion(snapshot ? !atRest(snapshot) : event.phase !== "settled");
     if (this.external) return;
-    this.commitNative(pagerState(this.windowId) ?? event, event);
+    this.commitNative(snapshot ?? event, event);
   };
+
+  private noteMotion(moving: boolean) {
+    const { held } = this.state.getState();
+    if (moving && !held) {
+      const current = this.current();
+      if (!current) return;
+      this.holdConsent = consentToken();
+      this.state.setState({ held: current, bypassed: false });
+      this.idleOffTarget = 0;
+      this.holdWatch ??= setInterval(this.watchHold, HOLD_WATCH_MS);
+    } else if (!moving && held) this.release();
+  }
+
+  private readonly watchHold = () => {
+    const snapshot = pagerState(this.windowId);
+    if (snapshot && MOVING_PHASES.has(snapshot.phase)) {
+      this.idleOffTarget = 0;
+      return;
+    }
+    const resting = !snapshot || atRest(snapshot);
+    if (!resting && ++this.idleOffTarget < IDLE_OFF_TARGET_LOOKS) return;
+    if (snapshot && resting && this.state.getState().held) notePagerRestSeenByWatch(this.holdConsent);
+    this.release();
+  };
+
+  private release(counted = true) {
+    if (this.holdWatch) clearInterval(this.holdWatch);
+    this.holdWatch = null;
+    const { held } = this.state.getState();
+    if (!held) return;
+    if (counted && held !== this.current()) notePagerSwitchAfterRest(this.holdConsent);
+    const pages = this.warmPages();
+    unstable_batchedUpdates(() => this.state.setState(samePages(pages, this.state.getState().pages) ? { held: null, bypassed: false } : { held: null, bypassed: false, pages }));
+  }
+
+  bypassHold() {
+    const { held, bypassed } = this.state.getState();
+    if (held && !bypassed) this.state.setState({ bypassed: true });
+  }
+
+  private setWarm(pages: PagerPage[] | null) {
+    if (!samePages(pages, this.state.getState().pages)) this.state.setState({ pages });
+  }
+
+  private keepWarm(leaving: string | undefined, order: string[]) {
+    const pages = this.state.getState().pages ?? [];
+    const slot = leaving ? order.indexOf(leaving) : -1;
+    if (!leaving || slot < 0 || pages.some((p) => p.id === leaving)) return;
+    this.state.setState({ pages: [...pages, { id: leaving, slot }].sort((a, b) => a.slot - b.slot) });
+  }
 
   private selectExternal(profileId: string, order: string[]) {
     const index = order.indexOf(profileId);
@@ -68,24 +144,32 @@ class ProfilePager {
       if (ok) this.commitNative(pagerState(this.windowId));
     };
     selectPager(this.windowId, profileId, order).then(done, () => done(false));
+    this.release(false);
   }
 
-  private commitNative(snapshot: Pick<PagerStateEvent, "sequence" | "selected" | "profileId"> | null, event?: PagerStateEvent) {
-    if (!snapshot || snapshot.sequence <= this.state.getState().ack) return;
-    if (__DEV__) this.lastEvent = { native: event ?? null, snapshot };
+  private commitNative(report: NativeReport | null, event?: PagerStateEvent) {
+    if (!report || report.sequence <= this.seen) return;
+    this.seen = report.sequence;
+    if (__DEV__) this.lastEvent = { native: event ?? null, snapshot: report };
     const s = useBrowser.getState();
     const w = s.windows[this.windowId];
-    const id = snapshot.profileId !== undefined ? snapshot.profileId : s.profileOrder[snapshot.selected];
+    const id = report.profileId !== undefined ? report.profileId : s.profileOrder[report.selected];
+    const switches = !!w && w.kind !== "private" && !!id && !!s.profiles[id] && id !== w.profileId;
+    const ack = selectionOf(report);
+    if (event?.phase === "began") this.switchedSinceBegan = false;
+    if (event?.phase === "settled") notePagerSettle(this.switchedSinceBegan || switches);
+    if (!switches && ack <= this.state.getState().ack) return;
     unstable_batchedUpdates(() => {
-      if (w && w.kind !== "private" && id && s.profiles[id] && id !== w.profileId) {
+      if (switches) {
+        this.switchedSinceBegan = true;
         this.switching = true;
         try {
-          s.switchProfile(this.windowId, id);
+          s.switchProfile(this.windowId, id!);
         } finally {
           this.switching = false;
         }
       }
-      this.state.setState({ ack: snapshot.sequence });
+      if (ack > this.state.getState().ack) this.state.setState({ ack });
     });
   }
 
@@ -132,13 +216,14 @@ class ProfilePager {
     });
   }
 
-  switchTo(profileId: string) {
+  switchTo(profileId: string, mayWrite?: () => boolean) {
     const s = useBrowser.getState();
     const index = s.profileOrder.indexOf(profileId);
     if (!s.profiles[profileId] || !this.current() || index < 0) return;
     if (!this.active) return s.switchProfile(this.windowId, profileId);
     void switchPager(this.windowId, index, s.profileOrder).then((ok) => {
-      if (!ok) useBrowser.getState().switchProfile(this.windowId, profileId);
+      if (ok || (mayWrite && !mayWrite())) return;
+      useBrowser.getState().switchProfile(this.windowId, profileId);
     });
   }
 
@@ -148,6 +233,8 @@ class ProfilePager {
   }
 
   private dispose() {
+    if (this.holdWatch) clearInterval(this.holdWatch);
+    this.holdWatch = null;
     this.external = 0;
     this.externalGeneration++;
     this.unsubscribe();
@@ -155,7 +242,8 @@ class ProfilePager {
   }
 
   debug() {
-    return { lastEvent: this.lastEvent, snapshot: pagerState(this.windowId), ack: this.state.getState().ack, surfaces: this.surfaces, warm: this.state.getState().pages };
+    const { ack, pages, held } = this.state.getState();
+    return { lastEvent: this.lastEvent, snapshot: pagerState(this.windowId), ack, seen: this.seen, surfaces: this.surfaces, warm: pages, held };
   }
 }
 
@@ -163,12 +251,14 @@ const pagers = new Map<string, ProfilePager>();
 
 export function pagerFor(windowId: string): ProfilePager {
   let pager = pagers.get(windowId);
-  if (!pager) pagers.set(windowId, (pager = new ProfilePager(windowId)));
+  if (pager) return pager;
+  if (!useBrowser.getState().windows[windowId]) return new ProfilePager(windowId, false);
+  pagers.set(windowId, (pager = new ProfilePager(windowId)));
   return pager;
 }
 
-export function pageToProfile(windowId: string, profileId: string) {
-  pagerFor(windowId).switchTo(profileId);
+export function pageToProfile(windowId: string, profileId: string, mayWrite?: () => boolean) {
+  pagerFor(windowId).switchTo(profileId, mayWrite);
 }
 
 export function usePagerSurface(windowId: string) {
@@ -184,6 +274,11 @@ export function usePagerPages(windowId: string): { pages: PagerPage[]; paging: b
   const everyPage = useMemo(() => order.map((id, slot) => ({ id, slot })), [order]);
   const resting = useMemo(() => (all ? null : restPages(current, order).map((p) => (p.id === current ? p : { ...p, resting: true }))), [all, current, order]);
   return { pages: resting ?? everyPage, paging: all, pager };
+}
+
+export function useSettledProfile(windowId: string, current: string | null): string | null {
+  const held = pagerFor(windowId).state((s) => (s.held && !s.bypassed && s.held !== current ? s.held : null));
+  return held ?? current;
 }
 
 export function usePagerNativeConfig(windowId: string, width?: number): NativePagerConfig | undefined {

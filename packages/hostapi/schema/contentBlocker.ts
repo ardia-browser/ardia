@@ -1,0 +1,110 @@
+import { defineDomain } from "../define.ts";
+
+export const contentBlocker = defineDomain({
+  kind: "engine",
+  imports: {
+    "../../contentBlocker": ["AddedFilterList", "ContentBlockerState", "ContentBlockerStats"],
+  },
+  calls: {
+    state: {
+      args: "{}",
+      result: "ContentBlockerState",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    setEnabled: {
+      args: "{ enabled: boolean }",
+      result: "null",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    setListEnabled: {
+      args: "{ id: string; enabled: boolean }",
+      result: "null",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    addList: {
+      args: "{ url: string }",
+      result: "AddedFilterList",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    removeList: {
+      args: "{ id: string }",
+      result: "null",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    isAllowed: {
+      args: "{ host: string }",
+      result: "boolean",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    setAllowed: {
+      args: "{ host: string; allowed: boolean }",
+      result: "null",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    removeAllowed: {
+      args: "{ host: string }",
+      result: "{ removed: boolean }",
+      desktop: "custom",
+      deadline: 90000,
+      mac: "custom",
+      windows: "absent",
+    },
+    hiddenElements: {
+      args: "{ profile: string }",
+      result: "string[]",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    hideElements: {
+      args: "{ profile: string; filters: string[] }",
+      result: "null",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    restoreElements: {
+      args: "{ profile: string; filters: string[] }",
+      result: "null",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    devFailNextMessage: {
+      args: "{}",
+      result: "null",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    devDelayNextLoad: {
+      args: "{ ms: number }",
+      result: "null",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+  },
+  events: {
+    changed: {
+      payload: "ContentBlockerStats",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+  },
+});

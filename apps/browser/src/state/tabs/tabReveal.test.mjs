@@ -147,3 +147,178 @@ test("a new tab isn't shown over a page whose toolbar is scrolled away (its page
   assert.deepEqual(revealed(), ["drop over a"]);
   useToolbarAutoHide.setState({ scrolledDown: {} });
 });
+
+test("the native switch is on from the start on this platform, and off while a tab is shared", () => {
+  assert.equal(stub.nativeTabSwitches[0], true);
+  stub.nativeTabSwitches.length = 0;
+  useMedia.setState({ tabShares: { a: { kind: "screen" } } });
+  useMedia.setState({ tabShares: { a: { kind: "screen" }, b: { kind: "screen" } } });
+  useMedia.setState({ tabShares: {} });
+  assert.deepEqual(stub.nativeTabSwitches, [false, true], "it's told only when that changes");
+});
+
+test("a press carries its native sequence to the switch it makes, and one that leaves its tab behind takes back only its own reveal", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  const presses = stub.nativeTabPresses;
+  let start = 5000;
+  const event = (mods = {}) => ({ nativeEvent: { identifier: "0", pageX: 10, pageY: 10, ...mods }, touchHistory: { touchBank: [{ startTimeStamp: ++start }] } });
+  const press = (tabId, mods = {}, native = 0) => {
+    const e = event(mods);
+    if (native) presses.byStart.set(start, native);
+    return held.holdTabPress("w1", tabId, e);
+  };
+  const dropped = () => presses.dropped.splice(0);
+  setup();
+  press("b", {}, 7);
+  assert.deepEqual(revealed(), ["b by press 7"], "native code can tell this switch from the presses after it");
+  assert.deepEqual(dropped(), [], "the press switched, nothing to take back");
+  S().activate("c");
+  assert.deepEqual(revealed(), ["c"], "a selection no press made carries none, so it wins over any press");
+  press("c");
+  assert.deepEqual([revealed(), dropped()], [[], []], "a press on the tab already in front");
+  press("a", { metaKey: true });
+  assert.deepEqual([revealed(), dropped()], [[], []], "native code doesn't show a modified click, so nothing to take back");
+  S().setSelection("w1", ["a", "b"]);
+  const selected = press("b", {}, 9);
+  assert.deepEqual([revealed(), dropped()], [[], [9]], "a press on a selected tab doesn't switch on press: only press 9's reveal goes");
+  held.clickHeldTabPress("w1", "b", event(), selected);
+  assert.deepEqual(revealed(), ["b by press 9"], "its switch on release still belongs to that press");
+  S().setSelection("w1", []);
+  held.devTabPress.switchOnPress = false;
+  try {
+    press("a", {}, 12);
+    assert.deepEqual([revealed(), dropped()], [[], [12]], "with switching on press off, the press leaves it in the background");
+  } finally {
+    held.devTabPress.switchOnPress = true;
+  }
+});
+
+test("a switch the native view can't show still names the press that made it and the tab it goes to", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  setup();
+  S().updateTab("b", { page: { kind: "asleep" } });
+  revealed();
+  stub.nativeTabPresses.byStart.set(9001, 21);
+  held.holdTabPress("w1", "b", { nativeEvent: { identifier: "0", pageX: 10, pageY: 10 }, touchHistory: { touchBank: [{ startTimeStamp: 9001 }] } });
+  assert.deepEqual(revealed(), ["drop over a by press 21"], "so a page pressed after it stays on screen");
+});
+
+test("a press claims the number native code gave that very event, never an older press on the same tab", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  const event = (startTimeStamp) => ({ nativeEvent: { identifier: "0", pageX: 10, pageY: 10 }, touchHistory: { touchBank: [{ startTimeStamp }] } });
+  setup();
+  revealed();
+  stub.nativeTabPresses.byStart.set(7000, 30);
+  stub.nativeTabPresses.byStart.set(7500, 31);
+  held.holdTabPress("w1", "b", event(7500));
+  assert.deepEqual(revealed(), ["b by press 31"], "press 30 on the same row, which JS never heard, is not taken for it");
+  S().activate("a");
+  revealed();
+  held.holdTabPress("w1", "b", event(8000));
+  assert.deepEqual(revealed(), ["b"], "an event native code never numbered claims nothing");
+  S().activate("a");
+  revealed();
+  held.holdTabPress("w1", "b", { nativeEvent: { identifier: "0", pageX: 10, pageY: 10 } });
+  assert.deepEqual(revealed(), ["b"], "nor does one with no start time");
+});
+
+test("rows of tabs in a split are never tagged for the native reveal, and native code is told which tabs those are", async () => {
+  const { tabPressTag, PAGE_IDENTITY_TAG } = await import("./tabReveal.ts");
+  assert.equal(tabPressTag("a", false, false), "tab-switch:a");
+  assert.equal(tabPressTag("a", true, false), "tab-selected:a");
+  assert.equal(tabPressTag("a", false, true), undefined);
+  assert.equal(PAGE_IDENTITY_TAG, "page-identity");
+  setup();
+  stub.nativeTabPresses.splits.length = 0;
+  const id = S().createSplit(["b", "c"]);
+  assert.deepEqual([...stub.nativeTabPresses.splits.at(-1)].sort(), ["b", "c"]);
+  S().separateSplit?.(id);
+});
+
+test("the native switch is off while a page popover is open: it names the page under it", async () => {
+  const { setPopover } = await import("./pageState.ts");
+  setup();
+  stub.nativeTabSwitches.length = 0;
+  setPopover("a", "siteControls");
+  setPopover("a", null);
+  assert.deepEqual(stub.nativeTabSwitches, [false, true]);
+});
+
+const pressAt = (start, x = 10) => ({ nativeEvent: { identifier: "0", pageX: x, pageY: 10 }, touchHistory: { touchBank: [{ startTimeStamp: start }] } });
+
+test("a press that selects a tab holds back that tab's close only in its window, for the time given, and at the same point", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  setup();
+  held.holdTabPress("w1", "b", pressAt(9100));
+  const here = { x: 12, y: 10 };
+  assert.equal(held.switchedByPressWithin("w1", "b", 500, here), true, "a second click where the first landed");
+  assert.equal(held.switchedByPressWithin("w1", "b", 500, { x: 40, y: 10 }), false, "a move to the close button is meant");
+  assert.equal(held.switchedByPressWithin("w1", "c", 500, here), false, "another tab's close button is not held back");
+  assert.equal(held.switchedByPressWithin("w2", "b", 500, here), false, "nor the same tab in another window");
+  assert.equal(held.switchedByPressWithin("w1", "b", 0, here), false, "past the time given");
+});
+
+test("a selection after the press ends the hold, so a keyboard switch back to the tab leaves its close button working", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  setup();
+  held.holdTabPress("w1", "b", pressAt(9200));
+  S().activate("b");
+  assert.equal(held.switchedByPressWithin("w1", "b", 500, { x: 10, y: 10 }), true);
+  S().activate("c");
+  S().activate("b");
+  assert.equal(held.switchedByPressWithin("w1", "b", 500, { x: 10, y: 10 }), false);
+});
+
+test("a tab that moves to another window after the press is not held back there or here", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  setup(["a", "b", "c"], "a", { windows: { w2: win("w2", ["z"], "z") }, tabs: [tab("z", "w2", "https://z.com/")] });
+  held.holdTabPress("w1", "b", pressAt(9300));
+  S().activate("b");
+  assert.equal(held.switchedByPressWithin("w1", "b", 500, { x: 10, y: 10 }), true);
+  S().updateTab("b", { windowId: "w2" });
+  assert.equal(held.switchedByPressWithin("w1", "b", 500, { x: 10, y: 10 }), false);
+  assert.equal(held.switchedByPressWithin("w2", "b", 500, { x: 10, y: 10 }), false);
+});
+
+test("a keyboard close right after a mouse select closes: Return and Space press the close button with no pointer point", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  setup();
+  held.holdTabPress("w1", "b", pressAt(9350));
+  S().activate("b");
+  assert.equal(held.switchedByPressWithin("w1", "b", 500, { x: 10, y: 10 }), true, "a mouse click at the same spot is still held back");
+  assert.equal(held.switchedByPressWithin("w1", "b", 500, null), false);
+  assert.equal(held.switchedByPressWithin("w1", "b", 500, held.pressPoint({ nativeEvent: {} })), false);
+});
+
+test("a press whose gesture ends without a press or a drag releases the hold", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  setup();
+  const press = held.holdTabPress("w1", "b", pressAt(9500));
+  assert.equal(held.tabPressHeld("w1"), true);
+  let ended = 0;
+  held.onTabPressEnd("w1", () => ended++);
+  held.pressOutTabPress(press, pressAt(9500, 200));
+  held.endPressGesture(press);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(held.tabPressHeld("w1"), false);
+  assert.equal(ended, 1, "what waited for the press to end runs");
+});
+
+test("a press answered by its click is not released twice by the end of its gesture", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  setup();
+  const press = held.holdTabPress("w1", "c", pressAt(9600));
+  held.clickHeldTabPress("w1", "c", pressAt(9600), press);
+  const next = held.holdTabPress("w1", "a", pressAt(9700));
+  held.endPressGesture(press);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(held.tabPressHeld("w1"), true, "the newer press is left alone");
+  held.clickHeldTabPress("w1", "a", pressAt(9700), next);
+});
+
+test("a press on the tab already in front holds nothing back", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  setup(["a", "b", "c"], "c");
+  held.holdTabPress("w1", "c", pressAt(9400));
+  assert.equal(held.switchedByPressWithin("w1", "c", 500, { x: 10, y: 10 }), false);
+});

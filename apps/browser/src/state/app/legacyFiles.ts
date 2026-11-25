@@ -1,6 +1,9 @@
 import { readDocument, removeDocument } from "../../platform/documents";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 
 export async function migrateLegacyFile<T>(name: string, area: string, move: (file: T) => Promise<void>, keepMs: number): Promise<"none" | "moved" | "kept"> {
+  const consent = consentToken();
   let file: T | null;
   try {
     const json = readDocument(name);
@@ -13,7 +16,7 @@ export async function migrateLegacyFile<T>(name: string, area: string, move: (fi
   try {
     await move(file);
   } catch (error) {
-    console.warn(`[${area}] moving ${name} into Chrome failed; trying again next launch`, error);
+    warnFor(consent, `[${area}] moving ${name} into Chrome failed; trying again next launch`, error);
     return "kept";
   }
   if (keepMs) setTimeout(() => removeDocument(name), keepMs);

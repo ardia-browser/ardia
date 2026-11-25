@@ -1,6 +1,6 @@
 import { fullscreenVertex } from "./sources";
 
-export type UniformValue = number | boolean | ArrayLike<number>;
+type UniformValue = number | boolean | ArrayLike<number>;
 export type Uniforms = Record<string, UniformValue>;
 
 const METAL_LAYER_COLOR_SPACE: PredefinedColorSpace = "srgb";

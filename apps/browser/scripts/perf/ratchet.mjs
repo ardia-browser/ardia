@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isHarnessTimer } from "./js-bench.mjs";
 
@@ -11,8 +11,12 @@ const appDir = process.env.RATCHET_APP_DIR ? resolve(process.env.RATCHET_APP_DIR
 const repo = resolve(appDir, "../..");
 const ceilingsFile = join(here, "ratchet.json");
 
-export const JOURNEYS = ["startup", "launch", "idle", "typing", "switchTabs", "scroll", "hover", "pageLoad", "openClose"];
+export const JOURNEYS = ["startup", "launch", "idle", "typing", "switchTabs", "scroll", "hover", "pageLoad", "openClose", "nodeChurn"];
+export const SMALL_JOURNEYS = ["startup", "launch"];
 const OPTIONS = '{"seconds":5}';
+const DEFAULT_PORT = 47831;
+const DEFAULT_CDP_PORT = 9700;
+const BASELINE_LANES = 4;
 
 const EXACT_SHARE = 1;
 const NOISY_SPREAD = 0.3;
@@ -24,7 +28,7 @@ const MIN_RUNS = 6;
 const COUNTERS = ["renders", "mounts", "storeUpdates", "storeKeys", "listenerCalls", "tasks", "timers", "writes", "writeBytes", "commitTasks"];
 const FAN_OUT = ["subNotified", "selectorCalls"];
 const SCALARS = ["commits", "hostUpdates"];
-const TOTALS = new Set([...COUNTERS, ...SCALARS, ...FAN_OUT, "firstCommitMounts"]);
+const TOTALS = new Set([...COUNTERS, ...SCALARS, ...FAN_OUT, "firstCommitMounts", "nativeNodesLeft"]);
 
 const add = (into, key, value) => {
   into[key] = (into[key] ?? 0) + value;
@@ -72,6 +76,10 @@ export function flatten(result, prefix = "") {
     flattenStats(out, "open", result.openClose.openStats);
     flattenStats(out, "close", result.openClose.closeStats);
   }
+  if (typeof result.nodeChurn?.left === "number") {
+    ran.add("nodeChurn");
+    out["nodeChurn.nativeNodesLeft"] = result.nodeChurn.left;
+  }
   if (result.pageLoad?.runs) {
     ran.add("pageLoad");
     for (const run of result.pageLoad.runs) flattenStats(out, "pageLoad", run.stats);
@@ -95,10 +103,12 @@ const isTotal = (key) => {
 
 const readJson = (file) => JSON.parse(readFileSync(file, "utf8"));
 
+const seedOf = (key) => (key.startsWith("small.") ? "small" : "big");
+
 function collect(reports) {
   const values = {};
   const ran = new Set();
-  let runs = 0;
+  const runsBySeed = { big: 0, small: 0 };
   for (const seed of ["big", "small"]) {
     const group = reports.filter((r) => (r.seed ?? "big") === seed);
     if (!group.length) continue;
@@ -108,13 +118,62 @@ function collect(reports) {
     for (const r of flat) for (const s of [...sharedRan]) if (!r.ran.has(s)) sharedRan.delete(s);
     for (const s of sharedRan) ran.add(s);
     for (const key of new Set(flat.flatMap((r) => Object.keys(r.counts)))) values[key] = flat.map((r) => r.counts[key] ?? 0);
-    if (seed === "big") runs = flat.length;
+    runsBySeed[seed] = flat.length;
   }
-  return { values, runs, ran };
+  return { values, runs: runsBySeed.big, runsBySeed, ran };
+}
+
+export function withRetry(first, retry) {
+  const values = { ...first.values };
+  const zeros = (c, key) => Array(c.runsBySeed[seedOf(key)]).fill(0);
+  for (const key of new Set([...Object.keys(first.values), ...Object.keys(retry.values)])) {
+    if (!retry.ran.has(scenarioOf(key)) || !first.ran.has(scenarioOf(key))) continue;
+    values[key] = [...(first.values[key] ?? zeros(first, key)), ...(retry.values[key] ?? zeros(retry, key))];
+  }
+  return { ...first, values };
+}
+
+export function retryPlan(rows) {
+  const failed = new Set(rows.filter((r) => r.kind === "over" && (r.tier === "exact" || r.tier === "noisy")).map((r) => scenarioOf(r.key)));
+  const rerunnable = (s) => s !== "startup" && ![...WORST_RUN].some((key) => scenarioOf(key) === s);
+  const last = JOURNEYS.findLastIndex((s) => rerunnable(s) && failed.has(s));
+  const small = SMALL_JOURNEYS.some((s) => s !== "startup" && failed.has(`small.${s}`));
+  return { big: last > 0 ? JOURNEYS.slice(0, last + 1) : null, small: small ? SMALL_JOURNEYS : null };
+}
+
+export function positiveInteger(value, name) {
+  if (value === true) throw new Error(`${name} needs a value`);
+  const n = Number(value);
+  if (!/^\d+$/.test(String(value)) || !Number.isSafeInteger(n) || n < 1) throw new Error(`${name} must be a positive whole number, got ${value}`);
+  return n;
+}
+
+export function splitRuns(runs, lanes) {
+  const n = Math.max(1, Math.min(lanes, runs));
+  return Array.from({ length: n }, (_, lane) => Math.floor(runs / n) + (lane < runs % n ? 1 : 0)).filter((count) => count > 0);
+}
+
+export const laneLabel = (name, seed) => (seed === "small" ? `${name}-small` : name);
+
+const portOk = (port) => Number.isInteger(port) && port >= 1024 && port <= 65535;
+
+export function portPlan({ port, cdpPort, counts, serialRuns = 0 }) {
+  let next = cdpPort;
+  const plan = counts.map((capacity, lane) => ({ port: port + lane, cdpPort: (next += capacity) - capacity, capacity }));
+  plan.serial = { port, cdpPort, capacity: serialRuns };
+  const lastCdp = cdpPort + Math.max(next - cdpPort, serialRuns) - 1;
+  const servers = plan.map((p) => p.port);
+  const bad = [...servers, cdpPort, lastCdp].find((p) => !portOk(p));
+  if (bad !== undefined) throw new Error(`port ${bad} is outside 1024..65535: pick another --port or --cdp-port`);
+  const clash = servers.find((p) => p >= cdpPort && p <= lastCdp);
+  if (clash !== undefined) throw new Error(`test-server port ${clash} falls in the remote-debugging ports ${cdpPort}..${lastCdp}: pick another --port or --cdp-port`);
+  return plan;
 }
 
 const sorted = (xs) => [...xs].sort((a, b) => a - b);
 const lowerMedian = (xs) => sorted(xs)[(xs.length - 1) >> 1];
+const WORST_RUN = new Set(["nodeChurn.nativeNodesLeft"]);
+const judged = (key, xs) => (WORST_RUN.has(key) ? Math.max(...xs) : lowerMedian(xs));
 
 function modeOf(xs) {
   const tally = new Map();
@@ -159,11 +218,11 @@ function table(rows) {
 function parseArgs(argv) {
   const positional = [];
   const flags = {};
-  const multi = new Set(["micro"]);
+  const multi = new Set(["micro", "retry"]);
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) {
       const name = argv[i].slice(2);
-      const value = argv[i + 1] === undefined || argv[i + 1].startsWith("--") ? "1" : argv[++i];
+      const value = argv[i + 1] === undefined || argv[i + 1].startsWith("--") ? true : argv[++i];
       if (multi.has(name)) (flags[name] ??= []).push(value);
       else flags[name] = value;
     } else positional.push(argv[i]);
@@ -171,7 +230,7 @@ function parseArgs(argv) {
   return { positional, flags };
 }
 
-function evaluate(ceilings, { files = [], micro = null, instr = null }) {
+export function evaluate(ceilings, { files = [], retryFiles = [], micro = null, instr = null }) {
   const rows = [];
   const notes = [];
   let ran = null;
@@ -182,10 +241,10 @@ function evaluate(ceilings, { files = [], micro = null, instr = null }) {
     const rev = reportRevisions(reports);
     if (String(ceilings.revisions.probe) !== rev.probe || String(ceilings.revisions.bench) !== rev.bench)
       notes.push(`WARNING: ratchet.json is for probe revision ${ceilings.revisions.probe}, bench revision ${ceilings.revisions.bench}; this report has probe ${rev.probe}, bench ${rev.bench}. If a counter was redefined (not just added), the ceilings mean something else now: rebuild them with \`ratchet.mjs init\` on a fresh census.`);
-    const c = collect(reports);
+    const c = retryFiles.length ? withRetry(collect(reports), collect(retryFiles.map(readJson))) : collect(reports);
     ran = c.ran;
     runs = c.runs;
-    counts = Object.fromEntries(Object.entries(c.values).map(([k, v]) => [k, lowerMedian(v)]));
+    counts = Object.fromEntries(Object.entries(c.values).map(([k, v]) => [k, judged(k, v)]));
     rows.push(...judge("exact", ceilings.exact, counts, ran), ...judge("noisy", ceilings.noisy, counts, ran));
   }
   if (micro) rows.push(...judge("micro", ceilings.micro, micro, null));
@@ -213,17 +272,19 @@ function printCheck({ rows, notes, ran, counts, runs }, ceilings, { quiet = fals
   return !failed;
 }
 
-function check(files, micro, instr) {
+function check(files, micro, instr, retryFiles = []) {
   const ceilings = readCeilings();
-  return printCheck(evaluate(ceilings, { files, micro, instr }), ceilings);
+  return printCheck(evaluate(ceilings, { files, retryFiles, micro, instr }), ceilings);
 }
+
+export const collectWithRetry = (files, retryFiles = []) => (retryFiles.length ? withRetry(collect(files.map(readJson)), collect(retryFiles.map(readJson))) : collect(files.map(readJson)));
 
 const serialize = (c) => {
   const section = (o) => (Object.keys(o).length ? `{\n${Object.keys(o).sort().map((k) => `    ${JSON.stringify(k)}: ${o[k]}`).join(",\n")}\n  }` : "{}");
   return `{\n  "about": ${JSON.stringify(c.about)},\n  "baseline": ${JSON.stringify(c.baseline)},\n  "revisions": ${JSON.stringify(c.revisions)},\n  "exact": ${section(c.exact)},\n  "noisy": ${section(c.noisy)},\n  "micro": ${section(c.micro)},\n  "instr": ${section(c.instr)}\n}`;
 };
 
-function lower(files, micro, instr) {
+function lower(files, micro, instr, retryFiles = []) {
   const ceilings = readCeilings();
   const diff = [];
   const set = (tier, key, ceiling, value) => {
@@ -231,7 +292,7 @@ function lower(files, micro, instr) {
     diff.push({ tier, key, ceiling, value });
   };
   if (files.length) {
-    const { values, ran } = collect(files.map(readJson));
+    const { values, ran } = collectWithRetry(files, retryFiles);
     for (const [key, ceiling] of Object.entries(ceilings.exact)) {
       if (!ran.has(scenarioOf(key))) continue;
       const worst = Math.max(...(values[key] ?? [0]));
@@ -246,11 +307,7 @@ function lower(files, micro, instr) {
   console.log(`\nlowered ${diff.length} ceilings in ${ceilingsFile}`);
 }
 
-function init(files, microRuns, instr, { adopt = false } = {}) {
-  const reports = files.map(readJson);
-  const { values, runs, ran } = collect(reports);
-  if (runs < MIN_RUNS) throw new Error(`init needs at least ${MIN_RUNS} runs to tell a steady count from a wobbling one; got ${runs}`);
-  const rev = reportRevisions(reports);
+export function ceilingsFrom(values) {
   const exact = {};
   const noisy = {};
   const dropped = [];
@@ -263,6 +320,15 @@ function init(files, microRuns, instr, { adopt = false } = {}) {
     } else if (isTotal(key) && (max - lowerMedian(v)) / max <= NOISY_SPREAD) noisy[key] = Math.ceil(max * (1 + NOISY_MARGIN));
     else if (isTotal(key)) dropped.push({ key, v });
   }
+  return { exact, noisy, dropped };
+}
+
+function init(files, microRuns, instr, { adopt = false } = {}) {
+  const reports = files.map(readJson);
+  const { values, runs, ran } = collect(reports);
+  if (runs < MIN_RUNS) throw new Error(`init needs at least ${MIN_RUNS} runs to tell a steady count from a wobbling one; got ${runs}`);
+  const rev = reportRevisions(reports);
+  const { exact, noisy, dropped } = ceilingsFrom(values);
   const micro = {};
   if (microRuns.length) {
     const runsM = microRuns;
@@ -331,7 +397,61 @@ function census(files) {
   for (const r of wobbly.filter((r) => !isTotal(r.key)).sort((a, b) => a.key.localeCompare(b.key))) console.log(line(r));
 }
 
-const sh = (cmd, args, options = {}) => execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], ...options });
+const children = new Map();
+const LANE_STOP_DEADLINE_MS = 20_000;
+
+export function spawnAsync(cmd, args, { cwd, env, capture = false, captureErr = false, lane = false } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { cwd, env, detached: true, stdio: ["ignore", capture ? "pipe" : "ignore", captureErr ? "pipe" : "inherit"] });
+    const closed = new Promise((done) => child.once("close", done));
+    children.set(child, { closed, lane });
+    let out = "";
+    let err = "";
+    if (capture) child.stdout.setEncoding("utf8").on("data", (d) => (out += d));
+    if (captureErr) child.stderr.setEncoding("utf8").on("data", (d) => (err += d));
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      children.delete(child);
+      if (code === 0) resolve(captureErr ? { out, err } : out);
+      else reject(new Error(`${basename(args[0] ?? cmd)} ${args.slice(1, 3).join(" ")} exited with ${code ?? signal}`));
+    });
+  });
+}
+
+const killGroup = (child) => {
+  try {
+    process.kill(-child.pid, "SIGKILL");
+  } catch {}
+};
+
+let stopping = false;
+
+export function finish(code) {
+  if (!stopping) process.exit(code);
+}
+
+export function stopOnSignals({ deadlineMs = LANE_STOP_DEADLINE_MS } = {}) {
+  for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143]])
+    process.on(sig, async () => {
+      if (stopping) return;
+      stopping = true;
+      const lanes = [...children].filter(([, c]) => c.lane);
+      for (const [child, c] of children) if (!c.lane) killGroup(child);
+      for (const [child] of lanes) child.kill(sig);
+      let timer;
+      await Promise.race([Promise.all(lanes.map(([, c]) => c.closed)), new Promise((r) => (timer = setTimeout(r, deadlineMs)))]);
+      clearTimeout(timer);
+      for (const [child] of lanes) if (children.has(child)) killGroup(child);
+      process.exit(code);
+    });
+}
+
+export async function allFinished(tasks) {
+  const settled = await Promise.allSettled(tasks);
+  const failed = settled.find((s) => s.status === "rejected");
+  if (failed) throw failed.reason;
+  return settled.map((s) => s.value);
+}
 
 function newestApp() {
   const dist = join(repo, "dist");
@@ -345,28 +465,27 @@ function newestApp() {
   throw new Error("no dist/<version>/export/Ardia.app: pass --app");
 }
 
-function jsSetup(flags, out, mark) {
+async function jsSetup(flags, out, mark, { counts, serialRuns = 0 }) {
   const app = flags.app ? resolve(flags.app) : newestApp();
   let jsbundle = flags.bundle ? resolve(flags.bundle) : join(app, "Contents/Resources/main.jsbundle");
   if (!flags.own && !flags.bundle) {
     const bundle = join(out, "bundle");
     mark("bundling the tree");
-    sh(process.execPath, [join(here, "js-bench.mjs"), "bundle", bundle], { stdio: ["ignore", "ignore", "inherit"] });
+    await spawnAsync(process.execPath, [join(here, "js-bench.mjs"), "bundle", bundle]);
     jsbundle = join(bundle, "main.jsbundle");
   }
-  const scenarios = JOURNEYS.join(",");
   const libs = [flags.lib ? resolve(flags.lib) : join(here, "bench-app.js"), join(here, "ratchet-app.js")].join(",");
   const label = flags.label ?? "ratchet";
-  const smallLabel = `s${label.slice(1)}`;
-  const args = (runs, append, small = false) => {
-    const a = [join(here, "js-bench.mjs"), "run", "--app", app, "--bundle", jsbundle, "--label", small ? smallLabel : label, "--runs", String(runs), "--port", flags.port ?? "47831", "--out", out, "--scenarios", small ? "startup,launch" : scenarios, "--options", OPTIONS];
-    if (small) a.push("--seed", "small");
-    else a.push("--probe", "selectors");
-    if (append) a.push("--append", "1");
-    a.push("--lib", libs);
-    return a;
+  const ports = portPlan({ port: Number(flags.port ?? DEFAULT_PORT), cdpPort: Number(flags["cdp-port"] ?? DEFAULT_CDP_PORT), counts, serialRuns });
+  const lane = ({ seed = "big", runs = 1, scenarios = seed === "small" ? SMALL_JOURNEYS : JOURNEYS, name = label, slot = 0 }) => {
+    const labelled = laneLabel(name, seed);
+    const { port, cdpPort, capacity } = slot === "serial" ? ports.serial : ports[slot];
+    if (runs > capacity) throw new Error(`lane ${slot} has ${runs} runs, more than the ${capacity} remote-debugging ports it was given`);
+    const args = [join(here, "js-bench.mjs"), "run", "--app", app, "--bundle", jsbundle, "--label", labelled, "--runs", String(runs), "--port", String(port), "--cdp-port", String(cdpPort), "--out", out, "--scenarios", scenarios.join(","), "--options", OPTIONS];
+    args.push(...(seed === "small" ? ["--seed", "small"] : ["--probe", "selectors"]), "--lib", libs);
+    return { report: join(out, `${labelled}.json`), run: () => spawnAsync(process.execPath, args, { lane: true }) };
   };
-  return { app, scenarios, report: join(out, `${label}.json`), smallReport: join(out, `${smallLabel}.json`), args };
+  return { app, lane };
 }
 
 async function run(flags) {
@@ -375,32 +494,35 @@ async function run(flags) {
   mkdirSync(out, { recursive: true });
   const mark = (what) => console.error(`[ratchet +${((Date.now() - started) / 1000).toFixed(0)}s] ${what}`);
   const ceilings = readCeilings();
-  let setup = null;
-  if (!flags["skip-js"]) {
-    setup = jsSetup(flags, out, mark);
-    mark(`running ${setup.scenarios} on ${setup.app}`);
-    sh(process.execPath, setup.args(1, false), { stdio: ["ignore", "ignore", "inherit"] });
-    sh(process.execPath, setup.args(1, false, true), { stdio: ["ignore", "ignore", "inherit"] });
-  }
-  let micro = null;
-  let instr = null;
-  if (!flags["skip-micro"]) {
-    mark("counting the Node hot paths");
-    micro = microCounts();
-    if (flags.instr) instr = Math.max(instrPerRound(), instrPerRound());
-  }
+  const setup = flags["skip-js"] ? null : await jsSetup(flags, out, mark, { counts: [1, 1] });
+  const big = setup?.lane({ seed: "big", slot: 0 });
+  const small = setup?.lane({ seed: "small", slot: 1 });
+  if (setup) mark(`running ${JOURNEYS.join(",")} and the one-tab launch side by side on ${setup.app}`);
+  if (!flags["skip-micro"]) mark("counting the Node hot paths alongside");
+  const [, , micro] = await allFinished([big?.run(), small?.run(), flags["skip-micro"] ? null : microCountsAsync()]);
+  const instr = !flags["skip-micro"] && flags.instr ? Math.max(await instrPerRound(), await instrPerRound()) : null;
   mark("checking");
-  const reports = () => (setup ? [setup.report, setup.smallReport] : []);
-  let result = evaluate(ceilings, { files: reports(), micro, instr });
-  if (setup && result.rows.some((r) => r.kind === "over" && ["exact", "noisy"].includes(r.tier))) {
-    mark("some counts are over: running the scenarios once more (only a count over in both runs fails)");
-    sh(process.execPath, setup.args(1, true), { stdio: ["ignore", "ignore", "inherit"] });
-    sh(process.execPath, setup.args(1, true, true), { stdio: ["ignore", "ignore", "inherit"] });
-    result = evaluate(ceilings, { files: reports(), micro, instr });
+  const files = setup ? [big.report, small.report] : [];
+  const microFile = micro ? join(out, `${flags.label ?? "ratchet"}-micro.json`) : null;
+  if (microFile) writeFileSync(microFile, `${JSON.stringify(micro)}\n`);
+  let retryFiles = [];
+  let result = evaluate(ceilings, { files, micro, instr });
+  const again = setup ? retryPlan(result.rows) : { big: null, small: null };
+  if (again.big || again.small) {
+    mark(`some counts are over: running ${[again.big && `the journeys up to ${again.big.at(-1)}`, again.small && "the one-tab launch"].filter(Boolean).join(" and ")} once more (only a count over in both runs fails)`);
+    const name = `${flags.label ?? "ratchet"}-again`;
+    const retry = [
+      again.big && setup.lane({ seed: "big", scenarios: again.big, name, slot: 0 }),
+      again.small && setup.lane({ seed: "small", scenarios: again.small, name, slot: 1 }),
+    ].filter(Boolean);
+    await allFinished(retry.map((l) => l.run()));
+    retryFiles = retry.map((l) => l.report);
+    result = evaluate(ceilings, { files, retryFiles, micro, instr });
   }
+  console.error(`[ratchet] the same verdict from the saved reports: node ${shellQuote(join(here, "ratchet.mjs"))} check ${replayArgs({ files, retryFiles, microFile, instr }).map(shellQuote).join(" ")}`);
   const ok = printCheck(result, ceilings, { quiet: true });
   console.error(`[ratchet] ${((Date.now() - started) / 1000).toFixed(0)}s`);
-  process.exit(ok ? 0 : 1);
+  finish(ok ? 0 : 1);
 }
 
 async function baseline(flags) {
@@ -408,32 +530,50 @@ async function baseline(flags) {
   const out = resolve(flags.out ?? join(process.env.TMPDIR ?? "/tmp", "ac-ratchet-baseline"));
   mkdirSync(out, { recursive: true });
   const mark = (what) => console.error(`[ratchet baseline +${((Date.now() - started) / 1000).toFixed(0)}s] ${what}`);
-  const setup = jsSetup(flags, out, mark);
-  mark(`running ${setup.scenarios} ${flags.runs ?? 8} times on ${setup.app}`);
-  sh(process.execPath, setup.args(flags.runs ?? 8, false), { stdio: ["ignore", "ignore", "inherit"] });
-  sh(process.execPath, setup.args(flags.runs ?? 8, false, true), { stdio: ["ignore", "ignore", "inherit"] });
-  if (flags["measure-only"]) return console.log(`${setup.report} ${setup.smallReport}`);
-  mark("counting the Node hot paths and instructions");
-  init([setup.report, setup.smallReport], [microCounts(), microCounts()], Math.max(instrPerRound(), instrPerRound(), instrPerRound()));
+  const runs = positiveInteger(flags.runs ?? 8, "--runs");
+  const split = splitRuns(runs, positiveInteger(flags.lanes ?? BASELINE_LANES, "--lanes"));
+  const setup = await jsSetup(flags, out, mark, { counts: split, serialRuns: runs });
+  const name = flags.label ?? "ratchet";
+  const lanes = split.map((count, slot) => setup.lane({ seed: "big", runs: count, name: `${name}-${slot}`, slot }));
+  const small = setup.lane({ seed: "small", runs, name, slot: "serial" });
+  mark(`running ${JOURNEYS.join(",")} ${runs} times on ${setup.app}, ${lanes.length} instances at once`);
+  const counting = flags["measure-only"] ? null : allFinished([microCountsAsync(), microCountsAsync()]);
+  await allFinished([...lanes.map((l) => l.run()), counting]);
+  mark(`running the one-tab launch ${runs} times, one at a time`);
+  await small.run();
+  const reports = [...lanes.map((l) => l.report), small.report];
+  if (flags["measure-only"]) return console.log(reports.join(" "));
+  mark("counting instructions");
+  init(reports, await counting, Math.max(await instrPerRound(), await instrPerRound(), await instrPerRound()));
 }
 
-export function microCounts() {
-  const text = sh(process.execPath, ["--no-warnings", "--import", "./src/test-loader.mjs", "scripts/perf/micro-bench.mjs", "counts"], { cwd: appDir });
+const MICRO_ARGS = ["--no-warnings", "--import", "./src/test-loader.mjs", "scripts/perf/micro-bench.mjs", "counts"];
+
+function parseMicro(text) {
   const line = text.split("\n").find((l) => l.startsWith("COUNTS "));
   if (!line) throw new Error("micro-bench counts printed no COUNTS line");
   return JSON.parse(line.slice("COUNTS ".length));
 }
 
-export function instrPerRound(rounds = 10) {
-  const retired = (n) => {
-    const r = spawnSync("/usr/bin/time", ["-l", process.execPath, "--no-warnings", "--predictable", "--import", "./src/test-loader.mjs", "scripts/perf/micro-bench.mjs", "instr"], {
-      cwd: appDir, encoding: "utf8", env: { ...process.env, INSTR_ROUNDS: String(n) },
-    });
-    const m = /(\d+)\s+instructions retired/.exec(r.stderr);
-    if (!m) throw new Error(`/usr/bin/time -l printed no "instructions retired": ${r.stderr.slice(-300)}`);
-    return Number(m[1]);
-  };
-  return Math.round((retired(rounds) - retired(0)) / rounds);
+const microCountsAsync = () => spawnAsync(process.execPath, MICRO_ARGS, { cwd: appDir, capture: true }).then(parseMicro);
+
+const INSTR_ARGS = ["-l", process.execPath, "--no-warnings", "--predictable", "--import", "./src/test-loader.mjs", "scripts/perf/micro-bench.mjs", "instr"];
+
+function retiredFrom(stderr) {
+  const m = /(\d+)\s+instructions retired/.exec(stderr);
+  if (!m) throw new Error(`/usr/bin/time -l printed no "instructions retired": ${stderr.slice(-300)}`);
+  return Number(m[1]);
+}
+
+export async function instrPerRound(rounds = 10) {
+  const retired = async (n) => retiredFrom((await spawnAsync("/usr/bin/time", INSTR_ARGS, { cwd: appDir, env: { ...process.env, INSTR_ROUNDS: String(n) }, captureErr: true })).err);
+  return Math.round(((await retired(rounds)) - (await retired(0))) / rounds);
+}
+
+export const shellQuote = (arg) => (/^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${String(arg).replace(/'/g, "'\\''")}'`);
+
+export function replayArgs({ files, retryFiles = [], microFile = null, instr = null }) {
+  return [...files, ...retryFiles.flatMap((f) => ["--retry", f]), ...(microFile ? ["--micro", microFile] : []), ...(instr !== null ? ["--instr", String(instr)] : [])];
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -441,22 +581,26 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const { positional, flags } = parseArgs(rest);
   try {
     const micro = command !== "init" && flags.micro?.length ? readJson(flags.micro[0]) : null;
+    if (command !== "run" && flags.instr === true) throw new Error("--instr needs a value outside run");
     const instr = flags.instr !== undefined && command !== "run" ? Number(flags.instr) : null;
+    if (command === "run" || command === "baseline" || command === "init") stopOnSignals();
     if (command === "run") await run(flags);
     else if (command === "baseline") await baseline(flags);
-    else if (command === "check") process.exit(check(positional, micro, instr) ? 0 : 1);
-    else if (command === "lower") lower(positional, micro, instr);
+    else if (command === "check") process.exit(check(positional, micro, instr, flags.retry ?? []) ? 0 : 1);
+    else if (command === "lower") lower(positional, micro, instr, flags.retry ?? []);
     else if (command === "init") {
-      const microRuns = flags.micro ? flags.micro.map(readJson) : [microCounts(), microCounts()];
-      init(positional, microRuns, flags["no-instr"] ? null : Math.max(instrPerRound(), instrPerRound(), instrPerRound()), { adopt: !!flags.adopt });
+      const microRuns = flags.micro ? flags.micro.map(readJson) : await allFinished([microCountsAsync(), microCountsAsync()]);
+      init(positional, microRuns, flags["no-instr"] ? null : Math.max(await instrPerRound(), await instrPerRound(), await instrPerRound()), { adopt: !!flags.adopt });
     }
     else if (command === "census") census(positional);
     else {
-      console.error("usage: ratchet.mjs run | baseline | check <report.json> | lower <report.json> | init <report.json…> | census <report.json…>  (see the header)");
+      console.error("usage: ratchet.mjs run | baseline | check <report.json…> [--retry <report.json>]… | lower <report.json…> [--retry <report.json>]… | init <report.json…> | census <report.json…>  (see the header)");
       process.exit(64);
     }
   } catch (error) {
-    console.error(String(error?.message ?? error));
-    process.exit(2);
+    if (!stopping) {
+      console.error(String(error?.message ?? error));
+      process.exit(2);
+    }
   }
 }

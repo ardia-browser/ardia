@@ -20,9 +20,12 @@ final class AppDelegate: ExpoAppDelegate {
 
     WindowHost.makeWindow = { BrowserWindow() }
     WindowHost.makeContentView = { [weak factory] windowId in
-      (factory?.rootViewFactory as? ExpoReactRootViewFactory)?.superView(
+      let root = (factory?.rootViewFactory as? ExpoReactRootViewFactory)?.superView(
         withModuleName: "main", initialProperties: ["windowId": windowId], launchOptions: nil) ?? NSView()
+      InterfaceScale.follow(root)
+      return root
     }
+    HermesFatal.install()
     factory.rootViewFactory.initializeReactHost(launchOptions: nil)
 
     super.applicationDidFinishLaunching(notification)
@@ -31,7 +34,7 @@ final class AppDelegate: ExpoAppDelegate {
   }
 
   override func application(_ application: NSApplication, open urls: [URL]) {
-    OpenURLInbox.receive(urls)
+    OpenURLInbox.receiveFromOtherApp(urls)
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

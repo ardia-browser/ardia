@@ -19,23 +19,23 @@ namespace ardiacore {
 
 const char* DispositionName(WindowOpenDisposition disposition) {
   switch (disposition) {
-    case WindowOpenDisposition::CURRENT_TAB:
+    case WindowOpenDisposition::kCurrentTab:
       return "current_tab";
-    case WindowOpenDisposition::SINGLETON_TAB:
+    case WindowOpenDisposition::kSingletonTab:
       return "singleton_tab";
-    case WindowOpenDisposition::NEW_FOREGROUND_TAB:
+    case WindowOpenDisposition::kNewForegroundTab:
       return "foreground_tab";
-    case WindowOpenDisposition::NEW_BACKGROUND_TAB:
+    case WindowOpenDisposition::kNewBackgroundTab:
       return "background_tab";
-    case WindowOpenDisposition::NEW_POPUP:
+    case WindowOpenDisposition::kNewPopup:
       return "popup";
-    case WindowOpenDisposition::NEW_WINDOW:
+    case WindowOpenDisposition::kNewWindow:
       return "window";
-    case WindowOpenDisposition::NEW_PICTURE_IN_PICTURE:
+    case WindowOpenDisposition::kNewPictureInPicture:
       return "picture_in_picture";
-    case WindowOpenDisposition::OFF_THE_RECORD:
+    case WindowOpenDisposition::kOffTheRecord:
       return "off_the_record";
-    case WindowOpenDisposition::NEW_SPLIT_VIEW:
+    case WindowOpenDisposition::kNewSplitView:
       return "split_view";
     default:
       return "other";
@@ -77,8 +77,12 @@ bool DeferWhileTabStripNotifies(dispatch_block_t retry) {
   return Defer(IsNotifyingTabStrip(), retry);
 }
 
+bool IsNotifyingAny() {
+  return IsNotifyingTabStrip() || g_navigation_notifying > 0;
+}
+
 bool DeferWhileAnyNotifies(dispatch_block_t retry) {
-  return Defer(IsNotifyingTabStrip() || g_navigation_notifying > 0, retry);
+  return Defer(IsNotifyingAny(), retry);
 }
 
 void InitialMainDocumentAccessed(content::WebContents* contents) {
@@ -118,7 +122,7 @@ void CloseBlankTabsBeforeWindowCloses(Browser* browser) {
   }
 }
 
-void DeleteTabClosedByHost(content::WebContents* contents) {
+void DeleteTabClosedByHost(content::WebContents* contents, ClosedTabRecord record) {
   BrowserWindowInterface* browser =
       GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(contents);
   if (!browser) {
@@ -131,7 +135,8 @@ void DeleteTabClosedByHost(content::WebContents* contents) {
   }
   content::NavigationEntry* committed =
       contents->GetController().GetLastCommittedEntry();
-  if (!Profile::FromBrowserContext(contents->GetBrowserContext())
+  if (record == ClosedTabRecord::kRecentlyClosed &&
+      !Profile::FromBrowserContext(contents->GetBrowserContext())
            ->IsOffTheRecord() &&
       committed && !committed->IsInitialEntry() && !OnlyShowedBlank(contents)) {
     model->delegate()->CreateHistoricalTab(contents);

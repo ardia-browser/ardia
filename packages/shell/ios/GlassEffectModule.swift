@@ -3,14 +3,13 @@ import ArdiaCore
 import Carbon.HIToolbox
 import ExpoModulesCore
 
-public class GlassEffectModule: Module {
-  public func definition() -> ModuleDefinition {
-    Name("ArdiaGlassEffect")
+public class GlassEffectModule: Module, GlassEffectNative {
+  static func isLiquidGlass() -> Bool { LiquidGlass.available }
 
-    Function("isLiquidGlass") { () -> Bool in
-      if #available(macOS 26.0, *) { return true }
-      return false
-    }
+  public func definition() -> ModuleDefinition {
+    Name(Self.moduleName)
+
+    Self.isLiquidGlassFunction
 
     View(GlassEffect.self) {
       Prop("cornerRadius") { (view: GlassEffect, v: Double) in view.cornerRadius = v }

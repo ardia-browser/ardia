@@ -1,0 +1,247 @@
+import { pressesWithoutRelease, pressRepeated } from "../../platform/focus";
+import { capture, consentToken, stillValid, onConsentPeriodChange, type ConsentToken } from "./client";
+import { takeHoverCardCounts } from "./hoverCardCounts";
+import { percentile } from "./transport";
+import { consentOrNow, countFor } from "./countFor";
+
+type TabPressEnd = "click" | "dragClick" | "drag";
+
+export type TabPressDrop = "no_release" | "not_dragged" | "no_start" | "start_mismatch";
+
+export type TabPressDrift = "lt5" | "5_9" | "10_plus" | "unknown";
+
+export type PressOut = { drift: TabPressDrift; windowKey: boolean };
+
+const MAX_SAMPLES = 500;
+const PAGE_CLICK_WINDOW_MS = 60_000;
+
+const empty = () => ({
+  presses: 0,
+  down_switches: 0,
+  clicks: 0,
+  drag_clicks: 0,
+  drags: 0,
+  drags_without_drop: 0,
+  drops_gap: 0,
+  drops_split_left: 0,
+  drops_split_right: 0,
+  drops_split_pinned: 0,
+  drops_split_unpinned: 0,
+  drops_tile: 0,
+  drops_other_profile: 0,
+  drops_profile_icon: 0,
+  drag_profile_switches: 0,
+  drag_profile_holds: 0,
+  drag_profile_edge_holds: 0,
+  unanswered: 0,
+  drop_no_release: 0,
+  drop_not_dragged: 0,
+  drop_no_start: 0,
+  drop_start_mismatch: 0,
+  press_out_no_press: 0,
+  unfocused_presses: 0,
+  unfocused_no_press: 0,
+  drift_lt5: 0,
+  drift_5_9: 0,
+  drift_10_plus: 0,
+  drift_unknown: 0,
+  no_press_drift_lt5: 0,
+  no_press_drift_5_9: 0,
+  no_press_drift_10_plus: 0,
+  no_press_drift_unknown: 0,
+  range_selects: 0,
+  range_from_shown: 0,
+  page_refused: 0,
+  tile_double_returns: 0,
+  tile_double_reloads: 0,
+  tile_double_fresh: 0,
+  tile_double_missed: 0,
+});
+let tally = empty();
+let pending = false;
+let unansweredOut: PressOut | null = null;
+let shown: { tabId: string; at: number } | null = null;
+let toPageClick: number[] = [];
+let heldMs: number[] = [];
+let pressedAt: number | null = null;
+let lostReleasesSeen = 0;
+const REPEAT_SLACK_MS = 150;
+let lastRowPressAt = 0;
+let repeats = { presses: 0, onNewTab: 0 };
+let repeatGaps: number[] = [];
+let repeatsLandedOn = new Map<string, number>();
+
+function takeLostReleases() {
+  const total = pressesWithoutRelease();
+  const fresh = Math.max(0, total - lostReleasesSeen);
+  lostReleasesSeen = total;
+  return fresh;
+}
+
+let period = {};
+const startedIn = new WeakMap<object, object>();
+const ofThisPeriod = (started?: object) => !started || (startedIn.get(started) ?? period) === period;
+
+function forgetPresses() {
+  period = {};
+  tally = empty();
+  pending = false;
+  unansweredOut = null;
+  shown = null;
+  toPageClick = [];
+  heldMs = [];
+  pressedAt = null;
+  takeLostReleases();
+  takeHoverCardCounts();
+  forgetRepeats();
+}
+
+function forgetRepeats() {
+  repeats = { presses: 0, onNewTab: 0 };
+  repeatGaps = [];
+  repeatsLandedOn = new Map();
+}
+
+export function noteRowPress(shownTabEmpty: boolean): Promise<void> {
+  const at = Date.now();
+  const rowPressBefore = lastRowPressAt;
+  lastRowPressAt = at;
+  const token = consentToken();
+  return pressRepeated().then((earlier) => {
+    if (!earlier || !stillValid(token) || rowPressBefore > at - earlier.ms - REPEAT_SLACK_MS) return;
+    repeats.presses++;
+    if (shownTabEmpty) repeats.onNewTab++;
+    if (repeatGaps.length < MAX_SAMPLES) repeatGaps.push(earlier.ms);
+    repeatsLandedOn.set(earlier.landedOn, (repeatsLandedOn.get(earlier.landedOn) ?? 0) + 1);
+  });
+}
+
+onConsentPeriodChange(() => (emitTabPresses(null), forgetPresses()));
+
+export function notePressStarted(switchedOnPress = false, windowKey = true, press?: PressOut) {
+  if (press) startedIn.set(press, period);
+  if (pending) tally.unanswered++;
+  pending = true;
+  tally.presses++;
+  if (switchedOnPress) tally.down_switches++;
+  if (!windowKey) tally.unfocused_presses++;
+  pressedAt = switchedOnPress ? Date.now() : null;
+}
+
+export function notePressEnded(end: TabPressEnd, tabId: string | null = null, drop: TabPressDrop | null = null) {
+  if (!pending) return;
+  pending = false;
+  const held = pressedAt === null ? -1 : Date.now() - pressedAt;
+  pressedAt = null;
+  if (end !== "drag" && held >= 0 && held < PAGE_CLICK_WINDOW_MS && heldMs.length < MAX_SAMPLES) heldMs.push(held);
+  if (end === "click") tally.clicks++;
+  else if (end === "dragClick") tally.drag_clicks++;
+  else {
+    tally.drags++;
+    if (drop) tally[`drop_${drop}` as const]++;
+  }
+  shown = tabId ? { tabId, at: Date.now() } : null;
+}
+
+function countPressOut(out: PressOut, withoutPress: boolean) {
+  if (!ofThisPeriod(out)) return;
+  const { drift, windowKey } = out;
+  tally[`drift_${drift}` as const]++;
+  if (!withoutPress) return;
+  tally.press_out_no_press++;
+  tally[`no_press_drift_${drift}` as const]++;
+  if (!windowKey) tally.unfocused_no_press++;
+}
+
+export function settleUnansweredPressOut() {
+  const out = unansweredOut;
+  unansweredOut = null;
+  if (out) countPressOut(out, true);
+}
+
+export function notePressOutUnanswered(out: PressOut) {
+  if (unansweredOut !== out) settleUnansweredPressOut();
+  unansweredOut = out;
+}
+
+export function notePressOutAnswered(out: PressOut) {
+  if (unansweredOut === out) unansweredOut = null;
+  countPressOut(out, false);
+}
+
+export function notePressAnswered(out: PressOut) {
+  if (unansweredOut === out) unansweredOut = null;
+}
+
+export function noteRangeSelect(fromShownTab: boolean) {
+  tally.range_selects++;
+  if (fromShownTab) tally.range_from_shown++;
+}
+
+export function notePagePress(tabId: string) {
+  const last = shown;
+  shown = null;
+  if (!last || last.tabId !== tabId) return;
+  const ms = Date.now() - last.at;
+  if (ms >= 0 && ms < PAGE_CLICK_WINDOW_MS && toPageClick.length < MAX_SAMPLES) toPageClick.push(ms);
+}
+
+export type TileDoubleClick = "return" | "reload" | "fresh" | "missed";
+
+const TILE_DOUBLE_FIELD = { return: "tile_double_returns", reload: "tile_double_reloads", fresh: "tile_double_fresh", missed: "tile_double_missed" } as const;
+
+export const noteTileDoubleClick = (what: TileDoubleClick, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void tally[TILE_DOUBLE_FIELD[what]]++);
+
+export const notePagePressRefused = () => void tally.page_refused++;
+
+export const noteDragBegan = (drag: object) => void startedIn.set(drag, period);
+
+export const noteDragWithoutDrop = (drag?: object) => void (ofThisPeriod(drag) && tally.drags_without_drop++);
+
+type SidebarDropKind = "gap" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile" | "other_profile" | "profile_icon";
+
+export const noteSidebarDrop = (kind: SidebarDropKind, drag?: object) => void (ofThisPeriod(drag) && tally[`drops_${kind}`]++);
+
+export type DragProfileHold = "icon" | "edge";
+
+export function noteDragProfileSwitch(by: DragProfileHold | null, drag?: object) {
+  if (!ofThisPeriod(drag)) return;
+  tally.drag_profile_switches++;
+  if (by === "icon") tally.drag_profile_holds++;
+  else if (by === "edge") tally.drag_profile_edge_holds++;
+}
+
+export function emitTabPresses(consent: ConsentToken | null) {
+  settleUnansweredPressOut();
+  const counts = tally;
+  const samples = toPageClick.sort((a, b) => a - b);
+  const held = heldMs.sort((a, b) => a - b);
+  tally = empty();
+  toPageClick = [];
+  heldMs = [];
+  const lostReleases = takeLostReleases();
+  const repeated = repeats;
+  const gaps = repeatGaps.sort((a, b) => a - b);
+  const landedOn = [...repeatsLandedOn].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  forgetRepeats();
+  const hoverCards = takeHoverCardCounts();
+  if (!Object.values(counts).some(Boolean) && !lostReleases && !repeated.presses && !Object.values(hoverCards).some(Boolean)) return;
+  const at = (list: number[], p: number) => (list.length ? percentile(list, p) : null);
+  capture("tab_presses", {
+    ...counts,
+    lost_releases: lostReleases,
+    repeat_presses: repeated.presses,
+    repeat_on_new_tab: repeated.onNewTab,
+    repeat_gap_ms_p50: at(gaps, 0.5),
+    repeat_landed_on: landedOn,
+    page_click_ms_p50: at(samples, 0.5),
+    page_click_ms_p75: at(samples, 0.75),
+    page_click_n: samples.length,
+    held_ms_p50: at(held, 0.5),
+    held_ms_p75: at(held, 0.75),
+    held_n: held.length,
+    ...hoverCards,
+  }, consent);
+}
+
+export const devTabPresses = () => ({ ...tally, pending, unansweredOut: !!unansweredOut, toPageClick: toPageClick.length, held: heldMs.length });

@@ -1,12 +1,18 @@
-import { useBrowser } from "../browser/store";
 import type { LightsPlace, OpenWindowOptions, WindowEvent } from "../../platform/windows";
 import type { BrowserState } from "../browser/store";
 import { engineProfile, windowTitle } from "../browser/model";
 import { windowOpens } from "./windowOpenOrder";
 import { focusedWindowOf } from "./ui";
 import { adoptOf } from "../tabs/pageSession";
+import { noteLittleArdiaFitBelowSaved } from "../telemetry/littleArdiaEscapes";
+import { isSmallWindow } from "./small";
+import { signalFullScreenExit } from "./fullScreenExits";
+import type { Frame } from "../browser/types";
 
-export type LightsCenter = LightsPlace | null;
+const fitsBelowSaved = (frame: Frame, was: Frame | null | undefined, [width, height]: readonly [number, number]) =>
+  (!was || was[2] !== frame[2] || was[3] !== frame[3]) && (Math.round(frame[2]) < width || Math.round(frame[3]) < height);
+
+type LightsCenter = LightsPlace | null;
 
 export type WindowPort = {
   open(id: string, options: OpenWindowOptions, lightsCenter: LightsCenter): void;
@@ -18,7 +24,7 @@ export type WindowPort = {
   releaseProfile(profile: string): void;
 };
 
-export type WindowSyncSetup = {
+type WindowSyncSetup = {
   port: WindowPort;
   getState(): BrowserState;
   isQuitting(): boolean;
@@ -30,21 +36,32 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
   const open = new Set<string>();
   const titles = new Map<string, string>();
 
-  const releaseIfIncognito = (w: BrowserState["windows"][string] | undefined) => {
-    if (w?.kind === "private") port.releaseProfile(engineProfile(useBrowser.getState(), w.profileId));
+  const privateProfiles = new Map<string, string>();
+
+  const releasePrivateProfile = (id: string) => {
+    const profile = privateProfiles.get(id);
+    if (profile === undefined) return;
+    privateProfiles.delete(id);
+    port.releaseProfile(profile);
   };
 
   const listen = () =>
     port.onEvent((e) => {
       const s = getState();
       if (e.type === "focus") s.setFocusedWindow(e.id);
-      if (e.type === "frame") s.setWindowFrame(e.id, e.frame);
-      if (e.type === "fullScreen" && !isQuitting()) s.setWindowFullScreen(e.id, e.on);
+      if (e.type === "frame") {
+        const w = s.windows[e.id];
+        if (e.fitted && w && isSmallWindow(w) && fitsBelowSaved(e.frame, w.frame, s.settings.littleArdiaSize)) noteLittleArdiaFitBelowSaved();
+        s.setWindowFrame(e.id, e.frame, e.restored, e.fitted);
+      }
+      if (e.type === "maximized" && !isQuitting()) s.setWindowMaximized(e.id, e.on);
+      if (e.type === "fullScreen" && !isQuitting()) s.setWindowFullScreen(e.id, e.on, e.display);
+      if (e.type === "fullScreen" && !e.on) signalFullScreenExit(e.id);
       if (e.type === "close") {
         if (isQuitting()) return;
         open.delete(e.id);
         s.closeWindow(e.id);
-        releaseIfIncognito(s.windows[e.id]);
+        releasePrivateProfile(e.id);
       }
     });
 
@@ -55,14 +72,16 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       open.add(id);
       titles.set(id, windowTitle(s, id));
       const profile = engineProfile(s, w.profileId);
+      if (w.kind === "private") privateProfiles.set(id, profile);
       const claim = w.kind === "small" ? adoptOf(s.tabs[w.tabIds[0] ?? ""]) : undefined;
       const small = w.kind === "small"
-        ? { kind: "small" as const, size: s.settings.littleArdiaSize, ...(claim?.startsWith("link:") ? { claim } : {}), ...(w.linkPointer ? { pointer: w.linkPointer } : {}) }
+        ? { kind: "small" as const, size: s.settings.littleArdiaSize, ...(claim?.startsWith("link:") ? { claim } : {}), ...(w.linkPointer ? { pointer: w.linkPointer } : {}), ...(w.linkApp ? { returnTo: w.linkApp } : {}) }
         : {};
       const made = w.kind !== "small" && w.chromeWindow ? { chromeWindow: w.chromeWindow } : {};
+      const under = behind ?? (w.kind === "main" ? w.opensBehind : undefined);
       port.open(
         id,
-        { frame: w.frame, incognito: w.kind === "private", title: titles.get(id), focus, profile, ...(behind ? { behind } : {}), ...(prev && w.kind !== "small" && !w.chromeWindow ? { animated: true } : {}), ...small, ...made },
+        { frame: w.restoredFrame ?? w.frame, ...(w.maximized && w.kind !== "small" ? { maximized: true } : {}), incognito: w.kind === "private", title: titles.get(id), focus, profile, ...(w.display ? { display: w.display } : {}), ...(under ? { behind: under } : {}), ...(prev && w.kind !== "small" && !w.chromeWindow ? { animated: true } : {}), ...small, ...made },
         lightsCenter(s, id),
       );
     }
@@ -71,7 +90,7 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       open.delete(id);
       titles.delete(id);
       port.close(id);
-      releaseIfIncognito(prev?.windows[id]);
+      releasePrivateProfile(id);
     }
     if (prev && s.tabs === prev.tabs && s.windows === prev.windows && s.profiles === prev.profiles) return;
     for (const id of open) {

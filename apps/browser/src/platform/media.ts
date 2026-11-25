@@ -1,4 +1,5 @@
 import { call, on, type CastDialog, type CastRoute } from "@ardia/ardiacore";
+import { macNativeApiAtLeast } from "./nativeApi";
 
 export {
   CastMode,
@@ -9,12 +10,25 @@ export {
   type DisplayMediaAudio,
   type DisplayMediaRequest,
   type MediaCommand,
+  type MediaFault,
   type NowPlaying,
   type ControlPress,
   type PictureInPictureState,
+  type PictureInPictureDrag,
+  type PictureInPictureResize,
+  type PictureInPictureSkip,
+  type PictureInPictureStandIn,
+  type PictureInPictureActivation,
+  type PictureInPictureUnstash,
+  type PictureInPictureRelease,
 } from "@ardia/ardiacore";
 
 export const getDisplayMediaSources = () => call("media.displayMediaSources");
+const PREVIEWS_SINCE_NATIVE_API = 92;
+export const getDisplayMediaThumbnails = (ids: string[], width: number): Promise<Record<string, string>> =>
+  macNativeApiAtLeast(PREVIEWS_SINCE_NATIVE_API) ? call("media.displayMediaThumbnails", { ids, width }) : Promise.resolve({});
+export const screenRecordingAllowed = () => call("media.screenRecordingAllowed");
+export const requestScreenRecording = () => call("media.requestScreenRecording");
 export const setDisplayMediaPicker = (enabled: boolean) => call("webView.setDisplayMediaPicker", { enabled });
 export const setAutoPictureInPicture = (enabled: boolean) => call("webView.setAutoPictureInPicture", { enabled });
 export const setVideoUpscaling = (enabled: boolean) => call("webView.setVideoUpscaling", { enabled });

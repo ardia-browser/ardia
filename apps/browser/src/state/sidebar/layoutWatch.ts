@@ -3,8 +3,10 @@ import { sidebarEntries } from "./entries";
 import { shownPinnedEntries } from "./pinnedFold";
 import { rowIds, rowView } from "./sidebarUi";
 import { useBrowser } from "../browser/store";
+import { tabsShownIn } from "../browser/model";
 import { parseEntry } from "./entryKey";
 import { focusedWindowOf } from "../windows/ui";
+import { windowRootSize, type RootSize } from "../windows/rootSize";
 
 const WATCH_MS = 8000;
 const MOVED = 0.5;
@@ -19,18 +21,18 @@ let commits = 0;
 let started = 0;
 let finished = false;
 
-function onScreen(p: Place, frame: readonly number[] | null | undefined): boolean {
+function onScreen(p: Place, root: RootSize | undefined): boolean {
   if (!p.width || !p.height) return false;
-  const [width, height] = frame ? [frame[2]!, frame[3]!] : [Infinity, Infinity];
+  const { width, height } = root ?? { width: Infinity, height: Infinity };
   return p.x >= 0 && p.x + p.width <= width + 1 && p.y + p.height > 0 && p.y < height;
 }
 
-function seen(key: string, place: Place, frame: readonly number[] | null | undefined) {
+function seen(key: string, place: Place, root: RootSize | undefined) {
   const before = last.get(key);
   if (before && before.commit > place.commit) return;
   if (before && shown.has(key) && (Math.abs(before.x - place.x) > MOVED || Math.abs(before.y - place.y) > MOVED)) moves.push({ row: key, from: before, to: place });
   last.set(key, place);
-  if (onScreen(place, frame)) shown.add(key);
+  if (onScreen(place, root)) shown.add(key);
 }
 
 function missingRows(): string[] {
@@ -38,7 +40,7 @@ function missingRows(): string[] {
   const missing: string[] = [];
   for (const windowId of s.windowOrder) {
     const w = s.windows[windowId];
-    if (!w || !w.sidebarOpen) continue;
+    if (!w || !tabsShownIn(s, windowId)) continue;
     const { tiles, pinned: all, list } = sidebarEntries(s, windowId, w.profileId);
     const pinned = shownPinnedEntries(s, windowId, w.profileId, all);
     const ids = [...tiles, ...[...pinned, ...list].map((e) => (parseEntry(e).kind === "split" ? e : parseEntry(e).id))];
@@ -79,9 +81,9 @@ export function layoutCommitted(editAt = 0) {
   if (commit === editAt) setTimeout(edit, 0);
   const s = useBrowser.getState();
   for (const windowId of s.windowOrder) {
-    const frame = s.windows[windowId]?.frame;
+    const root = windowRootSize(s, windowId);
     for (const id of rowIds(windowId)) {
-      rowView(windowId, id)?.measureInWindow((x, y, width, height) => seen(`${windowId}|${id}`, { x, y, width, height, commit }, frame));
+      rowView(windowId, id)?.measureInWindow((x, y, width, height) => seen(`${windowId}|${id}`, { x, y, width, height, commit }, root));
     }
   }
 }

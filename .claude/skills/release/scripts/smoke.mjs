@@ -14,6 +14,18 @@ const check = (name, ok, detail = "") => {
 const locked = process.env.SMOKE_LOCKED === "1";
 const checkUnlocked = (name, ok, detail = "") =>
   locked ? console.log(`SKIP  ${name}  (screen locked; ${ok ? "would pass" : "would fail"}${detail ? `: ${detail}` : ""})`) : check(name, ok, detail);
+const access = process.env.SMOKE_ACCESS ?? "post=1 titles=1";
+const canPostKeys = /post=1/.test(access);
+const canReadTitles = /titles=1/.test(access);
+const needs = (able, why) => (name, ok, detail = "") =>
+  able ? check(name, ok, detail) : console.log(`SKIP  ${name}  (${why}; ${ok ? "would pass" : "would fail"}${detail ? `: ${detail}` : ""})`);
+const checkKeys = needs(canPostKeys, "this process can't post key events: give the terminal Accessibility in System Settings › Privacy & Security");
+const checkTitles = needs(canReadTitles, "this process can't read window titles: give the terminal Screen Recording in System Settings › Privacy & Security");
+const pressOrRun = async (code, mods, command, arg) => {
+  if (canPostKeys) return execFileSync(process.env.SMOKE_KEYS, [pid, code, mods]);
+  await instance.eval(`ac.runCommand(${JSON.stringify({ command, ...(arg ? { arg } : {}) })}); return true;`);
+};
+if (!canPostKeys || !canReadTitles) console.log(`note: ${access}: key-routing checks need Accessibility and window-title checks need Screen Recording; the rest runs through the app's own commands`);
 const windows = () =>
   execFileSync(windowsTool, [pid], { encoding: "utf8" }).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 
@@ -143,18 +155,43 @@ await sleep(800);
 check("autofill dropdown accepts a suggestion", (await evaluate(`document.getElementById("c").value`)) === "Springfield");
 
 await go(`${pages}/passkey.html`);
+const passkeys = process.env.SMOKE_PASSKEYS === "1";
+const beforePasskey = new Set(windows().map((w) => w.id));
+const isPasskeyDialog = (w) =>
+  /passkey/i.test(w.title) || (!beforePasskey.has(w.id) && level(w) === 0 && w.w > 200 && w.h > 150 && w.title !== "Untitled");
 await click("#b");
 await sleep(1500);
 let list = windows();
 for (let i = 0, last = ""; i < 12; i++) {
   const now = JSON.stringify(list.map((w) => [w.id, w.x, w.y, w.w, w.h]));
-  if (now === last && list.some((w) => /passkey/i.test(w.title))) break;
+  if (now === last && list.some(isPasskeyDialog)) break;
   last = now;
   await sleep(500);
   list = windows();
 }
-const dialog = list.find((w) => /passkey/i.test(w.title));
-check("passkey dialog shows", !!dialog, dialog?.title ?? "no passkey window");
+const dialog = list.find(isPasskeyDialog);
+if (passkeys) {
+  const detail = dialog ? `${dialog.w}x${dialog.h} "${dialog.title}"` : "no passkey window";
+  const name = "passkey dialog shows, offering iCloud Keychain (Passwords) next to Ardia's passkeys";
+  checkTitles("passkey dialog shows", !!dialog, detail);
+  if (locked) {
+    checkUnlocked(name, false, `${detail}; Accessibility reads no window contents while the screen is locked, so the choices weren't read`);
+  } else {
+    let texts = null;
+    let unread = "";
+    try {
+      texts = JSON.parse(execFileSync(process.env.SMOKE_AX, [pid, "texts"], { encoding: "utf8", timeout: 20000, stdio: ["ignore", "pipe", "pipe"] })).flatMap((w) => w.texts);
+    } catch (error) {
+      unread = error.status === 3 ? "untrusted" : String(error.stderr || error.message).trim();
+    }
+    const offers = !!texts && ["Save in Passwords", "Save in Ardia Passkeys"].every((choice) => texts.includes(choice));
+    const why = offers ? "both choices offered" : texts ? `choices missing from ${JSON.stringify(texts.filter((t) => /save|passkey/i.test(t)))}` : `its choices couldn't be read: ${unread}`;
+    if (unread === "untrusted") needs(false, "this process isn't trusted for Accessibility: give the terminal Accessibility in System Settings › Privacy & Security")(name, false, `${detail}; choices unread`);
+    else checkTitles(name, !!dialog && offers, `${detail}; ${why}`);
+  }
+} else {
+  checkTitles("passkey dialog shows (no browser passkey entitlement: Chrome's own dialog)", !!dialog && /passkey/i.test(dialog.title), dialog?.title || "no passkey window");
+}
 if (dialog) {
   const owner = list.slice(list.indexOf(dialog) + 1).find((w) => level(w) === 0 && w.w > 400 && w.h > 300);
   const inside = owner && dialog.x >= owner.x && dialog.x + dialog.w <= owner.x + owner.w && dialog.y >= owner.y && dialog.y + dialog.h <= owner.y + owner.h;
@@ -165,7 +202,8 @@ if (dialog) {
 }
 await go(`${pages}/form.html`);
 await sleep(1500);
-checkUnlocked("…and closes when the page navigates", !windows().some((w) => /passkey/i.test(w.title)));
+(canReadTitles ? checkUnlocked : checkTitles)("…and closes when the page navigates",
+  !windows().some((w) => /passkey/i.test(w.title) || (dialog && w.id === dialog.id)));
 
 const adsOnPage = () => adFate(adScript, () => go(`${pages}/ad.html`));
 const allowAds = (allowed) => instance.eval(`return ac.engine.call("contentBlocker.setAllowed", ${JSON.stringify({ host: "localhost", allowed })})`, { timeout: 30000 });
@@ -223,7 +261,7 @@ for (const [key, code] of [["⌘2", 19], ["⌘9", 25], ["⌘1", 18]]) {
   numbered.push([key, await shownPage()]);
 }
 const [two, nine, one] = numbered.map(([, url]) => url);
-check("⌘2, ⌘9 and ⌘1 select the sidebar's second, last and first (pinned) tab",
+checkKeys("⌘2, ⌘9 and ⌘1 select the sidebar's second, last and first (pinned) tab",
   /\?pin-a$/.test(one ?? "") && !!two && !!nine && new Set([one, two, nine]).size === 3 && !/\?pin-a$/.test(two),
   numbered.map(([key, url]) => `${key} ${url?.replace(/^.*\//, "") ?? "nothing shown"}`).join(", "));
 
@@ -253,7 +291,7 @@ check(
   logged ? `logged: ${logged.slice(0, 80)}` : menu ? `layer ${menu.layer}` : "no menu",
 );
 
-execFileSync(process.env.SMOKE_KEYS, [pid, "18", "t"]);
+await pressOrRun("18", "t", "switchProfile", "default");
 let homeContext;
 for (const start = Date.now(); !homeContext && Date.now() - start < 8000; await sleep(500)) {
   homeContext = (await browserCall("Target.getTargets")).targetInfos?.find((t) => t.type === "page" && t.url.endsWith("?home"))?.browserContextId;
@@ -286,7 +324,7 @@ check("a page that stops responding is reported (Page Unresponsive)", !!hang, ha
 
 const newTabId = await (async () => {
   const before = await instance.eval(`return ac.store.getState().tabs ? Object.keys(ac.store.getState().tabs) : [];`).catch(() => []);
-  execFileSync(process.env.SMOKE_KEYS, [pid, "17", "c"]);
+  await pressOrRun("17", "c", "newTab");
   for (const end = Date.now() + 5000; Date.now() < end; await sleep(200)) {
     const now = await instance.eval(`return Object.keys(ac.store.getState().tabs);`).catch(() => []);
     const added = now.filter((id) => !before.includes(id));
@@ -304,7 +342,7 @@ if (newTabId) {
     if (t) newTabHistory = (await onPage(t, "Page.getNavigationHistory")).entries ?? null;
   }
 }
-const newTabBack = newTabId ? await instance.eval(`return !!ac.store.getState().live[${JSON.stringify(newTabId)}]?.canGoBack;`).catch(() => null) : null;
+const newTabBack = newTabId ? await instance.eval(`return !!ac.tabLive.liveOf(${JSON.stringify(newTabId)}).canGoBack;`).catch(() => null) : null;
 check("the first page opened from ⌘T has no Back (the prewarmed about:blank isn't in its history)",
   newTabHistory?.length === 1 && newTabBack === false,
   newTabId ? `${newTabHistory ? newTabHistory.map((e) => e.url.replace(/^.*\//, "")).join(" → ") : "page never loaded"}; canGoBack ${newTabBack}` : "⌘T made no tab");

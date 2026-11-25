@@ -73,7 +73,7 @@ takes effect with the first release after 0.2.13):
 - **Downloads:** GitHub's `download_count` for each release's DMG. Sparkle updates are the zip's count.
 - **Update checks:** builds after 0.2.13 poll `https://netnyahoo.com/appcast.xml` (0.2.32 and earlier) or `https://ardia.dev/appcast.xml` (`SUFeedURL`). nginx
   (`infra/site/nginx.conf`) answers every request with a 302 to
-  `https://github.com/mantrakp04/ardia/releases/latest/download/appcast.xml` and, beside it, mirrors a
+  `https://github.com/ardia-browser/ardia/releases/latest/download/appcast.xml` and, beside it, mirrors a
   telemetry event `update_check { version, first }` with the day as its timestamp. Only requests whose
   User-Agent is the app's Sparkle (`Ardia/<version> Sparkle/…`) count. Nothing else is passed on: no IP
   (so no country), no headers, no cookie, a fixed `distinct_id` (`update-check`). The redirect never waits on
@@ -121,12 +121,14 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
 ```
 
 - **Where it runs:** `infra/telemetry/hexclave.deploy.ts` (ClickHouse, OpenTelemetry Collector, SeaweedFS; all
-  private, images pinned by digest) and the routes in `infra/site/nginx.conf`. Only nginx is public. It limits
+  private, images pinned by digest) and the routes in `infra/site/nginx.conf`. The SeaweedFS there (`ph-objects`)
+  holds replays only; Report a Problem's files are on `ardia-feedback-objects` (`infra/feedback/hexclave.deploy.ts`),
+  so a full replay disk can't refuse a report. Only nginx is public. It limits
   bodies (512 KB events, 2 MB replay chunks), rates per visitor (20/s events, 5/s replays), and only accepts
   OTLP logs (no traces or metrics).
 - **Format:** each event is an OTLP log record. The body and the `event` attribute are the event name, plus
   `uuid`, `distinct_id`, `$session_id` (site) and every property, under PostHog's names. Senders:
-  `apps/site/src/scripts/telemetry/` and `apps/browser/src/telemetry/`. The collector
+  `apps/site/src/scripts/telemetry/` and `apps/browser/src/state/telemetry/`. The collector
   (`infra/telemetry/collector/config.yaml`) turns the visitor's address into `$geoip_country_code`/`_name` and
   `$geoip_continent_code` with DB-IP's IP to City Lite database (CC BY 4.0, a pinned monthly file checked by
   hash; `collector/fetch-geoip.mjs` falls back to the byte-identical npm mirror `dbip-city-lite` once DB-IP drops
@@ -154,7 +156,157 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
   `.claude/skills/stats/queries.md`. Secrets are Hexclave project secrets (`TELEMETRY_*`); a backup is in
   `~/.config/ardia/telemetry-secrets.env`.
   hekuto reads the same tables as `reader` through a Composio ClickHouse connection (Basic auth, base URL
-  `https://ardia.dev/_ch`); `/_ch/` takes Basic auth for `reader` only.
+  `https://ardia.dev/_ch`); `/_ch/` takes `reader` only, as Basic auth or `X-ClickHouse-User`.
+- **Ingest keys (since 2026-11):** senders put a public key per surface in `X-Ardia-Key` (site beacons, which
+  can't set headers, use `?ardia_key=`); keys live in `packages/core/src/ingestKeys.ts` and the map in
+  `infra/site/nginx.conf`. nginx refuses an unknown key with 403 and passes the surface to the collector, which
+  stores it as `ingest_key` (`app`, `cli`, `site` or `missing`). Reports from Report a Problem go through
+  `/api/feedback` to `infra/feedback` (see `docs/feedback.md`), land in `telemetry.feedback`, and keep their
+  files in SeaweedFS under `feedback/<id>/` with no expiry, on their own service (`ardia-feedback-objects`, 10 GB;
+  reports from 11-09 to 11-11 are still on `ph-objects`).
+- **Crash and diagnostics fields (opt-in, since 0.2.45-nightly.3):** every field is a count, a size, a
+  duration, a fixed name or yes/no, in `properties` like everything else, so no schema change. Code:
+  `apps/browser/src/state/telemetry/diagnostics.ts`, `errors.ts`, `tabPresses.ts`, `packages/shell/ios/CrashReports.swift`.
+  - `$exception` with `source` `native_crash` (the app process) or `helper_crash` (a page, GPU or other helper
+    process, read from macOS's `Chromium Helper*.ips` reports of this copy's helpers; the process type comes from the
+    crashed process's main thread name, `CrRendererMain`, `CrGpuMain`, `CrUtilityMain`). New fields: `crash_process`
+    (`browser`, `renderer`, `gpu`, `utility`, `alerts`, `plugin`), `crashed_version` and `crashed_build` (the app version
+    that crashed, which is the previous one when the report is found after an update; empty for helpers),
+    `crashed_engine_version` (helpers), `crash_termination` (`SIGNAL`, `CODESIGNING`…), `crash_uptime_s` (how
+    long the process ran), `crash_vm_writable_mb` (the report's `Writable regions: Total=`, the virtual size of its
+    writable regions, not what it wrote), and the context saved before the crash:
+    `ctx_tabs`, `ctx_windows`, `ctx_profiles`, `ctx_footprint_mb` (the app process's physical footprint),
+    `ctx_app_memory_mb` (every Ardia process, from the last hourly memory sample), `ctx_free_disk_gb` (0.1 GB under
+    10 GB, whole GB above), `ctx_memory_pressure` (`normal`, `warning`, `critical`), `ctx_page_processes_gone`,
+    `ctx_webui_page` (the built-in page the active tab was on: the host and first path segment of an `ardia://` or
+    `chrome://` URL, like `settings/cookies` or `history`, never a query or hash; null on any web page, and on a
+    sample saved by an older version), `ctx_hermes_heap_mb` (Hermes's JS heap in whole MB at that sample, from the
+    same reader as `state/tabs/memoryTrim.ts`, `lib/hermesHeap.ts`; null when the engine reports none and on a
+    sample saved by an older version), `ctx_webui_pages` (the last 3 different built-in pages the session was on, newest
+    first, each as `page:minutes` with the page in the same shape as `ctx_webui_page` and the minutes counted back from
+    the crash, like `flags:8,downloads:17,settings/cookies:22`; null when none, and on a sample saved by an older
+    version), `ctx_session_min` and `ctx_age_min` (how old the context was at the crash). The context is the latest one
+    sampled at or before the crash (the report's `captureTime`; the file's date only decides which reports are new)
+    in the session that crashed, else none. Native exception reasons are never sent, only the exception's type, name
+    and stack (older builds sent a scrubbed reason in `$exception_values`). The error that stopped the app's own JS is sent
+    only as a kind from a fixed list (below): `crash_js_fatal`, only on a `native_crash`. Before 0.2.45-nightly.3 a report from an
+    older version was dropped (the native reader required the running binary's UUID, JS the running version), so a
+    crash found at the first launch after an update never arrived. Crash reports are now read 1 s after an unclean
+    launch (5 s otherwise) and again every hour, and the queue goes out 2 s after an unclean launch.
+  - `app_launched` adds, every launch: `chip`, `gpu`, `memory_gb`, `displays`, `max_scale`, `hw_decode_av1`,
+    `hw_decode_vp9`, `hw_decode_hevc`, `hw_decode_h264` (VideoToolbox's `VTIsHardwareDecodeSupported`). After an
+    unclean session it adds that session's last context as `prev_*` (the `ctx_*` names) and `rebooted_since` (the Mac
+    restarted since that session started).
+  - `page_process_gone` (a page's renderer stopped: `reason` `crashed`, `killed`, `oom`, `launchFailed`, `integrity`,
+    `abnormal` or `unknown`, `exit_code`, `visible` (the tab was on screen), `tabs`, `windows`, `profiles`,
+    `session_min`, `gone_this_session`, `memory_pressure`). At most 30 per session. GPU and utility process exits aren't
+    visible to the app yet (their crash reports are, through `helper_crash`).
+  - `password_import` (once per import that sent at least one login to the engine; none for an empty list): `source`
+    (`browser` for an import from another browser, `csv` for a CSV file), `tried`, `saved`, `refused` (the engine
+    answered "Could not save the password (invalid, or already saved)"), `not_landed` (it answered "The password store
+    didn't take the change": the store hadn't shown the change within about 1 s) and `other` (any other error, or a
+    save that answered false). Counts only: never a site, a username or a password. The same warnings still reach
+    the log, now with the action in front (`browser import`, `csv import`, `settings edit`, `settings delete`,
+    `sync delete`). Added to tell which of the two engine refusals the daily password-save warnings are, and from
+    which import.
+  - `search_engine_import` (once per import from a Chrome-family browser or Arc, issue #1760): `source` (the browser's
+    import id, such as `arc`, `chrome` or `braveBeta`), `outcome` (`built_in`: the source's engine is one Ardia has
+    built in; `custom`: it came over as a custom engine; `source_default`: the source was on its own default, so
+    Ardia's engine stayed; `unusable`: its address couldn't be used), `changed` (Ardia's engine changed) and `offered`
+    (you had chosen an engine yourself, so Ardia kept it and the done screen offered the source's instead). Never
+    which engine, its name or its address. `usage_counts.import_search_engine_offers_taken` counts presses of that
+    offer's Use … for Search button. `usage_counts.onboarding_preset_kept_imports` counts onboarding's Continue
+    on the browser step leaving out the preset's search engine because an import had already brought one.
+  - `tab_presses` (hourly and at quit, when there were any): `presses` on sidebar rows, pinned tiles and top-strip
+    chips, `down_switches` (the press switched to the tab on mouse down), `clicks` (the press opened the tab),
+    `drag_clicks` (it became a drag and was rescued as a click), `drags`, `drags_without_drop` (sidebar drags let go
+    inside the window with no place to drop and no split: on Linux every drag in a space other than the one the window
+    opened in, until #2341), `drag_profile_switches` (profile switches during a sidebar tab drag, by any means) and `drag_profile_holds`
+    (those made by holding the tab over a profile's icon), `drag_profile_edge_holds` (those made by holding it at the
+    sidebar's left or right edge), `drops_other_profile` (tabs dropped at a slot in another profile's
+    sidebar) and `drops_profile_icon` (tabs let go on another profile's icon), `unanswered` (a press that got neither before
+    the next one), `lost_releases` (presses anywhere in the app's own UI whose mouse up a menu or drag session took, ended when
+    the menu began tracking or at that button's next mouse down instead of swallowing that click), `repeat_presses` (a tab or New Tab row press within 3 s and 12 pt
+    of a mouse down that reached no row: the click-twice report), `repeat_on_new_tab` (those with an empty New Tab showing),
+    `repeat_gap_ms_p50` and `repeat_landed_on` (the class names of the view the first click hit and its three ancestors), `held_ms_p50`/`_p75`/`held_n` (how long the button was held after a mouse-down switch: the wait a
+    switch on release would have added), `page_click_ms_p50`/`_p75`/`page_click_n` (from opening a tab with a press
+    to the first press in its page, within 60 s), `range_selects` (⇧-clicks that selected a range of tabs) and
+    `range_from_shown` (those whose last clicked tab was no longer the shown one, so the range started at the shown tab:
+    #1074, where it started at a Top Apps tile and took every pinned tab), `page_refused` (presses on the sidebar or anything else drawn over a
+    WebKit page that the page turned away, `WebKitPagePresses.swift`). Issue #3965 (a double-click on a Top Apps tile already at its pinned URL refreshes it, as Dia's) adds `tile_double_returns` (double-clicks that went back to the pinned URL), `tile_double_reloads` (those that refreshed the page), `tile_double_fresh` (those that did nothing because the page was fresh: the pair's first click switched to the tile or woke it, or it was still loading) and `tile_double_missed` (refreshes that found no page, or that the engine rejected or threw on: should stay near zero). A refresh counts once, as a reload or a miss, when the page answers. Issue #1386 (a sidebar tab sometimes needs a second click) adds
+    counts of where a press is lost: `drop_no_release`/`drop_not_dragged`/`drop_no_start`/`drop_start_mismatch` (the
+    condition that stopped a drag from being rescued as a click; they add up to `drags`), `press_out_no_press` (presses
+    Pressable ended without `onPress`), `unfocused_presses` and `unfocused_no_press` (presses that began while the
+    window was not the key window of an active app, in all and among those without `onPress`), and the pointer's
+    drift from where the press began when Pressable ended it, in buckets of under 5 pt, 5-9 pt, 10 pt or more and
+    unknown, for every press (`drift_lt5`/`drift_5_9`/`drift_10_plus`/`drift_unknown`) and for those without `onPress`
+    (`no_press_drift_*`). Counts only: no tab id, URL, title or position.
+  - `usage_counts` adds `pip_pinches_unfocused` and `pip_pinches_from_other_app` (#3973): pinches that resized a
+    Picture in Picture window while it wasn't the key window, and those that arrived while another app was in front.
+    Both are within `pip_pinches`; either dropping while `pip_pinches` holds means pinching an unfocused window broke.
+    Counts only: never the window's size or place.
+  - `usage_counts` adds `web_notifications_from_shim` (website notifications that reached the page script this
+    period; a notification that never reaches the page script doesn't count, so a gap shows up as missing counts),
+    `web_notification_clicks` (clicks on Ardia's website notifications) and `worker_notification_responses` (clicks or
+    dismissals of a service worker's notifications that the app handed to Chrome). These three count only while
+    sharing is on, and a pending count is dropped whenever sharing is turned on or off.
+  - `web_notification_failed` (a website notification macOS refused or the app couldn't post): `title_length`,
+    `body_length` (never the text), `icon_requested`, `icon_sent`, `icon_status` (`none`, `attached`, `invalid_url`,
+    `download_failed`, `empty`, `write_failed`, `attachment_rejected`, or `unknown` when the call threw; `none` also
+    covers an icon the page script failed to fetch, which reads as `icon_requested` true with `icon_sent` false),
+    `icon_error_code`, `error_domain`, `error_code` (macOS's own), `threw`, `error_type` (when it threw), and
+    `via_shim` (always true: only notifications that came through the page script are posted by the app).
+  - `settings_snapshot` adds `setting_app_icon` / `default_app_icon`.
+  - The context is saved in `telemetry.json` (`context`) every 10 minutes and 3 s after launch while sharing is on
+    (the last 12 samples also stay in memory), and cleared when sharing is turned off or a profile is deleted. It's
+    sent only with a crash report or an unclean launch. Turning sharing off also drops uncounted tab presses.
+  - The context also gets a sample when the active tab goes to a built-in page or leaves one (at most one every 2 s),
+    so `ctx_webui_page` is current at a crash right after opening a page like `ardia://settings/cookies`. This is
+    data only, to find which built-in page a crash happens on (#1244: adding a third-party cookie exception on
+    `ardia://settings/cookies`). The crash property cleaner lets a `webui_page` value through only in the shape
+    `host` or `host/segment` (letters, digits, dashes); anything else is scrubbed like any string.
+  - The saved context also holds the last 3 different built-in pages with the time each was left or last seen
+    (`webui_pages`, `page@epoch-ms` joined by commas, newest first), so a crash after leaving
+    `ardia://settings/cookies` still shows it. A page seen again moves to the front; going to a web page keeps them.
+    Reading it back drops any entry that isn't a `host` or `host/segment` page and a time, and keeps at most 3.
+    `ctx_webui_pages` is worked out at the crash from the same saved context. The crash property cleaner lets it
+    through only as 1 to 3 `page:minutes` entries. Added with #1244, data only. Turning sharing on or off and
+    deleting a profile clear the pages (and the page the watcher last saw); a sample whose native reads were still
+    pending then is dropped before it notes a page, so no page from while sharing was off, or from a deleted
+    profile, comes back.
+  - Chromium Framework frames are named from the engine's own symbols, which the engine release publishes with
+    their UUIDs (#1054: `publish-engine.sh` uploads the build's dSYMs, `scripts/symbolicate-crash.sh` resolves a
+    crash event's frames by the `crash_images` UUID). Nothing is sent from the app for this.
+  - `crash_js_fatal` is data only, to find why the app's JS stops the app. Two crashes name no reason without it.
+    A Hermes abort (0.2.45–0.2.46 `SIGABRT`s from `hermes + 0x19bea4`, #1980) is a Hades GC out-of-memory: resolved
+    against React Native 0.81.6's `hermes-ios-release` tarball (the shipped hermes has the same UUID, 2CA494AE), the
+    frames are `hermesFatalErrorHandler` ‹ `llvh::report_fatal_error` ‹ `GCBase::oom` ‹ `HadesGC::youngGenCollection`
+    ‹ `allocSlow` ‹ `Object.values` ‹ `Array.prototype.filter`, with 320 to 2,748 tabs open. An `RCTFatalException`
+    (0.2.46 `SIGTRAP` from `Ardia + 0x444da4`, which is `RCTFatal`) is a C++ exception that escaped a task on the
+    JS thread (`RCTJSThreadManager _tryAndHandleError`); its name was over the 64 characters the `.ips` reader allowed,
+    so it arrived as a plain `NSException`. Hermes aborts through a fatal handler, so
+    `HermesFatal.install()` (called in `AppDelegate.swift` before the React host starts, `ArdiaHermesFatal.mm`)
+    registers one with `IHermesRootAPI::setFatalHandler`. It only opens, writes and closes `hermes-fatal.txt` in the
+    data folder: the first line of Hermes's message, at most 200 bytes of printable ASCII, and the process still
+    aborts. `CrashReports.swift` reads all new reports first, then gives that file to the browser-process `SIGABRT`
+    whose crash time is nearest to the file's time, from 2 s before it to 30 s after it (`FatalMatch` in
+    `UpdaterCore`, tested in `FatalMatchTests.swift`), whatever order the reports are listed in. It adds the
+    message as `jsFatal` with `jsFatalSource` `hermes`, and moves the file to `hermes-fatal-last.txt`, which stays
+    on the Mac. A file no report matches is kept for a later read, and set aside after an hour. For an
+    `RCTFatalException` the report gets the exception name's text after `RCTFatalException: ` (React Native puts
+    the error's description there), with `jsFatalSource` `reactNative`. The text never leaves the Mac: `errors.ts`
+    sends only `jsFatalKind`'s kind from `sanitize.ts` (`JS_FATAL_KINDS`): `hermes_heap_limit` (`OOM:` … `Max heap
+    size was exceeded`), `hermes_out_of_memory`, `hermes_stack_overflow`, `hermes_other`; for React Native, from
+    the prefixes React Native's `tryAndReturnError` (`RCTCxxUtils.mm`) writes, `rn_js_type_error`, `rn_js_reference_error`,
+    `rn_js_range_error`, `rn_js_syntax_error`, `rn_js_stack_overflow`, `rn_js_error` (`Unhandled JS Exception:`),
+    `rn_host_function`, `rn_host_object` (Hermes's `Exception in HostFunction` / `HostObject`),
+    `rn_objc_exception`, `rn_cpp_exception` (`non-std …`), `rn_other`; `unknown` without a source; null on
+    every other crash. The release build strips Hermes's local symbols, but the shipped hermes is React Native's
+    prebuilt release binary: `react-native-artifacts-<hermes-engine version in Podfile.lock>-hermes-ios-release.tar.gz`
+    on Maven Central holds it unstripped (`destroot/Library/Frameworks/macosx`), and `atos -o … -l 0 <offset>` resolves
+    a `hermes + 0x…` frame once `dwarfdump --uuid` matches the report's `crash_images` uuid.
+  - The dashboard's health table credits app crashes to `crashed_version` and lists a version that has crashes but no
+    usage in the window, with no rate.
 - **Checks of the pipeline:** send with service `ardia-selftest` (or version `0.0.0-selftest`); the views
   leave those out.
 - **History and old versions:** `posthog_events` (`source = 'posthog-cloud'` in the view) is the history from
@@ -165,7 +317,8 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
 - **Leftover disks:** a trial self-hosted analytics stack (30 Sep) left two detached Hexclave volumes in the
   deployment group "posthog": `pgdata` (10 GB, service ph-db) and `redpanda` (5 GB, ph-kafka). Hexclave has no
   API to delete a volume; ask Hexclave support to remove them. The group, `ph-clickhouse` and `ph-objects`
-  keep their names because renaming them would detach their volumes.
+  keep their names because renaming them would detach their volumes. `ph-objects` is the replays' store and
+  stays that way; the reports' is `ardia-feedback-objects`.
 
 ### Parity: what PostHog did, what does it now
 

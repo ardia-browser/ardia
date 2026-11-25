@@ -17,6 +17,7 @@
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/devtools/devtools_contents_resizing_strategy.h"
 #include "chrome/browser/devtools/devtools_toggle_action.h"
+#include "chrome/browser/devtools/devtools_ui_bindings.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -30,6 +31,7 @@
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "components/prefs/scoped_user_pref_update.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
@@ -163,9 +165,9 @@ std::optional<bool> RunPageCommand(content::WebContents* contents, int command) 
   std::optional<base::AutoReset<ardiacore::OpenOrigin>> pending;
   if (host) {
     pending.emplace(host->ScopedPendingOpen(
-        {WindowOpenDisposition::NEW_FOREGROUND_TAB, _contents->GetWeakPtr()}));
+        {WindowOpenDisposition::kNewForegroundTab, _contents->GetWeakPtr()}));
   }
-  popups->ShowBlockedPopup(id_number, WindowOpenDisposition::NEW_FOREGROUND_TAB);
+  popups->ShowBlockedPopup(id_number, WindowOpenDisposition::kNewForegroundTab);
 }
 
 - (BOOL)executeChromeCommand:(int)command {
@@ -248,6 +250,29 @@ std::optional<bool> RunPageCommand(content::WebContents* contents, int command) 
     DevToolsWindow::OpenDevToolsWindow(_contents, DevToolsToggleAction::Show(),
                                        DevToolsOpenedByAction::kUnknown);
   }
+}
+
+- (void)showDevToolsPanel:(NSString*)panel {
+  if (!_contents) {
+    return;
+  }
+  const std::string name = base::SysNSStringToUTF8(panel);
+  Profile* profile =
+      Profile::FromBrowserContext(_contents->GetBrowserContext());
+  ScopedDictPrefUpdate preferences(profile->GetPrefs(),
+                                   prefs::kDevToolsPreferences);
+  preferences->Set("panel-selected-tab",
+                   base::WriteJson(base::Value(name)).value_or(std::string()));
+  DevToolsWindow* window =
+      DevToolsWindow::GetInstanceForInspectedWebContents(_contents);
+  if (DevToolsUIBindings* bindings =
+          window ? DevToolsUIBindings::ForWebContents(
+                       window->GetDevToolsWebContents())
+                 : nullptr) {
+    bindings->CallClientMethod("DevToolsAPI", "showPanel", base::Value(name));
+  }
+  DevToolsWindow::OpenDevToolsWindow(_contents, DevToolsToggleAction::Show(),
+                                     DevToolsOpenedByAction::kUnknown);
 }
 
 - (void)closeDevTools {

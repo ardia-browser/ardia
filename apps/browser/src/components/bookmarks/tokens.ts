@@ -11,14 +11,12 @@ export const bookmarkDialog = { belowField: space.xs, belowToolbar: space.xxs, r
 
 export const bookmarksBar = {
   overflowWidth: 28,
-  otherReserve: 150,
   dividerHeight: 14,
   dropLine: 2,
   dropLineRadius: capsule(2),
   dropLineInset: space.xs,
   dropRing: 1.5,
   dragStart: 4,
-  springOpenMs: 550,
   ghostOpacity: 0.92,
   hoverIn: duration.fast,
   hoverOut: duration.base,
@@ -40,9 +38,8 @@ export type BarSize = {
   menuRow: number;
 };
 
-export const barSizes: Record<"default" | "large", BarSize> = {
-  default: { height: 30, item: 24, itemMaxWidth: 190, itemGap: 0, padding: space.m, titleGap: space.s, radius: radius.control, favicon: 14, icon: 12, iconBox: 16, text: "small", menuWidth: 260, menuRow: 28 },
-  large: { height: 38, item: 30, itemMaxWidth: 220, itemGap: 2, padding: space.ml, titleGap: space.m, radius: radius.tile, favicon: 16, icon: 14, iconBox: 18, text: "body", menuWidth: 300, menuRow: 32 },
+export const barSizes: Record<"default", BarSize> = {
+  default: { height: 30, item: 24, itemMaxWidth: 190, itemGap: 0, padding: space.m, titleGap: space.s, get radius() { return radius.control; }, favicon: 14, icon: 12, iconBox: 16, text: "small", menuWidth: 260, menuRow: 28 },
 };
 
 export const folderMenu = { offsetY: space.xs, cascadeOverlap: space.xs, hoverOpenMs: 160, margin: space.m, favicon: 16, chevronBox: 12 } as const;

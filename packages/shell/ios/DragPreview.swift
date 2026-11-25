@@ -45,16 +45,16 @@ final class DragPreview {
     sourceClosing = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) {
       [weak self] _ in self?.cancel()
     }
-    pillSize = chip.size
-    self.grab = NSPoint(x: grab.x - chip.minX, y: grab.y - chip.minY)
+    pillSize = InterfaceScale.windowSize(fromRoot: chip.size)
+    self.grab = NSPoint(x: InterfaceScale.windowLength(fromRoot: grab.x - chip.minX), y: InterfaceScale.windowLength(fromRoot: grab.y - chip.minY))
     windowImage = Self.snapshot(window, scale: 0.5)
-    pillImage = Self.snapshot(window, scale: window.backingScaleFactor, of: chip)
+    pillImage = Self.snapshot(window, scale: window.backingScaleFactor, of: Self.contentRect(fromRoot: chip, in: window))
     composeCard()
   }
 
   func setPage(_ data: Data, frame: NSRect) {
-    guard source != nil, let image = NSImage(data: data)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
-    pageImage = (image, frame)
+    guard let source, let image = NSImage(data: data)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+    pageImage = (image, Self.frameRect(fromRoot: frame, in: source))
     placeholder = false
     composeCard()
     if shape == "card" { show(cardImage) }
@@ -63,7 +63,7 @@ final class DragPreview {
   func setPlaceholder(title: String, favicon: String?) {
     guard let window = source, pageImage == nil else { return }
     let size = window.frame.size
-    let top: CGFloat = 42
+    let top = InterfaceScale.windowLength(fromRoot: 42)
     let page = NSRect(x: 0, y: top, width: size.width, height: max(1, size.height - top))
     let icon: NSImage? = favicon.flatMap { spec -> NSImage? in
       guard let url = URL(string: spec) else { return nil }
@@ -98,7 +98,7 @@ final class DragPreview {
 
   func update(shape next: String, at local: NSPoint) {
     guard let source else { return }
-    let point = NSPoint(x: source.frame.minX + local.x, y: source.frame.maxY - local.y)
+    let point = InterfaceScale.screenPoint(fromRoot: local, in: source)
     wanted = next
     lastPoint = point
     if next == "hidden" {
@@ -331,6 +331,18 @@ final class DragPreview {
       ctx.draw(page.image, in: CGRect(x: r.minX * fit, y: drawn.maxY - r.maxY * fit, width: r.width * fit, height: r.height * fit))
     }
     cardImage = ctx.makeImage()
+  }
+
+  private static func frameRect(fromRoot rect: NSRect, in window: NSWindow) -> NSRect {
+    let inWindow = InterfaceScale.windowRect(fromRoot: rect, in: window)
+    return NSRect(x: inWindow.minX, y: window.frame.height - inWindow.maxY, width: inWindow.width, height: inWindow.height)
+  }
+
+  private static func contentRect(fromRoot rect: NSRect, in window: NSWindow) -> NSRect {
+    guard let view = window.contentView else { return rect }
+    let local = view.convert(InterfaceScale.windowRect(fromRoot: rect, in: window), from: nil)
+    let origin = SyntheticInput.topLeft(of: local, in: view)
+    return NSRect(origin: origin, size: local.size)
   }
 
   private static func snapshot(_ window: NSWindow, scale: CGFloat, of rect: NSRect? = nil) -> CGImage? {

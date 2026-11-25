@@ -2,29 +2,32 @@ import type { BrowserState } from "../browser/store";
 import { activeTabId, isIncognitoProfile } from "../browser/model";
 import { isPeekTab } from "../peek/peek";
 import { INTERNAL_PAGES, internalPageOf } from "../pages/urls";
+import { pluginPageOf } from "../plugins/pageNames";
 import { groupOf } from "../pins/tabGrouping";
 import { focusedWindowOf } from "../windows/ui";
+import { ownValue } from "../../lib/decode";
 
 export type AutomationWindowKind = "normal" | "little";
-export type AutomationTab = { id: string; url: string; title: string; profile: string; active: boolean; pinned: boolean; group: string | null };
+type AutomationTab = { id: string; url: string; title: string; profile: string; active: boolean; pinned: boolean; group: string | null };
 export type AutomationWindow = { id: string; kind: AutomationWindowKind; focused: boolean; profile: string; profileName: string; tabs: AutomationTab[] };
 
 type Snapshot = Pick<BrowserState, "windows" | "windowOrder" | "tabs" | "peeks" | "groups" | "profiles" | "ui">;
 
 export function eligibleKind(s: Pick<BrowserState, "windows">, windowId: string | null | undefined): AutomationWindowKind | null {
-  const w = windowId ? s.windows[windowId] : undefined;
+  const w = ownValue(s.windows, windowId);
   if (!w || w.kind === "private" || isIncognitoProfile(w.profileId)) return null;
   return w.kind === "small" ? "little" : "normal";
 }
 
 export function isEligibleTab(s: Pick<BrowserState, "windows" | "tabs" | "peeks">, tabId: string): boolean {
-  const t = s.tabs[tabId];
+  const t = ownValue(s.tabs, tabId);
   return !!t && eligibleKind(s, t.windowId) !== null && !isIncognitoProfile(t.profileId) && !isPeekTab(s, tabId);
 }
 
 export function shownPage(t: { url: string; title: string; customTitle?: string | null }): { url: string; title: string } {
   const page = internalPageOf(t.url);
   if (page) return { url: t.url.replace(/[?#].*$/, ""), title: INTERNAL_PAGES[page].title };
+  if (pluginPageOf(t.url)) return { url: t.url.replace(/[?#].*$/, ""), title: t.customTitle || t.title };
   return { url: t.url, title: t.customTitle || t.title };
 }
 

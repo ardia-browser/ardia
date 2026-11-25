@@ -1,9 +1,15 @@
-import ExpoModulesCore
+struct ScriptTabState {
+  let id: String
+  let title: String
+  let url: String
+  let loading: Bool
+  let pinned: Bool
 
-struct ScriptTabState: Record {
-  @Field var id: String = ""
-  @Field var title: String = ""
-  @Field var url: String = ""
-  @Field var loading: Bool = false
-  @Field var pinned: Bool = false
+  init(_ raw: [String: Any]) {
+    id = raw["id"] as? String ?? ""
+    title = raw["title"] as? String ?? ""
+    url = raw["url"] as? String ?? ""
+    loading = raw["loading"] as? Bool ?? false
+    pinned = raw["pinned"] as? Bool ?? false
+  }
 }

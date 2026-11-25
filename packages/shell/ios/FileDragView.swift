@@ -8,6 +8,7 @@ final class FileDragView: ExpoView, NSDraggingSource {
   var path: String?
   let onMiddleClick = EventDispatcher()
   private var downAt: NSPoint?
+  private static let iconSide: CGFloat = 32
 
   override func otherMouseUp(with event: NSEvent) {
     guard event.buttonNumber == 2 else { return super.otherMouseUp(with: event) }
@@ -35,7 +36,8 @@ final class FileDragView: ExpoView, NSDraggingSource {
     let item = NSDraggingItem(pasteboardWriter: url as NSURL)
     let icon = NSWorkspace.shared.icon(forFile: path)
     let local = convert(event.locationInWindow, from: nil)
-    item.setDraggingFrame(NSRect(x: local.x - 16, y: local.y - 16, width: 32, height: 32), contents: icon)
+    let side = abs(convert(NSSize(width: Self.iconSide, height: Self.iconSide), from: nil).width)
+    item.setDraggingFrame(NSRect(x: local.x - side / 2, y: local.y - side / 2, width: side, height: side), contents: icon)
     beginDraggingSession(with: [item], event: event, source: self)
   }
 

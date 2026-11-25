@@ -1,15 +1,18 @@
 import ExpoModulesCore
 
-public class MeadowModule: Module {
+public class MeadowModule: Module, MeadowNative {
+  static func debugState() -> [String: Any] { MeadowView.debugState }
+
+  static func debugEval(_ script: String, _ promise: Promise) {
+    guard let view = MeadowView.live else { return promise.resolve(nil) }
+    view.evaluate(script) { promise.resolve($0) }
+  }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaMeadow")
+    Name(Self.moduleName)
 
-    AsyncFunction("debugState") { () -> [String: Any] in MeadowView.debugState }.runOnQueue(.main)
-
-    AsyncFunction("debugEval") { (script: String, promise: Promise) in
-      guard let view = MeadowView.live else { return promise.resolve(nil) }
-      view.evaluate(script) { promise.resolve($0) }
-    }.runOnQueue(.main)
+    Self.debugStateFunction
+    Self.debugEvalFunction
 
     View(MeadowView.self) {
       Prop("night") { (view: MeadowView, night: Bool) in view.night = night }

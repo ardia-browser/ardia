@@ -1,9 +1,9 @@
-import type { SearchScope } from "@ardia/core";
+import { displayUrl, type SearchScope, type Suggestion } from "@ardia/core";
 import type { BarSnapshot } from "../../state/omnibox/barState";
 
 export type Selection = { start: number; end: number };
 
-export type BarText = {
+type BarText = {
   typed: string;
   edited: boolean;
   suppressCompletion: boolean;
@@ -22,22 +22,30 @@ export type BarEvent =
   | { kind: "completionDropped" }
   | { kind: "enteredScope"; scope: SearchScope; from: string }
   | { kind: "leftScope"; restore: string | null }
-  | { kind: "reset"; selected: number }
+  | { kind: "reset" }
   | { kind: "selected"; index: number }
   | { kind: "select"; selection: Selection }
   | { kind: "selectionApplied" };
 
-export function initialBar(restored: BarSnapshot | null, initialText: string, noneSelected: number): BarText {
+export function initialBar(restored: BarSnapshot | null, initialText: string): BarText {
   return {
     typed: restored?.typed ?? initialText,
     edited: restored?.edited ?? false,
     suppressCompletion: true,
-    selected: restored?.selected ?? noneSelected,
+    selected: restored?.selected ?? 0,
     scope: restored?.scope ?? null,
     scopeFrom: restored?.scopeFrom ?? "",
     pendingSelection: restored?.selection ?? (initialText ? { start: 0, end: initialText.length } : null),
   };
 }
+
+export function previewText(s: Suggestion | undefined): string | null {
+  if (s?.kind === "search") return s.query;
+  if (s?.kind === "page") return displayUrl(s.url);
+  return null;
+}
+
+export const fullUrlShown = (value: string, s: Suggestion | undefined): string | null => (s?.kind === "page" && value === displayUrl(s.url) ? s.url : null);
 
 const caret = (at: number): Selection => ({ start: at, end: at });
 
@@ -52,7 +60,7 @@ export function barReducer(s: BarText, e: BarEvent): BarText {
     case "tabAccepted":
       return { ...s, typed: e.text, suppressCompletion: true, pendingSelection: caret(e.text.length) };
     case "calculated":
-      return { ...s, typed: e.text, suppressCompletion: true, pendingSelection: { start: 0, end: e.text.length } };
+      return { ...s, typed: e.text, suppressCompletion: true, selected: 0, pendingSelection: { start: 0, end: e.text.length } };
     case "completionDropped":
       return { ...s, suppressCompletion: true };
     case "enteredScope":
@@ -61,7 +69,7 @@ export function barReducer(s: BarText, e: BarEvent): BarText {
       if (e.restore === null) return { ...s, scope: null, selected: 0, suppressCompletion: true };
       return { ...s, scope: null, typed: e.restore, edited: true, pendingSelection: caret(e.restore.length), selected: 0, suppressCompletion: true };
     case "reset":
-      return { ...s, typed: "", edited: false, scope: null, selected: e.selected, suppressCompletion: true };
+      return { ...s, typed: "", edited: false, scope: null, selected: 0, suppressCompletion: true };
     case "selected":
       return { ...s, selected: e.index };
     case "select":
@@ -93,6 +101,9 @@ export function selectionTracker(initial: Selection, now = Date.now) {
     },
     collapse() {
       current = { start: 0, end: 0 };
+    },
+    rebase() {
+      before = current;
     },
     beforeEdit: () => (now() - movedAt < CARET_WITH_KEY_MS ? before : current),
   };

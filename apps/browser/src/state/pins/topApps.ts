@@ -1,10 +1,10 @@
 import type { BrowserState } from "../browser/store";
 import { isPinnedRow, makeTab, pinKeyOf, pinSection, snapshotTab, TILE_PIN } from "../browser/model";
-import type { ParkedPins, Profile, Tab } from "../browser/types";
-import { isFields } from "../../lib/decode";
+import type { ParkedPins, Tab } from "../browser/types";
 import { dataGroups, dataIdOf, sharingProfiles } from "../profiles/profiles";
 import { isRegularWindow } from "../windows/small";
 import { writingFromSync } from "./syncWrites";
+import { noteTopAppsSharing, sharingStartedBySync } from "../telemetry/topAppsSharing";
 import { conform, pinnedGroupsOf, pinsMayDiffer, profilesOf, sectionOf, tileSig, union, type Item, type Section } from "./pinMirror";
 
 type Sharing = Pick<BrowserState, "profiles">;
@@ -14,7 +14,7 @@ export const isTopApp = (t: Pick<Tab, "pin">) => pinSection(t) === "tile";
 
 const sharingDataOf = (s: Sharing, profileId: string) => {
   const p = s.profiles[profileId];
-  return p && !p.ownTopApps ? dataIdOf(p) : undefined;
+  return p?.shareTopApps ? dataIdOf(p) : undefined;
 };
 
 export function topAppsShared(s: Sharing, a: string, b: string): boolean {
@@ -23,20 +23,17 @@ export function topAppsShared(s: Sharing, a: string, b: string): boolean {
   return !!data && data === sharingDataOf(s, b);
 }
 
-export const profilesAfterSharingSetting = (profiles: Record<string, Profile>, settings: unknown): Record<string, Profile> =>
-  isFields(settings) && settings.shareTopApps === false ? Object.fromEntries(Object.entries(profiles).map(([id, p]) => [id, { ...p, ownTopApps: true }])) : profiles;
-
 export const sameTopApp = (s: Sharing, a: Pick<Tab, "pin" | "profileId">, b: Pick<Tab, "pin" | "profileId">) =>
   isTopApp(a) && isTopApp(b) && topAppsShared(s, a.profileId, b.profileId);
 
-export function topAppCircles(s: Circles): string[][] {
+function topAppCircles(s: Circles): string[][] {
   return dataGroups(s)
-    .map((g) => g.profileIds.filter((id) => !s.profiles[id]!.ownTopApps))
+    .map((g) => g.profileIds.filter((id) => s.profiles[id]!.shareTopApps))
     .filter((ids) => ids.length > 1);
 }
 
 export const topAppSiblings = (s: Circles, profileId: string): string[] =>
-  s.profiles[profileId]?.ownTopApps ? [] : sharingProfiles(s, profileId).filter((id) => !s.profiles[id]!.ownTopApps);
+  s.profiles[profileId]?.shareTopApps ? sharingProfiles(s, profileId).filter((id) => s.profiles[id]!.shareTopApps) : [];
 
 const circleKey = (ids: string[]) => [...ids].sort().join(",");
 
@@ -143,6 +140,7 @@ export function mirrorTopApps(s: BrowserState, prev: BrowserState): BrowserState
   const recorded = key !== s.topAppsMerged ? { ...s, topAppsMerged: key } : s;
   const onlyRecorded = recorded === s ? null : recorded;
   if (!key) return onlyRecorded;
+  if (!onlyRecorded && s.parkedPins === prev.parkedPins && (writingFromSync() || !pinsMayDiffer(s, prev))) return null;
   const circles = topAppCircles(s);
   const merged = s.topAppsMerged.split("|").map((k) => new Set(k.split(",")));
   const joining = new Set(circles.filter((c) => !merged.some((m) => c.every((id) => m.has(id)))).map(circleKey));
@@ -153,6 +151,19 @@ export function mirrorTopApps(s: BrowserState, prev: BrowserState): BrowserState
   const prevGroups = pinnedGroupsOf(prev);
   const hadPlace = (p: string) => shownAnywhere(prev, p);
   let next: BrowserState = kept ?? recorded;
+  const copiedProfiles = new Set<string>();
+  let copiedTiles = 0;
+  let removedTiles = 0;
+  const copiedCircles = new Set<string>();
+  const copied = (circle: string[], profileId: string, own: Item[], tiles: Item[]) => {
+    copiedCircles.add(circleKey(circle));
+    if (copiedProfiles.has(profileId)) return;
+    copiedProfiles.add(profileId);
+    const had = new Set(own.map((x) => pinKeyOf(x.tab)));
+    const has = new Set(tiles.map((x) => pinKeyOf(x.tab)));
+    copiedTiles += [...has].filter((key) => !had.has(key)).length;
+    removedTiles += [...had].filter((key) => !has.has(key)).length;
+  };
   for (const circle of circles) {
     const turnedOn = joining.has(circleKey(circle));
     if (!turnedOn && writingFromSync()) continue;
@@ -196,11 +207,24 @@ export function mirrorTopApps(s: BrowserState, prev: BrowserState): BrowserState
       if (tiles.map((x) => tileSig(x.tab)).join("\n") === sigs[i]) return;
       if (!w) {
         next = withParkedTiles(next, p, tiles);
+        copied(circle, p, own, tiles);
         return;
       }
       if (!next.windows[w]) return;
       const section = sectionOf(next, next.windows[w]!, p, pinnedGroupsOf(next));
       next = conform(next, w, p, { ...section, items: [...section.items.filter((x) => x.group || !isTopApp(x.tab)), ...tiles] });
+      copied(circle, p, own, tiles);
+    });
+  }
+  if (copiedProfiles.size) {
+    noteTopAppsSharing("top_apps_mirrored", {
+      circles: circles.length,
+      joining_circles: joining.size,
+      circles_changed: copiedCircles.size,
+      profiles_changed: copiedProfiles.size,
+      tiles: copiedTiles,
+      tiles_removed: removedTiles,
+      from_sync: writingFromSync() || sharingStartedBySync(),
     });
   }
   return next === s ? null : next;

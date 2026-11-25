@@ -1,14 +1,15 @@
 import type { BrowserState } from "../browser/store";
 import type { Tab, TabGroup } from "../browser/types";
-import { activeTabId, IDLE_LIVE, makeTab, newId } from "../browser/model";
+import { activeTabId, makeTab, newId } from "../browser/model";
 import { nestGroups, orderSections, syncGroupOrder } from "../groups/groups";
 import { markPinned } from "../pins/pinChoices";
 import { removeTabs } from "../tabs/tabs";
 import { ASLEEP, hasPage } from "../tabs/pageSession";
 import type { LocalFolder } from "./local";
 import type { TargetEntry, TargetLevel } from "./tree";
+import { sameList } from "../../lib/lists";
 
-export const APPLIED_FIELDS = ["tabs", "live", "groups", "windows", "windowOrder", "windowUi", "find", "splits", "selection", "closedTabs", "pinChoices"] as const;
+export const APPLIED_FIELDS = ["tabs", "groups", "windows", "windowOrder", "windowUi", "find", "splits", "selection", "closedTabs", "pinChoices"] as const;
 
 function keysIn(level: TargetLevel, links: Set<string>, dirs: Set<string>) {
   for (const e of level.entries) {
@@ -23,8 +24,6 @@ export const EMPTY_FOLDER_URL = "about:blank";
 const EMPTY_FOLDER_TITLE = "Empty Folder";
 
 const isPlaceholder = (t: Tab | undefined) => !!t && !hasPage(t) && (!t.url || t.url === EMPTY_FOLDER_URL);
-
-const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 export function withFolder(s: BrowserState, groupId: string, level: TargetLevel, folder: LocalFolder): BrowserState {
   const root = s.groups[groupId];
@@ -43,7 +42,6 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
 
   const next = removed.length ? removeTabs(s, removed, false) : s;
   const tabs: Record<string, Tab> = { ...next.tabs };
-  const live = { ...next.live };
   let groups: Record<string, TabGroup> = { ...next.groups };
   for (const id of released) tabs[id] = { ...tabs[id]!, pinnedUrl: null, pinKey: undefined };
   for (const [key, id] of folder.groupOf) if (!dirs.has(key) && groups[id]) (delete groups[id], (dirty = true));
@@ -61,7 +59,6 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
     }
     const tab: Tab = { ...makeTab(windowId, profileId, e.url, { title: e.name, customTitle: e.name }), pinnedUrl: e.url, page: ASLEEP };
     tabs[tab.id] = tab;
-    live[tab.id] = IDLE_LIVE;
     created.push(tab.id);
     e.key = tab.id;
     dirty = true;
@@ -105,7 +102,6 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
   if (!members.length) {
     const blank: Tab = { ...makeTab(windowId, profileId, EMPTY_FOLDER_URL, { title: EMPTY_FOLDER_TITLE, customTitle: EMPTY_FOLDER_TITLE }), page: ASLEEP };
     tabs[blank.id] = blank;
-    live[blank.id] = IDLE_LIVE;
     members = [blank.id];
     dirty = true;
   }
@@ -123,8 +119,8 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
   const arranged = { ...window, tabIds: orderSections(ids, tabs, groups) };
   groups = syncGroupOrder(groups, arranged);
   const unchanged =
-    !dirty && sameIds(arranged.tabIds, window.tabIds) && Object.values(groups).every((g) => g.windowId !== windowId || sameIds(g.tabIds, s.groups[g.id]?.tabIds ?? []));
+    !dirty && sameList(arranged.tabIds, window.tabIds) && Object.values(groups).every((g) => g.windowId !== windowId || sameList(g.tabIds, s.groups[g.id]?.tabIds ?? []));
   if (unchanged) return s;
   const pinChoices = created.length ? markPinned(next.pinChoices, profileId, { placed: created }) : next.pinChoices;
-  return { ...next, tabs, live, groups, windows: { ...next.windows, [windowId]: arranged }, pinChoices };
+  return { ...next, tabs, groups, windows: { ...next.windows, [windowId]: arranged }, pinChoices };
 }

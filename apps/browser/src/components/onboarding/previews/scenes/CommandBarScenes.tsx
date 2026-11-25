@@ -1,16 +1,16 @@
-import { Animated, View } from "react-native";
-import { at, CRUMB_X, FIELD, fill, type Geo, type Rect, ROW, rowY, sideCard } from "../geometry";
-import { BLANK, type Suggestion, tab } from "../content";
-import type { Look } from "../look";
-import { linear, tracker, type Tracker } from "../timeline";
-import { Caret, Highlight, Label, NewTabButton, Rows, Selection, TabRow } from "../Kit";
+import { Animated } from "react-native";
+import { CRUMB_X, FIELD, fill, type Rect, ROW, rowY, sideCard } from "../geometry";
+import { BLANK } from "../content";
+import { tracker } from "../timeline";
+import { Caret, Highlight, Label, NewTabButton, Rows, TabRow } from "../Kit";
 import { NewTabPage } from "../MockPages";
-import { InputRow, Panel, SuggestionRow } from "../Floating";
+import { InputRow, Panel } from "../Floating";
 import { sceneMs } from "../tokens";
 import { radius, space } from "../../../ui/tokens";
 import { BAR_TYPE, SUGGESTION } from "../../../omnibox/tokens";
 import type { Scene } from "../scene";
 import { centredFrame, CURRENT, Divider, drop, FRESH, grow, KeyPress, listTop, PANEL_H, SelectedUrl, Std, SuggestionList } from "./SceneParts";
+import { keyText } from "../../../../state/commands/keyText";
 
 export const CmdlField: Scene = ({ g, look, p, opts }) => {
   const t = tracker(p, sceneMs.commandBar);
@@ -27,7 +27,7 @@ export const CmdlField: Scene = ({ g, look, p, opts }) => {
           <Divider g={g} look={look} />
           <SuggestionList g={g} look={look} t={t} rows={CURRENT} ms={400} />
         </Panel>
-        <KeyPress g={g} look={look} t={t} label="⌘L" />
+        <KeyPress g={g} t={t} label={keyText("⌘L")} />
       </>
     );
   }
@@ -43,7 +43,7 @@ export const CmdlField: Scene = ({ g, look, p, opts }) => {
         <Divider g={g} look={look} />
         <SuggestionList g={g} look={look} t={t} rows={CURRENT} ms={400} />
       </Panel>
-      <KeyPress g={g} look={look} t={t} label="⌘L" />
+      <KeyPress g={g} t={t} label={keyText("⌘L")} />
     </>
   );
 };
@@ -60,7 +60,7 @@ export const CmdlCentred: Scene = ({ g, look, p, opts }) => {
         <Divider g={g} look={look} />
         <SuggestionList g={g} look={look} t={t} rows={CURRENT} ms={400} />
       </Panel>
-      <KeyPress g={g} look={look} t={t} label="⌘L" />
+      <KeyPress g={g} t={t} label={keyText("⌘L")} />
     </>
   );
 };
@@ -81,7 +81,7 @@ export const NewTabOpensPage: Scene = ({ g, look, p, opts }) => {
           <Rows g={g} look={look} n={4} top={top} newTab={false} />
           <TabRow g={g} look={look} t={BLANK} y={rowY(4, top)} selected style={{ opacity: t.in(300, 240), transform: [{ translateX: t([[300, -12 * g.s], [600, 0]]) }] }} />
           <NewTabButton g={g} look={look} y={rowY(4, top)} style={{ transform: [{ translateY: t([[300, 0], [600, ROW.pitch * g.s]]) }] }} />
-          <KeyPress g={g} look={look} t={t} label="⌘T" />
+          <KeyPress g={g} t={t} label={keyText("⌘T")} />
         </>
       }
       card={
@@ -92,23 +92,6 @@ export const NewTabOpensPage: Scene = ({ g, look, p, opts }) => {
     />
   );
 };
-
-function Typed({ g, look, t, text, at: ms, step, caretUntil }: { g: Geo; look: Look; t: Tracker; text: string; at: number; step: number; caretUntil: number }) {
-  const caret = (from: number, to: number) => t([[from, 0], [from + 1, 1], [to, 1], [to + 1, 0]], linear);
-  return (
-    <>
-      <Caret g={g} look={look} style={{ position: "absolute", left: 0, opacity: caret(-1, ms) }} />
-      {text.split("").map((ch, i) => (
-        <Animated.View key={i} style={{ opacity: t.step(ms + i * step) }}>
-          <Label g={g} size={BAR_TYPE.floatingField.fontSize} color={look.t.textPrimary}>
-            {ch}
-          </Label>
-          <Caret g={g} look={look} style={{ position: "absolute", right: -1.4 * g.s, top: 1 * g.s, opacity: caret(ms + i * step, i === text.length - 1 ? caretUntil : ms + (i + 1) * step) }} />
-        </Animated.View>
-      ))}
-    </>
-  );
-}
 
 export const NewTabOpensBar: Scene = ({ g, look, p, opts }) => {
   const t = tracker(p, sceneMs.newTab);
@@ -125,7 +108,7 @@ export const NewTabOpensBar: Scene = ({ g, look, p, opts }) => {
         <Divider g={g} look={look} />
         <SuggestionList g={g} look={look} t={t} rows={FRESH} ms={400} />
       </Panel>
-      <KeyPress g={g} look={look} t={t} label="⌘T" />
+      <KeyPress g={g} t={t} label={keyText("⌘T")} />
     </>
   );
 };
@@ -164,46 +147,6 @@ export function newTabAt(at: "top" | "bottom" | "next"): Scene {
           </>
         }
       />
-    );
-  };
-}
-
-const TYPE_AT = 180;
-const TYPE_STEP = 75;
-const TYPED = "github";
-const TYPED_DONE = TYPE_AT + TYPED.length * TYPE_STEP;
-const GITHUB = tab(6);
-
-export function typed(search: boolean): Scene {
-  return ({ g, look, p, opts }) => {
-    const t = tracker(p, sceneMs.typed);
-    const site: Suggestion = { fav: GITHUB, title: "github.com", detail: "GitHub", hint: "Visit" };
-    const query: Suggestion = { icon: "magnifyingglass", title: "github", detail: "Search Google", hint: "Search" };
-    const rows = search ? [query, site] : [site, query];
-    return (
-      <>
-        <Std g={g} look={look} opts={opts} />
-        <Panel g={g} look={look} rect={{ ...centredFrame(g), h: 52 + 2 * SUGGESTION.height + 14 }} style={drop(t, g, 0)}>
-          <InputRow g={g} look={look}>
-            <Typed g={g} look={look} t={t} text={TYPED} at={TYPE_AT} step={TYPE_STEP} caretUntil={search ? sceneMs.typed : TYPED_DONE + 100} />
-            {search ? null : (
-              <Selection g={g} look={look} style={{ opacity: t.step(TYPED_DONE + 100) }}>
-                <Label g={g} size={BAR_TYPE.floatingField.fontSize} color={look.t.textPrimary}>
-                  .com
-                </Label>
-              </Selection>
-            )}
-          </InputRow>
-          <Divider g={g} look={look} />
-          <View style={{ paddingHorizontal: SUGGESTION.listX * g.s, paddingTop: space.xs * g.s }}>
-            {rows.map((s, i) => (
-              <Animated.View key={i} style={{ opacity: t.in(TYPED_DONE + 140 + i * 60, 200) }}>
-                <SuggestionRow g={g} look={look} s={s} selected={i === 0} />
-              </Animated.View>
-            ))}
-          </View>
-        </Panel>
-      </>
     );
   };
 }

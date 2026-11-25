@@ -49,6 +49,8 @@ export const settingsAdapter: Adapter = {
   },
 };
 
+export const settingSyncedIn = (records: Record<string, SyncRecord>, name: SettingKey) => records[recordKey(name)] !== undefined;
+
 export function settingsToReapply(records: Record<string, SyncRecord>): string[] {
   const settings = store().settings;
   const chosen = new Set(store().settingsMeta.chosen);

@@ -4,7 +4,7 @@ import { curve, duration } from "./motion";
 import { Panel } from "./Panel";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
-import { proseLineHeight, radius, shadow, sheetWidth, space, type SheetSize, type Space } from "./tokens";
+import { perLook, proseLineHeight, radius, shadow, sheetWidth, space, type SheetSize, type Space } from "./tokens";
 
 const CENTERED: StyleProp<ViewStyle> = [StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }];
 
@@ -17,6 +17,7 @@ export function Dialog({
   animated = false,
   maxHeight,
   place,
+  backdropCloses = true,
   children,
 }: {
   width: SheetSize;
@@ -27,6 +28,7 @@ export function Dialog({
   animated?: boolean;
   maxHeight?: DimensionValue;
   place?: Pick<ViewStyle, "top" | "left" | "right" | "bottom">;
+  backdropCloses?: boolean;
   children: ReactNode;
 }) {
   const theme = useTheme();
@@ -65,7 +67,7 @@ export function Dialog({
   if (!animated)
     return (
       <View style={CENTERED}>
-        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]} onPress={onDismiss} />
+        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]} onPress={backdropCloses ? onDismiss : undefined} />
         {surface}
       </View>
     );
@@ -102,9 +104,9 @@ function DialogKeys({ onDismiss, onSubmit, pad, children }: { onDismiss?: () => 
   );
 }
 
-export function Sheet({ size = "m", onClose, children }: { size?: SheetSize; onClose: () => void; children: ReactNode }) {
+export function Sheet({ size = "m", onClose, backdropCloses, children }: { size?: SheetSize; onClose: () => void; backdropCloses?: boolean; children: ReactNode }) {
   return (
-    <Dialog width={size} maxHeight="90%" onDismiss={onClose}>
+    <Dialog width={size} maxHeight="90%" onDismiss={onClose} backdropCloses={backdropCloses}>
       {children}
     </Dialog>
   );
@@ -112,7 +114,7 @@ export function Sheet({ size = "m", onClose, children }: { size?: SheetSize; onC
 
 const TITLE_ROW = { flexDirection: "row", alignItems: "center", gap: space.l } as const;
 const TITLE_TEXT = { flex: 1 } as const;
-const SUBTITLE = { lineHeight: proseLineHeight.small, marginTop: space.s } as const;
+const subtitleStyle = perLook(() => ({ lineHeight: proseLineHeight.small, marginTop: space.s }));
 
 export function DialogTitle({ icon, subtitle, children }: { icon?: ReactNode; subtitle?: ReactNode; children: ReactNode }) {
   const title = (
@@ -122,7 +124,7 @@ export function DialogTitle({ icon, subtitle, children }: { icon?: ReactNode; su
   );
   const sub =
     subtitle == null || subtitle === false ? null : typeof subtitle === "string" ? (
-      <Text size="small" tone="textSecondary" style={SUBTITLE}>
+      <Text size="small" tone="textSecondary" style={subtitleStyle()}>
         {subtitle}
       </Text>
     ) : (

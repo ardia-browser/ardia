@@ -301,7 +301,7 @@ function convert(input: string): { value: number; unit: string } | null {
   return { value: (amount * a.factor) / b.factor, unit: b.label };
 }
 
-export type Calculation = { expression: string; value: number; display: string };
+type Calculation = { expression: string; value: number; display: string };
 
 export function calculate(raw: string): Calculation | null {
   const expression = raw.trim().replace(/^=\s*/, "").replace(/\s*=\s*\??$/, "");

@@ -1,0 +1,442 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { resolveHostModule } from "./hostModules.ts";
+import {
+  HELD_LOGINS_DOCUMENT,
+  SYNC_CAPABILITIES,
+  configureHeldLogins,
+  configureOpenFailureCount,
+  createHeldLogins,
+  keyringResumer,
+  newSyncDeviceId,
+  refreshSyncDocuments,
+  whileResettingHeldLogins,
+  loadSyncCore,
+  syncModuleMethod,
+  whenSyncCore,
+} from "./hostSync.ts";
+import { NO_AUTHORITY_MESSAGE, REMOTE_METHODS, startSyncAuthority } from "./syncAuthority.ts";
+import { consentToken, setConsentPeriod, stillValid } from "../../browser/src/state/telemetry/consentPeriod.ts";
+
+const PHRASE = "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title";
+const fast = { set: (callback, ms) => setTimeout(callback, Math.min(ms, 15)), clear: (handle) => clearTimeout(handle) };
+const tick = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function fakeHost(reply = () => null) {
+  const calls = [];
+  return {
+    calls,
+    bootstrap: { windowId: "w1", profileId: "default", capabilities: [...SYNC_CAPABILITIES] },
+    call: async () => "{}",
+    invoke: async (method, args) => (calls.push({ method, args }), reply(method, args)),
+    onEvent: () => () => {},
+  };
+}
+
+function store(initial) {
+  let state = initial;
+  const listeners = new Set();
+  return {
+    getState: () => state,
+    setState(next, replace) {
+      state = replace ? next : { ...state, ...next };
+      for (const listener of listeners) listener(state);
+    },
+    subscribe: (listener) => (listeners.add(listener), () => listeners.delete(listener)),
+  };
+}
+
+function nativeLease(ttl = 200) {
+  let holder = "", expires = 0;
+  return {
+    claim(caller) {
+      if (holder && holder !== caller && Date.now() < expires) return { granted: false };
+      holder = caller;
+      expires = Date.now() + ttl;
+      return { granted: true };
+    },
+    release: (caller) => void (holder === caller && (holder = "")),
+    holds: (caller) => holder === caller && Date.now() < expires,
+  };
+}
+
+function renderer(name, { candidate, lease, engines, channelName }) {
+  const mirror = store({ status: "starting", error: null, folder: null });
+  const log = [];
+  const calls = [];
+  const authority = startSyncAuthority({
+    id: name, candidate, channel: new BroadcastChannel(channelName), mirror, timers: fast, report: () => {},
+    claim: async () => lease.claim(name),
+    release: async () => lease.release(name),
+    become: async () => {
+      engines.push(name);
+      const real = store({ status: "off", error: null, folder: null, owner: name });
+      const remote = Object.fromEntries(REMOTE_METHODS.map((method) => [method, async (...args) => {
+        log.push(method);
+        calls.push({ method, args });
+        if (!lease.holds(name)) throw new Error("ERR_SYNC_NOT_AUTHORITY");
+        if (method === "turnOnSync") real.setState({ ...real.getState(), status: "starting", folder: args[0] }, true);
+        return method === "turnOnSync" || method === "enterRecoveryPhrase" ? { ok: true } : null;
+      }]));
+      return { store: real, remote };
+    },
+  });
+  return { authority, mirror, log, calls };
+}
+
+function heldIo(docs = new Map(), { openFails = false } = {}) {
+  return {
+    docs,
+    read: (name) => docs.get(name) ?? null,
+    save: async (name, text) => void docs.set(name, text),
+    remove: async (name) => void docs.delete(name),
+    seal: async (text) => `sealed:${Buffer.from(text).toString("base64")}`,
+    open: async (sealed) => (openFails ? null : Buffer.from(sealed.slice(7), "base64").toString()),
+  };
+}
+
+test("saved passwords go only through the typed native path for the window's profile, and only once a held store exists", async () => {
+  const sealedList = [{ origin: "https://bank.example", username: "alice", sealed: "AdGh", created: 1700000000000 }];
+  const host = fakeHost((method) => (method === "ArdiaSync.readPasswords" ? sealedList : method === "ArdiaSync.savePassword" ? true : null));
+  const read = syncModuleMethod(host, "ArdiaSync", "readPasswords");
+  assert.equal(await read(""), null);
+  assert.deepEqual(host.calls, []);
+  configureHeldLogins(createHeldLogins(heldIo()));
+  try {
+    assert.deepEqual(await read("work"), sealedList);
+    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", "https://bank.example", "alice", "AdGh", true), true);
+  } finally {
+    configureHeldLogins(null);
+  }
+  assert.deepEqual(host.calls, [
+    { method: "ArdiaSync.readPasswords", args: { args: ["work"] } },
+    { method: "ArdiaSync.savePassword", args: { args: ["default", "https://bank.example", "alice", "AdGh", true] } },
+  ]);
+  assert.equal(syncModuleMethod(host, "ArdiaPasswords", "write"), undefined);
+});
+
+test("a held login is sealed at rest and hides the local value it replaced across restarts until that value really changes", async () => {
+  const io = heldIo();
+  const v1 = { origin: "https://bank.example", username: "alice", sealed: "V1", created: 5 };
+  assert.equal(await createHeldLogins(io).hold("", { origin: v1.origin, username: "alice", sealed: "LONG", replaced: "V1" }), true);
+  const stored = io.docs.get(HELD_LOGINS_DOCUMENT);
+  assert.ok(stored.startsWith("sealed:") && !stored.includes("bank.example") && !stored.includes("LONG"));
+  const restarted = createHeldLogins(io);
+  assert.deepEqual(await restarted.merge("", [v1]), [{ origin: v1.origin, username: "alice", sealed: "LONG", created: 0 }]);
+  assert.deepEqual(await restarted.merge("work", [v1]), [v1]);
+  const edited = { ...v1, sealed: "V2", created: 9 };
+  assert.deepEqual(await restarted.merge("", [edited]), [edited]);
+  assert.equal(io.docs.has(HELD_LOGINS_DOCUMENT), false);
+  const locked = createHeldLogins(heldIo(new Map([[HELD_LOGINS_DOCUMENT, "sealed:e30="]]), { openFails: true }));
+  assert.equal(await locked.merge("", [v1]), null);
+});
+
+test("holding a login and dropping a deleted profile at the same time keep both changes, in either order", async () => {
+  const kept = { origin: "https://kept.example", username: "kim", sealed: "KEPT", replaced: null };
+  const gone = { origin: "https://gone.example", username: "gil", sealed: "GONE", replaced: null };
+  const decode = (io) => JSON.parse(Buffer.from(io.docs.get(HELD_LOGINS_DOCUMENT).slice(7), "base64").toString());
+  for (const [holdDelay, dropDelay] of [[20, 0], [0, 20]]) {
+    const io = heldIo();
+    const held = createHeldLogins(io);
+    assert.equal(await held.hold("old", gone), true);
+    assert.equal(await held.hold("other", { ...gone, username: "ola" }), true);
+    const delays = [holdDelay, dropDelay];
+    const seal = io.seal;
+    io.seal = async (text) => {
+      await new Promise((resolve) => setTimeout(resolve, delays.shift() ?? 0));
+      return seal(text);
+    };
+    const [holding] = await Promise.all([held.hold("new", kept), held.dropProfiles(["old"])]);
+    assert.equal(holding, true);
+    const expected = { other: { [`${gone.origin}\n${"ola"}`]: { ...gone, username: "ola" } }, new: { [`${kept.origin}\n${kept.username}`]: kept } };
+    assert.deepEqual(decode(io), expected);
+    assert.deepEqual(await createHeldLogins(io).merge("old", []), []);
+    assert.equal(await held.holds("new", kept.origin, kept.username), true);
+    assert.equal(await held.holds("old", gone.origin, gone.username), false);
+  }
+});
+
+test("clearing the held store waits for a hold already saving, so nothing it cleared comes back", async () => {
+  const io = heldIo();
+  const held = createHeldLogins(io);
+  const seal = io.seal;
+  io.seal = async (text) => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return seal(text);
+  };
+  await Promise.all([held.hold("", { origin: "https://a.example", username: "ann", sealed: "A", replaced: null }), held.clear()]);
+  assert.equal(io.docs.has(HELD_LOGINS_DOCUMENT), false);
+  assert.equal(held.status().held, 0);
+});
+
+test("a key reset suspends the held store while it runs and clears it only when the engine began a new document", async () => {
+  const io = heldIo();
+  const read = syncModuleMethod(fakeHost((method) => (method === "ArdiaSync.readPasswords" ? [] : null)), "ArdiaSync", "readPasswords");
+  const held = createHeldLogins(io);
+  configureHeldLogins(held);
+  try {
+    await held.hold("", { origin: "https://long.example", username: "lee", sealed: "REMOTE", replaced: null });
+    await whileResettingHeldLogins(async () => {
+      assert.equal(await read(""), null);
+      return { error: "checksum" };
+    }, (result) => "ok" in result);
+    assert.equal((await read("")).length, 1);
+    await whileResettingHeldLogins(async () => ({ ok: true }), (result) => "ok" in result);
+    assert.deepEqual(await read(""), []);
+    assert.equal(io.docs.has(HELD_LOGINS_DOCUMENT), false);
+  } finally {
+    configureHeldLogins(null);
+  }
+});
+
+test("the sync module keeps device ids local and sends every other call as a typed sync invoke", async () => {
+  const host = fakeHost(() => true);
+  assert.match(syncModuleMethod(host, "ArdiaSync", "newDeviceId")(), /^[a-z2-7]{26}$/);
+  assert.equal(newSyncDeviceId((bytes) => bytes.fill(0)), "aaaaaaaaaaaaaaaaaaaaaaaaaa");
+  assert.equal(syncModuleMethod(host, "ArdiaSync", "nope"), undefined);
+  assert.equal(resolveHostModule(host, "ArdiaSync", "takeFileCounts"), null, "the hourly sync file counts are a Windows placeholder count Linux has none of, so the optional method is absent instead of a host call that rejects");
+  await resolveHostModule(host, "ArdiaSync", "folderInfo")(undefined);
+  await resolveHostModule(host, "ArdiaSync", "enterPhrase")("aaaaaaaaaaaaaaaaaaaaaaaaaa", PHRASE, "/sync");
+  assert.deepEqual(host.calls, [
+    { method: "ArdiaSync.folderInfo", args: { args: [null] } },
+    { method: "ArdiaSync.enterPhrase", args: { args: ["aaaaaaaaaaaaaaaaaaaaaaaaaa", PHRASE, "/sync"] } },
+  ]);
+});
+
+test("opening a keyring that was locked at launch resumes sync once from the stored key", async () => {
+  const secret = (keyStoreStatus, lastKeyStatus) => ({ keyStore: "secretService", keyStoreStatus, lastKeyStatus, unlocked: false, unreadable: false, passwords: false });
+  const replies = [secret("locked", "locked"), secret("ok", "locked"), secret("ok", "notFound")];
+  let resumed = 0;
+  const tickOnce = keyringResumer({ locked: () => true, status: async () => replies.shift(), seen: () => {}, resume: async () => void resumed++ });
+  assert.deepEqual([await tickOnce(), await tickOnce(), await tickOnce()], [false, true, false]);
+  assert.equal(resumed, 1);
+});
+
+test("a recovery phrase entered in another window reaches the sync window as a branded secret", async (t) => {
+  const { asSecret, isSecret, reveal } = await import("@ardia/core");
+  const channelName = `sync-${Math.random()}`;
+  const lease = nativeLease();
+  const engines = [];
+  const a = renderer("a", { candidate: true, lease, engines, channelName });
+  const settings = renderer("settings", { candidate: false, lease, engines, channelName });
+  t.after(() => { a.authority.stop(); settings.authority.stop(); });
+  await tick(80);
+  assert.deepEqual(await settings.authority.call("enterRecoveryPhrase", ["/home/tux/Sync", asSecret("syncPhrase", PHRASE)]), { ok: true });
+  const [folder, phrase] = a.calls.at(-1).args;
+  assert.equal(folder, "/home/tux/Sync");
+  assert.ok(isSecret(phrase));
+  assert.equal(phrase.kind, "syncPhrase");
+  assert.equal(reveal(phrase), PHRASE);
+  await settings.authority.call("setOpenTabsSynced", ["work", { relayedSecret: "syncPhrase", value: PHRASE }]);
+  assert.equal(isSecret(a.calls.at(-1).args[1]), false, "only the phrase argument of enterRecoveryPhrase is branded on arrival");
+  await assert.rejects(settings.authority.call("setOpenTabsSynced", ["work", asSecret("syncPhrase", PHRASE)]), TypeError);
+});
+
+test("one renderer runs sync, the others mirror it and forward their actions, and it fails over when that window closes", async (t) => {
+  const channelName = `sync-${Math.random()}`;
+  const lease = nativeLease();
+  const engines = [];
+  const a = renderer("a", { candidate: true, lease, engines, channelName });
+  const b = renderer("b", { candidate: true, lease, engines, channelName });
+  const settings = renderer("settings", { candidate: false, lease, engines, channelName });
+  t.after(() => { a.authority.stop(); b.authority.stop(); settings.authority.stop(); });
+  await tick(80);
+  assert.deepEqual(engines, ["a"]);
+  assert.equal(settings.authority.role(), "client");
+  assert.deepEqual(await settings.authority.call("turnOnSync", ["/home/tux/Sync"]), { ok: true });
+  assert.deepEqual(a.log, ["turnOnSync"]);
+  await tick();
+  assert.equal(settings.mirror.getState().folder, "/home/tux/Sync");
+  await settings.authority.call("setOpenTabsSynced", ["work", true]);
+  await settings.authority.call("setOpenTabsSynced", ["work", false]);
+  assert.deepEqual(a.calls.slice(1), [
+    { method: "setOpenTabsSynced", args: ["work", true] },
+    { method: "setOpenTabsSynced", args: ["work", false] },
+  ]);
+  a.authority.stop();
+  await tick(300);
+  assert.deepEqual(engines, ["a", "b"]);
+  assert.equal(await settings.authority.call("syncNow", []), null);
+  assert.deepEqual(b.log, ["syncNow"]);
+  await settings.authority.call("setOpenTabsSynced", ["work", true]);
+  await settings.authority.call("setOpenTabsSynced", ["work", false]);
+  assert.deepEqual(b.calls, [
+    { method: "syncNow", args: [] },
+    { method: "setOpenTabsSynced", args: ["work", true] },
+    { method: "setOpenTabsSynced", args: ["work", false] },
+  ]);
+  assert.equal(a.calls.length, 3);
+  b.authority.stop();
+  await tick(60);
+  await assert.rejects(settings.authority.call("syncNow", []), { message: NO_AUTHORITY_MESSAGE });
+  settings.authority.stop();
+});
+
+test("a Settings window picks the sync folder itself and hands turning on, choosing and moving it to the sync window", async (t) => {
+  const host = fakeHost((method) => (method === "ArdiaSync.chooseFolder" ? "/home/tux/Nextcloud" : null));
+  assert.equal(await syncModuleMethod(host, "ArdiaSync", "chooseFolder")("/home/tux"), "/home/tux/Nextcloud");
+  assert.equal(await syncModuleMethod(host, "ArdiaSync", "chooseFolder")(undefined), "/home/tux/Nextcloud");
+  assert.deepEqual(host.calls, [
+    { method: "ArdiaSync.chooseFolder", args: { args: ["/home/tux"] } },
+    { method: "ArdiaSync.chooseFolder", args: { args: [null] } },
+  ]);
+
+  const channelName = `sync-${Math.random()}`;
+  const lease = nativeLease();
+  const engines = [];
+  const browser = renderer("browser", { candidate: true, lease, engines, channelName });
+  const settings = renderer("settings", { candidate: false, lease, engines, channelName });
+  t.after(() => { browser.authority.stop(); settings.authority.stop(); });
+  await tick(80);
+  assert.equal(settings.authority.role(), "client");
+  await settings.authority.call("useFolder", ["/home/tux/Nextcloud/Ardia Sync"]);
+  await settings.authority.call("turnOnSync", ["/home/tux/Nextcloud/Ardia Sync", "picked"]);
+  await settings.authority.call("moveFolder", ["/media/usb/Ardia Sync"]);
+  assert.deepEqual(browser.calls, [
+    { method: "useFolder", args: ["/home/tux/Nextcloud/Ardia Sync"] },
+    { method: "turnOnSync", args: ["/home/tux/Nextcloud/Ardia Sync", "picked"] },
+    { method: "moveFolder", args: ["/media/usb/Ardia Sync"] },
+  ]);
+  assert.deepEqual(settings.calls, [], "the Settings window never runs sync itself");
+});
+
+test("refreshing sync documents drops journal parts stranded after a gap", async () => {
+  const disk = new Set(["sync.json", "sync-state.nns", "sync-journal-1.nns", "sync-journal-2.nns", "sync-journal-4.nns", "sync-journal-7.nns"]);
+  const result = await refreshSyncDocuments({ refresh: async (name) => disk.has(name), remove: async (name) => void disk.delete(name), maxParts: 12, batch: 5 });
+  assert.deepEqual(result, { parts: 2, removed: ["sync-journal-4.nns", "sync-journal-7.nns"] });
+});
+
+test("a sync.now forwarded to the sync window reports that window's answer", async () => {
+  const { syncNowThrough } = await import("./syncForward.ts");
+  const idle = async () => {};
+  assert.equal(await syncNowThrough(idle, async () => false, () => {}), false, "a refused pass stays refused");
+  assert.equal(await syncNowThrough(idle, async () => true, () => {}), true);
+  assert.equal(await syncNowThrough(idle, async () => null, () => {}), true, "a sync window that answers nothing still counts as done");
+  let forwarded = false;
+  await assert.rejects(syncNowThrough(idle, async () => (forwarded = true), () => { throw new Error("control is off"); }));
+  assert.equal(forwarded, false, "nothing is forwarded once the caller's check fails");
+});
+
+test("a forwarded sync.now checks its caller after the sync window's cycle ends, and never starts one behind a busy cycle", async () => {
+  const { syncIdle, syncNowIfIdle, syncNowThrough } = await import("./syncForward.ts");
+  let cycle = null;
+  let started = 0;
+  const engineSyncNow = async (stillWanted) => {
+    while (cycle) await cycle;
+    stillWanted();
+    started += 1;
+    return true;
+  };
+  let finish;
+  cycle = new Promise((resolve) => (finish = resolve)).then(() => (cycle = null));
+  let wanted = true;
+  const forwarded = syncNowThrough(() => syncIdle(engineSyncNow), () => syncNowIfIdle(engineSyncNow), () => {
+    if (!wanted) throw new Error("control is off");
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  wanted = false;
+  finish();
+  await assert.rejects(forwarded, /control is off/);
+  assert.equal(started, 0, "control turned off while the sync window was busy, so no cycle starts");
+
+  cycle = new Promise((resolve) => (finish = resolve)).then(() => (cycle = null));
+  const busy = syncNowIfIdle(engineSyncNow);
+  finish();
+  assert.equal(await busy, "busy", "a start that would have waited behind a cycle answers busy instead");
+  assert.equal(started, 0);
+  assert.equal(await syncNowIfIdle(engineSyncNow), true);
+  assert.equal(started, 1);
+});
+
+test("each read and openLocal counts its own open failures under the consent it began in, and hands the engine a plain result", async () => {
+  let consent = null;
+  const noted = [];
+  configureOpenFailureCount(() => consent, (started, failures) => noted.push({ started, failures }));
+  const replies = {
+    "ArdiaSync.read": [],
+    "ArdiaSync.openLocal": [],
+  };
+  const host = fakeHost((method) => new Promise((resolve) => replies[method].push(resolve)));
+  try {
+    const read = resolveHostModule(host, "ArdiaSync", "read");
+    const openLocal = resolveHostModule(host, "ArdiaSync", "openLocal");
+    const beforeOptIn = read("/sync", "app", []);
+    const localBeforeOptIn = openLocal("AAAA");
+    consent = "period-1";
+    const afterOptIn = read("/sync", "app", []);
+    const clean = read("/sync", "app", []);
+    const localAfterOptIn = openLocal("AAAA");
+    const fine = openLocal("BBBB");
+    await tick();
+    assert.equal(replies["ArdiaSync.read"].length, 3);
+    assert.equal(replies["ArdiaSync.openLocal"].length, 3);
+    const damaged = { files: [], pending: [], damaged: [{ id: "a", age: 0 }], present: ["a"] };
+    replies["ArdiaSync.read"][1]({ ...damaged, openFailures: { format: 1, authentication: 0, too_large: 0, other: 0 } });
+    replies["ArdiaSync.read"][0]({ ...damaged, openFailures: { format: 0, authentication: 4, too_large: 0, other: 0 } });
+    replies["ArdiaSync.read"][2]({ files: [], pending: [], damaged: [], present: [] });
+    replies["ArdiaSync.openLocal"][0]({ openFailure: "authentication" });
+    replies["ArdiaSync.openLocal"][1]({ openFailure: "too_large" });
+    replies["ArdiaSync.openLocal"][2]("{}");
+    assert.deepEqual(await afterOptIn, damaged, "the counts never reach the shared engine's listing");
+    assert.deepEqual(await beforeOptIn, damaged);
+    assert.deepEqual(await clean, { files: [], pending: [], damaged: [], present: [] });
+    assert.equal(await localBeforeOptIn, null, "a failed open is null to the engine, as before");
+    assert.equal(await localAfterOptIn, null);
+    assert.equal(await fine, "{}");
+    assert.deepEqual(noted, [
+      { started: "period-1", failures: { format: 1, authentication: 0, too_large: 0, other: 0 } },
+      { started: null, failures: { format: 0, authentication: 4, too_large: 0, other: 0 } },
+      { started: null, failures: { authentication: 1 } },
+      { started: "period-1", failures: { too_large: 1 } },
+    ], "a request that began before opting in carries no consent, even when it finishes after");
+  } finally {
+    configureOpenFailureCount(() => null, () => {});
+  }
+});
+
+function pendingCore() {
+  let answer;
+  const host = fakeHost((method) => (method === "ArdiaSync.core" ? new Promise((resolve, reject) => (answer = { resolve, reject })) : null));
+  return { host, answer: () => answer };
+}
+
+function recordToggle(recorded) {
+  return (core, consent) => {
+    if (stillValid(consent)) recorded.push({ on: true, sync_core: core });
+  };
+}
+
+test("a sync toggle that reaches the telemetry leader while ArdiaSync.core is pending is recorded with the engine's answer, not native", async () => {
+  setConsentPeriod(true, "toggle-period");
+  const recorded = [];
+  const { host, answer } = pendingCore();
+  const loading = loadSyncCore(host);
+  await tick();
+  whenSyncCore(consentToken(), recordToggle(recorded));
+  assert.deepEqual(recorded, [], "nothing is recorded before the engine answers");
+  answer().resolve("rust");
+  await loading;
+  await tick();
+  assert.deepEqual(recorded, [{ on: true, sync_core: "rust" }]);
+  whenSyncCore(consentToken(), recordToggle(recorded));
+  assert.deepEqual(recorded.at(-1), { on: true, sync_core: "rust" }, "once settled, a toggle records at once");
+  assert.equal(host.calls.filter((call) => call.method === "ArdiaSync.core").length, 1, "no keyring status or authority claim is needed");
+  setConsentPeriod(false, null);
+});
+
+test("an engine without ArdiaSync.core, or one that fails it, records native once it answers", async () => {
+  setConsentPeriod(true, "older-engine");
+  const recorded = [];
+  const { host, answer } = pendingCore();
+  const loading = loadSyncCore(host);
+  await tick();
+  whenSyncCore(consentToken(), recordToggle(recorded));
+  answer().reject(new Error("ERR_UNKNOWN_CALL"));
+  assert.equal(await loading, "native");
+  await tick();
+  assert.deepEqual(recorded, [{ on: true, sync_core: "native" }]);
+  await loadSyncCore(fakeHost((method) => (method === "ArdiaSync.core" ? "something else" : null)));
+  whenSyncCore(consentToken(), recordToggle(recorded));
+  assert.deepEqual(recorded.at(-1), { on: true, sync_core: "native" });
+  setConsentPeriod(false, null);
+});

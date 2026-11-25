@@ -1,3 +1,4 @@
+import ArdiaCore
 import ExpoModulesCore
 import WebKit
 
@@ -5,6 +6,7 @@ final class MeadowView: ExpoView {
   let onTone = EventDispatcher()
 
   private let clip = NSView()
+  private let pageHost = NSView()
   private let poster = NSView()
   private var posterChoice: MeadowPoster?
   private var posterImage: CGImage?
@@ -28,10 +30,12 @@ final class MeadowView: ExpoView {
     super.init(appContext: appContext)
     clip.wantsLayer = true
     clip.layer?.masksToBounds = true
+    NotificationCenter.default.addObserver(self, selector: #selector(interfaceScaleDidChange), name: .ArdiaInterfaceScaleDidChange, object: nil)
     poster.wantsLayer = true
     poster.layer?.contentsGravity = .resize
     clip.addSubview(poster)
     addSubview(clip)
+    addSubview(pageHost)
   }
 
   override func hitTest(_ point: NSPoint) -> NSView? { nil }
@@ -41,8 +45,20 @@ final class MeadowView: ExpoView {
   override func setFrameSize(_ newSize: NSSize) {
     super.setFrameSize(newSize)
     clip.frame = bounds
-    webView?.frame = bounds
+    fitPage()
     placePoster()
+  }
+
+  @objc private func interfaceScaleDidChange() {
+    fitPage()
+  }
+
+  private func fitPage() {
+    pageHost.frame = bounds
+    InterfaceScale.fitPageHost(pageHost)
+    guard let webView else { return }
+    webView.frame = pageHost.bounds
+    if webView.pageZoom != InterfaceScale.scale { webView.pageZoom = InterfaceScale.scale }
   }
 
   override func viewDidMoveToWindow() {
@@ -70,7 +86,7 @@ final class MeadowView: ExpoView {
     config.preferences.javaScriptCanOpenWindowsAutomatically = false
     config.preferences.isElementFullscreenEnabled = false
     config.mediaTypesRequiringUserActionForPlayback = .all
-    let webView = WKWebView(frame: bounds, configuration: config)
+    let webView = WKWebView(frame: pageHost.bounds, configuration: config)
     webView.navigationDelegate = messages
     webView.allowsMagnification = false
     webView.allowsBackForwardNavigationGestures = false
@@ -78,8 +94,9 @@ final class MeadowView: ExpoView {
     webView.isInspectable = false
     webView.setAccessibilityElement(false)
     webView.alphaValue = 0
-    addSubview(webView)
+    pageHost.addSubview(webView)
     self.webView = webView
+    fitPage()
     self.messages = messages
     Self.live = self
     timeline = [:]

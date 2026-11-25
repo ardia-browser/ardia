@@ -106,6 +106,7 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
       navigationEntries: async () => stack.current.entries.map((url, i) => ({ url, title: pageTitle(url), current: i === stack.current.index })),
       evaluate: async () => null,
       discard: async () => "unsupported",
+      sleepIfHidden: async () => [-1],
       capturePicture: async () => null,
       getSecurityInfo: async () => {
         const url = stack.current.entries[stack.current.index] ?? "";

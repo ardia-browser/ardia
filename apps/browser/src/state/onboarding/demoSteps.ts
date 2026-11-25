@@ -1,7 +1,7 @@
-import { isWebDemo } from "../../platform/webDemo";
+import { isWebDemo, requestAppDownload } from "../../platform/webDemo";
 
-export { isWebDemo };
+export { isWebDemo, requestAppDownload };
 
-const MAC_ONLY_STEPS: readonly string[] = ["searchPrivacy", "home"];
+const MAC_ONLY_STEPS: readonly string[] = ["searchPrivacy", "home", "plugins"];
 
 export const stepsForThisSurface = <T extends string>(steps: T[]): T[] => (isWebDemo ? steps.filter((s) => !MAC_ONLY_STEPS.includes(s)) : steps);

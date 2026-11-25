@@ -1,0 +1,91 @@
+--- a/components/password_manager/core/browser/password_store/login_database_async_helper.h
++++ b/components/password_manager/core/browser/password_store/login_database_async_helper.h
+@@ -72,7 +72,10 @@
+   // Synchronous implementation of PasswordStoreBackend interface.
+   base::expected<std::vector<StoredCredential>, PasswordStoreBackendError>
+   GetAllLogins();
++  // Ardia: every login or an error, never the readable part of a list.
+   base::expected<std::vector<StoredCredential>, PasswordStoreBackendError>
++  GetAllLoginsWithNoneSkipped();
++  base::expected<std::vector<StoredCredential>, PasswordStoreBackendError>
+   GetAutofillableLogins();
+   base::expected<std::vector<StoredCredential>, PasswordStoreBackendError>
+   FillMatchingLogins(const std::vector<PasswordFormDigest>& forms,
+--- a/components/password_manager/core/browser/password_store/login_database_async_helper.cc
++++ b/components/password_manager/core/browser/password_store/login_database_async_helper.cc
+@@ -122,7 +122,32 @@
+   return credentials;
+ }
+ 
++// Ardia: a list that left out a login it couldn't decrypt fails with
++// kKeychainError, and any other failure, a database that didn't open
++// included, with kUncategorized, so a reader that publishes the list (Ardia's
++// Sync) never takes a partial one for the whole.
+ base::expected<std::vector<StoredCredential>, PasswordStoreBackendError>
++LoginDatabaseAsyncHelper::GetAllLoginsWithNoneSkipped() {
++  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  std::vector<StoredCredential> credentials;
++  if (!login_db_) {
++    return base::unexpected(PasswordStoreBackendError(
++        PasswordStoreBackendErrorType::kUncategorized));
++  }
++  FormRetrievalResult result = login_db_->GetAllLogins(&credentials);
++  if (result == FormRetrievalResult::kEncryptionServiceFailure ||
++      result == FormRetrievalResult::kEncryptionServiceFailureWithPartialData) {
++    return base::unexpected(PasswordStoreBackendError(
++        PasswordStoreBackendErrorType::kKeychainError));
++  }
++  if (result != FormRetrievalResult::kSuccess) {
++    return base::unexpected(PasswordStoreBackendError(
++        PasswordStoreBackendErrorType::kUncategorized));
++  }
++  return credentials;
++}
++
++base::expected<std::vector<StoredCredential>, PasswordStoreBackendError>
+ LoginDatabaseAsyncHelper::GetAutofillableLogins() {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+   std::vector<StoredCredential> results;
+--- a/components/password_manager/core/browser/password_store/password_store_built_in_backend.cc
++++ b/components/password_manager/core/browser/password_store/password_store_built_in_backend.cc
+@@ -285,7 +285,7 @@
+   background_task_runner_->PostTaskAndReplyWithResult(
+       FROM_HERE,
+       base::BindOnce(
+-          &LoginDatabaseAsyncHelper::GetAllLogins,
++          &LoginDatabaseAsyncHelper::GetAllLoginsWithNoneSkipped,
+           base::Unretained(helper_.get())),  // Safe until `Shutdown()`.
+       ReportMetricsForResultCallback<base::expected<
+           std::vector<StoredCredential>, PasswordStoreBackendError>>(
+@@ -300,7 +300,17 @@
+   auto affiliation_injection = base::BindOnce(
+       &PasswordStoreBuiltInBackend::InjectAffiliationAndBrandingInformation,
+       weak_ptr_factory_.GetWeakPtr(), std::move(callback));
+-  GetAllLoginsAsync(std::move(affiliation_injection));
++  // Ardia: Settings, export and fill keep what could be read; only the plain
++  // GetAllLogins is strict.
++  background_task_runner_->PostTaskAndReplyWithResult(
++      FROM_HERE,
++      base::BindOnce(
++          &LoginDatabaseAsyncHelper::GetAllLogins,
++          base::Unretained(helper_.get())),  // Safe until `Shutdown()`.
++      ReportMetricsForResultCallback<base::expected<
++          std::vector<StoredCredential>, PasswordStoreBackendError>>(
++          MethodName("GetAllLoginsAsync"))
++          .Then(std::move(affiliation_injection)));
+ }
+ 
+ void PasswordStoreBuiltInBackend::GetAutofillableLoginsAsync(
+--- a/components/password_manager/core/browser/affiliation/password_affiliation_source_adapter.cc
++++ b/components/password_manager/core/browser/affiliation/password_affiliation_source_adapter.cc
+@@ -28,7 +28,9 @@
+ void PasswordAffiliationSourceAdapter::GetFacets(
+     AffiliationSource::ResultCallback response_callback) {
+   on_password_forms_received_callback_ = std::move(response_callback);
+-  store_->GetAllLogins(weak_ptr_factory_.GetWeakPtr());
++  // Ardia: keeps the readable logins; the plain GetAllLogins is strict.
++  store_->GetAllLoginsWithAffiliationAndBrandingInformation(
++      weak_ptr_factory_.GetWeakPtr());
+ }
+ 
+ void PasswordAffiliationSourceAdapter::StartObserving(

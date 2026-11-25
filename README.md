@@ -10,14 +10,15 @@
 </p>
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.43/Ardia-0.2.43.dmg">Download Ardia 0.2.43 for Mac</a>
+  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48 for Mac</a>
 </h3>
 
 <p align="center">
-  121 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
+  134 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
   Like your paint wet? <a href="https://ardia.dev/nightly">The nightly</a> has every fix the day it’s made, smudges and all.<br>
-  Homebrew: <code>brew install mantrakp04/tap/ardia</code><br>
-  <a href="https://ardia.dev">ardia.dev</a> · <a href="https://ardia.dev/release-notes">What’s new</a> · <a href="https://github.com/mantrakp04/ardia/releases">All releases</a> · <a href="https://discord.gg/TdhuXrbcA6">Discord</a>
+  Homebrew: <code>brew install ardia-browser/tap/ardia</code><br>
+  On your phone: <a href="https://testflight.apple.com/join/yXHasDmr">iPhone (TestFlight)</a> · <a href="https://github.com/ardia-browser/ardia/releases/download/android-v1.0.2/Ardia-1.0.2.apk">Android (APK)</a><br>
+  <a href="https://ardia.dev">ardia.dev</a> · <a href="https://ardia.dev/release-notes">What’s new</a> · <a href="https://github.com/ardia-browser/ardia/releases">All releases</a> · <a href="https://discord.gg/TdhuXrbcA6">Discord</a>
 </p>
 
 <p align="center">
@@ -74,22 +75,22 @@ Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions a
 
 | Part | Details | Status |
 | --- | --- | --- |
-| Engine | Chromium 156, on Chrome’s own framework. | ✓ Yes |
+| Engine | Chromium 158, on Chrome’s own framework. | ✓ Yes |
 | De-Googled | Google’s background services stripped out. | ✓ Yes |
 | H.264 and AAC | The codecs Chromium leaves out. | ✓ Yes |
 | DevTools | Docked, with device mode. Like Chrome. | ✓ Yes |
 | Sync | End-to-end encrypted, through your own iCloud Drive. | ✓ Yes |
 | Translate | On your Mac. Nothing leaves it. | ✓ macOS 26 |
-| Passkeys | Touch ID yes. iCloud Keychain waits on Apple. | ~ Partly |
+| Passkeys | Touch ID and iCloud Keychain. | ~ Partly |
 | Netflix and DRM | Streaming sites open in WebKit, where they play. Widevine in Chromium waits on Google. | ~ Partly |
 | Intel Macs | Apple Silicon only. | ✗ No |
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.43/Ardia-0.2.43.dmg">Download Ardia 0.2.43</a>
+  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48</a>
 </h3>
 
 <p align="center">
-  It’s 121 MB and one drag into Applications.<br>
+  It’s 134 MB and one drag into Applications.<br>
   Not on a Mac? Watch › Custom › Releases up top and GitHub tells you when it is.
 </p>
 
@@ -104,8 +105,9 @@ reconstructed from Dia's own New Tab effects.
 ```
 apps/
   browser/            Expo + react-native-macos app (UI in src/, Xcode project in macos/)
+  linux/              Linux desktop entry, window controls and native host integration; shares the browser UI
 packages/
-  ardiacore/             The engine: Chromium 156's framework with our layer (Chrome tabs hosted in our views), JS API in src/
+  ardiacore/             The engine: Chromium 158's framework with our layer (Chrome tabs hosted in our views), JS API in src/
   shell/              Native menu bar + shortcuts → JS, windows, SF Symbols, native primitives
   shaders/            Metal: New Tab effects + grained OKLab window backdrop
   import/             Import from other browsers (bookmarks, history, passwords, Arc spaces)
@@ -115,21 +117,26 @@ packages/
 
 ## Run it
 
-Requires Xcode 26+, CocoaPods, Node 22.13+ (pinned in `.nvmrc`), pnpm 11.
+The Linux desktop target is `apps/desktop`, for x86-64 Linux on Wayland or X11. Releases ship it as a `.deb`
+(`sudo apt install ./Ardia-<version>-linux-x64.deb`), an AppImage, a tarball and an Arch source package, and stables as
+`ardia-bin` on the AUR: [docs/linux-port.md › Installing on Linux](docs/linux-port.md#installing-on-linux). The same
+file has the source-build and packaging instructions. It builds against the dedicated Linux Chromium host.
+
+The macOS app requires Xcode 26+, CocoaPods, Node 24 (pinned in `.nvmrc`), pnpm 12.
 
 ```bash
 pnpm install
 ```
 
 The engine (Chrome's framework, built from our patched Chromium) comes prebuilt: with no local engine build, the app's
-build downloads the one matching your checkout's `engine/` (about 110 MB, once; Apple Silicon only) and checks it
-against `packages/ardiacore/prebuilt-engines.tsv`. Every release whose engine changed publishes one. If `main`'s engine
+build downloads the one matching your checkout's macOS engine key (`engine/engine-key.sh --platform macos`; about
+110 MB, once; Apple Silicon only) and checks it against `packages/ardiacore/prebuilt-engines.tsv`. Every release whose engine changed publishes one. If `main`'s engine
 is newer than the last release's, work from a release tag (`v0.2.30`, say), or run
 `packages/ardiacore/scripts/fetch-engine.sh --nearest` to build against the newest prebuilt anyway. Passkeys and saved
 cards need our team ID and won't work in a build signed by anyone else.
 
 To change the engine itself (anything under `engine/`), build it from source: Chrome's framework from our patched
-Chromium tree in `~/chromium-build` (Chromium 156.0.8078.79 with the patch series in `engine/patches`;
+Chromium tree in `~/chromium-build` (Chromium 158.0.8127.36 with the patch series in `engine/patches`;
 `docs/engine-build.md` › "Rebuilding", then `engine/chromium/apply.sh`,
 `engine/ardiacore/apply.sh` and `autoninja -C out/Release_GN_arm64 chrome_framework`; the first build takes about 2
 hours). The app's build stages it from there when it exists.
@@ -152,8 +159,10 @@ pnpm macos
 ```
 
 Other tasks: `pnpm typecheck`, `pnpm test`, `pnpm shaders:check` (compiles the embedded Metal offline),
-`pnpm build` (Release `.app` with a Hermes bytecode bundle in `apps/browser/build/`).
-Signed releases (DMG, Sparkle zip and appcast): `scripts/release.sh <version>`, see `docs/releasing.md`.
+`scripts/agent/build-app --config Release` (a Release `.app` with a Hermes bytecode bundle in
+`apps/browser/build-<name>`, under the shared build locks; `--help`).
+Signed releases (DMG, Sparkle zip and appcast) are built by the Release workflow with `scripts/release.sh`, see
+`docs/releasing.md`.
 
 Shortcuts: ⌘T new tab, ⌘L command bar, ⌘W close, ⇧⌘T reopen, ⌘S sidebar, ⌘[ / ⌘] back/forward,
 ⌘R reload, ⌘1–⌘9 select tab, ⌃Tab cycle.
@@ -221,6 +230,12 @@ Only math and colour values are reused. No Dia images, fonts or binaries are cop
 Feature parity with Dia (everything but its AI) is tracked row by row in
 [docs/dia-feature-parity.md](docs/dia-feature-parity.md); releases and their notes are at
 [ardia.dev/release-notes](https://ardia.dev/release-notes).
+
+## Sponsors
+
+Greptile reads every pull request before we do.
+
+<a href="https://www.greptile.com/?utm_source=oss_badge&utm_medium=readme&utm_campaign=greptile_for_open_source"><img src="https://www.greptile.com/badge.svg" alt="Greptile: The War on Bugs"></a>
 
 ## License
 

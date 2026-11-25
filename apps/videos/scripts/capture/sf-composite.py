@@ -62,6 +62,27 @@ def build(scene):
         p = os.path.join(src, name)
         if os.path.exists(p):
             extra[name.split(".")[0].replace("-", "")] = json.load(open(p)) if name.endswith(".json") else open(p).read().strip().split("\n") if name == "files.txt" else open(p).read().strip()
+    labels = [fr.get("label") for fr in frames]
+    first = next((i for i, l in enumerate(labels) if l in ("arrive:before", "rest")), None)
+    if first is not None and any(l in ("arrive", "adding") for l in labels):
+        import numpy as np
+        from PIL import Image
+        a = np.asarray(Image.open(os.path.join(dst, f"{first:04d}.jpg")).convert("L"), np.float32)
+        b = np.asarray(Image.open(os.path.join(dst, f"{len(out) - 1:04d}.jpg")).convert("L"), np.float32)
+        band = np.abs(a[:96] - b[:96]) > 24
+        cols = np.where(band.sum(axis=0) > 3)[0]
+        if len(cols) > 20:
+            x0 = int(cols.min())
+            span = 240
+            shifts = range(16, a.shape[1] - x0 - span)
+            insert = min(shifts, key=lambda d: float(np.abs(a[:96, x0:x0 + span] - b[:96, x0 + d:x0 + d + span]).mean()))
+            rgb = np.asarray(Image.open(os.path.join(dst, f"{first:04d}.jpg")).convert("RGB"), np.float32)
+            fill = np.median(rgb[14:22, max(0, x0 - 10):max(1, x0 - 2)].reshape(-1, 3), axis=0)
+            extra["strip"] = {"x": x0 / 2, "y": 2.0, "width": float(cols.max() - x0) / 2, "height": 40.0, "insert": insert / 2,
+                              "fill": "#%02X%02X%02X" % tuple(int(round(v)) for v in fill)}
+    tint = C.sampled_tint(frames[0]["f"]) if frames else None
+    if tint is not None:
+        extra["tint"] = ["#%02X%02X%02X" % tuple(int(round(v)) for v in c) for c in tint]
     index_path = os.path.join(C.ROOT, "src", "lib", "sf-film", "footage.json")
     index = json.load(open(index_path)) if os.path.exists(index_path) else {}
     index[scene] = {"size": size, "frames": out, **extra}

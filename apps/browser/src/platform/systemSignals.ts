@@ -65,12 +65,8 @@ export function onUserIdle(thresholdSeconds: number, listener: (idle: boolean) =
   };
 }
 
-export const holdsIncomingLinks = (): boolean => Signals().holdsIncomingLinks();
-
 export const setHoldIncomingLinks = (hold: boolean, hooksStamp: string | null): void => Signals().setHoldIncomingLinks(hold, hooksStamp);
 
 export const setApprovedDownloadFolders = (folders: string[]): void => Signals().setApprovedDownloadFolders(folders);
 
 export const moveCompletedDownload = (path: string, folder: string): Promise<MovedDownload> => Signals().moveCompletedDownload(path, folder);
-
-export const devPostSystemSignal = (name: "willSleep" | "didWake"): Promise<boolean> => Signals().devPost(name);

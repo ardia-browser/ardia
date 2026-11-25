@@ -1,11 +1,12 @@
 import type { ThemeBackdropProps, ThemeTexture } from "@ardia/core";
 import { requireNativeModule, requireNativeViewManager } from "expo-modules-core";
-import type { ComponentType } from "react";
 import type { ViewProps } from "react-native";
+import type { ShadersModules } from "./generated/native";
+import { MEADOW_INK } from "./meadowPage/config";
 
 export const DIA_SPECTRUM = ["#0358F7", "#5092C7", "#E1E1FE", "#FFD400", "#FA3D1D", "#FD02F5"];
 
-export type Rect = { x: number; y: number; width: number; height: number };
+type Rect = { x: number; y: number; width: number; height: number };
 
 export type AreaLightPalette = "blue" | "red" | "pink" | "orange" | "yellow" | "green" | "purple";
 
@@ -23,7 +24,9 @@ export type WindowBackdropProps = ViewProps &
 
 const NativeBackdrop = requireNativeViewManager<WindowBackdropProps>("ArdiaWindowBackdrop");
 
-const BackdropModule = requireNativeModule<{ holdKeyLook(on: boolean): Promise<void> }>("ArdiaWindowBackdrop");
+const nativeModule = <Name extends keyof ShadersModules>(name: Name) => requireNativeModule<ShadersModules[Name]>(name);
+
+const BackdropModule = nativeModule("ArdiaWindowBackdrop");
 
 export function holdThemedWindowsKeyLook(on: boolean) {
   void BackdropModule.holdKeyLook(on);
@@ -75,10 +78,7 @@ export function ThemeSwatch({ grain = 0, padLightness = -1, angle = 135, style, 
 
 export type MeadowTone = { tone: "light" | "dark"; halo: number };
 
-const MEADOW_INK = {
-  light: { ink: "#16130F", halo: [243, 236, 223] },
-  dark: { ink: "#EFE8DC", halo: [18, 16, 26] },
-} as const;
+export { MEADOW_INK };
 
 export function meadowTextStyle({ tone, halo }: MeadowTone) {
   const { ink, halo: rgb } = MEADOW_INK[tone];
@@ -90,13 +90,35 @@ export function meadowTextStyle({ tone, halo }: MeadowTone) {
   };
 }
 
-export type MeadowProps = ViewProps & { night: boolean; onTone?: (tone: MeadowTone) => void };
+type MeadowText = { fontSize: number; fontWeight: string; letterSpacing?: number; fontFamily?: string };
 
-type NativeMeadowProps = ViewProps & { night: boolean; onTone?: (event: { nativeEvent: MeadowTone }) => void };
+export type MeadowMotion = { delay: number; duration: number; easing: string };
 
-let NativeMeadow: ComponentType<NativeMeadowProps> | null = null;
+export type MeadowIntro = {
+  startedAt: number;
+  muted: boolean;
+  wordmark: string;
+  tagline: string;
+  skip: { label: string; hint: string };
+  mute: { mute: string; unmute: string; mutedIcon: string; playingIcon: string; iconSize: number; iconWeight: string; iconBox: number };
+  colors: { background: string; buttonBorder: string; buttonText: string; buttonHover: string };
+  type: { wordmark: MeadowText; tagline: MeadowText; button: MeadowText };
+  layout: { gap: number; icon: number; inset: number; button: number; buttonPad: number; iconFrom: number; iconOpaque: number; letterRise: number; taglineRise: number; exitScale: number; exitHold: number };
+  motion: { icon: MeadowMotion; letters: MeadowMotion[]; tagline: MeadowMotion; exit: MeadowMotion; skip: MeadowMotion; holds: { exit: number; skip: number }; press: { scale: number; circleScale: number; duration: number; easing: string } };
+};
 
-export function Meadow({ onTone, ...props }: MeadowProps) {
-  NativeMeadow ??= requireNativeViewManager<NativeMeadowProps>("ArdiaMeadow");
-  return <NativeMeadow pointerEvents="none" {...props} onTone={onTone ? (event) => onTone(event.nativeEvent) : undefined} />;
-}
+export type MeadowIntroEvent =
+  | { kind: "live"; firstFrameMs: number }
+  | { kind: "fallback"; reason: string }
+  | { kind: "poster" }
+  | { kind: "skip" }
+  | { kind: "mute"; muted: boolean }
+  | { kind: "closed" };
+
+export type MeadowProps = ViewProps & { night: boolean; onTone?: (tone: MeadowTone) => void; intro?: MeadowIntro; onIntro?: (event: MeadowIntroEvent) => void };
+
+export type { MeadowPageConfig, MeadowPageReport, MeadowPageState } from "./meadowPage/config";
+
+export type { AreaLightNative, MeadowNative, MetalSurfaceSnapshot, ShadersModules, WindowBackdropNative } from "./generated/native";
+
+export { Meadow } from "./meadow";

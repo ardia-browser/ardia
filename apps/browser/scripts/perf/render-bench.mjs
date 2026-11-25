@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { prepareApp } from "../../../../scripts/lib/app-copy.mjs";
 import { evaluate, launch, quit, startServer } from "./js-bench.mjs";
 import { buildSeed } from "./seed.mjs";
+import { medianOrNull as median } from "./median.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const defaultOut = process.env.AC_PERF_OUT ?? "/tmp/ac-perf-renders";
@@ -19,12 +21,6 @@ for (let i = 0; i < rest.length; i++) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sum = (o) => Object.values(o ?? {}).reduce((a, b) => a + b, 0);
-const median = (xs) => {
-  const s = xs.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
-  if (!s.length) return null;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 
 function writeRenderSeed(dir, origin, version, count) {
   const files = buildSeed(origin, version);
@@ -113,11 +109,7 @@ async function run() {
   if (!app || !jsbundle || !label) throw new Error("run needs --app, --bundle and --label");
   const only = flags.only ? new Set(flags.only.split(",")) : null;
   const want = (name) => !only || only.has(name);
-  const clone = join(out, "apps", label, "Ardia.app");
-  rmSync(dirname(clone), { recursive: true, force: true });
-  mkdirSync(dirname(clone), { recursive: true });
-  execFileSync("cp", ["-cR", app, clone]);
-  cpSync(jsbundle, join(clone, "Contents/Resources/main.jsbundle"));
+  const clone = prepareApp(app, join(out, "apps", label), { bundle: jsbundle });
   const version = execFileSync("/usr/libexec/PlistBuddy", ["-c", "Print CFBundleShortVersionString", join(clone, "Contents/Info.plist")], { encoding: "utf8" }).trim();
   const origin = `http://127.0.0.1:${port}`;
   const server = await startServer(Number(port));

@@ -1,5 +1,5 @@
 import { dragPreview, windowFrame, type DragPreviewShape } from "../../platform/windows";
-import { hapticTick } from "../../platform/haptics";
+import { reorderTick } from "./reorderTick";
 import { create } from "zustand";
 import { focus } from "../browser/actions";
 import { lastPicture, startTabPictures } from "../tabs/tabPictures";
@@ -7,17 +7,17 @@ import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
 import type { Frame } from "../browser/types";
 import { tabTitle } from "../browser/model";
-import { splitOf, type SplitSide, splitTabIdsOf } from "../splits/splits";
+import { splitOf, type SplitSide, splitTabIdsOf, splitViewAvailable } from "../splits/splits";
 import { dropTabIntoSplit } from "../splits/actions";
-import { dropTabsOutside, screenPoint, windowUnder } from "./windowDrop";
+import { dropTabsOutside, rootPointIn, screenPoint, windowUnder } from "./windowDrop";
 import { dropTabsOnBar, followTabDragOnBar } from "../bookmarks/barDrag";
 
-export type DropTarget = { tabId: string; side: SplitSide };
+type DropTarget = { tabId: string; side: SplitSide };
 type Insert = { windowId: string; beforeId: string | null };
 type Picture = { chip: () => [number, number, number, number]; grab: [number, number] };
 type TabDragSession = { seq: number; liveFrame: Frame | null; pointer: [number, number]; picture: Picture | null; sentShape: DragPreviewShape };
 
-export type TabDragging = {
+type TabDragging = {
   phase: "tab";
   tabId: string | null;
   tabIds: string[];
@@ -34,7 +34,7 @@ export type TabDragging = {
   session: TabDragSession;
 };
 
-export type ExternalDragging = {
+type ExternalDragging = {
   phase: "external";
   owner: { windowId: string; token: number };
   overWindow: string;
@@ -94,10 +94,10 @@ export function updateTabDrag(x: number, y: number, lifted: boolean | null = nul
   const { session } = drag;
   const s = useBrowser.getState();
   const { outside, overWindow } = windowUnder(s, drag.windowId, x, y, session.liveFrame);
-  if (overWindow && overWindow !== drag.overWindow && s.settings.tabReorderHaptics) hapticTick();
+  if (overWindow && overWindow !== drag.overWindow) reorderTick();
   const screen = overWindow ? screenPoint(s, drag.windowId, x, y, session.liveFrame) : null;
   const over = overWindow ? s.windows[overWindow]?.frame : null;
-  const overPoint: [number, number] | null = screen && over ? [screen[0] - over[0], over[1] + over[3] - screen[1]] : null;
+  const overPoint: [number, number] | null = screen && over ? rootPointIn(over, screen) : null;
   const insert = drag.insert?.windowId === overWindow ? drag.insert : null;
   session.pointer = [x, y];
   if (lifted === false && drag.lifted === false && !outside && !drag.outside) return;
@@ -168,7 +168,8 @@ function takePicture({ session, windowId, tabId }: TabDragging, { chip, grab }: 
   });
 }
 
-export function setDropTarget(target: DropTarget | null) {
+export function setDropTarget(offered: DropTarget | null) {
+  const target = splitViewAvailable ? offered : null;
   const d = tabDragState();
   if (!d || (d.target?.tabId === target?.tabId && d.target?.side === target?.side)) return;
   useTabDrag.setState({ target });
@@ -197,7 +198,7 @@ export function endTabDrag(): boolean {
   const [x, y] = session.pointer;
   const resolveInsert = overWindow && overPoint ? insertResolvers.get(overWindow) : undefined;
   const insertBefore = resolveInsert && overPoint ? resolveInsert(overPoint) : drag.insert?.windowId === overWindow ? drag.insert?.beforeId : undefined;
-  const target = resolveTarget ? resolveTarget(x, y, drag.target, outside) : drag.target;
+  const target = !splitViewAvailable ? null : resolveTarget ? resolveTarget(x, y, drag.target, outside) : drag.target;
   const onPage = !outside && !!(drag.lifted ?? drag.onPage);
   useTabDrag.setState(IDLE, true);
   const shown = previewShown;
@@ -207,8 +208,7 @@ export function endTabDrag(): boolean {
   }
   if (target && tabId) {
     dragPreview.end();
-    dropTabIntoSplit(tabId, target.tabId, target.side);
-    return true;
+    return !!dropTabIntoSplit(tabId, target.tabId, target.side);
   }
   if (!(outside || onPage)) {
     if (shown) dragPreview.end();

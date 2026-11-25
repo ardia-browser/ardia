@@ -1,6 +1,6 @@
 import type { Settings } from "../settings/settings";
 
-export type BrowserSourceId = "arc" | "dia" | "chrome" | "safari" | "firefox" | "zen" | "brave" | "edge" | "fresh";
+export type BrowserSourceId = "arc" | "dia" | "chrome" | "safari" | "firefox" | "zen" | "brave" | "edge" | "helium" | "chromium" | "vivaldi" | "opera" | "fresh";
 
 export type Preset = BrowserSourceId;
 
@@ -13,6 +13,10 @@ export const PRESET_NAMES: Record<Preset, string> = {
   zen: "Zen",
   brave: "Brave",
   edge: "Edge",
+  helium: "Helium",
+  chromium: "Chromium",
+  vivaldi: "Vivaldi",
+  opera: "Opera",
   fresh: "Ardia",
 };
 
@@ -35,10 +39,9 @@ const CLASSIC_TABS: Partial<Settings> = {
   hideToolbarWhileScrolling: false,
   bookmarksBar: "newTab",
   searchEngine: "google",
-  commandBarPreference: "search",
   openLinksInLittleArdia: false,
-  profileSwitcherIcons: false,
   peekLinksToOtherSites: false,
+  newTabLinksOpenIn: "tab",
 };
 
 export const PRESETS: Record<Preset, Partial<Settings>> = {
@@ -61,10 +64,9 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     hideToolbarWhileScrolling: true,
     bookmarksBar: "never",
     searchEngine: "google",
-    commandBarPreference: "website",
     openLinksInLittleArdia: true,
-    profileSwitcherIcons: false,
-    peekLinksToOtherSites: false,
+    peekLinksToOtherSites: true,
+    newTabLinksOpenIn: "peek",
   },
   arc: {
     tabLayout: "sidebar",
@@ -85,10 +87,9 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     hideToolbarWhileScrolling: true,
     bookmarksBar: "never",
     searchEngine: "google",
-    commandBarPreference: "website",
     openLinksInLittleArdia: true,
-    profileSwitcherIcons: true,
     peekLinksToOtherSites: true,
+    newTabLinksOpenIn: "peek",
   },
   zen: {
     tabLayout: "sidebar",
@@ -109,17 +110,20 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     hideToolbarWhileScrolling: false,
     bookmarksBar: "never",
     searchEngine: "google",
-    commandBarPreference: "search",
     openLinksInLittleArdia: false,
-    profileSwitcherIcons: true,
     peekLinksToOtherSites: true,
+    newTabLinksOpenIn: "peek",
   },
   chrome: CLASSIC_TABS,
   firefox: CLASSIC_TABS,
   safari: { ...CLASSIC_TABS, extendWebsiteColor: true, bookmarksBar: "never" },
   brave: { ...CLASSIC_TABS, searchEngine: "brave" },
   edge: { ...CLASSIC_TABS, searchEngine: "bing" },
-  fresh: { addressBar: "sidebar", commandBarPlacement: "centred", newTabPosition: "nextToCurrent", newTabButtonPosition: "bottom", profileSwitcherIcons: false, peekLinksToOtherSites: false },
+  helium: CLASSIC_TABS,
+  chromium: CLASSIC_TABS,
+  vivaldi: CLASSIC_TABS,
+  opera: CLASSIC_TABS,
+  fresh: { addressBar: "sidebar", commandBarPlacement: "centred", newTabPosition: "nextToCurrent", newTabButtonPosition: "bottom" },
 };
 
 export const setsUpLikeBrowser = (source: BrowserSourceId | null): source is Exclude<BrowserSourceId, "fresh"> => !!source && source !== "fresh";

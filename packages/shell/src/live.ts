@@ -1,4 +1,5 @@
 import type { EventSubscription } from "expo-modules-core";
+import type { CalendarNative, KeychainNative } from "./generated/native";
 
 export type CalendarAuthorization = "fullAccess" | "writeOnly" | "denied" | "restricted" | "notDetermined";
 
@@ -31,16 +32,16 @@ export type SystemCalendarEvent = {
   attendees: CalendarParticipant[];
 };
 
-export type CalendarNative = {
-  addListener(name: "onCalendarChanged", listener: () => void): EventSubscription;
-  authorizationStatus(): CalendarAuthorization;
-  requestAccess(): Promise<boolean>;
-  calendars(): Promise<SystemCalendar[]>;
-  events(start: number, end: number, calendarIds: string[]): Promise<SystemCalendarEvent[]>;
+export type CalendarAccessRequest = {
+  granted: boolean;
+  status: CalendarAuthorization;
+  error: string | null;
+  responsible: "self" | "other" | "unknown";
+  ms: number;
 };
 
-export type KeychainNative = {
-  get(account: string): Promise<string | null>;
-  set(account: string, secret: string): Promise<boolean>;
-  delete(account: string): Promise<boolean>;
-};
+export type { CalendarNative };
+
+export type KeychainReadResult = { status: "ok"; value: string } | { status: "missing" } | { status: "error"; reason: string };
+
+export type { KeychainNative };

@@ -1,11 +1,5 @@
 // Copyright 2026 Ardia. Apache-2.0.
 
-#include <errno.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-
 #include <memory>
 #include <optional>
 #include <string>
@@ -14,17 +8,15 @@
 #include <vector>
 
 #include "ardia/core/ac_content_hooks.h"
+#include "ardia/core/ac_launch_switches.h"
 #include "base/base64url.h"
 #include "base/command_line.h"
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
-#include "base/files/file_util.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
 #include "base/json/json_writer.h"
 #include "base/no_destructor.h"
-#include "base/path_service.h"
-#include "base/posix/eintr_wrapper.h"
 #include "base/process/process_handle.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
@@ -36,11 +28,19 @@
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "build/build_config.h"
+#include "ardia/core/ac_host_visibility.h"
+#include "ardia/core/ac_windowless_page.h"
+#include "chrome/browser/ardia/ac_cli_console_ring.h"
+#include "chrome/browser/ardia/ac_cli_control_file.h"
+#include "chrome/browser/ardia/ac_cli_devtools_sessions.h"
+#include "chrome/browser/ardia/ac_cli_ops.h"
+#include "chrome/browser/ardia/ac_cli_owned_tabs.h"
+#include "chrome/browser/ardia/ac_cli_page_signals.h"
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
 #include "chrome/browser/ardia/ac_engine.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lifetime/termination_notification.h"
-#include "chrome/common/chrome_paths.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
@@ -57,24 +57,11 @@
 namespace ardia {
 namespace {
 
-constexpr char kControlFileName[] = "ArdiaControl.json";
 constexpr char kTopic[] = "cliControl";
 constexpr int kBacklog = 10;
 constexpr base::TimeDelta kStartDeadline = base::Seconds(5);
 constexpr char kPolicyError[] =
     "Remote debugging is turned off by your administrator.";
-
-base::Lock& PublishLock() {
-  static base::NoDestructor<base::Lock> lock;
-  return *lock;
-}
-
-uint64_t g_live_generation = 0;
-
-void SetLiveGeneration(uint64_t generation) {
-  base::AutoLock hold(PublishLock());
-  g_live_generation = generation;
-}
 
 class LoopbackSocketFactory : public content::DevToolsSocketFactory {
  public:
@@ -93,65 +80,6 @@ class LoopbackSocketFactory : public content::DevToolsSocketFactory {
     return nullptr;
   }
 };
-
-base::FilePath ControlFilePath() {
-  base::FilePath dir;
-  if (!base::PathService::Get(chrome::DIR_USER_DATA, &dir)) {
-    return base::FilePath();
-  }
-  return dir.Append(kControlFileName);
-}
-
-std::string ErrnoText() {
-  return base::ToLowerASCII(strerror(errno));
-}
-
-std::string WriteControlFile(const base::FilePath& path,
-                             const std::string& contents,
-                             uint64_t generation) {
-  if (path.empty()) {
-    return "Ardia has no data folder.";
-  }
-  const base::FilePath temp = path.DirName().Append(
-      "." + path.BaseName().value() + "." +
-      base::HexEncode(base::RandBytesAsVector(8)));
-  const int fd = HANDLE_EINTR(
-      open(temp.value().c_str(),
-           O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600));
-  if (fd < 0) {
-    return base::StrCat({"Couldn't write ", path.value(), ": ", ErrnoText()});
-  }
-  bool written = base::WriteFileDescriptor(fd, contents) && fsync(fd) == 0;
-  std::string error = written ? std::string() : ErrnoText();
-  if (IGNORE_EINTR(close(fd)) != 0 && written) {
-    written = false;
-    error = ErrnoText();
-  }
-  if (!written) {
-    unlink(temp.value().c_str());
-    return base::StrCat({"Couldn't write ", path.value(), ": ", error});
-  }
-  {
-    base::AutoLock hold(PublishLock());
-    if (g_live_generation != generation) {
-      unlink(temp.value().c_str());
-      return "The control server stopped.";
-    }
-    if (rename(temp.value().c_str(), path.value().c_str()) != 0) {
-      error = ErrnoText();
-      unlink(temp.value().c_str());
-      return base::StrCat({"Couldn't write ", path.value(), ": ", error});
-    }
-  }
-  return std::string();
-}
-
-void DeleteControlFile(const base::FilePath& path) {
-  if (!path.empty() && unlink(path.value().c_str()) != 0 && errno != ENOENT &&
-      errno != EISDIR && errno != EPERM) {
-    PLOG(ERROR) << "[ardia] can't delete " << path;
-  }
-}
 
 bool ServerStartedBySwitch() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
@@ -173,8 +101,6 @@ class ControlServer {
     g_ardia_devtools_token_server = &ServerChanged;
     g_ardia_devtools_active_target = &ActiveTarget;
     g_ardia_devtools_token_client = &TokenClientFor;
-    g_ardia_devtools_may_attach = &TokenClientMayAttach;
-    g_ardia_devtools_may_input = &TokenClientMayInput;
     terminating_ = browser_shutdown::AddAppTerminatingCallback(
         base::BindOnce(&ControlServer::Quit, base::Unretained(this)));
     if (PrefService* local_state = LocalState()) {
@@ -184,8 +110,8 @@ class ControlServer {
                                       base::Unretained(this)));
     }
     if (!ServerStartedBySwitch()) {
-      FileRunner()->PostTask(FROM_HERE,
-                             base::BindOnce(&DeleteControlFile, file_path_));
+      FileRunner()->PostTask(
+          FROM_HERE, base::BindOnce(&DeleteStaleControlFile, file_path_));
     }
   }
 
@@ -238,6 +164,27 @@ class ControlServer {
 
   base::DictValue Status() const {
     base::DictValue status;
+    status.Set("dragsEnded",
+               base::DictValue()
+                   .Set("ownerGone", g_ardia_drags_ended[kArdiaDragEndOwnerGone])
+                   .Set("debuggerUnowned",
+                        g_ardia_drags_ended[kArdiaDragEndDebuggerUnowned])
+                   .Set("nativeRefused",
+                        g_ardia_drags_ended[kArdiaDragEndNativeRefused])
+                   .Set("sourceGone",
+                        g_ardia_drags_ended[kArdiaDragEndSourceGone]));
+    const ardiacore::WindowlessPageTotals windowless =
+        ardiacore::WindowlessPagesSoFar();
+    status.Set("windowlessPages", base::DictValue()
+                                      .Set("given", windowless.given)
+                                      .Set("missed", windowless.missed));
+    status.Set("tokenCommands", TokenCommandTotals());
+    status.Set("pageSignals", PageSignalTotals());
+    status.Set("consoleRing", ConsoleRingTotals());
+    status.Set("engineCli", EngineCliTotals());
+    if (ardiacore::TestFlag("nativeDragRefused")) {
+      status.Set("nativeDragsRefused", true);
+    }
     if (ServerStartedBySwitch()) {
       status.Set("state", "external");
       return status;
@@ -458,6 +405,9 @@ class ControlServer {
   }
 
   void PolicyChanged() {
+    if (!Allowed()) {
+      CancelAllCliOps();
+    }
     if (!Allowed() && Active()) {
       error_ = kPolicyError;
       Stop();
@@ -516,6 +466,48 @@ AC_ARGS_CALL(ac_cli_control) {
   }
   if (on.has_value()) {
     server.Disable();
+    ardia::CancelAllCliOps();
   }
   out.Send(server.Status());
+}
+
+AC_ARGS_CALL(ac_cli_owns_tab) {
+  ardia::Reply out = call.TakeReply();
+  std::optional<int> tab = call.args().FindInt("tab");
+  content::WebContents* contents = tab ? ardia::TabWithId(*tab) : nullptr;
+  out.Send(base::DictValue()
+               .Set("owned", ardia::IsCliOwnedTab(contents))
+               .Set("shown",
+                    contents && ardiacore::TabWasInShownSlot(contents)));
+}
+
+AC_ARGS_CALL(ac_cli_console_delta) {
+  ardia::Reply out = call.TakeReply();
+  std::optional<int> tab = call.args().FindInt("tab");
+  content::WebContents* contents = tab ? ardia::TabWithId(*tab) : nullptr;
+  if (!contents) {
+    return out.Error("no such tab");
+  }
+  constexpr double kMaxWatermark = 9007199254740991.0;
+  const auto whole = [&](std::optional<double> value) {
+    return !value || (*value >= 0 && *value <= kMaxWatermark &&
+                      *value == static_cast<double>(
+                                    static_cast<uint64_t>(*value)));
+  };
+  const std::optional<double> after = call.args().FindDouble("after");
+  const std::optional<double> generation =
+      call.args().FindDouble("generation");
+  const std::optional<int> limit = call.args().FindInt("limit");
+  if (!whole(after) || !whole(generation) ||
+      (limit && (*limit < 1 ||
+                 *limit > static_cast<int>(ardia::kConsoleDeltaMax)))) {
+    return out.Error("bad watermark, generation or limit");
+  }
+  base::expected<base::DictValue, std::string> delta = ardia::ConsoleDelta(
+      contents, after ? static_cast<uint64_t>(*after) : 0, generation,
+      limit ? static_cast<size_t>(*limit) : ardia::kConsoleDeltaMax);
+  if (!delta.has_value()) {
+    return out.Error(delta.error());
+  }
+  out.Send(std::move(delta.value()));
 }

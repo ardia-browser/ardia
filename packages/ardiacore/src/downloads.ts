@@ -1,4 +1,4 @@
-export type DownloadState = "downloading" | "finished" | "failed" | "cancelled";
+type DownloadState = "downloading" | "finished" | "failed" | "cancelled";
 
 export type Download = {
   id: string;
@@ -15,6 +15,7 @@ export type Download = {
   profile?: string;
   offTheRecord?: boolean;
   staging?: string | null;
+  startTime?: number;
 };
 
 export type DownloadSettings = { folder: string; askWhereToSave: boolean; managed: boolean };

@@ -27,6 +27,32 @@ export function upgraded(doc: unknown, version: number, migrations: Migrations =
   return current;
 }
 
+export type SavedProblem = "empty" | "invalid" | "shape" | "newer";
+type SavedRead = { doc: SavedObject; from: number } | { problem: SavedProblem };
+
+export function readSavedValue(value: unknown, version: number, migrations: Migrations = {}, field = "version"): SavedRead {
+  const stamped = isFields(value) && owns(value, field) ? value[field] : 0;
+  if (typeof stamped === "number" && Number.isSafeInteger(stamped) && stamped > version) return { problem: "newer" };
+  let doc: SavedObject | null = null;
+  try {
+    doc = upgraded(value, version, migrations, field);
+  } catch {
+    doc = null;
+  }
+  return doc && typeof stamped === "number" ? { doc, from: stamped } : { problem: "shape" };
+}
+
+export function readSaved(json: string, version: number, migrations: Migrations = {}, field = "version"): SavedRead {
+  if (!json.trim()) return { problem: "empty" };
+  let value: unknown;
+  try {
+    value = JSON.parse(json);
+  } catch {
+    return { problem: "invalid" };
+  }
+  return readSavedValue(value, version, migrations, field);
+}
+
 export function parseSaved(json: string | null | undefined, version: number, migrations: Migrations = {}, field = "version"): SavedObject | null {
   if (!json) return null;
   try {

@@ -1,17 +1,20 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { closeTab } from "../../state/browser/actions";
-import { COMPLETION_MS, openLiveItem } from "../../state/live/engine";
+import { COMPLETION_MS, openLiveItem, returnLiveTab } from "../../state/live/engine";
 import { prBadge } from "../../state/live/github";
 import { SOURCES } from "../../state/live/sources";
-import { useLive } from "../../state/live/store";
+import { hideItems, useLive } from "../../state/live/store";
 import type { CompletedItem, LiveItem } from "../../state/live/types";
 import { usePageProfileId } from "../../state/browser/hooks";
-import { useIsActiveIn, useLiveItemTab } from "../../state/sidebar/hooks";
+import { useIsActiveIn, useLiveItemTab, useLiveTabOpen, useTabAwayFromPin } from "../../state/sidebar/hooks";
+import type { CloseControl } from "../../state/sidebar/closeControl";
+import { noteLiveRowHide } from "../../state/telemetry/liveHides";
 import { HoverSlot } from "../ui/HoverSlot";
-import { Badge, Button, ContextMenuArea, Dot, hairline, ink, space, Symbol, Text } from "../ui";
-import { curve, springs } from "../ui/motion";
-import { layout, useTheme } from "../ui/theme";
+import { Badge, Button, ContextMenuArea, Dot, hairline, HoverFill, ink, radius, space, Symbol, Text, useHover, withAlpha } from "../ui";
+import { curve, liftSpring } from "../ui/motion";
+import { Squish, useSquish } from "../ui/Squish";
+import { hex, layout, useTheme } from "../ui/theme";
 import { useLiveColors, type LiveColors } from "../live/tokens";
 import { modifiersOf } from "../../lib/keys";
 import { dismissHover } from "../../state/sidebar/hover";
@@ -20,21 +23,26 @@ import { openLiveItemMenu } from "../../state/sidebar/liveMenus";
 import { registerRow } from "../../state/sidebar/sidebarUi";
 import { withShortcut } from "../../state/commands/commandShortcuts";
 import { TabIcon } from "./TabIcon";
-import { SIDEBAR_MOTION, sidebarTokens, TAB_ROW } from "./tokens";
+import { SIDEBAR_MOTION, sidebarTokens, TAB_ROW, useSidebarTokens } from "./tokens";
 import { useSidebarRowLook } from "./rowLook";
 import { SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
+import { consentToken } from "../../state/telemetry/client";
 
 const liveRowKey = (folderId: string, itemId: string) => `live|${folderId}|${itemId}`;
 
 export function LiveItemRow({ folderId, item, windowId, inStack = false }: { folderId: string; item: LiveItem; windowId: string; inStack?: boolean }) {
   const indent = inStack ? STACK_INDENT : 0;
   const theme = useTheme();
-  const { closeTabHint: closeHint } = useSidebarRowLook();
+  const tokens = useSidebarTokens();
+  const { closeTabHint: closeHint, backToPinHint, quiet } = useSidebarRowLook();
+  const backToPin = useHover();
   const colors = useLiveColors();
   const key = liveRowKey(folderId, item.id);
   const profileId = usePageProfileId();
   const tabId = useLiveItemTab(windowId, profileId, folderId, item.id);
   const active = useIsActiveIn(windowId, profileId, tabId);
+  const away = useTabAwayFromPin(tabId);
+  const tabOpen = useLiveTabOpen(folderId, [item.id]);
   const unread = useLive((s) => !!s.unread[folderId]?.includes(item.id));
   const completion = useLive((s) => (s.completing[folderId]?.includes(item.id) ? (s.completed[folderId]?.find((c) => c.item.id === item.id)?.state ?? "merged") : null));
   const { hovered, hoverProps } = useRowHover(windowId, completion ? null : { kind: "live", id: key });
@@ -47,7 +55,15 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
       Animated.timing(fold, { toValue: 0, duration: SIDEBAR_MOTION.liveFold, easing: curve.enter, useNativeDriver: false }),
     ]).start();
   }, [completion]);
-  const fill = active ? theme.tabSelected : hovered ? theme.tabHover : ink.clear;
+  const fill = active ? (quiet ? tokens.quietWash : theme.tabSelected) : ink.clear;
+  const hoverFill = quiet ? tokens.quietHover : theme.tabHover;
+  const border = active && !quiet ? 0.5 : 0;
+  const pressedFill = quiet ? tokens.quietPressed : theme.tabPressed;
+  const titleColor = completion ? theme.textSecondary : quiet ? hex(withAlpha(theme.textTab, active ? tokens.quietActiveText : tokens.quietText)) : active ? theme.rowSelectedText : theme.textTab;
+  const resettable = away && !completion;
+  const resetting = resettable && backToPin.hovered;
+  const control = liveRowControl(folderId, item, tabId, tabOpen, closeHint);
+  const squish = useSquish("row");
 
   return (
     <Animated.View style={completion ? { height: fold.interpolate({ inputRange: [0, 1], outputRange: [0, layout.rowHeight] }), opacity: fold, overflow: "hidden" } : null}>
@@ -59,25 +75,51 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
           }}
         >
           <Pressable
+            onPressIn={squish.onPressIn}
+            onPressOut={squish.onPressOut}
             onPress={(e) => {
               dismissHover();
               openLiveItem(windowId, folderId, item, { background: modifiersOf(e).metaKey });
             }}
           >
             {({ pressed }) => (
-              <SidebarRowSurface fill={!active && pressed ? theme.tabPressed : fill} selected={active} border={active ? 1 : 0} padLeft={TAB_ROW.contentLeft + indent}>
+              <Squish scale={squish.scale}>
+              <HoverFill shown={!active && (hovered || pressed)} instant={active} color={pressed ? pressedFill : hoverFill} radius={radius.chrome} />
+              <SidebarRowSurface fill={fill} selected={active && !quiet} border={border} padLeft={TAB_ROW.contentLeft + indent}>
                 {unread ? <Dot size={5} color={theme.accent} style={{ position: "absolute", left: UNREAD_DOT_LEFT + indent }} /> : null}
-                <ItemIcon item={item} completion={completion} colors={colors} />
-                <SidebarRowLabel text={item.title} weight={unread ? "medium" : undefined} color={active ? theme.tabSelectedText : completion ? theme.textSecondary : theme.textTab} />
+                <View {...backToPin.hoverProps}>
+                  {resettable ? (
+                    <Pressable
+                      onPress={() => tabId && returnLiveTab(tabId)}
+                      tooltip={withShortcut("Back to Pinned URL", backToPinHint)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Back to Pinned URL"
+                    >
+                      {resetting ? (
+                        <Symbol name="arrow.uturn.backward" size={11} weight="semibold" color={active ? theme.rowSelectedText : theme.textTab} style={{ width: 16, height: 16 }} />
+                      ) : (
+                        <ItemIcon item={item} completion={completion} colors={colors} />
+                      )}
+                    </Pressable>
+                  ) : (
+                    <ItemIcon item={item} completion={completion} colors={colors} />
+                  )}
+                </View>
+                <SidebarRowLabel
+                  text={resetting ? "Back to Pinned URL" : item.title}
+                  weight={unread ? "medium" : undefined}
+                  color={titleColor}
+                />
                 {inStack && item.pr?.stack ? <PositionChip position={item.pr.stack.position} /> : null}
                 <HoverSlot
-                  hovered={hovered && !!tabId && !completion}
+                  hovered={hovered && !!control && !completion}
                   reserve={inStack && item.pr?.stack ? "always" : "hover"}
-                  hover={<Button variant="icon" icon="xmark" size="s" weight="semibold" onPress={() => tabId && void closeTab(tabId)} tooltip={withShortcut("Close Tab", closeHint)} />}
+                  hover={control ? <Button variant="icon" icon={control.icon} size="s" weight="semibold" onPress={control.press} tooltip={control.tooltip} /> : null}
                 >
                   <Trailing item={item} completion={completion} colors={colors} />
                 </HoverSlot>
               </SidebarRowSurface>
+              </Squish>
             )}
           </Pressable>
         </ContextMenuArea>
@@ -89,6 +131,22 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
 const UNREAD_DOT_LEFT = 2;
 const STACK_INDENT = 10;
 const POSITION_CHIP = { marginLeft: space.xs } as const;
+
+type LiveRowControl = CloseControl & { press(): void };
+
+function liveRowControl(folderId: string, item: LiveItem, tabId: string | null, tabOpen: boolean, closeHint: string | undefined): LiveRowControl | null {
+  if (tabId) return { icon: "minus", tooltip: withShortcut("Close Tab", closeHint), press: () => void closeTab(tabId, { user: { consent: consentToken() } }) };
+  if (item.pr && !tabOpen)
+    return {
+      icon: "xmark",
+      tooltip: "Hide Until Refresh",
+      press: () => {
+        hideItems(folderId, [item]);
+        noteLiveRowHide();
+      },
+    };
+  return null;
+}
 
 function PositionChip({ position }: { position: number }) {
   return (
@@ -109,7 +167,7 @@ function ItemIcon({ item, completion, colors }: { item: LiveItem; completion: Co
   useEffect(() => {
     if (!completion) return;
     pop.setValue(0);
-    Animated.spring(pop, { toValue: 1, ...springs.bouncy, useNativeDriver: true }).start();
+    Animated.spring(pop, { toValue: 1, ...liftSpring(), useNativeDriver: true }).start();
   }, [completion]);
   if (completion) {
     const glyph = COMPLETION_GLYPH[completion];

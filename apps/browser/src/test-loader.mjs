@@ -40,7 +40,7 @@ registerHooks({
       return next(specifier, context);
     } catch (error) {
       if (specifier.startsWith(".")) {
-        for (const ext of [".ts", ".tsx"]) {
+        for (const ext of [".ts", ".tsx", "/index.ts", "/index.tsx"]) {
           try {
             return next(specifier + ext, context);
           } catch {}
@@ -51,6 +51,10 @@ registerHooks({
   },
   load(url, context, next) {
     if (url.startsWith("file:") && url.endsWith(".tsx")) return { format: "module", source: transpiledTsx(url), shortCircuit: true };
+    if (url.startsWith("file:") && url.endsWith(".json") && !url.includes("/node_modules/") && !context.importAttributes?.type) return { format: "module", source: `export default ${readFileSync(new URL(url), "utf8")};`, shortCircuit: true };
     return next(url, context);
   },
 });
+
+const { setSecretEscapeMode } = await import(new URL("../../../packages/core/src/secret.ts", import.meta.url).href);
+setSecretEscapeMode("throw");

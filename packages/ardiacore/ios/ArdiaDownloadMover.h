@@ -14,6 +14,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setApprovedFolders:(NSArray<NSString *> *)folders NS_SWIFT_NAME(setApprovedFolders(_:));
 - (NSDictionary<NSString *, id> *)moveDownloadAt:(NSString *)path toFolder:(NSString *)folder NS_SWIFT_NAME(moveDownload(at:toFolder:));
 
+- (void)rememberMove:(NSString *)downloadId from:(NSString *)from to:(NSString *)to NS_SWIFT_NAME(rememberMove(_:from:to:));
+
 + (NSString *)safeFileName:(NSString *)name;
 
 @end

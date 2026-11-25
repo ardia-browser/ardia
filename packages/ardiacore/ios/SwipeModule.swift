@@ -1,3 +1,4 @@
+import AppKit
 import ExpoModulesCore
 import QuartzCore
 
@@ -54,10 +55,11 @@ public class SwipeModule: Module {
       Prop("isPager") { (view: SwipeArea, value: Bool?) in view.isPager = value ?? false }
       Prop("nativePager") { (view: SwipeArea, config: PagerConfig?) in view.configurePager(config) }
       AsyncFunction("devLocate") { (view: SwipeArea) -> [String: Any]? in
-        guard let window = view.window, let content = window.contentView else { return nil }
-        let frame = view.convert(view.bounds, to: content)
-        let top = content.isFlipped ? frame.minY : content.bounds.height - frame.maxY
-        return ["windowNumber": window.windowNumber, "x": frame.minX, "y": top, "width": frame.width, "height": frame.height]
+        guard let window = view.window, let root = InterfaceScale.root(of: window) ?? window.contentView else { return nil }
+        let frame = root.convert(view.bounds, from: view)
+        let left = frame.minX - root.bounds.minX
+        let top = root.isFlipped ? frame.minY - root.bounds.minY : root.bounds.maxY - frame.maxY
+        return ["windowNumber": window.windowNumber, "x": left, "y": top, "width": frame.width, "height": frame.height]
       }.runOnQueue(.main)
     }
   }

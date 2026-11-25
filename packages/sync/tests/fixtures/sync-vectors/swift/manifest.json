@@ -1,0 +1,84 @@
+{
+  "chainTag" : "wf3hndrnif6exl54xwkxktorom",
+  "entropy" : "18237426389ab0a38da16127b1b161ba8978d9723d70a2f472a3b0820c2521f3",
+  "files" : [
+    {
+      "id" : "huv3hgx4vnzlvs5fskpzx3nvu4",
+      "path" : "vault/wf3hndrnif6exl54xwkxktorom/drwhd6qje3pckd74bzthucolne/huv3hgx4vnzlvs5fskpzx3nvu4.nns",
+      "payload" : "log-line",
+      "scope" : "app"
+    },
+    {
+      "id" : "idgi5nm4by5q2ie4w3ktfi6j44",
+      "path" : "vault/wf3hndrnif6exl54xwkxktorom/drwhd6qje3pckd74bzthucolne/idgi5nm4by5q2ie4w3ktfi6j44.nns",
+      "payload" : "pattern-1019",
+      "scope" : "app"
+    },
+    {
+      "id" : "nldmqxjozzbtj25rl3jdhmqrxe",
+      "path" : "vault/wf3hndrnif6exl54xwkxktorom/drwhd6qje3pckd74bzthucolne/nldmqxjozzbtj25rl3jdhmqrxe.nns",
+      "payload" : "pattern-1020",
+      "scope" : "app"
+    },
+    {
+      "id" : "m2llzmf4h3zhtvjklm47xvpnxi",
+      "path" : "vault/wf3hndrnif6exl54xwkxktorom/drwhd6qje3pckd74bzthucolne/m2llzmf4h3zhtvjklm47xvpnxi.nns",
+      "payload" : "pattern-1021",
+      "scope" : "app"
+    },
+    {
+      "id" : "if2rkx5xjivuznizd5igv7baju",
+      "path" : "vault/wf3hndrnif6exl54xwkxktorom/drwhd6qje3pckd74bzthucolne/if2rkx5xjivuznizd5igv7baju.nns",
+      "payload" : "empty",
+      "scope" : "app"
+    },
+    {
+      "id" : "f7wz4xr5jsfh4ancihl5grxwfm",
+      "path" : "vault/wf3hndrnif6exl54xwkxktorom/65dsbbmif46ijahbxs2kfg74ge/f7wz4xr5jsfh4ancihl5grxwfm.nns",
+      "payload" : "log-line",
+      "scope" : "p:personal000000000000000000"
+    },
+    {
+      "id" : "qvrs37spgygyh2egjl32ccdypa",
+      "path" : "vault/wf3hndrnif6exl54xwkxktorom/65dsbbmif46ijahbxs2kfg74ge/qvrs37spgygyh2egjl32ccdypa.nns",
+      "payload" : "pattern-1019",
+      "scope" : "p:personal000000000000000000"
+    },
+    {
+      "id" : "ta3jf3ngbpfqzpd5dceuzafdiq",
+      "path" : "vault/wf3hndrnif6exl54xwkxktorom/65dsbbmif46ijahbxs2kfg74ge/ta3jf3ngbpfqzpd5dceuzafdiq.nns",
+      "payload" : "pattern-1020",
+      "scope" : "p:personal000000000000000000"
+    },
+    {
+      "id" : "oqmqk733mp3hrpm4mp7ewyanzy",
+      "path" : "vault/wf3hndrnif6exl54xwkxktorom/65dsbbmif46ijahbxs2kfg74ge/oqmqk733mp3hrpm4mp7ewyanzy.nns",
+      "payload" : "pattern-1021",
+      "scope" : "p:personal000000000000000000"
+    },
+    {
+      "id" : "fr4ya2pipt4ustyu2edzfv6lky",
+      "path" : "vault/wf3hndrnif6exl54xwkxktorom/65dsbbmif46ijahbxs2kfg74ge/fr4ya2pipt4ustyu2edzfv6lky.nns",
+      "payload" : "empty",
+      "scope" : "p:personal000000000000000000"
+    }
+  ],
+  "localState" : {
+    "entropy" : "random",
+    "fileId" : "state",
+    "payload" : "local-state",
+    "sealed" : "Tk5TMdKQ+vXVgGUZRBEI07XqiptyBPR/F++1zqtCs6qwYg5CeqsM9Gt6wGcDATL23KiAMGi+DRrIha+1lUtxSnThFh4nlpvR45bDaysAI33eDJrHMl9eR7Q0s+QWKQLGUjTwaS2/lH9HP2jSMhGHi6IMu8sB4weE8ws4A8/e8vu3BqVcjRCK0J3fFI7Usp6n9mz69enNEf8VGNbybwEcyS+NshEt7pYrDxmd5ChcQLfdzn9dv1FIotC5AM9zXOS5nq9HEqtuazDhxy9cQBq6G5oS6POcD0MjjSOl/FrZf9Oc1BbcIawZfOofvcXJasenzeolGc+zBOkSQTzq9TBSzIKG/HZ34nXkTbDlsZ/hvh6fxmyhHv1ipTazV/xNaB78mVcjp+jVhdm9UUYdINRTxbmgzSpL7mSMkoZgmFHPkzmSJeRXCgTn1peNTRMv5ZaYHi+09wCgIoD+IA0V6f5MbejqvR/5+hzRgfRWn1mKVCvLq1aPOCyF8C1KyF/p0k4icIeZevqJYRScER+iXbQwdYTHks/A5Mg0hYD07zmKVSwO47TEx3WSUSCS5c9MmGKa++0oR8UkbkpJCCMlI6+iwPr1QgqMtEuZR+umjxHe9sw6u5oyBqoBREdW8lLMRDMrondMeLOjGv4sAf/9PEHR+iYkNdBeRuvtfrIKzsYtkAN2/sj1PtZL9vMp1YnYjBE3q7IkUsJQP91cOAKHgzn/C4haaKazjpsFkmrV6aUk4q/05UVorvfdAPHQKZQy1ftDiOfvByd1l+bgNKQj1ZNRhdjlsYoR9CaW6wncVysolL5xpiQHalIGf6KnOQj4e+Cl+gISMNSXWfXXwga7X4KDg9gY2JkXRMgvqsU2tVRTJzeLCkqY7KUL5iBSmMlRMyVtXdTVGVJjqvck3H9bXcKDCwzC6rgsdjJ6F+FJeRWSpdqYZv4+FPK5xg1QTft4DGR4XZ8vrsbSKEfAVr+z5dHAJQwRLwoJPMG4c91ZGigmnvaZWN4KAF6QsmDTvXCESzSF0CPheHRkIgs18fwH4GRmuCmKjK14c8bYNw7PUhGINniXcNHb3qxsPCjt+fjs9TRWaWTzWtedjjfZarsGAmzcStwaDZyC9XQ2a4lgj3s105DnmNCBBMofHtCjJxZwNAkyLHfbsHM/kGyvTyh/zSweEA3wOsKO2HjhJ5WhU9uYlZECl4bMyq2zTOWWLfVOj616GOekx1tcfcZUkG65/IUy4sI+nuL8MjpsJLVqCEtOkM5r50LZPCxQB6XslIsOFq+UwETjHQ2bVevTbDLPqUiSgbJ6a4eMLeRAC12IplFqGCymS2n9hKp2V0q4KQ6n2SGUho/bWw92BuQGEtX8G7ZV4xTHr+L6m9tlvPZPLx5Dalmpzm36+yrkgG7bx5TXMDr9"
+  },
+  "password" : {
+    "origin" : "https://bücher.example",
+    "password" : "correct horse battery staple",
+    "username" : "zoë@例え.jp"
+  },
+  "phrase" : "blouse brick another illness prison fade custom club chicken mirror flash insect nurse hole similar puppy pepper phone pottery genre camp barely march invite",
+  "scopeTags" : {
+    "app" : "drwhd6qje3pckd74bzthucolne",
+    "p:personal000000000000000000" : "65dsbbmif46ijahbxs2kfg74ge"
+  },
+  "sealedPassword" : "AVWarn0v9pawShsnMKoaqcY3lWhie8VMQwgK8BG/yItxYuzymDhYbKP3WLaZ2pxBPC9d0lTakiGqCyqHGw==",
+  "writer" : "swift"
+}

@@ -7,7 +7,8 @@ public class ContextMenuAreaModule: Module {
     Name("ArdiaContextMenuArea")
 
     View(ContextMenuArea.self) {
-      Events("onContextMenu")
+      Events("onContextMenu", "onMiddleClick")
+      Prop("middleClicks") { (view: ContextMenuArea, on: Bool) in view.middleClicks = on }
       Prop("captureDescendants") { (view: ContextMenuArea, on: Bool) in view.captureDescendants = on }
     }
   }

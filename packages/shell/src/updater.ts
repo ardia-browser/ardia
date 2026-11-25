@@ -1,3 +1,5 @@
+import type { UpdaterNative } from "./generated/native";
+
 export type UpdaterState =
   | { available: false }
   | {
@@ -13,14 +15,15 @@ export type UpdaterState =
       displayVersion?: string;
       channel?: UpdateChannel;
       buildChannel?: UpdateChannel;
+      switchCheck?: SwitchCheck | null;
     };
+
+export type SwitchCheck = {
+  phase: "waiting" | "checking" | "found" | "upToDate" | "newerThanLatest" | "failed" | "downloading" | "installing" | "ready";
+  channel: UpdateChannel;
+  version?: string;
+};
 
 export type UpdateChannel = "stable" | "nightly";
 
-export type UpdaterNative = {
-  updaterState(): Promise<UpdaterState>;
-  checkForUpdates(): Promise<void>;
-  setAutomaticUpdateChecks(on: boolean): Promise<void>;
-  setAutomaticUpdateDownloads(on: boolean): Promise<void>;
-  setUpdateChannel(channel: UpdateChannel): Promise<void>;
-};
+export type { UpdaterNative };

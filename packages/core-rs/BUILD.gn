@@ -1,0 +1,143 @@
+import("//build/rust/rust_static_library.gni")
+import("//build/rust/rust_unit_test.gni")
+import("//testing/test.gni")
+
+declare_args() {
+  ardia_core_rs_checkout = ""
+}
+
+ardia_crypto_sources = [
+  "crates/ardia-crypto/src/boringssl.rs",
+  "crates/ardia-crypto/src/lib.rs",
+  "crates/ardia-crypto/src/small_order.rs",
+]
+
+ardia_sync_core_sources = [
+  "crates/ardia-sync-core/src/base32.rs",
+  "crates/ardia-sync-core/src/error.rs",
+  "crates/ardia-sync-core/src/foundation_base64.rs",
+  "crates/ardia-sync-core/src/keys.rs",
+  "crates/ardia-sync-core/src/lib.rs",
+  "crates/ardia-sync-core/src/lowercase_letters.rs",
+  "crates/ardia-sync-core/src/phrase.rs",
+  "crates/ardia-sync-core/src/vault.rs",
+  "crates/ardia-sync-core/src/wordlist.rs",
+]
+
+ardia_ffi_sources = [ "crates/ardia-ffi/src/lib.rs" ]
+
+rust_static_library("ardia_crypto") {
+  crate_name = "ardia_crypto"
+  crate_root = "crates/ardia-crypto/src/lib.rs"
+  sources = ardia_crypto_sources
+  edition = "2021"
+  features = [
+    "boringssl",
+    "ed25519",
+  ]
+  deps = [
+    "//third_party/boringssl:bssl_crypto",
+    "//third_party/rust/zeroize/v1:lib",
+  ]
+  visibility = [ ":*" ]
+}
+
+rust_static_library("ardia_sync_core") {
+  crate_name = "ardia_sync_core"
+  crate_root = "crates/ardia-sync-core/src/lib.rs"
+  sources = ardia_sync_core_sources
+  edition = "2021"
+  deps = [
+    ":ardia_crypto",
+    "//third_party/rust/base64/v0_22:lib",
+    "//third_party/rust/zeroize/v1:lib",
+  ]
+  visibility = [ ":*" ]
+}
+
+rust_static_library("ardia_core_rust") {
+  crate_name = "ardia_core"
+  crate_root = "crates/ardia-ffi/src/lib.rs"
+  sources = ardia_ffi_sources
+  edition = "2021"
+  allow_unsafe = true
+  deps = [
+    ":ardia_sync_core",
+    "//third_party/rust/serde/v1:lib",
+    "//third_party/rust/serde_json/v1:lib",
+    "//third_party/rust/zeroize/v1:lib",
+  ]
+  visibility = [ ":*" ]
+}
+
+source_set("ardia_core") {
+  public = [ "include/ardia_core.h" ]
+  public_deps = [ ":ardia_core_rust" ]
+}
+
+rust_unit_test("ardia_crypto_known_answers") {
+  crate_root = "crates/ardia-crypto/tests/known_answers.rs"
+  sources = [ "crates/ardia-crypto/tests/known_answers.rs" ]
+  edition = "2021"
+  features = [ "ed25519" ]
+  deps = [ ":ardia_crypto" ]
+}
+
+template("ardia_sync_vectors_test") {
+  rust_unit_test(target_name) {
+    crate_root = invoker.crate_root
+    sources = [
+      "crates/ardia-sync-vectors/tests/support/mod.rs",
+      invoker.crate_root,
+    ]
+    edition = "2021"
+    rustenv = [ "CARGO_MANIFEST_DIR=$ardia_core_rs_checkout/packages/core-rs/crates/ardia-sync-vectors" ]
+    deps = [
+      ":ardia_crypto",
+      ":ardia_sync_core",
+      "//third_party/rust/base64/v0_22:lib",
+      "//third_party/rust/serde_json/v1:lib",
+      "//third_party/rust/zeroize/v1:lib",
+    ]
+  }
+}
+
+if (ardia_core_rs_checkout != "") {
+  ardia_sync_vectors_test("ardia_sync_vectors") {
+    crate_root = "crates/ardia-sync-vectors/tests/vectors.rs"
+  }
+
+  ardia_sync_vectors_test("ardia_sync_vectors_phrase") {
+    crate_root = "crates/ardia-sync-vectors/tests/phrase.rs"
+  }
+
+  ardia_sync_vectors_test("ardia_sync_vectors_password_reads") {
+    crate_root = "crates/ardia-sync-vectors/tests/password_reads.rs"
+  }
+}
+
+test("ardia_core_rs_unittests") {
+  sources = [ "tests/chromium/ardia_core_rs_unittest.cc" ]
+  deps = [
+    ":ardia_core",
+    "//base",
+    "//base/test:run_all_unittests",
+    "//testing/gtest",
+  ]
+}
+
+group("tests") {
+  testonly = true
+  deps = [
+    ":ardia_core",
+    ":ardia_core_rs_unittests",
+    ":ardia_crypto_known_answers",
+  ]
+  if (ardia_core_rs_checkout != "") {
+    deps += [
+      ":ardia_sync_vectors",
+      ":ardia_sync_vectors_password_reads",
+      ":ardia_sync_vectors_phrase",
+    ]
+  }
+}

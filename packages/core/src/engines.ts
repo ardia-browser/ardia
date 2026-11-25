@@ -29,7 +29,7 @@ export const BUILT_IN_ENGINES: readonly SearchEngine[] = [
     name: "Google",
     keyword: "google.com",
     url: "https://www.google.com/search?q=%s",
-    suggestUrl: "https://suggestqueries.google.com/complete/search?client=firefox&ie=utf-8&oe=utf-8&q=%s",
+    suggestUrl: "https://www.google.com/complete/search?client=chrome&q=%s",
   },
   { id: "bing", name: "Bing", keyword: "bing.com", url: "https://www.bing.com/search?q=%s", suggestUrl: "https://api.bing.com/osjson.aspx?query=%s" },
   {
@@ -86,8 +86,20 @@ export const BUILT_IN_ENGINES: readonly SearchEngine[] = [
   },
 ];
 
+export const validSearchTemplate = (url: unknown): url is string => typeof url === "string" && /^https?:\/\/[^/?#\s]+/i.test(url) && url.includes("%s");
+
+export function customEngineFrom(raw: unknown): CustomSearchEngine | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { id, name, keyword, url } = raw as Record<string, unknown>;
+  if (typeof id !== "string" || typeof name !== "string" || typeof keyword !== "string" || !validSearchTemplate(url)) return null;
+  return { id, name, keyword, url };
+}
+
+export const customEnginesFrom = (raw: unknown): CustomSearchEngine[] =>
+  Array.isArray(raw) ? raw.flatMap((e) => customEngineFrom(e) ?? []) : [];
+
 export function allEngines(custom: readonly CustomSearchEngine[] = [], extension: readonly ExtensionSearchEngine[] = []): SearchEngine[] {
-  const engines: SearchEngine[] = [...BUILT_IN_ENGINES, ...custom.map((e) => ({ ...e, custom: true }))];
+  const engines: SearchEngine[] = [...BUILT_IN_ENGINES, ...customEnginesFrom(custom).map((e) => ({ ...e, custom: true }))];
   const seen = new Set<string>();
   for (const e of extension) {
     if (seen.has(e.extensionId)) continue;
@@ -117,14 +129,36 @@ export function engineById(engines: readonly SearchEngine[], id: string | undefi
 export const searchUrl = (engine: Pick<SearchEngine, "url">, query: string) => searchUrlFor(engine.url, query);
 
 export const suggestRequestUrl = (engine: SearchEngine, query: string) =>
-  engine.suggestUrl && query.trim() ? searchUrlFor(engine.suggestUrl, query) : null;
+  engine.suggestUrl && !engine.custom && query.trim() ? searchUrlFor(engine.suggestUrl, query) : null;
 
 export const engineHost = (engine: Pick<SearchEngine, "url">) => hostOf(engine.url.replace(/%s/g, "q"));
 
-export function parseSuggestions(body: unknown): string[] {
-  if (!Array.isArray(body) || !Array.isArray(body[1])) return [];
-  return (body[1] as unknown[]).filter((s): s is string => typeof s === "string" && s.trim() !== "").map((s) => s.trim());
+const NOT_QUERIES = new Set(["NAVIGATION", "PERSONALIZED_NAVIGATION", "CALCULATOR"]);
+const SITES = new Set(["NAVIGATION", "PERSONALIZED_NAVIGATION"]);
+
+export type RemoteSite = { url: string; title: string };
+export type RemoteSuggestions = { queries: string[]; sites: RemoteSite[] };
+
+export const suggestReplyJson = (text: string): unknown => JSON.parse(text.replace(/^\)\]\}'\s*/, ""));
+
+export function parseRemoteSuggestions(body: unknown): RemoteSuggestions {
+  if (!Array.isArray(body) || !Array.isArray(body[1])) return { queries: [], sites: [] };
+  const extras = body[4] as { "google:suggesttype"?: unknown } | undefined;
+  const types = Array.isArray(extras?.["google:suggesttype"]) ? (extras["google:suggesttype"] as unknown[]) : [];
+  const titles = Array.isArray(body[2]) ? (body[2] as unknown[]) : [];
+  const queries: string[] = [];
+  const sites: RemoteSite[] = [];
+  (body[1] as unknown[]).forEach((s, i) => {
+    if (typeof s !== "string" || s.trim() === "") return;
+    const type = String(types[i]);
+    if (SITES.has(type)) {
+      if (/^https?:\/\/[^\s/?#]+/i.test(s.trim())) sites.push({ url: s.trim(), title: typeof titles[i] === "string" ? (titles[i] as string).trim() : "" });
+    } else if (!NOT_QUERIES.has(type)) queries.push(s.trim());
+  });
+  return { queries, sites };
 }
+
+export const parseSuggestions = (body: unknown): string[] => parseRemoteSuggestions(body).queries;
 
 export type EngineInput = { name: string; keyword: string; url: string };
 

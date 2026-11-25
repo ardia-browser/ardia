@@ -1,20 +1,23 @@
 import ExpoModulesCore
 import Foundation
 
-public class ConfigModule: Module {
+public class ConfigModule: Module, ConfigNative {
+  static func readFile(_ name: String) -> [String: Any] { ConfigFolder.read(name) }
+
+  func watch(_ names: [String], _ promise: Promise) { ConfigWatcher.shared.watch(names, armed: { promise.resolve(nil) }) { [weak self] in self?.sendEvent("onChange", [:]) } }
+
+  static func writeSchemas(_ files: [String: String]) throws -> [String] { try ConfigFolder.writeSchemas(files) }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaConfig")
+    Name(Self.moduleName)
 
-    Events("onChange")
+    Self.eventsDefinition
 
-    Function("readFile") { (name: String) -> [String: Any] in ConfigFolder.read(name) }
+    Self.readFileFunction
 
-    AsyncFunction("watch") { [weak self] (names: [String], promise: Promise) in
-      ConfigWatcher.shared.watch(names, armed: { promise.resolve(nil) }) { self?.sendEvent("onChange", [:]) }
-    }
+    watchFunction
 
-    AsyncFunction("writeSchemas") { (files: [String: String]) throws -> [String] in try ConfigFolder.writeSchemas(files) }
-      .runOnQueue(DispatchQueue.global(qos: .utility))
+    Self.writeSchemasFunction
 
     OnDestroy { ConfigWatcher.shared.stop() }
   }

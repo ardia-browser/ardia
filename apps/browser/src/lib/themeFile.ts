@@ -1,21 +1,22 @@
 import { isFields } from "./decode";
 import { JSON_SCHEMA_DIALECT, type JsonSchema } from "./jsonSchema";
 import { toHex } from "./color";
+import { LOOK_KEYS, lookSchemas, parseLookBlocks, type LookBlocks } from "./themeLook";
 
-export type RoleValue = string | number | boolean | readonly [string, string];
-export type RolePalette = Readonly<Record<string, RoleValue>>;
+type RoleValue = string | number | boolean | readonly [string, string];
+type RolePalette = Readonly<Record<string, RoleValue>>;
 export type RolePalettes = { readonly dark: RolePalette; readonly light: RolePalette };
 export type BasePalette = RolePalettes & { readonly revision: number };
 export type ThemeRoles = { readonly dark: Readonly<Record<string, RoleValue>>; readonly light: Readonly<Record<string, RoleValue>> };
 export type ThemeMode = keyof RolePalettes;
-export type ParsedTheme = { roles: ThemeRoles | null; problems: string[] };
+export type ParsedTheme = { roles: ThemeRoles | null; look: LookBlocks | null; problems: string[] };
 
 export const THEME_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 export const THEME_MODES: readonly ThemeMode[] = ["dark", "light"];
 
 const CHANNEL = String.raw`\s*(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\s*`;
 const ALPHA = String.raw`\s*(0|1|0?\.\d+|1\.0+)\s*`;
-export const COLOR_PATTERN = String.raw`^(?:#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{8}|rgb\(${CHANNEL},${CHANNEL},${CHANNEL}\)|rgba\(${CHANNEL},${CHANNEL},${CHANNEL},${ALPHA}\))$`;
+const COLOR_PATTERN = String.raw`^(?:#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{8}|rgb\(${CHANNEL},${CHANNEL},${CHANNEL}\)|rgba\(${CHANNEL},${CHANNEL},${CHANNEL},${ALPHA}\))$`;
 const COLOR = new RegExp(COLOR_PATTERN);
 const COLOR_RULE = "a colour (#RGB, #RRGGBB, #RRGGBBAA, or rgb or rgba with r, g, b from 0 to 255 and a from 0 to 1)";
 
@@ -41,7 +42,7 @@ function numberRange(role: string): { minimum?: number; maximum?: number } {
   return {};
 }
 
-export function roleKind(role: string, value: RoleValue): RoleKind | null {
+function roleKind(role: string, value: RoleValue): RoleKind | null {
   if (typeof value === "string") return { kind: "color" };
   if (typeof value === "number") return { kind: "number", ...numberRange(role) };
   if (Array.isArray(value)) return { kind: "pair" };
@@ -70,11 +71,12 @@ export function parseThemeFile(file: string, text: string, defaults: RolePalette
   try {
     doc = JSON.parse(text);
   } catch (error) {
-    return { roles: null, problems: [`${file}: isn't valid JSON (${(error as Error).message})`] };
+    return { roles: null, look: null, problems: [`${file}: isn't valid JSON (${(error as Error).message})`] };
   }
-  if (!isFields(doc)) return { roles: null, problems: [`${file}: must be an object`] };
+  if (!isFields(doc)) return { roles: null, look: null, problems: [`${file}: must be an object`] };
   const problems: string[] = [];
-  for (const key of Object.keys(doc)) if (key !== "$schema" && key !== "dark" && key !== "light") problems.push(`${file}: ${key} isn't a theme key (dark, light)`);
+  const keys: readonly string[] = [...THEME_MODES, ...LOOK_KEYS];
+  for (const key of Object.keys(doc)) if (key !== "$schema" && !keys.includes(key)) problems.push(`${file}: ${key} isn't a theme key (${keys.join(", ")})`);
   const roles = { dark: {} as Record<string, RoleValue>, light: {} as Record<string, RoleValue> };
   for (const mode of THEME_MODES) {
     const given = doc[mode];
@@ -94,7 +96,7 @@ export function parseThemeFile(file: string, text: string, defaults: RolePalette
       else roles[mode][role] = checked.value;
     }
   }
-  return { roles, problems };
+  return { roles, look: parseLookBlocks(file, doc, problems), problems };
 }
 
 export function mergedPalettes(defaults: RolePalettes, roles: ThemeRoles | null, revision: number): BasePalette {
@@ -121,9 +123,9 @@ function modeSchema(mode: ThemeMode, palette: RolePalette): JsonSchema {
 export function themeSchema(defaults: RolePalettes): object {
   return {
     $schema: JSON_SCHEMA_DIALECT,
-    description: "An Ardia theme: colour roles that replace Ardia's own, per appearance",
+    description: "An Ardia theme: colour roles that replace Ardia's own, per appearance, and the type, metrics, layout and icons it draws with",
     type: "object",
-    properties: { $schema: { type: "string" }, dark: modeSchema("dark", defaults.dark), light: modeSchema("light", defaults.light) },
+    properties: { $schema: { type: "string" }, dark: modeSchema("dark", defaults.dark), light: modeSchema("light", defaults.light), ...lookSchemas() },
     additionalProperties: false,
   };
 }

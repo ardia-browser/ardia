@@ -6,7 +6,7 @@ function Screen({ title, body, children }: { title: string; body: string; childr
   return (
     <div className="grid min-h-[60dvh] place-items-center px-6">
       <div className="grid max-w-md justify-items-center gap-3 text-center">
-        <img src="/ardia-mark.png" alt="" width={56} height={42} className="opacity-80" />
+        <img src="/ardia-mark.png" alt="" width={56} height={56} className="opacity-80" />
         <h1 className="text-xl font-semibold tracking-[-0.02em]">{title}</h1>
         <p className="text-sm break-words text-muted-foreground">{body}</p>
         <div className="mt-2 flex gap-2">{children}</div>

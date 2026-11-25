@@ -8,8 +8,17 @@ Issue #717. Config files and themes are `docs/config.md`; page scripting over CD
 
 - While "Let the ardia command control Ardia" (`cliControl`) is on, the app listens on a Unix socket at exactly
   `<data dir>/ArdiaControl.sock` (the app's own data dir; `ARDIA_DATA_DIR` for test instances).
-- **Safe place.** The server starts only if the data dir is a real directory (not a symlink) owned by the user and not
-  writable by group or others; otherwise it logs one line and reports an error status. The socket is created under a
+- **Safe place.** The server starts only if the data dir is a real directory (not a symlink) owned by the user, not
+  writable by group or others, not on a volume that ignores ownership, and with no macOS access list that allows
+  anyone but the user anything (an inherited `everyone allow read` would otherwise reach every file made in it, 0600
+  or not; `ControlPeerCore/PrivateFolder.swift`, as the engine's `UnsafeControlFolder`), and only if no folder above
+  it (its real path, `F_GETPATH`) could be swapped by someone else: each is owned by root or the user, not writable by
+  others unless sticky, with no access list that lets anyone else write, delete or take ownership; otherwise it logs
+  one line and reports an error status. The checked folder stays open while the socket serves: the lock file, the old
+  socket's removal and the stop's cleanup all go through that descriptor (`openat`, `fstatat`, `unlinkat`), and
+  since `bind` only takes a path, the socket bound at the path must be the same inode found through the descriptor, or
+  it doesn't start (binding relative to the folder after `fchdir` would change the whole process's working folder,
+  which Chromium's threads share). The socket is created under a
   0177 umask, so it is 0600 from the start (a socket is made 0777 less the umask, so 0077 would leave it 0700).
 - **One owner.** The server holds an exclusive `flock` on `<data dir>/ArdiaControl.sock.lock` for as long as it
   serves. Only after taking the lock may it remove an old path, and only a socket (never a regular file, directory or
@@ -17,7 +26,53 @@ Issue #717. Config files and themes are `docs/config.md`; page scripting over CD
   A second instance that can't take the lock serves nothing and disturbs nothing.
 - **Both ends check the peer.** The server refuses a peer whose uid (`getpeereid`) isn't its own; the CLI checks the
   server's uid on the connected socket (`LOCAL_PEERCRED`) before sending anything. A pathname check alone is not
-  authentication. No token: the bar is the user's own account, as for the token file.
+  authentication. No token: the bar is the user's own account, as for the token file, and on macOS the program's
+  code identity on top (next point).
+- **Who the program is (macOS).** After the uid check the server reads the peer's audit token (`LOCAL_PEERTOKEN`, so
+  a reused pid can't stand in for it: a token whose process has gone resolves to nothing) and resolves its code with
+  Security.framework off the socket queue (`ControlPeerCore/ControlPeer.swift`): Team ID, signing identifier, path,
+  cdhash, hardened runtime, and whether the signature is valid against an Apple anchor. A hardened program signed with
+  Ardia's own Team ID (the bundled `ardia` and its runtime, and any other code Ardia ships, all signed by the release's
+  `sign` job) is the owner, as before. Any other program waits, unread, while Ardia rings a **doorbell**: a sheet on
+  the last focused window, "A program wants to control Ardia", with the program's name right beside who signed it
+  ("Not signed by an identified developer" for anything else) and its path, control and direction characters stripped
+  and lengths bounded, so a program can't pass itself off as `ardia` in the headline. Its buttons are Allow Once, Allow
+  for 30 Minutes, Always Allow and Don't Allow; Return does nothing, Escape and the initial keyboard focus are Don't
+  Allow, so a keystroke meant for a page never lets a program in.
+  Approvals are keyed by Team ID + identifier for a program signed by an identified developer, `apple:` + identifier
+  for one of macOS's own, and path + cdhash for anything else. That cdhash is checked against the running process
+  (a `cdhash H"…"` requirement on the dynamic code), so a file swapped on disk can't borrow an approval; a program whose
+  running code doesn't validate has no cdhash and can only be allowed once.
+  They live in `<data dir>/ArdiaControlApprovals.json` (0600 with no access list, read only if it's a private regular
+  file of the user's with no access list letting anyone else in, from a folder that passes the same check, and written
+  by an `O_EXCL` temp file stripped of any inherited access list and flushed to disk (`F_FULLFSYNC`, `fsync` where
+  that isn't supported), then a rename and a flush of the folder, so a grant reported saved survives a power loss), are listed in Settings › Advanced › Command line and automation ›
+  Programs you let in, and removing one there closes its open connections; a 30-minute one also closes them when it
+  runs out, at the approval's own end time on the wall clock (sleep included), and after that end no line it sends is
+  run and no new event is sent to it (only a frame already being written to it may finish). One doorbell shows at a time. Connections share one only when they come
+  from the same process (pid and pid version from the audit token) with the same identity; another process gets its
+  own, and choosing Allow for 30 Minutes or Always Allow then lets in every waiting process with the same key. An
+  answer counts only while the ask is live: a click after its deadline, or after the process has gone (its audit token
+  no longer resolves, or its socket hung up even with a request still buffered), lets nothing in and saves nothing,
+  and nothing is saved when there's no room for a new connection. A waiting connection is
+  refused (a `{"id": null, "error": {"code": "refused", …}}` line, then close) when you choose Don't Allow, after 60 s,
+  when nobody can see the question (no window on screen, or a background instance), or when control goes off; it's
+  dropped without a word if the program leaves. After Don't Allow or a timeout the same program is refused without
+  asking for 30 s, and its other pending asks end with it. A grant checks every other waiting ask it lets in the same
+  way as the one answered. At most 8 connections wait and 8 identity look-ups run at once (counted until each look-up returns,
+  across stop and start); one that takes over 10 s is refused. When the JS bridge changes (a reload), its open asks
+  end and Ardia takes their sheets away natively.
+  What it doesn't stop: a process of the user's can still run the bundled `ardia` (or its signed runtime) itself and
+  get in as it does, can still read `ArdiaControl.json` for the token connection until the engine stops writing the token there (the
+  socket's `control.devtoolsEndpoint` hands it only to programs let in, and the command will move to it;
+  `docs/control-socket.md` › The DevTools token), and can write its
+  own entry into `ArdiaControlApprovals.json` (the file is the user's, and its entries carry no signature). The doorbell is
+  so a program never drives Ardia without the user seeing its name, not a wall against malware running as the user.
+- **Test instances keep the old rule.** A test instance (a build not signed for distribution with a scratch
+  `ARDIA_DATA_DIR`, `docs/agent-brief.md` › Launch variables) admits every process of the user, as before, so agents'
+  and tests' clients keep working against hidden instances. `ARDIA_TEST controlDoorbell` gives one the doorbell to
+  test it; with `appDialog` too, the doorbell is written to `dialog.json` and answered from `dialog.json.pick` (a
+  choice's title or its index). Release builds have no such switch.
 - A path longer than `sun_path` allows (103 bytes plus the terminator) is refused with a logged line and an error
   status; the CLI says so instead of hanging.
 - **Turning it off.** Turning `cliControl` off, or quitting, closes every connection, drops what is queued and removes
@@ -31,8 +86,9 @@ Issue #717. Config files and themes are `docs/config.md`; page scripting over CD
 
 At most 16 connections (more are closed at accept). Per connection: one input line at most 1,048,576 bytes before its
 newline, an incomplete line closes the connection after 30 s, at most 32 requests waiting for a reply, at most 4 MB of
-output buffered. Events beyond 1,000 waiting on one connection drop the oldest waiting events (never a reply, never a
-partly written line); the next event written carries a top-level `"dropped": N` with the count since the last one.
+output buffered. Events beyond 1,000 waiting on one connection, or beyond what fits in the 4 MB, drop the oldest
+waiting events (never a reply, never a partly written line; an event larger than the whole budget is dropped
+itself); the next event written carries a top-level `"dropped": N` with the count since the last one.
 Going over any other limit closes only that connection. Each event is serialized at most twice (with and without
 full URLs) and the bytes are fanned out. Decide requests ride the event path, so a flooded runner can lose one; the
 app then uses its default at the deadline. At most 64 decisions wait at once (16 per connection); past that the
@@ -42,8 +98,9 @@ default applies at once.
 
 Newline-delimited JSON, UTF-8, one object per line, `\n` terminated.
 
-- Requests: `{"id": 1, "method": "…", "params": {…}}`. `id` is a safe integer or a string, echoed in the reply;
-  `params` is optional.
+- Requests: `{"id": 1, "method": "…", "params": {…}}`. `id` is a safe integer or a well-formed string (no lone surrogate) of at most 256 UTF-8
+  bytes, echoed in the reply; any other id is refused with `bad_request` and `"id": null`, so no reply grows past the line limit
+  because of its id. `params` is optional.
 - Replies: `{"id": 1, "result": …}` or `{"id": 1, "error": {"code": "…", "message": "…"}}`. A line that isn't a JSON
   object, or has no usable `id`, gets an error with `"id": null` and the connection stays open.
 - Events: `{"event": "tab.opened", "time": 1730400000000, "data": {…}}`, in the order the store changed. Subscribing
@@ -72,11 +129,20 @@ bookmark searches) and their fixed page title.
 
 ### Methods
 
-- `hello` → `{"app": "Ardia", "version": "0.2.44", "protocol": 2}`. Protocol 2 added `subscribe`'s options,
-  `run`'s `tab`, `answer` and decide requests; protocol 1 clients keep working.
+- `hello` `{"caller"?: {"name", "app"?}}` → `{"app": "Ardia", "version": "0.2.44", "protocol": 4}`. Protocol 2 added
+  `subscribe`'s options, `run`'s `tab`, `answer` and decide requests; protocol 3 added `workspace` and `apply`
+  (Tabs and groups, below); protocol 4 added the plugin methods (`plugins`, `plugins.enable`, `plugins.disable`,
+  `plugins.remove`, `plugins.call`, `docs/plugins.md`); older clients keep working. `caller` names
+  who runs the client for the pill (The pill), display only.
+- `caller` → `{"ok": true}` puts the connection's `hello` caller on the pill now (`ok` is false without one). The
+  `browse` daemon and `scripts test` call it, since their CDP connections carry no name.
 - `commands` → `[{"id", "title", "scope", "variants": [ids] | null}]`: the automatable commands. `title` is the menu
   title (else the command bar's, else the id), `scope` is `"page"`, `"window"` or `null`.
 - `run` `{"command", "arg"?, "window"?, "tab"?}` → `{"ok": true}` once the command was dispatched (not necessarily finished).
+  In a background instance `run` answers `refused` for every command ("run isn't available in background instances;
+  use the dedicated methods"), since a menu command can open UI or start a page load nobody can answer; a visible
+  instance runs it, and a question it asks shows in its window while the reply still comes at dispatch, as for a
+  click on the menu.
   `command` is a catalog id, `arg` one of its variant ids. It runs through `runCommand`, exactly as the menu or a
   shortcut would. `window` must be an eligible window id, else `no_window` (no fallback to another window); without
   it, the last focused eligible window (windows never focused come after, in window order); with no browser window
@@ -101,6 +167,123 @@ bookmark searches) and their fixed page title.
   subscription accepted and runs a decide request only when its `revision` matches one of them, so a request for an
   approved revision never runs an edited program.
 - `answer` `{"decide", "answer"}`: see Protocol.
+- `workspace` `{"window"?, "profile"?, "usage"?}` and `apply` `{"ops": [...]}`: see Tabs and groups.
+- `offscreen` `{"tab"}` → `{"ok": true}`: takes a tab the ardia command opened, and that was never shown, out of
+  its window and the sidebar into Ardia's automation window for that profile, where `ardia browse set viewport` may
+  size its page (`docs/cli.md` › The engine's token connection). `refused` for the shown tab, one the command didn't
+  open, one that has been shown, or a page Ardia couldn't move; `no_window` for an unknown or private tab. The tab
+  never comes back: the command opens a new one to show the page.
+
+### Tabs and groups
+
+Issue #876. Everything the sidebar does to tabs and groups, by id, through the same store actions the sidebar
+calls (`placeTabs`, `pinTabs`, `groupTabs`, `updateGroup`, `moveGroup`, `ungroup`, `closeGroup`, `deleteGroup`,
+`newTab`, `closeTabs`, `setMuted`, `updateTab`, `moveTabsToWindow`, `moveTabToProfile`, `moveGroupToWindow`,
+`moveGroupToProfile`), so pins, group nesting, the pin mirror, Chrome's tab strips and sync follow exactly as for a
+drag or a menu pick. Code: `state/automation/workspace*.ts`.
+
+`workspace` → `{"profiles": [{"id", "name"}], "windows": [{"id", "kind", "focused", "profile", "profileName",
+"activeTab", "spaces": [space]}]}`, eligible windows only (Who's included), narrowed by `window` or `profile`
+(`no_window` for one that isn't there). A window holds one space per profile it has tabs of, the shown one with
+`"shown": true`: `{"profile", "profileName", "shown", "activeTab", "topApps", "pinned", "tabs"}`, each list in sidebar
+order. `topApps` holds tiles and tile folders (`{"type": "folder", "id", "name", "items"}`); `pinned` the pinned rows
+and pinned groups, interleaved as shown; `tabs` the rest. A group is `{"type": "group", "id", "name", "label" (the
+shown name, made from its tabs when `name` is empty), "icon" (an emoji, `symbol:<SF Symbol>`, `"none"`, which draws
+the default folder like null, or null for the default), "color" (`neutral`, `none` or one of Chrome's nine), "collapsed", "pinned", "parent",
+"items"}`, its items its own tabs and child groups in order. A tab is `{"type": "tab", "id", "url", "title",
+"customTitle", "icon", "pin" (`tile`, `row` or null), "pinned" (also true in a pinned group), "folder", "group" (the
+innermost), "split", "active", "muted", "asleep", "index"}`; URLs and titles as in `windows` (internal pages
+redacted). Peek tabs, private windows and incognito profiles never appear. It doesn't show the pill.
+
+`workspace` `{"usage": true}` adds each tab's renderer process to its node: `"pid"` (the process id, as `top` and
+Activity Monitor show it), `"cpu"` (percent of one core, one decimal) and `"memory"` (bytes), each null for a tab with
+no process (asleep, or a page that isn't loaded). The numbers are Chrome's Task Manager's (`engine.tasks`,
+`ac_tasks_list`), per process, so tabs sharing a renderer show the same ones, and a frame in another process isn't
+counted. The task manager measures CPU between two of its 2 s refreshes and stops 15 s after the last read, so the
+first read in a while waits 2.2 s and reads again (`state/automation/workspaceUsage.ts`); later ones answer at once.
+`pid` is null on an engine whose `ac_tasks_list` has no `pid` field. Without `usage` the nodes have none of the three,
+and nothing is sampled.
+
+`apply` runs a batch of operations in order and shows the pill like `run`. Every operation is checked before the
+first runs: an unknown `op` or field (typos included), a wrong type, more than 500 operations or 100 URLs in one
+list is `bad_request`, a URL the socket won't open is `refused`, and nothing runs. Then each one checks its targets
+just before it runs, against the state the earlier ones left: a tab or group that is gone, moved out of reach, private
+or in an incognito profile is `no_window`, never a stand-in. Ids are looked up as the store's own entries only, so
+`constructor` or `__proto__` is no id. Each operation works on the tabs the store will really move: the ones named
+plus the other panes of their split rows (`withSplitRows`, as `placeTabs`, `pinTabs` and `groupTabs` expand them).
+Before its first change it checks every target, destination, section and restriction on that set; what fails there
+changes nothing. After its changes it checks that the store did what was asked (each tab in the window, profile,
+group and spot asked, on the right side of its anchor; each group with the parent, pin, position and fields asked; a
+removed group gone). If that check fails the reply is `failed`, never success, and says what happened: an `open` or
+`group.create` closes the tabs it made (the message says so, and `error.changed` lists any it couldn't close, and the
+tabs and group a `group.create` was given or made that are still there); any other operation lists the tabs and
+groups it may have changed in `error.changed`. Tabs open one by one, and a URL a declarative `tab.opening` rule
+cancels stops the operation as `refused` and closes the tabs it had opened before it. A program hook decides after
+the reply, so it can still cancel (close) a tab the reply listed. The first failure stops the batch; the
+operations before it stay (no rollback: each was the user's own complete action). Batches never interleave: a
+second `apply` waits for the first. Turning control off stops a running batch before its next operation.
+
+Reply: `{"ok", "applied", "results": [{"op", "tabs"?, "group"?, "label"?, "icon"?, "outcomes"?}], "error"?: {"index", "code",
+"message"}, "tabs": [tab], "groups": [group without items, with "tabs"], "windows": [{"id", "activeTab"}]}`: every tab
+and group an operation named or made, as they ended up, and the shown tab of every window touched. A group
+operation's result also has the group's `label` and `icon` (for `group.ungroup`, `close` and `delete`, as they were
+before it went), so the CLI prints `created group 💼 Work (g-…) with 4 tabs`. A failed operation is a normal reply
+with `ok: false`; only a request that fails the up-front check is an `error` reply.
+
+Ids may be `$N` (N less than the operation's own index): what operation N made, its group in a group field, its
+tabs in a tab field (one tab where only one fits). A group field (`group`, `parent`) also takes a group's name, as a
+string or `{"name": "Work"}`: `$N` first, then an exact group id (ids win, even over a group named like one), then
+the name, matched case-insensitively and ignoring surrounding spaces against the groups' names (and their shown
+labels, for groups without a name). Names are looked up in one window: the operation's `window` and `profile` when
+it has them (for `group.move`'s `parent`, the window the group goes to), else the window of the tabs it names, else
+the last focused window. A name no group there has is `no_window`; a name several share is `bad_request` with each
+one's id. A string that is exactly `$` and digits is always a reference, never a name. `before`/`after` take a tab or a group id and put the tabs (or
+group) next to it, in that tab's group and section. With `group` (or `parent`) too, the anchor must be inside that
+group, in its window and profile, else `bad_request`. The anchor's section decides the section: next to a Top Apps
+tile the tabs become tiles, next to a pinned row or a top-level pinned group they become pinned rows (a moved group
+becomes pinned), next to a tab in a group they join that group. `open` with `pin` must name an anchor of that kind
+(`tile` next to a tile, `row` next to a pinned row or pinned group), a group can't go next to a tile, and a
+`pinned` that contradicts the anchor's section is `bad_request`; all of it before anything opens or moves. With `"group": null` too, the tabs go to the top level next to
+the anchor's outermost group (before its first tab, or after its last). With neither, a tab moving to a window or
+profile goes where the store puts moved tabs.
+
+| `op` | Fields | Does |
+|---|---|---|
+| `open` | `urls` (one or a list), `window`?, `profile`?, `group`?, `before`?/`after`?, `pin`? (`tile`/`row`), `activate`? | `newTab` in the background for each, in order, where new tabs go (or as placed); `window` defaults to the last focused one, or one showing `profile`. `activate` shows the first (never focuses the window) |
+| `tab.move` | `tabs`, `group`? (id, or null for the top level), `before`?/`after`?, `window`?, `profile`? | Moves without reloading: into another profile (`moveTabToProfile`), window (`moveTabsToWindow`), then placed (`placeTabs`), keeping the order given. A group or anchor in another window or profile takes the tabs there. `null` with no anchor puts them just below their old top group |
+| `tab.pin` / `tab.unpin` | `tabs`, `as`? (`tile`/`row`) | `pinTabs`; unpinning a tab of a pinned group takes it out (`placeTabs`), as Unpin does. A split's panes pin together, as rows: `as: "tile"` on one is `bad_request` |
+| `tab.activate` | `tab` | `activate` |
+| `tab.mute` / `tab.unmute` | `tabs` | `setMuted`; unmute also unmutes the site, as the menu does |
+| `tab.sleep` | `tabs` | Pinned tabs unload (`closeTabs`, as their ✕); others are discarded by Chrome. A tab is left alone (`shown`) when it, a pinned copy sharing its page, or a pane of its split is shown in any window. `outcomes`: `asleep`, `already`, `shown`, `refused`, `unsupported`. Each tab's discard has 10 s: past that the op fails (`failed`, "outcome unknown"; `changed` lists the tabs it did put to sleep) and the batch stops there, so a stuck engine call never holds up other clients' batches. The tab stays busy (`refused`) until the engine answers, it closes, control goes off or 60 s pass, and the next `apply` on the same connection reports that answer once under `late` |
+| `tab.wake` | `tabs` | Loads a sleeping tab in the background (`updateTab` with its woken page, or a reload for a discarded one). `outcomes`: `awake` (reloaded, view still attached), `loading` (its page was asked to load), `no_view` (its view is known gone), `reload_unverified` (reloaded, attachment can't be checked on this platform), `already`, `failed`. A reload has 10 s, as `tab.sleep`'s discard does |
+| `tab.close` | `tabs` | `closeTabs`: as ✕, so pinned tabs unload; never closes a window (a window left empty gets a New Tab) |
+| `tab.rename` / `tab.icon` | `tab`, `title` / `icon` (null resets) | `updateTab` `customTitle` / `customIcon`, as Rename… and Change Icon… |
+| `group.create` | `tabs`?, `urls`?, `window`?, `profile`?, `parent`?, `pinned`? (default true, like New Group with Tab), `name`?, `icon`?, `color`?, `collapsed`?, `before`?/`after`? | Opens `urls`, else one New Tab when no `tabs`; places them (out of their old groups, into the parent), `groupTabs`, then `updateGroup`. With no anchor and no parent, a group made from tabs of another group goes just above that group's outermost group (its first tab left), so groups made one after another from one group keep their creation order and the group, with the tabs left in it, stays below them; `group.ungroup` of it then leaves those tabs where they are, as the sidebar's Ungroup does. A group made from loose tabs goes where its first tab was. An anchor decides where the group goes, by the rule above: next to a pinned row or a top-level pinned group it is a pinned group there; next to a tab or group inside group P it is nested in P; next to a Top Apps tile it is refused; a `pinned` or `parent` that contradicts that is `bad_request`, before anything opens. Top Apps tiles in `tabs` are refused. The post-check covers its parent, pinned state and side of the anchor; if it fails, or a URL doesn't open (a `tab.opening` rule cancelled it: `refused`), the tabs it opened are closed again and the tabs it was given stay where they were moved (`error.changed`) |
+| `group.update` | `group`, `name`?, `icon`?, `color`?, `collapsed`? (at least one) | `updateGroup` |
+| `group.move` | `group`, `parent`? (id or null), `pinned`?, `before`?/`after`?, `window`?, `profile`? | `moveGroupToProfile`, `moveGroupToWindow` (not a pinned group: it is in every window of its profile), then `moveGroup`. A move to another profile gives the group a new id; the result has it |
+| `group.ungroup` / `group.close` / `group.delete` | `group` | `ungroup` (tabs stay), `closeGroup` (to Recently Closed Groups), `deleteGroup` |
+
+- **No confirmations, no focus.** The sidebar's dialogs (closing a group, moving tabs to a profile) don't show: the
+  caller asked for exactly this. Nothing focuses a window, and nothing changes which tab a window shows unless asked
+  (`activate`, `tab.activate`) or unavoidable (closing or moving away the tab it shows); the store's own moves take a
+  `background` option for this.
+- **Refused.** A shared folder's group (`groupKeptOpen`) is never ungrouped, closed, deleted, unpinned, nested or
+  moved to another profile here (the sidebar asks first), and no operation may remove or empty one indirectly: closing
+  or deleting a child that holds all its tabs (the store closes the outermost group with the same tabs), moving,
+  pinning or regrouping all its members, or moving a child group out with them; Little Ardia tabs aren't organized (it holds one tab); a Top Apps tile
+  doesn't change profile.
+- **URLs** go through the omnibox's own fix-up (`fixupUrl`, so `example.com` works) and then must be http or https
+  with a host and no user info (`lib/urlParts.ts`'s strict reading), `file://`, `about:blank`, or `ardia://history`,
+  `bookmarks`, `downloads` or `newtab`. Never `javascript:`, `data:`, `blob:`, `view-source:`, `chrome:`, other
+  `ardia://` pages (settings, flags, extensions…) or schemes that open other apps.
+- **Icons** are what the icon picker offers: an emoji from its list (`lib/emojiData.ts`), `symbol:<name>` (an SF
+  Symbol name, lowercase with dots), `"none"` (No Icon: pinned rows, which then show their title alone; a group draws its folder) or null. Names are trimmed text of at most 200
+  characters without control characters.
+- **Telemetry:** `usage_counts` carries `cli_tab_edits`, `cli_group_edits` (operations applied),
+  `cli_edit_failures` (batches refused or stopped) and `cli_pill_shows` (times the control pill appeared: `run` and
+  DevTools sessions only, never `apply`); the CLI's `cli_command` has the subcommand and `batch_steps`. Every socket
+  request also counts once in `cli_socket_calls_<family>` and, when it answers an error, in `cli_socket_call_failures`
+  (`docs/control-socket.md`).
 
 ### Which commands
 
@@ -148,6 +331,13 @@ clipboard writes, internal pages). That is the point of it, and it is opt-in beh
 | `system.sleep`, `system.wake` * | none |
 | `user.idle`, `user.active` * | `idle` (threshold, s) |
 | `page.error` | `windowId`, `tabId`, `profile`, `url`, `status` |
+| `bookmarks.changed` | `profile`, `added`, `changed`, `removed` (bookmark ids, at most 1000 each), `count` |
+| `history.removed` | `profiles` (every profile sharing that history), `all`, `urls` (at most 1000 and 256 KB, minimized without `fullUrls`), `count`, `truncated` |
+| `download.changed` | `id`, `change` (`added`/`updated`/`removed`), `state`, `paused`, `dangerous`, `awaitsKeep`, `filename`, `profile` |
+| `profile.changed` | `profile`, `change` (`created`/`updated`/`removed`), `name`, `keys` (what changed, `default` when it became the default); or `change: "reordered"`, `order` |
+| `permission.prompted` | `windowId`, `tabId`, `id`, `origin`, `permissions`, `queued` |
+| `password.prompted` * | `windowId`, `tabId`, `origin`, `state`, `username`, `usernames` |
+| `menu.opened` | `id`, `kind` (`page`: a context menu a hidden Ardia captured), `windowId`, `tabId`, `items` (a count) |
 
 \* Named-only: `"*"` never includes them; a subscriber names each one. Notification text never goes into a hook's
 environment (no `ARDIA_TITLE`, no `ARDIA_URL`) and the runner never logs it.
@@ -163,6 +353,11 @@ environment (no `ARDIA_TITLE`, no `ARDIA_URL`) and the runner never logs it.
   stale. The web view reports the signal with each navigation update: the last committed URL (`committedUrl`), the
   time of the last document commit (`committedAt`) and the main frame's HTTP status (`httpStatus`); a new
   `committedAt` is a document navigation, a new URL alone is same-document.
+- `bookmarks.changed` is one event per profile per change, for a title, address, folder or order change, never for
+  a favicon or a profile's bookmarks loading. `history.removed` comes from the engine's history, so it covers
+  every way history goes (the History page, Clear Browsing Data, `history.*`, sync, Chrome's own expiry).
+  `download.changed` skips progress: it's sent when a download starts, finishes, fails, pauses, resumes or is
+  removed, or when it turns dangerous or waits to be kept.
 - `page.error` is sent once per committed main-frame document whose status is 400 to 599: never for subframes,
   same-document changes, cancelled or stale commits. Builds whose engine doesn't report `httpStatus` send none.
 - `app.launched` is recorded once per process, after the session is restored and the first window is up, with its
@@ -175,7 +370,10 @@ environment (no `ARDIA_TITLE`, no `ARDIA_URL`) and the runner never logs it.
   holds the quit open.
 - `tab.idle`: a tab is touched while it is the active tab of the focused window, and when it was last activated. It
   goes idle after the threshold without that (checked every 30 s) and fires once per idle stretch; `tab.resumed`
-  follows when it is shown again. Pinned tabs are included, with `pinned: true`.
+  follows when it is shown again. Moving a tab to another profile starts a new stretch without a `tab.resumed`. Pinned
+  tabs are included, with `pinned: true`. A connection that starts listening
+  for `tab.idle` at a threshold is sent the tabs already idle at it once, just after the `subscribe` reply; other
+  connections coming and going never send them again.
 - `system.sleep`, `system.wake`, `user.idle` and `user.active` come from the native system signals
   (`platform/systemSignals.ts`); an older build without them just sends none.
 
@@ -234,12 +432,12 @@ Hooks that answer before something happens, with a deadline after which Ardia do
   `"fullUrls": true`; a program that rewrites query parameters needs it. The runner trims again on its side.
 - **link.opening** decides before any tab exists. At every launch native holds incoming links (no early Little Ardia
   tab, no parked link tabs) until JS reports its link policy with `setHoldIncomingLinks(hold, hooksStamp)`: the app reports it
-  once its hooks are loaded and again on every change, `true` while an active `tab.opening` or `link.opening` hook
-  exists. `hooksStamp` is the stamp (device, inode, size, mtime, ctime) native returned with the hooks.json read the
+  once its hooks are loaded and again on every change, `true` while an active `tab.opening` or `link.opening` hook,
+  an enabled Air Traffic Control rule or an Everything Else choice exists. `hooksStamp` is the stamp (device, inode, size, mtime, ctime) native returned with the hooks.json read the
   rules came from, so a decision is never filed under a newer file; native keeps the fast-path fingerprint only when
-  that stamp is the file's current one. The fingerprint also covers config.json and `automation-approvals.json`, so
-  native takes its fast path before JS loads only when the last report said no hold and none of the three changed
-  since. A routed or rewritten link never adopts contents loaded for it
+  that stamp is the file's current one. The fingerprint also covers config.json, `automation-approvals.json` and
+  `air-traffic.json`, so native takes its fast path before JS loads only when the last report said no hold and none of
+  the four changed since. A routed or rewritten link never adopts contents loaded for it
   under another profile.
 - **Permissions.** A hook can deny or leave the normal prompt; `allow` means "show the prompt", never an unattended
   grant. A deny is answered on the engine's own request id and never remembered. A request dismissed or replaced
@@ -276,6 +474,55 @@ Hooks that answer before something happens, with a deadline after which Ardia do
   runner runs at most 16 decide programs at once (4 per hook) and gives up at the deadline. Command hooks run at
   most 10 commands per 10 s each, so a hook that triggers itself stops.
 
+## Air Traffic Control
+
+Settings › Air Traffic Control is the same `link.opening` route engine with rules the user makes in Settings, kept in
+the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fallback`), not in the config folder.
+
+- **Order.** For a link from another app (after `tab.opening` has had its say): the Settings rules from the top, the
+  first enabled one that fits answering; then the hooks.json `link.opening` hooks as above; then the Everything Else
+  choice when nothing answered (no hook fit, a route hook's profile is gone, or a program hook gave no answer in
+  time). With no Everything Else choice the link takes Ardia's usual routing.
+- **A rule** is `from` (an app by bundle id, or by name when it has none; `null` is any app), a link condition (`any`,
+  a `site` host that also takes its subdomains, matched as `*://*.<host>/*`, or a `pattern`), a profile
+  id (`null` is the profile used last) and `open` (`tab`, `window`, `littleArdia`). Profiles are stored by id, so a
+  rename keeps the rule; a rule or fallback whose profile was deleted, or is private, doesn't apply and the link
+  goes on down the list.
+- **Patterns.** A pattern with `://` (or `<all_urls>`) is a userscript match pattern. One without is a wildcard, case
+  blind, where `*` is any run of characters: with no `/` it matches the link's host (`*git*`, `*.github.com`), with one
+  it matches host, path and query (`github.com/ardia/*`), and one with no `*` matches anywhere in that text (`github`
+  is `*github*`). Spaces are refused.
+- **A tab group.** A rule (or Everything Else) that opens a profile as a tab may name one of that profile's tab groups
+  (`groupKey`: the group's pin key, or its id when it has none, so a pinned group keeps its key when its window closes
+  and comes back). The link opens as a tab in the group's copy in the window shown last, or in a new window of that
+  profile when the group is parked (a pinned group whose window closed), and the group expands if it was collapsed.
+  A rule (or Everything Else) whose group no longer exists in that profile still applies: the link opens as a plain tab
+  in the rule's profile, and its row in Settings says the group isn't open. A copy of the group in a window that is closing
+  doesn't count. The parser drops a `groupKey` without a profile or with another `open`, so the rule keeps working as a
+  plain tab.
+- **No approval.** The user makes these rules in Settings, so they count as approved. hooks.json route hooks still need
+  approval in Advanced › Automation; the pane lists them read-only with their state.
+- **The hold.** An enabled rule or an Everything Else choice turns the incoming-link hold on, reported again on every
+  change, so the native fast path never opens a link before the rules have seen it. `air-traffic.json` is in native's
+  fast-path fingerprint, so a file changed while Ardia was closed holds the first link of the next launch too. A
+  change is saved before the store takes it, so a save that fails changes neither the rules nor the hold.
+- **Versions.** Version 2 added `groupKey`; a version 1 file reads unchanged, its rules naming no group. A build from
+  before a version reads a newer file as no rules, since downgrades aren't supported.
+- **Source apps.** The app (bundle id, name) of the last 20 distinct apps that sent a link is kept in
+  `link-sources.json` for the app picker, on this Mac only and never sent.
+- **Try a Link** runs the same `traceOpening` and `traceLink` the real decision runs (`state/automation/decisions.ts`),
+  so it can't drift: a `tab.opening` rule that cancels or rewrites the link comes first, then it names the rule, hook,
+  Everything Else or usual routing that would take the link and where it would open, tab group included. A program
+  hook can't be asked without sending the link, so it shows what happens if the program doesn't answer.
+- Code: `state/airTraffic/rules.ts` (the pure matching and the saved document), `store.ts`, `sourceApps.ts`,
+  `preview.ts`, `groups.ts` (a profile's groups by key, their names and where they are) and `openAt.ts` (opening a
+  link in a group); `state/littleArdia/actions.ts` opens links from other apps; the pane is
+  `components/settings/panes/AirTraffic.tsx` with its sheet `AirTrafficSheet.tsx`.
+- Telemetry: `usage_counts.air_traffic_rule_links` and `air_traffic_fallback_links` (links from other apps) and
+  `air_traffic_group_links` (those that joined a tab group), and `settings_snapshot`'s `air_traffic_rules` (enabled
+  rules), `air_traffic_wildcard_rules` (enabled rules with a wildcard pattern), `air_traffic_group_rules` (enabled rules
+  that send into a group) and `air_traffic_fallback` (true or false).
+
 ## Approvals
 
 config.json can't enable control, add search destinations or grant permissions (`docs/config.md`), and files
@@ -306,9 +553,10 @@ an aborted query is cancelled (the program is killed). The program prints `[{"ti
 
 ### The pill
 
-`run` shows the "ardia is controlling Ardia" pill like a CDP connection does: it counts as active from the moment
-the request arrives until its reply is written, then the usual 3 s hold. The indicator combines CDP connections and
-socket runs; neither overwrites the other. `hello`, `commands`, `windows` and `subscribe` don't show it, so a hooks
+`run` and `apply` show the "ardia is controlling Ardia" pill like a CDP connection does: it counts as active from the moment
+the request arrives until its reply is written, then the usual 3 s hold. A `run`, `apply` or `caller` on a connection whose
+`hello` named a caller puts that name (and app icon) on the pill, the most recent one winning (`docs/cli.md`). The indicator combines CDP connections and
+socket runs; neither overwrites the other. `hello`, `commands`, `windows`, `workspace` and `subscribe` don't show it, so a hooks
 runner connected all day doesn't keep it up. Stop hides it at once.
 
 ## The ardia command
@@ -321,6 +569,16 @@ checks the server's uid, and exits 2 with one line when Ardia isn't running, con
   sending is reported, never retried, with exit 2 and a line saying the command may or may not have run.
 - `ardia commands [--json]` lists command ids, titles and variants.
 - `ardia windows [--json]` prints the windows and their tabs.
+- `ardia tabs [--window ID] [--profile ID] [--flat] [--usage] [--pid N] [--json]` prints the workspace (each window's
+  spaces, Top Apps, pinned section, groups nested). `--usage` prints one tab per line with its process id, CPU and
+  memory, hottest first (`--json`: the tree, or the flat list with `--flat`, with `pid`, `cpu` and `memory` on each
+  tab); `--pid N` prints only the tabs in process N (`--json`: a flat list), and exits 1 when no tab runs there
+  (`no_tab`) or the app reports no process ids (`no_pid`). An app from before `usage` gets "update Ardia"; `ardia tabs open|move|pin|unpin|activate|mute|unmute|sleep|wake|close|rename|icon …`
+  and `ardia groups [create|update|rename|move|ungroup|close|delete] …` each send one `apply` operation; `ardia groups`
+  alone lists the groups. `ardia apply [FILE|-]` sends a batch (a JSON list or `{"ops": [...]}`). Exit 1 for a
+  refusal, a bad request or a stopped batch (with how many operations ran), 2 when Ardia can't be reached or the
+  connection dropped after sending (it may or may not have run; never retried); an Ardia without protocol 3 gets
+  "update Ardia".
 - `ardia events [EVENT…] [--json] [--full-urls] [--idle DURATION]` streams events (default all but the named-only
   ones) until interrupted; `--json` prints the raw lines. Event names are checked against the table above (a typo
   fails with the closest names, exit 1); a lost connection exits 2. `dropped` is reported on stderr in the text
@@ -331,11 +589,10 @@ checks the server's uid, and exits 2 with one line when Ardia isn't running, con
 - `ardia hooks run|install|uninstall|list` runs the hooks in `hooks.json` in the config folder (`docs/config.md`'s
   resolver, so a scratch instance uses its own). `list` shows each hook's kind (`event`, `command`, `decide`,
   `scheduled`, `omnibox`), trigger and action.
-- In `ardia exec`: `await run(command, arg=None, window=None, tab=None)`, `await windows()`, and
-  `async for e in events(*names, full_urls=False)`. With `--port`, `--ws` or `$ARDIA_CDP_URL` they need
-  `--data-dir` or `$ARDIA_DATA_DIR` and raise without one, so a test browser never drives the installed Ardia by
-  accident. Errors are `CommandError` (`.code`, `.message`) and `ControlUnreachable`; each call opens its own
-  connection.
+- From a script or a hook's program, call the commands: `ardia run … --json`, `ardia windows --json` and
+  `ardia events --json` give the same replies and lines as the socket, and `ardia browse` drives the pages. They
+  find the socket the same way (`--data-dir`, `$ARDIA_DATA_DIR`, else the installed app's), and the shared options
+  go before or after the command (`docs/cli.md`, Shared options).
 
 ### Running a hook
 
@@ -343,6 +600,8 @@ checks the server's uid, and exits 2 with one line when Ardia isn't running, con
   `ARDIA_TAB_ID`, `ARDIA_PROFILE`, `ARDIA_URL`, `ARDIA_TITLE`, all set or removed for every run (never inherited from
   the runner), NULs stripped and each cut to 4 KB. `notification.shown` sets neither `ARDIA_TITLE` nor `ARDIA_URL`.
   A hook without `fullUrls` gets URLs without their query and fragment even when another hook asked for full ones.
+  Event data (`ARDIA_TITLE`, `ARDIA_URL`, the JSON line) comes from pages, so a program that prints it to a terminal
+  should escape control characters first, as the CLI's own output does; the runner leaves PROGRAM's output alone.
 - PROGRAM runs from argv, never through a shell unless PROGRAM is one; event values are never put into the command
   line. A leading `~` in PROGRAM is expanded, nothing else is.
 - `--match`/`match` take userscript match patterns (`urlmatch.py`); several match if any does; an event without a URL
@@ -430,15 +689,22 @@ The runner fires them and passes a `schedule.fired` event (it never comes from A
   `hooks.log.1`; stdout and stderr are drained as they come and a single line longer than 64 KB is cut. `hooks run`
   writes the log itself (`--log PATH`, `-` for the terminal), so the plist's `StandardOutPath` and
   `StandardErrorPath` are `/dev/null`: launchd would hold its own descriptor to the file and defeat the rotation.
+- On Linux, `hooks install` writes the systemd user service `dev.ardia.hooks.service` in
+  `${XDG_CONFIG_HOME:-~/.config}/systemd/user` instead (the same command line and environment, `Restart=on-failure`,
+  `RestartSec=10`, `StartLimitIntervalSec=0`, output to `/dev/null` for the same reason), then runs
+  `systemctl --user daemon-reload`, `enable` and `restart`. `uninstall` disables and stops it and removes the unit,
+  and `hooks list` reads `systemctl --user show`. The log is `${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log`.
 
 ## Tests
 
 The app side: node tests for the handlers (the command classification, refusals, `no_window` without fallback, the
 eligibility rule including closes and Peek, internal-page redaction, event shapes, subscribe replacement, the
-generation check; `automationHooks.test.mjs` for launch replay, named-only events, URL minimization, tab targets,
+generation check; `workspace.test.mjs` for the tab and group operations, URL and icon checks, batch stops, `$N`
+references, private windows and the shown tab never changing; `automationHooks.test.mjs` for launch replay, named-only events, URL minimization, tab targets,
 the new events, decide rules with control off, approvals, program decisions bound to their runner with duplicate,
 foreign and late answers refused, permissions, link routing and omnibox hooks; `hookFile.test.mjs` for the file
 checks, approval classes and rewrite safety) and a hidden-instance check over the real socket. The CLI side: unit tests against a fake socket
 server speaking the protocol (`test_hooks_more.py` covers validation, subscription options, launch dedupe across
 restarts, command hooks and their rate limit, decide programs, cancels and timeouts, and the scheduler on fake
-clocks), and one end-to-end run against a hidden instance.
+clocks; `test_workspace.py` for the tabs, groups and apply commands), and one end-to-end run against a hidden
+instance.

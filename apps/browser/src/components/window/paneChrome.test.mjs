@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { cardChrome, paneBar } = await import("./paneChrome.ts");
+const { cardChrome, developerBarShown, paneBar } = await import("./paneChrome.ts");
 
-const card = (o = {}) => cardChrome({ addressInSidebar: false, small: false, split: false, fullscreen: false, hideWhileScrolling: false, ...o });
+const card = (o = {}) => cardChrome({ addressInSidebar: false, small: false, minimal: false, split: false, fullscreen: false, hideWhileScrolling: false, ...o });
 const shown = { visible: true, fullscreen: false, lingering: false };
 const warm = { visible: false, fullscreen: false, lingering: false };
 const lingering = { visible: true, fullscreen: false, lingering: true };
@@ -27,7 +27,7 @@ test("the full-screen page itself has no toolbar", () => {
 });
 
 test("a small window and the address bar in the sidebar draw no toolbar on the card, and never hide one while scrolling", () => {
-  for (const o of [{ small: true }, { addressInSidebar: true }, { small: true, hideWhileScrolling: true }, { addressInSidebar: true, hideWhileScrolling: true, split: true }]) {
+  for (const o of [{ small: true }, { addressInSidebar: true }, { minimal: true }, { minimal: true, split: true, hideWhileScrolling: true }, { small: true, hideWhileScrolling: true }, { addressInSidebar: true, hideWhileScrolling: true, split: true }]) {
     assert.deepEqual(card(o), { kind: "none" });
     assert.deepEqual(paneBar(card(o), shown), { kind: "none" });
   }
@@ -48,4 +48,14 @@ test("hide while scrolling in a split: each pane hides its own bar", () => {
 test("a New Tab page lingering under the new tab keeps its band but doesn't take over the window's bar", () => {
   assert.deepEqual(paneBar(card(), lingering), { kind: "backdrop" });
   assert.deepEqual(paneBar(card({ hideWhileScrolling: true }), lingering), { kind: "autoHide", bar: "backdrop" });
+});
+
+test("the developer bar shows only where no toolbar already holds the address", () => {
+  const on = { developerMode: true, small: false, fullscreen: false };
+  assert.equal(developerBarShown({ kind: "none" }, on), true);
+  assert.equal(developerBarShown({ kind: "window", autoHide: false }, on), false);
+  assert.equal(developerBarShown({ kind: "pane", autoHide: true }, on), false);
+  assert.equal(developerBarShown({ kind: "none" }, { ...on, developerMode: false }), false);
+  assert.equal(developerBarShown({ kind: "none" }, { ...on, small: true }), false);
+  assert.equal(developerBarShown({ kind: "none" }, { ...on, fullscreen: true }), false);
 });

@@ -1,0 +1,1121 @@
+package com.ardia.browser
+
+import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Rect
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
+import android.view.Choreographer
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.URLUtil
+import android.webkit.WebSettings
+import android.webkit.WebView
+import androidx.webkit.ScriptHandler
+import androidx.webkit.UserAgentMetadata
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.resume
+import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
+
+internal class WebViewPage(
+    override val id: String,
+    override val isPrivate: Boolean,
+    internal val engine: DevelopmentWebViewEngine,
+    setup: PageSetup,
+    private var popup: PopupRequest?,
+) : Page, DiscardablePage {
+    private val mutableState = MutableStateFlow(PageState(url = setup.url, title = setup.title))
+    private val mutableView = MutableStateFlow<View?>(null)
+    private val mutableRequest = MutableStateFlow<PageRequest?>(null)
+    private val mutableFind = MutableStateFlow<FindResult?>(null)
+    internal val mutableFullscreen = MutableStateFlow<FullscreenVideo?>(null)
+    private val mutableEvents = MutableSharedFlow<PageEvent>(extraBufferCapacity = 32, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    override val state: StateFlow<PageState> = mutableState.asStateFlow()
+    override val view: StateFlow<View?> = mutableView.asStateFlow()
+    override val request: StateFlow<PageRequest?> = mutableRequest.asStateFlow()
+    override val find: StateFlow<FindResult?> = mutableFind.asStateFlow()
+    override val fullscreen: StateFlow<FullscreenVideo?> = mutableFullscreen.asStateFlow()
+    override val events: SharedFlow<PageEvent> = mutableEvents.asSharedFlow()
+
+    private var webView: WebView? = null
+    internal val webViewOrNull: WebView? get() = webView
+    private var savedBundle: Bundle? = setup.savedState?.let(PageStateBundles::read)
+    private var firstVisit: VisitKind? = setup.firstVisit
+    private var pendingUrl: String? = null
+    private var desktopSite = savedBundle?.getBoolean(DESKTOP_SITE_KEY, false) ?: false
+    private var desktopHost: String? = setup.url?.takeIf { savedBundle?.containsKey(DESKTOP_SITE_KEY) == true }?.let(BrowserUrl::host)
+    private var crashReloads = 0
+    private var released = false
+    private var systemUserAgent = ""
+    private var filterHandler: ScriptHandler? = null
+    private var desktopViewportHandler: ScriptHandler? = null
+    private var nightShadeHandler: ScriptHandler? = null
+    private var nightShadeSource: String? = null
+    private var nightShadeUrl: String? = null
+    private var desktopRewritesShown = 0
+    private var desktopStartShown = false
+    private var desktopFinishedWidth: Double? = null
+    private var desktopLoad = 0
+    private var scrollAtDiscard: Int? = null
+    private var restoringScroll: Int? = null
+    private var installedStart: List<String>? = null
+    private var installedEnd: List<String>? = null
+    private var installedBundle: String? = null
+    private val progressThrottle = ProgressThrottle()
+    private val scrollTracker = ScrollDirectionTracker()
+    private var isNavigatingHistory = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val clearHistoryNavigationRunnable = Runnable {
+        isNavigatingHistory = false
+        webView?.let { scrollTracker.snapTo(it.scrollY.toDouble()) }
+    }
+    private var pendingVisit: VisitKind? = null
+    private var lastCommitAt = Long.MIN_VALUE / 2
+    private var lastCommittedUrl: String? = null
+    private var failedUrl: String? = null
+    private var titledUrl: String? = setup.url.takeIf { setup.title.isNotBlank() }
+    private var findQuery = ""
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+    internal val answeredSignIns = HashSet<String>()
+    internal var lastCaptureRoute: CaptureRoute? = null
+    private var reportsContent = false
+    private var nextVisualStateRequest = 1L
+
+    @Volatile
+    internal var filterPageUrl: String? = setup.url
+
+    @Volatile
+    internal var sawInsecureContent = false
+    private val blockedCount = AtomicInteger()
+    private val blockedFlushPending = AtomicBoolean()
+    private val reachedSchemes = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    override val isLive: Boolean get() = webView != null
+
+    override fun makeLive() {
+        if (webView != null || released) return
+        val web = engine.createWebView(isPrivate)
+        configure(web)
+        webView = web
+        mutableView.value = web
+        val zoom = engine.sitePreferences.pageZoom(mutableState.value.host, isPrivate) ?: 1.0
+        web.settings.textZoom = (zoom * 100).roundToInt()
+        update { it.copy(isLive = true, pageZoom = zoom, isDesktopSite = desktopSite) }
+        val popup = popup
+        this.popup = null
+        val saved = savedBundle
+        savedBundle = null
+        val url = mutableState.value.url
+        val pending = pendingUrl
+        pendingUrl = null
+        when {
+            popup != null -> {
+                pendingVisit = VisitKind.Link
+                val transport = popup.transport.obj as? WebView.WebViewTransport
+                transport?.webView = web
+                popup.transport.sendToTarget()
+            }
+            pending != null -> navigate(web, pending, VisitKind.Typed)
+            saved != null && restore(web, saved, url) -> {
+                restoringScroll = scrollAtDiscard
+                Log.i(LOG_TAG, "recreate $id from saved state, scroll at discard ${scrollAtDiscard ?: "unknown"}")
+            }
+            url != null && BrowserUrl.scheme(url) != BrowserUrl.BROWSE_SCHEME -> navigate(web, url, firstVisit ?: VisitKind.Restored)
+        }
+        firstVisit = null
+    }
+
+    override fun discard() {
+        val web = webView ?: return
+        savedBundle = Bundle().also { saveInto(web, it) }
+        scrollAtDiscard = web.scrollY
+        Log.i(LOG_TAG, "discard $id at scroll ${web.scrollY} of ${(web.contentHeight * web.resources.displayMetrics.density).toInt()}")
+        tearDown(web)
+    }
+
+    internal fun release() {
+        released = true
+        webView?.let(::tearDown)
+        savedBundle = null
+        popup = null
+    }
+
+    override fun close() = engine.close(id)
+
+    override fun load(url: String) {
+        failedUrl = null
+        update { it.copy(failure = null) }
+        val web = webView
+        if (web == null) {
+            pendingUrl = url
+            update { it.copy(url = url) }
+            return
+        }
+        navigate(web, url, VisitKind.Typed)
+    }
+
+    override fun reload() {
+        failedUrl = null
+        crashReloads = 0
+        update { it.copy(failure = null) }
+        val web = webView
+        if (web == null) {
+            makeLive()
+            return
+        }
+        val current = web.url
+        if (current == null) {
+            mutableState.value.url?.let { navigate(web, it, VisitKind.Typed) }
+            return
+        }
+        clearHistoryNavigationGuard()
+        pendingVisit = null
+        prepareNavigation(web, current)
+        web.reload()
+    }
+
+    override fun stop() {
+        webView?.stopLoading()
+    }
+
+    override fun goBack(): Boolean = goBy(-1)
+
+    override fun goForward(): Boolean = goBy(1)
+
+    private fun goBy(step: Int): Boolean {
+        val web = webView ?: return false
+        if (!web.canGoBackOrForward(step)) return false
+        failedUrl = null
+        isNavigatingHistory = true
+        scheduleClearHistoryNavigation(HISTORY_NAVIGATION_GUARD_MILLIS)
+        scrollTracker.snapTo(web.scrollY.toDouble())
+        update { it.copy(failure = null, scrollDirection = ScrollDirection.Up) }
+        val list = web.copyBackForwardList()
+        list.getItemAtIndex(list.currentIndex + step)?.url?.let { prepareNavigation(web, it) }
+        pendingVisit = VisitKind.BackForward
+        web.goBackOrForward(step)
+        return true
+    }
+
+    override fun find(text: String) {
+        val web = webView ?: return
+        findQuery = text
+        if (text.isEmpty()) {
+            web.clearMatches()
+            mutableFind.value = FindResult("", -1, 0, true)
+            return
+        }
+        if (mutableFind.value?.query != text) web.clearMatches()
+        mutableFind.value = FindResult(text, -1, 0, false)
+        web.findAllAsync(text)
+    }
+
+    override fun findNext() {
+        if (findQuery.isNotEmpty()) webView?.findNext(true)
+    }
+
+    override fun findPrevious() {
+        if (findQuery.isNotEmpty()) webView?.findNext(false)
+    }
+
+    override fun endFind() {
+        findQuery = ""
+        webView?.clearMatches()
+        mutableFind.value = null
+    }
+
+    override fun setPageZoom(zoom: Double) {
+        val clamped = PageZoom.clamp(zoom)
+        applyZoom(clamped)
+        mutableState.value.host?.let { engine.sitePreferences.setPageZoom(it, isPrivate, if (clamped == 1.0) null else clamped) }
+    }
+
+    override fun zoomIn() {
+        PageZoom.next(mutableState.value.pageZoom)?.let(::setPageZoom)
+    }
+
+    override fun zoomOut() {
+        PageZoom.previous(mutableState.value.pageZoom)?.let(::setPageZoom)
+    }
+
+    override fun setDesktopSite(enabled: Boolean) {
+        if (desktopSite == enabled) return
+        desktopSite = enabled
+        update { it.copy(isDesktopSite = enabled) }
+        val web = webView ?: return
+        applyUserAgent(web)
+        val current = web.url?.takeIf(BrowserUrl::isWeb)
+        if (current == null || failedUrl != null) {
+            reload()
+            return
+        }
+        traceDesktop("switched ${if (enabled) "on" else "off"}: loading $current again as a new navigation, so no saved page scale is restored")
+        pendingVisit = null
+        prepareNavigation(web, current)
+        web.loadUrl(current)
+    }
+
+    override fun download(url: String) {
+        emitDownload(url, webView?.settings?.userAgentString, null, null, -1)
+    }
+
+    override suspend fun readableContent(): ReadableContent {
+        val script = withContext(Dispatchers.IO) { engine.scripts.reader }
+        val raw = withContext(Dispatchers.Main.immediate) {
+            val web = webView ?: throw ReadableContentException(ReadableContentException.Reason.PageNotLoaded)
+            evaluate(web, PageScripts.readerCall(script))
+        }
+        val json = PageScripts.decodeEvaluationResult(raw) ?: throw ReadableContentException(ReadableContentException.Reason.NotReadable)
+        return withContext(Dispatchers.Default) {
+            runCatching { ReadableContent.fromJson(json) }.getOrElse { throw ReadableContentException(ReadableContentException.Reason.NotReadable) }
+        }
+    }
+
+    override suspend fun snapshot(maxWidth: Int, windowCopy: Boolean): Bitmap? = withContext(Dispatchers.Main.immediate) {
+        val web = webView ?: return@withContext null
+        if (mutableState.value.url == null) return@withContext null
+        if (!ErrorPages.capturable(mutableState.value.failure)) return@withContext null
+        if (web.parent == null && !web.isAttachedToWindow) {
+            return@withContext engine.parked(web) {
+                repeat(PARKED_FRAMES) { awaitPaintedFrame(web) }
+                if (webView === web) drawSnapshot(web, maxWidth, windowCopy) else null
+            }
+        }
+        drawSnapshot(web, maxWidth, windowCopy)
+    }
+
+    private suspend fun drawSnapshot(web: WebView, maxWidth: Int, windowCopy: Boolean): Bitmap? {
+        if (!PageCapture.isDrawable(web)) return null
+        return captureSnapshot(web, maxWidth, windowCopy)
+    }
+
+    private suspend fun captureSnapshot(web: WebView, maxWidth: Int, windowCopy: Boolean): Bitmap? = withContext(Dispatchers.Main.immediate) {
+        val scale = min(1f, maxWidth.toFloat() / web.width)
+        val width = (web.width * scale).roundToInt().coerceAtLeast(1)
+        val height = (web.height * scale).roundToInt().coerceAtLeast(1)
+        val region = Rect(0, 0, web.width, web.height)
+        repeat(DRAW_ATTEMPTS) { attempt ->
+            if (webView !== web || !PageCapture.isDrawable(web)) return@withContext null
+            val drawn = PageCapture.drawView(web, region, width, height)
+            if (!isSuspect(drawn)) {
+                lastCaptureRoute = CaptureRoute.ViewDraw
+                return@withContext drawn
+            }
+            drawn.recycle()
+            if (attempt < DRAW_ATTEMPTS - 1) awaitPaintedFrame(web)
+        }
+        if (!windowCopy || webView !== web || !PageCapture.windowCopyIsTrustworthy(web)) return@withContext null
+        val copied = PageCapture.copyWindow(web, region, width, height) ?: return@withContext null
+        if (isSuspect(copied)) {
+            copied.recycle()
+            return@withContext null
+        }
+        lastCaptureRoute = CaptureRoute.WindowCopy
+        copied
+    }
+
+    override suspend fun sampleTone(topInset: Int, bottomInset: Int): PageTone? = withContext(Dispatchers.Main.immediate) {
+        val web = webView ?: return@withContext null
+        if (!ErrorPages.capturable(mutableState.value.failure)) return@withContext null
+        if (!PageCapture.isDrawable(web)) return@withContext null
+        val band = (ToneSampler.BAND_HEIGHT_DP * web.resources.displayMetrics.density).roundToInt().coerceAtLeast(1)
+        if (web.height <= topInset + bottomInset + band * 3) return@withContext null
+        val top = Rect(0, topInset + 1, web.width, topInset + 1 + band)
+        val bottomEdge = web.height - bottomInset - band - 2
+        val bottom = Rect(0, bottomEdge, web.width, bottomEdge + band)
+        var topCapture = sampleBand(web, top, CaptureRoute.ViewDraw) ?: return@withContext null
+        var bottomCapture = sampleBand(web, bottom, topCapture.route) ?: return@withContext null
+        if (topCapture.route != bottomCapture.route) {
+            topCapture.bitmap.recycle()
+            topCapture = sampleBand(web, top, bottomCapture.route) ?: return@withContext null
+            if (topCapture.route != bottomCapture.route) {
+                topCapture.bitmap.recycle()
+                bottomCapture.bitmap.recycle()
+                return@withContext null
+            }
+        }
+        lastCaptureRoute = topCapture.route
+        val topPixels = PageCapture.pixels(topCapture.bitmap)
+        val bottomPixels = PageCapture.pixels(bottomCapture.bitmap)
+        topCapture.bitmap.recycle()
+        bottomCapture.bitmap.recycle()
+        val tone = PageTone(ToneSampler.dominant(topPixels), ToneSampler.dominant(bottomPixels), ToneSampler.shade(topPixels), ToneSampler.shade(bottomPixels))
+        if (tone == PageTone()) null else tone
+    }
+
+    private suspend fun sampleBand(web: WebView, region: Rect, preferred: CaptureRoute): Capture? {
+        if (preferred == CaptureRoute.ViewDraw) {
+            val drawn = PageCapture.drawView(web, region, ToneSampler.SAMPLE_WIDTH, ToneSampler.SAMPLE_HEIGHT)
+            if (!PageCapture.isBlank(drawn, blackIsBlank = false)) return Capture(drawn, CaptureRoute.ViewDraw)
+            drawn.recycle()
+        }
+        if (!PageCapture.windowCopyIsTrustworthy(web)) return null
+        val copied = PageCapture.copyWindow(web, region, ToneSampler.SAMPLE_WIDTH, ToneSampler.SAMPLE_HEIGHT) ?: return null
+        if (PageCapture.isBlank(copied, blackIsBlank = false)) {
+            copied.recycle()
+            return null
+        }
+        return Capture(copied, CaptureRoute.WindowCopy)
+    }
+
+    private fun isSuspect(picture: Bitmap): Boolean =
+        PageCapture.isBlank(picture, blackIsBlank = true) || (reportsContent && PageCapture.isNearlyUniform(picture))
+
+    @SuppressLint("RequiresFeature")
+    private suspend fun awaitPaintedFrame(web: WebView) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.VISUAL_STATE_CALLBACK)) {
+            withTimeoutOrNull(VISUAL_STATE_WAIT_MILLIS) {
+                suspendCancellableCoroutine { continuation ->
+                    WebViewCompat.postVisualStateCallback(web, nextVisualStateRequest++) { if (continuation.isActive) continuation.resume(Unit) }
+                }
+            }
+        }
+        withTimeoutOrNull(FRAME_WAIT_MILLIS) {
+            suspendCancellableCoroutine { continuation ->
+                val callback = Choreographer.FrameCallback { if (continuation.isActive) continuation.resume(Unit) }
+                Choreographer.getInstance().postFrameCallback(callback)
+                continuation.invokeOnCancellation { Choreographer.getInstance().removeFrameCallback(callback) }
+            }
+        }
+    }
+
+    override fun saveState(): ByteArray? {
+        val bundle = webView?.let { web -> Bundle().also { saveInto(web, it) } } ?: savedBundle ?: return null
+        return PageStateBundles.write(bundle)
+    }
+
+    internal fun applySitePreferences() {
+        val web = webView ?: return
+        val host = mutableState.value.host
+        installNightShade(web, nightShadeUrl ?: web.url)
+        applyNightShade(web, engine.sitePreferences.nightShade(host, isPrivate))
+        applyZoom(engine.sitePreferences.pageZoom(host, isPrivate) ?: 1.0)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility", "RequiresFeature")
+    private fun configure(web: WebView) {
+        with(web.settings) {
+            systemUserAgent = userAgentString
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            setSupportMultipleWindows(true)
+            javaScriptCanOpenWindowsAutomatically = false
+            builtInZoomControls = true
+            displayZoomControls = false
+            useWideViewPort = true
+            loadWithOverviewMode = true
+            allowFileAccess = false
+            allowContentAccess = false
+            setGeolocationEnabled(true)
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            mediaPlaybackRequiresUserGesture = true
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                WebSettingsCompat.setAlgorithmicDarkeningAllowed(this, false)
+            }
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.HYPERLINK_CONTEXT_MENU_ITEMS)) {
+                WebSettingsCompat.setHyperlinkContextMenuItems(this, WebSettingsCompat.HYPERLINK_CONTEXT_MENU_DISABLED)
+            }
+        }
+        applyUserAgent(web)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
+        web.webViewClient = WebViewPageClient(this)
+        web.webChromeClient = WebViewPageChromeClient(this)
+        web.setDownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+            emitDownload(url, userAgent, contentDisposition, mimeType, contentLength)
+        }
+        web.setFindListener { ordinal, count, isDone ->
+            if (findQuery.isNotEmpty()) mutableFind.value = FindResult(findQuery, if (count == 0) -1 else ordinal, count, isDone)
+        }
+        web.setOnTouchListener { _, event ->
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                lastTouchX = event.x
+                lastTouchY = event.y
+                scrollTracker.touched(event.rawY.toDouble())
+                if (isNavigatingHistory) {
+                    isNavigatingHistory = false
+                    mainHandler.removeCallbacks(clearHistoryNavigationRunnable)
+                    scrollTracker.snapTo(web.scrollY.toDouble())
+                }
+            }
+            if (event.actionMasked == MotionEvent.ACTION_MOVE) scrollTracker.dragged(event.rawY.toDouble())
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) scrollTracker.released()
+            false
+        }
+        web.setOnLongClickListener { longPressed(web) }
+        web.setOnScrollChangeListener { _, _, scrollY, _, _ -> scrolled(web, scrollY) }
+        web.addOnLayoutChangeListener { view, left, top, right, bottom, _, oldTop, _, oldBottom ->
+            engine.notePageSize(view, right - left, bottom - top)
+            if (bottom - top != oldBottom - oldTop) scrollTracker.resized(SystemClock.uptimeMillis())
+        }
+        installNightShade(web, mutableState.value.url)
+        if (engine.supportsDocumentStartScripts && engine.supportsMessageListener) {
+            WebViewCompat.addDocumentStartJavaScript(web, TouchScrollers.script, setOf("*"))
+        }
+        if (engine.supportsMessageListener) {
+            WebViewCompat.addWebMessageListener(web, PageScripts.BRIDGE_NAME, setOf("*")) { _, message, origin, isMainFrame, reply ->
+                val data = message.data
+                when {
+                    data == PageScripts.NIGHT_SHADE_MESSAGE -> {
+                        val host = BrowserUrl.host(origin.toString())
+                        val sites = engine.sitePreferences
+                        reply.postMessage(PageScripts.nightShadeState(sites.nightShade(host, isPrivate), sites.nightShadeVerdict(host, isPrivate)))
+                    }
+                    data?.startsWith(PageScripts.NIGHT_SHADE_VERDICT_MESSAGE) == true -> {
+                        if (isMainFrame) nightShadeMeasured(web, BrowserUrl.host(origin.toString()), PageScripts.nightShadeVerdict(data))
+                    }
+                    else -> TouchScrollers.report(web, data, android.os.SystemClock.uptimeMillis())
+                }
+            }
+        }
+    }
+
+    @SuppressLint("RequiresFeature")
+    private fun applyUserAgent(web: WebView) {
+        val settings = web.settings
+        settings.userAgentString = if (desktopSite) BrowserUserAgent.desktop(systemUserAgent) else BrowserUserAgent.mobile(systemUserAgent)
+        if (engine.supportsDocumentStartScripts) {
+            if (desktopSite && desktopViewportHandler == null) {
+                desktopViewportHandler = WebViewCompat.addDocumentStartJavaScript(web, PageScripts.desktopViewport, setOf("*"))
+            } else if (!desktopSite) {
+                desktopViewportHandler?.remove()
+                desktopViewportHandler = null
+            }
+        }
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) return
+        runCatching {
+            val major = BrowserUserAgent.chromeMajor(systemUserAgent)
+            val brands = listOf(
+                UserAgentMetadata.BrandVersion.Builder().setBrand("Chromium").setMajorVersion(major).setFullVersion("$major.0.0.0").build(),
+                UserAgentMetadata.BrandVersion.Builder().setBrand("Not)A;Brand").setMajorVersion("99").setFullVersion("99.0.0.0").build(),
+            )
+            val metadata = UserAgentMetadata.Builder(WebSettingsCompat.getUserAgentMetadata(settings))
+                .setBrandVersionList(brands)
+                .setMobile(!desktopSite)
+                .setPlatform(if (desktopSite) "Linux" else "Android")
+                .build()
+            WebSettingsCompat.setUserAgentMetadata(settings, metadata)
+        }
+    }
+
+    private fun navigate(web: WebView, url: String, kind: VisitKind) {
+        clearHistoryNavigationGuard()
+        pendingVisit = kind
+        val host = BrowserUrl.host(url)
+        DesktopSites.onEnter(host, desktopHost, desktopSite, host?.let { engine.sitePreferences.desktopSite(it, isPrivate) })?.let { wanted ->
+            desktopSite = wanted
+            update { it.copy(isDesktopSite = wanted) }
+            applyUserAgent(web)
+        }
+        if (host != null) desktopHost = host
+        prepareNavigation(web, url)
+        web.loadUrl(url)
+    }
+
+    private fun restore(web: WebView, saved: Bundle, url: String?): Boolean {
+        url?.let { prepareNavigation(web, it) }
+        pendingVisit = VisitKind.Restored
+        val restored = web.restoreState(saved)
+        if (restored != null && restored.currentItem != null) return true
+        pendingVisit = null
+        return false
+    }
+
+    @SuppressLint("RequiresFeature")
+    private fun saveInto(web: WebView, bundle: Bundle) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.SAVE_STATE)) {
+            WebViewCompat.saveState(web, bundle, SAVED_STATE_LIMIT, true)
+        } else {
+            web.saveState(bundle)
+        }
+        bundle.putBoolean(DESKTOP_SITE_KEY, desktopSite)
+    }
+
+    private fun tearDown(web: WebView) {
+        mutableRequest.value?.dismiss()
+        mutableRequest.value = null
+        mutableFullscreen.value?.exit()
+        mutableFullscreen.value = null
+        findQuery = ""
+        mutableFind.value = null
+        filterHandler = null
+        desktopViewportHandler = null
+        nightShadeHandler = null
+        nightShadeSource = null
+        nightShadeUrl = null
+        installedStart = null
+        installedEnd = null
+        installedBundle = null
+        web.stopLoading()
+        (web.parent as? ViewGroup)?.removeView(web)
+        web.destroy()
+        webView = null
+        mutableView.value = null
+        mainHandler.removeCallbacks(clearHistoryNavigationRunnable)
+        isNavigatingHistory = false
+        progressThrottle.reset()
+        scrollTracker.reset()
+        update { it.copy(isLive = false, isLoading = false, progress = 0f) }
+    }
+
+    internal fun prepareNavigation(web: WebView, url: String) {
+        filterPageUrl = url
+        installNightShade(web, url)
+        installFilterScripts(web, url)
+    }
+
+    @SuppressLint("RequiresFeature")
+    private fun installNightShade(web: WebView, url: String?) {
+        nightShadeUrl = url
+        val host = url?.let(BrowserUrl::host)
+        val sites = engine.sitePreferences
+        val source = PageScripts.nightShadeAtStart(engine.scripts.nightShade, host, sites.nightShade(host, isPrivate), sites.nightShadeVerdict(host, isPrivate))
+        if (source == nightShadeSource) return
+        nightShadeSource = source
+        if (!engine.supportsDocumentStartScripts) return
+        nightShadeHandler?.remove()
+        nightShadeHandler = WebViewCompat.addDocumentStartJavaScript(web, source, setOf("*"))
+    }
+
+    private fun nightShadeMeasured(web: WebView, host: String?, verdict: NightShadeVerdict?) {
+        if (web !== webView || host == null || verdict == null) return
+        val use = engine.sitePreferences.rememberNightShadeVerdict(host, isPrivate, verdict)
+        if (use != null && !isPrivate) engine.onNightShadeVerdict?.invoke(use)
+        if (host == nightShadeUrl?.let(BrowserUrl::host)) installNightShade(web, nightShadeUrl)
+    }
+
+    private fun countNightShadeReuse(host: String?) {
+        if (isPrivate || host == null) return
+        val sites = engine.sitePreferences
+        if (sites.nightShade(host, false) == NightShadeMode.Disabled || sites.nightShadeVerdict(host, false) == null) return
+        engine.onNightShadeVerdict?.invoke(NightShadeVerdictUse.Reused)
+    }
+
+    @SuppressLint("RequiresFeature")
+    private fun installFilterScripts(web: WebView, url: String): Boolean {
+        val filter = engine.filterFor(isPrivate)
+        val start = filter?.scriptsAtDocumentStart(url).orEmpty()
+        val end = filter?.scriptsAtDocumentEnd(url).orEmpty()
+        if (start == installedStart && end == installedEnd) return false
+        installedStart = start
+        installedEnd = end
+        filterHandler?.remove()
+        filterHandler = null
+        val bundle = PageScripts.filterBundle(start, end)
+        installedBundle = bundle
+        if (bundle != null && engine.supportsDocumentStartScripts) {
+            filterHandler = WebViewCompat.addDocumentStartJavaScript(web, bundle, setOf("*"))
+        }
+        return true
+    }
+
+    internal fun pageStarted(web: WebView, url: String) {
+        if (web !== webView) return
+        filterPageUrl = url
+        reportsContent = false
+        desktopLoad += 1
+        desktopRewritesShown = 0
+        desktopStartShown = false
+        desktopFinishedWidth = null
+        if (desktopSite) traceDesktop("start ${viewNumbers(web)}")
+        installNightShade(web, url)
+        val changed = installFilterScripts(web, url)
+        if (!engine.supportsDocumentStartScripts) {
+            nightShadeSource?.let { web.evaluateJavascript(it, null) }
+            if (desktopSite) web.evaluateJavascript(PageScripts.desktopViewport, null)
+            installedBundle?.let { web.evaluateJavascript(it, null) }
+        } else if (changed) {
+            installedBundle?.let { web.evaluateJavascript(it, null) }
+        }
+        val host = BrowserUrl.host(url)
+        countNightShadeReuse(host)
+        val lastDesktopHost = desktopHost
+        if (host != null) desktopHost = host
+        DesktopSites.onEnter(host, lastDesktopHost, desktopSite, host?.let { engine.sitePreferences.desktopSite(it, isPrivate) })?.let { wanted ->
+            engine.mainHandler.post { if (web === webView && desktopHost == host) setDesktopSite(wanted) }
+        }
+        if (!engine.supportsMessageListener) applyNightShade(web, engine.sitePreferences.nightShade(host, isPrivate))
+        if (isNavigatingHistory) {
+            scheduleClearHistoryNavigation(HISTORY_LOADING_GUARD_MILLIS)
+            scrollTracker.snapTo(web.scrollY.toDouble())
+        } else {
+            scrollTracker.reset()
+        }
+        val zoom = engine.sitePreferences.pageZoom(host, isPrivate) ?: 1.0
+        web.settings.textZoom = (zoom * 100).roundToInt()
+        val keepsFailure = failedUrl != null && BrowserUrl.withoutFragment(failedUrl!!) == BrowserUrl.withoutFragment(url)
+        if (!keepsFailure) failedUrl = null
+        update {
+            it.copy(
+                url = url,
+                isLoading = true,
+                failure = if (keepsFailure) it.failure else null,
+                security = PageSecurity.of(url, sawInsecureContent),
+                canGoBack = web.canGoBack(),
+                canGoForward = web.canGoForward(),
+                faviconUrl = null,
+                favicon = null,
+                themeColor = null,
+                backgroundColor = null,
+                scrollDirection = ScrollDirection.Up,
+                isScrolledToTop = true,
+                blockedRequests = blockedCount.get(),
+                pageZoom = zoom,
+            )
+        }
+    }
+
+    internal fun pageFinished(web: WebView, url: String) {
+        if (web !== webView) return
+        crashReloads = 0
+        progressThrottle.reset()
+        answeredSignIns.clear()
+        if (isNavigatingHistory) {
+            scheduleClearHistoryNavigation(HISTORY_SETTLE_GUARD_MILLIS)
+        }
+        update {
+            it.copy(
+                url = web.url ?: url,
+                isLoading = false,
+                progress = 0f,
+                canGoBack = web.canGoBack(),
+                canGoForward = web.canGoForward(),
+                security = PageSecurity.of(web.url ?: url, sawInsecureContent),
+            )
+        }
+        if (ErrorPages.takesFromPage(failedUrl)) readPageLook(web)
+        if (desktopSite) {
+            val load = desktopLoad
+            web.postDelayed({ if (load == desktopLoad) fitDesktopWidth(web, DESKTOP_FINISHED) }, FIT_WIDTH_DELAY_MILLIS)
+            web.postDelayed({ if (load == desktopLoad) fitDesktopWidth(web, DESKTOP_LATER) }, FIT_WIDTH_LATER_MILLIS)
+        }
+        restoringScroll?.let { atDiscard ->
+            restoringScroll = null
+            web.postDelayed({ checkRestoredScroll(web, atDiscard) }, RESTORED_SCROLL_CHECK_MILLIS)
+        }
+    }
+
+    internal fun historyUpdated(web: WebView, url: String, isReload: Boolean) {
+        if (web !== webView) return
+        val previous = lastCommittedUrl
+        lastCommittedUrl = url
+        val kind = pendingVisit
+        pendingVisit = null
+        val now = SystemClock.elapsedRealtime()
+        val sinceLastCommit = now - lastCommitAt
+        lastCommitAt = now
+        update { it.copy(url = url, canGoBack = web.canGoBack(), canGoForward = web.canGoForward()) }
+        if (isReload) return
+        val visit = when {
+            kind != null -> kind
+            previous != null && BrowserUrl.withoutFragment(previous) == BrowserUrl.withoutFragment(url) -> null
+            previous != null && sinceLastCommit < CLIENT_REDIRECT_WINDOW_MILLIS -> VisitKind.Redirect
+            else -> VisitKind.Link
+        }
+        if (visit == null) return
+        val title = if (ErrorPages.takesFromPage(failedUrl)) cleanTitle(web.title, url) else mutableState.value.title
+        mutableEvents.tryEmit(PageEvent.Visited(url, title, visit))
+    }
+
+    internal fun rendererNavigationKind(hasGesture: Boolean): VisitKind = when {
+        hasGesture -> VisitKind.Link
+        SystemClock.elapsedRealtime() - lastCommitAt < CLIENT_REDIRECT_WINDOW_MILLIS -> VisitKind.Redirect
+        else -> VisitKind.Link
+    }
+
+    internal fun startRendererNavigation(web: WebView, url: String, kind: VisitKind?) {
+        if (kind == VisitKind.Link) clearHistoryNavigationGuard()
+        failedUrl = null
+        if (mutableState.value.failure != null) update { it.copy(failure = null) }
+        if (kind != null) pendingVisit = kind
+        noteRequest(BrowserUrl.scheme(url), BrowserUrl.rawHost(url))
+        prepareNavigation(web, url)
+    }
+
+    internal fun progressChanged(web: WebView, percent: Int) {
+        if (web !== webView || !mutableState.value.isLoading) return
+        val value = progressThrottle.offer(percent / 100.0, SystemClock.uptimeMillis()) ?: return
+        update { it.copy(progress = value) }
+    }
+
+    internal fun titleReceived(web: WebView, title: String?) {
+        if (web !== webView || !ErrorPages.takesFromPage(failedUrl)) return
+        val clean = cleanTitle(title, web.url)
+        if (clean.isEmpty()) return
+        titledUrl = web.url
+        if (clean == mutableState.value.title) return
+        update { it.copy(title = clean) }
+    }
+
+    internal fun iconReceived(web: WebView, icon: Bitmap?) {
+        if (web === webView && icon != null) update { it.copy(favicon = icon) }
+    }
+
+    internal fun failed(web: WebView, url: String, reason: NetworkFailure) {
+        if (web !== webView) return
+        failedUrl = url
+        update {
+            it.copy(
+                failure = PageLoadFailure.Network(reason),
+                title = ErrorPages.titleOnFailure(it.title, titledUrl, url),
+                themeColor = null,
+                backgroundColor = null,
+            )
+        }
+    }
+
+    internal fun rendererGone(web: WebView, didCrash: Boolean) {
+        if (web !== webView) {
+            (web.parent as? ViewGroup)?.removeView(web)
+            web.destroy()
+            return
+        }
+        tearDown(web)
+        if (!didCrash || released) return
+        if (crashReloads == 0) {
+            crashReloads += 1
+            engine.mainHandler.post { makeLive() }
+        } else {
+            update { it.copy(failure = PageLoadFailure.Crashed) }
+        }
+    }
+
+    internal fun noteInsecureContent() {
+        engine.mainHandler.post {
+            val current = mutableState.value
+            val security = PageSecurity.of(current.url, sawInsecureContent)
+            if (security != current.security) update { it.copy(security = security) }
+        }
+    }
+
+    internal fun startDocumentRequests() {
+        sawInsecureContent = false
+        reachedSchemes.clear()
+        blockedCount.set(0)
+        scheduleBlockedFlush()
+    }
+
+    internal fun noteRequest(scheme: String?, host: String?) {
+        val key = host?.lowercase() ?: return
+        val bit = when (scheme?.lowercase()) {
+            "https" -> REACHED_SECURELY
+            else -> REACHED_INSECURELY
+        }
+        reachedSchemes.merge(key, bit) { old, new -> old or new }
+    }
+
+    internal fun signInIsSecure(host: String): Boolean =
+        BrowserUrl.isSecure(filterPageUrl) && reachedSchemes[host.lowercase()] == REACHED_SECURELY
+
+    internal fun countBlocked() {
+        blockedCount.incrementAndGet()
+        scheduleBlockedFlush()
+    }
+
+    private fun scheduleBlockedFlush() {
+        if (!blockedFlushPending.compareAndSet(false, true)) return
+        engine.mainHandler.postDelayed({
+            blockedFlushPending.set(false)
+            val count = blockedCount.get()
+            if (count != mutableState.value.blockedRequests) update { it.copy(blockedRequests = count) }
+        }, BLOCKED_FLUSH_MILLIS)
+    }
+
+    internal fun ask(kind: PageRequest.Kind, host: String, completion: (PageRequest.Answer) -> Unit): PageRequest {
+        lateinit var request: PageRequest
+        request = PageRequest(kind, host) { answer ->
+            mutableRequest.compareAndSet(request, null)
+            onMain { completion(answer) }
+        }
+        mutableRequest.value?.dismiss()
+        mutableRequest.value = request
+        return request
+    }
+
+    internal fun withdraw(request: PageRequest?) {
+        if (request != null && mutableRequest.value === request) request.dismiss()
+    }
+
+    internal fun askToOpenExternal(url: String, route: LinkRoute.External) {
+        ask(PageRequest.Kind.OpenExternal(url, route.app), mutableState.value.host ?: "") { answer ->
+            if (answer != PageRequest.Answer.Accepted) return@ask
+            val launched = ExternalLauncher.intentFor(url)?.let(::launch) ?: false
+            if (launched) return@ask
+            val fallback = route.fallbackUrl
+            if (fallback != null) load(fallback) else mutableEvents.tryEmit(PageEvent.ExternalAppMissing(url))
+        }
+    }
+
+    internal fun opensInApp(url: String): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        val target = BrowserUrl.host(url) ?: return false
+        if (target == mutableState.value.host || !engine.sitePreferences.opensLinksInApps(target, isPrivate)) return false
+        return launch(ExternalLauncher.appLinkIntent(url))
+    }
+
+    internal fun emit(event: PageEvent) {
+        mutableEvents.tryEmit(event)
+    }
+
+    internal fun currentHost(): String = mutableState.value.host ?: ""
+
+    private fun launch(intent: Intent): Boolean {
+        val activity = engine.hostActivity()
+        return try {
+            if (activity != null) {
+                activity.startActivity(intent)
+            } else {
+                engine.appContext.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            true
+        } catch (error: ActivityNotFoundException) {
+            false
+        } catch (error: SecurityException) {
+            false
+        }
+    }
+
+    private fun emitDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?, contentLength: Long) {
+        val linkName = if (mimeType == null && contentDisposition == null) DownloadRules.linkName(url, null, null) { null } else null
+        val fileName = (linkName ?: URLUtil.guessFileName(url, contentDisposition, mimeType))
+            .replace('/', '-')
+            .replace(':', '-')
+            .trim()
+            .trim('.')
+            .ifEmpty { engine.appContext.getString(R.string.download_fallback_name) }
+        mutableEvents.tryEmit(
+            PageEvent.Download(
+                PageDownload(
+                    url = url,
+                    fileName = fileName,
+                    mimeType = mimeType?.ifBlank { null },
+                    contentLength = contentLength,
+                    userAgent = userAgent,
+                    contentDisposition = contentDisposition,
+                    referer = mutableState.value.url?.takeIf(BrowserUrl::isWeb),
+                    isPrivate = isPrivate,
+                    privateSession = if (isPrivate) engine.currentPrivateSession() else null,
+                ),
+            ),
+        )
+    }
+
+    private fun longPressed(web: WebView): Boolean {
+        val hit = web.hitTestResult
+        val extra = hit.extra ?: return false
+        val x = lastTouchX
+        val y = lastTouchY
+        return when (hit.type) {
+            WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
+                if (ExternalLinks.route(extra) != LinkRoute.Web) return false
+                requestFocusNode(web) { data -> emit(PageEvent.LongPress(PressTarget.Link(extra, data.getString("title")?.trim()?.ifEmpty { null }), x, y)) }
+                true
+            }
+            WebView.HitTestResult.IMAGE_TYPE -> {
+                emit(PageEvent.LongPress(PressTarget.Image(extra, null), x, y))
+                true
+            }
+            WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                requestFocusNode(web) { data ->
+                    val link = data.getString("url")?.takeIf { ExternalLinks.route(it) == LinkRoute.Web }
+                    emit(PageEvent.LongPress(PressTarget.Image(data.getString("src") ?: extra, link), x, y))
+                }
+                true
+            }
+            else -> false
+        }
+    }
+
+    private fun requestFocusNode(web: WebView, onResult: (Bundle) -> Unit) {
+        val handler = Handler(Looper.getMainLooper()) { message ->
+            if (web === webView) onResult(message.data)
+            true
+        }
+        web.requestFocusNodeHref(handler.obtainMessage())
+    }
+
+    internal fun scrolled(web: WebView, scrollY: Int) {
+        if (web !== webView) return
+        val atTop = scrollY <= 1
+        if (isNavigatingHistory) {
+            scrollTracker.snapTo(scrollY.toDouble())
+            val current = mutableState.value
+            if (atTop != current.isScrolledToTop || current.scrollDirection != ScrollDirection.Up) {
+                update { it.copy(isScrolledToTop = atTop, scrollDirection = ScrollDirection.Up) }
+            }
+            return
+        }
+        val direction = scrollTracker.offer(scrollY.toDouble(), !web.canScrollVertically(1), SystemClock.uptimeMillis())
+        val current = mutableState.value
+        if (atTop == current.isScrolledToTop && (direction == null || direction == current.scrollDirection)) return
+        update { it.copy(isScrolledToTop = atTop, scrollDirection = direction ?: it.scrollDirection) }
+    }
+
+    private fun scheduleClearHistoryNavigation(delayMillis: Long) {
+        mainHandler.removeCallbacks(clearHistoryNavigationRunnable)
+        mainHandler.postDelayed(clearHistoryNavigationRunnable, delayMillis)
+    }
+
+    private fun clearHistoryNavigationGuard() {
+        isNavigatingHistory = false
+        mainHandler.removeCallbacks(clearHistoryNavigationRunnable)
+    }
+
+    private fun readPageLook(web: WebView) {
+        val url = web.url ?: return
+        if (!BrowserUrl.isWeb(url)) return
+        web.evaluateJavascript(engine.scripts.pageLook) { raw ->
+            if (web !== webView || web.url != url) return@evaluateJavascript
+            val look = PageScripts.decodeEvaluationResult(raw)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return@evaluateJavascript
+            fun text(key: String): String? = if (look.isNull(key)) null else look.optString(key).ifEmpty { null }
+            val favicon = text("icon") ?: Uri.parse(url).buildUpon().encodedPath("/favicon.ico").encodedQuery(null).fragment(null).build().toString()
+            val theme = PageColors.parseCss(text("theme"))
+            val background = PageColors.parseCss(text("background"))
+            reportsContent = look.optBoolean("content", false)
+            update { it.copy(faviconUrl = favicon, themeColor = theme, backgroundColor = background) }
+        }
+    }
+
+    private fun fitDesktopWidth(web: WebView, stage: String) {
+        if (web !== webView || !desktopSite) return
+        web.evaluateJavascript(DesktopFit.MEASURE_SCRIPT) { raw ->
+            if (web !== webView || !desktopSite) return@evaluateJavascript
+            val measured = PageScripts.decodeEvaluationResult(raw)?.let { runCatching { JSONObject(it) }.getOrNull() }
+            val contentWidth = measured?.let { maxOf(it.optDouble("rootWidth", 0.0), it.optDouble("bodyWidth", 0.0)) }?.takeIf { it > 0.0 }
+            if (measured != null) traceMeasured(web, stage, measured)
+            val grownFrom = desktopFinishedWidth
+            if (stage == DESKTOP_FINISHED) desktopFinishedWidth = contentWidth
+            @Suppress("DEPRECATION")
+            val decision = if (stage != DESKTOP_FINISHED && grownFrom != null && contentWidth != null && contentWidth <= grownFrom) {
+                DesktopFit.Decision.Skip("the content did not grow after pageFinished")
+            } else {
+                DesktopFit.decide(web.width, contentWidth, web.scale)
+            }
+            if (decision is DesktopFit.Decision.Zoom) web.zoomBy(decision.factor)
+            traceDesktop("fit at $stage: content ${contentWidth?.let { number(it, 0) } ?: "unknown"} css px, ${viewNumbers(web)} -> $decision")
+        }
+    }
+
+    private fun traceMeasured(web: WebView, stage: String, measured: JSONObject) {
+        if (engine.desktopTrace == null) return
+        val trace = measured.optJSONObject("trace")
+        val start = trace?.optJSONObject("start")
+        if (start != null && !desktopStartShown) {
+            desktopStartShown = true
+            traceDesktop("document start: ${pageNumbers(start)} screen ${start.opt("screenWidth")}")
+        }
+        val rewrites = trace?.optJSONArray("rewrites")
+        if (rewrites != null) {
+            while (desktopRewritesShown < rewrites.length()) {
+                val rewrite = rewrites.optJSONObject(desktopRewritesShown)
+                desktopRewritesShown += 1
+                traceDesktop("viewport tag rewritten: \"${rewrite?.optString("before")}\" -> \"${rewrite?.optString("after")}\"")
+            }
+        }
+        if (trace == null) traceDesktop("$stage: the viewport script did not run in this document")
+        val tags = measured.optJSONArray("tags")
+        val tagText = if (tags == null || tags.length() == 0) "none" else (0 until tags.length()).joinToString(" | ") { "\"${tags.optString(it)}\"" }
+        traceDesktop("$stage: ${pageNumbers(measured)} tag $tagText ${viewNumbers(web)}")
+    }
+
+    private fun pageNumbers(values: JSONObject): String {
+        fun value(key: String, digits: Int): String = if (values.isNull(key)) "null" else number(values.optDouble(key), digits)
+        return "scrollWidth ${value("rootWidth", 0)} innerWidth ${value("innerWidth", 0)} visualViewport.width ${value("viewportWidth", 1)} visualViewport.scale ${value("viewportScale", 4)}"
+    }
+
+    @Suppress("DEPRECATION")
+    private fun viewNumbers(web: WebView): String {
+        val density = web.resources.displayMetrics.density
+        return "view ${web.width}px ${number(web.width / density.toDouble(), 1)}dp density ${number(density.toDouble(), 3)} getScale ${number(web.scale.toDouble(), 4)}"
+    }
+
+    private fun number(value: Double, digits: Int): String = if (value.isFinite()) String.format(java.util.Locale.US, "%.${digits}f", value) else "$value"
+
+    private fun traceDesktop(line: String) {
+        engine.desktopTrace?.invoke(id, "PAGELAB desktop $line")
+    }
+
+    private fun checkRestoredScroll(web: WebView, atDiscard: Int) {
+        if (web !== webView) return
+        val restored = web.scrollY
+        val lost = restored <= 1 && atDiscard > web.height / 2
+        Log.i(LOG_TAG, "restored $id at scroll $restored, scroll at discard $atDiscard${if (lost) ", putting it back" else ""}")
+        if (lost) web.scrollTo(web.scrollX, atDiscard)
+    }
+
+    private fun applyZoom(zoom: Double) {
+        webView?.settings?.textZoom = (zoom * 100).roundToInt()
+        if (mutableState.value.pageZoom != zoom) update { it.copy(pageZoom = zoom) }
+    }
+
+    private fun applyNightShade(web: WebView, mode: NightShadeMode) {
+        web.evaluateJavascript(PageScripts.nightShadeCall(mode), null)
+    }
+
+    private suspend fun evaluate(web: WebView, script: String): String? = suspendCancellableCoroutine { continuation ->
+        web.evaluateJavascript(script) { continuation.resume(it) }
+    }
+
+    private fun onMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else engine.mainHandler.post(block)
+    }
+
+    private inline fun update(transform: (PageState) -> PageState) = mutableState.update(transform)
+
+    companion object {
+        private const val SAVED_STATE_LIMIT = 512 * 1024
+        private const val LOG_TAG = "ArdiaPages"
+        private const val DESKTOP_SITE_KEY = "ardia.desktopSite"
+        private const val FIT_WIDTH_DELAY_MILLIS = 300L
+        private const val FIT_WIDTH_LATER_MILLIS = 2_000L
+        private const val DESKTOP_FINISHED = "pageFinished"
+        private const val DESKTOP_LATER = "2 s later"
+        private const val RESTORED_SCROLL_CHECK_MILLIS = 700L
+        private const val PARKED_FRAMES = 3
+        private const val CLIENT_REDIRECT_WINDOW_MILLIS = 1500L
+        private const val HISTORY_NAVIGATION_GUARD_MILLIS = 1000L
+        private const val HISTORY_LOADING_GUARD_MILLIS = 3000L
+        private const val HISTORY_SETTLE_GUARD_MILLIS = 500L
+        private const val BLOCKED_FLUSH_MILLIS = 250L
+        private const val DRAW_ATTEMPTS = 2
+        private const val VISUAL_STATE_WAIT_MILLIS = 300L
+        private const val FRAME_WAIT_MILLIS = 100L
+        private const val REACHED_SECURELY = 1
+        private const val REACHED_INSECURELY = 2
+
+        fun cleanTitle(title: String?, url: String?): String {
+            val trimmed = title?.trim().orEmpty()
+            if (trimmed.isEmpty() || url == null) return trimmed
+            val withoutScheme = url.substringAfter("://")
+            return if (trimmed == url || trimmed == withoutScheme || trimmed == withoutScheme.removeSuffix("/")) "" else trimmed
+        }
+    }
+}

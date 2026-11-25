@@ -1,0 +1,159 @@
+assert(is_win)
+
+declare_args() {
+  ardia_linux_compile_probe = false
+}
+
+if (ardia_linux_compile_probe) {
+  group("linux_compile_probe") {
+    deps = [ "//ardia/linux:compile_probe" ]
+  }
+}
+
+action("webui_bootstrap") {
+  script = "//ardia/linux/generate_bootstrap.py"
+  sources = [ "//ardia/linux/bootstrap.js" ]
+  outputs = [ "$root_gen_dir/ardia/linux/host_bootstrap.h" ]
+  args = [
+    "--input",
+    rebase_path(sources[0], root_build_dir),
+    "--output",
+    rebase_path(outputs[0], root_build_dir),
+  ]
+}
+
+source_set("win") {
+  sources = [
+    "//ardia/linux/ac_linux_contract.h",
+    "//ardia/linux/ac_linux_session.cc",
+    "//ardia/linux/ac_linux_session.h",
+    "ac_calls.cc",
+    "ac_calls.h",
+    "api.cc",
+    "api.h",
+    "autoplay.cc",
+    "autoplay.h",
+    "context_menu.cc",
+    "context_menu.h",
+    "external_apps.cc",
+    "external_apps.h",
+    "frame_view.cc",
+    "frame_view.h",
+    "hooks.h",
+    "host.cc",
+    "host.h",
+    "host_visibility.cc",
+    "kept_pages.cc",
+    "kept_pages.h",
+    "launch_guard.cc",
+    "launch_guard.h",
+    "main.cc",
+    "main.h",
+    "page_links.cc",
+    "page_links.h",
+    "page_links_internal.h",
+    "page_links_peek.cc",
+    "page_links_session.cc",
+    "page_links_script.h",
+    "private_sessions.cc",
+    "private_sessions.h",
+    "profiles.cc",
+    "profiles.h",
+    "public/EngineApi.h",
+    "renderer_efficiency.cc",
+    "renderer_efficiency.h",
+    "tab_calls.cc",
+    "tab_calls.h",
+    "tab_events.cc",
+    "tab_events.h",
+    "tab_state.cc",
+    "tab_state.h",
+    "test_gate.cc",
+    "test_gate.h",
+    "webui/desktop_platform_win.cc",
+    "webui/desktop_platform_win.h",
+    "webui/webui_caption_script.h",
+    "webui/webui_mode.cc",
+    "webui/webui_mode.h",
+    "webui/webui_shell.cc",
+    "webui/webui_shell.h",
+  ]
+  sources += get_target_outputs(":webui_bootstrap")
+
+  libs = [ "dwmapi.lib" ]
+
+  deps = [
+    ":launch_switches",
+    ":webui_bootstrap",
+    "//ardia/desktop",
+    "//third_party/icu",
+    "//components/input",
+    "//services/network/public/mojom",
+    "//ui/display",
+    "//ui/views/controls/webview",
+    "//base",
+    "//chrome/app:command_ids",
+    "//chrome/browser",
+    "//chrome/browser/ardia",
+    "//chrome/browser/devtools",
+    "//chrome/browser/printing",
+    "//chrome/browser/ui:recently_audible_helper",
+    "//chrome/browser/profiles:profile",
+    "//chrome/common",
+    "//chrome/install_static:install_static_util",
+    "//components/blocked_content",
+    "//components/content_settings/core/browser",
+    "//components/favicon/content",
+    "//components/favicon/core",
+    "//components/find_in_page",
+    "//components/keep_alive_registry",
+    "//components/performance_manager",
+    "//components/policy/core/common",
+    "//components/prefs",
+    "//components/sessions",
+    "//components/url_formatter",
+    "//components/version_info",
+    "//components/web_modal",
+    "//components/zoom",
+    "//content/public/browser",
+    "//content/public/common",
+    "//media",
+    "//net",
+    "//pdf:buildflags",
+    "//printing/buildflags",
+    "//skia",
+    "//third_party/blink/public/common",
+    "//ui/aura",
+    "//ui/base",
+    "//ui/events",
+    "//ui/gfx",
+    "//ui/views",
+    "//url",
+  ]
+}
+
+source_set("launch_switches") {
+  sources = [
+    "//ardia/core/ac_launch_switches.cc",
+    "//ardia/core/ac_launch_switches.h",
+  ]
+
+  deps = [
+    "//base",
+    "//chrome/common:non_code_constants",
+    "//components/os_crypt/common:switches",
+    "//content/public/common",
+  ]
+}
+
+shared_library("probe") {
+  output_name = "ArdiaProbe"
+  sources = [
+    "probe/probe.cc",
+    "public/EngineApi.h",
+  ]
+  libs = [
+    "gdi32.lib",
+    "user32.lib",
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "extensions": {
+    "pinned_extensions": [
+      "gggggggggggggggggggggggggggggggg",
+      "ffffffffffffffffffffffffffffffff",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "settings": {
+      "ffffffffffffffffffffffffffffffff": {
+        "from_webstore": true,
+        "location": 1,
+        "path": "ffffffffffffffffffffffffffffffff/3.2_0",
+        "disable_reasons": [
+          2
+        ]
+      },
+      "gggggggggggggggggggggggggggggggg": {
+        "from_webstore": true,
+        "location": 1,
+        "path": "gggggggggggggggggggggggggggggggg/1.5_0",
+        "disable_reasons": [
+          1
+        ]
+      },
+      "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh": {
+        "from_webstore": true,
+        "location": 1,
+        "path": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh/0.9_0",
+        "disable_reasons": [
+          8388608
+        ]
+      },
+      "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii": {
+        "from_webstore": true,
+        "location": 1,
+        "path": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii/2.0_0"
+      },
+      "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj": {
+        "from_webstore": false,
+        "location": 4,
+        "path": "/Users/someone/dev-helper",
+        "manifest": {
+          "name": "Dev Helper",
+          "manifest_version": 3
+        }
+      },
+      "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk": {
+        "from_webstore": true,
+        "location": 9,
+        "manifest": {
+          "name": "Company SSO"
+        }
+      },
+      "llllllllllllllllllllllllllllllll": {
+        "from_webstore": true,
+        "location": 6,
+        "manifest": {
+          "name": "Password Helper"
+        }
+      },
+      "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm": {
+        "from_webstore": false,
+        "location": 1,
+        "manifest": {
+          "name": "Dragged In"
+        }
+      },
+      "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn": {
+        "from_webstore": true,
+        "location": 1,
+        "manifest": {
+          "name": "A Theme",
+          "theme": {}
+        }
+      },
+      "oooooooooooooooooooooooooooooooo": {
+        "from_webstore": true,
+        "location": 1,
+        "disable_reasons": 3,
+        "manifest": {
+          "name": "Legacy Mask Off",
+          "version": "7.0",
+          "manifest_version": 3
+        }
+      },
+      "pppppppppppppppppppppppppppppppp": {
+        "from_webstore": true,
+        "location": 1,
+        "state": 0,
+        "manifest": {
+          "name": "Old Off",
+          "version": "1.0",
+          "manifest_version": 3
+        }
+      },
+      "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": {
+        "from_webstore": true,
+        "location": 10,
+        "manifest": {
+          "name": "Built In"
+        }
+      },
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+        "from_webstore": true,
+        "manifest": {
+          "name": "No Location",
+          "version": "1.0",
+          "manifest_version": 3
+        }
+      },
+      "cccccccccccccccccccccccccccccccc": {
+        "from_webstore": true,
+        "location": 1,
+        "disable_reasons": 4,
+        "manifest": {
+          "name": "Reloading",
+          "version": "1.0",
+          "manifest_version": 3
+        }
+      }
+    }
+  }
+}

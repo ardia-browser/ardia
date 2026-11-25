@@ -1,7 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { orderSections, syncGroupOrder, withParent } from "../groups/groups";
-import { familyKeyOf, IDLE_LIVE, inPinnedContainer, newId, pinKeyOf } from "../browser/model";
+import { familyKeyOf, inPinnedContainer, newId, pinKeyOf } from "../browser/model";
 import { frozenOn, hasOwnOrSharedPage, hasPage, holderOfPage, IDLE, isAsleep, wakeOf, withNavigationAt, withWake } from "./pageSession";
 import { chainOf, copyOf, hasDuplicates, keyField, profilesOf, sectionOf, signature, treeOrder, union } from "../pins/pinMirror";
 import { removeTabs, withNewTab } from "./tabs";
@@ -9,6 +9,7 @@ import type { Tab, TabGroup } from "../browser/types";
 import { pinnedGroupMembers } from "../browser/structure";
 import { isRegularWindow } from "../windows/small";
 import { splitTabIds, withPaneIds } from "../splits/splits";
+import { isPeekTab, peekTabIds } from "../peek/peek";
 
 type Section = ReturnType<typeof sectionOf>;
 
@@ -18,13 +19,14 @@ export const sharesTabs = (s: Pick<BrowserState, "settings">) => !!s.settings?.s
 const listable = (t: Tab) => !t.pin && !!t.url && !t.liveItem;
 
 export function sharedListTab(s: BrowserState, t: Tab): boolean {
-  return sharesTabs(s) && listable(t) && isRegularWindow(s.windows[t.windowId]) && !inPinnedContainer(s, t.id) && s.peeks[t.windowId]?.tabId !== t.id;
+  return sharesTabs(s) && listable(t) && isRegularWindow(s.windows[t.windowId]) && !inPinnedContainer(s, t.id) && !isPeekTab(s, t.id);
 }
 
 function listMember(s: BrowserState): (t: Tab) => boolean {
   const pinnedMembers = pinnedGroupMembers(s.groups);
   const inSplit = new Set(Object.values(s.splits).flatMap((v) => splitTabIds(v)));
-  return (t) => listable(t) && !pinnedMembers.has(t.id) && !inSplit.has(t.id) && s.peeks[t.windowId]?.tabId !== t.id;
+  const peeked = peekTabIds(s.peeks);
+  return (t) => listable(t) && !pinnedMembers.has(t.id) && !inSplit.has(t.id) && !peeked.has(t.id);
 }
 
 const listGroupsOf = (s: Pick<BrowserState, "groups">) => Object.values(s.groups).filter((g) => !g.pinned);
@@ -123,7 +125,6 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
   const mine = cur.items.map((i) => i.tab);
   const used = new Set<string>();
   const tabs = { ...s.tabs };
-  const live = { ...s.live };
   let groups = { ...s.groups };
   const byKey = new Map<string, Tab[]>();
   for (const m of mine) byKey.get(pinKeyOf(m))?.push(m) ?? byKey.set(pinKeyOf(m), [m]);
@@ -132,9 +133,8 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
     const same = (byKey.get(key) ?? []).filter((m) => !used.has(m.id));
     const t = same.find(hasPage) ?? same[0];
     if (!t) {
-      const copy = { ...copyOf(src, windowId, false), page: IDLE, lastActiveAt: src.lastActiveAt };
+      const copy = { ...copyOf(src, windowId, false), page: IDLE, lastActiveAt: src.lastActiveAt, ...(src.restoredAt ? { restoredAt: src.restoredAt } : {}) };
       tabs[copy.id] = copy;
-      live[copy.id] = IDLE_LIVE;
       used.add(copy.id);
       return copy.id;
     }
@@ -201,7 +201,7 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
 
   const window = { ...w, tabIds: orderSections(ids, tabs, groups) };
   groups = syncGroupOrder(groups, window);
-  let next: BrowserState = { ...s, tabs, live, groups, windows: { ...s.windows, [windowId]: window } };
+  let next: BrowserState = { ...s, tabs, groups, windows: { ...s.windows, [windowId]: window } };
   if (!gone.length) return next;
   return removeTabs(keepShownProfile(next, windowId, gone), gone, false);
 }
@@ -312,25 +312,25 @@ export function unshareTabs(s: BrowserState, prev: BrowserState): BrowserState |
   return gone.length ? removeTabs(next, gone, false) : next;
 }
 
-export function sharedElsewhere(s: BrowserState, t: Tab): boolean {
-  if (!sharedListTab(s, t)) return false;
-  const key = pinKeyOf(t);
-  return Object.values(s.tabs).some((x) => x.id !== t.id && x.windowId !== t.windowId && x.profileId === t.profileId && pinKeyOf(x) === key && isRegularWindow(s.windows[x.windowId]));
-}
-
-export function sharedLastUsed(s: BrowserState): Map<string, number> | null {
+function sharedLatest(s: BrowserState, at: (t: Tab) => number): Map<string, number> | null {
   if (!sharesTabs(s)) return null;
   const member = listMember(s);
   const out = new Map<string, number>();
   for (const t of Object.values(s.tabs)) {
     if (!isRegularWindow(s.windows[t.windowId]) || !member(t)) continue;
     const key = familyKeyOf(t);
-    out.set(key, Math.max(out.get(key) ?? 0, t.lastActiveAt));
+    out.set(key, Math.max(out.get(key) ?? 0, at(t)));
   }
   return out;
 }
 
+export const sharedLastUsed = (s: BrowserState) => sharedLatest(s, (t) => t.lastActiveAt);
+
+export const sharedRestoredAt = (s: BrowserState) => sharedLatest(s, (t) => t.restoredAt ?? 0);
+
 export const lastUsedOf = (used: Map<string, number> | null, t: Tab) => used?.get(familyKeyOf(t)) ?? t.lastActiveAt;
+
+export const restoredAtOf = (restored: Map<string, number> | null, t: Tab) => restored?.get(familyKeyOf(t)) ?? t.restoredAt ?? 0;
 
 export function sharedTabsIn(tabs: Record<string, Tab>, windowId: string): { elsewhere(t: Tab): boolean; lastUsed(t: Tab): number } {
   const here = new Set<string>();
@@ -353,7 +353,8 @@ export function openTabsByUse(
   o: { profileId: string; windowId: string; shared: boolean },
 ): { tab: Tab; lastActiveAt: number }[] {
   const view = o.shared ? sharedTabsIn(tabs, o.windowId) : null;
+  const peeked = peekTabIds(peeks);
   return Object.values(tabs)
-    .filter((t) => t.profileId === o.profileId && peeks[t.windowId]?.tabId !== t.id && !view?.elsewhere(t))
+    .filter((t) => t.profileId === o.profileId && !peeked.has(t.id) && !view?.elsewhere(t))
     .map((t) => ({ tab: t, lastActiveAt: view ? view.lastUsed(t) : t.lastActiveAt }));
 }

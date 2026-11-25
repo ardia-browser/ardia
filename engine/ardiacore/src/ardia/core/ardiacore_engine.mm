@@ -186,6 +186,12 @@ extern "C" __attribute__((visibility("default"))) int ArdiaCoreMain(
   ProfileManager* manager = g_browser_process->profile_manager();
   base::FilePath path =
       manager->user_data_dir().Append(base::SysNSStringToUTF8(directoryName));
+  if (Profile* dying = ardiacore::DyingProfileAt(path)) {
+    ardiacore::WhenProfileGone(dying, base::BindOnce(^{
+                              [self loadProfile:directoryName completion:completion];
+                            }));
+    return;
+  }
   Profile* loaded = manager->GetProfileByPath(path);
   if (IsProfileDirectoryMarkedForDeletion(path) ||
       (loaded && ardiacore::IsProfileDeleting(loaded))) {
@@ -242,9 +248,11 @@ extern "C" __attribute__((visibility("default"))) int ArdiaCoreMain(
 + (void)setVideoUpscalingTestConditions:(NSDictionary<NSString*, NSNumber*>*)conditions {
   NSNumber* low_power = conditions[@"lowPower"];
   NSNumber* thermal = conditions[@"thermalPressure"];
+  NSNumber* capturing = conditions[@"capturing"];
   ardiacore::SetVideoUpscalingTestConditions(
       low_power ? std::optional<bool>(low_power.boolValue) : std::nullopt,
-      thermal ? std::optional<bool>(thermal.boolValue) : std::nullopt);
+      thermal ? std::optional<bool>(thermal.boolValue) : std::nullopt,
+      capturing ? std::optional<bool>(capturing.boolValue) : std::nullopt);
 }
 
 + (NSDictionary<NSString*, id>*)videoUpscalingState {
@@ -355,6 +363,14 @@ extern "C" __attribute__((visibility("default"))) int ArdiaCoreMain(
                               base::SysNSStringToUTF8(audio ?: @""));
 }
 
++ (BOOL)pagesPickDisplayMedia {
+  return ardiacore::PagesPickDisplayMedia();
+}
+
++ (void)setPagesPickDisplayMedia:(BOOL)pagesPick {
+  ardiacore::SetPagesPickDisplayMedia(pagesPick);
+}
+
 + (NSDictionary<NSString*, NSNumber*>*)desktopCaptureAudio {
   return @{
     @"system" : @(ardiacore::IsDesktopCaptureSystemAudioSupported()),
@@ -398,6 +414,10 @@ extern "C" __attribute__((visibility("default"))) int ArdiaCoreMain(
   out << *KeepAliveRegistry::GetInstance()
       << " trying_to_quit=" << browser_shutdown::IsTryingToQuit();
   return NS(out.str());
+}
+
+- (NSString*)pictureInPictureCloses {
+  return NS(ardiacore::PictureInPictureCloseRecord());
 }
 
 - (NSString*)chromiumVersion {

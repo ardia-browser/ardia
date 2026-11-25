@@ -1,4 +1,5 @@
 import type { EventSubscription } from "expo-modules-core";
+import type { CliNative } from "./generated/native";
 
 export type CliInstallResult = {
   ok: boolean;
@@ -11,8 +12,4 @@ export type CliInstallResult = {
   lines: string[];
 };
 
-export type CliNative = {
-  installedVersion(): string | null;
-  install(): Promise<CliInstallResult>;
-  addListener(name: "onInstallLine", listener: (e: { line: string }) => void): EventSubscription;
-};
+export type { CliNative };

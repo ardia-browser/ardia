@@ -33,6 +33,7 @@ namespace {
 
 constexpr base::TimeDelta kCloseFade = base::Milliseconds(100);
 constexpr base::TimeDelta kHideFade = base::Milliseconds(70);
+constexpr base::TimeDelta kSaveBoundsAfterMoves = base::Milliseconds(250);
 constexpr int kSeekButtonSize = 40;
 constexpr int kSeekButtonCenterOffset = 76;
 
@@ -63,7 +64,9 @@ ArdiaVideoOverlayWindow::ArdiaVideoOverlayWindow(
   hide_controls_timer_.Stop();
 }
 
-ArdiaVideoOverlayWindow::~ArdiaVideoOverlayWindow() = default;
+ArdiaVideoOverlayWindow::~ArdiaVideoOverlayWindow() {
+  SavePendingBounds();
+}
 
 void ArdiaVideoOverlayWindow::SetUpViews() {
   VideoOverlayWindowViews::SetUpViews();
@@ -304,6 +307,7 @@ void ArdiaVideoOverlayWindow::ShowInactive() {
 }
 
 void ArdiaVideoOverlayWindow::Hide() {
+  SavePendingBounds();
   RemoveOverlayViewIfExists();
   if (fade_animator_) {
     fade_animator_->CancelAndReset();
@@ -353,6 +357,7 @@ void ArdiaVideoOverlayWindow::HideIdleControlsUnlessPointerOnControl() {
 }
 
 void ArdiaVideoOverlayWindow::OnNativeWidgetDestroyed() {
+  SavePendingBounds();
   views::Widget::OnNativeWidgetDestroyed();
   const bool should_pause_video = false;
   controller_->OnWindowDestroyed(should_pause_video);
@@ -372,7 +377,19 @@ void ArdiaVideoOverlayWindow::OnNativeWidgetSizeChanged(
 void ArdiaVideoOverlayWindow::MaybeSaveBounds() {
   if (has_been_shown_ && !is_tucking_forced_ && views::Widget::IsVisible() &&
       !ac_hide_timer_.IsRunning()) {
-    SaveArdiaPictureInPictureBounds(GetBounds());
+    ac_pending_bounds_ = GetBounds();
+    ac_save_bounds_timer_.Start(
+        FROM_HERE, kSaveBoundsAfterMoves,
+        base::BindOnce(&ArdiaVideoOverlayWindow::SavePendingBounds,
+                       base::Unretained(this)));
+  }
+}
+
+void ArdiaVideoOverlayWindow::SavePendingBounds() {
+  ac_save_bounds_timer_.Stop();
+  if (const std::optional<gfx::Rect> bounds =
+          std::exchange(ac_pending_bounds_, std::nullopt)) {
+    SaveArdiaPictureInPictureBounds(*bounds);
   }
 }
 

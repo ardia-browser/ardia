@@ -1,5 +1,5 @@
 
-export type TextFragment = { prefix?: string; start: string; end?: string; suffix?: string };
+type TextFragment = { prefix?: string; start: string; end?: string; suffix?: string };
 
 export type SelectionContext = {
   selected: string;

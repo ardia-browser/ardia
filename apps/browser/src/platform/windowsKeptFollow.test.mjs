@@ -285,7 +285,7 @@ test("a pop-up that opens focused follows its page through the same rule: kept u
   await settle();
   assert.deepEqual(followed("kf-popup-page"), followedOnce("kf-popup-page"));
   later = 0;
-  const popup = readFileSync(new URL("../../../../packages/expo-windows/src/engine/PopupWindow.tsx", import.meta.url), "utf8");
+  const popup = readFileSync(new URL("../../../../packages/expo-windows/src/engine/PopupWindow.tsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   assert.match(popup, /return void \(popup\.focused \? followPage\(pageKey, windowId\) : undefined\);/, "the pop-up asks through followPage, not a timed focus call");
   await unmountAll();
 });
@@ -307,10 +307,10 @@ test("a tab moved to another window: its page still showing in the old window do
 });
 
 test("no follow waits on the show timer: followPage either calls a page showing in that window, or keeps the ask", () => {
-  const pages = readFileSync(new URL("../../../../packages/expo-windows/src/engine/pages.ts", import.meta.url), "utf8");
+  const pages = readFileSync(new URL("../../../../packages/expo-windows/src/engine/pages.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   assert.match(pages, /if \(page && !page\.closed && page\.show\?\.visible && page\.show === page\.showSent && \(!windowId \|\| page\.windowId === windowId\)\) return void callPage\(key, "focus", \{ follow: true \}\);\n  keepFollow\(key\);/);
   assert.match(pages, /function followNow\(page: Page\) \{\n  lastAskedToFocus = page;\n  page\.focusArgs = \{ follow: true \};\n\}/, "a spent kept ask sets no show-wait time");
-  const follows = readFileSync(new URL("../state/focus/keyboardFollows.ts", import.meta.url), "utf8");
+  const follows = readFileSync(new URL("../state/focus/keyboardFollows.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   assert.match(follows, /follow\(shown, windowId\)/);
   assert.match(follows, /follow\(peek, windowId\)/);
 });
@@ -380,7 +380,7 @@ test("a focus the page takes once it shows, refused by the engine, is logged ins
 });
 
 test("the counts reach the hourly usage event, and What's Sent names them", () => {
-  const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   assert.match(source("../../../../packages/expo-windows/src/engine/modules.ts"), /takeKeptFollows: \(\) => takeKeptFollows\(\),/);
   assert.match(source("../state/telemetry/keyboardFollowCounts.ts"), /keyboard_follows_kept: kept, keyboard_follows_used: used, keyboard_follows_dropped: dropped/);
   assert.match(source("../state/telemetry/hourlyExtras.ts"), /\.\.\.takeKeyboardFollowCounts\(\)/);

@@ -73,22 +73,58 @@ extension WebKitPageScript {
   if (!proto) return;
   const handlers = new Map();
   let position = null;
+  let microphoneActive = null;
+  let cameraActive = null;
+  let micSeq = 0;
+  let cameraSeq = 0;
   let samples = 0;
   const notify = () => {
     try {
-      apply(dispatch, doc, [new Custom("ardia:media-session", { detail: stringify({ actions: Array.from(handlers.keys()), position }) })]);
+      apply(dispatch, doc, [new Custom("ardia:media-session", { detail: stringify({ actions: Array.from(handlers.keys()), position, microphoneActive, cameraActive }) })]);
     } catch (e) {}
   };
   if (typeof proto.setActionHandler === "function") {
     proto.setActionHandler = asNative(proto.setActionHandler, (setActionHandler, self, args) => {
       const result = apply(setActionHandler, self, args);
       const [action, handler] = args;
-      if (typeof handler === "function") handlers.set(String(action), handler);
-      else handlers.delete(String(action));
+      const name = String(action);
+      if (typeof handler === "function") handlers.set(name, handler);
+      else {
+        handlers.delete(name);
+        if (name === "togglemicrophone") {
+          micSeq++;
+          microphoneActive = null;
+        } else if (name === "togglecamera") {
+          cameraSeq++;
+          cameraActive = null;
+        }
+      }
       notify();
       return result;
     });
   }
+  const wrapActiveState = (name, nextSeq, isCurrent, set) => {
+    if (typeof proto[name] !== "function") return;
+    proto[name] = asNative(proto[name], (native, self, args) => {
+      const result = apply(native, self, args);
+      if (self !== session || args.length < 1) return result;
+      const seq = nextSeq();
+      const next = Boolean(args[0]);
+      const commit = () => {
+        if (!isCurrent(seq)) return;
+        set(next);
+        notify();
+      };
+      if (result instanceof NativePromise) {
+        try {
+          apply(then, result, [commit, noop]);
+        } catch (e) {}
+      } else commit();
+      return result;
+    });
+  };
+  wrapActiveState("setMicrophoneActive", () => ++micSeq, (seq) => seq === micSeq, (value) => (microphoneActive = value));
+  wrapActiveState("setCameraActive", () => ++cameraSeq, (seq) => seq === cameraSeq, (value) => (cameraActive = value));
   if (typeof proto.setPositionState === "function") {
     proto.setPositionState = asNative(proto.setPositionState, (setPositionState, self, args) => {
       const result = apply(setPositionState, self, args);

@@ -23,6 +23,12 @@ bool Finite(NSDictionary *d, NSString *key, double *out) {
   return true;
 }
 
+NSNumber *OptionalBool(NSDictionary *d, NSString *key) {
+  NSNumber *n = Field<NSNumber>(d, key);
+  if (!n || CFGetTypeID((__bridge CFTypeRef)n) != CFBooleanGetTypeID()) return nil;
+  return @([n boolValue]);
+}
+
 NSDictionary *Sanitized(NSDictionary *d, BOOL main) {
   NSString *state = Field<NSString>(d, @"playbackState");
   if (![@[ @"none", @"paused", @"playing" ] containsObject:state]) state = @"none";
@@ -48,6 +54,8 @@ NSDictionary *Sanitized(NSDictionary *d, BOOL main) {
     @"actions" : actions,
     @"controllable" : @([Field<NSNumber>(d, @"controllable") boolValue]),
     @"loop" : @([Field<NSNumber>(d, @"loop") boolValue]),
+    @"microphoneActive" : OptionalBool(d, @"microphoneActive") ?: NSNull.null,
+    @"cameraActive" : OptionalBool(d, @"cameraActive") ?: NSNull.null,
   };
 }
 

@@ -12,6 +12,8 @@ let sidebarPlayerFromOtherProfile = 0;
 let loopRestarts = 0;
 let rewinds = 0;
 let pastEnd = 0;
+let micToggles = 0;
+let cameraToggles = 0;
 
 export function sidebarPlayerOpenCounter() {
   let shownOpen = false;
@@ -35,6 +37,11 @@ export const noteSidebarPlayerFromOtherProfile = () => void sidebarPlayerFromOth
 
 export const noteNowPlayingLoopRestart = () => void loopRestarts++;
 
+export function noteMediaCardCallToggle(kind: "mic" | "camera") {
+  if (kind === "mic") micToggles++;
+  else cameraToggles++;
+}
+
 export function noteMediaPositionReport(before: PositionReport | undefined, report: PositionReport) {
   if (before?.playbackState !== "playing") return;
   const extrapolated = before.position + ((report.timestamp - before.timestamp) / 1000) * (before.playbackRate || 1);
@@ -43,12 +50,24 @@ export function noteMediaPositionReport(before: PositionReport | undefined, repo
 }
 
 export function takeMediaCardCounts() {
-  const taken = { sidebar_player_expands: sidebarPlayerExpands, sidebar_player_reopens: sidebarPlayerReopens, sidebar_player_from_other_profile: sidebarPlayerFromOtherProfile, now_playing_loop_restarts: loopRestarts, media_position_rewinds: rewinds, media_reports_past_end: pastEnd, ...takeSharePreviewCounts() };
+  const taken = {
+    sidebar_player_expands: sidebarPlayerExpands,
+    sidebar_player_reopens: sidebarPlayerReopens,
+    sidebar_player_from_other_profile: sidebarPlayerFromOtherProfile,
+    now_playing_loop_restarts: loopRestarts,
+    media_position_rewinds: rewinds,
+    media_reports_past_end: pastEnd,
+    media_card_mic_toggles: micToggles,
+    media_card_camera_toggles: cameraToggles,
+    ...takeSharePreviewCounts(),
+  };
   sidebarPlayerExpands = 0;
   sidebarPlayerReopens = 0;
   sidebarPlayerFromOtherProfile = 0;
   loopRestarts = 0;
   rewinds = 0;
   pastEnd = 0;
+  micToggles = 0;
+  cameraToggles = 0;
   return taken;
 }

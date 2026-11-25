@@ -211,6 +211,8 @@
   const actions = new Map();
   let positionState = null;
   let timeline = null;
+  let microphoneActive = null;
+  let cameraActive = null;
   const listening = new WeakSet();
   const LISTEN_TRIES = 20;
   const playingUnmuted = (m) => !m.paused && !m.ended && !m.muted && m.volume > 0;
@@ -289,6 +291,8 @@
         actions: [...actions.keys()],
         controllable: !!el && heard.has(el) && (sessionState !== "none" || !oneShot(el)),
         loop: !positionState && !!el && el.loop,
+        microphoneActive,
+        cameraActive,
       };
       if (!state.title && !el) state = null;
     }
@@ -375,6 +379,8 @@
     };
     wrapSetter("metadata");
     wrapSetter("playbackState", () => timeline && restartTimelineClock(clockPosition(timeline.playbackRate, timeline.clock, performance.now())));
+    let micSeq = 0;
+    let cameraSeq = 0;
     const setActionHandler = proto.setActionHandler;
     proto.setActionHandler = function (action, handler) {
       if (action === "enterpictureinpicture") {
@@ -382,11 +388,44 @@
         if (pipTrace) send("pipTrace", { event: "setActionHandler", action, set: pipHandlerSet });
       }
       const result = setActionHandler.apply(this, arguments);
-      if (handler) actions.set(action, handler);
-      else actions.delete(action);
+      const name = String(action);
+      if (typeof handler === "function") actions.set(name, handler);
+      else {
+        actions.delete(name);
+        if (name === "togglemicrophone") {
+          micSeq++;
+          microphoneActive = null;
+        } else if (name === "togglecamera") {
+          cameraSeq++;
+          cameraActive = null;
+        }
+      }
       reportNowPlaying();
       return result;
     };
+    const PromiseType = Promise;
+    const promiseThen = Promise.prototype.then;
+    const ignore = () => {};
+    const wrapActiveState = (name, nextSeq, isCurrent, set) => {
+      const native = proto[name];
+      if (typeof native !== "function") return;
+      proto[name] = asNative(native, (target, self, args) => {
+        const result = apply(target, self, args);
+        if (self !== session || args.length < 1) return result;
+        const seq = nextSeq();
+        const next = Boolean(args[0]);
+        const commit = () => {
+          if (!isCurrent(seq)) return;
+          set(next);
+          reportNowPlaying();
+        };
+        if (result instanceof PromiseType) guard(() => apply(promiseThen, result, [commit, ignore]))();
+        else commit();
+        return result;
+      });
+    };
+    wrapActiveState("setMicrophoneActive", () => ++micSeq, (seq) => seq === micSeq, (value) => (microphoneActive = value));
+    wrapActiveState("setCameraActive", () => ++cameraSeq, (seq) => seq === cameraSeq, (value) => (cameraActive = value));
     const setPositionState = proto.setPositionState;
     proto.setPositionState = function (state) {
       const result = setPositionState.apply(this, arguments);
@@ -501,6 +540,12 @@
         break;
       case "enterpictureinpicture":
         call("enterpictureinpicture");
+        break;
+      case "toggleMicrophone":
+        call("togglemicrophone");
+        break;
+      case "toggleCamera":
+        call("togglecamera");
         break;
     }
     lastNowPlaying = null;

@@ -40,8 +40,10 @@ export type NowPlaying = {
   actions: string[];
   controllable: boolean;
   loop?: boolean;
+  microphoneActive?: boolean | null;
+  cameraActive?: boolean | null;
 };
-export type MediaCommand = "play" | "pause" | "toggle" | "next" | "previous" | "seekBy" | "seekTo" | "stop";
+export type MediaCommand = "play" | "pause" | "toggle" | "next" | "previous" | "seekBy" | "seekTo" | "stop" | "toggleMicrophone" | "toggleCamera";
 export type MediaAccess = { camera: boolean; microphone: boolean; screen: boolean };
 
 type OpenDisposition = "foreground" | "background" | "window" | "popup" | "incognito" | "current" | "split" | "peek";

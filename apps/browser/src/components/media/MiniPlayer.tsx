@@ -2,15 +2,18 @@ import { Dot, Symbol, Text, useHover } from "../ui";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Image, Pressable, View, type GestureResponderEvent, type TextStyle } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
-import { hex } from "../ui/theme";
+import { hex, useTheme } from "../ui/theme";
 import { buttonMotion, duration as motionDuration, usePressScaleMotion } from "../ui/motion";
 import { font, ink, radius, space, weight } from "../ui/tokens";
 import { useTab } from "../../state/browser/hooks";
 import { useMuteState } from "../../state/tabs/hooks";
+import { muteTitle } from "../../state/tabs/mute";
+import { usePage } from "../../state/tabs/pageState";
 import { Favicon } from "../favicon/Favicon";
 import { useArtwork } from "../../state/media/artwork";
 import { useMarqueeGroup, Marquee } from "./Marquee";
-import { formatTime, hasTrackControls, isPlaying, mediaCommand, positionOf, seekTo, skipOrTrack, transportIcons, useSession, useTicker, type Session } from "../../state/media/media";
+import { formatTime, isPlaying, mediaCommand, positionOf, seekTo, skipOrTrack, transportIcons, useSession, useTicker, type Session } from "../../state/media/media";
+import { playerControlsFor, toggleCallControl } from "../../state/media/playerControls";
 import { hostOf } from "@ardia/core";
 import { ART_HOVER_SCRIM, useMediaTokens, type MediaTokens } from "./tokens";
 
@@ -22,8 +25,10 @@ const TEXT_X = INSET + ART + 12;
 const CONTROLS_WIDTH = 88;
 
 export function MiniPlayer({ tabId, onBackToTab }: { tabId: string; onBackToTab: () => void }) {
+  const theme = useTheme();
   const tokens = useMediaTokens();
   const session = useSession(tabId);
+  const mediaAccess = usePage(tabId, (p) => p.mediaAccess);
   const tab = useTab(tabId);
   const mute = useMuteState(tabId);
   const playing = isPlaying(session);
@@ -33,7 +38,7 @@ export function MiniPlayer({ tabId, onBackToTab }: { tabId: string; onBackToTab:
   const width = MINI_PLAYER_WIDTH;
   const textWidth = width - TEXT_X - CONTROLS_WIDTH - 8 - INSET;
   const controlsX = width - INSET - CONTROLS_WIDTH;
-  const tracks = hasTrackControls(session);
+  const controls = playerControlsFor(session, mediaAccess);
   const icons = transportIcons(session);
   const artist = session.artist || hostOf(tab.url);
   const title = session.title || tab.title;
@@ -48,33 +53,78 @@ export function MiniPlayer({ tabId, onBackToTab }: { tabId: string; onBackToTab:
         <Marquee id="artist" text={artist} group={group} height={16} background={tokens.backgroundRgb} style={{ ...font.caption, color: tokens.secondary }} />
       </View>
 
-      <TransportButton
-        left={controlsX}
-        width={16}
-        icon={icons.back}
-        size={tracks ? 14 : 15}
-        tooltip={icons.backTip}
-        tokens={tokens}
-        onPress={() => skipOrTrack(tabId, session, "back")}
-      />
-      <TransportButton
-        left={controlsX + 32}
-        width={24}
-        icon={playing ? "pause.fill" : "play.fill"}
-        size={24}
-        tooltip={playing ? "Pause" : "Play"}
-        tokens={tokens}
-        onPress={() => mediaCommand(tabId, "toggle")}
-      />
-      <TransportButton
-        left={controlsX + 72}
-        width={16}
-        icon={icons.ahead}
-        size={tracks ? 14 : 15}
-        tooltip={icons.aheadTip}
-        tokens={tokens}
-        onPress={() => skipOrTrack(tabId, session, "ahead")}
-      />
+      {controls.kind === "call" ? (
+        controls.controls.length === 2 ? (
+          controls.controls.map((control, i) => (
+            <TransportButton
+              key={control.kind}
+              left={controlsX + (i === 0 ? 12 : 56)}
+              width={20}
+              icon={control.icon}
+              size={17}
+              tooltip={control.tooltip}
+              color={control.active ? undefined : theme.destructive}
+              tokens={tokens}
+              onPress={() => toggleCallControl(tabId, control.kind)}
+            />
+          ))
+        ) : controls.controls.length === 1 ? (
+          <TransportButton
+            left={controlsX + 32}
+            width={24}
+            icon={controls.controls[0]!.icon}
+            size={18}
+            tooltip={controls.controls[0]!.tooltip}
+            color={controls.controls[0]!.active ? undefined : theme.destructive}
+            tokens={tokens}
+            onPress={() => toggleCallControl(tabId, controls.controls[0]!.kind)}
+          />
+        ) : (
+          <TransportButton
+            left={controlsX + 32}
+            width={24}
+            icon={mute ? "speaker.slash.fill" : "speaker.wave.2.fill"}
+            size={17}
+            tooltip={muteTitle(mute)}
+            tokens={tokens}
+            onPress={() => toggleMute(tabId)}
+          />
+        )
+      ) : (
+        <>
+          {controls.canSkip ? (
+            <TransportButton
+              left={controlsX}
+              width={16}
+              icon={icons.back}
+              size={controls.tracks ? 14 : 15}
+              tooltip={icons.backTip}
+              tokens={tokens}
+              onPress={() => skipOrTrack(tabId, session, "back")}
+            />
+          ) : null}
+          <TransportButton
+            left={controlsX + 32}
+            width={24}
+            icon={playing ? "pause.fill" : "play.fill"}
+            size={24}
+            tooltip={playing ? "Pause" : "Play"}
+            tokens={tokens}
+            onPress={() => mediaCommand(tabId, "toggle")}
+          />
+          {controls.canSkip ? (
+            <TransportButton
+              left={controlsX + 72}
+              width={16}
+              icon={icons.ahead}
+              size={controls.tracks ? 14 : 15}
+              tooltip={icons.aheadTip}
+              tokens={tokens}
+              onPress={() => skipOrTrack(tabId, session, "ahead")}
+            />
+          ) : null}
+        </>
+      )}
 
       <View style={{ position: "absolute", left: TEXT_X, right: INSET, top: 50, height: 18 }}>
         <TimeBar tabId={tabId} session={session} tokens={tokens} />
@@ -89,6 +139,7 @@ function TransportButton({
   icon,
   size,
   tooltip,
+  color,
   tokens,
   onPress,
 }: {
@@ -97,6 +148,7 @@ function TransportButton({
   icon: string;
   size: number;
   tooltip: string;
+  color?: string;
   tokens: MediaTokens;
   onPress: () => void;
 }) {
@@ -107,9 +159,9 @@ function TransportButton({
     <View {...hoverProps} tooltip={tooltip} style={{ position: "absolute", left: left - (box - width) / 2, top: 9, width: box, height: 38 }}>
       <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
         {({ pressed }) => (
-          <View style={{ width: box, height: 38, alignItems: "center", justifyContent: "center", opacity: hovered ? (pressed ? 0.82 : 1) : 0.6 }}>
+          <View style={{ width: box, height: 38, alignItems: "center", justifyContent: "center", opacity: hovered ? (pressed ? 0.82 : 1) : color ? 1 : 0.6 }}>
             <Animated.View pointerEvents="none" style={pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined}>
-              <Symbol name={icon} size={size} color={hex(tokens.label)} style={{ width: box, height: 38 }} />
+              <Symbol name={icon} size={size} color={color ?? hex(tokens.label)} style={{ width: box, height: 38 }} />
             </Animated.View>
           </View>
         )}

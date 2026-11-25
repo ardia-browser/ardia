@@ -94,15 +94,29 @@ void DialogHostObserverRemoved() {
 }
 
 ACTabDialogHost::ACTabDialogHost(content::WebContents* contents)
-    : content::WebContentsUserData<ACTabDialogHost>(*contents) {}
+    : content::WebContentsObserver(contents),
+      content::WebContentsUserData<ACTabDialogHost>(*contents) {}
 
 ACTabDialogHost::~ACTabDialogHost() {
+  NotifyHostDestroying();
+}
+
+void ACTabDialogHost::WebContentsDestroyed() {
+  NotifyHostDestroying();
+}
+
+void ACTabDialogHost::NotifyHostDestroying() {
+  if (destroying_) {
+    return;
+  }
+  destroying_ = true;
   for (auto& observer : observers_) {
     observer.OnHostDestroying();
   }
   for ([[maybe_unused]] auto& observer : observers_) {
     DialogHostObserverRemoved();
   }
+  observers_.Clear();
 }
 
 WindowHost* ACTabDialogHost::window_host() const {
@@ -141,7 +155,7 @@ gfx::Size ACTabDialogHost::GetMaximumDialogSize() {
 }
 
 void ACTabDialogHost::AddObserver(web_modal::ModalDialogHostObserver* observer) {
-  if (observers_.HasObserver(observer)) {
+  if (destroying_ || observers_.HasObserver(observer)) {
     return;
   }
   observers_.AddObserver(observer);

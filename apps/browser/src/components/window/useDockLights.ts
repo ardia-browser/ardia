@@ -21,14 +21,21 @@ export function useTopStripLights(windowId: string, dock: Animated.Value, on: bo
 
 type SidebarLights = { width: number; moving: boolean; peeking: boolean; fullscreen: boolean; lights: readonly [number, number]; right: boolean; peekAt: { left: number; top: number } };
 
-export function useSidebarLights(windowId: string, dock: Animated.Value, slide: Animated.Value, o: SidebarLights, onSlide: (value: number) => void = () => {}) {
+export function useSidebarLights(
+  windowId: string,
+  dock: Animated.Value,
+  slide: Animated.Value,
+  o: SidebarLights,
+  onSlide: (value: number) => void = () => {},
+  liveWidth?: Animated.Value,
+) {
   const latestOnSlide = useRef(onSlide);
   latestOnSlide.current = onSlide;
   const values = useRef({ dock: 1, slide: 0 });
   const apply = useRef<() => void>(() => {});
   const sent = useRef<ReturnType<typeof slidingCenter> | undefined>(undefined);
   apply.current = () => {
-    const center = slidingCenter(o, values.current.dock, values.current.slide);
+    const center = slidingCenter(o, values.current.dock, values.current.slide, liveWidth && currentValue(liveWidth));
     const last = sent.current;
     if ((last && last.join(",") === center.join(",")) || stillOffWindow(last, center)) return;
     sent.current = center;
@@ -48,6 +55,11 @@ export function useSidebarLights(windowId: string, dock: Animated.Value, slide: 
     };
   }, [windowId, dock]);
   useEffect(() => {
+    if (!liveWidth) return;
+    const c = liveWidth.addListener(() => apply.current());
+    return () => liveWidth.removeListener(c);
+  }, [liveWidth]);
+  useEffect(() => {
     if (!o.peeking) return;
     const b = slide.addListener(({ value }) => {
       values.current.slide = value;
@@ -62,7 +74,7 @@ export function useSidebarLights(windowId: string, dock: Animated.Value, slide: 
   useEffect(() => apply.current(), [o.width, o.peeking, o.fullscreen, o.lights, o.right, o.peekAt.left, o.peekAt.top]);
 }
 
-export function slidingCenter(o: SidebarLights, dock: number, slide: number) {
+export function slidingCenter(o: SidebarLights, dock: number, slide: number, edgeWidth: number = o.width) {
   const offset = o.fullscreen ? 0 : o.peeking ? (o.width + 12) * (1 - slide) - o.peekAt.left : o.width * (1 - dock);
-  return sidebarLightsCenter(o.right && !o.fullscreen, o.width, offset, o.peeking && !o.fullscreen ? o.peekAt.top : 0, o.lights);
+  return sidebarLightsCenter(o.right && !o.fullscreen, edgeWidth, offset, o.peeking && !o.fullscreen ? o.peekAt.top : 0, o.lights);
 }

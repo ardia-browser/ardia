@@ -1,3 +1,5 @@
+import { useEffect, useLayoutEffect } from "react";
+import type { Animated } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
 import { activeTabId, isPinnedRow, tabTitle } from "../browser/model";
@@ -18,13 +20,20 @@ import { groupEntries, keptEntries, showsExtraTabs, sidebarEntries } from "./ent
 import { groupTabIds } from "./groupPanelRows";
 import { capture, type Capture } from "./listCapture";
 import { pinnedCollapsed, pinnedKept } from "./pinnedFold";
-import { useSidebarUi, type Hover } from "./sidebarUi";
+import { forgetLiveSidebarWidth, liveSidebarWidth, useSidebarUi, type Hover } from "./sidebarUi";
 import { useShownSidebarWidth } from "./shownWidth";
 
-export function useSidebarWidth(windowId: string): number {
-  const shown = useShownSidebarWidth(windowId);
-  const dragging = useSidebarUi((u) => u.dragWidth[windowId]);
-  return dragging ?? shown;
+export const useSidebarWidth = useShownSidebarWidth;
+
+export function useLiveSidebarWidth(windowId: string): { width: number; live: Animated.Value; resizing: boolean } {
+  const resizing = useSidebarUi((u) => windowId in u.resizing);
+  const width = useShownSidebarWidth(windowId);
+  const live = liveSidebarWidth(windowId, width);
+  useLayoutEffect(() => {
+    if (!resizing) live.setValue(width);
+  }, [live, resizing, width]);
+  useEffect(() => () => forgetLiveSidebarWidth(windowId), [windowId]);
+  return { width, live, resizing };
 }
 
 export const useDragGhostLabel = (folderName: string | undefined, groupId: string | undefined, tab: Tab | undefined) =>

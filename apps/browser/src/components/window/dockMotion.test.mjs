@@ -522,3 +522,25 @@ test("a peek's light moves that stay wholly off the window at one height aren't 
   assert.equal(dm.stillOffWindow([-60, 33, "right"], [-30, 33, "right"]), true);
   assert.equal(dm.stillOffWindow([-30, 33, "right"], [10, 33, "right"]), false);
 });
+
+test("a resize during a peek's slide-in keeps the lights on the panel: the slide travels the settled width, the live width only moves a right sidebar's anchor", async () => {
+  const { useSidebarLights } = await import("./useDockLights.ts");
+  for (const right of [false, true]) {
+    const id = `lights-${right}`;
+    stub.windows.open.set(id, {});
+    const dock = new Animated.Value(0);
+    const slide = new Animated.Value(0);
+    const live = new Animated.Value(320);
+    const o = { width: 240, moving: false, peeking: true, fullscreen: false, lights: dm.LIGHTS_CENTER, right, peekAt: DEFAULT_PEEK };
+    const lights = mount(() => useSidebarLights(id, dock, slide, o, undefined, live));
+    try {
+      slide.setValue(0.9);
+      const panelShift = (240 + 12) * (1 - 0.9);
+      const expected = dm.sidebarLightsCenter(right, 320, panelShift - DEFAULT_PEEK.left, DEFAULT_PEEK.top, dm.LIGHTS_CENTER);
+      const sent = stub.windows.open.get(id);
+      assert.deepEqual([sent.trafficLightsCenter, sent.trafficLightsTrailing], [[expected[0], expected[1]], right], `${right ? "right" : "left"}: lights at ${sent.trafficLightsCenter}, panel at ${expected}`);
+    } finally {
+      lights.unmount();
+    }
+  }
+});

@@ -1,4 +1,4 @@
-import type { View } from "react-native";
+import { Animated, type View } from "react-native";
 import { create } from "zustand";
 import { snappedToDevicePixels } from "../settings/interfaceScale";
 import { peekShown } from "../windows/dockMotion";
@@ -15,7 +15,7 @@ type SidebarUi = {
   hover: Hover | null;
   searchTabs: string | null;
   switcher: { windowId: string; ids: string[]; index: number; mounted: boolean; visible: boolean } | null;
-  dragWidth: Record<string, number>;
+  resizing: Record<string, true>;
 };
 
 export const useSidebarUi = create<SidebarUi>()(() => ({
@@ -25,18 +25,32 @@ export const useSidebarUi = create<SidebarUi>()(() => ({
   hover: null,
   searchTabs: null,
   switcher: null,
-  dragWidth: {},
+  resizing: {},
 }));
 
 export const sidebarUi = () => useSidebarUi.getState();
 export const setSidebarUi = (patch: Partial<SidebarUi>) => useSidebarUi.setState(patch);
 
+const liveWidths = new Map<string, Animated.Value>();
+
+export function liveSidebarWidth(windowId: string, initial = 0): Animated.Value {
+  let value = liveWidths.get(windowId);
+  if (!value) liveWidths.set(windowId, (value = new Animated.Value(initial)));
+  return value;
+}
+
+export const forgetLiveSidebarWidth = (windowId: string) => void liveWidths.delete(windowId);
+
 export function setLiveSidebarWidth(windowId: string, width: number | null) {
-  if (width !== null && !(windowId in useSidebarUi.getState().dragWidth) && peekShown(windowId)) noteSidebarPeekResize();
-  useSidebarUi.setState((u) => {
-    const { [windowId]: _, ...rest } = u.dragWidth;
-    return { dragWidth: width === null ? rest : { ...rest, [windowId]: snappedToDevicePixels(width) } };
-  });
+  const held = windowId in useSidebarUi.getState().resizing;
+  if (width === null) {
+    if (held) useSidebarUi.setState(({ resizing: { [windowId]: _, ...rest } }) => ({ resizing: rest }));
+    return;
+  }
+  liveSidebarWidth(windowId).setValue(snappedToDevicePixels(width));
+  if (held) return;
+  if (peekShown(windowId)) noteSidebarPeekResize();
+  useSidebarUi.setState((u) => ({ resizing: { ...u.resizing, [windowId]: true } }));
 }
 
 const rows = new Map<string, Map<string, View>>();

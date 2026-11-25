@@ -54,7 +54,7 @@ const SURFACES: Record<Surface, { open: (at: Where) => boolean; watch: Watch[] }
   rename: { open: (at) => sidebarUi().renaming?.windowId === at.windowId, watch: [onSidebarUi] },
   iconPicker: { open: (at) => sidebarUi().iconPicker?.windowId === at.windowId || profileIconPickerIn(at.windowId), watch: [onSidebarUi, onProfileIconPicker, onBrowser] },
   hoverCard: { open: (at) => sidebarUi().hover?.windowId === at.windowId && pointerOnCard(), watch: [onSidebarUi] },
-  resize: { open: (at) => at.windowId in sidebarUi().dragWidth, watch: [onSidebarUi] },
+  resize: { open: (at) => at.windowId in sidebarUi().resizing, watch: [onSidebarUi] },
   downloads: { open: (at) => !!browser().windowUi[at.windowId]?.downloadsOpen, watch: [onBrowser] },
   panel: { open: (at) => !!browser().windowUi[at.windowId]?.panel.open, watch: [onBrowser] },
   popover: { open: (at) => Object.entries(usePages.getState().popover).some(([id, open]) => !!open && at.tab(id)), watch: [onPages, onBrowser] },

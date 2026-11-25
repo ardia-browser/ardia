@@ -35,10 +35,12 @@ constexpr CFTimeInterval kTakeOverLendSeconds = 1;
   const BOOL heldFocus = [responder isKindOfClass:NSView.class] && [(NSView *)responder isDescendantOf:page];
   if (heldFocus) [window makeFirstResponder:nil];
   _standIn.lentTo = holder;
+  _standIn.lentAt = now;
   holder->_standIn.page = page;
   holder->_standIn.tab = _tab;
   holder->_standIn.lender = self;
   holder->_standIn.closes = NO;
+  holder->_standIn.lentAt = now;
   WithoutActions(^{
     page.frame = holder.bounds;
     if (covers) [holder addSubview:page positioned:NSWindowAbove relativeTo:nil];
@@ -80,6 +82,7 @@ constexpr CFTimeInterval kTakeOverLendSeconds = 1;
   _standIn.lender = nil;
   _standIn.closes = NO;
   _standIn.leaving = NO;
+  _standIn.lentAt = 0;
   _standIn.generation++;
 }
 

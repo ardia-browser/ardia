@@ -4,15 +4,15 @@ import { ClipView, ContextMenuArea, space, WindowDragRegion } from "../ui";
 import { useTheme } from "../ui/theme";
 import { useSidebarHighContrast } from "../../state/sidebar/textLook";
 import { TintInk } from "../ui/TintInk";
-import { useWindowId, useWindowProfileId } from "../../state/browser/hooks";
+import { useWindowId, useWindowSpaceId } from "../../state/browser/hooks";
 import { useHasDownloads, useNoTiles } from "../../state/sidebar/hooks";
 import { collapsedSidebarHeader, useAddressBarInSidebar, useDownloadsInSidebarFooter, usePageFrameInset, useSidebarCaptionRoom, useSidebarHeaderCollapsed, useToolbarLightsCenter } from "../../state/windows/layout";
 import { closeAnchoredWhenControlsRowChanges } from "../../state/sidebar/controlsRowChange";
 import { DownloadsButton } from "../downloads/DownloadsButton";
-import { profileIndicatorX, ProfileIndicator } from "../profiles/ProfileIndicator";
+import { profileIndicatorX, SpaceIndicator } from "../spaces/SpaceIndicator";
 import { useWindowChrome } from "../../state/windows/windowButtons";
-import { pagerFor, usePagerPages, useSettledProfile, type PagerPage } from "../../state/windows/profilePager";
-import { PROFILE_DOTS_HEIGHT, ProfileDots, useProfileDotsShown } from "../profiles/ProfileDots";
+import { pagerFor, usePagerPages, useSettledProfile, type PagerPage } from "../../state/windows/spacePager";
+import { SPACE_DOTS_HEIGHT, SpaceDots, useSpaceDotsShown } from "../spaces/SpaceDots";
 import { SidebarAddressRow, SidebarHeaderTools } from "./AddressBar";
 import { DragGhost } from "./DragGhost";
 import { EdgeGlow } from "./EdgeGlow";
@@ -39,7 +39,7 @@ export function Sidebar({ width }: { width: number }) {
   const windowId = useWindowId();
   const theme = useTheme();
   const strongText = useSidebarHighContrast();
-  const current = useWindowProfileId();
+  const current = useWindowSpaceId();
   const { pages, paging } = usePagerPages(windowId);
   const [available, setAvailable] = useState(0);
   const newTabAtTop = useNewTabAtTop();
@@ -60,10 +60,10 @@ export function Sidebar({ width }: { width: number }) {
   const downloadsShown = useSidebarPart("downloads");
   const hasDownloads = useHasDownloads(windowId) && downloadsShown;
   const profileShown = useSidebarPart("profile");
-  const dotsWanted = useProfileDotsShown();
+  const dotsWanted = useSpaceDotsShown();
   const dots = dotsWanted && profileShown;
   const footerDownloads = useDownloadsInSidebarFooter() && hasDownloads;
-  const band = dots || footerDownloads ? PROFILE_DOTS_HEIGHT : 0;
+  const band = dots || footerDownloads ? SPACE_DOTS_HEIGHT : 0;
   const fieldBand = field === "bottom" ? bottomFieldBand() : 0;
   const footer = band + fieldBand;
   const pinnedShown = useSidebarPart("pinned");
@@ -131,7 +131,7 @@ export function Sidebar({ width }: { width: number }) {
                 <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: footer }}>
                   <ContextMenuArea style={StyleSheet.absoluteFill} onContextMenu={() => void openSidebarMenu(windowId)} />
                   {field === "bottom" ? <SidebarAddressRow width={width} top={SIDEBAR_FIELD_BOTTOM.above} /> : null}
-                  {dots ? <View style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}><ProfileDots windowId={windowId} width={width} besideDownloads={footerDownloads} /></View> : null}
+                  {dots ? <View style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}><SpaceDots windowId={windowId} width={width} besideDownloads={footerDownloads} /></View> : null}
                   {footerDownloads ? (
                     <View style={{ position: "absolute", left: SIDEBAR_FOOTER_DOWNLOADS.left, bottom: SIDEBAR_FOOTER_DOWNLOADS.bottom }}>
                       <DownloadsButton windowId={windowId} />
@@ -151,7 +151,7 @@ export function Sidebar({ width }: { width: number }) {
                   </>
                 ) : collapsed ? null : (
                   <View pointerEvents="box-none" style={{ height: header, flexDirection: "row", alignItems: "flex-start", paddingLeft: indicatorX, paddingRight: HEADER_RIGHT + captionRoom, paddingTop: lightsY - 17 }}>
-                    <ProfileIndicator room={width - indicatorX - HEADER_RIGHT - captionRoom - (hasDownloads && !footerDownloads ? SIDEBAR_FOOTER_DOWNLOADS.size + 2 : 0)} profileShown={profileShown} />
+                    <SpaceIndicator room={width - indicatorX - HEADER_RIGHT - captionRoom - (hasDownloads && !footerDownloads ? SIDEBAR_FOOTER_DOWNLOADS.size + 2 : 0)} profileShown={profileShown} />
                     <View pointerEvents="none" style={{ flex: 1 }} />
                     {hasDownloads && !footerDownloads ? <DownloadsButton windowId={windowId} /> : null}
                   </View>
@@ -233,7 +233,7 @@ const SidebarPages = memo(function SidebarPages({ windowId, pages, paging, width
       {pages.map((page) => (
         <SidebarPage
           key={page.id}
-          profileId={page.id}
+          spaceId={page.id}
           slot={page.slot}
           paging={paging}
           width={width}

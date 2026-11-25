@@ -64,7 +64,6 @@ const EXPECTED = [
   ["components/pages/DownloadsPage.tsx", ["title=\"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
   ["state/downloads/downloadMenu.ts", ["title: \"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
   ["state/bookmarks/exportHtml.ts", ["title: \"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
-  ["state/browser/actions.ts", ["stay installed on this computer, turned off."], ["on this ${PLATFORM_TERMS.computer}"]],
   ["state/onboarding/tour.ts", ["Ctrl+S hides the sidebar.", "press Super+Shift+=.", "Settings (Ctrl+,)."], ["menu bar", "⌘"]],
   ["state/presets/setupCode.ts", ["Appearance follows your desktop", "Ctrl+T opens the command bar"], ["your ${PLATFORM_TERMS.computer}", "⌘T"]],
   ["state/releaseNotes/releaseNotes.ts", ["from any page with Ctrl+L."], ["⌘L"]],
@@ -107,7 +106,7 @@ test("the reworded copy says what Linux does and drops what it can't do", () => 
 test("search rows describing reworded panes read as Linux too", () => {
   const general = linuxCopy("components/settings/rows/generalRows.ts");
   const rows = read("components/settings/rows/generalRows.ts");
-  assert.match(section(rows, "        sync: {", "section: \"Updates\""), /\bmacs\b|icloud/);
+  assert.match(section(rows, "        sync: {", "section: \"Updates\""), /PLATFORM_TERMS\.cloudDrive/);
   assert.doesNotMatch(section(general, "        sync: {", "section: \"Updates\""), /\bMacs?\b|icloud/i);
   const profile = read("components/settings/rows/profileRows.ts");
   assert.match(section(profile, "section: \"Passwords and autofill\"", "savedCards: {"), /keychain|PLATFORM_TERMS\.deviceUnlock/);

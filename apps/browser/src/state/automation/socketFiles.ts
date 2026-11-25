@@ -16,12 +16,12 @@ const armOptions = (params: Record<string, unknown>) => ({
 
 function armUpload(params: Record<string, unknown>, call: SocketCall) {
   const tab = tabOf(params.tab);
-  return armFiles({ kind: "upload", tab: tab.id, profileId: tab.profileId, paths: params.paths as string[], ...armOptions(params) }, call);
+  return armFiles({ kind: "upload", tab: tab.id, profileId: tab.spaceId, paths: params.paths as string[], ...armOptions(params) }, call);
 }
 
 function armDownload(params: Record<string, unknown>, call: SocketCall) {
   const tab = params.tab !== undefined ? tabOf(params.tab) : null;
-  return armFiles({ kind: "download", tab: tab?.id ?? null, profileId: tab?.profileId ?? null, paths: [params.path as string], ...armOptions(params) }, call);
+  return armFiles({ kind: "download", tab: tab?.id ?? null, profileId: tab?.spaceId ?? null, paths: [params.path as string], ...armOptions(params) }, call);
 }
 
 const ARM_RESULT = "{arm, kind, tab, paths | path, folder?, once, state, reason?, armedAt, expiresAt, answered, chosen?, downloads?}";

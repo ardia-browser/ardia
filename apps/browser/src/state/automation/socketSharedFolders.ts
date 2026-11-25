@@ -1,4 +1,4 @@
-import { isIncognitoProfile, pinKeyOf } from "../browser/model";
+import { isIncognitoSpace, pinKeyOf } from "../browser/model";
 import type { TabGroup } from "../browser/types";
 import { groupLabel } from "../pins/tabGrouping";
 import { fileUrlOf } from "../sharedFolders/actions";
@@ -11,16 +11,16 @@ import { now } from "./socketTargets";
 
 const linkCount = (base: BaseEntry[]): number => base.reduce((n, b) => n + (b.kind === "link" ? 1 : linkCount(b.children)), 0);
 
-function groupsFor(profileId: string, key: string): TabGroup[] {
+function groupsFor(spaceId: string, key: string): TabGroup[] {
   const s = now();
-  return Object.values(s.groups).filter((g) => g.profileId === profileId && g.pinned && !g.parentId && pinKeyOf(g) === key && eligibleKind(s, g.windowId) === "normal");
+  return Object.values(s.groups).filter((g) => g.spaceId === spaceId && g.pinned && !g.parentId && pinKeyOf(g) === key && eligibleKind(s, g.windowId) === "normal");
 }
 
-function row(profileId: string, key: string, folder: SharedFolder) {
-  const groups = groupsFor(profileId, key);
-  const sync = useSharedFolders.getState().sync[folderRef(profileId, key)];
+function row(spaceId: string, key: string, folder: SharedFolder) {
+  const groups = groupsFor(spaceId, key);
+  const sync = useSharedFolders.getState().sync[folderRef(spaceId, key)];
   return {
-    profile: profileId,
+    profile: spaceId,
     key,
     groups: groups.map((g) => g.id),
     name: groups[0] ? groupLabel(now(), groups[0]) : (folder.path.split("/").filter(Boolean).at(-1) ?? ""),
@@ -36,8 +36,8 @@ function row(profileId: string, key: string, folder: SharedFolder) {
 
 function list() {
   return boundFolders()
-    .filter(({ profileId }) => !isIncognitoProfile(profileId) && !!now().profiles[profileId])
-    .map(({ profileId, key, folder }) => row(profileId, key, folder));
+    .filter(({ profileId: spaceId }) => !isIncognitoSpace(spaceId) && !!now().spaces[spaceId])
+    .map(({ profileId: spaceId, key, folder }) => row(spaceId, key, folder));
 }
 
 const ROW = "{profile, key, groups, name, path, url, links, state, waiting, error, addedAt}";

@@ -60,7 +60,7 @@ export const COMMAND_INTERACTION: Readonly<Record<BrowserCommand, CommandInterac
   togglePin: "quiet",
   togglePinnedRow: "quiet",
   duplicateTab: "quiet",
-  moveTabToProfile: "interactive",
+  moveTabToSpace: "interactive",
   moveTabToWindow: "quiet",
   bookmarkPage: "interactive",
   addBookmarkToFolder: "interactive",
@@ -72,10 +72,10 @@ export const COMMAND_INTERACTION: Readonly<Record<BrowserCommand, CommandInterac
   toggleReader: "quiet",
   downloads: "quiet",
   mergeAllWindows: "quiet",
-  switchProfile: "quiet",
-  nextProfile: "quiet",
-  previousProfile: "quiet",
-  newProfile: "interactive",
+  switchSpace: "quiet",
+  nextSpace: "quiet",
+  previousSpace: "quiet",
+  newSpace: "interactive",
   openSettings: "quiet",
   importBrowserData: "quiet",
   showHistory: "quiet",
@@ -118,7 +118,7 @@ export const COMMAND_INTERACTION: Readonly<Record<BrowserCommand, CommandInterac
   moveTabDown: "quiet",
   moveTabUp: "quiet",
   closeTabGroup: "asksWhen",
-  openProfileMenu: "interactive",
+  openSpaceMenu: "interactive",
 };
 
 export const KEY_REPEAT_IGNORED_COMMANDS: ReadonlySet<string> = new Set(["focusCommandBar"]);

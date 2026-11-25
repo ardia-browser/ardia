@@ -29,7 +29,7 @@ import { useDeveloperMode } from "../../state/site/developerMode";
 import { PluginPageBar } from "../plugins/PluginPageBar";
 import type { PageBarMatch } from "../../state/plugins/pageBar";
 import { PageOverlays } from "./PageOverlays";
-import { useProfileTheme } from "./ThemeScope";
+import { useSpaceTheme } from "./ThemeScope";
 import { markNewTabPane } from "../../state/omnibox/newTabMarks";
 import { useNewTabKeptForPage } from "../../state/tabs/newTabKeep";
 import { continuousCorners } from "../ui";
@@ -92,7 +92,7 @@ export const TabPane = memo(function TabPane({
   const visible = !!rect;
   const live = visible || !!warm;
   const own = useTabValue(tabId, paneTab, shallowEqual);
-  const theme = useProfileTheme(own.profileId);
+  const theme = useSpaceTheme(own.spaceId);
   const isNewTab = !own.url;
   const emptyCard = isNewTab && newTabCard;
   const newTabShown = useStoreWhile(usePages, live, (s) => !!s.pages[tabId]?.newTabShown);
@@ -195,4 +195,4 @@ export const TabPane = memo(function TabPane({
   );
 });
 
-const paneTab = (t: Tab | undefined) => ({ exists: !!t, url: t?.url ?? "", profileId: t?.profileId ?? "", appPage: !!t && isInternalTab(t) });
+const paneTab = (t: Tab | undefined) => ({ exists: !!t, url: t?.url ?? "", spaceId: t?.spaceId ?? "", appPage: !!t && isInternalTab(t) });

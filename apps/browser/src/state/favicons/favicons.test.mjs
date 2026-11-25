@@ -8,12 +8,12 @@ globalThis.__DEV__ = false;
 
 const native = import.meta.resolve("../../platform/favicons.ts");
 const stub = `export * from ${JSON.stringify(native)};
-export const faviconsFor = (profile, pages) => globalThis.faviconsForTest(profile, pages);
+export const faviconsFor = (space, pages) => globalThis.faviconsForTest(space, pages);
 export const peekFavicons = (profile, pages) => (globalThis.peekFaviconsForTest ?? globalThis.faviconsForTest)(profile, pages);
 export const storeFavicon = (...args) => (globalThis.storedFavicons.push(args), Promise.resolve({ stored: true }));
 export const iconAccent = (uri) => (globalThis.iconAccentForTest ? globalThis.iconAccentForTest(uri) : Promise.resolve(null));
 export const iconTheme = (request) => (globalThis.iconThemeForTest ? globalThis.iconThemeForTest(request) : Promise.resolve(null));
-export const fetchFavicon = (src, profile) => (globalThis.fetchFaviconForTest ? globalThis.fetchFaviconForTest(src, profile) : Promise.resolve(null));`;
+export const fetchFavicon = (src, space) => (globalThis.fetchFaviconForTest ? globalThis.fetchFaviconForTest(src, space) : Promise.resolve(null));`;
 const historyStub = `export * from ${JSON.stringify(import.meta.resolve("../../platform/history.ts"))};
 export const onHistoryChanged = (listener) => ((globalThis.historyListeners ??= new Set()).add(listener), { remove: () => globalThis.historyListeners.delete(listener) });`;
 registerHooks({
@@ -33,7 +33,7 @@ const { openProfile, useProfileLoading } = await import("../profiles/profileLoad
 const { seedFavicons } = await import("./launchFavicons.ts");
 const { adoptIconPage, dropOutlivedFavicon, noteIconPage } = await import("./iconPage.ts");
 const { useBrowser } = await import("../browser/store.ts");
-const { engineProfile } = await import("../browser/model.ts");
+const { engineProfile, engineProfileForSpace } = await import("../browser/model.ts");
 const { webviews } = await import("../../platform/webviews.ts");
 const { askFaviconAccent, useFaviconAccent, useFaviconAccents } = await import("./faviconAccent.ts");
 const { markAsked } = await import("./askedFavicons.ts");
@@ -49,7 +49,7 @@ test("an empty lookup that started before an import doesn't wipe the imported ic
   const page = "https://imported.test/";
   const lookups = [];
   globalThis.storedFavicons = [];
-  globalThis.faviconsForTest = (profile, pages) => new Promise((resolve) => lookups.push({ pages, answer: () => resolve({ pages: new Map(), icons: new Map() }) }));
+  globalThis.faviconsForTest = (space, pages) => new Promise((resolve) => lookups.push({ pages, answer: () => resolve({ pages: new Map(), icons: new Map() }) }));
   const row = mount(() => useFavicon(page, null, "default"));
   try {
     await waitFor(() => lookups.some((l) => l.pages.includes(page)));
@@ -112,18 +112,18 @@ test("an icon stays when the tab finishes loading another page on the icon's sit
 });
 
 const empty = () => Promise.resolve({ pages: new Map(), icons: new Map() });
-const answering = (icons) => (profile, pages) => Promise.resolve({ pages: new Map(pages.flatMap((p) => (icons[p] ? [[p, { uri: icons[p] }]] : []))), icons: new Map() });
+const answering = (icons) => (space, pages) => Promise.resolve({ pages: new Map(pages.flatMap((p) => (icons[p] ? [[p, { uri: icons[p] }]] : []))), icons: new Map() });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
 const quietWindow = async () => {
   for (let tick = 0; tick < 10; tick++) await new Promise((resolve) => setTimeout(resolve, 5));
 };
-const cached = (page) => useFavicons.getState().profiles[engineProfile(useBrowser.getState(), "default")]?.pages[page];
+const cached = (page) => useFavicons.getState().spaces[engineProfileForSpace(useBrowser.getState(), "default")]?.pages[page];
 
 test("a lookup that failed is asked again the next time the page is shown", async () => {
   useBrowser.getState().hydrate({});
   const page = "https://retry.test/";
   const asked = [];
-  globalThis.faviconsForTest = (profile, pages) => (asked.push(...pages), asked.length === 1 ? Promise.reject(new Error("engine busy")) : answering({ [page]: "data:image/png;base64,RETRY" })(profile, pages));
+  globalThis.faviconsForTest = (space, pages) => (asked.push(...pages), asked.length === 1 ? Promise.reject(new Error("engine busy")) : answering({ [page]: "data:image/png;base64,RETRY" })(space, pages));
   const warn = console.warn;
   console.warn = () => {};
   try {
@@ -146,7 +146,7 @@ test("a page Chrome has no icon for is answered once, and its own icon is fetche
   const page = "https://no-icon.test/";
   const asked = [];
   const fetched = [];
-  globalThis.faviconsForTest = (profile, pages) => (asked.push(...pages), empty());
+  globalThis.faviconsForTest = (space, pages) => (asked.push(...pages), empty());
   globalThis.fetchFaviconForTest = (src) => (fetched.push(src), Promise.resolve({ uri: "data:image/png;base64,LINKED" }));
   globalThis.storedFavicons = [];
   try {
@@ -178,8 +178,8 @@ test("a private window looks other profiles' icons up read-only and keeps the an
   const shared = "https://shared-read.test/";
   const touched = [];
   const peeked = [];
-  globalThis.faviconsForTest = (profile, pages) => (touched.push(...pages.map((page) => [profile, page])), answering({ [shared]: "data:image/png;base64,SHARED" })(profile, pages));
-  globalThis.peekFaviconsForTest = (profile, pages) => (peeked.push(...pages.map((page) => [profile, page])), answering({ [privatePage]: "data:image/png;base64,PEEKED" })(profile, pages));
+  globalThis.faviconsForTest = (space, pages) => (touched.push(...pages.map((page) => [space, page])), answering({ [shared]: "data:image/png;base64,SHARED" })(space, pages));
+  globalThis.peekFaviconsForTest = (space, pages) => (peeked.push(...pages.map((page) => [space, page])), answering({ [privatePage]: "data:image/png;base64,PEEKED" })(space, pages));
   const engine = engineProfile(S(), "default");
   const windowId = S().createWindow({ kind: "private", profileId: "default" });
   const viewer = S().windows[windowId].profileId;
@@ -214,7 +214,7 @@ test("a private window looks other profiles' icons up read-only and keeps the an
   }
 });
 
-test("an icon drawn for a regular profile inside a private window looks up as that window, and outside any window as before", async () => {
+test("an icon drawn for a regular space inside a private window looks up as that window, and outside any window as before", async () => {
   const S = () => useBrowser.getState();
   S().hydrate({});
   const stop = startFavicons();
@@ -222,8 +222,8 @@ test("an icon drawn for a regular profile inside a private window looks up as th
   const outside = "https://bookmark-in-settings.test/";
   const touched = [];
   const peeked = [];
-  globalThis.faviconsForTest = (profile, pages) => (touched.push(...pages), empty());
-  globalThis.peekFaviconsForTest = (profile, pages) => (peeked.push(...pages), empty());
+  globalThis.faviconsForTest = (space, pages) => (touched.push(...pages), empty());
+  globalThis.peekFaviconsForTest = (space, pages) => (peeked.push(...pages), empty());
   const windowId = S().createWindow({ kind: "private", profileId: "default" });
   const viewer = S().windows[windowId].profileId;
   const row = (url) => () => useFavicon(url, null, usePrivateViewer() ?? "default");
@@ -243,7 +243,7 @@ test("an icon drawn for a regular profile inside a private window looks up as th
   }
 });
 
-test("a Favicon's private-window flag reads nothing on a tab switch and follows its window's profile", () => {
+test("a Favicon's private-window flag reads nothing on a tab switch and follows its window's space", () => {
   const S = () => useBrowser.getState();
   S().hydrate({});
   const internals = React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
@@ -275,7 +275,7 @@ test("a Favicon's private-window flag reads nothing on a tab switch and follows 
     reads = 0;
     S().switchProfile(windowId, work);
     assert.equal(S().windows[windowId].profileId, work);
-    assert.equal(reads, 1, "a profile switch reads the flag again");
+    assert.equal(reads, 1, "a space switch reads the flag again");
     assert.equal(row.value, undefined);
     const viewer = "incognito:flag-test@default";
     useBrowser.setState((s) => ({ windows: { ...s.windows, [windowId]: { ...s.windows[windowId], profileId: viewer } } }));
@@ -292,7 +292,7 @@ test("a refused peek is asked again three times at most, and closing the window 
   const stop = startFavicons();
   const peeked = [];
   globalThis.faviconsForTest = () => empty();
-  globalThis.peekFaviconsForTest = (profile, pages) => (peeked.push(...pages), Promise.reject(new Error("favicons not loaded")));
+  globalThis.peekFaviconsForTest = (space, pages) => (peeked.push(...pages), Promise.reject(new Error("favicons not loaded")));
   const warn = console.warn;
   console.warn = () => {};
   mock.timers.enable({ apis: ["setTimeout"] });
@@ -357,7 +357,7 @@ test("a peek refused after its window closed keeps nothing for a retry", async (
   }
 });
 
-test("a row inside a private window that names its profile shows that profile's icon before Default's", () => {
+test("a row inside a private window that names its space shows that space's icon before Default's", () => {
   const S = () => useBrowser.getState();
   S().hydrate({});
   const page = "https://same-page-two-profiles.test/";
@@ -376,7 +376,7 @@ test("a row inside a private window that names its profile shows that profile's 
   }
 });
 
-test("a private row whose own profile opens later asks it then, even with Default's icon showing meanwhile", async () => {
+test("a private row whose own space opens later asks it then, even with Default's icon showing meanwhile", async () => {
   const S = () => useBrowser.getState();
   S().hydrate({});
   useBrowser.setState((s) => ({ profiles: { ...s.profiles, work: { ...s.profiles.default, id: "work", name: "Work" } }, profileOrder: [...s.profileOrder, "work"] }));
@@ -387,7 +387,7 @@ test("a private row whose own profile opens later asks it then, even with Defaul
   useFavicons.setState({ profiles: { ...before.profiles, [engineProfile(S(), "default")]: { pages: { [page]: "data:default" }, srcs: {}, appearances: {} } } });
   const peeked = [];
   globalThis.faviconsForTest = () => empty();
-  globalThis.peekFaviconsForTest = (profile, pages) => (peeked.push(profile), answering(profile === "work" ? { [page]: "data:work" } : {})(profile, pages));
+  globalThis.peekFaviconsForTest = (space, pages) => (peeked.push(space), answering(space === "work" ? { [page]: "data:work" } : {})(space, pages));
   const windowId = S().createWindow({ kind: "private", profileId: "default" });
   const viewer = S().windows[windowId].profileId;
   const row = mount(() => useFavicon(page, null, viewer, "work"));
@@ -415,7 +415,7 @@ test("closing a private window while its row still waits on a missed icon asks n
   const page = "https://private-miss.test/";
   const peeked = [];
   globalThis.faviconsForTest = () => empty();
-  globalThis.peekFaviconsForTest = (profile, pages) => (peeked.push(...pages), empty());
+  globalThis.peekFaviconsForTest = (space, pages) => (peeked.push(...pages), empty());
   const windowId = S().createWindow({ kind: "private", profileId: "default" });
   const viewer = S().windows[windowId].profileId;
   assert.equal(privateViewer(viewer), viewer);
@@ -443,15 +443,15 @@ test("a lookup answered after its page was deleted from history doesn't bring th
   const page = "https://deleted-while-asked.test/";
   const held = [];
   let calls = 0;
-  globalThis.faviconsForTest = (profile, pages) =>
+  globalThis.faviconsForTest = (space, pages) =>
     calls++ === 0
-      ? new Promise((resolve) => held.push(() => answering({ [page]: "data:image/png;base64,STALE" })(profile, pages).then(resolve)))
-      : answering({ [page]: "data:image/png;base64,FRESH" })(profile, pages);
+      ? new Promise((resolve) => held.push(() => answering({ [page]: "data:image/png;base64,STALE" })(space, pages).then(resolve)))
+      : answering({ [page]: "data:image/png;base64,FRESH" })(space, pages);
   const row = mount(() => useFavicon(page, null, "default"));
   try {
     await waitFor(() => held.length === 1);
     const engine = engineProfile(useBrowser.getState(), "default");
-    for (const listener of globalThis.historyListeners) listener({ kind: "deleted", profile: engine, urls: [page] });
+    for (const listener of globalThis.historyListeners) listener({ kind: "deleted", space: engine, urls: [page] });
     held.shift()();
     await waitFor(() => cached(page) === "data:image/png;base64,FRESH");
     assert.equal(calls, 2);
@@ -462,7 +462,7 @@ test("a lookup answered after its page was deleted from history doesn't bring th
   }
 });
 
-test("a private row whose own profile has its icon only on disk asks that profile even when Default already shows one", async () => {
+test("a private row whose own space has its icon only on disk asks that space even when Default already shows one", async () => {
   const S = () => useBrowser.getState();
   S().hydrate({});
   const stop = startFavicons();
@@ -471,7 +471,7 @@ test("a private row whose own profile has its icon only on disk asks that profil
   useFavicons.setState({ profiles: { ...before.profiles, [engineProfile(S(), "default")]: { pages: { [page]: "data:default" }, srcs: {}, appearances: {} } } });
   const peeked = [];
   globalThis.faviconsForTest = () => empty();
-  globalThis.peekFaviconsForTest = (profile, pages) => (peeked.push(profile), answering(profile === "work" ? { [page]: "data:work" } : {})(profile, pages));
+  globalThis.peekFaviconsForTest = (space, pages) => (peeked.push(space), answering(space === "work" ? { [page]: "data:work" } : {})(space, pages));
   const windowId = S().createWindow({ kind: "private", profileId: "default" });
   const viewer = S().windows[windowId].profileId;
   const row = mount(() => useFavicon(page, null, viewer, "work"));
@@ -487,11 +487,11 @@ test("a private row whose own profile has its icon only on disk asks that profil
     delete globalThis.peekFaviconsForTest;
   }
 });
-test("pruning a profile's icons looks the pages still waiting on screen up again", async () => {
+test("pruning a space's icons looks the pages still waiting on screen up again", async () => {
   useBrowser.getState().hydrate({});
   const page = "https://pruned.test/";
   const asked = [];
-  globalThis.faviconsForTest = (profile, pages) => (asked.push(...pages), empty());
+  globalThis.faviconsForTest = (space, pages) => (asked.push(...pages), empty());
   try {
     const row = mount(() => useFavicon(page, null, "default"));
     await waitFor(() => cached(page) === null);
@@ -554,8 +554,8 @@ test("a page that changes its icon right after the appearance flips keeps both, 
   const windowId = S().createWindow({ url: page });
   const tabId = S().windows[windowId].tabIds[0];
   S().updateTab(tabId, { url: page });
-  const key = engineProfile(S(), "default");
-  seedFavicons({ images: ["data:light", "data:dark", "data:other"], profiles: { [key]: { pages: { [page]: 0 }, srcs: { "https://github.test/dark.svg": 1, "https://github.test/other.svg": 2 } } }, themes: {} });
+  const key = engineProfileForSpace(S(), "default");
+  seedFavicons({ images: ["data:light", "data:dark", "data:other"], spaces: { [key]: { pages: { [page]: 0 }, srcs: { "https://github.test/dark.svg": 1, "https://github.test/other.svg": 2 } } }, themes: {} });
   try {
     setDark(true);
     noteFavicon(tabId, "https://github.test/dark.svg");
@@ -568,7 +568,7 @@ test("a page that changes its icon right after the appearance flips keeps both, 
     try {
       const other = "https://other-site.test/";
       S().updateTab(tabId, { url: other });
-      seedFavicons({ images: ["data:before"], profiles: { [key]: { pages: { [other]: 0 }, srcs: {} } }, themes: {} });
+      seedFavicons({ images: ["data:before"], spaces: { [key]: { pages: { [other]: 0 }, srcs: {} } }, themes: {} });
       noteFavicon(tabId, "https://github.test/other.svg");
       await settle();
       assert.equal(resolveFavicon(other, null, "default")?.uri, "data:other");
@@ -585,7 +585,7 @@ test("a page that changes its icon right after the appearance flips keeps both, 
 
 const heldLookups = () => {
   const held = [];
-  globalThis.faviconsForTest = (profile, pages) => new Promise((resolve) => held.push({ pages, answer: (icons = {}) => resolve({ pages: new Map(pages.flatMap((p) => (icons[p] ? [[p, { uri: icons[p] }]] : []))), icons: new Map() }) }));
+  globalThis.faviconsForTest = (space, pages) => new Promise((resolve) => held.push({ pages, answer: (icons = {}) => resolve({ pages: new Map(pages.flatMap((p) => (icons[p] ? [[p, { uri: icons[p] }]] : []))), icons: new Map() }) }));
   return held;
 };
 
@@ -626,8 +626,8 @@ test("an icon the page reported during a lookup still wins after the cache start
   const windowId = S().createWindow({ url: page });
   const tabId = S().windows[windowId].tabIds[0];
   S().updateTab(tabId, { url: page });
-  const key = engineProfile(S(), "default");
-  seedFavicons({ images: ["data:image/png;base64,NEW"], profiles: { [key]: { pages: {}, srcs: { "https://evicted-race.test/new.png": 0 } } }, themes: {} });
+  const key = engineProfileForSpace(S(), "default");
+  seedFavicons({ images: ["data:image/png;base64,NEW"], spaces: { [key]: { pages: {}, srcs: { "https://evicted-race.test/new.png": 0 } } }, themes: {} });
   const held = heldLookups();
   globalThis.storedFavicons = [];
   try {
@@ -650,7 +650,7 @@ test("an icon the page reported during a lookup still wins after the cache start
 const privateWindow = (url) => {
   const s = useBrowser.getState();
   const id = s.createWindow({ kind: "private", url });
-  return { id, profile: useBrowser.getState().windows[id].profileId, tab: useBrowser.getState().windows[id].tabIds[0] };
+  return { id, profile: useBrowser.getState().windows[id].spaceId, tab: useBrowser.getState().windows[id].tabIds[0] };
 };
 
 test("an icon a private tab reports after its window closed doesn't bring the page back into memory", async () => {
@@ -888,4 +888,54 @@ test("checking whether an icon is still held reuses one set until the icon cache
   assert.equal(first("data:image/png;base64,HELD7"), false);
   assert.equal(first("data:image/png;base64,ELSEWHERE"), true);
   assert.notEqual(unheldIn({ ...profiles }), first, "a new cache state is read again");
+});
+
+function withoutInitialSpace() {
+  globalThis.storedFavicons = [];
+  const S = () => useBrowser.getState();
+  S().hydrate({});
+  const profileId = S().createProfile({ name: "Remaining identity" });
+  const spaceId = S().createSpace({ name: "Remaining space", profileId });
+  S().updateSettings({ defaultSpaceId: spaceId });
+  S().deleteSpace("default");
+  assert.equal(S().spaces.default, undefined);
+  return { S, profileId, spaceId };
+}
+
+test("favicon lookup skips the deleted initial Space and still resolves a remaining Space", () => {
+  const { spaceId } = withoutInitialSpace();
+  const page = "https://remaining-space-icon.test/";
+  adoptFavicons(spaceId, [{ page, icon: "i", png: "REMAINING" }]);
+  assert.deepEqual(resolveFavicon(page), { uri: "data:image/png;base64,REMAINING", spaceId });
+  const row = mount(() => useFavicon(page));
+  row.unmount();
+});
+
+test("favicon lookup for a deleted explicit Space returns no other Profile's icon", () => {
+  const { spaceId } = withoutInitialSpace();
+  const page = "https://deleted-space-icon.test/";
+  adoptFavicons(spaceId, [{ page, icon: "i", png: "OTHER" }]);
+  assert.equal(resolveFavicon(page, null, "default"), null);
+  for (const src of [null, "https://deleted-space-icon.test/favicon.ico"]) {
+    const row = mount(() => useFavicon(page, src, "default"));
+    row.unmount();
+  }
+});
+
+test("favicon lookup skips a Space whose Profile is unavailable", () => {
+  const { S, profileId, spaceId } = withoutInitialSpace();
+  useBrowser.setState({ profiles: Object.fromEntries(Object.entries(S().profiles).filter(([id]) => id !== profileId)) });
+  assert.equal(resolveFavicon("https://missing-profile-icon.test/", null, spaceId), null);
+  assert.equal(resolveFavicon("https://missing-profile-icon.test/"), null);
+});
+
+test("favicon lookup retains private cache precedence after the initial Space is deleted", () => {
+  const { S, spaceId } = withoutInitialSpace();
+  const windowId = S().createWindow({ kind: "private", spaceId });
+  const privateId = S().windows[windowId].spaceId;
+  const page = "https://private-space-icon.test/";
+  seedFavicons({ images: ["data:regular"], spaces: { [engineProfile(S(), spaceId)]: { pages: { [page]: 0 }, srcs: {} } }, themes: {} });
+  useFavicons.setState((f) => ({ spaces: { ...f.spaces, [privateId]: { pages: { [page]: "data:private" }, srcs: {}, appearances: {} } } }));
+  assert.deepEqual(resolveFavicon(page, null, privateId), { uri: "data:private", spaceId: privateId });
+  assert.equal(resolveFavicon("https://uncached-private-icon.test/", null, privateId), null);
 });

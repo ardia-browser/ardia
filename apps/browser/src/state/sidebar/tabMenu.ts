@@ -1,9 +1,9 @@
 import type { MenuItem } from "../../platform/menus";
 import { chooseFromMenu, type ChoiceItem } from "../app/menuChoice";
-import { closeTab, moveTabsToProfile, moveTabToWindow, toggleMute, toggleSiteMute } from "../browser/actions";
+import { closeTab, moveTabsToSpace, moveTabToWindow, toggleMute, toggleSiteMute } from "../browser/actions";
 import { muteState, muteSymbol, muteTitle, siteMuteTitle } from "../tabs/mute";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { activeTabId, bookmarkProfileId, inPinnedContainer, isIncognitoProfile, pinnedSectionTitle, pinSection, tabTitle, togglePinTitle, viewTabIds, tabLayoutOf } from "../browser/model";
+import { activeTabId, bookmarkSpaceId, inPinnedContainer, isIncognitoSpace, pinnedSectionTitle, pinSection, tabTitle, togglePinTitle, viewTabIds, tabLayoutOf } from "../browser/model";
 import { awayFromPin, selectedTabIds } from "../pins/organize";
 import { groupOf } from "../pins/tabGrouping";
 import { splitOf, splitRowPanes, splitViewAvailable } from "../splits/splits";
@@ -52,7 +52,7 @@ function tabMenuFacts(s: BrowserState, windowId: string, tab: Tab) {
     group: groupOf(s, tab.id),
     split,
     splitRow: splitRowPanes(s, split).includes(tab.id),
-    incognito: isIncognitoProfile(tab.profileId),
+    incognito: isIncognitoSpace(tab.spaceId),
     across: tabLayoutOf(s, windowId) === "top",
     active: activeTabId(s, windowId) === tab.id,
   };
@@ -123,7 +123,7 @@ function moveToItem(s: BrowserState, windowId: string, tab: Tab, f: Facts): TabM
     title: "Move to",
     symbol: "arrow.up.forward.square",
     children: sections<TabMenuItem>(place, groupingItems(s, windowId, tab, f), [
-      { id: "moveToProfile", title: "Profile", symbol: "person", enabled: !f.incognito, children: profileItems(s, (id) => id === tab.profileId) },
+      { id: "moveToProfile", title: "Profile", symbol: "person", enabled: !f.incognito, children: profileItems(s, (id) => id === tab.spaceId) },
       { id: "moveToWindow", title: "Window", symbol: "macwindow", enabled: !f.incognito, children: windowItems(s, windowId) },
     ]),
   };
@@ -135,7 +135,7 @@ function pictureInPictureItems(tab: Tab): MenuItem[] {
 
 function bookmarkItems(s: BrowserState, windowId: string, tab: Tab, f: Facts): MenuItem[] {
   if (!bookmarksShown(s.settings)) return [];
-  const saved = !!tab.url && isBookmarked(s, bookmarkProfileId(s, s.windows[windowId]), tab.url);
+  const saved = !!tab.url && isBookmarked(s, bookmarkSpaceId(s, s.windows[windowId]), tab.url);
   if (!saved) return [{ id: "bookmark", title: "Bookmark Tab…", symbol: "bookmark", enabled: !!tab.url, ...hintWhen(f.active, "bookmarkPage", s) }];
   const edit: MenuItem = { id: "bookmark", title: "Edit Bookmark…", symbol: "bookmark.fill" };
   const remove: MenuItem = { id: "unbookmark", title: "Remove Bookmark", symbol: "minus.circle" };
@@ -262,7 +262,7 @@ function openAsSplit(windowId: string, tabId: string, wasActive: boolean) {
 
 function sendTab(windowId: string, tabId: string, to: Destination) {
   if (to.kind === "group") store().placeTabs([tabId], { pinned: false, groupId: to.groupId });
-  else if (to.kind === "profile") void moveTabsToProfile([tabId], to.profileId);
+  else if (to.kind === "profile") void moveTabsToSpace([tabId], to.spaceId);
   else if (to.kind === "window") moveTabToWindow(tabId, to.windowId);
   else void bookmarkTabs(windowId, [tabId], to);
 }

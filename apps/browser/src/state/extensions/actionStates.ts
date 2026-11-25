@@ -1,24 +1,24 @@
 import { extensionActionStates } from "../../platform/extensions";
 import { useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
-import { extensionProfile, readyTabOf, tabProfile, useExtensions, windowExtensions } from "./store";
+import { extensionSpace, readyTabOf, tabProfile, useExtensions, windowExtensions } from "./store";
 import { singleFlight } from "../../lib/singleFlight";
 import { noteExtensionActionRefresh, noteExtensionActionStateFailure, noteExtensionActionStateRequest } from "../telemetry/workCounts";
 import { consentToken } from "../telemetry/client";
 
 let pendingAll = false;
-const pendingProfiles = new Set<string>();
+const pendingSpaces = new Set<string>();
 
-export function refreshActionStates(profiles?: Iterable<string>): Promise<void> {
-  if (profiles) for (const profile of profiles) pendingProfiles.add(profile);
+export function refreshActionStates(spaces?: Iterable<string>): Promise<void> {
+  if (spaces) for (const space of spaces) pendingSpaces.add(space);
   else pendingAll = true;
   return refresh();
 }
 
 const refresh = singleFlight(async () => {
-  const only = pendingAll ? null : new Set(pendingProfiles);
+  const only = pendingAll ? null : new Set(pendingSpaces);
   pendingAll = false;
-  pendingProfiles.clear();
+  pendingSpaces.clear();
   noteExtensionActionRefresh();
   await pass(only);
 });
@@ -27,7 +27,7 @@ async function pass(only: Set<string> | null) {
   const s = useBrowser.getState();
   const { popup } = useExtensions.getState();
   await Promise.all(
-    s.windowOrder.filter((windowId) => !only || only.has(extensionProfile(s, windowId))).map(async (windowId) => {
+    s.windowOrder.filter((windowId) => !only || only.has(extensionSpace(s, windowId))).map(async (windowId) => {
       const ids = windowExtensions(s, windowId)
         .filter((x) => x.hasAction !== false && (x.pinned || popup?.extensionId === x.id))
         .map((x) => x.id);

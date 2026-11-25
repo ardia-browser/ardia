@@ -6,7 +6,7 @@ import { Pressable, View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { useSettings } from "../../../state/browser/hooks";
-import { useProfileOrder } from "../../../state/profiles/hooks";
+import { useSpaceOrder } from "../../../state/spaces/hooks";
 import { setMouseShortcut, setShortcutOverride, updateSettings } from "../../../state/settings/actions";
 import { openUrls } from "../../../state/browser/actions";
 import { Anchor, Group, Row, SectionHeader, SettingToggle } from "../Form";
@@ -59,7 +59,7 @@ export function ShortcutsPane(_place: SettingsPlace) {
 function KeyboardSection() {
   const overrides = useSettings((s) => s.shortcuts);
   const mouseOverrides = useSettings((s) => s.mouseShortcuts);
-  const profileOrder = useProfileOrder();
+  const spaceOrder = useSpaceOrder();
   const menuBar = useMenuBarRevision();
   const [loaded] = useResource(shortcutItems);
   const items = loaded ?? null;
@@ -76,7 +76,7 @@ function KeyboardSection() {
     setShortcutsQuery("");
   }, []);
 
-  const resolved = useMemo(() => resolvedShortcuts({ settings: { shortcuts: overrides, mouseShortcuts: mouseOverrides }, profileOrder }), [items, overrides, mouseOverrides, profileOrder, menuBar]);
+  const resolved = useMemo(() => resolvedShortcuts({ settings: { shortcuts: overrides, mouseShortcuts: mouseOverrides }, spaceOrder }), [items, overrides, mouseOverrides, spaceOrder, menuBar]);
   const byId = useMemo(() => new Map((items ?? []).map((item) => [item.id, item])), [items]);
   const effective = (item: MenuShortcut): Shortcut => resolved.bindings.get(item.id)?.[0] ?? NO_SHORTCUT;
   const conflictsOf = (item: MenuShortcut) => resolved.conflictsOf(item.id).flatMap((id) => byId.get(id) ?? []);

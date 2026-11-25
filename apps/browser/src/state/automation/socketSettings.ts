@@ -10,7 +10,7 @@ import { expect, now } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
 
 const OWN_METHOD: Partial<Record<SettingKey, string>> = {
-  defaultProfileId: "profiles.setDefault",
+  defaultSpaceId: "profiles.setDefault",
   customSearchEngines: "search.add, search.update and search.remove",
   cliControl: "nothing: the ardia command can't switch its own control",
   allowJavaScriptFromAppleEvents: "nothing: it would let any AppleScript run script in every page",
@@ -58,7 +58,7 @@ function apply(values: Record<string, unknown>, label: string, replaced: Partial
   const settings = now().settings;
   const ruled = Object.fromEntries(Object.entries(values).filter(([key]) => hasSocketRule(key)));
   const fromRules = checkedByRules(ruled, settings, values);
-  const { values: checked, problems } = checkedSettings(label, Object.fromEntries(Object.entries(values).filter(([key]) => !hasSocketRule(key))), { ...settings, ...fromRules.patch }, { order: now().profileOrder, mustExist: true });
+  const { values: checked, problems } = checkedSettings(label, Object.fromEntries(Object.entries(values).filter(([key]) => !hasSocketRule(key))), { ...settings, ...fromRules.patch }, { order: now().spaceOrder, mustExist: true });
   problems.push(...fromRules.problems.map((p) => `${label}: ${p}`));
   const merged = { ...fromRules.patch, ...checked, ...replaced };
   const problem = problems.length ? null : searchProblem(settings, { ...settings, ...merged } as Settings);

@@ -4,10 +4,10 @@ import { addGroupsFromDrafts } from "../bookmarks/bookmarkGroups";
 import type { GroupDraft } from "../groups/draftGroups";
 import { syncGroupOrder } from "../groups/groups";
 import { useBrowser } from "../browser/store";
-import { newProfileLiveFolder } from "../live/engine";
+import { newSpaceLiveFolder } from "../live/engine";
 import { live } from "../live/store";
 import type { LiveSourceId } from "../live/types";
-import { setProfileTheme } from "../profiles/themeActions";
+import { setProfileTheme } from "../spaces/themeActions";
 import { noteImportedPins } from "../telemetry/usage";
 import type { ConsentToken } from "../telemetry/client";
 import { isRegularWindow, mainWindowFor } from "../windows/small";
@@ -42,18 +42,18 @@ const liveSources = (nodes: ImportedNode[]): LiveSourceId[] =>
 const withoutLiveFolders = (nodes: ImportedNode[]): ImportedNode[] =>
   nodes.filter((n) => !liveSourceOf(n)).map((n) => (n.children ? { ...n, children: withoutLiveFolders(n.children) } : n));
 
-function importPullRequestsFolders(profileId: string, nodes: ImportedNode[]) {
+function importPullRequestsFolders(spaceId: string, nodes: ImportedNode[]) {
   for (const source of new Set(liveSources(nodes))) {
-    const have = Object.values(live().folders).some((f) => f.profileId === profileId && f.kind === "pullRequests" && f.sources.includes(source));
-    if (!have) newProfileLiveFolder(profileId, "pullRequests", [source]);
+    const have = Object.values(live().folders).some((f) => f.spaceId === spaceId && f.kind === "pullRequests" && f.sources.includes(source));
+    if (!have) newSpaceLiveFolder(spaceId, "pullRequests", [source]);
   }
 }
 
-function sidebarWindowFor(profileId: string): string {
-  const near = windowFor(profileId);
+function sidebarWindowFor(spaceId: string): string {
+  const near = windowFor(spaceId);
   const s = useBrowser.getState();
   if (isRegularWindow(s.windows[near])) return near;
-  return mainWindowFor(s, profileId) ?? s.createWindow({ profileId });
+  return mainWindowFor(s, spaceId) ?? s.createWindow({ spaceId: spaceId });
 }
 
 type ImportedSection = { tabs: number; splits: number; skipped: number; groups: number };
@@ -77,9 +77,9 @@ function rootGroupOf(groups: Record<string, { parentId?: string }>, id: string):
   return at;
 }
 
-function importFolders(profileId: string, windowId: string, folders: ImportedNode[], pinned: boolean): ImportedSection & { tabIds: string[] } {
+function importFolders(spaceId: string, windowId: string, folders: ImportedNode[], pinned: boolean): ImportedSection & { tabIds: string[] } {
   if (!folders.length) return { ...NO_SECTION, tabIds: [] };
-  const drafts = addGroupsFromDrafts(profileId, folders.map(toGroupDraft), windowId, { collapsed: true, pinned });
+  const drafts = addGroupsFromDrafts(spaceId, folders.map(toGroupDraft), windowId, { collapsed: true, pinned });
   const s = useBrowser.getState();
   const made = new Set(drafts.made);
   const members = new Set(drafts.made.flatMap((id) => s.groups[id]?.tabIds ?? []));
@@ -108,13 +108,13 @@ const pinnedRowsOf = (n: ImportedNode, i: number): IncomingTab[] => {
 
 type PinnedPart = ImportedSection & { rows: number; blocks: Map<number, string[]> };
 
-function importPinnedRows(profileId: string, windowId: string, pinned: ImportedNode[]): PinnedPart {
-  importPullRequestsFolders(profileId, pinned);
+function importPinnedRows(spaceId: string, windowId: string, pinned: ImportedNode[]): PinnedPart {
+  importPullRequestsFolders(spaceId, pinned);
   const part: PinnedPart = { ...NO_SECTION, rows: 0, blocks: new Map() };
   pinned.forEach((n, i) => {
     const rows = pinnedRowsOf(n, i);
     if (!rows.length) return;
-    const placed = importTabsWithSplits(profileId, rows, null, "anyPin", windowId);
+    const placed = importTabsWithSplits(spaceId, rows, null, "anyPin", windowId);
     Object.assign(part, sumSections(part, sectionOf(placed)));
     part.rows += placed.tabs;
     part.blocks.set(i, placed.ids);
@@ -122,11 +122,11 @@ function importPinnedRows(profileId: string, windowId: string, pinned: ImportedN
   return part;
 }
 
-function importPinnedFolders(profileId: string, windowId: string, pinned: ImportedNode[], rows: PinnedPart): PinnedPart {
+function importPinnedFolders(spaceId: string, windowId: string, pinned: ImportedNode[], rows: PinnedPart): PinnedPart {
   const part: PinnedPart = { ...rows, blocks: new Map(rows.blocks) };
   pinned.forEach((n, i) => {
     if (n.type !== "folder" || isSplitNode(n)) return;
-    const folder = importFolders(profileId, windowId, withoutLiveFolders([n]), true);
+    const folder = importFolders(spaceId, windowId, withoutLiveFolders([n]), true);
     Object.assign(part, sumSections(part, folder));
     part.blocks.set(i, folder.tabIds);
   });
@@ -150,29 +150,29 @@ function placeInSourceOrder(windowId: string, blocks: Map<number, string[]>) {
   useBrowser.setState({ windows: { ...s.windows, [windowId]: window }, groups: syncGroupOrder(s.groups, window) });
 }
 
-export function importArcSpace(profileId: string, space: SpaceSuggestion, favicons?: ImportedFavicon[], consent?: ConsentToken | null): { tabs: number; bookmarks: number; skipped: number } {
-  importFavicons(profileId, favicons, [...linksOf(space.pinned), ...space.tabs.map((t) => t.url)]);
-  const windowId = sidebarWindowFor(profileId);
-  const rows = importPinnedRows(profileId, windowId, space.pinned);
-  const today = importTabsWithSplits(profileId, space.tabs.map((t) => ({ ...t, pinned: false })), "Imported", "anyPin", windowId);
-  const pinned = importPinnedFolders(profileId, windowId, space.pinned, rows);
+export function importArcSpace(spaceId: string, space: SpaceSuggestion, favicons?: ImportedFavicon[], consent?: ConsentToken | null): { tabs: number; bookmarks: number; skipped: number } {
+  importFavicons(spaceId, favicons, [...linksOf(space.pinned), ...space.tabs.map((t) => t.url)]);
+  const windowId = sidebarWindowFor(spaceId);
+  const rows = importPinnedRows(spaceId, windowId, space.pinned);
+  const today = importTabsWithSplits(spaceId, space.tabs.map((t) => ({ ...t, pinned: false })), "Imported", "anyPin", windowId);
+  const pinned = importPinnedFolders(spaceId, windowId, space.pinned, rows);
   const theme = space.theme ? parseArcTheme(space.theme) : null;
-  if (theme) setProfileTheme(profileId, theme);
+  if (theme) setProfileTheme(spaceId, theme);
   noteImportedPins({ rows: pinned.rows, splits: pinned.splits + today.splits }, consent);
   return { tabs: pinned.tabs + today.tabs, bookmarks: 0, skipped: pinned.skipped };
 }
 
 type ImportedDiaSpace = { tabs: number; skipped: number; groups: number; splits: number };
 
-export function importDiaSpace(profileId: string, space: SpaceSuggestion, favicons?: ImportedFavicon[], consent?: ConsentToken | null): ImportedDiaSpace {
+export function importDiaSpace(spaceId: string, space: SpaceSuggestion, favicons?: ImportedFavicon[], consent?: ConsentToken | null): ImportedDiaSpace {
   const favorites = space.favorites ?? [];
   const openGroups = space.openGroups ?? [];
-  importFavicons(profileId, favicons, [...favorites.map((t) => t.url), ...linksOf(space.pinned), ...space.tabs.map((t) => t.url), ...linksOf(openGroups)]);
-  const windowId = sidebarWindowFor(profileId);
-  const tiles = favorites.length ? importTabs(profileId, favorites.map((t) => ({ ...t, pinned: true })), null, "tiles", windowId) : 0;
-  const pinned = importPinnedFolders(profileId, windowId, space.pinned, importPinnedRows(profileId, windowId, space.pinned));
-  const groups = importFolders(profileId, windowId, openGroups.filter((n) => n.type === "folder" && !isSplitNode(n)), false);
-  const loose = importTabsWithSplits(profileId, space.tabs.map((t) => ({ ...t, pinned: false })), "Imported", "anyPin", windowId);
+  importFavicons(spaceId, favicons, [...favorites.map((t) => t.url), ...linksOf(space.pinned), ...space.tabs.map((t) => t.url), ...linksOf(openGroups)]);
+  const windowId = sidebarWindowFor(spaceId);
+  const tiles = favorites.length ? importTabs(spaceId, favorites.map((t) => ({ ...t, pinned: true })), null, "tiles", windowId) : 0;
+  const pinned = importPinnedFolders(spaceId, windowId, space.pinned, importPinnedRows(spaceId, windowId, space.pinned));
+  const groups = importFolders(spaceId, windowId, openGroups.filter((n) => n.type === "folder" && !isSplitNode(n)), false);
+  const loose = importTabsWithSplits(spaceId, space.tabs.map((t) => ({ ...t, pinned: false })), "Imported", "anyPin", windowId);
   const open = sumSections(groups, sectionOf(loose));
   noteImportedPins({ rows: pinned.rows, splits: pinned.splits + open.splits }, consent);
   return { tabs: tiles + pinned.tabs + open.tabs, skipped: pinned.skipped + open.skipped, groups: pinned.groups + open.groups, splits: pinned.splits + open.splits };

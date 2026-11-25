@@ -93,7 +93,7 @@ const ANSWERED = {
   "ArdiaApp.removeNotifications": undefined,
 };
 const SYSTEM_INFO = ["ArdiaApp.systemInfo"];
-const ALLOWED_TO_REJECT = new Set(SYSTEM_INFO);
+const ALLOWED_TO_REJECT = new Set([...SYSTEM_INFO, "ArdiaDocuments.writeDocumentImmediately"]);
 
 const linuxHost = () => ({
   bootstrap: { windowId: "main", profileId: "default", capabilities: [...advertised] },

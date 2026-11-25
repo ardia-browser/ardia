@@ -27,18 +27,18 @@ const store = () => useBrowser.getState();
 const always = () => true;
 
 export function folderPlace(s: BrowserState, profileId: string, key: string): Place {
-  if (!s.profiles[profileId]) return { kind: "gone" };
+  if (!s.spaces[profileId]) return { kind: "gone" };
   const order = [...s.ui.focusOrder, ...s.windowOrder];
   const rank = (windowId: string) => {
     const i = order.indexOf(windowId);
     return i < 0 ? order.length : i;
   };
   const copies = Object.values(s.groups)
-    .filter((g) => g.pinned && !g.parentId && g.profileId === profileId && pinKeyOf(g) === key && isRegularWindow(s.windows[g.windowId]))
+    .filter((g) => g.pinned && !g.parentId && g.spaceId === profileId && pinKeyOf(g) === key && isRegularWindow(s.windows[g.windowId]))
     .sort((a, z) => rank(a.windowId) - rank(z.windowId));
   if (copies[0]) return { kind: "shown", groupId: copies[0].id };
   if (s.parkedPins[profileId]?.groups.some((g) => g.id === key)) return { kind: "hidden" };
-  const shows = Object.values(s.windows).some((w) => isRegularWindow(w) && w.tabIds.some((id) => s.tabs[id]?.profileId === profileId));
+  const shows = Object.values(s.windows).some((w) => isRegularWindow(w) && w.tabIds.some((id) => s.tabs[id]?.spaceId === profileId));
   return shows ? { kind: "gone" } : { kind: "hidden" };
 }
 

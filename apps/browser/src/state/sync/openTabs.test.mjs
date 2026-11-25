@@ -6,7 +6,7 @@ const pinnedArea = await import("./pinned.ts");
 const previous = await import("./fixtures/pinned-v0.2.40.ts");
 const openTabs = await import("./openTabs.ts");
 const { openTabsClosed, noteTabClosedByUser } = await import("./openTabCloses.ts");
-const { profileOpenTabsAdapter } = await import("./profileAdapters.ts");
+const { spaceOpenTabsAdapter } = await import("./profileAdapters.ts");
 const { pinKeyOf } = await import("../browser/model.ts");
 
 const S = () => useBrowser.getState();
@@ -42,7 +42,7 @@ class Device {
     if (browser) S().hydrate(browser);
     else {
       S().hydrate({});
-      S().updateProfile(P, { syncTabs: true });
+      S().updateSpace(P, { syncTabs: true });
     }
     this.browser = S();
     this.scope = scope ?? emptyScope();
@@ -50,7 +50,7 @@ class Device {
     this.flagAt = this.clock.tick();
   }
   setOption(on) {
-    this.with(() => S().updateProfile(P, { syncTabs: on || undefined }));
+    this.with(() => S().updateSpace(P, { syncTabs: on || undefined }));
     this.flagAt = this.clock.tick();
   }
   note(next, prev) {
@@ -63,7 +63,7 @@ class Device {
     };
   }
   mode() {
-    return S().profiles[P]?.syncTabs ? "on" : this.retire ? "retire" : "off";
+    return S().spaces[P]?.syncTabs ? "on" : this.retire ? "retire" : "off";
   }
   with(fn) {
     useBrowser.setState(this.browser, true);
@@ -263,7 +263,7 @@ test("quitting and relaunching with the session restored publishes nothing", asy
   const saved = a.with(() => {
     const s = S();
     const tabs = Object.fromEntries(Object.entries(s.tabs).map(([id, t]) => [id, { ...t, page: { kind: "idle" } }]));
-    return { profiles: s.profiles, profileOrder: s.profileOrder, windows: s.windows, windowOrder: s.windowOrder, tabs, groups: s.groups };
+    return { profiles: s.profiles, spaces: s.spaces, spaceOrder: s.spaceOrder, windows: s.windows, windowOrder: s.windowOrder, tabs, groups: s.groups };
   });
   const relaunched = new Device("devA", folder, { browser: saved, scope: JSON.parse(JSON.stringify(a.scope)) });
   relaunched.clock = a.clock;
@@ -328,11 +328,11 @@ test("the option itself syncs between Macs", async () => {
   const folder = new Folder();
   const app = (id) => {
     const d = new Device(id, folder);
-    d.with(() => S().updateProfile(P, { syncTabs: undefined }));
+    d.with(() => S().updateSpace(P, { syncTabs: undefined }));
     d.sync = async function () {
       useBrowser.setState(this.browser, true);
       try {
-        return await syncScope({ scope: "app", state: this.scope, transport: folder.transport(), adapters: [profileOpenTabsAdapter(() => ({ [P]: { syncId: "s1" } }))], clock: this.clock, device: this.id });
+        return await syncScope({ scope: "app", state: this.scope, transport: folder.transport(), adapters: [spaceOpenTabsAdapter(() => ({ [P]: { syncId: "s1" } }))], clock: this.clock, device: this.id });
       } finally {
         this.browser = S();
       }
@@ -342,12 +342,12 @@ test("the option itself syncs between Macs", async () => {
   const a = app("devA");
   const b = app("devB");
   await syncAll([a, b]);
-  a.with(() => S().updateProfile(P, { syncTabs: true }));
+  a.with(() => S().updateSpace(P, { syncTabs: true }));
   await syncAll([a, b]);
-  assert.equal(b.with(() => S().profiles[P].syncTabs), true);
-  b.with(() => S().updateProfile(P, { syncTabs: undefined }));
+  assert.equal(b.with(() => S().spaces[P].syncTabs), true);
+  b.with(() => S().updateSpace(P, { syncTabs: undefined }));
   await syncAll([b, a]);
-  assert.equal(a.with(() => S().profiles[P].syncTabs), undefined);
+  assert.equal(a.with(() => S().spaces[P].syncTabs), undefined);
 });
 
 test("a Mac on a released version keeps the records untouched, through its own snapshot too", async () => {

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { switchOrigin } from "../../lib/pluginPageBar";
 import { useBrowser } from "../browser/store";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import { isPeekTab } from "../peek/peek";
 import { takeTypedAddress } from "./typedAddresses";
 import type { ConsentToken } from "../telemetry/choice";
@@ -69,7 +69,7 @@ export function consumeTypedAddress(tabId: string, committedUrl: string, committ
 export function useSiteSwitchRows(tabId: string): SiteSwitchRow[] {
   const url = useBrowser((s) => {
     const t = s.tabs[tabId];
-    return t && !isIncognitoProfile(t.profileId) && !isPeekTab(s, tabId) ? t.url : "";
+    return t && !isIncognitoSpace(t.spaceId) && !isPeekTab(s, tabId) ? t.url : "";
   });
   const plugins = usePlugins(useShallow((s) => ({ listings: s.listings, records: s.records, order: s.order })));
   return useMemo(() => (url ? siteSwitchRows(plugins, url) : []), [url, plugins]);

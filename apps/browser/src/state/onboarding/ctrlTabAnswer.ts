@@ -7,7 +7,7 @@ import { draftPreset, previewLive, setOnboardingDraft, useOnboarding } from "./o
 import { CTRL_TAB_LIKE, setsUpLikeBrowser } from "./presets";
 
 type Onboarding = Pick<ReturnType<typeof useOnboarding.getState>, "draft" | "baseline" | "prefill" | "preset" | "source">;
-type Browser = Pick<ReturnType<typeof useBrowser.getState>, "settings" | "profileOrder">;
+type Browser = Pick<ReturnType<typeof useBrowser.getState>, "settings" | "spaceOrder">;
 
 const beforePreview = (o: Onboarding = useOnboarding.getState(), b: Browser = useBrowser.getState()): Browser =>
   o.baseline.shortcuts ? { ...b, settings: { ...b.settings, shortcuts: o.baseline.shortcuts } } : b;

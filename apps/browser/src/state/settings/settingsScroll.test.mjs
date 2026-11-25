@@ -10,7 +10,7 @@ const scrollShown = (y) => rememberSettingsScrollOffset(nav().visit, y);
 
 function fresh() {
   forgetSettingsScroll();
-  useSettingsNav.setState({ pane: "general", profileId: null, detail: null, scroll: 0, visit: 0, back: [], forward: [] });
+  useSettingsNav.setState({ pane: "general", spaceId: null, detail: null, scroll: 0, visit: 0, back: [], forward: [] });
   rememberSettingsScrollOffset(-1, 0);
 }
 
@@ -64,11 +64,11 @@ test("two profiles' overviews are separate history entries with their own positi
   assert.notEqual(nav().visit, work);
   scrollShown(80);
   settingsBack();
-  assert.equal(nav().profileId, "work");
+  assert.equal(nav().spaceId, "work");
   assert.equal(nav().visit, work);
   assert.equal(nav().scroll, 500);
   settingsForward();
-  assert.equal(nav().profileId, "home");
+  assert.equal(nav().spaceId, "home");
   assert.equal(nav().scroll, 80);
 });
 
@@ -470,7 +470,7 @@ test("S3 (round 2): the default profile opened without an id and its own pill sh
   fresh();
   const { useBrowser } = globalThis.__browserStore;
   const work = useBrowser.getState().createProfile({ name: "Work" });
-  const personal = useBrowser.getState().settings.defaultProfileId;
+  const personal = useBrowser.getState().spaces[useBrowser.getState().settings.defaultSpaceId].profileId;
   const settings = window(500);
   goToSettingsPane("profiles", null);
   settings.show();
@@ -486,16 +486,16 @@ test("S5 (round 2): Back to a deleted profile, now shown as another one, doesn't
   fresh();
   const { useBrowser } = globalThis.__browserStore;
   const work = useBrowser.getState().createProfile({ name: "Work" });
-  const personal = useBrowser.getState().settings.defaultProfileId;
+  const personal = useBrowser.getState().spaces[useBrowser.getState().settings.defaultSpaceId].profileId;
   goToSettingsPane("profiles", work);
   scrollShown(400);
   goToSettingsPane("profiles", personal);
   useBrowser.setState((s) => {
     const { [work]: _gone, ...profiles } = s.profiles;
-    return { profiles, profileOrder: s.profileOrder.filter((id) => id !== work) };
+    return { profiles };
   });
   settingsBack();
-  assert.equal(nav().profileId, work);
+  assert.equal(nav().spaceId, work);
   assert.equal(nav().scroll, 400);
   assert.equal(settingsScrollFor(nav().visit), 0, "the page shows the default profile, so 400 isn't restored on it");
 });
@@ -539,12 +539,12 @@ test("S5 (round 3): deleting the profile on screen and falling back to the defau
   fresh();
   const { useBrowser } = globalThis.__browserStore;
   const work = useBrowser.getState().createProfile({ name: "Work" });
-  const personal = useBrowser.getState().settings.defaultProfileId;
+  const personal = useBrowser.getState().spaces[useBrowser.getState().settings.defaultSpaceId].profileId;
   goToSettingsPane("profiles", work);
   scrollShown(400);
   useBrowser.setState((s) => {
     const { [work]: _gone, ...profiles } = s.profiles;
-    return { profiles, profileOrder: s.profileOrder.filter((id) => id !== work) };
+    return { profiles };
   });
   replaceSettingsPlace(null);
   assert.equal(nav().scroll, 0);
@@ -614,13 +614,13 @@ test("R4-2: fallback profile keeps its own scroll offset and default switch neve
   const { useBrowser } = globalThis.__browserStore;
   const work = useBrowser.getState().createProfile({ name: "Work" });
   const alt = useBrowser.getState().createProfile({ name: "Alt" });
-  const personal = useBrowser.getState().settings.defaultProfileId;
+  const personal = useBrowser.getState().spaces[useBrowser.getState().settings.defaultSpaceId].profileId;
   goToSettingsPane("profiles", work);
   scrollShown(400);
   goToSettingsPane("general");
   useBrowser.setState((s) => {
     const { [work]: _gone, ...profiles } = s.profiles;
-    return { profiles, profileOrder: s.profileOrder.filter((id) => id !== work) };
+    return { profiles };
   });
   settingsBack();
   assert.equal(settingsScrollFor(nav().visit), 0);
@@ -632,7 +632,8 @@ test("R4-2: fallback profile keeps its own scroll offset and default switch neve
   fresh();
   goToSettingsPane("profiles", null);
   scrollShown(120);
-  useBrowser.setState((s) => ({ settings: { ...s.settings, defaultProfileId: alt } }));
+  const altSpace = useBrowser.getState().createSpace({ name: "Alternate", profileId: alt });
+  useBrowser.getState().setDefaultSpace(altSpace);
   scrollShown(260);
   replaceSettingsPlace(personal);
   assert.equal(nav().scroll, 0, "switching to previous default never restores the new default's 260");

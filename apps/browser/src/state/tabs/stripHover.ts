@@ -36,7 +36,7 @@ async function show(target: Pointed, mine: number) {
   if (mine !== ticket || pointed !== target || !anchor || !tabCardsOn() || tabDragging() || hoverHeld(target.windowId)) return;
   useStripHover.setState({ hover: { windowId: target.windowId, tabId: target.tabId, anchor } });
   const s = useBrowser.getState();
-  noteStripHoverCard(s.tabs[target.tabId]?.profileId !== s.windows[target.windowId]?.profileId, consent);
+  noteStripHoverCard(s.tabs[target.tabId]?.spaceId !== s.windows[target.windowId]?.spaceId, consent);
 }
 
 export function stripChipEntered(windowId: string, tabId: string, measure: () => Promise<Anchor | null>) {
@@ -82,7 +82,7 @@ export function dismissStripHoverIn(windowId: string) {
 
 export function stripPageOffstage(windowId: string, profileId: string) {
   const tabs = useBrowser.getState().tabs;
-  const ofPage = (tabId: string) => tabs[tabId]?.profileId === profileId;
+  const ofPage = (tabId: string) => tabs[tabId]?.spaceId === profileId;
   if (pointed?.windowId === windowId && ofPage(pointed.tabId)) {
     pointed = null;
     ticket++;

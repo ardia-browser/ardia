@@ -49,12 +49,12 @@ function syncStatus() {
     enabled: s.enabled,
     folder: s.folder,
     types: s.types,
-    profiles: s.profiles,
+    profiles: s.spaces,
     lastSyncedAt: s.lastSyncedAt,
     error: s.error,
     pending: s.pending,
     devices: s.devices,
-    remoteProfiles: s.remoteProfiles,
+    remoteProfiles: s.remoteSpaces,
     remoteTabs: s.remoteTabs,
   };
 }

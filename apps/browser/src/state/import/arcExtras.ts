@@ -182,7 +182,7 @@ export async function importArcArchive(archive: ArcArchive, homes: ArcHomes, now
     const entry: ClosedTab = {
       kind: "tab",
       id: newId("ct"),
-      tab: { url: t.url, title: t.title, favicon: null, pin: null, muted: false, zoom: 1, customTitle: t.customTitle ?? null, customIcon: null, profileId, lastActiveAt: t.archivedAt },
+      tab: { url: t.url, title: t.title, favicon: null, pin: null, muted: false, zoom: 1, customTitle: t.customTitle ?? null, customIcon: null, spaceId: profileId, lastActiveAt: t.archivedAt },
       windowId: "",
       index: 0,
       group: null,

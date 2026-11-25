@@ -2,8 +2,8 @@ import type { BrowserState, HydrateData } from "../../browser/src/state/browser/
 import { cloneSessionValue, sessionItemIdentity, shareSessionValue } from "./hostSessionMerge.ts";
 import { parseSettingsMeta } from "../../browser/src/state/settings/settings";
 
-const tables = ["profiles", "windows", "tabs", "groups", "splits", "parkedPins", "pinChoices", "pinSync"] as const;
-const lists = ["profileOrder", "windowOrder", "orphanedProfileData", "closedTabs", "closedWindows", "closedGroups", "deletedGroups", "cleanedTabs"] as const;
+const tables = ["profiles", "spaces", "topApps", "parkedTopApps", "windows", "tabs", "groups", "splits", "parkedPins", "pinChoices", "pinSync"] as const;
+const lists = ["spaceOrder", "windowOrder", "orphanedProfileData", "closedTabs", "closedWindows", "closedGroups", "deletedGroups", "cleanedTabs"] as const;
 const transientTabKeys = ["page"];
 
 export function sessionStatePatch(state: BrowserState, local: HydrateData, merged: HydrateData): Partial<BrowserState> {

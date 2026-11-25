@@ -134,6 +134,16 @@ class Folder {
   }
 }
 
+export const workspaceOf = (entry) => entry.spaceId ?? entry.profileId;
+export const workspacesOf = (state) => state.spaces ?? state.profiles;
+export const workspaceOrderOf = (state) => state.spaceOrder ?? state.profileOrder;
+export const workspaceOption = (state, id) => state.spaces ? { spaceId: id } : { profileId: id };
+
+export function createWorkspace(state, name) {
+  const profileId = state.createProfile({ name });
+  return state.createSpace ? state.createSpace({ name, profileId }) : profileId;
+}
+
 export function pinKeysOf(world, s) {
   const { inPinnedContainer, pinKeyOf } = world.modules.model;
   const keys = new Map();
@@ -144,9 +154,13 @@ export function pinKeysOf(world, s) {
   for (const t of Object.values(s.tabs)) {
     const w = s.windows[t.windowId];
     if (!w || w.kind === "private" || w.kind === "small") continue;
-    if (inPinnedContainer(s, t.id)) add(t.profileId, pinKeyOf(t));
+    if (inPinnedContainer(s, t.id)) add(workspaceOf(t), pinKeyOf(t));
   }
   for (const [profileId, park] of Object.entries(s.parkedPins ?? {})) for (const t of park.tabs ?? []) add(profileId, t.id);
+  if (s.spaces) for (const space of Object.values(s.spaces)) {
+    if (!space.shareTopApps || space.legacyTopApps) continue;
+    for (const tile of s.topApps[space.profileId] ?? []) add(space.id, tile.key);
+  }
   return keys;
 }
 
@@ -215,9 +229,9 @@ export function createWorld(modules, { clock, timers }) {
     openTabInProfile([w, p, bg]) {
       if (allTabs().length >= MAX_TABS) return null;
       const windowId = pick(regularWindows(), w);
-      const profileId = pick(S().profileOrder, p);
+      const profileId = pick(workspaceOrderOf(S()), p);
       if (!windowId || !profileId) return null;
-      const id = S().newTab(windowId, { url: nextUrl(), profileId, background: bg % 2 === 0 });
+      const id = S().newTab(windowId, { url: nextUrl(), ...workspaceOption(S(), profileId), background: bg % 2 === 0 });
       return { detail: `newTab(${windowId}, profile ${profileId}) -> ${id}` };
     },
     closeTab([t]) {
@@ -263,7 +277,7 @@ export function createWorld(modules, { clock, timers }) {
         t,
       );
       if (!id) return null;
-      const removes = { [S().tabs[id].profileId]: [keyOf(id)] };
+      const removes = { [workspaceOf(S().tabs[id])]: [keyOf(id)] };
       S().pinTabs([id], false);
       return { detail: `pinTabs([${id}], false)`, removes, keeps: [id] };
     },
@@ -271,7 +285,7 @@ export function createWorld(modules, { clock, timers }) {
       const list = allTabs().filter((x) => !groups().some((g) => g.tabIds.includes(x)));
       const first = pick(list, t);
       if (!first) return null;
-      const same = list.filter((x) => S().tabs[x].windowId === S().tabs[first].windowId && S().tabs[x].profileId === S().tabs[first].profileId);
+      const same = list.filter((x) => S().tabs[x].windowId === S().tabs[first].windowId && workspaceOf(S().tabs[x]) === workspaceOf(S().tabs[first]));
       const ids = [first, ...same.filter((x) => x !== first).slice(0, n % 3)];
       const asPinned = pinned % 2 === 0;
       const groupId = S().groupTabs(ids, { pinned: asPinned, name: `G${world.urlCounter}` });
@@ -280,7 +294,7 @@ export function createWorld(modules, { clock, timers }) {
     ungroup([g]) {
       const group = pick(groups(), g);
       if (!group) return null;
-      const removes = group.pinned ? { [group.profileId]: groupKeys(group) } : undefined;
+      const removes = group.pinned ? { [workspaceOf(group)]: groupKeys(group) } : undefined;
       const members = group.tabIds.filter((x) => S().tabs[x]);
       S().ungroup(group.id);
       return { detail: `ungroup(${group.id})`, removes, keeps: members };
@@ -289,12 +303,12 @@ export function createWorld(modules, { clock, timers }) {
       const group = pick(groups(), g);
       if (!group) return null;
       const id = pick(
-        allTabs().filter((x) => S().tabs[x].windowId === group.windowId && S().tabs[x].profileId === group.profileId && !group.tabIds.includes(x)),
+        allTabs().filter((x) => S().tabs[x].windowId === group.windowId && workspaceOf(S().tabs[x]) === workspaceOf(group) && !group.tabIds.includes(x)),
         t,
       );
       if (!id) return null;
       const leavesPins = !group.pinned && modules.model.inPinnedContainer(S(), id);
-      const removes = leavesPins ? { [group.profileId]: [keyOf(id)] } : undefined;
+      const removes = leavesPins ? { [workspaceOf(group)]: [keyOf(id)] } : undefined;
       S().addTabsToGroup(group.id, [id]);
       return { detail: `addTabsToGroup(${group.id}, [${id}])`, removes, keeps: [id] };
     },
@@ -302,14 +316,14 @@ export function createWorld(modules, { clock, timers }) {
       const group = pick(groups(), g);
       const id = group && pick(group.tabIds.filter((x) => S().tabs[x]), t);
       if (!id) return null;
-      const removes = group.pinned ? { [group.profileId]: [keyOf(id)] } : undefined;
+      const removes = group.pinned ? { [workspaceOf(group)]: [keyOf(id)] } : undefined;
       S().removeTabsFromGroup([id]);
       return { detail: `removeTabsFromGroup([${id}]) from ${group.id}`, removes, keeps: [id] };
     },
     newWindow([p]) {
       if (regularWindows().length >= MAX_WINDOWS) return null;
-      const profileId = pick(S().profileOrder, p);
-      const id = S().createWindow({ url: nextUrl(), profileId });
+      const profileId = pick(workspaceOrderOf(S()), p);
+      const id = S().createWindow({ url: nextUrl(), ...workspaceOption(S(), profileId) });
       return { detail: `createWindow(profile ${profileId}) -> ${id}` };
     },
     closeWindow([w]) {
@@ -320,23 +334,27 @@ export function createWorld(modules, { clock, timers }) {
     },
     switchProfile([w, p]) {
       const windowId = pick(regularWindows(), w);
-      const profileId = pick(S().profileOrder, p);
-      if (!windowId || !profileId || S().windows[windowId].profileId === profileId) return null;
-      S().switchProfile(windowId, profileId);
+      const profileId = pick(workspaceOrderOf(S()), p);
+      if (!windowId || !profileId || workspaceOf(S().windows[windowId]) === profileId) return null;
+      (S().switchSpace ?? S().switchProfile)(windowId, profileId);
       return { detail: `switchProfile(${windowId}, ${profileId})` };
     },
     createProfile() {
-      if (S().profileOrder.length >= MAX_PROFILES) return null;
-      const id = S().createProfile({ name: `P${S().profileOrder.length}` });
+      if (workspaceOrderOf(S()).length >= MAX_PROFILES) return null;
+      const id = createWorkspace(S(), `P${workspaceOrderOf(S()).length}`);
       return { detail: `createProfile() -> ${id}` };
     },
     deleteProfile([p]) {
       const profileId = pick(
-        S().profileOrder.filter((id) => id !== S().settings.defaultProfileId),
+        workspaceOrderOf(S()).filter((id) => id !== (S().settings.defaultSpaceId ?? S().settings.defaultProfileId)),
         p,
       );
       if (!profileId) return null;
-      S().deleteProfile(profileId);
+      const owner = S().spaces?.[profileId]?.profileId;
+      if (S().deleteSpace) {
+        S().deleteSpace(profileId);
+        if (owner && !Object.values(S().spaces).some((space) => space.profileId === owner)) S().deleteProfile(owner);
+      } else S().deleteProfile(profileId);
       return { detail: `deleteProfile(${profileId})`, removesProfile: profileId };
     },
     shareTabs([on]) {

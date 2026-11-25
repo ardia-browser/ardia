@@ -17,7 +17,7 @@ function dismissalsByProfile(): Record<string, number> {
   try {
     const saved = JSON.parse(readDocument(PANEL_HINTS_DOCUMENT) ?? "null") as { dismissals?: unknown } | null;
     const stored = saved && typeof saved.dismissals === "object" && saved.dismissals ? (saved.dismissals as Record<string, unknown>) : {};
-    for (const [profileId, count] of Object.entries(stored)) if (typeof count === "number" && Number.isFinite(count) && count > 0) dismissals[profileId] = Math.floor(count);
+    for (const [spaceId, count] of Object.entries(stored)) if (typeof count === "number" && Number.isFinite(count) && count > 0) dismissals[spaceId] = Math.floor(count);
   } catch {}
   return dismissals;
 }
@@ -28,13 +28,13 @@ export function panelHintLabel(url: string | undefined): string | null {
   return LABEL.test(label) ? label : null;
 }
 
-const panelHintQuiet = (profileId: string) => (dismissalsByProfile()[profileId] ?? 0) >= PANEL_HINT_DISMISSALS;
+const panelHintQuiet = (spaceId: string) => (dismissalsByProfile()[spaceId] ?? 0) >= PANEL_HINT_DISMISSALS;
 
 export async function offerPanelHint(tabId: string, opened: FieldProviderOpened): Promise<boolean> {
   if (!PLATFORM_FEATURES.systemPasswordManagers || opened?.shown !== true || (opened.panel !== "above" && opened.panel !== "below")) return false;
   const tab = currentTab(tabId);
   const label = panelHintLabel(tab?.url);
-  if (!tab || !label || panelHintQuiet(tab.profileId)) return false;
+  if (!tab || !label || panelHintQuiet(tab.spaceId)) return false;
   const reply = await showPanelHint(tabId, label, opened.panel === "below" ? "above" : "below").catch(() => null);
   return reply?.shown === true;
 }
@@ -42,10 +42,10 @@ export async function offerPanelHint(tabId: string, opened: FieldProviderOpened)
 export function panelHintReported(tabId: string, hint: FieldProviderHint) {
   if (hint?.state !== "shown" && hint?.state !== "dismissed") return;
   notePanelHint(hint.state);
-  const profileId = currentTab(tabId)?.profileId;
-  if (hint.state !== "dismissed" || !profileId) return;
+  const spaceId = currentTab(tabId)?.spaceId;
+  if (hint.state !== "dismissed" || !spaceId) return;
   const counts = dismissalsByProfile();
-  counts[profileId] = (counts[profileId] ?? 0) + 1;
+  counts[spaceId] = (counts[spaceId] ?? 0) + 1;
   saveDocument(PANEL_HINTS_DOCUMENT, JSON.stringify({ version: 1, dismissals: counts }));
 }
 

@@ -4,7 +4,7 @@ import { CalendarSection } from "./CalendarSection";
 import { LinkRoutingSection } from "./LinkRoutingSection";
 import { LiveFoldersSection } from "./LiveFoldersSection";
 
-export function AutomationsPane({ profileId }: SettingsPlace) {
+export function AutomationsPane({ spaceId: profileId }: SettingsPlace) {
   return (
     <View>
       <CalendarSection />

@@ -21,7 +21,7 @@ export function sharedFolderMenuItems(s: Pick<BrowserState, "groups">, groupId: 
   const shared = sharedFolderOfGroup(s, groupId);
   if (!shared) return [share];
   const g = s.groups[groupId]!;
-  const sync = useSharedFolders.getState().sync[folderRef(g.profileId, pinKeyOf(g))];
+  const sync = useSharedFolders.getState().sync[folderRef(g.spaceId, pinKeyOf(g))];
   return [
     {
       id: "sharedFolder",

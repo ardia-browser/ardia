@@ -19,7 +19,6 @@ const { takeAirTrafficCounts, airTrafficSetting } = await import("../telemetry/a
 const { cleanProperties } = await import("../telemetry/sanitize.ts");
 
 const S = () => useBrowser.getState();
-const PERSONAL = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };
 const SLACK = { bundleId: "com.tinyspeck.slackmacgap", appName: "Slack" };
 const MAIL = { bundleId: "com.apple.mail", appName: "Mail" };
 const slackApp = { bundleId: "com.tinyspeck.slackmacgap", name: "Slack" };
@@ -29,8 +28,8 @@ const rule = (over = {}) => ({ id: `t${++next}`, enabled: true, from: null, when
 const counted = (over) => ({ air_traffic_rule_links: 0, air_traffic_fallback_links: 0, air_traffic_group_links: 0, ...over });
 
 function fresh({ rules: list = [], fallback = null, hooks = [] } = {}) {
-  S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
-  const work = S().createProfile({ name: "Work" });
+  S().hydrate({});
+  const work = S().createSpace({ name: "Work" });
   resetApprovalsForTests();
   stub.configFolder.files.set("hooks.json", JSON.stringify({ hooks }));
   reloadHooks();
@@ -93,7 +92,7 @@ test("a pattern without a scheme is a wildcard over the link", () => {
 
 test("a rule whose profile was deleted or is private falls through to the next one", () => {
   const work = fresh({ rules: [(w) => rule({ profileId: w, open: "window" }), rule({ profileId: "incognito:1@default" }), rule({ open: "littleArdia" })] });
-  S().deleteProfile(work);
+  S().deleteSpace(work);
   assert.equal(verdictOf(decideLink("https://a.example/", SLACK)), "last:littleArdia");
   assert.equal(traceLink("https://a.example/", SLACK).index, 2);
 });
@@ -115,7 +114,7 @@ test("the fallback answers only links nothing else caught, and a fallback to a d
   approveRule(approvalFor(useHookRules.getState().hooks[0]).key);
   assert.equal(verdictOf(decideLink("https://a.example/", MAIL)), "last:littleArdia");
   assert.equal(verdictOf(decideLink("https://a.example/", SLACK)), `${work}:window`);
-  S().deleteProfile(work);
+  S().deleteSpace(work);
   assert.equal(decideLink("https://a.example/", SLACK), null);
   assert.equal(traceLink("https://a.example/", SLACK).by, "usual");
 });
@@ -304,7 +303,7 @@ test("a rule whose tab group is gone opens a plain tab in its profile, and a gro
   const work = fresh({ rules: [(w) => rule({ profileId: w, groupKey: "missing" }), (w) => rule({ profileId: w, open: "window" })] });
   assert.deepEqual(decideLink("https://a.example/", MAIL), { profileId: work, open: "tab", windowId: null, groupKey: null });
   assert.deepEqual([previewLink("a.example", MAIL).profileName, previewLink("a.example", MAIL).groupName], ["Work", null]);
-  const w = S().createWindow({ url: "https://inbox.example/", profileId: work });
+  const w = S().createWindow({ url: "https://inbox.example/", spaceId: work });
   const group = S().groupTabs([S().windows[w].tabIds[0]], { name: "Inbox" });
   const key = S().groups[group].pinKey ?? group;
   store.updateAirTrafficRule(store.useAirTraffic.getState().config.rules[0].id, { groupKey: key });
@@ -317,8 +316,8 @@ test("a link from another app with a group rule joins the group's copy in the wi
   const { openExternalUrls } = await import("../littleArdia/actions.ts");
   const work = fresh();
   startDecideHooks();
-  const first = S().createWindow({ url: "https://inbox.example/", profileId: work });
-  const group = S().groupTabs([S().windows[first].tabIds.find((id) => S().tabs[id].profileId === work)], { name: "Inbox" });
+  const first = S().createWindow({ url: "https://inbox.example/", spaceId: work });
+  const group = S().groupTabs([S().windows[first].tabIds.find((id) => S().tabs[id].spaceId === work)], { name: "Inbox" });
   S().updateGroup(group, { collapsed: true });
   const key = S().groups[group].pinKey ?? group;
   store.addAirTrafficRule({ enabled: true, from: null, when: { kind: "site", host: "mail.example" }, profileId: work, open: "tab", groupKey: key });
@@ -342,7 +341,7 @@ test("a link from another app with a group rule joins the group's copy in the wi
 test("Everything Else with a tab group routes into it, and opens a plain tab in its profile once the group is gone", () => {
   const work = fresh({ fallback: (w) => ({ profileId: w, open: "tab", groupKey: "missing" }) });
   assert.deepEqual(decideLink("https://a.example/", MAIL), { profileId: work, open: "tab", windowId: null, groupKey: null });
-  const w = S().createWindow({ url: "https://inbox.example/", profileId: work });
+  const w = S().createWindow({ url: "https://inbox.example/", spaceId: work });
   const group = S().groupTabs([S().windows[w].tabIds[0]], { name: "Inbox" });
   const key = S().groups[group].pinKey ?? group;
   store.setAirTrafficFallback({ profileId: work, open: "tab", groupKey: key });
@@ -351,11 +350,11 @@ test("Everything Else with a tab group routes into it, and opens a plain tab in 
 
 test("with the group in two windows the link joins the one shown last, and never one that is closing", () => {
   const work = fresh();
-  const first = S().createWindow({ url: "https://inbox.example/", profileId: work });
-  const second = S().createWindow({ url: "https://other.example/", profileId: work });
-  const inFirst = S().groupTabs([S().windows[first].tabIds.find((id) => S().tabs[id].profileId === work)], { name: "Inbox", pinned: false });
+  const first = S().createWindow({ url: "https://inbox.example/", spaceId: work });
+  const second = S().createWindow({ url: "https://other.example/", spaceId: work });
+  const inFirst = S().groupTabs([S().windows[first].tabIds.find((id) => S().tabs[id].spaceId === work)], { name: "Inbox", pinned: false });
   const key = S().groups[inFirst].pinKey ?? inFirst;
-  const inSecond = S().groupTabs([S().windows[second].tabIds.find((id) => S().tabs[id].profileId === work)], { name: "Inbox", pinned: false });
+  const inSecond = S().groupTabs([S().windows[second].tabIds.find((id) => S().tabs[id].spaceId === work)], { name: "Inbox", pinned: false });
   useBrowser.setState((s) => ({ groups: { ...s.groups, [inSecond]: { ...s.groups[inSecond], pinKey: key } }, ui: { ...s.ui, focusOrder: [first, second] } }));
   assert.equal(groupWindow(S(), work, key), first);
   useBrowser.setState((s) => ({ ui: { ...s.ui, focusOrder: [second, first] } }));
@@ -374,15 +373,15 @@ test("with the group in two windows the link joins the one shown last, and never
 test("the routing targets' stamp changes when a profile or one of its tab groups appears, is renamed or goes away", () => {
   const work = fresh();
   const stamps = [routeTargetsStamp(S())];
-  const w = S().createWindow({ url: "https://inbox.example/", profileId: work });
+  const w = S().createWindow({ url: "https://inbox.example/", spaceId: work });
   stamps.push(routeTargetsStamp(S()));
-  const group = S().groupTabs([S().windows[w].tabIds.find((id) => S().tabs[id].profileId === work)], { name: "Inbox", pinned: false });
+  const group = S().groupTabs([S().windows[w].tabIds.find((id) => S().tabs[id].spaceId === work)], { name: "Inbox", pinned: false });
   stamps.push(routeTargetsStamp(S()));
   S().updateGroup(group, { name: "Mail" });
   stamps.push(routeTargetsStamp(S()));
   S().ungroup(group);
   stamps.push(routeTargetsStamp(S()));
-  S().createProfile({ name: "Side" });
+  S().createSpace({ name: "Side" });
   stamps.push(routeTargetsStamp(S()));
   assert.equal(stamps[1], stamps[0], "a new window alone changes no target");
   for (let i = 2; i < stamps.length; i++) assert.notEqual(stamps[i], stamps[i - 1], `step ${i}`);
@@ -398,7 +397,7 @@ test("a link from another app lands where its rule says, before any tab exists",
   openExternalUrls(["https://github.com/ardia"], undefined, SLACK);
   await new Promise((resolve) => setTimeout(resolve, 20));
   const tab = Object.values(S().tabs).find((t) => t.url === "https://github.com/ardia");
-  assert.equal(tab?.profileId, work);
+  assert.equal(tab?.spaceId, work);
   assert.notEqual(S().windows[tab.windowId].kind, "small");
   assert.equal(store.useAirTraffic.getState().recentApps[0].name, "Slack");
 });

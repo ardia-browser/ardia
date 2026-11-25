@@ -16,7 +16,7 @@ export function initialLinuxLaunch(host: ArdiaHost, saved: HydrateData | null | 
   return { initial: initialLinuxSession(host, saved, (id) => restored.push(id)), restored };
 }
 
-const utilitySnapshot = (state: BrowserState, canonical: HydrateData): HydrateData => ({ ...snapshotHostSession(state), focusedWindowId: canonical.focusedWindowId, lastProfileId: canonical.lastProfileId });
+const utilitySnapshot = (state: BrowserState, canonical: HydrateData): HydrateData => ({ ...snapshotHostSession(state), focusedWindowId: canonical.focusedWindowId, lastSpaceId: canonical.lastSpaceId });
 
 export function createUtilitySessionSnapshot(initial: BrowserState, saved: HydrateData) {
   let baseline = utilitySnapshot(initial, saved);

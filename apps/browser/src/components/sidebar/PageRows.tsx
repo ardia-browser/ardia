@@ -3,7 +3,7 @@ import { Animated, View } from "react-native";
 import { continuousCorners, radius, space, Symbol, Text } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { useSettings } from "../../state/browser/hooks";
-import { isIncognitoProfile } from "../../state/browser/model";
+import { isIncognitoSpace } from "../../state/browser/model";
 import { newCapture } from "../../state/sidebar/listCapture";
 import { useCapturedSidebarEntries, useOffersTidyTabs, usePinnedCollapsed, usePinnedKept } from "../../state/sidebar/hooks";
 import { useAddressBarInSidebar } from "../../state/windows/layout";
@@ -30,7 +30,7 @@ import { useLaunchGrowth } from "./useLaunchGrowth";
 
 type PageRowsProps = {
   windowId: string;
-  profileId: string;
+  spaceId: string;
   current: boolean;
   rows: number | undefined;
   lazy: boolean;
@@ -47,11 +47,11 @@ type PageRowsProps = {
 
 const DOCKED_TILES_GAP = SCROLL_EDGE.gap + SCROLL_EDGE.line + SCROLL_EDGE.inset;
 
-export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, underDockedTiles, innerWidth, inlineNewTab, controller, geometry, regions, viewport }: PageRowsProps) {
+export function PageRows({ windowId, spaceId, current, rows, lazy, offScreen, tiles, underDockedTiles, innerWidth, inlineNewTab, controller, geometry, regions, viewport }: PageRowsProps) {
   const [captured] = useState(newCapture);
   const pluginViews = usePluginChrome(PLUGIN_CHROME.sidebar);
-  const { list: all } = useCapturedSidebarEntries(windowId, profileId, captured);
-  const [mountedRows, setMountedRows] = useState(() => firstPaintEntriesNow(windowId, profileId, all, lazy));
+  const { list: all } = useCapturedSidebarEntries(windowId, spaceId, captured);
+  const [mountedRows, setMountedRows] = useState(() => firstPaintEntriesNow(windowId, spaceId, all, lazy));
   const [visited, setVisited] = useState(current);
   const [lastRows, setLastRows] = useState(rows ?? 0);
   if (rows !== undefined && rows !== lastRows) setLastRows(rows);
@@ -70,27 +70,27 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   }, [growNow, mountedRows, all.length]);
   const limit = cap ?? (growing ? mountedRows : undefined);
   const list = limit === undefined ? all : all.slice(0, limit);
-  const pending = usePendingEntriesHeight(windowId, profileId, all, mountedRows, growing);
+  const pending = usePendingEntriesHeight(windowId, spaceId, all, mountedRows, growing);
   const showClear = useSettings((s) => s.showClearButton);
   const clearable = showClear && !offScreen && all.length > 0;
   const tidyTabs = useSettings((s) => s.tidyTabs);
-  const tidy = useOffersTidyTabs(windowId, profileId, offScreen || !tidyTabs);
-  const pinned = usePinnedSequence(windowId, profileId, offScreen);
+  const tidy = useOffersTidyTabs(windowId, spaceId, offScreen || !tidyTabs);
+  const pinned = usePinnedSequence(windowId, spaceId, offScreen);
   const pinnedSection = pinned.length > 0;
   const divided = clearable || tidy || pinnedSection;
-  const collapsed = usePinnedCollapsed(profileId);
+  const collapsed = usePinnedCollapsed(spaceId);
   const pinnedFold = useFold(collapsed);
-  const kept = usePinnedKept(windowId, profileId, pinned);
+  const kept = usePinnedKept(windowId, spaceId, pinned);
   const pinnedGap = collapsed && !kept && !pinnedFold.moving ? 0 : layout.rowGap;
   const newTabButtonAtTop = useNewTabAtTop();
   const animated = current && !offScreen;
-  const motion = useListMotion(windowId, profileId, all, captured, animated, viewport, newTabButtonAtTop && inlineNewTab ? rowPitch() : 0, () => ({ list: collapsed ? (kept ? [kept] : []) : pinned, base: regions.pinnedGroups - regions.list }));
+  const motion = useListMotion(windowId, spaceId, all, captured, animated, viewport, newTabButtonAtTop && inlineNewTab ? rowPitch() : 0, () => ({ list: collapsed ? (kept ? [kept] : []) : pinned, base: regions.pinnedGroups - regions.list }));
   const scope = useMemo(() => ({ slideBelow: motion.slideBelow, seenIn: motion.seenIn }), [motion.slideBelow, motion.seenIn]);
   if (geometry) geometry.current.newTabAtTop = newTabButtonAtTop && inlineNewTab;
   return (
     <ListMotionContext.Provider value={scope}>
       <View>
-        {isIncognitoProfile(profileId) ? <IncognitoBadge /> : null}
+        {isIncognitoSpace(spaceId) ? <IncognitoBadge /> : null}
         {tiles.length ? (
           <DragScope enabled={current}>
             <PinnedGrid tabs={tiles} innerWidth={innerWidth} flush />
@@ -109,7 +109,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
               collapsed={collapsed}
               entries={pinned.map((entry) => ({ key: entry, node: <SidebarEntry entry={entry} section="pinnedGroups" rowSection="pinnedRows" /> }))}
               keep={kept}
-              estimate={(key) => entryHeightNow(windowId, profileId, key)}
+              estimate={(key) => entryHeightNow(windowId, spaceId, key)}
             />
           ) : null}
           <Tail section="pinnedGroups" />
@@ -117,8 +117,8 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
         {divided ? (
           <ClearDivider
             windowId={windowId}
-            profileId={profileId}
-            lift={underDockedTiles && !pinnedSection && !isIncognitoProfile(profileId) ? DOCKED_TILES_GAP : 0}
+            spaceId={spaceId}
+            lift={underDockedTiles && !pinnedSection && !isIncognitoSpace(spaceId) ? DOCKED_TILES_GAP : 0}
             clear={clearable}
             tidy={tidy}
             pinned={pinnedSection ? { collapsed, open: pinnedFold.open } : null}
@@ -147,7 +147,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
           <Tail section="list" />
           {!newTabButtonAtTop && inlineNewTab ? <NewTabRow windowId={windowId} shift={motion.tail} clip={motion.tailClip} /> : null}
         </View>
-        {pluginViews && !offScreen && !isIncognitoProfile(profileId) ? <PluginSidebarViews windowId={windowId} /> : null}
+        {pluginViews && !offScreen && !isIncognitoSpace(spaceId) ? <PluginSidebarViews windowId={windowId} /> : null}
         {current ? <CleanUpUpsell windowId={windowId} shift={motion.tail} /> : null}
       </View>
     </ListMotionContext.Provider>

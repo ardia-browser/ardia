@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { exportBookmarks } from "../../../state/bookmarks/exportHtml";
+import { exportProfileBookmarks } from "../../../state/bookmarks/exportHtml";
+import { profileIdForSpace } from "../../../state/profiles/current";
+import { spaceOfWindow } from "../../../state/bookmarks/bookmarkGroups";
+import { settingsBrowserWindow } from "../../../state/settings/settingsWindows";
 import { Button } from "../../ui";
 import { Row } from "../Form";
 
@@ -10,7 +13,7 @@ export function ExportBookmarksRow({ profileId }: { profileId: string }) {
     setBusy(true);
     setStatus("");
     try {
-      const path = await exportBookmarks(profileId);
+      const path = await exportProfileBookmarks(profileId);
       if (path) {
         const parts = path.split(/[\\/]/);
         setStatus(`Saved “${parts.at(-1) ?? path}” to “${parts.at(-2) ?? ""}”.`);

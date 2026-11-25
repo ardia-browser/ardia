@@ -65,7 +65,7 @@ async function carryZoom(tabId: string, to: PageEngine, url: string): Promise<bo
   const t = s.tabs[tabId];
   const host = hostOf(url);
   if (!t || !host || !Number.isFinite(t.zoom) || t.zoom <= 0) return false;
-  const profile = engineProfile(s, t.profileId);
+  const profile = engineProfile(s, t.spaceId);
   const write = to === "webkit" ? setWebKitZoom(profile, host, t.zoom) : setZoom(profile, host, t.zoom);
   return (await withDeadline(write.then(() => true).catch(() => false), EVALUATE_MS, false)) && Math.abs(t.zoom - 1) > 0.001;
 }

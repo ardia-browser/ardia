@@ -131,6 +131,7 @@ export type DocumentsNative = {
   readDocument(name: string): string | null;
   documentExists(name: string): boolean | Promise<boolean>;
   writeDocument(name: string, contents: string): void;
+  writeDocumentImmediately(name: string, contents: string): void | boolean;
   documentSaved(name: string): Promise<void>;
   createDocument(name: string, contents: string): Promise<void>;
   listDocuments(prefix: string): string[];

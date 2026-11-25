@@ -15,12 +15,12 @@ let startedAt = 0;
 const commits = new Map<string, Commit>();
 
 function windowData(s: BrowserState, windowId: string) {
-  return { windowId, kind: eligibleKind(s, windowId)!, profile: s.windows[windowId]!.profileId };
+  return { windowId, kind: eligibleKind(s, windowId)!, profile: s.windows[windowId]!.spaceId };
 }
 
 function tabData(s: BrowserState, tabId: string) {
   const t = s.tabs[tabId]!;
-  return { windowId: t.windowId, tabId, profile: t.profileId, ...shownPage(t) };
+  return { windowId: t.windowId, tabId, profile: t.spaceId, ...shownPage(t) };
 }
 
 function diffStates(s: BrowserState, prev: BrowserState, send: AutomationEventSink) {
@@ -61,7 +61,7 @@ function sendNavigated(tabId: string, { url, sameDocument }: HeldNavigation) {
   const s = useBrowser.getState();
   if (!sink || !isEligibleTab(s, tabId)) return;
   const t = s.tabs[tabId]!;
-  sink("tab.navigated", { windowId: t.windowId, tabId, profile: t.profileId, ...shownPage({ ...t, url }), sameDocument });
+  sink("tab.navigated", { windowId: t.windowId, tabId, profile: t.spaceId, ...shownPage({ ...t, url }), sameDocument });
 }
 
 function releaseNavigations(tabId: string) {
@@ -86,7 +86,7 @@ function sendPageError(tabId: string, url: string, status: number) {
   const s = useBrowser.getState();
   if (!sink || !isEligibleTab(s, tabId)) return;
   const t = s.tabs[tabId]!;
-  sink("page.error", { windowId: t.windowId, tabId, profile: t.profileId, url: shownPage({ ...t, url }).url, status });
+  sink("page.error", { windowId: t.windowId, tabId, profile: t.spaceId, url: shownPage({ ...t, url }).url, status });
 }
 
 export function noteCommit(tabId: string, url: string | undefined, at: number | undefined, httpStatus?: number) {

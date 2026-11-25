@@ -1,7 +1,8 @@
 import type { HydrateData } from "../browser/store";
-import type { BrowserWindow, ClosedWindow, ParkedPins, Profile, SplitView, Tab } from "../browser/types";
-import { parseSaved, type Migrations, type SavedObject } from "../../lib/savedDocument";
-import { sessionWithCleanUpMinutes } from "../settings/cleanUpAfter";
+import type { BrowserWindow, ClosedWindow, ParkedPins, Profile, Space, SplitView, Tab } from "../browser/types";
+import { parseSaved, type Migrations, type SavedObject, unchanged } from "../../lib/savedDocument";
+import { sessionWithSpaces } from "../../lib/workspaceUpgrade";
+import { topAppValue } from "../pins/topAppValue";
 import { parseSettingsMeta, sessionWithNewTabLinksInLittleArdia, sessionWithSettingsMeta, sessionWithUnreadCountsOffByDefault } from "../settings/settings";
 import { sessionWithOwnTabMutes } from "../tabs/mute";
 import { pinChoicesFromDisk, sessionWithPinChoiceStamps } from "../pins/pinChoices";
@@ -11,8 +12,20 @@ import { profilesKeepingLegacyDots } from "../profiles/switcherMark";
 import { profilesWithOwnLooks } from "../../lib/presetLook";
 import { layoutDrops } from "../browser/hydratedLayout";
 
-export const SESSION_VERSION = 11;
-export const SESSION_MIGRATIONS: Migrations = { 2: sessionWithCleanUpMinutes, 3: sessionWithOwnTabMutes, 4: sessionWithTabPages, 5: sessionWithTabPins, 6: sessionWithSplitSlots, 7: sessionWithSettingsMeta, 8: sessionWithPinChoiceStamps, 9: sessionWithNewTabLinksInLittleArdia, 10: sessionWithUnreadCountsOffByDefault };
+export const SESSION_VERSION = 12;
+const migrateWorkspace = (doc: SavedObject) => doc.spaces && doc.profiles ? unchanged(doc) : sessionWithSpaces(doc);
+export const SESSION_MIGRATIONS: Migrations = {
+  2: migrateWorkspace,
+  3: migrateWorkspace,
+  4: (doc) => doc.spaces ? sessionWithOwnTabMutes(doc) : sessionWithSpaces(doc),
+  5: migrateWorkspace,
+  6: migrateWorkspace,
+  7: sessionWithSettingsMeta,
+  8: sessionWithPinChoiceStamps,
+  9: sessionWithNewTabLinksInLittleArdia,
+  10: sessionWithUnreadCountsOffByDefault,
+  11: migrateWorkspace,
+};
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter(isString) : []);
 const has = (o: SavedObject, keys: readonly string[]) => keys.every((k) => isString(o[k]));
@@ -21,14 +34,14 @@ const byProfile = <T,>(v: unknown, ok: (o: SavedObject) => boolean = () => true)
   (isFields(v) ? Object.fromEntries(Object.entries(v).filter(([, o]) => isFields(o) && ok(o))) : {}) as Record<string, T>;
 const byId = <T extends { id: string }>(list: T[]) => Object.fromEntries(list.map((x) => [x.id, x]));
 
-const windowOk = (o: SavedObject) => has(o, ["id", "profileId"]) && isStringList(o.tabIds) && isFields(o.activeTabIds) && Object.values(o.activeTabIds).every(isString);
-const tabOk = (o: SavedObject) => has(o, ["id", "windowId", "profileId", "url"]);
-const groupOk = (o: SavedObject) => has(o, ["id", "windowId", "profileId"]) && isStringList(o.tabIds);
+const windowOk = (o: SavedObject) => has(o, ["id", "spaceId"]) && isStringList(o.tabIds) && isFields(o.activeTabIds) && Object.values(o.activeTabIds).every(isString);
+const tabOk = (o: SavedObject) => has(o, ["id", "windowId", "spaceId", "url"]);
+const groupOk = (o: SavedObject) => has(o, ["id", "windowId", "spaceId"]) && isStringList(o.tabIds);
 const splitOk = (o: SavedObject) => has(o, ["id", "windowId"]) && (o.orientation === "horizontal" || o.orientation === "vertical") && !!slotsFromDisk(o.slots);
-const snapshotOk = (o: unknown) => isFields(o) && has(o, ["url", "profileId"]);
+const snapshotOk = (o: unknown) => isFields(o) && has(o, ["url", "spaceId"]);
 const closedTabOk = (o: SavedObject) => isString(o.id) && snapshotOk(o.tab);
 const tabListOk = (o: SavedObject) => isString(o.id) && Array.isArray(o.tabs) && o.tabs.every(snapshotOk);
-const profileOk = (o: SavedObject) => has(o, ["id", "name"]);
+const spaceOk = (o: SavedObject) => has(o, ["id", "name"]);
 const parkedOk = (o: SavedObject) => Array.isArray(o.tabs) && o.tabs.every(snapshotOk) && Array.isArray(o.groups) && o.groups.every((g) => isFields(g) && isString(g.id));
 
 export type SavedSession = Omit<HydrateData, "history" | "bookmarks" | "downloads"> & {
@@ -67,15 +80,18 @@ export function sessionFromSaved(raw: SavedObject): SavedSession {
   const settings = settingsWithAutoHideTabs(raw.settings, savedWindowRows);
   return {
     windowsAgainstAutoHideTabs: windowsAgainstAutoHideTabs(settings, savedWindowRows),
-    profiles: profilesWithOwnLooks(profilesKeepingLegacyDots(byProfile<Profile>(raw.profiles, profileOk), raw.settings)),
-    profileOrder: strings(raw.profileOrder).filter(notInherited),
+    profiles: byProfile<Profile>(raw.profiles, (profile) => spaceOk(profile) && isString(profile.engineId)),
+    spaces: profilesWithOwnLooks(profilesKeepingLegacyDots(byProfile<Space>(raw.spaces, (space) => spaceOk(space) && isString(space.profileId)), raw.settings)),
+    spaceOrder: strings(raw.spaceOrder).filter(notInherited),
+    topApps: Object.fromEntries(Object.entries(isFields(raw.topApps) ? raw.topApps : {}).map(([id, items]) => [id, Array.isArray(items) ? items.flatMap((item) => topAppValue(item) ?? []) : []])),
+    parkedTopApps: Object.fromEntries(Object.entries(isFields(raw.parkedTopApps) ? raw.parkedTopApps : {}).map(([id, tabs]) => [id, rows<Tab>(tabs, tabOk).map((tab) => ({ ...tab, page: pageFromDisk(tab.page), pin: pinFromDisk(tab.pin) }))])),
     orphanedProfileData: strings(raw.orphanedProfileData),
     settings,
     settingsMeta: parseSettingsMeta(raw.settingsMeta),
     windows: byId(rows<Omit<BrowserWindow, "autoHideTabs"> & { incognito?: unknown; sidebarOpen?: unknown; autoHideTabs?: unknown }>(raw.windows, windowOk).map(({ incognito: _i, sidebarOpen: _s, autoHideTabs, ...w }): BrowserWindow => ({ ...w, kind: "main", ...(typeof autoHideTabs === "boolean" ? { autoHideTabs } : {}) }))),
     windowOrder: strings(raw.windowOrder).filter(notInherited),
     focusedWindowId: ownId(raw.focusedWindowId),
-    lastProfileId: ownId(raw.lastProfileId),
+    lastSpaceId: ownId(raw.lastSpaceId),
     tabs: byId(rows<Tab>(raw.tabs, tabOk).map((t) => ({ ...t, page: pageFromDisk(t.page), pin: pinFromDisk(t.pin) }))),
     groups: byId(rows(raw.groups, groupOk)),
     splits: byId(rows<SplitView>(raw.splits, splitOk).map((v) => ({ ...v, slots: slotsFromDisk(v.slots)! }))),

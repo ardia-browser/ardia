@@ -16,7 +16,7 @@ const { startRename, bookmarkTabs } = await import("../../browser/src/state/side
 const { renameFolder } = await import("../../browser/src/state/sidebar/tileFolderUi.ts");
 const { newTileFolder, folderIn } = await import("../../browser/src/state/pins/tileFolders.ts");
 const { sidebarUi } = await import("../../browser/src/state/sidebar/sidebarUi.ts");
-const { deleteProfile } = await import("../../browser/src/state/browser/actions.ts");
+const { deleteSpace } = await import("../../browser/src/state/browser/actions.ts");
 const { startWindowCloseGuard } = await import("../../browser/src/state/windows/windowClose.ts");
 const { windows } = await import("../../browser/src/test-native/shell.ts");
 const state = () => useBrowser.getState();
@@ -78,21 +78,21 @@ test("real tile folder rename and bookmark folder creation use shell prompt", as
   f.adapter.retire();
 });
 
-test("real profile delete preserves destructive label and honors Cancel then Confirm", async () => {
+test("real Space delete preserves destructive label and honors Cancel then Confirm", async () => {
   const f = fixture();
-  const profile = state().createProfile({ name: "Disposable" });
-  const canceled = deleteProfile(profile, f.windowId);
+  const space = state().createSpace({ name: "Disposable", profileId: "default" });
+  const canceled = deleteSpace(space, f.windowId);
   await turn();
   const options = f.requests.at(-1).args[0].options;
   assert.equal(options.destructive, true);
-  assert.equal(options.confirmTitle, "Delete Profile");
+  assert.equal(options.confirmTitle, "Delete Space");
   assert.equal(options.windowId, f.windowId);
-  assert.ok(state().profiles[profile]);
+  assert.ok(state().spaces[space]);
   f.respond({ confirmed: false, suppressed: false }); await canceled;
-  assert.ok(state().profiles[profile]);
-  const confirmed = deleteProfile(profile, f.windowId);
+  assert.ok(state().spaces[space]);
+  const confirmed = deleteSpace(space, f.windowId);
   await turn(); f.respond({ confirmed: true, suppressed: false }); await confirmed;
-  assert.equal(state().profiles[profile], undefined);
+  assert.equal(state().spaces[space], undefined);
   f.adapter.retire();
 });
 
@@ -127,15 +127,15 @@ test("closing the last regular window asks nothing, since its tabs come back wit
   f.adapter.retire();
 });
 
-test("real profile delete rejects an unavailable identity backend without deleting data", async () => {
+test("real Space delete rejects an unavailable identity backend without deleting data", async () => {
   const f = fixture();
-  const profile = state().createProfile({ name: "Keep" });
+  const space = state().createSpace({ name: "Keep", profileId: "default" });
   f.host.invoke = async (method, payload) => {
     f.requests.push({ method, ...payload });
     throw Object.assign(new Error("Unsupported ArdiaShell.windowIdentity"), { code: "ERR_UNAVAILABLE" });
   };
-  await assert.rejects(deleteProfile(profile, f.windowId), { code: "ERR_UNAVAILABLE" });
-  assert.ok(state().profiles[profile]);
+  await assert.rejects(deleteSpace(space, f.windowId), { code: "ERR_UNAVAILABLE" });
+  assert.ok(state().spaces[space]);
   assert.deepEqual(f.requests.map((request) => request.method), ["ArdiaShell.windowIdentity"]);
   f.adapter.retire();
 });

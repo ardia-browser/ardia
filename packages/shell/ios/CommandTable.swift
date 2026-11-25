@@ -59,7 +59,7 @@ enum CommandTable {
     case togglePin
     case togglePinnedRow
     case duplicateTab
-    case moveTabToProfile
+    case moveTabToSpace
     case moveTabToWindow
     case bookmarkPage
     case addBookmarkToFolder
@@ -71,10 +71,10 @@ enum CommandTable {
     case toggleReader
     case downloads
     case mergeAllWindows
-    case switchProfile
-    case nextProfile
-    case previousProfile
-    case newProfile
+    case switchSpace
+    case nextSpace
+    case previousSpace
+    case newSpace
     case openSettings
     case importBrowserData
     case showHistory
@@ -117,7 +117,7 @@ enum CommandTable {
     case moveTabDown
     case moveTabUp
     case closeTabGroup
-    case openProfileMenu
+    case openSpaceMenu
   }
 
   static let titles: [String: String] = [
@@ -189,15 +189,16 @@ enum CommandTable {
     "togglePin:tile": "Move Pinned Tab to Top Apps",
     "togglePinnedRow": "Move to Pinned",
     "duplicateTab": "Duplicate",
+    "moveTabToSpace:new": "New Space…",
     "bookmarkPage": "Add to Bookmarks…",
     "toggleMute": "Mute Tab",
     "togglePageEngine": "Open Page in WebKit",
     "toggleReader": "Show Reader",
     "downloads": "Downloads",
     "mergeAllWindows": "Merge All Windows",
-    "nextProfile": "Next Profile",
-    "previousProfile": "Previous Profile",
-    "newProfile": "New Profile…",
+    "nextSpace": "Next Space",
+    "previousSpace": "Previous Space",
+    "newSpace": "New Space…",
     "openSettings": "Settings…",
     "importBrowserData": "Import from Another Browser…",
     "showHistory": "Show History…",
@@ -244,7 +245,7 @@ enum CommandTable {
     "moveTabDown": "Move Tab Down",
     "moveTabUp": "Move Tab Up",
     "closeTabGroup": "Close Group",
-    "openProfileMenu": "Show Profiles Menu",
+    "openSpaceMenu": "Show Spaces Menu",
   ]
 
   static let keys: [String: [(key: String, mods: NSEvent.ModifierFlags)]] = [
@@ -300,8 +301,8 @@ enum CommandTable {
     "bookmarkPage": [("d", [.command])],
     "toggleReader": [("r", [.option, .command])],
     "downloads": [("j", [.shift, .command]), ("l", [.option, .command])],
-    "nextProfile": [("\u{F703}", [.option, .command])],
-    "previousProfile": [("\u{F702}", [.option, .command])],
+    "nextSpace": [("\u{F703}", [.option, .command])],
+    "previousSpace": [("\u{F702}", [.option, .command])],
     "openSettings": [(",", [.command])],
     "showHistory": [("y", [.command])],
     "clearBrowsingData": [("\u{8}", [.shift, .command])],
@@ -323,7 +324,7 @@ enum CommandTable {
     "moveTabDown": [("\u{F72D}", [.control, .shift])],
     "moveTabUp": [("\u{F72C}", [.control, .shift])],
     "closeTabGroup": [("w", [.control, .command])],
-    "openProfileMenu": [("m", [.shift, .command])],
+    "openSpaceMenu": [("m", [.shift, .command])],
     "std:quit:": [("q", [.command])],
     "std:hide:": [("h", [.command])],
     "std:hideOtherApplications:": [("h", [.option, .command])],

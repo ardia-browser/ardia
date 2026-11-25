@@ -1,10 +1,10 @@
 import { boundFolders } from "../sharedFolders/store";
 import { SHARED_GROUPS_SIDEBAR_ONLY } from "./workspaceSharedGuard";
 import type { BrowserState } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
-import { deleteProfile } from "../browser/actions";
+import { engineProfile, isIncognitoSpace } from "../browser/model";
+import { deleteSpace } from "../browser/actions";
 import { sanitizeTheme, startingTheme } from "../../lib/profileLook";
-import { choosePresetColor, setProfileTheme } from "../profiles/themeActions";
+import { choosePresetColor, setProfileTheme } from "../spaces/themeActions";
 import type { ProfileColor } from "../browser/types";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { setOpenTabsSynced } from "../sync/engine";
@@ -16,15 +16,15 @@ import { askWhereSeen, shownWindowId } from "./socketAsk";
 const COLORS = ["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral"] as const;
 
 function profileRow(s: BrowserState, id: string) {
-  const p = s.profiles[id]!;
+  const p = s.spaces[id]!;
   return {
     id,
     name: p.name,
     color: p.color,
     icon: p.icon,
     theme: p.theme ?? null,
-    default: s.settings.defaultProfileId === id,
-    sharesDataWith: s.profileOrder.filter((other) => other !== id && engineProfile(s, other) === engineProfile(s, id)),
+    default: s.settings.defaultSpaceId === id,
+    sharesDataWith: s.spaceOrder.filter((other) => other !== id && engineProfile(s, other) === engineProfile(s, id)),
     shareTopApps: !!p.shareTopApps,
     syncTabs: !!p.syncTabs,
     pinnedCollapsed: !!p.pinnedCollapsed,
@@ -34,7 +34,7 @@ function profileRow(s: BrowserState, id: string) {
 
 const listProfiles = () => {
   const s = now();
-  return s.profileOrder.filter((id) => s.profiles[id] && !isIncognitoProfile(id)).map((id) => profileRow(s, id));
+  return s.spaceOrder.filter((id) => s.spaces[id] && !isIncognitoSpace(id)).map((id) => profileRow(s, id));
 };
 
 const isName = (name: unknown) => typeof name === "string" && !!name.trim() && name.length <= 200;
@@ -42,8 +42,8 @@ const isName = (name: unknown) => typeof name === "string" && !!name.trim() && n
 function createProfile(params: Record<string, unknown>) {
   if (!isName(params.name)) throw new OpError("bad_request", "name is 1 to 200 characters.");
   const shareWith = params.shareDataWith !== undefined ? profileArg(params.shareDataWith) : undefined;
-  const id = now().createProfile({ name: (params.name as string).trim(), color: params.color as ProfileColor | undefined, icon: (params.icon as string | undefined) ?? null, shareWith, shareTopApps: params.shareTopApps as boolean | undefined });
-  expect(!!id && !!now().profiles[id], "the profile wasn't made.");
+  const id = now().createSpace({ name: (params.name as string).trim(), color: params.color as ProfileColor | undefined, icon: (params.icon as string | undefined) ?? null, profileId: shareWith === undefined ? undefined : now().spaces[shareWith]?.profileId, shareTopApps: params.shareTopApps as boolean | undefined });
+  expect(!!id && !!now().spaces[id], "the profile wasn't made.");
   return profileRow(now(), id);
 }
 
@@ -57,8 +57,8 @@ function updateProfile(params: Record<string, unknown>) {
     ...(params.shareTopApps !== undefined ? { shareTopApps: params.shareTopApps ? (true as const) : undefined } : {}),
   };
   if (!Object.keys(patch).length && params.syncTabs === undefined) throw new OpError("bad_request", "profiles.update needs name, icon, pinnedCollapsed, shareTopApps or syncTabs.");
-  if (Object.keys(patch).length) now().updateProfile(id, patch);
-  if (params.syncTabs !== undefined && !!now().profiles[id]!.syncTabs !== params.syncTabs) setOpenTabsSynced(id, params.syncTabs as boolean);
+  if (Object.keys(patch).length) now().updateSpace(id, patch);
+  if (params.syncTabs !== undefined && !!now().spaces[id]!.syncTabs !== params.syncTabs) setOpenTabsSynced(id, params.syncTabs as boolean);
   return profileRow(now(), id);
 }
 
@@ -83,19 +83,19 @@ function setLook(params: Record<string, unknown>) {
 function reorder(params: Record<string, unknown>) {
   const s = now();
   const given = params.profiles as string[];
-  const own = s.profileOrder.filter((p) => !isIncognitoProfile(p));
+  const own = s.spaceOrder.filter((p) => !isIncognitoSpace(p));
   if (given.length !== own.length || !own.every((p) => given.includes(p))) throw new OpError("bad_request", `profiles lists every profile once: ${own.join(", ")}.`);
-  now().reorderProfiles(given);
+  now().reorderSpaces(given);
   return listProfiles();
 }
 
 async function remove(params: Record<string, unknown>, call: SocketCall) {
   const id = profileArg(params.profile);
-  if (now().profileOrder.length <= 1) throw new OpError("refused", "That's the only profile.");
+  if (now().spaceOrder.length <= 1) throw new OpError("refused", "That's the only profile.");
   if (boundFolders().some((b) => b.profileId === id)) throw new OpError("refused", `Profile ${id} has groups synced to shared folders; ${SHARED_GROUPS_SIDEBAR_ONLY}, so it can be deleted only from the sidebar.`);
   const mayDelete = () => call.serving() && !boundFolders().some((b) => b.profileId === id);
-  await deleteProfile(id, shownWindowId(), mayDelete, askWhereSeen(`Profile ${id} wasn't deleted`, call));
-  const deleted = !now().profiles[id];
+  await deleteSpace(id, shownWindowId(), mayDelete, askWhereSeen(`Profile ${id} wasn't deleted`, call));
+  const deleted = !now().spaces[id];
   if (!deleted) call.stillServing();
   return { deleted };
 }
@@ -135,8 +135,8 @@ export const PROFILE_METHODS: MethodSpec[] = [
     result: "profile",
     run: (p) => {
       const id = profileArg(p.profile);
-      now().setDefaultProfile(id);
-      expect(now().settings.defaultProfileId === id, "the default didn't change.");
+      now().setDefaultSpace(id);
+      expect(now().settings.defaultSpaceId === id, "the default didn't change.");
       return profileRow(now(), id);
     },
   },

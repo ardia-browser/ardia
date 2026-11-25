@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { topStripPeekHeld, watchHolds } from "../../state/app/transientUi";
-import { useWindowFullScreen, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
+import { useWindowFullScreen, useWindowId, useWindowSpaceId } from "../../state/browser/hooks";
 import { beginExternalDrag, endExternalDrag, moveExternalDrag } from "../../state/drag/tabDrag";
 import { lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { useWindowChrome } from "../../state/windows/windowButtons";
-import { usePagerPages } from "../../state/windows/profilePager";
+import { usePagerPages } from "../../state/windows/spacePager";
 import { DownloadsButton } from "../downloads/DownloadsButton";
 import { useMinimalism } from "../../state/windows/layout";
-import { ProfileIndicator, useProfileIndicatorWidth } from "../profiles/ProfileIndicator";
+import { SpaceIndicator, useSpaceIndicatorWidth } from "../spaces/SpaceIndicator";
 import { ClipView, ContextMenuArea, continuousCorners, Panel, shadow, WindowDragRegion } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { TintInk } from "../ui/TintInk";
 import { radius } from "../ui/tokens";
-import { ProfileSwipeArea } from "../window/ProfileSwipe";
+import { SpaceSwipeArea } from "../window/SpaceSwipe";
 import { TabDropArea, type TabDropTarget } from "../window/TabDropArea";
 import { usePeek } from "../window/usePeek";
 import { noteTabStripPeek } from "../../state/telemetry/usage";
@@ -49,11 +49,11 @@ export { TOP_STRIP_HEIGHT } from "./tokens";
 export function TopTabStrip({ width, floating = false, hidden = false, swipe = true }: { width: number; floating?: boolean; hidden?: boolean; swipe?: boolean }) {
   useWindowChrome();
   const windowId = useWindowId();
-  const current = useWindowProfileId();
+  const current = useWindowSpaceId();
   const { pages } = usePagerPages(windowId);
   const minimal = useMinimalism();
-  const profileChip = useProfileIndicatorWidth(PROFILE_ROOM, !minimal);
-  const controls = minimal ? profileChip : (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
+  const spaceChip = useSpaceIndicatorWidth(PROFILE_ROOM, !minimal);
+  const controls = minimal ? spaceChip : (spaceChip ? spaceChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
   const fullScreen = useWindowFullScreen(windowId);
   const left = floating || fullScreen ? 8 : layout.trafficLightsWidth + LIGHTS_GAP;
   const room = stripCaptionRoom(floating, fullScreen);
@@ -74,19 +74,19 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
           <WindowDragRegion style={StyleSheet.absoluteFill} />
           <ClipView pointerEvents="box-none" style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8 + room), maxWidth: pageWidth + flare * 2, top: 0, bottom: 0, overflow: "hidden" }}>
             {pages.map((page) => (
-              <StripPage key={page.id} profileId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />
+              <StripPage key={page.id} spaceId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />
             ))}
           </ClipView>
         </ContextMenuArea>
         {controls ? (
           <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8 + room, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
             <TintInk>
-              <ProfileIndicator room={PROFILE_ROOM} profileShown={!minimal} />
+              <SpaceIndicator room={PROFILE_ROOM} profileShown={!minimal} />
               {minimal ? null : <DownloadsButton windowId={windowId} />}
             </TintInk>
           </View>
         ) : null}
-        {swipe && <ProfileSwipeArea surface="strip" style={StyleSheet.absoluteFill} pageWidth={pageWidth + flare * 2} />}
+        {swipe && <SpaceSwipeArea surface="strip" style={StyleSheet.absoluteFill} pageWidth={pageWidth + flare * 2} />}
         {!floating && <StripDropHighlight left={left} right={right} />}
       </StripDropArea>
       {!floating && <StripHoverCard windowId={windowId} stripBottom={TOP_STRIP_HEIGHT} windowWidth={width} />}

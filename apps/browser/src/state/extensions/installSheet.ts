@@ -9,7 +9,7 @@ import { consentToken, type ConsentToken } from "../telemetry/client";
 import { noteExtensionInstallPromptStale } from "../telemetry/usage";
 import { declinePrompt, holdPrompt, takeHeldPrompt } from "./installPrompts";
 import { refreshExtensions, refreshExtensionsAfterChange } from "./lists";
-import { extensionProfile, nextInstallKey, useExtensions, type InstallRequest } from "./store";
+import { extensionSpace, nextInstallKey, useExtensions, type InstallRequest } from "./store";
 
 const STALE_PROMPT = "This install request has closed. Open the extension's page in the Chrome Web Store and add it again.";
 
@@ -58,7 +58,7 @@ export function showInstallPrompt(windowId: string, prompt: ExtensionInstallProm
   showInstallSheet({ key: nextInstallKey(), windowId, profile: prompt.profile, source: "webStore", status: "prompt", prompt });
 }
 
-export async function loadUnpacked(windowId: string, profile = extensionProfile(useBrowser.getState(), windowId)): Promise<boolean> {
+export async function loadUnpacked(windowId: string, profile = extensionSpace(useBrowser.getState(), windowId)): Promise<boolean> {
   const path = await chooseExtensionFolder();
   if (!path) return false;
   try {

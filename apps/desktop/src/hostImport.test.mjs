@@ -5,6 +5,7 @@ import { CHOOSER_DEADLINE_MS, IMPORT_IDLE_MS, MAX_SPACE_IDS, UNLOCK_DEADLINE_MS,
 import { applyPendingPasswords, applyResult, setImportPasswordSink } from "./importApply.ts";
 import { IMPORT_HANDLE_LIFETIME_MS, claimImportHandle, isImportHandle, issueImportHandles } from "./importHandles.ts";
 import { savePassword } from "./importedPasswordSave.ts";
+import { useBrowser } from "../../browser/src/state/browser/store.ts";
 import { randomBytes } from "node:crypto";
 
 class ImportError extends Error {
@@ -466,9 +467,12 @@ test("applyPendingPasswords writes requested passwords to the engine profile and
   assert.equal(await applyPendingPasswords(incognito, "incognito:w1@default", result, ["passwords"], (k) => failed.push(k)), 0);
   assert.deepEqual(incognito.log, [["discard", TOKEN]]);
 
+  const store = useBrowser.getState();
+  const profileId = store.createProfile({ name: "Work" });
+  const work = store.createSpace({ name: "Work", profileId });
   const refused = sink(native("ERR_PROFILE_UNAVAILABLE"));
-  assert.equal(await applyPendingPasswords(refused, "work", result, ["passwords"], (k) => failed.push(k)), 0);
-  assert.deepEqual(refused.log, [["write", TOKEN, "work"]]);
+  assert.equal(await applyPendingPasswords(refused, work, result, ["passwords"], (k) => failed.push(k)), 0);
+  assert.deepEqual(refused.log, [["write", TOKEN, profileId]]);
   assert.deepEqual(failed, ["passwords", "passwords"]);
 
   const none = sink({ imported: 9 });

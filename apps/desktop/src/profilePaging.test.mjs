@@ -59,12 +59,13 @@ test("menu and keyboard switches page to any profile", async () => {
 
 test("Linux switches an isolated profile in place, like a profile sharing the window's data", () => {
   S().hydrate(initialHostSession({ bootstrap: { windowId: "main", profileId: "default", startup: false } }, null));
-  const work = S().createProfile({ name: "Work" });
-  const side = S().createProfile({ name: "Side", shareWith: "default" });
+  const owner = S().createProfile({ name: "Work" });
+  const work = S().createSpace({ name: "Work", profileId: owner });
+  const side = S().createSpace({ name: "Side", profileId: "default" });
   const before = Object.keys(S().windows).length;
-  S().switchProfile("main", work);
-  assert.equal(S().windows.main.profileId, work);
-  S().switchProfile("main", side);
-  assert.equal(S().windows.main.profileId, side);
+  S().switchSpace("main", work);
+  assert.equal(S().windows.main.spaceId, work);
+  S().switchSpace("main", side);
+  assert.equal(S().windows.main.spaceId, side);
   assert.equal(Object.keys(S().windows).length, before);
 });

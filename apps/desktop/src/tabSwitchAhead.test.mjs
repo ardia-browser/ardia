@@ -22,7 +22,7 @@ function stage() {
     onEvent: () => () => {},
   };
   const listeners = new Set();
-  let state = { windows: { main: { profileId: "default", activeTabIds: { default: "a" } } } };
+  let state = { windows: { main: { spaceId: "default", activeTabIds: { default: "a" } } } };
   const store = {
     subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
     activate: (id) => {

@@ -15,7 +15,7 @@ function PeekedFavicon({ peekId, size }: { peekId: string; size: number }) {
   const theme = useTheme();
   const url = useTab(peekId, (t) => t?.url ?? "");
   const favicon = useTab(peekId, (t) => t?.favicon ?? null);
-  const profileId = useTab(peekId, (t) => t?.profileId);
+  const profileId = useTab(peekId, (t) => t?.spaceId);
   const icon = Math.round(size * PEEK_MARK.scale);
   const box = icon + 2 * PEEK_MARK.plate;
   return (
@@ -33,7 +33,7 @@ function PeekedFavicon({ peekId, size }: { peekId: string; size: number }) {
         backgroundColor: theme.panel,
       }}
     >
-      <Favicon url={url} favicon={favicon} size={icon} profileId={profileId} />
+      <Favicon url={url} favicon={favicon} size={icon} spaceId={profileId} />
     </View>
   );
 }

@@ -13,7 +13,7 @@ const BAND_MARGIN = 48;
 
 type Run = Animated.CompositeAnimation;
 type StripSlide = { key: string; value: Animated.Value; opacity: Animated.Value | null; from: number; at: number; until: number; moving: number; fading: boolean; appearAt: number | null; pending: boolean; mounted: boolean; consent: ConsentToken | null };
-type GhostTab = { title: string; url: string; favicon?: string | null; icon?: string | null; profileId: string };
+type GhostTab = { title: string; url: string; favicon?: string | null; icon?: string | null; spaceId: string };
 export type StripGhost = { key: string; x: number; width: number; tab: GhostTab; opacity: Animated.Value; until: number; started: boolean };
 export type Shot = { keys: string[]; x: Map<string, number>; width: Map<string, number>; tabs: Map<string, string[]>; shown: Map<string, string[]>; groups: Set<string>; end: number | null; state: BrowserState };
 type Move = { key: string; from: number };
@@ -66,7 +66,7 @@ export function offsetAt(slide: StripSlide | undefined, now: number): number {
 
 function ghostTab(s: BrowserState, tabId: string): GhostTab | null {
   const tab = s.tabs[tabId];
-  return tab ? { title: tabTitle(tab), url: tab.url, favicon: tab.favicon, icon: tab.customIcon, profileId: tab.profileId } : null;
+  return tab ? { title: tabTitle(tab), url: tab.url, favicon: tab.favicon, icon: tab.customIcon, spaceId: tab.spaceId } : null;
 }
 
 function memberChanges(before: Shot, after: Shot, had: Set<string>) {

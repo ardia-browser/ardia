@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { openPanel } from "../../state/windows/actions";
-import { useActiveTab, useWindowFullScreen, useWindowId, useWindowProfile, useWindowUi } from "../../state/browser/hooks";
+import { useActiveTab, useWindowFullScreen, useWindowId, useWindowSpace, useWindowUi } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
 import { CommandPanel } from "../omnibox/CommandPanel";
 import { ContentCard } from "../window/ContentCard";
@@ -15,10 +15,10 @@ import { ToolbarPopupAnchor } from "../extensions/ToolbarExtensions";
 import { setUrlAnchor, usePageFrameInset, windowCornerRadius } from "../../state/windows/layout";
 import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { copyPageUrl } from "../../state/site/selection";
-import { ProfileBadge } from "../profiles/ProfileIcons";
-import { useProfileDotsShown } from "../profiles/ProfileDots";
-import { HeaderAppMenu, useAppMenuInHeader } from "../profiles/ProfileIndicator";
-import { closeLittleArdia, openInMainWindow, openLittleArdiaProfileMenu } from "../../state/littleArdia/actions";
+import { SpaceBadge } from "../spaces/SpaceIcons";
+import { HeaderAppMenu, useAppMenuInHeader } from "../spaces/SpaceIndicator";
+import { closeLittleArdia, openInMainWindow, openLittleArdiaSpaceMenu } from "../../state/littleArdia/actions";
+import { useSpaceDotsShown } from "../spaces/SpaceDots";
 import { isWindowClosing } from "../../state/windows/closeAnimated";
 import { notePinch, noteSwipeClose } from "../../state/telemetry/usage";
 import { SwipeCloseContext } from "../window/swipeClose";
@@ -163,7 +163,7 @@ function LittleArdiaBar() {
   const windowId = useWindowId();
   const tab = useActiveTab();
   const panelOpen = useWindowUi().panel.open;
-  const switcherShown = useProfileDotsShown();
+  const switcherShown = useSpaceDotsShown();
   const appMenu = useAppMenuInHeader();
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -192,7 +192,7 @@ function LittleArdiaBar() {
         { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open in Ardia (${keyText("⌘O")})`, onPress: () => openInMainWindow(windowId) },
       ]}
       trailing={[
-        ...(switcherShown ? [<ProfileButton key="profile" windowId={windowId} />] : []),
+        ...(switcherShown ? [<SpaceButton key="profile" windowId={windowId} />] : []),
         ...(appMenu ? [<HeaderAppMenu key="menu" size={SMALL_BAR_BUTTON} />] : []),
       ]}
     >
@@ -218,11 +218,11 @@ function HistoryButtons({ tabId, windowId, bar }: { tabId: string; windowId: str
   );
 }
 
-function ProfileButton({ windowId }: { windowId: string }) {
-  const profile = useWindowProfile();
+function SpaceButton({ windowId }: { windowId: string }) {
+  const profile = useWindowSpace();
   return (
-    <Button variant="icon" look="row" tooltip={`Profile: ${profile.name}`} onPress={() => void openLittleArdiaProfileMenu(windowId)}>
-      <ProfileBadge profile={profile.switcherDot ? { ...profile, icon: null } : profile} size={16} />
+    <Button variant="icon" look="row" tooltip={`Space: ${profile.name}`} onPress={() => void openLittleArdiaSpaceMenu(windowId)}>
+      <SpaceBadge profile={profile.switcherDot ? { ...profile, icon: null } : profile} size={16} />
     </Button>
   );
 }

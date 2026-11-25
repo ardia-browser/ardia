@@ -2,7 +2,7 @@ import { parseSyncFile, SyncNative, type FolderInfo, type Listing } from "../../
 import { errorText } from "../../lib/errors";
 import { onConsentPeriodChange } from "../telemetry/choice";
 import { APP_SCOPE, type SyncDoc } from "./syncDoc";
-import { PROFILE, profileScope } from "./records";
+import { PROFILE, profileScope, spaceScope } from "./records";
 
 const SYNC_FOLDER_NAME = "Ardia Sync";
 const DAMAGED_GIVEN_UP_MS = 86_400_000;
@@ -38,7 +38,8 @@ export function takeFolderCounts() {
 export function folderScopes(doc: SyncDoc): string[] {
   const listed = Object.keys(doc.scopes[APP_SCOPE]?.records ?? {}).filter((key) => key.startsWith(PROFILE)).map((key) => profileScope(key.slice(PROFILE.length)));
   const linked = Object.values(doc.profiles).map((link) => profileScope(link.syncId));
-  return [...new Set([APP_SCOPE, ...Object.keys(doc.scopes), ...linked, ...listed])];
+  const spaces = Object.values(doc.spaces).map((link) => spaceScope(link.syncId));
+  return [...new Set([APP_SCOPE, ...Object.keys(doc.scopes), ...linked, ...spaces, ...listed])];
 }
 
 type FolderMoveNative = {

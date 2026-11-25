@@ -9,8 +9,8 @@ const store = () => useBrowser.getState();
 export function openInRouteGroup(url: string, profileId: string, groupKey: string): void {
   const s = store();
   const home = groupWindow(s, profileId, groupKey);
-  const target = home ?? openWindow({ url, profileId });
-  const tabId = home ? s.newTab(home, { url, profileId, gated: true }) : (store().windows[target]?.activeTabIds[profileId] ?? "");
+  const target = home ?? openWindow({ url, spaceId: profileId });
+  const tabId = home ? s.newTab(home, { url, spaceId: profileId, gated: true }) : (store().windows[target]?.activeTabIds[profileId] ?? "");
   if (tabId && joinGroup(tabId, profileId, groupKey)) noteAirTrafficLink("group");
   focus(target);
 }
@@ -18,7 +18,7 @@ export function openInRouteGroup(url: string, profileId: string, groupKey: strin
 function joinGroup(tabId: string, profileId: string, groupKey: string): boolean {
   const s = store();
   const tab = s.tabs[tabId];
-  const group = tab && Object.values(s.groups).find((g) => g.windowId === tab.windowId && g.profileId === profileId && pinKeyOf(g) === groupKey);
+  const group = tab && Object.values(s.groups).find((g) => g.windowId === tab.windowId && g.spaceId === profileId && pinKeyOf(g) === groupKey);
   if (!group) return false;
   s.addTabsToGroup(group.id, [tabId]);
   if (group.collapsed) store().updateGroup(group.id, { collapsed: false });

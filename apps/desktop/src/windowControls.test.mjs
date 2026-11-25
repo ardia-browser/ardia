@@ -6,8 +6,8 @@ const windowsChrome = (await import("../../browser/src/lib/platformChrome.window
 
 function state(settings = {}, window = {}, extra = {}) {
   return {
-    windows: { w: { id: "w", kind: "main", profileId: "p", fullScreen: false, ...window } },
-    windowOrder: ["w"], ui: { focusOrder: ["w"] }, profiles: { p: { id: "p", name: "Personal" } }, profileOrder: ["p"], downloads: [], windowUi: {},
+    windows: { w: { id: "w", kind: "main", spaceId: "p", fullScreen: false, ...window } },
+    windowOrder: ["w"], ui: { focusOrder: ["w"] }, profiles: { p: { id: "p", name: "Personal", engineId: "p" } }, spaces: { p: { id: "p", name: "Personal", profileId: "p" } }, spaceOrder: ["p"], downloads: [], windowUi: {},
     ...extra,
     settings: { pageFrame: 9, tabLayout: "sidebar", sidebarSide: "left", addressBar: "toolbar", compactToolbar: false, hideToolbarWhileScrolling: false, autoHideTabs: false, sidebarWidth: 190, ...settings },
   };
@@ -78,15 +78,15 @@ test("with the traffic lights or the buttons hidden a hamburger is drawn even wh
   const { WindowContext } = await import("../../browser/src/state/browser/hooks.ts");
   const { WINDOW_CHROME } = await import("../../browser/src/lib/windowChrome.ts");
   const { TRAFFIC_LIGHTS_CHROME, HIDDEN_BUTTONS_CHROME } = await import("../../browser/src/lib/platformChrome.desktop.ts");
-  const { HeaderAppMenu, ProfileIndicator } = await import("./ProfileIndicator.tsx");
+  const { HeaderAppMenu, SpaceIndicator } = await import("./ProfileIndicator.tsx");
   const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
   const sidebar = source("../../browser/src/components/sidebar/Sidebar.tsx");
   const strip = source("../../browser/src/components/tabstrip/TopTabStrip.tsx");
-  assert.match(sidebar, /\n\s*<ProfileIndicator room=\{[^\n]*\} profileShown=\{profileShown\} \/>/, "the sidebar header always mounts the indicator");
-  assert.doesNotMatch(sidebar, /profileShown \? <ProfileIndicator/);
-  assert.match(strip, /<ProfileIndicator room=\{PROFILE_ROOM\} profileShown=\{!minimal\} \/>/, "the top strip mounts it under Minimalism too");
-  assert.match(strip, /useProfileIndicatorWidth\(PROFILE_ROOM, !minimal\)/);
-  assert.match(strip, /const controls = minimal \? profileChip :/);
+  assert.match(sidebar, /\n\s*<SpaceIndicator room=\{[^\n]*\} profileShown=\{profileShown\} \/>/, "the sidebar header always mounts the indicator");
+  assert.doesNotMatch(sidebar, /profileShown \? <SpaceIndicator/);
+  assert.match(strip, /<SpaceIndicator room=\{PROFILE_ROOM\} profileShown=\{!minimal\} \/>/, "the top strip mounts it under Minimalism too");
+  assert.match(strip, /useSpaceIndicatorWidth\(PROFILE_ROOM, !minimal\)/);
+  assert.match(strip, /const controls = minimal \? spaceChip :/);
   const little = source("../../browser/src/components/littleArdia/LittleArdiaWindow.tsx");
   assert.match(little, /const appMenu = useAppMenuInHeader\(\);/);
   assert.match(little, /\.\.\.\(appMenu \? \[<HeaderAppMenu key="menu" size=\{SMALL_BAR_BUTTON\} \/>\] : \[\]\)/, "Little Ardia's bar holds the hamburger");
@@ -96,7 +96,7 @@ test("with the traffic lights or the buttons hidden a hamburger is drawn even wh
   const saved = { ...WINDOW_CHROME };
   const menuButtons = (node) => !node || typeof node !== "object" ? 0 : Array.isArray(node) ? node.reduce((sum, child) => sum + menuButtons(child), 0) : (node.type?.name === "AppMenuButton" ? 1 : 0) + menuButtons(node.props?.children);
   const menus = (profileShown) => {
-    const mounted = mount(() => ProfileIndicator({ room: 160, profileShown }), { contexts: [[WindowContext, windowId]] });
+    const mounted = mount(() => SpaceIndicator({ room: 160, profileShown }), { contexts: [[WindowContext, windowId]] });
     try {
       return menuButtons(mounted.value);
     } finally {

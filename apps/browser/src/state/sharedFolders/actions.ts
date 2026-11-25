@@ -7,7 +7,7 @@ import { errorText } from "../../lib/errors";
 import { bindingAt, boundAt } from "./bindings";
 import { useBrowser, type BrowserState } from "../browser/store";
 import type { Tab } from "../browser/types";
-import { isIncognitoProfile, makeTab, newId, pinKeyOf } from "../browser/model";
+import { isIncognitoSpace, makeTab, newId, pinKeyOf } from "../browser/model";
 import { pinnedGroupMembers } from "../browser/structure";
 import { insertAll, nestGroups, orderSections, syncGroupOrder } from "../groups/groups";
 import { markPinned } from "../pins/pinChoices";
@@ -41,12 +41,12 @@ async function chooseParent(windowId: string): Promise<string | null> {
 export function withSharedGroup(s: BrowserState, windowId: string, name: string): [BrowserState, string] {
   const w = s.windows[windowId];
   if (!isRegularWindow(w)) return [s, ""];
-  const profileId = w.profileId;
+  const profileId = w.spaceId;
   const tab: Tab = { ...makeTab(windowId, profileId, EMPTY_FOLDER_URL, { title: "Empty Folder", customTitle: "Empty Folder" }), page: ASLEEP };
   const id = newId("g");
   const groups = nestGroups({
     ...s.groups,
-    [id]: { id, windowId, profileId, name, icon: null, color: null, collapsed: false, pinned: true, tabIds: [tab.id], createdAt: Date.now() },
+    [id]: { id, windowId, spaceId: profileId, name, icon: null, color: null, collapsed: false, pinned: true, tabIds: [tab.id], createdAt: Date.now() },
   });
   const tabs = withEntry(s.tabs, tab.id, tab);
   const pinnedArea = pinnedGroupMembers(s.groups);
@@ -59,7 +59,7 @@ export function withSharedGroup(s: BrowserState, windowId: string, name: string)
 
 export async function addSharedFolder(windowId: string) {
   const w = store().windows[windowId];
-  if (!sharedFoldersAvailable() || !isRegularWindow(w) || isIncognitoProfile(w.profileId)) return;
+  if (!sharedFoldersAvailable() || !isRegularWindow(w) || isIncognitoSpace(w.spaceId)) return;
   const location = sharedLocation();
   const start = location.iCloudAvailable ? location.path : await chooseParent(windowId);
   if (!start) return;
@@ -71,12 +71,12 @@ export async function addSharedFolder(windowId: string) {
   });
   if (!found) return;
   const { path } = found;
-  const profileId = store().windows[windowId]?.profileId ?? w.profileId;
+  const profileId = store().windows[windowId]?.spaceId ?? w.spaceId;
   await bindingAt(profileId, found);
-  if (store().windows[windowId]?.profileId !== profileId) return;
+  if (store().windows[windowId]?.spaceId !== profileId) return;
   const known = boundAt(profileId, found);
   if (known) {
-    const g = Object.values(store().groups).find((x) => x.profileId === profileId && x.pinned && pinKeyOf(x) === known.key);
+    const g = Object.values(store().groups).find((x) => x.spaceId === profileId && x.pinned && pinKeyOf(x) === known.key);
     showToast(windowId, `“${(g && groupLabel(store(), g)) || path.split("/").at(-1)}” is already in your sidebar`, undefined, { icon: "person.2" });
     return syncFolderNow(profileId, known.key);
   }
@@ -94,19 +94,19 @@ export async function shareFolder(windowId: string, groupId: string) {
   if (!g || !canShareGroup(s, groupId)) return;
   const key = pinKeyOf(g);
   try {
-    let folder = sharedFolderOf(g.profileId, key);
+    let folder = sharedFolderOf(g.spaceId, key);
     if (!folder) {
       const parent = await chooseParent(windowId);
       if (!parent) return;
       const made = await createSharedFolder(parent, groupLabel(s, g) || "Shared Folder");
-      if (!bindFolderIfUnbound(g.profileId, key, made)) await discardSharedFolder(made).catch(() => false);
+      if (!bindFolderIfUnbound(g.spaceId, key, made)) await discardSharedFolder(made).catch(() => false);
     }
-    await syncFolderAfterNow(g.profileId, key);
-    folder = sharedFolderOf(g.profileId, key);
+    await syncFolderAfterNow(g.spaceId, key);
+    folder = sharedFolderOf(g.spaceId, key);
     if (!folder) return;
-    const state = useSharedFolders.getState().sync[folderRef(g.profileId, key)]?.state;
+    const state = useSharedFolders.getState().sync[folderRef(g.spaceId, key)]?.state;
     if (state !== "synced" && state !== "waiting") {
-      const why = useSharedFolders.getState().sync[folderRef(g.profileId, key)]?.error;
+      const why = useSharedFolders.getState().sync[folderRef(g.spaceId, key)]?.error;
       const reason = why ?? (state === "missing" ? "Its folder can’t be found any more. Stop syncing it, then share it again." : "Its links aren’t in the folder yet. Try again in a moment.");
       return showToast(windowId, "Couldn’t share this folder yet", reason, { icon: "exclamationmark.icloud" });
     }

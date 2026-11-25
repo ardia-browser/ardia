@@ -57,10 +57,10 @@ test("per-profile shortcut rows are named after their profiles, under the menus 
   const profiles = { default: { name: "Personal" }, "p-mwjexflnk00i-p": { name: "Gallant AI" } };
   const items = linuxMenuShortcuts({}, ["default", "p-mwjexflnk00i-p"], profiles);
   const row = (id) => items.find((item) => item.id === id);
-  assert.deepEqual([row("switchProfile:default").title, row("switchProfile:default").path], ["Personal", ["Window", "Profiles"]]);
-  assert.deepEqual([row("switchProfile:p-mwjexflnk00i-p").title, row("switchProfile:p-mwjexflnk00i-p").defaultKey], ["Gallant AI", "2"]);
-  assert.deepEqual([row("newLittleArdia:p-mwjexflnk00i-p").title, row("newLittleArdia:p-mwjexflnk00i-p").path], ["Gallant AI", ["File", "New Little Ardia Window in Profile"]]);
-  assert.deepEqual(row("nextProfile").path, ["Window", "Profiles"]);
+  assert.deepEqual([row("switchSpace:default").title, row("switchSpace:default").path], ["Personal", ["Window", "Spaces"]]);
+  assert.deepEqual([row("switchSpace:p-mwjexflnk00i-p").title, row("switchSpace:p-mwjexflnk00i-p").defaultKey], ["Gallant AI", "2"]);
+  assert.deepEqual([row("newLittleArdia:p-mwjexflnk00i-p").title, row("newLittleArdia:p-mwjexflnk00i-p").path], ["Gallant AI", ["File", "New Little Ardia Window in Space"]]);
+  assert.deepEqual(row("nextSpace").path, ["Window", "Spaces"]);
   assert(!items.some((item) => item.title.includes("p-mwjexflnk00i-p")));
 });
 

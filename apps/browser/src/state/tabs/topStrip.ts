@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { usePageProfileId } from "../browser/hooks";
+import { usePageSpaceId } from "../browser/hooks";
 import { activeTabId, tabLabel, viewTabIds } from "../browser/model";
 import { movingTabIds, resolveDrop, slotDrop, type DragSource, type DropSpot, type Lane } from "../drag/drops";
 import { groupLabel } from "../pins/tabGrouping";
@@ -12,10 +12,10 @@ import { chooseFromMenu, type ChoiceItem } from "../app/menuChoice";
 import { parseEntry } from "../sidebar/entryKey";
 import { splitTabIdsOf } from "../splits/splits";
 
-function tuckTarget(s: BrowserState, windowId: string, profileId: string, groupId: string): string | undefined {
+function tuckTarget(s: BrowserState, windowId: string, spaceId: string, groupId: string): string | undefined {
   const members = new Set(s.groups[groupId]?.tabIds ?? []);
   let best: string | undefined;
-  for (const id of viewTabIds(s, windowId, profileId)) {
+  for (const id of viewTabIds(s, windowId, spaceId)) {
     const t = s.tabs[id];
     if (!t || members.has(id)) continue;
     if (!best || t.lastActiveAt > s.tabs[best]!.lastActiveAt) best = id;
@@ -29,9 +29,9 @@ export { stripEntries, type StripDock, type StripEntry, type StripGroupEntry, ty
 
 type FolderMenuItem = ChoiceItem<{ tabId: string }>;
 
-export function tileFolderMenuItems(s: BrowserState, windowId: string, folderId: string, activeId: string | undefined): FolderMenuItem[] {
+export function tileFolderMenuItems(s: BrowserState, windowId: string, folderId: string, activeId?: string, spaceId = s.windows[windowId]?.spaceId): FolderMenuItem[] {
   return [
-    ...folderMembers(s, windowId, folderId).map((id): FolderMenuItem => ({ value: { tabId: id }, title: tabLabel(s.tabs[id]!), checked: id === activeId })),
+    ...folderMembers(s, windowId, folderId, spaceId).map((id): FolderMenuItem => ({ value: { tabId: id }, title: tabLabel(s.tabs[id]!), checked: id === activeId })),
     { separator: true },
     { id: "rename", title: "Rename…", symbol: "pencil" },
   ];
@@ -49,16 +49,16 @@ export function folderMenuItems(s: BrowserState, groupId: string, activeId: stri
   });
 }
 
-export const useStripEntries = (windowId: string, profileId: string) => useBrowser((s) => stripEntries(s, windowId, profileId));
+export const useStripEntries = (windowId: string, spaceId: string) => useBrowser((s) => stripEntries(s, windowId, spaceId));
 
 const titleNeedsMemo = new Map<string, { tabs: BrowserState["tabs"]; order: string[] | undefined; signature: string }>();
 
-function titleNeedsSignature(s: BrowserState, windowId: string, profileId: string): string {
-  const key = `${windowId}|${profileId}`;
+function titleNeedsSignature(s: BrowserState, windowId: string, spaceId: string): string {
+  const key = `${windowId}|${spaceId}`;
   const order = s.windows[windowId]?.tabIds;
   const cached = titleNeedsMemo.get(key);
   if (cached && cached.tabs === s.tabs && cached.order === order) return cached.signature;
-  const signature = computeTitleNeeds(s, windowId, profileId);
+  const signature = computeTitleNeeds(s, windowId, spaceId);
   titleNeedsMemo.set(key, { tabs: s.tabs, order, signature });
   if (titleNeedsMemo.size > 16) for (const k of titleNeedsMemo.keys()) if (!s.windows[k.split("|")[0]!]) titleNeedsMemo.delete(k);
   return signature;
@@ -70,9 +70,9 @@ export function needingTitles(icons: readonly (readonly [id: string, icon: strin
   return icons.filter(([, icon]) => !icon || seen.get(icon)! > 1).map(([id]) => id);
 }
 
-function computeTitleNeeds(s: BrowserState, windowId: string, profileId: string): string {
+function computeTitleNeeds(s: BrowserState, windowId: string, spaceId: string): string {
   const icons: [string, string][] = [];
-  for (const id of viewTabIds(s, windowId, profileId)) {
+  for (const id of viewTabIds(s, windowId, spaceId)) {
     const t = s.tabs[id];
     if (!t || t.pin) continue;
     icons.push([id, t.customIcon ?? t.favicon ?? ""]);
@@ -80,27 +80,27 @@ function computeTitleNeeds(s: BrowserState, windowId: string, profileId: string)
   return needingTitles(icons).join("\n");
 }
 
-export function useStripTitleNeeds(windowId: string, profileId: string): (tabId: string) => boolean {
-  const signature = useBrowser((s) => titleNeedsSignature(s, windowId, profileId));
+export function useStripTitleNeeds(windowId: string, spaceId: string): (tabId: string) => boolean {
+  const signature = useBrowser((s) => titleNeedsSignature(s, windowId, spaceId));
   return useMemo(() => {
     const needs = new Set(signature ? signature.split("\n") : []);
     return (tabId: string) => needs.has(tabId);
   }, [signature]);
 }
 
-export const useShownTabIdFor = (windowId: string, profileId: string) => useBrowser((s) => s.windows[windowId]?.activeTabIds[profileId] ?? "");
+export const useShownTabIdFor = (windowId: string, spaceId: string) => useBrowser((s) => s.windows[windowId]?.activeTabIds[spaceId] ?? "");
 
-export const useHasTuckTarget = (enabled: boolean, windowId: string, profileId: string, groupId: string) =>
-  useBrowser((s) => enabled && !!tuckTarget(s, windowId, profileId, groupId));
+export const useHasTuckTarget = (enabled: boolean, windowId: string, spaceId: string, groupId: string) =>
+  useBrowser((s) => enabled && !!tuckTarget(s, windowId, spaceId, groupId));
 
 export function useTileFolderLabel(windowId: string, folderId: string) {
-  const profileId = usePageProfileId();
+  const profileId = usePageSpaceId();
   return useBrowser((s) => folderLabel(folderIn(s, windowId, folderId, profileId)));
 }
 
-export function tuckGroup(windowId: string, profileId: string, groupId: string) {
+export function tuckGroup(windowId: string, spaceId: string, groupId: string) {
   const s = useBrowser.getState();
-  const target = tuckTarget(s, windowId, profileId, groupId);
+  const target = tuckTarget(s, windowId, spaceId, groupId);
   if (target) s.activate(target);
 }
 

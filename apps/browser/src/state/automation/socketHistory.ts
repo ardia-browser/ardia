@@ -1,6 +1,6 @@
 import { engineProfile } from "../browser/model";
 import { pruneEngineFavicons, cacheKey } from "../favicons/favicons";
-import { clearBrowsingData } from "../profiles/profileData";
+import { clearBrowsingData } from "../spaces/spaceData";
 import { queryHistory } from "../../platform/history";
 import { isWebPageUrl } from "../../lib/url";
 import { historyHandle, historyPageOf, type HistoryPage } from "./historyHandles";
@@ -95,7 +95,7 @@ async function historyRemove(params: Record<string, unknown>, call: SocketCall) 
     byProfile.set(found.profileId, entry);
   }
   for (const [profileId, entry] of byProfile) {
-    if (!now().profiles[profileId] || engineProfile(now(), profileId) !== entry.engine) throw new OpError("bad_request", `Profile ${profileId}'s history moved since that search; search again.`);
+    if (!now().spaces[profileId] || engineProfile(now(), profileId) !== entry.engine) throw new OpError("bad_request", `Profile ${profileId}'s history moved since that search; search again.`);
   }
   await engineDeleted(Promise.all([...byProfile].map(([profileId, entry]) => now().removeHistory(profileId, entry.urls))));
   return { ok: true };

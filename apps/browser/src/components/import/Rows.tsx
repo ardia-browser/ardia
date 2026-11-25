@@ -73,7 +73,7 @@ export function Monogram({ name, color }: { name: string; color?: string }) {
   );
 }
 
-export function SpaceIcon({ space: summary }: { space: SpaceSummary }) {
+export function SpaceIcon({ profile: summary }: { profile: SpaceSummary }) {
   const size = importLayout.avatar;
   const emoji = arcSpaceEmoji(summary);
   return (
@@ -96,7 +96,7 @@ export function SpaceIcon({ space: summary }: { space: SpaceSummary }) {
   );
 }
 
-export function ProfileAvatar({ path, name, color }: { path?: string; name: string; color?: string }) {
+export function SpaceAvatar({ path, name, color }: { path?: string; name: string; color?: string }) {
   const size = importLayout.avatar;
   return path ? <Image source={{ uri: `file://${path}` }} style={{ width: size, height: size, borderRadius: capsule(size) }} /> : <Monogram name={name} color={color} />;
 }

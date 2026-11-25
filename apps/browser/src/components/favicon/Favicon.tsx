@@ -11,7 +11,7 @@ export const Favicon = memo(function Favicon({
   url,
   favicon,
   size = 16,
-  profileId,
+  spaceId,
   direct,
   opacity = 1,
   fallbackColor,
@@ -19,7 +19,7 @@ export const Favicon = memo(function Favicon({
   url: string;
   favicon?: string | null;
   size?: number;
-  profileId?: string;
+  spaceId?: string;
   direct?: boolean;
   opacity?: number;
   fallbackColor?: string;
@@ -27,10 +27,10 @@ export const Favicon = memo(function Favicon({
   const theme = useTheme();
   useAppearanceDark();
   const privateWindow = usePrivateViewer();
-  const viewer = privateWindow ?? profileId;
-  const source = privateWindow ? profileId : undefined;
+  const viewer = privateWindow ?? spaceId;
+  const source = privateWindow ? spaceId : undefined;
   const cached = useFavicon(url, direct ? null : favicon, viewer, source);
-  const resolved = direct && favicon ? { uri: favicon, profileId: "" } : cached;
+  const resolved = direct && favicon ? { uri: favicon, spaceId: "" } : cached;
   const shape = useFaviconTheme(theme.dark || direct ? "" : url, favicon, viewer, source);
   const white = shape?.kind === "template" && !!shape.stroke;
   const [broken, setBroken] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export const Favicon = memo(function Favicon({
     source: { uri: resolved.uri },
     onError: () => {
       setBroken(resolved.uri);
-      if (resolved.profileId) faviconFailed(resolved.profileId, resolved.uri);
+      if (resolved.spaceId) faviconFailed(resolved.spaceId, resolved.uri);
     },
     style: { width: size, height: size, borderRadius: size > 18 ? radius.control : radius.hair, opacity },
   });
@@ -52,7 +52,7 @@ export const SiteFavicon = memo(function SiteFavicon({ host, profileId, size }: 
   const theme = useTheme();
   const url = `https://${host}`;
   if (bundledSiteIcon(url, theme.dark) !== undefined) return <Favicon url={url} size={size} />;
-  return <Favicon url={url} favicon={`${url}/favicon.ico`} profileId={profileId} size={size} />;
+  return <Favicon url={url} favicon={`${url}/favicon.ico`} spaceId={profileId} size={size} />;
 });
 
 export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, opacity = 1, color }: { url: string; size?: number; opacity?: number; color?: string }) {

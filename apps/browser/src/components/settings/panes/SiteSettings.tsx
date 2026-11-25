@@ -10,7 +10,7 @@ import {
   type SiteSettingValue,
 } from "../../../state/site/siteSettings";
 import { useEffect, useState } from "react";
-import { currentEngineProfile } from "../../../state/browser/current";
+import { profileEngine as currentEngineProfile } from "../../../state/profiles/current";
 import { useSettings } from "../../../state/browser/hooks";
 import { effectiveSettingValue, offersSiteSetting } from "../../../state/site/siteControls";
 import { Button, PopUp, Toggle } from "../../ui";

@@ -11,7 +11,7 @@ import { adoptIconPage, dropOutlivedFavicon, noteIconPage } from "../../state/fa
 import { endThemeHold, heldThemeColor } from "../../state/windows/launchLook";
 import { noteTabReady } from "../../state/app/programControl";
 import { isQuitting } from "../../state/app/quit";
-import { useProfileTheme } from "./ThemeScope";
+import { useSpaceTheme } from "./ThemeScope";
 import { opaqueCard } from "../ui/opaqueCard";
 import { handOff, takeHandOff, wantsPage } from "../../state/tabs/tabPages";
 import { noteDiscarded, noteGone, noteReady } from "../../state/tabs/tabLifecycle";
@@ -27,10 +27,10 @@ import { noteIssued, takeStartedNavigation } from "../../state/tabs/earlyNavigat
 import { currentEngineProfile, currentTab, isTabSilenced } from "../../state/browser/current";
 import { updateLive, updateTab } from "../../state/tabs/actions";
 import { returnRefusedMove, setFind } from "../../state/windows/actions";
-import { activateFocusedPane, currentTabEngine, downloadNavigated, useTabEngine } from "../../state/windows/card";
+import { activateFocusedPane, currentTabEngine, downloadNavigated, useTabEngine , useTabProfile } from "../../state/windows/card";
 import { setPageProgress } from "../../state/tabs/pageProgress";
-import { shallowEqual, useBrowserWhile, useProfilesValue, useTabValue } from "../../state/tabs/tabWatch";
-import { isIncognitoProfile, navigationTo } from "../../state/browser/model";
+import { shallowEqual, useBrowserWhile, useSpacesValue, useTabValue } from "../../state/tabs/tabWatch";
+import { engineProfileForSpace, isIncognitoSpace, navigationTo } from "../../state/browser/model";
 import type { Tab } from "../../state/browser/types";
 import { zoomChangedByUser } from "../../state/site/zoomBubble";
 import { markTabReady, patchPage, pageOf } from "../../state/tabs/pageState";
@@ -67,7 +67,7 @@ import { forgetPeekHandover, notePeekRecipient, peekDonorTaken } from "../../sta
 import { promotedFromPeek } from "../../state/peek/actions";
 import { consumedCallbackUrl } from "../../state/tabs/callbackUrls";
 
-const webViewTab = (t: Tab | undefined) => ({ navigation: navigationOf(t), adoptId: adoptOf(t), profileId: t?.profileId ?? "", shownUrl: t?.url ?? "" });
+const webViewTab = (t: Tab | undefined) => ({ navigation: navigationOf(t), adoptId: adoptOf(t), spaceId: t?.spaceId ?? "", shownUrl: t?.url ?? "" });
 
 type TabWebViewProps = { tabId: string; visible: boolean; selected?: boolean; warm: boolean; peekOf?: string };
 
@@ -75,28 +75,32 @@ const ARRIVING = [StyleSheet.absoluteFill, { opacity: 0 }];
 
 export const TabWebView = memo(function TabWebView(props: TabWebViewProps) {
   const engine = useTabEngine(props.tabId);
+  const profile = useTabProfile(props.tabId);
   const retiring = useRetiringEngine(props.tabId, engine);
-  const shown = useRef(engine);
+  const shown = useRef({ engine, profile });
   const holding = useRef<PageEngine | null>(null);
-  if (shown.current !== engine) {
+  if (shown.current.profile !== profile) {
+    holding.current = null;
+    shown.current = { engine, profile };
+  } else if (shown.current.engine !== engine) {
     const leavingUnpainted = holding.current !== null;
-    holding.current = retiring === shown.current && props.visible && !leavingUnpainted ? retiring : null;
-    shown.current = engine;
+    holding.current = retiring === shown.current.engine && props.visible && !leavingUnpainted ? retiring : null;
+    shown.current = { engine, profile };
   }
   if (holding.current && (retiring !== holding.current || !props.visible)) holding.current = null;
   const held = holding.current;
-  const live = <EngineWebView key={engine} engine={engine} arriving={!!held} {...props} />;
+  const live = <EngineWebView key={JSON.stringify([engine, profile])} engine={engine} profile={profile} arriving={!!held} {...props} />;
   if (!held) return live;
-  const old = <EngineWebView key={held} engine={held} retired {...props} />;
+  const old = <EngineWebView key={JSON.stringify([held, profile])} engine={held} profile={profile} retired {...props} />;
   return held === "chromium" ? [old, live] : [live, old];
 });
 
-function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, retired = false, arriving = false }: TabWebViewProps & { engine: PageEngine; retired?: boolean; arriving?: boolean }) {
+function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, profile, retired = false, arriving = false }: TabWebViewProps & { engine: PageEngine; profile: string; retired?: boolean; arriving?: boolean }) {
   const asPeek = peekOf !== undefined;
   const isDonor = () => asPeek && promotedFromPeek(tabId);
   const handedToTab = () => isDonor() && peekDonorTaken(tabId);
-  const { navigation, adoptId, profileId, shownUrl } = useTabValue(tabId, webViewTab, shallowEqual);
-  const neighbour = useBrowserWhile(warm, (s) => warm && s.windows[s.tabs[tabId]?.windowId ?? ""]?.profileId !== profileId);
+  const { navigation, adoptId, spaceId, shownUrl } = useTabValue(tabId, webViewTab, shallowEqual);
+  const neighbour = useBrowserWhile(warm, (s) => warm && s.windows[s.tabs[tabId]?.windowId ?? ""]?.spaceId !== spaceId);
   const tab = () => currentTab(tabId);
   const ref = useMemo(() => {
     const register = webviewRef(tabId);
@@ -104,8 +108,8 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
   }, [tabId]);
   const autoPictureInPicture = useAutoPictureInPicture(tabId, visible);
   useEffect(() => (visible ? presentTab(tabId) : noteTabHidden(tabId)), [tabId, visible]);
-  const pageColor = useProfilesValue(profileId, (profiles) => (isIncognitoProfile(profileId) ? "incognito" : (profiles[profileId]?.color ?? "plum")));
-  const theme = useProfileTheme(profileId);
+  const pageColor = useSpacesValue(spaceId, (spaces) => (isIncognitoSpace(spaceId) ? "incognito" : (spaces[spaceId]?.color ?? "plum")));
+  const theme = useSpaceTheme(spaceId);
   const backdrop = useMemo(() => opaqueCard(theme), [theme.card, theme.windowTint[0], theme.windowTint[1]]);
 
   const lastPage = useRef<string | null>(null);
@@ -157,7 +161,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
   useEffect(() => {
     if (waitsOffScreen) noteWebKitPageKeptHidden();
   }, [waitsOffScreen]);
-  const mountedProfile = useRef(profileId);
+  const mountedProfile = useRef(spaceId);
   const wentRetired = useRef(false);
   useLayoutEffect(() => {
     const revived = wentRetired.current && !retired;
@@ -174,7 +178,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
       if (wentRetired.current || handedToTab()) return;
       const t = tab();
       const sameEngine = currentTabEngine(tabId) === engine;
-      if (wantsPage(t) && sameEngine && currentEngineProfile(t.profileId) === currentEngineProfile(mountedProfile.current) && !isQuitting()) handOff(tabId, currentEngineProfile(t.profileId), engine);
+      if (wantsPage(t) && sameEngine && engineProfileForSpace(t.spaceId) === profile && !isQuitting()) handOff(tabId, profile, engine);
       else {
         setPageProgress(tabId, 0);
         if (!isQuitting()) pageEnded(tabId);
@@ -187,7 +191,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
 
   const onOpenWindow = (request: OpenWindowRequest) => {
     const t = tab();
-    if (t) openFromPage(request, { windowId: t.windowId, profileId: t.profileId, tabId });
+    if (t) openFromPage(request, { windowId: t.windowId, spaceId: t.spaceId, tabId });
   };
 
   return (
@@ -197,7 +201,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
       retired={retired}
       style={arriving ? ARRIVING : StyleSheet.absoluteFill}
       url={navigation?.url ?? (adoptId ? tab()?.url : undefined)}
-      profile={currentEngineProfile(profileId)}
+      profile={profile}
       adoptId={adoptId}
       tabId={tabId}
       temporary={peekOf !== undefined}
@@ -225,7 +229,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         notePluginStateCommit(tabId, committedUrl, committedAt);
         verificationCodeDocument(tabId, committedAt);
         if (!retired) notePageCommit(tabId, committedAt);
-        notePageDocument(tabId, reported, committedUrl, committedAt, isIncognitoProfile(profileId), documentReporter);
+        notePageDocument(tabId, reported, committedUrl, committedAt, isIncognitoSpace(spaceId), documentReporter);
         if (reopening.current && reported && !isBlankAddress(reported)) {
           reopening.current = false;
           noteReopenedPage(canGoBack);

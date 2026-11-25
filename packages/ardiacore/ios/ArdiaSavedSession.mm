@@ -49,7 +49,7 @@ bool EarlyLaunchFieldsWellTyped(NSDictionary *document) {
 @implementation ArdiaSavedSession
 
 + (NSInteger)version {
-  return 11;
+  return 12;
 }
 
 + (instancetype)readFrom:(NSString *)directory {
@@ -80,7 +80,7 @@ bool EarlyLaunchFieldsWellTyped(NSDictionary *document) {
     }
     _launchBackdrop = Typed<NSDictionary>(document[@"launchBackdrop"]);
     _settings = Typed<NSDictionary>(document[@"settings"]) ?: @{};
-    _profiles = document[@"profiles"];
+    _profiles = Typed<NSDictionary>(document[@"spaces"]) ?: Typed<NSDictionary>(document[@"profiles"]);
     _windows = Dictionaries(document[@"windows"]);
     _tabs = Dictionaries(document[@"tabs"]);
     _groups = Dictionaries(document[@"groups"]);

@@ -28,10 +28,10 @@ function nativeHost({ bootstrap = { windowId: "main", profileId: "default", star
 function freshWindow() {
   S().hydrate(initialHostSession({ bootstrap: { windowId: "main", profileId: "default", startup: false } }, null));
   const w = S().windows.main;
-  return { first: w.activeTabIds[w.profileId] };
+  return { first: w.activeTabIds[w.spaceId] };
 }
 
-const active = () => S().windows.main.activeTabIds[S().windows.main.profileId];
+const active = () => S().windows.main.activeTabIds[S().windows.main.spaceId];
 const tabsAt = (url) => Object.values(S().tabs).filter((t) => t.windowId === "main" && t.url === url);
 
 test("only well-formed native tab offers become adoption ids", () => {
@@ -47,7 +47,7 @@ test("an active unclaimed tab opens selected in its window and an inactive one k
   const opened = adoptUnclaimedTab(useBrowser, "main", { adoptId: "tab:21", url: URL_A, active: true });
   assert.equal(active(), opened);
   assert.deepEqual(S().tabs[opened].page, { kind: "adopted", adopt: "tab:21", nav: null });
-  assert.equal(S().tabs[opened].profileId, "default");
+  assert.equal(S().tabs[opened].spaceId, "default");
   const behind = adoptUnclaimedTab(useBrowser, "main", { adoptId: "tab:22", url: "https://background.example/", active: false });
   assert.equal(active(), opened);
   assert.ok(S().windows.main.tabIds.includes(behind));
@@ -131,16 +131,17 @@ test("a window Chrome made is saved with its adopted tabs instead of waiting for
 
 test("a tab Chrome inserts for another engine profile joins the window in that profile, in the background", () => {
   freshWindow();
-  const work = S().createProfile({ name: "Work" });
-  const side = S().createProfile({ name: "Side", shareWith: "default" });
+  const owner = S().createProfile({ name: "Work" });
+  const work = S().createSpace({ name: "Work", profileId: owner });
+  const side = S().createSpace({ name: "Side", profileId: "default" });
   const before = active();
-  const isolated = adoptUnclaimedTab(useBrowser, "main", { adoptId: "tab:41", url: "https://work.test/", active: true, profile: work });
-  assert.equal(S().tabs[isolated].profileId, work);
+  const isolated = adoptUnclaimedTab(useBrowser, "main", { adoptId: "tab:41", url: "https://work.test/", active: true, profile: S().profiles[owner].engineId });
+  assert.equal(S().tabs[isolated].spaceId, work);
   assert.equal(S().tabs[isolated].windowId, "main");
   assert.equal(active(), before, "the visible profile keeps its selection");
-  S().switchProfile("main", side);
+  S().switchSpace("main", side);
   const shared = adoptUnclaimedTab(useBrowser, "main", { adoptId: "tab:42", url: "https://side.test/", active: false, profile: "" });
-  assert.equal(S().tabs[shared].profileId, side, "a profile sharing the default engine profile keeps the tab in the current profile");
+  assert.equal(S().tabs[shared].spaceId, side, "a profile sharing the default engine profile keeps the tab in the current profile");
   assert.equal(adoptUnclaimedTab(useBrowser, "main", { adoptId: "tab:43", url: "https://gone.test/", active: false, profile: "p-missing" }), undefined,
     "an offer for an engine profile no UI profile uses is left alone");
 });

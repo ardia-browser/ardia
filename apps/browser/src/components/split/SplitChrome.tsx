@@ -9,7 +9,7 @@ import { evenPair, resize, type Divider, type Rect } from "../window/geometry";
 import { capsule, OverPage, space, Symbol, Text, Toast, withAlpha } from "../ui";
 import { hideToast, useToasts } from "../../state/app/toasts";
 import { noteSplit } from "../../state/telemetry/usage";
-import { useTab, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
+import { useTab, useWindowId, useWindowSpaceId } from "../../state/browser/hooks";
 import { useCardFrame } from "../window/cardFrame";
 import type { Size } from "../ui/useSettled";
 import { overPeek } from "../../state/windows/dockMotion";
@@ -178,9 +178,9 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
         : NOT_DRAGGING,
     ),
   );
-  const draggedProfile = useTab(dragging ?? undefined, (t) => t?.profileId);
-  const windowProfile = useWindowProfileId();
-  const foreign = !!dragging && draggedProfile !== windowProfile;
+  const draggedSpace = useTab(dragging ?? undefined, (t) => t?.spaceId);
+  const windowSpace = useWindowSpaceId();
+  const foreign = !!dragging && draggedSpace !== windowSpace;
   const full = Object.keys(panes).length >= 3;
   const fallback = useDragFallbackPane(dragging, panes, windowId);
   const candidates = useMemo((): [string, Rect][] => {

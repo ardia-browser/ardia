@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "../browser/store";
 import type { Tab } from "../browser/types";
-import { isIncognitoProfile, without } from "../browser/model";
+import { isIncognitoSpace, without } from "../browser/model";
 import { hostOf } from "@ardia/core";
 import { isString, listOf } from "../../lib/decode";
 import { cachedHostLookup } from "../../lib/url";
@@ -11,15 +11,15 @@ const cachedHostOf = cachedHostLookup();
 export type MuteState = "site" | "tab" | null;
 
 type SiteMutes = Pick<BrowserState, "settings" | "privateSiteMutes">;
-type MutedTab = Pick<Tab, "url" | "windowId" | "profileId" | "muted">;
+type MutedTab = Pick<Tab, "url" | "windowId" | "spaceId" | "muted">;
 
-function isHostMuted(s: SiteMutes, tab: Pick<Tab, "windowId" | "profileId">, host: string): boolean {
-  const own = isIncognitoProfile(tab.profileId) ? s.privateSiteMutes[tab.windowId]?.[host] : undefined;
+function isHostMuted(s: SiteMutes, tab: Pick<Tab, "windowId" | "spaceId">, host: string): boolean {
+  const own = isIncognitoSpace(tab.spaceId) ? s.privateSiteMutes[tab.windowId]?.[host] : undefined;
   return own ?? s.settings.mutedSites.includes(host);
 }
 
 export function isSiteMuted(s: SiteMutes, tab: Omit<MutedTab, "muted">): boolean {
-  const anyMuted = (s.settings.mutedSites?.length ?? 0) > 0 || (isIncognitoProfile(tab.profileId) && !!s.privateSiteMutes[tab.windowId]);
+  const anyMuted = (s.settings.mutedSites?.length ?? 0) > 0 || (isIncognitoSpace(tab.spaceId) && !!s.privateSiteMutes[tab.windowId]);
   if (!anyMuted || !tab.url) return false;
   const host = cachedHostOf(tab.url);
   return !!host && isHostMuted(s, tab, host);
@@ -37,33 +37,6 @@ export function muteTitle(state: MuteState): string {
 export const siteMuteTitle = (state: MuteState): string => (state === "site" ? "Unmute Site" : "Mute Site");
 
 export const muteSymbol = (state: MuteState): string => (state ? "speaker.wave.2" : "speaker.slash");
-
-type SavedDoc = Record<string, unknown>;
-
-export function sessionWithOwnTabMutes(doc: SavedDoc): SavedDoc {
-  const settings = doc.settings as { mutedSites?: unknown } | undefined;
-  const sites = new Set(listOf(settings?.mutedSites).filter(isString));
-  if (!sites.size) return doc;
-  const own = <T>(t: T): T => {
-    const tab = t as Partial<Tab> | null;
-    if (!tab?.muted || typeof tab.url !== "string" || isIncognitoProfile(tab.profileId ?? "")) return t;
-    const host = hostOf(tab.url);
-    return host && sites.has(host) ? ({ ...tab, muted: false } as T) : t;
-  };
-  const withTab = (entry: unknown) => (entry && typeof entry === "object" && "tab" in entry ? { ...entry, tab: own((entry as { tab: unknown }).tab) } : entry);
-  const withTabs = (entry: unknown) => (entry && typeof entry === "object" && "tabs" in entry ? { ...entry, tabs: listOf((entry as { tabs: unknown }).tabs).map(own) } : entry);
-  const parked = doc.parkedPins && typeof doc.parkedPins === "object" ? Object.fromEntries(Object.entries(doc.parkedPins).map(([id, p]) => [id, withTabs(p)])) : doc.parkedPins;
-  return {
-    ...doc,
-    tabs: listOf(doc.tabs).map(own),
-    closedTabs: listOf(doc.closedTabs).map(withTab),
-    cleanedTabs: listOf(doc.cleanedTabs).map(withTab),
-    closedWindows: listOf(doc.closedWindows).map(withTabs),
-    closedGroups: listOf(doc.closedGroups).map(withTabs),
-    deletedGroups: listOf(doc.deletedGroups).map(withTabs),
-    parkedPins: parked,
-  };
-}
 
 export type MuteSlice = {
   privateSiteMutes: Record<string, Record<string, boolean>>;
@@ -102,7 +75,7 @@ export const createMuteSlice: StateCreator<BrowserState, [], [], MuteSlice> = (s
     if (!tab) return;
     const host = hostOf(tab.url);
     if (!host) return;
-    if (isIncognitoProfile(tab.profileId)) {
+    if (isIncognitoSpace(tab.spaceId)) {
       const own = { ...s.privateSiteMutes[tab.windowId], [host]: muted };
       return set({ privateSiteMutes: { ...get().privateSiteMutes, [tab.windowId]: own } });
     }
@@ -112,3 +85,4 @@ export const createMuteSlice: StateCreator<BrowserState, [], [], MuteSlice> = (s
     get().updateSettings({ mutedSites: [...sites] });
   },
 });
+export { sessionWithOwnTabMutes } from "../../lib/sessionMuteUpgrade";

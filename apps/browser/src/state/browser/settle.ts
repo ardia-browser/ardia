@@ -11,6 +11,7 @@ import { mirrorPins } from "../pins/pinMirror";
 import { settleSharedPins } from "../pins/pinShare";
 import { settleTileFolders } from "../pins/tileFolders";
 import { mirrorTopApps } from "../pins/topApps";
+import { mirrorLegacyTopApps } from "../pins/legacyTopApps";
 import { mirrorTabs, pagesIntoSplits, unshareTabs } from "../tabs/tabShare";
 import { splitsWhereUnavailable } from "../splits/splits";
 
@@ -37,8 +38,9 @@ export const SETTLE_STEPS: readonly (readonly [string, SettleStep])[] = [
   ["pagesIntoSplits", pagesIntoSplits],
   ["settleSharedPins", settleSharedPins],
   ["settleTileFolders", settleTileFolders],
-  ["mirrorPins", mirrorPins],
   ["mirrorTopApps", mirrorTopApps],
+  ["mirrorLegacyTopApps", mirrorLegacyTopApps],
+  ["mirrorPins", mirrorPins],
   ["mirrorTabs", mirrorTabs],
   ["pinnedTabsLeaveLive", patched(pinnedTabsLeaveLive)],
 ];

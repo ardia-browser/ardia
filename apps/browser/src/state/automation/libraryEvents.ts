@@ -1,7 +1,7 @@
 import { onHistoryChanged } from "../../platform/history";
 import type { Download } from "../../platform/downloads";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfile, isIncognitoSpace } from "../browser/model";
 import { changedIds } from "../browser/changes";
 import type { BookmarkNode } from "../browser/types";
 import { bookmarkRoots } from "../bookmarks/bookmarks";
@@ -38,8 +38,8 @@ export function historyRemoval(profiles: string[], all: boolean, urls: readonly 
 const sameBookmark = (a: BookmarkNode, b: BookmarkNode) =>
   a.kind === b.kind && a.title === b.title && a.parentId === b.parentId && (a.kind === "url" ? a.url === (b as typeof a).url : a.children === (b as typeof a).children || a.children.join() === (b as typeof a).children.join());
 
-function bookmarksLoaded(s: BrowserState, profileId: string) {
-  const roots = bookmarkRoots(s, profileId);
+function bookmarksLoaded(s: BrowserState, spaceId: string) {
+  const roots = bookmarkRoots(s, spaceId);
   return !!roots && !!s.bookmarks.nodes[roots.bar];
 }
 
@@ -50,7 +50,7 @@ function ownersOfBookmark(s: BrowserState, id: string): string[] {
   for (let i = 0; node?.parentId && i < BOOKMARK_DEPTH; i++) node = s.bookmarks.nodes[node.parentId];
   if (!node) return [];
   const rootId = node.id;
-  return s.profileOrder.filter((p) => {
+  return s.spaceOrder.filter((p) => {
     const roots = bookmarkRoots(s, p);
     return roots?.bar === rootId || roots?.other === rootId;
   });
@@ -63,7 +63,7 @@ function bookmarkChanges(s: BrowserState, prev: BrowserState) {
     const was = prev.bookmarks.nodes[id];
     if (next && was && sameBookmark(next, was)) continue;
     for (const owner of next ? ownersOfBookmark(s, id) : ownersOfBookmark(prev, id)) {
-      if (isIncognitoProfile(owner) || (!was && !bookmarksLoaded(prev, owner))) continue;
+      if (isIncognitoSpace(owner) || (!was && !bookmarksLoaded(prev, owner))) continue;
       let bucket = byProfile.get(owner);
       if (!bucket) byProfile.set(owner, (bucket = { added: [], changed: [], removed: [] }));
       bucket[!was ? "added" : !next ? "removed" : "changed"].push(id);
@@ -99,14 +99,14 @@ function downloadChanges(s: BrowserState, prev: BrowserState) {
   return out;
 }
 
-const PROFILE_KEYS = ["name", "color", "icon", "theme", "dataId", "pinnedCollapsed", "shareTopApps", "syncTabs"] as const;
+const PROFILE_KEYS = ["name", "color", "icon", "theme", "profileId", "pinnedCollapsed", "shareTopApps", "syncTabs"] as const;
 
 function profileChanges(s: BrowserState, prev: BrowserState) {
   const out: Record<string, unknown>[] = [];
-  for (const id of changedIds(s.profiles, prev.profiles)) {
-    if (isIncognitoProfile(id)) continue;
-    const next = s.profiles[id];
-    const was = prev.profiles[id];
+  for (const id of changedIds(s.spaces, prev.spaces)) {
+    if (isIncognitoSpace(id)) continue;
+    const next = s.spaces[id];
+    const was = prev.spaces[id];
     if (!was) out.push({ profile: id, change: "created", name: next!.name });
     else if (!next) out.push({ profile: id, change: "removed", name: was.name });
     else {
@@ -114,11 +114,11 @@ function profileChanges(s: BrowserState, prev: BrowserState) {
       if (keys.length) out.push({ profile: id, change: "updated", name: next.name, keys });
     }
   }
-  const defaultWas = prev.settings.defaultProfileId;
-  const defaultNow = s.settings.defaultProfileId;
-  if (defaultNow !== defaultWas && s.profiles[defaultNow]) out.push({ profile: defaultNow, change: "updated", name: s.profiles[defaultNow]!.name, keys: ["default"] });
-  const order = (state: BrowserState) => state.profileOrder.filter((id) => !isIncognitoProfile(id) && state.profiles[id]);
-  if (s.profileOrder !== prev.profileOrder) {
+  const defaultWas = prev.settings.defaultSpaceId;
+  const defaultNow = s.settings.defaultSpaceId;
+  if (defaultNow !== defaultWas && s.spaces[defaultNow]) out.push({ profile: defaultNow, change: "updated", name: s.spaces[defaultNow]!.name, keys: ["default"] });
+  const order = (state: BrowserState) => state.spaceOrder.filter((id) => !isIncognitoSpace(id) && state.profiles[id]);
+  if (s.spaceOrder !== prev.spaceOrder) {
     const now = order(s);
     const before = order(prev).filter((id) => now.includes(id));
     if (before.join() !== now.filter((id) => before.includes(id)).join()) out.push({ change: "reordered", order: now });
@@ -130,7 +130,7 @@ function startHistoryRemovals(send: EventSend) {
   const subscription = onHistoryChanged((change) => {
     if (change.kind !== "deleted") return;
     const s = useBrowser.getState();
-    const profiles = s.profileOrder.filter((id) => !isIncognitoProfile(id) && s.profiles[id] && engineProfile(s, id) === change.profile);
+    const profiles = s.spaceOrder.filter((id) => !isIncognitoSpace(id) && s.spaces[id] && engineProfile(s, id) === change.profile);
     if (!profiles.length) return;
     send("history.removed", historyRemoval(profiles, change.all, change.urls));
   });
@@ -146,7 +146,7 @@ export function startLibraryEvents(send: EventSend, wants: ReadonlySet<string>):
       useBrowser.subscribe((s, prev) => {
         if (wants.has("bookmarks.changed") && s.bookmarks !== prev.bookmarks) for (const data of bookmarkChanges(s, prev)) send("bookmarks.changed", data);
         if (wants.has("download.changed") && s.downloads !== prev.downloads) for (const data of downloadChanges(s, prev)) send("download.changed", data);
-        if (wants.has("profile.changed") && (s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder || s.settings.defaultProfileId !== prev.settings.defaultProfileId)) {
+        if (wants.has("profile.changed") && (s.spaces !== prev.spaces || s.spaceOrder !== prev.spaceOrder || s.settings.defaultSpaceId !== prev.settings.defaultSpaceId)) {
           for (const data of profileChanges(s, prev)) send("profile.changed", data);
         }
       }),

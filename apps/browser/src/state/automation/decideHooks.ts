@@ -4,7 +4,7 @@ import { setOpeningGate, type OpeningContext, type OpeningVerdict } from "../tab
 import { setLinkGate, type LinkGateResult, type LinkSourceInfo } from "../littleArdia/linkGate";
 import { setPermissionGate, type PermissionAsk } from "../site/permissionGate";
 import { useBrowser } from "../browser/store";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import { cancelAllDecisions } from "./decideSocket";
 import { decideLink, decideOpening, decidePermission, profileNamed, type LinkVerdict, type PermissionVerdict } from "./decisions";
 import { eligibleKind, isEligibleTab } from "./automationWindows";
@@ -21,9 +21,9 @@ import { consentToken, type ConsentToken } from "../telemetry/choice";
 
 const LINK_OPEN = new Set(["tab", "littleArdia", "window"]);
 
-function pluginEligible(windowId: string | null, profileId: string | null, tabId: string | null = null): boolean {
+function pluginEligible(windowId: string | null, spaceId: string | null, tabId: string | null = null): boolean {
   const s = useBrowser.getState();
-  if (profileId && isIncognitoProfile(profileId)) return false;
+  if (spaceId && isIncognitoSpace(spaceId)) return false;
   if (tabId && s.tabs[tabId] && !isEligibleTab(s, tabId)) return false;
   if (windowId && s.windows[windowId] && !eligibleKind(s, windowId)) return false;
   return true;
@@ -52,11 +52,11 @@ function openingWithPlugins(url: string, context: OpeningContext, consent: Conse
 function pluginLink(verdict: unknown): LinkVerdict | null {
   if (!isFields(verdict)) return null;
   if (verdict.drop === true) return { drop: true };
-  const profileId = verdict.profile === undefined ? null : profileNamed(verdict.profile);
-  if (verdict.profile !== undefined && !profileId) return null;
+  const spaceId = verdict.profile === undefined ? null : profileNamed(verdict.profile);
+  if (verdict.profile !== undefined && !spaceId) return null;
   const open = typeof verdict.open === "string" && LINK_OPEN.has(verdict.open) ? (verdict.open as "tab" | "littleArdia" | "window") : null;
   if (verdict.open !== undefined && !open) return null;
-  return profileId || open ? { profileId, open, windowId: null, groupKey: null } : null;
+  return spaceId || open ? { profileId: spaceId, open, windowId: null, groupKey: null } : null;
 }
 
 function linkWithPlugins(url: string, source: LinkSourceInfo, consent: ConsentToken | null): LinkVerdict | null | Promise<LinkVerdict | null> {
@@ -68,8 +68,8 @@ function permissionWithPlugins(request: PermissionAsk, signal?: AbortSignal): Pe
   const consent = consentToken();
   const declared = decidePermission(request, signal);
   const tab = request.tabId ? useBrowser.getState().tabs[request.tabId] : undefined;
-  if (!tab || !pluginEligible(tab.windowId, tab.profileId, tab.id) || !pluginsDeciding("permission.requested").length) return declared;
-  const data = { origin: request.origin, kinds: request.permissions, windowId: tab.windowId, tabId: tab.id, profile: tab.profileId };
+  if (!tab || !pluginEligible(tab.windowId, tab.spaceId, tab.id) || !pluginsDeciding("permission.requested").length) return declared;
+  const data = { origin: request.origin, kinds: request.permissions, windowId: tab.windowId, tabId: tab.id, profile: tab.spaceId };
   const ask = () => runPluginDecideHook("permission.requested", data, consent, signal).then((found): PermissionVerdict => (isFields(found?.verdict) && found.verdict.permission === "deny" ? "deny" : "ask"));
   if (declared instanceof Promise) return declared.then((v) => (v === "deny" ? v : ask()));
   return declared === "deny" ? declared : ask();

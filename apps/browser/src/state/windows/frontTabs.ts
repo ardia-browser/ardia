@@ -7,7 +7,7 @@ export type FrontTabListener = (change: FrontTabChange, s: BrowserState) => void
 
 const frontOf = (s: Fronts, windowId: string) => {
   const w = s.windows[windowId];
-  const id = w?.activeTabIds[w.profileId];
+  const id = w?.activeTabIds[w.spaceId];
   return id && s.tabs[id]?.windowId === windowId ? id : undefined;
 };
 

@@ -1,5 +1,5 @@
 import { controlOwnsTab } from "../../platform/control";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import { noteDevTools } from "../telemetry/cliCounts";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { fetchFieldData, fieldDataOrigin, type FieldData, type FieldDataRequest } from "./devToolsFieldData";
@@ -35,7 +35,7 @@ function only(result: TraceInsights, insight: unknown) {
 
 function checkFieldDataAsk(params: Record<string, unknown>, profileId: string): { apiKey: string; formFactor: FieldDataRequest["formFactor"] } | null {
   if (params.includeFieldData !== true) return null;
-  if (isIncognitoProfile(profileId)) throw new OpError("refused", "Field data is never asked for a private window's page.");
+  if (isIncognitoSpace(profileId)) throw new OpError("refused", "Field data is never asked for a private window's page.");
   if (typeof params.fieldDataKey !== "string") throw new OpError("bad_request", "includeFieldData needs fieldDataKey.");
   return { apiKey: params.fieldDataKey, formFactor: (params.formFactor as FieldDataRequest["formFactor"] | undefined) ?? null };
 }
@@ -75,7 +75,7 @@ async function perfTrace(params: Record<string, unknown>, call: SocketCall) {
   if (reload && !(await controlOwnsTab(tab.id)).owned) throw new OpError("refused", "Only a tab the ardia command opened can be reloaded for a trace.");
   call.stillServing();
   const durationMs = (params.durationMs as number | undefined) ?? 5000;
-  const ask = checkFieldDataAsk(params, tab.profileId);
+  const ask = checkFieldDataAsk(params, tab.spaceId);
   try {
     const recording = await withInspection(tab.id, call.connection, (session) => {
       call.stillServing();

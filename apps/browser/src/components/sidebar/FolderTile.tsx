@@ -3,7 +3,7 @@ import { Animated, Pressable, View } from "react-native";
 import { ContextMenuArea, space, Symbol } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { Squish, useSquish } from "../ui/Squish";
-import { usePageProfileId, useTab, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
+import { usePageSpaceId, useTab, useWindowId, useWindowSpaceId } from "../../state/browser/hooks";
 import { useShownFolderTab, useTileFolderMembers } from "../../state/pins/hooks";
 import { useDragItem, useFolderTarget } from "./DragProvider";
 import { dismissHover } from "../../state/sidebar/hover";
@@ -26,7 +26,7 @@ export const FolderTile = memo(function FolderTile({ folderId, width, sliding, x
   const theme = useTheme();
   const windowId = useWindowId();
   const members = useTileFolderMembers(windowId, folderId);
-  const onScreen = usePageProfileId() === useWindowProfileId();
+  const onScreen = usePageSpaceId() === useWindowSpaceId();
   const shown = useShownFolderTab(windowId, folderId);
   const open = useFolderPanel((u) => u.open?.windowId === windowId && u.open.folderId === folderId);
   const { hovered, hoverProps } = useRowHover(windowId, { kind: "folder", id: folderId });

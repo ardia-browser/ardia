@@ -9,14 +9,14 @@ test("Linux Settings shares navigation actions and opens the requested native ut
   assert.equal(linux.useSettingsNav, shared.useSettingsNav);
   assert.equal(linux.goToSettingsPane, shared.goToSettingsPane);
   windows.open.clear();
-  shared.useSettingsNav.setState({ pane: "general", profileId: null, detail: null, scroll: 0, visit: 1, back: [], forward: [] });
+  shared.useSettingsNav.setState({ pane: "general", spaceId: null, detail: null, scroll: 0, visit: 1, back: [], forward: [] });
   let saved;
   setSessionFlush(() => new Promise((resolve) => { saved = resolve; }));
 
   assert.equal(linux.openSettings("profiles", "work"), undefined);
   assert.equal(windows.open.has("settings"), false);
   assert.equal(shared.useSettingsNav.getState().pane, "profiles");
-  assert.equal(shared.useSettingsNav.getState().profileId, "work");
+  assert.equal(shared.useSettingsNav.getState().spaceId, "work");
   saved();
   await new Promise(setImmediate);
   assert.deepEqual(windows.open.get("settings"), {
@@ -24,7 +24,7 @@ test("Linux Settings shares navigation actions and opens the requested native ut
     title: "Settings",
     settings: { pane: "profiles", profileId: "work", detail: null },
   });
-  assert.deepEqual(shared.useSettingsNav.getState().back, [{ pane: "general", profileId: null, detail: null, scroll: 0, visit: 1, shownProfile: null }]);
+  assert.deepEqual(shared.useSettingsNav.getState().back, [{ pane: "general", spaceId: null, detail: null, scroll: 0, visit: 1, shownProfile: null }]);
 
   linux.settingsBack();
   assert.equal(shared.useSettingsNav.getState().pane, "general");
@@ -54,7 +54,7 @@ test("Manage Extensions on Linux and Windows carries the Extensions row to the S
   const { useSettingsSearch, setSettingsQuery } = await import("../../browser/src/state/settings/searchState.ts");
   const { navigateUtility } = await import("./utilityPlace.ts");
   windows.open.clear();
-  shared.useSettingsNav.setState({ pane: "general", profileId: null, detail: null, back: [], forward: [] });
+  shared.useSettingsNav.setState({ pane: "general", spaceId: null, detail: null, back: [], forward: [] });
   setSessionFlush(() => Promise.resolve());
   linux.openSettings("profiles", "work", null, "profiles.extensions");
   await new Promise(setImmediate);
@@ -64,12 +64,12 @@ test("Manage Extensions on Linux and Windows carries the Extensions row to the S
   assert.match(revealId, /^[0-9a-f-]{36}$/);
   assert.equal(revealConsent, null);
 
-  shared.useSettingsNav.setState({ pane: "general", profileId: null, detail: null, back: [], forward: [] });
+  shared.useSettingsNav.setState({ pane: "general", spaceId: null, detail: null, back: [], forward: [] });
   setSettingsQuery("cookies");
   useSettingsSearch.setState({ reveal: null });
   navigateUtility(JSON.parse(JSON.stringify(request.settings)));
   const nav = shared.useSettingsNav.getState();
-  assert.deepEqual([nav.pane, nav.profileId, nav.detail], ["profiles", "work", null]);
+  assert.deepEqual([nav.pane, nav.spaceId, nav.detail], ["profiles", "work", null]);
   assert.equal(useSettingsSearch.getState().reveal?.id, "profiles.extensions");
   assert.equal(useSettingsSearch.getState().query, "");
 
@@ -105,10 +105,10 @@ test("a second Settings renderer started from the host's cached payload doesn't 
   assert.equal(useSettingsSearch.getState().reveal, null, "the ready reply repeats the bootstrap payload: shown once");
 
   const second = await import("./utilityPlace.ts?renderer=second");
-  shared.useSettingsNav.setState({ pane: "general", profileId: null, detail: null, back: [], forward: [] });
+  shared.useSettingsNav.setState({ pane: "general", spaceId: null, detail: null, back: [], forward: [] });
   second.navigateUtility(payload);
   const nav = shared.useSettingsNav.getState();
-  assert.deepEqual([nav.pane, nav.profileId], ["profiles", "work"], "the destination is still restored");
+  assert.deepEqual([nav.pane, nav.spaceId], ["profiles", "work"], "the destination is still restored");
   assert.equal(useSettingsSearch.getState().reveal, null, "the consumed reveal isn't replayed");
 
   linux.openSettings("profiles", "work", null, "profiles.extensions");

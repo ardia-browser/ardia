@@ -135,14 +135,14 @@ function linkUrl(value: unknown): string {
 function add(params: Record<string, unknown>) {
   const { profileId, parentId } = placeOf(params);
   const url = linkUrl(params.url);
-  const made = now().addBookmark({ profileId, url, title: (params.title as string | undefined) ?? url, parentId, index: params.index as number | undefined });
+  const made = now().addBookmark({ spaceId: profileId, url, title: (params.title as string | undefined) ?? url, parentId, index: params.index as number | undefined });
   expect(!!now().bookmarks.nodes[made], "the bookmark wasn't added.");
   return bookmarkRow(now().bookmarks.nodes[made]!, 0);
 }
 
 function addFolder(params: Record<string, unknown>) {
   const { profileId, parentId } = placeOf(params);
-  const made = now().addBookmarkFolder({ profileId, title: params.title as string, parentId, index: params.index as number | undefined });
+  const made = now().addBookmarkFolder({ spaceId: profileId, title: params.title as string, parentId, index: params.index as number | undefined });
   expect(!!now().bookmarks.nodes[made], "the folder wasn't added.");
   return bookmarkRow(now().bookmarks.nodes[made]!, 0);
 }

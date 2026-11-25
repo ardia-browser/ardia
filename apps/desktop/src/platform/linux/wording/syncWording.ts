@@ -55,8 +55,10 @@ export const SYNC_WORDING: readonly Wording[] = [
         `On your other device, open Ardia › Settings › General › Sync and choose the same sync folder.`,
       ],
       [
-        "Click Show Code. On your iPhone, open Ardia, tap Sync With Mac, and scan the code. For another Mac, you can also scan it with your iPhone’s camera and paste the words there with Universal Clipboard.",
-        "Click Show Code, then scan the code with your phone’s camera to copy the words, and type or paste them on your other device.",
+        `          {PLATFORM_FEATURES.syncsWithPhone
+            ? "On your iPhone, open Ardia, tap Sync With Mac, and scan the code. You can also use your camera to copy the words for another computer."
+            : "Scan the code with your phone’s camera to copy the words and enter them on your other computer."}`,
+        `          Scan the code with your phone’s camera to copy the words and enter them on your other computer.`,
       ],
       ["Your data on each ${PLATFORM_TERMS.syncedComputer} stays.", "Your data on each device stays."],
       [
@@ -70,10 +72,9 @@ export const SYNC_WORDING: readonly Wording[] = [
     ],
   },
   {
-    file: "components/settings/rows/generalRows.ts",
+    file: "components/settings/rows/workspaceRows.ts",
     replacements: [
       [`keywords: ["icloud drive", "dropbox", "folder"]`, `keywords: ["syncthing", "nextcloud", "dropbox", "folder"]`],
-      [`keywords: ["devices", "computers", "macs", "remove device"]`, `keywords: ["devices", "computers", "remove device"]`],
     ],
   },
   {

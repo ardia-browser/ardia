@@ -1,16 +1,16 @@
 import { canonical, pullSettled, type ScopeState } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
-import type { Profile } from "../browser/types";
-import { legacyThemeOf, themeAngleKey, themeFromRecord, type ProfileRecord } from "./profileAdapters";
+import type { Space } from "../browser/types";
+import { legacyThemeOf, themeAngleKey, themeFromRecord, type SpaceRecord } from "./spaceAdapters";
 import { PROFILE, PROFILE_THEME, profileRecord } from "./records";
-import type { ProfileLink } from "./syncDoc";
+import type { SpaceLink } from "./syncDoc";
 import { withSyncedColor } from "../../lib/presetLook";
 
-function pairedTheme(app: ScopeState, syncId: string): Pick<Profile, "theme"> | null {
+function pairedTheme(app: ScopeState, syncId: string): Pick<Space, "theme"> | null {
   const record = app.records[`${PROFILE_THEME}${syncId}`]?.v;
   if (record) return themeFromRecord(record, app.records[themeAngleKey(syncId)]?.v);
-  const profile = profileRecord(app.records[`${PROFILE}${syncId}`]?.v);
-  return profile ? legacyThemeOf(profile) : null;
+  const space = profileRecord(app.records[`${PROFILE}${syncId}`]?.v);
+  return space ? legacyThemeOf(space) : null;
 }
 
 function settledTheme(app: ScopeState, syncId: string): boolean {
@@ -18,26 +18,26 @@ function settledTheme(app: ScopeState, syncId: string): boolean {
   return !!record && !!themeFromRecord(record);
 }
 
-export function pairTheme(app: ScopeState | undefined, profileId: string, link: ProfileLink, record?: ProfileRecord) {
+export function pairTheme(app: ScopeState | undefined, spaceId: string, link: SpaceLink, record?: SpaceRecord) {
   const theme = app ? pairedTheme(app, link.syncId) : record ? legacyThemeOf(record) : null;
-  const profile = useBrowser.getState().profiles[profileId];
+  const profile = useBrowser.getState().spaces[spaceId];
   const color = (app ? profileRecord(app.records[`${PROFILE}${link.syncId}`]?.v) : record)?.c;
   const chosen = profile && color ? withSyncedColor(profile, color, theme ? (theme.theme ?? null) : undefined) : null;
-  if (theme || chosen) useBrowser.getState().setProfileLook(profileId, { ...chosen, ...(theme ?? {}) });
+  if (theme || chosen) useBrowser.getState().updateSpace(spaceId, { ...chosen, ...(theme ?? {}) });
   if (app && settledTheme(app, link.syncId)) delete link.themeAdopting;
   else link.themeAdopting = true;
 }
 
-export function themeChosenHere(link: ProfileLink | undefined): boolean {
+export function themeChosenHere(link: SpaceLink | undefined): boolean {
   if (!link?.themeAdopting) return false;
   delete link.themeAdopting;
   return true;
 }
 
-export function settleThemeAdoption(profiles: Record<string, ProfileLink>, app: ScopeState | undefined, afterPull: boolean) {
+export function settleThemeAdoption(spaces: Record<string, SpaceLink>, app: ScopeState | undefined, afterPull: boolean) {
   if (!app) return;
   const clean = afterPull && pullSettled(app);
-  for (const link of Object.values(profiles)) {
+  for (const link of Object.values(spaces)) {
     if (!link.themeAdopting) continue;
     const key = `${PROFILE_THEME}${link.syncId}`;
     const record = app.records[key]?.v;

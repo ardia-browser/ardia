@@ -13,15 +13,15 @@ const MAX_NAME = 200;
 
 function folderRow(s: BrowserState, windowId: string, folderId: string) {
   const folder = folderIn(s, windowId, folderId);
-  return { id: folderId, window: windowId, profile: s.windows[windowId]!.profileId, name: folder?.name ?? "", label: folderLabel(folder), tabs: folderMembers(s, windowId, folderId) };
+  return { id: folderId, window: windowId, profile: s.windows[windowId]!.spaceId, name: folder?.name ?? "", label: folderLabel(folder), tabs: folderMembers(s, windowId, folderId) };
 }
 
 function foldersIn(s: BrowserState, windowId: string) {
   const seen = new Set<string>();
-  const profileId = s.windows[windowId]!.profileId;
+  const profileId = s.windows[windowId]!.spaceId;
   for (const tabId of s.windows[windowId]!.tabIds) {
     const t = s.tabs[tabId];
-    const folder = t?.profileId === profileId ? tileFolderOf(t) : undefined;
+    const folder = t?.spaceId === profileId ? tileFolderOf(t) : undefined;
     if (folder) seen.add(folder.id);
   }
   return [...seen].map((folderId) => folderRow(s, windowId, folderId));
@@ -47,8 +47,8 @@ function sameSpace(tabIds: string[]) {
   const tabs = [...new Set(tabIds)].map(tabOf);
   const first = tabs[0]!;
   if (eligibleKind(now(), first.windowId) !== "normal") throw new OpError("bad_request", "Tile folders are in a main window's sidebar, not in Little Ardia.");
-  if (tabs.some((t) => t.windowId !== first.windowId || t.profileId !== first.profileId)) throw new OpError("bad_request", "Every tab must be in the same window and profile.");
-  if (now().windows[first.windowId]!.profileId !== first.profileId) throw new OpError("bad_request", "Those tabs belong to a profile the window isn't showing.");
+  if (tabs.some((t) => t.windowId !== first.windowId || t.spaceId !== first.spaceId)) throw new OpError("bad_request", "Every tab must be in the same window and profile.");
+  if (now().windows[first.windowId]!.spaceId !== first.spaceId) throw new OpError("bad_request", "Those tabs belong to a profile the window isn't showing.");
   return tabs.map((t) => t.id);
 }
 

@@ -928,51 +928,61 @@
    ]
   },
   {
-   "id": "sync-adapter:profileAdapters.ts#profilesAdapter",
+   "id": "sync-adapter:identityAdapters.ts#profilesAdapter",
+   "source": "sync",
+   "guard": "identityRecord checks the name, icon and optional seed flag before updating a linked Profile",
+   "checks": [
+    "apps/browser/src/state/sync/identityAdapters.ts#profilesAdapter",
+    "apps/browser/src/state/sync/identityAdapters.test.mjs"
+   ]
+  },
+  {
+   "id": "sync-adapter:identityAdapters.ts#topAppsAdapter",
+   "source": "sync",
+   "guard": "topAppValue and key and position checks reject a malformed list before any Profile Top Apps are replaced",
+   "checks": [
+    "apps/browser/src/state/sync/identityAdapters.ts#topAppsAdapter",
+    "apps/browser/src/state/sync/identityAdapters.test.mjs"
+   ]
+  },
+  {
+   "id": "sync-adapter:spaceAdapters.ts#spacesAdapter",
    "source": "sync",
    "guard": "profileRecord decoder",
    "checks": [
-    "apps/browser/src/state/sync/profileAdapters.ts#profilesAdapter"
+    "apps/browser/src/state/sync/spaceAdapters.ts#spacesAdapter"
    ]
   },
   {
-   "id": "sync-adapter:profileAdapters.ts#profileThemesAdapter",
+   "id": "sync-adapter:spaceAdapters.ts#spaceThemesAdapter",
    "source": "sync",
    "guard": "Themes sanitized before use",
    "checks": [
-    "apps/browser/src/state/sync/profileAdapters.ts#profileThemesAdapter"
+    "apps/browser/src/state/sync/spaceAdapters.ts#spaceThemesAdapter"
    ]
   },
   {
-   "id": "sync-adapter:profileAdapters.ts#profileTopAppsAdapter",
+   "id": "sync-adapter:profileAdapters.ts#spaceTopAppsAdapter",
    "source": "sync",
    "guard": "topAppsRecord decoder; a boolean",
    "checks": [
-    "apps/browser/src/state/sync/profileAdapters.ts#profileTopAppsAdapter"
+    "apps/browser/src/state/sync/profileAdapters.ts#spaceTopAppsAdapter"
    ]
   },
   {
-   "id": "sync-adapter:profileAdapters.ts#profileOpenTabsAdapter",
+   "id": "sync-adapter:profileAdapters.ts#spaceOpenTabsAdapter",
    "source": "sync",
    "guard": "openTabsRecord decoder; a boolean",
    "checks": [
-    "apps/browser/src/state/sync/profileAdapters.ts#profileOpenTabsAdapter"
+    "apps/browser/src/state/sync/profileAdapters.ts#spaceOpenTabsAdapter"
    ]
   },
   {
-   "id": "sync-adapter-set:profileAdapters.ts#profileSyncAdapters",
+   "id": "sync-adapter-set:profileSync.ts#createProfileSync",
    "source": "sync",
    "guard": "Composes the single adapters listed above; adds no decoding of its own",
    "checks": [
-    "apps/browser/src/state/sync/profileAdapters.ts#profileSyncAdapters"
-   ]
-  },
-  {
-   "id": "sync-adapter:scopeAdapters.ts#extensionsOf",
-   "source": "sync",
-   "guard": "See extensions.ts#extensionsAdapterFor",
-   "checks": [
-    "apps/browser/src/state/sync/scopeAdapters.ts#extensionsOf"
+    "apps/browser/src/state/sync/profileSync.ts#createProfileSync"
    ]
   },
   {
@@ -984,11 +994,11 @@
    ]
   },
   {
-   "id": "sync-adapter-set:scopeAdapters.ts#profileAdapters",
+   "id": "sync-adapter-set:scopeAdapters.ts#spaceAdapters",
    "source": "sync",
    "guard": "Composes the single adapters listed above; adds no decoding of its own",
    "checks": [
-    "apps/browser/src/state/sync/scopeAdapters.ts#profileAdapters"
+    "apps/browser/src/state/sync/scopeAdapters.ts#spaceAdapters"
    ]
   },
   {
@@ -1492,6 +1502,16 @@
    "count": 1,
    "checks": [
     "apps/browser/src/state/settings/settings.ts"
+   ]
+  },
+  {
+   "id": "raw-settings-write:state/spaces/spaces.ts",
+   "source": "native",
+   "guard": "setDefaultSpace changes just the default Space ID and requires the destination to exist locally",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/spaces/spaces.ts#setDefaultSpace",
+    "apps/browser/src/state/spaces/ownership.test.mjs"
    ]
   },
   {

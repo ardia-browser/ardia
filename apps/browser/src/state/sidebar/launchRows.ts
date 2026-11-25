@@ -13,7 +13,7 @@ export const LATE_MS = 3000;
 const MAX_REPORTED_ROWS = 5000;
 const MAX_REPORTED_MS = 60_000;
 
-type Held = { tab: string | null; profileId: string | undefined; loading: boolean };
+type Held = { tab: string | null; spaceId: string | undefined; loading: boolean };
 
 const useLaunchRows = create<{ started: boolean; held: Record<string, true> }>()(() => ({ started: false, held: {} }));
 
@@ -80,7 +80,7 @@ function watch() {
       for (const [windowId, held] of windows) {
         const w = s.windows[windowId];
         if (!w || (held.tab && s.tabs[held.tab]?.windowId !== windowId)) releaseLaunchRows(windowId, null);
-        else if (w.profileId !== held.profileId) releaseLaunchRows(windowId, "profile");
+        else if (w.spaceId !== held.spaceId) releaseLaunchRows(windowId, "profile");
       }
     }),
   );
@@ -97,7 +97,7 @@ export function startLaunchRows() {
       const w = s.windows[windowId];
       if (!w || w.kind === "small") continue;
       const tab = launchTabOf(s, windowId);
-      windows.set(windowId, { tab, profileId: w.profileId, loading: !!tab && liveOf(tab).isLoading });
+      windows.set(windowId, { tab, spaceId: w.spaceId, loading: !!tab && liveOf(tab).isLoading });
       held[windowId] = true;
     }
   }

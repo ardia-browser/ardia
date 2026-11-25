@@ -7,7 +7,7 @@ import type { Settings } from "../settings/settings";
 import type { PresetThemes, ProfileColor, ProfileTheme } from "../browser/types";
 import { PRESETS, presetFor, setsUpLikeBrowser, type BrowserSourceId, type Preset } from "./presets";
 import { endToolTour, startToolTour } from "./tour";
-import { choosePresetColor, setProfileTheme } from "../profiles/themeActions";
+import { choosePresetColor, setProfileTheme } from "../spaces/themeActions";
 import { stepsForThisSurface } from "./demoSteps";
 import { hasSavedSession } from "../session/sessionDocument";
 import { isLiquidGlass } from "../../platform/app";
@@ -190,27 +190,27 @@ export function previewLive(patch: Partial<Settings>) {
 export function previewColor(color: ProfileColor) {
   const { windowId } = useOnboarding.getState();
   const b = useBrowser.getState();
-  const profileId = windowId ? b.windows[windowId]?.profileId : undefined;
-  if (!profileId) return;
-  recordLookBaseline(profileId);
-  choosePresetColor(profileId, color);
+  const spaceId = windowId ? b.windows[windowId]?.spaceId : undefined;
+  if (!spaceId) return;
+  recordLookBaseline(spaceId);
+  choosePresetColor(spaceId, color);
 }
 
 export function previewTheme(theme: ProfileTheme | null) {
   const { windowId } = useOnboarding.getState();
   const b = useBrowser.getState();
-  const profileId = windowId ? b.windows[windowId]?.profileId : undefined;
-  if (!profileId) return;
-  recordLookBaseline(profileId);
-  setProfileTheme(profileId, theme);
+  const spaceId = windowId ? b.windows[windowId]?.spaceId : undefined;
+  if (!spaceId) return;
+  recordLookBaseline(spaceId);
+  setProfileTheme(spaceId, theme);
 }
 
-function recordLookBaseline(profileId: string) {
+function recordLookBaseline(spaceId: string) {
   const { baseline } = useOnboarding.getState();
-  const profile = useBrowser.getState().profiles[profileId];
-  if (!profile || baseline.looks?.[profileId]) return;
-  const look = { color: profile.color, theme: profile.theme ?? null, presetThemes: profile.presetThemes };
-  useOnboarding.setState({ baseline: { ...baseline, ...("color" in baseline ? {} : { color: profile.color }), looks: { ...baseline.looks, [profileId]: look } } });
+  const space = useBrowser.getState().spaces[spaceId];
+  if (!space || baseline.looks?.[spaceId]) return;
+  const look = { color: space.color, theme: space.theme ?? null, presetThemes: space.presetThemes };
+  useOnboarding.setState({ baseline: { ...baseline, ...("color" in baseline ? {} : { color: space.color }), looks: { ...baseline.looks, [spaceId]: look } } });
 }
 
 export function confirmAnswer(question: QuestionId, patch: Partial<Settings>, picked: string[]) {
@@ -260,7 +260,7 @@ function revertLive(keys: readonly (keyof LiveBaseline)[]) {
   const b = useBrowser.getState();
   if (tabLayout && windowId) setWindowLayout(windowId, tabLayout);
   if (Object.keys(rest).length) b.updateSettings(rest, { fromSync: true });
-  for (const [id, look] of Object.entries(looks ?? {})) if (b.profiles[id]) b.setProfileLook(id, look);
+  for (const [id, look] of Object.entries(looks ?? {})) if (b.spaces[id]) b.updateSpace(id, look);
   const kept = { ...baseline };
   for (const key of keys) delete kept[key];
   useOnboarding.setState({ baseline: kept });

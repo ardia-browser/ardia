@@ -1,6 +1,6 @@
 import { refuseSyncedLinkChange } from "./workspaceSharedGuard";
 import type { BrowserState } from "../browser/store";
-import { activeTabId, isIncognitoProfile } from "../browser/model";
+import { activeTabId, isIncognitoSpace } from "../browser/model";
 import type { ClosedGroup, ClosedTab, ClosedWindow } from "../browser/types";
 import { groupOf } from "../pins/tabGrouping";
 import { splitOf } from "../splits/splits";
@@ -28,7 +28,7 @@ function tabRow(s: BrowserState, tabId: string) {
   return {
     id: tabId,
     window: t.windowId,
-    profile: t.profileId,
+    profile: t.spaceId,
     ...shownPage(t),
     customTitle: t.customTitle,
     customIcon: t.customIcon,
@@ -55,7 +55,7 @@ function listTabs(params: Record<string, unknown>) {
   const s = now();
   const windows = params.window !== undefined ? [windowOf(params.window).id] : s.windowOrder.filter((w) => eligibleKind(s, w));
   const profile = params.profile !== undefined ? profileArg(params.profile) : null;
-  return windows.flatMap((w) => windowTabIds(s, w)).filter((t) => !profile || s.tabs[t]!.profileId === profile).map((t) => tabRow(s, t));
+  return windows.flatMap((w) => windowTabIds(s, w)).filter((t) => !profile || s.tabs[t]!.spaceId === profile).map((t) => tabRow(s, t));
 }
 
 function navigate(params: Record<string, unknown>) {
@@ -106,15 +106,15 @@ function setPinnedUrl(params: Record<string, unknown>) {
 type Closed = ClosedTab | ClosedWindow | ClosedGroup;
 
 function closedRow(c: Closed) {
-  if (c.kind === "tab") return { id: c.id, kind: c.kind, closedAt: c.closedAt, url: c.tab.url, title: c.tab.customTitle || c.tab.title, profile: c.tab.profileId, group: c.group?.name ?? null };
-  if (c.kind === "window") return { id: c.id, kind: c.kind, closedAt: c.closedAt, profile: c.window.profileId, tabs: c.tabs.length, groups: c.groups.length };
-  return { id: c.id, kind: c.kind, closedAt: c.closedAt, name: c.group.name, tabs: c.tabs.length, profile: c.tabs[0]?.profileId ?? null };
+  if (c.kind === "tab") return { id: c.id, kind: c.kind, closedAt: c.closedAt, url: c.tab.url, title: c.tab.customTitle || c.tab.title, profile: c.tab.spaceId, group: c.group?.name ?? null };
+  if (c.kind === "window") return { id: c.id, kind: c.kind, closedAt: c.closedAt, profile: c.window.spaceId, tabs: c.tabs.length, groups: c.groups.length };
+  return { id: c.id, kind: c.kind, closedAt: c.closedAt, name: c.group.name, tabs: c.tabs.length, profile: c.tabs[0]?.spaceId ?? null };
 }
 
 function closedOf(params: Record<string, unknown>) {
   const s = now();
   const list = recentlyClosedIn(s, windowOrFocused(params.window, ["normal"]));
-  return [...list.tabs, ...list.windows, ...list.groups].filter((c) => c.kind !== "tab" || !isIncognitoProfile(c.tab.profileId));
+  return [...list.tabs, ...list.windows, ...list.groups].filter((c) => c.kind !== "tab" || !isIncognitoSpace(c.tab.spaceId));
 }
 
 const closedList = (params: Record<string, unknown>) => closedOf(params).sort((a, b) => b.closedAt - a.closedAt).map(closedRow);
@@ -122,7 +122,7 @@ const closedList = (params: Record<string, unknown>) => closedOf(params).sort((a
 function closedRestore(params: Record<string, unknown>) {
   const s = now();
   const entry = [...s.closedTabs, ...s.closedWindows, ...s.closedGroups].find((c) => c.id === params.id);
-  if (!entry || (entry.kind === "tab" && isIncognitoProfile(entry.tab.profileId))) throw new OpError("no_window", `There's no closed tab, window or group ${String(params.id)}.`);
+  if (!entry || (entry.kind === "tab" && isIncognitoSpace(entry.tab.spaceId))) throw new OpError("no_window", `There's no closed tab, window or group ${String(params.id)}.`);
   const windowId = params.window !== undefined ? windowOf(params.window, ["normal"]).id : null;
   const before = new Set(Object.keys(s.tabs));
   now().restoreClosed(entry.id, windowId);

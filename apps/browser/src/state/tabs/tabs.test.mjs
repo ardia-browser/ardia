@@ -373,7 +373,7 @@ test("a pinned group's reopened tab not shown yet keeps its back/forward list th
   S().closeTab(c2);
   assert.equal(S().tabs[c2].page.wake, `restore:${c}`);
   S().closeWindow(w);
-  assert.ok(S().parkedPins.default, "the profile's pins are parked");
+  assert.ok(S().parkedPins.default, "the space's pins are parked");
   const n = S().createWindow();
   const back = S().windows[n].tabIds.find((id) => S().tabs[id].url.includes("c.com"));
   S().activate(back);
@@ -392,30 +392,30 @@ test("Settings shows the tab layout of the window in front, not a default it no 
   assert.equal(model.tabLayoutOf(S()), "top");
 });
 
-test("⇧⌘T reopens only what the window's shown profile closed", () => {
+test("⇧⌘T reopens only what the window's shown space closed", () => {
   reset();
   const [w, , b] = setup("a", "b");
   S().closeTab(b);
-  const p = S().createProfile({ name: "Work" });
-  S().switchProfile(w, p);
+  const p = S().createSpace({ name: "Work", profileId: S().createProfile({ name: "Work" }) });
+  S().switchSpace(w, p);
   const work = S().newTab(w, { url: "w.com" });
   S().reopenClosed(w);
-  assert.equal(S().windows[w].profileId, p, "it stays on Work");
-  assert.ok(!Object.values(S().tabs).some((t) => short(t.url) === "b"), "the default profile's tab stays closed");
+  assert.equal(S().windows[w].spaceId, p, "it stays on Work");
+  assert.ok(!Object.values(S().tabs).some((t) => short(t.url) === "b"), "the default space's tab stays closed");
   S().closeTab(work);
   S().reopenClosed(w);
-  assert.ok(Object.values(S().tabs).some((t) => short(t.url) === "w" && t.profileId === p), "Work's own tab comes back");
-  S().switchProfile(w, "default");
+  assert.ok(Object.values(S().tabs).some((t) => short(t.url) === "w" && t.spaceId === p), "Work's own tab comes back");
+  S().switchSpace(w, "default");
   S().reopenClosedTab(w);
-  assert.ok(Object.values(S().tabs).some((t) => short(t.url) === "b" && t.profileId === "default"));
+  assert.ok(Object.values(S().tabs).some((t) => short(t.url) === "b" && t.spaceId === "default"));
 });
 
 test("switching tabs in one profile keeps another profile's opener links in the same window", () => {
   reset();
   const [w, a] = setup("a", "b");
   const c = open(w, "c", a);
-  const p = S().createProfile({ name: "Work" });
-  S().switchProfile(w, p);
+  const p = S().createSpace({ name: "Work", profileId: S().createProfile({ name: "Work" }) });
+  S().switchSpace(w, p);
   const w1 = model.activeTabId(S(), w);
   const w2 = S().newTab(w, { url: "w2.com", background: true });
   const w3 = open(w, "w3", w1);
@@ -426,9 +426,9 @@ test("switching tabs in one profile keeps another profile's opener links in the 
   open(w, "w4", w2, false);
   S().navigate(w2, "typed.com");
   assert.equal(S().tabs[c].openerId, a, "a link opened in front and a typed address in Work keep it too");
-  S().switchProfile(w, "default");
+  S().switchSpace(w, "default");
   open(w, "c2", a);
-  const personal = hosts(w).filter((_, i) => S().tabs[S().windows[w].tabIds[i]].profileId === "default");
+  const personal = hosts(w).filter((_, i) => S().tabs[S().windows[w].tabIds[i]].spaceId === "default");
   assert.deepEqual(personal, ["a", "c", "c2", "b"], "the next link from the same tab still lines up after the first");
 });
 
@@ -457,10 +457,10 @@ test("abandoned New Tab cleanup never closes a window or the tab it shows", () =
   const front = S().newTab(w);
   S().closeAbandonedNewTabs();
   assert.deepEqual(S().windows[w].tabIds, [front]);
-  const p = S().createProfile({ name: "Work" });
-  S().switchProfile(w, p);
+  const p = S().createSpace({ name: "Work", profileId: S().createProfile({ name: "Work" }) });
+  S().switchSpace(w, p);
   const work = model.activeTabId(S(), w);
-  S().switchProfile(w, "default");
+  S().switchSpace(w, "default");
   S().closeAbandonedNewTabs();
   assert.ok(S().tabs[work] && S().tabs[front]);
   const w2 = S().createWindow();
@@ -729,17 +729,17 @@ test("Clear on the blank tab a second Clear left does nothing, and the earlier U
 test("Undo of a second Clear after switching profiles brings the tab back in its profile without switching back", () => {
   reset();
   const [w] = setup("a");
-  const p = S().createProfile({ name: "Work" });
-  S().switchProfile(w, p);
-  S().switchProfile(w, "default");
+  const p = S().createSpace({ name: "Work", profileId: S().createProfile({ name: "Work" }) });
+  S().switchSpace(w, p);
+  S().switchSpace(w, "default");
   const cleared = S().clearUnpinnedTabs(w);
-  S().switchProfile(w, p);
+  S().switchSpace(w, p);
   assert.equal(clearedTabs.canUndoClear(S(), cleared), true, "switching profiles leaves the toast's Undo working");
   S().undoClearTabs(cleared);
-  assert.equal(S().windows[w].profileId, p, "the window stays on Work");
+  assert.equal(S().windows[w].spaceId, p, "the window stays on Work");
   const back = S().windows[w].activeTabIds.default;
   assert.equal(short(S().tabs[back].url), "a", "the default profile's selected tab is the one Clear closed");
-  S().switchProfile(w, "default");
+  S().switchSpace(w, "default");
   assert.equal(shown(w), "a");
 });
 
@@ -785,12 +785,12 @@ test("switching to a profile the window never showed keeps the Undo of a second 
   reset();
   const [w] = setup("a");
   const cleared = S().clearUnpinnedTabs(w);
-  const p = S().createProfile({ name: "Work" });
-  S().switchProfile(w, p);
-  assert.ok(S().windows[w].tabIds.some((id) => S().tabs[id].profileId === p), "Work got its first tab");
+  const p = S().createSpace({ name: "Work", profileId: S().createProfile({ name: "Work" }) });
+  S().switchSpace(w, p);
+  assert.ok(S().windows[w].tabIds.some((id) => S().tabs[id].spaceId === p), "Work got its first tab");
   assert.equal(clearedTabs.canUndoClear(S(), cleared), true);
   S().undoClearTabs(cleared);
-  assert.equal(S().windows[w].profileId, p);
+  assert.equal(S().windows[w].spaceId, p);
   assert.equal(short(S().tabs[S().windows[w].activeTabIds.default].url), "a");
 });
 
@@ -818,8 +818,8 @@ test("Undo of a Clear in one profile leaves a group made since in another profil
   S().activate(a);
   const cleared = S().clearUnpinnedTabs(w);
   assert.deepEqual(cleared.entries.map((e) => short(e.tab.url)), ["b"]);
-  const p = S().createProfile({ name: "Work" });
-  S().switchProfile(w, p);
+  const p = S().createSpace({ name: "Work", profileId: S().createProfile({ name: "Work" }) });
+  S().switchSpace(w, p);
   const x = S().newTab(w, { url: "x.com" });
   const y = S().newTab(w, { url: "y.com" });
   S().moveTab(y, 0);
@@ -831,7 +831,7 @@ test("Undo of a Clear in one profile leaves a group made since in another profil
   assert.deepEqual([...S().groups[g].tabIds].sort(), [x, y].sort(), "with both its tabs");
   assert.deepEqual(model.viewTabIds(S(), w, p), workOrder, "Work's order stays");
   assert.deepEqual(model.viewTabIds(S(), w, "default").map((id) => short(S().tabs[id].url)), ["a", "b"], "Personal gets its tab back in place");
-  assert.equal(S().windows[w].profileId, p);
+  assert.equal(S().windows[w].spaceId, p);
 });
 
 test("Clear on a split of two empty panes offers Undo, and Undo puts the split back", async () => {
@@ -892,19 +892,19 @@ test("Clear on a lone selected tab closes it and leaves the window open", () => 
 test("Undo of Clear in one profile keeps another profile's Recently Closed reopen index intact", () => {
   reset();
   const [w, p1] = setup("p1", "p2");
-  const work = S().createProfile({ name: "Work" });
-  S().switchProfile(w, work);
+  const work = S().createSpace({ name: "Work", profileId: S().createProfile({ name: "Work" }) });
+  S().switchSpace(w, work);
   const a = S().newTab(w, { url: "a.com" });
   const b = S().newTab(w, { url: "b.com" });
   const c = S().newTab(w, { url: "c.com" });
   const blank = model.viewTabIds(S(), w, work).find((id) => !S().tabs[id].url);
   if (blank) S().closeTabs([blank]);
   S().closeTabs([b]);
-  S().switchProfile(w, "default");
+  S().switchSpace(w, "default");
   S().activate(p1);
   const cleared = S().clearUnpinnedTabs(w);
   S().undoClearTabs(cleared);
-  S().switchProfile(w, work);
+  S().switchSpace(w, work);
   S().reopenClosedTab(w);
   assert.deepEqual(model.viewTabIds(S(), w, work).map((id) => short(S().tabs[id].url)), ["a", "b", "c"]);
   assert.ok(S().tabs[a] && S().tabs[c]);
@@ -916,8 +916,8 @@ test("Undo of Clear in one profile keeps a tab closed afterwards in another prof
   S().activate(p1);
   const cleared = S().clearUnpinnedTabs(w);
   assert.deepEqual(cleared.entries.map((e) => short(e.tab.url)), ["p2"]);
-  const work = S().createProfile({ name: "Work" });
-  S().switchProfile(w, work);
+  const work = S().createSpace({ name: "Work", profileId: S().createProfile({ name: "Work" }) });
+  S().switchSpace(w, work);
   const a = S().newTab(w, { url: "a.com" });
   const b = S().newTab(w, { url: "b.com" });
   const c = S().newTab(w, { url: "c.com" });
@@ -967,4 +967,13 @@ test("a tab opened behind joins the ⌃Tab order only once it is shown, so ⌃Ta
   S().activate(link);
   assert.deepEqual(order(), ["link", "a", "b"]);
   assert.equal(S().tabs[link].unseen, undefined);
+});
+
+test("a saved tab whose Space was deleted opens in the window’s current Space", () => {
+  reset();
+  const [windowId, tabId] = setup("home");
+  const snapshot = { ...model.snapshotTab(S().tabs[tabId]), url: "https://reopened.example/", spaceId: "deleted-space" };
+  const id = S().newTab(windowId, { url: snapshot.url, spaceId: snapshot.spaceId, snapshot });
+  assert.equal(S().tabs[id]?.spaceId, "default");
+  assert.ok(model.viewTabIds(S(), windowId).includes(id));
 });

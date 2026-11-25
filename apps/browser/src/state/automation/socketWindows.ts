@@ -17,8 +17,8 @@ export function windowRow(s: BrowserState, id: string) {
   return {
     id,
     kind: eligibleKind(s, id),
-    profile: w.profileId,
-    profileName: s.profiles[w.profileId]?.name ?? "",
+    profile: w.spaceId,
+    profileName: s.spaces[w.spaceId]?.name ?? "",
     focused: focusedWindowOf(s) === id,
     activeTab: activeTabId(s, id) ?? null,
     tabs: windowTabIds(s, id).length,
@@ -41,7 +41,7 @@ function url(value: unknown): string | undefined {
 
 function createWindow(params: Record<string, unknown>) {
   const profileId = profileArg(params.profile);
-  const id = now().createWindow({ profileId, url: url(params.url) });
+  const id = now().createWindow({ spaceId: profileId, url: url(params.url) });
   expect(!!id && !!now().windows[id], "the window didn't open.");
   if (params.layout !== undefined && tabLayoutOf(now(), id) !== params.layout) now().toggleTabLayout(id);
   return windowRow(now(), id);
@@ -60,8 +60,8 @@ function setLayout(params: Record<string, unknown>) {
 function switchProfile(params: Record<string, unknown>) {
   const w = windowOf(params.window, ["normal"]);
   const profileId = profileArg(params.profile);
-  now().switchProfile(w.id, profileId);
-  expect(now().windows[w.id]?.profileId === profileId, `window ${w.id} didn't switch to ${profileId}.`);
+  now().switchSpace(w.id, profileId);
+  expect(now().windows[w.id]?.spaceId === profileId, `window ${w.id} didn't switch to ${profileId}.`);
   return windowRow(now(), w.id);
 }
 

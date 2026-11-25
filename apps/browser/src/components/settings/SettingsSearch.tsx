@@ -27,7 +27,7 @@ import { commandsBoundTo, parseCombo } from "../../state/commands/comboQuery";
 import { resolvedShortcuts, useMenuBarRevision, type MenuShortcut } from "../../state/commands/commandShortcuts";
 import { formatShortcut } from "../../state/commands/shortcuts";
 import { useSettings } from "../../state/browser/hooks";
-import { useProfileOrder } from "../../state/profiles/hooks";
+import { useSpaceOrder } from "../../state/spaces/hooks";
 import { shortcutItems } from "../../state/settings/paneData";
 import { useResource } from "../../state/settings/resources";
 
@@ -39,15 +39,15 @@ const KEY_SEARCH_SETTLE_MS = 1000;
 function useCommandKeyHits(query: string): CommandKeyHit[] {
   const combo = useMemo(() => parseCombo(query), [query]);
   const overrides = useSettings((s) => s.shortcuts);
-  const profileOrder = useProfileOrder();
+  const spaceOrder = useSpaceOrder();
   const menuBar = useMenuBarRevision();
   const [items] = useResource(shortcutItems);
   return useMemo(() => {
     if (!combo || !items) return [];
-    const resolved = resolvedShortcuts({ settings: { shortcuts: overrides }, profileOrder });
+    const resolved = resolvedShortcuts({ settings: { shortcuts: overrides }, spaceOrder });
     const keys = formatShortcut(combo);
     return commandsBoundTo(combo, items, (id) => resolved.bindings.get(id)).map((item) => ({ item, keys }));
-  }, [combo, items, overrides, profileOrder, menuBar]);
+  }, [combo, items, overrides, spaceOrder, menuBar]);
 }
 
 export function SettingsSearchField() {

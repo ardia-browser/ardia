@@ -1,20 +1,26 @@
 import { useBrowser } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
-import { DEFAULT_PROFILE_ID } from "../settings/settings";
+import { engineProfile, isIncognitoSpace } from "../browser/model";
+import { DEFAULT_SPACE_ID } from "../settings/settings";
 import { profileOpened } from "../profiles/profileLoading";
 import { incognitoClosed } from "./privateLookups";
 
-export const cacheKey = (profileId: string) => (isIncognitoProfile(profileId) ? profileId : engineProfile(useBrowser.getState(), profileId));
+export const cacheKey = (spaceId: string) => (isIncognitoSpace(spaceId) ? spaceId : engineProfile(useBrowser.getState(), spaceId));
 
-export function lookupOrder(profileId?: string, source?: string): string[] {
-  if (profileId && !isIncognitoProfile(profileId)) return [profileId];
-  const first = source && !isIncognitoProfile(source) ? [source] : [];
-  return [...new Set([...(profileId ? [profileId] : []), ...first, DEFAULT_PROFILE_ID, ...useBrowser.getState().profileOrder])];
+export function lookupOrder(spaceId?: string, source?: string): string[] {
+  const state = useBrowser.getState();
+  const available = (id: string) => {
+    const profileId = state.spaces[id]?.profileId;
+    return profileId !== undefined && !!state.profiles[profileId];
+  };
+  if (spaceId && !isIncognitoSpace(spaceId)) return available(spaceId) ? [spaceId] : [];
+  const first = source && available(source) ? [source] : [];
+  const regular = [DEFAULT_SPACE_ID, ...state.spaceOrder].filter(available);
+  return [...new Set([...(spaceId ? [spaceId] : []), ...first, ...regular])];
 }
 
-export const askable = (id: string) => !isIncognitoProfile(id) && profileOpened(cacheKey(id));
+export const askable = (id: string) => !isIncognitoSpace(id) && profileOpened(cacheKey(id));
 
-export const privateViewer = (profileId?: string | null) => (profileId && isIncognitoProfile(profileId) ? profileId : undefined);
+export const privateViewer = (spaceId?: string | null) => (spaceId && isIncognitoSpace(spaceId) ? spaceId : undefined);
 
 const BORROWED = ">";
 const borrowed = new Set<string>();
@@ -22,7 +28,7 @@ const borrowed = new Set<string>();
 export const isBorrowed = (key: string) => key.includes(BORROWED);
 export const viewerOf = (key: string) => key.split(BORROWED)[0]!;
 export const sourceEngineOf = (key: string) => cacheKey(key.slice(key.indexOf(BORROWED) + 1));
-const borrows = (viewer: string | undefined, id: string): viewer is string => !!viewer && isIncognitoProfile(viewer) && id !== viewer;
+const borrows = (viewer: string | undefined, id: string): viewer is string => !!viewer && isIncognitoSpace(viewer) && id !== viewer;
 const borrowedKey = (viewer: string, id: string) => `${viewer}${BORROWED}${id}`;
 
 export const askKey = (viewer: string | undefined, id: string) => (borrows(viewer, id) ? borrowedKey(viewer, id) : cacheKey(id));

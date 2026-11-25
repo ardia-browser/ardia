@@ -1,5 +1,5 @@
 import { afterStoreTransactionIdempotent, inStoreTransaction, useBrowser, type BrowserState } from "../browser/store";
-import { activeTabId, isIncognitoProfile } from "../browser/model";
+import { activeTabId, isIncognitoSpace } from "../browser/model";
 import { usePages } from "../tabs/pageState";
 import { changedIds } from "../browser/changes";
 import { holderOfPage } from "../tabs/pageSession";
@@ -15,14 +15,14 @@ const IDLE_SCAN_MS = 30_000;
 
 function tabData(s: BrowserState, tabId: string) {
   const t = s.tabs[tabId]!;
-  return { windowId: t.windowId, tabId, profile: t.profileId, ...shownPage(t) };
+  return { windowId: t.windowId, tabId, profile: t.spaceId, ...shownPage(t) };
 }
 
 function peekData(s: BrowserState, sourceId: string) {
   const peek = s.peeks[sourceId]!;
   const t = s.tabs[peek.tabId];
-  if (!t || !eligibleKind(s, t.windowId) || isIncognitoProfile(t.profileId)) return null;
-  return { windowId: t.windowId, tabId: peek.tabId, profile: t.profileId, sourceTabId: peek.sourceId, ...shownPage(t) };
+  if (!t || !eligibleKind(s, t.windowId) || isIncognitoSpace(t.spaceId)) return null;
+  return { windowId: t.windowId, tabId: peek.tabId, profile: t.spaceId, sourceTabId: peek.sourceId, ...shownPage(t) };
 }
 
 const splitTabs = (s: BrowserState, id: string) => s.splits[id]!.slots.flatMap((slot) => ("tabId" in slot ? [slot.tabId] : slot.stack));
@@ -34,10 +34,10 @@ function diffMore(s: BrowserState, prev: BrowserState, send: EventSend, wants: R
       const before = prev.windows[id];
       if (wants.has("littleArdia.opened") && !before && eligibleKind(s, id) === "little") {
         const tabId = activeTabId(s, id);
-        send("littleArdia.opened", { windowId: id, profile: w.profileId, ...(tabId && isEligibleTab(s, tabId) ? { tabId, ...shownPage(s.tabs[tabId]!) } : {}) });
+        send("littleArdia.opened", { windowId: id, profile: w.spaceId, ...(tabId && isEligibleTab(s, tabId) ? { tabId, ...shownPage(s.tabs[tabId]!) } : {}) });
       }
-      if (wants.has("profile.switched") && before && before.profileId !== w.profileId && eligibleKind(s, id) && eligibleKind(prev, id)) {
-        send("profile.switched", { windowId: id, from: before.profileId, profile: w.profileId, profileName: s.profiles[w.profileId]?.name ?? "" });
+      if (wants.has("profile.switched") && before && before.spaceId !== w.spaceId && eligibleKind(s, id) && eligibleKind(prev, id)) {
+        send("profile.switched", { windowId: id, from: before.spaceId, profile: w.spaceId, profileName: s.spaces[w.spaceId]?.name ?? "" });
       }
     }
   }
@@ -139,7 +139,7 @@ export function startTabIdle(send: EventSend): TabIdleTracker {
   const idleData = (s: BrowserState, id: string, threshold: number) => ({ ...tabData(s, id), pinned: !!s.tabs[id]!.pin, idle: threshold });
   const stillIdle = (s: BrowserState, id: string, record: IdleRecord) => {
     const tab = s.tabs[id];
-    return !!tab && isEligibleTab(s, id) && tab.profileId === record.profile && tab.createdAt === record.createdAt && tab.restoredAt === record.restoredAt;
+    return !!tab && isEligibleTab(s, id) && tab.spaceId === record.profile && tab.createdAt === record.createdAt && tab.restoredAt === record.restoredAt;
   };
   const lastActivity = (s: BrowserState, id: string) => Math.max(s.tabs[id]!.lastActiveAt, s.tabs[id]!.restoredAt ?? 0, touched.get(id) ?? 0);
   const scan = (only?: ReadonlySet<number>, quietly = false) => {
@@ -160,8 +160,8 @@ export function startTabIdle(send: EventSend): TabIdleTracker {
         if (tabs.has(id) || shown.has(id) || !isEligibleTab(s, id)) continue;
         const last = lastActivity(s, id);
         if (now - last >= threshold * 1000) {
-          const { profileId, createdAt, restoredAt } = s.tabs[id]!;
-          tabs.set(id, { since: last, profile: profileId, createdAt, restoredAt });
+          const { spaceId, createdAt, restoredAt } = s.tabs[id]!;
+          tabs.set(id, { since: last, profile: spaceId, createdAt, restoredAt });
           if (!quietly) send("tab.idle", { ...idleData(s, id, threshold), idleSince: last });
         }
       }

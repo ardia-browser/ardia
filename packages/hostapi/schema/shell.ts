@@ -141,6 +141,7 @@ export const shell = defineModuleDomain({
         readDocument: { args: [["name", "string"]], result: "string | null", swiftResult: "String?", async: false, mac: "custom", desktop: "absent", windows: "custom" },
         documentExists: { args: [["name", "string"]], result: "boolean | Promise<boolean>", swiftResult: "Bool", async: false, mac: "custom", desktop: "absent", windows: "custom" },
         writeDocument: { args: [["name", "string"], ["contents", "string"]], result: "void", async: false, throws: true, mac: "custom", desktop: "absent", windows: "custom" },
+        writeDocumentImmediately: { args: [["name", "string"], ["contents", "string"]], result: "void | boolean", swiftResult: "Void", async: false, throws: true, mac: "custom", desktop: "absent", windows: "absent" },
         documentSaved: { args: [["name", "string"]], result: "void", async: true, promise: true, throws: true, mac: "custom", desktop: "absent", windows: "custom" },
         createDocument: { args: [["name", "string"], ["contents", "string"]], result: "void", async: true, promise: true, throws: true, mac: "custom", desktop: "absent", windows: "custom" },
         listDocuments: { args: [["prefix", "string"]], result: "string[]", async: false, mac: "custom", desktop: "absent", windows: "custom" },

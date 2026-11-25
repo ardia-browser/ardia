@@ -1,7 +1,7 @@
 import { chooseFromMenu, type ChoiceItem } from "../app/menuChoice";
-import { closeGroup, moveGroupToProfile, moveGroupToWindow } from "../browser/actions";
+import { closeGroup, moveGroupToSpace, moveGroupToWindow } from "../browser/actions";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { activeTabId, isIncognitoProfile } from "../browser/model";
+import { activeTabId, isIncognitoSpace } from "../browser/model";
 import { groupOf } from "../pins/tabGrouping";
 import { hasOwnGroupIcon } from "../groups/groupIcons";
 import type { GroupColor } from "../browser/types";
@@ -57,7 +57,7 @@ export function groupMenuItems(s: BrowserState, windowId: string, groupId: strin
   if (!g) return [];
   const siteColor = g.tabIds.map((id) => shownLiveOf(s, id).themeColor).find(Boolean);
   const shown = groupOf(s, activeTabId(s, windowId))?.id === groupId;
-  const incognito = isIncognitoProfile(g.profileId);
+  const incognito = isIncognitoSpace(g.spaceId);
   return sections<GroupMenuItem>(
     [
       { id: "newTab", title: "New Tab in Group", symbol: "plus.app", ...hintWhen(shown, "newTabInGroup", s) },
@@ -71,7 +71,7 @@ export function groupMenuItems(s: BrowserState, windowId: string, groupId: strin
         title: "Move to",
         symbol: "arrow.up.forward.square",
         children: [
-          { id: "moveToProfile", title: "Profile", symbol: "person", enabled: !incognito, children: profileItems(s, (id) => id === g.profileId) },
+          { id: "moveToSpace", title: "Space", symbol: "person", enabled: !incognito, children: profileItems(s, (id) => id === g.spaceId) },
           ...(g.pinned ? [] : [{ id: "moveToWindow", title: "Window", symbol: "macwindow", enabled: !incognito, children: windowItems(s, windowId) }]),
           ...(bookmarksShown(s.settings) ? [{ id: "bookmarkBar", title: "Bookmarks Bar", symbol: "bookmark" }] : []),
         ],
@@ -118,7 +118,7 @@ const REMOVES_FOLDER = new Set(["pin", "ungroup", "delete", "bookmarkBar"]);
 
 function sendGroup(groupId: string, to: GroupChoice) {
   if (to.kind === "color") store().updateGroup(groupId, { color: to.color });
-  else if (to.kind === "profile") void moveGroupToProfile(groupId, to.profileId);
+  else if (to.kind === "profile") void moveGroupToSpace(groupId, to.spaceId);
   else if (to.kind === "window") moveGroupToWindow(groupId, to.windowId);
 }
 
@@ -128,7 +128,7 @@ function runGroupChoice(windowId: string, groupId: string, choice: string | Grou
   if (!g || g.windowId !== windowId) return;
   if (typeof choice !== "string") return sendGroup(groupId, choice);
   if (isPluginMenuChoice(choice)) {
-    if (!isIncognitoProfile(g.profileId)) void runPluginMenuChoice(choice, windowId, pluginGroupContext(s, windowId, groupId), consent);
+    if (!isIncognitoSpace(g.spaceId)) void runPluginMenuChoice(choice, windowId, pluginGroupContext(s, windowId, groupId), consent);
     return;
   }
   if (runSharedFolderChoice(windowId, groupId, choice)) return;

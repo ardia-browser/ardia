@@ -18,26 +18,26 @@ import { OnboardingOverlay } from "./components/onboarding";
 import { IntroWindow } from "./components/onboarding/IntroWindow";
 import { INTRO_WINDOW_ID } from "./state/onboarding/introWindow";
 import { useFullscreenTab } from "./state/tabs/pageState";
-import { ProfileTint } from "./components/window/ProfileSwipe";
+import { SpaceTint } from "./components/window/SpaceSwipe";
 import { TOP_STRIP_HEIGHT, TopStripPeek, TopTabStrip } from "./components/tabstrip/TopTabStrip";
 import { useCardTopInset, usePageFrameInset, useTabLayout } from "./state/windows/layout";
-import { WindowProfile } from "./components/window/WindowProfile";
+import { WindowSpace } from "./components/window/WindowSpace";
 import { DockedLayout } from "./components/window/SidebarDock";
 import { LittleArdiaWindow } from "./components/littleArdia/LittleArdiaWindow";
 import { SidebarOverlays } from "./components/sidebar/Overlays";
 import { ReportSheetHost } from "./components/report/ReportSheet";
-import { profileAccent, profileTheme, useTheme } from "./components/ui/theme";
+import { spaceAccent, profileTheme, useTheme } from "./components/ui/theme";
 import { ThemeScope } from "./components/window/ThemeScope";
 import { PageBarContext, usePageBarScopeValue } from "./components/plugins/PageBarScope";
 import { useBrowser } from "./state/browser/store";
 import { useWindowId, WindowContext } from "./state/browser/hooks";
-import { provideProfileLooks } from "./state/profiles/looks";
+import { provideProfileLooks } from "./state/spaces/looks";
 import { currentBasePalette } from "./state/config/basePalette";
 import { focusedWindowOf } from "./state/windows/ui";
 import { SETTLE_MS, useSettled } from "./components/ui/useSettled";
 import { forgetWindowRootSize, setWindowRootSize } from "./state/windows/rootSize";
 
-provideProfileLooks({ accent: profileAccent, theme: (profile, appDark, source) => profileTheme(profile, appDark, source, currentBasePalette()) });
+provideProfileLooks({ accent: spaceAccent, theme: (profile, appDark, source) => profileTheme(profile, appDark, source, currentBasePalette()) });
 
 export function WindowRoot({ windowId }: { windowId?: string }) {
   if (windowId === INTRO_WINDOW_ID)
@@ -99,8 +99,8 @@ function BrowserWindow() {
   return (
     <CrxDropArea style={{ flex: 1, flexDirection: "row" }} onLayout={(e) => (setWindowRootSize(windowId, e.nativeEvent.layout.width, e.nativeEvent.layout.height), settleWidth(e.nativeEvent.layout.width))}>
       <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />
-      <WindowProfile />
-      <ProfileTint />
+      <WindowSpace />
+      <SpaceTint />
       <DockedLayout
         fullscreen={fullscreen}
         topTabs={topTabs}

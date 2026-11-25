@@ -6,10 +6,11 @@ import { menuShortcut } from "../commands/commandShortcuts";
 import { closeWindowAnimated, isWindowClosing } from "../windows/closeAnimated";
 import { routedLinks, type RoutedLinks } from "./linkRoutes";
 import { runsJavaScript } from "../settings/scriptUrls";
-import { profileAccentOf } from "../profiles/looks";
+import { profileAccentOf } from "../spaces/looks";
 import { useBrowser } from "../browser/store";
-import { activeTabId } from "../browser/model";
-import { isSmall, lastActiveProfile, mainWindowFor } from "../windows/small";
+import { confirm } from "../app/system";
+import { engineProfileForSpace, activeTabId } from "../browser/model";
+import { isSmall, lastActiveSpace, mainWindowFor } from "../windows/small";
 import { firstRegular } from "../tabs/openers";
 import { navigationOf } from "../tabs/pageSession";
 import { asAdoptId } from "../tabs/adoptIds";
@@ -25,8 +26,8 @@ import type { CloseGuard, GuardedClose } from "../windows/windowClose";
 
 const store = () => useBrowser.getState();
 
-export function openLittleArdia(url?: string, profileId?: string, adoptId?: AdoptId, linkPointer?: [number, number], linkApp?: string): string {
-  const id = store().createWindow({ kind: "small", url, profileId, adoptId, linkPointer, linkApp });
+export function openLittleArdia(url?: string, spaceId?: string, adoptId?: AdoptId, linkPointer?: [number, number], linkApp?: string): string {
+  const id = store().createWindow({ kind: "small", url, spaceId, adoptId, linkPointer, linkApp });
   if (!url) store().openPanel(id, "");
   return id;
 }
@@ -60,7 +61,7 @@ export function openExternalUrls(given: string[], pointer?: [number, number], so
       if (!result) return;
       if (result.url !== urls[i] && admitIncomingUrl(result.url) === null) return;
       if (result.route) return openRoutedUrl(result.url, result.route, pointer, app);
-      if (result.url !== urls[i]) return openUrlsFromApps([result.url], { profileId: null, adoptIds: [undefined] }, pointer, true, app);
+      if (result.url !== urls[i]) return openUrlsFromApps([result.url], { spaceId: null, adoptIds: [undefined] }, pointer, true, app);
       plain.push(result.url);
     });
     if (plain.length) openUndecided(plain, pointer, results.some((r) => r?.decided), app);
@@ -69,20 +70,20 @@ export function openExternalUrls(given: string[], pointer?: [number, number], so
 }
 
 function openRoutedUrl(url: string, route: LinkRouteChoice, pointer?: [number, number], app?: string) {
-  const profileId = route.profileId ?? lastActiveProfile(store());
+  const spaceId = route.profileId ?? lastActiveSpace(store());
   if (route.windowId && store().windows[route.windowId]) {
     noteExternalLink("tab", store().settings.openLinksInLittleArdia);
-    store().newTab(route.windowId, { url, profileId, gated: true });
+    store().newTab(route.windowId, { url, spaceId, gated: true });
     return focus(route.windowId);
   }
   if (route.groupKey) {
     noteExternalLink("tab", store().settings.openLinksInLittleArdia);
-    return openInRouteGroup(url, profileId, route.groupKey);
+    return openInRouteGroup(url, spaceId, route.groupKey);
   }
   const open = decideExternal([url], route.open);
-  if (open === "littleArdia") return void openLittleArdia(url, profileId, undefined, pointer, app);
-  if (open === "window") return focus(openWindow({ url, profileId }));
-  openLinksInMainWindow([url], profileId, [undefined], true);
+  if (open === "littleArdia") return void openLittleArdia(url, spaceId, undefined, pointer, app);
+  if (open === "window") return focus(openWindow({ url, spaceId }));
+  openLinksInMainWindow([url], spaceId, [undefined], true);
 }
 
 function decideExternal(urls: string[], ruled: ExternalLinkOpen | null = null): ExternalLinkOpen {
@@ -115,13 +116,13 @@ function openRoutedUrls(urls: string[], route: LinkRoute, pointer?: [number, num
 
 function openUrlsFromApps(urls: string[], routed: RoutedLinks, pointer?: [number, number], gated = false, app?: string) {
   const [url] = urls;
-  const profileId = routed.profileId ?? lastActiveProfile(store());
-  if (decideExternal(urls) === "littleArdia" && url) return void openLittleArdia(url, profileId, asAdoptId(routed.adoptIds[0]), pointer, app);
-  openLinksInMainWindow(urls, profileId, routed.adoptIds, gated);
+  const spaceId = routed.spaceId ?? lastActiveSpace(store());
+  if (decideExternal(urls) === "littleArdia" && url) return void openLittleArdia(url, spaceId, asAdoptId(routed.adoptIds[0]), pointer, app);
+  openLinksInMainWindow(urls, spaceId, routed.adoptIds, gated);
 }
 
-function openLinksInMainWindow(urls: string[], profileId: string, adoptIds: (string | undefined)[], gated = false) {
-  let target = mainWindowFor(store(), profileId);
+function openLinksInMainWindow(urls: string[], spaceId: string, adoptIds: (string | undefined)[], gated = false) {
+  let target = mainWindowFor(store(), spaceId);
   urls.forEach((url, i) => {
     const s = store();
     const adoptId = asAdoptId(adoptIds[i]);
@@ -129,12 +130,12 @@ function openLinksInMainWindow(urls: string[], profileId: string, adoptIds: (str
     const blank = w && w.tabIds.length === 1 ? s.tabs[w.tabIds[0]!] : undefined;
     const panel = w && s.windowUi[w.id]?.panel;
     const barOverBlank = panel?.newTab?.kind === "into" && panel.newTab.tabId === blank?.id;
-    const intoBlank = blank && !blank.url && !navigationOf(blank) && blank.profileId === profileId && (!panel?.open || barOverBlank);
-    if (!w) target = openWindow({ url, profileId, adoptId });
+    const intoBlank = blank && !blank.url && !navigationOf(blank) && blank.spaceId === spaceId && (!panel?.open || barOverBlank);
+    if (!w) target = openWindow({ url, spaceId, adoptId });
     else if (intoBlank && !adoptId) s.navigate(blank.id, url, { gated });
     else {
-      const index = s.settings.appLinksFirst ? firstRegular(s, w, profileId) + i : undefined;
-      s.newTab(w.id, { url, profileId, adoptId, gated, index });
+      const index = s.settings.appLinksFirst ? firstRegular(s, w, spaceId) + i : undefined;
+      s.newTab(w.id, { url, spaceId, adoptId, gated, index });
       if (intoBlank) store().closeTab(blank.id);
     }
   });
@@ -146,24 +147,24 @@ export function openInMainWindow(windowId: string) {
   if (!isSmall(s, windowId)) return;
   const tabId = activeTabId(s, windowId);
   const tab = tabId ? s.tabs[tabId] : undefined;
-  const target = mainWindowFor(s, tab?.profileId ?? s.windows[windowId]!.profileId);
+  const target = mainWindowFor(s, tab?.spaceId ?? s.windows[windowId]!.spaceId);
   if (!tab?.url) {
     s.closeWindow(windowId);
     if (target) focus(target);
-    else openWindow({ profileId: tab?.profileId });
+    else openWindow({ spaceId: tab?.spaceId });
     return;
   }
   const moved = s.moveTabsToWindow([tab.id], target ?? null);
   if (moved) focus(moved);
 }
 
-export function moveLittleArdiaToProfile(windowId: string, profileId: string) {
+export async function moveLittleArdiaToSpace(windowId: string, spaceId: string) {
   const s = store();
   const w = s.windows[windowId];
-  if (!w || !isSmall(s, windowId) || isWindowClosing(windowId) || !s.profiles[profileId] || w.profileId === profileId) return;
+  if (!w || !isSmall(s, windowId) || isWindowClosing(windowId) || !s.spaces[spaceId] || w.spaceId === spaceId) return;
   const tabId = activeTabId(s, windowId);
   const url = (tabId ? s.tabs[tabId]?.url : undefined) || undefined;
-  const id = store().createWindow({ kind: "small", url, profileId, frame: w.frame });
+  const id = store().createWindow({ kind: "small", url, spaceId, frame: w.frame });
   if (!url) store().openPanel(id, "");
   closeWindowAnimated(windowId, {
     replacedBy: id,
@@ -173,27 +174,27 @@ export function moveLittleArdiaToProfile(windowId: string, profileId: string) {
   });
 }
 
-export function cycleLittleArdiaProfile(windowId: string, delta: 1 | -1) {
+export function cycleLittleArdiaSpace(windowId: string, delta: 1 | -1) {
   const s = store();
   const w = s.windows[windowId];
-  if (!w || s.profileOrder.length < 2) return;
-  const i = s.profileOrder.indexOf(w.profileId);
-  moveLittleArdiaToProfile(windowId, s.profileOrder[(i + delta + s.profileOrder.length) % s.profileOrder.length]!);
+  if (!w || s.spaceOrder.length < 2) return;
+  const i = s.spaceOrder.indexOf(w.spaceId);
+  moveLittleArdiaToSpace(windowId, s.spaceOrder[(i + delta + s.spaceOrder.length) % s.spaceOrder.length]!);
 }
 
-export async function openLittleArdiaProfileMenu(windowId: string) {
+export async function openLittleArdiaSpaceMenu(windowId: string) {
   const s = store();
-  const current = s.windows[windowId]?.profileId;
+  const current = s.windows[windowId]?.spaceId;
   const choice = await showMenu(
-    s.profileOrder.map((id) => ({
+    s.spaceOrder.map((id) => ({
       id,
-      title: s.profiles[id]!.name,
+      title: s.spaces[id]!.name,
       checked: id === current,
-      swatch: profileAccentOf(s.profiles[id]),
-      ...menuShortcut(`switchProfile:${id}`, s),
+      swatch: profileAccentOf(s.spaces[id]),
+      ...menuShortcut(`switchSpace:${id}`, s),
     })),
   );
-  if (choice) foreignWriteHooks.around(() => moveLittleArdiaToProfile(windowId, choice));
+  if (choice) foreignWriteHooks.around(() => moveLittleArdiaToSpace(windowId, choice));
 }
 
 export async function closeLittleArdia(windowId: string, { mayClose = () => true, ask }: CloseGuard = {}): Promise<GuardedClose> {

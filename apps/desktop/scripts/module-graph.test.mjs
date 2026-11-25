@@ -41,7 +41,7 @@ const ADAPTER_REPLACEMENTS = [
   ["components/window/PageOverlays.tsx", "PageOverlays.tsx", ["BesidePeekPopovers", "PageOverlays", "PeekPage"]],
   ["components/window/WindowOverlays.tsx", "WindowOverlays.tsx", ["windowOverlays"]],
   ["components/downloads/Downloads.tsx", "DownloadsPopover.tsx", ["DownloadMagnet", "DownloadsPopover"]],
-  ["components/profiles/ProfileIndicator.tsx", "ProfileIndicator.tsx", ["HeaderAppMenu", "profileIndicatorX", "ProfileIndicator", "useAppMenuInHeader", "useProfileIndicatorWidth"]],
+  ["components/spaces/SpaceIndicator.tsx", "ProfileIndicator.tsx", ["HeaderAppMenu", "profileIndicatorX", "SpaceIndicator", "useAppMenuInHeader", "useSpaceIndicatorWidth"]],
   ["components/sidebar/AddressBar.tsx", "SidebarAddressBar.tsx", ["SidebarAddressRow", "SidebarHeaderTools"]],
   ["components/sidebar/TileFace.tsx", "TileFace.tsx", ["FolderDropRing", "RestingTile", "TileFace", "useSlotPosition"]],
   ["state/settings/settingsWindows.ts", "settingsWindows.ts", ["goToSettingsPane", "openImport", "openSettings", "useSettingsNav"]],

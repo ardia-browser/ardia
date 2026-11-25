@@ -2,7 +2,7 @@ import { tabTitle } from "../browser/model";
 import type { Suggestion } from "@ardia/core";
 import { showMenu, type MenuItem } from "../../platform/menus";
 import type { BrowserCommand } from "../../platform/commands";
-import { moveTabToProfile } from "../browser/actions";
+import { moveTabToSpace } from "../browser/actions";
 import { runCommand } from "../commands/commands";
 import { useBrowser } from "../browser/store";
 import { splitOf, type SplitSide } from "../splits/splits";
@@ -11,7 +11,7 @@ import { openOptions, shownIn } from "../extensions/actions";
 import { openSplitPane } from "../splits/actions";
 import { openSettings } from "../settings/settingsWindows";
 import { isOrganizeId, shownOrganizeContext, sideBySide, splitCandidates, type OrganizeContext, type OrganizeId } from "./organizeActions";
-import { renameProfile } from "../profiles/profileMenu";
+import { renameSpace } from "../spaces/spaceMenu";
 import { isPluginAction, runPluginAction } from "../plugins/commands";
 import { consentToken } from "../telemetry/client";
 
@@ -31,15 +31,15 @@ async function pickTabForSplit(c: OrganizeContext) {
   openSplitPane(c.windowId, { tabId: choice, anchorTabId: tab.id, side: split && !sideBySide(split) ? "bottom" : "right" });
 }
 
-async function pickProfileForTab({ s, tab }: OrganizeContext) {
-  const items: MenuItem[] = s.profileOrder.map((id) => ({ id, title: s.profiles[id]?.name ?? "", checked: id === tab.profileId, enabled: id !== tab.profileId }));
+async function pickSpaceForTab({ s, tab }: OrganizeContext) {
+  const items: MenuItem[] = s.spaceOrder.map((id) => ({ id, title: s.spaces[id]?.name ?? "", checked: id === tab.spaceId, enabled: id !== tab.spaceId }));
   const choice = await showMenu(items);
-  if (choice) await moveTabToProfile(tab.id, choice);
+  if (choice) await moveTabToSpace(tab.id, choice === "new" ? null : choice);
 }
 
-async function renameWindowProfile({ windowId }: OrganizeContext) {
-  const profileId = store().windows[windowId]?.profileId;
-  if (profileId) await renameProfile(profileId, windowId);
+async function renameWindowSpace({ windowId }: OrganizeContext) {
+  const spaceId = store().windows[windowId]?.spaceId;
+  if (spaceId) await renameSpace(spaceId, windowId);
 }
 
 const RUN_ORGANIZE: Record<OrganizeId, (c: OrganizeContext) => void | Promise<void>> = {
@@ -52,9 +52,9 @@ const RUN_ORGANIZE: Record<OrganizeId, (c: OrganizeContext) => void | Promise<vo
   "split:convert": ({ split }) => (split ? store().toggleSplitOrientation(split.id) : undefined),
   "split:remove": ({ tab }) => store().removeTabFromSplit(tab.id),
   "split:exit": ({ split }) => (split ? store().separateSplit(split.id) : undefined),
-  "profile:moveTab": pickProfileForTab,
-  "profile:rename": renameWindowProfile,
-  "profile:edit": ({ s, windowId }) => openSettings("profiles", s.windows[windowId]?.profileId),
+  "space:moveTab": pickSpaceForTab,
+  "space:rename": renameWindowSpace,
+  "space:edit": ({ s, windowId }) => openSettings("spaces", s.windows[windowId]?.spaceId),
 };
 
 export function runBarAction(id: string, windowId: string) {

@@ -49,7 +49,7 @@ function tabSection(s: BrowserState, id: string): string[] {
   const tab = s.tabs[id];
   const w = tab && s.windows[tab.windowId];
   if (!w) return [];
-  return w.tabIds.filter((t) => s.tabs[t]?.profileId === tab.profileId && pinSection(s.tabs[t]) === pinSection(tab));
+  return w.tabIds.filter((t) => s.tabs[t]?.spaceId === tab.spaceId && pinSection(s.tabs[t]) === pinSection(tab));
 }
 
 function openOutsideTab(s: BrowserState, url: string, windowId: string): boolean {
@@ -69,18 +69,18 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     if (home) return get().newTab(windowId, { ...options, url: home });
     const small = get().windows[windowId];
     if (small?.kind === "small" && small.tabIds.length) {
-      const profileId = options?.profileId ?? small.profileId;
-      const main = mainWindowFor(get(), profileId);
+      const spaceId = options?.spaceId ?? small.spaceId;
+      const main = mainWindowFor(get(), spaceId);
       if (!main) {
-        const created = get().createWindow({ profileId, url: options?.url, adoptId: options?.adoptId ?? options?.wakeAdoptId, background: options?.background });
+        const created = get().createWindow({ spaceId, url: options?.url, adoptId: options?.adoptId ?? options?.wakeAdoptId, background: options?.background });
         return activeTabId(get(), created) ?? "";
       }
-      return get().newTab(main, { ...options, profileId, index: undefined });
+      return get().newTab(main, { ...options, spaceId, index: undefined });
     }
     if (options?.url && !options.adoptId && !options.enginePage && openOutsideTab(get(), resolveTyped(get().settings, options.url), windowId)) return "";
     if (options?.url && !options.adoptId && !options.gated && isGatedUrl(options.url)) {
-      const profileId = options.profileId ?? get().windows[windowId]?.profileId ?? null;
-      const gated = gateOpening(options.url, { tabId: null, windowId, profileId, via: "newTab" }, null);
+      const spaceId = options.spaceId ?? get().windows[windowId]?.spaceId ?? null;
+      const gated = gateOpening(options.url, { tabId: null, windowId, profileId: spaceId, via: "newTab" }, null);
       if ("verdict" in gated) {
         if (gated.verdict && "cancel" in gated.verdict) return "";
         return get().newTab(windowId, { ...options, url: gated.verdict?.url ?? options.url, gated: true, replaced: !!gated.verdict });
@@ -95,7 +95,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
       return id;
     }
     const w = get().windows[windowId];
-    const beside = w && options?.newTabCommand && !options.openerId ? newTabPlacement(get(), w, options.profileId) : undefined;
+    const beside = w && options?.newTabCommand && !options.openerId ? newTabPlacement(get(), w, options.spaceId) : undefined;
     let [next, id] = withNewTab(get(), windowId, beside ? { ...options, ...beside } : options);
     const typed = beside && navigationOf(next.tabs[id]);
     if (typed) next = { ...next, tabs: withEntry(next.tabs, id, { ...next.tabs[id]!, engine: engineForUrl(next, typed.url) }) };
@@ -133,7 +133,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     if (!hasPage(tab) && holderOf(s, id)) return handOffPinPage(id, () => get().handOffPin(id));
     const shown = activeTabId(s, tab.windowId);
     let next = apply(s, activated(s, id));
-    if (shown && shown !== id && !switchKeepsOpeners(s, shown, id)) next = forgetOpeners(next, tab.windowId, tab.profileId);
+    if (shown && shown !== id && !switchKeepsOpeners(s, shown, id)) next = forgetOpeners(next, tab.windowId, tab.spaceId);
     set(next);
   },
 
@@ -146,7 +146,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const shown = activeTabId(s, tab.windowId);
     const target = swapped?.holderId ?? id;
     let next = apply(base, activated(base, target));
-    if (shown && shown !== id && !switchKeepsOpeners(base, shown, target)) next = forgetOpeners(next, tab.windowId, tab.profileId);
+    if (shown && shown !== id && !switchKeepsOpeners(base, shown, target)) next = forgetOpeners(next, tab.windowId, tab.spaceId);
     set(next);
   },
 
@@ -159,7 +159,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
   cycle(windowId, delta) {
     const s = get();
     const view = viewTabIds(s, windowId);
-    const i = view.indexOf(s.windows[windowId]?.activeTabIds[s.windows[windowId]!.profileId] ?? "");
+    const i = view.indexOf(s.windows[windowId]?.activeTabIds[s.windows[windowId]!.spaceId] ?? "");
     if (view.length) get().activate(view[(i + delta + view.length) % view.length]!);
   },
 
@@ -178,7 +178,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const tab = s.tabs[id];
     if (!url || !tab) return;
     if (userInitiated && !gated && isGatedUrl(url)) {
-      const gate = gateOpening(url, { tabId: id, windowId: tab.windowId, profileId: tab.profileId, via: "typed" }, `tab:${id}`);
+      const gate = gateOpening(url, { tabId: id, windowId: tab.windowId, profileId: tab.spaceId, via: "typed" }, `tab:${id}`);
       if (!("verdict" in gate) || gate.verdict) {
         settleOpening(gate, `tab:${id}`, (verdict) => {
           if (verdict && "cancel" in verdict) return;
@@ -191,7 +191,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
       if (get().windowUi[tab.windowId]?.panel.open) get().closePanel(tab.windowId);
       return;
     }
-    const base = userInitiated && tab.url ? forgetOpeners(s, tab.windowId, tab.profileId) : s;
+    const base = userInitiated && tab.url ? forgetOpeners(s, tab.windowId, tab.spaceId) : s;
     const navigation = navigationTo(url, userInitiated);
     const engine = userInitiated ? typedNavigationEngine(s, tab, url) : undefined;
     const switching = !!engine && engine !== tabEngine(s, id);
@@ -231,7 +231,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const w = s.windows[source.windowId]!;
     const [next, copy] = withNewTab(s, w.id, {
       url: source.url || undefined,
-      profileId: source.profileId,
+      spaceId: source.spaceId,
       snapshot: { ...snapshotTab(source), pin: null, lastActiveAt: undefined },
       index: w.tabIds.indexOf(id) + 1,
       adoptId: source.url ? cloneId(id) : undefined,

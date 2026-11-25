@@ -19,13 +19,13 @@ import { switcherStep } from "./switcher";
 import type { ByUser } from "../tabs/closeActivation";
 
 function hasCollapsiblePinned(s: BrowserState, w: BrowserState["windows"][string] | undefined): boolean {
-  if (!w || !s.profiles[w.profileId] || tabLayoutOf(s, w.id) !== "sidebar") return false;
-  if (w.kind !== "private" && live().folderOrder.some((id) => live().folders[id]?.profileId === w.profileId)) return true;
+  if (!w || !s.profiles[w.spaceId] || tabLayoutOf(s, w.id) !== "sidebar") return false;
+  if (w.kind !== "private" && live().folderOrder.some((id) => live().folders[id]?.spaceId === w.spaceId)) return true;
   const rootGroups = groupIndex(s.groups);
   const hideEmpty = newTabOpensBar(s);
   for (const id of w.tabIds) {
     const t = s.tabs[id];
-    if (!t || t.profileId !== w.profileId) continue;
+    if (!t || t.spaceId !== w.spaceId) continue;
     if (isPinnedRow(t)) return true;
     if (!t.pin && rootGroups.get(id)?.pinned && !t.liveItem && (!hideEmpty || !hiddenEmptyCard(s, t))) return true;
   }
@@ -75,7 +75,7 @@ export function runSidebarCommand(command: BrowserCommand, arg: string | null, w
       return true;
     case "togglePinnedFold": {
       const w = s.windows[windowId];
-      if (hasCollapsiblePinned(s, w)) togglePinnedFold(w!.profileId);
+      if (hasCollapsiblePinned(s, w)) togglePinnedFold(w!.spaceId);
       return true;
     }
   }
@@ -98,7 +98,7 @@ export function sidebarMenuState(s: BrowserState, windowId: string | undefined) 
   }
   const w = windowId ? s.windows[windowId] : undefined;
   if (!hasCollapsiblePinned(s, w)) disabled.push("togglePinnedFold");
-  else if (w && pinnedCollapsed(s, w.profileId)) titles.togglePinnedFold = PINNED_FOLD_TITLES.expand;
+  else if (w && pinnedCollapsed(s, w.spaceId)) titles.togglePinnedFold = PINNED_FOLD_TITLES.expand;
   const recentlyClosedGroups: MenuEntry[] = recentlyClosedIn(s, w)
     .groups.reverse()
     .slice(0, 10)

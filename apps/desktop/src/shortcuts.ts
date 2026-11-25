@@ -37,11 +37,11 @@ const commandTitle = (id: string) => {
   return (arg && spec?.variants?.[arg]?.title) || spec?.title || `${command!.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}${arg ? ` ${arg}` : ""}`;
 };
 const legacyPathOf = (command: string) => LINUX_STANDARD_ITEMS[command]?.path ?? (/Settings|Profile/.test(command) ? "Ardia" : /Tab|Window|Group/.test(command) ? "Tabs" : /find|Find|Selection|copy/.test(command) ? "Edit" : /bookmark|Bookmark/.test(command) ? "Bookmarks" : /History|Browsing|downloads|back|forward/.test(command) ? "History" : "View");
-const PROFILES_MENU = ["Window", "Profiles"];
-const PROFILES_MENU_COMMANDS: ReadonlySet<string> = new Set(["switchProfile", "nextProfile", "previousProfile", "newProfile"]);
+const SPACES_MENU = ["Window", "Spaces"];
+const SPACES_MENU_COMMANDS: ReadonlySet<string> = new Set(["switchSpace", "nextSpace", "previousSpace", "newSpace"]);
 const PER_PROFILE_PATHS: Readonly<Record<string, readonly string[]>> = {
-  switchProfile: PROFILES_MENU,
-  newLittleArdia: ["File", "New Little Ardia Window in Profile"],
+  switchSpace: SPACES_MENU,
+  newLittleArdia: ["File", "New Little Ardia Window in Space"],
 };
 type ProfileNames = Readonly<Record<string, { name: string } | undefined>>;
 const profileRow = (id: string, profileNames: ProfileNames) => {
@@ -52,7 +52,7 @@ const profileRow = (id: string, profileNames: ProfileNames) => {
   return path && name ? { title: name, path: [...path] } : null;
 };
 const rowOf = (id: string, profileNames: ProfileNames) => profileRow(id, profileNames)
-  ?? { title: commandTitle(id), path: PROFILES_MENU_COMMANDS.has(id.split(":")[0]!) ? [...PROFILES_MENU] : [legacyPathOf(id)] };
+  ?? { title: commandTitle(id), path: SPACES_MENU_COMMANDS.has(id.split(":")[0]!) ? [...SPACES_MENU] : [legacyPathOf(id)] };
 
 export function linuxMenuShortcuts(overrides: ShortcutOverrides = {}, profiles: readonly string[] = [], profileNames: ProfileNames = {}): MenuShortcut[] {
   const sources = shortcutSources(profiles, Object.keys(overrides));

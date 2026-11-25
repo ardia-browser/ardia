@@ -1,3 +1,4 @@
+import { liveWithSpaces } from "../../lib/workspaceUpgrade";
 import { createLivePersistence, type LivePersistenceIntent, type LiveProjection } from "../../platform/livePersistence";
 import { create } from "zustand";
 import { noteLiveSave } from "../telemetry/workCounts";
@@ -69,7 +70,7 @@ const DEFAULT_CALENDAR: CalendarSettings = {
 
 const PERSISTED = ["folders", "folderOrder", "items", "known", "unread", "hidden", "repoHidden", "completed", "expandedStacks", "accounts", "config", "calendar", "meetingGroups", "dismissedAlerts", "dismissedNow"] as const;
 const persistence = createLivePersistence(noteLiveSave);
-const saved = persistence.load() as Partial<LiveState>;
+const saved = liveWithSpaces(persistence.load()) as Partial<LiveState>;
 
 const FOLDER_OPTION_DEFAULTS = { groupStacks: true, showCompleted: true, hiddenRepos: [] as string[], showNewRepos: true, shownRepos: [] as string[] } satisfies Partial<LiveFolder>;
 
@@ -122,7 +123,7 @@ persistence.start((payload, invalidated = []) => {
     completing[invalidation.folderId] = (completing[invalidation.folderId] ?? []).filter((id) => !ids.has(id));
     for (const id of ids) origins?.delete(id);
   }
-  const saved = payload as Partial<LiveState>;
+  const saved = liveWithSpaces(payload) as Partial<LiveState>;
   applyingCanonical = true;
   try {
     useLive.setState({
@@ -143,11 +144,11 @@ const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: LiveSourc
   documents: { name: "Documents", sources: ["notion"] },
 };
 
-export function createFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): string {
+export function createFolder(spaceId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): string {
   const id = persistence.newFolderId();
   const folder: LiveFolder = {
     id,
-    profileId,
+    spaceId,
     kind,
     name: FOLDER_DEFAULTS[kind].name,
     icon: null,
@@ -165,7 +166,7 @@ export function createFolder(profileId: string, kind: LiveFolderKind, sources?: 
   return id;
 }
 
-export function updateFolder(id: string, patch: Partial<Omit<LiveFolder, "id" | "profileId" | "kind">>) {
+export function updateFolder(id: string, patch: Partial<Omit<LiveFolder, "id" | "spaceId" | "kind">>) {
   setLive((s) => (s.folders[id] ? { folders: { ...s.folders, [id]: { ...s.folders[id]!, ...patch } } } : {}));
 }
 

@@ -13,7 +13,7 @@ let counts = empty();
 
 const selectedIn = (s: BrowserState, windowId: string): string | undefined => {
   const w = s.windows[windowId];
-  return w ? w.activeTabIds[w.profileId] : undefined;
+  return w ? w.activeTabIds[w.spaceId] : undefined;
 };
 
 function changedSelections(prev: BrowserState, s: BrowserState): [string, string, string][] {
@@ -22,7 +22,7 @@ function changedSelections(prev: BrowserState, s: BrowserState): [string, string
   for (const windowId of Object.keys(s.windows)) {
     const before = selectedIn(prev, windowId);
     const after = selectedIn(s, windowId);
-    if (before && after && before !== after && prev.windows[windowId]?.profileId === s.windows[windowId]!.profileId) out.push([windowId, before, after]);
+    if (before && after && before !== after && prev.windows[windowId]?.spaceId === s.windows[windowId]!.spaceId) out.push([windowId, before, after]);
   }
   return out;
 }

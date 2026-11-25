@@ -8,11 +8,11 @@ import { boundFolders } from "../sharedFolders/store";
 type Trees = { groups: Set<string>; tabs: Set<string> };
 
 function boundTrees(s: BrowserState): Trees {
-  const bound = new Set(boundFolders().map(({ profileId, key }) => `${profileId}\u0001${key}`));
+  const bound = new Set(boundFolders().map(({ profileId: spaceId, key }) => `${spaceId}\u0001${key}`));
   const groups = new Set<string>();
   const tabs = new Set<string>();
   for (const g of Object.values(s.groups)) {
-    if (!g.pinned || g.parentId || !bound.has(`${g.profileId}\u0001${pinKeyOf(g)}`)) continue;
+    if (!g.pinned || g.parentId || !bound.has(`${g.spaceId}\u0001${pinKeyOf(g)}`)) continue;
     for (const id of [g.id, ...descendantIds(s.groups, g.id)]) {
       groups.add(id);
       for (const t of s.groups[id]?.tabIds ?? []) tabs.add(t);

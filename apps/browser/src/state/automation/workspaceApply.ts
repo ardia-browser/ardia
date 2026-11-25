@@ -49,7 +49,7 @@ import {
 const str = (v: unknown) => v as string;
 
 function intoSpace(ids: string[], where: Space) {
-  for (const id of ids) if (store().tabs[id]!.profileId !== where.profileId) store().moveTabToProfile(id, where.profileId, { background: true });
+  for (const id of ids) if (store().tabs[id]!.spaceId !== where.profileId) store().moveTabToSpace(id, where.profileId, { background: true });
   const away = ids.filter((id) => store().tabs[id]!.windowId !== where.windowId);
   if (away.length) store().moveTabsToWindow(away, where.windowId, { background: true });
 }
@@ -60,7 +60,7 @@ function placeEach(ids: string[], placement: TabPlacement) {
 
 function aboveSource(s: BrowserState, ids: string[], where: Space): string | null {
   const first = s.tabs[ids[0]!]!;
-  const inner = first.windowId === where.windowId && first.profileId === where.profileId ? innermostGroupOf(s.groups, first.id) : undefined;
+  const inner = first.windowId === where.windowId && first.spaceId === where.profileId ? innermostGroupOf(s.groups, first.id) : undefined;
   const source = inner ? rootOf(s.groups, inner.id) : undefined;
   const moving = new Set(ids);
   const top = source ? s.windows[where.windowId]!.tabIds.find((id) => source.tabIds.includes(id) && !moving.has(id)) : undefined;
@@ -76,7 +76,7 @@ function besideOwnGroup(s: BrowserState, ids: string[], where: Space): string | 
 export function openTabs(urls: string[], where: Space, created: string[]): string[] {
   const ids: string[] = [];
   for (const url of urls) {
-    const id = store().newTab(where.windowId, { url, background: true, profileId: where.profileId });
+    const id = store().newTab(where.windowId, { url, background: true, spaceId: where.profileId });
     if (!id) throw new OpError("refused", `${url || "A New Tab"} didn't open: a tab.opening rule cancelled it, or Ardia refused it.`);
     ids.push(id);
     created.push(id);
@@ -144,7 +144,7 @@ function moveTabs(results: OpResult[], op: Op): OpResult {
   const dest = destination(results, op, new Set(panes), group);
   if (dest) checkSame(dest, op);
   const first = s.tabs[ids[0]!]!;
-  const where = dest ?? space(op, { windowId: first.windowId, profileId: first.profileId });
+  const where = dest ?? space(op, { windowId: first.windowId, profileId: first.spaceId });
   profileMovable(s, ids, where.profileId);
   noSplitTiles(s, panes, dest?.placement, `next to Top Apps tile ${dest?.anchor?.id}`);
   const placement: TabPlacement | undefined = dest?.placement ?? (group === null ? { pinned: false, groupId: null, beforeId: besideOwnGroup(s, panes, where) } : undefined);
@@ -163,7 +163,7 @@ function bySpace(ids: string[]): string[][] {
   const s = store();
   const out = new Map<string, string[]>();
   for (const id of ids) {
-    const key = `${s.tabs[id]!.windowId}\u0000${s.tabs[id]!.profileId}`;
+    const key = `${s.tabs[id]!.windowId}\u0000${s.tabs[id]!.spaceId}`;
     out.set(key, [...(out.get(key) ?? []), id]);
   }
   return [...out.values()];
@@ -179,7 +179,7 @@ function pin(results: OpResult[], op: Op): OpResult {
   guardEmptied(s, new Set(panes));
   for (const set of bySpace(ids)) store().pinTabs(set, true, row);
   afterChange({ tabs: panes }, () => {
-    for (const id of panes) expectTabs([id], { windowId: s.tabs[id]!.windowId, profileId: s.tabs[id]!.profileId }, { pinned: true, row });
+    for (const id of panes) expectTabs([id], { windowId: s.tabs[id]!.windowId, profileId: s.tabs[id]!.spaceId }, { pinned: true, row });
   });
   return { tabs: ids };
 }
@@ -221,7 +221,7 @@ function createGroup(results: OpResult[], op: Op): OpResult {
   if (dest) checkSame(dest, op);
   const { parentId, pinned } = groupSection(s, dest, { parentId: parent?.id ?? null, pinned: parent ? parent.pinned : true }, op.pinned);
   const first = given[0] ? s.tabs[given[0]]! : undefined;
-  const where = dest ?? space(op, first && { windowId: first.windowId, profileId: first.profileId });
+  const where = dest ?? space(op, first && { windowId: first.windowId, profileId: first.spaceId });
   profileMovable(s, given, where.profileId);
   guardEmptied(s, new Set(given), withAncestors(s, parentId));
   const before = dest ? dest.placement.beforeId : parentId || !given.length ? null : aboveSource(s, given, where);
@@ -238,7 +238,7 @@ function createGroup(results: OpResult[], op: Op): OpResult {
     if (!id) throw new OpError("failed", "Ardia didn't do that: the group couldn't be made.");
     const patch = groupPatch({ ...op, name: undefined });
     if (Object.keys(patch).length) store().updateGroup(id, patch);
-    expectGroup(id, { ...patch, windowId: where.windowId, profileId: where.profileId, pinned, parentId, tabs: ids });
+    expectGroup(id, { ...patch, windowId: where.windowId, spaceId: where.profileId, pinned, parentId, tabs: ids });
     expectBeside(ids, dest?.anchor, dest?.after);
     return { ...labelled(id), tabs: ids };
   } catch (error) {
@@ -258,18 +258,18 @@ function regroupedId(g: TabGroup): string {
 function moveGroup(results: OpResult[], op: Op): OpResult {
   const s = store();
   const asked = groupRef(results, op.group);
-  const profileId = op.profile !== undefined ? profileOf(str(op.profile)) : asked.profileId;
+  const profileId = op.profile !== undefined ? profileOf(str(op.profile)) : asked.spaceId;
   const windowId = op.window !== undefined ? normalWindow(str(op.window)) : asked.windowId;
-  const changesProfile = profileId !== asked.profileId;
+  const changesProfile = profileId !== asked.spaceId;
   const changesWindow = windowId !== asked.windowId;
   if (changesProfile) keptOpen(asked, "move");
   if (changesWindow && asked.pinned) throw new OpError("refused", `Group ${asked.id} is pinned, so it's in every window of its profile.`);
-  const parentScope = () => ({ windowId: op.window !== undefined ? normalWindow(str(op.window)) : asked.windowId, profileId: (op.profile as string | undefined) ?? asked.profileId });
+  const parentScope = () => ({ windowId: op.window !== undefined ? normalWindow(str(op.window)) : asked.windowId, profileId: (op.profile as string | undefined) ?? asked.spaceId });
   const parent = op.parent === undefined ? undefined : op.parent === null ? null : groupRef(results, op.parent, parentScope);
   const ref = (op.before ?? op.after) as string | undefined;
   const anchor = ref !== undefined ? anchorRef(results, ref) : undefined;
   for (const [what, place] of [["parent", parent], ["anchor", anchor]] as const) {
-    if (place && (place.windowId !== windowId || place.profileId !== profileId)) throw new OpError("bad_request", `The ${what} is in another window or profile than group ${asked.id} would be.`);
+    if (place && (place.windowId !== windowId || ("spaceId" in place ? place.spaceId : place.profileId) !== profileId)) throw new OpError("bad_request", `The ${what} is in another window or profile than group ${asked.id} would be.`);
   }
   const own = new Set(withDescendants(s, asked.id));
   if (parent && own.has(parent.id)) throw new OpError("bad_request", `Group ${asked.id} can't go inside ${parent.id}.`);
@@ -287,7 +287,7 @@ function moveGroup(results: OpResult[], op: Op): OpResult {
   if (changesProfile || changesWindow) guardEmptied(s, new Set(asked.tabIds), own);
   let g = asked;
   if (changesProfile) {
-    store().moveGroupToProfile(g.id, profileId, { background: true });
+    store().moveGroupToSpace(g.id, profileId, { background: true });
     g = store().groups[regroupedId(g)]!;
   }
   if (changesWindow) {
@@ -296,12 +296,12 @@ function moveGroup(results: OpResult[], op: Op): OpResult {
   }
   const moved = g.id;
   if (anchor === undefined && parent === undefined && op.pinned === undefined) {
-    afterChange({ groups: [moved] }, () => expectGroup(moved, { windowId, profileId }));
+    afterChange({ groups: [moved] }, () => expectGroup(moved, { windowId, spaceId: profileId }));
     return labelled(moved);
   }
   store().moveGroup(g.id, { pinned, parentId, beforeId: dest?.placement.beforeId });
   afterChange({ groups: [moved] }, () => {
-    expectGroup(moved, { windowId, profileId, parentId, pinned });
+    expectGroup(moved, { windowId, spaceId: profileId, parentId, pinned });
     expectBeside(store().groups[moved]!.tabIds, dest?.anchor, dest?.after);
   });
   return labelled(moved);

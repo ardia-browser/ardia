@@ -211,13 +211,14 @@ test("utility snapshots keep profile deletion and browser tabs created by Settin
   const initial = browserSession();
   useBrowser.getState().hydrate(initial);
   const other = useBrowser.getState().createProfile({ name: "Work" });
-  const saved = { ...initial, profiles: useBrowser.getState().profiles, profileOrder: useBrowser.getState().profileOrder };
+  const saved = snapshotHostSession(useBrowser.getState());
   const snapshot = createUtilitySessionSnapshot(useBrowser.getState(), saved);
-  useBrowser.getState().deleteProfile("default");
+  useBrowser.getState().deleteProfile("default", other);
   const deleted = snapshot(useBrowser.getState(), saved);
   assert.equal(deleted.profiles.default, undefined);
-  assert.equal(deleted.windows.main.profileId, other);
-  assert.ok(Object.values(deleted.tabs).every((tab) => tab.profileId !== "default"));
+  assert.equal(deleted.windows.main.spaceId, "default");
+  assert.equal(deleted.spaces.default.profileId, other);
+  assert.ok(Object.values(deleted.tabs).every((tab) => tab.spaceId === "default"));
   const afterDelete = createUtilitySessionSnapshot(useBrowser.getState(), deleted);
   const created = useBrowser.getState().newTab("main", { url: "https://chromewebstore.google.com/" });
   const opened = afterDelete(useBrowser.getState(), deleted);

@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { radius, space } from "../ui/tokens";
 import { PROFILE_COLORS } from "../ui/theme";
-import { useWindowProfileValue } from "../../state/profiles/hooks";
+import { useWindowSpaceValue } from "../../state/spaces/hooks";
 import type { Settings } from "../../state/settings/settings";
 import { ChoiceList, type ChoiceOption } from "./ChoiceList";
 import { ChoiceCard } from "./ChoiceCard";
@@ -56,8 +56,8 @@ export function LookStep() {
   const { values, mock } = useScreen(LOOK_KEYS);
   const windowId = useOnboarding((s) => s.windowId) ?? "";
   const appIcon = useOnboarding((s) => s.extras.appIcon);
-  const color = useWindowProfileValue(windowId, (p) => p?.color);
-  const customTheme = useWindowProfileValue(windowId, (p) => !!p?.theme);
+  const color = useWindowSpaceValue(windowId, (p) => p?.color);
+  const customTheme = useWindowSpaceValue(windowId, (p) => !!p?.theme);
   const [icons, setIcons] = useState<{ list: AppIcon[]; current: string | null }>({ list: [], current: null });
   useEffect(() => {
     if (active) previewLive({ appearance: values.appearance, extendWebsiteColor: values.extendWebsiteColor, ...(liquidGlass ? { interfaceStyle: values.interfaceStyle } : {}) });

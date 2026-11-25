@@ -5,8 +5,8 @@ import { deviceLabel, deviceSymbol } from "./devices";
 import { sendTab, sendTargets, useSync } from "./engine";
 import type { RemoteTabs } from "./syncDoc";
 
-export function syncedDevicesMenuItem(profileId: string): MenuItem | null {
-  const devices = useSync.getState().remoteTabs[profileId] ?? [];
+export function syncedDevicesMenuItem(spaceId: string): MenuItem | null {
+  const devices = useSync.getState().remoteTabs[spaceId] ?? [];
   if (!devices.length) return null;
   const tabs = (d: RemoteTabs): MenuItem[] => [
     { id: "synced-header", title: "Recent Tabs", enabled: false },
@@ -24,10 +24,10 @@ export function syncedDevicesMenuItem(profileId: string): MenuItem | null {
   };
 }
 
-export function openSyncedTab(choice: string, windowId: string, profileId: string): boolean {
+export function openSyncedTab(choice: string, windowId: string, spaceId: string): boolean {
   const match = /^synced:(.+):(\d+)$/.exec(choice);
   if (!match) return false;
-  const device = useSync.getState().remoteTabs[profileId]?.find((d) => d.deviceId === match[1]);
+  const device = useSync.getState().remoteTabs[spaceId]?.find((d) => d.deviceId === match[1]);
   const tab = device?.tabs[Number(match[2])];
   if (tab) useBrowser.getState().newTab(windowId, { url: tab.url });
   return true;
@@ -36,7 +36,7 @@ export function openSyncedTab(choice: string, windowId: string, profileId: strin
 const SEND_CHOICE = "sendTo:";
 
 export function sendTabMenuItem(tab: Tab): MenuItem | null {
-  const targets = /^https?:/i.test(tab.url) ? sendTargets(tab.profileId) : [];
+  const targets = /^https?:/i.test(tab.url) ? sendTargets(tab.spaceId) : [];
   if (!targets.length) return null;
   if (targets.length === 1) {
     const d = targets[0]!;

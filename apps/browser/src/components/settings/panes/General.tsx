@@ -6,7 +6,7 @@ import { confirm, pickFolder } from "../../../state/app/system";
 import { Button, PopUp, Toggle } from "../../ui";
 import { updateSettings } from "../../../state/settings/actions";
 import { currentEngineProfile } from "../../../state/browser/current";
-import { useProfiles, useSettings } from "../../../state/browser/hooks";
+import { useSpaces, useSettings } from "../../../state/browser/hooks";
 import { Group, Row, SectionHeader } from "../Form";
 import { defaultBrowser, downloadFoldersDiffer, downloadSettings, loginItem, makeDefaultBrowser, setDownloadsFor } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
@@ -25,7 +25,6 @@ import { CrashReportDetails, ShareDiagnosticsToggle } from "./ShareDiagnostics";
 import { Checklist } from "./Checklist";
 import { FilterListsPage } from "./FilterListsPage";
 import { PaneSubPage } from "./PaneSubPage";
-import { SyncSection } from "./SyncSection";
 import { UpdatesSection } from "./UpdatesSection";
 import { homeRelative } from "../../../lib/homePath";
 
@@ -46,7 +45,9 @@ export function GeneralPane({ detail }: SettingsPlace) {
       {PLATFORM_FEATURES.webKit && <EngineSection />}
       <DownloadsSection />
       {PLATFORM_FEATURES.contentBlocker && <ContentBlockingSection />}
-      {PLATFORM_FEATURES.sync && <SyncSection />}
+      {PLATFORM_FEATURES.sync && (
+        <Group><Row anchor="general.sync" onPress={() => goToSettingsPane("sync")} /></Group>
+      )}
       <UpdatesSection />
       <CrashReportsSection />
       <ImportSection />
@@ -87,7 +88,7 @@ function StartupSection() {
   const warnBeforeClosingWindow = useSettings((s) => s.warnBeforeClosingWindow);
   const warnBeforeClosingLastTab = useSettings((s) => s.warnBeforeClosingLastTab);
   const warnBeforeClosingTabGroup = useSettings((s) => s.warnBeforeClosingTabGroup);
-  const warnBeforeMovingTabs = useSettings((s) => s.warnBeforeMovingTabsToProfile);
+  const warnBeforeMovingTabs = useSettings((s) => s.warnBeforeMovingTabsToSpace);
   const [loginStatus = "notRegistered", refreshLogin] = useResource(loginItem);
   return (
     <>
@@ -123,7 +124,7 @@ function StartupSection() {
             { key: "window", label: "Closing a window with several tabs", value: warnBeforeClosingWindow, onChange: (on) => updateSettings({ warnBeforeClosingWindow: on }) },
             { key: "lastTab", label: "Closing the last tab in a profile", value: warnBeforeClosingLastTab, onChange: (on) => updateSettings({ warnBeforeClosingLastTab: on }) },
             { key: "group", label: "Closing a tab group", value: warnBeforeClosingTabGroup, onChange: (on) => updateSettings({ warnBeforeClosingTabGroup: on }) },
-            { key: "move", label: "Moving tabs to another profile", value: warnBeforeMovingTabs, onChange: (on) => updateSettings({ warnBeforeMovingTabsToProfile: on }) },
+            { key: "move", label: "Moving tabs to another profile", value: warnBeforeMovingTabs, onChange: (on) => updateSettings({ warnBeforeMovingTabsToSpace: on }) },
           ]}
         />
       </Group>
@@ -144,8 +145,8 @@ function EngineSection() {
 
 function DownloadsSection() {
   const separate = useSettings((s) => s.separateDownloadFolders);
-  const defaultProfileId = useSettings((s) => s.defaultProfileId);
-  const profiles = useProfiles();
+  const defaultProfileId = useSettings((s) => s.defaultSpaceId);
+  const profiles = useSpaces();
   const profile = currentEngineProfile(defaultProfileId);
   const [current] = useResource(downloadSettings, profile);
   const everyProfile = [...new Set([profile, ...profiles.map((p) => currentEngineProfile(p.id))])];

@@ -152,7 +152,7 @@ test("the engine moves the folder while sync is on: later batches land in the ne
   const engine = await import("./engine.ts?move");
   engine.startSync();
   assert.ok("ok" in (await engine.turnOnSync("/home/someone/Ardia Sync", "picked")));
-  S().addBookmark({ profileId: "default", url: "https://before.example/", title: "Before" });
+  S().addBookmark({ spaceId: "default", url: "https://before.example/", title: "Before" });
   await engine.syncNow();
   const oldApp = payloads("/home/someone/Ardia Sync", "app");
   assert.ok(oldApp.length > 0);
@@ -162,7 +162,7 @@ test("the engine moves the folder while sync is on: later batches land in the ne
   assert.equal(engine.useSync.getState().folder, "/home/someone/Nextcloud/Ardia Sync");
   assert.deepEqual(payloads("/home/someone/Nextcloud/Ardia Sync", "app"), oldApp);
 
-  S().addBookmark({ profileId: "default", url: "https://after.example/", title: "After" });
+  S().addBookmark({ spaceId: "default", url: "https://after.example/", title: "After" });
   await engine.syncNow();
   assert.equal(engine.useSync.getState().status, "updated", "the new folder holds the chain, so the cycle doesn't read it as reset");
   const titles = (folder) =>
@@ -196,8 +196,9 @@ test("every profile the folder knows about moves with it, not just the ones sync
   const doc = {
     scopes: { app: { records: { "prof:aaa": { v: {} }, "prof:bbb": { v: null }, "pta:aaa": { v: {} } } }, "p:ccc": { records: {} } },
     profiles: { default: { syncId: "ddd", enabled: false } },
+    spaces: { work: { syncId: "eee", enabled: false } },
   };
-  assert.deepEqual(folderScopes(doc).sort(), ["app", "p:aaa", "p:bbb", "p:ccc", "p:ddd"]);
+  assert.deepEqual(folderScopes(doc).sort(), ["app", "p:aaa", "p:bbb", "p:ccc", "p:ddd", "p:eee"]);
 });
 
 test("each move outcome has a message that says where sync is now", () => {
@@ -251,7 +252,7 @@ test("turning Sync off during a move waits for the move, then turns Sync off", a
   const engine = await import("./engine.ts?stop");
   engine.startSync();
   assert.ok("ok" in (await engine.turnOnSync("/home/someone/Ardia Sync", "picked")));
-  S().addBookmark({ profileId: "default", url: "https://before.example/", title: "Before" });
+  S().addBookmark({ spaceId: "default", url: "https://before.example/", title: "Before" });
   await engine.syncNow();
   const moving = engine.moveSyncFolder("/home/someone/Nextcloud/Ardia Sync");
   await engine.stopSync();
@@ -283,7 +284,7 @@ test("Sync Now during a move waits for the move, then runs its cycle in the new 
   assert.ok("ok" in (await engine.turnOnSync("/home/someone/Ardia Sync", "picked")));
   await engine.syncNow();
   const moving = engine.moveSyncFolder("/home/someone/Nextcloud/Ardia Sync");
-  S().addBookmark({ profileId: "default", url: "https://during.example/", title: "During" });
+  S().addBookmark({ spaceId: "default", url: "https://during.example/", title: "During" });
   assert.equal(await engine.syncNow(), true);
   assert.deepEqual(await moving, { ok: "moved" });
   const titles = [...chainOf("/home/someone/Nextcloud/Ardia Sync").get(OURS).values()].flatMap((files) => [...files.values()]).flatMap((payload) => JSON.parse(payload).ops ?? []).map((op) => op.v?.t);

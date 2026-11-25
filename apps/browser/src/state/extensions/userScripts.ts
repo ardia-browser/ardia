@@ -8,7 +8,7 @@ import {
   type UserScriptsFolder,
 } from "../../platform/userScripts";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfile, engineProfileForSpace, isIncognitoSpace } from "../browser/model";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 import { errorText } from "../../lib/errors";
 import { singleFlight, type Flight } from "../../lib/singleFlight";
@@ -18,22 +18,29 @@ import { warnFor } from "../telemetry/logs";
 import { programControlOn } from "../app/programControlSetting";
 
 type ScriptsOutcome = { ok: true } | { disabled: true } | { removed: true } | { error: string };
-type Status = { generation: number; profiles: Record<string, ScriptsOutcome> };
+type Status = { generation: number; spaces: Record<string, ScriptsOutcome>; engines?: Record<string, ScriptsOutcome> };
 
 const enabled = () => programControlOn(useBrowser.getState());
 
-function scriptsTargets(s: Pick<BrowserState, "profileOrder" | "profiles">): Map<string, string[]> {
+function scriptsTargets(s: Pick<BrowserState, "spaceOrder" | "spaces" | "profiles">): Map<string, string[]> {
   const targets = new Map<string, string[]>();
   const taken = new Map<string, number>();
-  for (const id of s.profileOrder) {
-    const profile = s.profiles[id];
-    if (!profile || isIncognitoProfile(id)) continue;
-    const base = profile.name.trim() || id;
+  for (const id of s.spaceOrder) {
+    const space = s.spaces[id];
+    if (!space || isIncognitoSpace(id)) continue;
+    const base = space.name.trim() || id;
     const seen = (taken.get(base) ?? 0) + 1;
     taken.set(base, seen);
     const name = seen === 1 ? base : `${base} (${seen})`;
     const engine = engineProfile(s, id);
     targets.set(engine, [...(targets.get(engine) ?? []), name]);
+  }
+  for (const profile of Object.values(s.profiles)) {
+    if (targets.has(profile.engineId)) continue;
+    const base = profile.name.trim() || profile.id;
+    const seen = (taken.get(base) ?? 0) + 1;
+    taken.set(base, seen);
+    targets.set(profile.engineId, [seen === 1 ? base : `${base} (${seen})`]);
   }
   return targets;
 }
@@ -93,11 +100,10 @@ async function seed() {
   try {
     lastStatus = await readUserScriptsStatus();
     const status = parseSaved(lastStatus, STATUS_VERSION, STATUS_MIGRATIONS) as Status | null;
-    if (!status || typeof status.generation !== "number" || !status.profiles) return;
-    for (const [engine, names] of scriptsTargets(useBrowser.getState())) {
-      const outcomes = names.map((n) => status.profiles[n]);
-      const outcome = outcomes[0];
-      if (!outcome || "error" in outcome || outcomes.some((o) => JSON.stringify(o) !== JSON.stringify(outcome))) continue;
+    if (!status || typeof status.generation !== "number" || !status.engines) return;
+    for (const engine of scriptsTargets(useBrowser.getState()).keys()) {
+      const outcome = status.engines[engine];
+      if (!outcome || "error" in outcome) continue;
       applied.set(engine, { generation: status.generation, wanted: wantedBy(outcome), outcome });
     }
   } catch (error) {
@@ -137,8 +143,8 @@ async function reconcile(flight: Flight) {
     if (!enabled()) return;
   }
   if (flight.again || !enabled()) return;
-  const status: Status = { generation, profiles: {} };
-  for (const [engine, names] of targets) for (const name of names) status.profiles[name] = outcomes.get(engine)!;
+  const status: Status = { generation, spaces: {}, engines: Object.fromEntries(outcomes) };
+  for (const [engine, names] of targets) for (const name of names) status.spaces[name] = outcomes.get(engine)!;
   const json = versionedJson(status, STATUS_VERSION, "version", 2);
   if (json === lastStatus) return;
   await writeUserScriptsStatus(json);
@@ -172,8 +178,8 @@ export function startUserScripts() {
     if (on) void schedule();
   };
   sync(useBrowser.getState());
-  useBrowser.subscribeTo(["settings", "profileOrder", "profiles"], (s, prev) => {
-    if (programControlOn(s) !== programControlOn(prev) || s.profileOrder !== prev.profileOrder || s.profiles !== prev.profiles) sync(s);
+  useBrowser.subscribeTo(["settings", "spaceOrder", "profiles"], (s, prev) => {
+    if (programControlOn(s) !== programControlOn(prev) || s.spaceOrder !== prev.spaceOrder || s.spaces !== prev.spaces || s.profiles !== prev.profiles) sync(s);
   });
   onProfilesOpened(() => sync(useBrowser.getState()));
 }

@@ -235,7 +235,7 @@ export function errorText(kind: LiveError["kind"], source: LiveSourceId, now = D
 export function newLiveFolder(windowId: string, kind: LiveFolderKind): string | null {
   const w = useBrowser.getState().windows[windowId];
   if (!w || w.kind === "private") return null;
-  return newProfileLiveFolder(w.profileId, kind);
+  return newSpaceLiveFolder(w.spaceId, kind);
 }
 
 export const connectedSourcesOf = (kind: LiveFolderKind): LiveSourceId[] => {
@@ -243,9 +243,9 @@ export const connectedSourcesOf = (kind: LiveFolderKind): LiveSourceId[] => {
   return kind === "pullRequests" ? (["github", "bitbucket"] as const).filter((id) => s.accounts[id]) : (["notion", "confluence", "gdrive"] as const).filter((id) => s.accounts[id]);
 };
 
-export function newProfileLiveFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[], options: { name?: string; allowed?: () => boolean } = {}): string {
+export function newSpaceLiveFolder(spaceId: string, kind: LiveFolderKind, sources?: LiveSourceId[], options: { name?: string; allowed?: () => boolean } = {}): string {
   const connected = connectedSourcesOf(kind);
-  const id = createFolder(profileId, kind, sources ?? (connected.length ? connected : undefined));
+  const id = createFolder(spaceId, kind, sources ?? (connected.length ? connected : undefined));
   if (options.name !== undefined) updateFolder(id, { name: options.name });
   void refreshFolderWhile(id, true, options.allowed ?? always);
   return id;
@@ -363,8 +363,8 @@ export function startLiveEngine() {
 
   useBrowser.subscribeTo(["groups", "profiles"], (s, prev) => {
     if (s.groups !== prev.groups) syncLiveHomes();
-    if (s.profiles === prev.profiles) return;
-    for (const f of Object.values(live().folders)) if (!s.profiles[f.profileId]) removeFolder(f.id);
+    if (s.spaces === prev.spaces) return;
+    for (const f of Object.values(live().folders)) if (!s.spaces[f.spaceId]) removeFolder(f.id);
   });
 
   const due = (id: string, maxAge: number) => {

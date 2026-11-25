@@ -106,3 +106,199 @@ test("a surface told not to cover (a Peek hidden with its tab) cuts no hole, and
   assert.deepEqual(holesFor(page, coversIn(windowId), false), [[400, 80, 500, 400, 12]], "shown again, the hole is back");
   back.stop();
 });
+
+test("many motion requests share one in-flight measurement and drain one fresh pass", async () => {
+  const callbacks = [];
+  const surface = { measureInWindow: (callback) => callbacks.push(callback) };
+  const measurer = coverMeasurer("coalesced-window", "surface", 0, () => surface, []);
+  const requests = Array.from({ length: 100 }, () => measurer.measure());
+  assert.equal(callbacks.length, 1);
+  callbacks[0](0, 0, 50, 10);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(callbacks.length, 2);
+  assert.equal(coversIn("coalesced-window")[0].height, 10, "a valid active result is published even with a newer request");
+  callbacks[1](0, 0, 50, 20);
+  await Promise.all(requests);
+  assert.equal(coversIn("coalesced-window")[0].height, 20);
+  measurer.stop();
+});
+
+test("node replacement releases a measurement whose removed native tag never answered", async () => {
+  const callbacks = [];
+  let current = { measureInWindow: (callback) => callbacks.push(callback) };
+  const measurer = coverMeasurer("replaced-window", "surface", 0, () => current, []);
+  const old = measurer.measure();
+  current = node(5, 5, 30, 30);
+  await measurer.measure();
+  await old;
+  callbacks[0](0, 0, 100, 100);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(coversIn("replaced-window")[0].width, 30);
+  measurer.stop();
+});
+
+test("clip replacement invalidates its old measurement without blocking a newer pass", async () => {
+  let oldCallback;
+  let clipNode = { measureInWindow: (callback) => oldCallback = callback };
+  const surface = node(0, 0, 100, 100);
+  const measurer = coverMeasurer("replaced-clip-window", "surface", 0, () => surface, [coverClip(() => clipNode)]);
+  const old = measurer.measure();
+  clipNode = node(0, 0, 20, 20);
+  await measurer.measure();
+  await old;
+  oldCallback(0, 0, 90, 90);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(coversIn("replaced-clip-window")[0].width, 20);
+  measurer.stop();
+});
+
+test("a missing callback times out and stop releases its pending promise", async () => {
+  let reply = false;
+  const surface = { measureInWindow: (callback) => { if (reply) callback(1, 2, 30, 40); } };
+  const measurer = coverMeasurer("timeout-window", "surface", 0, () => surface, []);
+  await measurer.measure();
+  reply = true;
+  await measurer.measure();
+  assert.equal(coversIn("timeout-window")[0].height, 40);
+  reply = false;
+  const pending = measurer.measure();
+  measurer.stop();
+  await pending;
+});
+
+test("the final measurement still publishes at 150 ms after its wait timed out", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let callback;
+  const surface = { measureInWindow: (reply) => callback = reply };
+  const measurer = coverMeasurer("late-idle-window", "surface", 8, () => surface, []);
+  const pending = measurer.measure();
+  t.mock.timers.tick(100);
+  await pending;
+  assert.deepEqual(coversIn("late-idle-window"), []);
+  t.mock.timers.tick(50);
+  callback(4, 8, 80, 40);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(coversIn("late-idle-window"), [{ x: 4, y: 8, width: 80, height: 40, radius: 8 }]);
+  measurer.stop();
+});
+
+test("a timed-out answer cannot overwrite a newer pass on the same native node", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const callbacks = [];
+  const surface = { measureInWindow: (reply) => callbacks.push(reply) };
+  const measurer = coverMeasurer("late-newer-window", "surface", 0, () => surface, []);
+  const old = measurer.measure();
+  t.mock.timers.tick(100);
+  await old;
+  const fresh = measurer.measure();
+  callbacks[1](0, 0, 30, 40);
+  await fresh;
+  callbacks[0](0, 0, 90, 90);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(coversIn("late-newer-window")[0].width, 30);
+  measurer.stop();
+});
+
+test("a timeout drains a queued pass without letting the older answer publish", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const callbacks = [];
+  const surface = { measureInWindow: (reply) => callbacks.push(reply) };
+  const measurer = coverMeasurer("late-dirty-window", "surface", 0, () => surface, []);
+  const pending = [measurer.measure(), measurer.measure()];
+  t.mock.timers.tick(100);
+  assert.equal(callbacks.length, 2);
+  callbacks[0](0, 0, 90, 90);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(coversIn("late-dirty-window"), []);
+  callbacks[1](0, 0, 30, 40);
+  await Promise.all(pending);
+  assert.equal(coversIn("late-dirty-window")[0].width, 30);
+  measurer.stop();
+});
+
+test("a late answer after the timeout cannot revive a stopped surface", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let callback;
+  const surface = { measureInWindow: (reply) => callback = reply };
+  const measurer = coverMeasurer("late-stopped-window", "surface", 0, () => surface, []);
+  const pending = measurer.measure();
+  t.mock.timers.tick(100);
+  await pending;
+  measurer.stop();
+  callback(0, 0, 90, 90);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(coversIn("late-stopped-window"), []);
+});
+
+test("late answers validate surface and clip identities even without another request", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const replaced of ["surface", "clip"]) {
+    let callback;
+    let surface = { measureInWindow: (reply) => callback = reply };
+    let clip = { measureInWindow: (reply) => reply(0, 0, 100, 100) };
+    const windowId = `late-identity-${replaced}`;
+    const measurer = coverMeasurer(windowId, "surface", 0, () => surface, [coverClip(() => clip)]);
+    const pending = measurer.measure();
+    t.mock.timers.tick(100);
+    await pending;
+    if (replaced === "surface") surface = node(0, 0, 30, 30);
+    else clip = node(0, 0, 30, 30);
+    callback(0, 0, 90, 90);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(coversIn(windowId), []);
+    measurer.stop();
+  }
+});
+
+test("a stopped non-covering measurer cannot erase the replacement's cover", async () => {
+  const windowId = "stopped-owner-window";
+  const surface = node(4, 8, 80, 40);
+  const hidden = coverMeasurer(windowId, "surface", 8, () => surface, [], false);
+  await hidden.measure();
+  hidden.stop();
+  const shown = coverMeasurer(windowId, "surface", 8, () => surface, []);
+  await shown.measure();
+  await hidden.measure();
+  assert.deepEqual(coversIn(windowId), [{ x: 4, y: 8, width: 80, height: 40, radius: 8 }]);
+  shown.stop();
+});
+
+test("an unmounted non-covering measurer cannot erase a live cover", async () => {
+  const windowId = "unmounted-owner-window";
+  const surface = node(4, 8, 80, 40);
+  const shown = coverMeasurer(windowId, "surface", 8, () => surface, []);
+  await shown.measure();
+  const unmounted = coverMeasurer(windowId, "surface", 8, () => null, [], false);
+  await unmounted.measure();
+  assert.deepEqual(coversIn(windowId), [{ x: 4, y: 8, width: 80, height: 40, radius: 8 }]);
+  unmounted.stop();
+  shown.stop();
+});
+
+test("covers publish during continuous motion when native answers take three frames", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let position = 0;
+  const callbacks = [];
+  const pending = [];
+  const surface = { measureInWindow: (reply) => callbacks.push({ reply, x: position }) };
+  const measurer = coverMeasurer("continuous-motion-window", "surface", 0, () => surface, []);
+  for (let frame = 1; frame <= 9; frame++) {
+    pending.push(measurer.measure());
+    position += 16;
+    t.mock.timers.tick(16);
+    assert.equal(callbacks.length, 1, "one native pass remains in flight across frames");
+    if (frame % 3 === 0) {
+      const answer = callbacks.shift();
+      answer.reply(answer.x, 0, 80, 40);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(coversIn("continuous-motion-window")[0].x, position - 48, "the hole moves before the animation stops");
+    }
+  }
+  const final = callbacks.shift();
+  assert.equal(final.x, position);
+  final.reply(final.x, 0, 80, 40);
+  await Promise.all(pending);
+  assert.equal(callbacks.length, 0);
+  assert.equal(coversIn("continuous-motion-window")[0].x, 144);
+  measurer.stop();
+});

@@ -14,6 +14,7 @@
  "customEvents": {
   "ardia:media-element": "Page-world shim names a media element for the isolated world to track; only an HTMLMediaElement is taken, and only its own playback state is read",
   "ardia:media-fault": "Page-world shim relays a media error on the listed media sites only; a string of at most 64 characters, at most 200 per page, classified natively by WebKitMediaFaults.event",
+  "ardia:drm": "Page-world shim relays whether a protected key system request was granted, on the listed media sites only; a JSON string read for a key system of at most 64 characters, a boolean and an integer code, at most 16 distinct reports per page, classified natively by WebKitTab.emitDrmDiagnostic. Any page script can send the same; it only misreports that page's own DRM state",
   "ardia:media-session": "Page-world shim relays the page's own Media Session: actions filtered to a fixed list, positions must be finite numbers; it describes only the page's own media",
   "ardia:app-badge": "Page-world shim relays the Badging API from the top frame; native requires the main frame and takes the origin from frameInfo, as for the badge API itself",
   "ardia:media-action": "Dispatched by the isolated world into the page world to run a media action on the page's own elements. A page that dispatches its own only acts on itself",
@@ -418,6 +419,11 @@
    "guard": "Main frame only, frameInfo origin (WebKitTab+Site.swift)"
   },
   {
+   "id": "webkit-page-message:drm",
+   "source": "frame",
+   "guard": "Listed streaming sites only; stage from a fixed list, key system matched against a fixed pattern, host from frameInfo.securityOrigin (WebKitTab+ContentBlocker.swift). Before telemetry, protectedMedia.ts checks consent first, drops a granted request, a video asking for keys and any stage that is not a problem, then sends only the built-in site's slug, the key system's family from a fixed set, a problem stage from a fixed list, a safe-integer code, the frame flag and a count of blocked hosts, never a host or the key system string (hostileInputs.test.mjs checks the queue and the local copy)"
+  },
+  {
    "id": "webkit-page-message:field",
    "source": "frame",
    "guard": "Autofill script in the isolated world; same-origin frames and document tokens (WebKitAutofill.swift)"
@@ -590,7 +596,7 @@
    "id": "webkit-page-listener-count:WebKitPageScript.swift",
    "source": "page",
    "guard": "Isolated world; media and icon state validated natively",
-   "count": 18,
+   "count": 21,
    "checks": [
     "packages/ardiacore/ios/WebKitPageScript.swift"
    ]

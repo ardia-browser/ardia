@@ -2,14 +2,14 @@ import { platformCopy } from "./platformCopy";
 
 export const SHARING_COPY = {
   toggle: "Share anonymous crash reports and usage stats",
-  summary: "Crashes and anonymous usage stats. Never sites, searches, or tabs.",
+  summary: "Crashes and anonymous usage stats. Never your sites, searches or tabs, except which built-in streaming site had a video-protection (DRM) problem.",
   whatsSent: "What's Sent",
   footnote:
     "Sent to ardia.dev with a random ID made on this Mac, and kept on our own servers. No third parties. Turning this off stops it at once and deletes anything waiting to be sent. This setting doesn't sync.",
   keptOnThisMac: "Kept on this Mac",
   ask: {
     title: "Help fix Ardia?",
-    body: "Share anonymous crash reports and usage stats. No sites, searches or typing. Ever.",
+    body: "Share anonymous crash reports and usage stats. No searches or typing, and no sites except which built-in streaming site had a video-protection (DRM) problem. Ever.",
     share: "Share",
     notNow: "Not now",
   },
@@ -21,7 +21,7 @@ export const SHARING_COPY = {
     "While update checks are on, each launch also reads ardia.dev/switches.json: one small file, the same for everyone, that lets us turn off a speed-up that misbehaves. It sends no ID, no cookies and nothing about you.",
   onboarding: {
     title: "Help us fix what breaks",
-    row: "Crashes, errors, feature counts and speed. Never your sites, typing or tabs.",
+    row: "Crashes, errors, feature counts and speed. Never your typing or tabs, and your sites only as which built-in streaming site had a video-protection (DRM) problem.",
     note: "Off unless you turn it on. Either way, Ardia sends one anonymous “opened today” count a day, with no ID.",
     subtitle:
       "Off unless you turn it on; change it any time in Settings › Privacy & Security. Either way, Ardia sends one anonymous “opened today” count a day, with its version and macOS version and no persistent ID.",
@@ -48,6 +48,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
       "The same for crashes of Ardia's page, graphics and helper processes, plus the version that crashed, how long the process had run, the total size of its writable memory regions, and how the system ended it (its termination reason, like a signal or a code-signing kill)",
       "When a page's process stops (crashed, killed, out of memory or failed to start): why, its exit code, whether the tab was on screen, how many tabs, windows and profiles were open, and whether that tab was translating (and at which step) and how many other tabs were translating or translated",
       "Every 10 minutes Ardia notes on this Mac its tab, window and profile counts, its memory use, rough free disk space, the Mac's memory pressure, how long it has been open, and which of Ardia's own pages (like Settings or History) the tab in front was on, never a website's address. Ardia also takes that note when you open or leave one of those pages, and keeps the last 3 of those pages with how many minutes ago you were on each. That note is sent only with a crash report, or at the next launch after Ardia didn't quit cleanly, with whether the Mac restarted since. Turning sharing off or deleting a profile erases it",
+      "On the built-in streaming-video sites only (like Netflix and Tencent Video), when the page's request for a DRM system is refused, or its protected playback waits for keys or fails: which of the built-in sites it was, the kind of DRM system (Widevine, PlayReady, FairPlay or other), which of those happened and its error code, whether it was the page itself or a frame in it, and how many requests the ad blocker stopped on that page. Nothing when the request is granted and the video plays. Never any host names, the page's address or what you watch",
       "When an error in Ardia's own interface code stops Ardia: which kind of error it was, from a fixed list (Hermes, the JavaScript engine that runs that code, ran out of memory or stack, or a JavaScript TypeError, a failure in a native function and the like), never the error's message. The size of Hermes's memory heap goes in the note above, so it comes with a crash report too",
       "When pages stop reacting to the pointer while Ardia is in front: why (Ardia is only half switched to, a menu was left open in the background, the window isn't active, something covers the page, or keyboard focus went missing), whether macOS and Ardia agree that Ardia is the app in front, whether a menu was open, what kind of window was active instead (none, hidden, a pop-up, another Ardia window), whether the page's window could become active and was still the main one, what covered the page (Ardia's own view or another, or an invisible window over it), whether it was see-through, what kind of view it was and what kind of view made it see-through (a plain view, text, an image, a text field, a scrolling list, the view that holds a page, or one of Ardia's own, the system's or the browser engine's; never its name or what it shows) and how much of the page it covered (a little, a large part or all of it), what held keyboard focus (nothing, the window, another window, the page or one of Ardia's controls), whether it came from a click or a pointer move, whether Ardia fixed it by itself and whether that worked, why Ardia didn't fix it by itself (which safety check refused first and last: the window wasn't visible, on this desktop or in front, a dialog, sheet or save panel was open, a menu was open or showing, a window was entering or leaving full screen, it wasn't a click, or a pop-up held keyboard focus), what kind of window was open when a menu was found showing (a menu, panel, pop-up, sharing, tooltip, full-screen or Ardia window or another window, how high it floats, and whether it belongs to the Ardia window; never its name or title), how many clicks landed in another Ardia window meanwhile, how it ended (the pointer worked again, Ardia fixed it, you switched apps, its window closed, or you quit Ardia while it lasted, which is sent at the next launch) and how long it lasted. Never which page",
       "When a window may be showing a black page: whether it is a regular or a private window, how many windows are open, whether it had just been seen, had just gained or lost focus or had just switched profiles, whether the system counts it as visible and whether Ardia overruled that, whether Ardia is the app in front, whether Share tabs across windows is on, how many pages it showed and how many of them looked unpainted, and why (see-through, hidden, detached from its window, still waiting for a first frame, lent to another page, or covered while it opens). Sent once per episode, never which page",
@@ -252,7 +253,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
   {
     title: "Never",
     items: [
-      "Web addresses, site names or page titles",
+      "Web addresses, site names or page titles, except which of the built-in streaming-video sites (like Netflix) a DRM request or protected-playback problem happened on",
       "Anything you type or search for",
       "History, bookmarks, passwords or what's in your tabs",
       "Profile, extension or file names",

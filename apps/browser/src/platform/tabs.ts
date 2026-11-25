@@ -25,6 +25,7 @@ export {
   type ScrollState,
   type FocusRestoreOutcome,
   type ProtectedMediaRequest,
+  type DrmDiagnostic,
   type AppBadge,
 } from "@ardia/ardiacore";
 

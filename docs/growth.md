@@ -225,6 +225,16 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     `abnormal` or `unknown`, `exit_code`, `visible` (the tab was on screen), `tabs`, `windows`, `profiles`,
     `session_min`, `gone_this_session`, `memory_pressure`). At most 30 per session. GPU and utility process exits aren't
     visible to the app yet (their crash reports are, through `helper_crash`).
+  - `protected_media` (a WebKit page on a built-in streaming site, when its request for a DRM system is refused or its
+    protected playback waits for keys or fails; nothing for a granted request or a video asking for keys: `site` (the built-in site's host with dots as underscores, like
+    `v_qq_com`; subdomains count as the site), `family` (`widevine`, `playready`, `fairplay`, `other` or `none` for the key
+    system the page was granted, else the one it asked for), `stage` (`accessDenied` for a
+    refused key system request, `waitingforkey` for a video waiting on keys, `error` for a media error), `code` (the error's code:
+    the DOM exception's for a refused request, 9 for `NotSupportedError`; the media error's for `error`; 0 otherwise),
+    `main` (the top frame) and `blocked_hosts_n` (how many hosts the ad blocker stopped on that page, at most 8)).
+    Never a host name beyond the built-in site, an address or the page's own key system string. Nothing is recorded or
+    counted while sharing is off. Each distinct record once (the same fields, `blocked_hosts_n` included), at most 30 per
+    session.
   - `password_import` (once per import that sent at least one login to the engine; none for an empty list): `source`
     (`browser` for an import from another browser, `csv` for a CSV file), `tried`, `saved`, `refused` (the engine
     answered "Could not save the password (invalid, or already saved)"), `not_landed` (it answered "The password store

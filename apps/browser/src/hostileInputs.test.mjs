@@ -31,6 +31,10 @@ const { parseIntent, INTENT_SPECS } = await import("./state/plugins/stateIntents
 const { pluginStateUrl, redactedTabs } = await import("./state/plugins/pluginEventRedaction.ts");
 const { copyLinkFromPageMenu } = await import("./state/site/pageLinkCopy.ts");
 const { cleanUrl } = await import("@ardia/core");
+const telemetry = await import("./state/telemetry/client.ts");
+const localStore = await import("./state/telemetry/localStore.ts");
+const { trackDrmDiagnostic } = await import("./state/telemetry/protectedMedia.ts");
+const { PROTECTED_VIDEO_SITES } = await import("./state/engines/engines.ts");
 
 const S = () => useBrowser.getState();
 const show = (value) => {
@@ -465,6 +469,83 @@ test("a WebKit page menu address reaches native's writer only as a string the cl
       await copyLinkFromPageMenu(address, 7, null);
       assert.deepEqual(webKitAddressWrites.written, address ? [{ request: 7, url: cleanUrl(address) }] : [], show(address));
     }
+  }
+});
+
+test("a DRM report a page can forge reaches the telemetry queue and the local copy only as a built-in site, a DRM family, a problem stage from a fixed list and numbers", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 503 });
+  try {
+    const hostName = /^[a-z0-9]([a-z0-9.-]{0,98}[a-z0-9])?$/;
+    const families = [["widevine", "com.widevine.alpha"], ["playready", "com.microsoft.playready"], ["fairplay", "com.apple.fps"]];
+    const stages = ["accessDenied", "waitingforkey", "error"];
+    const sites = PROTECTED_VIDEO_SITES.map((domain) => domain.replaceAll(".", "_"));
+    const valid = { host: "v.qq.com", keySystem: "com.widevine.alpha", stage: "accessDenied", code: 7, main: true, blockedHosts: ["ad.qq.com"] };
+    const control = { site: "v_qq_com", family: "widevine", stage: "accessDenied", code: 7, main: true, blocked_hosts_n: 1 };
+    const expectedFrom = {
+      host: (v) => {
+        const domain = typeof v === "string" && hostName.test(v) ? PROTECTED_VIDEO_SITES.find((d) => v === d || v.endsWith(`.${d}`)) : undefined;
+        return domain ? { site: domain.replaceAll(".", "_") } : null;
+      },
+      keySystem: (v) => ({ family: typeof v === "string" && v ? (families.find(([, prefix]) => v.startsWith(prefix))?.[0] ?? "other") : "none" }),
+      stage: (v) => (stages.includes(v) ? { stage: v } : null),
+      code: (v) => ({ code: Number.isSafeInteger(v) ? v : 0 }),
+      main: (v) => ({ main: v === true }),
+      blockedHosts: (v) => ({ blocked_hosts_n: Math.min(8, Array.isArray(v) ? v.filter((h) => typeof h === "string" && hostName.test(h)).length : 0) }),
+    };
+    const values = HOSTILE_VALUES.map((h) => h.value);
+    const variants = {
+      host: [...values, ...strings.flatMap((s) => embedded(s, "v.qq.com", ".v.qq.com").slice(1))],
+      keySystem: [...values, ...strings.flatMap((s) => embedded(s, "com.widevine.alpha", "com.widevine.alpha").slice(1))],
+      stage: [...values, ...strings.flatMap((s) => embedded(s, "accessDenied", "error").slice(1)), "waitingforkey", "error", "access", "encrypted"],
+      code: values,
+      main: values,
+      blockedHosts: [
+        ...values.flatMap((v) => [v, [v], ["ad.qq.com", v]]),
+        ...strings.flatMap((s) => embedded(s, "ad.qq.com", ".qq.com").slice(1).map((x) => [x])),
+      ],
+    };
+    const pick = ({ site, family, stage, code, main, blocked_hosts_n }) => ({ site, family, stage, code, main, blocked_hosts_n });
+    let keys = null;
+    let accepted = 0;
+    const runChunk = async (field, items, label) => {
+      await telemetry.setSharing(false, "settings");
+      await telemetry.setSharing(true, "settings");
+      stub.telemetryLocal.reset();
+      const consent = telemetry.consentToken();
+      trackDrmDiagnostic({ ...valid }, consent);
+      const expected = [control];
+      items.forEach((item, i) => {
+        const code = field === "code" ? item : 1000 + i;
+        trackDrmDiagnostic({ ...valid, code, [field]: item }, consent);
+        const wanted = expectedFrom[field](item);
+        const props = wanted && { ...control, ...(field === "code" ? {} : { code }), ...wanted };
+        if (props && !expected.some((e) => JSON.stringify(e) === JSON.stringify(props))) expected.push(props);
+      });
+      await telemetry.saveQueueNow();
+      const queued = (JSON.parse(stub.docs.get("telemetry-queue.json") ?? "{}").events ?? []).filter((e) => e.event === "protected_media").map((e) => e.properties);
+      localStore.flushLocal();
+      const kept = stub.telemetryLocal.records().filter((r) => r.event === "protected_media").map((r) => r.properties);
+      for (const list of [queued, kept]) {
+        assert.deepEqual(list.map(pick), expected, label);
+        for (const p of list) {
+          keys ??= Object.keys(p).sort();
+          assert.deepEqual(Object.keys(p).sort(), keys, label);
+          assert.ok(sites.includes(p.site), `${label}: site`);
+          assert.ok(["widevine", "playready", "fairplay", "other", "none"].includes(p.family), `${label}: family`);
+          assert.ok(stages.includes(p.stage), `${label}: stage`);
+          assert.ok(Number.isSafeInteger(p.code) && typeof p.main === "boolean" && Number.isInteger(p.blocked_hosts_n), `${label}: numbers`);
+        }
+      }
+      accepted += expected.length - 1;
+    };
+    for (const [field, items] of Object.entries(variants)) {
+      for (let i = 0; i < items.length; i += 20) await runChunk(field, items.slice(i, i + 20), `${field} from ${i}: ${show(items[i])}`);
+    }
+    assert.ok(accepted > 500, String(accepted));
+  } finally {
+    await telemetry.setSharing(false, "settings");
+    globalThis.fetch = realFetch;
   }
 });
 

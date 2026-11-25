@@ -68,6 +68,15 @@ extension WebKitPageScript {
 
 \#(WebKitMediaFaults.pageScript)
 
+  const test = RegExp.prototype.test;
+  const protectedKeySystem = /^com\.(widevine\.alpha|microsoft\.playready|apple\.fps)/;
+  const domCodeOf = getter(DOMException.prototype, "code");
+  const reportAccess = (name, ok, error) => {
+    if (typeof name !== "string" || !apply(test, protectedKeySystem, [name])) return;
+    const code = !ok && error instanceof DOMException ? read(domCodeOf, error) : 0;
+    apply(dispatch, doc, [new Custom("ardia:drm", { detail: stringify({ keySystem: name, ok, code }) })]);
+  };
+
   const session = navigator.mediaSession;
   const proto = session && Object.getPrototypeOf(session);
   if (!proto) return;

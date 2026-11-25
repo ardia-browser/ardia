@@ -1,7 +1,9 @@
+import type { TabSwitcherScope } from "../pins/recentTabs";
 import type { View } from "react-native";
 import { create } from "zustand";
 import { snappedToDevicePixels } from "../settings/interfaceScale";
 import { peekShown } from "../windows/dockMotion";
+import type { ConsentToken } from "../telemetry/client";
 import { noteSidebarPeekResize } from "../telemetry/dockCounts";
 import type { Settings } from "../settings/settings";
 
@@ -15,7 +17,7 @@ type SidebarUi = {
   tileLetters: { windowId: string; tabId: string; anchor: Anchor | null } | null;
   hover: Hover | null;
   searchTabs: string | null;
-  switcher: { windowId: string; ids: string[]; index: number; view: Settings["tabSwitcherView"]; mounted: boolean; visible: boolean } | null;
+  switcher: { windowId: string; profileId: string; scope: TabSwitcherScope; consent: ConsentToken | null; ids: string[]; index: number; view: Settings["tabSwitcherView"]; mounted: boolean; visible: boolean } | null;
   dragWidth: Record<string, number>;
 };
 

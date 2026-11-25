@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { recentTabIds, sessionTabIds } = await import("./tabCleanup.ts");
+const { recentTabIds, sessionTabIds } = await import("./recentTabs.ts");
 const { useLifecycle } = await import("../tabs/sleepingTabs.ts");
 
 const HOUR = 60 * 60 * 1000;

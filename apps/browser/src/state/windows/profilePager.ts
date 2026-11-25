@@ -86,7 +86,10 @@ class ProfilePager {
         if (flipped && this.state.getState().held && s.profileOrder === prev.profileOrder) this.keepWarm(was?.profileId, s.profileOrder);
         else this.setWarm(this.warmPages());
       }
-      if (!this.switching && w.kind !== "private" && w.profileId !== was?.profileId) this.selectExternal(w.profileId, s.profileOrder);
+      if (!this.switching && w.kind !== "private" && flipped) {
+        const selectsDifferentTab = was?.activeTabIds[w.profileId] !== w.activeTabIds[w.profileId];
+        this.selectExternal(w.profileId, selectsDifferentTab && this.active);
+      }
     });
   }
 
@@ -153,9 +156,7 @@ class ProfilePager {
     this.state.setState({ pages: [...pages, { id: leaving, slot }].sort((a, b) => a.slot - b.slot) });
   }
 
-  private selectExternal(profileId: string, order: string[]) {
-    const index = order.indexOf(profileId);
-    if (index >= 0) this.pos.setValue(index);
+  private selectExternal(profileId: string, waitForRows: boolean) {
     const generation = ++this.externalGeneration;
     this.external = generation;
     const done = (ok: boolean) => {
@@ -163,8 +164,16 @@ class ProfilePager {
       this.external = 0;
       if (ok) this.commitNative(pagerState(this.windowId));
     };
-    selectPager(this.windowId, profileId, order).then(done, () => done(false));
-    this.release(false);
+    const select = () => {
+      if (this.external !== generation) return;
+      const order = useBrowser.getState().profileOrder;
+      const index = order.indexOf(profileId);
+      if (index >= 0) this.pos.setValue(index);
+      selectPager(this.windowId, profileId, order).then(done, () => done(false));
+      this.release(false);
+    };
+    if (waitForRows) requestAnimationFrame(() => requestAnimationFrame(select));
+    else select();
   }
 
   private commitNative(report: NativeReport | null, event?: PagerStateEvent) {

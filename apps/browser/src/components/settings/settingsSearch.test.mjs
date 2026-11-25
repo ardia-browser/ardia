@@ -434,3 +434,9 @@ test("searching for hiding or showing the control pill surfaces advanced.showCli
     assert.ok(ids(query).includes("advanced.showCliPill"), query);
   }
 });
+
+test("cross-profile scope is searchable beside the recent tabs picker", () => {
+  for (const query of ["all profiles", "current profile", "cross profile"]) {
+    assert.equal(first(query), "appearance.tabSwitcherScope", query);
+  }
+});

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 const { pluginTelemetryDisclosures } = await import("./disclosures.ts");
 const { readManifest } = await import("../../lib/pluginManifest.ts");
@@ -19,7 +20,8 @@ test("an official plugin whose manifest has no telemetry block keeps the pin's d
   const [fallback] = pluginTelemetryDisclosures(store(cli));
   assert.equal(fallback.title, "The ardia command");
   assert.equal(fallback.official, true);
-  assert.equal(fallback.items.length, 5);
+  const pin = JSON.parse(readFileSync(new URL("../../../official-plugins.json", import.meta.url), "utf8"));
+  assert.deepEqual(fallback.items, pin.plugins.find((plugin) => plugin.name === "cli").telemetry.items);
   const own = listing({ manifest: 2, name: "cli", title: "Command Line", alwaysOn: true, official: true, telemetry: { title: "Its own words", items: ["x"] } }, { official: true });
   assert.equal(pluginTelemetryDisclosures(store(own))[0].title, "Its own words");
   const added = listing({ manifest: 2, name: "mine", title: "Mine", telemetry: { title: "Mine sends", items: ["y"] } });

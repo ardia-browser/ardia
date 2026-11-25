@@ -21,7 +21,6 @@ import { noteSettingChoices } from "../telemetry/settingChoices";
 import { checkedSettingsPatch, keptSettingsPatch } from "./settingsPatch";
 
 export const DEFAULT_PROFILE_ID = "default";
-
 export type SettingSpec<T> = { default: T; valid: (value: unknown) => boolean; synced: boolean; schema: JsonSchema; values?: readonly T[] };
 
 const SYNCED = true;
@@ -82,6 +81,7 @@ export const SETTING_SPECS = {
   undoReopensClosedTab: flag(false, SYNCED),
   warnBeforeMovingTabsToProfile: flag(true, SYNCED),
   shareTabsAcrossWindows: flag(false),
+  tabSwitcherScope: oneOf(["currentProfile", "sharedData", "allProfiles"], "currentProfile", SYNCED),
   extendWebsiteColor: flag(true, SYNCED),
   cmdClickCreatesTabGroup: flag(false, SYNCED),
   optShiftClickOpensInGroup: flag(true, SYNCED),

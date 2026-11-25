@@ -88,3 +88,19 @@ test("a setup code can carry every value its settings can take", () => {
     if (values) assert.deepEqual(values.filter((v) => !SETTING_FIELDS[key].values.includes(v)), [], key);
   }
 });
+
+
+test("recent tab scope defaults locally, persists through hydration, and syncs only valid choices", () => {
+  assert.equal(parseSettings({}).tabSwitcherScope, "currentProfile");
+  assert.equal(parseSettings({ tabSwitcherScope: "allProfiles" }).tabSwitcherScope, "allProfiles");
+  assert.equal(parseSettings({ tabSwitcherScope: "everyWindow" }).tabSwitcherScope, "currentProfile");
+  assert.ok(SYNCED_SETTINGS.includes("tabSwitcherScope"));
+  S().hydrate({ settings: { tabSwitcherScope: "allProfiles" } });
+  assert.equal(S().settings.tabSwitcherScope, "allProfiles");
+  settingsAdapter.apply(new Map([["set:tabSwitcherScope", { v: "currentProfile" }]]), ["set:tabSwitcherScope"]);
+  assert.equal(S().settings.tabSwitcherScope, "currentProfile");
+  settingsAdapter.apply(new Map([["set:tabSwitcherScope", { v: "allProfiles" }]]), ["set:tabSwitcherScope"]);
+  assert.equal(S().settings.tabSwitcherScope, "allProfiles");
+  settingsAdapter.apply(new Map([["set:tabSwitcherScope", { v: "everyWindow" }]]), ["set:tabSwitcherScope"]);
+  assert.equal(S().settings.tabSwitcherScope, "allProfiles");
+});

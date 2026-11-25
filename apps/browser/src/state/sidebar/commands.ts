@@ -81,7 +81,7 @@ export function runSidebarCommand(command: BrowserCommand, arg: string | null, w
       if (tabId) s.returnToPinnedUrl(tabId);
       return true;
     case "tabSwitcher":
-      switcherStep(windowId, arg === "backward");
+      switcherStep(windowId, arg === "backward", user?.consent ?? null);
       return true;
     case "togglePinnedFold": {
       const w = s.windows[windowId];

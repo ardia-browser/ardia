@@ -3,6 +3,7 @@ import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
 const organize = await import("../pins/tabCleanup.ts");
+const { recentTabIds } = await import("../pins/recentTabs.ts");
 const clearedTabs = await import("../pins/clearedTabs.ts");
 const { controllingSearchExtension, defaultSearchEngine, searchUrlPrefix } = await import("../settings/settings.ts");
 const media = await import("../media/media.ts");
@@ -962,7 +963,7 @@ test("a tab opened behind joins the ⌃Tab order only once it is shown, so ⌃Ta
   S().activate(b);
   S().activate(a);
   const link = open(w, "link", a);
-  const order = () => organize.recentTabIds(S(), w, now).map((id) => short(S().tabs[id].url));
+  const order = () => recentTabIds(S(), w, now).map((id) => short(S().tabs[id].url));
   assert.deepEqual(order(), ["a", "link", "b"]);
   S().activate(link);
   assert.deepEqual(order(), ["link", "a", "b"]);

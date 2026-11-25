@@ -75,7 +75,9 @@ export async function closeTab(tabId: string, { mayWrite, user }: CloseRequest =
     applyHeldReports();
   }
   const now = store();
-  const closesItsWindow = now.tabs[tabId]?.windowId === w.id && !isPeekTab(now, tabId) && lastTabOfWindow(now, tabId) && !leavesEmptyWindow(now, tabId);
+  const stillHere = now.tabs[tabId];
+  if (stillHere?.windowId !== w.id || stillHere.profileId !== tab.profileId) return;
+  const closesItsWindow = !isPeekTab(now, tabId) && lastTabOfWindow(now, tabId) && !leavesEmptyWindow(now, tabId);
   if (last && closesItsWindow) {
     if (closesBesideKeptTopApps(now, tabId)) noteTopAppWindowClosedFromNewTab(consent);
     noteTabClosedByUser(tabId);

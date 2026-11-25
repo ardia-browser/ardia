@@ -160,7 +160,7 @@ test("a window showing a page still gives up after half a second", async () => {
 });
 
 test("a window expects a field while it has no active tab or its active tab is a new tab", () => {
-  const state = (tabs, active) => ({ windows: { w: { id: "w", profileId: "p", activeTabIds: active ? { p: active } : {} } }, tabs });
+  const state = (tabs, active) => ({ windows: { w: { id: "w", spaceId: "p", activeTabIds: active ? { p: active } : {} } }, tabs });
   assert.equal(windowExpectsField(state({}, null), "w"), true);
   assert.equal(windowExpectsField(state({ t: { id: "t", windowId: "w", url: "" } }, "t"), "w"), true);
   assert.equal(windowExpectsField(state({ t: { id: "t", windowId: "w", url: "https://ardia.test/" } }, "t"), "w"), false);
@@ -168,7 +168,7 @@ test("a window expects a field while it has no active tab or its active tab is a
 });
 
 test("a window that onboarding owns shows no command bar, so it expects no field", () => {
-  const state = { windows: { w: { id: "w", profileId: "p", activeTabIds: { p: "t" } } }, tabs: { t: { id: "t", windowId: "w", url: "" } } };
+  const state = { windows: { w: { id: "w", spaceId: "p", activeTabIds: { p: "t" } } }, tabs: { t: { id: "t", windowId: "w", url: "" } } };
   assert.equal(windowExpectsField(state, "w", "w"), false);
   assert.equal(windowExpectsField(state, "w", "other"), true);
   assert.equal(windowExpectsField(state, "w", null), true);

@@ -1,3 +1,4 @@
+import { workspaceOf } from "./world.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -107,7 +108,7 @@ export function rowsOf(world) {
   const splitOf = (id) => Object.values(s.splits ?? {}).find((v) => JSON.stringify(v.slots ?? []).includes(id))?.id;
   return Object.values(s.tabs)
     .filter((t) => s.windows[t.windowId])
-    .map((t) => ({ tabId: t.id, windowId: t.windowId, profileId: t.profileId, groupId: groupOf(t.id), splitId: splitOf(t.id), url: t.url }));
+    .map((t) => ({ tabId: t.id, windowId: t.windowId, profileId: workspaceOf(t), groupId: groupOf(t.id), splitId: splitOf(t.id), url: t.url }));
 }
 
 export function mountRows(world, loaded, rows) {

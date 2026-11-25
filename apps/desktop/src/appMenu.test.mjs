@@ -40,18 +40,18 @@ test("items carry the menu state's checks, disabled commands and titles", () => 
   assert.equal(find(items, "forward").enabled, true);
   assert.equal(find(items, "togglePin:tile"), undefined);
   assert.equal(find(top(items, "Bookmarks").children, "bookmarkPage").title, "Edit Bookmark…");
-  assert.equal(find(top(items, "Tabs").children, "moveTabToProfile:p1").checked, true);
+  assert.equal(find(top(items, "Tabs").children, "moveTabToSpace:p1").checked, true);
   assert.equal(find(items, "openBookmark:b2").title, "https://ardia.dev");
   assert.equal(find(items, "addFolderToSidebar:f1").enabled, true);
   assert.equal(find(items, "openExtension:ext").title, "uBlock");
 });
 
-test("empty lists show a disabled placeholder and single profiles hide profile menus", () => {
+test("empty lists show a disabled placeholder and single spaces hide Space menus", () => {
   const items = appMenuItems(state({ profiles: [{ id: "p1", title: "Personal", current: true }] }));
   const history = top(items, "History").children;
   assert.deepEqual(history.at(-1), { id: "empty", title: "Empty", enabled: false });
-  assert.equal(find(items, "menu:Profiles"), undefined);
-  assert.equal(find(items, "menu:New Little Ardia Window in Profile"), undefined);
+  assert.equal(find(items, "menu:Spaces"), undefined);
+  assert.equal(find(items, "menu:New Little Ardia Window in Space"), undefined);
 });
 
 test("items show the effective Linux shortcut", () => {
@@ -173,9 +173,9 @@ test("the Ardia menu checks for updates, or restarts to finish one, only where u
   assert.deepEqual(appMenuChoice("restartToUpdate"), { kind: "updates", restart: true }, "the item picked decides whether Ardia restarts, not what finished while the menu was open");
 });
 
-test("Move to Profile lists the profiles only, and the Tabs and Extensions menus leave setup rows to Settings", () => {
+test("Move to Space lists the spaces only, and the Tabs and Extensions menus leave setup rows to Settings", () => {
   const items = appMenuItems(state());
-  assert.deepEqual(find(items, "menu:Move to Profile").children.map((item) => item.title), ["Personal", "Work"]);
+  assert.deepEqual(find(items, "menu:Move to Space").children.map((item) => item.title), ["Personal", "Work"]);
   assert.equal(find(items, "menu:Add Bookmark to Folder"), undefined);
   assert.deepEqual(rows(items, "Extensions"), ["uBlock", "-", "Manage Extensions…", "Add Extension…"]);
 });

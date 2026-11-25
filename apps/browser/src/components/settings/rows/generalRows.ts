@@ -99,7 +99,7 @@ export const generalRows = {
         sync: {
           title: "Sync",
           explained: true,
-          description: `Keep your profiles, tabs and settings the same on every ${PLATFORM_TERMS.syncedComputer}.`,
+          description: `Keep your profiles, spaces, tabs and settings the same on every ${PLATFORM_TERMS.syncedComputer}.`,
           keywords: [PLATFORM_TERMS.cloudDrive.toLowerCase(), "recovery phrase", "devices", "turn on sync", "end to end", "encrypted"],
         },
       },

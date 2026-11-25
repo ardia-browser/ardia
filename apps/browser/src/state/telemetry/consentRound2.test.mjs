@@ -79,7 +79,7 @@ test("A3/8 a window that reloads the choice and finds a new consent period, shar
 
 test("4 a profile switch made while sharing was off isn't sent once sharing is on", async () => {
   client.setSharing(false, "settings");
-  profileSwap.profileSwitched("w-swap", "same", "same", 2, {});
+  profileSwap.profileSwitched("w-swap", false, 2, {});
   client.setSharing(true, "settings");
   await turns();
   await new Promise((resolve) => setTimeout(resolve, 5));

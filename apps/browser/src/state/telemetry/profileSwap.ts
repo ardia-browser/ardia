@@ -1,6 +1,4 @@
 import type { WindowProfileSwapped } from "../../platform/profiles";
-import { useBrowser } from "../browser/store";
-import { engineProfile } from "../browser/model";
 import { capture, consentNow } from "./client";
 
 export const SWAP_WAIT_MS = 12_000;
@@ -54,11 +52,10 @@ export function noteProfileSwapped(windowId: string, report: WindowProfileSwappe
   waiting.get(windowId)?.find((waiter) => waiter.switchId === switchId)?.settle(profileSwapProperties(report));
 }
 
-export function profileSwitched(windowId: string, from: string, to: string, profiles: number, via: Record<string, unknown>) {
+export function profileSwitched(windowId: string, engineChanged: boolean, profiles: number, via: Record<string, unknown>) {
   const start = Date.now();
   const consent = consentNow();
-  const s = useBrowser.getState();
-  const swapped = engineProfile(s, from) === engineProfile(s, to) ? Promise.resolve({}) : awaitSwap(windowId);
+  const swapped = engineChanged ? awaitSwap(windowId) : Promise.resolve({});
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       const switchMs = Date.now() - start;

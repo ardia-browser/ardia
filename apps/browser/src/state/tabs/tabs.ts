@@ -340,7 +340,7 @@ export function withNewTab(s: BrowserState, windowId: string, o: NewTabOptions =
   const spaceId = w.kind === "private" ? w.spaceId : o.spaceId && s.spaces[o.spaceId] ? o.spaceId : w.spaceId;
   if (o.openerId && !o.background) s = forgetOpeners(s, windowId, spaceId);
   const url = o.url ? resolveTyped(s.settings, o.url) : "";
-  const tab = makeTab(windowId, spaceId, url, { ...o.snapshot, pin: o.pinned === false ? null : (o.snapshot?.pin ?? (o.pinned ? TILE_PIN : null)) });
+  const tab = makeTab(windowId, spaceId, url, { ...o.snapshot, spaceId, pin: o.pinned === false ? null : (o.snapshot?.pin ?? (o.pinned ? TILE_PIN : null)) });
   if (tab.page.kind === "loaded" && !o.snapshot) tab.page = loadedPage(navigationTo(url, !o.replaced));
   tab.openerId = o.openerId ?? null;
   if (o.openerId) tab.linkOpenerId = o.openerId;

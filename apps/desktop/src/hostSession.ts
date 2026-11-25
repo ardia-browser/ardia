@@ -134,6 +134,7 @@ function migratedSession(session: HydrateData, from: number): HydrateData {
 }
 
 export const linuxSessionShape = (saved: HydrateData): HydrateData => {
+  if (Object.keys(saved).every((key) => key === "settings" || key === "settingsMeta" || key === "version")) return saved;
   const stamped = linuxSessionVersion(saved);
   if (stamped !== undefined && stamped >= SESSION_VERSION) return sniffedSessionShape(saved);
   return migratedSession(sniffedSessionShape(saved), Math.max(stamped ?? SNIFFED_SESSION_VERSION, SNIFFED_SESSION_VERSION));

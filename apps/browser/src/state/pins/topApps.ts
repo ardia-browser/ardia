@@ -103,7 +103,20 @@ export function mirrorTopApps(s: BrowserState, prev: BrowserState): BrowserState
           edit(profile.id, items);
         }
       }
-      const removed = new Set(Object.values(prev.tabs).filter((tab) => tile(tab) && profileOf(prev, tab) === profile.id && sharingProfile(s, tab.spaceId) === profile.id && s.windows[tab.windowId] && (s.tabs[tab.id] ? !tile(s.tabs[tab.id]) || profileOf(s, s.tabs[tab.id]!) !== profile.id : !Object.values(s.tabs).some((other) => tile(other) && profileOf(s, other) === profile.id && pinKeyOf(other) === pinKeyOf(tab)))).map(pinKeyOf));
+      const removed = new Set(Object.values(prev.tabs).flatMap((tab) => {
+        if (!tile(tab) || profileOf(prev, tab) !== profile.id || sharingProfile(s, tab.spaceId) !== profile.id || !s.windows[tab.windowId]) return [];
+        const current = s.tabs[tab.id];
+        if (tile(current) && profileOf(s, current) === profile.id) return [];
+        const key = pinKeyOf(tab);
+        const owner = (other: Tab) => tile(other) && profileOf(s, other) === profile.id && pinKeyOf(other) === key;
+        if (!current && Object.values(s.tabs).some(owner)) return [];
+        const wasDuplicate = prev.windows[tab.windowId]?.tabIds.some((id) => {
+          const other = prev.tabs[id];
+          return id !== tab.id && tile(other) && other.spaceId === tab.spaceId && pinKeyOf(other) === key;
+        });
+        if (wasDuplicate && Object.values(s.tabs).some(owner)) return [];
+        return [key];
+      }));
       if (removed.size) { items = items.filter((item) => !removed.has(item.key)); edit(profile.id, items); }
       for (const tab of Object.values(s.tabs)) {
         if (!tile(tab) || profileOf(s, tab) !== profile.id || sourceWindow && tab.windowId !== sourceWindow || !mirrored(s.windows[tab.windowId])) continue;

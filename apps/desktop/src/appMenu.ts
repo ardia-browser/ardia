@@ -100,7 +100,7 @@ export function appMenuItems(state: MenuState, shortcuts: AppMenuShortcuts = new
       cmd("newWindow"),
       cmd("newIncognitoWindow"),
       cmd("newLittleArdia"),
-      ...(multipleProfiles ? [sub("New Little Ardia Window in Profile", state.profiles.map(entry("newLittleArdia")))] : []),
+      ...(multipleProfiles ? [sub("New Little Ardia Window in Space", state.profiles.map(entry("newLittleArdia")))] : []),
       cmd("reopenClosedTab"),
       cmd("reopenClosedWindow"),
       cmd("openFile"),
@@ -198,7 +198,7 @@ export function appMenuItems(state: MenuState, shortcuts: AppMenuShortcuts = new
       cmd("duplicateTab"),
       cmd("newGroupWithTabs"),
       separator,
-      sub("Move to Profile", state.profiles.map(entry("moveTabToSpace", true))),
+      sub("Move to Space", state.profiles.map(entry("moveTabToSpace", true))),
       sub("Move to Window", [...state.windows.map(entry("moveTabToWindow")), ...(state.windows.length ? [separator] : []), cmd("moveTabToWindow", "new", "New Window")]),
       separator,
       cmd("bookmarkPage"),
@@ -239,7 +239,7 @@ export function appMenuItems(state: MenuState, shortcuts: AppMenuShortcuts = new
       cmd("downloads"),
       cmd("taskManager"),
       cmd("mergeAllWindows"),
-      ...(multipleProfiles ? [separator, sub("Profiles", [
+      ...(multipleProfiles ? [separator, sub("Spaces", [
         ...state.profiles.map(entry("switchSpace", true)),
         separator,
         cmd("nextSpace"),

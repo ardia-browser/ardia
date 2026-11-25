@@ -52,7 +52,13 @@ export const SYNC_WORDING: readonly Wording[] = [
       ["return `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.`;", `return "Couldn’t save the sync key in your system keyring.";`],
       [
         "On your other ${PLATFORM_TERMS.syncedComputer}, open Ardia › Settings › General › Sync and choose the same sync folder.",
-        `On your other device, open Ardia › Settings › Sync and choose the same sync folder.`,
+        `On your other device, open Ardia › Settings › General › Sync and choose the same sync folder.`,
+      ],
+      [
+        `          {PLATFORM_FEATURES.syncsWithPhone
+            ? "On your iPhone, open Ardia, tap Sync With Mac, and scan the code. You can also use your camera to copy the words for another computer."
+            : "Scan the code with your phone’s camera to copy the words and enter them on your other computer."}`,
+        `          Scan the code with your phone’s camera to copy the words and enter them on your other computer.`,
       ],
       ["Your data on each ${PLATFORM_TERMS.syncedComputer} stays.", "Your data on each device stays."],
       [

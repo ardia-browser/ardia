@@ -16,8 +16,9 @@ const quiet = (run) => async (...args) => {
 function regularSession() {
   const initial = initialHostSession({ bootstrap: { windowId: "main", profileId: "default", startup: false } }, null);
   S().hydrate(initial);
-  const work = S().createProfile({ name: "Work" });
-  const shared = S().createProfile({ name: "Side", shareWith: "default" });
+  const owner = S().createProfile({ name: "Work" });
+  const work = S().createSpace({ name: "Work", profileId: owner });
+  const shared = S().createSpace({ name: "Side", profileId: "default" });
   S().setFocusedWindow("main");
   return { work, shared };
 }
@@ -41,17 +42,17 @@ function fakeHost({ reject, pending = false, bootstrap = { windowId: "main", pro
 
 test("a window whose native creation fails is closed in shell state so no phantom window remains", quiet(async () => {
   const { work } = regularSession();
-  const id = S().createWindow({ profileId: work, background: true });
+  const id = S().createWindow({ spaceId: work, background: true });
   const host = fakeHost({ reject: "Chrome could not open this profile" });
   const events = [];
   const open = createHostWindowOpener(host, () => S(), (event) => events.push(event));
-  await open(id, { profile: engineProfile(S(), S().windows[id].profileId) });
-  assert.deepEqual(host.calls, [["ArdiaShell.openWindow", { args: [id, { profile: work }] }]]);
+  await open(id, { profile: engineProfile(S(), S().windows[id].spaceId) });
+  assert.deepEqual(host.calls, [["ArdiaShell.openWindow", { args: [id, { profile: engineProfile(S(), work) }] }]]);
   assert.deepEqual(events, [{ type: "close", id }]);
 
   const opened = fakeHost();
   const none = [];
-  await createHostWindowOpener(opened, () => S(), (event) => none.push(event))(id, { profile: work });
+  await createHostWindowOpener(opened, () => S(), (event) => none.push(event))(id, { profile: engineProfile(S(), work) });
   assert.deepEqual(none, [], "a created window is left alone");
 
   const gone = [];
@@ -62,11 +63,11 @@ test("a window whose native creation fails is closed in shell state so no phanto
 test("private windows open with their own seed and never fall back to a regular window", quiet(async () => {
   const { work } = regularSession();
   S().setFocusedWindow("main");
-  const id = S().createWindow({ kind: "private", profileId: work, url: "https://private.test/" });
+  const id = S().createWindow({ kind: "private", spaceId: work, url: "https://private.test/" });
   const w = S().windows[id];
-  assert.equal(engineProfile(S(), w.profileId), `incognito:${id}@${work}`);
+  assert.equal(engineProfile(S(), w.spaceId), `incognito:${id}@${engineProfile(S(), work)}`);
   const host = fakeHost();
-  await createHostWindowOpener(host, () => S(), () => {})(id, { incognito: true, profile: engineProfile(S(), w.profileId) });
+  await createHostWindowOpener(host, () => S(), () => {})(id, { incognito: true, profile: engineProfile(S(), w.spaceId) });
   const [, { args: [sentId, options] }] = host.calls[0];
   assert.equal(sentId, id);
   assert.equal(options.privateWindow.window.id, id);
@@ -77,7 +78,7 @@ test("private windows open with their own seed and never fall back to a regular 
 
   const events = [];
   const noSeed = fakeHost();
-  await createHostWindowOpener(noSeed, () => ({ windows: { [id]: { ...w, kind: "main" } }, tabs: S().tabs }), (event) => events.push(event))(id, { incognito: true, profile: engineProfile(S(), w.profileId) });
+  await createHostWindowOpener(noSeed, () => ({ windows: { [id]: { ...w, kind: "main" } }, tabs: S().tabs }), (event) => events.push(event))(id, { incognito: true, profile: engineProfile(S(), w.spaceId) });
   assert.deepEqual(noSeed.calls, [], "no regular-window state is sent as a private window");
   assert.deepEqual(events, [{ type: "close", id }]);
 
@@ -87,13 +88,13 @@ test("private windows open with their own seed and never fall back to a regular 
 test("a private window renderer starts from its seed, and a missing seed fails instead of opening a regular window", () => {
   const { work } = regularSession();
   const saved = snapshotHostSession(S());
-  const id = S().createWindow({ kind: "private", profileId: work, url: "https://private.test/" });
+  const id = S().createWindow({ kind: "private", spaceId: work, url: "https://private.test/" });
   const seed = privateWindowSeed(S(), id);
-  const pageProfile = engineProfile(S(), S().windows[id].profileId);
+  const pageProfile = engineProfile(S(), S().windows[id].spaceId);
   const bootstrap = { windowId: id, profileId: "default", startup: false, pageProfile, privateWindow: seed };
   const session = initialHostSession({ bootstrap }, saved);
   assert.equal(session.windows[id].kind, "private");
-  assert.equal(session.windows[id].profileId, S().windows[id].profileId);
+  assert.equal(session.windows[id].spaceId, S().windows[id].spaceId);
   assert.equal(session.focusedWindowId, id);
   assert.deepEqual(session.windows[id].tabIds, seed.window.tabIds);
   assert.equal(session.windows.main.kind, "main", "public windows stay as they were");
@@ -101,7 +102,7 @@ test("a private window renderer starts from its seed, and a missing seed fails i
 
   assert.throws(() => initialHostSession({ bootstrap: { ...bootstrap, privateWindow: undefined } }, saved), /private window state/);
   assert.throws(() => initialHostSession({ bootstrap: { ...bootstrap, pageProfile: `incognito:${id}@` } }, saved), /private window state/);
-  const foreign = { ...seed, tabs: { ...seed.tabs, intruder: { ...Object.values(seed.tabs)[0], id: "intruder", profileId: work } } };
+  const foreign = { ...seed, tabs: { ...seed.tabs, intruder: { ...Object.values(seed.tabs)[0], id: "intruder", spaceId: work } } };
   const filtered = withPrivateWindow({ bootstrap: { ...bootstrap, privateWindow: foreign } }, saved);
   assert.equal(filtered.tabs.intruder, undefined, "only the private window's own tabs are adopted");
   assert.equal(withPrivateWindow({ bootstrap: { windowId: "main", profileId: "default", pageProfile: "" } }, saved), undefined);
@@ -109,14 +110,14 @@ test("a private window renderer starts from its seed, and a missing seed fails i
 
 test("private windows, their tabs and their closed entries never reach session persistence", async () => {
   const { work } = regularSession();
-  const id = S().createWindow({ kind: "private", profileId: work, url: "https://private.test/" });
+  const id = S().createWindow({ kind: "private", spaceId: work, url: "https://private.test/" });
   const seed = privateWindowSeed(S(), id);
   const saved = snapshotHostSession(S());
-  const bootstrap = { windowId: id, profileId: "default", startup: false, pageProfile: engineProfile(S(), S().windows[id].profileId), privateWindow: seed };
+  const bootstrap = { windowId: id, profileId: "default", startup: false, pageProfile: engineProfile(S(), S().windows[id].spaceId), privateWindow: seed };
   S().hydrate(initialHostSession({ bootstrap }, saved));
   const privateTab = S().windows[id].tabIds[0];
   S().closeTabs([privateTab]);
-  S().createWindow({ kind: "private", profileId: "default", url: "https://second-private.test/" });
+  S().createWindow({ kind: "private", spaceId: "default", url: "https://second-private.test/" });
   const writes = [];
   const host = {
     bootstrap,
@@ -150,19 +151,19 @@ test("private windows, their tabs and their closed entries never reach session p
 
 test("every regular profile switches and moves in place, isolated or sharing data", () => {
   const { work, shared } = regularSession();
-  assert.equal(S().profiles[shared].dataId, "default", "the side profile shares the default profile's data");
+  assert.equal(S().spaces[shared].profileId, "default", "the side profile shares the default profile's data");
   const before = S().windowOrder.length;
-  S().switchProfile("main", shared);
-  assert.equal(S().windows.main.profileId, shared);
-  S().switchProfile("main", work);
-  assert.equal(S().windows.main.profileId, work, "an isolated profile pages in place");
+  S().switchSpace("main", shared);
+  assert.equal(S().windows.main.spaceId, shared);
+  S().switchSpace("main", work);
+  assert.equal(S().windows.main.spaceId, work, "an isolated profile pages in place");
   assert.equal(S().windowOrder.length, before, "no window opens for the isolated profile");
-  S().switchProfile("main", "default");
+  S().switchSpace("main", "default");
   const tab = S().windows.main.tabIds[0];
   useBrowser.setState((s) => ({ tabs: { ...s.tabs, [tab]: { ...s.tabs[tab], url: "https://move.test/" } } }));
-  S().moveTabToProfile(tab, work);
+  S().moveTabToSpace(tab, work);
   assert.equal(S().tabs[tab].windowId, "main", "the moved tab stays in its window");
-  assert.equal(S().tabs[tab].profileId, work);
+  assert.equal(S().tabs[tab].spaceId, work);
   assert.equal(S().windowOrder.length, before);
 });
 
@@ -171,13 +172,13 @@ test("the native host follows the window's engine profile, once per engine chang
   const { watchActiveProfile } = await import("./hostWindowProfiles.ts");
   const host = fakeHost();
   const stop = watchActiveProfile(host, useBrowser);
-  S().switchProfile("main", shared);
-  S().switchProfile("main", work);
-  S().switchProfile("main", "default");
+  S().switchSpace("main", shared);
+  S().switchSpace("main", work);
+  S().switchSpace("main", "default");
   await tick();
   stop();
   assert.deepEqual(host.calls.filter(([method]) => method === "ArdiaShell.setActiveProfile").map(([, { args }]) => args),
-    [["", 1], [work, 2], ["", 3]], "sharing profiles keep the engine profile, so only engine changes reach the host");
+    [["", 1], [engineProfile(S(), work), 2], ["", 3]], "sharing profiles keep the engine profile, so only engine changes reach the host");
 });
 
 test("a private window never reports an active engine profile", async () => {
@@ -201,14 +202,16 @@ test("an isolated-profile window lists its own profile's downloads", async () =>
     running.stop();
     return state.downloads;
   };
-  const isolated = await run("p-work");
+  const { work } = regularSession();
+  const engine = engineProfile(S(), work);
+  const isolated = await run(engine);
   assert.equal(isolated.length, 1);
-  assert.equal(isolated[0].profile, "p-work");
-  assert.ok(downloadVisibleIn({ profiles: {} }, isolated[0], { kind: "main", profileId: "p-work" }));
-  assert.ok(!downloadVisibleIn({ profiles: {} }, isolated[0], { kind: "main", profileId: "default" }));
+  assert.equal(isolated[0].profile, engine);
+  assert.ok(downloadVisibleIn(S(), isolated[0], { kind: "main", spaceId: work }));
+  assert.ok(!downloadVisibleIn(S(), isolated[0], { kind: "main", spaceId: "default" }));
   const regular = await run("");
   assert.equal(regular[0].profile, "");
-  assert.ok(downloadVisibleIn({ profiles: {} }, regular[0], { kind: "main", profileId: "default" }));
+  assert.ok(downloadVisibleIn(S(), regular[0], { kind: "main", spaceId: "default" }));
 });
 
 test("a refused window leaves the store without closed-window history", quiet(async () => {
@@ -217,8 +220,8 @@ test("a refused window leaves the store without closed-window history", quiet(as
   const open = createHostWindowOpener(host, () => S(), () => {}, (id) => dropRefusedWindow(useBrowser, id));
   const closedWindows = S().closedWindows;
   const closedTabs = S().closedTabs;
-  const created = S().createWindow({ profileId: work, background: true });
-  await open(created, { profile: work });
+  const created = S().createWindow({ spaceId: work, background: true });
+  await open(created, { profile: engineProfile(S(), work) });
   await tick();
   assert.ok(S().windows[created]);
   host.native({ type: "refused", id: created });
@@ -233,9 +236,9 @@ test("an opening settles only once its own window attaches", quiet(async () => {
   const { work } = regularSession();
   const host = fakeHost({ pending: true });
   const open = createHostWindowOpener(host, () => S(), () => {}, (id) => dropRefusedWindow(useBrowser, id));
-  const created = S().createWindow({ profileId: work, background: true });
+  const created = S().createWindow({ spaceId: work, background: true });
   const opened = windowOpened(created);
-  await open(created, { profile: work });
+  await open(created, { profile: engineProfile(S(), work) });
   host.native({ type: "attached", id: "someone-else" });
   await tick();
   assert.equal(pendingOpenings(), 1);

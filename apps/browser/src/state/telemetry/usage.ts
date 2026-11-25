@@ -3,6 +3,7 @@ import { currentAppIcon, listComponents, onAppEvent } from "../../platform/app";
 import { useTranslate } from "../site/translate";
 import { useBrowser } from "../browser/store";
 import { keysOf } from "../browser/changes";
+import { engineProfileIn } from "../browser/model";
 import { takeOpenTabSyncCounts, takeSnapshotWrites, useSync, whenSyncCore } from "../sync/engine";
 import { takeSyncCodeCounts } from "../sync/recoveryKit";
 import { capture, consentNow, consentToken, counted, consentOrNow, countFor, endSession, flush, isSharing, markSettingsSnapshot, settingsSnapshotDay, startClient, stillValid, watchConsentBoundary, withHourlyExtras, type ConsentToken } from "./usageClient";
@@ -260,7 +261,10 @@ function watchStore() {
         const w = s.windows[id]!;
         const before = prev.windows[id];
         if (before && !before.fullScreen && w.fullScreen) counts.fullScreens++;
-        if (before && before.spaceId !== w.spaceId && w.kind !== "private") profileSwitched(id, before.spaceId, w.spaceId, size(s.spaces), switcherSwitchProperties(id, w.spaceId));
+        if (before && before.spaceId !== w.spaceId && w.kind !== "private") {
+          const engineChanged = engineProfileIn(prev, before.spaceId) !== engineProfileIn(s, w.spaceId);
+          profileSwitched(id, engineChanged, size(s.spaces), switcherSwitchProperties(id, w.spaceId));
+        }
       }
     }
     if (s.groups !== prev.groups) counts.groupTabsKept += keptTabsAdded(s.groups, prev.groups);

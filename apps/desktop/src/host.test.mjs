@@ -239,8 +239,8 @@ test("an isolated profile's new window seeds itself in that profile before the s
   };
   const session = initialHostSession(host, saved, 100);
   const w = session.windows["w-isolated"];
-  assert.equal(w.profileId, "p-isolated");
-  assert.deepEqual(w.tabIds.map((id) => session.tabs[id].profileId), ["p-isolated"]);
+  assert.equal(w.spaceId, "p-isolated");
+  assert.deepEqual(w.tabIds.map((id) => session.tabs[id].spaceId), ["p-isolated"]);
   assert.deepEqual(Object.keys(w.activeTabIds), ["p-isolated"]);
 });
 
@@ -248,10 +248,10 @@ test("new host sessions use native IDs and contain no demo URLs", () => {
   const { host } = fixture();
   const session = initialHostSession(host, null, 100);
   assert.deepEqual(session.windowOrder, ["w_linux"]);
-  assert.deepEqual(session.profileOrder, ["default"]);
+  assert.deepEqual(session.spaceOrder, ["default"]);
   const tab = Object.values(session.tabs)[0];
   assert.equal(tab.url, "");
-  assert.equal(tab.profileId, "default");
+  assert.equal(tab.spaceId, "default");
   assert.equal(session.focusedWindowId, "w_linux");
   assert.equal(initialHostSession(host, session).tabs[tab.id].id, tab.id);
   assert.throws(() => initialHostSession({ bootstrap: { windowId: "w", profileId: "/tmp/profile" } }, null), /Invalid/);
@@ -275,7 +275,7 @@ test("a window Chrome made seeds its tabs from the native adoption offers and ke
     ["https://second.example/", { kind: "adopted", adopt: "tab:42", nav: null }],
   ]);
   assert.deepEqual(w.activeTabIds, { default: tabs[1].id });
-  assert.ok(tabs.every((t) => t.windowId === "w_linux" && t.profileId === "default"));
+  assert.ok(tabs.every((t) => t.windowId === "w_linux" && t.spaceId === "default"));
   useBrowser.getState().hydrate(session);
   assert.deepEqual(w.tabIds.map((id) => useBrowser.getState().tabs[id]?.page.kind), ["adopted", "adopted"]);
   const lone = initialHostSession({ ...host, bootstrap: { ...host.bootstrap, adoptTabs: [{ adoptId: "tab:44", url: "https://lone.example/", active: false }] } }, null, 100);
@@ -297,7 +297,7 @@ test("restore-disabled sessions park pinned tabs and groups and retain ordinary 
     regular: make("regular", "https://ordinary.example"),
   };
   saved.windows.w_linux = { ...saved.windows.w_linux, tabIds: ["tile", "grouped", "regular"], activeTabIds: { default: "regular" } };
-  saved.groups = { pinnedGroup: { id: "pinnedGroup", windowId: "w_linux", profileId: "default", name: "Saved", pinned: true, tabIds: ["grouped"], createdAt: 100, collapsed: false, color: null, icon: null } };
+  saved.groups = { pinnedGroup: { id: "pinnedGroup", windowId: "w_linux", spaceId: "default", name: "Saved", pinned: true, tabIds: ["grouped"], createdAt: 100, collapsed: false, color: null, icon: null } };
   saved.settings = { restoreSession: false };
   const before = JSON.stringify(saved);
   const session = initialHostSession(host, saved, 200);
@@ -321,13 +321,14 @@ function browserState() {
   const publicTab = Object.values(session.tabs)[0];
   return {
     ...session,
-    profiles: { ...session.profiles, "incognito:private": { id: "incognito:private" } },
-    profileOrder: [...session.profileOrder, "incognito:private"],
-    windows: { ...session.windows, private: { id: "private", kind: "private", profileId: "incognito:private", tabIds: ["secret"] } },
+    spaces: { ...session.spaces, "incognito:private": { id: "incognito:private", profileId: "default" } },
+    topApps: {}, parkedTopApps: {},
+    spaceOrder: [...session.spaceOrder, "incognito:private"],
+    windows: { ...session.windows, private: { id: "private", kind: "private", spaceId: "incognito:private", tabIds: ["secret"] } },
     windowOrder: [...session.windowOrder, "private"],
-    tabs: { ...session.tabs, [publicTab.id]: { ...publicTab, page: { kind: "frozen", holderId: "other", wake: "restore:old" } }, secret: { id: "secret", windowId: "private", profileId: "incognito:private", url: "https://private.example", page: { kind: "idle" } } },
-    ui: { focusOrder: ["private", "w_linux"], lastProfileId: "default" },
-    peeks: {}, groups: {}, splits: {}, closedTabs: [{ tab: { profileId: "incognito:private" } }],
+    tabs: { ...session.tabs, [publicTab.id]: { ...publicTab, page: { kind: "frozen", holderId: "other", wake: "restore:old" } }, secret: { id: "secret", windowId: "private", spaceId: "incognito:private", url: "https://private.example", page: { kind: "idle" } } },
+    ui: { focusOrder: ["private", "w_linux"], lastSpaceId: "default" },
+    peeks: {}, groups: {}, splits: {}, closedTabs: [{ tab: { spaceId: "incognito:private" } }],
     closedWindows: [], closedGroups: [], deletedGroups: [], cleanedTabs: [],
     parkedPins: { "incognito:private": ["secret"] }, pinChoices: {}, pinSync: {}, settings: {}, orphanedProfileData: [],
   };
@@ -340,7 +341,7 @@ test("session snapshots omit private and transient state without mutating the st
   assert.equal(JSON.stringify(state), before);
   assert.equal(saved.windows.private, undefined);
   assert.equal(saved.tabs.secret, undefined);
-  assert.equal(saved.profiles["incognito:private"], undefined);
+  assert.equal(saved.spaces["incognito:private"], undefined);
   assert.equal(saved.parkedPins["incognito:private"], undefined);
   assert.equal(saved.closedTabs.length, 0);
   assert.equal(saved.focusedWindowId, "w_linux");
@@ -510,7 +511,7 @@ test("window, profile, split and page-alias transfers preserve retained holder k
   const alias = { ...holder, id: "alias", page: { kind: "frozen", holderId: key } };
   const store = mutableStore({ tabs: { [key]: holder, alias } });
   const stop = startHostTabLifecycle(host, store);
-  store.set({ tabs: { [key]: { ...holder, windowId: "other", profileId: "work" }, alias } });
+  store.set({ tabs: { [key]: { ...holder, windowId: "other", spaceId: "work" }, alias } });
   store.set({ tabs: { [key]: { ...holder, windowId: "other" } } });
   const moved = store.getState();
   store.set({ tabs: {} });
@@ -559,7 +560,7 @@ test("production data bridges persist bookmark edits in Chrome and load history 
   try {
     await Promise.all([reloadBookmarks(), reloadHistory()]);
     assert.equal(useBrowser.getState().history[""].list[0].url, "https://history.example");
-    const bookmark = useBrowser.getState().addBookmark({ profileId: "default", url: "https://bookmark.example", title: "Persist me" });
+    const bookmark = useBrowser.getState().addBookmark({ spaceId: "default", url: "https://bookmark.example", title: "Persist me" });
     await reloadBookmarks();
     assert.equal(native.chromeBookmarks("").get(bookmark).u, "https://bookmark.example");
     useBrowser.setState({ orphanedProfileData: ["unused-profile"] });
@@ -584,7 +585,8 @@ test("a launch reads only the profiles its windows show, and another once a wind
   native.loadedEngineProfiles.add("");
   const { host } = fixture();
   useBrowser.getState().hydrate(initialHostSession(host, null));
-  const work = useBrowser.getState().createProfile({ name: "Work" });
+  const owner = useBrowser.getState().createProfile({ name: "Work" });
+  const work = useBrowser.getState().createSpace({ name: "Work", profileId: owner });
   const engine = engineProfile(useBrowser.getState(), work);
   const since = native.engineCalls.length;
   const stop = startHostData();
@@ -592,7 +594,7 @@ test("a launch reads only the profiles its windows show, and another once a wind
   try {
     await Promise.all([reloadBookmarks(), reloadHistory()]);
     assert.deepEqual(callsToWork(), []);
-    useBrowser.getState().switchProfile("w_linux", work);
+    useBrowser.getState().switchSpace("w_linux", work);
     await Promise.all([reloadBookmarks(), reloadHistory()]);
     assert.ok(callsToWork().some((call) => call.domain === "history"));
     assert.ok(callsToWork().some((call) => call.domain === "bookmarks"));

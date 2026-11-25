@@ -174,8 +174,9 @@ test("a launch reports the Top Apps merge marker the saved session had, before h
   const { topAppsSharingAtLaunch } = await import("../../browser/src/state/telemetry/topAppsSharing.ts");
   const S = () => useBrowser.getState();
   S().hydrate(initialHostSession(hostFor("a"), null));
-  S().updateProfile("default", { shareTopApps: true });
-  S().createProfile({ name: "Work", shareWith: "default", shareTopApps: true });
+  S().updateSpace("default", { shareTopApps: true, legacyTopApps: true });
+  const work = S().createSpace({ name: "Work", profileId: "default", shareTopApps: true });
+  S().updateSpace(work, { legacyTopApps: true });
   assert.notEqual(S().topAppsMerged, "", "two sharing profiles record a merge marker");
   const saved = { ...cloneSessionValue(snapshotHostSession(S())), topAppsMerged: "" };
   S().hydrate({});
@@ -189,8 +190,10 @@ test("a launch that clears a saved Top Apps merge marker reports it cleared, not
   const { topAppsSharingAtLaunch } = await import("../../browser/src/state/telemetry/topAppsSharing.ts");
   const S = () => useBrowser.getState();
   S().hydrate(initialHostSession(hostFor("a"), null));
-  S().createProfile({ name: "Work", shareWith: "default" });
-  const saved = { ...cloneSessionValue(snapshotHostSession(S())), topAppsMerged: "default,work" };
+  S().updateSpace("default", { shareTopApps: undefined, legacyTopApps: true });
+  const work = S().createSpace({ name: "Work", profileId: "default", shareTopApps: false });
+  S().updateSpace(work, { legacyTopApps: true });
+  const saved = { ...cloneSessionValue(snapshotHostSession(S())), topAppsMerged: `default,${work}` };
   S().hydrate({});
   hydrateLaunchSession(saved, initialHostSession(hostFor("a", true), saved));
   assert.equal(S().topAppsMerged, "", "no profile opted in, so hydration cleared the marker");

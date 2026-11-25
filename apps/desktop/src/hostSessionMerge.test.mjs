@@ -54,8 +54,8 @@ test("structural sharing preserves unchanged table entries and transient object 
 
 test("a tab another window saved asleep arrives asleep, and one it saved loaded arrives idle", () => {
   const empty = Object.fromEntries([
-    ...["profiles", "windows", "tabs", "groups", "splits", "parkedPins", "pinChoices", "pinSync"].map((field) => [field, {}]),
-    ...["profileOrder", "windowOrder", "orphanedProfileData", "closedTabs", "closedWindows", "closedGroups", "deletedGroups", "cleanedTabs"].map((field) => [field, []]),
+    ...["profiles", "spaces", "topApps", "parkedTopApps", "windows", "tabs", "groups", "splits", "parkedPins", "pinChoices", "pinSync"].map((field) => [field, {}]),
+    ...["spaceOrder", "windowOrder", "orphanedProfileData", "closedTabs", "closedWindows", "closedGroups", "deletedGroups", "cleanedTabs"].map((field) => [field, []]),
     ["settings", {}],
   ]);
   const merged = { tabs: {

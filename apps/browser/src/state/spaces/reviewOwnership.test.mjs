@@ -33,6 +33,24 @@ test("shared Top Apps remain visible when switching Spaces while saved rows stay
   assert.ok(!sidebarEntries(S(), w).pinned.includes(`t:${row}`));
 });
 
+test("moving a Top App into a window that already shows it keeps the pin", () => {
+  const first = reset();
+  const tab = S().windows[first].tabIds[0];
+  S().pinTabs([tab], true);
+  const key = pinKeyOf(S().tabs[tab]);
+  const second = S().createWindow({ url: "https://second.test/" });
+  const copy = sidebarEntries(S(), second).tiles.find((id) => pinKeyOf(S().tabs[id]) === key);
+  assert.ok(copy);
+  S().moveTabsToWindow([copy], first);
+  for (const windowId of [first, second]) {
+    assert.equal(sidebarEntries(S(), windowId).tiles.filter((id) => pinKeyOf(S().tabs[id]) === key).length, 1);
+  }
+  const remaining = sidebarEntries(S(), first).tiles.find((id) => pinKeyOf(S().tabs[id]) === key);
+  S().pinTabs([remaining], false);
+  assert.equal(sidebarEntries(S(), first).tiles.length, 0);
+  assert.equal(sidebarEntries(S(), second).tiles.length, 0);
+});
+
 test("bookmarking an inactive Space's group keeps its browsing Profile", () => {
   const w = reset();
   const profileId = S().createProfile({ name: "Work" });

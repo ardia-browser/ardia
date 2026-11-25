@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { seededRandom } from "./rng.mjs";
-import { generateSteps, turn } from "./world.mjs";
+import { createWorkspace, generateSteps, turn, workspaceOption, workspaceOrderOf } from "./world.mjs";
 import { instrumentStore, startServices } from "./probe.mjs";
 import { loadRowHooks, mountRows, rowsOf } from "./rowHooks.mjs";
 import { leakCheck } from "./leak.mjs";
@@ -23,8 +23,8 @@ async function buildScene(world) {
   S().pinTabs([ids[0]], true);
   S().groupTabs([ids[1], ids[2]], { pinned: false, name: "Loose" });
   S().groupTabs([ids[3]], { pinned: true, name: "Folder" });
-  const work = S().createProfile({ name: "Work" });
-  const other = S().createWindow({ url: url(7), profileId: work });
+  const work = createWorkspace(S(), "Work");
+  const other = S().createWindow({ url: url(7), ...workspaceOption(S(), work) });
   for (const n of [8, 9, 10]) S().newTab(other, { url: url(n), background: true });
   await turn();
 }
@@ -129,7 +129,7 @@ async function actionCosts(world, probe, { seeds, steps }) {
         entry.byVia[e.via] = (entry.byVia[e.via] ?? 0) + n;
       }
       const { before, after } = outcome;
-      const global = before.settings !== after.settings || before.profiles !== after.profiles || before.profileOrder !== after.profileOrder || !!outcome.roundTrip || !!outcome.relaunch || !!outcome.syncPair;
+      const global = before.settings !== after.settings || before.profiles !== after.profiles || before.spaces !== after.spaces || workspaceOrderOf(before) !== workspaceOrderOf(after) || !!outcome.roundTrip || !!outcome.relaunch || !!outcome.syncPair;
       const touched = new Set(changedIds(after.tabs, before.tabs));
       for (const wid of changedIds(after.windows, before.windows)) for (const id of [...(after.windows[wid]?.tabIds ?? []), ...(before.windows[wid]?.tabIds ?? [])]) touched.add(id);
       for (const gid of changedIds(after.groups, before.groups)) for (const id of [...(after.groups[gid]?.tabIds ?? []), ...(before.groups[gid]?.tabIds ?? [])]) touched.add(id);

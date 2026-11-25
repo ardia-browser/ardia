@@ -43,9 +43,13 @@ extension WebKitTab: PageTab {
   }
 
   func fillWithPage() {
-    guard let webView, webView.frame != bounds else { return }
-    guard webView.superview === self else { return noteFullScreenFrameKept() }
-    webView.frame = bounds
+    guard let webView else { return }
+    guard webView.superview !== self else {
+      if webView.frame != bounds { webView.frame = bounds }
+      return
+    }
+    for view in subviews where !(view is WKWebView) && view.frame != bounds { view.frame = bounds }
+    noteFullScreenFrameKept()
   }
 
   private func noteFullScreenFrameKept() {

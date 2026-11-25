@@ -12,7 +12,7 @@
  
 --- a/chrome/browser/ui/views/overlay/video_overlay_window_views.cc
 +++ b/chrome/browser/ui/views/overlay/video_overlay_window_views.cc
-@@ -316,6 +316,12 @@
+@@ -317,6 +317,12 @@
      return std::make_unique<OverlayWindowFrameView>(widget);
    }
  };
@@ -25,7 +25,7 @@
  
  // static
  std::unique_ptr<VideoOverlayWindowViews> VideoOverlayWindowViews::Create(
-@@ -323,8 +329,8 @@
+@@ -324,8 +330,8 @@
    // Can't use make_unique(), which doesn't have access to the private
    // constructor. It's important that the constructor be private, because it
    // doesn't initialize the object fully.

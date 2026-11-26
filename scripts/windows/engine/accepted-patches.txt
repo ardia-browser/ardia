@@ -53,7 +53,6 @@ chromium-helium-devtools-inspect-shortcut.patch
 chromium-neterror-game.patch
 chromium-branding.patch
 chromium-safe-storage-name.patch
-chromium-safe-storage-one-key-for-every-data-dir.patch
 chromium-pref-hash-safe-storage-key-change.patch
 chromium-password-bubble-hook.patch
 chromium-password-generation-local.patch

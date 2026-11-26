@@ -544,10 +544,12 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
           items={tabsMenuItems(barOrder)}
           place={duoStrip ? { bottom: barCenterFromBottom(insets.bottom, design) - DUO_BAR.button / 2, ...besideStrip(duoStrip, width, tabsLayout.menuWidth, space.l) } : { bottom: barHeight(insets.bottom, design) + space.xs, left: space.l, width: Math.min(tabsLayout.menuWidth, width - space.l * 2) }}
           frost={null}
+          glassSource={PAGE_FROST}
+          privately={tab.isPrivate}
           onDismiss={() => setTabsMenu(false)}
         />
       ) : null}
-      <PressMenu width={width} height={height} />
+      <PressMenu width={width} height={height} glassSource={PAGE_FROST} />
       {materialBarHosted && siteSettingsSheet ? null : pageMenu}
       {reader.shown ? <ReaderView tabId={reader.shown} closing={reader.closing} /> : null}
       <PageRequestHost tabId={tab.id} />

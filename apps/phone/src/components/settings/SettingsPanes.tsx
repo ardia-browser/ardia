@@ -21,6 +21,7 @@ import { refreshPageSummariesEnabled, usePageSummariesEnabled } from "../../stat
 import { settingsTint, type SymbolName } from "../ui";
 import { CheckRow } from "./AppearancePage";
 import { Group, NavRow, PickerRow, SettingsPage, ToggleRow } from "./SettingsKit";
+import { useUpdateDot } from "../../state/appUpdate/store";
 
 type PanePage = Extract<SettingsRoute["page"], "general" | "tabs" | "appearance" | "search" | "siteSettings" | "experimental">;
 
@@ -48,10 +49,11 @@ const INTERVALS = (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[])
 
 export function SettingsPaneList() {
   const panes = SETTINGS_PANES.filter(paneShown);
+  const updateDot = useUpdateDot();
   return (
     <Group>
       {panes.map((pane, index) => (
-        <NavRow key={pane.page} title={pane.title} icon={pane.icon} tint={pane.tint} divider={index < panes.length - 1} onPress={() => pushSettings({ page: pane.page })} />
+        <NavRow key={pane.page} title={pane.title} icon={pane.icon} tint={pane.tint} dot={pane.page === "general" && updateDot} divider={index < panes.length - 1} onPress={() => pushSettings({ page: pane.page })} />
       ))}
     </Group>
   );
@@ -67,6 +69,7 @@ function Pane({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function GeneralPane() {
+  const updateDot = useUpdateDot();
   const appLinks = useEngines((s) => s.appLinks);
   const sharing = useUsageSharing((s) => s.sharing);
   const offersDefault = offersDefaultBrowser(useDefaultBrowser((s) => s.status));
@@ -90,7 +93,7 @@ export function GeneralPane() {
       </Group>
       <Group header="About">
         <NavRow title="Set up Ardia again" detail="Shows the welcome screens again." chevron={false} divider onPress={showOnboardingFromSettings} />
-        <NavRow title="About Ardia" onPress={() => pushSettings({ page: "about" })} />
+        <NavRow title="About Ardia" dot={updateDot} onPress={() => pushSettings({ page: "about" })} />
       </Group>
     </Pane>
   );

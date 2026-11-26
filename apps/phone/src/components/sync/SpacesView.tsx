@@ -4,22 +4,22 @@ import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, useWin
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { PinnedTile, SyncedProfile } from "../../state/sync/store";
-import { SPACES_LARGE_TEXT, Switcher, Tiles, Unavailable } from "./SpacesParts";
+import { pinnedFolderMenu, pinnedLinkMenu, SPACES_LARGE_TEXT, Switcher, Tiles, Unavailable } from "./SpacesParts";
 import { CrossfadeText } from "../settings/SettingsKit";
 import { haptics } from "../../state/app/haptics";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { closeArchive, openArchive } from "../../state/browse/store";
-import { copyLink, menuOpenedHaptic, shareUrl } from "../../state/browse/tabMenus";
+import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { openSettings } from "../../state/settings/nav";
 import { openRemote, selectProfile, syncNow } from "../../state/sync/actions";
 import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync/hooks";
-import { remoteTitle, spaceGroupColor, spaceRows, type SpaceRow } from "../../state/sync/spaces";
+import { spaceGroupColor, spaceRows, type SpaceRow } from "../../state/sync/spaces";
 import { showAllDeviceTabs, toggleSpaceRow, useSpaceOpenFor } from "../../state/sync/spaceOpen";
 import { spaceTone } from "../../lib/profileLook";
 import { sfSymbol } from "../../lib/sfSymbols";
 import { syncBanner, type BannerIcon } from "../../state/sync/syncRules";
 import {
-  controlRadius,
+  capsule,
   FadingBackdrop,
   DEFAULT_PROFILE_COLOR,
   Favicon,
@@ -29,7 +29,6 @@ import {
   toastMotion,
   useIncreasedContrast,
   useSheetFrame,
-  iconRoles,
   isSymbolName,
   PROFILE_PRESETS,
   space,
@@ -49,7 +48,7 @@ import {
   Tappable,
 } from "../ui";
 import type { Point } from "../../lib/menuPlace";
-import { actionWords, destinationWords, dismissWords } from "../../lib/sharedWords";
+import { destinationWords, dismissWords } from "../../lib/sharedWords";
 
 const BANNER_ICONS: Record<BannerIcon, SymbolName> = { folder: "folderFill", lock: "lockFill", reset: "arrowClockwise", warning: "exclamationmarkTriangle", offline: "wifiSlash" };
 const IPHONE_BANNER_ICONS: Record<BannerIcon, SymbolName> = { folder: "folderBadgeQuestionmark", lock: "lockFill", reset: "exclamationmarkArrowTriangle2Circlepath", warning: "exclamationmarkIcloud", offline: "wifiSlash" };
@@ -205,15 +204,9 @@ function SpacePage({ profile, isShown, onMenu, bottom }: { profile: SyncedProfil
     return before ? new Set([...now].filter((key) => !before.has(key))) : new Set<string>();
   }, [rows]);
   const toggle = (key: string) => toggleSpaceRow(profile.syncId, key);
-  const linkMenu = (url: string, title: string, at: Point | null) => {
+  const linkMenu = (url: string, title: string, at: Point | null, pinnedKey: string | null = null) => {
     menuOpenedHaptic();
-    const sharing: MenuItem[] = /^https?:\/\//i.test(url)
-      ? [
-          { label: actionWords.copyLink, icon: iconRoles.copyLink, onPress: () => copyLink(url) },
-          { label: actionWords.share, icon: iconRoles.share, onPress: () => shareUrl(url, title) },
-        ]
-      : [];
-    onMenu({ items: [{ label: actionWords.open, icon: "arrowUpForward", onPress: () => openRemote(url, title, profile.syncId) }, ...sharing], at });
+    onMenu({ items: pinnedLinkMenu(url, title, profile.syncId, pinnedKey), at });
   };
   return (
     <FlatList
@@ -242,7 +235,7 @@ function SpacePage({ profile, isShown, onMenu, bottom }: { profile: SyncedProfil
             onToggle={toggle}
             onShowAll={(id) => showAllDeviceTabs(profile.syncId, id)}
             onLongPress={linkMenu}
-            onFolder={(tile, anchor) => onMenu({ items: (tile.folder ?? []).map((tab) => ({ label: remoteTitle(tab.title, tab.url), onPress: () => openRemote(tab.url, tab.title, profile.syncId, tab.key) })), at: null, anchor })}
+            onFolder={(tile, anchor) => onMenu({ items: pinnedFolderMenu(tile, profile.syncId), at: null, anchor })}
             tint={theme.secondaryLabel}
           />
         </Appearing>
@@ -257,7 +250,7 @@ type RowProps = {
   tint: string;
   onToggle: (key: string) => void;
   onShowAll: (deviceId: string) => void;
-  onLongPress: (url: string, title: string, at: Point | null) => void;
+  onLongPress: (url: string, title: string, at: Point | null, pinnedKey: string | null) => void;
   onFolder: (tile: PinnedTile, anchor: RefObject<ViewInstance | null>) => void;
 };
 
@@ -296,8 +289,8 @@ function Row({ row, profileId, tint, onToggle, onShowAll, onLongPress, onFolder 
         <Pressable
           accessibilityRole="button"
           onPress={() => openRemote(row.url, row.title, profileId, row.pinnedKey)}
-          onLongPress={(event) => onLongPress(row.url, row.title, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
-          {...screenReaderActions([{ name: "longpress", run: () => onLongPress(row.url, row.title, null) }])}
+          onLongPress={(event) => onLongPress(row.url, row.title, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }, row.pinnedKey)}
+          {...screenReaderActions([{ name: "longpress", run: () => onLongPress(row.url, row.title, null, row.pinnedKey) }])}
           style={({ pressed }) => [styles.row, { paddingLeft: space.l + INDENT * row.depth }, pressed ? { backgroundColor: theme.rowHighlight } : null]}
         >
           <View testID="spaceTabIcon" style={[styles.tabSymbol, { width: iconSide, height: iconSide }]}>
@@ -374,7 +367,7 @@ const styles = StyleSheet.create({
   centered: { textAlign: "center" },
   header: { flexDirection: "row", alignItems: "center", gap: space.s, paddingLeft: space.l + 4, paddingRight: space.s, paddingTop: space.m, paddingBottom: space.xs },
   headerButton: slotAround(spacesLayout.headerCircle),
-  headerCircle: { width: spacesLayout.headerCircle, height: spacesLayout.headerCircle, borderRadius: controlRadius(spacesLayout.headerCircle), borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
+  headerCircle: { width: spacesLayout.headerCircle, height: spacesLayout.headerCircle, borderRadius: capsule(spacesLayout.headerCircle), borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
   banner: { flexDirection: "row", alignItems: "center", gap: spacesLayout.bannerGap, marginHorizontal: space.l, marginBottom: space.xs, padding: spacesLayout.bannerPadding, borderRadius: spacesLayout.bannerRadius },
   row: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 48, paddingRight: space.l },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacesLayout.headerGap, paddingHorizontal: space.l, paddingTop: space.l, paddingBottom: spacesLayout.headerBottom },

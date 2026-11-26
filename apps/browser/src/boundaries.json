@@ -9,7 +9,8 @@
   "socket": "a same-user process on the control socket while Settings > Advanced > Let programs control Ardia is on",
   "native": "the browser's own native layer, relaying OS input",
   "import": "a file or browser profile the user chose to import",
-  "update": "a release manifest, its signature and the package the browser downloaded for the self-updater, trusted only once the release key's signature verifies"
+  "update": "a release manifest, its signature and the package the browser downloaded for the self-updater, trusted only once the release key's signature verifies",
+  "release-list": "GitHub's public API, read unauthenticated by the Android app: the repo's android-v release tags and each release's details, which anyone on the network path or a GitHub outage could make malformed"
  },
  "customEvents": {
   "ardia:media-element": "Page-world shim names a media element for the isolated world to track; only an HTMLMediaElement is taken, and only its own playback state is read",
@@ -2745,6 +2746,31 @@
     "patches/react-native-macos@0.81.9.patch#RCTUIPlainTextOfRichPasteboard",
     "patches/react-native-macos@0.81.9.patch#RCTUISingleLinePastedText",
     "apps/browser/src/hostileInputs.test.mjs#a clipboard another app filled reaches the address field"
+   ],
+   "detected": false
+  },
+  {
+   "id": "phone-update:findUpdate",
+   "source": "release-list",
+   "guard": "Android release builds only, in the front; a 10 s deadline and a 1,000,000-character cap on each answer; tags must be refs/tags/android-v<release version> (androidRelease.ts, the parser the release script uses) on the installed build's channel and newer than it, at most 3 looked up a check; a release is offered only when draft is false, its tag_name is that tag, published_at is a real UTC time and an asset in state uploaded named Ardia-<version>.apk has exactly the download URL the app builds itself; stored memory (next check, offered versions, unpublished tags) is re-validated on read; the download request is rebuilt from that URL (updateDownloadRequest) and AppUpdateHandoff.kt checks it again before the DownloadManager or another browser gets it. The shared hostile list runs through every guard and the download request in apps/phone/src/lib/appUpdate.test.ts; the install reads the release's Ardia-<version>.apk.sha256 asset (required for an offer, at the URL the app builds) only as one sha256sum line for that file name, and AppUpdateHandoff.kt installs only a cache copy whose SHA-256 matches it, deleting the download otherwise; GitHub's asset digest is taken only as sha256:<64 lowercase hex> and must agree with the checksum file, standing in for it only when the file can't be reached; the install streams that copy into a PackageInstaller session for Ardia's own package, hashing it again and abandoning the session on a mismatch, and takes the status only from Ardia's own unexported receiver; installer callbacks are taken only for EXTRA_SESSION_ID values Ardia recorded before commit, and the ready notification's install request only with the one-time token it carried",
+   "checks": [
+    "apps/phone/src/lib/appUpdate.ts#newerTaggedVersions",
+    "apps/phone/src/lib/appUpdate.ts#publishedRelease",
+    "apps/phone/src/lib/appUpdate.ts#isReleaseDownloadUrl",
+    "apps/phone/src/lib/appUpdate.ts#updateDownloadRequest",
+    "apps/phone/src/lib/appUpdate.ts#parseUnpublished",
+    "apps/phone/src/lib/appUpdate.ts#readGitHubJson",
+    "apps/phone/src/lib/androidRelease.ts#parseAndroidRelease",
+    "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateHandoff.kt#releaseApkName",
+    "apps/phone/src/lib/appUpdate.test.ts#the download action builds its request only from this repo's exact APK address",
+    "apps/phone/src/lib/appUpdate.ts#parseReleaseChecksum",
+    "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateHandoff.kt#verifiedCopy",
+    "apps/phone/src/lib/appUpdate.test.ts#the release checksum file is read only in sha256sum's own form",
+    "apps/phone/src/lib/appUpdate.ts#assetDigest",
+    "apps/phone/src/lib/appUpdate.ts#checksumVerdict",
+    "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateInstaller.kt#install",
+    "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateInstaller.kt#report",
+    "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateHandoff.kt#noteInstallRequest"
    ],
    "detected": false
   }

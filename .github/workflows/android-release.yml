@@ -50,6 +50,9 @@ jobs:
           for needed in apps/phone/scripts/android-version.ts apps/phone/scripts/build-apk apps/phone/scripts/sign-release-apk apps/phone/scripts/check-release-apk apps/phone/test/release/sign-release-apk.test.sh apps/phone/test/r8/check-names.py; do
             [ -f "$needed" ] || missing="$missing $needed"
           done
+          if grep -q "androidRelease" apps/phone/scripts/android-version.ts 2>/dev/null && [ ! -f apps/phone/src/lib/androidRelease.ts ]; then
+            missing="$missing apps/phone/src/lib/androidRelease.ts"
+          fi
           if [ -n "$missing" ]; then
             echo "::error::This commit doesn't have the Android release scripts (missing:$missing). They arrive with the Expo phone app; until it is merged, dispatch with --ref t3/unify-expo-architecture."
             exit 1

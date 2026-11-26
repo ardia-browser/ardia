@@ -36,7 +36,7 @@ final class PageView: ExpoView {
   weak var hostedWebView: WKWebView?
   private var failedID: String?
   private var sampled: PageTone?
-  private var sentTone: PageTone?
+  var sentTone: PageTone?
   private var glassBarDark: Bool?
   private var sentBarDark: Bool?
   private var sentState: NSDictionary?
@@ -70,11 +70,21 @@ final class PageView: ExpoView {
   static let flatProbesAccepted = 3
   static let scrollRest: TimeInterval = 0.5
   static let drawnProbeWidth: Double = 64
-  private var madeGestures: PageGestures?
-  private var madePinchWatcher: PagePinchWatcher?
-  private var summaryLayer: PageSummaryLayer?
-  private var summaryHideTask: Task<Void, Never>?
-  private var registeredPageID: String?
+  var madeGestures: PageGestures?
+  var madePinchWatcher: PagePinchWatcher?
+  var summaryStage: PageSummaryStage?
+  var summarySession: PageSummarySession?
+  weak var stageWebView: WKWebView?
+  var stageNavigation: Int?
+  var leaving: (stage: PageSummaryStage, webView: WKWebView?, wasCommitted: Bool)?
+  var pinchNavigation: Int?
+  var lastHold: PagePinchWatcher.Hold?
+  var pageShot: UIImage?
+  var deliveredShotSize: CGSize?
+  var pageShotRequest = 0
+  var pageShotWaiters: [(UIImage?) -> Void] = []
+  let pinchGround = UIView()
+  private(set) var registeredPageID: String?
 
   @MainActor private static let hosts = NSMapTable<NSString, PageView>.strongToWeakObjects()
 
@@ -86,7 +96,10 @@ final class PageView: ExpoView {
 
   @MainActor
   static func dismissAllSummaries() {
-    for view in hosts.objectEnumerator()?.allObjects.compactMap({ $0 as? PageView }) ?? [] { view.dismissSummary(animated: true) }
+    for view in hosts.objectEnumerator()?.allObjects.compactMap({ $0 as? PageView }) ?? [] {
+      view.madePinchWatcher?.reset()
+      view.dismissSummary(animated: true)
+    }
   }
 
   @MainActor
@@ -101,7 +114,6 @@ final class PageView: ExpoView {
   private var gestures: PageGestures {
     if let madeGestures { return madeGestures }
     let made = PageGestures(container: self)
-    made.ignoresTouch = { [weak self] in self?.isSummaryTouch($0) == true }
     made.onSwipedPastHistory = { [weak self] direction in
       self?.onPageEvent(["name": "swipedPastHistory", "direction": direction == .back ? "back" : "forward"])
     }
@@ -113,9 +125,17 @@ final class PageView: ExpoView {
   private var pinchWatcher: PagePinchWatcher {
     if let madePinchWatcher { return madePinchWatcher }
     let made = PagePinchWatcher(container: self)
-    made.ignoresTouch = { [weak self] in self?.isSummaryTouch($0) == true }
-    made.moment = { [weak self] in PageSummarySwitch.shared.isOn ? self?.pinchMoment() : nil }
-    made.onPinchedIn = { [weak self] in _ = self?.summarize(.pinch) }
+    made.moment = { [weak self] in
+      guard let self, PageSummarySwitch.shared.isOn, self.summarySession == nil else { return nil }
+      return self.pinchMoment()
+    }
+    made.mayBegin = { [weak self] in
+      guard let self, let webView = self.hostedWebView else { return false }
+      return self.summaryStage == nil && self.leaving == nil && webView.alpha > 0.99 && webView.transform.isIdentity
+    }
+    made.onTaken = { [weak self] in self?.pinchTaken() }
+    made.onHeld = { [weak self] in self?.pinchHeld($0) }
+    made.onLetGo = { [weak self] in self?.pinchLetGo(fired: $0) }
     madePinchWatcher = made
     return made
   }
@@ -126,6 +146,10 @@ final class PageView: ExpoView {
     sideMargins.isUserInteractionEnabled = false
     sideMargins.isHidden = true
     addSubview(sideMargins)
+    pinchGround.isUserInteractionEnabled = false
+    pinchGround.isHidden = true
+    pinchGround.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    addSubview(pinchGround)
     NotificationCenter.default.addObserver(self, selector: #selector(glassToneChanged(_:)), name: GlassTone.changed, object: nil)
   }
 
@@ -174,8 +198,7 @@ final class PageView: ExpoView {
     scrollObservation = nil
     contentSizeObservation = nil
     madeGestures?.detach()
-    madePinchWatcher?.reset()
-    dismissSummary(animated: false)
+    endPinchNow()
     if let registeredPageID, Self.hosts.object(forKey: registeredPageID as NSString) === self { Self.hosts.removeObject(forKey: registeredPageID as NSString) }
     registeredPageID = nil
     PhoneHandoff.withdraw(self)
@@ -197,8 +220,12 @@ final class PageView: ExpoView {
       if webView !== hostedWebView, let page { PageLastFrame.keep(hostedWebView, document: page.navigationGeneration) }
       hostedWebView.removeFromSuperview()
     }
-    if webView !== hostedWebView { forgetHostedWebView() }
+    if webView !== hostedWebView {
+      endPinchNow()
+      forgetHostedWebView()
+    }
     hostedWebView = webView
+    madePinchWatcher?.zoomer = webView?.scrollView
     scrollObservation = nil
     contentSizeObservation = nil
     guard let webView else {
@@ -212,7 +239,6 @@ final class PageView: ExpoView {
     hostedAt = CACurrentMediaTime()
     showLastFrame(of: webView)
     if PhoneTestBuild.isOn { NSLog("PAGELAB time page hosted %.0f", Date().timeIntervalSince1970 * 1000) }
-    if let summaryLayer { bringSubviewToFront(summaryLayer) }
     applyObscuredInsets()
     gestures.attach(webView, page: page)
     scrollObservation = webView.scrollView.observe(\.contentOffset, options: []) { [weak self] _, _ in
@@ -266,7 +292,8 @@ final class PageView: ExpoView {
       onPageEvent(payload)
     }
     if !page.isLoading { madeGestures?.pageStoppedLoading() }
-    if let session = summaryLayer?.presenter.session, !session.isCurrent(for: page) { dismissSummary(animated: false) }
+    if let session = summarySession, !session.isCurrent(for: page) { dismissSummary(animated: false) }
+    if summarySession == nil, pinchIsPending, pinchNavigation != page.navigationGeneration { endPinchNow() }
     if window != nil, !isPrivate { PhoneHandoff.offer(page.url, title: page.title, from: self) } else { PhoneHandoff.withdraw(self) }
     if let drawnDocument, drawnDocument != page.navigationGeneration {
       drawnSent = false
@@ -333,7 +360,7 @@ final class PageView: ExpoView {
   }
 
   @MainActor
-  private func scheduleToneSample(after delay: Duration) {
+  func scheduleToneSample(after delay: Duration) {
     toneTask?.cancel()
     toneTask = Task { @MainActor [weak self] in
       try? await Task.sleep(for: delay)
@@ -346,10 +373,10 @@ final class PageView: ExpoView {
   @MainActor
   private func sampleTone() async {
     guard let page, let webView = hostedWebView, webView.window != nil, !webView.isHidden, webView.url != nil,
-          !page.isLoading, madeGestures?.isSwiping != true, webView.bounds.height > toneInsets.top + toneInsets.bottom + ToneSampler.bandHeight * 4 else { return }
+          !page.isLoading, madeGestures?.isSwiping != true, showsPageAtRest(webView), webView.bounds.height > toneInsets.top + toneInsets.bottom + ToneSampler.bandHeight * 4 else { return }
     let id = page.id
     guard let tone = await ToneSampler.sample(webView, topInset: toneInsets.top, bottomInset: toneInsets.bottom),
-          self.page?.id == id else { return }
+          self.page?.id == id, showsPageAtRest(webView) else { return }
     sampled = tone
     sendTone(theme: page.themeColor, underPage: page.underPageBackgroundColor)
   }
@@ -370,8 +397,7 @@ final class PageView: ExpoView {
         restoreHiddenCover()
         coverHandedOver = false
         PhoneHandoff.withdraw(self)
-        madePinchWatcher?.reset()
-        dismissSummary(animated: false)
+        endPinchNow()
       }
       return
     }
@@ -386,12 +412,13 @@ final class PageView: ExpoView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    if let hostedWebView, hostedWebView.superview === self { hostedWebView.frame = webViewFrame }
-    if pinsSafeArea { applyObscuredInsets() }
+    if let hostedWebView, hostedWebView.superview === self { place(hostedWebView, in: webViewFrame) }
     MainActor.assumeIsolated {
-      if let presenter = summaryLayer?.presenter, presenter.bottomInset != summaryBottomInset { presenter.bottomInset = summaryBottomInset }
-      reportDrawnSoon()
+      if let stage = summaryStage, stage.phase == .held, stage.pageSize != webViewFrame.size { endPinchNow() }
+      if let leaving, leaving.stage.pageSize != webViewFrame.size { finishLeaving() }
     }
+    if pinsSafeArea { applyObscuredInsets() }
+    MainActor.assumeIsolated { reportDrawnSoon() }
   }
 
   override func safeAreaInsetsDidChange() {
@@ -437,7 +464,7 @@ final class PageView: ExpoView {
     return UIEdgeInsets(top: 0, left: pinned.left, bottom: 0, right: pinned.right)
   }
 
-  private var webViewFrame: CGRect { bounds.inset(by: pinnedSides) }
+  var webViewFrame: CGRect { bounds.inset(by: pinnedSides) }
 
   private func paintSideMargins() {
     let shown = pinnedSides.left > 0 || pinnedSides.right > 0
@@ -460,8 +487,7 @@ final class PageView: ExpoView {
     guard let hostedWebView, hostedWebView.superview === self else { return }
     let pins = pinsSafeArea && window != nil
     let pinned = pins ? pinnedSafeArea() : .zero
-    let frame = webViewFrame
-    if hostedWebView.frame != frame { hostedWebView.frame = frame }
+    place(hostedWebView, in: webViewFrame)
     paintSideMargins()
     let insets = effectiveObscuredInsets
     if hostedWebView.obscuredContentInsets != insets { hostedWebView.obscuredContentInsets = insets }
@@ -476,93 +502,6 @@ final class PageView: ExpoView {
       scrollView.verticalScrollIndicatorInsets.top = topClearance
       if restsAtTop { scrollView.contentOffset.y = -scrollView.adjustedContentInset.top }
     }
-  }
-
-  @MainActor
-  private func isSummaryTouch(_ touch: UITouch) -> Bool {
-    guard let layer = summaryLayer, let view = touch.view else { return false }
-    return view.isDescendant(of: layer)
-  }
-
-  private var summaryBottomInset: CGFloat {
-    max(effectiveObscuredInsets.bottom, safeAreaInsets.bottom)
-  }
-
-  @MainActor
-  private func pinchMoment() -> PagePinch.Moment? {
-    guard let page, let webView = hostedWebView, webView.superview === self, page.webView === webView, madeGestures?.isSwiping != true else { return nil }
-    let visible = window != nil && webView.window != nil && !webView.isHidden && !isHidden && alpha > 0.01 && UIApplication.shared.applicationState == .active
-    let scroller = webView.scrollView
-    return PagePinch.Moment(
-      page: page.id,
-      navigation: page.navigationGeneration,
-      zoomScale: Double(scroller.zoomScale),
-      minimumZoomScale: Double(scroller.minimumZoomScale),
-      isVisible: visible && Self.summarizes(page.url),
-      isLoading: page.isLoading || webView.isLoading
-    )
-  }
-
-  static func summarizes(_ url: URL?) -> Bool {
-    guard let scheme = url?.scheme?.lowercased() else { return false }
-    return scheme == "https" || scheme == "http"
-  }
-
-  @MainActor
-  func summarize(_ trigger: PageSummarySession.Trigger) -> Bool {
-    guard PageSummarySwitch.shared.isOn, let pageID = registeredPageID, let page, let moment = pinchMoment(), moment.isVisible, !moment.isLoading else { return false }
-    if let current = summaryLayer?.presenter.session, current.isCurrent(for: page) {
-      if case .failed = current.phase {} else { return true }
-    }
-    dismissSummary(animated: false)
-    let session = PageSummarySession(trigger: trigger, tab: page)
-    let isPrivate = page.isPrivate
-    session.onSettled = { settled in
-      PhonePages.shared.send(pageID, "page.summarySettled", ["trigger": settled.trigger.rawValue, "outcome": settled.outcome, "isPrivate": isPrivate])
-    }
-    let layer = ensureSummaryLayer()
-    summaryHideTask?.cancel()
-    layer.isHidden = false
-    bringSubviewToFront(layer)
-    layer.presenter.bottomInset = summaryBottomInset
-    withAnimation(.smooth(duration: 0.32)) { layer.presenter.session = session }
-    session.start(page)
-    PhonePages.shared.send(pageID, "page.summaryOpened", ["trigger": trigger.rawValue, "isPrivate": isPrivate])
-    UIAccessibility.post(notification: .layoutChanged, argument: layer)
-    return true
-  }
-
-  @MainActor
-  private func ensureSummaryLayer() -> PageSummaryLayer {
-    if let summaryLayer { return summaryLayer }
-    let presenter = PageSummaryPresenter()
-    let layer = PageSummaryLayer(presenter: presenter)
-    layer.frame = bounds
-    layer.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    presenter.onDismiss = { [weak self] in self?.dismissSummary(animated: true) }
-    addSubview(layer)
-    summaryLayer = layer
-    return layer
-  }
-
-  @MainActor
-  func dismissSummary(animated: Bool) {
-    guard let layer = summaryLayer, let session = layer.presenter.session else { return }
-    session.cancel()
-    layer.presenter.cardFrame = .zero
-    summaryHideTask?.cancel()
-    guard animated else {
-      layer.presenter.session = nil
-      layer.isHidden = true
-      return
-    }
-    withAnimation(.smooth(duration: 0.24)) { layer.presenter.session = nil }
-    summaryHideTask = Task { @MainActor [weak layer] in
-      try? await Task.sleep(for: .milliseconds(300))
-      guard !Task.isCancelled, let layer, layer.presenter.session == nil else { return }
-      layer.isHidden = true
-    }
-    UIAccessibility.post(notification: .layoutChanged, argument: hostedWebView)
   }
 
   @MainActor

@@ -76,7 +76,7 @@ const PRESS_ICONS: Record<PressAction, SymbolName> = {
   saveImage: "arrowDownCircle",
 };
 
-export function PressMenu({ width, height }: { width: number; height: number }) {
+export function PressMenu({ width, height, glassSource }: { width: number; height: number; glassSource?: string }) {
   const press = usePress();
   const insets = useSafeAreaInsets();
   const material = useDesign() === "material";
@@ -89,7 +89,7 @@ export function PressMenu({ width, height }: { width: number; height: number }) 
   const placer = pointPlacer({ x: press.x, y: press.y + insets.top }, { width, height }, insets, material ? materialMenuWidth(items) : menuLook.width);
   return (
     <Portal exitMs={menuExitMs(true)}>
-      <Menu items={items} placer={placer} dimmed frost={null} privately={pressedPrivately(press.tabId)} onDismiss={dismissPress} />
+      <Menu items={items} placer={placer} dimmed frost={null} glassSource={glassSource} privately={pressedPrivately(press.tabId)} onDismiss={dismissPress} />
     </Portal>
   );
 }

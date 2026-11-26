@@ -4,12 +4,12 @@ import { lookIsNative } from "@ardia/phone-native";
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { withAlpha } from "../../lib/color";
-import { insetRect, MENU_MARGIN, menuAt, menuHeight, menuOnTrigger, menuShrink, type MenuAlign, type MenuLimits, type Point, type Rect } from "../../lib/menuPlace";
+import { insetRect, keepAbove, MENU_MARGIN, menuAt, menuHeight, menuOnTrigger, menuShrink, roomAbove, type MenuAlign, type MenuLimits, type Point, type Rect } from "../../lib/menuPlace";
 import { useReduceMotion } from "./contrast";
 import { focusForScreenReader } from "./coverFocus";
 import { useDesign } from "./design";
 import { FabricCatchUp } from "./FabricCatchUp";
-import { LookFrost, SURFACES_FROST } from "./LookViews";
+import { LookFrost, SURFACES_FROST, useSolidChrome, usesGlass } from "./LookViews";
 import { MATERIAL_STATE } from "./materialRoles";
 import { MATERIAL_MENU_GROUP_GAP, materialMenuFill, materialMenuGroups, materialMenuHeight, materialMenuWidth, useMaterialBack } from "./MaterialSurfaces";
 import { useMaterialTheme } from "./materialTheme";
@@ -20,9 +20,9 @@ import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
 import { useTheme } from "./theme";
 import { drawnMenuInk as menuInk, drawnMenuLook as menuLook } from "./menuTokens";
-import { font, ink, smoothCorners } from "./tokens";
+import { font, ink, smoothCorners, startLayout } from "./tokens";
 
-export type MenuAction = { label: string; icon?: SymbolName; systemImage?: string; destructive?: boolean; checked?: boolean; disabled?: boolean; onPress: () => void };
+export type MenuAction = { label: string; icon?: SymbolName; systemImage?: string; destructive?: boolean; checked?: boolean; disabled?: boolean; dot?: boolean; onPress: () => void };
 
 export type MenuSubmenu = { label: string; icon?: SymbolName; systemImage?: string; disabled?: boolean; children: MenuItem[] };
 
@@ -66,12 +66,21 @@ const PRESS = menuLook.pressInset;
 
 const MATERIAL = !menuLook.frosted;
 
+export const menuDrawsGlass = (frost: "thin" | "glass", source: string | null, nativeLook: boolean, nativeGlass: boolean, solidChrome: boolean) => frost === "glass" && source !== null && nativeLook && nativeGlass && !solidChrome;
+
+function useMenuGlass(source: string | null) {
+  const solidChrome = useSolidChrome();
+  return !MATERIAL && menuDrawsGlass(menuLook.frost, source, lookIsNative(), usesGlass(), solidChrome);
+}
+
 const CHECK_TRAILING = menuLook.checkSide === "trailing";
 
 const SCRIM_ACCESSIBILITY = Platform.OS === "android" ? ({ accessible: false, importantForAccessibility: "no" } as const) : ({ accessibilityLabel: "Dismiss" } as const);
 const CHECK_SHIFT = CHECK_TRAILING ? 0 : menuLook.labelInsetChecked - menuLook.labelInset;
 
-type Props = { items: MenuItem[]; place?: ViewStyle; placer?: MenuPlacer; onDismiss: (chosen?: boolean) => void; dimmed?: boolean; origin?: string; frost?: string | null; shown?: boolean; privately?: boolean };
+type Props = { items: MenuItem[]; place?: ViewStyle; placer?: MenuPlacer; onDismiss: (chosen?: boolean) => void; dimmed?: boolean; origin?: string; frost?: string | null; glassSource?: string; shown?: boolean; privately?: boolean };
+
+const menuDot = { width: startLayout.pageDot, height: startLayout.pageDot, borderRadius: startLayout.pageDot / 2 } as const;
 
 export function Menu(props: Props) {
   return useDesign() === "material" ? <MaterialMenu {...props} /> : <ClassicMenu {...props} />;
@@ -219,6 +228,7 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
                     <Text numberOfLines={1} style={[materialType.labelLarge, materialStyles.menuLabel, { color }]}>
                       {entry.label}
                     </Text>
+                    {entry.dot ? <View testID="menuItemDot" style={[menuDot, { backgroundColor: scheme.primary }]} /> : null}
                     {entry.checked ? <Symbol name="checkmark" size={materialSize.icon} color={scheme.primary} /> : null}
                   </Pressable>
                 );
@@ -232,12 +242,14 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
   );
 }
 
-function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin = "top", frost, shown = true, privately = false }: Props) {
+function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin = "top", frost, glassSource, shown = true, privately = false }: Props) {
   const theme = useTheme();
   const paint = theme.dark ? menuInk.dark : menuInk.light;
   const reduceMotion = useReduceMotion();
   const frostAround = useMenuFrost();
-  const source = frost === undefined ? frostAround : frost;
+  const frostSource = frost === undefined ? frostAround : frost;
+  const glassFace = useMenuGlass(glassSource ?? frostSource);
+  const source = glassFace ? glassSource ?? frostSource : frostSource;
   const [pages, setPages] = useState<MenuSubmenu[]>([]);
   const page = pages[pages.length - 1] ?? null;
   const openPage = (submenu: MenuSubmenu) => setPages((now) => [...now, submenu]);
@@ -387,6 +399,7 @@ function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin =
         ) : null}
         {icon ? <MenuIcon name={icon} color={item.destructive ? color : paint.icon} left={iconLeft} /> : null}
         {label(item.label, color)}
+        {item.dot ? <View testID="menuItemDot" style={[menuDot, { backgroundColor: theme.spaceAccent }]} /> : null}
         {!leading && item.icon ? <Symbol name={item.icon} size={menuLook.iconSize} color={color} /> : null}
       </Pressable>
     );
@@ -400,10 +413,10 @@ function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin =
         testID="drawnMenu"
         accessibilityRole="menu"
         accessibilityViewIsModal
-        style={[styles.panel, { boxShadow: menuLook.shadow, borderColor: paint.rim, transformOrigin: spot.origin }, spot.place, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight }, revealed ? null : styles.unseen, grow]}
+        style={[styles.panel, { boxShadow: menuLook.shadow, borderColor: glassFace ? ink.clear : paint.rim, transformOrigin: spot.origin }, spot.place, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight }, revealed ? null : styles.unseen, grow]}
       >
-        <MenuMaterial source={source} fill={paint.fill} solid={paint.solid} radius={menuLook.radius} style={[styles.material, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight - 2 * menuLook.rim }]}>
-          {MATERIAL ? null : <View pointerEvents="none" style={[styles.specular, { backgroundColor: paint.specular }]} />}
+        <MenuMaterial source={source} glass={glassFace} privately={privately} fill={paint.fill} solid={paint.solid} radius={menuLook.radius} style={[styles.material, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight - 2 * menuLook.rim }]}>
+          {MATERIAL || glassFace ? null : <View pointerEvents="none" style={[styles.specular, { backgroundColor: paint.specular }]} />}
           <ScrollView testID="drawnMenuRows" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.rows} bounces={false} overScrollMode="never" onContentSizeChange={(_width, height) => setContent(height + 2 * menuLook.rim)}>
           <Animated.View style={rowsFade}>
           {page ? (
@@ -423,11 +436,11 @@ function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin =
   );
 }
 
-export function MenuMaterial({ source, fill, solid, radius, style, children }: { source: string | null; fill: string; solid: string; radius: number; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+export function MenuMaterial({ source, glass = false, privately = false, fill, solid, radius, style, children }: { source: string | null; glass?: boolean; privately?: boolean; fill: string; solid: string; radius: number; style?: StyleProp<ViewStyle>; children: ReactNode }) {
   if (!source || !lookIsNative() || MATERIAL) return <View style={[style, { backgroundColor: solid, borderRadius: radius }]}>{children}</View>;
   return (
-    <LookFrost source={source} variant={menuLook.frost} cornerRadius={radius} fill={ink.clear} style={style}>
-      <View testID="menuMaterialFill" pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: fill }]} />
+    <LookFrost source={source} variant={glass ? "glass" : "thin"} privately={privately} overlay={glass} cornerRadius={radius} fill={ink.clear} style={style}>
+      {glass ? null : <View testID="menuMaterialFill" pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: fill }]} />}
       {children}
     </LookFrost>
   );
@@ -452,10 +465,11 @@ export function pointPlacer(at: Point, screen: { width: number; height: number }
   };
 }
 
-function triggerPlacer(row: Rect, host: Rect, insets: Insets, width: number, align?: MenuAlign, clearAnchor = false): MenuPlacer {
+function triggerPlacer(row: Rect, host: Rect, insets: Insets, width: number, align?: MenuAlign, clearAnchor = false, floor?: number | null): MenuPlacer {
   return (height, keepBelow, pageWidth = width) => {
     if (host.width > 0) pageWidth = Math.min(pageWidth, Math.max(1, host.width - insets.left - insets.right - MENU_MARGIN * 2));
-    const spot = menuOnTrigger(row, host, host.width > 0 ? insetRect(host, insets) : host, pageWidth, height, MENU_MARGIN, keepBelow, align, clearAnchor);
+    const room = roomAbove(host.width > 0 ? insetRect(host, insets) : host, floor);
+    const spot = keepAbove(menuOnTrigger(row, host, room, pageWidth, height, MENU_MARGIN, keepBelow, align, clearAnchor), floor === null || floor === undefined ? null : floor - host.y - MENU_MARGIN, room.y - host.y + MENU_MARGIN);
     return { place: { left: spot.left, top: spot.top, width: pageWidth }, origin: spot.origin, maxHeight: spot.height, shrink: menuShrink(row, pageWidth, spot.height) };
   };
 }
@@ -484,9 +498,9 @@ export const menuExitMs = (dimmed?: boolean) => (dimmed ? menuMotion.heldClose :
 
 const widthOf = (place: ViewStyle) => (typeof place.width === "number" ? place.width : menuLook.width);
 
-type FloatingProps = Omit<Props, "shown" | "origin" | "placer" | "place"> & { place?: ViewStyle; anchor?: RefObject<ViewInstance | null>; at?: Point | null; align?: MenuAlign; floor?: number | null };
+type FloatingProps = Omit<Props, "shown" | "origin" | "placer" | "place"> & { place?: ViewStyle; anchor?: RefObject<ViewInstance | null>; anchorShift?: number; at?: Point | null; align?: MenuAlign; floor?: number | null };
 
-export function FloatingMenu({ items, place = {}, onDismiss, anchor, at, align, floor, dimmed, frost, privately }: FloatingProps) {
+export function FloatingMenu({ items, place = {}, onDismiss, anchor, anchorShift = 0, at, align, floor, dimmed, frost, privately }: FloatingProps) {
   const material = useDesign() === "material";
   const hostFrame = useOverlayFrame();
   const insets = useSafeAreaInsets();
@@ -498,7 +512,7 @@ export function FloatingMenu({ items, place = {}, onDismiss, anchor, at, align, 
     if (at && !anchor) return;
     let live = true;
     void Promise.all([hostFrame(), anchor ? measureAnchor(anchor) : Promise.resolve(null)]).then(([host, row]) => {
-      if (live) setMeasured({ host, row: row && row.height > 0 ? row : null });
+      if (live) setMeasured({ host, row: row && row.height > 0 ? { ...row, y: row.y + anchorShift } : null });
     });
     return () => {
       live = false;
@@ -506,7 +520,7 @@ export function FloatingMenu({ items, place = {}, onDismiss, anchor, at, align, 
   }, []);
   const heldWithoutPoint = dimmed && !at && measured?.row ? { x: measured.row.x, y: measured.row.y + measured.row.height } : null;
   const point = at ?? heldWithoutPoint;
-  const placer = point ? (anchor && !measured ? undefined : pointPlacer(point, screen, insets, width, { control: measured?.row, floor })) : measured ? (measured.row ? triggerPlacer(measured.row, measured.host, insets, width, align, material) : fixedPlacer(place, measured.host, insets, width)) : undefined;
+  const placer = point ? (anchor && !measured ? undefined : pointPlacer(point, screen, insets, width, { control: measured?.row, floor })) : measured ? (measured.row ? triggerPlacer(measured.row, measured.host, insets, width, align, material, floor) : fixedPlacer(place, measured.host, insets, width)) : undefined;
   return (
     <Portal exitMs={menuExitMs(dimmed)}>
       <Menu items={items} place={{ ...place, width }} placer={placer} shown={placer !== undefined} dimmed={dimmed} privately={privately} frost={frost === undefined ? frostAround : frost} onDismiss={onDismiss} />

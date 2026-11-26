@@ -262,7 +262,7 @@ const iPhoneMenuLook = {
   labelLines: 3,
   iconSide: "leading" as "leading" | "trailing",
   disabledOpacity: 0.4,
-  frost: "thin" as const,
+  frost: "glass" as "thin" | "glass",
   frosted: true,
   shadow: "0px 10px 40px rgba(0,0,0,0.12)",
 };
@@ -423,11 +423,10 @@ export const voiceInk = {
   bar: "rgba(255,255,255,0.85)",
   glass: "rgba(255,255,255,0.18)",
   transcript: "rgba(0,0,0,0.18)",
-  logoShadow: "0px 6px 12px rgba(0, 0, 0, 0.15)",
 } as const;
 
 export const voiceLayout = {
-  logo: 128,
+  appIcon: 104,
   pill: 50,
   cancel: 44,
   icon: 17,

@@ -27,10 +27,40 @@ public struct PagePinch: Equatable, Sendable {
     var restsAtMinimumZoom: Bool { zoomScale <= minimumZoomScale * (1 + PagePinch.zoomTolerance) }
   }
 
-  public static let triggerScale = 0.7
+  public static let commitScale = 0.5
+  public static let engageScale = 0.9
+  public static let flickVelocity = -1.0
   public static let outwardTolerance = 1.04
-  public static let reversalTolerance = 0.12
   public static let zoomTolerance = 0.01
+  public static let bandFloor = 0.95
+  public static let bandReach = 0.1
+  public static let bandCoefficient = 0.55
+
+  public static func rubberBand(_ value: Double, in range: ClosedRange<Double>, reach: Double, coefficient: Double = bandCoefficient) -> Double {
+    let held = min(max(value, range.lowerBound), range.upperBound)
+    guard held != value, reach > 0 else { return value }
+    let give = reach * (1 - 1 / (abs(held - value) * coefficient / reach + 1))
+    return value < held ? held - give : held + give
+  }
+
+  public static func shownScale(for scale: Double) -> Double {
+    guard scale.isFinite, scale < 1 else { return 1 }
+    return rubberBand(max(scale, 0), in: bandFloor...1, reach: bandReach)
+  }
+
+  public static func shownWidthScale(for scale: Double) -> Double { 1 - 0.5 * (1 - shownScale(for: scale)) }
+
+  public static func foldProgress(for scale: Double) -> Double {
+    guard scale.isFinite else { return 0 }
+    return min(max((engageScale - scale) * 1.5, 0), 1)
+  }
+
+  public static func glow(for scale: Double) -> Double {
+    guard scale.isFinite else { return 0 }
+    return min(max((engageScale - scale) * 10, 0), 1)
+  }
+
+  public static func isEngaged(at scale: Double) -> Bool { scale.isFinite && scale < engageScale }
 
   public let page: UUID
   public let navigation: Int
@@ -54,9 +84,9 @@ public struct PagePinch: Equatable, Sendable {
 
   public var wentOutward: Bool { largestScale > Self.outwardTolerance }
 
-  public func fires(_ ending: Ending, at moment: Moment) -> Bool {
+  public func fires(_ ending: Ending, velocity: Double = 0, at moment: Moment) -> Bool {
     guard ending == .ended, !wentOutward else { return false }
-    guard lastScale <= Self.triggerScale, lastScale <= smallestScale + Self.reversalTolerance else { return false }
+    guard lastScale < Self.commitScale || (lastScale < Self.engageScale && velocity < Self.flickVelocity) else { return false }
     guard moment.page == page, moment.navigation == navigation, moment.isVisible, !moment.isLoading else { return false }
     return moment.restsAtMinimumZoom
   }

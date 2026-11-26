@@ -74,7 +74,7 @@ final class PageView: ExpoView {
   var madePinchWatcher: PagePinchWatcher?
   var summaryStage: PageSummaryStage?
   var summarySession: PageSummarySession?
-  private weak var stageWebView: WKWebView?
+  weak var stageWebView: WKWebView?
   var stageNavigation: Int?
   var leaving: (stage: PageSummaryStage, webView: WKWebView?, wasCommitted: Bool)?
   var pinchNavigation: Int?

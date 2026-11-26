@@ -116,6 +116,16 @@ const CHECKS = {
     assert(shown.state === "helperMissing" && shown.choice !== "apple", "nothing is saved", shown);
     return { state: shown.state };
   },
+  async E4() {
+    if (!releaseApp) throw new Error("E4 needs --release <Release Ardia.app>");
+    const fake = fakeHelper(path.join(SCRATCH, "E4", "fake"));
+    await start("E4", { manifest: fake.manifest, binary: appPath(releaseApp), files: { "perf-probe": "" } });
+    const shown = await pickApplePasswords();
+    await sleep(2000);
+    assert(fake.launches() === 0, "the fake helper never starts in a Release build", fake.launches());
+    assert(shown.state === "notEntitled" && shown.choice !== "apple", "an unentitled Release build doesn't offer Apple Passwords", shown);
+    return { state: shown.state, launches: fake.launches() };
+  },
 };
 
 const names = wanted.length ? wanted : Object.keys(CHECKS);

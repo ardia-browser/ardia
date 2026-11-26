@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { applePasswordsStatus, cancelApplePasswordsPairing, finishApplePasswordsPairing, onApplePasswordsChanged, pairApplePasswords, type ApplePasswordsPairing, type ApplePasswordsState } from "../../platform/applePasswords";
+import { noteApplePasswordsPairing, noteApplePasswordsPairingFailed } from "../telemetry/passwordManagerCounts";
 import { choosePasswordManager } from "./passwordManager";
 
 export type PairingStep = "starting" | "code" | "checking" | "failed";
@@ -47,6 +48,7 @@ const setPairing = (pairing: Pairing | null) => useApplePasswords.setState({ pai
 const current = (pairing: Pairing) => useApplePasswords.getState().pairing === pairing;
 
 function failed(attempt: Pairing, outcome: keyof typeof PAIRING_FAILURES) {
+  noteApplePasswordsPairingFailed(outcome);
   setPairing({ ...attempt, step: outcome === "wrongCode" ? "code" : "failed", error: PAIRING_FAILURES[outcome] });
   if (outcome !== "wrongCode") void loadApplePasswords();
 }
@@ -54,6 +56,7 @@ function failed(attempt: Pairing, outcome: keyof typeof PAIRING_FAILURES) {
 export async function startApplePasswordsPairing(profileId: string | null) {
   const attempt: Pairing = { profileId, step: "starting", error: null };
   setPairing(attempt);
+  noteApplePasswordsPairing("started");
   const outcome = await pairApplePasswords().catch((): ApplePasswordsPairing => "failed");
   if (!current(attempt)) return;
   if (outcome === "awaitingCode") return setPairing({ ...attempt, step: "code" });
@@ -62,6 +65,7 @@ export async function startApplePasswordsPairing(profileId: string | null) {
 }
 
 function paired(attempt: Pairing) {
+  noteApplePasswordsPairing("paired");
   changes += 1;
   useApplePasswords.setState({ state: "connected", pairing: null });
   if (attempt.profileId) choosePasswordManager(attempt.profileId, "apple");

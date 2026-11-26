@@ -1,3 +1,4 @@
+import type { ApplePasswordsPairing } from "../../platform/applePasswords";
 import type { FieldProviderOpened } from "../../platform/passwordProviders";
 import type { PasswordManagerKind } from "../site/passwordManagerChoice";
 import type { ConsentToken } from "./choice";
@@ -49,7 +50,18 @@ const CHOICE_FIELDS: Record<PasswordManagerKind, string> = {
   plugin: "password_manager_chose_plugin",
 };
 
-const FIELDS = [...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
+type PairingFailure = Exclude<ApplePasswordsPairing, "awaitingCode" | "paired">;
+const PAIRING_FIELDS = { started: "apple_passwords_pairings_started", paired: "apple_passwords_pairings_paired", failed: "apple_passwords_pairings_failed" };
+const PAIRING_FAILURES: Record<PairingFailure, string> = {
+  wrongCode: "apple_passwords_pairing_failures_wrong_code",
+  failed: "apple_passwords_pairing_failures_failed",
+  refused: "apple_passwords_pairing_failures_refused",
+  helperMissing: "apple_passwords_pairing_failures_helper_missing",
+  tooOld: "apple_passwords_pairing_failures_too_old",
+  notEntitled: "apple_passwords_pairing_failures_not_entitled",
+};
+
+const FIELDS = [...Object.values(PAIRING_FIELDS), ...Object.values(PAIRING_FAILURES), ...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
 
 let counts: Record<string, number> = {};
 const bump = (field: string, consent?: ConsentToken | null, by = 1) => countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + by));
@@ -72,6 +84,13 @@ export const noteOfferToSaveRestore = (restored: boolean, consent?: ConsentToken
 export const notePanelHint = (step: PanelHintStep) => bump(HINT_FIELDS[step]);
 
 export const notePasswordManagerChosen = (kind: PasswordManagerKind) => bump(CHOICE_FIELDS[kind]);
+
+export const noteApplePasswordsPairing = (step: "started" | "paired") => bump(PAIRING_FIELDS[step]);
+
+export function noteApplePasswordsPairingFailed(kind: PairingFailure) {
+  bump(PAIRING_FIELDS.failed);
+  bump(PAIRING_FAILURES[kind]);
+}
 
 export function takePasswordManagerCounts(): Record<string, number> {
   const taken = Object.fromEntries(FIELDS.map((field) => [field, counts[field] ?? 0]));

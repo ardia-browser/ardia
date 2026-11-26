@@ -33,6 +33,11 @@ export const HOST_METHODS_V3 = {
   clipboardWriteText: "clipboard.writeText",
   filesPick: "fs.pickFiles",
   filesSave: "fs.saveFile",
+  filesReadChunk: "fs.readChunk",
+  filesClose: "fs.closeFile",
+  filesSaveBegin: "fs.saveBegin",
+  filesSaveChunk: "fs.saveChunk",
+  filesSaveCommit: "fs.saveCommit",
   notify: "ui.notify",
 } as const;
 
@@ -116,6 +121,7 @@ export type PageReadResult = {
   metadata?: PageMetadata;
   selection?: string;
   screenshot?: { mimeType: "image/png" | "image/jpeg"; data: string; width: number; height: number };
+  screenshotOmitted?: true;
 };
 
 export type ContentMessageEvent = { tabId: string; frameId?: number; scriptId?: string; message: unknown };
@@ -136,7 +142,24 @@ export type SplitOpenOptions = { tabs?: string[]; urls?: string[]; side?: "left"
 export type PeekOpenOptions = { url: string };
 
 export type PickFilesOptions = { multiple?: boolean; types?: string[]; title?: string };
-export type PickedFile = { name: string; size: number; mimeType: string; data: string; encoding: "base64" | "utf8" };
+export type PickedFile = { name: string; size: number; mimeType: string; data: string; encoding: "base64" | "utf8"; handle?: string };
+
+export const FILE_CHUNK_BYTES = 384 * 1024;
+export const SOCKET_SEND_BYTES = 1024 * 1024 - 8 * 1024;
+
+export function utf8Length(text: string): number {
+  let bytes = 0;
+  for (let i = 0; i < text.length; i++) {
+    const unit = text.charCodeAt(i);
+    if (unit < 0x80) bytes += 1;
+    else if (unit < 0x800) bytes += 2;
+    else if (unit >= 0xd800 && unit <= 0xdbff && i + 1 < text.length && (text.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      bytes += 4;
+      i++;
+    } else bytes += 3;
+  }
+  return bytes;
+}
 export type SaveFileOptions = { name: string; data: string; encoding?: "base64" | "utf8"; mimeType?: string };
 
 export type NotifyOptions = { title: string; body?: string; subtitle?: string; icon?: string; command?: string; silent?: boolean };

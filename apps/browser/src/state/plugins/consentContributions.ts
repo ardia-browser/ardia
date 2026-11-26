@@ -3,7 +3,7 @@ import { isDecideEvent } from "../automation/eventNames";
 
 type Line = { icon: string; text: string };
 
-const SLOT_WORDS: Record<MenuSlot, string> = { tab: "tabs", group: "groups" };
+const SLOT_WORDS: Record<MenuSlot, string> = { tab: "tabs", group: "groups", page: "pages", selection: "selected text", link: "links", image: "images" };
 const MODE_WORDS: Record<PanelMode, string> = { sidecar: "a side panel", tab: "a tab", split: "Split View" };
 
 const listed = (items: string[]) => (items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`);

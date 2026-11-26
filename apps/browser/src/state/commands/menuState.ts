@@ -19,6 +19,7 @@ import { muteState, muteTitle } from "../tabs/mute";
 import { sidebarMenuState } from "../sidebar/commands";
 import { LITTLE_ARDIA_DISABLED_COMMANDS, PAGE_COMMANDS, PAGE_COMMANDS_OFF_INTERNAL_PAGES, settingChecks, UNAVAILABLE_COMMANDS, WINDOW_COMMANDS } from "../commands/commandCatalog";
 import { extensionMenu } from "../extensions/actions";
+import { pluginMenuBarItems } from "../plugins/pluginMenuBar";
 import type { InstalledExtension } from "../extensions/store";
 import { menuBarBindings, menuBarMouseBindings } from "./commandShortcuts";
 import { focusedWindowOf } from "../windows/ui";
@@ -177,7 +178,7 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
     downloadsInProgress: s.downloads.filter((d) => d.state === "downloading").length,
     shortcuts: menuBarBindings(s),
     mouseShortcuts: menuBarMouseBindings(s),
-    extensions: extensionMenu(s, windowId) };
+    extensions: [...extensionMenu(s, windowId), ...pluginMenuBarItems(s, windowId)] };
 }
 
 export type MenuReads = { keys: ReadonlySet<keyof BrowserState>; tabs: RecordReads };

@@ -9,12 +9,15 @@ import { notePageOverlay } from "../../state/telemetry/usage";
 import { consentToken } from "../../state/telemetry/client";
 import { useMemoryPressure } from "../../state/tabs/sleepingTabs";
 import { capWarmPanes } from "../../state/tabs/sleepPolicy";
+import { useKeptPluginPageTabs } from "../../state/plugins/hooks";
 
 const NEW_TAB_LINGER_MS = 400;
 const NEW_TAB_LINGER_LATE_MS = 100;
 
 export function usePaneLayout(windowId: string, activeId: string | undefined, split: SplitView | undefined, fullscreenTab: string | undefined, size: { width: number; height: number }, gap: number) {
   const mounted = useMountedTabIds(windowId);
+  const keptPages = useKeptPluginPageTabs(windowId);
+  const paneIds = useMemo(() => (keptPages.length ? [...mounted, ...keptPages.filter((id) => !mounted.includes(id))] : mounted), [mounted, keptPages]);
 
   const mountedIds = useMemo(() => new Set(mounted), [mounted]);
 
@@ -72,7 +75,7 @@ export function usePaneLayout(windowId: string, activeId: string | undefined, sp
     return out;
   }, [warm, warmSplits, shownPanes, pressure, size.width, size.height, gap]);
 
-  const shown = useShownPaneKeys(mounted, shownPanes);
+  const shown = useShownPaneKeys(paneIds, shownPanes);
 
   return { mountedIds, panes, dividers, warmPanes, shown, lingerId: lingerRect ? lingerId : undefined, lingerRect };
 }

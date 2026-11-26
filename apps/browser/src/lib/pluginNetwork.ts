@@ -18,9 +18,30 @@ function isHostName(host: string): boolean {
   return host.split(".").every((label) => LABEL.test(label));
 }
 
+const LOOPBACK_ENTRY = /^(localhost|127\.0\.0\.1):([1-9]\d{0,4})$/;
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+export function loopbackPortOf(entry: unknown): number | null {
+  if (typeof entry !== "string") return null;
+  const found = LOOPBACK_ENTRY.exec(entry);
+  const port = found ? Number(found[2]) : NaN;
+  return port >= 1 && port <= 65535 ? port : null;
+}
+
+export const isLoopbackEntry = (entry: unknown): boolean => loopbackPortOf(entry) !== null;
+
+export const loopbackPortsOf = (allowed: readonly string[]): number[] => [...new Set(allowed.flatMap((entry) => loopbackPortOf(entry) ?? []))];
+
+export const isLoopbackHost = (host: string) => LOOPBACK_HOSTS.has(normalizedHost(host));
+
+export function reachesLoopback(host: string, port: number, allowed: readonly string[]): boolean {
+  return isLoopbackHost(host) && loopbackPortsOf(allowed).includes(port);
+}
+
 export function hostPatternProblem(pattern: unknown): string | null {
   if (typeof pattern !== "string") return "isn't text";
   if (pattern === ANY_HOST) return null;
+  if (isLoopbackEntry(pattern)) return null;
   if (pattern !== pattern.toLowerCase()) return "must be lowercase";
   if (/[\s/:@?#\\[\]]/.test(pattern)) return "must be a bare host, like api.example.com or *.example.com, without a scheme, port or path";
   if (pattern.startsWith("*.")) {
@@ -41,7 +62,7 @@ export function matchesAllowedHost(host: string, allowedHosts: readonly string[]
   const target = normalizedHost(host);
   if (!target || target.length > MAX_HOST_LENGTH) return false;
   for (const pattern of allowedHosts) {
-    if (!isHostPattern(pattern)) continue;
+    if (!isHostPattern(pattern) || isLoopbackEntry(pattern)) continue;
     if (pattern === ANY_HOST) return true;
     if (pattern.startsWith("*.")) {
       const domain = pattern.slice(2);
@@ -53,7 +74,9 @@ export function matchesAllowedHost(host: string, allowedHosts: readonly string[]
 
 export function hostPatternCovers(broader: string, narrower: string): boolean {
   if (!isHostPattern(broader) || !isHostPattern(narrower)) return false;
-  if (broader === ANY_HOST || broader === narrower) return true;
+  if (broader === narrower) return true;
+  if (isLoopbackEntry(narrower) || isLoopbackEntry(broader)) return false;
+  if (broader === ANY_HOST) return true;
   if (narrower === ANY_HOST || !broader.startsWith("*.")) return false;
   return matchesAllowedHost(narrower.startsWith("*.") ? narrower.slice(2) : narrower, [broader]);
 }

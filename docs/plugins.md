@@ -318,7 +318,7 @@ plugin that isn't needed yet costs nothing: no host process, no memory. The firs
 | `activePage` | `true` | Read the text and selection of the page you're on when you run one of its commands (`plugin_page_reads`). The read is refused once you switch tabs or the page navigates after that use |
 | `workspace` | `true` | See and arrange every tab, group and folder (needs `tabs: write` and `fullUrls`) |
 | `commands` | `true` | Run Ardia's commands, the same ones with the same refusals as the `ardia` command (`docs/automation.md` › Which commands) |
-| `storage` | `true` | A private key-value store in `PluginData/<name>/storage.json`, at most 2 MB in all and 256 KB a value (`plugin_storage_writes`). `storage.get` answers `{found: true, value}` or `{found: false}`. A file Ardia can't read or parse, an empty one included, fails every call; Ardia never overwrites it with an empty store |
+| `storage` | `true` | A private key-value store in `PluginData/<name>/storage.json`, at most 16 MB in all and 256 KB a value (`plugin_storage_writes`). `storage.get` answers `{found: true, value}` or `{found: false}`. A file Ardia can't read or parse, an empty one included, fails every call; Ardia never overwrites it with an empty store |
 | `secrets` | `true` | Keychain items of its own (`ardia.plugin.<name>.<key>`, at most 64, 16 KB each; `plugin_secret_writes`). If the Keychain's list of them can't be read, Ardia keeps it, fails secret writes and deletes, and says removing the plugin left its secrets |
 | `network` | `false`, `"*"`, or 1 to 32 host patterns | main's `fetch` reaches only these hosts (`*.example.com` included); a sidecar gets the network as in v1. A web view the plugin shows (its page, a `file` panel) goes online only with `"*"`: WebKit's traffic can't be held to a list of hosts, so with a list it stays offline and the plugin reaches its hosts through `net.fetch` |
 | `state` | `{"events"?, "intents"?}` or `false` | `events`: any of `tabs`, `workspace`, `navigation` (each needs `tabs`) and `downloads`, heard after Ardia commits them, redacted. `intents`: any of `tabs.group`, `tabs.ungroup`, `tabs.move`, `tabs.pin`, `tabs.unpin`, `tabs.mute`, `tabs.unmute`, `tabs.activate` and `groups.update` (needs `tabs: write`). See [State events and intents](#state-events-and-intents) |
@@ -371,7 +371,10 @@ command where it doesn't belong.
 
 ### menus
 
-`contributes.menus.<slot>`, with slots `tab` (a tab's context menu) and `group` (a group's or folder's): each entry
+`contributes.menus.<slot>`, with slots `tab` (a tab's context menu), `group` (a group's or folder's) and `page` (the
+web page's own context menu, at most 8 items, flat; `{from: "menu", slot: "page", tabId, windowId}`). `selection`,
+`link` and `image` parse and validate, but the engine's context-menu hook doesn't hand Ardia the selected text or the
+link or image under the pointer yet, so they don't show. Each entry
 names one of the plugin's commands, with an optional `title`, `icon` and `when`. They show as a section above Close in
 that context menu (`state/plugins/menus.ts`); more than 2 from one plugin fold into a submenu named after it. Never in a
 private window's or an incognito group's menus. Running one from a tab hands the command `{from: "menu", slot: "tab",
@@ -1103,6 +1106,216 @@ The control socket's protocol 4 adds `plugins`, `plugins.enable` (`{"waiting": t
 `plugins.disable`, `plugins.remove` and `plugins.call` (`{"plugin", "tool", "input"?}`).
 
 
+## The v3 runtime
+
+A main whose host says protocol 3 (`hello`) gets everything below; each method checks the manifest at every call, so
+turning a permission off takes effect at once. macOS serves all of it; Linux and Windows don't run plugins yet (below).
+
+### Network: streams, sockets and local ports
+
+- `net.fetch.stream` (`ardia.net.fetchStream`) answers with the head (`status`, `statusText`, `headers`, `url`), then
+  `net.fetch.chunk {stream, data}` events, then `net.fetch.end` or `net.fetch.error`. `net.fetch.cancel {stream}` stops
+  it. The native fetch (`PluginHostFetch.swift`, streaming mode) writes the events straight into the plugin's pipe,
+  never through the JS bridge, waits while the pipe holds over 4 MB, never splits a UTF-8 character across chunks
+  (`PluginUtf8Chunks`), and caps a stream at 256 MB, 120 s without data and 30 minutes. Redirects and every resolved
+  address are checked as for `net.fetch`; at most 8 streams per run (`plugin_net_streams`, `plugin_net_stream_failures`).
+  Buffered `net.fetch` keeps its 700 KB answer and 960 KB channel cap; its error now points at `fetchStream`.
+- `net.ws.connect {socket, url, protocols?, headers?}` (`ardia.net.connect`) opens a host-proxied WebSocket
+  (`PluginWebSocket.swift`): `wss://` on an allowed host, or `ws://`/`wss://` on a listed local port. Ardia resolves the
+  name and vets every address before it opens anything, then connects to a vetted address with TLS checked against
+  the original host name, and speaks the WebSocket handshake and frames itself (`PluginWebSocketCodec`), so no byte
+  (headers included) leaves before the policy passes and DNS can't swap the address after. Events are `net.ws.open`,
+  `net.ws.message {data, binary}` (binary as base64), `net.ws.close {code, reason, wasClean}` and `net.ws.error`.
+  A message is at most 1 MB, and its event line must fit the channel's 1 MB line once encoded: a bigger one ends the
+  socket with 1009 and an explicit `net.ws.error`, never a silent drop; a plugin that stops reading gets
+  `net.ws.error` (code `backpressure`) and then a 1008 close. The SDK's `socket.send` refuses (`too_big`) a message
+  whose encoded request wouldn't fit the plugin's own 1 MB line, before anything is written, so one big send can't
+  end the plugin's connection; `net.ws.send` takes 64 waiting. `net.ws.close` takes 1000, 1001, 1008, 1009 or
+  3000–4999. A stream or socket starts only on a live run, checked, counted and registered in one step, each under its
+  own token, so a cancelled stream's late completion, backpressure or queued chunk can't touch a new one reusing its id
+  (`PluginRunTable`; the token is checked again when the event is written, against the latest token issued for
+  that id, so a stale end can't pass after the id was reused and released). Liveness is a leaf lock (`PluginLiveRuns`)
+  the host updates before it closes a run's resources (on exit, stop, remove and a closed control channel), so admission never waits on the host queue; every one closes
+  when the run stops, and a stream the plugin stops reading or the host fails
+  ends with `net.fetch.error` (`plugin_net_sockets`, `plugin_net_socket_failures`).
+- `permissions.network` may list `localhost:<port>` or `127.0.0.1:<port>` (1–65535). Only that port on loopback opens,
+  over http or https; a bare `localhost` never does, and every other private, link-local and metadata address stays
+  refused (`PluginFetchPolicy.loopbackAddress`).
+
+### Sign-in
+
+`auth.signIn {authorizeUrl, tokenUrl, clientId, scopes?, extraParams?}` (`ardia.auth.signIn`) needs a recent use of
+the plugin, and both URLs must be https (never a local port) on hosts in `permissions.network`. The session belongs to
+the run that asked: it ends after 5 minutes, when the plugin stops, is turned off, updated or revoked, and Ardia
+checks the run, the current manifest and its hosts again right before it sends the code and verifier. Ardia makes the state and the PKCE verifier
+(S256), opens an ephemeral `ASWebAuthenticationSession` (no cookies shared with your browsing), takes only
+`ardia-auth://<scope>/<name>/callback` with one matching `state` and a `code`, exchanges the code at `tokenUrl` through
+the host fetch, and answers `{accessToken, tokenType, refreshToken?, expiresAt?, scope?, idToken?}` for the plugin to
+keep in `ardia.secrets`. A background instance never opens the window (`plugin_auth_signins`, `plugin_auth_failures`).
+
+### Services
+
+`services.provide {iface, methods}` (or `services` in `ready`) registers a plugin as a provider of an interface it
+lists in `provides` (`ai.provider`, `credentials.provider`, `search.provider` are the standard ones). `services.list`
+and `services.call {iface, method, input, provider?, timeoutMs?}` work for a plugin that lists the interface in
+`consumes`, or that depends on the provider (`dependencies`, `optionalDependencies`). The call reaches the provider's
+`kind: "service"` handler through the call table (`tools.ts`), so the caller never sees the provider's secrets, hosts
+or permissions; a profile-scoped provider answers only in the caller's profile (`services.ts`, `plugin_service_calls`,
+`plugin_service_refusals`). `tools.call` to a plugin the caller depends on no longer needs the caller to hold every
+permission of the callee.
+
+### Main beside a sidecar
+
+A plugin may declare both `main` and `sidecar`. Main's host stays off the network; once main is ready, Ardia starts
+the sidecar under its own run key (`<name>/sidecar`, `PluginProcess.Spec.sidecar`), in the program sandbox, with the
+network only if `permissions.network` is `"*"`. `sidecar.request {method, params}` sends `{id, method, params}` down
+the sidecar's pipe and answers with its `{id, result | error}` (30 s, 32 waiting, 1 MB lines); `sidecar.send {message}`
+sends `{event: "message", data}`; a sidecar's `{event: "message", data}` reaches main as `sidecar.message`. The sidecar
+can't call Ardia's API, restarts after a crash (1, 4 and 16 s, then gives up), and stops with main
+(`sidecarPipe.ts`, `plugin_sidecar_starts`, `plugin_sidecar_requests`, `plugin_sidecar_failures`).
+
+### Idle sleep and the watchdog
+
+- A main that starts on demand, with no hooks and no state subscription, sleeps after `idleTimeoutSec` (default 300,
+  at most 1800) with no request, call or activation, unless a surface is mounted, a call is waiting, a stream or socket
+  is open or its content scripts are in a tab. The next command, surface, service call or activation wakes it
+  (`plugin_idle_sleeps`, `plugin_idle_wakes`).
+- Every 5 s while a plugin runs, Ardia samples each run's memory footprint and CPU (`PluginUsage`, `proc_pid_rusage`)
+  and counts its requests. Over 95% of `memoryMB`, 90% of a core for 15 s, or over 400 requests a second for 3 s
+  pauses it: the run stops, its scripts and styles leave every page, a toast says *Paused for high CPU* (memory,
+  requests), and nothing restarts it until **Resume** on its Settings page (`watchdog.ts`, `plugin_watchdog_cpu`,
+  `plugin_watchdog_memory`, `plugin_watchdog_ipc`).
+- Settings › Plugins › a plugin shows a **Health** row: running, asleep, paused, starting or stopped, its memory (the
+  main run's plus the live sidecar run's; a sample from a replaced sidecar is never added), the tabs its scripts are
+  in, its open connections and the last error (`PluginHealthDetails.tsx`).
+
+### Pages: reads, scripts, styles
+
+- `page.readActive {markdown?, metadata?, selection?, screenshot?}` reads the page you used the plugin from, as
+  `tabs.readActivePage` does, adding Markdown (article or main), metadata (description, site name, author, published
+  time, image, language, canonical URL), headings, links and form fields (names, types and labels, never values),
+  and with `activePage.screenshot` a JPEG of the visible page. Sizes are counted in encoded UTF-8 bytes, so a page of
+  CJK text or emoji is trimmed (text and Markdown up to 300 KB each, the whole read up to 760 KB in the page and
+  900 KB on the host) instead of failing; when the screenshot no longer fits it's left out with
+  `screenshotOmitted: true`. The URL, title and selection are capped too (8 KB, 4 KB, 64 KB), and a final check of the
+  whole reply always lands it under the line. Without `fullUrls`, every URL (links, images, the
+  canonical URL and each Markdown link and image) loses its query and fragment inside the read itself, before the
+  Markdown is written, with `(`, `)`, `<`, `>` and spaces escaped in each destination; Markdown is cut at whole blocks
+  only, so a link is never left half-written, and the host runs a parenthesis-aware pass over it again
+  (`pluginPageRead.ts`, `pageApis.ts`, `plugin_page_reads`, `plugin_page_screenshots`).
+- `page.readTab {tabId}` with `activePage.multiTab` reads a tab you attached: typing `@tab` in a plugin's input mode
+  grants a lease on that tab's current document (its native identity: Chromium's loader id, WebKit's commit), which
+  ends when the tab closes, navigates or reloads, and the command gets `tabs: [tabId]` (`plugin_tab_leases`). Every
+  read checks the document, the lease or gesture, the plugin's run and the tab's profile again after the page answers,
+  and without `fullUrls` the URLs inside the Markdown are minimized like every other URL.
+- `contributes.pageStyles` and `contributes.contentScripts` run on pages that both their `matches` and
+  `permissions.pages` cover, and never in a private window, on Ardia's own pages, on anything but http and https, or
+  on a site where Site Controls › **Plugin scripts** is off (`Plugins/site-script-blocks.json`). Each content script
+  contribution gets its own isolated world (`ardia-plugin:<key>~<id>`), so a plugin's contributions share the DOM but
+  not globals: a `WKContentWorld` on WebKit, a DevTools-created isolated world on
+  Chromium (`ArdiaPluginWorlds.mm`, no engine change), neither able to see the page's scripts. Styles go in one
+  shared styles world. Every injection is bound to the document it was meant for. Native refuses it once that
+  document is gone: Chromium checks the main frame's loader id before and after creating the world, before caching its
+  context and before each poll hands messages on; WebKit checks its commit serial before evaluating, and a run that
+  lands in a newer document tears down the world it started there. On top of that, each world is stamped with a random
+  per-document nonce the first time Ardia uses it on a document, and every script, style, delivery and poll runs inside
+  a guard that compares it first, so an operation that reaches a replacement document (a same-address reload, or a
+  reused execution context id) returns without touching it. The world also carries a per-contribution token every
+  script and message must match, and the plugin's access is checked again right before each step. When a same-document
+  move (`pushState`) takes the page out of one contribution's `matches`, only that contribution's world is torn down;
+  the others keep running and never run twice. A contribution counts as running only once its script actually ran: a
+  run the guard refused (the route moved mid-flight) is tried again on the new route. A tab's injection record is
+  replaced only when a new document commits, not when loading starts, so a same-address reload never runs
+  `document_start` twice in the departing document. The stored address follows the move so newly matching styles and
+  scripts apply, and bridge messages and `page.sendToContent` reach only a contribution that matches the current
+  address (the world checks the address again before it dispatches). `document_start` scripts
+  run as soon as the document is there, `document_idle` ones once it has loaded, each stage on its own. Turning the
+  plugin off, pausing it, revoking it or blocking the site tears its world down at once (its timers, intervals,
+  animation frames, mutation observers and event listeners stop) and reloads a tab its scripts ran in, so nothing it
+  started keeps running (`pageWorlds.ts`, `plugin_page_styles`, `plugin_content_injections`).
+- A content script gets `ardia.bridge.send(message)` and `ardia.bridge.onMessage(fn)`. Its messages (256 KB each,
+  50 a second) reach main as `page.contentMessage {tabId, scriptId, message}`; main answers with
+  `page.sendToContent {tabId, message, scriptId?}`. WebKit carries them through a message handler scoped to the
+  plugin's world and resolved to the tab that owns the page at that moment; Chromium through a long-poll in the
+  plugin's own world. Size and rate are checked before anything is parsed (`plugin_content_messages`,
+  `plugin_content_refusals`).
+- `contributes.netRules` validates but doesn't run yet: neither engine gives Ardia a per-plugin request hook it can
+  hold to the plugin's hosts without an engine change.
+
+### Browser data and the OS
+
+Every one of these acts in the caller's profile: a profile-scoped plugin's request profile, or for a global plugin
+the `profile` it names or the front window's; a refused profile is refused, never swapped for another.
+`bookmarks.*` (`bookmarks: read|write`, the request's profile only), `history.search`/`recent` (`history: read`),
+`profiles.list`/`current`/`switch` (`profiles: read|write`), `media.sessions`/`control` (`media: read|control`),
+`splits.open` and `peek.open` (named in `permissions.state.intents`), `clipboard.writeText`/`readText`
+(`clipboard: write|read`, both just after you use the plugin), `ui.notify` (`notifications`; at most one every 2 s
+and 30 an hour; clicking it runs the named command), and `fs.pickFiles`/`saveFile` (`files: picker`, just after you
+use the plugin; native panels hand over only what you pick). A picked file is opened once (`O_NOFOLLOW`, a regular
+file, read only from that descriptor). A file of up to 256 KB comes back inline while the whole pick stays within a
+640 KB encoded budget (escaped text counted at its encoded size), so a reply always fits the 1 MB channel line;
+anything bigger, or past the budget, comes back (up to 64 MB) as a handle the SDK reads in 384 KB chunks
+(`fs.readChunk`, `fs.closeFile`; `PluginFileBatch`). `saveFile` opens the save panel first (`fs.saveBegin`), then sends
+chunks (`fs.saveChunk`) and commits atomically (`fs.saveCommit`), up to 64 MB; a chunk that fails to write
+poisons the save, so later chunks and the commit are refused and the part file is removed, never saved with a hole. Handles belong to the run: a stopped
+run can't register one, a pick that fails partway closes the ones it opened, and a read in flight keeps its
+descriptor open until it ends, however the run stops (`fileApis.ts`, `PluginCore/PluginFileHandles.swift`). Storage
+holds 16 MB.
+
+### Views
+
+`surface.patch {surfaceId, base, rev, ops}` applies the SDK's `treePatch` ops to the tree Ardia holds at revision
+`base`; any other revision or a bad op fails, and the SDK sends the whole tree (`surfacePatch.ts`,
+`plugin_surface_patches`, `plugin_surface_patch_failures`). The renderer adds `ListItemDetail` (a list item's child
+shows beside the list), `Grid`, `Table`, `Tabs`, `CodeBlock` (highlighted, with Copy), `Image` (a `data:image` URL or
+an https URL on the plugin's hosts, fetched by the host with every redirect checked, or an image file inside the
+plugin's own folder; PNG, JPEG, GIF or WebP up to 4 MB), `TagList` and `FileDropZone` (click to pick, or drop files
+on it through Ardia's `FileDropArea`; needs `files: picker`; `accept` (extensions like `.png`, or MIME types like
+`image/*`) filters both the picker and the drop, before a single-file zone takes its one file, and a
+dropped file that can't be opened or is too big is skipped rather than failing the drop; the files go to the
+surface only if the same mounted instance,
+window, profile and run are still there, and otherwise their handles are closed) (`SurfaceRich.tsx`,
+`surfaceMedia.ts`, `codeTokens.ts`).
+
+### Input modes
+
+Each `contributes.inputModes` entry tied to a command (`commands[].inputMode`) becomes a command bar scope: type its
+keyword and press Tab (or Space), type, and Enter runs the command with `{from: "inputMode", inputMode, query,
+tabs?}` (`inputModes.ts`, `plugin_input_modes`).
+
+### Menus, shortcuts and page tabs
+
+- `contributes.menus.selection` shows in the selection menu on both engines and hands the command `{selection}` (with
+  `activePage`); `page` shows in the page's own menu. Their `when` sees the same context as tab menus (`urlHost`,
+  `urlScheme`, `isActive`, `isPinned`, `isInGroup`, `isSplit`, `tabCount`). The menu carries the document it was
+  shown for, and choosing an item runs it only if the tab is still on that document and in the same profile.
+- Every plugin command is in the menu bar's Extensions menu, so Settings › Shortcuts lists it and you can bind or change
+  its key. A command's `shortcut` is its default, left off when Ardia or another plugin already holds that key. Keys
+  are read the way recorded shortcuts are (`normalShortcut`, `comboKey`): `cmd+y` is ⌘Y, not ⇧⌘Y, and the same
+  reading decides whether Ardia holds a key. Changing only a command's `shortcut` refreshes the menu bar and the
+  resolver at once.
+- A plugin page tab (`ardia://<key>/<route>`, where `<key>` is the plugin's key, like `sample__notes`;
+  `ardia://@scope/name/<route>` opens the same tab) stays mounted once shown, under one stable parent, hidden while
+  you're on another tab, so its view keeps its state (up to the 6 most recently shown, `keptPages.ts`). Its page's
+  title becomes the tab's, and Back and Forward step through its own history. When the page sets its route with
+  `?ardiaPath=` (`history.pushState`), the address follows it without reloading the page; an address you type loads it
+  fresh, even when it's the address the tab already shows (each view's route events carry the load they
+  belong to, so a late event from an older view can't overwrite a newer navigation), and Back to the page's root document puts the root address
+  back. A tab in a profile the plugin isn't on in (typed, or restored after its grant was removed) shows a notice and
+  never wakes the plugin. A profile-scoped plugin's page keeps a separate WebKit data store per profile (cookies,
+  storage, IndexedDB), all removed with the plugin (`Plugins/page-stores.json`; a profile's entry stays listed until WebKit confirms its
+  store is gone). It's a tab like any other, so it can
+  lead a group.
+
+### Not done yet (each needs an engine rebuild)
+
+- `contributes.netRules`: a request hook per plugin, held to its hosts, in both engines.
+- `contributes.menus.link` and `.image`: Chromium's context-menu hook in `ArdiaCore.h` doesn't hand Ardia the link
+  or image under the pointer.
+- Linux and Windows: `packages/plugin-broker` (Rust, QuickJS, bubblewrap) already speaks this protocol, since it relays
+  lines and shares `HostPrelude.swift`, but `apps/desktop` has no native layer that starts it, so
+  `PLATFORM_FEATURES.plugins` stays off there; `ArdiaPlugins` answers with "not available" on desktop.
+
 ## Code
 
 - `lib/pluginManifest.ts`: parsing and checks, with `pluginContributions.ts`, `pluginCommands.ts`, `pluginRows.ts`,
@@ -1131,6 +1344,18 @@ The control socket's protocol 4 adds `plugins`, `plugins.enable` (`{"waiting": t
   `packages/shell/plugin-host` is the host.
 - UI: `components/settings/panes/Plugins.tsx`, `components/plugins/` (`PluginPage`, `PluginSidePanel`,
   `PluginOverlays`, `PluginToolbarItems`, `PluginSidebarViews`, the native node renderer, the consent sheets).
+- The v3 runtime: `state/plugins/channelV3.ts` routes `netChannels.ts`, `netRequest.ts`, `services.ts`,
+  `sidecarPipe.ts`, `pageApis.ts`, `pageWorlds.ts`, `siteScriptBlocks.ts`, `browserApis.ts`, `osApis.ts`,
+  `surfacePatch.ts`, `inputModes.ts`, `fileApis.ts`, `surfaceMedia.ts`, `pluginMenuBar.ts` and `watchdog.ts`, started by
+  `runtimeV3.ts`; `lib/pluginWorlds.ts` and
+  `lib/pluginPageRead.ts` build the injected scripts; natively `PluginNetChannels.swift`, `PluginWebSocket.swift`,
+  `PluginAuthSession.swift`, `PluginFilePanels.swift`, `PluginsModule+Runtime.swift`, `PluginCore/PluginAuthRequest`,
+  `PluginUtf8Chunks`, `PluginUsage`, `PluginWebSocketCodec`, `PluginBoundedFile`, `PluginImageBytes` and
+  `ControlLineBudget`, `PluginRunTable`, `PluginLiveRuns`, `PluginFileHandles`, `PluginFileBatch`, `PluginPageStores`, `PluginImageLoader.swift`, and in `packages/ardiacore/ios` `ArdiaPluginWorlds.mm`,
+  `ArdiaWebView+PluginWorlds.mm`, `WebKitTab+PluginWorlds.swift` and `WebKitPluginWorldHandler.swift`;
+  `state/plugins/runtimeV3.test.mjs`, `runtimeV3Round2.test.mjs`, `runtimeV3Review2.test.mjs`,
+  `runtimeV3Review3.test.mjs` and `runtimeV3Review4.test.mjs`; natively
+  `plugin-tests/PluginRunTableTests.swift`.
 - The example plugin used by the tests: `tests/fixtures/plugins/example/`.
 
 ## Telemetry

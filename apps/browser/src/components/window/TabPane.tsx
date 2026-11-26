@@ -28,6 +28,7 @@ import { DeveloperBar } from "../toolbar/DeveloperBar";
 import { useDeveloperMode } from "../../state/site/developerMode";
 import { PluginPageBar } from "../plugins/PluginPageBar";
 import type { PageBarMatch } from "../../state/plugins/pageBar";
+import { useKeptPluginPage } from "../../state/plugins/hooks";
 import { PageOverlays } from "./PageOverlays";
 import { useProfileTheme } from "./ThemeScope";
 import { markNewTabPane } from "../../state/omnibox/newTabMarks";
@@ -114,6 +115,7 @@ export const TabPane = memo(function TabPane({
   }, [visible, isNewTab, small, inSplit, emptyCard]);
   const newTabPageShown = visible && isNewTab && !small && !inSplit && !emptyCard;
   const keptNewTab = useNewTabKeptForPage(tabId, newTabPageShown, visible && !isNewTab, own.appPage);
+  const keptPluginPage = useKeptPluginPage(tabId, visible && own.appPage);
   const prewarmed = usePrewarm(visible && isNewTab && !emptyCard && !mounted && !small && !inSplit);
   const toolbar = chrome.kind !== "none";
   const bar = paneBar(chrome, { visible, fullscreen, lingering });
@@ -168,7 +170,7 @@ export const TabPane = memo(function TabPane({
                 {!keptNewTab && inSplit ? <SplitEmptyState tabId={tabId} focused={focused} /> : !keptNewTab && emptyCard ? <EmptyCard windowId={windowId} tabId={tabId} /> : <NewTabPage key={tabId} tabId={tabId} toolbar={toolbar} kept={keptNewTab} />}
               </NewTabDropArea>
             )}
-            {visible && own.appPage && <InternalPage contentAreaOf={tabId} />}
+            {(visible || keptPluginPage) && own.appPage && <InternalPage contentAreaOf={tabId} hidden={!visible} />}
             {visible && (
               <PageOverlays
                 tabId={tabId}

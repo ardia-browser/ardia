@@ -209,7 +209,7 @@ before(() => {
   if (!swiftc) return;
   dir = mkdtempSync(join(tmpdir(), "control-output-"));
   writeFileSync(join(dir, "main.swift"), MAIN);
-  execFileSync("xcrun", ["swiftc", "-O", join(ios, "ControlOutput.swift"), join(ios, "ControlConnection.swift"), join(dir, "main.swift"), "-o", join(dir, "run")], { stdio: "pipe" });
+  execFileSync("xcrun", ["swiftc", "-O", join(ios, "ControlOutput.swift"), join(ios, "ControlConnection.swift"), join(ios, "PluginCore", "ControlLineBudget.swift"), join(dir, "main.swift"), "-o", join(dir, "run")], { stdio: "pipe" });
   got = JSON.parse(execFileSync(join(dir, "run"), { encoding: "utf8", timeout: 120_000 }).trim());
 });
 after(() => dir && rmSync(dir, { recursive: true, force: true }));

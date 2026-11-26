@@ -28,6 +28,7 @@ final class FileDropView: ExpoView {
   private func dropped(_ pasteboard: NSPasteboard) -> [[String: String]] {
     switch accepts {
     case "extensionPackages": DroppedLinks.extensionPackages(pasteboard)
+    case "files": DroppedLinks.items(pasteboard).filter { $0["kind"] == "file" }
     case "linksAndText": DroppedLinks.items(pasteboard, anyText: true)
     default: DroppedLinks.items(pasteboard)
     }

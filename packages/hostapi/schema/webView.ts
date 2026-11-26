@@ -117,5 +117,12 @@ export const webView = defineDomain({
       windows: "absent",
     },
   },
-  events: {},
+  events: {
+    pluginWorld: {
+      payload: "{ tabId: string; world: string; document: string; json: string; epoch?: string }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+  },
 });

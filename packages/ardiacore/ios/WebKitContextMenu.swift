@@ -280,6 +280,7 @@ final class WebKitContextMenu {
     addSearchItem()
     addPrintItem()
     addShare(.text)
+    addPageMenuItems(slot: "selection")
   }
 
   private func responderItem(_ title: String, _ selector: Selector) -> NSMenuItem {
@@ -328,15 +329,17 @@ final class WebKitContextMenu {
     addPageMenuItems()
   }
 
-  private func addPageMenuItems() {
+  private func addPageMenuItems(slot: String = "page") {
     let tab = tab
+    let text = slot == "selection" ? target.selection : ""
     let items = tab.pageMenuItems.compactMap { item -> (id: String, title: String)? in
-      guard let id = item["id"], let title = item["title"], !id.isEmpty, !title.isEmpty, id != "search" else { return nil }
+      guard let id = item["id"], let title = item["title"], !id.isEmpty, !title.isEmpty, id != "search", (item["slot"] ?? "page") == slot else { return nil }
       return (id, title)
     }
     guard !items.isEmpty else { return }
+    let document = WebKitPluginWorldHandler.document(of: tab)
     separate()
-    for item in items { add(WebKitMenuAction.item(item.title) { tab.emit("command", ["command": item.id, "text": ""]) }) }
+    for item in items { add(WebKitMenuAction.item(item.title) { tab.emit("command", ["command": item.id, "text": text, "document": document]) }) }
   }
 
   func build() -> NSMenu {

@@ -41,6 +41,7 @@ import { useControlTurnedOff } from "../../../state/app/programControlSetting";
 import { useNeverChosenCount } from "../../../state/site/passwordManager";
 import { PasswordManagerDetails } from "./PasswordManagerPlugin";
 import { updateNoteText } from "../../../state/plugins/featured";
+import { PluginHealthDetails } from "./PluginHealthDetails";
 
 export function PluginsPane({ detail }: SettingsPlace) {
   if (!PLATFORM_FEATURES.plugins) return <UnavailablePage />;
@@ -281,6 +282,7 @@ function PluginPage({ name }: { name: string }) {
             <Button title="Restart" onPress={() => restartPlugin(name)} />
           </Row>
         ) : null}
+        {active && (m?.main || m?.process) ? <PluginHealthDetails name={name} /> : null}
         {m?.programs.length && active ? (
           <Row title={m.programs.length === 1 ? "Its command" : "Its commands"} description={programsText(programs) ?? m.programs.map((p) => p.name).join(", ")}>
             {canRelink(programs) ? <Button title="Try Again" onPress={() => relinkPrograms(name)} /> : null}

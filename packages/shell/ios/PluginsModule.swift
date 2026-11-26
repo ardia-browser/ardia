@@ -118,16 +118,51 @@ public class PluginsModule: Module, PluginsNative {
 
     Self.devSnapshotPageFunction
 
+    Self.fetchStreamFunction
+
+    Self.cancelStreamFunction
+
+    Self.wsConnectFunction
+
+    Self.wsSendFunction
+
+    Self.wsCloseFunction
+
+    Self.closeNetFunction
+
+    Self.usageFunction
+
+    Self.authSignInFunction
+
+    Self.pickFilesFunction
+
+    Self.openDroppedFilesFunction
+
+    Self.readFileChunkFunction
+
+    Self.saveBeginFunction
+
+    Self.saveChunkFunction
+
+    Self.finishFileFunction
+
+    Self.loadImageFunction
+
+    Self.readPluginAssetFunction
+
     View(PluginPageView.self) {
       Events("onLoaded", "onTitleChange", "onNavigationChange", "onMessage")
       Prop("plugin") { (view: PluginPageView, value: String) in view.plugin = value }
       Prop("url") { (view: PluginPageView, value: String) in view.url = value }
       Prop("network") { (view: PluginPageView, value: Bool) in view.network = value }
       Prop("folderId") { (view: PluginPageView, value: String) in view.folderId = value }
+      Prop("storeKey") { (view: PluginPageView, value: String?) in view.storeKey = value ?? "" }
       Prop("approved") { (view: PluginPageView, value: String) in view.approved = value }
       Prop("run") { (view: PluginPageView, value: Int) in view.run = value }
       Prop("context") { (view: PluginPageView, value: String) in view.context = value }
       Prop("themeCss") { (view: PluginPageView, value: String?) in view.themeCss = value ?? "" }
+      AsyncFunction("goBack") { (view: PluginPageView) in view.goBack() }.runOnQueue(.main)
+      AsyncFunction("goForward") { (view: PluginPageView) in view.goForward() }.runOnQueue(.main)
     }
 
     OnDestroy {
@@ -159,6 +194,7 @@ public class PluginsModule: Module, PluginsNative {
     var process = PluginProcess.Spec(name: name, run: run, memoryMB: memoryMB, network: network, folderId: folderId, approved: approved, hasPage: hasPage, launch: launch)
     process.runtime = runtime
     process.entry = entry
+    process.sidecar = spec["sidecar"] as? Bool ?? false
     PluginHost.shared.start(process) { reply in promise.resolve(reply) }
   }
 

@@ -16,7 +16,7 @@ export { compareVersions } from "./versions";
 export { LIMITS, NAME_PATTERN, KEY_PATTERN, VERSION_PATTERN, SYMBOL_PATTERN, KEYWORD_PATTERN, isPluginPath, DEFAULT_MAIN_MB, DEFAULT_SIDECAR_MB } from "./pluginChecks";
 export { ROW_TYPES, rowValue, storedRows, secretRows, type RowSpec, type RowType, type RowValue, type SettingsSpec } from "./pluginRows";
 export { SPLIT_SIDES, isToolAction, isOpenAction, isViewAction, isPanelAction, isHandlerAction, type PageSide, type CommandAction, type CommandSpec, type ToolSpec } from "./pluginCommands";
-export { PLUGIN_PERMISSIONS, PERMISSION_KEYS, NO_PERMISSIONS, TAB_ACCESS, grantedPermissions, missingPermissions, canReadTabs, canOpenTabs, hasNetwork, allowedHostsOf, type PluginPermission, type PluginPermissions, type PermissionKey, type TabAccess, type NetworkAccess } from "./pluginPermissions";
+export { PLUGIN_PERMISSIONS, PERMISSION_KEYS, NO_PERMISSIONS, TAB_ACCESS, LEVELED, hasLevel, grantedPermissions, missingPermissions, canReadTabs, canOpenTabs, hasNetwork, allowedHostsOf, type PluginPermission, type PluginPermissions, type PermissionKey, type TabAccess, type NetworkAccess } from "./pluginPermissions";
 export { MENU_SLOTS, PANEL_MODES, PAGE_PANEL_ID, CONTRIBUTES_KEYS, pagePanelOf, viewIdsOf, type MenuSlot, type PanelMode, type MenuContribution, type MenuContributions, type ToolbarItem, type SidebarView, type PanelSpec, type OmniboxSpec, type ThemeSpec, type PluginContributions } from "./pluginContributions";
 export { STARTUP_EVENTS, ACTIVATION_PREFIXES, activationEventProblem, derivedActivationEvents, startsEagerly, urlActivationHosts } from "./pluginActivation";
 export type { MainSpec, ProcessSpec, ProgramSpec } from "./pluginRuntime";
@@ -107,11 +107,12 @@ function pageOf(k: PluginContributions): PageSpec | null {
 }
 
 const V2_HOST = /^(\*\.)?[a-z0-9.-]{1,253}$/;
+const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1):[1-9]\d{0,4}$/;
 
 function runtimePermissions(p: ManifestV3["permissions"]): Fields {
   if (!p) return {};
   const active = p.activePage === true || (isFields(p.activePage) && p.activePage.read === true);
-  const hosts = Array.isArray(p.network) ? p.network.filter((h) => V2_HOST.test(h)) : [];
+  const hosts = Array.isArray(p.network) ? p.network.filter((h) => V2_HOST.test(h) || LOOPBACK_HOST.test(h)) : [];
   const network = p.network === "*" ? "*" : hosts.length ? hosts : false;
   const state = isFields(p.state)
     ? {
@@ -120,8 +121,12 @@ function runtimePermissions(p: ManifestV3["permissions"]): Fields {
       }
     : false;
   const out: Fields = { tabs: p.tabs ?? false, network, state };
-  for (const key of ["fullUrls", "workspace", "commands", "storage", "secrets", "control"] as const) if (p[key] !== undefined) out[key] = p[key];
+  for (const key of ["fullUrls", "workspace", "commands", "storage", "secrets", "control", "notifications", "pages", "bookmarks", "history", "downloads", "media", "profiles", "clipboard", "files"] as const) if (p[key] !== undefined) out[key] = p[key];
   if (active) out.activePage = true;
+  if (active && isFields(p.activePage)) {
+    if (p.activePage.screenshot === true) out.screenshot = true;
+    if (p.activePage.multiTab === true) out.multiTab = true;
+  }
   return out;
 }
 
@@ -131,7 +136,7 @@ function runtimeContributes(c: ManifestV3["contributes"]): Fields {
   if (!c) return {};
   const out: Fields = {};
   for (const key of RUNTIME_CONTRIBUTES) if (c[key] !== undefined) out[key] = c[key];
-  if (c.commands) out.commands = c.commands.map(({ inputMode: _inputMode, ...rest }) => rest);
+  if (c.commands) out.commands = c.commands.map(({ inputMode: _inputMode, shortcut: _shortcut, ...rest }) => rest);
   if (c.menus) out.menus = Object.fromEntries(MENU_SLOTS.flatMap((slot) => (c.menus?.[slot] ? [[slot, c.menus[slot]]] : [])));
   return out;
 }
@@ -153,7 +158,7 @@ function runtimeDoc(v3: ManifestV3, key: string): Fields {
   if (v3.telemetry !== undefined) doc.telemetry = v3.telemetry;
   if (v3.main !== undefined) doc.main = v3.main;
   if (v3.memoryMB !== undefined && v3.main !== undefined) doc.memoryMB = v3.memoryMB;
-  if (v3.sidecar !== undefined && v3.main === undefined) doc.sidecar = v3.sidecar;
+  if (v3.sidecar !== undefined) doc.sidecar = v3.sidecar;
   const activation = runtimeActivation(v3.activationEvents);
   if (activation?.length) doc.activationEvents = activation;
   return doc;

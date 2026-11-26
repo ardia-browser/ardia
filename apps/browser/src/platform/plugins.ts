@@ -20,6 +20,23 @@ import {
   type PluginStartResult,
   type PluginStartSpec,
   type PluginStorageReadResult,
+  type PluginStreamSpec,
+  type PluginStreamHead,
+  type PluginSocketSpec,
+  type PluginSocketOpen,
+  type PluginNetOutcome,
+  type PluginUsageRow,
+  type PluginAuthSpec,
+  type PluginAuthResult,
+  type PluginPickSpec,
+  type PluginPickResult,
+  type PluginPickedFile,
+  type PluginSaveSpec,
+  type PluginSaveResult,
+  type PluginDropSpec,
+  type PluginChunkResult,
+  type PluginImageSpec,
+  type PluginImageResult,
 } from "@ardia/shell";
 
 export type {
@@ -43,6 +60,23 @@ export type {
   PluginStartResult,
   PluginStartSpec,
   PluginStorageReadResult,
+  PluginStreamSpec,
+  PluginStreamHead,
+  PluginSocketSpec,
+  PluginSocketOpen,
+  PluginNetOutcome,
+  PluginUsageRow,
+  PluginAuthSpec,
+  PluginAuthResult,
+  PluginPickSpec,
+  PluginPickResult,
+  PluginPickedFile,
+  PluginSaveSpec,
+  PluginSaveResult,
+  PluginDropSpec,
+  PluginChunkResult,
+  PluginImageSpec,
+  PluginImageResult,
 };
 
 let bound: ReturnType<typeof nativeModule<"ArdiaPlugins">> | null = null;
@@ -79,3 +113,19 @@ export const writePluginStorage = (name: string, text: string) => Plugins().stor
 export const readPluginFile = (name: string, folderId: string, approved: string, path: string) => Plugins().readPluginFile(name, folderId, approved, path);
 export const onPluginLine = (listener: (e: PluginLine) => void) => Plugins().addListener("onLine", listener);
 export const onPluginExit = (listener: (e: PluginExit) => void) => Plugins().addListener("onExit", listener);
+export const startPluginStream = (spec: PluginStreamSpec) => Plugins().fetchStream(spec);
+export const cancelPluginStream = (name: string, run: number, stream: string) => Plugins().cancelStream(name, run, stream);
+export const connectPluginSocket = (spec: PluginSocketSpec) => Plugins().wsConnect(spec);
+export const sendPluginSocket = (name: string, run: number, socket: string, data: string, binary: boolean) => Plugins().wsSend(name, run, socket, data, binary);
+export const closePluginSocket = (name: string, run: number, socket: string, code: number, reason: string) => Plugins().wsClose(name, run, socket, code, reason);
+export const closePluginNet = (name: string, run: number) => Plugins().closeNet(name, run);
+export const pluginUsage = () => Plugins().usage();
+export const pluginSignIn = (spec: PluginAuthSpec) => Plugins().authSignIn(spec);
+export const pickPluginFiles = (spec: PluginPickSpec) => Plugins().pickFiles(spec);
+export const openDroppedPluginFiles = (spec: PluginDropSpec) => Plugins().openDroppedFiles(spec);
+export const readPluginFileChunk = (name: string, run: number, handle: string, offset: number, length: number) => Plugins().readFileChunk(name, run, handle, offset, length);
+export const beginPluginSave = (spec: PluginSaveSpec) => Plugins().saveBegin(spec);
+export const savePluginChunk = (name: string, run: number, handle: string, data: string) => Plugins().saveChunk(name, run, handle, data);
+export const finishPluginFile = (name: string, run: number, handle: string, commit: boolean) => Plugins().finishFile(name, run, handle, commit);
+export const loadPluginImage = (spec: PluginImageSpec) => Plugins().loadImage(spec);
+export const readPluginAssetImage = (name: string, folderId: string, approved: string, path: string) => Plugins().readPluginAsset(name, folderId, approved, path);

@@ -353,21 +353,60 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
   });
 }
 
+- (void)notePageMenuDocument {
+  self.pageMenuDocument = nil;
+  if (!self.pageMenuItems.count) return;
+  const NSUInteger generation = ++self.pageMenuGeneration;
+  const NSInteger count = (NSInteger)_tab.committedDocumentCount;
+  self.pageMenuDocumentCount = count;
+  NSMutableArray<void (^)(NSString *)> *waiting = [NSMutableArray array];
+  self.pageMenuWaiting = waiting;
+  __weak ArdiaWebView *weakSelf = self;
+  [self pluginDocument:^(NSString *document) {
+    ArdiaWebView *strong = weakSelf;
+    NSString *resolved = strong && [strong pageMenuStillOn:count] ? (document ?: @"") : @"";
+    if (strong && strong.pageMenuGeneration == generation) {
+      strong.pageMenuDocument = resolved;
+      strong.pageMenuWaiting = nil;
+    }
+    for (void (^send)(NSString *) in [waiting copy]) send(resolved);
+    [waiting removeAllObjects];
+  }];
+}
+
+- (BOOL)pageMenuStillOn:(NSInteger)count {
+  return !_tab.closed && (NSInteger)_tab.committedDocumentCount == count;
+}
+
+- (void)whenPageMenuDocument:(void (^)(NSString *document))send {
+  if (self.pageMenuWaiting) return [self.pageMenuWaiting addObject:[send copy]];
+  send([self pageMenuStillOn:self.pageMenuDocumentCount] ? (self.pageMenuDocument ?: @"") : @"");
+}
+
 - (NSArray<NSDictionary<NSString *, NSString *> *> *)tab:(ArdiaCoreTab *)tab
                            contextMenuItemsForSelection:(NSString *)text {
-  return @[ @{
+  [self notePageMenuDocument];
+  NSMutableArray *items = [NSMutableArray arrayWithObject:@{
     @"id" : @"search",
     @"title" : [NSString stringWithFormat:@"Search %@ for “%@”", gSearchEngineName, SelectionLabel(text)],
     @"replaces" : @"search",
-  } ];
+  }];
+  for (NSDictionary *item in self.pageMenuItems) {
+    NSString *itemId = Field<NSString>(item, @"id");
+    NSString *title = Field<NSString>(item, @"title");
+    if (itemId.length && title.length && [Field<NSString>(item, @"slot") isEqualToString:@"selection"]) [items addObject:@{@"id" : itemId, @"title" : title}];
+  }
+  return items;
 }
 
 - (NSArray<NSDictionary<NSString *, NSString *> *> *)tab:(ArdiaCoreTab *)tab contextMenuItemsForPage:(NSString *)url {
+  if (!self.pageMenuWaiting || ![self pageMenuStillOn:self.pageMenuDocumentCount]) [self notePageMenuDocument];
   NSMutableArray *items = [NSMutableArray array];
   for (NSDictionary *item in self.pageMenuItems) {
     NSString *itemId = Field<NSString>(item, @"id");
     NSString *title = Field<NSString>(item, @"title");
-    if (itemId.length && title.length && ![itemId isEqualToString:@"search"]) [items addObject:@{@"id" : itemId, @"title" : title}];
+    NSString *slot = Field<NSString>(item, @"slot");
+    if (itemId.length && title.length && ![itemId isEqualToString:@"search"] && (!slot.length || [slot isEqualToString:@"page"])) [items addObject:@{@"id" : itemId, @"title" : title}];
   }
   return items;
 }
@@ -382,7 +421,14 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
   }
   for (NSDictionary *item in self.pageMenuItems)
     if ([Field<NSString>(item, @"id") isEqualToString:itemId]) {
-      [self emit:@"command" payload:@{@"command" : itemId, @"text" : @""}];
+      const BOOL selected = [Field<NSString>(item, @"slot") isEqualToString:@"selection"];
+      NSString *text = selected ? (selection ?: @"") : @"";
+      __weak ArdiaWebView *weakSelf = self;
+      [self whenPageMenuDocument:^(NSString *document) {
+        ArdiaWebView *strong = weakSelf;
+        if (!strong) return;
+        [strong emit:@"command" payload:@{@"command" : itemId, @"text" : text, @"document" : document ?: @""}];
+      }];
       return;
     }
 }

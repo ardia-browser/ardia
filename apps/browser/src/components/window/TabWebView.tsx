@@ -52,10 +52,11 @@ import { withoutFragment } from "../../lib/url";
 import { adoptOf, loadedPage, navigationOf } from "../../state/tabs/pageSession";
 import { noteCommit } from "../../state/automation/automationEvents";
 import { notePluginStateCommit } from "../../state/plugins/stateCommits";
+import { notePluginWorldCommit } from "../../state/plugins/pageWorlds";
 import { forgetUnreadIfGone, noteAppBadge, noteUnreadFavicon, noteUnreadLoading, noteUnreadPageEnded } from "../../state/tabs/unread";
 import { trackPageProcessGone } from "../../state/telemetry/diagnostics";
-import { defaultTarget, languageName, releaseTranslation, revertPage, translateCrashContext, translatePage, translation, useTranslateState } from "../../state/site/translate";
-import { translatePageMenuItems } from "../../state/site/translateMenu";
+import { releaseTranslation, translateCrashContext } from "../../state/site/translate";
+import { runPageMenuCommand, usePageMenuItems } from "../../state/site/pageMenu";
 import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
 import { noteWebKitFocusRestore } from "../../state/telemetry/pageFocusReturns";
 import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
@@ -104,8 +105,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
     return (handle: Parameters<typeof register>[0]) => (handle && peekOf !== undefined && promotedFromPeek(tabId) ? undefined : register(handle));
   }, [tabId]);
   const autoPictureInPicture = useAutoPictureInPicture(tabId, visible);
-  const translateState = useTranslateState(tabId);
-  const pageMenuItems = useMemo(() => (translation ? translatePageMenuItems(translateState, languageName(defaultTarget())) : []), [translateState]);
+  const pageMenuItems = usePageMenuItems(tabId);
   useEffect(() => (visible ? presentTab(tabId) : noteTabHidden(tabId)), [tabId, visible]);
   const pageColor = useProfilesValue(profileId, (profiles) => (isIncognitoProfile(profileId) ? "incognito" : (profiles[profileId]?.color ?? "plum")));
   const theme = useProfileTheme(profileId);
@@ -227,6 +227,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         const pageArrived = trackPageArrival(tabId);
         noteCommit(tabId, committedUrl, committedAt, httpStatus);
         notePluginStateCommit(tabId, committedUrl, committedAt);
+        notePluginWorldCommit(tabId, committedAt);
         verificationCodeDocument(tabId, committedAt);
         if (!retired) notePageCommit(tabId, committedAt);
         notePageDocument(tabId, reported, committedUrl, committedAt, isIncognitoProfile(profileId), documentReporter);
@@ -355,14 +356,13 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
       onWindowClose={() => pageAskedToClose(tabId)}
       onTransferRefused={(from) => returnRefusedMove(tabId, from)}
       onNotification={(notification) => showWebNotification(tabId, notification)}
-      onCommand={({ command, text, modifiers, share, anchor, point }) => {
+      onCommand={({ command, text, modifiers, share, anchor, point, document }) => {
         if (command === "search") searchSelection(tabId, text, modifiers);
         else if (command === "share" && share) void shareFromPage(tab(), share, anchor);
         else if (command === "copyLinkToHighlight") void copyLinkToSelection(tabId);
         else if (command === "escape") escapePressed(tabId, "page");
         else if (command === "hideElement" && point) void startHidingElement(tabId, point);
-        else if (command === "translatePage") void translatePage(tabId, defaultTarget(), "page_menu");
-        else if (command === "showOriginal") void revertPage(tabId);
+        else runPageMenuCommand(tabId, command, text, document ?? "");
       }}
       onSelection={(selection) => setPageSelection(tabId, selection)}
       onScroll={(state) => noteScroll(tabId, state)}

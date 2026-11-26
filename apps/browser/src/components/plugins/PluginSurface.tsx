@@ -23,6 +23,7 @@ import { FormNode, SelectNode, TextFieldNode, ToggleNode } from "./SurfaceForm";
 import { SurfaceShortcutScope } from "./SurfaceActions";
 import { ListNode } from "./SurfaceList";
 import { SidebarItemNode, SidebarSectionNode, SidebarViewNode } from "./SurfaceSidebar";
+import { CodeBlockNode, FileDropZoneNode, GridNode, ImageNode, ListItemDetailNode, TableNode, TabsNode, TagListNode } from "./SurfaceRich";
 import { SURFACE } from "./tokens";
 import { isHandlerRef, nodeKey, SurfaceContext, type Child, type SurfaceDispatch, type SurfaceFireOptions } from "./surfaceNodes";
 import type { SurfaceKeys } from "./surfaceShortcuts";
@@ -51,6 +52,14 @@ const NODES: Record<string, ComponentType<{ node: PluginNode }>> = {
   ActionPanel: ActionPanelNode,
   Action: ActionNode,
   WebView: WebViewNode,
+  ListItemDetail: ListItemDetailNode,
+  Grid: GridNode,
+  Table: TableNode,
+  Tabs: TabsNode,
+  CodeBlock: CodeBlockNode,
+  Image: ImageNode,
+  TagList: TagListNode,
+  FileDropZone: FileDropZoneNode,
 };
 
 function renderChild(child: Child, index: number): ReactNode {

@@ -92,7 +92,7 @@ function stopNative(name: string, entry: Supervised, graceMs: number, consent: C
 
 function startSpec(name: string, entry: Pick<Supervised, "manifest" | "folderId" | "hash">, launchToken: number): PluginStartSpec {
   const m = entry.manifest;
-  const base = { name, network: m.sidecar !== null && m.permissions.network !== false, folderId: entry.folderId, approved: entry.hash, page: m.contributes.panels.some((p) => !!p.file), launch: launchToken };
+  const base = { name, network: m.main === null && m.sidecar !== null && m.permissions.network !== false, folderId: entry.folderId, approved: entry.hash, page: m.contributes.panels.some((p) => !!p.file), launch: launchToken };
   if (m.main) return { ...base, runtime: "js", entry: m.main.entry, run: [], memoryMB: m.main.memoryMB };
   return { ...base, run: m.sidecar?.run ?? [], memoryMB: m.sidecar?.memoryMB ?? 0 };
 }

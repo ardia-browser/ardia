@@ -44,6 +44,8 @@ import { onLiveChange } from "../tabs/tabLive";
 import { usePages } from "../tabs/pageState";
 import { openFromWindowlessPage } from "../tabs/openFromWindowlessPage";
 import { startCaptionRegionSync } from "../windows/captionRegions";
+import { onPluginMenuBarChange } from "../plugins/pluginMenuBar";
+import { shortcutSourcesKey } from "../commands/commandCatalog";
 
 const QUIT_SAVES_WAIT_MS = 3_000;
 
@@ -148,7 +150,7 @@ export function startNativeSync() {
     lastMenu = json;
     lastBookmarkMenus = bookmarkMenus;
     const sent = setMenuStateParts(state, bookmarksChanged);
-    const menuItems = JSON.stringify([state.profiles.map((p) => p.id), (state.extensions ?? []).map((e) => e.id)]);
+    const menuItems = JSON.stringify([state.profiles.map((p) => p.id), (state.extensions ?? []).map((e) => e.id), shortcutSourcesKey()]);
     if (menuItems === lastMenuItems) return void sent;
     lastMenuItems = menuItems;
     void sent.then(menuShortcuts).then((items) => {
@@ -164,6 +166,7 @@ export function startNativeSync() {
     windows.sync(s, prev);
     if (!menuReads || menuInputsChanged(menuReads, s, prev)) menuTimer ??= setTimeout(syncMenu, 120);
   });
+  onPluginMenuBarChange(() => void (menuTimer ??= setTimeout(syncMenu, 120)));
   onLiveChange((tabId) => {
     if (menuTimer !== undefined) return;
     const s = store.getState();

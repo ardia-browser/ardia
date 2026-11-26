@@ -17,7 +17,8 @@ enum PluginStorageRead: Equatable {
 
 enum PluginStorage {
   static let fileName = "storage.json"
-  static let limit = 2 << 20
+  static let limit = 16 << 20
+  static var limitText: String { "\(limit >> 20) MB" }
 
   static func read(in directory: Int32) -> PluginStorageRead {
     let fd = openat(directory, fileName, O_RDONLY | O_NONBLOCK | O_CLOEXEC | O_NOFOLLOW)
@@ -28,7 +29,7 @@ enum PluginStorage {
     defer { Darwin.close(fd) }
     var info = stat()
     guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { return .error("its storage isn't a file") }
-    guard info.st_size <= off_t(limit) else { return .error("its storage is over 2 MB") }
+    guard info.st_size <= off_t(limit) else { return .error("its storage is over \(limitText)") }
     guard let data = PluginFiles.readAll(fd, limit: limit) else { return .error("its storage couldn't be read") }
     guard let text = String(data: data, encoding: .utf8) else { return .error("its storage isn't UTF-8") }
     return .ok(text)
@@ -40,7 +41,7 @@ enum PluginStorage {
 
   static func write(in directory: Int32, text: String) -> FolderRefusal? {
     let bytes = Array(text.utf8)
-    guard bytes.count <= limit else { return FolderRefusal(reason: "its storage would be over 2 MB") }
+    guard bytes.count <= limit else { return FolderRefusal(reason: "its storage would be over \(limitText)") }
     guard isJSON(text) else { return FolderRefusal(reason: "its storage has to be JSON") }
     var existing = stat()
     if fstatat(directory, fileName, &existing, AT_SYMLINK_NOFOLLOW) == 0, (existing.st_mode & S_IFMT) != S_IFREG {

@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 import type { PanelSpec } from "../../lib/pluginManifest";
 import { Box, Button, Text } from "../ui";
 import { useTab, useWindowId } from "../../state/browser/hooks";
-import { usePluginActive, usePluginManifest, usePluginPageContext, usePluginPageSpec, usePluginPageUrl, usePluginProcess, usePluginWindowEligible } from "../../state/plugins/hooks";
+import { usePluginActive, usePluginLoadPath, usePluginOnInProfile, usePluginManifest, usePluginPageContext, usePluginPageSpec, usePluginPageUrl, usePluginProcess, usePluginWindowEligible } from "../../state/plugins/hooks";
 import { pluginPagePath } from "../../state/plugins/actions";
 import { panelOfPath, wakeForFilePage } from "../../state/plugins/pages";
 import { openSettings } from "../../state/settings/settingsWindows";
@@ -34,7 +34,9 @@ function viewPanelOf(panels: readonly PanelSpec[], path: string): PanelSpec | nu
 export function PluginPage({ tabId, name }: { tabId: string; name: string }) {
   const windowId = useWindowId();
   const eligible = usePluginWindowEligible(windowId);
-  const path = useTab(tabId, (t) => pluginPagePath(t?.url ?? ""));
+  const { path, load } = usePluginLoadPath(tabId, useTab(tabId, (t) => pluginPagePath(t?.url ?? "")));
+  const profileId = useTab(tabId, (t) => t?.profileId ?? null);
+  const inProfile = usePluginOnInProfile(name, profileId);
   const spec = usePluginPageSpec(name);
   const manifest = usePluginManifest(name);
   const active = usePluginActive(name);
@@ -44,9 +46,10 @@ export function PluginPage({ tabId, name }: { tabId: string; name: string }) {
   const viewPanel = manifest ? viewPanelOf(manifest.contributes.panels, path) : null;
   const title = spec?.title ?? viewPanel?.title ?? manifest?.title ?? name;
   useEffect(() => {
-    if (eligible && active && url) wakeForFilePage(name, path);
-  }, [eligible, active, url, name, path]);
+    if (eligible && active && inProfile && url) wakeForFilePage(name, path, profileId);
+  }, [eligible, active, inProfile, url, name, path, profileId]);
   if (!eligible) return <Notice name={name} title="Plugins aren't available in private windows" detail="Open this plugin in a regular window." />;
+  if (active && !inProfile) return <Notice name={name} title={`${title} isn't on in this profile`} detail="Turn it on for this profile in Settings › Plugins to use its page here." />;
   if (!active || (!spec && !viewPanel)) return <Notice name={name} title={`${title} is off`} detail="Turn the plugin on in Settings › Plugins to use its page." />;
   if (viewPanel?.view && !url) {
     return (
@@ -63,7 +66,7 @@ export function PluginPage({ tabId, name }: { tabId: string; name: string }) {
   }
   return (
     <View style={StyleSheet.absoluteFill}>
-      <PluginFileView plugin={name} url={url} context={context} />
+      <PluginFileView key={load} load={load} plugin={name} url={url} context={context} tabId={tabId} />
     </View>
   );
 }

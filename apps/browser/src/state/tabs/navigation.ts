@@ -66,8 +66,16 @@ export async function goBackAsking(tabId: string, mayAct: () => boolean = () => 
   return true;
 }
 
+export type PageNavigator = { goBack(): unknown; goForward(): unknown };
+const pageNavigators = new Map<string, PageNavigator>();
+
+export function registerPageNavigator(tabId: string, navigator: PageNavigator): () => void {
+  pageNavigators.set(tabId, navigator);
+  return () => void (pageNavigators.get(tabId) === navigator && pageNavigators.delete(tabId));
+}
+
 function goBackHere(tabId: string) {
-  if (liveOf(tabId).canGoBack) return void webviews.get(tabId)?.goBack();
+  if (liveOf(tabId).canGoBack) return void (pageNavigators.get(tabId)?.goBack() ?? webviews.get(tabId)?.goBack());
   if (pageOf(tabId).backToNewTab) return showNewTab(tabId);
   if (backClosesTab(store(), tabId)) {
     noteBackCloseToOpener();
@@ -98,6 +106,8 @@ function goForwardHere(tabId: string): boolean {
     hideNewTab(tabId);
     return true;
   }
+  const navigator = pageNavigators.get(tabId);
+  if (navigator) return void navigator.goForward(), true;
   const page = webviews.get(tabId);
   if (!page) return false;
   void page.goForward();

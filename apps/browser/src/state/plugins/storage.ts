@@ -1,7 +1,7 @@
 import { isFields } from "../../lib/decode";
 import { readStorageText, writeStorageText } from "./hostIo";
 
-export const MAX_STORAGE_BYTES = 2 * 1024 * 1024;
+export const MAX_STORAGE_BYTES = 16 * 1024 * 1024;
 const STORAGE_LIMITS = { key: 128, keys: 1000, valueBytes: 256 * 1024, totalBytes: MAX_STORAGE_BYTES } as const;
 
 const STORAGE_KEY = /^[\x21-\x7e]{1,128}$/;

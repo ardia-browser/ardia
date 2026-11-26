@@ -118,8 +118,29 @@ enum PluginFetchPolicy {
     isolated && allowedHosts.contains(loopbackForTests)
   }
 
+  static let loopbackNames: [String: String] = ["localhost": "127.0.0.1", "127.0.0.1": "127.0.0.1", "::1": "::1"]
+
+  static func loopbackPorts(_ allowedHosts: [String]) -> Set<Int> {
+    var ports = Set<Int>()
+    for entry in allowedHosts.prefix(maxAllowedHosts) {
+      let rule = entry.trimmingCharacters(in: .whitespaces).lowercased()
+      guard let colon = rule.lastIndex(of: ":") else { continue }
+      let name = normalizedHost(String(rule[rule.startIndex..<colon]))
+      let digits = rule[rule.index(after: colon)...]
+      guard loopbackNames[name] != nil, (1...5).contains(digits.count), digits.utf8.allSatisfy({ $0 >= 0x30 && $0 <= 0x39 }), let port = Int(digits), (1...65535).contains(port) else { continue }
+      ports.insert(port)
+    }
+    return ports
+  }
+
+  static func loopbackAddress(for url: URL, allowedHosts: [String]) -> String? {
+    guard let raw = url.host, let address = loopbackNames[normalizedHost(raw)], url.user == nil, url.password == nil else { return nil }
+    return loopbackPorts(allowedHosts).contains(PluginHttpCodec.port(of: url)) ? address : nil
+  }
+
   static func check(_ url: URL, allowedHosts: [String], allowLoopback: Bool = false) -> String? {
     guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return "only https addresses can be fetched" }
+    if loopbackAddress(for: url, allowedHosts: allowedHosts) != nil { return nil }
     guard url.user == nil, url.password == nil else { return "the address carries a user name or password" }
     guard let rawHost = url.host, !rawHost.isEmpty else { return "the address has no host" }
     if scheme == "http", !(allowLoopback && normalizedHost(rawHost) == loopbackForTests) { return "only https addresses can be fetched; plain http would send the request unencrypted" }

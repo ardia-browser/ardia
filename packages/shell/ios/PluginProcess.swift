@@ -38,7 +38,10 @@ final class PluginProcess: PluginRun {
     let launch: Int
     var runtime = "process"
     var entry: String?
+    var sidecar = false
 
+    static let sidecarSuffix = "/sidecar"
+    var runKey: String { sidecar ? name + Self.sidecarSuffix : name }
     var isScript: Bool { runtime == "js" }
     var sandboxNetwork: Bool { isScript ? false : network }
   }
@@ -108,7 +111,7 @@ final class PluginProcess: PluginRun {
 
   static func spawn(
     _ spec: Spec, run: Int, folders: PluginFolders, queue: DispatchQueue, certificates: PluginSandbox.PreparedCertificates,
-    onLine: @escaping (PluginProcess, String) -> Void, onExit: @escaping (PluginProcess, Int32?, Int32?, Bool) -> Void
+    onLine: @escaping (PluginProcess, String) -> Void, onClose: @escaping (PluginProcess) -> Void = { _ in }, onExit: @escaping (PluginProcess, Int32?, Int32?, Bool) -> Void
   ) -> Result<PluginProcess, Failure> {
     let folder: OpenedFolder
     switch folders.approvedFolder(spec.name, folderId: spec.folderId, approved: spec.approved) {
@@ -197,8 +200,8 @@ final class PluginProcess: PluginRun {
       return .failure(.refused("it couldn't start (\(errnoText(result)))"))
     }
     let limit = UInt64(max(64, spec.memoryMB)) << 20
-    let process = PluginProcess(name: spec.name, run: run, pid: pid, queue: queue, memoryLimit: limit, log: log, approved: spec.approved, hasPage: spec.hasPage, launch: spec.launch)
-    process.watch(channel: pair[0], onLine: onLine, onExit: onExit)
+    let process = PluginProcess(name: spec.runKey, run: run, pid: pid, queue: queue, memoryLimit: limit, log: log, approved: spec.approved, hasPage: spec.hasPage, launch: spec.launch)
+    process.watch(channel: pair[0], lines: spec.sidecar ? .messages : .requests, onLine: onLine, onClose: onClose, onExit: onExit)
     return .success(process)
   }
 
@@ -208,14 +211,20 @@ final class PluginProcess: PluginRun {
     return body(pointers)
   }
 
-  private func watch(channel: Int32, onLine: @escaping (PluginProcess, String) -> Void, onExit: @escaping (PluginProcess, Int32?, Int32?, Bool) -> Void) {
+  private func watch(
+    channel: Int32, lines: ControlLineBudget.Mode, onLine: @escaping (PluginProcess, String) -> Void, onClose: @escaping (PluginProcess) -> Void,
+    onExit: @escaping (PluginProcess, Int32?, Int32?, Bool) -> Void
+  ) {
     let connection = ControlConnection(
       id: run, fd: channel, queue: queue,
       onLine: { [weak self] _, line in
         guard let self, !self.answeredPageLine(line) else { return }
         onLine(self, line)
       },
-      onClose: { _ in }, onWritten: { _ in })
+      onClose: { [weak self] _ in
+        guard let self else { return }
+        onClose(self)
+      }, onWritten: { _ in }, lines: lines)
     self.connection = connection
     connection.open()
     let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: queue)

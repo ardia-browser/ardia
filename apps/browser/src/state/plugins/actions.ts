@@ -2,19 +2,26 @@ import { pluginsFolder, revealPluginLog, revealPluginsFolder } from "../../platf
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { turnOffPlugin } from "./lifecycle";
 import { consentNow } from "../telemetry/choice";
+import { resumePlugin as resumeWatchedPlugin } from "./watchdog";
 
 export { dismissPluginConsent, enablePlugin, removePlugin, requestPluginConsent, setPluginValue, turnOnApprovedPlugin } from "./lifecycle";
 export { UNSAVED } from "./store";
 export const disablePlugin = (name: string) => turnOffPlugin(name, consentNow());
 export { restartProcess as restartPlugin } from "./process";
 export { removePluginAfterConfirm } from "./removeConfirmed";
-export { openPluginPage, pluginPagePath } from "./pages";
+export { openPluginPage, pluginPagePath, routePluginPage } from "./pages";
 export { consentLines, fullControlLine, FULL_CONTROL_SUMMARY } from "./consent";
 export { canRelink, relinkPrograms } from "./programs";
 export { installPlugin, cancelInstall, FETCH_REASONS, OFFLINE_REGISTRY } from "./installer";
 export { addRegistry, removeRegistry, getPlugin, installFromFile, installFromDeepLink, refreshCatalog, setPluginChannel, setPluginProfiles, filterCatalog, catalogCategories, CATEGORIES_ALL, type CatalogEntry } from "./marketplace";
 export { reviewUpdate, rollbackPlugin, checkPlugins } from "./updater";
 export { ensurePluginActivated } from "./activation";
+export { droppedFilePaths, pluginImage, pickFilesForPluginView, dropFilesOnPluginView, pluginCanPickFiles } from "./surfaceMedia";
+export { grantTabLease, revokeTabLease } from "./pageApis";
+export const resumePlugin = (name: string) => resumeWatchedPlugin(name, consentNow());
+
+export { runPluginInput } from "./inputModes";
+export { setPluginScriptsBlocked } from "./siteScriptBlocks";
 export { runPluginAction, pluginBarActions } from "./commands";
 export { runPluginToolbarItem, type PluginToolbarEntry } from "./toolbar";
 export { setPluginSecretRow, pluginSecretRowIsSet } from "./secretRows";

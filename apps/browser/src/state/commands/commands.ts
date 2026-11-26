@@ -48,6 +48,7 @@ import { APP_COMMAND_HANDLERS } from "./appCommands";
 import { runSidebarCommand } from "../sidebar/commands";
 import { numberedTabs } from "../sidebar/entries";
 import { openExtensionFromMenu } from "../extensions/bridge";
+import { runPluginMenuBarItem } from "../plugins/pluginMenuBar";
 import { toggleCastPicker } from "../media/cast";
 import { openManageExtensions, openPinDialog, openWebStore } from "../extensions/actions";
 import { requestAutofill } from "../site/autofill";
@@ -350,6 +351,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
     case "previousProfile":
       return cycleProfile(windowId, -1, mayWrite);
     case "openExtension":
+      if (arg && runPluginMenuBarItem(windowId, arg)) return;
       return arg ? openExtensionFromMenu(windowId, arg, tabId) : undefined;
     case "addExtension":
       return void openWebStore(windowId);

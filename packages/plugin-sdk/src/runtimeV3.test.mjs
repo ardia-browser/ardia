@@ -291,6 +291,25 @@ describe("channel edge cases", () => {
     assert.equal(channels.openCount(), 0);
   });
 
+  test("a socket message too big for the plugin channel is refused before it's written, and a host backpressure close reaches onError", async () => {
+    const { rpc, calls } = fakeRpc({ "net.ws.connect": () => ({ open: true }), "net.ws.send": () => ({ ok: true }) });
+    const channels = createChannels(rpc, () => {});
+    const socket = await channels.connect("wss://a.com/");
+    await assert.rejects(socket.send("x".repeat(1024 * 1024)), (error) => error.code === "too_big");
+    await assert.rejects(socket.send("\u00e9".repeat(520 * 1024)), (error) => error.code === "too_big", "the limit counts encoded bytes, not characters");
+    await assert.rejects(socket.send("\"".repeat(600 * 1024)), (error) => error.code === "too_big", "and JSON escaping");
+    assert.equal(calls.filter(([m]) => m === "net.ws.send").length, 0, "nothing oversized reached the wire");
+    await socket.send("y".repeat(900 * 1024));
+    assert.equal(calls.filter(([m]) => m === "net.ws.send").length, 1, "a message that fits still goes");
+    const errors = [];
+    socket.onError((message) => errors.push(message));
+    channels.deliver("net.ws.error", { socket: socket.id, message: "the plugin didn't read the socket's messages in time", code: "backpressure" });
+    channels.deliver("net.ws.close", { socket: socket.id, code: 1008, reason: "The plugin fell behind." });
+    await Promise.resolve();
+    assert.deepEqual(errors, ["the plugin didn't read the socket's messages in time"]);
+    assert.equal(socket.state, "closed");
+  });
+
   test("socket events that arrive before a listener attaches are held for it", async () => {
     const { rpc } = fakeRpc({ "net.ws.connect": () => ({ open: true }) });
     const channels = createChannels(rpc, () => {});
@@ -492,6 +511,28 @@ describe("services, sidecar and content scripts", () => {
     await host.dispose();
   });
 
+  test("big files cross the channel in chunks: a picked handle is read whole, and a save is begun, chunked and committed", async () => {
+    const host = createMockHost({ strict: false });
+    const chunks = ["QUJD", "REVG"];
+    host.respond("fs.pickFiles", () => ({ files: [{ name: "big.bin", size: 6, mimeType: "application/octet-stream", data: "", encoding: "base64", handle: "h1" }] }));
+    host.respond("fs.readChunk", (params) => ({ data: chunks[params.offset / 3], eof: params.offset / 3 === chunks.length - 1 }));
+    host.respond("fs.closeFile", () => ({ saved: false }));
+    host.respond("fs.saveBegin", () => ({ saved: true, handle: "w1" }));
+    host.respond("fs.saveChunk", () => ({ ok: true }));
+    host.respond("fs.saveCommit", (params) => ({ saved: params.commit === true, name: "out.txt" }));
+    await host.load({});
+    const a = host.ardia;
+    const [file] = await a.fs.pickFiles();
+    assert.deepEqual([file.data, file.handle], ["QUJDREVG", undefined]);
+    assert.deepEqual(host.requests("fs.closeFile")[0], { handle: "h1" });
+    const big = "é".repeat(300 * 1024);
+    assert.deepEqual(await a.fs.saveFile({ name: "out.txt", data: big }), { saved: true, name: "out.txt" });
+    const sent = host.requests("fs.saveChunk").map((r) => r.data).join("");
+    assert.equal(Buffer.from(sent, "base64").toString("utf8"), big);
+    assert.ok(host.requests("fs.saveChunk").length > 1 && host.requests("fs.saveChunk").every((r) => r.data.length <= 512 * 1024));
+    await host.dispose();
+  });
+
   test("the rest of the v3 surface speaks the documented host methods", async () => {
     const host = createMockHost({ strict: false });
     host.respond("page.readActive", (params) => ({ tabId: "t", url: "https://a.com", title: "A", text: "x", ...(params.markdown ? { markdown: "# A" } : {}) }));
@@ -513,8 +554,8 @@ describe("services, sidecar and content scripts", () => {
     await a.fs.saveFile({ name: "a.txt", data: "hi" });
     await a.ui.notify({ title: "Done" });
     const methods = host.sent.map((r) => r.method);
-    for (const method of ["bookmarks.search", "history.recent", "profiles.list", "media.control", "splits.open", "peek.open", "fs.pickFiles", "fs.saveFile", "ui.notify"]) assert.ok(methods.includes(method), method);
-    assert.deepEqual(host.requests("fs.saveFile")[0], { encoding: "utf8", name: "a.txt", data: "hi" });
+    for (const method of ["bookmarks.search", "history.recent", "profiles.list", "media.control", "splits.open", "peek.open", "fs.pickFiles", "fs.saveBegin", "ui.notify"]) assert.ok(methods.includes(method), method);
+    assert.deepEqual(host.requests("fs.saveBegin")[0], { name: "a.txt" }, "a save asks for a place first, then sends chunks");
     await host.dispose();
   });
 

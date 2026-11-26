@@ -85,6 +85,8 @@ export function shownCommandContext(p: PluginPermissions, context: CommandContex
       if (typeof value === "string" && p.tabs) out[key] = value;
     } else if (PAGE_TEXT_KEY.test(key)) {
       if (typeof value === "string" && p.activePage) out[key] = value.slice(0, 20_000);
+    } else if (key === "tabs") {
+      if (Array.isArray(value) && value.length <= 8 && value.every((id) => typeof id === "string" && id.length <= 200) && p.multiTab) out[key] = [...value];
     } else if (value === null || ["string", "number", "boolean"].includes(typeof value)) out[key] = value;
   }
   return out;

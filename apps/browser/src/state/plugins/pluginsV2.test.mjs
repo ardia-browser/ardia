@@ -210,7 +210,7 @@ test("net.fetch reaches only allowed hosts, through the host, with headers check
   assert.deepEqual(host.fetches.at(-1), { url: "https://api.example.com/v1", method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", timeoutMs: 30000, allowedHosts: ["api.example.com"] });
   assert.equal((await ask("reader", "net.fetch", { url: "https://evil.example.com/" }, run)).error.code, "refused");
   assert.equal((await ask("reader", "net.fetch", { url: "file:///etc/passwd" }, run)).error.code, "bad_request");
-  assert.deepEqual((await ask("reader", "net.fetch", { url: "http://api.example.com/v1" }, run)).error, { code: "refused", message: "net.fetch reaches only https addresses." }, "plain http never leaves, even to an allowed host");
+  assert.deepEqual((await ask("reader", "net.fetch", { url: "http://api.example.com/v1" }, run)).error, { code: "refused", message: "net.fetch reaches only https addresses, or a local port the plugin lists." }, "plain http never leaves, even to an allowed host");
   assert.equal((await ask("reader", "net.fetch", { url: "https://api.example.com/", headers: { Cookie: "x" } }, run)).error.code, "bad_request");
   assert.equal((await ask("reader", "net.fetch", { url: "https://api.example.com/", method: "GET", body: "x" }, run)).error.code, "bad_request");
   assert.equal(host.fetches.length, 1, "refused requests never reach the host");
@@ -483,8 +483,8 @@ test("removing a plugin closes its storage first: a read held across the removal
   assert.deepEqual(await storageGet("reader", "a"), { ok: true, value: { found: false } }, "storage opens again once the removal is over");
 });
 
-test("storage keeps its 2 MB budget, and storage the host can't read or parse fails cleanly and is never overwritten", async () => {
-  assert.equal(MAX_STORAGE_BYTES, 2 * 1024 * 1024);
+test("storage keeps its 16 MB budget, and storage the host can't read or parse fails cleanly and is never overwritten", async () => {
+  assert.equal(MAX_STORAGE_BYTES, 16 * 1024 * 1024);
   await enable(READER);
   const run = await activated();
   host.storage.reader = "{not json";
@@ -662,10 +662,10 @@ test("main gets plugin.stopping about 120 ms before Ardia stops or restarts it",
   assert.equal(host.stops.length, 2);
 });
 
-test("hello tells a sidecar or v1 helper protocol 1 and main's host protocol 2", async () => {
+test("hello tells a sidecar or v1 helper protocol 1 and main's host protocol 3", async () => {
   await enable(READER);
   const m = P().listings.reader.manifest;
-  assert.equal(answerMethod({ name: "reader", run: 1 }, m, "hello", {}).result.protocol, 2);
+  assert.equal(answerMethod({ name: "reader", run: 1 }, m, "hello", {}).result.protocol, 3);
   assert.equal(answerMethod({ name: "reader", run: 1 }, { ...m, main: null }, "hello", {}).result.protocol, 1);
 });
 
@@ -729,7 +729,7 @@ test("net.fetch refuses a response whose JSON reply would overflow the channel f
   await enable(READER);
   const run = await activated();
   host.fetchResult = { ok: true, status: 200, statusText: "OK", url: "https://api.example.com/", headers: {}, body: "\n".repeat(700 * 1024) };
-  assert.deepEqual((await ask("reader", "net.fetch", { url: "https://api.example.com/" }, run)).error, { code: "failed", message: "The response is too large for the plugin channel." });
+  assert.deepEqual((await ask("reader", "net.fetch", { url: "https://api.example.com/" }, run)).error, { code: "failed", message: "The response is too large for the plugin channel; use ardia.net.fetchStream for big answers." });
   host.fetchResult = { ok: true, status: 200, statusText: "OK", url: "https://api.example.com/", headers: {}, body: "x".repeat(700 * 1024) };
   assert.equal((await ask("reader", "net.fetch", { url: "https://api.example.com/" }, run)).result.body.length, 700 * 1024);
 });

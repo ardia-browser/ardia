@@ -15,6 +15,9 @@ import { valuesFor } from "./values";
 import { dropHiddenRetainedSidePanels } from "./surfaces";
 import { answerMethod } from "./channelApi";
 import { dropStateSubscriptions } from "./stateEvents";
+import { isSidecarKey, sidecarExited, sidecarLine } from "./sidecarPipe";
+import { noteRequest } from "./watchdog";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 
 export { pluginWebUrl } from "../../lib/pluginWebUrl";
 
@@ -69,8 +72,10 @@ function reply(c: Connection, id: RequestId, body: Body) {
   for (const data of replay) deliverTo(c, "tab.idle", data, Date.now());
 }
 
-function handlePluginLine({ name, run, launch, line }: PluginLine) {
+function handlePluginLine({ name, run, launch, line }: PluginLine, consent: ConsentToken | null) {
+  if (isSidecarKey(name)) return sidecarLine(name, run, line, consent);
   if (!acceptsLine(name, run, launch)) return;
+  if (!noteRequest(name, consent)) return;
   const manifest = activeManifest(currentPlugins(), name);
   const c = connectionFor(name, run);
   const request = parseRequest(line);
@@ -132,12 +137,12 @@ export function startChannels() {
   listening = true;
   onPluginLine((line) => {
     try {
-      handlePluginLine(line);
+      handlePluginLine(line, consentToken());
     } catch (error) {
       console.warn("[plugins] a helper's request failed", error);
     }
   });
-  onPluginExit(processExited);
+  onPluginExit((exit) => (isSidecarKey(exit.name) ? sidecarExited(exit, consentToken()) : processExited(exit)));
   onProcessStopped(dropConnections);
   onProcessStopped(dropCalls);
   onProcessStopped(dropHiddenRetainedSidePanels);

@@ -50,6 +50,7 @@ export type PluginStartSpec = {
   launch: number;
   runtime?: "js" | "process";
   entry?: string;
+  sidecar?: boolean;
 };
 export type PluginStartResult = { ok: true; run: number; pid: number } | { ok: false; reason: string };
 export type PluginExit = { name: string; run: number; status: number | null; signal: number | null; overMemory: boolean };
@@ -59,6 +60,23 @@ export type PluginFetchSpec = { url: string; method: string; headers: Record<str
 export type PluginFetchResult =
   | { ok: true; status: number; statusText: string; url: string; headers: Record<string, string>; body: string }
   | { ok: false; reason: string };
+export type PluginStreamSpec = PluginFetchSpec & { name: string; run: number; stream: string };
+export type PluginStreamHead = { ok: true; status: number; statusText: string; url: string; headers: Record<string, string> } | { ok: false; reason: string };
+export type PluginSocketSpec = { name: string; run: number; socket: string; url: string; protocols: string[]; headers: Record<string, string>; allowedHosts: string[] };
+export type PluginSocketOpen = { ok: true; open: boolean; protocol: string } | { ok: false; reason: string };
+export type PluginNetOutcome = { ok: true } | { ok: false; reason: string };
+export type PluginUsageRow = { name: string; run: number; memoryBytes: number; cpuMs: number; streams: number; sockets: number };
+export type PluginAuthSpec = { plugin: string; run: number; scope: string; pluginName: string; authorizeUrl: string; clientId: string; scopes: string[]; extraParams: Record<string, string> };
+export type PluginAuthResult = { ok: true; code: string; verifier: string; redirectUri: string } | { ok: false; reason: string; cancelled?: boolean };
+export type PluginPickSpec = { name: string; run: number; multiple: boolean; types: string[]; title?: string; maxBytes?: number };
+export type PluginDropSpec = { name: string; run: number; paths: string[]; maxBytes?: number };
+export type PluginPickedFile = { name: string; size: number; mimeType: string; data: string; encoding: "base64" | "utf8"; handle?: string };
+export type PluginChunkResult = { ok: true; data: string; eof: boolean } | { ok: false; reason: string };
+export type PluginImageSpec = { url: string; timeoutMs: number; allowedHosts: string[] };
+export type PluginImageResult = { ok: true; url: string } | { ok: false; reason: string };
+export type PluginPickResult = { ok: true; files: PluginPickedFile[] } | { ok: false; reason: string; cancelled?: boolean };
+export type PluginSaveSpec = { name: string; run: number; fileName: string };
+export type PluginSaveResult = { ok: true; saved: boolean; name?: string; handle?: string } | { ok: false; reason: string };
 export type PluginFileReadResult = { ok: true; text: string } | { ok: false; reason: string };
 export type PluginStorageReadResult = { status: "ok"; text: string } | { status: "missing" } | { status: "error"; reason: string };
 
@@ -75,6 +93,7 @@ export type PluginPageProps = ViewProps & {
   run: number;
   context: string;
   themeCss?: string;
+  storeKey?: string;
   onLoaded?: (e: PluginPageEvent<{ url: string; title: string }>) => void;
   onTitleChange?: (e: PluginPageEvent<{ title: string }>) => void;
   onNavigationChange?: (e: PluginPageEvent<{ url: string; title: string; canGoBack: boolean; canGoForward: boolean }>) => void;

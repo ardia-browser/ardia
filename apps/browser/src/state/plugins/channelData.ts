@@ -1,16 +1,15 @@
-import { isFields } from "../../lib/decode";
 import { withDeadline } from "../../lib/deadline";
-import { allowedHostsOf, type PluginManifest } from "../../lib/pluginManifest";
-import { matchesAllowedHost } from "../../lib/pluginNetwork";
-import { pluginWebUrl } from "../../lib/pluginWebUrl";
+import type { PluginManifest } from "../../lib/pluginManifest";
+import { fetchRequestOf } from "./netRequest";
 import { withoutFragment } from "../../lib/url";
 import { minimizedUrl } from "../../lib/urlParts";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
-import { activeTabId } from "../browser/model";
+import { activeTabId, isIncognitoProfile } from "../browser/model";
 import type { Tab } from "../browser/types";
 import { failure } from "../automation/automationMethods";
-import { eligibleKind, isEligibleTab } from "../automation/automationWindows";
+import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow } from "../automation/automationWindows";
+import { manifestInProfile } from "./profileScope";
 import type { Body } from "../automation/controlSocket";
 import { consentToken } from "../telemetry/choice";
 import { notePlugin } from "../telemetry/pluginCounts";
@@ -25,14 +24,11 @@ import { storageDelete, storageGet, storageKeys, storageSet, storageSpace, type 
 import { focusedWindowId } from "../browser/current";
 import { ownValue } from "../../lib/decode";
 
-export const FETCH_LIMITS = { headers: 50, headerBytes: 8 * 1024, bodyBytes: 512 * 1024, timeoutMs: [1000, 60_000], defaultTimeoutMs: 30_000 } as const;
+export { FETCH_LIMITS } from "./netRequest";
 const PAGE_TEXT_LIMIT = 200_000;
 const READ_PAGE_DEADLINE_MS = 3000;
 const MAX_REPLY_BYTES = 960 * 1024;
 
-const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
-const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
-const FORBIDDEN_HEADERS = /^(host|cookie|cookie2|connection|content-length|transfer-encoding|keep-alive|upgrade|te|trailer|expect|origin|referer|proxy-.*|sec-.*)$/i;
 
 type Caller = { name: string; run: number };
 
@@ -51,6 +47,33 @@ export function requestProfile(name: string, m: Pick<PluginManifest, "scope">, p
   const front = focused ? b.windows[focused]?.profileId : undefined;
   const fallback = [front, b.settings.defaultProfileId, ...(Array.isArray(limited) ? limited : [])].find((id): id is string => typeof id === "string" && allowed(id));
   return fallback ? { ok: true, profileId: fallback } : { ok: false, message: "This plugin isn't on in any profile." };
+}
+
+export function callerProfile(name: string, m: Pick<PluginManifest, "scope">, params: Record<string, unknown>): { ok: true; profileId: string } | { ok: false; message: string } {
+  const scoped = requestProfile(name, m, params);
+  if (!scoped.ok) return scoped;
+  if (scoped.profileId) return { ok: true, profileId: scoped.profileId };
+  const b = useBrowser.getState();
+  const usable = (id: unknown): id is string => typeof id === "string" && !!b.profiles[id] && !isIncognitoProfile(id);
+  if (params.profile !== undefined) return usable(params.profile) ? { ok: true, profileId: params.profile } : { ok: false, message: "profile isn't one of your profiles." };
+  const focused = focusedWindowId();
+  const front = focused ? b.windows[focused]?.profileId : undefined;
+  const id = [front, b.settings.defaultProfileId].find(usable);
+  return id ? { ok: true, profileId: id } : { ok: false, message: "There's no profile to use." };
+}
+
+export function pluginWindow(name: string, m: Pick<PluginManifest, "scope">, params: Record<string, unknown>): { ok: true; windowId: string } | { ok: false; body: Body } {
+  const s = useBrowser.getState();
+  const inScope = (id: string) => eligibleKind(s, id) && !!manifestInProfile(currentPlugins(), name, s.windows[id]?.profileId ?? null);
+  if (params.profile !== undefined) {
+    const profile = callerProfile(name, m, params);
+    if (!profile.ok) return { ok: false, body: failure("refused", profile.message) };
+    const windowId = [...s.ui.focusOrder, ...s.windowOrder].find((id) => s.windows[id]?.profileId === profile.profileId && inScope(id));
+    return windowId ? { ok: true, windowId } : { ok: false, body: failure("no_window", "There's no window in that profile.") };
+  }
+  const front = lastFocusedEligibleWindow(s);
+  if (!front) return { ok: false, body: failure("no_window", "No window to use.") };
+  return inScope(front) ? { ok: true, windowId: front } : { ok: false, body: failure("refused", "This plugin isn't on in the front window's profile.") };
 }
 
 export function storageMethod(c: Caller, m: PluginManifest, method: string, params: Record<string, unknown>): Promise<Body> | Body {
@@ -82,55 +105,15 @@ export function secretsMethod(c: Caller, m: PluginManifest, method: string, para
   return deletePluginSecret(space, params.key).then((o) => (o.ok ? { result: { ok: true } } : settled(o)));
 }
 
-function headersOf(raw: unknown): Record<string, string> | string {
-  if (raw === undefined) return {};
-  if (!isFields(raw)) return "headers is an object of header names to text.";
-  const entries = Object.entries(raw);
-  if (entries.length > FETCH_LIMITS.headers) return `headers has more than ${FETCH_LIMITS.headers} entries.`;
-  const out: Record<string, string> = {};
-  let size = 0;
-  for (const [name, value] of entries) {
-    if (!HEADER_NAME.test(name)) return `headers has a bad name: ${JSON.stringify(name.slice(0, 64))}.`;
-    if (FORBIDDEN_HEADERS.test(name)) return `Ardia sets ${name} itself.`;
-    if (typeof value !== "string" || /[\r\n\0]/.test(value)) return `headers.${name} must be text on one line.`;
-    size += name.length + value.length;
-    out[name] = value;
-  }
-  return size > FETCH_LIMITS.headerBytes ? `headers are over ${FETCH_LIMITS.headerBytes / 1024} KB.` : out;
-}
-
-const LOOPBACK_FOR_TESTS = "127.0.0.1";
-
 export async function netFetch(m: PluginManifest, params: Record<string, unknown>): Promise<Body> {
-  if (m.permissions.network === false) return failure("refused", "net.fetch needs the network permission.");
-  const checked = pluginWebUrl(params.url);
-  if ("problem" in checked) return failure("bad_request", `url ${checked.problem}.`);
-  if (!/^https:/i.test(checked.url) && checked.host !== LOOPBACK_FOR_TESTS) {
-    notePlugin("plugin_net_refusals");
-    return failure("refused", "net.fetch reaches only https addresses.");
-  }
-  const allowedHosts = allowedHostsOf(m.permissions);
-  if (!matchesAllowedHost(checked.host, allowedHosts)) {
-    notePlugin("plugin_net_refusals");
-    return failure("refused", `${checked.host} isn't one of the hosts this plugin may reach.`);
-  }
-  const method = typeof params.method === "string" ? params.method.toUpperCase() : "GET";
-  if (!METHODS.includes(method)) return failure("bad_request", `method is one of ${METHODS.join(", ")}.`);
-  const headers = headersOf(params.headers);
-  if (typeof headers === "string") return failure("bad_request", headers);
-  if (params.body !== undefined && typeof params.body !== "string") return failure("bad_request", "body is text; JSON.stringify an object first.");
-  const body = params.body as string | undefined;
-  if (body !== undefined && new TextEncoder().encode(body).length > FETCH_LIMITS.bodyBytes) return failure("bad_request", `body is over ${FETCH_LIMITS.bodyBytes / 1024} KB.`);
-  if (body !== undefined && (method === "GET" || method === "HEAD")) return failure("bad_request", `A ${method} request has no body.`);
-  const [least, most] = FETCH_LIMITS.timeoutMs;
-  const given = params.timeoutMs;
-  if (given !== undefined && (typeof given !== "number" || !Number.isInteger(given) || given < least || given > most)) return failure("bad_request", `timeoutMs is a whole number from ${least} to ${most}.`);
+  const request = fetchRequestOf(m, params);
+  if ("code" in request) return failure(request.code, request.message);
   notePlugin("plugin_net_fetches");
-  const answered = await hostFetch({ url: checked.url, method, headers, ...(body !== undefined ? { body } : {}), timeoutMs: (given as number | undefined) ?? FETCH_LIMITS.defaultTimeoutMs, allowedHosts });
+  const answered = await hostFetch(request);
   if (!answered.ok) return failure("failed", answered.reason);
   const { ok: _ok, ...response } = answered;
   const reply = { result: response };
-  if (new TextEncoder().encode(JSON.stringify(reply)).length > MAX_REPLY_BYTES) return failure("failed", "The response is too large for the plugin channel.");
+  if (new TextEncoder().encode(JSON.stringify(reply)).length > MAX_REPLY_BYTES) return failure("failed", "The response is too large for the plugin channel; use ardia.net.fetchStream for big answers.");
   return reply;
 }
 
@@ -145,7 +128,7 @@ type PageRead = { text?: unknown; selection?: unknown; lang?: unknown };
 type Gesture = NonNullable<ReturnType<typeof recentPluginGesture>>;
 type Readable = { ok: true; tab: Tab } | { ok: false; body: Body };
 
-function readableTab(gesture: Gesture): Readable {
+export function readableTab(gesture: Gesture): Readable {
   const s = useBrowser.getState();
   if (!eligibleKind(s, gesture.windowId)) return { ok: false, body: failure("refused", "The page you used the plugin from is private or gone.") };
   const tabId = activeTabId(s, gesture.windowId);

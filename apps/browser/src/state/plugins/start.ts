@@ -13,6 +13,7 @@ import { migrateLegacyPlugins } from "./migration";
 import { handlePluginInstallLinks } from "./installLinks";
 import { installFromDeepLink } from "./marketplace";
 import { watchPageBarCommits } from "./pageBarCommits";
+import { startRuntimeV3 } from "./runtimeV3";
 
 let started = false;
 
@@ -31,6 +32,7 @@ export function startPlugins() {
   watchPluginFolder();
   watchPluginUpdates();
   watchPageBarCommits();
+  startRuntimeV3();
   const consent = consentToken();
   void migrateLegacyPlugins(consent).finally(() => void rescanPlugins(consent));
   watchPluginOmnibox();

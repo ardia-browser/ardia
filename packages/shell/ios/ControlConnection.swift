@@ -24,7 +24,7 @@ final class ControlConnection {
   private var openSources = 0
   private var input: [UInt8] = []
   private var output = ControlOutput()
-  private var pendingRequests = 0
+  private var budget: ControlLineBudget
   private var deadline: DispatchWorkItem?
   private(set) var closed = false
   private var finishingLine = false
@@ -36,8 +36,10 @@ final class ControlConnection {
     id: Int, fd: Int32, queue: DispatchQueue, onLine: @escaping (ControlConnection, String) -> Void,
     onClose: @escaping (ControlConnection) -> Void, onWritten: @escaping ([Int]) -> Void,
     onPeerFinished: @escaping (ControlConnection) -> Void = { _ in },
-    mayWrite: @escaping (ControlConnection) -> Bool = { _ in true }
+    mayWrite: @escaping (ControlConnection) -> Bool = { _ in true },
+    lines: ControlLineBudget.Mode = .requests
   ) {
+    self.budget = ControlLineBudget(mode: lines, limit: Self.maxPendingRequests)
     self.id = id
     self.fd = fd
     self.queue = queue
@@ -58,7 +60,7 @@ final class ControlConnection {
 
   func reply(_ data: Data, ticket: Int) {
     guard !closed, !finishingLine else { return report(ticket > 0 ? [ticket] : []) }
-    pendingRequests = max(0, pendingRequests - 1)
+    budget.answered()
     guard output.addReply(data, ticket: ticket) else {
       report(ticket > 0 ? [ticket] : [])
       return retire()
@@ -71,6 +73,8 @@ final class ControlConnection {
     guard output.addKept(data) else { return retire() }
     if !writeArmed { flush() }
   }
+
+  var pendingBytes: Int { output.bytes }
 
   func event(_ data: Data) {
     guard !closed, !finishingLine, !draining else { return }
@@ -212,7 +216,7 @@ final class ControlConnection {
   }
 
   private func closeIfDrained() {
-    guard draining, !closed, output.isEmpty, pendingRequests == 0 else { return }
+    guard draining, !closed, output.isEmpty, budget.settled else { return }
     close()
   }
 
@@ -225,8 +229,7 @@ final class ControlConnection {
     while let newline = input[index...].firstIndex(of: 10) {
       let length = newline - lineStart
       guard length <= Self.maxLine else { return retire() }
-      pendingRequests += 1
-      guard pendingRequests <= Self.maxPendingRequests else { return retire() }
+      guard budget.received() else { return retire() }
       onLine(self, String(decoding: input[lineStart..<newline], as: UTF8.self))
       if closed || finishingLine { return }
       lineStart = newline + 1

@@ -55,7 +55,7 @@ test("a pane shown with nothing over its page mounts none of its overlays, only 
   const pane = readFileSync(new URL("./TabPane.tsx", import.meta.url), "utf8");
   assert.match(pane, /const share = useShareFor\(tabId, shareBarRoom\);\n  const shareBar = useKeptWhile\(!!share, shareBarRoom\);/);
   assert.match(pane, /\{shareBar && <ShareBar tabId=\{tabId\} found=\{share\} \/>\}/);
-  assert.match(pane, /\{visible && own\.appPage && <InternalPage /);
+  assert.match(pane, /\{\(visible \|\| keptPluginPage\) && own\.appPage && <InternalPage contentAreaOf=\{tabId\} hidden=\{!visible\} \/>\}/, "a plugin page stays mounted, hidden, once it has been shown");
 });
 
 test("each page state that shows an overlay turns on its own bit", () => {

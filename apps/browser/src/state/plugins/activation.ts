@@ -6,7 +6,8 @@ import { isEligibleTab } from "../automation/automationWindows";
 import { notePlugin } from "../telemetry/pluginCounts";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { activeManifest, currentPlugins, usePlugins, type PluginsStore } from "./store";
-import { onProcessStopped, restartProcess, superviseProcess } from "./process";
+import { onProcessStopped, restartProcess, stopProcess, superviseProcess } from "./process";
+import { markUsed, noteActivity, pausedReason } from "./watchdog";
 
 const ACTIVATION_TIMEOUT_MS = 10_000;
 
@@ -28,7 +29,7 @@ const readyListeners = new Set<(name: string, run: number) => void>();
 
 const needsHost = (m: PluginManifest) => m.main !== null || m.sidecar !== null;
 const runsEagerly = (m: PluginManifest) => needsHost(m) && (m.main === null || startsEagerly(m.activationEvents));
-export const shouldRun = (name: string, hash: string, m: PluginManifest) => runsEagerly(m) || activated.get(name) === hash;
+export const shouldRun = (name: string, hash: string, m: PluginManifest) => !pausedReason(name) && (runsEagerly(m) || activated.get(name) === hash);
 
 export function onPluginReady(listener: (name: string, run: number) => void): () => void {
   readyListeners.add(listener);
@@ -94,12 +95,17 @@ export function ensurePluginActivated(name: string, trigger: string, timeoutMs =
   const listing = s.listings[name];
   if (!m || !listing?.hash) return Promise.reject(new PluginActivationError(name, `There's no plugin ${name} that is on.`));
   if (!needsHost(m)) return Promise.reject(new PluginActivationError(name, `${name} has no main or sidecar to run.`));
+  if (pausedReason(name)) return Promise.reject(new PluginActivationError(name, `${name} is paused. Resume it in Settings › Plugins.`));
   const run = readyRun(name, m);
-  if (run !== null) return Promise.resolve(run);
+  if (run !== null) {
+    markUsed(name);
+    return Promise.resolve(run);
+  }
   const state = s.processes[name];
   if (state?.state === "crashed" || state?.state === "failed") return Promise.reject(new PluginActivationError(name, `${name} stopped: ${state.reason}. Restart it in Settings › Plugins.`));
   const hash = listing.hash;
   const consent = consentToken();
+  noteActivity(name, consent);
   if (activated.get(name) !== hash) {
     activated.set(name, hash);
     notePlugin("plugin_activations", consent);
@@ -125,6 +131,11 @@ export function ensurePluginActivated(name: string, trigger: string, timeoutMs =
   if (state?.state === "exited") restartProcess(name);
   else superviseProcess(name, hash, m, listing.folderId, consent);
   return promise;
+}
+
+export function sleepPlugin(name: string, consent: ConsentToken | null) {
+  deactivatePlugin(name);
+  stopProcess(name, consent);
 }
 
 export function deactivatePlugin(name: string) {

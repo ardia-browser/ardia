@@ -6,10 +6,13 @@ import { activeTabId, viewTabIds } from "../browser/model";
 import { openSplitPane } from "../splits/actions";
 import { notePlugin } from "../telemetry/pluginCounts";
 import type { ConsentToken } from "../telemetry/choice";
-import { isPagePath, pluginPageOf, pluginPagePath, pluginPageUrl } from "./pageNames";
+import { isPagePath, pageRouteOfView, pluginPageOf, pluginPagePath, pluginPageUrl } from "./pageNames";
 import { activeManifest, currentPlugins, usePlugins, type PluginsStore } from "./store";
 import { eligibleKind, isEligibleTab } from "../automation/automationWindows";
 import { ensurePluginActivated, pluginReadyRun } from "./activation";
+import { manifestInProfile } from "./profileScope";
+import { navigationOf, renavigated } from "../tabs/pageSession";
+import type { Tab } from "../browser/types";
 
 export { isPagePath, pluginPageOf, pluginPagePath };
 
@@ -78,7 +81,33 @@ function pageFileOf(m: PluginManifest, path: string): string | null {
   return pagePanelAt(m, path)?.file ?? null;
 }
 
-export function wakeForFilePage(name: string, path = "") {
+const selfRouted = new Map<string, { url: string; seq: number }>();
+
+const navSeqOf = (tab: Tab | undefined) => navigationOf(tab)?.seq ?? 0;
+
+export function isSelfRouted(tabId: string, tab: Tab | undefined = useBrowser.getState().tabs[tabId]): boolean {
+  const routed = selfRouted.get(tabId);
+  return !!tab && !!routed && routed.url === tab.url && routed.seq === navSeqOf(tab);
+}
+
+export const pluginPageLoadSeq = (tab: Tab | undefined) => navSeqOf(tab);
+
+export function routePluginPage(tabId: string, name: string, viewUrl: string, load: number): boolean {
+  const route = pageRouteOfView(name, viewUrl);
+  const tab = useBrowser.getState().tabs[tabId];
+  if (route === null || !tab || pluginPageOf(tab.url) !== name || navSeqOf(tab) !== load) return false;
+  const panel = panelOfPath(pluginPagePath(tab.url));
+  const kept = panel && !panelOfPath(route) ? `${route}${route.includes("?") ? "&" : "?"}${PANEL_PARAM}=${panel}` : route;
+  const next = pluginPageUrl(name, isPagePath(kept) ? kept : route);
+  const nav = navigationOf(tab);
+  if (tab.url === next && (!nav || nav.url === next)) return false;
+  selfRouted.set(tabId, { url: next, seq: navSeqOf(tab) });
+  useBrowser.getState().updateTab(tabId, { url: next, ...(nav ? { page: renavigated(tab, { ...nav, url: next }) } : {}) });
+  return true;
+}
+
+export function wakeForFilePage(name: string, path = "", profileId?: string | null) {
+  if (profileId !== undefined && !manifestInProfile(currentPlugins(), name, profileId)) return;
   const m = activeManifest(currentPlugins(), name);
   const panel = m && isPagePath(path) ? pagePanelAt(m, path) : null;
   if (!m || m.main === null || !panel?.file || pluginReadyRun(name) !== null) return;
@@ -103,7 +132,7 @@ function contextOf(name: string, tabId: string | null): PageContext | null {
   const m = activeManifest(currentPlugins(), name);
   const s = useBrowser.getState();
   const tab = tabId ? s.tabs[tabId] : undefined;
-  if (!m || !tab || !m.permissions.tabs || !isEligibleTab(s, tab.id) || pluginPageOf(tab.url)) return null;
+  if (!m || !tab || !m.permissions.tabs || !isEligibleTab(s, tab.id) || pluginPageOf(tab.url) || !manifestInProfile(currentPlugins(), name, tab.profileId)) return null;
   return { tabId: tab.id, url: tab.url, title: tab.customTitle || tab.title };
 }
 
@@ -112,7 +141,7 @@ export function openPluginPage(windowId: string, name: string, how: { split?: bo
   const path = how.path ?? "";
   if (!isPagePath(path)) return null;
   const s = useBrowser.getState();
-  if (!eligibleKind(s, windowId)) return null;
+  if (!eligibleKind(s, windowId) || !manifestInProfile(currentPlugins(), name, s.windows[windowId]?.profileId ?? null)) return null;
   const url = pluginPageUrl(name, path);
   const anchor = activeTabId(s, windowId);
   const existing = viewTabIds(s, windowId).find((id) => {

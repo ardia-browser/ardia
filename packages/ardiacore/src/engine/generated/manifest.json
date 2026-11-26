@@ -1418,7 +1418,14 @@
           "windows": "absent"
         }
       },
-      "events": {}
+      "events": {
+        "pluginWorld": {
+          "topic": "webView.pluginWorld",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      }
     },
     "windows": {
       "kind": "engine",
@@ -1510,8 +1517,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "94cb99721f35f8f6309d51ad389ec10741b947c6149f7ac4c137fce52f865100",
-        "swift": "07e701bcb2fa91b4e0365eef9596b908e23c34c250ddcd1fd4371bdc51b47719"
+        "types": "2ade452f0eb97a3860e7fed31ec1bf67d249e51ae40071b84f41cbed601544ca",
+        "swift": "1c19ab63037a155a95db08f44ab29e8853aca8fa4c156a87a86a3dfe1050a1bd"
       },
       "modules": {
         "ArdiaShell": {
@@ -4099,6 +4106,172 @@
             "devSnapshotPage": {
               "args": [
                 "name",
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "fetchStream": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "cancelStream": {
+              "args": [
+                "name",
+                "run",
+                "stream"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "wsConnect": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "wsSend": {
+              "args": [
+                "name",
+                "run",
+                "socket",
+                "data",
+                "binary"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "wsClose": {
+              "args": [
+                "name",
+                "run",
+                "socket",
+                "code",
+                "reason"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "closeNet": {
+              "args": [
+                "name",
+                "run"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "usage": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "authSignIn": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "pickFiles": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "openDroppedFiles": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "readFileChunk": {
+              "args": [
+                "name",
+                "run",
+                "handle",
+                "offset",
+                "length"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "saveBegin": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "saveChunk": {
+              "args": [
+                "name",
+                "run",
+                "handle",
+                "data"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "finishFile": {
+              "args": [
+                "name",
+                "run",
+                "handle",
+                "commit"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "loadImage": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "readPluginAsset": {
+              "args": [
+                "name",
+                "folderId",
+                "approved",
                 "path"
               ],
               "async": true,

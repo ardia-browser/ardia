@@ -6,7 +6,16 @@ import Network
 final class PluginHostFetch {
   typealias Reply = ([String: Any]) -> Void
 
+  struct Stream {
+    let chunk: (_ text: String, _ ready: @escaping () -> Void) -> Void
+    let end: () -> Void
+    let fail: (_ reason: String) -> Void
+  }
+
   static let readChunk = 64 * 1024
+  static let maxStreamBytes = 256 << 20
+  static let streamIdle: TimeInterval = 120
+  static let streamLifetime: TimeInterval = 30 * 60
 
   private let allowedHosts: [String]
   private let allowLoopback: Bool
@@ -23,21 +32,30 @@ final class PluginHostFetch {
   private var attemptDeadline: DispatchWorkItem?
   private var requestBytes = Data()
   private var keepAlive: PluginHostFetch?
+  private var stream: Stream?
+  private var streamText = PluginUtf8Chunks()
+  private var idle: DispatchWorkItem?
+  private var binary = false
+  private var bodyCap = PluginFetchPolicy.maxResponseBytes
+  private var maxBody: Int { stream == nil ? bodyCap : Self.maxStreamBytes }
 
-  private init(request: PluginFetchRequest, allowedHosts: [String], allowLoopback: Bool, reply: @escaping Reply) {
+  private init(request: PluginFetchRequest, allowedHosts: [String], allowLoopback: Bool, stream: Stream?, reply: @escaping Reply) {
     self.allowedHosts = allowedHosts
     self.allowLoopback = allowLoopback
     self.timeout = request.timeout
     self.hop = PluginHttpHop(request)
-    self.parser = PluginHttpParser(method: request.method, maxBody: PluginFetchPolicy.maxResponseBytes)
+    self.stream = stream
+    self.parser = PluginHttpParser(method: request.method, maxBody: stream == nil ? PluginFetchPolicy.maxResponseBytes : Self.maxStreamBytes)
     self.reply = reply
   }
 
   static func failed(_ reason: String) -> [String: Any] { ["ok": false, "reason": reason] }
 
-  static func run(_ spec: [String: Any], reply: @escaping Reply) {
+  @discardableResult
+  static func run(_ spec: [String: Any], stream: Stream? = nil, reply: @escaping Reply) -> PluginHostFetch? {
     guard let url = spec["url"] as? String, let allowedHosts = spec["allowedHosts"] as? [String] else {
-      return reply(failed("hostFetch needs a url and allowedHosts"))
+      reply(failed("hostFetch needs a url and allowedHosts"))
+      return nil
     }
     let method = spec["method"] as? String ?? "GET"
     let headers = (spec["headers"] as? [String: Any] ?? [:]).mapValues { "\($0)" }
@@ -46,8 +64,24 @@ final class PluginHostFetch {
     let loopback = PluginFetchPolicy.loopbackAllowed(isolated: LaunchConfig.shared.isolated, allowedHosts: allowedHosts)
     let made = PluginFetchPolicy.request(url: url, method: method, headers: headers, body: body, timeoutMs: timeoutMs, allowedHosts: allowedHosts, allowLoopback: loopback)
     switch made {
-    case .failure(let refusal): reply(failed(refusal.reason))
-    case .success(let request): PluginHostFetch(request: request, allowedHosts: allowedHosts, allowLoopback: loopback, reply: reply).start()
+    case .failure(let refusal):
+      reply(failed(refusal.reason))
+      return nil
+    case .success(let request):
+      let fetch = PluginHostFetch(request: request, allowedHosts: allowedHosts, allowLoopback: loopback, stream: stream, reply: reply)
+      if spec["binary"] as? Bool == true {
+        fetch.binary = true
+        fetch.bodyCap = PluginImageBytes.maxBytes
+      }
+      fetch.start()
+      return fetch
+    }
+  }
+
+  func cancel() {
+    queue.async { [self] in
+      stream = nil
+      finish(Self.failed("it was cancelled"))
     }
   }
 
@@ -68,7 +102,8 @@ final class PluginHostFetch {
     return found
   }
 
-  static func vettedAddresses(for url: URL, allowLoopback: Bool) -> Result<[String], FolderRefusal> {
+  static func vettedAddresses(for url: URL, allowLoopback: Bool, allowedHosts: [String] = []) -> Result<[String], FolderRefusal> {
+    if let loopback = PluginFetchPolicy.loopbackAddress(for: url, allowedHosts: allowedHosts) { return .success([loopback]) }
     guard let raw = url.host else { return .failure(FolderRefusal(reason: "the address has no host")) }
     let host = PluginFetchPolicy.normalizedHost(raw)
     let resolved = PluginFetchPolicy.isIPLiteral(host) ? [] : addresses(of: host)
@@ -118,8 +153,9 @@ final class PluginHostFetch {
     guard reply != nil else { return }
     let url = hop.url
     let allowLoopback = allowLoopback
+    let allowedHosts = allowedHosts
     DispatchQueue.global(qos: .userInitiated).async {
-      let vetted = Self.vettedAddresses(for: url, allowLoopback: allowLoopback)
+      let vetted = Self.vettedAddresses(for: url, allowLoopback: allowLoopback, allowedHosts: allowedHosts)
       self.queue.async { self.open(vetted) }
     }
   }
@@ -132,7 +168,7 @@ final class PluginHostFetch {
     }
     guard let bytes = PluginHttpCodec.requestBytes(hop) else { return finish(Self.failed("the request couldn't be made")) }
     requestBytes = bytes
-    parser = PluginHttpParser(method: hop.method, maxBody: PluginFetchPolicy.maxResponseBytes)
+    parser = PluginHttpParser(method: hop.method, maxBody: maxBody)
     tryNextAddress()
   }
 
@@ -184,11 +220,16 @@ final class PluginHostFetch {
     made.receive(minimumIncompleteLength: 1, maximumLength: Self.readChunk) { [weak self, weak made] data, _, isComplete, error in
       guard let self, let made, self.connection === made else { return }
       do {
-        if let data, !data.isEmpty, try self.parser.feed(data) { return self.answered() }
-        if isComplete {
+        var finished = false
+        if let data, !data.isEmpty { finished = try self.parser.feed(data) }
+        if !finished, isComplete {
           try self.parser.finishAtEOF()
-          return self.answered()
+          finished = true
         }
+        if self.stream != nil, self.parser.headReady, !PluginHttpCodec.isRedirect(self.parser.response.status) {
+          return self.pushStream(finished: finished, failure: finished ? nil : error, on: made)
+        }
+        if finished { return self.answered() }
       } catch let refusal as FolderRefusal {
         return self.finish(Self.failed(refusal.reason))
       } catch {
@@ -215,10 +256,65 @@ final class PluginHostFetch {
     }
   }
 
+  private func head(_ response: PluginHttpResponse) -> [String: Any] {
+    [
+      "ok": true, "status": response.status, "statusText": HTTPURLResponse.localizedString(forStatusCode: response.status),
+      "url": hop.url.absoluteString, "headers": response.joinedHeaders,
+    ]
+  }
+
+  private func pushStream(finished: Bool, failure: NWError?, on made: NWConnection) {
+    guard let stream else { return }
+    if let reply {
+      self.reply = nil
+      deadline?.cancel()
+      deadline = nil
+      let lifetime = DispatchWorkItem { [weak self] in self?.failStream("it streamed for longer than \(Int(Self.streamLifetime / 60)) minutes") }
+      deadline = lifetime
+      queue.asyncAfter(deadline: .now() + Self.streamLifetime, execute: lifetime)
+      reply(head(parser.response))
+    }
+    armIdle()
+    let text = streamText.text(parser.drainBody()) + (finished ? streamText.finish() : "")
+    let next = { [weak self, weak made] in
+      guard let self else { return }
+      self.queue.async {
+        guard self.stream != nil else { return }
+        if finished { return self.endStream() }
+        if let failure { return self.failStream(Self.describe(failure)) }
+        guard let made, self.connection === made else { return }
+        self.receive(on: made)
+      }
+    }
+    if text.isEmpty { return next() }
+    stream.chunk(text, next)
+  }
+
+  private func armIdle() {
+    idle?.cancel()
+    let item = DispatchWorkItem { [weak self] in self?.failStream("it sent nothing for \(Int(Self.streamIdle)) s") }
+    idle = item
+    queue.asyncAfter(deadline: .now() + Self.streamIdle, execute: item)
+  }
+
+  private func endStream() {
+    let ending = stream
+    stream = nil
+    finish([:])
+    ending?.end()
+  }
+
+  private func failStream(_ reason: String) {
+    let failing = stream
+    stream = nil
+    finish(Self.failed(reason))
+    failing?.fail(reason)
+  }
+
   private func succeed(_ response: PluginHttpResponse) {
     finish([
       "ok": true, "status": response.status, "statusText": HTTPURLResponse.localizedString(forStatusCode: response.status),
-      "url": hop.url.absoluteString, "headers": response.joinedHeaders, "body": String(decoding: response.body, as: UTF8.self),
+      "url": hop.url.absoluteString, "headers": response.joinedHeaders, "body": binary ? response.body.base64EncodedString() : String(decoding: response.body, as: UTF8.self),
     ])
   }
 
@@ -232,13 +328,19 @@ final class PluginHostFetch {
   }
 
   private func finish(_ body: [String: Any]) {
-    guard let reply else { return }
-    self.reply = nil
+    let pending = reply
+    reply = nil
     deadline?.cancel()
     deadline = nil
+    idle?.cancel()
+    idle = nil
     closeConnection()
     keepAlive = nil
-    reply(body)
+    if let pending { return pending(body) }
+    if let failing = stream, (body["ok"] as? Bool) == false {
+      stream = nil
+      failing.fail(body["reason"] as? String ?? "the stream failed")
+    }
   }
 
   static func describe(_ error: NWError) -> String {

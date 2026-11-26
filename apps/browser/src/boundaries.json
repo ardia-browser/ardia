@@ -2435,6 +2435,149 @@
     "apps/browser/src/hostileInputs.test.mjs#a clipboard another app filled reaches the address field"
    ],
    "detected": false
+  },
+  {
+   "id": "webkit-script-handler:ardiacore/ios/WebKitPluginWorldHandler.swift",
+   "source": "page",
+   "guard": "Only the plugin's own named content world in the main frame, JSON up to 256 KB; the tab must still carry that plugin's world, rate-limited per plugin (pageWorlds.receiveWorldMessage, worldMessagesOf)",
+   "checks": [
+    "packages/ardiacore/ios/WebKitPluginWorldHandler.swift#userContentController",
+    "apps/browser/src/state/plugins/pageWorlds.ts#receiveWorldMessage",
+    "apps/browser/src/lib/pluginWorlds.ts#worldMessagesOf"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/plugins/pageApis.ts",
+   "source": "main-world",
+   "guard": "page.readActive and page.readTab: activePage permission and a recent gesture or a tab lease, re-checked after the read; every field type-checked, URLs minimized without fullUrls",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/plugins/pageApis.ts#readTab"
+   ]
+  },
+  {
+   "id": "plugin-method:net.fetch.stream",
+   "source": "plugin",
+   "guard": "fetchRequestOf: network permission, https or a listed local port, allowed host, header and body caps; native re-checks every redirect and resolved address, caps the stream at 256 MB",
+   "checks": [
+    "apps/browser/src/state/plugins/netRequest.ts#fetchRequestOf",
+    "packages/shell/ios/PluginCore/PluginFetchPolicy.swift#loopbackAddress"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:net.ws.connect",
+   "source": "plugin",
+   "guard": "targetOf with sockets: wss on an allowed host or ws/wss on a listed local port; native checks the connected address, caps frames at 1 MB and 64 queued sends",
+   "checks": [
+    "apps/browser/src/state/plugins/netRequest.ts#targetOf",
+    "packages/shell/ios/PluginWebSocket.swift#ready"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:net.ws.send",
+   "source": "plugin",
+   "guard": "Socket id grammar, text or base64, 1 MB cap; the native socket refuses ids the run didn't open",
+   "checks": [
+    "apps/browser/src/state/plugins/netChannels.ts#sendSocket"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:auth.signIn",
+   "source": "plugin",
+   "guard": "authorizeUrl and tokenUrl must be https on the plugin's hosts; PKCE S256 with a host-made state and verifier, callback checked for scheme, plugin path, single state and code",
+   "checks": [
+    "apps/browser/src/state/plugins/osApis.ts#signIn",
+    "packages/shell/ios/PluginCore/PluginAuthRequest.swift#code"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:services.call",
+   "source": "plugin",
+   "guard": "The caller must consume the interface or depend on the provider; profile-scoped providers only in the caller's profile; the provider answers through the call table, its secrets and hosts never cross",
+   "checks": [
+    "apps/browser/src/state/plugins/services.ts#callService"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:sidecar.request",
+   "source": "plugin",
+   "guard": "Only a plugin with both main and sidecar; method grammar, 1 MB lines, 32 pending, 30 s; the sidecar's lines are parsed as JSON and only its own replies resolve",
+   "checks": [
+    "apps/browser/src/state/plugins/sidecarPipe.ts#sidecarMethod",
+    "apps/browser/src/state/plugins/sidecarPipe.ts#sidecarLine"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:page.sendToContent",
+   "source": "plugin",
+   "guard": "Only to a tab that holds that plugin's isolated world, not private, not blocked for the site; JSON up to 256 KB",
+   "checks": [
+    "apps/browser/src/state/plugins/pageWorlds.ts#postToContent"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:fs.pickFiles",
+   "source": "plugin",
+   "guard": "files: picker and a recent gesture; native panels open only what you pick, once, O_NOFOLLOW and regular, read from that descriptor up to its cap; big files come back as run-scoped handles read in bounded chunks",
+   "checks": [
+    "apps/browser/src/state/plugins/fileApis.ts#filesMethod",
+    "packages/shell/ios/PluginFilePanels.swift#open",
+    "packages/shell/ios/PluginCore/PluginBoundedFile.swift#openRegular"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:clipboard.readText",
+   "source": "plugin",
+   "guard": "clipboard: read and a recent gesture; text only, a million characters",
+   "checks": [
+    "apps/browser/src/state/plugins/osApis.ts#clipboardMethod"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:bookmarks.create",
+   "source": "plugin",
+   "guard": "bookmarks: write; only folders and bookmarks of the request's profile, pluginWebUrl on the URL",
+   "checks": [
+    "apps/browser/src/state/plugins/browserApis.ts#bookmarksMethod"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:history.search",
+   "source": "plugin",
+   "guard": "history: read; the request's profile only, at most 500 results",
+   "checks": [
+    "apps/browser/src/state/plugins/browserApis.ts#historyMethod"
+   ],
+   "detected": false
+  },
+  {
+   "id": "engine-event:webView.pluginWorld",
+   "source": "page",
+   "guard": "Chromium content-script bridge: the world must be ardia-plugin:<key>, polled from its own isolated context; parsed by worldMessagesOf and dropped unless the tab still carries that plugin's world",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaPluginWorlds.mm#pollOnce",
+    "apps/browser/src/state/plugins/pageWorlds.ts#receiveWorldMessage"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-file:pageStyles",
+   "source": "plugin",
+   "guard": "CSS from the plugin's own approved folder, 2 MB a file, put only in the styles world on pages both the style's matches and permissions.pages cover",
+   "checks": [
+    "apps/browser/src/state/plugins/pageWorlds.ts#wantedFor"
+   ],
+   "detected": false
   }
  ]
 }

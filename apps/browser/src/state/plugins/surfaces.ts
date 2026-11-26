@@ -47,6 +47,7 @@ export const isSurfaceWindowEligible = (windowId: string): boolean => !!eligible
 
 type Mounted = { plugin: string; surfaceId: string; viewId: string; kind: SurfaceKind; windowId: string; context: Record<string, unknown>; sentRun: number | null };
 const mounted = new Map<string, Mounted>();
+export const surfaceRevs = new Map<string, number>();
 
 const without = <T,>(record: Record<string, T>, keep: (value: T, key: string) => boolean): Record<string, T> => Object.fromEntries(Object.entries(record).filter(([k, v]) => keep(v, k)));
 
@@ -86,6 +87,7 @@ export function unmountPluginSurface(plugin: string, surfaceId: string, windowId
   const key = surfaceKey(plugin, surfaceId);
   if (mounted.get(key)?.windowId !== windowId) return;
   mounted.delete(key);
+  surfaceRevs.delete(key);
   sendSurfaceMessage(plugin, { surface: "unmount", surfaceId });
   usePluginSurfaces.setState((s) => ({ trees: without(s.trees, (_v, k) => k !== key) }));
 }
@@ -98,6 +100,8 @@ export function dispatchPluginSurfaceEvent(plugin: string, surfaceId: string, wi
 }
 
 const mountedSurfaces = (plugin: string) => [...mounted.values()].filter((m) => m.plugin === plugin);
+
+export const mountedCountOf = (plugin: string) => mountedSurfaces(plugin).length;
 
 export const isMountedSurface = (plugin: string, surfaceId: string) => mounted.has(surfaceKey(plugin, surfaceId));
 
@@ -210,6 +214,7 @@ export function resolveInputBox(id: string, value: string | null) {
 
 export function clearPluginSurfaces(plugin: string) {
   for (const [key, m] of mounted) if (m.plugin === plugin) mounted.delete(key);
+  for (const key of [...surfaceRevs.keys()]) if (key.startsWith(`${plugin}:`)) surfaceRevs.delete(key);
   for (const [id, a] of quickPickAnswers) if (a.plugin === plugin) resolveQuickPick(id, null);
   for (const [id, a] of inputBoxAnswers) if (a.plugin === plugin) resolveInputBox(id, null);
   const prefix = `${plugin}:`;
@@ -246,6 +251,7 @@ export function dropHiddenRetainedSidePanels(plugin: string) {
     if (m.plugin !== plugin || m.kind !== "panel" || Object.hasOwn(m.context, "tabId")) continue;
     if (!dropped.some((d) => d.windowId === m.windowId && d.panelId === m.context.panelId)) continue;
     mounted.delete(key);
+    surfaceRevs.delete(key);
     droppedTrees.add(key);
   }
   usePluginSurfaces.setState((now) => ({ retainedSidePanels, sidePanels, trees: droppedTrees.size ? without(now.trees, (_v, k) => !droppedTrees.has(k)) : now.trees }));

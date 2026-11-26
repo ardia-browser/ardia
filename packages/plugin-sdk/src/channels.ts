@@ -1,6 +1,8 @@
 import {
   CHANNEL_EVENTS as E,
   HOST_METHODS_V3 as M,
+  SOCKET_SEND_BYTES,
+  utf8Length,
   type ContentMessageEvent,
   type StreamFetchRequest,
   type StreamHead,
@@ -271,7 +273,10 @@ export function createChannels(rpc: Rpc, report: (error: unknown) => void) {
       },
       send: (data) => {
         if (state !== "open") return Promise.reject(new PluginError("closed", "The socket isn't open."));
-        return rpc.request(M.wsSend, { socket: id, data }).then(() => undefined);
+        if (typeof data !== "string") return Promise.reject(new PluginError("bad_request", "socket.send takes a string."));
+        const params = { socket: id, data };
+        if (utf8Length(JSON.stringify(params)) > SOCKET_SEND_BYTES) return Promise.reject(new PluginError("too_big", `socket.send takes up to ${Math.floor(SOCKET_SEND_BYTES / 1024)} KB per message.`));
+        return rpc.request(M.wsSend, params).then(() => undefined);
       },
       close: (code = 1000, reason = "") => {
         if (state === "closed" || state === "closing") return Promise.resolve();

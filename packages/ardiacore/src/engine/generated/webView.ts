@@ -17,4 +17,6 @@ export type WebViewCalls = {
   "webView.takeFirstPaintHolds": [{}, { held: number; painted: number; loaded: number; pressed: number; timedOut: number; heldMs: number }];
 };
 
-export type WebViewEvents = {};
+export type WebViewEvents = {
+  "webView.pluginWorld": { tabId: string; world: string; document: string; json: string; epoch?: string };
+};

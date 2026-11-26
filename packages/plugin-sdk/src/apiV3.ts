@@ -25,6 +25,7 @@ import {
   type SplitOpenOptions,
 } from "./protocol";
 import { PluginError, type Rpc } from "./rpc";
+import { FILE_CHUNK_BYTES } from "./protocolV3";
 import { disposable, type Disposable, type Registry, type ServiceHandlers } from "./types";
 
 const INTERFACE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
@@ -48,7 +49,51 @@ function httpsOnly(url: string, label: string) {
   if (!/^https:\/\/[^\s/]+/.test(url) && !/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//.test(url)) throw new PluginError("bad-url", `${label} must be an https:// URL.`);
 }
 
+const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function utf8Bytes(text: string): number[] {
+  const out: number[] = [];
+  for (const char of text) {
+    const code = char.codePointAt(0)!;
+    if (code < 0x80) out.push(code);
+    else if (code < 0x800) out.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+    else if (code < 0x10000) out.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+    else out.push(0xf0 | (code >> 18), 0x80 | ((code >> 12) & 0x3f), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+  }
+  return out;
+}
+
+export function base64OfBytes(bytes: readonly number[]): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i]!;
+    const b = bytes[i + 1];
+    const c = bytes[i + 2];
+    out += BASE64[a >> 2]! + BASE64[((a & 3) << 4) | ((b ?? 0) >> 4)]! + (b === undefined ? "=" : BASE64[((b & 15) << 2) | ((c ?? 0) >> 6)]!) + (c === undefined ? "=" : BASE64[c & 63]!);
+  }
+  return out;
+}
+
+const base64Of = (data: string, encoding: "base64" | "utf8") => (encoding === "base64" ? data : base64OfBytes(utf8Bytes(data)));
+
 export function createArdiaV3(rpc: Rpc, registry: Registry, channels: Channels, state: V3State) {
+  async function readFile(handle: string): Promise<string> {
+    let data = "";
+    let offset = 0;
+    try {
+      for (;;) {
+        const chunk = await rpc.request<{ data: string; eof: boolean }>(M.filesReadChunk, { handle, offset, length: FILE_CHUNK_BYTES });
+        if (typeof chunk?.data !== "string") break;
+        data += chunk.data;
+        offset += Math.floor((chunk.data.length * 3) / 4) - (chunk.data.endsWith("==") ? 2 : chunk.data.endsWith("=") ? 1 : 0);
+        if (chunk.eof || !chunk.data) break;
+      }
+    } finally {
+      await rpc.request(M.filesClose, { handle }).then(nothing, nothing);
+    }
+    return data;
+  }
+
   const services = {
     provide(iface: string, handlers: ServiceHandlers): Disposable {
       checkInterface(iface);
@@ -134,8 +179,25 @@ export function createArdiaV3(rpc: Rpc, registry: Registry, channels: Channels, 
       writeText: (text: string) => rpc.request(M.clipboardWriteText, { text }).then(nothing),
     },
     fs: {
-      pickFiles: async (options: PickFilesOptions = {}) => listOf<PickedFile>(await rpc.request(M.filesPick, { ...options }), "files"),
-      saveFile: (options: SaveFileOptions) => rpc.request<{ saved: boolean; name?: string }>(M.filesSave, { encoding: "utf8", ...options }),
+      pickFiles: async (options: PickFilesOptions = {}) => {
+        const files = listOf<PickedFile>(await rpc.request(M.filesPick, { ...options }), "files");
+        for (const file of files) if (file.handle) file.data = await readFile(file.handle);
+        return files.map(({ handle: _handle, ...rest }) => rest as PickedFile);
+      },
+      readFile,
+      async saveFile(options: SaveFileOptions): Promise<{ saved: boolean; name?: string }> {
+        const encoded = base64Of(options.data, options.encoding ?? "utf8");
+        const begun = await rpc.request<{ saved: boolean; handle?: string; name?: string }>(M.filesSaveBegin, { name: options.name, ...(options.mimeType ? { mimeType: options.mimeType } : {}) });
+        if (!begun?.saved || !begun.handle) return { saved: false };
+        const step = Math.floor(FILE_CHUNK_BYTES / 3) * 4;
+        try {
+          for (let at = 0; at < encoded.length; at += step) await rpc.request(M.filesSaveChunk, { handle: begun.handle, data: encoded.slice(at, at + step) });
+        } catch (error) {
+          await rpc.request(M.filesSaveCommit, { handle: begun.handle, commit: false }).then(nothing, nothing);
+          throw error;
+        }
+        return rpc.request<{ saved: boolean; name?: string }>(M.filesSaveCommit, { handle: begun.handle, commit: true });
+      },
     },
     notify: (options: NotifyOptions) => rpc.request(M.notify, { ...options }).then(nothing),
     net: {

@@ -11,6 +11,7 @@ import { notePlugin } from "../telemetry/pluginCounts";
 import { recentPluginGesture } from "./gestures";
 import { closePluginCommandView, closePluginPopover, closePluginSidePanel, isMountedSurface, mountedEntry, mountedInstancesOf, PROMPT_BUSY, setPluginSurfaceTree, showPluginInputBox, showPluginQuickPick, updatePluginToolbar, usePluginSurfaces } from "./surfaces";
 import { closePluginPanel, openPluginPanel, pluginPanel } from "./panels";
+import { noteSurfaceRev, patchSurfaces } from "./surfacePatch";
 
 const TOAST_GAP_MS = 1500;
 const SYMBOL = /^[a-z0-9.]{1,64}$/;
@@ -90,7 +91,7 @@ function toast(c: Caller, params: Record<string, unknown>): Body {
   return { result: { ok: true } };
 }
 
-function renderTargets(m: PluginManifest, plugin: string, surfaceId: string): string[] {
+export function renderTargets(m: PluginManifest, plugin: string, surfaceId: string): string[] {
   if (isMountedSurface(plugin, surfaceId)) return [surfaceId];
   return viewIdsOf(m.contributes).includes(surfaceId) ? mountedInstancesOf(plugin, surfaceId) : [];
 }
@@ -101,8 +102,18 @@ function render(m: PluginManifest, c: Caller, params: Record<string, unknown>): 
   if (!targets.length) return failure("refused", `This plugin has no open surface ${String(surfaceId).slice(0, 40)}.`);
   const checked = checkPluginNode(params.tree);
   if (!checked.ok) return failure("bad_request", `tree ${checked.problem}.`);
-  for (const target of targets) setPluginSurfaceTree(c.name, target, checked.tree);
+  for (const target of targets) {
+    setPluginSurfaceTree(c.name, target, checked.tree);
+    noteSurfaceRev(c.name, target, params.rev);
+  }
   return { result: { ok: true } };
+}
+
+function patch(m: PluginManifest, c: Caller, params: Record<string, unknown>): Body {
+  const surfaceId = params.surfaceId;
+  const targets = typeof surfaceId === "string" ? renderTargets(m, c.name, surfaceId) : [];
+  if (!targets.length) return failure("refused", `This plugin has no open surface ${String(surfaceId).slice(0, 40)}.`);
+  return patchSurfaces(c.name, targets, params);
 }
 
 const sideViewOf = (plugin: string, panelId: string) => {
@@ -165,7 +176,7 @@ function panel(c: Caller, method: string, params: Record<string, unknown>): Body
   return outcome.ok ? { result: { ok: true, windowId, ...(outcome.tabId ? { tabId: outcome.tabId } : {}) } } : failure("failed", outcome.reason);
 }
 
-export const UI_METHODS = ["ui.showQuickPick", "ui.showInputBox", "ui.showConfirm", "ui.showToast", "surface.render", "surface.close", "toolbar.update", "panel.open", "panel.close"] as const;
+export const UI_METHODS = ["ui.showQuickPick", "ui.showInputBox", "ui.showConfirm", "ui.showToast", "surface.render", "surface.patch", "surface.close", "toolbar.update", "panel.open", "panel.close"] as const;
 
 export function uiMethod(c: Caller, m: PluginManifest, method: string, params: Record<string, unknown>): Body | Promise<Body> {
   switch (method) {
@@ -179,6 +190,8 @@ export function uiMethod(c: Caller, m: PluginManifest, method: string, params: R
       return toast(c, params);
     case "surface.render":
       return render(m, c, params);
+    case "surface.patch":
+      return patch(m, c, params);
     case "surface.close":
       return closeSurface(c, params);
     case "toolbar.update":

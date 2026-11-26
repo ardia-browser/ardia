@@ -65,6 +65,12 @@ export function comboKey({ key, modifiers }: Shortcut): string {
 
 export const sameShortcut = (a: Shortcut, b: Shortcut) => comboKey(a) === comboKey(b);
 
+export function normalShortcut(key: string, modifiers: readonly string[]): Shortcut {
+  const single = Array.from(key).length === 1;
+  const shifted = single && key !== key.toLowerCase();
+  return { key: single ? key.toLowerCase() : key, modifiers: ordered(shifted ? [...modifiers, "shift"] : modifiers) };
+}
+
 export function resolveShortcuts(sources: readonly ShortcutSource[], overrides: ShortcutOverrides, read: ModifierReading = storedModifiers, mouseOverrides: ShortcutOverrides = {}): ResolvedShortcuts {
   const rebindable = new Set(sources.filter((s) => !s.fixed).map((s) => s.id));
   const taken = new Set<string>();

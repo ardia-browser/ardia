@@ -66,12 +66,13 @@ test("the runtime reads what this Ardia runs and keeps the whole v3 manifest for
   const { manifest, problems: found } = readManifest(JSON.stringify(doc));
   assert.deepEqual(found, []);
   assert.equal(manifest.permissions.activePage, true);
-  assert.deepEqual(manifest.permissions.network, ["api.example.com"], "a localhost host waits for the runtime that can hold a plugin to it");
+  assert.deepEqual(manifest.permissions.network, ["api.example.com", "localhost:11434"], "an explicit local port is kept for the host to hold the plugin to");
+  assert.deepEqual([manifest.permissions.screenshot, manifest.permissions.multiTab, manifest.permissions.bookmarks, manifest.permissions.pages], [true, false, "read", ["https://github.com/*"]]);
   assert.equal(manifest.v3.permissions.bookmarks, "read");
   assert.deepEqual(manifest.v3.contributes.pageStyles.map((s) => s.id), ["s"]);
   assert.deepEqual(manifest.commands[0].action, { handler: true }, "an input-mode command runs its handler until input modes land");
   const hybrid = readManifest(JSON.stringify(v3({ name: "both", title: "Both", main: "index.js", sidecar: { run: ["bin/helper"] } }))).manifest;
-  assert.equal(hybrid.sidecar, null, "main and a sidecar together run main for now");
+  assert.deepEqual([hybrid.main?.entry, hybrid.sidecar?.run], ["index.js", ["bin/helper"]], "main and a sidecar run side by side");
   assert.deepEqual(hybrid.v3.sidecar, { run: ["bin/helper"] });
   const deps = readManifest(JSON.stringify(v3({ name: "d", title: "D", main: "index.js", dependencies: { "@acme/lib": "^1.0.0" }, optionalDependencies: { "@ardia/cli": ">=0.8.0" } }))).manifest;
   assert.deepEqual([deps.dependencies, deps.optionalDependencies, deps.engines], [{ "@acme/lib": "^1.0.0" }, { "@ardia/cli": ">=0.8.0" }, { ardia: ">=0.0.0" }]);

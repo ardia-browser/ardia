@@ -1,3 +1,4 @@
+import { isPluginKey } from "../../lib/pluginIds";
 import { parseThemeFile, type ParsedTheme, type RolePalettes } from "../../lib/themeFile";
 import { activeManifest, activeNames, currentPlugins, recordOf, type PluginsStore } from "./store";
 import { readFolderFile } from "./hostIo";
@@ -7,8 +8,8 @@ type PluginTheme = { plugin: string; pluginTitle: string; id: string; title: str
 const pluginThemeKey = (plugin: string, id: string) => `plugin:${plugin}/${id}`;
 
 export function parsePluginThemeKey(key: string): { plugin: string; id: string } | null {
-  const found = /^plugin:([a-z0-9][a-z0-9-]{0,39})\/([A-Za-z0-9_-]{1,40})$/.exec(key);
-  return found ? { plugin: found[1]!, id: found[2]! } : null;
+  const found = /^plugin:([a-z0-9][a-z0-9-]{0,39}(?:__[a-z0-9][a-z0-9-]{0,39})?)\/([A-Za-z0-9_-]{1,40})$/.exec(key);
+  return found && isPluginKey(found[1]!) ? { plugin: found[1]!, id: found[2]! } : null;
 }
 
 export function pluginThemes(s: Pick<PluginsStore, "listings" | "records" | "order"> = currentPlugins()): PluginTheme[] {

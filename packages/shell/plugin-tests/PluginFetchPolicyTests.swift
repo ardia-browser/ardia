@@ -203,4 +203,20 @@ final class PluginFetchPolicyTests: XCTestCase {
     let headers = ["authorization": "Bearer x", "accept": "*/*"]
     XCTAssertEqual(PluginFetchPolicy.redirectHeaders(headers, from: plain, to: URL(string: "https://api.example.com:443/next")!), headers)
   }
+
+  func testAnExplicitLoopbackPortReachesOnlyThatPortOnLoopback() {
+    let allowed = ["api.example.com", "localhost:11434", "127.0.0.1:1234"]
+    XCTAssertEqual(PluginFetchPolicy.loopbackPorts(allowed), [11434, 1234])
+    XCTAssertNil(PluginFetchPolicy.check(url("http://localhost:11434/api/chat"), allowedHosts: allowed))
+    XCTAssertNil(PluginFetchPolicy.check(url("http://127.0.0.1:11434/"), allowedHosts: allowed))
+    XCTAssertNil(PluginFetchPolicy.check(url("http://[::1]:1234/"), allowedHosts: allowed))
+    XCTAssertEqual(PluginFetchPolicy.loopbackAddress(for: url("http://localhost:11434/"), allowedHosts: allowed), "127.0.0.1")
+    XCTAssertNotNil(PluginFetchPolicy.check(url("http://localhost:8080/"), allowedHosts: allowed))
+    XCTAssertNotNil(PluginFetchPolicy.check(url("http://localhost/"), allowedHosts: allowed))
+    XCTAssertNotNil(PluginFetchPolicy.check(url("http://10.0.0.1:11434/"), allowedHosts: allowed))
+    XCTAssertNotNil(PluginFetchPolicy.check(url("http://169.254.169.254:11434/"), allowedHosts: allowed))
+    XCTAssertNotNil(PluginFetchPolicy.check(url("http://user:pw@localhost:11434/"), allowedHosts: allowed))
+    XCTAssertTrue(PluginFetchPolicy.loopbackPorts(["localhost", "localhost:0", "localhost:70000", "localhost:12a", "evil.com:11434"]).isEmpty)
+    XCTAssertNil(PluginFetchPolicy.loopbackAddress(for: url("http://localhost.evil.com:11434/"), allowedHosts: allowed))
+  }
 }

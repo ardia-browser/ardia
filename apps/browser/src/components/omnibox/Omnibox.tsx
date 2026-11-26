@@ -23,6 +23,7 @@ import type { NewTabTarget } from "../../state/browser/types";
 import { showFieldMenu } from "../../state/omnibox/paste";
 import { SuggestionIcon, SuggestionList, isRemovable, type RowActions } from "./SuggestionRow";
 import { keywordScope } from "../../state/omnibox/scopes";
+import { runPluginInput } from "../../state/plugins/actions";
 import { setPopover } from "../../state/tabs/pageState";
 import { AddChip } from "./AddChip";
 import { INCOGNITO_ICON } from "../ntp/IncognitoHeading";
@@ -146,7 +147,7 @@ export function Omnibox({
 
   const go = (url: string, asked: Disposition = "current") => {
     bangEnter.cancel();
-    if (!url) return;
+    if (!url || runPluginInput(url, windowId, dismiss)) return;
     const disposition = asked === "split" && !barSplitsFrom(tabId) ? (opensTab ? "newTab" : "current") : asked;
     if (opensTab && disposition !== "newWindow" && disposition !== "split") return openFromNewTabBar(windowId, opensTab, url);
     if (disposition === "current") journeyNavigate(tabId);

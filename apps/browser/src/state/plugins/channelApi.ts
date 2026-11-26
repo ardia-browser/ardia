@@ -5,7 +5,7 @@ import { canOpenTabs, missingPermissions, SPLIT_SIDES, type PageSide, type Plugi
 import { pluginWebUrl } from "../../lib/pluginWebUrl";
 import { useBrowser } from "../browser/store";
 import { failure } from "../automation/automationMethods";
-import { automationWindows, lastFocusedEligibleWindow } from "../automation/automationWindows";
+import { automationWindows } from "../automation/automationWindows";
 import { runMethod, type Body } from "../automation/controlSocket";
 import { applyMethod, workspaceMethod } from "../automation/workspaceMethods";
 import type { UrlRule } from "../automation/workspaceOps";
@@ -16,13 +16,16 @@ import { acceptsRun } from "./process";
 import { markPluginReady } from "./activation";
 import { isPagePath, openPluginPage } from "./pages";
 import { valuesFor } from "./values";
-import { netFetch, readActivePage, secretsMethod, storageMethod } from "./channelData";
+import { callerProfile, pluginWindow, netFetch, readActivePage, secretsMethod, storageMethod } from "./channelData";
 import { UI_METHODS, uiMethod } from "./channelUi";
 import { programsStatus, relinkOwnPrograms } from "./programs";
 import { subscribeState } from "./stateEvents";
 import { runIntent } from "./stateIntents";
+import { answerV3Method } from "./channelV3";
+import { noteReadyServices } from "./services";
+import { syncSidecar } from "./sidecarPipe";
 
-const CHANNEL_PROTOCOL = 2;
+const CHANNEL_PROTOCOL = 3;
 const LEGACY_CHANNEL_PROTOCOL = 1;
 const MAX_OPEN_URLS = 10;
 const TAB_APPLY_OPS = ["open", "tab.close", "tab.activate"] as const;
@@ -40,19 +43,30 @@ function openPage(name: string, m: PluginManifest, params: Record<string, unknow
   if (path !== undefined && (typeof path !== "string" || !isPagePath(path))) return failure("bad_request", "page.open's path is /like/this?q=1, at most 512 characters.");
   if (side !== undefined && !(SPLIT_SIDES as readonly unknown[]).includes(side)) return failure("bad_request", "side is left, right, top or bottom.");
   if (context === true && !m.permissions.tabs) return failure("refused", "Handing the page a tab needs the tabs permission.");
-  const windowId = lastFocusedEligibleWindow(useBrowser.getState());
-  if (!windowId) return failure("no_window", "No window to open the page in.");
+  const target = pluginWindow(name, m, params);
+  if (!target.ok) return target.body;
+  const windowId = target.windowId;
   const tabId = openPluginPage(windowId, name, { path: (path as string | undefined) ?? "", split: split === true, side: side as PageSide | undefined, context: context === true });
   return tabId ? { result: { tabId, windowId } } : failure("failed", "The page couldn't open.");
 }
 
-async function toolsCall(name: string, m: PluginManifest, params: Record<string, unknown>): Promise<Body> {
+async function toolsCall(c: ChannelCaller, m: PluginManifest, params: Record<string, unknown>): Promise<Body> {
+  const name = c.name;
   const { plugin, tool, input } = params;
   if (typeof plugin !== "string" || typeof tool !== "string") return failure("bad_request", "tools.call needs a plugin and a tool.");
   const callee = activeManifest(currentPlugins(), plugin);
-  const missing = callee ? missingPermissions(m.permissions, callee.permissions) : [];
+  const depends = !!callee && (Object.hasOwn(m.dependencies, callee.id) || Object.hasOwn(m.optionalDependencies, callee.id));
+  const missing = callee && !depends ? missingPermissions(m.permissions, callee.permissions) : [];
   if (missing.length) return failure("refused", `${plugin} has permissions this plugin doesn't (${missing.join(", ")}), so it can't call its tools.`);
-  const outcome = await callTool(plugin, tool, input, { kind: "plugin", plugin: name });
+  const profile = callerProfile(name, m, params);
+  if (!profile.ok) return failure("refused", profile.message);
+  const stillReaches = () => {
+    const now = activeManifest(currentPlugins(), name);
+    if (!acceptsRun(name, c.run) || !now) return `${name} stopped.`;
+    const again = callerProfile(name, now, { profile: profile.profileId });
+    return again.ok ? null : again.message;
+  };
+  const outcome = await callTool(plugin, tool, input, { kind: "plugin", plugin: name }, undefined, callee?.scope === "profile" ? profile.profileId : null, stillReaches);
   return outcome.ok ? { result: outcome.result } : failure(outcome.code, outcome.message);
 }
 
@@ -109,8 +123,12 @@ export function answerMethod(c: ChannelCaller, m: PluginManifest, method: string
       return { result: { app: "Ardia", version: systemInfo().appVersion, protocol: m.main ? CHANNEL_PROTOCOL : LEGACY_CHANNEL_PROTOCOL, plugin: c.name, values: valuesFor(c.name) } };
     case "values":
       return { result: valuesFor(c.name) };
-    case "ready":
-      return markPluginReady(c.name, c.run) ? { result: { ok: true } } : failure("refused", "This run of the plugin has ended.");
+    case "ready": {
+      if (!markPluginReady(c.name, c.run)) return failure("refused", "This run of the plugin has ended.");
+      noteReadyServices(c, m, params.services);
+      syncSidecar(c.name);
+      return { result: { ok: true } };
+    }
     case "windows":
       return m.permissions.tabs ? { result: minimizedWindows(m.permissions.fullUrls) } : failure("refused", "windows needs the tabs permission.");
     case "run":
@@ -129,7 +147,7 @@ export function answerMethod(c: ChannelCaller, m: PluginManifest, method: string
     case "page.open":
       return openPage(c.name, m, params);
     case "tools.call":
-      return toolsCall(c.name, m, params);
+      return toolsCall(c, m, params);
     case "net.fetch":
       return netFetch(m, params);
     case "programs.status":
@@ -146,5 +164,5 @@ export function answerMethod(c: ChannelCaller, m: PluginManifest, method: string
   if (method.startsWith("storage.") && ["storage.get", "storage.set", "storage.delete", "storage.keys"].includes(method)) return storageMethod(c, m, method, params);
   if (["secrets.get", "secrets.set", "secrets.delete"].includes(method)) return secretsMethod(c, m, method, params);
   if ((UI_METHODS as readonly string[]).includes(method)) return uiMethod(c, m, method, params);
-  return null;
+  return answerV3Method(c, m, method, params);
 }

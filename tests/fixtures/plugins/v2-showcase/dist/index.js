@@ -35,6 +35,11 @@
     clipboardWriteText: "clipboard.writeText",
     filesPick: "fs.pickFiles",
     filesSave: "fs.saveFile",
+    filesReadChunk: "fs.readChunk",
+    filesClose: "fs.closeFile",
+    filesSaveBegin: "fs.saveBegin",
+    filesSaveChunk: "fs.saveChunk",
+    filesSaveCommit: "fs.saveCommit",
     notify: "ui.notify"
   };
   var CHANNEL_EVENTS = {
@@ -49,6 +54,21 @@
     contentMessage: "page.contentMessage"
   };
   var CHANNEL_EVENT_NAMES = Object.values(CHANNEL_EVENTS);
+  var FILE_CHUNK_BYTES = 384 * 1024;
+  var SOCKET_SEND_BYTES = 1024 * 1024 - 8 * 1024;
+  function utf8Length(text) {
+    let bytes = 0;
+    for (let i = 0; i < text.length; i++) {
+      const unit = text.charCodeAt(i);
+      if (unit < 128) bytes += 1;
+      else if (unit < 2048) bytes += 2;
+      else if (unit >= 55296 && unit <= 56319 && i + 1 < text.length && (text.charCodeAt(i + 1) & 64512) === 56320) {
+        bytes += 4;
+        i++;
+      } else bytes += 3;
+    }
+    return bytes;
+  }
 
   var definedKeys = (record) => Object.keys(record).filter((key) => record[key] !== void 0);
   function deepEqual(a, b) {
@@ -303,7 +323,46 @@
   function httpsOnly(url, label) {
     if (!/^https:\/\/[^\s/]+/.test(url) && !/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//.test(url)) throw new PluginError("bad-url", `${label} must be an https:// URL.`);
   }
+  var BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  function utf8Bytes(text) {
+    const out = [];
+    for (const char of text) {
+      const code = char.codePointAt(0);
+      if (code < 128) out.push(code);
+      else if (code < 2048) out.push(192 | code >> 6, 128 | code & 63);
+      else if (code < 65536) out.push(224 | code >> 12, 128 | code >> 6 & 63, 128 | code & 63);
+      else out.push(240 | code >> 18, 128 | code >> 12 & 63, 128 | code >> 6 & 63, 128 | code & 63);
+    }
+    return out;
+  }
+  function base64OfBytes(bytes) {
+    let out = "";
+    for (let i = 0; i < bytes.length; i += 3) {
+      const a = bytes[i];
+      const b = bytes[i + 1];
+      const c = bytes[i + 2];
+      out += BASE64[a >> 2] + BASE64[(a & 3) << 4 | (b ?? 0) >> 4] + (b === void 0 ? "=" : BASE64[(b & 15) << 2 | (c ?? 0) >> 6]) + (c === void 0 ? "=" : BASE64[c & 63]);
+    }
+    return out;
+  }
+  var base64Of = (data, encoding) => encoding === "base64" ? data : base64OfBytes(utf8Bytes(data));
   function createArdiaV3(rpc, registry, channels, state) {
+    async function readFile(handle) {
+      let data = "";
+      let offset = 0;
+      try {
+        for (; ; ) {
+          const chunk = await rpc.request(HOST_METHODS_V3.filesReadChunk, { handle, offset, length: FILE_CHUNK_BYTES });
+          if (typeof chunk?.data !== "string") break;
+          data += chunk.data;
+          offset += Math.floor(chunk.data.length * 3 / 4) - (chunk.data.endsWith("==") ? 2 : chunk.data.endsWith("=") ? 1 : 0);
+          if (chunk.eof || !chunk.data) break;
+        }
+      } finally {
+        await rpc.request(HOST_METHODS_V3.filesClose, { handle }).then(nothing, nothing);
+      }
+      return data;
+    }
     const services = {
       provide(iface, handlers) {
         checkInterface(iface);
@@ -386,8 +445,25 @@
         writeText: (text) => rpc.request(HOST_METHODS_V3.clipboardWriteText, { text }).then(nothing)
       },
       fs: {
-        pickFiles: async (options = {}) => listOf(await rpc.request(HOST_METHODS_V3.filesPick, { ...options }), "files"),
-        saveFile: (options) => rpc.request(HOST_METHODS_V3.filesSave, { encoding: "utf8", ...options })
+        pickFiles: async (options = {}) => {
+          const files = listOf(await rpc.request(HOST_METHODS_V3.filesPick, { ...options }), "files");
+          for (const file of files) if (file.handle) file.data = await readFile(file.handle);
+          return files.map(({ handle: _handle, ...rest }) => rest);
+        },
+        readFile,
+        async saveFile(options) {
+          const encoded = base64Of(options.data, options.encoding ?? "utf8");
+          const begun = await rpc.request(HOST_METHODS_V3.filesSaveBegin, { name: options.name, ...options.mimeType ? { mimeType: options.mimeType } : {} });
+          if (!begun?.saved || !begun.handle) return { saved: false };
+          const step = Math.floor(FILE_CHUNK_BYTES / 3) * 4;
+          try {
+            for (let at = 0; at < encoded.length; at += step) await rpc.request(HOST_METHODS_V3.filesSaveChunk, { handle: begun.handle, data: encoded.slice(at, at + step) });
+          } catch (error) {
+            await rpc.request(HOST_METHODS_V3.filesSaveCommit, { handle: begun.handle, commit: false }).then(nothing, nothing);
+            throw error;
+          }
+          return rpc.request(HOST_METHODS_V3.filesSaveCommit, { handle: begun.handle, commit: true });
+        }
       },
       notify: (options) => rpc.request(HOST_METHODS_V3.notify, { ...options }).then(nothing),
       net: {
@@ -1350,7 +1426,10 @@
         },
         send: (data) => {
           if (state !== "open") return Promise.reject(new PluginError("closed", "The socket isn't open."));
-          return rpc.request(HOST_METHODS_V3.wsSend, { socket: id, data }).then(() => void 0);
+          if (typeof data !== "string") return Promise.reject(new PluginError("bad_request", "socket.send takes a string."));
+          const params2 = { socket: id, data };
+          if (utf8Length(JSON.stringify(params2)) > SOCKET_SEND_BYTES) return Promise.reject(new PluginError("too_big", `socket.send takes up to ${Math.floor(SOCKET_SEND_BYTES / 1024)} KB per message.`));
+          return rpc.request(HOST_METHODS_V3.wsSend, params2).then(() => void 0);
         },
         close: (code = 1e3, reason = "") => {
           if (state === "closed" || state === "closing") return Promise.resolve();

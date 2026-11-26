@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { keepPluginPage, useKeptPluginPages } from "./keptPages";
 import { useShallow } from "zustand/react/shallow";
 import { surfaceKey, usePluginSurfaces, type PluginSurfacesStore, type SidePanel } from "./surfaces";
 import { pluginToolbarItems } from "./toolbar";
 import { activeManifest, activeNames, consentListing, currentPlugins, needsReview, recordOf, usePlugins, webViewsOnline, type PluginsStore } from "./store";
-import { pageContextOf, pageViewUrl, shownContext, usePluginPages } from "./pages";
+import { isSelfRouted, pluginPageLoadSeq, pageContextOf, pageViewUrl, pluginPageOf, shownContext, usePluginPages } from "./pages";
 import { useBrowser } from "../browser/store";
 import { useKeyed, watchWindowRecord } from "../browser/keyedWatch";
 import { eligibleKind } from "../automation/automationWindows";
@@ -12,7 +13,8 @@ import { consentVerbOf } from "./consentWords";
 import { fullControlLine } from "./consent";
 import { ownValue } from "../../lib/decode";
 import { useLock } from "./lockfile";
-import { shownNames } from "./profileScope";
+import { manifestInProfile, shownNames } from "./profileScope";
+import { pageMenuKey, pluginPageMenuItems } from "./menus";
 
 export const usePluginOrder = () => usePlugins((s) => s.order);
 export { useCatalog } from "./marketplace";
@@ -85,3 +87,41 @@ export function useConsentBundle(bundle: readonly { name: string; hash: string }
   const key = usePlugins((s) => JSON.stringify((bundle ?? []).map((b) => (consentListing(s, b.name, b.hash)?.hash === b.hash ? b.name : null))));
   return useMemo(() => (JSON.parse(key) as (string | null)[]).filter((n): n is string => n !== null), [key]);
 }
+export { usePluginHealth } from "./watchdog";
+export { useSitePluginScripts, usePluginsTouchPages } from "./siteScriptBlocks";
+
+export function usePluginPageMenuItems<T extends { id: string; title: string }>(tabId: string, base: T[]): (T | ReturnType<typeof pluginPageMenuItems>[number])[] {
+  const key = useBrowser((s) => pageMenuKey(s, tabId));
+  const plugins = usePlugins(useShallow((s) => ({ listings: s.listings, records: s.records, order: s.order })));
+  return useMemo(() => (key ? [...base, ...pluginPageMenuItems(tabId, plugins)] : base), [tabId, key, plugins, base]);
+}
+
+export { runPluginPageMenu } from "./menus";
+
+export const usePluginOnInProfile = (name: string, profileId: string | null) => usePlugins((s) => !!manifestInProfile(s, name, profileId));
+
+export const pluginStoreKey = (s: Pick<PluginsStore, "listings" | "records">, name: string, profileId: string | null) => (activeManifest(s, name)?.scope === "profile" && profileId ? profileId : "");
+
+export function usePluginStoreKey(name: string, tabId: string | null, windowId: string): string {
+  const profileId = useBrowser((s) => (tabId ? s.tabs[tabId]?.profileId : undefined) ?? s.windows[windowId]?.profileId ?? null);
+  return usePlugins((s) => pluginStoreKey(s, name, profileId));
+}
+
+export function usePluginLoadPath(tabId: string, path: string): { path: string; load: number } {
+  const routed = useBrowser((s) => isSelfRouted(tabId, s.tabs[tabId]));
+  const seq = useBrowser((s) => pluginPageLoadSeq(s.tabs[tabId]));
+  const loaded = useRef({ path, load: seq });
+  if (!routed && (loaded.current.path !== path || loaded.current.load !== seq)) loaded.current = { path, load: seq };
+  return loaded.current;
+}
+
+export function useKeptPluginPage(tabId: string, shown: boolean): boolean {
+  const isPluginPage = useBrowser((s) => !!pluginPageOf(s.tabs[tabId]?.url ?? ""));
+  const kept = useKeptPluginPages((k) => k.order.includes(tabId));
+  useEffect(() => {
+    if (shown && isPluginPage) keepPluginPage(tabId);
+  }, [shown, isPluginPage, tabId]);
+  return isPluginPage && (kept || shown);
+}
+
+export { useKeptPluginPageTabs } from "./keptPages";

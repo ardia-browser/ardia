@@ -11,10 +11,19 @@ final class PluginHost {
   private var sink: (owner: ObjectIdentifier, send: Sink)?
   private var attachment = 0
   private let runs = PluginRuns<PluginProcess>()
+  private let live = PluginLiveRuns()
   private let lifecycle = PluginLifecycle()
   private let outbox = PluginPageOutbox()
   private var nextRun = 0
   private var quitObserver: NSObjectProtocol?
+
+  private init() {}
+
+  func isLive(_ name: String, run: Int) -> Bool { live.contains(name, run: run) }
+
+  private func publishLive() {
+    live.replace(with: runs.current.values.filter { !$0.exited && $0.connection?.closed == false }.map { (name: $0.name, run: $0.run) })
+  }
 
   func attach(_ owner: AnyObject, send: @escaping Sink) {
     let id = ObjectIdentifier(owner)
@@ -43,13 +52,15 @@ final class PluginHost {
     attachment += 1
     let all = runs.all
     runs.removeAll()
+    publishLive()
     for process in all { process.terminateForQuit(within: Self.quitGrace / Double(max(1, all.count))) }
   }
 
   func start(_ spec: PluginProcess.Spec, done: @escaping ([String: Any]) -> Void) {
     queue.async { [self] in
-      lifecycle.enqueue(spec.name, .start, cancelled: { done(["ok": false, "reason": "a later stop or removal replaced this start"]) }) { [self] complete in
-        runs.stopAll(spec.name, graceMs: 0) { [self] in
+      lifecycle.enqueue(spec.runKey, .start, cancelled: { done(["ok": false, "reason": "a later stop or removal replaced this start"]) }) { [self] complete in
+        runs.stopAll(spec.runKey, graceMs: 0) { [self] in
+          publishLive()
           let attached = attachment
           PluginProcess.prepareCertificates(for: spec, deliverOn: queue) { [self] certificates in
             if attachment == attached {
@@ -60,6 +71,7 @@ final class PluginHost {
             complete()
           }
         }
+        publishLive()
       }
     }
   }
@@ -72,9 +84,18 @@ final class PluginHost {
       onLine: { [weak self] process, line in
         self?.sink?.send("onLine", ["name": process.name, "run": process.run, "launch": process.launch, "line": line])
       },
+      onClose: { [weak self] process in
+        guard let self else { return }
+        self.live.markClosed(process.name, run: process.run)
+        self.publishLive()
+        PluginNetChannels.shared.closeAll(process.name, run: process.run)
+      },
       onExit: { [weak self] process, status, signal, overMemory in
         guard let self else { return }
+        self.live.markClosed(process.name, run: process.run)
         self.runs.exited(process)
+        self.publishLive()
+        PluginNetChannels.shared.closeAll(process.name, run: process.run)
         self.sink?.send(
           "onExit",
           ["name": process.name, "run": process.run, "status": status.map { Int($0) } ?? NSNull(), "signal": signal.map { Int($0) } ?? NSNull(), "overMemory": overMemory])
@@ -82,6 +103,7 @@ final class PluginHost {
     switch result {
     case .success(let process):
       runs.installed(process)
+      publishLive()
       process.onPagePost = { [weak self] process, post in self?.post(post, from: process) }
       done(["ok": true, "run": process.run, "pid": Int(process.pid)])
     case .failure(let failure):
@@ -132,10 +154,12 @@ final class PluginHost {
   func stop(_ name: String, run: Int, graceMs: Int, done: @escaping () -> Void) {
     queue.async { [self] in
       lifecycle.enqueue(name, run == 0 ? .stop : .stopRun) { [self] complete in
-        runs.stopAll(name, onlyRun: run, graceMs: graceMs) {
+        runs.stopAll(name, onlyRun: run, graceMs: graceMs) { [self] in
+          publishLive()
           done()
           complete()
         }
+        publishLive()
       }
     }
   }
@@ -162,6 +186,29 @@ final class PluginHost {
     }
   }
 
+  func deliver(_ name: String, run: Int, _ line: String, still: @escaping () -> Bool = { true }, then: @escaping (_ backlog: Int?) -> Void) {
+    let data = Self.framed(line)
+    queue.async { [self] in
+      guard still(), let process = runs.current[name], process.run == run, !process.exited, let connection = process.connection, !connection.closed else { return then(nil) }
+      connection.send(data)
+      then(connection.closed ? nil : connection.pendingBytes)
+    }
+  }
+
+  func runningProcesses(_ answer: @escaping ([(name: String, run: Int, pid: pid_t)]) -> Void) {
+    queue.async { [self] in
+      let running = runs.current.values.filter { !$0.exited }.map { (name: $0.name, run: $0.run, pid: $0.pid) }
+      DispatchQueue.global(qos: .utility).async { answer(running) }
+    }
+  }
+
+  func backlog(_ name: String, run: Int, then: @escaping (_ backlog: Int?) -> Void) {
+    queue.async { [self] in
+      guard let process = runs.current[name], process.run == run, !process.exited, let connection = process.connection, !connection.closed else { return then(nil) }
+      then(connection.pendingBytes)
+    }
+  }
+
   func event(_ name: String, run: Int, _ line: String) {
     let data = Self.framed(line)
     queue.async { [self] in
@@ -173,11 +220,16 @@ final class PluginHost {
   func remove(_ name: String, source: String, folderId: String?, done: @escaping (String?) -> Void) {
     queue.async { [self] in
       lifecycle.enqueue(name, .remove) { [self] complete in
+        let retiring = runs.all.filter { $0.name == name || $0.name == name + PluginProcess.Spec.sidecarSuffix }
+        runs.stopAll(name + PluginProcess.Spec.sidecarSuffix, graceMs: 1000) {}
         runs.stopAll(name, graceMs: 1000) {
           let problem = PluginFolders.current().map { $0.remove(name, source: source, folderId: folderId) } ?? "Ardia has no data folder."
           DispatchQueue.main.async { done(problem) }
           complete()
         }
+        for process in retiring { live.markClosed(process.name, run: process.run) }
+        publishLive()
+        for process in retiring { PluginNetChannels.shared.closeAll(process.name, run: process.run) }
       }
     }
   }

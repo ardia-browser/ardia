@@ -77,7 +77,7 @@ final class PluginStorageTests: XCTestCase {
     XCTAssertNotNil(PluginStorage.write(in: folder.fd, text: big))
     XCTAssertEqual(PluginStorage.read(in: folder.fd), .missing)
     try big.write(toFile: storagePath, atomically: false, encoding: .utf8)
-    XCTAssertEqual(PluginStorage.read(in: folder.fd), .error("its storage is over 2 MB"))
+    XCTAssertEqual(PluginStorage.read(in: folder.fd), .error("its storage is over 16 MB"))
   }
 
   func testOnlyJSONIsSaved() {

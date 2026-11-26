@@ -1087,3 +1087,41 @@ test("T3: whatever the page hands over as passages, the model only gets numbered
     for (const node of texts) assert.equal(typeof node.nodeValue, "string", id);
   }
 });
+
+test("plugins v3: content-script messages, input-mode addresses, site blocks and plugin network targets keep hostile values out of their sinks", async () => {
+  const { worldMessagesOf, worldOf, pluginOfWorld } = await import("./lib/pluginWorlds.ts");
+  const { parseInputUrl } = await import("./state/plugins/inputModes.ts");
+  const { parseSiteScriptBlocks } = await import("./state/plugins/siteScriptBlocks.ts");
+  const { targetOf, fetchRequestOf } = await import("./state/plugins/netRequest.ts");
+  const { codeTokens } = await import("./components/plugins/codeTokens.ts");
+  const m = readManifest(v3Text({ manifest: 2, name: "net", title: "Net", main: "index.js", permissions: { network: ["api.example.com", "localhost:11434"] } })).manifest;
+  assert.ok(m, "a positive control manifest");
+  assert.equal("url" in fetchRequestOf(m, { url: "https://api.example.com/x" }), true, "the positive control reaches its host");
+  assert.equal("url" in targetOf(m, "ws://localhost:11434/", "ws", true), true, "and its local port");
+  let checked = 0;
+  for (const { value } of HOSTILE_VALUES) {
+    for (const json of [value, JSON.stringify([value]), JSON.stringify([JSON.stringify({ scriptId: value, message: value })]), JSON.stringify({ scriptId: value, __proto__: { polluted: true } })]) {
+      for (const entry of worldMessagesOf(json)) {
+        assert.ok(entry.scriptId === null || (typeof entry.scriptId === "string" && entry.scriptId.length <= 64));
+        assert.equal({}.polluted, undefined);
+      }
+    }
+    if (typeof value === "string") {
+      assert.ok(worldOf(value) === null || /^ardia-plugin:[a-z0-9_-]+$/.test(worldOf(value)));
+      const parsed = parseInputUrl(`ardia-input:${value}`);
+      assert.ok(parsed === null || (/^[a-z0-9][a-z0-9_-]*$/.test(parsed.plugin) && /^[a-z0-9][a-z0-9-]*$/.test(parsed.mode)));
+      assert.ok(pluginOfWorld(value) === null || /^[a-z0-9]/.test(pluginOfWorld(value)));
+      const sites = parseSiteScriptBlocks(JSON.stringify({ version: 1, sites: [value, `https://${value}`] }));
+      for (const origin of Object.keys(sites)) assert.match(origin, /^https?:\/\/[^/\s]+$/);
+      const line = value.slice(0, 2000);
+      assert.equal(codeTokens(line, "js").map((t) => t.text).join(""), line, "code tokens keep every character, never more");
+    }
+    for (const socket of [false, true]) {
+      const target = targetOf(m, value, "x", socket);
+      if ("code" in target) continue;
+      checked++;
+      assert.ok(target.loopback ? /^(https?|wss?):\/\/(localhost|127\.0\.0\.1):11434\//i.test(target.url) : /^(https|wss):\/\/api\.example\.com[/:?]/i.test(target.url) || target.host === "127.0.0.1", target.url);
+    }
+  }
+  assert.ok(checked >= 0);
+});

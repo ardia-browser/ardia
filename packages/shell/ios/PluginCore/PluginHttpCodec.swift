@@ -122,6 +122,7 @@ struct PluginHttpParser {
   private(set) var response = PluginHttpResponse()
   private(set) var framing: Framing?
   private(set) var done = false
+  private(set) var bodyTotal = 0
   private var buffer: [UInt8] = []
   private var cursor = 0
   private var chunk = ChunkStep.size
@@ -129,6 +130,14 @@ struct PluginHttpParser {
   init(method: String, maxBody: Int) {
     self.method = method
     self.maxBody = maxBody
+  }
+
+  var headReady: Bool { framing != nil }
+
+  mutating func drainBody() -> Data {
+    let drained = response.body
+    response.body = Data()
+    return drained
   }
 
   private var tooBig: FolderRefusal { FolderRefusal(reason: "the answer is over \(maxBody / 1024) KB") }
@@ -211,11 +220,12 @@ struct PluginHttpParser {
     guard count > 0 else { return 0 }
     response.body.append(contentsOf: buffer[cursor..<(cursor + count)])
     cursor += count
+    bodyTotal += count
     return count
   }
 
   private func checkedSize() throws -> Bool {
-    if response.body.count > maxBody { throw tooBig }
+    if bodyTotal > maxBody { throw tooBig }
     return true
   }
 
@@ -273,7 +283,7 @@ struct PluginHttpParser {
       guard let (bytes, next) = try line(from: cursor, limit: PluginHttpCodec.maxChunkLine) else { return false }
       let digits = Self.fieldText(bytes).split(separator: ";", maxSplits: 1).first.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: " \t")) } ?? ""
       guard !digits.isEmpty, digits.count <= 8, let size = Int(digits, radix: 16), size >= 0 else { throw FolderRefusal(reason: "the answer has a bad chunk size") }
-      if response.body.count + size > maxBody { throw tooBig }
+      if bodyTotal + size > maxBody { throw tooBig }
       cursor = next
       chunk = size == 0 ? .trailers : .data(size)
       return true

@@ -37,6 +37,8 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   private(set) var muted = false
   var pageMedia = WebKitPageMedia()
   var life = WebKitTabLife()
+  var documentSerial = 0
+  var pluginNonces: [String: (serial: Int, nonce: String)] = [:]
   var sightObserver: NSObjectProtocol?
   var errorURL: URL?
   private var committedAt: Double = 0
@@ -179,6 +181,8 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   func dropViewForDiscard() -> WebKitWebView? {
     guard let view = webView else { return nil }
+    WebKitPluginWorldHandler.detachAll(view: view)
+    documentSerial += 1
     observations = []
     webView = nil
     stopListening(to: view)
@@ -193,6 +197,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   func close() {
     guard !closed else { return }
+    WebKitPluginWorldHandler.detachAll(view: webView)
     lifecycleEnded()
     closed = true
     observations = []
@@ -515,6 +520,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   }
 
   func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    documentSerial += 1
     fieldProviderCommitted()
     if !showingError { errorURL = nil }
     committedAt = Date().timeIntervalSince1970 * 1000

@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useBrowser } from "../browser/store";
 import { ALL, useKeyed } from "../browser/keyedWatch";
-import { commandTitle, shortcutSources, UNAVAILABLE_COMMANDS } from "./commandCatalog";
+import { commandTitle, shortcutSources, shortcutSourcesKey, UNAVAILABLE_COMMANDS } from "./commandCatalog";
 import type { BrowserCommand } from "../../platform/commands";
 import { ALTERNATE_MODIFIER } from "./keyNotation";
 import { formatShortcut, resolveShortcuts, type ResolvedShortcuts, type Shortcut, type ShortcutOverrides, type ShortcutSource } from "./shortcuts";
@@ -19,7 +19,7 @@ export type ShortcutState = { settings: { shortcuts: ShortcutOverrides; mouseSho
 type MenuBar = { listed: ReadonlySet<string>; fixed: readonly ShortcutSource[] };
 
 const useMenuBar = create<{ bar: MenuBar | undefined; revision: number }>()(() => ({ bar: undefined, revision: 0 }));
-let resolvedFor: { overrides: ShortcutOverrides; mouse: ShortcutOverrides | undefined; profiles: readonly string[]; menuBar: MenuBar | undefined; resolved: ResolvedShortcuts } | undefined;
+let resolvedFor: { overrides: ShortcutOverrides; mouse: ShortcutOverrides | undefined; profiles: readonly string[]; menuBar: MenuBar | undefined; extra: string; resolved: ResolvedShortcuts } | undefined;
 
 export function setMenuBarShortcuts(offered: readonly MenuShortcut[]) {
   const items = offered.filter((item) => !UNAVAILABLE_COMMANDS.has(item.id));
@@ -37,10 +37,11 @@ export function resolvedShortcuts({ settings, profileOrder }: ShortcutState): Re
   const overrides = settings.shortcuts;
   const mouse = PLATFORM_FEATURES.mouseShortcuts ? settings.mouseShortcuts : undefined;
   const bar = useMenuBar.getState().bar;
-  if (resolvedFor?.overrides !== overrides || resolvedFor.mouse !== mouse || resolvedFor.profiles !== profileOrder || resolvedFor.menuBar !== bar) {
+  const extra = shortcutSourcesKey();
+  if (resolvedFor?.overrides !== overrides || resolvedFor.mouse !== mouse || resolvedFor.profiles !== profileOrder || resolvedFor.menuBar !== bar || resolvedFor.extra !== extra) {
     const catalog = shortcutSources(profileOrder, [...Object.keys(overrides), ...Object.keys(mouse ?? {})]);
     const sources = bar ? [...catalog.filter((source) => bar.listed.has(source.id)), ...bar.fixed] : catalog;
-    resolvedFor = { overrides, mouse, profiles: profileOrder, menuBar: bar, resolved: resolveShortcuts(sources, overrides, undefined, mouse) };
+    resolvedFor = { overrides, mouse, profiles: profileOrder, menuBar: bar, extra, resolved: resolveShortcuts(sources, overrides, undefined, mouse) };
   }
   return resolvedFor.resolved;
 }

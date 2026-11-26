@@ -87,7 +87,8 @@ export function ListNode({ node }: { node: PluginNode }) {
     if (isHandlerRef(entry.node.props.onSelect)) fire(entry.node.props.onSelect);
     else run(actionsIn(entry.node.props.actions)[0] ?? actionsIn(p.actions)[0]);
   };
-  const detail = bool(p.isShowingDetail) && current && isNode(current.node.props.detail) ? current.node.props.detail : null;
+  const childDetail = current?.node.children.find((c): c is PluginNode => typeof c !== "string" && c.type === "ListItemDetail") ?? null;
+  const detail = current && p.isShowingDetail !== false && (bool(p.isShowingDetail) || childDetail) ? (isNode(current.node.props.detail) ? current.node.props.detail : childDetail) : null;
   const currentNode = current?.node;
   const activeActions = useMemo(() => [...actionsIn(currentNode?.props.actions), ...actionsIn(p.actions)], [currentNode, p.actions]);
   useShortcutRegistration(activeActions);

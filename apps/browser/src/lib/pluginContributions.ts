@@ -6,7 +6,7 @@ import { pageBarOf, siteSwitchesOf, type PageBarSpec, type SiteSwitchSpec } from
 import { settingsOf, type SettingsSpec } from "./pluginRows";
 import { program, type ProgramSpec } from "./pluginRuntime";
 
-export const MENU_SLOTS = ["tab", "group"] as const;
+export const MENU_SLOTS = ["tab", "group", "page", "selection", "link", "image"] as const;
 export type MenuSlot = (typeof MENU_SLOTS)[number];
 export const PANEL_MODES = ["sidecar", "tab", "split"] as const;
 export type PanelMode = (typeof PANEL_MODES)[number];
@@ -39,7 +39,7 @@ export type PluginContributions = {
 export const CONTRIBUTES_KEYS = ["commands", "tools", "hooks", "settings", "programs", "passwordManager", "menus", "toolbar", "sidebarViews", "panels", "omnibox", "themes", "siteSwitches", "pageBar"] as const;
 export const PAGE_PANEL_ID = "default";
 
-const emptyMenus = (): MenuContributions => ({ tab: [], group: [] });
+const emptyMenus = (): MenuContributions => ({ tab: [], group: [], page: [], selection: [], link: [], image: [] });
 
 const P = "contributes";
 

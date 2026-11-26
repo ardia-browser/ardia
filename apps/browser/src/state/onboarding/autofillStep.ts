@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { cancelPairing, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords } from "../site/applePasswords";
-import { setMeCardFor } from "../site/meCard";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
-import { autofillStepOffers, holdAutofillOffers, offerPicks, recordAutofillAnswers, type AutofillOffer } from "./autofillOffers";
+import { noteOnboardingOffer } from "../telemetry/passwordManagerCounts";
+import { useBrowser } from "../browser/store";
+import { setMeCardFor, useMeCard } from "../site/meCard";
+import { autofillStepOffers, holdAutofillOffers, offerPicks, recordAutofillAnswers, useHeldOffers, type AutofillOffer } from "./autofillOffers";
 import { confirmAnswer, onboardingProfile, skipStep, useOnboarding } from "./onboarding";
 
 type AutofillStepPhase = "offer" | "working" | "pairing";
@@ -21,6 +23,19 @@ const ACCEPTED_LINES: Record<AutofillOffer, string> = {
   meCard: "Fills forms from your Me card",
 };
 
+function record(offered: readonly AutofillOffer[], accepted: readonly AutofillOffer[], consent: ConsentToken | null) {
+  for (const [offer, answer] of recordAutofillAnswers(offered, accepted)) noteOnboardingOffer(offer, answer, consent);
+}
+
+export function useAutofillStepOffers(): AutofillOffer[] {
+  const id = useOnboarding((s) => onboardingProfile(s.windowId));
+  useHeldOffers((s) => s.held);
+  useApplePasswords((s) => s.state);
+  useMeCard((s) => s.entries);
+  useBrowser((s) => (id ? s.profiles[id]?.passwordManager : undefined));
+  return autofillStepOffers(id);
+}
+
 export const resetAutofillStep = () => useAutofillStep.setState({ ...FRESH });
 
 export function toggleAutofillOffer(offer: AutofillOffer) {
@@ -32,7 +47,7 @@ function finish(offered: readonly AutofillOffer[], accepted: readonly AutofillOf
   const { consent } = now();
   resetAutofillStep();
   if (inStep()) confirmAnswer("autofill", {}, accepted.map((offer) => ACCEPTED_LINES[offer]));
-  recordAutofillAnswers(offered, accepted, consent);
+  record(offered, accepted, consent);
 }
 
 export async function continueAutofillStep() {
@@ -75,5 +90,5 @@ export function skipAutofillStep() {
   const consent = now().consent ?? consentToken();
   resetAutofillStep();
   skipStep();
-  recordAutofillAnswers(offered, [], consent);
+  record(offered, [], consent);
 }

@@ -3,8 +3,6 @@ import { applePasswordsOffered, useApplePasswords } from "../site/applePasswords
 import { useMeCard } from "../site/meCard";
 import { currentPasswordManager } from "../site/passwordManager";
 import { create } from "zustand";
-import type { ConsentToken } from "../telemetry/choice";
-import { noteOnboardingOffer } from "../telemetry/passwordManagerCounts";
 import { readSaved, saveOnboarding } from "./onboardingDocument";
 
 export type AutofillOffer = "applePasswords" | "meCard";
@@ -36,9 +34,9 @@ export function autofillStepOffers(profileId: string | null | undefined): Autofi
   return held.length ? held : openAutofillOffers(profileId);
 }
 
-export function recordAutofillAnswers(offered: readonly AutofillOffer[], accepted: readonly AutofillOffer[], consent: ConsentToken | null) {
-  const answers = Object.fromEntries(offered.map((offer) => [offer, accepted.includes(offer) ? "accepted" : "declined"] as const));
-  for (const [offer, answer] of Object.entries(answers)) noteOnboardingOffer(offer as AutofillOffer, answer, consent);
-  saveOnboarding({ offers: { ...answeredAutofillOffers(), ...answers } });
+export function recordAutofillAnswers(offered: readonly AutofillOffer[], accepted: readonly AutofillOffer[]): [AutofillOffer, AutofillOfferAnswer][] {
+  const answers = offered.map((offer): [AutofillOffer, AutofillOfferAnswer] => [offer, accepted.includes(offer) ? "accepted" : "declined"]);
+  saveOnboarding({ offers: { ...answeredAutofillOffers(), ...Object.fromEntries(answers) } });
   useHeldOffers.setState({ held: [] });
+  return answers;
 }

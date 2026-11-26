@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { PAIRING_CODE_DIGITS, pairingCodeInput, pairingPrompt, useApplePasswords, type Pairing } from "../../state/site/applePasswords";
-import { useMeCard } from "../../state/site/meCard";
-import { useBrowser } from "../../state/browser/store";
-import { autofillStepOffers, useHeldOffers, type AutofillOffer } from "../../state/onboarding/autofillOffers";
-import { continueAutofillStep, finishAutofillPairing, skipAutofillStep, submitAutofillPairingCode, toggleAutofillOffer, useAutofillStep } from "../../state/onboarding/autofillStep";
-import { onboardingProfile, useOnboarding } from "../../state/onboarding/onboarding";
+import type { AutofillOffer } from "../../state/onboarding/autofillOffers";
+import { continueAutofillStep, finishAutofillPairing, skipAutofillStep, submitAutofillPairingCode, toggleAutofillOffer, useAutofillStep, useAutofillStepOffers } from "../../state/onboarding/autofillStep";
 import { Checkbox, Symbol, Text, TextField } from "../ui";
 import { capsule, space } from "../ui/tokens";
 import { ChoiceCard } from "./ChoiceCard";
@@ -18,17 +15,8 @@ const CARDS: Record<AutofillOffer, { icon: string; title: string; subtitle: stri
   meCard: { icon: "person.crop.circle", title: "Use my Me card from Contacts", subtitle: "Fill forms with your name, email and addresses", chip: "Forms from your Me card" },
 };
 
-function useStepOffers(): AutofillOffer[] {
-  const profile = useOnboarding((s) => onboardingProfile(s.windowId));
-  useHeldOffers((s) => s.held);
-  useApplePasswords((s) => s.state);
-  useMeCard((s) => s.entries);
-  useBrowser((s) => (profile ? s.profiles[profile]?.passwordManager : undefined));
-  return autofillStepOffers(profile);
-}
-
 export function AutofillStep() {
-  const offers = useStepOffers();
+  const offers = useAutofillStepOffers();
   const picks = useAutofillStep((s) => s.picks);
   const phase = useAutofillStep((s) => s.phase);
   const pairing = useApplePasswords((s) => s.pairing);

@@ -36,6 +36,7 @@ import { useBarItems } from "./useBarItems";
 import { useHeldSelection, useProviderEnter } from "./heldSelection";
 import { useBarText } from "./useBarText";
 import { markNewTabBar } from "../../state/omnibox/newTabMarks";
+import { cancelUnlessLeavingApp, watchAppLeaving } from "../../state/omnibox/appLeaving";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { usePreviewSelection } from "./usePreviewSelection";
 
@@ -307,8 +308,8 @@ export function Omnibox({
       }}
       onChangeText={onChangeText}
       onSubmitEditing={() => choose(current, "current", true)}
-      onFocus={() => ((editing.current = true), setListAway(false), hero && markNewTabBar("focused", tabId))}
-      onBlur={() => ((editing.current = false), (focusEcho.current = false), onCancel?.())}
+      onFocus={() => (watchAppLeaving(), (editing.current = true), setListAway(false), hero && markNewTabBar("focused", tabId))}
+      onBlur={() => ((editing.current = false), (focusEcho.current = false), onCancel && cancelUnlessLeavingApp(onCancel))}
       keyDownEvents={barKeyDownEvents(asksForBackspace(scope), isRemovable(current))}
       onKeyDown={onKeyDown}
     />

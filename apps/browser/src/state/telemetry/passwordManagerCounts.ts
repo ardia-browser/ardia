@@ -29,6 +29,11 @@ const CODE_FIELDS: Record<VerificationCodeStep, string> = {
   failed: "verification_code_setups_failed",
 };
 
+const ME_CARD_FIELDS: Record<"on" | "refused", string> = {
+  on: "me_card_turned_on",
+  refused: "me_card_access_refused",
+};
+
 const RECORD_FAILED = "password_manager_record_failed";
 const MOVED_BACK = "password_manager_profiles_moved_back";
 const RESTORE_FIELDS: Record<"restored" | "failed", string> = {
@@ -48,7 +53,7 @@ const CHOICE_FIELDS: Record<PasswordManagerKind, string> = {
   plugin: "password_manager_chose_plugin",
 };
 
-const FIELDS = [...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
+const FIELDS = [...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), ...Object.values(ME_CARD_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
 
 let counts: Record<string, number> = {};
 const bump = (field: string, consent?: ConsentToken | null, by = 1) => countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + by));
@@ -69,6 +74,8 @@ export function noteProfilesMovedBack(moved: number, consent?: ConsentToken | nu
 export const noteOfferToSaveRestore = (restored: boolean, consent?: ConsentToken | null) => bump(RESTORE_FIELDS[restored ? "restored" : "failed"], consent);
 
 export const notePanelHint = (step: PanelHintStep) => bump(HINT_FIELDS[step]);
+
+export const noteMeCardSwitch = (step: keyof typeof ME_CARD_FIELDS, consent?: ConsentToken | null) => bump(ME_CARD_FIELDS[step], consent);
 
 export const notePasswordManagerChosen = (kind: PasswordManagerKind) => bump(CHOICE_FIELDS[kind]);
 

@@ -430,7 +430,7 @@ export const contacts = {
   requests: 0,
   card: null as MeCard | null,
   opened: 0,
-  changed: () => contactsEvents.emit("onContactsChanged", {}),
+  changed: (epoch?: string) => contactsEvents.emit("onContactsChanged", { epoch }),
 };
 const contactsModule: Modules["ArdiaContacts"] = {
   addListener: contactsEvents.addListener,

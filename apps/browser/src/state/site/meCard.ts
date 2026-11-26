@@ -14,6 +14,12 @@ import {
 } from "../../platform/contacts";
 import { isFields } from "../../lib/decode";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { onWebKitCount } from "../../platform/webkit";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
+import { warnFor } from "../telemetry/consoleConsent";
+import { nativeConsent } from "../telemetry/nativeConsent";
+import { noteMeCardSwitch } from "../telemetry/passwordManagerCounts";
+import { noteWebKitAutofillCount } from "../telemetry/webKitAutofillCounts";
 import { parseSaved, unchanged, versionedJson } from "../../lib/savedDocument";
 
 type MeCardState = { entries: Record<string, string[]>; hints: Record<string, string | null>; asking: Record<string, boolean> };
@@ -77,10 +83,10 @@ async function writeEntries(profile: string, wanted: AddressInput[], had: string
   return ids;
 }
 
-let queue: Promise<unknown> = Promise.resolve();
+let lastWrite: Promise<unknown> = Promise.resolve();
 const serially = <T>(work: () => Promise<T>): Promise<T> => {
-  const run = queue.then(work, work);
-  queue = run.catch(() => undefined);
+  const run = lastWrite.then(work, work);
+  lastWrite = run.catch(() => undefined);
   return run;
 };
 
@@ -100,6 +106,7 @@ const removeEntries = (profile: string) =>
   });
 
 export async function setMeCardFor(profile: string, on: boolean) {
+  const consent = consentToken();
   if (!on) {
     patch("hints", profile, null);
     return removeEntries(profile);
@@ -107,7 +114,11 @@ export async function setMeCardFor(profile: string, on: boolean) {
   patch("asking", profile, true);
   const { status, error } = await askForContacts();
   patch("asking", profile, false);
-  if (!canRead(status)) return patch("hints", profile, accessHint(status, error));
+  if (!canRead(status)) {
+    noteMeCardSwitch("refused", consent);
+    return patch("hints", profile, accessHint(status, error));
+  }
+  noteMeCardSwitch("on", consent);
   patch("hints", profile, null);
   if (!useMeCard.getState().entries[profile]) await recordEntries(profile, []);
   await refresh(profile);
@@ -122,13 +133,19 @@ export const useMeCardFor = (profile: string) => ({
 const NO_ENTRIES: string[] = [];
 export const useMeCardEntryIds = (profile: string) => useMeCard((s) => s.entries[profile] ?? NO_ENTRIES);
 
-const refreshAll = () => Promise.all(Object.keys(useMeCard.getState().entries).map((profile) => refresh(profile).catch((e: unknown) => console.warn("[me card] refresh failed", e))));
+function refreshAll(consent: ConsentToken | null) {
+  return Promise.all(Object.keys(useMeCard.getState().entries).map((profile) => refresh(profile).catch((e: unknown) => warnFor(consent, "[me card] refresh failed", e))));
+}
 
 let started = false;
 
 export function startMeCard() {
   if (started || !PLATFORM_FEATURES.meCard) return;
   started = true;
-  onContactsChanged(() => void refreshAll());
-  void refreshAll();
+  onContactsChanged((change) => void refreshAll(nativeConsent(change)));
+  onWebKitCount((count) => {
+    if (count.name !== "autofillAddressFill" || !count.entry) return;
+    if (Object.values(useMeCard.getState().entries).some((ids) => ids.includes(count.entry!))) noteWebKitAutofillCount("autofillMeCardFill", nativeConsent(count));
+  });
+  void refreshAll(consentToken());
 }

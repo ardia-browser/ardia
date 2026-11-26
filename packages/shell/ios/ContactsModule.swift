@@ -95,7 +95,7 @@ public class ContactsModule: Module, ContactsNative {
     stopObserving()
     if let path = Self.fixturePath { return watchFixture(path) }
     observer = NotificationCenter.default.addObserver(forName: .CNContactStoreDidChange, object: nil, queue: .main) { [weak self] _ in
-      self?.sendOnContactsChanged([:])
+      self?.sendOnContactsChanged(ArdiaConsentStamp.begin().onto([:]))
     }
   }
 
@@ -114,7 +114,7 @@ public class ContactsModule: Module, ContactsNative {
     source.setEventHandler { [weak self, weak source] in
       guard let self, let source else { return }
       let replaced = !source.data.intersection([.delete, .rename]).isEmpty
-      self.sendOnContactsChanged([:])
+      self.sendOnContactsChanged(ArdiaConsentStamp.begin().onto([:]))
       if replaced { DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in self?.watchFixture(path) } }
     }
     source.setCancelHandler { close(descriptor) }

@@ -279,11 +279,11 @@ export type ContactsNative = {
   requestAccess(): Promise<ContactsAccessRequest>;
   meCard(): Promise<MeCard | null>;
   openMeCard(): Promise<void>;
-  addListener(name: "onContactsChanged", listener: () => void): { remove(): void };
+  addListener(name: "onContactsChanged", listener: (event: ContactsNativeEvents["onContactsChanged"]) => void): { remove(): void };
 };
 
 export type ContactsNativeEvents = {
-  onContactsChanged: void;
+  onContactsChanged: { epoch?: string };
 };
 
 export type KeychainNative = {

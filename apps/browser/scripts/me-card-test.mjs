@@ -260,10 +260,16 @@ try {
   });
 
   await check("E29 a Me card entry fills name, company, email, phone and address in a WebKit tab", async () => {
+    await app.eval(`globalThis.__meCardFills = []; ac.engine.on("webKit.counted", (e) => e.name === "autofillAddressFill" && globalThis.__meCardFills.push(e.entry ?? null)); return true`);
     const values = await fillInWebKit();
     const wrong = filledLike(values, TWO_ADDRESSES);
     if (wrong) throw new Error(`${wrong}; form ${q(values)}`);
-    return values;
+    const ids = (await fromContactsIds()) ?? [];
+    const counted = await until("the fill counted with its entry", async () => {
+      const entries = await app.eval(`return globalThis.__meCardFills`);
+      return entries?.some((id) => ids.includes(id)) ? entries : null;
+    }, 4000);
+    return { ...values, counted: counted.length };
   });
 
   await check("E30 changing the Me card updates the entries; turning the switch off removes them", async () => {

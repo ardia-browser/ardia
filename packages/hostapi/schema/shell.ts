@@ -304,7 +304,7 @@ export const shell = defineModuleDomain({
         openMeCard: { args: [], result: "void", async: true, queue: "main", instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
       },
       events: {
-        onContactsChanged: { payload: "void", mac: "custom", desktop: "absent", windows: "absent" },
+        onContactsChanged: { payload: "{ epoch?: string }", mac: "custom", desktop: "absent", windows: "absent" },
       },
     },
     ArdiaKeychain: {

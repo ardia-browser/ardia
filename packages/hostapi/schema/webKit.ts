@@ -152,7 +152,7 @@ export const webKit = defineDomain({
   },
   events: {
     counted: {
-      payload: "{ name: WebKitCount; epoch?: string }",
+      payload: "{ name: WebKitCount; epoch?: string; entry?: string }",
       desktop: "absent",
       mac: "custom",
       windows: "absent",

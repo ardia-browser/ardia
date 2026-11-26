@@ -1510,7 +1510,7 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "7c9137a6e428e7a2d12031aea0b160b0124641fdf3120bceb0ecda5af0f04649",
+        "types": "b40e6948602c351a077b2b5bbe1bc96f69bc5bb5ac0a3393349f3b28deb0330a",
         "swift": "5e7b0c6d8818012b5a2d0483ca3a23ea6561c0f5b978c030e4153ad517a2d914"
       },
       "modules": {

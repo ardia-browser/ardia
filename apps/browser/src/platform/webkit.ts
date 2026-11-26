@@ -29,7 +29,7 @@ export const writeWebKitSiteData = (profile: string, set: PageCookie[], remove: 
 export const onWebKitSiteDataWanted = (listener: (e: { id: string; profile: string; origin: string; epoch?: string }) => void) => on("webKit.siteDataWanted", listener);
 export const onWebKitSiteCookiesChanged = (listener: (e: { profile: string; domains: string[]; epoch?: string }) => void) => on("webKit.siteCookiesChanged", listener);
 export const setWebKitZoom = (profile: string, host: string, zoom: number) => call("webKit.setZoom", { profile, host, zoom });
-export const onWebKitCount = (listener: (e: { name: WebKitCount; epoch?: string }) => void) => on("webKit.counted", listener);
+export const onWebKitCount = (listener: (e: { name: WebKitCount; epoch?: string; entry?: string }) => void) => on("webKit.counted", listener);
 export const onWebKitCopyAddress = (listener: (e: EngineEvents["webKit.copyAddress"]) => void) => on("webKit.copyAddress", listener);
 export const writeCopiedWebKitAddress = (request: number, url: CleanedUrl) => call("webKit.writeCopiedAddress", { request, url });
 export const webKitNotificationAction = (id: string, action: "click" | "close") => call("webKit.notificationAction", { id, action });

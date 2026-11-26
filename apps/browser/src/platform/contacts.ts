@@ -8,4 +8,4 @@ export const contactsAuthorization = (): ContactsAuthorization => Contacts.autho
 export const requestContactsAccess = (): Promise<ContactsAccessRequest> => Contacts.requestAccess();
 export const readMeCard = (): Promise<MeCard | null> => Contacts.meCard();
 export const openMeCardInContacts = () => Contacts.openMeCard();
-export const onContactsChanged = (listener: () => void) => Contacts.addListener("onContactsChanged", listener);
+export const onContactsChanged = (listener: (e: { epoch?: string }) => void) => Contacts.addListener("onContactsChanged", listener);

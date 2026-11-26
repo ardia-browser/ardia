@@ -1,13 +1,14 @@
 import { create } from "zustand";
 import { cancelPairing, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords } from "../site/applePasswords";
 import { setMeCardFor } from "../site/meCard";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { autofillStepOffers, holdAutofillOffers, offerPicks, recordAutofillAnswers, type AutofillOffer } from "./autofillOffers";
 import { confirmAnswer, onboardingProfile, skipStep, useOnboarding } from "./onboarding";
 
 type AutofillStepPhase = "offer" | "working" | "pairing";
-type AutofillStepState = { picks: Partial<Record<AutofillOffer, boolean>>; phase: AutofillStepPhase };
+type AutofillStepState = { picks: Partial<Record<AutofillOffer, boolean>>; phase: AutofillStepPhase; consent: ConsentToken | null };
 
-const FRESH: AutofillStepState = { picks: {}, phase: "offer" };
+const FRESH: AutofillStepState = { picks: {}, phase: "offer", consent: null };
 
 export const useAutofillStep = create<AutofillStepState>()(() => ({ ...FRESH }));
 
@@ -28,9 +29,10 @@ export function toggleAutofillOffer(offer: AutofillOffer) {
 }
 
 function finish(offered: readonly AutofillOffer[], accepted: readonly AutofillOffer[]) {
+  const { consent } = now();
   resetAutofillStep();
   if (inStep()) confirmAnswer("autofill", {}, accepted.map((offer) => ACCEPTED_LINES[offer]));
-  recordAutofillAnswers(offered, accepted);
+  recordAutofillAnswers(offered, accepted, consent);
 }
 
 export async function continueAutofillStep() {
@@ -39,7 +41,7 @@ export async function continueAutofillStep() {
   const offered = autofillStepOffers(id);
   const picked = offerPicks(now().picks, offered);
   holdAutofillOffers(offered);
-  useAutofillStep.setState({ phase: "working" });
+  useAutofillStep.setState({ phase: "working", consent: consentToken() });
   if (picked.includes("meCard")) await setMeCardFor(id, true);
   if (!inStep()) return;
   if (!picked.includes("applePasswords")) return finish(offered, picked);
@@ -70,7 +72,8 @@ export function skipAutofillStep() {
   if (!inStep()) return;
   const offered = autofillStepOffers(profile());
   if (now().phase === "pairing") cancelPairing();
+  const consent = now().consent ?? consentToken();
   resetAutofillStep();
   skipStep();
-  recordAutofillAnswers(offered, []);
+  recordAutofillAnswers(offered, [], consent);
 }

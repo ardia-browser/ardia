@@ -1,9 +1,8 @@
-import { errorFor } from "../../browser/src/state/telemetry/consoleConsent";
 import { ardiaHost } from "./host";
 import { entryKind } from "./popoverSurface";
 
 function showStartupFailure(error: unknown) {
-  errorFor(null, "[ardia linux] startup failed", error);
+  console.error("[ardia linux] startup failed", error);
   const root = document.getElementById("root");
   if (root) {
     root.setAttribute("role", "alert");

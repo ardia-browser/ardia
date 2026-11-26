@@ -7,6 +7,7 @@
 //   E2  a helper killed at launch makes Pairing say "Apple Passwords isn't available"
 //   E3  with no helper manifest, Pairing says how to get the helper back
 //   E4  a Release build ignores the fake-helper override: the fake never starts (needs --release)
+//   E8  on Apple Passwords, Chrome keeps its offer to save on but never shows its own password list over a sign-in field
 //
 // Each check launches its own instance (scripts/lib/instance.mjs) with ARDIA_TEST applePasswordsManifest at the fake's
 // manifest and Chromium resolving the fixture sites (sites.mjs: https example.test, accounts.example.test and other.test,
@@ -87,6 +88,47 @@ const assert = (ok, message, detail) => {
   if (!ok) throw new Error(`${message}: ${JSON.stringify(detail)}`);
 };
 
+async function pairApplePasswords(fake) {
+  await pickApplePasswords();
+  await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${JSON.stringify(fake.fixtures.code)}).then(() => true);`, { timeout: 60_000 });
+  return until(pairingView, (v) => v.state === "connected" && v.choice === "apple");
+}
+
+const CHROME_ONLY_LOGIN = { username: "chrome-only@example.test", password: "fixture-pw-chrome-only-9" };
+
+async function openSignIn(host, pathname = "/login") {
+  const url = sites.url(host, pathname);
+  await app.eval(`ac.actions.openUrls([${JSON.stringify(url)}]); return true;`);
+  const { tabId } = await until(
+    `const s = ac.store.getState(); const id = Object.keys(s.tabs).find((t) => s.tabs[t].url === ${JSON.stringify(url)} && !ac.tabLive.liveOf(t)?.isLoading); return { tabId: id ?? null };`,
+    (v) => v.tabId,
+  );
+  return { tabId, url };
+}
+
+const loginItems = (events) =>
+  events.filter((e) => e.name === "autofillSuggestions").flatMap((e) => e.payload?.items ?? []).filter((i) => /Password|Webauthn|Passkey/.test(i.type ?? ""));
+
+async function chromeListAfterAsking(tabId, url) {
+  const page = await app.page(url);
+  try {
+    await app.eval(`return ac.webviews.get(${JSON.stringify(tabId)}).focus()`);
+    const before = (await app.eval(`return ac.engine.call("tabs.devEvents", { tabId: ${JSON.stringify(tabId)} })`)).length;
+    const box = await page.eval("JSON.stringify(document.getElementById('u').getBoundingClientRect())");
+    const { x, y, height } = JSON.parse(box);
+    const at = { x: x + 20, y: y + height / 2, button: "left", clickCount: 1 };
+    await page.send("Input.dispatchMouseEvent", { type: "mousePressed", ...at, buttons: 1 });
+    await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...at, buttons: 0 });
+    await sleep(1500);
+    const asked = await app.eval(`return ac.engine.call("autofill.showSuggestions", { tabId: ${JSON.stringify(tabId)}, passwords: true })`);
+    await sleep(2500);
+    const events = (await app.eval(`return ac.engine.call("tabs.devEvents", { tabId: ${JSON.stringify(tabId)} })`)).slice(before);
+    return { asked, items: loginItems(events) };
+  } finally {
+    page.close();
+  }
+}
+
 const CHECKS = {
   async E1() {
     const fake = fakeHelper(path.join(SCRATCH, "E1", "fake"));
@@ -128,6 +170,29 @@ const CHECKS = {
     assert(fake.launches() === 0, "the fake helper never starts in a Release build", fake.launches());
     assert(shown.state === "notEntitled" && shown.choice !== "apple", "an unentitled Release build doesn't offer Apple Passwords", shown);
     return { state: shown.state, launches: fake.launches() };
+  },
+  async E8() {
+    const fake = fakeHelper(path.join(SCRATCH, "E8", "fake"));
+    await start("E8", { manifest: fake.manifest });
+    const origin = new URL(sites.url("example.test")).origin;
+    const seeded = await app.eval(
+      `return globalThis.expo.modules.ArdiaPasswords.save("", ${JSON.stringify(origin)}, ${JSON.stringify(CHROME_ONLY_LOGIN.username)}, ${JSON.stringify(CHROME_ONLY_LOGIN.password)}).then(() => true).catch((e) => ({ error: e.message }))`,
+    );
+    assert(seeded === true, "a login saved in Chrome's own store", seeded);
+    const first = await openSignIn("example.test");
+    const control = await chromeListAfterAsking(first.tabId, first.url);
+    assert(control.items.some((i) => [i.label, i.sublabel].includes(CHROME_ONLY_LOGIN.username)), "on Ardia, Chrome's list shows its saved login (control)", control);
+    await pairApplePasswords(fake);
+    const offer = await until(`return ac.engine.call("passwords.autofillEnabled", { profile: "" })`, (v) => v === true, 10_000).catch((e) => ({ error: e.message }));
+    assert(offer === true, "Chrome's offer to save stays on for Apple Passwords", offer);
+    await app.eval(`ac.store.getState().navigate(${JSON.stringify(first.tabId)}, ${JSON.stringify(first.url)}, { userInitiated: true }); return true;`);
+    await sleep(1500);
+    const reloaded = await chromeListAfterAsking(first.tabId, first.url);
+    assert(reloaded.items.length === 0, "an open tab shows no Chrome password list once the profile is on Apple Passwords", reloaded);
+    const second = await openSignIn("example.test", "/login?again");
+    const fresh = await chromeListAfterAsking(second.tabId, second.url);
+    assert(fresh.items.length === 0, "a new tab shows no Chrome password list on Apple Passwords", fresh);
+    return { control: control.items.length, reloaded: reloaded.asked, fresh: fresh.asked };
   },
 };
 

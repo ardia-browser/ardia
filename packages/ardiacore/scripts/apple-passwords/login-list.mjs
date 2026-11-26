@@ -191,5 +191,22 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       }
       return { engine: engineName, ...seen };
     },
+    async E17() {
+      const { app } = await paired();
+      const ardiaOnly = "ardia-only@example.test";
+      const origin = sites.origin("example.localhost");
+      await app.eval(`return globalThis.expo.modules.ArdiaPasswords.save("", ${q(origin)}, ${q(ardiaOnly)}, "fixture-pw-ardia-6").then(() => true)`, { timeout: 20_000 });
+      const kept = await app.eval(`return ac.engine.call("passwords.list", { profile: "" }).then((r) => r.passwords.some((p) => p.username === ${q(ardiaOnly)}))`, { timeout: 20_000 });
+      assert(kept, "Ardia's own store holds a login for the site", kept);
+      const tab = await open("example.localhost");
+      try {
+        await tab.click("#u");
+        const rows = await tab.waitRows();
+        assert(q(titles(rows.slice(0, -1))) === q(usersFor("example.localhost")), "only the Apple Passwords logins are listed", rows);
+        return { engine: engineName, rows: titles(rows) };
+      } finally {
+        await tab.close();
+      }
+    },
   };
 }

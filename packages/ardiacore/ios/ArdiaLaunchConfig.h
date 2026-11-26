@@ -19,6 +19,8 @@ NS_SWIFT_NAME(LaunchConfig)
 @property(readonly, nullable) NSNumber *remoteDebuggingPort;
 @property(readonly) BOOL prewarm;
 @property(readonly, nullable) NSString *feedbackURL;
+@property(readonly, nullable) NSString *pluginRegistryURL;
+@property(readonly, nullable) NSString *pluginNativeKeys;
 @property(readonly) BOOL isolated;
 @property(readonly) BOOL testInstance;
 @property(readonly) BOOL webUIShell;

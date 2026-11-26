@@ -290,6 +290,18 @@ describe("revocations", () => {
     assert.deepEqual(matchRevocations({ id: "@x/y", version: "1.0.0", registry: "https://evil.example.com/" }, list).map((m) => m.action), ["block"]);
     assert.deepEqual(matchRevocations({ id: "@x/y", version: "1.0.0", registry: "http://evil.example.com" }, list), []);
     assert.equal(sameRegistry("https://ardia.dev", "ardia.dev"), true);
+    assert.equal(sameRegistry("https://plugins.example.com", "https://plugins.example.com/r"), true, "an origin names every registry under it");
+    assert.equal(sameRegistry("https://plugins.example.com/r", "https://plugins.example.com/r/"), true);
+    assert.equal(sameRegistry("https://plugins.example.com/r/index.json", "https://plugins.example.com/r"), true);
+    assert.equal(sameRegistry("plugins.example.com", "https://plugins.example.com/r"), true);
+    assert.equal(sameRegistry("https://plugins.example.com/r", "https://plugins.example.com/other"), false, "a path names only the registry at it");
+    assert.equal(sameRegistry("https://plugins.example.com/r", "https://plugins.example.com/rx"), false);
+    assert.equal(sameRegistry("https://plugins.example.com/a/b", "https://plugins.example.com/a"), false, "a selector for a child path never matches its parent");
+    assert.equal(sameRegistry("https://plugins.example.com/a", "https://plugins.example.com/a/b"), true);
+    assert.equal(sameRegistry("HTTPS://Plugins.Example.com/R", "https://plugins.example.com/R"), true, "scheme and host fold case");
+    assert.equal(sameRegistry("https://plugins.example.com/R", "https://plugins.example.com/r"), false, "a path keeps its case");
+    assert.equal(sameRegistry("https://plugins.example.com/r", "https://evil.example.com/r"), false);
+    assert.deepEqual(matchRevocations({ id: "@x/y", version: "1.0.0", registry: "https://evil.example.com/r" }, list).map((m) => m.action), ["block"]);
     assert.deepEqual(matchRevocations({ id: "@a/b", version: "1.1.0" }, null), []);
   });
 
@@ -435,6 +447,24 @@ describe("resolvePluginGraph", () => {
     assert.equal(resolvePluginGraph({ ...base, revocations: yank, installed: { "@a/ai": "1.2.0" }, keepInstalled: true, roots: [{ id: "@a/ai", range: "^1.0.0" }] }).plan[0].version, "1.2.0");
     const blocked = { ...yank, entries: [revocation({ match: { id: "@a/ai" }, action: "block" })] };
     assert.match(resolvePluginGraph({ ...base, revocations: blocked, installed: { "@a/ai": "1.2.0" }, keepInstalled: true, roots: [{ id: "@a/ai" }] }).problems[0].message, /revoked/);
+  });
+
+  test("an installed plugin's ranges hold back an update its dependency would break", () => {
+    const lib = new Map([["@h/lib", detail("@h/lib", [version("1.0.0"), version("1.1.0"), version("2.0.0")])]]);
+    const held = { "@h/lib": [{ from: "@h/app", range: "^1.0.0" }] };
+    assert.equal(resolvePluginGraph({ catalog: lib, ardiaVersion: "1.0.0", platform: null, heldBy: held, roots: [{ id: "@h/lib" }] }).plan[0].version, "1.1.0");
+    assert.equal(resolvePluginGraph({ catalog: lib, ardiaVersion: "1.0.0", platform: null, roots: [{ id: "@h/lib" }] }).plan[0].version, "2.0.0");
+    const blocked = resolvePluginGraph({ catalog: lib, ardiaVersion: "1.0.0", platform: null, heldBy: held, roots: [{ id: "@h/lib", range: "^2.0.0" }] });
+    assert.equal(blocked.ok, false);
+    assert.match(blocked.problems[0].message, /@h\/app \(installed\) wants \^1\.0\.0/);
+  });
+
+  test("each plugin's revocations match the registry it came from", () => {
+    const revocations = { seq: 1, issuedAt: "2026-11-25T00:00:00Z", entries: [revocation({ match: { registry: "https://bad.example.com" }, action: "block" })] };
+    const from = (id) => (id === "@a/ai" ? "https://bad.example.com/r" : "https://ardia.dev/r");
+    const result = resolvePluginGraph({ ...base, revocations, registry: from, roots: [{ id: "@a/app" }] });
+    assert.equal(result.ok, false, "a dependency served by a revoked registry is refused even when its root comes from a good one");
+    assert.equal(resolvePluginGraph({ ...base, revocations, registry: () => "https://ardia.dev/r", roots: [{ id: "@a/app" }] }).ok, true);
   });
 });
 
@@ -624,5 +654,43 @@ describe("diffSecuritySurface", () => {
     assert.equal(isNativeTier({ contributes: { programs: [{ name: "ardia", path: "bin/ardia" }] } }), true);
     assert.equal(isNativeTier({ sidecar: { run: ["sidecar/server.mjs"] } }), true);
     assert.equal(isNativeTier({}), false);
+  });
+});
+
+describe("official artifact signatures", async () => {
+  const { OFFICIAL_ARTIFACT_DOMAIN, officialArtifactMessage, signOfficialArtifact, verifyOfficialArtifact, isNativeTier, reachesOutsideSandbox } = await import("./registry.ts");
+  const claim = { id: "@ardia/cli", version: "0.8.0", platform: "macos-arm64", sha256: "a".repeat(64) };
+
+  test("the signed bytes are the domain plus canonical {v, id, version, platform, sha256}", async () => {
+    const message = new TextDecoder().decode(officialArtifactMessage(claim));
+    assert.equal(message, `${OFFICIAL_ARTIFACT_DOMAIN}{"id":"@ardia/cli","platform":"macos-arm64","sha256":"${"a".repeat(64)}","v":1,"version":"0.8.0"}`);
+    const k = keys();
+    const sig = await signOfficialArtifact(claim, k.privatePem);
+    assert.match(sig, /^[A-Za-z0-9_-]{86}$/);
+    assert.ok(nodeVerify(null, Buffer.from(officialArtifactMessage(claim)), createPublicKey(k.publicPem), Buffer.from(fromBase64Url(sig))));
+  });
+
+  test("verifies against any trusted key, and refuses another key, another hash, another platform or another scope", async () => {
+    const k = keys();
+    const other = keys();
+    const sig = await signOfficialArtifact(claim, k.privatePem);
+    assert.deepEqual(await verifyOfficialArtifact(claim, sig, { old: other.publicPem, now: k.raw.replace(/-/g, "+").replace(/_/g, "/") }), { ok: true, kid: "now" });
+    assert.equal((await verifyOfficialArtifact(claim, sig, { only: other.publicPem })).ok, false);
+    assert.equal((await verifyOfficialArtifact({ ...claim, sha256: "b".repeat(64) }, sig, { k: k.publicPem })).ok, false);
+    assert.equal((await verifyOfficialArtifact({ ...claim, platform: "universal" }, sig, { k: k.publicPem })).ok, false);
+    assert.match((await verifyOfficialArtifact({ ...claim, id: "@alice/cli" }, sig, { k: k.publicPem })).reason, /only @ardia/);
+    assert.match((await verifyOfficialArtifact(claim, undefined, { k: k.publicPem })).reason, /no official signature/);
+    assert.match((await verifyOfficialArtifact(claim, sig, {})).reason, /no official signing key/);
+    assert.match((await verifyOfficialArtifact(claim, "short", { k: k.publicPem })).reason, /64 bytes/);
+  });
+
+  test("native tier is a sidecar, a program or control; only programs and control reach outside the sandbox", () => {
+    assert.equal(isNativeTier({}), false);
+    assert.equal(isNativeTier({ sidecar: null }), false);
+    assert.equal(isNativeTier({ sidecar: { run: ["bin/x"] } }), true);
+    assert.equal(isNativeTier({ contributes: { programs: [{ name: "ardia" }] } }), true);
+    assert.equal(isNativeTier({ permissions: { control: true } }), true);
+    assert.equal(reachesOutsideSandbox({ sidecar: { run: ["bin/x"] } }), false);
+    assert.equal(reachesOutsideSandbox({ permissions: { control: true } }), true);
   });
 });

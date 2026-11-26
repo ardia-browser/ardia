@@ -235,8 +235,8 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
 - **The `ardia` command** (`cliHome`, `cliBinDir`, `cliUrl` (`file://` works), test `cliInstallScript`, test
   `bundledPlugins`): on macOS a test instance links built-in plugins' programs only into `cliBinDir`, takes its program
   registry from the bundled manifests' `claim`s, and adopts an old install only from `cliHome`, so it never touches the real home; give it the plugin folder with
-  `ARDIA_TEST bundledPlugins=<dir>` (`scripts/release/official-plugins.py bundle <dir>` for the pinned ones, or
-`plugins/cli/build.sh <dir>` in ardia-browser/plugins for a local one), since a Debug build bundles none. On Linux a
+  a dev link (`ardia-plugin dev` in the plugin's folder) or a local registry (`ARDIA_PLUGIN_REGISTRY_URL` with
+  `ARDIA_PLUGIN_REGISTRY_PUBLIC_KEY`, and `ARDIA_INSTANCE pluginArtifactsFrom=<dir>` for its archives). On Linux a
   test instance installs or upgrades only with the first two set. Its
   `--remote-debugging-port` makes the "Let the ardia command control Ardia" setting stand aside; test that setting in an
   instance launched without one.

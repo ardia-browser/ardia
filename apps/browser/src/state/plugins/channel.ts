@@ -8,6 +8,7 @@ import { eventTargets, refreshFeed, setFeedConsumer, type Body } from "../automa
 import { launchToReplay } from "../automation/lifecycleEvents";
 import { isDecideEvent, type AutomationEventName } from "../automation/eventNames";
 import { activeManifest, currentPlugins } from "./store";
+import { eventProfileId, manifestInProfile } from "./profileScope";
 import { dropCalls } from "./tools";
 import { acceptsLine, onProcessStopped, processExited } from "./process";
 import { valuesFor } from "./values";
@@ -85,17 +86,23 @@ function handlePluginLine({ name, run, launch, line }: PluginLine) {
   else reply(c, request.id, body);
 }
 
+export const eventReaches = (plugin: string, data: Record<string, unknown>) => !!manifestInProfile(currentPlugins(), plugin, eventProfileId(data));
+
 function deliverTo(c: Connection, name: AutomationEventName, data: Record<string, unknown>, time: number) {
+  if (!eventReaches(c.name, data)) return;
+  const profileId = eventProfileId(data);
   const full = !!c.sub?.fullUrls;
   const shown = full ? data : redactedEventData(data);
-  sendToPlugin(c.name, c.run, JSON.stringify({ event: name, time, data: shown }));
+  const profile = profileId && activeManifest(currentPlugins(), c.name)?.scope === "profile" ? { profile: profileId } : {};
+  sendToPlugin(c.name, c.run, JSON.stringify({ event: name, time, data: shown, ...profile }));
 }
 
 function deliver(name: AutomationEventName, data: Record<string, unknown>, time: number) {
   const subs = new Map<number, Subscription>();
   const byIndex: Connection[] = [];
+  const profileId = eventProfileId(data);
   for (const c of connections.values()) {
-    if (!c.sub || !activeManifest(currentPlugins(), c.name)) continue;
+    if (!c.sub || !manifestInProfile(currentPlugins(), c.name, profileId)) continue;
     byIndex.push(c);
     subs.set(byIndex.length - 1, c.sub);
   }

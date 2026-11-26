@@ -282,15 +282,6 @@ class ReleaseScriptTests(unittest.TestCase):
 
 
 STUB_PYTHON = {
-    'scripts/release/official-plugins.py': '''
-import hashlib, pathlib, sys
-if sys.argv[1] == 'describe':
-    print('plugin cli 0.0.0 fixture')
-    sys.exit(0)
-out = pathlib.Path(sys.argv[3])
-out.write_bytes(b'cli')
-pathlib.Path(f'{out}.sha256').write_text(f'{hashlib.sha256(b"cli").hexdigest()}  {out.name}\\n')
-''',
     'scripts/linux/runtime_files.py': 'import sys\nsys.exit(0)\n',
     'scripts/linux/package.py': '''
 import pathlib, sys

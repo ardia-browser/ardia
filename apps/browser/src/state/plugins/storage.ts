@@ -22,13 +22,16 @@ const CLOSED_MESSAGE = "The plugin is being removed, so its storage is closed.";
 const bytes = (text: string) => new TextEncoder().encode(text).length;
 const fail = <T,>(code: "bad_request" | "failed", message: string): StorageOutcome<T> => ({ ok: false, code, message });
 
-const epochOf = (name: string) => epochs.get(name) ?? 0;
-const isOpen = (name: string, epoch: number) => !closed.has(name) && epochOf(name) === epoch;
+export const storageSpace = (name: string, profileId: string | null) => (profileId ? `profiles/${profileId}/${name}` : name);
+const pluginOf = (space: string) => space.slice(space.lastIndexOf("/") + 1);
+
+const epochOf = (space: string) => epochs.get(pluginOf(space)) ?? 0;
+const isOpen = (space: string, epoch: number) => !closed.has(pluginOf(space)) && epochOf(space) === epoch;
 
 const cancelled = <T,>(): StorageOutcome<T> => ({ ok: false, code: "failed", message: CLOSED_MESSAGE, closed: true });
 
 function queued<T>(name: string, work: (epoch: number) => Promise<StorageOutcome<T>>): Promise<StorageOutcome<T>> {
-  if (closed.has(name)) return Promise.resolve(cancelled<T>());
+  if (closed.has(pluginOf(name))) return Promise.resolve(cancelled<T>());
   const epoch = epochOf(name);
   const guarded = () => (isOpen(name, epoch) ? work(epoch) : Promise.resolve(cancelled<T>()));
   const run = (queues.get(name) ?? Promise.resolve()).then(guarded, guarded);
@@ -111,16 +114,21 @@ export function storageDelete(name: string, key: unknown): Promise<StorageOutcom
   });
 }
 
+const spacesOf = (name: string) => [...new Set([name, ...loaded.keys(), ...generations.keys(), ...queues.keys()])].filter((space) => pluginOf(space) === name);
+
 export function dropPluginStorage(name: string) {
-  loaded.delete(name);
-  generations.set(name, (generations.get(name) ?? 0) + 1);
+  for (const space of spacesOf(name)) {
+    loaded.delete(space);
+    generations.set(space, (generations.get(space) ?? 0) + 1);
+  }
 }
 
 export async function closePluginStorage(name: string): Promise<void> {
   closed.add(name);
   epochs.set(name, epochOf(name) + 1);
+  const waits = spacesOf(name).map((space) => queues.get(space));
   dropPluginStorage(name);
-  await queues.get(name);
+  await Promise.all(waits);
 }
 
 export function reopenPluginStorage(name: string) {

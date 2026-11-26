@@ -18,6 +18,7 @@
     "@ardia/shell": "workspace:*",
     "@ardia/ardiacore": "workspace:*",
     "@ardia/import": "workspace:*",
+    "@ardia/plugin-sdk": "workspace:*",
     "@ardia/sync": "workspace:*",
     "expo": "~54.0.37",
     "expo-modules-core": "~3.0.29",

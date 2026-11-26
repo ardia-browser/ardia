@@ -6,9 +6,13 @@ import { openSettings } from "../settings/settingsWindows";
 import { releaseOrphanedConsent } from "./consentSurface";
 import { ALREADY_ASKING, removePlugin, requestPluginConsent, turnOffPlugin } from "./lifecycle";
 import { activeManifest, currentPlugins, needsReview, recordOf } from "./store";
-import { installOfficialPlugin, isOfficialName, officialPlugins } from "./official";
 import { pluginRecordsSaved } from "./savedState";
 import { callTool } from "./tools";
+import { devReload } from "./devReload";
+import { installPlugin } from "./installer";
+import { parseGithubSpec } from "./githubSource";
+import { isPluginId, keyOfId } from "../../lib/pluginIds";
+import { currentLock } from "./lockfile";
 
 const nameOf = (params: Record<string, unknown>) => (typeof params.name === "string" ? params.name : null);
 
@@ -19,6 +23,8 @@ function pluginList() {
     const m = listing.manifest;
     return {
       name,
+      id: m?.id ?? null,
+      source: listing.source ?? "local",
       title: m?.title ?? name,
       version: m?.version ?? null,
       enabled: recordOf(s, name).enabled,
@@ -28,6 +34,9 @@ function pluginList() {
       contributes: m ? contributionsOf(m) : [],
       tools: m?.tools.map((t) => ({ name: t.name, title: t.title, description: t.description })) ?? [],
       problems: listing.problems,
+      channel: m ? (currentLock()[m.id]?.channel ?? null) : null,
+      revoked: recordOf(s, name).revoked?.reason ?? null,
+      update: recordOf(s, name).pendingUpdate?.version ?? null,
     };
   });
 }
@@ -38,15 +47,25 @@ function callPluginTool(params: Record<string, unknown>): Body | Promise<Body> {
   return callTool(plugin, tool, input, { kind: "socket" }).then((o) => (o.ok ? { result: o.result } : failure(o.code, o.message)));
 }
 
+function installFromSocket(params: Record<string, unknown>): Body | Promise<Body> {
+  const given = typeof params.id === "string" ? params.id : typeof params.source === "string" ? params.source : null;
+  const repo = given ? parseGithubSpec(given) : null;
+  if (!given || (!isPluginId(given) && !repo)) return failure("bad_request", "plugins.install needs an id like @scope/name or github:owner/repo.");
+  const channel: "latest" | "beta" = params.channel === "beta" ? "beta" : "latest";
+  const request = isPluginId(given) ? { id: given, channel } : { id: "", channel, source: { kind: "github" as const, repo: repo! } };
+  void installPlugin(request);
+  return { result: { waiting: true, name: isPluginId(given) ? keyOfId(given) : null } };
+}
+
 export function pluginSocketMethod(method: string, params: Record<string, unknown>, serving: () => boolean = () => true): Body | Promise<Body> | null {
   if (method === "plugins") return { result: pluginList() };
-  if (method === "plugins.official") return { result: officialPlugins(currentPlugins()) };
   if (!method.startsWith("plugins.")) return null;
   if (method === "plugins.call") return callPluginTool(params);
+  if (method === "plugins.devReload") return devReload(params).then((reply) => ({ result: reply }));
+  if (method === "plugins.install") return installFromSocket(params);
   const name = nameOf(params);
   const plugins = currentPlugins();
-  const official = name !== null && isOfficialName(plugins, name);
-  const known = name !== null && (Object.hasOwn(plugins.listings, name) || official);
+  const known = name !== null && Object.hasOwn(plugins.listings, name);
   const recorded = name !== null && Object.hasOwn(plugins.records, name);
   const leftOn = recorded && plugins.records[name!]!.enabled;
   switch (method) {
@@ -55,10 +74,6 @@ export function pluginSocketMethod(method: string, params: Record<string, unknow
       if (activeManifest(currentPlugins(), name)) return { result: { ok: true } };
       releaseOrphanedConsent();
       if (currentPlugins().consent) return failure("refused", ALREADY_ASKING);
-      if (official) {
-        void installOfficialPlugin(name!);
-        return { result: { waiting: true } };
-      }
       if (!requestPluginConsent(name)) return failure("refused", `${name} has problems, so it can't be turned on.`);
       openSettings("plugins", null, name);
       return { result: { waiting: true } };

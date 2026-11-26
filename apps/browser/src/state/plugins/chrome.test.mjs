@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { v3Text } from "./fixtures/manifests.mjs";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { mount } from "../../test-hooks.mjs";
@@ -46,7 +47,7 @@ async function only(...docs) {
   startPlugins();
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name, consentToken());
   await settledStops();
-  host.folders = docs.map((doc) => ({ name: doc.name, status: "ok", text: JSON.stringify(doc) }));
+  host.folders = docs.map((doc) => ({ name: doc.name, status: "ok", text: v3Text(doc) }));
   await lifecycle.rescanPlugins(consentToken());
   for (const doc of docs) {
     assert.deepEqual(P().listings[doc.name].problems, [], doc.name);

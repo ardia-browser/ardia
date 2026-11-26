@@ -29,9 +29,13 @@ enum DocumentStore {
       let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
       dir = base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "Ardia", isDirectory: true)
     }
-    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    return dir.appendingPathComponent((name as NSString).lastPathComponent)
+    let base = (name as NSString).lastPathComponent
+    let folder = name == "\(pluginsFolder)/\(base)" ? dir.appendingPathComponent(pluginsFolder, isDirectory: true) : dir
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    return folder.appendingPathComponent(base)
   }
+
+  static let pluginsFolder = "Plugins"
 
   static func read(_ name: String) -> String? {
     guard let url = try? url(name) else { return nil }

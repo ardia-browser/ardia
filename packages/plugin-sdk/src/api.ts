@@ -75,6 +75,10 @@ function pickedIds(result: unknown): string[] {
 
 type FetchReply = FetchResponseData | { ok: false; reason?: string };
 
+export type ProfileOption = { profile?: string };
+
+const profileOf = (options: ProfileOption | undefined): { profile?: string } => (typeof options?.profile === "string" ? { profile: options.profile } : {});
+
 function response(reply: FetchReply): PluginResponse {
   if (typeof (reply as Partial<FetchResponseData>).status !== "number") {
     const reason = (reply as { reason?: unknown }).reason;
@@ -269,24 +273,24 @@ export function createArdia(rpc: Rpc, registry: Registry, state: ApiState, chann
       close: (panelId: string) => rpc.request<PanelResult>(M.panelClose, { panelId }),
     },
     storage: {
-      get: async <T = unknown>(key: string): Promise<T | undefined> => {
-        const res = await rpc.request<{ found?: boolean; value?: T }>(M.storageGet, { key });
+      get: async <T = unknown>(key: string, options?: ProfileOption): Promise<T | undefined> => {
+        const res = await rpc.request<{ found?: boolean; value?: T }>(M.storageGet, { key, ...profileOf(options) });
         return res && typeof res === "object" && res.found === true ? res.value : undefined;
       },
-      set: (key: string, value: unknown) => rpc.request(M.storageSet, { key, value }).then(() => undefined),
-      delete: (key: string) => rpc.request(M.storageDelete, { key }).then(() => undefined),
-      keys: async (): Promise<string[]> => {
-        const keys = unwrap(await rpc.request(M.storageKeys), "keys");
+      set: (key: string, value: unknown, options?: ProfileOption) => rpc.request(M.storageSet, { key, value, ...profileOf(options) }).then(() => undefined),
+      delete: (key: string, options?: ProfileOption) => rpc.request(M.storageDelete, { key, ...profileOf(options) }).then(() => undefined),
+      keys: async (options?: ProfileOption): Promise<string[]> => {
+        const keys = unwrap(await rpc.request(M.storageKeys, profileOf(options)), "keys");
         return Array.isArray(keys) ? keys.filter((k): k is string => typeof k === "string") : [];
       },
     },
     secrets: {
-      get: async (key: string): Promise<string | undefined> => {
-        const value = unwrap(await rpc.request(M.secretGet, { key }), "value");
+      get: async (key: string, options?: ProfileOption): Promise<string | undefined> => {
+        const value = unwrap(await rpc.request(M.secretGet, { key, ...profileOf(options) }), "value");
         return typeof value === "string" ? value : undefined;
       },
-      set: (key: string, value: string) => rpc.request(M.secretSet, { key, value }).then(() => undefined),
-      delete: (key: string) => rpc.request(M.secretDelete, { key }).then(() => undefined),
+      set: (key: string, value: string, options?: ProfileOption) => rpc.request(M.secretSet, { key, value, ...profileOf(options) }).then(() => undefined),
+      delete: (key: string, options?: ProfileOption) => rpc.request(M.secretDelete, { key, ...profileOf(options) }).then(() => undefined),
     },
     settings,
     pages: {

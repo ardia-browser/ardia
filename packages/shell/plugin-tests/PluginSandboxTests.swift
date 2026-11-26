@@ -32,10 +32,10 @@ final class PluginSandboxTests: XCTestCase {
     try? FileManager.default.removeItem(atPath: root)
   }
 
-  func sandbox(plugin: String? = nil, program: String = "/bin/sh", network: Bool = false, officialCopy: String? = nil) -> PluginSandbox {
+  func sandbox(plugin: String? = nil, program: String = "/bin/sh", network: Bool = false, storeCopy: String? = nil) -> PluginSandbox {
     PluginSandbox(
       home: home, appData: data, configFolder: config, pluginFolder: plugin ?? self.plugin, pluginData: pluginData, program: program, network: network,
-      officialCopy: officialCopy)
+      storeCopy: storeCopy)
   }
 
   func refusal(_ box: PluginSandbox) -> String? {
@@ -62,24 +62,24 @@ final class PluginSandboxTests: XCTestCase {
     XCTAssertNotNil(refusal(sandbox(plugin: "/")))
   }
 
-  func testAnOfficialCopyInTheStoreIsAPluginFolderAndNothingAroundItIs() throws {
-    let copy = "\(data)/OfficialPlugins/example/\(String(repeating: "a", count: 64))"
-    XCTAssertNil(refusal(sandbox(plugin: copy, officialCopy: copy)), "the verified copy starts")
+  func testAStoreCopyIsAPluginFolderAndNothingAroundItIs() throws {
+    let copy = "\(data)/Plugins/store/@test/example/1.0.0-aaaaaaaaaaaa"
+    XCTAssertNil(refusal(sandbox(plugin: copy, storeCopy: copy)), "the verified copy starts")
     XCTAssertNotNil(refusal(sandbox(plugin: copy)), "the same folder reached any other way, a linked local plugin say, doesn't")
-    XCTAssertNotNil(refusal(sandbox(plugin: copy, officialCopy: "\(data)/OfficialPlugins/example/\(String(repeating: "c", count: 64))")), "nor when another copy is the verified one")
-    XCTAssertNotNil(refusal(sandbox(plugin: "\(data)/OfficialPlugins", officialCopy: "\(data)/OfficialPlugins")))
-    XCTAssertNotNil(refusal(sandbox(plugin: "\(data)/OfficialPlugins/example", officialCopy: "\(data)/OfficialPlugins/example")))
-    XCTAssertNotNil(refusal(sandbox(plugin: "\(copy)/bin", officialCopy: "\(copy)/bin")))
-    XCTAssertNotNil(refusal(sandbox(plugin: "\(data)/OfficialPluginsX/example/copy", officialCopy: "\(data)/OfficialPluginsX/example/copy")))
+    XCTAssertNotNil(refusal(sandbox(plugin: copy, storeCopy: "\(data)/Plugins/store/@test/example/1.0.0-cccccccccccc")), "nor when another copy is the verified one")
+    XCTAssertNotNil(refusal(sandbox(plugin: "\(data)/Plugins/store", storeCopy: "\(data)/Plugins/store")))
+    XCTAssertNotNil(refusal(sandbox(plugin: "\(data)/Plugins/store/@test/example", storeCopy: "\(data)/Plugins/store/@test/example")))
+    XCTAssertNotNil(refusal(sandbox(plugin: "\(copy)/bin", storeCopy: "\(copy)/bin")))
+    XCTAssertNotNil(refusal(sandbox(plugin: "\(data)/Plugins/storeX/@test/example/copy", storeCopy: "\(data)/Plugins/storeX/@test/example/copy")))
     try FileManager.default.createDirectory(atPath: copy, withIntermediateDirectories: true)
     try "{}".write(toFile: "\(copy)/plugin.json", atomically: true, encoding: .utf8)
-    let other = "\(data)/OfficialPlugins/other/\(String(repeating: "b", count: 64))"
+    let other = "\(data)/Plugins/store/@test/other/1.0.0-bbbbbbbbbbbb"
     try FileManager.default.createDirectory(atPath: other, withIntermediateDirectories: true)
     try "secret".write(toFile: "\(other)/plugin.json", atomically: true, encoding: .utf8)
-    let box = sandbox(plugin: copy, officialCopy: copy)
+    let box = sandbox(plugin: copy, storeCopy: copy)
     XCTAssertEqual(try run(box, "cat '\(copy)/plugin.json'"), 0, "it reads its own copy")
     XCTAssertNotEqual(try run(box, "cat '\(other)/plugin.json'"), 0, "not another official plugin's")
-    XCTAssertNotEqual(try run(box, "ls '\(data)/OfficialPlugins'"), 0, "nor list the store")
+    XCTAssertNotEqual(try run(box, "ls '\(data)/Plugins/store'"), 0, "nor list the store")
     XCTAssertNotEqual(try run(box, "echo x > '\(copy)/written'"), 0, "and its copy stays read-only")
   }
 

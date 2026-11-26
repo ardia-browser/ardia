@@ -22,14 +22,10 @@ struct ProgramsLinked: Equatable {
   let fresh: Bool
   let linked: [String]
   let refusals: [String: LinkRefusal]
-  var adoption: LegacyAdoption = .none
   var kept: String? = nil
 
   var refused: [String: String] { refusals.mapValues(\.reason) }
   var causes: [String: String] { refusals.mapValues(\.cause.rawValue) }
-
-  var adopted: Bool { adoption == .adopted }
-  var adoptBusy: Bool { adoption == .busy }
 }
 
 enum PluginPrograms {
@@ -41,6 +37,7 @@ enum PluginPrograms {
   static let caches = "__pycache__"
   private static let reserved: Set<String> = [leasesName, afterUpdateMarker, afterUpdateClaim]
   private static let namePattern = try! NSRegularExpression(pattern: "\\A[a-z0-9][a-z0-9-]{0,39}\\z")
+  private static let keyPattern = try! NSRegularExpression(pattern: "\\A[a-z0-9][a-z0-9-]{0,39}(?:__[a-z0-9][a-z0-9-]{0,39})?\\z")
   private static let versionCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
 
   static func folded(_ name: String) -> String {
@@ -55,6 +52,10 @@ enum PluginPrograms {
     namePattern.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
   }
 
+  static func isKey(_ key: String) -> Bool {
+    keyPattern.firstMatch(in: key, range: NSRange(key.startIndex..., in: key)) != nil
+  }
+
   static func versionFolderName(version: String?, approved: String) -> String {
     let kept = String(String.UnicodeScalarView((version ?? "").unicodeScalars.filter { versionCharacters.contains($0) }.prefix(48)))
     let trimmed = String(kept.drop(while: { $0 == "." || $0 == "-" }))
@@ -64,7 +65,7 @@ enum PluginPrograms {
 
   static func install(
     plugin: String, from folder: OpenedFolder, approved: String, version: String?, programs: [PluginProgram], places: ProgramPlaces,
-    expectedDigest: String? = nil, adoption: LegacyInstall? = nil
+    expectedDigest: String? = nil
   ) -> Result<ProgramsLinked, FolderRefusal> {
     guard let lock = lock(plugin, places) else { return .failure(FolderRefusal(reason: "its program folder couldn't be locked")) }
     defer { close(lock) }
@@ -94,19 +95,8 @@ enum PluginPrograms {
         fresh = true
       }
     }
-    let legacy = adoption.map { lockLegacy($0, plugin: plugin, places: places) }
-    defer { legacy?.release() }
-    if legacy?.outcome == .busy {
-      return .success(ProgramsLinked(version: name, fresh: fresh, linked: [], refusals: [:], adoption: .busy))
-    }
     let before = linkTarget((pluginStore as NSString).appendingPathComponent(currentName))
     let replacing = before.map { $0 != name && isRealFolder((pluginStore as NSString).appendingPathComponent($0)) } ?? false
-    let adoptTarget = { (program: PluginProgram) -> String? in
-      adoption?.program == program.name && legacy?.held == true ? adoption.map(legacyLauncherPath) : nil
-    }
-    let deadLegacyLauncher = { (program: PluginProgram) -> String? in
-      adoption?.program == program.name && legacy?.outcome == LegacyAdoption.none ? adoption.map(legacyLauncherPath) : nil
-    }
     guard let binHeld = binLock(places) else {
       var refusals: [String: LinkRefusal] = [:]
       for program in programs { refusals[program.name] = LinkRefusal(reason: "\(places.binDir) couldn't be locked", cause: .busy) }
@@ -118,7 +108,7 @@ enum PluginPrograms {
     if replacing {
       var held: [String: LinkRefusal] = [:]
       for program in programs {
-        if let problem = linkProblem(program, plugin: plugin, places: places, bin: bin, adoptTarget: adoptTarget(program), deadLegacyLauncher: deadLegacyLauncher(program)) { held[program.name] = problem }
+        if let problem = linkProblem(program, plugin: plugin, places: places, bin: bin) { held[program.name] = problem }
       }
       if !held.isEmpty { return .success(ProgramsLinked(version: name, fresh: fresh, linked: [], refusals: held, kept: before)) }
     }
@@ -128,9 +118,8 @@ enum PluginPrograms {
     }
     var linked: [String] = []
     var refusals: [String: LinkRefusal] = [:]
-    var outcome: LegacyAdoption = legacy?.outcome == .failed ? .failed : .none
     for program in programs {
-      if let problem = link(program, plugin: plugin, places: places, bin: bin, adoptTarget: adoptTarget(program), deadLegacyLauncher: deadLegacyLauncher(program)) { refusals[program.name] = problem } else { linked.append(program.name) }
+      if let problem = link(program, plugin: plugin, places: places, bin: bin) { refusals[program.name] = problem } else { linked.append(program.name) }
     }
     let refused = refusals.mapValues(\.reason)
     if replacing, !refused.isEmpty, let before {
@@ -154,8 +143,7 @@ enum PluginPrograms {
     if let before, before != name { _ = swapLink(in: pluginStore, named: previousName, to: before) }
     if let openedBin { unlinkOthers(plugin: plugin, keeping: Set(programs.map(\.name)), places: places, in: openedBin) }
     sweepLocked(plugin: plugin, places: places, keepCurrent: true)
-    if let legacy, let entry = adoption, legacy.held, linked.contains(entry.program) { outcome = adoptLegacyLocked(legacy, plugin: plugin, places: places, entry: entry) }
-    return .success(ProgramsLinked(version: name, fresh: fresh, linked: linked, refusals: refusals, adoption: outcome))
+    return .success(ProgramsLinked(version: name, fresh: fresh, linked: linked, refusals: refusals))
   }
 
   static func withdraw(plugin: String, programs: [String], places: ProgramPlaces, keepCopy: Bool = false) {
@@ -208,7 +196,7 @@ enum PluginPrograms {
   }
 
   static func shouldRunAfterUpdate(_ linked: ProgramsLinked, plugin: String, places: ProgramPlaces) -> Bool {
-    !linked.adoptBusy && needsAfterUpdate(plugin: plugin, version: linked.version, places: places)
+    needsAfterUpdate(plugin: plugin, version: linked.version, places: places)
   }
 
   static func needsAfterUpdate(plugin: String, version: String, places: ProgramPlaces) -> Bool {
@@ -290,13 +278,13 @@ enum PluginPrograms {
       close(binHeld)
     }
     let stores = (try? FileManager.default.contentsOfDirectory(atPath: places.store)) ?? []
-    for plugin in stores where isName(plugin) && !active.contains(plugin) && isRealFolder(places.pluginStore(plugin)) {
+    for plugin in stores where isKey(plugin) && !active.contains(plugin) && isRealFolder(places.pluginStore(plugin)) {
       withdraw(plugin: plugin, programs: [], places: places, keepCopy: keepingCopies.contains(plugin))
     }
   }
 
   static func lock(_ plugin: String, _ places: ProgramPlaces) -> Int32? {
-    guard isName(plugin), realFolder(places.store, creating: true) != nil else { return nil }
+    guard isKey(plugin), realFolder(places.store, creating: true) != nil else { return nil }
     let fd = open((places.store as NSString).appendingPathComponent(".\(plugin).lock"), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0o600)
     guard fd >= 0 else { return nil }
     guard flock(fd, LOCK_EX) == 0 else {
@@ -346,7 +334,7 @@ enum PluginPrograms {
 
   static func owner(of target: String, store: String) -> String? {
     let rest = String(target.dropFirst(store.count)).split(separator: "/").first.map(String.init)
-    return rest.flatMap { isName($0) ? $0 : nil }
+    return rest.flatMap { isKey($0) ? $0 : nil }
   }
 
   private static func stage(
@@ -501,7 +489,7 @@ enum PluginPrograms {
       switch info.st_mode & S_IFMT {
       case S_IFDIR: listing.append(Data("d \(relative)\n".utf8))
       case S_IFREG:
-        guard let digest = OfficialArchive.sha256(file: path) else { return nil }
+        guard let digest = PluginArchive.sha256(file: path) else { return nil }
         listing.append(Data("f \(info.st_mode & 0o111 != 0 ? "755" : "644") \(digest) \(relative)\n".utf8))
       default: return nil
       }

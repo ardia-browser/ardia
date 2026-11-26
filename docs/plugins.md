@@ -1,6 +1,7 @@
 # Plugins
 
-A plugin is a folder with a `plugin.json` that adds to Ardia without a restart. Plugin Architecture v2 (#3183) gives
+A plugin is a folder with a `plugin.json` (manifest 3, an `@scope/name` id) that adds to Ardia without a restart, and
+comes from Ardia's signed registry, a registry you add, GitHub, a folder or a dev link. Plugin Architecture v2 (#3183) gave
 it the same reach Raycast extensions have, inside a browser: native views written in JSX (lists, details, forms,
 sidebar views, popovers), toolbar buttons, context-menu items, command bar entries and omnibox results, side panels,
 themes, settings rows (secrets included, kept in the Keychain), decide hooks that can rewrite or stop a navigation,
@@ -13,7 +14,7 @@ hook. AI features ship as a plugin (#2463) through exactly these contributions.
 Plugins run on macOS. Linux and Windows don't load them yet (`PLATFORM_FEATURES.plugins`): the Plugins pane says so,
 and the `ardia` command's plugin commands still install and list files there.
 
-## The shape of a v2 plugin
+## The shape of a plugin
 
 ```
 plugin.json          the manifest: what it adds, what it may touch, when it wakes
@@ -94,220 +95,160 @@ definePlugin({ views: { releases: Releases }, commands: { refresh: async () => a
 ## Where they live
 
 ```
-<config folder>/plugins/<name>/plugin.json     the manifest, and the plugin's own files beside it
-<data dir>/plugins.json                         which plugins are on, what you approved, your row values
-<data dir>/PluginData/<name>/                   the helper's home, temp folder and log
-<data dir>/OfficialPlugins/<name>/<sha256>/     official plugins as fetched and verified on Install (below)
-~/Library/Application Support/Ardia/Programs/   Ardia's copies of the programs plugins put on PATH (below)
+<config folder>/plugins/<folder>/plugin.json         a local plugin: its manifest and files (folder <name> or <scope>__<name>)
+<config folder>/plugins-dev/<scope>__<name>.json      a dev link `ardia-plugin dev` writes: {v, id, path, …}
+<data dir>/Plugins/store/@scope/name/<ver>-<sha12>/   a registry install, unpacked and sealed read-only after its SHA-256 check
+<data dir>/Plugins/store/@scope/name/active           the copy that runs (an atomic symlink switch)
+<data dir>/Plugins/store/@scope/name/previous         the one it replaced, kept for an instant Roll Back
+<data dir>/Plugins/plugins-lock.json                  resolved versions, channels, sources, SHA-256s, payload digests, the dependency graph
+<data dir>/Plugins/plugins-state.json                 which plugins are on (and in which profiles), what you approved, row values, your registries
+<data dir>/Plugins/revocations-cache.json             the last verified revocations.json and its seq
+<data dir>/Plugins/registry-cache.json                ETags and envelopes of the registry files Ardia read
+<data dir>/PluginData/<key>/                          a plugin's home, temp folder and log
+~/Library/Application Support/Ardia/Programs/<key>/   Ardia's copies of the programs plugins put on PATH, with .leases/
 ```
 
+- A plugin's **id** is `@scope/name` (`^@[a-z0-9][a-z0-9-]{0,38}/[a-z0-9][a-z0-9-]{0,39}$`). Inside Ardia it goes by
+  its **key**, `scope__name` (`lib/pluginIds.ts`): records, `PluginData`, program folders, `ardia-plugin://` and
+  `ardia://` addresses all use it. A local folder may also be named after the id's bare name, and keeps that name as
+  its key, so plugins you made before v3 keep their data. `@ardia/*` is reserved: only Ardia's registry provides it
+  (a local folder, a `.tar.gz`, a `github:` install or a custom registry naming `@ardia/…` is refused); a dev link of
+  one runs, but isn't the verified download, so it can't put `ardia` on PATH.
 - The config folder is `docs/config.md`'s (`~/.config/ardia/`, or `<data dir>/config` for a scratch instance), so a
-  dotfiles repo can carry plugins. A plugin's folder may be a symlink (Ardia watches its target); its `plugin.json`
-  may not: a linked manifest could point anywhere Ardia doesn't watch, so it is listed as a problem. Ardia reads
-  regular files only, at most 1 MB per manifest, and at most 64 plugins.
-- The folder name is the plugin's `name`. A folder whose name doesn't match its manifest is listed with that problem.
-- Ardia watches the folder: a plugin appears, changes or disappears the moment its files do.
+  dotfiles repo can carry plugins. A plugin's folder may be a symlink; its `plugin.json` may not. Ardia reads regular
+  files only, at most 1 MB per manifest, and at most 64 plugins.
+- Ardia watches the folder: a plugin appears, changes or disappears the moment its files do. A dev link shows with a
+  yellow **Dev** badge and stands in for a registry copy of the same id while it's there.
 - Installing, enabling and the rest need no restart. Turning a plugin off withdraws everything it added at once.
 
-### Official plugins: fetched on Install
+## The registry, installs and updates
 
-First-party plugins (Command Line, `cli`, today) aren't packaged in the app. They're built and released in
-github.com/ardia-browser/plugins. This repo pins each one's version and per-platform SHA-256 in
-`apps/browser/official-plugins.json`, and the release copies that file, less unpublished artifacts, into Info.plist as
-`ArdiaOfficialPlugins` (`export-sign.sh`, `official-plugins.py signed-pin`). The app's signature covers it, so the pin
-is the only source of which version may be fetched.
+Plugins v3 (#4343) has one install path for everything: Ardia's registry at `https://ardia.dev/r`, registries you add,
+`github:owner/repo`, a folder or a `.tar.gz` (#2576), and dev links. Code: `state/plugins/registryClient.ts` (signed
+fetches), `installPlan.ts` (resolving), `installer.ts` (downloads and the consent sheet), `updater.ts` (updates,
+revocations, rollback), `marketplace.ts` (the catalog and registries), `lockfile.ts`, `migration.ts`, `devReload.ts`;
+natively `PluginCore/PluginStore.swift`, `PluginInstaller.swift`, `PluginArchive.swift` and `PluginArtifactFetch.swift`.
 
-- **Install** (Settings › Plugins, onboarding, or `plugins.enable` on the socket) fetches first, then asks. Native code
-  (`OfficialPluginFetch.swift`, `PluginCore/OfficialInstaller.swift`) does the following:
-  - downloads the pinned `macos-arm64` asset with an ephemeral `URLSession`: https only, at most 512 MB, idle timeout
-    60 s, deadline 15 min. It goes into a private scratch folder under `OfficialPlugins/<name>/.fetch-*`.
-  - refuses the download unless its SHA-256 is the pinned one.
-  - unpacks it with its own gzip and tar reader. Only files and folders are accepted, all under `<name>/`: no links,
-    devices, `..`, absolute paths, duplicates or PAX `size`/`linkpath` overrides. The caps (`OfficialArchive.Limits`):
-    512 MB downloaded, 1 GB unpacked, 20,000 entries (files and folders, however they're named), 32 levels deep, and no more than 100 times the download's size
-    unpacked overall or 200 times its compressed size for any one file. Neither ratio applies below 4 MB, so small text
-    files that compress well are fine. Folders a path implies count as entries. zlib reads the one gzip member,
-    checking its CRC and length; bytes after it (a second member, padding) are refused. The per-file ratio comes from
-    how much of the stream zlib consumed while that file came out, taken every 4 KB of output. Verifying a kept copy
-    applies the same caps. A file's ratio is checked before its staged file is created.
-  - requires the unpacked `plugin.json` to be the pinned name and version, claiming only programs the pin reserves
-    for it.
-  - trusts nothing but the pin, as VS Code does with its own extensions: no Developer ID signature or notarization is
-    required, so ad hoc and linker-signed programs run as published, and signed ones run too. The files are written by
-    Ardia itself and carry no quarantine flag (one found on the download is cleared only after the SHA-256 matches),
-    so Gatekeeper never asks to notarize them.
-  - unpacks only after the SHA-256 matched, into a private folder (`.stage-*`, mode 0700) inside Ardia's data folder,
-    then publishes it with a same-volume rename under a per-plugin lock as `OfficialPlugins/<name>/<sha256>/`, sealed
-    read-only (folders 0555, files 0555 or 0444) once it is there, and keeps the download beside it as `<sha256>.tar.gz`
-    (0444). It is sealed after the rename, not before: macOS 15 and macOS 26 up to 26.3 refuse to rename a folder you
-    can't write to (#3683), and nothing trusts the copy until its fresh check passes under the same lock. Program
-    copies in `Programs/<name>/<version>/` are sealed the same way once they verify, except their top folder, where
-    Ardia keeps its leases and after-update marks; removing either unseals it first.
-- **What makes a copy official.** A copy counts only while its download still has a SHA-256 the signed app vouches
-  for, and the payload digest of the copy (`PluginPrograms.payloadDigest`) equals the one computed by streaming that
-  download's tar (`OfficialArchive.payloadDigest`, `OfficialVerification`).
-  - The SHA-256s the app vouches for are the current pin's and those of earlier pinned artifacts listed in
-    `apps/browser/official-plugins-history.json`, which `export-sign.sh` writes into Info.plist with the pin (each
-    plugin's `trusted.artifacts`, `OfficialTrust`). `OfficialPlugins/<name>/active` only selects among copies that pass,
-    and `plugins.json` plays no part in it: a copy no signed pin names is never official, whatever the record says.
-  - `official-plugins.py history-check` fails when a `v*` tag that pinned a plugin still in the pin has no history entry,
-    and the release-script tests run it, so a pin bump has to add the release it replaces.
-  - Each lookup re-checks the stamps of the download and of every file in the copy, the digests are recomputed whenever
-    one changed, and promotion always re-checks from scratch.
-  - A replaced or damaged copy isn't listed as official, can't be promoted, and can't be linked. Linking stages the
-    program copy and refuses it unless its digest is that same one.
-- **Then consent.** That copy is a *candidate*: the scan lists it apart from the active plugins (`candidates` in the
-  plugins store), and the consent sheet shows its manifest.
-  - Its folder identity is `official-<sha256>`, so the approval hash binds the exact manifest to the exact artifact.
-  - Confirming records the approval in `plugins.json`, then native code switches `OfficialPlugins/<name>/active` to
-    that copy (`promoteOfficial`, which checks the hash against the copy again). The next scan lists it, and its
-    programs link from it.
-  - A crash after the record and before the switch is finished at the next scan, because the approval is on record.
-  - A failed or offline download leaves no listing and no PATH change. The row says why ("Check your internet
-    connection", "didn't match the copy this version of Ardia trusts", "programs aren't signed by Ardia") and offers
-    Try Again, in Settings and in onboarding. Leaving onboarding during a download cancels it.
-- **Updates.** A pin that names a new artifact fetches it in the background once you have the plugin, retrying after
-  10 minutes, then doubling up to 6 hours.
-  - It switches over by itself if its exact approval is on record: the same name and hash, or the old receipt below.
-  - It also switches over by itself, with no sheet, when it grants nothing you hadn't already approved
-    (`state/plugins/officialUpdate.ts`, #3868). All of these must hold:
-    - the installed copy is official by native's say (the pin's digest, an earlier pinned digest, or a 0.2.47 bundled
-      digest), it's on, and the record's `approved` is that copy's exact receipt;
-    - the new copy is the verified download of the pin's own digest (`folderId` is the pin's), its manifest has the
-      same `name`, is marked `official` and has no problems;
-    - its manifest asks for nothing the approved one didn't. Every field that runs, reaches pages, changes the
-      browser or grants anything must be identical, order and limits included: permissions (narrowing too, since it
-      changes which other plugins may call its tools; only the order of network hosts doesn't count), programs with
-      their paths and after-update steps, hooks, tools and their timeouts, settings defaults and rows, menus, toolbar,
-      sidebar views, panels, omnibox, themes, site switches, the page bar, the page, `main` and sidecar specs with
-      their memory budgets, every activation event other than `onCommand:`, and every approved command. A program's
-      `example` must stay what Settings offers to copy (the pin's example stands in for a manifest without one).
-      The one addition is a first `main` (the owner's call, for the move off the Python CLI): it passes only when
-      its only way in is the command bar, with the new view or handler commands that reach it (all its activation
-      events `onCommand:`; no page, panels, sidebar views, toolbar, omnibox, menus, tools, hooks or sidecar), and
-      the unchanged permissions give it nothing to use (only `control`, the separate program-control setting). It
-      is still a new runtime, able to show toasts and dialogs and relink its own programs, so the note says so.
-      Python 0.4.0 to Bun 0.6.0 is this case. Title, description, version, `requires`, icon, keywords, the telemetry
-      text and a program's `claim` don't count. Any field the comparison doesn't know, or a malformed one, prompts.
-      The boundary row is `plugin-update:official-auto`.
-    - The record keeps `previous` for a rollback and an `updated` note (`from`, `to`, the consent lines that are
-      new, and `runtime` when it added a first `main`). While that copy is the one installed, the plugin's page shows
-      "Updated by itself to 0.6.0", "It added its own code, which runs in Ardia's sandbox, offline, and first starts
-      when you use one of its commands in the command bar" when it did, "Its permissions didn't change", and those lines.
-      `official_updates_auto` counts the switch once it took.
-      Approving any later update by hand drops the note.
-  - Otherwise it waits, and the plugin's row offers **Update…**, which shows the consent sheet for the new copy. It
-    also waits while the consent sheet is open for that plugin, and when nothing is on record: an `ardia` installed
-    the old way that was never approved isn't adopted, since there's no approval to compare with.
-  - Telemetry: `official_updates_auto` counts updates that installed by themselves; `official_updates_waiting` the
-    ones left for review, with `official_update_prompts_<reason>` saying why (`baseline`, `permissions`, `network`,
-    `runtime`, `activation`, `programs`, `hooks`, `settings`, `contributions`, `unknown`), once per download.
-  - Until then the approved copy keeps running, and `previous` in the record keeps it approved while the switch
-    happens.
-- **Provenance.** Only native code decides that a plugin is official: the signed pin plus a verified copy in the
-  store, or an earlier copy as described below. `PluginFolders.list` marks those entries `official`. A folder you add
-  to `plugins/` named `cli` gets no official privileges, and `appChecks` refuses its `official`, `alwaysOn`,
-  `autoInstall`, `claim` and `afterUpdate`. `afterUpdate` runs only for a fetched official copy.
-- **Same switch and Remove as any plugin.** An official plugin has an on/off switch and Remove on its page.
-  - Off unlinks its programs. On relinks them with no new consent while its approval matches.
-  - Remove deletes its download and its PATH link and program copy, and keeps `PluginData/<name>` and its secrets, so
-    installing it again picks up where it left off.
-  - `"alwaysOn"` now only keeps `installed: true` in the record, so 0.2.47 sees the same install after a rollback.
-  - `"autoInstall"` activates nothing: activation always needs the user's approval.
-  - "Let programs control Ardia" in Settings › Advanced still governs control on its own.
-- **0.2.47 installs.** 0.2.47 bundled Command Line 0.4.0, approved as `sha256(manifest + "\0bundled")` and copied to
-  `Programs/cli/<version>` with `ardia` linked to `Programs/cli/current/bin/ardia`.
-  - Until a fetched copy is active, the scan lists that copy as the plugin (folder identity `bundled`, `legacy`), but
-    only while its payload digest is the one a release shipped (`trusted.bundledDigests`, one per release, since each
-    re-signed its bundled copy) and the record's old receipt approves it exactly. The history covers every release that
-    bundled Command Line: 0.2.47-nightly.7 (0.3.0), 0.2.47-nightly.8, 0.2.47-nightly.9 and 0.2.47 (0.4.0). A copy from
-    anywhere else stops counting as official: its `ardia` is taken off PATH and Install… is offered. Its programs are kept linked in place
-    (`PluginPrograms.keepLegacy`), with nothing restaged or switched.
-  - The launch sweep keeps every installed official plugin's link, listing or not (`programsKeptAtLaunch`).
-  - The fetched replacement switches over silently when its `plugin.json` is the one already approved (it carries
-    `legacyHash`, the old receipt of its own manifest); otherwise it waits for review as above.
-  - The silent switch records the exact approval of the download and keeps the 0.2.47 receipt as `previous`, so a
-    later pin change keeps it approved and 0.2.47, which only checks `installed` for its Command Line, still runs its own
-    copy after a rollback.
-- **Publish before switching.** `PluginPrograms.install` stages, verifies the payload digest and the team signature,
-  then checks that every program can go on PATH before it moves `current`. A replacement that can't take over (a name
-  someone else holds) leaves the old target in place and reports the refusal (`kept`). A retry finishes the switch.
-- **Test instances** read the pin from `ARDIA_TEST officialPin=<official-plugins.json>`. Any scratch instance, Release
-  included, may fetch from a folder instead of GitHub with `ARDIA_INSTANCE officialPluginsFrom=<dir>`; the SHA-256 and
-  signature checks are unchanged.
-
-### Official plugins: the seam for Settings and onboarding
-
-`apps/browser/src/state/plugins/actions.ts` (and `hooks.ts` for the hook) is the stable API the official-plugins UI
-builds on; `programs.test.mjs` and `adoption.test.mjs` pin it.
-
-- `useOfficialPlugins(): OfficialPlugin[]`, a hook, and `officialPlugins(store, supported?, showComingSoon?)`, its pure
-  form. `OfficialPlugin` is `{ name, title, blurb, icon, version, example, switchable, state }` (`switchable`: built in but not always on, so it has an off switch; `example`: the first `programs[].example` its manifest gives), `state` one of `"available"`, `"installed"`,
-  `"comingSoon"`, `"unsupported"`. The list is `OFFICIAL_CATALOGUE`, built from `apps/browser/official-plugins.json`
-  (`state/plugins/officialPin.ts`: each pinned plugin's `name`, `title`, `blurb` and `icon`), plus
-  any other built-in plugin whose manifest says `official`; title, blurb and icon come from the bundled manifest when
-  there is one. Only a built-in plugin can claim `official`, so a plugin you install never shows here. Where plugins
-  aren't supported (Linux and Windows today, `PLATFORM_FEATURES.plugins`), or the app has no bundled copy, every entry
-  is `"unsupported"`; Linux's own `ardia` installer (Settings › Advanced) is unchanged.
-- `COMING_SOON` entries (the pin's `comingSoon`, the AI plugin today) show as `"comingSoon"` only while their
-  experiment is on (`officialPluginsAi`, off by default), and never install.
-- The pin also says which plugins onboarding ticks (`"preselected": true`, `PRESELECTED_PLUGINS`) and which old Settings
-  anchors still lead to a plugin's row (`"anchorAliases": ["commandLine"]` resolves `plugins.commandLine` to
-  `plugins.cli`). `scripts/release/official-plugins.py check` validates every field.
-- `installOfficialPlugin(name, { showSheet? }): Promise<{ ok: boolean; reason?: string }>` opens the consent sheet (in
-  Settings › Plugins on that plugin, unless `showSheet: false` and the caller shows `PluginConsentSheet` itself) and
-  settles when it's decided, as `InstallResult = { ok: true } | { ok: false; reason: string; cancelled?: true }`:
-  `{ ok: true }` once installed and its commands are on PATH; `{ ok: false, cancelled: true, reason: "Cancelled." }`
-  when the user closed the sheet (Cancel, or the Settings window it was in); `{ ok: false, reason }` with no
-  `cancelled` when another install or another plugin's sheet takes its place, when it can't load, or when it
-  installed but its commands couldn't be linked (asking again retries the link and needs no new approval). Show
-  `reason`, and treat `cancelled` as no error. A replaced sheet
-  can neither approve nor cancel the newer one, and an old install adopted while the sheet is open closes it with
-  `{ ok: true }`.
-- `PluginConsentSheet({ name, hash, onClosed })` (`components/plugins/PluginConsentSheet.tsx`) is the sheet itself, and
-  `usePluginConsent()` says which plugin's sheet is open.
-
-### Official plugins: where they're offered
-
-Both surfaces read the seam above and nothing else; `state/plugins/officialView.ts` maps a plugin's state, its link
-state and the attempt in progress to what a row shows (`officialView.test.mjs`).
-
-- **Settings › Plugins › Official** (`components/settings/panes/OfficialPlugins.tsx`), above the other plugins, which no
-  longer list an official one twice. Text is kept to a minimum: a heading, and per row the icon, the seam's title and
-  its blurb on one line. **Install…** (**Turn On…** for a switchable plugin, matching its sheet) opens the consent sheet in place and the row turns to installed with no reload; a switchable plugin that's on reads "On" beside its title, with a switch that turns it off;
-  installed reads "Installed · <version>" beside the title, with its manifest's first `programs[].example` in mono and **Copy** (where the
-  command lives is on the plugin's own page, behind the chevron); a failure shows its reason with **Try Again**;
-  coming soon is the title and "Coming soon"; unsupported shows nothing. The list below has one short line, and its
-  empty state is "None yet" with **How to add one**, which shows the folder and the `ardia plugins install` hint.
-  Every pinned or coming-soon plugin has its own generated row, `plugins.<name>`, which Settings search finds by its
-  title, its blurb and the bundled manifest's `keywords`; "Official plugins" finds the section.
-- **Onboarding** has a step between Make it home and the outro (`components/onboarding/PluginsStep.tsx`,
-  `state/onboarding/pluginsStep.ts`). The command line starts ticked. **Install** shows the same consent lines inside
-  onboarding (`consentLines`, with the same changed-while-open guard) and nothing is installed until **Install** there
-  is pressed; **Cancel** returns to the offer; **Skip** installs nothing. A failure shows its reason and never blocks
-  Continue. When everything is already installed the step says so, and when nothing can be offered (Linux, Windows,
-  the web demo, a build with no bundled copy) the step is left out.
-- **Counts** (`state/telemetry/officialPluginCounts.ts`, in the hourly `usage_counts`):
-  `official_plugin_<onboarding|settings>_<shown|installed|skipped|failed>_<name>`, where `<name>` is any pinned or
-  coming-soon plugin's name with `-` as `_` (so `_cli` and `_ai` stay as they were) and `other` for anything else. `shown` counts a plugin that
-  could still be chosen, `skipped` is onboarding only, and a closed consent counts as nothing. Watch
-  `…_onboarding_installed_cli` against `…_onboarding_shown_cli` for the take-up, and `…_failed_cli` for a regression.
-- On the control socket, `plugins.official` returns the same list; `plugins.enable` on an official plugin opens its
-  sheet and answers `{"waiting": true}`.
-
+- **Signed JSON.** `index.json`, `plugins/@scope/name.json` and `revocations.json` are envelopes `{v: 1, kid, sig,
+  payload}`: an unpadded base64url Ed25519 `sig` over UTF-8 `"ardia-registry-v1\n" + canonicalJson({v: 1, kid,
+  payload})` (`@ardia/plugin-sdk/registry`). Ardia verifies every one against the registry keys built into it, then
+  validates its body; anything that doesn't verify is refused. With no key for a registry nothing from it is trusted.
+  Each file is fetched with its ETag (`If-None-Match`); a 304 reuses the cached envelope, verified again. On the Mac
+  the signature check is CryptoKit (`PluginSignatures.verify`, through `verifySignature`); where the JS runtime has
+  WebCrypto Ed25519 (Linux and Windows) it uses that.
+- **Official native code is co-signed.** An `@ardia/*` artifact of a `native` plugin (one with programs, a sidecar or
+  `control`) needs `officialSig`: an Ed25519 signature, by the official-native key kept apart from the registry's,
+  over `"ardia-official-native-v1\n" + canonicalJson({v: 1, id, version, platform, sha256})`, so even a compromised
+  registry server can't push a rogue `ardia` binary. What counts is the `plugin.json` Ardia actually downloaded, not
+  the tier the registry claims: an `@ardia` download that declares any of those needs the signature before the sheet
+  opens. Native checks it again with its own copy of the keys (`PluginOfficial.swift`) and records the proof as
+  `.<version>-<sha12>.official` beside the store copy. Such a copy reaches the consent sheet only with its signature
+  recorded, Ardia verifies it again before the switch, and native refuses to make it active without a proof that
+  verifies; an `@ardia` copy without one puts no program on PATH at all, and a rollback to an `@ardia` copy needs its
+  recorded signature too.
+- **Overrides for testing.** `ARDIA_PLUGIN_REGISTRY_URL` points Ardia at another registry (its envelopes still have to
+  verify; a plain-http loopback address only in an unsigned scratch build); in a test instance only, `ARDIA_PLUGIN_REGISTRY_PUBLIC_KEY` and `ARDIA_PLUGIN_NATIVE_PUBLIC_KEY` replace
+  the built-in keys (`kid=key,…`, raw base64 or SPKI PEM), and `ARDIA_INSTANCE pluginArtifactsFrom=<folder>` serves
+  artifacts from a folder by file name.
+- **Resolving.** `planInstall` fetches the plugin's registry file and every dependency's (at most 32), then runs the
+  SDK's `resolvePluginGraph`: versions whose `engines.ardia` this Ardia satisfies, with a `universal` artifact or this
+  platform's, on the plugin's channel (`latest` or `beta`), never yanked or revoked, one version of each plugin
+  browser-wide, highest first with backtracking. Optional dependencies that can't be met are skipped.
+- **Downloads.** Each new artifact is fetched natively (`fetchArtifact`), its SHA-256 checked against the signed
+  registry entry before anything is unpacked, then unpacked with strict caps (512 MB compressed, 1 GB unpacked, 20,000
+  entries, 32 levels, a compression-ratio check; no links, devices, `..`, absolute or duplicate paths; every entry under
+  `<name>/`), its `plugin.json` checked to be the expected id and version, and the copy sealed read-only. The approval
+  of a store copy binds the manifest to `store-<sha256>`, so it covers the whole package. Downloads are shared only
+  between requests for the exact same artifact (plugin, version, SHA-256 and address), and the copy native returns
+  must be that version and digest. Ardia rescans the store before it decides what to download, so a locked version
+  whose files are gone is downloaded again.
+- **Folder installs.** A folder in `<config>/plugins/` is identified by `local-<sha256>`, a digest over every file and
+  folder in it (sorted paths, sizes, the executable bit and bytes; links and special files refused, 4,096 entries and
+  256 MB at most, Finder's `.DS_Store` skipped). The approval binds that digest with `plugin.json`, and every load,
+  page file and program link derives it again, so changing any script needs consent again.
+- **Consent.** One sheet asks for the plugin and every dependency the install pulls in, each with its plain-English
+  lines; a plugin that runs outside Ardia's sandbox (programs, control) says so first. Confirming approves them all
+  and the install finishes once their `active` links have switched; each switch writes that plugin's entry in
+  `plugins-lock.json` (version, SHA-256, dependencies, source, repo, official signature and platform), keeping the
+  entry it replaced as `previous`. The entry waiting for its switch is kept in the lock file's `staged` section, so an
+  **Update…** confirmed after a restart keeps its provenance; a download whose staged entry can't be saved fails before
+  the sheet, and a store copy can't reach the sheet until its staged entry is on disk. Lock writes run one at a time,
+  each from the last state that landed; Ardia holds only what reached the disk, and a write that doesn't land writes
+  the earlier lock back. A store that can't be listed, before or after the download, fails the install. A failed switch fails the install
+  and leaves the lock alone; a lock that can't be written after the switch switches back (or takes a first install away) and fails;
+  removing a plugin drops its entry.
+- **Updates.** At launch and every 20 minutes Ardia reads `index.json` (cheap with its ETag) and compares each plugin's
+  channel tag with what it runs. A newer compatible version is downloaded and checked like an install, then its whole
+  security surface (`diffSecuritySurface`: permissions, contributions, dependencies) is compared with the approved one.
+  The same or narrower switches over in the background, keeps the old copy as `previous`, and notes "Updated to …" in
+  Settings. Anything more waits: the current version keeps running and Settings shows **Update…** with the exact
+  `+ Added` lines. An update that needs a newer version of an installed dependency brings it along: silently when
+  neither widens, otherwise on the same sheet, with the dependency's additions named. **Roll Back** checks the earlier
+  version against revocations (and an `@ardia` copy's signature) before it swaps `active` and `previous`, and restores
+  that version's whole lock entry; native switches only if `previous` is still that version and SHA-256. A version
+  the plugins you have installed can't take (their dependency ranges) is held back to the newest one that fits.
+- **Browser upgrades.** A plugin whose `engines.ardia` this Ardia is past stops with "Incompatible with Ardia X.Y.Z —
+  waiting for plugin update", and the next check looks for a compatible version on its channel first.
+- **Revocations.** `revocations.json` is read at launch, every 20 minutes, and before every install and update; a list
+  with a lower `seq` than one seen is refused (no replays), only a list that verifies sets that floor, and a list
+  that couldn't be saved counts as a failed refresh until it is. Once Ardia
+  has a key for its registry, an install from any source (a registry you added, GitHub, a file) waits for the list and
+  fails if it can't load; with no key yet, Ardia's own registry stays closed and the others work without it. Every
+  approval checks the exact copy it approves (a new copy also against `yank`), turning a plugin back on checks it
+  again, a `.tar.gz` or folder install is checked before its sheet, and the check runs over every installed plugin,
+  not only those in the lock. A `registry` selector matches its scheme and host in any case and its path exactly or
+  as a parent, never a child path matching its parent. `yank` refuses installs and updates to those versions;
+  `disable` stops the plugin, unlinks its programs, withdraws its UI and shows the reason, rolling back first when
+  `rollbackTo` is the kept `previous`; `block` does the same across every source, matching `id`, `scope`,
+  `githubOwner`, `repo` or an archive's `sha256`. Lifting a revocation lets the plugin run again.
+- **Custom registries** (Settings › Plugins › Registries) are an https address, the scopes they serve (`@acme/*`) and
+  the Ed25519 key they sign with; a plugin of a bound scope comes from its registry, everything else from Ardia's, and
+  the catalog lists each plugin only from the registry its install would use. A dependency comes from its own
+  registry, and revocations naming a registry match each plugin's own (an origin covers every registry under it).
+  `github:owner/repo` reads the repo's releases and their `plugin.json` and needs a `.sha256` beside the `.tar.gz`;
+  `release.assets` (or an `asset` with `{platform}`) picks this computer's archive, and only a plain `asset` is
+  universal.
+- **Per-profile plugins.** A `"scope": "profile"` plugin can be on in all profiles or selected ones (Settings, the
+  plugin's page). Its menus, commands and events reach only windows and tabs of those profiles (an event with no
+  profile reaches it only when it's on in all of them). Its `storage.*` lives in `PluginData/profiles/<profileId>/`
+  and its `secrets.*`, settings rows included (Settings picks the profile), under a Keychain account for that profile:
+  the request's `profile`, else the front window's, else the default or first profile it's on in. Commands, tools a
+  command runs, decide hooks, omnibox queries (the profile of the window the query started in, whatever has focus) and events from another
+  profile never reach it, its state snapshots hold only its profiles' windows, tabs, groups and downloads (frames queued before its profiles
+  changed are dropped and built again), and every
+  call and event it gets carries the `profile` that invoked it (`call.profile`, a listener's `event.profile`), and
+  `storage.*`/`secrets.*` take `{ profile }` so an async handler keeps to it; launch and idle replays pass the same
+  gate as live events. `"scope": "global"` plugins keep one store. `"scope": "global"` is forced for plugins with `programs` or `control`.
+- **Dev links.** `ardia-plugin dev` writes `<config>/plugins-dev/<scope>__<name>.json` and calls `plugins.devReload`
+  `{id, path, link}` on the control socket, with the folder's real path. Ardia rescans, refuses a `path` that isn't
+  the folder the link points at, reloads the plugin's host and answers `{ok: true, id,
+  version}`; a reload whose security surface grew, or a plugin never approved, answers `{ok: false, error: {code:
+  "needs_consent", message}}` and opens the consent sheet. Other refusals: `bad_request`, `not_linked`, `manifest`.
+- **The old Command Line.** On the first launch of v3 an install of the `cli` plugin (0.2.48 and 0.2.49) is moved to
+  `@ardia/cli`: its programs folder, its data and `~/.local/bin/ardia`'s link move to the new key in place, so
+  `ardia` keeps working, and the first registry copy of `@ardia/cli` installs with no sheet if the old one was on (a
+  turned-off one stays off and asks). Its programs are copied to the new folder first and PATH is pointed there before
+  the old folder goes, all under the PATH lock; if PATH can't be pointed there, the links that moved go back and the copy
+  goes, unless a link couldn't go back or is gone from its name, in which case the copy stays so nothing dangles. The old
+  download stays until the verified `@ardia/cli` copy is active and PATH points at the new folder; a move that fails is retried at the next check, and the move counts as done only
+  then.
+- **Install links.** `ardia://plugin/install/@scope/name` opens Settings › Plugins on that plugin's Get; a link that
+  launches Ardia waits until plugins have started.
 
 ## The manifest
 
 ```json
 {
-  "$schema": "../../plugin.schema.json",
-  "manifest": 2,
-  "name": "example",
-  "title": "Example",
+  "$schema": "https://ardia.dev/schemas/plugin.v3.json",
+  "manifest": 3,
+  "id": "@you/example",
+  "name": "Example",
   "description": "One line on what it does.",
   "version": "2.0.0",
-  "requires": "0.2.50",
   "icon": "sparkles",
+  "engines": { "ardia": ">=0.3.0 <1.0.0" },
+  "scope": "profile",
+  "dependencies": {},
   "main": "dist/index.js",
   "memoryMB": 128,
   "activationEvents": ["onUrl:github.com"],
@@ -336,54 +277,27 @@ state and the attempt in progress to what a row shows (`officialView.test.mjs`).
         { "key": "side", "title": "Open Beside On", "type": "choice", "default": "right", "choices": [{ "value": "left", "title": "Left" }, { "value": "right", "title": "Right" }] }
       ]
     },
-    "tools": [{ "name": "hello", "title": "Say hello", "description": "Greets someone.", "timeout": 10 }],
-    "programs": [{ "name": "example-tool", "path": "bin/example-tool" }]
+    "tools": [{ "name": "hello", "title": "Say hello", "description": "Greets someone.", "timeout": 10 }]
   }
 }
 ```
 
-- `manifest` is the schema version, now 2. A newer version than Ardia knows is listed as "needs a newer Ardia" and
-  never loads. Unknown keys anywhere are errors, so a typo never silently does nothing. Every problem is reported at
-  once, with its path (`plugin.json: contributes.commands[0].tool: hello isn't one of this plugin's tools`); a
-  manifest with any problem doesn't load, the Plugins pane shows the problems and `ardia plugins check` prints them.
-- `name`: 1 to 40 lowercase letters, digits and dashes, starting with a letter or digit, and the plugin's folder
-  name. `title` up to 60 characters, `description` up to 200, with control and bidi characters refused. `version` and
-  `requires` are `MAJOR.MINOR.PATCH` with an optional `-suffix`; a plugin that requires a newer Ardia doesn't load.
-  `icon` is an SF Symbol.
-- `main` is a `.js`, `.mjs` or `.cjs` file inside the plugin's folder; `memoryMB` (only with `main`) is the host's
-  watchdog threshold. `sidecar` is `{run, memoryMB}` as below. A command with no action of its own (`tool`, `open`,
-  `view`, `panel`) is handled by main, so it needs one.
-- `keywords` (v2): up to 12 words of up to 40 characters that find the plugin's row in Settings search.
-- `telemetry` (v2): `{ "title": "…", "items": ["…"] }` (1 to 16 items of up to 800 characters), what the plugin's own
-  programs collect. Settings › Privacy › What's Sent shows it under its title for every installed plugin that has one,
-  labelled as the plugin's own, under its own heading, "From plugins you added" ("What each plugin says its own programs
-  send. Ardia doesn't send it, and the switch above doesn't control it"). An official plugin whose pinned release has no block yet uses the pin's
-  `telemetry` (the command line's "The ardia command" today), labelled as described by a plugin that ships with Ardia;
-  that block also shows while an old standalone install of it is still in place, asked again each time What's Sent
-  opens. The pin's `example` is likewise the
-  first command shown until the plugin's manifest gives one. Ardia's own counters
-  about what a plugin does (the `cli_socket_*` and control-pill counts, for one) stay in Ardia's own copy.
-- The app writes `plugin.schema.json` beside `config.schema.json` (`docs/config.md` › Schemas), generated from the
-  same rules, for editors and the CLI. The app validates with its own code.
-
-### Migrations: 0 → 1 → 2
-
-Old manifests keep working with no edit, through `MANIFEST_MIGRATIONS` in `lib/pluginMigrations.ts`, like every saved
-document (`docs/conventions.md`):
-
-- **0 → 1.** A file with no `manifest` is version 0, the settings-only presets of github.com/ardia-browser/plugins
-  (`name`, `title`, `description`, `requires`, `settings`, `reset`): its `settings` becomes `settings.defaults`, and
-  `reset` (the old installer's) is dropped.
-- **1 → 2.** `commands`, `tools`, `hooks`, `settings`, `programs` and `passwordManager` move into `contributes`;
-  `page` becomes the panel `{"id": "default", "mode": "tab", …}`; `process` becomes `sidecar`; and the permission
-  list becomes the object (`"tabs"` → `"tabs": "read"`, `"network"` → `"network": "*"`, any other name → `true`).
-  A manifest that already has `contributes`, `main` or `sidecar` is taken as v2 whatever its number says.
-- Problems in a migrated manifest are reported in its own words (`v1Problem`): a v1 plugin hears about `page` and
-  `process`, not `contributes.panels[0]` and `sidecar`.
-- The approval is the hash of the file's text, so a migration never asks for a new approval. Command Line 0.4.0, the
-  copy 0.2.47 bundled and that a 0.2.47 install keeps until its replacement is approved, is a v1 manifest and loads
-  through this path unchanged; `keywords`, `telemetry`,
-  `programs[].example` and `programs[].claim` need manifest 2.
+- `manifest` is 3, checked by `@ardia/plugin-sdk/manifest` (`validateManifestV3`), the same code `ardia-plugin check`
+  and the registry's indexer run. A newer number is listed as "needs a newer Ardia"; an older one (0, 1, 2) is
+  refused with "plugin.json uses an older manifest that this Ardia no longer reads; it needs manifest 3", since v3 is a
+  clean slate. Unknown keys anywhere are errors; every problem is reported at once with its path.
+- `id` is the plugin's scoped id, `name` its title (up to 60 characters), `description` up to 200. `engines.ardia` is
+  a semver range this Ardia has to satisfy; `engines.sdk` optional. `version` is semver.
+- `scope`: `profile` (the default) or `global`. `dependencies` and `optionalDependencies` are id → range maps;
+  `provides` and `consumes` name service interfaces like `ai.provider`.
+- The app reads the parts this Ardia runs through `lib/pluginManifest.ts` (`readManifest`), and keeps the whole
+  validated manifest as `manifest.v3` for the consent sheet and update comparisons. Parts the runtime doesn't run yet
+  (input modes, page styles, content scripts, net rules, localhost hosts, `main` and a `sidecar` together) are
+  accepted and shown but have no effect until Phase 4.
+- `keywords` find the plugin's row in Settings search. `telemetry` (`{title, items}`) is what its own programs collect;
+  Settings › Privacy › What's Sent shows it, labelled as the plugin's own.
+- The app writes `plugin.schema.json` beside `config.schema.json` (`docs/config.md` › Schemas): the SDK's schema, the
+  same as `docs/plugin.v3.schema.json`.
 
 ### activationEvents
 
@@ -427,8 +341,8 @@ Site Controls and a page bar with the actions it names.
 - `rows` (at most 20) add rows to the plugin's page in Settings › Plugins: `toggle` (boolean), `text` (up to 200
   characters), `number` (with optional `min`, `max` and `step`; `default` between them), `choice` (2 to 12 `choices`,
   `default` one of their values) and `secret`. `key` is 1 to 40 letters, digits, `-` and `_`; `description` is an
-  optional second line. Values are kept in `plugins.json` and sent to main and the sidecar; nothing in Ardia reads them.
-- A **`secret`** row is a password field whose value never touches `plugins.json`, logs or telemetry: it is a Keychain
+  optional second line. Values are kept in `Plugins/plugins-state.json` and sent to main and the sidecar; nothing in Ardia reads them.
+- A **`secret`** row is a password field whose value never touches `plugins-state.json`, logs or telemetry: it is a Keychain
   item (`ardia.plugin.<name>.<key>`, `state/plugins/secrets.ts`), the row shows only whether it is set, and main reads
   it with `ardia.secrets.get(key)` (needs `secrets`). Removing the plugin deletes its items.
 
@@ -686,9 +600,9 @@ Paths go in as `-D` parameters, never into the profile's text.
 - **With network** (a sidecar whose plugin is granted it), outbound and local IP, the resolver's socket, the
   `machAllowedOnline` services and `/etc/hosts` and `resolv.conf`. Without it, no IP at all: no loopback, no listening,
   no names. main's host is always offline.
-- **An official plugin's folder** is its verified, read-only copy, `OfficialPlugins/<name>/<sha256>/`, the one place in
-  Ardia's data folder a plugin may run from: only the copy `OfficialTrust` just verified for that plugin, compared by
-  real path, so a local plugin linked to a folder there is refused. It can't read or list another copy.
+- **A store copy** is its verified, read-only folder, `Plugins/store/@scope/name/<version>-<sha12>/`, the one place in
+  Ardia's data folder a plugin may run from: only the copy `PluginStore` just verified for that plugin, compared by real
+  path, so a local plugin linked to a folder there is refused. It can't read or list another copy.
 - **Never:** your home folder, Ardia's data and config folders, `/Users` and `/Volumes` (an absolute program elsewhere
   reads only itself), any other app's temp files, `/Applications`, `/etc` beyond the files above, pathname sockets,
   shared memory, IOKit, Apple Events, Launch Services, launchd jobs, preference writes and notifications.
@@ -703,22 +617,11 @@ command and `path` an executable file in the plugin's folder. Two more keys need
 
 - **`example`**: a command to try, up to 120 characters, shown with **Copy** on an official plugin's Settings row once
   the program is on PATH (`ardia tabs` for the command line).
-- **`claim: true`** (official plugins only): reserves the name. Claims aren't read from whatever is listed. The
-  release writes a program registry, `{ "version": 1, "claims": { "<program>": "<owner>" }, "legacyInstalls": [...] }`,
-  from the pin alone: each pinned plugin's `reservedPrograms` and `legacyInstall` (`scripts/release/official-plugins.py
-  registry`). It goes into `Info.plist` as `ArdiaProgramRegistry`, beside `ArdiaOfficialPlugins` and covered by the
-  same signature, and `verify.sh` runs `verify-registry`.
-  - The app derives the same registry from its signed pin and refuses one that disagrees (`ProgramRegistry.resolve`).
-  - A download's manifest may claim only names the pin reserves for it.
-  - Listing (`state/plugins/appChecks.ts`, given the registry by native `programRegistry()`) and the native linker
-    (`ProgramRegistry` in `PluginCore/PluginProgramRegistry.swift`) both consult it. A claimed name stays reserved
-    while its owner is off, uninstalled or not downloaded, and any other plugin naming it doesn't load ("ardia belongs
-    to Ardia's official cli plugin").
-  - A registry that is damaged, disagrees with the pin, or is missing from a distributed build fails closed, even with
-    no official plugin installed: no program is linked at all, and Settings › Advanced › Programs on your PATH says the
-    list is missing or damaged. JS does the same.
-  - Only a test instance (a scratch data dir and not signed for distribution) may do without one: it derives the
-    registry from its pin (`ARDIA_TEST officialPin`).
+- **`claim: true`** (official plugins only). Names are reserved in code, not by a pin: `ardia` belongs to `@ardia/cli`
+  (`RESERVED_PROGRAMS` in `state/plugins/appChecks.ts`, `ReservedPrograms` in `PluginCore/PluginLegacyMove.swift`).
+  Only the verified store copy of the owner, installed from Ardia's registry, may link it; a local folder, a dev link
+  or another plugin naming it doesn't load ("ardia belongs to Ardia's official @ardia/cli plugin"), and the native
+  linker refuses it too.
 
 Ardia never runs a plugin's program itself, with one exception for official plugins:
 
@@ -788,33 +691,8 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   leased. At the first scan after launch, every link into the store whose plugin isn't on (or isn't there any more,
   however it went) comes off, and those plugins' stores are swept; a plugin that dropped a command loses that link
   the next time it links.
-- **Adopting an old install.** The program registry's `legacyInstalls` come from the pin's `legacyInstall` on a plugin
-  (`{ "program": "ardia", "root": "Library/Application Support/Ardia/CLI", "current": "current" }`); `root` must be one
-  of the known legacy app-data roots (`KNOWN_LEGACY_ROOTS` in `official-plugins.py`, `knownLegacyRoots` in Swift) and
-  `current` one file name. Native checks the exact old layout, walking from the home folder with no-follow checks on
-  every folder: `<root>/<current>` is a link to a version folder beside it, and that folder's `bin/<program>` is a
-  regular file. JS asks `legacyProgramsInstalled()` once per launch, which answers the owners found, and installs an
-  always-on owner that isn't installed yet (only while control is on; an Off you chose is never overridden). Once the
-  program is linked, and while the old installer's lock (`<root>/.lock`) is free, the old home's `current` becomes a
-  link to `Programs/<owner>/current`, so paths saved through it keep working; only once it does are its old version
-  folders deleted, each a real folder inside that home and once no running program leases it; its other files stay.
-  All of it goes through directory descriptors: the home is opened one folder at a time with `O_NOFOLLOW` (each owned
-  by you), the lock must be a regular file you own, and the lock is taken right after the new version is staged,
-  before anything changes, and held through the check of the old layout, Ardia's own `current`, the PATH link and the old
-  home's `current` alike. While the old installer holds it nothing is switched: Ardia's `current` stays where it was (so
-  PATH runs the same file, even through an old home already adopted), no link changes, native answers `busy`, and no
-  `afterUpdate` starts. The swap and the pruning are
-  `renameat`/`unlinkat` inside the opened folder. A link on PATH is taken over only when it points at the
-  exact old launcher, `<root>/<current>/bin/<program>`. Native answers `adoption`: `adopted`, `already` (it was
-  Ardia's), `failed` (the swap didn't take), `busy` (the old installer holds its lock) or `none`. A busy lock is tried
-  again, for an Install and an automatic adoption alike (6 times, 5 s apart), then shown with **Try Again**, as a
-  failed swap is. `plugin_adoptions` counts, and a waiting Install settles, only once native says `adopted` or
-  `already`; `usage_counts.program_adoptions` counts the old home switched over.
-- **Official plugins' files** are checked against the download. The fetch records the payload digest of the verified
-  copy, derived from the kept download whose SHA-256 the signed pin names (the same digest
-  `scripts/release/plugin-digest.py` computes). Ardia computes it again over its program copy before using it, and
-  again when it reuses one, and refuses one that differs. What goes on PATH is what the pin vouches for, even if the
-  store was changed on disk.
+- **Store copies' files** are checked against the download: the fetch records the payload digest of the verified copy,
+  and Ardia computes it again over its program copy before using it and refuses one that differs.
 - **Which Ardia writes there.** Only an Ardia on its real data folder links into `~/.local/bin` and the store. A test
   instance (`ARDIA_DATA_DIR`) links only into `ARDIA_INSTANCE cliBinDir=<dir>`, keeps its store in
   `<data dir>/Programs`, adopts an old install only from `ARDIA_INSTANCE cliHome=<dir>` (the old home itself; the key keeps
@@ -822,7 +700,7 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   signed smoke instance included: it keeps the signed claims but adopts nothing without that scratch folder,
   and runs `afterUpdate` with `HOME` at `<data dir>/ProgramsHome`. Plugins belong to the data
   folder, not to a profile, so one link serves every profile; two copies of Ardia.app on one data folder share
-  `plugins.json`, their version folders never collide, and the last to link wins.
+  `plugins-state.json`, their version folders never collide, and the last to link wins.
 - **Stale requests.** Each link and unlink takes the plugin's next generation when it's asked for, and does nothing when
   a newer one was asked for before it runs; its answer to JS is only whether it worked, which commands were linked or
   refused and why, the bin folder, whether an old install was adopted, and whether its lock was held (`adoptBusy`).
@@ -862,8 +740,8 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   anything they send to the port carries an `Origin`, which the engine refuses.
 
 Code: `PluginCore/PluginPrograms.swift` (the store, links and leases; `plugin-tests/PluginProgramsTests.swift`),
-`PluginCore/PluginProgramRegistry.swift` (claims and legacy installs; `plugin-tests/PluginProgramRegistryTests.swift`),
-`PluginProgramLinks.swift` (places, PATH, the signed digests), `state/plugins/programs.ts`, `state/plugins/programRegistry.ts`.
+`PluginCore/PluginLegacyMove.swift` (reserved names and moving the old `cli` to `@ardia/cli`),
+`PluginProgramLinks.swift` (places, PATH, the checked digests), `state/plugins/programs.ts`.
 
 
 ### passwordManager
@@ -930,16 +808,7 @@ can't tell a lost write from an Off made in Chrome's own password settings durin
 that Off comes back on at the next launch; an Off made in Ardia's Settings always wins. A record from a newer Ardia (a higher
 `version`) is never overwritten: offer to save is left as it is for that run.
 
-**Retired plugins.** `RETIRED_OFFICIAL_PLUGINS` in `state/plugins/lifecycle.ts` maps each official plugin Ardia no
-longer ships (`apple-passwords`) to the approvals its bundled copies were given (the hash of the bundled manifest with
-folder `bundled`). Once a scan lists no plugin by that name, a record carrying one of those approvals is dropped from
-plugins.json. A record you approved for a plugin of that name you installed yourself never matches, so it stays even
-when a folder read error lists nothing, and a scan that fails drops nothing. Approving or removing a leftover folder of
-that name while the bundled record is still there counts as dropping it. In the launch that drops it, a profile
-whose stored choice is `plugin:<retired>` is saved as `ardia`,
-and when the dropped record was on, so are profiles that never chose, so a rollback to a build that still bundles the
-plugin can't hand them back to it with offer to save off. With no retired record and no such choice nothing is
-written. Offer to save then comes back through the journal above.
+**Retired plugins** are gone with the pin: a profile whose choice names a plugin that isn't installed falls back to Ardia's own manager.
 
 **Withdrawn at once.** Ardia pushes the whole set of profiles with a key (`passwords.setFieldProviders {session, generation,
 profiles: [{profile, fields, codeSetup}]}`) at launch and whenever it changes. Turning the plugin off, removing it or
@@ -1265,6 +1134,19 @@ The control socket's protocol 4 adds `plugins`, `plugins.enable` (`{"waiting": t
 - The example plugin used by the tests: `tests/fixtures/plugins/example/`.
 
 ## Telemetry
+
+Registry installs and updates (hourly, counts only, never ids, URLs or reasons): `registry_install_starts`,
+`registry_installs`, `registry_install_refusals`, `registry_offline`, `registry_downloads`, `registry_download_failures`,
+`registry_download_offline`, `registry_verify_failures`, `artifact_fetch_cause_<cause>`, `updates_silent`,
+`updates_prompted`, `updates_failed`, `updates_rolled_back`, `revocations_disable`, `revocations_block`,
+`revocations_rolled_back`, `migrations_found`, `migrations_adopted`, `migrations_failed`, `rollback_refusals`,
+`file_installs_revoked`, `dev_reloads`, `dev_reload_consents`,
+`catalog_loads`, `catalog_offline`, `catalog_gets`, `channel_beta`, `channel_latest`, `registries_added`,
+`file_installs_archive`, `file_installs_folder`, `deep_link_installs` and `onboarding_plugin_<shown|installed|skipped|failed>`,
+`onboarding_registry_offline`. Watch `registry_verify_failures` against `registry_downloads` (a signing or mirror
+problem), `updates_prompted` against `updates_silent` (how often updates ask for more), `revocations_*` after an admin
+action, `rollback_refusals` and `file_installs_revoked` (a revoked or unsigned copy turned away), and
+`migrations_adopted` against `migrations_found`, with `migrations_failed` for a move that has to try again.
 
 Counts only, never plugin names, titles, URLs, row values, secrets, tool input or output, fetched hosts or view
 contents, each tied to the consent period the activity began in, so a count that finishes after sharing changed stays

@@ -15,7 +15,6 @@ const RECORD = "password-manager.json";
 const record = (heldOff, restored) => JSON.stringify({ offerToSaveHeldOff: heldOff, ...(restored ? { offerToSaveRestored: restored } : {}), version: 1 });
 const EMPTY = { offerToSaveHeldOff: [], version: 1 };
 const saved = () => (stub.docs.get(RECORD) ? JSON.parse(stub.docs.get(RECORD)) : null);
-const pluginsSaved = () => JSON.parse(stub.docs.get("plugins.json")).plugins;
 const toggle = (profile) => stub.profileToggles.user.get(profile)?.passwords;
 const profile = (id, passwordManager, extra = {}) => ({ id, name: id, color: "plum", icon: null, createdAt: 0, ...(passwordManager === undefined ? {} : { passwordManager }), ...extra });
 const S = () => useBrowser.getState();
@@ -51,19 +50,17 @@ async function launch() {
   return pm;
 }
 
-test("launch 1 after the update: Apple Passwords' choices read Ardia, its record goes, and offer to save comes back once per data, marked but not yet confirmed", async () => {
+test("launch 1 after the update: a choice of a plugin that isn't installed reads Ardia, and offer to save comes back once per data, marked but not yet confirmed", async () => {
   takePasswordManagerCounts();
   const pm = await launch();
-  assert.equal(usePlugins.getState().records["apple-passwords"], undefined, "the orphaned record is dropped");
-  assert.deepEqual(Object.keys(pluginsSaved()), ["other"], "and only it");
-  for (const id of ["default", "work", "shared", "c"]) assert.equal(S().profiles[id].passwordManager, "ardia", `${id} is saved as Ardia, so a rollback to 0.2.47 can't pick the plugin`);
+  assert.ok(usePlugins.getState().records["apple-passwords"], "a record of a plugin that isn't installed is left as it is");
   assert.equal(pm.currentPasswordManager("default"), "ardia");
   assert.equal(toggle(""), true);
   assert.equal(toggle("work"), true, "work and the profile sharing its data are restored through one engine profile");
   assert.equal(toggle("mine"), false, "an off Ardia didn't make is left alone");
   assert.equal(stub.profileToggles.user.has("gone"), false, "a deleted profile's engine data isn't touched");
   assert.deepEqual(saved(), { offerToSaveHeldOff: ["", "work"], offerToSaveRestored: ["", "work"], version: 1 }, "the deleted profile is dropped; the rest stay until a later launch reads the value back");
-  assert.deepEqual(counts(), { password_manager_profiles_moved_back: 2 });
+  assert.deepEqual(counts(), {});
 });
 
 test("launch 2 reads offer to save back on and clears the record; launch 3 writes nothing", async () => {

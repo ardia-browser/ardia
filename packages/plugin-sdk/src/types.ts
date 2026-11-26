@@ -15,6 +15,7 @@ export type CallContext = {
   readonly caller: unknown;
   readonly deadline: number | undefined;
   readonly signal: CancelSignal;
+  readonly profile?: string;
 };
 
 export type ToolHandler<I = any, O = unknown> = (input: I, call: CallContext) => Awaitable<O>;
@@ -29,7 +30,7 @@ export type ServiceHandler<I = any, O = unknown> = (input: I, call: CallContext)
 
 export type ServiceHandlers = Record<string, ServiceHandler>;
 
-export type EventListener<D = Record<string, unknown>> = (data: D, event: { name: string; time: number | undefined }) => void;
+export type EventListener<D = Record<string, unknown>> = (data: D, event: { name: string; time: number | undefined; profile?: string }) => void;
 
 export type StateListener<D = Record<string, unknown>> = (data: D, event: { name: string; time: number | undefined }) => void;
 

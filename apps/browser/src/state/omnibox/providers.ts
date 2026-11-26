@@ -3,7 +3,9 @@ import { create } from "zustand";
 
 export type ProviderRow = { title: string; url: string; subtitle?: string; icon?: string | null; badge?: string };
 
-export type OmniboxProvider = { id: string; title: string; keyword?: string; query(text: string, signal: AbortSignal): Promise<ProviderRow[]> };
+export type ProviderQueryContext = { windowId?: string };
+
+export type OmniboxProvider = { id: string; title: string; keyword?: string; query(text: string, signal: AbortSignal, context?: ProviderQueryContext): Promise<ProviderRow[]> };
 
 export const useRegisteredProviders = create<{ list: readonly OmniboxProvider[] }>()(() => ({ list: [] }));
 

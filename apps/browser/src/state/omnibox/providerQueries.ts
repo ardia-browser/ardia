@@ -1,10 +1,10 @@
 import type { ProviderSection } from "@ardia/core";
-import type { OmniboxProvider } from "./providers";
+import type { OmniboxProvider, ProviderQueryContext } from "./providers";
 
 const PROVIDER_DEADLINE_MS = 1500;
 
 type ProviderQueries = {
-  run(text: string, providers: readonly OmniboxProvider[], onSection: (section: ProviderSection) => void): void;
+  run(text: string, providers: readonly OmniboxProvider[], onSection: (section: ProviderSection) => void, context?: ProviderQueryContext): void;
   cancel(): void;
 };
 
@@ -30,7 +30,7 @@ export function createProviderQueries(deadlineMs: number = PROVIDER_DEADLINE_MS)
   };
   return {
     cancel,
-    run(text, providers, onSection) {
+    run(text, providers, onSection, context = {}) {
       cancel();
       const run = new AbortController();
       current = run;
@@ -39,7 +39,7 @@ export function createProviderQueries(deadlineMs: number = PROVIDER_DEADLINE_MS)
         const deadline = new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(new Error("deadline")), { once: true }));
         let answer: Promise<unknown>;
         try {
-          answer = Promise.resolve(provider.query(text, signal));
+          answer = Promise.resolve(provider.query(text, signal, context));
         } catch {
           done();
           continue;

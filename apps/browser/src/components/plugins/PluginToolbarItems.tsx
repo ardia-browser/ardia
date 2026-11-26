@@ -24,7 +24,7 @@ function itemsWidth(items: readonly PluginToolbarEntry[], button: number): numbe
 
 export function PluginToolbarItems({ windowId, palette, top, right, onWidth }: { windowId: string; palette: ToolbarPalette; top: number; right: number; onWidth: (width: number) => void }) {
   const eligible = usePluginWindowEligible(windowId);
-  const items = usePluginToolbarItems();
+  const items = usePluginToolbarItems(windowId);
   const button = useToolbarRowContext().extensionButton || TOOLBAR_ITEM.button;
   const width = eligible ? itemsWidth(items, button) : 0;
   useLayoutEffect(() => onWidth(width), [onWidth, width]);

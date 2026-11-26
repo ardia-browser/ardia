@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
+import { v3Text } from "./fixtures/manifests.mjs";
 
 const keychain = new Map();
 const keychainRefuses = new Set();
@@ -60,6 +61,7 @@ let nextId = 0;
 const READER = {
   manifest: 2,
   name: "reader",
+  scope: "global",
   title: "Reader",
   icon: "book",
   main: "dist/index.js",
@@ -98,7 +100,7 @@ async function enable(...docs) {
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name, consentToken());
   await settledStops();
   resetHost();
-  host.folders = docs.map((doc) => ({ name: doc.name, status: "ok", text: JSON.stringify(doc) }));
+  host.folders = docs.map((doc) => ({ name: doc.name, status: "ok", text: v3Text(doc) }));
   await lifecycle.rescanPlugins(consentToken());
   for (const doc of docs) {
     assert.deepEqual(P().listings[doc.name].problems, [], doc.name);

@@ -1,10 +1,14 @@
 {
-  "manifest": 2,
-  "name": "v2-showcase",
-  "title": "V2 Showcase",
+  "$schema": "https://ardia.dev/schemas/plugin.v3.json",
+  "manifest": 3,
+  "id": "@test/v2-showcase",
+  "name": "V2 Showcase",
   "description": "Every v2 surface in one plugin: commands, prompts, toasts, a sidebar view, a toolbar popover, a sidecar panel, omnibox, a tab menu, a decide hook, a theme, settings and tools.",
   "version": "2.0.0",
   "icon": "sparkles",
+  "engines": {
+    "ardia": ">=0.0.0"
+  },
   "main": "dist/index.js",
   "activationEvents": [
     "onStartupFinished",

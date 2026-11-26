@@ -1,17 +1,50 @@
 {
-  "manifest": 2,
-  "name": "developer-mode",
-  "title": "Developer Mode",
+  "$schema": "https://ardia.dev/schemas/plugin.v3.json",
+  "manifest": 3,
+  "id": "@test/developer-mode",
+  "name": "Developer Mode",
   "description": "Arc's striped developer bar on the sites you're building.",
   "version": "1.0.0",
   "icon": "hammer",
+  "engines": {
+    "ardia": ">=0.0.0"
+  },
   "contributes": {
-    "settings": { "rows": [{ "key": "localAddresses", "title": "Turn On for Local Addresses", "type": "toggle", "default": false }] },
-    "siteSwitches": [{ "key": "on", "title": "Developer Mode", "icon": "hammer" }],
+    "settings": {
+      "rows": [
+        {
+          "key": "localAddresses",
+          "title": "Turn On for Local Addresses",
+          "type": "toggle",
+          "default": false
+        }
+      ]
+    },
+    "siteSwitches": [
+      {
+        "key": "on",
+        "title": "Developer Mode",
+        "icon": "hammer"
+      }
+    ],
     "pageBar": {
       "look": "stripes",
-      "when": { "siteSwitch": "on", "localAddresses": "localAddresses" },
-      "buttons": ["siteControls", "address", "copyLink", "|", "console", "network", "inspect", "|", "extensions", "split"]
+      "when": {
+        "siteSwitch": "on",
+        "localAddresses": "localAddresses"
+      },
+      "buttons": [
+        "siteControls",
+        "address",
+        "copyLink",
+        "|",
+        "console",
+        "network",
+        "inspect",
+        "|",
+        "extensions",
+        "split"
+      ]
     }
   }
 }

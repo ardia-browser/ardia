@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { v3Text } from "./fixtures/manifests.mjs";
+import { EXAMPLE } from "./fixtures/example.mjs";
 import { readFileSync } from "node:fs";
 import { after, test } from "node:test";
 const stub = await import("../../test-native/index.ts");
@@ -9,7 +11,7 @@ const { usePlugins } = await import("./store.ts");
 const lifecycle = await import("./lifecycle.ts");
 const { consentToken } = await import("../telemetry/consentPeriod.ts");
 
-const FIXTURE = JSON.parse(readFileSync(new URL("../../../../../tests/fixtures/plugins/example/plugin.json", import.meta.url), "utf8"));
+const FIXTURE = EXAMPLE;
 const S = () => useBrowser.getState();
 const P = () => usePlugins.getState();
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -36,7 +38,7 @@ async function idleTabsAndPlugin() {
   await settle();
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
   const doc = { ...FIXTURE, hooks: [...FIXTURE.hooks, "tab.idle", "tab.resumed"] };
-  host.folders = [{ name: "example", status: "ok", text: JSON.stringify(doc) }];
+  host.folders = [{ name: "example", status: "ok", text: v3Text(doc) }];
   await lifecycle.rescanPlugins(consentToken());
   assert.ok(lifecycle.requestPluginConsent("example"));
   assert.ok(lifecycle.enablePlugin("example", P().consent.hash));

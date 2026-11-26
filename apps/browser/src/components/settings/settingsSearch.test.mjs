@@ -12,7 +12,7 @@ const TOP = [
   ["shell", ["advanced.ardiaCommand"]],
   ["devtools", ["advanced.ardiaCommand"]],
   ["remote debugging", ["advanced.ardiaCommand"]],
-  ["command line", ["plugins.cli"]],
+  ["command line", ["advanced.ardiaCommand", "plugins.marketplace"]],
   ["terminal", ["advanced.ardiaCommand"]],
   ["ardia command", ["advanced.ardiaCommand"]],
   ["dark", ["appearance.theme"]],
@@ -195,7 +195,7 @@ test("results that land on the same place collapse into one", () => {
 test("rows named by the query stay apart even when they share a place", () => {
   const tabs = search(SETTINGS_INDEX, "tabs").filter((h) => h.entry.section === "Layout" && h.title.length);
   assert.ok(tabs.length >= 2, "several Layout rows say tabs in their names");
-  assert.equal(first("command line"), "plugins.cli");
+  assert.ok(["advanced.ardiaCommand", "plugins.marketplace"].includes(first("command line")));
   assert.equal(first("devtools"), "advanced.ardiaCommand");
 });
 
@@ -268,18 +268,15 @@ test("a long matching text shows the part around its match", () => {
   assert.equal(cut.text.slice(cut.ranges[0].start, cut.ranges[0].end), "Live");
 });
 
-test("the official plugins turn up by their pinned title and their manifest's keywords, and the old anchor still leads there", () => {
-  for (const query of ["command line", "plugins", "official plugins"]) assert.ok(ids(query).includes("plugins.cli") || ids(query).includes("plugins.official"), query);
-  assert.ok(ids("command line").includes("plugins.cli"));
-  assert.ok(ids("terminal").includes("plugins.cli"), "its pinned blurb says terminal");
-  assert.ok(!search(SETTINGS_INDEX, "skills").some((h) => h.entry.id === "plugins.cli"), "no keyword of the plugin's own is baked into the browser");
-  const withKeywords = settingsIndexWith({ "plugins.cli": ["skills", "cli"] });
-  assert.ok(search(withKeywords, "skills").some((h) => h.entry.id === "plugins.cli"), "the manifest's keywords find it");
+test("the marketplace turns up by what people call it, installed plugins by their manifests' keywords, and the old anchors lead there", () => {
+  for (const query of ["command line", "plugins", "official plugins", "marketplace", "get plugins"]) assert.ok(ids(query).includes("plugins.marketplace"), query);
+  assert.ok(ids("registry").includes("plugins.registries"));
+  assert.ok(!search(SETTINGS_INDEX, "skills").some((h) => h.entry.id === "plugins.plugins"), "no keyword of a plugin's own is baked into the browser");
+  const withKeywords = settingsIndexWith({ "plugins.plugins": ["skills"] });
+  assert.ok(search(withKeywords, "skills").some((h) => h.entry.id === "plugins.plugins"), "an installed plugin's keywords find it");
   assert.equal(withKeywords.length, SETTINGS_INDEX.length);
-  assert.ok(ids("plugins").includes("plugins.official"));
-  assert.equal(first("official plugins"), "plugins.official");
-  assert.equal(resolveSettingId("plugins.commandLine"), "plugins.cli");
-  assert.equal(findSetting("plugins.commandLine")?.id, "plugins.cli");
+  assert.equal(resolveSettingId("plugins.official"), "plugins.marketplace");
+  assert.equal(resolveSettingId("plugins.cli"), "plugins.marketplace");
 });
 
 test("edit distance counts a swap as one edit", () => {
@@ -397,21 +394,6 @@ test("Minimalism mode turns up for every word people use for it", () => {
 
 test("autoplay and notification blocking are found through each profile's Site settings", () => {
   for (const query of ["block autoplay on every site", "block requests to send notifications", "camera", "autoplay"]) assert.equal(first(query), "profiles.siteSettings", query);
-});
-
-test("search leaves out the official plugins when Settings › Plugins doesn't draw them, as on a build without the bundled command line", async () => {
-  const { unshownSettings } = await import("./settingsIndex.ts");
-  const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
-  const unshown = (env) => new Set(unshownSettings(DEFAULT_SETTINGS, env).split("\n").filter(Boolean));
-  const without = unshown({ top: false, officialPlugins: [] });
-  assert.ok(without.has("plugins.cli"));
-  assert.ok(without.has("plugins.official"));
-  const onlyAi = unshown({ top: false, officialPlugins: ["ai"] });
-  assert.ok(onlyAi.has("plugins.cli"));
-  assert.ok(!onlyAi.has("plugins.official"));
-  const bundled = unshown({ top: false, officialPlugins: ["cli"] });
-  assert.ok(!bundled.has("plugins.cli"));
-  assert.ok(!bundled.has("plugins.official"));
 });
 
 test("with Minimalism mode off, searching favicons or site logos still finds Minimalism tiles and says what it needs (#3609)", async () => {

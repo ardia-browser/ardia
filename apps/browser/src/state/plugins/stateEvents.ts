@@ -10,6 +10,7 @@ import { consentToken, stillValid, type ConsentToken } from "../telemetry/choice
 import { warnFor } from "../telemetry/consoleConsent";
 import { acceptsRun } from "./process";
 import { activeManifest, currentPlugins } from "./store";
+import { limitedProfiles, profileView } from "./profileScope";
 import { commitCursor, commitsAfter, forgetCommitsThrough, listenForPluginStateCommits } from "./stateCommits";
 import { packFrames, takeRound, wireLine, type Frame } from "./stateEventPacking";
 import { commitItems, diffRows, itemsFor, REMOVED, rowsOf, type Rows, type Sent, type SnapshotTopic } from "./stateProjection";
@@ -19,7 +20,9 @@ export const STATE_FLUSH_MS = 100;
 const SLOW_FLUSH_MS = 16;
 
 type Caller = { name: string; run: number };
-type Queued = Frame & { settles: [string, string | null][]; consent: ConsentToken | null };
+type Queued = Frame & { settles: [string, string | null][]; consent: ConsentToken | null; scope: string };
+
+export const profileScopeKey = (name: string) => limitedProfiles(currentPlugins(), name)?.join("\u0000") ?? "*";
 type Subscriber = Caller & { topics: Set<StateTopic>; sent: Map<StateTopic, Sent>; outbox: Queued[]; cursor: number };
 
 const subscribers = new Map<string, Subscriber>();
@@ -117,20 +120,20 @@ function settlesFor(frame: Frame, signatures: Sent): [string, string | null][] {
   return frame.completes.map((key): [string, string | null] => (key.startsWith(REMOVED) ? [key.slice(REMOVED.length), null] : [key, signatures.get(key)!]));
 }
 
-function queueTopic(sub: Subscriber, topic: StateTopic, s: BrowserState, r: Redaction, cache: Map<string, Rows>, consent: ConsentToken | null) {
+function queueTopic(sub: Subscriber, topic: StateTopic, s: BrowserState, r: Redaction, cache: Map<string, Rows>, consent: ConsentToken | null, scope: string) {
   if (topic === "navigation") {
     const items = commitItems(s, commitsAfter(sub.cursor), r);
     sub.cursor = commitCursor();
     for (const frame of items.length ? packFrames(topic, ["commits"], items, { initial: false }) : []) {
       const tokens = frame.tags as (ConsentToken | null)[];
-      sub.outbox.push({ ...frame, settles: [], consent: tokens.find((t) => stillValid(t)) ?? null });
+      sub.outbox.push({ ...frame, settles: [], consent: tokens.find((t) => stillValid(t)) ?? null, scope });
     }
     return;
   }
   const diff = diffRows(sub.sent.get(topic), rowsOf(topic as SnapshotTopic, s, r, cache));
   if (diff.before && !diff.changed.length && !diff.removed.length) return;
   const { fields, items } = itemsFor(diff, topic as SnapshotTopic);
-  for (const frame of packFrames(topic, fields, items, { initial: !diff.before })) sub.outbox.push({ ...frame, settles: settlesFor(frame, diff.signatures), consent });
+  for (const frame of packFrames(topic, fields, items, { initial: !diff.before })) sub.outbox.push({ ...frame, settles: settlesFor(frame, diff.signatures), consent, scope });
 }
 
 type Counts = Map<ConsentToken | null, number>;
@@ -149,7 +152,17 @@ function sendFrame(sub: Subscriber, frame: Queued, more: boolean, time: number, 
   counts.set(frame.consent, (counts.get(frame.consent) ?? 0) + 1);
 }
 
+export function dropOutOfScope(sub: Pick<Subscriber, "name" | "outbox" | "sent">): StateTopic[] {
+  const scope = profileScopeKey(sub.name);
+  const stale = [...new Set(sub.outbox.filter((f) => f.scope !== scope).map((f) => f.topic as StateTopic))];
+  if (!stale.length) return [];
+  sub.outbox = sub.outbox.filter((f) => !stale.includes(f.topic as StateTopic));
+  for (const topic of stale) sub.sent.delete(topic);
+  return stale;
+}
+
 function drain(sub: Subscriber, time: number, counts: Counts, consent: ConsentToken | null) {
+  for (const topic of dropOutOfScope(sub)) dirty.add(topic);
   const failed = new Set<string>();
   for (const { frame, more } of takeRound(sub.outbox)) {
     if (failed.has(frame.topic)) continue;
@@ -172,6 +185,10 @@ function flushFor(sub: Subscriber, topics: Set<StateTopic>, s: BrowserState, cac
     return;
   }
   const r = redactionFor(m.permissions);
+  const limited = limitedProfiles(currentPlugins(), sub.name);
+  const view = limited ? profileView(s, limited) : s;
+  const viewCache = limited ? new Map<string, Rows>() : cache;
+  const scope = profileScopeKey(sub.name);
   for (const topic of sub.topics) {
     if (!topics.has(topic) || !grantsTopic(m.permissions.state, topic)) continue;
     if (sub.outbox.some((f) => f.topic === topic)) {
@@ -179,7 +196,7 @@ function flushFor(sub: Subscriber, topics: Set<StateTopic>, s: BrowserState, cac
       continue;
     }
     try {
-      queueTopic(sub, topic, s, r, cache, consent);
+      queueTopic(sub, topic, view, r, viewCache, consent, scope);
     } catch (error) {
       sub.sent.delete(topic);
       notePlugin("plugin_state_events_dropped", consent);

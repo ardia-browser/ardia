@@ -21,27 +21,31 @@ public class PluginsModule: Module, PluginsNative {
 
   static func setAfterUpdateQuitConsent(_ consent: String) { PluginProgramLinks.setQuitStopsConsent(consent) }
 
-  static func legacyProgramsInstalled(_ promise: Promise) { PluginProgramLinks.legacyInstalled { promise.resolve($0) } }
-
-  static func programRegistry(_ promise: Promise) { PluginProgramLinks.registry { promise.resolve($0) } }
-
   static func sweepPrograms(_ active: [String], _ promise: Promise) { PluginProgramLinks.sweep(keeping: active) { promise.resolve(nil) } }
 
   static func unlinkPrograms(_ name: String, _ programs: [String], _ remove: Bool, _ promise: Promise) { PluginProgramLinks.unlink(name, programs: programs, remove: remove) { promise.resolve($0) } }
 
-  static func officialPlugins() -> [[String: Any]]? { PluginFolders.officialPin().map { pin in pin.entries.map { ["name": $0.name, "version": $0.version, "folderId": $0.folderId] } } }
+  static func fetchArtifact(_ spec: [String: Any], _ promise: Promise) { PluginArtifactFetch.shared.fetch(spec) { promise.resolve($0) } }
 
-  static func fetchOfficial(_ name: String, _ promise: Promise) { OfficialPluginFetch.shared.fetch(name) { promise.resolve($0) } }
+  static func cancelArtifactFetch(_ name: String) { PluginArtifactFetch.shared.cancel(name) }
 
-  static func cancelOfficialFetch(_ name: String) { OfficialPluginFetch.shared.cancel(name) }
+  static func installArchiveFile(_ path: String, _ promise: Promise) { PluginLocalInstall.archive(path) { promise.resolve($0) } }
 
-  static func promoteOfficial(_ name: String, _ folderId: String, _ approved: String) -> [String: Any] { OfficialPluginFetch.promote(name, folderId: folderId, approved: approved) }
+  static func installFolder(_ path: String, _ promise: Promise) { PluginLocalInstall.folder(path) { promise.resolve($0) } }
+
+  static func activateStore(_ name: String, _ folderId: String, _ approved: String) -> [String: Any] { PluginLocalInstall.activate(name, folderId: folderId, approved: approved) }
+
+  static func rollbackStore(_ name: String, _ expectedVersion: String, _ expectedSha256: String) -> [String: Any] { PluginLocalInstall.rollback(name, expectedVersion: expectedVersion, expectedSha256: expectedSha256) }
+
+  static func verifySignature(_ publicKey: String, _ signature: String, _ message: String) -> Bool { PluginSignatures.verify(publicKey: publicKey, signature: signature, message: message) }
+
+  static func adoptLegacy(_ from: String, _ to: String, _ promise: Promise) { PluginProgramLinks.adoptLegacy(from: from, to: to) { promise.resolve($0) } }
 
   static func hostFetch(_ spec: [String: Any], _ promise: Promise) { PluginHostFetch.run(spec) { promise.resolve($0) } }
 
   static func readPluginFile(_ name: String, _ folderId: String, _ approved: String, _ path: String) -> [String: Any] { Self.readPluginFile(name, folderId: folderId, approved: approved, path: path) }
 
-  static func remove(_ name: String, _ official: Bool, _ folderId: String?, _ promise: Promise) { Self.remove(name, official: official, folderId: folderId, promise) }
+  static func remove(_ name: String, _ source: String, _ folderId: String?, _ promise: Promise) { Self.remove(name, source: source, folderId: folderId, promise) }
 
   static func revealLog(_ name: String) { DispatchQueue.main.async { Self.showLog(name) } }
 
@@ -78,21 +82,25 @@ public class PluginsModule: Module, PluginsNative {
 
     Self.setAfterUpdateQuitConsentFunction
 
-    Self.legacyProgramsInstalledFunction
-
-    Self.programRegistryFunction
-
     Self.sweepProgramsFunction
 
     Self.unlinkProgramsFunction
 
-    Self.officialPluginsFunction
+    Self.fetchArtifactFunction
 
-    Self.fetchOfficialFunction
+    Self.cancelArtifactFetchFunction
 
-    Self.cancelOfficialFetchFunction
+    Self.installArchiveFileFunction
 
-    Self.promoteOfficialFunction
+    Self.installFolderFunction
+
+    Self.activateStoreFunction
+
+    Self.rollbackStoreFunction
+
+    Self.verifySignatureFunction
+
+    Self.adoptLegacyFunction
 
     Self.hostFetchFunction
 
@@ -183,10 +191,10 @@ public class PluginsModule: Module, PluginsNative {
     }
   }
 
-  private static func remove(_ name: String, official: Bool, folderId: String?, _ promise: Promise) {
-    PluginHost.shared.remove(name, official: official, folderId: folderId) { problem in
+  private static func remove(_ name: String, source: String, folderId: String?, _ promise: Promise) {
+    PluginHost.shared.remove(name, source: source, folderId: folderId) { problem in
       if let problem { return promise.resolve(["ok": false, "reason": problem]) }
-      if official { return promise.resolve(["ok": true]) }
+      if source == "dev" { return promise.resolve(["ok": true]) }
       PluginPageView.removeData(name) { promise.resolve(["ok": true]) }
     }
   }

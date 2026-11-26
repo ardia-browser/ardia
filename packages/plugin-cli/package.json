@@ -5,15 +5,19 @@
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "ardia-plugin": "./dist/cli.js",
-    "create-ardia-plugin": "./dist/create.js"
+    "ardia-plugin": "./bin/ardia-plugin.mjs",
+    "create-ardia-plugin": "./bin/create-ardia-plugin.mjs"
   },
   "files": [
     "dist",
     "README.md"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "bin": {
+      "ardia-plugin": "./dist/cli.js",
+      "create-ardia-plugin": "./dist/create.js"
+    }
   },
   "repository": {
     "type": "git",

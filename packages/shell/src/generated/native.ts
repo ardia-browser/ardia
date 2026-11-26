@@ -13,7 +13,7 @@ import type { LocationPermission } from "../location";
 import type { MenuBookmarkKey, MenuItem, MenuPickEvent, MenuState, OpenSurface, SurfaceEvent, SurfaceItem } from "../menus";
 import type { NotificationOptions, NotificationPermission, NotificationPostResult, NotificationResponse } from "../notifications";
 import type { PeekRect } from "../peekStage";
-import type { OfficialFetchProgress, OfficialFetchResult, OfficialPinned, PluginAfterUpdateQuitStops, PluginExit, PluginFetchResult, PluginFetchSpec, PluginFileReadResult, PluginFolderEntry, PluginLine, PluginProgramRegistry, PluginProgramsResult, PluginProgramsSpec, PluginRemoveResult, PluginStartResult, PluginStartSpec, PluginStorageReadResult } from "../plugins";
+import type { PluginAfterUpdateQuitStops, PluginArtifactProgress, PluginArtifactResult, PluginArtifactSpec, PluginExit, PluginFetchResult, PluginFetchSpec, PluginFileReadResult, PluginFolderEntry, PluginLegacyAdoption, PluginLine, PluginLocalInstallResult, PluginProgramsResult, PluginProgramsSpec, PluginRemoveResult, PluginSource, PluginStartResult, PluginStartSpec, PluginStorageReadResult, PluginStoreSwitchResult } from "../plugins";
 import type { ReportEvent, UploadReply } from "../report";
 import type { ScriptCommand, ScriptState } from "../scripting";
 import type { DevDragAction, DevDragPayload, LaunchAtLoginStatus, MagnifyUpdate, MenuShortcut, ShortcutModifier } from "../system";
@@ -409,31 +409,33 @@ export type PluginsNative = {
   linkPrograms(spec: PluginProgramsSpec): Promise<PluginProgramsResult>;
   takeAfterUpdateQuitStops(): Promise<PluginAfterUpdateQuitStops>;
   setAfterUpdateQuitConsent(consent: string): void;
-  legacyProgramsInstalled(): Promise<string[]>;
-  programRegistry(): Promise<PluginProgramRegistry>;
   sweepPrograms(active: string[]): Promise<void>;
   unlinkPrograms(name: string, programs: string[], remove: boolean): Promise<{ ok: boolean }>;
-  officialPlugins(): Promise<OfficialPinned[] | null>;
-  fetchOfficial(name: string): Promise<OfficialFetchResult>;
-  cancelOfficialFetch(name: string): void;
-  promoteOfficial(name: string, folderId: string, approved: string): Promise<{ ok: true } | { ok: false; reason: string }>;
+  fetchArtifact(spec: PluginArtifactSpec): Promise<PluginArtifactResult>;
+  cancelArtifactFetch(name: string): void;
+  installArchiveFile(path: string): Promise<PluginLocalInstallResult>;
+  installFolder(path: string): Promise<PluginLocalInstallResult>;
+  activateStore(name: string, folderId: string, approved: string): Promise<PluginStoreSwitchResult>;
+  rollbackStore(name: string, expectedVersion: string, expectedSha256: string): Promise<PluginStoreSwitchResult>;
+  verifySignature(publicKey: string, signature: string, message: string): boolean;
+  adoptLegacy(from: string, to: string): Promise<PluginLegacyAdoption>;
   hostFetch(spec: PluginFetchSpec): Promise<PluginFetchResult>;
   storageRead(name: string): Promise<PluginStorageReadResult>;
   storageWrite(name: string, text: string): Promise<{ ok: boolean; reason?: string }>;
   readPluginFile(name: string, folderId: string, approved: string, path: string): Promise<PluginFileReadResult>;
-  remove(name: string, official: boolean, folderId: string | null): Promise<PluginRemoveResult>;
+  remove(name: string, source: PluginSource, folderId: string | null): Promise<PluginRemoveResult>;
   revealLog(name: string): void;
   revealFolder(): void;
   devSnapshotPage(name: string, path: string): Promise<boolean>;
   addListener(name: "onLine", listener: (event: PluginsNativeEvents["onLine"]) => void): { remove(): void };
   addListener(name: "onExit", listener: (event: PluginsNativeEvents["onExit"]) => void): { remove(): void };
-  addListener(name: "onOfficialFetch", listener: (event: PluginsNativeEvents["onOfficialFetch"]) => void): { remove(): void };
+  addListener(name: "onArtifactFetch", listener: (event: PluginsNativeEvents["onArtifactFetch"]) => void): { remove(): void };
 };
 
 export type PluginsNativeEvents = {
   onLine: PluginLine;
   onExit: PluginExit;
-  onOfficialFetch: OfficialFetchProgress;
+  onArtifactFetch: PluginArtifactProgress;
 };
 
 export type SystemSignalsNative = {

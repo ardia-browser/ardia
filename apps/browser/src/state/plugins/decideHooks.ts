@@ -5,6 +5,7 @@ import { notePlugin } from "../telemetry/pluginCounts";
 import { onPluginReady, pluginReadyRun } from "./activation";
 import { onProcessStopped } from "./process";
 import { activeManifest, currentPlugins } from "./store";
+import { eventProfileId, manifestInProfile } from "./profileScope";
 import { invokePluginCall } from "./tools";
 
 const PLUGIN_DECIDE_TIMEOUT_MS = 250;
@@ -36,12 +37,13 @@ export async function runPluginDecideHook(event: string, data: Record<string, un
   const deciders = pluginsDeciding(event);
   if (!deciders.length) return null;
   const timeout = decideTimeoutFor(event);
+  const profile = eventProfileId(data);
   const asked = deciders.map(async (plugin) => {
-    const m = activeManifest(currentPlugins(), plugin);
+    const m = manifestInProfile(currentPlugins(), plugin, profile);
     if (!m) return null;
     notePlugin("plugin_decide_calls", consent);
     const shown = m.permissions.fullUrls ? data : redactedEventData(data);
-    const outcome = await invokePluginCall(plugin, { kind: "decide", event, data: shown }, { kind: "host" }, timeout, { activate: false, consent });
+    const outcome = await invokePluginCall(plugin, { kind: "decide", event, data: shown }, { kind: "host" }, timeout, { activate: false, consent, profile });
     if (!outcome.ok) {
       if (outcome.message.includes("didn't answer")) notePlugin("plugin_decide_timeouts", consent);
       return null;

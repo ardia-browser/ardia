@@ -4,6 +4,7 @@ import type { PasswordField } from "../../lib/pluginPasswordManager";
 import { pageBarConsent } from "../../lib/pluginPageBar";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { contributionLines } from "./consentContributions";
+import { v3Lines } from "./consentV3";
 
 type ConsentLine = { icon: string; text: string };
 
@@ -111,7 +112,8 @@ export const CONTROL_OFF_LINE = "Control is off, as you set it, and installing t
 
 export function consentLines(m: PluginManifest, context: ConsentContext = {}): ConsentLine[] {
   const control = fullControlLine(m, context);
-  const lines: ConsentLine[] = [...(control ? [control] : []), ...runtimeLines(m), ...permissionLines(m)];
+  const extra = v3Lines(m);
+  const lines: ConsentLine[] = [...extra.slice(0, 1).filter((l) => l.icon === "exclamationmark.triangle.fill"), ...(control ? [control] : []), ...runtimeLines(m), ...permissionLines(m), ...extra.filter((l) => l.icon !== "exclamationmark.triangle.fill")];
   if (m.permissions.control && context.controlOff) lines.push({ icon: "hand.raised.slash", text: CONTROL_OFF_LINE });
   const defaults = Object.keys(m.settings.defaults);
   if (defaults.length) lines.push({ icon: "slider.horizontal.3", text: `Changes these settings while it's on: ${defaults.join(", ")}` });

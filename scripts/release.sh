@@ -155,7 +155,6 @@ if [ "$phase" != sign ]; then
   {
     echo "version $version, build $release_build, $channel${version_settings:+ (${version_settings[*]})}"
     echo "commit $(git -C "$root" rev-parse HEAD)${dirty:+ + uncommitted changes}"
-    python3 -I "$stages/official-plugins.py" describe
     echo "framework $(plutil -extract SCMRevision raw "$framework_src/Versions/Current/Resources/Info.plist" 2>/dev/null)"
     echo "framework built $(stat -f '%Sm' "$framework_src/Versions/Current/Chromium Framework")"
   } > "$dist/provenance.txt"

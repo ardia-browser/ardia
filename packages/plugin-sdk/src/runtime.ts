@@ -162,6 +162,7 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
       caller: message.caller ?? null,
       deadline: typeof message.deadline === "number" ? message.deadline : undefined,
       signal,
+      ...(typeof message.profile === "string" ? { profile: message.profile } : {}),
     };
     let body: Record<string, unknown>;
     try {
@@ -191,7 +192,7 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
     await sendResult({ call: message.call, error: `The plugin didn't activate: ${errorMessage(activationError)}` });
   }
 
-  function deliverEvent(name: string, data: Record<string, unknown>, time: number | undefined) {
+  function deliverEvent(name: string, data: Record<string, unknown>, time: number | undefined, profile?: string) {
     if (name.startsWith(STATE_PREFIX)) return subscriptions.deliverState(name, data, time);
     if (name === "plugin.values") {
       const values = (data.values ?? data) as Record<string, unknown>;
@@ -201,7 +202,7 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
     const targets = [...(registry.events.get(name) ?? []), ...(name === "plugin.values" ? [] : (registry.events.get("*") ?? []))];
     for (const listener of targets) {
       try {
-        listener(data, { name, time });
+        listener(data, { name, time, ...(profile ? { profile } : {}) });
       } catch (error) {
         report(error);
       }
@@ -242,9 +243,10 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
       subscriptions.noteDropped(record.dropped);
       const data = (typeof record.data === "object" && record.data !== null ? record.data : {}) as Record<string, unknown>;
       const time = typeof record.time === "number" ? record.time : undefined;
+      const profile = typeof record.profile === "string" ? record.profile : undefined;
       if (record.event === "plugin.values") return deliverEvent(record.event, data, time);
       if (record.event === "plugin.stopping") return void stop().catch(report);
-      return whenActive(() => deliverEvent(record.event as string, data, time));
+      return whenActive(() => deliverEvent(record.event as string, data, time, profile));
     }
   }
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 const stub = await import("../../test-native/index.ts");
+const lockfile = await import("../plugins/lockfile.ts");
 globalThis.fetch = async () => ({ status: 503 });
 const telemetryClient = await import("../telemetry/client.ts");
 telemetryClient.loadChoice();
@@ -39,7 +40,15 @@ async function folders(list) {
   await settle();
 }
 
-const pluginFolder = (name, { official = false, text = MANIFEST } = {}) => ({ name, status: "ok", text: text.replace('"password-manager"', JSON.stringify(name)), ...(official ? { official: true } : {}) });
+const officialId = (name) => `@ardia/${name.replace(/^ardia__/, "")}`;
+
+function pluginFolder(name, { official = false, text = MANIFEST } = {}) {
+  const id = official ? officialId(name) : `@test/${name}`;
+  const body = text.replace('"@test/password-manager"', JSON.stringify(id));
+  if (!official) return { name, status: "ok", text: body };
+  lockfile.updateLock((now) => ({ ...now, [id]: { id, key: name, version: "1.0.0", channel: "latest", source: { kind: "registry", url: "https://ardia.dev/r" }, sha256: "1".repeat(64), payloadDigest: null, dependencies: [], root: true, official: true, installedAt: 1 } }), null);
+  return { name, status: "ok", source: "store", folderId: `store-${"1".repeat(64)}`, text: body };
+}
 
 function turnOn(name) {
   assert.ok(lifecycle.requestPluginConsent(name), `consent for ${name}`);
@@ -55,7 +64,7 @@ test("before any password manager plugin is on, every profile keeps Ardia's mana
   shared = S().createProfile({ name: "Shared", shareWith: work });
   S().createWindow({ url: "https://a.example/", profileId: "default" });
   startPlugins();
-  await folders([pluginFolder("system-passwords", { official: true }), pluginFolder("other-passwords")]);
+  await folders([pluginFolder("ardia__system-passwords", { official: true }), pluginFolder("other-passwords")]);
   pm.startPasswordManager();
   await settle();
   assert.equal(pm.currentPasswordManager("default"), "ardia");
@@ -65,7 +74,7 @@ test("before any password manager plugin is on, every profile keeps Ardia's mana
 });
 
 test("the consent sheet names the reach and, for a built-in plugin, how many profiles move", () => {
-  const m = P().listings["system-passwords"].manifest;
+  const m = P().listings["ardia__system-passwords"].manifest;
   const lines = consentLines(m, { official: true, movesProfiles: pm.neverChosenCount() }).map((l) => l.text);
   assert.ok(lines.includes("Moves 3 profiles that never picked a password manager to Test Passwords"), lines.join("\n"));
   assert.ok(lines.some((l) => l.startsWith("Shows a key in login and verification code fields on every site")));
@@ -90,9 +99,9 @@ test("an installed plugin moves no profile on Turn On; a profile picks it explic
 });
 
 test("turning on a built-in plugin moves only profiles that never chose; explicit choices stay", async () => {
-  turnOn("system-passwords");
+  turnOn("ardia__system-passwords");
   await settle();
-  assert.equal(S().profiles.default.passwordManager, "plugin:system-passwords", "Personal never chose, so it moves and that is recorded");
+  assert.equal(S().profiles.default.passwordManager, "plugin:ardia__system-passwords", "Personal never chose, so it moves and that is recorded");
   assert.equal(S().profiles[work].passwordManager, "plugin:other-passwords", "Work's choice stays");
   assert.deepEqual(calls("setFieldProviders").at(-1)[1], ["", work].sort());
   assert.deepEqual(calls("offerToSave"), [["", false]]);
@@ -103,7 +112,7 @@ test("turning on a built-in plugin moves only profiles that never chose; explici
 
 test("a new profile follows the built-in plugin while it's on", () => {
   const later = S().createProfile({ name: "Later" });
-  assert.equal(pm.currentPasswordManager(later), "plugin:system-passwords");
+  assert.equal(pm.currentPasswordManager(later), "plugin:ardia__system-passwords");
   S().deleteProfile(later);
 });
 
@@ -119,7 +128,7 @@ test("Edit › AutoFill › Passwords… opens the system panel in a profile who
   native.calls.length = 0;
   await requestAutofill(windowId, "passwords", tabId);
   assert.deepEqual(calls("showSystemPanel"), [], "an Ardia profile gets Chrome's dropdown as before");
-  pm.choosePasswordManager("default", "plugin:system-passwords");
+  pm.choosePasswordManager("default", "plugin:ardia__system-passwords");
   await settle();
   native.calls.length = 0;
 });
@@ -198,35 +207,35 @@ test("a second code on the same page waits for the first prompt to close, and a 
 test("turning a plugin off withdraws its profiles natively before the host reports it off, and gives offer to save back", async () => {
   let seenAtCommit = null;
   const unsubscribe = usePlugins.subscribe((s, prev) => {
-    if (seenAtCommit === null && prev.records["system-passwords"]?.enabled && !s.records["system-passwords"]?.enabled) seenAtCommit = native.profiles.map((p) => p.profile);
+    if (seenAtCommit === null && prev.records["ardia__system-passwords"]?.enabled && !s.records["ardia__system-passwords"]?.enabled) seenAtCommit = native.profiles.map((p) => p.profile);
   });
-  assert.ok(await lifecycle.turnOffPlugin("system-passwords", consentToken()));
+  assert.ok(await lifecycle.turnOffPlugin("ardia__system-passwords", consentToken()));
   unsubscribe();
   assert.deepEqual(seenAtCommit, [work], "Personal was gone natively before the store said the plugin is off");
   await settle();
   assert.equal(pm.currentPasswordManager("default"), "ardia");
-  assert.equal(S().profiles.default.passwordManager, "plugin:system-passwords", "the stored choice stays for when it comes back");
+  assert.equal(S().profiles.default.passwordManager, "plugin:ardia__system-passwords", "the stored choice stays for when it comes back");
   assert.deepEqual(calls("offerToSave"), [["", true]]);
   assert.match(stub.docs.get("password-manager.json") ?? "", /"offerToSaveRestored":\[""\]/, "the give-back is marked for a later launch to read back and confirm");
   native.calls.length = 0;
-  turnOn("system-passwords");
+  turnOn("ardia__system-passwords");
   await settle();
-  assert.equal(pm.currentPasswordManager("default"), "plugin:system-passwords", "turning it back on restores the choice");
+  assert.equal(pm.currentPasswordManager("default"), "plugin:ardia__system-passwords", "turning it back on restores the choice");
   native.calls.length = 0;
 });
 
 test("a changed manifest withdraws the plugin until it's approved again", async () => {
-  await folders([pluginFolder("system-passwords", { official: true, text: MANIFEST.replace('"1.0.0"', '"1.0.1"') }), pluginFolder("other-passwords")]);
+  await folders([pluginFolder("ardia__system-passwords", { official: true, text: MANIFEST.replace('"1.0.0"', '"1.0.1"') }), pluginFolder("other-passwords")]);
   assert.equal(pm.currentPasswordManager("default"), "ardia");
   assert.deepEqual(native.profiles.map((p) => p.profile), [work]);
 });
 
 test("a choice counts only for the plugin approved under that name", async () => {
-  await folders([pluginFolder("system-passwords", { official: true })]);
+  await folders([pluginFolder("ardia__system-passwords", { official: true })]);
   assert.equal(pm.currentPasswordManager(work), "ardia", "other-passwords is gone, so Work reads as Ardia");
-  await folders([pluginFolder("system-passwords", { official: true }), pluginFolder("other-passwords", { text: MANIFEST.replace("Test Passwords", "Someone Else") })]);
+  await folders([pluginFolder("ardia__system-passwords", { official: true }), pluginFolder("other-passwords", { text: MANIFEST.replace("Test Passwords", "Someone Else") })]);
   assert.equal(pm.currentPasswordManager(work), "ardia", "a different manifest under the same name isn't the approved one");
-  lifecycle.disablePlugin("system-passwords", consentToken());
+  lifecycle.disablePlugin("ardia__system-passwords", consentToken());
   lifecycle.disablePlugin("other-passwords", consentToken());
 });
 

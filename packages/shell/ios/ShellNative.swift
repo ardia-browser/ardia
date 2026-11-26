@@ -1422,19 +1422,21 @@ protocol PluginsNative {
   static func linkPrograms(_ spec: [String: Any], _ promise: Promise)
   static func takeAfterUpdateQuitStops(_ promise: Promise)
   static func setAfterUpdateQuitConsent(_ consent: String)
-  static func legacyProgramsInstalled(_ promise: Promise)
-  static func programRegistry(_ promise: Promise)
   static func sweepPrograms(_ active: [String], _ promise: Promise)
   static func unlinkPrograms(_ name: String, _ programs: [String], _ remove: Bool, _ promise: Promise)
-  static func officialPlugins() -> [[String: Any]]?
-  static func fetchOfficial(_ name: String, _ promise: Promise)
-  static func cancelOfficialFetch(_ name: String)
-  static func promoteOfficial(_ name: String, _ folderId: String, _ approved: String) -> [String: Any]
+  static func fetchArtifact(_ spec: [String: Any], _ promise: Promise)
+  static func cancelArtifactFetch(_ name: String)
+  static func installArchiveFile(_ path: String, _ promise: Promise)
+  static func installFolder(_ path: String, _ promise: Promise)
+  static func activateStore(_ name: String, _ folderId: String, _ approved: String) -> [String: Any]
+  static func rollbackStore(_ name: String, _ expectedVersion: String, _ expectedSha256: String) -> [String: Any]
+  static func verifySignature(_ publicKey: String, _ signature: String, _ message: String) -> Bool
+  static func adoptLegacy(_ from: String, _ to: String, _ promise: Promise)
   static func hostFetch(_ spec: [String: Any], _ promise: Promise)
   static func storageRead(_ name: String) -> [String: Any]
   static func storageWrite(_ name: String, _ text: String) -> [String: Any]
   static func readPluginFile(_ name: String, _ folderId: String, _ approved: String, _ path: String) -> [String: Any]
-  static func remove(_ name: String, _ official: Bool, _ folderId: String?, _ promise: Promise)
+  static func remove(_ name: String, _ source: String, _ folderId: String?, _ promise: Promise)
   static func revealLog(_ name: String)
   static func revealFolder()
   static func devSnapshotPage(_ name: String, _ path: String, _ promise: Promise)
@@ -1444,7 +1446,7 @@ extension PluginsNative {
   static var moduleName: String { "ArdiaPlugins" }
 
   static var eventsDefinition: AnyDefinition {
-    Events("onLine", "onExit", "onOfficialFetch")
+    Events("onLine", "onExit", "onArtifactFetch")
   }
 
   static var folderFunction: AnyDefinition {
@@ -1487,14 +1489,6 @@ extension PluginsNative {
     Function("setAfterUpdateQuitConsent") { (consent: String) in Self.setAfterUpdateQuitConsent(consent) }
   }
 
-  static var legacyProgramsInstalledFunction: AnyDefinition {
-    AsyncFunction("legacyProgramsInstalled") { (promise: Promise) in Self.legacyProgramsInstalled(promise) }
-  }
-
-  static var programRegistryFunction: AnyDefinition {
-    AsyncFunction("programRegistry") { (promise: Promise) in Self.programRegistry(promise) }
-  }
-
   static var sweepProgramsFunction: AnyDefinition {
     AsyncFunction("sweepPrograms") { (active: [String], promise: Promise) in Self.sweepPrograms(active, promise) }
   }
@@ -1503,20 +1497,36 @@ extension PluginsNative {
     AsyncFunction("unlinkPrograms") { (name: String, programs: [String], remove: Bool, promise: Promise) in Self.unlinkPrograms(name, programs, remove, promise) }
   }
 
-  static var officialPluginsFunction: AnyDefinition {
-    AsyncFunction("officialPlugins") { () -> [[String: Any]]? in Self.officialPlugins() }.runOnQueue(DispatchQueue.global(qos: .utility))
+  static var fetchArtifactFunction: AnyDefinition {
+    AsyncFunction("fetchArtifact") { (spec: [String: Any], promise: Promise) in Self.fetchArtifact(spec, promise) }
   }
 
-  static var fetchOfficialFunction: AnyDefinition {
-    AsyncFunction("fetchOfficial") { (name: String, promise: Promise) in Self.fetchOfficial(name, promise) }
+  static var cancelArtifactFetchFunction: AnyDefinition {
+    Function("cancelArtifactFetch") { (name: String) in Self.cancelArtifactFetch(name) }
   }
 
-  static var cancelOfficialFetchFunction: AnyDefinition {
-    Function("cancelOfficialFetch") { (name: String) in Self.cancelOfficialFetch(name) }
+  static var installArchiveFileFunction: AnyDefinition {
+    AsyncFunction("installArchiveFile") { (path: String, promise: Promise) in Self.installArchiveFile(path, promise) }
   }
 
-  static var promoteOfficialFunction: AnyDefinition {
-    AsyncFunction("promoteOfficial") { (name: String, folderId: String, approved: String) -> [String: Any] in Self.promoteOfficial(name, folderId, approved) }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
+  static var installFolderFunction: AnyDefinition {
+    AsyncFunction("installFolder") { (path: String, promise: Promise) in Self.installFolder(path, promise) }
+  }
+
+  static var activateStoreFunction: AnyDefinition {
+    AsyncFunction("activateStore") { (name: String, folderId: String, approved: String) -> [String: Any] in Self.activateStore(name, folderId, approved) }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
+  }
+
+  static var rollbackStoreFunction: AnyDefinition {
+    AsyncFunction("rollbackStore") { (name: String, expectedVersion: String, expectedSha256: String) -> [String: Any] in Self.rollbackStore(name, expectedVersion, expectedSha256) }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
+  }
+
+  static var verifySignatureFunction: AnyDefinition {
+    Function("verifySignature") { (publicKey: String, signature: String, message: String) -> Bool in Self.verifySignature(publicKey, signature, message) }
+  }
+
+  static var adoptLegacyFunction: AnyDefinition {
+    AsyncFunction("adoptLegacy") { (from: String, to: String, promise: Promise) in Self.adoptLegacy(from, to, promise) }
   }
 
   static var hostFetchFunction: AnyDefinition {
@@ -1536,7 +1546,7 @@ extension PluginsNative {
   }
 
   static var removeFunction: AnyDefinition {
-    AsyncFunction("remove") { (name: String, official: Bool, folderId: String?, promise: Promise) in Self.remove(name, official, folderId, promise) }.runOnQueue(.main)
+    AsyncFunction("remove") { (name: String, source: String, folderId: String?, promise: Promise) in Self.remove(name, source, folderId, promise) }.runOnQueue(.main)
   }
 
   static var revealLogFunction: AnyDefinition {
@@ -1555,7 +1565,7 @@ extension PluginsNative {
 extension PluginsNative where Self: Module {
   func sendOnLine(_ payload: [String: Any?]) { sendEvent("onLine", payload) }
   func sendOnExit(_ payload: [String: Any?]) { sendEvent("onExit", payload) }
-  func sendOnOfficialFetch(_ payload: [String: Any?]) { sendEvent("onOfficialFetch", payload) }
+  func sendOnArtifactFetch(_ payload: [String: Any?]) { sendEvent("onArtifactFetch", payload) }
 }
 
 protocol SystemSignalsNative {

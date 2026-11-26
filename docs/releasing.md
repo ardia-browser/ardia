@@ -110,9 +110,8 @@ phones a build that isn't a release says Dev.
   2047999; `apps/phone/scripts/android-version.ts`). A build without one is Dev. It ships as an APK on GitHub Releases
   through `android-release.yml`, as a draft prerelease `android-v<version>` that only the owner publishes
   (`docs/phone.md` › Android release). No Play listing.
-- **CLI.** It has its own version and releases in ardia-browser/plugins (`cli-v<version>`). Each Ardia release, nightly
-  or stable, bundles the version pinned in `apps/browser/official-plugins.json` and signs it with the app
-  (`docs/cli.md`); a new command reaches users when the pin moves and the next Ardia release ships.
+- **CLI.** It has its own version and releases in ardia-browser/plugins, published as `@ardia/cli` through the plugin
+  registry (`docs/cli.md`); a new command reaches users on their next plugin update check, with no Ardia release.
 - **Windows.** Every release, nightly or stable, builds it in the Release workflow's `windows` job, attaches
   `Ardia-<version>-windows-<cpu>-setup.exe` for x64 and arm64 with the engine's source
   `Ardia-<version>-windows-source.tar.xz` (`scripts/windows/engine-source.sh`), and refreshes the one feed its updater reads, on the
@@ -338,9 +337,7 @@ the engine if `engine/` changed (below).
 - **checks**: `pnpm typecheck`, `pnpm test`, `pnpm shaders:check`.
 - **build**, on Blacksmith's `blacksmith-12vcpu-macos-27` runner (Xcode 27.1, the same build as here), with no secrets: fetches the engine for
   this exact `engine/` tree (`fetch-engine.sh`), installs (pnpm, Pods), runs
-  `scripts/release.sh <version> --phase build` (the archive, signed ad hoc, and the official plugins pinned in
-  `apps/browser/official-plugins.json`, fetched and SHA-256 checked by `scripts/release/official-plugins.py bundle`)
-  and uploads them as one tar. Caches: pnpm, Pods with Hermes, uBO, the engine and Xcode's
+  `scripts/release.sh <version> --phase build` (the archive, signed ad hoc) and uploads it as one tar. Caches: pnpm, Pods with Hermes, uBO, the engine and Xcode's
   compilation cache (per Xcode build and month).
 - **sign** installs nothing and restores no cache, so no dependency code runs next to the keys. A dry run's sign step runs the preflight as `--mode dry-run` (`RELEASE_PREFLIGHT_MODE`), not as a local
   candidate, so a feed it can't read fails it there too. The step no

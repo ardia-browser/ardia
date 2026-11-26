@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { v3Text } from "./fixtures/manifests.mjs";
+import { EXAMPLE } from "./fixtures/example.mjs";
 import { readFileSync } from "node:fs";
 import { after, beforeEach, test } from "node:test";
 const stub = await import("../../test-native/index.ts");
@@ -22,7 +24,7 @@ const { consentToken } = await import("../telemetry/consentPeriod.ts");
 const { logConsent } = await import("../telemetry/consoleConsent.ts");
 setConsentPeriod(true, "plugins-test");
 
-const FIXTURE = readFileSync(new URL("../../../../../tests/fixtures/plugins/example/plugin.json", import.meta.url), "utf8");
+const FIXTURE = v3Text(EXAMPLE);
 const S = () => useBrowser.getState();
 const P = () => usePlugins.getState();
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -84,7 +86,7 @@ test("an installed plugin stays off until its consent is accepted, then starts i
   assert.equal(lifecycle.enablePlugin("example", "0".repeat(64)), false, "a stale hash never turns it on");
   const run = await enabled();
   assert.ok(run > 0);
-  assert.deepEqual(host.starts.at(-1), { name: "example", run: ["/usr/bin/python3", "helper.py"], memoryMB: 256, network: false, folderId: "", approved: P().records.example.approved, page: true, launch: host.starts.at(-1).launch });
+  assert.deepEqual(host.starts.at(-1), { name: "example", run: ["helper.py"], memoryMB: 256, network: false, folderId: "", approved: P().records.example.approved, page: true, launch: host.starts.at(-1).launch });
   assert.equal(typeof host.starts.at(-1).launch, "number", "each start carries the launch its lines must name");
   assert.equal(P().processes.example.state, "running");
   const counts = takePluginCounts();
@@ -94,7 +96,7 @@ test("an installed plugin stays off until its consent is accepted, then starts i
 
 test("the consent sheet names every reach the plugin gets", () => {
   const lines = consentLines(P().listings.example.manifest).map((l) => l.text).join("\n");
-  for (const words of ["/usr/bin/python3 helper.py", "can't connect to anything or accept connections", "title of your tabs", "tab.activated", "Runs Ardia commands", "commandBarStart", "ardia://example", "handed the tab you're on", "Say Hello", "Offers tools"]) assert.ok(lines.includes(words), words);
+  for (const words of ["helper.py", "can't connect to anything or accept connections", "title of your tabs", "tab.activated", "Runs Ardia commands", "commandBarStart", "ardia://example", "handed the tab you're on", "Say Hello", "Offers tools"]) assert.ok(lines.includes(words), words);
 });
 
 test("settings defaults apply on enable and go back on disable, unless changed since", async () => {
@@ -218,9 +220,9 @@ test("a changed manifest stops everything until reviewed; disabling withdraws co
   const w = S().createWindow({ url: "https://a.example/" });
   const page = openPluginPage(w, "example");
   assert.equal(pageViewUrl(P(), "example"), "ardia-plugin://example/page/index.html");
-  const changed = JSON.parse(FIXTURE);
+  const changed = structuredClone(EXAMPLE);
   changed.permissions.push("network");
-  await install(JSON.stringify(changed));
+  await install(v3Text(changed));
   assert.ok(needsReview(P(), "example"));
   assert.equal(activeManifest(P(), "example"), null);
   assert.equal(P().processes.example, undefined);
@@ -264,10 +266,10 @@ test("socket methods list, enable (through the sheet), disable and remove", asyn
 
 test("a helper can't reach through another plugin's tools to a permission it wasn't granted", async () => {
   const run = await enabled();
-  const other = JSON.parse(FIXTURE);
+  const other = structuredClone(EXAMPLE);
   other.name = "other";
   other.permissions = ["tabs", "commands", "network"];
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "other", status: "ok", text: JSON.stringify(other) }];
+  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "other", status: "ok", text: v3Text(other) }];
   await lifecycle.rescanPlugins(consentToken());
   assert.ok(lifecycle.requestPluginConsent("other"));
   assert.ok(lifecycle.enablePlugin("other", P().consent.hash));
@@ -308,10 +310,10 @@ test("two plugins setting the same setting: whichever leaves, the other's value 
   startPlugins();
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
   const original = S().settings.commandBarStart;
-  const second = JSON.parse(FIXTURE);
+  const second = structuredClone(EXAMPLE);
   second.name = "second";
   second.settings.defaults = { commandBarStart: { openTabs: { limit: 2 } } };
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "second", status: "ok", text: JSON.stringify(second) }];
+  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "second", status: "ok", text: v3Text(second) }];
   await lifecycle.rescanPlugins(consentToken());
   const on = (name) => (assert.ok(lifecycle.requestPluginConsent(name)), assert.ok(lifecycle.enablePlugin(name, P().consent.hash)));
   on("example");
@@ -324,9 +326,9 @@ test("two plugins setting the same setting: whichever leaves, the other's value 
 });
 
 test("a plugin can't set settings that need their own approval", async () => {
-  const doc = JSON.parse(FIXTURE);
+  const doc = structuredClone(EXAMPLE);
   doc.settings.defaults = { launchActions: ["newTab"] };
-  await install(JSON.stringify(doc));
+  await install(v3Text(doc));
   assert.equal(P().listings.example.manifest, null);
   assert.ok(P().listings.example.problems.some((p) => p.includes("launchActions needs its own approval")));
 });
@@ -366,9 +368,9 @@ test("two plugins setting the same value: turning the first off keeps it while t
   S().hydrate({});
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
   const original = S().settings.commandBarStart;
-  const twin = JSON.parse(FIXTURE);
+  const twin = structuredClone(EXAMPLE);
   twin.name = "twin";
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "twin", status: "ok", text: JSON.stringify(twin) }];
+  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "twin", status: "ok", text: v3Text(twin) }];
   await lifecycle.rescanPlugins(consentToken());
   for (const name of ["example", "twin"]) assert.ok(lifecycle.requestPluginConsent(name) && lifecycle.enablePlugin(name, P().consent.hash));
   lifecycle.disablePlugin("example");
@@ -407,9 +409,9 @@ test("plugin commands stay out of private windows and never hand a private tab t
 });
 
 test("a page's context belongs to the plugin, the address and the approval it was handed to", async () => {
-  const full = JSON.parse(FIXTURE);
+  const full = structuredClone(EXAMPLE);
   full.permissions = ["tabs", "fullUrls", "commands"];
-  await install(JSON.stringify(full));
+  await install(v3Text(full));
   assert.ok(lifecycle.requestPluginConsent("example") && lifecycle.enablePlugin("example", P().consent.hash));
   const w = S().createWindow({ url: "https://a.example/read?token=1" });
   const reading = S().windows[w].tabIds[0];
@@ -433,9 +435,9 @@ test("a page's context belongs to the plugin, the address and the approval it wa
 });
 
 test("a command named page doesn't collide with the page's own entry", async () => {
-  const doc = JSON.parse(FIXTURE);
+  const doc = structuredClone(EXAMPLE);
   doc.commands.push({ name: "page", title: "Say Page", tool: "hello" });
-  await install(JSON.stringify(doc));
+  await install(v3Text(doc));
   assert.ok(lifecycle.requestPluginConsent("example") && lifecycle.enablePlugin("example", P().consent.hash));
   await settle();
   const ids = pluginBarActions(P()).map((a) => a.id);
@@ -454,13 +456,13 @@ test("defaults unwind in the order they were applied, even when a later plugin s
   S().hydrate({});
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
   const original = S().settings.commandBarStart;
-  const dark = JSON.parse(FIXTURE);
+  const dark = structuredClone(EXAMPLE);
   dark.name = "dark";
   dark.settings.defaults = { commandBarStart: { openTabs: { limit: 2 } } };
-  const light = JSON.parse(FIXTURE);
+  const light = structuredClone(EXAMPLE);
   light.name = "light";
   light.settings.defaults = { commandBarStart: original };
-  host.folders = [{ name: "dark", status: "ok", text: JSON.stringify(dark) }, { name: "light", status: "ok", text: JSON.stringify(light) }];
+  host.folders = [{ name: "dark", status: "ok", text: v3Text(dark) }, { name: "light", status: "ok", text: v3Text(light) }];
   await lifecycle.rescanPlugins(consentToken());
   for (const name of ["dark", "light"]) assert.ok(lifecycle.requestPluginConsent(name) && lifecycle.enablePlugin(name, P().consent.hash));
   assert.deepEqual(S().settings.commandBarStart, original);
@@ -553,10 +555,10 @@ test("approving a plugin's changed manifest takes its old default out of the sta
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
   const original = S().settings.commandBarStart;
   const make = (name, limit) => {
-    const doc = JSON.parse(FIXTURE);
+    const doc = structuredClone(EXAMPLE);
     doc.name = name;
     doc.settings.defaults = { commandBarStart: { openTabs: { limit } } };
-    return { name, status: "ok", text: JSON.stringify(doc) };
+    return { name, status: "ok", text: v3Text(doc) };
   };
   host.folders = [make("first", 2), make("second", 3)];
   await lifecycle.rescanPlugins(consentToken());
@@ -574,9 +576,9 @@ test("approving a plugin's changed manifest takes its old default out of the sta
 test("a plugin named like an Object property gets its own record", async () => {
   S().hydrate({});
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
-  const doc = JSON.parse(FIXTURE);
+  const doc = structuredClone(EXAMPLE);
   doc.name = "constructor";
-  host.folders = [{ name: "constructor", status: "ok", text: JSON.stringify(doc) }];
+  host.folders = [{ name: "constructor", status: "ok", text: v3Text(doc) }];
   await lifecycle.rescanPlugins(consentToken());
   lifecycle.setPluginValue("constructor", "loud", true);
   assert.deepEqual(P().records.constructor.applied, {}, "a whole record, not Object's constructor");
@@ -588,10 +590,10 @@ test("a value you chose between two plugins comes back when both leave, in eithe
   S().hydrate({});
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
   const make = (name, limit) => {
-    const doc = JSON.parse(FIXTURE);
+    const doc = structuredClone(EXAMPLE);
     doc.name = name;
     doc.settings.defaults = { commandBarStart: { openTabs: { limit } } };
-    return { name, status: "ok", text: JSON.stringify(doc) };
+    return { name, status: "ok", text: v3Text(doc) };
   };
   host.folders = [make("first", 2), make("second", 3)];
   await lifecycle.rescanPlugins(consentToken());
@@ -637,10 +639,10 @@ test("a page opens a tab only by asking its helper, which needs the commands per
   assert.ok(opened.result, JSON.stringify(opened));
   assert.ok(Object.values(S().tabs).some((t) => t.url === "https://b.example/from-the-page"));
   assert.equal(Object.keys(S().tabs).length, before + 1);
-  const bare = JSON.parse(FIXTURE);
+  const bare = structuredClone(EXAMPLE);
   bare.permissions = ["tabs"];
   bare.commands = bare.commands.filter((c) => !c.tool || c.tool !== "newtab");
-  await install(JSON.stringify(bare));
+  await install(v3Text(bare));
   assert.ok(lifecycle.requestPluginConsent("example") && lifecycle.enablePlugin("example", P().consent.hash));
   await settle();
   assert.equal((await ask("open", { urls: ["https://c.example/"] }, P().processes.example.run)).error.code, "refused");
@@ -877,7 +879,7 @@ test("a disable reported to the ardia command, and a removal, wait until plugins
   try {
     const removal = await lifecycle.removePlugin("example");
     assert.equal(removal.ok, false, "nothing is deleted while the disable that must precede it isn't saved");
-    assert.match(removal.reason, /plugins.json couldn't be saved/);
+    assert.match(removal.reason, /couldn't save its plugin settings/);
     assert.deepEqual(host.removed, []);
   } finally {
     stub.refusedWrites.landingFails = false;
@@ -896,9 +898,9 @@ test("a disable reported to the ardia command, and a removal, wait until plugins
 
 test("when a helper that called another plugin's tools stops, its waiting calls are released and cancelled", async () => {
   await enabled();
-  const second = JSON.parse(FIXTURE);
+  const second = structuredClone(EXAMPLE);
   second.name = "second";
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "second", status: "ok", text: JSON.stringify(second) }];
+  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "second", status: "ok", text: v3Text(second) }];
   await lifecycle.rescanPlugins(consentToken());
   assert.ok(lifecycle.requestPluginConsent("second") && lifecycle.enablePlugin("second", P().consent.hash));
   await settle();

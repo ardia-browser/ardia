@@ -4,7 +4,6 @@ import { describeCommandInstall, installCommandInBackground, useCommandInstall }
 import { useControlServer } from "../../../state/app/programControl";
 import { programControlOn, setControlFromSettings, setProgramControl } from "../../../state/app/programControlSetting";
 import { usePluginsWithPrograms, usePluginPrograms } from "../../../state/plugins/hooks";
-import { useProgramRegistry } from "../../../state/plugins/programRegistry";
 import { canRelink, relinkPrograms } from "../../../state/plugins/actions";
 import type { ProgramsState } from "../../../state/plugins/store";
 import { goToSettingsPane, type SettingsPlace } from "../../../state/settings/settingsWindows";
@@ -149,9 +148,6 @@ function programsLine(programs: ProgramsState | undefined): string {
   if (programs?.state === "linked") {
     const refused = Object.entries(programs.refused).map(([name, reason]) => `${name}: ${reason}`);
     if (refused.length) return refused.join("; ");
-    if (programs.adoption === "retrying") return "Waiting for the old install to finish updating…";
-    if (programs.adoption === "busy") return "The old install is busy updating. Try again in a moment.";
-    if (programs.adoption === "failed") return "The old install couldn't be switched over to it.";
     return programs.linked.length ? `On your PATH: ${programs.linked.join(", ")}` : "Nothing on your PATH.";
   }
   if (programs?.state === "failed") return `Not on your PATH: ${programs.reason}`;
@@ -198,7 +194,6 @@ function ProgramControlRow() {
 
 function ProgramsRows() {
   const plugins = usePluginsWithPrograms();
-  const registryUnreadable = useProgramRegistry((s) => s.failClosed);
   return (
     <>
       <ProgramControlRow />
@@ -210,11 +205,6 @@ function ProgramsRows() {
             <Text size="caption" tone="textSecondary" style={NOTE()}>
               {plugins.length ? "Commands your plugins put in your terminal." : "None of your plugins add commands to your terminal."}
             </Text>
-            {registryUnreadable ? (
-              <Text selectable size="caption" tone="destructive" style={NOTE()}>
-                Ardia's list of program names kept for its built-in plugins is missing or damaged, so no program goes on PATH. Reinstall Ardia from ardia.dev.
-              </Text>
-            ) : null}
           </View>
         }
       />

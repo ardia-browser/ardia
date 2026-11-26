@@ -9,6 +9,8 @@ export type SecretOutcome<T> = { ok: true; value: T } | { ok: false; code: "bad_
 const secretAccount = (plugin: string, key: string) => `ardia.plugin.${plugin}.${key}`;
 const indexAccount = (plugin: string) => `ardia.plugin-index.${plugin}`;
 
+export const secretSpace = (plugin: string, profileId: string | null) => (profileId ? `${plugin}@${profileId}` : plugin);
+
 const queues = new Map<string, Promise<unknown>>();
 
 function queued<T>(plugin: string, work: () => Promise<T>): Promise<T> {
@@ -112,6 +114,11 @@ export const pluginSecretKeys = (plugin: string): Promise<string[]> => queued(pl
   const index = await indexOf(plugin);
   return index.ok ? index.keys : [];
 });
+
+export async function clearPluginSecretsEverywhere(plugin: string, profileIds: readonly string[]): Promise<SecretsCleared> {
+  const all = await Promise.all([plugin, ...profileIds.map((id) => secretSpace(plugin, id))].map(clearPluginSecrets));
+  return { ok: all.every((c) => c.ok), remaining: all.flatMap((c) => c.remaining), ...(all.find((c) => c.reason)?.reason ? { reason: all.find((c) => c.reason)!.reason } : {}) };
+}
 
 export function clearPluginSecrets(plugin: string): Promise<SecretsCleared> {
   return queued(plugin, async () => {

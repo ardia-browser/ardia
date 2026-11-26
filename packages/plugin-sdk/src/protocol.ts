@@ -262,6 +262,7 @@ export type PluginCallMessage = {
   context?: Record<string, unknown>;
   caller?: unknown;
   deadline?: number;
+  profile?: string;
   command?: string;
   provider?: string;
   query?: string;

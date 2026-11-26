@@ -10,6 +10,11 @@ export const isTestInstance = (): boolean => current().testInstance;
 
 export const feedbackURLOverride = (): string | null => current().feedbackURL ?? null;
 
+export const pluginRegistryOverrides = (): { url: string | null; registryKeys: string | null; nativeKeys: string | null } => {
+  const c = current();
+  return { url: c.pluginRegistryURL ?? null, registryKeys: c.pluginRegistryKeys ?? null, nativeKeys: c.pluginNativeKeys ?? null };
+};
+
 export const switchOverride = (name: string): boolean | undefined => current().switches[name];
 
 const testValue = (key: string): string | null => current().test[key] ?? null;

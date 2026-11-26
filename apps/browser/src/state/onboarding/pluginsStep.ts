@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { claimOnboardingConsent, CONFIRM_REFUSED, confirmConsentAs, dismissConsentAs, releaseOnboardingConsent } from "../plugins/consentSurface";
-import { cancelOfficialInstall, installOfficialPlugin, type OfficialPlugin } from "../plugins/official";
-import { officialTitle, wasCancelled } from "../plugins/officialView";
+import { cancelInstall, installPlugin } from "../plugins/installer";
+import { wasCancelled, type FeaturedPlugin } from "../plugins/featured";
+import { refreshCatalog } from "../plugins/marketplace";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
-import { noteOfficialPlugin } from "../telemetry/officialPluginCounts";
+import { notePlugin } from "../telemetry/pluginCounts";
 import { activeSteps, confirmAnswer, goToStep, skipStep, STEPS, useOnboarding } from "./onboarding";
 import { PRESELECTED_PLUGINS, pluginsStepShown } from "./pluginsOffer";
 
@@ -19,20 +20,24 @@ type PluginsStepState = {
   run: number;
 };
 
-type InstallOutcome = Awaited<ReturnType<typeof installOfficialPlugin>>;
+type InstallOutcome = Awaited<ReturnType<typeof installPlugin>>;
+
+type OfficialPlugin = FeaturedPlugin;
+
+const noteOnboarding = (event: "shown" | "installed" | "skipped" | "failed", consent?: ConsentToken | null) => notePlugin(`onboarding_plugin_${event}`, consent);
 
 export const REFUSED_REASON = CONFIRM_REFUSED;
 
 const FRESH = { picks: {}, phase: "offer", current: null, failures: {}, installed: [], shown: [] } satisfies Omit<PluginsStepState, "run">;
 
-function installOrRefusal(name: string, run: number): Promise<InstallOutcome> {
+function installOrRefusal(plugin: FeaturedPlugin, run: number): Promise<InstallOutcome> {
   const alive = () => inPluginsStep(run);
-  return installOfficialPlugin(name, { showSheet: false, alive, onConsent: (id) => void claimOnboardingConsent(id, useOnboarding.getState().windowId, alive) });
+  return installPlugin({ id: plugin.id }, { showSheet: false, alive, onConsent: (id) => void claimOnboardingConsent(id, useOnboarding.getState().windowId, alive) });
 }
 
 function stopInstalling() {
   const current = now().current;
-  if (current) cancelOfficialInstall(current);
+  if (current) cancelInstall(current);
   releaseOnboardingConsent();
 }
 
@@ -44,7 +49,7 @@ export function notePluginsShown(names: readonly string[]) {
   const fresh = names.filter((name) => !now().shown.includes(name));
   if (!fresh.length) return;
   usePluginsStep.setState((s) => ({ shown: [...s.shown, ...fresh] }));
-  for (const name of fresh) noteOfficialPlugin("onboarding", "shown", name);
+  for (const _name of fresh) noteOnboarding("shown");
 }
 
 export const usePluginsStep = create<PluginsStepState>()(() => ({ ...FRESH, run: 0 }));
@@ -55,7 +60,7 @@ export const isPicked = (plugin: OfficialPlugin, picks: Record<string, boolean>)
 
 export const pickedPlugins = (plugins: readonly OfficialPlugin[], picks: Record<string, boolean>) => plugins.filter((p) => isPicked(p, picks));
 
-const installedLines = (plugins: readonly OfficialPlugin[], installed: readonly string[]) => plugins.filter((p) => installed.includes(p.name)).map((p) => `${officialTitle(p)} installed`);
+const installedLines = (plugins: readonly OfficialPlugin[], installed: readonly string[]) => plugins.filter((p) => installed.includes(p.name)).map((p) => `${p.title} installed`);
 
 export function primaryTitle(plugins: readonly OfficialPlugin[], state: Pick<PluginsStepState, "picks" | "phase">): string {
   if (state.phase === "working") return "Installing…";
@@ -74,13 +79,14 @@ export function resetPluginsStep() {
 
 const inPluginsStep = (run: number) => now().run === run && useOnboarding.getState().step === "plugins" && !!useOnboarding.getState().windowId;
 
-async function installEach(names: readonly string[], run: number, consent: ConsentToken | null): Promise<"done" | "cancelled" | "left"> {
-  for (const name of names) {
+async function installEach(plugins: readonly FeaturedPlugin[], run: number, consent: ConsentToken | null): Promise<"done" | "cancelled" | "left"> {
+  for (const plugin of plugins) {
+    const name = plugin.name;
     if (!inPluginsStep(run)) return "left";
     usePluginsStep.setState((s) => ({ phase: "working", current: name, failures: Object.fromEntries(Object.entries(s.failures).filter(([failed]) => failed !== name)) }));
-    const result = await installOrRefusal(name, run);
+    const result = await installOrRefusal(plugin, run);
     if (wasCancelled(result)) return inPluginsStep(run) ? "cancelled" : "left";
-    noteOfficialPlugin("onboarding", result.ok ? "installed" : "failed", name, consent);
+    noteOnboarding(result.ok ? "installed" : "failed", consent);
     if (!inPluginsStep(run)) continue;
     if (result.ok) usePluginsStep.setState((s) => ({ installed: [...s.installed, name] }));
     else usePluginsStep.setState((s) => ({ failures: { ...s.failures, [name]: result.reason } }));
@@ -88,9 +94,9 @@ async function installEach(names: readonly string[], run: number, consent: Conse
   return inPluginsStep(run) ? "done" : "left";
 }
 
-async function runInstall(names: readonly string[], consent: ConsentToken | null) {
+async function runInstall(plugins: readonly FeaturedPlugin[], consent: ConsentToken | null) {
   const run = now().run;
-  const outcome = await installEach(names, run, consent);
+  const outcome = await installEach(plugins, run, consent);
   if (outcome === "left") return;
   const failed = Object.keys(now().failures).length > 0;
   usePluginsStep.setState({ current: null, phase: outcome === "cancelled" ? (failed ? "failed" : "offer") : failed ? "failed" : "installed" });
@@ -99,23 +105,28 @@ async function runInstall(names: readonly string[], consent: ConsentToken | null
 export function installPickedPlugins(plugins: readonly OfficialPlugin[]): Promise<void> {
   const state = now();
   if (state.phase !== "offer") return Promise.resolve();
-  const names = pickedPlugins(plugins, state.picks).map((p) => p.name);
-  if (!names.length) {
+  const picked = pickedPlugins(plugins, state.picks);
+  if (!picked.length) {
     finishPluginsStep(plugins);
     return Promise.resolve();
   }
-  return runInstall(names, consentToken());
+  return runInstall(picked, consentToken());
 }
 
-export function installPluginAgain(name: string): Promise<void> {
+export function installPluginAgain(plugin: FeaturedPlugin): Promise<void> {
   if (now().phase !== "failed") return Promise.resolve();
-  return runInstall([name], consentToken());
+  return runInstall([plugin], consentToken());
+}
+
+export function checkRegistryAgain(): Promise<void> {
+  notePlugin("onboarding_registry_offline");
+  return refreshCatalog(true);
 }
 
 export function finishPluginsStep(plugins: readonly OfficialPlugin[]) {
   const state = now();
   if (state.phase === "working" || useOnboarding.getState().step !== "plugins") return;
-  for (const plugin of plugins) if (plugin.state === "available" && !state.installed.includes(plugin.name) && !(plugin.name in state.failures)) noteOfficialPlugin("onboarding", "skipped", plugin.name);
+  for (const plugin of plugins) if (plugin.state === "available" && !state.installed.includes(plugin.name) && !(plugin.name in state.failures)) noteOnboarding("skipped");
   const lines = installedLines(plugins, state.installed);
   resetPluginsStep();
   confirmAnswer("plugins", {}, lines);
@@ -124,7 +135,7 @@ export function finishPluginsStep(plugins: readonly OfficialPlugin[]) {
 export function skipPluginsStep(plugins: readonly OfficialPlugin[]) {
   if (useOnboarding.getState().step !== "plugins") return;
   const state = now();
-  if (state.phase !== "working") for (const plugin of plugins) if (plugin.state === "available" && !(plugin.name in state.failures)) noteOfficialPlugin("onboarding", "skipped", plugin.name);
+  if (state.phase !== "working") for (const plugin of plugins) if (plugin.state === "available" && !(plugin.name in state.failures)) noteOnboarding("skipped");
   stopInstalling();
   resetPluginsStep();
   skipStep();

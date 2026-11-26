@@ -124,10 +124,8 @@ package job red after almost every merge.
   1. reads the version from `MARKETING_VERSION` in the Xcode project, as `scripts/release.sh` does;
   2. fetches the engine (cached per engine key and table);
   3. builds `apps/desktop/dist/linux`;
-  4. fetches the `ardia` command pinned in `apps/browser/official-plugins.json` (its linux-x64 tarball, from
-     ardia-browser/plugins' release, SHA-256 checked) and names it `ardia-cli-<version>-linux-x64.tar.gz` for the package
-     (`scripts/release/official-plugins.py linux-cli`); until the pin is published it packages without the CLI, with a
-     warning, and the smoke skips the `cli-*` assertions;
+  4. packages without the `ardia` command (it is the `@ardia/cli` plugin now, and Linux doesn't run plugins yet), so
+     the smoke skips the `cli-*` assertions;
   5. prepares uBlock Origin with `scripts/linux/fetch-ubo.sh` (cached);
   6. runs `scripts/linux/package.py --out <engine> --version <version> --cli <CLI tarball> --deb <path> --rpm <path>
      --appimage <path>`, which seeds the packaged uBlock Origin by running the staged `chrome` once

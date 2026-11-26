@@ -17,6 +17,9 @@ NSString *const kTraceVariable = @"ARDIA_TRACE";
 NSString *const kTestVariable = @"ARDIA_TEST";
 NSString *const kPrewarmVariable = @"ARDIA_PREWARM";
 NSString *const kFeedbackURLVariable = @"ARDIA_FEEDBACK_URL";
+NSString *const kPluginRegistryURLVariable = @"ARDIA_PLUGIN_REGISTRY_URL";
+NSString *const kPluginRegistryKeyVariable = @"ARDIA_PLUGIN_REGISTRY_PUBLIC_KEY";
+NSString *const kPluginNativeKeyVariable = @"ARDIA_PLUGIN_NATIVE_PUBLIC_KEY";
 NSString *const kSwitchesCacheDocument = @"switches-cache.json";
 NSString *const kShellVariable = @"ARDIA_SHELL";
 NSString *const kShellArgument = @"--ardia-shell=webui";
@@ -32,7 +35,7 @@ NSString *const kEngineDataFolder = @"Chromium";
 NSArray<NSString *> *InstanceKeys() {
   return @[
     @"jsLocation", @"chromiumSwitches", @"downloadsDir", @"updateFeed", @"allowAudio", @"allowOcclusion", @"releaseNotes",
-    @"cliHome", @"cliBinDir", @"cliUrl", @"syncFolder", @"sharedFolders", @"importSourceDir", @"importSafariHome", @"officialPluginsFrom",
+    @"cliHome", @"cliBinDir", @"cliUrl", @"syncFolder", @"sharedFolders", @"importSourceDir", @"importSafariHome", @"pluginArtifactsFrom",
   ];
 }
 
@@ -52,7 +55,7 @@ NSArray<NSString *> *AppTestKeys() {
   return @[
     @"pipSelfTest", @"pipHover", @"fakeFullScreenMs", @"shadersKeyWindow", @"peekStrict", @"peekMesh", @"peekReady", @"peekReduceMotion", @"peekSlow", @"importSecret", @"importDiaBundleId", @"importDiaWindows",
     @"cliInstallScript", @"legacySource", @"legacyCrashAfter", @"bangsUrl", @"onboarding", @"whatsNew", @"telemetry",
-    @"liveMock", @"calendarFixture", @"appMenu", @"appDialog", @"loginsTimeout", @"screenRecording", @"systemLocationPermission", @"officialPin",
+    @"liveMock", @"calendarFixture", @"appMenu", @"appDialog", @"loginsTimeout", @"screenRecording", @"systemLocationPermission",
     @"applePasswordsPanel", @"systemPanelRace", @"controlDoorbell",
   ];
 }
@@ -60,7 +63,7 @@ NSArray<NSString *> *AppTestKeys() {
 NSArray<NSString *> *KeysWhoseValuesHoldCommas() {
   return @[
     @"chromiumSwitches", @"downloadsDir", @"updateFeed", @"cliHome", @"cliBinDir", @"cliUrl", @"syncFolder", @"sharedFolders", @"importSourceDir",
-    @"importSafariHome", @"importSecret", @"cliInstallScript", @"legacySource", @"bangsUrl", @"liveMock", @"officialPin", @"officialPluginsFrom",
+    @"importSafariHome", @"importSecret", @"cliInstallScript", @"legacySource", @"bangsUrl", @"liveMock", @"pluginArtifactsFrom",
   ];
 }
 
@@ -253,6 +256,9 @@ BOOL SignedForDistribution() {
 }
 
 @implementation ArdiaLaunchConfig {
+  NSString *_Nullable _pluginRegistryURL;
+  NSString *_Nullable _pluginRegistryKeys;
+  NSString *_Nullable _pluginNativeKeys;
   NSDictionary<NSString *, NSString *> *_instance;
   NSDictionary<NSString *, NSNumber *> *_switches;
   NSDictionary<NSString *, NSNumber *> *_cachedSwitches;
@@ -309,6 +315,9 @@ BOOL SignedForDistribution() {
     _remoteDebuggingPort = port > 0 && port < 65536 ? @(port) : nil;
     _prewarm = Present(environment[kPrewarmVariable]) != nil;
     _feedbackURL = Present(environment[kFeedbackURLVariable]);
+    _pluginRegistryURL = Present(environment[kPluginRegistryURLVariable]);
+    _pluginRegistryKeys = Present(environment[kPluginRegistryKeyVariable]);
+    _pluginNativeKeys = Present(environment[kPluginNativeKeyVariable]);
     _instance = KeyedEntries(environment[kInstanceVariable], InstanceKeys(), kInstanceVariable);
     _switches = SwitchEntries(environment[kSwitchesVariable]);
     _requestedAreas = AreaEntries(environment[kTraceVariable]);
@@ -328,6 +337,16 @@ BOOL SignedForDistribution() {
 
 - (BOOL)isolated {
   return _dataDirectory != nil;
+}
+
+- (nullable NSString *)pluginRegistryURL {
+  if (!_pluginRegistryURL) return nil;
+  if ([_pluginRegistryURL.lowercaseString hasPrefix:@"https://"]) return _pluginRegistryURL;
+  return self.testInstance ? _pluginRegistryURL : nil;
+}
+
+- (nullable NSString *)pluginNativeKeys {
+  return self.testInstance ? _pluginNativeKeys : nil;
 }
 
 - (BOOL)testInstance {
@@ -433,6 +452,9 @@ BOOL SignedForDistribution() {
     @"trace" : [self.honouredAreas.allObjects sortedArrayUsingSelector:@selector(compare:)],
     @"test" : self.honouredTest,
     @"feedbackURL" : _feedbackURL ?: NSNull.null,
+    @"pluginRegistryURL" : self.pluginRegistryURL ?: NSNull.null,
+    @"pluginRegistryKeys" : (self.testInstance ? _pluginRegistryKeys : nil) ?: NSNull.null,
+    @"pluginNativeKeys" : self.pluginNativeKeys ?: NSNull.null,
     @"webUIShell" : @(_webUIShell),
     @"webUIRefusedDataDirectory" : @(_webUIRefusedDataDirectory),
   };

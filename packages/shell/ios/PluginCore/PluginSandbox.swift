@@ -10,7 +10,7 @@ struct PluginSandbox {
   let program: String
   let network: Bool
   var kind: Kind = .program
-  var officialCopy: String?
+  var storeCopy: String?
   var developer: String? = PluginSandbox.developerFolder()
 
   static let searchPath = ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin"]
@@ -319,7 +319,7 @@ struct PluginSandbox {
 
   static let developerLink = "/private/var/db/xcode_select_link"
 
-  static let officialFolderName = "OfficialPlugins"
+  static let storeFolderName = "Plugins/store"
 
   static func developerFolder(link: String = developerLink) -> String? {
     guard let real = resolved(link), real.hasPrefix("/") else { return nil }
@@ -464,13 +464,13 @@ struct PluginSandbox {
     }
     let pluginsRoot = (configFolder as NSString).appendingPathComponent("plugins")
     let inPluginsRoot = Self.isInside(pluginFolder, pluginsRoot) && pluginFolder != pluginsRoot
-    let officialRoot = (appData as NSString).appendingPathComponent(Self.officialFolderName)
-    let inOfficialStore = officialCopy == pluginFolder && Self.isInside(pluginFolder, officialRoot)
-      && pluginFolder.dropFirst(officialRoot.count + 1).split(separator: "/", omittingEmptySubsequences: false).count == 2
+    let storeRoot = (appData as NSString).appendingPathComponent(Self.storeFolderName)
+    let inStore = storeCopy == pluginFolder && Self.isInside(pluginFolder, storeRoot)
+      && pluginFolder.dropFirst(storeRoot.count + 1).split(separator: "/", omittingEmptySubsequences: false).count == 3
     if pluginFolder == "/" || [home, configFolder, appData].contains(where: { Self.isInside($0, pluginFolder) }) {
       throw Refusal.unsafe("its folder takes in Ardia's data, its settings or your home folder")
     }
-    if (Self.isInside(pluginFolder, configFolder) || Self.isInside(pluginFolder, appData)) && !inPluginsRoot && !inOfficialStore {
+    if (Self.isInside(pluginFolder, configFolder) || Self.isInside(pluginFolder, appData)) && !inPluginsRoot && !inStore {
       throw Refusal.unsafe("its folder is in Ardia's data or config folder")
     }
     if !Self.isInside(program, pluginFolder) && (Self.isInside(program, appData) || Self.isInside(program, configFolder)) {

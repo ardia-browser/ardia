@@ -1,13 +1,14 @@
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
-import { officialPlugins, PRESELECTED_PLUGINS, type OfficialPlugin } from "../plugins/official";
+import { featuredPlugins, PRESELECTED_PLUGINS, type FeaturedPlugin } from "../plugins/featured";
+import { useCatalog } from "../plugins/marketplace";
 import { currentPlugins } from "../plugins/store";
 
 export { PRESELECTED_PLUGINS };
 
-export const offeredInOnboarding = (plugins: readonly OfficialPlugin[]) => plugins.filter((p) => p.state !== "unsupported");
+export const offeredInOnboarding = (plugins: readonly FeaturedPlugin[]) => plugins.filter((p) => p.state !== "unsupported");
 
-export const pluginsStepHasSomething = (plugins: readonly OfficialPlugin[]) => plugins.some((p) => p.state === "available" || p.state === "installed");
+export const pluginsStepHasSomething = (plugins: readonly FeaturedPlugin[]) => plugins.some((p) => p.state !== "unsupported");
 
 export const pluginsCatalogueKnown = (supported: boolean = PLATFORM_FEATURES.plugins) => !supported || currentPlugins().scanned;
 
-export const pluginsStepShown = () => !pluginsCatalogueKnown() || pluginsStepHasSomething(officialPlugins(currentPlugins()));
+export const pluginsStepShown = () => !pluginsCatalogueKnown() || pluginsStepHasSomething(featuredPlugins(currentPlugins(), useCatalog.getState()));

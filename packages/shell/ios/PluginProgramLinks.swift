@@ -43,28 +43,16 @@ enum PluginProgramLinks {
       if remove {
         done(["ok": PluginPrograms.remove(plugin: name, programs: programs, places: places)])
       } else {
-        PluginPrograms.withdraw(plugin: name, programs: programs, places: places, keepCopy: PluginFolders.officialPin()?.entry(name) != nil)
+        PluginPrograms.withdraw(plugin: name, programs: programs, places: places, keepCopy: PluginStore.parts(name) != nil)
         done(["ok": true])
       }
     }
   }
 
-  static func legacyInstalled(done: @escaping ([String]) -> Void) {
-    queue.async {
-      guard let folders = PluginFolders.current() else { return done([]) }
-      let registry = folders.programRegistry()
-      done(registry.failClosed ? [] : registry.legacy.filter(PluginPrograms.legacyInstalled).map(\.owner))
-    }
-  }
-
-  static func registry(done: @escaping ([String: Any]) -> Void) {
-    queue.async { done((PluginFolders.current()?.programRegistry() ?? .empty).jsonValue) }
-  }
-
   static func sweep(keeping active: [String], done: @escaping () -> Void) {
     queue.async {
       if let folders = PluginFolders.current(), case .success(let places) = folders.programPlaces() {
-        PluginPrograms.withdrawAllBut(Set(active), places: places, keepingCopies: Set(PluginFolders.officialPin()?.entries.map(\.name) ?? []))
+        PluginPrograms.withdrawAllBut(Set(active), places: places, keepingCopies: Set(folders.store().keys()))
       }
       done()
     }
@@ -80,25 +68,21 @@ enum PluginProgramLinks {
       return PluginProgram(name: program, path: path)
     }
     guard let folders = PluginFolders.current() else { return ["ok": false, "reason": "Ardia has no data folder"] }
-    let pin = PluginFolders.officialPin()
-    let legacy = folderId == PluginFolders.legacyId
-    let copy = legacy ? nil : folders.officialCopy(name, folderId: folderId, pin: pin, fresh: true)
-    if legacy && folders.legacyFolder(name, pin: pin) == nil { return ["ok": false, "reason": "its earlier copy is gone"] }
+    let copy = folders.storeCopy(name, folderId: folderId, fresh: true)
     let unverified = { (reason: String) -> [String: Any] in
       if case .success(let places) = folders.programPlaces(),
-        PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [], bundledDigests: pin?.entry(name)?.bundledDigests ?? []) == .stuck
+        PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: []) == .stuck
       {
         return ["ok": false, "reason": "\(reason), and the programs it left on PATH couldn't be taken off"]
       }
       return ["ok": false, "reason": reason]
     }
-    if OfficialPin.sha(ofFolderId: folderId) != nil && copy == nil { return unverified("its downloaded copy is gone") }
-    let builtIn = legacy || copy != nil
-    let registry = folders.programRegistry(pin: pin)
-    if let refusal = programs.lazy.compactMap({ registry.refusal(program: $0.name, plugin: name, builtIn: builtIn) }).first {
+    if PluginStore.sha(ofFolderId: folderId) != nil && copy == nil { return unverified("its downloaded copy is gone") }
+    let official = copy.map { folders.store().isOfficial($0, keys: PluginOfficial.keys(override: LaunchConfig.shared.pluginNativeKeys)) } ?? false
+    if let refusal = programs.lazy.compactMap({ ReservedPrograms.refusal(program: $0.name, plugin: name, official: official) }).first {
       return ["ok": false, "reason": refusal]
     }
-    let afterUpdate = copy != nil ? raw.compactMap { entry -> (String, [[String]])? in
+    let afterUpdate = official ? raw.compactMap { entry -> (String, [[String]])? in
       guard let program = entry["path"] as? String, let commands = entry["afterUpdate"] as? [[String]], !commands.isEmpty else { return nil }
       return (program, commands)
     } : []
@@ -113,15 +97,8 @@ enum PluginProgramLinks {
     case .success(let opened): folder = opened
     }
     defer { folder.close() }
-    let result: Result<ProgramsLinked, FolderRefusal>
-    if legacy {
-      result = PluginPrograms.keepLegacy(plugin: name, programs: programs, places: places)
-    } else {
-      let adoption = registry.adoption(for: name, programs: programs.map(\.name), builtIn: builtIn)
-      result = PluginPrograms.install(
-        plugin: name, from: folder, approved: approved, version: spec["version"] as? String, programs: programs, places: places,
-        expectedDigest: copy?.payloadDigest, adoption: adoption)
-    }
+    let result = PluginPrograms.install(
+      plugin: name, from: folder, approved: approved, version: spec["version"] as? String, programs: programs, places: places, expectedDigest: copy?.payloadDigest)
     let clean: Bool
     switch result {
     case .failure: clean = false
@@ -130,7 +107,7 @@ enum PluginProgramLinks {
     var check = CurrentCheck.trusted
     if !clean, let copy {
       let source = TrustedProgramCopy(version: spec["version"] as? String, approved: approved, digest: copy.payloadDigest)
-      check = PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [source], bundledDigests: pin?.entry(name)?.bundledDigests ?? [])
+      check = PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [source])
       if check == .stuck { return ["ok": false, "reason": "its programs on PATH don't match the copy Ardia checked, and couldn't be taken off PATH"] }
     }
     switch result {
@@ -141,9 +118,18 @@ enum PluginProgramLinks {
       if !afterUpdate.isEmpty, PluginPrograms.shouldRunAfterUpdate(linked, plugin: name, places: places) {
         runAfterUpdate(name, version: linked.version, commands: afterUpdate, programs: programs, places: places, generation: generation, digest: copy?.payloadDigest)
       }
-      var reply: [String: Any] = ["ok": true, "linked": linked.linked, "refused": linked.refused, "causes": linked.causes, "binDir": places.binDir, "adopted": linked.adopted, "adoptBusy": linked.adoptBusy, "adoption": linked.adoption.rawValue]
+      var reply: [String: Any] = ["ok": true, "linked": linked.linked, "refused": linked.refused, "causes": linked.causes, "binDir": places.binDir, "adopted": false]
       if let kept = linked.kept, check == .trusted { reply["kept"] = kept }
       return reply
+    }
+  }
+
+  static func adoptLegacy(from: String, to: String, done: @escaping ([String: Any]) -> Void) {
+    queue.async {
+      guard let folders = PluginFolders.current(), case .success(let places) = folders.programPlaces() else { return done(["ok": false, "found": false, "moved": [], "reason": "Ardia has no data folder"]) }
+      let store = folders.store()
+      let replaced = store.active(to).map { store.isOfficial($0, keys: PluginOfficial.keys(override: LaunchConfig.shared.pluginNativeKeys)) } ?? false
+      done(PluginLegacyMove.adopt(from: from, to: to, appData: folders.appData, places: places, replaced: replaced))
     }
   }
 

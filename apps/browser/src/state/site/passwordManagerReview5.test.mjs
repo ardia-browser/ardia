@@ -22,7 +22,7 @@ const settle = async () => {
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const offerToSave = (profile) => stub.profileToggles.user.get(profile)?.passwords;
 const onDisk = () => JSON.parse(stub.docs.get("password-manager.json") ?? "{}").offerToSaveHeldOff ?? [];
-const folder = (name) => ({ name, status: "ok", text: MANIFEST.replace('"password-manager"', JSON.stringify(name)) });
+const folder = (name) => ({ name, status: "ok", text: MANIFEST.replace('"@test/password-manager"', JSON.stringify(`@test/${name}`)) });
 const native = stub.passwordProviders;
 const pushedProfiles = () => native.calls.filter((c) => c[0] === "setFieldProviders").map((c) => c[2]);
 const setPref = (on) => stub.profileToggles.user.set("", { ...stub.profileToggles.user.get(""), passwords: on });

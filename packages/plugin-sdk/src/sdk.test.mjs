@@ -802,6 +802,21 @@ describe("createHostRuntime", () => {
     assert.deepEqual(host.calls("subscribe").at(-1).params, { events: ["tab.activated"] });
   });
 
+  test("a profile plugin's calls and events carry the profile that invoked them, and storage takes it", async () => {
+    const seen = [];
+    const { host, runtime } = await started({
+      commands: { save: async (_input, call) => (await runtime.ardia.storage.set("k", 1, { profile: call.profile }), call.profile ?? null) },
+      events: { "tab.idle": (data, event) => seen.push([data.tabId, event.profile ?? null]) },
+    });
+    host.push({ call: "p1", kind: "command", command: "save", context: { windowId: "w1" }, caller: { kind: "command" }, deadline: 60000, profile: "work" });
+    host.push({ event: "tab.idle", time: 2, data: { tabId: "t1" }, profile: "work" });
+    host.push({ event: "tab.idle", time: 3, data: { tabId: "t2" } });
+    await settle(8);
+    assert.equal(host.resultFor("p1").result, "work");
+    assert.deepEqual(host.calls("storage.set").at(-1).params, { key: "k", value: 1, profile: "work" }, "an async handler writes to the profile that called it");
+    assert.deepEqual(seen, [["t1", "work"], ["t2", null]]);
+  });
+
   test("a lone wildcard listener subscribes to every hook", async () => {
     const seen = [];
     const { host, runtime } = await started({});
@@ -1760,7 +1775,7 @@ describe("v2-showcase fixture", () => {
     const { readManifest } = await import("../../../apps/browser/src/lib/pluginManifest.ts");
     const { appProblems } = await import("../../../apps/browser/src/state/plugins/appChecks.ts");
     const { useBrowser } = await import("../../../apps/browser/src/state/browser/store.ts");
-    const read = readManifest(readFileSync(fixture("plugin.json"), "utf8"));
+    const read = readManifest(readFileSync(fixture("plugin.json"), "utf8"), "v2-showcase");
     assert.deepEqual(read.problems, []);
     assert.deepEqual(appProblems(read.manifest, useBrowser.getState().settings, "99.0.0"), []);
     assert.equal(read.manifest.name, "v2-showcase");

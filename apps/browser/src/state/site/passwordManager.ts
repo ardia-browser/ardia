@@ -8,8 +8,7 @@ import { engineProfile } from "../browser/model";
 import { usePages } from "../tabs/pageState";
 import { useShallow } from "zustand/react/shallow";
 import { beforePluginsCommit, beforePluginsWithdraw, onPluginWithdrawAbandoned, usePlugins, recordOf, activeManifest, type PluginsCommit } from "../plugins/store";
-import { notePasswordManagerChosen, notePasswordPanel, noteProfilesMovedBack } from "../telemetry/passwordManagerCounts";
-import { isBundledRetiredRecord, RETIRED_OFFICIAL_PLUGINS, retiredRecordOf } from "../plugins/retiredOfficial";
+import { notePasswordManagerChosen, notePasswordPanel } from "../telemetry/passwordManagerCounts";
 import {
   choiceKind,
   fieldProviderSet,
@@ -103,29 +102,6 @@ function passwordManagerInUse(): boolean {
 function adoptNeverChosen(name: string) {
   const s = browser();
   for (const id of neverChosenProfiles(s)) if (s.profiles[id] && !s.profiles[id]!.passwordManager) s.updateProfile(id, { passwordManager: pluginChoice(name) });
-}
-
-function keepArdiaForRetired(consent: ConsentToken | null, stamped: Set<string>): boolean {
-  const s = browser();
-  const plugins = pluginsView();
-  const moved = new Map<string, string>();
-  let settled = true;
-  for (const name of Object.keys(RETIRED_OFFICIAL_PLUGINS)) {
-    if (stamped.has(name)) continue;
-    const retired = retiredRecordOf(name);
-    if (!retired) {
-      if (isBundledRetiredRecord(name, plugins.records[name])) settled = false;
-      continue;
-    }
-    stamped.add(name);
-    const rollbackPicksIt = retired.enabled;
-    const unset = rollbackPicksIt ? new Set(neverChosenProfiles(s)) : new Set<string>();
-    for (const [id, profile] of Object.entries(s.profiles)) if (profile && (profile.passwordManager === pluginChoice(name) || unset.has(id))) moved.set(id, engineProfile(s, id));
-  }
-  if (!moved.size) return settled;
-  for (const id of moved.keys()) s.updateProfile(id, { passwordManager: "ardia" });
-  noteProfilesMovedBack(new Set(moved.values()).size, consent);
-  return settled;
 }
 
 const liveEngineProfiles = (s: BrowserState) => new Set(Object.keys(s.profiles).filter((id) => s.profiles[id]).map((id) => engineProfile(s, id)));
@@ -244,16 +220,10 @@ export function startPasswordManager() {
   if (started || !PLATFORM_FEATURES.systemPasswordManagers || !PLATFORM_FEATURES.plugins) return;
   started = true;
   startOfferToSave();
-  const startConsent = consentToken();
   let modes = new Map<string, PasswordManagerChoice>();
   let seen = new Set<string>();
   let unifying = false;
   let ready = false;
-  let retiredKept = false;
-  const retiredStamped = new Set<string>();
-  const keepRetired = (committing = false) => {
-    if (!retiredKept && (committing || pluginsView().scanned)) retiredKept = keepArdiaForRetired(startConsent, retiredStamped);
-  };
 
   const plugins = () => managerPlugins(pluginsView());
 
@@ -293,7 +263,6 @@ export function startPasswordManager() {
   };
 
   beforePluginsCommit((next, before) => {
-    keepRetired(true);
     if (!ready && commitPlugins(next).length) begin(true);
     if (!ready) return;
     const active = new Set(commitPlugins(next).map((p) => p.name));
@@ -324,7 +293,6 @@ export function startPasswordManager() {
   };
   const begin = (inUse = false) => {
     if (ready || !pluginsView().scanned) return;
-    keepRetired();
     if (!(inUse || passwordManagerInUse())) return;
     ready = true;
     void forgetHeldOffOutside(liveEngineProfiles(browser()));
@@ -342,7 +310,6 @@ export function startPasswordManager() {
 
   usePlugins.subscribe((s, prev) => {
     const changed = s.listings !== prev.listings || s.records !== prev.records || s.order !== prev.order;
-    if (changed) keepRetired();
     if (!ready) return void ((changed || s.scanned !== prev.scanned) && begin());
     if (changed) syncModes();
   });

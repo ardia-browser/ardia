@@ -18,7 +18,7 @@ import {
   useSettingsSearch,
 } from "../../state/settings/searchState";
 import { paneTitle, settingsIndexWith, type SettingEntry } from "./settingsIndex";
-import { officialKeywords } from "../../state/plugins/official";
+import { pluginSearchKeywords } from "../../state/plugins/featured";
 import { currentPlugins } from "../../state/plugins/store";
 import { useUnshownSettings } from "./Form";
 import { settingsInk } from "./tokens";
@@ -92,7 +92,7 @@ const FIELD = { marginHorizontal: space.ml, marginBottom: space.ml } as const;
 let cached: { query: string; unshown: ReadonlySet<string>; keywords: string; results: SettingsHit[] } = { query: "", unshown: new Set(), keywords: "", results: [] };
 
 export function settingsResults(query: string, unshown: ReadonlySet<string>): SettingsHit[] {
-  const extra = officialKeywords(currentPlugins());
+  const extra = pluginSearchKeywords(currentPlugins());
   const keywords = JSON.stringify(extra);
   if (cached.query !== query || cached.unshown !== unshown || cached.keywords !== keywords) {
     cached = { query, unshown, keywords, results: search(settingsIndexWith(extra).filter((p) => !unshown.has(p.entry.id) || p.entry.needs), query) };

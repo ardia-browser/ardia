@@ -29,14 +29,12 @@ else
 fi
 [ "$(lipo -archs "$app/Contents/MacOS/Ardia")" = arm64 ] || die "the app's executable is $(lipo -archs "$app/Contents/MacOS/Ardia"), not arm64"
 
-echo "==> Official plugins (fetched on Install; the app carries only the pin and the program registry)"
+echo "==> Plugins (installed from the signed registry; the app bundles none)"
 plist="$app/Contents/Info.plist"
-[ ! -e "$app/Contents/Resources/Plugins" ] || die "the export bundles plugins; official plugins are fetched on Install"
+[ ! -e "$app/Contents/Resources/Plugins" ] || die "the export bundles plugins; plugins are installed from the registry"
 /usr/libexec/PlistBuddy -c "Delete :ArdiaBuiltInPlugins" "$plist" 2>/dev/null || true
-signed_pin="$(python3 -I "$root/scripts/release/official-plugins.py" signed-pin)" || die "the official plugins' pin couldn't be read"
-plutil -replace ArdiaOfficialPlugins -json "$signed_pin" "$plist" || die "couldn't write ArdiaOfficialPlugins into Info.plist"
-registry="$(python3 -I "$root/scripts/release/official-plugins.py" registry)" || die "the pin's program registry couldn't be made"
-plutil -replace ArdiaProgramRegistry -json "$registry" "$plist" || die "couldn't write ArdiaProgramRegistry into Info.plist"
+plutil -remove ArdiaOfficialPlugins "$plist" >/dev/null 2>&1 || true
+plutil -remove ArdiaProgramRegistry "$plist" >/dev/null 2>&1 || true
 
 echo "==> Licenses"
 licenses="$app/Contents/Resources/Licenses"

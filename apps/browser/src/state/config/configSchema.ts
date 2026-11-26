@@ -5,13 +5,12 @@ import { CONFIG_SETTING_KEYS } from "../settings/configAllowlist";
 import { SETTING_SPECS } from "../settings/settings";
 import { PER_PROFILE_SHORTCUT_PATTERN, SHORTCUT_FORMAT, shortcutCatalog, shortcutDescription } from "./configShortcuts";
 import { launchActionIds, MAX_LAUNCH_ACTIONS } from "../automation/launchActions";
-import { PLUGIN_EVENTS } from "../automation/eventNames";
-import { PLUGIN_SCHEMA_FILE, pluginSchemaJson } from "../../lib/pluginSchema";
-import { PLUGIN_RULES } from "../plugins/appChecks";
+import { manifestV3SchemaJson } from "@ardia/plugin-sdk/manifest";
 
 const CONFIG_SCHEMA_FILE = "config.schema.json";
 const THEME_SCHEMA_FILE = "theme.schema.json";
-const CONFIG_THEME_PATTERN = "^(?:[a-z0-9][a-z0-9_-]*|plugin:[a-z0-9][a-z0-9-]{0,39}/[A-Za-z0-9_-]{1,40})$";
+const PLUGIN_SCHEMA_FILE = "plugin.schema.json";
+const CONFIG_THEME_PATTERN = "^(?:[a-z0-9][a-z0-9_-]*|plugin:[a-z0-9][a-z0-9-]{0,39}(?:__[a-z0-9][a-z0-9-]{0,39})?/[A-Za-z0-9_-]{1,40})$";
 
 function shortcutsSchema(): JsonSchema {
   const properties: Record<string, JsonSchema> = {};
@@ -63,5 +62,5 @@ export function configSchema(): object {
 export const schemaFiles = (roles: RolePalettes): Record<string, string> => ({
   [CONFIG_SCHEMA_FILE]: schemaJson(configSchema()),
   [THEME_SCHEMA_FILE]: schemaJson(themeSchema(roles)),
-  [PLUGIN_SCHEMA_FILE]: pluginSchemaJson(PLUGIN_EVENTS, PLUGIN_RULES),
+  [PLUGIN_SCHEMA_FILE]: manifestV3SchemaJson(),
 });

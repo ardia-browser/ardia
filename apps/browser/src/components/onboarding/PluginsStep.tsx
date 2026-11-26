@@ -1,15 +1,15 @@
 import { useEffect } from "react";
 import { View } from "react-native";
-import type { OfficialPlugin } from "../../state/plugins/actions";
 import { consentOwner } from "../../state/plugins/consentSurface";
-import { useOfficialFetch, useOfficialPlugins, usePluginConsent, usePluginPrograms } from "../../state/plugins/hooks";
+import { usePluginConsent, usePluginFetch, usePluginPrograms } from "../../state/plugins/hooks";
+import { featuredView, useFeaturedPlugins, type FeaturedPlugin } from "../../state/plugins/featured";
+import { refreshCatalog } from "../../state/plugins/marketplace";
 import { usePlugins } from "../../state/plugins/store";
 import { useOnboarding } from "../../state/onboarding/onboarding";
 import { useSection } from "./sectionContext";
 import { PluginConsentSheet } from "../plugins/PluginConsentSheet";
-import { isOffered, officialTitle, officialView } from "../../state/plugins/officialView";
 import { offeredInOnboarding, pluginsCatalogueKnown } from "../../state/onboarding/pluginsOffer";
-import { cancelPluginConsent, confirmPluginConsent, finishPluginsStep, installPickedPlugins, isPicked, leavePluginsStep, notePluginsShown, passEmptyPluginsStep, primaryTitle, installPluginAgain, skipPluginsStep, togglePluginPick, usePluginsStep } from "../../state/onboarding/pluginsStep";
+import { cancelPluginConsent, confirmPluginConsent, finishPluginsStep, installPickedPlugins, isPicked, leavePluginsStep, notePluginsShown, passEmptyPluginsStep, primaryTitle, installPluginAgain, checkRegistryAgain, skipPluginsStep, togglePluginPick, usePluginsStep } from "../../state/onboarding/pluginsStep";
 import { ActivitySpinner, Checkbox, IconTile, Symbol, Text } from "../ui";
 import { monoFace, radius, space } from "../ui/tokens";
 import { SecondaryButton } from "./Buttons";
@@ -18,8 +18,10 @@ import { OptionCard } from "./OptionCard";
 import { Tag, useOnboardingColors } from "./Parts";
 import { StepActions, StepLayout } from "./StepLayout";
 
+type OfficialPlugin = FeaturedPlugin;
+
 export function PluginsStep() {
-  const plugins = offeredInOnboarding(useOfficialPlugins());
+  const plugins = offeredInOnboarding(useFeaturedPlugins());
   const phase = usePluginsStep((s) => s.phase);
   const picks = usePluginsStep((s) => s.picks);
   const current = usePluginsStep((s) => s.current);
@@ -27,8 +29,11 @@ export function PluginsStep() {
   const asking = phase === "working" && !!current && consentOwner(consent) === "onboarding" && consent?.name === current;
   const shownPhase = asking ? "offer" : phase;
   const known = usePlugins(() => pluginsCatalogueKnown());
-  const names = plugins.filter(isOffered).map((p) => p.name).join(" ");
+  const names = plugins.filter((p) => p.state === "available").map((p) => p.name).join(" ");
   const { active } = useSection();
+  useEffect(() => {
+    if (active) void refreshCatalog();
+  }, [active]);
   useEffect(() => {
     if (active) notePluginsShown(names ? names.split(" ") : []);
   }, [active, names]);
@@ -44,7 +49,7 @@ export function PluginsStep() {
     <StepLayout
       pageKey="plugins"
       title={nothingToDo ? "You're already set" : phase === "installed" ? "Installed" : "Want the extras?"}
-      subtitle={nothingToDo ? "Nothing to install." : phase === "installed" ? "Open a new terminal to use it." : "Official plugins. Optional."}
+      subtitle={nothingToDo ? "Nothing to install." : phase === "installed" ? "Open a new terminal to use it." : "From Ardia's plugin registry. Optional."}
       actions={
         <StepActions
           continueTitle={primaryTitle(plugins, { picks, phase: shownPhase })}
@@ -70,14 +75,14 @@ function PluginCard({ plugin, picked, asking }: { plugin: OfficialPlugin; picked
   const working = usePluginsStep((s) => s.phase === "working" && s.current === plugin.name);
   const failure = usePluginsStep((s) => s.failures[plugin.name]);
   const programs = usePluginPrograms(plugin.name);
-  const fetch = useOfficialFetch(plugin.name);
-  const view = officialView(plugin, programs, failure ? { state: "failed", reason: failure } : working ? { state: "installing" } : null, working ? fetch : undefined);
+  const fetch = usePluginFetch(plugin.name);
+  const view = featuredView(plugin, programs, failure ? { state: "failed", reason: failure } : working ? { state: "installing" } : null, working ? fetch : undefined);
   if (plugin.state === "available" && (phase === "offer" || asking))
-    return <OptionCard control="check" icon={plugin.icon} title={officialTitle(plugin)} subtitle={plugin.blurb} subtitleLines={1} selected={picked} onPress={() => togglePluginPick(plugin)} />;
-  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? "" : (view.status ?? (view.note === "installed" ? "Installed" : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={view.note === "installed" && !view.failed && !view.busy} />;
+    return <OptionCard control="check" icon={plugin.icon} title={plugin.title} subtitle={plugin.blurb} subtitleLines={1} selected={picked} onPress={() => togglePluginPick(plugin)} />;
+  return <StatusCard plugin={plugin} status={view.status} failed={view.failed} busy={view.busy} soon={false} done={view.installed && !view.failed && !view.busy} offline={plugin.state === "offline"} />;
 }
 
-function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: OfficialPlugin; status: string | null; failed: boolean; busy: boolean; soon: boolean; done: boolean }) {
+function StatusCard({ plugin, status, failed, busy, soon, done, offline }: { plugin: OfficialPlugin; status: string | null; failed: boolean; busy: boolean; soon: boolean; done: boolean; offline: boolean }) {
   const colors = useOnboardingColors();
   const phase = usePluginsStep((s) => s.phase);
   return (
@@ -86,7 +91,7 @@ function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: Offi
         <IconTile symbol={plugin.icon} size="m" fill={colors.iconContainer} glyph={colors.title} />
         <View style={{ flex: 1, gap: space.xxs }}>
           <Text weight="medium" color={colors.title}>
-            {officialTitle(plugin)}
+            {plugin.title}
           </Text>
           {status === "" ? null : (
             <Text size="small" lines={failed ? undefined : 1} selectable={failed} color={colors.rowSubtitle}>
@@ -103,9 +108,9 @@ function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: Offi
         ) : null}
         {failed ? <Symbol name="exclamationmark.triangle" size={14} color={colors.title} style={WARNING} /> : null}
       </View>
-      {failed && phase === "failed" ? (
+      {offline || (failed && phase === "failed") ? (
         <View style={{ flexDirection: "row" }}>
-          <SecondaryButton title="Try Again" onPress={() => void installPluginAgain(plugin.name)} />
+          <SecondaryButton title="Try Again" onPress={() => void (offline ? checkRegistryAgain() : installPluginAgain(plugin))} />
         </View>
       ) : null}
     </ChoiceCard>

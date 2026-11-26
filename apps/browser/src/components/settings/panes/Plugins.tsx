@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import type { PluginManifest, RowSpec, RowValue } from "../../../lib/pluginManifest";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
@@ -22,22 +22,29 @@ import {
   showPluginLog,
   showPluginsFolder,
   UNSAVED,
+  reviewUpdate,
+  rollbackPlugin,
+  setPluginChannel,
+  setPluginProfiles,
 } from "../../../state/plugins/actions";
-import { usePluginActive, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginUnsaved, usePluginValues } from "../../../state/plugins/hooks";
+import { usePluginActive, usePluginListing, usePluginLockEntry, usePluginNeedsReview, usePluginOrder, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginUnsaved, usePluginValues } from "../../../state/plugins/hooks";
+import { useProfileOrder, useProfileRecords } from "../../../state/profiles/hooks";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, type SettingsPlace } from "../../../state/settings/settingsWindows";
-import { Button, PopUp, Symbol, TextField, Toggle } from "../../ui";
-import { Group, Row, SectionHeader } from "../Form";
+import { Button, PopUp, Symbol, Text, TextField, Toggle } from "../../ui";
+import { radius, space } from "../../ui/tokens";
+import { Group, ProfilePicker, Row, SectionHeader, useSettingsProfile } from "../Form";
 import { useTheme } from "../../ui/theme";
 import { PaneSubPage } from "./PaneSubPage";
 import { releaseOrphanedConsent } from "../../../state/plugins/consentSurface";
-import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugins";
+import { MarketplaceSection, RegistriesSection } from "./PluginMarketplace";
 import { useControlTurnedOff } from "../../../state/app/programControlSetting";
 import { useNeverChosenCount } from "../../../state/site/passwordManager";
 import { PasswordManagerDetails } from "./PasswordManagerPlugin";
-import { autoUpdateNote } from "../../../state/plugins/officialView";
+import { updateNoteText } from "../../../state/plugins/featured";
 
 export function PluginsPane({ detail }: SettingsPlace) {
   if (!PLATFORM_FEATURES.plugins) return <UnavailablePage />;
+  if (detail?.startsWith("get:")) return <PluginList getting={detail.slice(4)} />;
   return detail ? <PluginPage name={detail} /> : <PluginList />;
 }
 
@@ -52,22 +59,23 @@ function UnavailablePage() {
   );
 }
 
-function PluginList() {
-  const order = usePluginsBelowOfficial();
+function PluginList({ getting }: { getting?: string }) {
+  const order = usePluginOrder();
   const [how, setHow] = useState(false);
   return (
     <View>
-      <OfficialPluginsSection />
+      <MarketplaceSection getting={getting ?? null} />
       <SectionHeader anchor="plugins.plugins" action={<Button title={`Show in ${PLATFORM_TERMS.fileManager}`} onPress={showPluginsFolder} />} />
       <Group of="plugins.plugins">
         {order.length ? (
           order.map((name) => <PluginRow key={name} name={name} />)
         ) : (
-          <Row title="None yet" description={how ? `Put a plugin's folder in ${pluginsFolderPath()}, or run ardia plugins install <folder>.` : undefined}>
+          <Row title="None yet" description={how ? `Get one above, put a plugin's folder in ${pluginsFolderPath()}, or run npx ardia-plugin dev in its folder.` : undefined}>
             {how ? null : <Button variant="text" look="link" pad="none" title="How to add one" onPress={() => setHow(true)} />}
           </Row>
         )}
       </Group>
+      <RegistriesSection />
     </View>
   );
 }
@@ -91,9 +99,10 @@ function programsText(p: ProgramsState | undefined): string | null {
   return p.linked.length ? `${p.linked.join(", ")} is on PATH (${p.binDir})` : null;
 }
 
-function originText(listing: PluginListing | undefined, active: boolean): string | null {
-  if (listing?.ignoresUserFolder) return `Official (the folder of the same name in ${pluginsFolderPath()} is ignored)`;
-  return listing?.official ? "Official" : null;
+function originText(listing: PluginListing | undefined, _active: boolean): string | null {
+  if (listing?.source === "dev") return listing.shadowsStore ? "Dev (in place of its installed copy)" : "Dev";
+  if (listing?.official) return "Official";
+  return listing?.manifest?.id ?? null;
 }
 
 function statusOf(m: PluginManifest | null, problems: string[], active: boolean, review: boolean, p: ProcessState | undefined, unsaved: boolean, describe = true): string {
@@ -129,6 +138,8 @@ function PluginRow({ name }: { name: string }) {
       icon={<Symbol name={m?.icon ?? m?.page?.icon ?? "puzzlepiece"} size={14} color={theme.icon} style={ICON} />}
       onPress={() => goToSettingsPane("plugins", null, name)}
     >
+      {listing?.source === "dev" ? <DevBadge /> : null}
+      {record.pendingUpdate ? <Button title="Update…" onPress={() => reviewUpdate(name)} /> : null}
       <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on || (record.enabled && review))} />
     </Row>
   );
@@ -188,20 +199,31 @@ function NumberRow({ name, row, value }: { name: string; row: Extract<RowSpec, {
 }
 
 function SecretRow({ name, row }: { name: string; row: Extract<RowSpec, { type: "secret" }> }) {
+  const perProfile = usePluginListing(name)?.manifest?.scope === "profile";
+  const [profileId, setProfileId] = useSettingsProfile();
+  const space = perProfile ? profileId : null;
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState<boolean | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const asked = useRef(0);
   useEffect(() => {
     let live = true;
-    void pluginSecretRowIsSet(name, row.key).then((set) => live && setSaved(set));
+    asked.current += 1;
+    setDraft("");
+    setProblem(null);
+    setSaved(null);
+    setBusy(false);
+    void pluginSecretRowIsSet(name, row.key, space).then((set) => live && setSaved(set));
     return () => {
       live = false;
     };
-  }, [name, row.key]);
+  }, [name, row.key, space]);
   const write = async (value: string | null) => {
+    const mine = ++asked.current;
     setBusy(true);
-    const outcome = await setPluginSecretRow(name, row.key, value);
+    const outcome = await setPluginSecretRow(name, row.key, value, space);
+    if (mine !== asked.current) return;
     setBusy(false);
     if (!outcome.ok) return setProblem(outcome.message);
     setProblem(null);
@@ -211,6 +233,7 @@ function SecretRow({ name, row }: { name: string; row: Extract<RowSpec, { type: 
   const status = problem ?? (saved === null ? null : saved ? `Saved in ${PLATFORM_TERMS.secretStore}` : "Not set");
   return (
     <Row title={row.title} description={[row.description, status].filter(Boolean).join(" · ") || undefined}>
+      {perProfile ? <ProfilePicker value={profileId} onChange={setProfileId} /> : null}
       <TextField value={draft} width={180} secure placeholder={saved ? "••••••••" : row.placeholder} onChangeText={setDraft} onSubmit={() => draft && void write(draft)} />
       <Button title="Save" disabled={!draft || busy} onPress={() => void write(draft)} />
       {saved ? <Button title="Clear" disabled={busy} onPress={() => void write(null)} /> : null}
@@ -245,7 +268,13 @@ function PluginPage({ name }: { name: string }) {
         >
           <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on)} />
         </Row>
-        {listing.official && record.updated && record.approved === listing.hash ? <Row title={autoUpdateNote(record.updated).title} description={autoUpdateNote(record.updated).description} /> : null}
+        {record.revoked ? <Row title={record.revoked.action === "block" ? "Blocked by Ardia's registry" : "Turned off by Ardia's registry"} description={record.revoked.reason} /> : null}
+        {record.pendingUpdate ? (
+          <Row title={`Version ${record.pendingUpdate.version} is ready`} description={record.pendingUpdate.added.length ? `It asks for more: ${record.pendingUpdate.added.slice(0, 3).join("; ")}` : "It needs your review before it switches over."}>
+            <Button title="Update…" onPress={() => reviewUpdate(name)} />
+          </Row>
+        ) : null}
+        {record.updated && record.approved === listing.hash ? <Row title={updateNoteText(record.updated).title} description={updateNoteText(record.updated).description} /> : null}
         {active && (m?.process || (m?.main && process)) ? (
           <Row title={m?.process ? "Its program" : "Its code"} description={m?.process ? m.process.run.join(" ") : typeof m?.main === "string" ? m.main : m?.main?.entry}>
             <Button title="Show Log" onPress={() => showPluginLog(name)} />
@@ -269,6 +298,7 @@ function PluginPage({ name }: { name: string }) {
         </>
       ) : null}
       {m?.passwordManager && active ? <PasswordManagerDetails name={name} spec={m.passwordManager} /> : null}
+      {m ? <InstallDetails name={name} listing={listing} /> : null}
       {m ? (
         <>
           <SectionHeader title="What it gets" />
@@ -289,7 +319,7 @@ function PluginPage({ name }: { name: string }) {
         </>
       )}
       <Group>
-        <Row title="Remove" description={listing.official ? "Removes its download and its commands on your PATH. Its data stays." : `Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
+        <Row title="Remove" description={listing.source === "store" ? "Removes its download, its data and its commands on your PATH." : listing.source === "dev" ? "Removes the dev link. Your project stays." : `Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
           <Button title="Remove…" kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
         </Row>
       </Group>
@@ -297,4 +327,67 @@ function PluginPage({ name }: { name: string }) {
   );
 }
 
+function DevBadge() {
+  const theme = useTheme();
+  return (
+    <View style={[BADGE, { borderColor: theme.warning }]}>
+      <Text size="small" weight="semibold" tone="warning">
+        Dev
+      </Text>
+    </View>
+  );
+}
+
+function InstallDetails({ name, listing }: { name: string; listing: PluginListing }) {
+  const lock = usePluginLockEntry(name);
+  const record = usePluginRecord(name);
+  const order = useProfileOrder();
+  const records = useProfileRecords();
+  const profiles = order.flatMap((id) => (records[id] ? [{ id, name: records[id]!.name }] : []));
+  const [problem, setProblem] = useState<string | null>(null);
+  const m = listing.manifest;
+  if (!m) return null;
+  const profileScoped = m.scope === "profile";
+  const chosen = record.profiles === undefined || record.profiles === "all" ? "all" : "selected";
+  return (
+    <>
+      <SectionHeader title="Install" />
+      <Group>
+        {lock && lock.source.kind !== "file" ? (
+          <Row title="Updates" description={lock.source.kind === "github" ? `From github.com/${lock.source.repo}` : lock.source.url}>
+            <PopUp value={lock.channel} options={[{ value: "latest", title: "Stable" }, { value: "beta", title: "Beta" }]} accessibilityLabel="Update channel" onChange={(channel) => void setPluginChannel(name, channel)} />
+          </Row>
+        ) : null}
+        {listing.source === "store" && listing.previousVersion ? (
+          <Row title="Earlier version" description={problem ?? `Go back to ${listing.previousVersion}`}>
+            <Button title="Roll Back" onPress={() => void rollbackPlugin(name).then((r) => setProblem(r.ok ? null : (r.reason ?? null)))} />
+          </Row>
+        ) : null}
+        {profileScoped && profiles.length > 1 ? (
+          <Row title="Profiles" description={chosen === "all" ? "On in every profile" : `On in ${(record.profiles as string[]).length} of ${profiles.length} profiles`}>
+            <PopUp
+              value={chosen}
+              options={[{ value: "all", title: "All Profiles" }, { value: "selected", title: "Selected Profiles" }]}
+              accessibilityLabel="Profiles"
+              onChange={(v) => void setPluginProfiles(name, v === "all" ? "all" : profiles.slice(0, 1).map((p) => p.id))}
+            />
+          </Row>
+        ) : null}
+        {profileScoped && chosen === "selected"
+          ? profiles.map((p) => (
+              <Row key={p.id} title={p.name}>
+                <Toggle
+                  value={(record.profiles as string[]).includes(p.id)}
+                  accessibilityLabel={`On in ${p.name}`}
+                  onChange={(on) => void setPluginProfiles(name, on ? [...(record.profiles as string[]), p.id] : (record.profiles as string[]).filter((id) => id !== p.id))}
+                />
+              </Row>
+            ))
+          : null}
+      </Group>
+    </>
+  );
+}
+
 const ICON = { width: 18, height: 18 } as const;
+const BADGE = { borderRadius: radius.control, borderWidth: 1, paddingHorizontal: space.s, paddingVertical: space.xxs } as const;

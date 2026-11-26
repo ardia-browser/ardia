@@ -7,24 +7,18 @@ is what Ardia does for it: how it ships, how it's installed, and the contract th
 
 ## How Ardia ships it
 
-- **The pin.** `apps/browser/official-plugins.json` names each official plugin Ardia bundles: its version, the GitHub
-  release it comes from and the SHA-256 of each artifact (`macos-arm64`, the plugin folder; `linux-x64`, the command's
-  tarball; `installer`, `install.sh`). A `null` SHA-256 means not published yet, and every release step that needs it
-  refuses. `scripts/release/official-plugins.py pin cli <version>` writes the hashes of a published release, and
-  `check` (in the tests) holds the file well formed and `apps/cli/install.sh` equal to the pinned installer. The app's
-  official catalogue (`state/plugins/official.ts`) is held equal to it by a test.
-- **macOS.** The Release workflow's `build` job, which holds no secrets, fetches the pinned folder, checks its SHA-256 and
-  unpacks it (`official-plugins.py bundle`: files and folders only, its `plugin.json` must be the pinned name and
-  version). The `sign` job signs its Mach-Os inside out with the app's Developer ID and hardened runtime, writes each
-  plugin's payload digest into `Info.plist` (`ArdiaBuiltInPlugins`) and the program registry its manifests' `claim`s and
-  the pin's `legacyInstall` make (`ArdiaProgramRegistry`, `docs/plugins.md` › programs), then signs the app; `verify.sh`
-  recomputes both on the signed app and checks every Mach-O's signature and runtime flag. The plugins repo never needs the
-  signing identity. The release no longer publishes an `ardia-cli-*.tar.gz` of its own.
-- **Linux** has no plugins yet, so the package carries the command for its installer: `official-plugins.py linux-cli
-  <app version>` fetches the pinned linux-x64 tarball, checks it, and renames it `ardia-cli-<app version>-linux-x64.tar.gz`
-  with that top folder, the name the Linux engine's installer (`ac_linux_cli.cc`) expects; `scripts/linux/package.py`
-  puts it in `lib/ardia/cli/` with `apps/cli/install.sh` and its digest. The smoke's `cli-install` checks that the
-  installed `ardia --version` prints a version (the command's own, not the app's).
+- **The registry.** Command Line is the `@ardia/cli` plugin, released from ardia-browser/plugins with the reusable
+  `release-plugin.yml` and indexed by `ardia.dev/r` (`docs/plugins.md` › The registry, installs and updates). Ardia
+  installs it like any plugin, from Settings › Plugins, onboarding, `plugins.install` on the control socket or an
+  `ardia://plugin/install/@ardia/cli` link. Its artifact is native, so besides the registry's signature it needs the
+  `officialSig` the plugins repo's release key made over its exact bytes; nothing is pinned in the app any more and
+  the release doesn't touch it.
+- **Updates** come from the plugin's channel (Stable or Beta, per plugin) on Ardia's 20-minute check, silently when
+  they ask for nothing new.
+- **The old install.** 0.2.48 and 0.2.49 installed it as the `cli` plugin. The first v3 launch moves its programs, data
+  and `~/.local/bin/ardia` link to `@ardia/cli` in place, so `ardia` keeps working, and installs the registry's copy
+  with no sheet once it can reach the registry.
+- **Linux** has no plugins yet and its package no longer carries the command; `ardia` comes to Linux when plugins do.
 - **`apps/cli/install.sh`** is the one file of the command kept here: the engine's Linux packaging test
   (`engine/patches/build/tests/test_linux_release.py`) reads it, and moving it would change the engine key. It is a copy
   of the pinned release's `install.sh`; when the engine is next rebuilt, that test can read the fetched installer and
@@ -175,12 +169,9 @@ reaches Ardia two ways (`docs/automation.md`, `docs/control-socket.md`):
   wouldn't fit goes out summarized with `truncated: true`, and a decide request that wouldn't fit isn't sent (Ardia uses
   its default). A reader that falls behind loses its oldest events, never a reply or a decide message and never its connection
   in the middle of a line; the next event it gets carries `dropped: <n>`. Details in `docs/control-socket.md` › The 1 MiB line.
-- **The plugin schema.** `docs/plugin.schema.json` is the manifest schema Ardia writes (`apps/browser/scripts/
-  write-plugin-schema.mjs`; a test keeps it current). The command ships a copy for `ardia plugins check` offline, and the
-  plugins repo's CI compares that copy with ardia main's.
-- **Release smoke.** `scripts/release/cli-bootstrap-smoke.sh` checks that a fresh profile gets no `ardia` until it installs
-  Command Line, and that an installed one gets `ardia` from the signed copy at the pinned version with `ardia tabs`
-  answering. `scripts/release/token-smoke.sh` runs `ardia browse` over the real token connection with the app's built-in
+- **The plugin schema.** `docs/plugin.v3.schema.json` is the manifest 3 schema (`packages/plugin-sdk/scripts/write-schema.mjs`;
+  a test keeps it current), the one Ardia writes beside `config.schema.json` and `ardia-plugin check` uses.
+- **Release smoke.** `scripts/release/token-smoke.sh` runs `ardia browse` over the real token connection with the app's built-in
   `ardia`.
 - **Telemetry.** The command's events go to the same service under `source = 'ardia-cli'` (the dashboard's CLI health
   page reads them); the What's Sent copy in the app lists them, since the consent is the app's. A new CLI event needs

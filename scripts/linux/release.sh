@@ -133,7 +133,6 @@ deb_name="Ardia-$version-linux-x64.deb"
 rpm_name="Ardia-$version-linux-x64.rpm"
 flatpak_name="Ardia-$version-linux-x64.flatpak"
 appimage_name="Ardia-$version-linux-x64.AppImage"
-cli_name="ardia-cli-$version-linux-x64.tar.gz"
 srcpkg_name="ardia-bin-$version.src.tar.gz"
 update_name="Ardia-$version-linux-update.txt"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct)}
@@ -174,10 +173,6 @@ echo "==> UI (apps/desktop/dist/linux)"
 pnpm --filter @ardia/desktop build >"$out/ui-build.log" 2>&1 \
   || { tail -20 "$out/ui-build.log" >&2; die "building apps/desktop/dist/linux failed ($out/ui-build.log)"; }
 
-echo "==> ardia command (pinned in apps/browser/official-plugins.json)"
-python3 -I scripts/release/official-plugins.py ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} linux-cli "$version" "$out/$cli_name" \
-  || die "the pinned ardia command couldn't be fetched and verified"
-
 echo "==> ardia-update-verify (packages/core-rs)"
 update_verify=$(scripts/linux/update-verify.sh 2>"$out/update-verify.log") \
   || { tail -20 "$out/update-verify.log" >&2; die "building ardia-update-verify failed ($out/update-verify.log)"; }
@@ -188,7 +183,7 @@ blocker=$(scripts/linux/fetch-ubo.sh 2>"$out/ubo.log") \
 
 echo "==> Package"
 python3 scripts/linux/package.py --out "$engine" --ui apps/desktop/dist/linux --content-blocker "$blocker" \
-  --version "$version" --cli "$out/$cli_name" --update-verify "$update_verify" --destination "$out/$package_name" \
+  --version "$version" --update-verify "$update_verify" --destination "$out/$package_name" \
   --deb "$out/$deb_name" --appimage "$out/$appimage_name" >/dev/null
 rpm_dropped=""
 drop_rpm() {
@@ -243,7 +238,6 @@ write_provenance() {
       echo "flatpak dropped: building it failed (flatpak-build.log)"
     fi
     echo "arch $(cut -d' ' -f1 "$out/$srcpkg_name.sha256")  $srcpkg_name"
-    echo "cli $(cut -d' ' -f1 "$out/$cli_name.sha256")  $cli_name, from $(python3 -I scripts/release/official-plugins.py describe | grep '^plugin cli ')"
   } > "$out/provenance.txt"
 }
 write_provenance
@@ -279,9 +273,9 @@ fi
 echo
 [ "$exact" = 1 ] || echo "NOT a release: built against engine $engine_label, not this commit's ${head_key:0:12}."
 [ -z "$dirty" ] || echo "NOT a release: built with uncommitted changes."
-du -sh "${built_names[@]/#/$out/}" "$out/$cli_name"
+du -sh "${built_names[@]/#/$out/}"
 upload=()
-for built in "${built_names[@]}" "$cli_name"; do upload+=("$out/$built" "$out/$built.sha256"); done
+for built in "${built_names[@]}"; do upload+=("$out/$built" "$out/$built.sha256"); done
 echo
 if [ -n "$update_key" ]; then
   upload+=("$out/$update_name" "$out/$update_name.sig")

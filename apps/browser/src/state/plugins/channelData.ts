@@ -20,8 +20,10 @@ import { pluginPageOf } from "./pages";
 import { acceptsRun } from "./process";
 import { activeManifest, currentPlugins } from "./store";
 import { reveal } from "@ardia/core";
-import { deletePluginSecret, getPluginSecret, setPluginSecret, type SecretOutcome } from "./secrets";
-import { storageDelete, storageGet, storageKeys, storageSet, type StorageOutcome } from "./storage";
+import { deletePluginSecret, getPluginSecret, secretSpace, setPluginSecret, type SecretOutcome } from "./secrets";
+import { storageDelete, storageGet, storageKeys, storageSet, storageSpace, type StorageOutcome } from "./storage";
+import { focusedWindowId } from "../browser/current";
+import { ownValue } from "../../lib/decode";
 
 export const FETCH_LIMITS = { headers: 50, headerBytes: 8 * 1024, bodyBytes: 512 * 1024, timeoutMs: [1000, 60_000], defaultTimeoutMs: 30_000 } as const;
 const PAGE_TEXT_LIMIT = 200_000;
@@ -36,27 +38,48 @@ type Caller = { name: string; run: number };
 
 const settled = <T,>(outcome: StorageOutcome<T> | SecretOutcome<T>): Body => (outcome.ok ? { result: outcome.value } : failure(outcome.code, outcome.message));
 
+export function requestProfile(name: string, m: Pick<PluginManifest, "scope">, params: Record<string, unknown>): { ok: true; profileId: string | null } | { ok: false; message: string } {
+  if (m.scope !== "profile") return { ok: true, profileId: null };
+  const b = useBrowser.getState();
+  const limited = ownValue(currentPlugins().records, name)?.profiles;
+  const allowed = (id: string) => !!b.profiles[id] && (!limited || limited === "all" || limited.includes(id));
+  if (params.profile !== undefined) {
+    if (typeof params.profile !== "string" || !allowed(params.profile)) return { ok: false, message: "profile isn't a profile this plugin is on in." };
+    return { ok: true, profileId: params.profile };
+  }
+  const focused = focusedWindowId();
+  const front = focused ? b.windows[focused]?.profileId : undefined;
+  const fallback = [front, b.settings.defaultProfileId, ...(Array.isArray(limited) ? limited : [])].find((id): id is string => typeof id === "string" && allowed(id));
+  return fallback ? { ok: true, profileId: fallback } : { ok: false, message: "This plugin isn't on in any profile." };
+}
+
 export function storageMethod(c: Caller, m: PluginManifest, method: string, params: Record<string, unknown>): Promise<Body> | Body {
   if (!m.permissions.storage) return failure("refused", `${method} needs the storage permission.`);
+  const profile = requestProfile(c.name, m, params);
+  if (!profile.ok) return failure("refused", profile.message);
+  const space = storageSpace(c.name, profile.profileId);
   const consent = consentToken();
   const answered = <T,>(outcome: StorageOutcome<T>): Body => {
     if (!outcome.ok && outcome.closed) notePlugin("plugin_storage_cancels", consent);
     return settled(outcome);
   };
-  if (method === "storage.get") return storageGet(c.name, params.key).then(answered);
-  if (method === "storage.set") return storageSet(c.name, params.key, params.value).then((o) => (o.ok ? (notePlugin("plugin_storage_writes", consent), { result: { ok: true } }) : answered(o)));
-  if (method === "storage.delete") return storageDelete(c.name, params.key).then((o) => (o.ok ? { result: { ok: true } } : answered(o)));
-  return storageKeys(c.name).then(answered);
+  if (method === "storage.get") return storageGet(space, params.key).then(answered);
+  if (method === "storage.set") return storageSet(space, params.key, params.value).then((o) => (o.ok ? (notePlugin("plugin_storage_writes", consent), { result: { ok: true } }) : answered(o)));
+  if (method === "storage.delete") return storageDelete(space, params.key).then((o) => (o.ok ? { result: { ok: true } } : answered(o)));
+  return storageKeys(space).then(answered);
 }
 
 export function secretsMethod(c: Caller, m: PluginManifest, method: string, params: Record<string, unknown>): Promise<Body> | Body {
   if (!m.permissions.secrets) return failure("refused", `${method} needs the secrets permission.`);
-  if (method === "secrets.get") return getPluginSecret(c.name, params.key).then((o) => (o.ok ? { result: o.value && reveal(o.value) } : settled(o)));
+  const profile = requestProfile(c.name, m, params);
+  if (!profile.ok) return failure("refused", profile.message);
+  const space = secretSpace(c.name, profile.profileId);
+  if (method === "secrets.get") return getPluginSecret(space, params.key).then((o) => (o.ok ? { result: o.value && reveal(o.value) } : settled(o)));
   if (method === "secrets.set") {
     const consent = consentToken();
-    return setPluginSecret(c.name, params.key, params.value).then((o) => (o.ok ? (notePlugin("plugin_secret_writes", consent), { result: { ok: true } }) : settled(o)));
+    return setPluginSecret(space, params.key, params.value).then((o) => (o.ok ? (notePlugin("plugin_secret_writes", consent), { result: { ok: true } }) : settled(o)));
   }
-  return deletePluginSecret(c.name, params.key).then((o) => (o.ok ? { result: { ok: true } } : settled(o)));
+  return deletePluginSecret(space, params.key).then((o) => (o.ok ? { result: { ok: true } } : settled(o)));
 }
 
 function headersOf(raw: unknown): Record<string, string> | string {

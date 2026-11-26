@@ -45,7 +45,7 @@ const OLD_TRACE = { visibility: "ARDIA_TRACE_VISIBILITY", pip: "ARDIA_TRACE_PIP"
 
 export const INSTANCE_KEYS = [
   "jsLocation", "chromiumSwitches", "downloadsDir", "updateFeed", "allowAudio", "allowOcclusion", "releaseNotes",
-  "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir", "importSafariHome", "officialPluginsFrom",
+  "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir", "importSafariHome", "pluginArtifactsFrom",
 ];
 export const TEST_KEYS = [
   "keychain", "keychainHiddenReads", "keychainFail", "safeStorageAnswer", "reauth", "bluetoothChooser",
@@ -53,12 +53,12 @@ export const TEST_KEYS = [
   "loginsDelay", "loginsReleaseAfter", "cdpTabsVisible", "nativeDragRefused",
   "pipSelfTest", "pipHover", "fakeFullScreenMs", "shadersKeyWindow", "peekStrict", "peekMesh", "peekReady", "peekReduceMotion", "peekSlow", "importSecret", "importDiaBundleId", "importDiaWindows",
   "cliInstallScript", "legacySource", "legacyCrashAfter", "bangsUrl", "onboarding", "whatsNew", "telemetry",
-  "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "screenRecording", "systemLocationPermission", "officialPin",
+  "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "screenRecording", "systemLocationPermission",
   "applePasswordsPanel", "systemPanelRace", "controlDoorbell",
 ];
 export const COMMA_KEYS = [
   "chromiumSwitches", "downloadsDir", "updateFeed", "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir",
-  "importSafariHome", "importSecret", "cliInstallScript", "legacySource", "bangsUrl", "liveMock", "officialPin", "officialPluginsFrom",
+  "importSafariHome", "importSecret", "cliInstallScript", "legacySource", "bangsUrl", "liveMock", "pluginArtifactsFrom",
 ];
 
 const knownKeys = { instance: INSTANCE_KEYS, test: TEST_KEYS };

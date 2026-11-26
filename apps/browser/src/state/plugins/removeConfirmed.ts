@@ -7,12 +7,14 @@ import { removalIdentity, removePlugin } from "./lifecycle";
 export async function removePluginAfterConfirm(name: string, title: string, windowId: string): Promise<boolean> {
   const consent = consentToken();
   const identity = removalIdentity(name);
-  const official = identity.official;
   const { confirmed } = await confirm({
     title: `Remove ${title}?`,
-    message: official
-      ? "Its download and its commands on your PATH are removed. Its data and secrets stay, so installing it again picks up where you left off."
-      : `Its folder moves to the ${PLATFORM_TERMS.trash}, and its data and its panel's website data are deleted.`,
+    message:
+      identity.source === "store"
+        ? "Its download, its commands on your PATH, its data and its panel's website data are removed."
+        : identity.source === "dev"
+          ? "Its dev link is removed, along with its data and its panel's website data. Your project's folder stays."
+          : `Its folder moves to the ${PLATFORM_TERMS.trash}, and its data and its panel's website data are deleted.`,
     confirmTitle: "Remove",
     destructive: true,
     windowId,

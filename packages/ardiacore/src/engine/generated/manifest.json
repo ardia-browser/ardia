@@ -1510,8 +1510,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "824356c4ceb0f526b84811590c1aab1a8ad59aa6b3f949f06ad68fb723cef12f",
-        "swift": "41a93592952890260b4a8e0f8fba27b9931a42b5ee4a4b1b2bb25ca358f7c010"
+        "types": "94cb99721f35f8f6309d51ad389ec10741b947c6149f7ac4c137fce52f865100",
+        "swift": "07e701bcb2fa91b4e0365eef9596b908e23c34c250ddcd1fd4371bdc51b47719"
       },
       "modules": {
         "ArdiaShell": {
@@ -3930,20 +3930,6 @@
               "desktop": "custom",
               "windows": "absent"
             },
-            "legacyProgramsInstalled": {
-              "args": [],
-              "async": true,
-              "mac": "custom",
-              "desktop": "custom",
-              "windows": "absent"
-            },
-            "programRegistry": {
-              "args": [],
-              "async": true,
-              "mac": "custom",
-              "desktop": "custom",
-              "windows": "absent"
-            },
             "sweepPrograms": {
               "args": [
                 "active"
@@ -3964,23 +3950,16 @@
               "desktop": "custom",
               "windows": "absent"
             },
-            "officialPlugins": {
-              "args": [],
-              "async": true,
-              "mac": "custom",
-              "desktop": "custom",
-              "windows": "absent"
-            },
-            "fetchOfficial": {
+            "fetchArtifact": {
               "args": [
-                "name"
+                "spec"
               ],
               "async": true,
               "mac": "custom",
               "desktop": "custom",
               "windows": "absent"
             },
-            "cancelOfficialFetch": {
+            "cancelArtifactFetch": {
               "args": [
                 "name"
               ],
@@ -3989,11 +3968,61 @@
               "desktop": "custom",
               "windows": "absent"
             },
-            "promoteOfficial": {
+            "installArchiveFile": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "installFolder": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "activateStore": {
               "args": [
                 "name",
                 "folderId",
                 "approved"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "rollbackStore": {
+              "args": [
+                "name",
+                "expectedVersion",
+                "expectedSha256"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "verifySignature": {
+              "args": [
+                "publicKey",
+                "signature",
+                "message"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "adoptLegacy": {
+              "args": [
+                "from",
+                "to"
               ],
               "async": true,
               "mac": "custom",
@@ -4043,7 +4072,7 @@
             "remove": {
               "args": [
                 "name",
-                "official",
+                "source",
                 "folderId"
               ],
               "async": true,
@@ -4089,7 +4118,7 @@
               "desktop": "absent",
               "windows": "absent"
             },
-            "onOfficialFetch": {
+            "onArtifactFetch": {
               "mac": "custom",
               "desktop": "absent",
               "windows": "absent"

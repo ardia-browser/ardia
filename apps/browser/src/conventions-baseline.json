@@ -152,7 +152,6 @@
     "scripts/agent/locked": 1,
     "scripts/agent/train": 1,
     "scripts/lib/worktree-deps.test.mjs": 2,
-    "scripts/release/cli-bootstrap-smoke.sh": 5,
     "scripts/release/launch-check.sh": 1
   },
   "expiring-skip": {

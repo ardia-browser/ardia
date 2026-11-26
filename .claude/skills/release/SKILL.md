@@ -244,8 +244,6 @@ and a session whose window was left on its second profile, and checks, over CDP 
 
 - the engine and chrome://version are the Chromium version `engine/patches/build/env.sh` names, and the after-update release-notes tab opened exactly once;
 - the browser's child processes are the bundle's own helpers (Chrome's process checks pass under Developer ID);
-- a fresh profile is offered the built-in Command Line plugin and gets no `ardia`; an installed one gets `ardia` from
-  the signed copy, at the pinned version (`scripts/release/cli-bootstrap-smoke.sh`);
 - `ardia browse read <url>`, `open <url>` and `read` work over the real token connection, with the app's built-in
   `ardia` (`scripts/release/token-smoke.sh`, in a second hidden instance with no DevTools port);
 - pages load, uBlock blocks an ad script, H.264/AAC/WebGL2;

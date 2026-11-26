@@ -44,8 +44,9 @@ export function useProviderSections({
         const rank = (s: ProviderSection) => order.current.findIndex((p) => p.id === s.id);
         return { query, targets, sections: [...kept, section].sort((a, b) => rank(a) - rank(b)) };
       }),
+      { windowId },
     );
-  }, [query, targets, queries]);
+  }, [query, targets, queries, windowId]);
   useEffect(() => () => queries.cancel(), [queries]);
 
   return answered.query === query && answered.targets === targets ? answered.sections : NO_SECTIONS;

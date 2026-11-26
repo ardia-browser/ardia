@@ -20,19 +20,24 @@ const same = (a: string | undefined, b: string | undefined) => a !== undefined &
 
 const scopeOf = (id: string) => id.slice(0, Math.max(0, id.indexOf("/")));
 
-export function registryKey(value: string): { host: string; origin: string | null } {
-  const trimmed = value.trim().toLowerCase().replace(/\/+$/, "");
-  const found = /^([a-z][a-z0-9+.-]*):\/\/([^/]+)$/.exec(trimmed);
-  if (found) return { host: found[2]!, origin: `${found[1]}://${found[2]}` };
-  return { host: trimmed, origin: null };
+export function registryKey(value: string): { host: string; origin: string | null; path: string } {
+  const trimmed = value.trim().replace(/\/index\.json$/, "").replace(/\/+$/, "");
+  const found = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]+)(\/[^?#]*)?$/.exec(trimmed);
+  if (found) {
+    const host = found[2]!.toLowerCase();
+    return { host, origin: `${found[1]!.toLowerCase()}://${host}`, path: (found[3] ?? "").replace(/\/+$/, "") };
+  }
+  const slash = trimmed.indexOf("/");
+  const host = (slash < 0 ? trimmed : trimmed.slice(0, slash)).toLowerCase();
+  return { host, origin: null, path: slash < 0 ? "" : trimmed.slice(slash).replace(/\/+$/, "") };
 }
 
-export function sameRegistry(a: string | undefined, b: string | undefined): boolean {
-  if (a === undefined || b === undefined) return false;
-  const left = registryKey(a);
-  const right = registryKey(b);
-  if (left.origin && right.origin) return left.origin === right.origin;
-  return left.host === right.host;
+export function sameRegistry(selector: string | undefined, target: string | undefined): boolean {
+  if (selector === undefined || target === undefined) return false;
+  const named = registryKey(selector);
+  const actual = registryKey(target);
+  if (named.origin && actual.origin ? named.origin !== actual.origin : named.host !== actual.host) return false;
+  return named.path === "" || actual.path === named.path || actual.path.startsWith(`${named.path}/`);
 }
 
 export function versionMatches(version: string, selectors: readonly string[]): boolean {

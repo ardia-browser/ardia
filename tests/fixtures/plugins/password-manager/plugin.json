@@ -1,10 +1,23 @@
 {
-  "$schema": "../../plugin.schema.json",
-  "manifest": 1,
-  "name": "password-manager",
-  "title": "Test Passwords",
+  "$schema": "https://ardia.dev/schemas/plugin.v3.json",
+  "manifest": 3,
+  "id": "@test/password-manager",
+  "name": "Test Passwords",
   "description": "Fill logins and verification codes from the system's password panel.",
   "version": "1.0.0",
-  "requires": "0.0.0",
-  "passwordManager": { "fill": "system", "fields": ["login", "oneTimeCode"], "verificationCodeSetup": "system", "passkeys": "system" }
+  "engines": {
+    "ardia": ">=0.0.0"
+  },
+  "main": "index.js",
+  "contributes": {
+    "passwordManager": {
+      "fill": "system",
+      "fields": [
+        "login",
+        "oneTimeCode"
+      ],
+      "verificationCodeSetup": "system",
+      "passkeys": "system"
+    }
+  }
 }

@@ -1,4 +1,4 @@
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -47,8 +47,16 @@ export function devPaths(project: Project, flags: DevFlags, env: Env = flags.env
   };
 }
 
+export function canonicalDir(dir: string): string {
+  try {
+    return realpathSync(dir);
+  } catch {
+    return resolve(dir);
+  }
+}
+
 export function writeDevLink(project: Project, paths: DevPaths): DevLink {
-  const link: DevLink = { v: 1, id: project.manifest.id, path: project.dir, manifest: "plugin.json", version: project.manifest.version, linkedAt: new Date().toISOString(), pid: process.pid, cli: CLI_VERSION };
+  const link: DevLink = { v: 1, id: project.manifest.id, path: canonicalDir(project.dir), manifest: "plugin.json", version: project.manifest.version, linkedAt: new Date().toISOString(), pid: process.pid, cli: CLI_VERSION };
   mkdirSync(join(paths.configDir, "plugins-dev"), { recursive: true });
   const partial = `${paths.link}.partial-${process.pid}`;
   writeFileSync(partial, `${JSON.stringify(link, null, 2)}\n`, { mode: 0o600 });
@@ -172,7 +180,7 @@ export async function runDev(dir: string | undefined, out: Output, flags: DevFla
       for (const problem of check.problems) out.warn(`  ${problem}`);
       return { ok: false, reason: "check" };
     }
-    const ping = await pingArdia(paths.socket, { id: project.manifest.id, path: project.dir, link: paths.link });
+    const ping = await pingArdia(paths.socket, { id: project.manifest.id, path: canonicalDir(project.dir), link: paths.link });
     if (ping.reached && ping.error === undefined) out.info(`reloaded ${project.manifest.id} in Ardia`);
     else if (ping.reached) {
       const reason = ping.error || "Ardia refused the reload";

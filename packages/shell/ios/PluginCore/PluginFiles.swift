@@ -142,9 +142,24 @@ enum PluginFiles {
     SHA256.hash(data: Data("\(text)\u{0}\(folderId)".utf8)).map { String(format: "%02x", $0) }.joined()
   }
 
-  static func approvedFolder(_ path: String, folderId: String, approved: String, identity: String? = nil) -> Result<OpenedFolder, FolderRefusal> {
+  static func digestedFolder(_ opened: OpenedFolder) -> Result<OpenedFolder, FolderRefusal> {
+    switch FolderDigests.shared.digest(opened) {
+    case .success(let digest): return .success(OpenedFolder(fd: opened.fd, path: opened.path, id: PluginFolderDigest.folderId(digest)))
+    case .failure(let failure): return .failure(FolderRefusal(reason: PluginFolderDigest.reason(failure), cause: .mismatch))
+    }
+  }
+
+  static func approvedFolder(_ path: String, folderId: String, approved: String, identity: String? = nil, digested: Bool = false) -> Result<OpenedFolder, FolderRefusal> {
     guard let opened = openFolder(path) else { return .failure(FolderRefusal(reason: "its folder is missing")) }
-    let folder = identity.map { OpenedFolder(fd: opened.fd, path: opened.path, id: $0) } ?? opened
+    var folder = identity.map { OpenedFolder(fd: opened.fd, path: opened.path, id: $0) } ?? opened
+    if digested {
+      switch digestedFolder(opened) {
+      case .success(let named): folder = named
+      case .failure(let refusal):
+        opened.close()
+        return .failure(refusal)
+      }
+    }
     guard folder.id == folderId else {
       folder.close()
       return .failure(FolderRefusal(reason: "its folder was replaced since you approved it"))
@@ -181,8 +196,8 @@ enum PluginFiles {
 
   static let maxPageFile = 10 << 20
 
-  static func readPageFile(_ path: String, folderId: String, approved: String, relative: String, identity: String? = nil) -> Data? {
-    guard case .success(let folder) = approvedFolder(path, folderId: folderId, approved: approved, identity: identity) else { return nil }
+  static func readPageFile(_ path: String, folderId: String, approved: String, relative: String, identity: String? = nil, digested: Bool = false) -> Data? {
+    guard case .success(let folder) = approvedFolder(path, folderId: folderId, approved: approved, identity: identity, digested: digested) else { return nil }
     defer { folder.close() }
     let fd = openBeneath(folder.fd, relative, flags: O_RDONLY | O_NONBLOCK)
     guard fd >= 0 else { return nil }

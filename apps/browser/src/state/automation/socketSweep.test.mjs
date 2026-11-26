@@ -94,6 +94,8 @@ const PARAMS = (f) => ({
   "plugins.disable": { name: "none" },
   "plugins.remove": { name: "none" },
   "plugins.call": { plugin: "none", tool: "none" },
+  "plugins.install": { id: "@none/none" },
+  "plugins.devReload": { id: "@none/none", path: "/none", link: "/none.json" },
   "tabs.navigate": { tab: f.other, url: "https://nav.example/" },
   "tabs.reload": { tab: f.other },
   "tabs.back": { tab: f.other },

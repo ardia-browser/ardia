@@ -16,6 +16,9 @@ export type LaunchConfig = {
   trace: string[];
   test: Record<string, string>;
   feedbackURL?: string | null;
+  pluginRegistryURL?: string | null;
+  pluginRegistryKeys?: string | null;
+  pluginNativeKeys?: string | null;
   webUIShell?: boolean;
 };
 

@@ -374,6 +374,9 @@ still counts:
 | `ARDIA_SWITCHES` | `name=on,…` | The only feature toggle, backed by the registry `platform/killSwitches.ts`: kill switches (on by default, at most 8) and experiments (off by default), each with an owner and `removeBy` |
 | `ARDIA_TRACE` | `pip,visibility,…` | Trace logging per area |
 | `ARDIA_TEST` | `keychain=file,reauth=granted,…` | All test fakes and fixtures |
+| `ARDIA_PLUGIN_REGISTRY_URL` | URL | The plugin registry's base (`https://ardia.dev/r` otherwise), for a local registry under test; its envelopes still have to verify |
+| `ARDIA_PLUGIN_REGISTRY_PUBLIC_KEY` | `kid=key,…` | Test instances only: the Ed25519 keys (raw base64 or SPKI PEM) registry envelopes verify against, in place of the built-in ones |
+| `ARDIA_PLUGIN_NATIVE_PUBLIC_KEY` | `kid=key,…` | Test instances only: the Ed25519 keys an `@ardia/*` native artifact's `officialSig` verifies against |
 | `ARDIA_FEEDBACK_URL` | URL | Where Report a Problem sends (`https://ardia.dev/api/feedback` otherwise); the `ardia` CLI reads the same variable (`docs/feedback.md`) |
 
 - `ARDIA_TEST` and `ARDIA_TRACE` work only in a test instance (not signed for distribution, a scratch data dir, the

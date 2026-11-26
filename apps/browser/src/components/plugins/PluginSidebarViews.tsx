@@ -9,7 +9,7 @@ type SidebarViewEntry = ReturnType<typeof usePluginSidebarViews>[number];
 
 export function PluginSidebarViews({ windowId }: { windowId: string }) {
   const eligible = usePluginWindowEligible(windowId);
-  const views = usePluginSidebarViews();
+  const views = usePluginSidebarViews(windowId);
   if (!eligible || !views.length) return null;
   return (
     <Box gap="xs">

@@ -22,7 +22,7 @@ const settle = async () => {
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const pushes = () => native.calls.filter((c) => c[0] === "setFieldProviders");
 const offerToSave = (profile) => stub.profileToggles.user.get(profile)?.passwords;
-const folder = (name) => ({ name, status: "ok", text: MANIFEST.replace('"password-manager"', JSON.stringify(name)) });
+const folder = (name) => ({ name, status: "ok", text: MANIFEST.replace('"@test/password-manager"', JSON.stringify(`@test/${name}`)) });
 const gate = () => {
   let open;
   const promise = new Promise((resolve) => (open = resolve));

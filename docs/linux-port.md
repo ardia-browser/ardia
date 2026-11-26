@@ -691,8 +691,8 @@ python3 scripts/linux/package.py \
   `~/.cache/ardia-appimage`. It carries no setuid helper and no polkit policy, so reauth falls back to the login
   password, and it needs user namespaces: where they're restricted (Ubuntu 24.04 and later) it refuses to start.
 
-That makes a dev package. A release adds `--version <version>` and `--cli <ardia-cli-<version>-linux-x64.tar.gz>`, the
-pinned command renamed for this version (`scripts/release/official-plugins.py linux-cli <version> <out>`).
+That makes a dev package. A release adds `--version <version>`; `--cli <ardia-cli-<version>-linux-x64.tar.gz>` still
+bundles a command tarball given by hand, but the release no longer passes one (the command is the `@ardia/cli` plugin).
 `scripts/linux/release.sh <version>` runs the whole release build, the smoke gate included, and prints the upload
 command ([linux-ci.md](linux-ci.md) › Linux releases).
 
@@ -726,8 +726,7 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
     (`scripts/linux/update-verify.sh` builds it for `x86_64-unknown-linux-musl`; a package without it reports
     `unsupported noVerifier` and never updates itself), and `lib/ardia/linux-update.pem` (0644), the Ed25519 public
     key the manifests are signed for;
-  - `lib/ardia/cli/` (with `--cli`): `ardia-cli-install.sh` (`apps/cli/install.sh`, the pinned installer from
-    ardia-browser/plugins; `scripts/release/official-plugins.py check` holds it to the pin, mode 0755),
+  - `lib/ardia/cli/` (with `--cli`): `ardia-cli-install.sh` (`apps/cli/install.sh`, mode 0755),
     `ardia-cli-<version>-linux-x64.tar.gz` and `ardia-cli.sha256` (the digest is its first token), the `ardia`
     command's installer, tarball and pinned digest. When the CLI is turned on, the browser installs from these files
     with `ardia-cli-install.sh --version <VERSION> --sha256 <digest>` and `ARDIA_CLI_URL=file://…`;

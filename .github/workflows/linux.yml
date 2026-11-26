@@ -10,8 +10,6 @@ on:
       - "apps/browser/assets/**"
       - "apps/browser/package.json"
       - "apps/browser/tsconfig.json"
-      - "apps/browser/official-plugins.json"
-      - "apps/browser/official-plugins.d.json.ts"
       - "apps/browser/macos/Ardia.xcodeproj/project.pbxproj"
       - "apps/site/src/scripts/meadow/**"
       - "apps/cli/install.sh"
@@ -51,7 +49,6 @@ on:
       - "scripts/linux/**"
       - "scripts/lib/**"
       - "scripts/agent/locked"
-      - "scripts/release/official-plugins.py"
       - ".claude/skills/release/scripts/publish.sh"
       - "docs/linux-port.md"
       - "docs/engine-build.md"
@@ -255,17 +252,8 @@ jobs:
         if: env.FULL == 'true'
         run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rpm cpio
       - run: pnpm --filter @ardia/desktop build
-      - name: ardia command (pinned)
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/dist"
-          if python3 -I scripts/release/official-plugins.py published cli linux-x64; then
-            python3 -I scripts/release/official-plugins.py linux-cli "$VERSION" "$RUNNER_TEMP/dist/$CLI_NAME"
-            echo "CLI_ARGS=--cli $RUNNER_TEMP/dist/$CLI_NAME" >> "$GITHUB_ENV"
-          else
-            echo "::warning::the pinned ardia command isn't published yet (apps/browser/official-plugins.json): packaging without it, so the smoke skips cli-install, cli-control and cli-scripts"
-            echo "CLI_ARGS=" >> "$GITHUB_ENV"
-          fi
+      - name: ardia command
+        run: echo "CLI_ARGS=" >> "$GITHUB_ENV"
       - name: Package
         run: |
           set -euo pipefail

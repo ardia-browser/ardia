@@ -28,7 +28,7 @@ const { setConsentPeriod, consentToken } = await import("../telemetry/consentPer
 setConsentPeriod(true, "page-bar-test");
 
 const FIXTURE = readFileSync(new URL("../../../../../tests/fixtures/plugins/developer-mode/plugin.json", import.meta.url), "utf8");
-const twin = (name) => JSON.stringify({ ...JSON.parse(FIXTURE), name });
+const twin = (name) => JSON.stringify({ ...JSON.parse(FIXTURE), id: `@test/${name}` });
 const P = () => usePlugins.getState();
 const host = stub.pluginHost;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

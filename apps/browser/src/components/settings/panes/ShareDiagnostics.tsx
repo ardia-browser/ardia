@@ -3,7 +3,6 @@ import { View } from "react-native";
 import { setSharing, useTelemetry } from "../../../state/telemetry/client";
 import { IDENTITY_COPY, LOCAL_COPY, PLUGIN_SENT_COPY, SELF_INSTALLED_COMMAND_SENT, SHARING_COPY, WATCH_COPY, WHATS_SENT } from "../../../state/telemetry/copy";
 import { usePluginTelemetryDisclosures } from "../../../state/plugins/disclosures";
-import { refreshLegacyInstalls } from "../../../state/plugins/programRegistry";
 import { installsCommandItself } from "../../../state/app/linuxCommandInstall";
 import { identityFor, resetAnonymousId, shortInstallId, stopWatch, useInstallId, useWatchReport, useWatchTurnedSharingOn, useWatchUntil, viewMyData } from "../../../state/telemetry/privacy";
 import { UI_LOCALE } from "../../../lib/uiLocale";
@@ -161,7 +160,6 @@ function WhatsSentGroups() {
 }
 
 export function WhatsSentSheet() {
-  useEffect(() => void refreshLegacyInstalls(), []);
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
       <DialogTitle subtitle={`Only while “${SHARING_COPY.toggle}” is on, except what’s under “Even with sharing off”, “${SHARING_COPY.keptOnThisMac}” and “${PLUGIN_SENT_COPY.addedTitle}”.`}>{SHARING_COPY.whatsSent}</DialogTitle>

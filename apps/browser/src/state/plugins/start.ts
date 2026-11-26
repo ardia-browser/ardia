@@ -8,7 +8,10 @@ import { watchPageContexts } from "./pages";
 import { watchActivation } from "./activation";
 import { watchPluginOmnibox } from "./omnibox";
 import { watchSurfaceRemounts } from "./surfaces";
-import { watchOfficialUpdates } from "./official";
+import { watchPluginUpdates } from "./updater";
+import { migrateLegacyPlugins } from "./migration";
+import { handlePluginInstallLinks } from "./installLinks";
+import { installFromDeepLink } from "./marketplace";
 import { watchPageBarCommits } from "./pageBarCommits";
 
 let started = false;
@@ -24,9 +27,11 @@ export function startPlugins() {
   watchSurfaceRemounts();
   watchPageContexts();
   registerPluginSocketMethods();
+  handlePluginInstallLinks(installFromDeepLink);
   watchPluginFolder();
-  watchOfficialUpdates();
+  watchPluginUpdates();
   watchPageBarCommits();
-  void rescanPlugins(consentToken());
+  const consent = consentToken();
+  void migrateLegacyPlugins(consent).finally(() => void rescanPlugins(consent));
   watchPluginOmnibox();
 }

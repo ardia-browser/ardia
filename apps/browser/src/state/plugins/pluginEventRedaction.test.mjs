@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { v3Text } from "./fixtures/manifests.mjs";
+import { EXAMPLE } from "./fixtures/example.mjs";
 import { readFileSync } from "node:fs";
 import { after, test } from "node:test";
 const stub = await import("../../test-native/index.ts");
@@ -9,7 +11,7 @@ const lifecycle = await import("./lifecycle.ts");
 const { setConsentPeriod, consentToken } = await import("../telemetry/consentPeriod.ts");
 setConsentPeriod(true, "plugin-event-redaction-test");
 
-const FIXTURE = JSON.parse(readFileSync(new URL("../../../../../tests/fixtures/plugins/example/plugin.json", import.meta.url), "utf8"));
+const FIXTURE = EXAMPLE;
 const S = () => useBrowser.getState();
 const P = () => usePlugins.getState();
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -26,7 +28,7 @@ async function enabledWith(permissions) {
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
   for (const key of ["starts", "stops", "replies", "events", "removed"]) host[key].length = 0;
   const doc = { ...FIXTURE, hooks: [...FIXTURE.hooks, "history.removed"], permissions: [...new Set([...(FIXTURE.permissions ?? []), ...permissions])] };
-  host.folders = [{ name: "example", status: "ok", text: JSON.stringify(doc) }];
+  host.folders = [{ name: "example", status: "ok", text: v3Text(doc) }];
   await lifecycle.rescanPlugins(consentToken());
   assert.ok(lifecycle.requestPluginConsent("example"));
   assert.ok(lifecycle.enablePlugin("example", P().consent.hash));

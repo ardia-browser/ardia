@@ -11,9 +11,12 @@ import { valuesOf } from "./values";
 import { consentVerbOf } from "./consentWords";
 import { fullControlLine } from "./consent";
 import { ownValue } from "../../lib/decode";
+import { useLock } from "./lockfile";
+import { shownNames } from "./profileScope";
 
 export const usePluginOrder = () => usePlugins((s) => s.order);
-export { useOfficialPlugins } from "./official";
+export { useCatalog } from "./marketplace";
+export const usePluginLockEntry = (name: string) => useLock((s) => Object.values(s.lock).find((entry) => entry.key === name) ?? null);
 export const usePluginListing = (name: string) => usePlugins((s) => s.listings[name]);
 export const usePluginFullControl = (name: string) =>
   usePlugins((s) => {
@@ -22,7 +25,7 @@ export const usePluginFullControl = (name: string) =>
   });
 export const useConsentListing = (name: string, hash: string) => usePlugins((s) => consentListing(s, name, hash));
 export const useConsentVerb = (name: string, hash: string) => usePlugins((s) => consentVerbOf(s, name, hash));
-export const useOfficialFetch = (name: string) => usePlugins((s) => ownValue(s.fetches, name));
+export const usePluginFetch = (name: string) => usePlugins((s) => ownValue(s.fetches, name));
 export const usePluginTitle = (name: string | null | undefined) => usePlugins((s) => (name && Object.hasOwn(s.listings, name) ? (s.listings[name]!.manifest?.title ?? name) : null));
 export const usePluginRecord = (name: string) => usePlugins((s) => recordOf(s, name));
 export const usePluginActive = (name: string) => usePlugins((s) => !!activeManifest(s, name));
@@ -55,10 +58,13 @@ export const usePluginApproval = (name: string) => usePlugins((s) => recordOf(s,
 export const usePluginNetwork = (name: string) => usePlugins((s) => webViewsOnline(s, name));
 export const usePluginPageSpec = (name: string) => usePlugins((s) => s.listings[name]?.manifest?.page ?? null);
 export const usePluginManifest = (name: string) => usePlugins((s) => activeManifest(s, name));
-export const usePluginToolbarItems = () => {
+const useWindowProfileId = (windowId: string | undefined) => useBrowser((s) => (windowId ? (s.windows[windowId]?.profileId ?? null) : null));
+
+export const usePluginToolbarItems = (windowId?: string) => {
   const plugins = usePlugins(useShallow((s: PluginsStore) => ({ listings: s.listings, records: s.records, order: s.order })));
   const surfaces = usePluginSurfaces(useShallow((s: PluginSurfacesStore) => ({ toolbarState: s.toolbarState })));
-  return useMemo(() => pluginToolbarItems(plugins, surfaces), [plugins, surfaces]);
+  const profileId = useWindowProfileId(windowId);
+  return useMemo(() => pluginToolbarItems(plugins, surfaces, profileId), [plugins, surfaces, profileId]);
 };
 export const usePluginSurfaceTree = (plugin: string, surfaceId: string) => usePluginSurfaces((s) => s.trees[surfaceKey(plugin, surfaceId)] ?? null);
 export const usePluginSidePanel = (windowId: string) => usePluginSurfaces((s) => s.sidePanels[windowId] ?? null);
@@ -69,7 +75,13 @@ export const usePluginPopover = (windowId: string) => usePluginSurfaces((s) => s
 export const usePluginCommandView = (windowId: string) => usePluginSurfaces((s) => s.commandViews[windowId] ?? null);
 export const usePluginQuickPick = () => usePluginSurfaces((s) => s.quickPick);
 export const usePluginInputBox = () => usePluginSurfaces((s) => s.inputBox);
-export const usePluginSidebarViews = () => {
+export const usePluginSidebarViews = (windowId?: string) => {
   const plugins = usePlugins(useShallow((s: PluginsStore) => ({ listings: s.listings, records: s.records, order: s.order })));
-  return useMemo(() => activeNames(plugins).flatMap((plugin) => activeManifest(plugins, plugin)!.contributes.sidebarViews.map((v) => ({ ...v, plugin }))), [plugins]);
+  const profileId = useWindowProfileId(windowId);
+  return useMemo(() => shownNames(plugins, profileId).flatMap((plugin) => activeManifest(plugins, plugin)!.contributes.sidebarViews.map((v) => ({ ...v, plugin }))), [plugins, profileId]);
 };
+
+export function useConsentBundle(bundle: readonly { name: string; hash: string }[] | undefined): string[] {
+  const key = usePlugins((s) => JSON.stringify((bundle ?? []).map((b) => (consentListing(s, b.name, b.hash)?.hash === b.hash ? b.name : null))));
+  return useMemo(() => (JSON.parse(key) as (string | null)[]).filter((n): n is string => n !== null), [key]);
+}

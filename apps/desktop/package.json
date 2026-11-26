@@ -24,6 +24,7 @@
     "@ardia/core": "workspace:*",
     "@ardia/ardiacore": "workspace:*",
     "@ardia/import": "workspace:*",
+    "@ardia/plugin-sdk": "workspace:*",
     "@ardia/shaders": "workspace:*",
     "@ardia/shell": "workspace:*",
     "@ardia/sync": "workspace:*",

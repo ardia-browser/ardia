@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { v3Text } from "./fixtures/manifests.mjs";
 import { afterEach, beforeEach, test } from "node:test";
 
 const stub = await import("../../test-native/index.ts");
@@ -54,7 +55,7 @@ async function enable(...docs) {
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name, consentToken());
   await settledStops();
   for (const key of ["starts", "stops", "replies", "events"]) host[key].length = 0;
-  host.folders = docs.map((doc) => ({ name: doc.name, status: "ok", text: JSON.stringify(doc) }));
+  host.folders = docs.map((doc) => ({ name: doc.name, status: "ok", text: v3Text(doc) }));
   await lifecycle.rescanPlugins(consentToken());
   for (const doc of docs) {
     assert.deepEqual(P().listings[doc.name].problems, [], doc.name);
@@ -107,22 +108,22 @@ afterEach(() => {
 const download = (fields) => ({ url: "https://files.example/a.zip?token=s3cret#x", filename: "a.zip", path: "/Users/me/Downloads/a.zip", state: "downloading", paused: false, received: 1, total: 10, speed: 0, mimeType: "application/zip", profile: "", startTime: 1, ...fields });
 
 test("the manifest gates every topic and intent, and needs tabs for tab topics and tabs: write for intents", () => {
-  const problems = (permissions) => readManifest(JSON.stringify(plugin("p", permissions))).problems;
+  const problems = (permissions) => readManifest(v3Text(plugin("p", permissions))).problems;
   assert.deepEqual(problems({ tabs: "read", state: { events: ["tabs"] } }), []);
   assert.deepEqual(problems({ state: { events: ["downloads"] } }), []);
-  assert.match(problems({ state: { events: ["tabs"] } }).join("\n"), /state\.events: tabs needs tabs/);
-  assert.match(problems({ state: { events: ["navigation"] } }).join("\n"), /navigation needs tabs/);
-  assert.match(problems({ tabs: "read", state: { intents: ["tabs.pin"] } }).join("\n"), /intents need tabs: write/);
+  assert.match(problems({ state: { events: ["tabs"] } }).join("\n"), /state\.events\[0\]: tabs events need permissions\.tabs/);
+  assert.match(problems({ state: { events: ["navigation"] } }).join("\n"), /navigation events need permissions\.tabs/);
+  assert.match(problems({ tabs: "read", state: { intents: ["tabs.pin"] } }).join("\n"), /intents need permissions\.tabs: "write"/);
   for (const name of ["plugins.json", "consent.approve", "secrets.set", "permissions.grant", "settings.update", "profiles.update", "updates.pin", "keychain.write", "__proto__", "constructor"]) {
     assert.match(problems({ tabs: "write", state: { intents: [name] } }).join("\n"), /state\.intents\[0\] must be one of/, name);
     assert.match(problems({ tabs: "read", state: { events: [name] } }).join("\n"), /state\.events\[0\] must be one of/, name);
   }
   assert.match(problems({ tabs: "write", state: { intents: ["tabs.pin"], writes: ["plugins"] } }).join("\n"), /writes/);
-  assert.match(problems({ tabs: "write", state: true }).join("\n"), /permissions\.state must be an object/);
+  assert.match(problems({ tabs: "write", state: true }).join("\n"), /permissions\.state must be false or an object/);
 });
 
 test("the consent sheet names what a plugin hears and which changes it may make", () => {
-  const lines = (doc) => consentLines(readManifest(JSON.stringify(doc)).manifest).map((l) => l.text).join("\n");
+  const lines = (doc) => consentLines(readManifest(v3Text(doc)).manifest).map((l) => l.text).join("\n");
   assert.match(lines(WATCHER), /Hears when your tabs change, when your windows and groups change, when a tab goes to a new page, when a download starts/);
   assert.match(lines(WATCHER), /Never private windows, private downloads or where a file was saved/);
   assert.match(lines(ACTOR), /Can group tabs, ungroup tabs, move tabs, pin tabs/);

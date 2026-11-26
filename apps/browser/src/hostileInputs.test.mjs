@@ -25,7 +25,13 @@ const { filterListAddress } = await import("./state/site/contentBlocking.ts");
 const { CLEAN_UP_KEY, LEGACY_CLEAN_UP_KEY } = await import("./state/settings/cleanUpAfter.ts");
 const { checkedInput, isKeyName, MAX_TEXT_LENGTH } = await import("./state/automation/tabInput.ts");
 const { MAX_MESSAGE_LENGTH } = await import("./state/automation/tabDiagnostics.ts");
-const { updateWithin } = await import("./state/plugins/officialUpdate.ts");
+const { updateVerdict } = await import("./state/plugins/updater.ts");
+const { pluginInstallLink, isPluginId } = await import("./lib/pluginIds.ts");
+const { registryUrl, parseKeyList } = await import("./state/plugins/registryKeys.ts");
+const { parseGithubSpec, GITHUB_REPO } = await import("./state/plugins/githubSource.ts");
+const { devReload } = await import("./state/plugins/devReload.ts");
+const { verifyEnvelope, signEnvelope, validateRegistryIndex } = await import("@ardia/plugin-sdk/registry");
+const { v3Text } = await import("./state/plugins/fixtures/manifests.mjs");
 const { readManifest } = await import("./lib/pluginManifest.ts");
 const { parseIntent, INTENT_SPECS } = await import("./state/plugins/stateIntents.ts");
 const { pluginStateUrl, redactedTabs } = await import("./state/plugins/pluginEventRedaction.ts");
@@ -427,31 +433,97 @@ test("the release's original smuggled hide is refused at every layer", () => {
   assert.equal(LINUX_NATIVE_REFUSES.test(`${HOST}##${smuggled}`), true);
 });
 
-test("an official update's manifest with any hostile value in a field that counts is never approved without a sheet", () => {
-  const steps = [["skills", "install", "--auto"], ["skills", "refresh"], ["computer", "refresh"]];
-  const approved = readManifest(JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.4.0", alwaysOn: true, official: true, permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia", afterUpdate: steps }] })).manifest;
-  const next = readManifest(JSON.stringify({ manifest: 2, name: "cli", title: "Command Line", version: "0.6.0", alwaysOn: true, official: true, main: "dist/main.js", permissions: { control: true }, contributes: { commands: [{ name: "show-status", title: "Status", icon: "terminal", view: "status" }], programs: [{ name: "ardia", path: "bin/ardia", claim: true, afterUpdate: steps }] } })).manifest;
-  assert.equal(updateWithin(approved, next).ok, true, "the real move passes, so the refusals below aren't vacuous");
-  const COSMETIC = new Set(["manifest", "declaredManifest", "title", "description", "version", "requires", "icon", "keywords", "telemetry"]);
-  const unchanged = (a, b) => typeof a === typeof b && JSON.stringify(a) === JSON.stringify(b);
+test("an update whose manifest carries any hostile value in a field that counts is never switched to without a sheet", () => {
+  const listing = (doc) => ({ manifest: readManifest(v3Text(doc, "ardia")).manifest });
+  const doc = { name: "cli", title: "Command Line", version: "0.8.0", main: "dist/main.js", permissions: { control: true, tabs: "read" }, contributes: { commands: [{ name: "status", title: "Status", view: "status" }], programs: [{ name: "ardia", path: "bin/ardia", afterUpdate: [["skills", "refresh"]] }] } };
+  const approved = listing(doc);
+  assert.equal(updateVerdict(approved, listing({ ...doc, version: "0.9.0", title: "Command Line 2" })).silent, true, "a cosmetic move passes, so the refusals below aren't vacuous");
   let refused = 0;
   for (const { value } of HOSTILE_VALUES) {
-    for (const key of Object.keys(next).filter((k) => !COSMETIC.has(k) && !unchanged(value, next[k]) && !unchanged(value, approved[k]))) {
-      const verdict = updateWithin(approved, { ...next, [key]: value });
-      assert.equal(verdict.ok, false, `${key} = ${show(value)}`);
+    for (const [key, patch] of [
+      ["permissions.network", { permissions: { ...doc.permissions, network: [value] } }],
+      ["permissions.pages", { permissions: { ...doc.permissions, pages: [value] } }],
+      ["programs.name", { contributes: { ...doc.contributes, programs: [{ name: value, path: "bin/ardia" }] } }],
+      ["programs.afterUpdate", { contributes: { ...doc.contributes, programs: [{ ...doc.contributes.programs[0], afterUpdate: [["skills", "refresh"], [value]] }] } }],
+      ["commands.view", { contributes: { ...doc.contributes, commands: [{ name: "status", title: "Status", view: value }] } }],
+    ]) {
+      const next = readManifest(v3Text({ ...doc, ...patch }, "ardia"));
+      if (!next.manifest) continue;
+      assert.equal(updateVerdict(approved, next).silent, false, `${key} = ${show(value)}`);
       refused++;
     }
-    for (const key of Object.keys(next.permissions).filter((k) => !unchanged(value, next.permissions[k]) && !unchanged(value, approved.permissions[k]))) assert.equal(updateWithin(approved, { ...next, permissions: { ...next.permissions, [key]: value } }).ok, false, `permissions.${key} = ${show(value)}`);
-    for (const key of Object.keys(next.contributes).filter((k) => !unchanged(value, next.contributes[k]) && !unchanged(value, approved.contributes[k]))) assert.equal(updateWithin(approved, { ...next, contributes: { ...next.contributes, [key]: value } }).ok, false, `contributes.${key} = ${show(value)}`);
-    assert.equal(updateWithin(approved, { ...next, programs: [{ ...next.programs[0], afterUpdate: [...steps, [value]] }] }).ok, false, `afterUpdate step ${show(value)}`);
   }
   for (const key of PROTOTYPE_KEYS) {
-    const extra = JSON.parse(`{${JSON.stringify(key)}: true}`);
-    assert.equal(updateWithin(approved, { ...next, ...extra }).ok, false, `manifest key ${key}`);
-    assert.equal(updateWithin(approved, { ...next, permissions: { ...next.permissions, ...extra } }).ok, false, `permission key ${key}`);
-    assert.equal(updateWithin(approved, { ...next, contributes: { ...next.contributes, ...extra } }).ok, false, `contributes key ${key}`);
+    const text = v3Text(doc, "ardia").replace('"permissions":{', `"permissions":{${JSON.stringify(key)}:true,`);
+    const next = readManifest(text);
+    assert.ok(!next.manifest || !updateVerdict(approved, next).silent, `permission key ${key}`);
   }
-  assert.ok(refused > 1000);
+  assert.ok(refused > 20);
+});
+
+test("registry envelopes with any hostile kid, sig or payload are refused, and only a real signature verifies", async () => {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const keys = { k: publicKey.export({ type: "spki", format: "pem" }) };
+  const payload = { seq: 1, generatedAt: "2026-11-25T10:00:00Z", plugins: [] };
+  const good = await signEnvelope(payload, "k", privateKey.export({ type: "pkcs8", format: "pem" }));
+  assert.equal((await verifyEnvelope(good, keys)).ok, true);
+  for (const { value } of HOSTILE_VALUES) {
+    for (const envelope of [{ ...good, kid: value }, { ...good, sig: value }, { ...good, v: value }, { ...good, payload: value }, { ...good, payload: { ...payload, seq: value } }]) {
+      assert.equal((await verifyEnvelope(envelope, keys)).ok, false, show(value));
+    }
+    assert.equal(validateRegistryIndex({ ...payload, plugins: [{ id: value }] }).ok, false, show(value));
+  }
+  for (const key of PROTOTYPE_KEYS) assert.equal((await verifyEnvelope(JSON.parse(`{${JSON.stringify(key)}: 1, "v": 1, "kid": "k", "sig": "${good.sig}", "payload": {}}`), keys)).ok, false, key);
+});
+
+test("install links, registry addresses, registry keys and github: specs take only their own shapes", () => {
+  for (const { value } of HOSTILE_VALUES) {
+    if (typeof value !== "string") continue;
+    for (const url of [`ardia://plugin/install/${value}`, `ardia://plugin/install/@a/${value}`, value]) {
+      const id = pluginInstallLink(url);
+      assert.ok(id === null || isPluginId(id), show(url));
+    }
+    for (const url of [value, `https://${value}`, `https://a.test/${value}`]) {
+      const clean = registryUrl(url);
+      assert.ok(clean === null || (/^https:\/\/[a-z0-9.-]+(?::\d+)?(?:\/\S*)?$/i.test(clean) && !/[\s\\@]/.test(clean)), show(url));
+    }
+    const repo = parseGithubSpec(`github:${value}`);
+    assert.ok(repo === null || GITHUB_REPO.test(repo), show(value));
+    for (const [kid] of Object.entries(parseKeyList(`${value}=${"A".repeat(44)}`))) assert.ok(typeof kid === "string" && !kid.includes(","), show(value));
+  }
+  assert.equal(pluginInstallLink("ardia://plugin/install/@acme/jira"), "@acme/jira");
+  assert.equal(registryUrl("https://plugins.acme.com/r"), "https://plugins.acme.com/r");
+});
+
+test("plugins.devReload refuses any hostile id, path or link before it reads anything", async () => {
+  for (const { value } of HOSTILE_VALUES) {
+    for (const params of [{ id: value, path: "/work", link: "/config/plugins-dev/a__b.json" }, { id: "@a/b", path: value, link: "/config/plugins-dev/a__b.json" }, { id: "@a/b", path: "/work", link: value }]) {
+      const reply = await devReload(params);
+      assert.equal(reply.ok, false, show(params));
+      assert.ok(["bad_request", "not_linked"].includes(reply.error.code), show(params));
+    }
+  }
+});
+
+test("a folder install's listing keeps native's hostile reasons and folder ids as inert text that never approves anything", async () => {
+  const { rescanPlugins } = await import("./state/plugins/lifecycle.ts");
+  const { usePlugins, activeManifest } = await import("./state/plugins/store.ts");
+  const text = v3Text({ name: "f", title: "F", main: "index.js" }, "acme");
+  for (const { value } of HOSTILE_VALUES) {
+    if (typeof value !== "string") continue;
+    stub.pluginHost.folders = [
+      { name: "acme__f", status: "unchecked", reason: value, source: "local" },
+      { name: "acme__g", status: "ok", source: "local", text, folderId: value },
+    ];
+    await rescanPlugins(null);
+    const s = usePlugins.getState();
+    assert.equal(s.listings.acme__f.manifest, null, show(value));
+    assert.ok(s.listings.acme__f.problems[0].startsWith("Ardia couldn't check the folder's files"), show(value));
+    assert.equal(activeManifest(s, "acme__g"), null, show(value));
+  }
+  stub.pluginHost.folders = [];
+  await rescanPlugins(null);
 });
 
 test("a WebKit page menu address reaches native's writer only as a string the cleaner returned, whatever the page holds", async () => {

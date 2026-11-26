@@ -1,15 +1,16 @@
 import { isFields, type Fields } from "./decode";
-import { upgraded } from "./savedDocument";
+import { validateManifestV3, type ManifestV3 } from "@ardia/plugin-sdk/manifest";
 import { RESERVED_PAGE_NAMES } from "./pluginNames";
-import { LIMITS, list, matching, NAME, NAME_RULE, object, only, text, VERSION, type Check, SYMBOL, SYMBOL_RULE } from "./pluginChecks";
+import { LIMITS, matching, text, type Check } from "./pluginChecks";
 import { SPLIT_SIDES, type CommandSpec } from "./pluginCommands";
 import { contributesOf, MENU_SLOTS, pagePanelOf, type PluginContributions } from "./pluginContributions";
-import { activationEventsOf, derivedActivationEvents } from "./pluginActivation";
-import { MANIFEST_MIGRATIONS, v1Problem } from "./pluginMigrations";
+import { activationEventsOf, derivedActivationEvents, ACTIVATION_PREFIXES } from "./pluginActivation";
 import { permissionsOf, type PluginPermissions } from "./pluginPermissions";
 import { storedRows, type RowValue, type SettingsSpec } from "./pluginRows";
 import { mainOf, sidecarOf, type MainSpec, type ProcessSpec, type ProgramSpec } from "./pluginRuntime";
 import type { PasswordManagerSpec } from "./pluginPasswordManager";
+import { STATE_INTENTS, STATE_TOPICS } from "./pluginState";
+import { isOfficialId, keyOfId, PLUGIN_KEY, splitPluginId } from "./pluginIds";
 
 export { compareVersions } from "./versions";
 export { LIMITS, NAME_PATTERN, KEY_PATTERN, VERSION_PATTERN, SYMBOL_PATTERN, KEYWORD_PATTERN, isPluginPath, DEFAULT_MAIN_MB, DEFAULT_SIDECAR_MB } from "./pluginChecks";
@@ -18,23 +19,31 @@ export { SPLIT_SIDES, isToolAction, isOpenAction, isViewAction, isPanelAction, i
 export { PLUGIN_PERMISSIONS, PERMISSION_KEYS, NO_PERMISSIONS, TAB_ACCESS, grantedPermissions, missingPermissions, canReadTabs, canOpenTabs, hasNetwork, allowedHostsOf, type PluginPermission, type PluginPermissions, type PermissionKey, type TabAccess, type NetworkAccess } from "./pluginPermissions";
 export { MENU_SLOTS, PANEL_MODES, PAGE_PANEL_ID, CONTRIBUTES_KEYS, pagePanelOf, viewIdsOf, type MenuSlot, type PanelMode, type MenuContribution, type MenuContributions, type ToolbarItem, type SidebarView, type PanelSpec, type OmniboxSpec, type ThemeSpec, type PluginContributions } from "./pluginContributions";
 export { STARTUP_EVENTS, ACTIVATION_PREFIXES, activationEventProblem, derivedActivationEvents, startsEagerly, urlActivationHosts } from "./pluginActivation";
-export { MANIFEST_MIGRATIONS } from "./pluginMigrations";
 export type { MainSpec, ProcessSpec, ProgramSpec } from "./pluginRuntime";
+export type { ManifestV3 } from "@ardia/plugin-sdk/manifest";
 
-export const MANIFEST_VERSION = 2;
+export const MANIFEST_VERSION = 3;
 const MANIFEST_FILE = "plugin.json";
 
 type PageSpec = { title: string; icon: string; source: { file: string } };
 type TelemetryDisclosure = { title: string; items: string[] };
 
+export type PluginScope = "global" | "profile";
+
 export type PluginManifest = {
   manifest: number;
-  declaredManifest: number;
+  id: string;
+  scope: PluginScope;
   name: string;
   title: string;
   description: string;
-  version: string | null;
-  requires: string | null;
+  version: string;
+  engines: { ardia: string; sdk?: string };
+  dependencies: Record<string, string>;
+  optionalDependencies: Record<string, string>;
+  provides: string[];
+  consumes: string[];
+  categories: string[];
   icon: string | null;
   keywords: string[];
   telemetry: TelemetryDisclosure | null;
@@ -43,9 +52,7 @@ export type PluginManifest = {
   sidecar: ProcessSpec | null;
   activationEvents: string[];
   contributes: PluginContributions;
-  alwaysOn: boolean;
   official: boolean;
-  autoInstall: boolean;
   settings: SettingsSpec;
   commands: CommandSpec[];
   tools: PluginContributions["tools"];
@@ -54,12 +61,11 @@ export type PluginManifest = {
   passwordManager: PasswordManagerSpec | null;
   page: PageSpec | null;
   process: ProcessSpec | null;
+  v3: ManifestV3;
 };
 
 export type ManifestRead = { manifest: PluginManifest | null; problems: string[]; newer: boolean };
 
-const TOP_KEYS = ["$schema", "manifest", "name", "title", "description", "version", "requires", "icon", "main", "memoryMB", "sidecar", "activationEvents", "permissions", "contributes", "alwaysOn", "official", "autoInstall", "keywords", "telemetry"];
-const V2_ONLY_KEYS = ["keywords", "telemetry"] as const;
 const K = "contributes";
 
 function commandProblems(c: Check, k: PluginContributions, permissions: PluginPermissions, hasPage: boolean, hasMain: boolean) {
@@ -95,77 +101,128 @@ function contributionProblems(c: Check, k: PluginContributions, permissions: Plu
   if (k.settings.rows.some((r) => r.type === "secret") && !permissions.secrets) c.problems.push(`${K}.settings.rows: a secret row needs the secrets permission`);
 }
 
-function keywordsOf(c: Check, value: unknown): string[] {
-  const given = list(c, "keywords", value, LIMITS.pluginKeywords).map((k, i) => text(c, `keywords[${i}]`, k, LIMITS.keyword));
-  return [...new Set(given.filter((k): k is string => k !== null))];
-}
-
-function telemetryOf(c: Check, value: unknown): TelemetryDisclosure | null {
-  if (value === undefined) return null;
-  const doc = object(c, "telemetry", value);
-  if (!doc) return null;
-  only(c, "telemetry", doc, ["title", "items"]);
-  const title = text(c, "telemetry.title", doc.title, LIMITS.title);
-  const raw = list(c, "telemetry.items", doc.items, LIMITS.telemetryItems);
-  if (!raw.length) c.problems.push(`telemetry.items must be a list of 1 to ${LIMITS.telemetryItems}`);
-  const items = raw.map((item, i) => text(c, `telemetry.items[${i}]`, item, LIMITS.telemetryItem));
-  return title && raw.length && items.every((i) => i !== null) ? { title, items: items as string[] } : null;
-}
-
-function v2OnlyProblems(c: Check, raw: Fields, programs: PluginContributions["programs"], declared: number) {
-  if (declared >= MANIFEST_VERSION) return;
-  for (const key of V2_ONLY_KEYS) if (raw[key] !== undefined) c.problems.push(`${key} needs manifest ${MANIFEST_VERSION}`);
-  programs.forEach((p, i) => {
-    if (p.example !== null) c.problems.push(`programs[${i}].example needs manifest ${MANIFEST_VERSION}`);
-    if (p.claim) c.problems.push(`programs[${i}].claim needs manifest ${MANIFEST_VERSION}`);
-  });
-}
-
 function pageOf(k: PluginContributions): PageSpec | null {
   const panel = pagePanelOf(k.panels);
   return panel?.file ? { title: panel.title, icon: panel.icon, source: { file: panel.file } } : null;
 }
 
-function checkManifest(raw: Fields, declaredManifest = MANIFEST_VERSION): { manifest: PluginManifest | null; problems: string[] } {
+const V2_HOST = /^(\*\.)?[a-z0-9.-]{1,253}$/;
+
+function runtimePermissions(p: ManifestV3["permissions"]): Fields {
+  if (!p) return {};
+  const active = p.activePage === true || (isFields(p.activePage) && p.activePage.read === true);
+  const hosts = Array.isArray(p.network) ? p.network.filter((h) => V2_HOST.test(h)) : [];
+  const network = p.network === "*" ? "*" : hosts.length ? hosts : false;
+  const state = isFields(p.state)
+    ? {
+        events: (p.state.events ?? []).filter((e) => (STATE_TOPICS as readonly string[]).includes(e)),
+        intents: (p.state.intents ?? []).filter((i) => (STATE_INTENTS as readonly string[]).includes(i)),
+      }
+    : false;
+  const out: Fields = { tabs: p.tabs ?? false, network, state };
+  for (const key of ["fullUrls", "workspace", "commands", "storage", "secrets", "control"] as const) if (p[key] !== undefined) out[key] = p[key];
+  if (active) out.activePage = true;
+  return out;
+}
+
+const RUNTIME_CONTRIBUTES = ["commands", "tools", "hooks", "settings", "programs", "passwordManager", "toolbar", "sidebarViews", "panels", "omnibox", "themes", "siteSwitches", "pageBar"] as const;
+
+function runtimeContributes(c: ManifestV3["contributes"]): Fields {
+  if (!c) return {};
+  const out: Fields = {};
+  for (const key of RUNTIME_CONTRIBUTES) if (c[key] !== undefined) out[key] = c[key];
+  if (c.commands) out.commands = c.commands.map(({ inputMode: _inputMode, ...rest }) => rest);
+  if (c.menus) out.menus = Object.fromEntries(MENU_SLOTS.flatMap((slot) => (c.menus?.[slot] ? [[slot, c.menus[slot]]] : [])));
+  return out;
+}
+
+const runtimeActivation = (events: readonly string[] | undefined): string[] | undefined =>
+  events?.filter((e) => e === "*" || e === "onStartupFinished" || ACTIVATION_PREFIXES.some((prefix) => e.startsWith(`${prefix}:`)));
+
+function runtimeDoc(v3: ManifestV3, key: string): Fields {
+  const doc: Fields = {
+    name: key,
+    title: v3.name,
+    description: v3.description,
+    version: v3.version,
+    permissions: runtimePermissions(v3.permissions),
+    contributes: runtimeContributes(v3.contributes),
+  };
+  if (v3.icon !== undefined) doc.icon = v3.icon;
+  if (v3.keywords !== undefined) doc.keywords = v3.keywords;
+  if (v3.telemetry !== undefined) doc.telemetry = v3.telemetry;
+  if (v3.main !== undefined) doc.main = v3.main;
+  if (v3.memoryMB !== undefined && v3.main !== undefined) doc.memoryMB = v3.memoryMB;
+  if (v3.sidecar !== undefined && v3.main === undefined) doc.sidecar = v3.sidecar;
+  const activation = runtimeActivation(v3.activationEvents);
+  if (activation?.length) doc.activationEvents = activation;
+  return doc;
+}
+
+function keywordsOf(value: unknown): string[] {
+  return Array.isArray(value) ? [...new Set(value.filter((k): k is string => typeof k === "string"))].slice(0, LIMITS.pluginKeywords) : [];
+}
+
+function checkRuntime(raw: Fields, v3: ManifestV3): { manifest: PluginManifest | null; problems: string[] } {
   const c: Check = { problems: [] };
-  only(c, "", raw, TOP_KEYS);
-  const name = matching(c, "name", raw.name, NAME, NAME_RULE);
-  const title = text(c, "title", raw.title ?? raw.name, LIMITS.title);
-  const description = text(c, "description", raw.description, LIMITS.description, false) ?? "";
-  const version = matching(c, "version", raw.version, VERSION, "MAJOR.MINOR.PATCH", false);
-  const requires = matching(c, "requires", raw.requires, VERSION, "an Ardia version, MAJOR.MINOR.PATCH", false);
-  const icon = matching(c, "icon", raw.icon, SYMBOL, SYMBOL_RULE, false);
-  const keywords = keywordsOf(c, raw.keywords);
-  const telemetry = telemetryOf(c, raw.telemetry);
+  const name = matching(c, "id", raw.name, PLUGIN_KEY, "a plugin key like scope__name");
+  const title = text(c, "name", raw.title, LIMITS.title);
   const permissions = permissionsOf(c, raw.permissions);
   const main = mainOf(c, raw.main, raw.memoryMB);
   const sidecar = sidecarOf(c, "sidecar", raw.sidecar);
   const runtime = { main: main !== null || raw.main !== undefined, sidecar: sidecar !== null || raw.sidecar !== undefined };
-  if (runtime.main && runtime.sidecar) c.problems.push("a plugin can declare main or sidecar, not both");
   const contributes = contributesOf(c, raw[K], runtime.main);
   const given = activationEventsOf(c, raw.activationEvents);
-  if (given && !runtime.main) c.problems.push("activationEvents only go with a main");
-  const [alwaysOn, official, autoInstall] = (["alwaysOn", "official", "autoInstall"] as const).map((k) => (raw[k] === undefined ? false : raw[k] === true || (c.problems.push(`${k} must be true`), false)));
   const page = pageOf(contributes);
-  v2OnlyProblems(c, raw, contributes.programs, declaredManifest);
   commandProblems(c, contributes, permissions, page !== null, runtime.main);
   contributionProblems(c, contributes, permissions, runtime);
-  if (contributes.panels.some((p) => p.file) && name && RESERVED_PAGE_NAMES.includes(name)) c.problems.push(`name: ${name} is one of Ardia's own pages (ardia://${name}), so a plugin with a page can't use it`);
+  if (contributes.panels.some((p) => p.file) && name && RESERVED_PAGE_NAMES.includes(name)) c.problems.push(`id: ${v3.id} is one of Ardia's own pages (ardia://${name}), so a plugin with a page can't use it`);
   if (sidecar && Array.isArray(permissions.network)) c.problems.push(`permissions.network: a sidecar can only have "*" or false, since Ardia can't hold a program to a list of hosts`);
   if (c.problems.length || !name || !title) return { manifest: null, problems: c.problems };
   const activationEvents = given ?? derivedActivationEvents(contributes, runtime);
   const k = contributes;
+  const telemetry = isFields(raw.telemetry) && typeof raw.telemetry.title === "string" && Array.isArray(raw.telemetry.items) ? { title: raw.telemetry.title, items: raw.telemetry.items.filter((i): i is string => typeof i === "string") } : null;
   return {
     manifest: {
-      manifest: MANIFEST_VERSION, declaredManifest, name, title, description, version, requires, icon, keywords, telemetry, permissions, main, sidecar, activationEvents, contributes,
-      alwaysOn: !!alwaysOn, official: !!official, autoInstall: !!autoInstall,
-      settings: k.settings, commands: k.commands, tools: k.tools, hooks: k.hooks, programs: k.programs, passwordManager: k.passwordManager, page, process: sidecar,
+      manifest: MANIFEST_VERSION,
+      id: v3.id,
+      scope: v3.scope ?? "profile",
+      name,
+      title,
+      description: v3.description,
+      version: v3.version,
+      engines: { ardia: v3.engines.ardia, ...(v3.engines.sdk ? { sdk: v3.engines.sdk } : {}) },
+      dependencies: { ...(v3.dependencies ?? {}) },
+      optionalDependencies: { ...(v3.optionalDependencies ?? {}) },
+      provides: [...(v3.provides ?? [])],
+      consumes: [...(v3.consumes ?? [])],
+      categories: [...(v3.categories ?? [])],
+      icon: v3.icon ?? null,
+      keywords: keywordsOf(raw.keywords),
+      telemetry,
+      permissions,
+      main,
+      sidecar,
+      activationEvents,
+      contributes,
+      official: isOfficialId(v3.id),
+      settings: k.settings,
+      commands: k.commands,
+      tools: k.tools,
+      hooks: k.hooks,
+      programs: k.programs,
+      passwordManager: k.passwordManager,
+      page,
+      process: sidecar,
+      v3,
     },
     problems: [],
   };
 }
 
-export function readManifest(text: string): ManifestRead {
+export const OLDER_MANIFEST = "plugin.json uses an older manifest that this Ardia no longer reads; it needs manifest 3, with an id like @you/name (run npx ardia-plugin check)";
+
+export function readManifest(text: string, key?: string): ManifestRead {
   let doc: unknown;
   try {
     doc = JSON.parse(text);
@@ -175,15 +232,16 @@ export function readManifest(text: string): ManifestRead {
   if (!isFields(doc)) return { manifest: null, problems: [`${MANIFEST_FILE} must be an object`], newer: false };
   const given = doc.manifest;
   if (given !== undefined && (typeof given !== "number" || !Number.isSafeInteger(given) || given < 0))
-    return { manifest: null, problems: ["manifest must be a whole number, the manifest's version"], newer: false };
+    return { manifest: null, problems: [`${MANIFEST_FILE}: manifest must be a whole number, the manifest's version`], newer: false };
   if (typeof given === "number" && given > MANIFEST_VERSION)
-    return { manifest: null, problems: [`manifest ${given} needs a newer Ardia (this one reads up to ${MANIFEST_VERSION})`], newer: true };
-  const current = upgraded(doc, MANIFEST_VERSION, MANIFEST_MIGRATIONS, "manifest");
-  if (!current) return { manifest: null, problems: [`${MANIFEST_FILE} couldn't be read`], newer: false };
-  const declared = typeof given === "number" ? given : 0;
-  const legacy = declared < MANIFEST_VERSION;
-  const { manifest, problems } = checkManifest(current, declared);
-  return { manifest, problems: problems.map((p) => `${MANIFEST_FILE}: ${legacy ? v1Problem(p) : p}`), newer: false };
+    return { manifest: null, problems: [`${MANIFEST_FILE}: manifest ${given} needs a newer Ardia (this one reads ${MANIFEST_VERSION})`], newer: true };
+  if (given !== MANIFEST_VERSION) return { manifest: null, problems: [OLDER_MANIFEST], newer: false };
+  const checked = validateManifestV3(doc);
+  if (!checked.ok) return { manifest: null, problems: checked.problems.map((p) => `${MANIFEST_FILE}: ${p}`), newer: false };
+  const runtimeKey = key ?? keyOfId(checked.manifest.id);
+  if (!runtimeKey || !splitPluginId(checked.manifest.id)) return { manifest: null, problems: [`${MANIFEST_FILE}: id isn't a scoped plugin id`], newer: false };
+  const { manifest, problems } = checkRuntime(runtimeDoc(checked.manifest, runtimeKey), checked.manifest);
+  return { manifest, problems: problems.map((p) => `${MANIFEST_FILE}: ${p}`), newer: false };
 }
 
 export type Contribution = "settings" | "commands" | "page" | "process" | "programs" | "hooks" | "tools" | "passwordManager" | "main" | "menus" | "toolbar" | "sidebarViews" | "panels" | "omnibox" | "themes" | "siteSwitches" | "pageBar";

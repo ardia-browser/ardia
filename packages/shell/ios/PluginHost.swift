@@ -170,11 +170,11 @@ final class PluginHost {
     }
   }
 
-  func remove(_ name: String, official: Bool, folderId: String?, done: @escaping (String?) -> Void) {
+  func remove(_ name: String, source: String, folderId: String?, done: @escaping (String?) -> Void) {
     queue.async { [self] in
       lifecycle.enqueue(name, .remove) { [self] complete in
         runs.stopAll(name, graceMs: 1000) {
-          let problem = PluginFolders.current().map { $0.remove(name, official: official, folderId: folderId) } ?? "Ardia has no data folder."
+          let problem = PluginFolders.current().map { $0.remove(name, source: source, folderId: folderId) } ?? "Ardia has no data folder."
           DispatchQueue.main.async { done(problem) }
           complete()
         }

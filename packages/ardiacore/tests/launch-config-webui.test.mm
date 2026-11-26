@@ -173,9 +173,30 @@ static void ReleaseBuild() {
 }
 #endif
 
+static ArdiaLaunchConfig *Signed(NSDictionary<NSString *, NSString *> *environment, BOOL distribution) {
+  return [[ArdiaLaunchConfig alloc] initWithEnvironment:environment
+                                              arguments:@[ kExecutable ]
+                                          homeDirectory:gHome
+                                  signedForDistribution:^BOOL { return distribution; }];
+}
+
+static void PluginRegistryOverrides() {
+  NSDictionary *loopback = @{@"ARDIA_DATA_DIR" : @"/tmp/scratch-registry", @"ARDIA_PLUGIN_REGISTRY_URL" : @"http://127.0.0.1:8123/r", @"ARDIA_PLUGIN_NATIVE_PUBLIC_KEY" : @"k=abc"};
+  ArdiaLaunchConfig *scratch = Signed(loopback, NO);
+  CHECK([scratch.pluginRegistryURL isEqualToString:@"http://127.0.0.1:8123/r"]);
+  CHECK([scratch.pluginNativeKeys isEqualToString:@"k=abc"]);
+  ArdiaLaunchConfig *shipped = Signed(loopback, YES);
+  CHECK(shipped.pluginRegistryURL == nil);
+  CHECK(shipped.pluginNativeKeys == nil);
+  CHECK([shipped.snapshot[@"pluginRegistryURL"] isEqual:NSNull.null]);
+  CHECK(Signed(@{@"ARDIA_PLUGIN_REGISTRY_URL" : @"http://localhost/r"}, NO).pluginRegistryURL == nil);
+  CHECK([Signed(@{@"ARDIA_PLUGIN_REGISTRY_URL" : @"https://plugins.acme.example/r"}, YES).pluginRegistryURL isEqualToString:@"https://plugins.acme.example/r"]);
+}
+
 int main() {
   @autoreleasepool {
     MakeHome();
+    PluginRegistryOverrides();
 #if DEBUG
     DebugBuild();
     std::printf("launch-config-webui debug: %d failures\n", failures);

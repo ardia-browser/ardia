@@ -17,6 +17,7 @@ import type { AdoptId } from "../browser/types";
 import { linkGate, type LinkGateResult, type LinkRouteChoice, type LinkSourceInfo } from "./linkGate";
 import { externalLinkOpen, type ExternalLinkOpen } from "./externalLinkOpen";
 import { admitIncomingUrl } from "./incomingUrls";
+import { takePluginInstallLinks } from "../plugins/installLinks";
 import { noteExternalLink } from "../telemetry/usage";
 import { openInRouteGroup } from "../airTraffic/openAt";
 import { noteLittleArdiaAppHandoff, noteLittleArdiaEscapeClose, type EscapePressedIn } from "../telemetry/littleArdiaEscapes";
@@ -32,8 +33,9 @@ export function openLittleArdia(url?: string, profileId?: string, adoptId?: Adop
 }
 
 
-export function openExternalUrls(given: string[], pointer?: [number, number], source?: LinkSourceInfo, returnTo?: string): number {
+export function openExternalUrls(incoming: string[], pointer?: [number, number], source?: LinkSourceInfo, returnTo?: string): number {
   const settings = store().settings;
+  const given = takePluginInstallLinks(incoming);
   const urls = given.flatMap((url) => {
     if (settings.allowJavaScriptFromAppleEvents && runsJavaScript(url, settings)) return [url];
     const admitted = admitIncomingUrl(url);

@@ -1,6 +1,6 @@
 import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -238,11 +238,12 @@ describe("dev", () => {
       const session = await runDev(dir, createOutput(false, false, streams), { dataDir: data, once: true });
       assert.equal(session.paths.link, join(data, "config", "plugins-dev", "acme__devved.json"));
       const link = JSON.parse(readFileSync(session.paths.link, "utf8"));
-      assert.deepEqual([link.v, link.id, link.path, link.manifest], [1, "@acme/devved", dir, "plugin.json"]);
+      assert.deepEqual([link.v, link.id, link.path, link.manifest], [1, "@acme/devved", realpathSync(dir), "plugin.json"], "the link records the folder's real path, the one Ardia compares a reload against");
       assert.ok(existsSync(join(dir, "dist/index.js")));
       assert.equal(requests.length, 1);
       assert.equal(requests[0].method, "plugins.devReload");
       assert.equal(requests[0].params.id, "@acme/devved");
+      assert.equal(requests[0].params.path, link.path, "a reload names the same folder its link does");
       assert.match(out.stderr, /reloaded @acme\/devved in Ardia/);
     } finally {
       server.close();

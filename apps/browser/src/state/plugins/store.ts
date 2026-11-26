@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { PluginManifest, RowValue } from "../../lib/pluginManifest";
 import type { ConsentToken } from "../telemetry/choice";
-import type { OfficialPinned } from "../../platform/plugins";
+import type { PluginSource } from "../../platform/plugins";
 import { ownValue } from "../../lib/decode";
 
 export type PluginListing = {
@@ -10,15 +10,20 @@ export type PluginListing = {
   problems: string[];
   hash: string | null;
   folderId: string;
+  source?: PluginSource;
   official?: boolean;
-  legacy?: boolean;
-  legacyHash?: string;
-  ignoresUserFolder?: boolean;
+  version?: string;
+  payloadDigest?: string;
+  previousVersion?: string;
+  previousFolderId?: string;
+  previousNative?: boolean;
+  devPath?: string;
+  shadowsStore?: boolean;
 };
 
-export type OfficialFetch = { state: "fetching"; received: number; total: number } | { state: "promoting" } | { state: "failed"; reason: string; code: string };
+export type PluginFetch = { state: "fetching"; received: number; total: number } | { state: "promoting" } | { state: "failed"; reason: string; code: string };
 
-export function setOfficialFetch(name: string, state: OfficialFetch | null) {
+export function setPluginFetch(name: string, state: PluginFetch | null) {
   usePlugins.setState((s) => {
     const fetches = { ...s.fetches };
     if (state) fetches[name] = state;
@@ -29,7 +34,7 @@ export function setOfficialFetch(name: string, state: OfficialFetch | null) {
 
 export type ProgramsState =
   | { state: "linking"; hash: string; request: number }
-  | { state: "linked"; hash: string; linked: string[]; refused: Record<string, string>; binDir: string; adoption?: "retrying" | "busy" | "failed" }
+  | { state: "linked"; hash: string; linked: string[]; refused: Record<string, string>; binDir: string }
   | { state: "failed"; hash: string; reason: string };
 
 export type ProcessState =
@@ -48,12 +53,24 @@ export type PluginRecord = {
   installed?: boolean;
   previous?: string;
   sites?: SiteSwitchValues;
-  updated?: OfficialAutoUpdate;
+  updated?: PluginUpdateNote;
+  pendingUpdate?: PendingUpdate;
+  revoked?: PluginRevoked;
+  profiles?: "all" | string[];
+  preapproved?: true;
 };
 
-export type OfficialAutoUpdate = { from: string | null; to: string | null; added: string[]; runtime?: true };
+export type PluginUpdateNote = { from: string | null; to: string | null; added: string[]; runtime?: true; rolledBack?: true };
+
+export type PendingBundled = { name: string; folderId: string };
+
+export type PendingUpdate = { version: string; folderId: string; added: string[]; dependencies: string[]; bundle?: PendingBundled[] };
+
+export type PluginRevoked = { action: "disable" | "block"; reason: string; version?: string };
 
 export type SiteSwitchValues = Record<string, Record<string, boolean>>;
+
+export type PluginConsentRequest = { id: number; name: string; hash: string; bundle?: { name: string; hash: string }[]; added?: string[] };
 
 export type PluginsStore = {
   loaded: boolean;
@@ -64,9 +81,8 @@ export type PluginsStore = {
   processes: Record<string, ProcessState>;
   programs: Record<string, ProgramsState>;
   candidates: Record<string, PluginListing>;
-  pinned: OfficialPinned[] | null;
-  fetches: Record<string, OfficialFetch>;
-  consent: { id: number; name: string; hash: string } | null;
+  fetches: Record<string, PluginFetch>;
+  consent: PluginConsentRequest | null;
   unsaved: string | null;
 };
 
@@ -79,7 +95,6 @@ export const usePlugins = create<PluginsStore>()(() => ({
   processes: {},
   programs: {},
   candidates: {},
-  pinned: null,
   fetches: {},
   consent: null,
   unsaved: null,
@@ -89,19 +104,25 @@ export const NO_RECORD: PluginRecord = { enabled: false, approved: null, values:
 
 export const recordOf = (s: Pick<PluginsStore, "records">, name: string): PluginRecord => ownValue(s.records, name) ?? NO_RECORD;
 
-export const approvalMatches = (listing: Pick<PluginListing, "hash" | "legacyHash"> | undefined, approved: string | null | undefined): boolean =>
-  !!approved && !!listing?.hash && (approved === listing.hash || (!!listing.legacyHash && approved === listing.legacyHash));
+export const approvalMatches = (listing: Pick<PluginListing, "hash"> | undefined, approved: string | null | undefined): boolean => !!approved && !!listing?.hash && approved === listing.hash;
 
 export const recordApproves = (listing: PluginListing | undefined, record: PluginRecord | undefined): boolean =>
   !!record && (approvalMatches(listing, record.approved) || approvalMatches(listing, record.previous));
 
-export const keepsInstalledFlag = (listing: PluginListing | undefined): boolean => !!listing?.official && !!listing.manifest?.alwaysOn;
-
 export function activeManifest(s: Pick<PluginsStore, "listings" | "records">, name: string): PluginManifest | null {
   const listing = ownValue(s.listings, name);
   const record = ownValue(s.records, name);
-  if (!listing?.manifest || !listing.hash || !record?.enabled || !recordApproves(listing, record)) return null;
+  if (!listing?.manifest || !listing.hash || !record?.enabled || record.revoked || !recordApproves(listing, record)) return null;
   return listing.manifest;
+}
+
+export const enabledInProfile = (record: Pick<PluginRecord, "profiles"> | undefined, profileId: string | null | undefined): boolean =>
+  !record?.profiles || record.profiles === "all" || !profileId || record.profiles.includes(profileId);
+
+export function shownManifest(s: Pick<PluginsStore, "listings" | "records">, name: string, profileId: string | null | undefined): PluginManifest | null {
+  const manifest = activeManifest(s, name);
+  if (!manifest || manifest.scope === "global") return manifest;
+  return enabledInProfile(ownValue(s.records, name), profileId) ? manifest : null;
 }
 
 export function consentListing(s: Pick<PluginsStore, "listings" | "candidates">, name: string, hash: string): PluginListing | undefined {
@@ -122,7 +143,7 @@ export function needsReview(s: Pick<PluginsStore, "listings" | "records">, name:
 
 export const currentPlugins = () => usePlugins.getState();
 
-export const UNSAVED = "plugins.json couldn't be saved. Try again.";
+export const UNSAVED = "Ardia couldn't save its plugin settings. Try again.";
 
 export const clearUnsaved = (name: string) => {
   if (currentPlugins().unsaved === name) usePlugins.setState({ unsaved: null });

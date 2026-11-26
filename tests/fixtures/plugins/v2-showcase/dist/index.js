@@ -407,6 +407,7 @@
     if (Array.isArray(picked)) return picked.filter((id) => typeof id === "string");
     return [];
   }
+  var profileOf = (options) => typeof options?.profile === "string" ? { profile: options.profile } : {};
   function response(reply) {
     if (typeof reply.status !== "number") {
       const reason = reply.reason;
@@ -583,24 +584,24 @@
         close: (panelId) => rpc.request(HOST_METHODS.panelClose, { panelId })
       },
       storage: {
-        get: async (key) => {
-          const res = await rpc.request(HOST_METHODS.storageGet, { key });
+        get: async (key, options) => {
+          const res = await rpc.request(HOST_METHODS.storageGet, { key, ...profileOf(options) });
           return res && typeof res === "object" && res.found === true ? res.value : void 0;
         },
-        set: (key, value) => rpc.request(HOST_METHODS.storageSet, { key, value }).then(() => void 0),
-        delete: (key) => rpc.request(HOST_METHODS.storageDelete, { key }).then(() => void 0),
-        keys: async () => {
-          const keys = unwrap(await rpc.request(HOST_METHODS.storageKeys), "keys");
+        set: (key, value, options) => rpc.request(HOST_METHODS.storageSet, { key, value, ...profileOf(options) }).then(() => void 0),
+        delete: (key, options) => rpc.request(HOST_METHODS.storageDelete, { key, ...profileOf(options) }).then(() => void 0),
+        keys: async (options) => {
+          const keys = unwrap(await rpc.request(HOST_METHODS.storageKeys, profileOf(options)), "keys");
           return Array.isArray(keys) ? keys.filter((k) => typeof k === "string") : [];
         }
       },
       secrets: {
-        get: async (key) => {
-          const value = unwrap(await rpc.request(HOST_METHODS.secretGet, { key }), "value");
+        get: async (key, options) => {
+          const value = unwrap(await rpc.request(HOST_METHODS.secretGet, { key, ...profileOf(options) }), "value");
           return typeof value === "string" ? value : void 0;
         },
-        set: (key, value) => rpc.request(HOST_METHODS.secretSet, { key, value }).then(() => void 0),
-        delete: (key) => rpc.request(HOST_METHODS.secretDelete, { key }).then(() => void 0)
+        set: (key, value, options) => rpc.request(HOST_METHODS.secretSet, { key, value, ...profileOf(options) }).then(() => void 0),
+        delete: (key, options) => rpc.request(HOST_METHODS.secretDelete, { key, ...profileOf(options) }).then(() => void 0)
       },
       settings,
       pages: {
@@ -1876,7 +1877,8 @@
         context: message.context ?? {},
         caller: message.caller ?? null,
         deadline: typeof message.deadline === "number" ? message.deadline : void 0,
-        signal
+        signal,
+        ...typeof message.profile === "string" ? { profile: message.profile } : {}
       };
       let body;
       try {
@@ -1903,7 +1905,7 @@
       if (signal.cancelled) return;
       await sendResult({ call: message.call, error: `The plugin didn't activate: ${errorMessage(activationError)}` });
     }
-    function deliverEvent(name, data, time) {
+    function deliverEvent(name, data, time, profile) {
       if (name.startsWith(STATE_PREFIX)) return subscriptions.deliverState(name, data, time);
       if (name === "plugin.values") {
         const values = data.values ?? data;
@@ -1913,7 +1915,7 @@
       const targets = [...registry.events.get(name) ?? [], ...name === "plugin.values" ? [] : registry.events.get("*") ?? []];
       for (const listener of targets) {
         try {
-          listener(data, { name, time });
+          listener(data, { name, time, ...profile ? { profile } : {} });
         } catch (error) {
           report(error);
         }
@@ -1953,9 +1955,10 @@
         subscriptions.noteDropped(record.dropped);
         const data = typeof record.data === "object" && record.data !== null ? record.data : {};
         const time = typeof record.time === "number" ? record.time : void 0;
+        const profile = typeof record.profile === "string" ? record.profile : void 0;
         if (record.event === "plugin.values") return deliverEvent(record.event, data, time);
         if (record.event === "plugin.stopping") return void stop().catch(report);
-        return whenActive(() => deliverEvent(record.event, data, time));
+        return whenActive(() => deliverEvent(record.event, data, time, profile));
       }
     }
     transport.onLine((line) => {

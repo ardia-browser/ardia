@@ -1,3 +1,4 @@
+import { manifestInProfile, shownNames, windowProfileId } from "./profileScope";
 import type { CommandAction as BarAction } from "@ardia/core";
 import type { CommandSpec, PageSide, PluginPermissions } from "../../lib/pluginManifest";
 import { minimizedUrl, urlParts } from "../../lib/urlParts";
@@ -42,7 +43,7 @@ function windowWhenContext(windowId: string, s: BrowserState = useBrowser.getSta
 export function pluginBarActions(s: Pick<PluginsStore, "listings" | "records" | "order">, windowId?: string): BarAction[] {
   const out: BarAction[] = [];
   const when = windowId === undefined ? null : windowWhenContext(windowId);
-  for (const name of activeNames(s)) {
+  for (const name of shownNames(s, windowProfileId(windowId))) {
     const m = activeManifest(s, name)!;
     if (m.page) out.push({ id: `${PLUGIN_ACTION_PREFIX}${name}/${PAGE_ACTION}`, title: `Open ${m.page.title}`, icon: m.page.icon, keywords: [m.title, "plugin"] });
     for (const c of m.commands) if (!when || whenHolds(c.when, when)) out.push({ id: `${PLUGIN_ACTION_PREFIX}${name}/${c.name}`, title: c.title, icon: c.icon, keywords: [...c.keywords, m.title] });
@@ -103,14 +104,14 @@ async function runCommandSpec(name: string, title: string, permissions: PluginPe
     if (!opened.ok) showToast(windowId, `${title}: ${command.title} didn't work`, opened.reason.slice(0, MESSAGE_LIMIT), { icon: "exclamationmark.triangle" });
     return;
   }
-  if ("tool" in action) return reportOutcome(windowId, title, command, await callTool(name, action.tool, action.input, { kind: "command" }, consent));
+  if ("tool" in action) return reportOutcome(windowId, title, command, await callTool(name, action.tool, action.input, { kind: "command" }, consent, windowProfileId(windowId)));
   reportOutcome(windowId, title, command, await invokePluginCall(name, { kind: "command", command: command.name, context: { ...shownCommandContext(permissions, context), windowId } }, { kind: "command" }, COMMAND_TIMEOUT_MS, { consent }));
 }
 
 export async function runPluginCommand(name: string, commandName: string, windowId: string, context: CommandContext = {}, when?: WhenContext, consent?: ConsentToken | null): Promise<boolean> {
   const token = consent !== undefined ? consent : consentToken();
   if (!eligibleKind(useBrowser.getState(), windowId)) return false;
-  const m = activeManifest(currentPlugins(), name);
+  const m = manifestInProfile(currentPlugins(), name, windowProfileId(windowId));
   const command = m?.commands.find((c) => c.name === commandName);
   if (!m || !command || !whenHolds(command.when, when ?? windowWhenContext(windowId))) return false;
   await runCommandSpec(name, m.title, m.permissions, command, windowId, context, token);
@@ -124,7 +125,7 @@ export async function runPluginAction(id: string, windowId: string): Promise<voi
   if (slash < 0) return;
   const name = rest.slice(0, slash);
   const action = rest.slice(slash + 1);
-  const m = activeManifest(currentPlugins(), name);
+  const m = manifestInProfile(currentPlugins(), name, windowProfileId(windowId));
   if (!m) return;
   if (action === PAGE_ACTION) return void openPluginPage(windowId, name);
   await runPluginCommand(name, action, windowId);

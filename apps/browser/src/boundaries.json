@@ -9,7 +9,8 @@
   "socket": "a same-user process on the control socket while Settings > Advanced > Let programs control Ardia is on",
   "native": "the browser's own native layer, relaying OS input",
   "import": "a file or browser profile the user chose to import",
-  "update": "a release manifest, its signature and the package the browser downloaded for the self-updater, trusted only once the release key's signature verifies"
+  "update": "a release manifest, its signature and the package the browser downloaded for the self-updater, trusted only once the release key's signature verifies",
+  "registry": "a plugin registry's answers (Ardia's, one the user added, or a GitHub repo's releases) and the archives they point at, trusted only once the registry key's Ed25519 signature and the archive's SHA-256 verify"
  },
  "customEvents": {
   "ardia:media-element": "Page-world shim names a media element for the isolated world to track; only an HTMLMediaElement is taken, and only its own playback state is read",
@@ -1633,26 +1634,84 @@
    "detected": false
   },
   {
-   "id": "plugin-update:official-auto",
-   "source": "plugin",
-   "guard": "An official update's manifest is approved without a sheet only when the installed copy and the download are the pin's verified copies and every field but cosmetic text is identical to the approved manifest (a first command-bar-only main excepted); anything else, unknown or malformed keeps the prompt",
+   "id": "plugin-registry:envelope",
+   "source": "registry",
+   "guard": "Every /r/ answer is a {v, kid, sig, payload} envelope verified with Ed25519 against the registry's pinned keys (none: nothing is trusted) over the domain-separated canonical JSON, then validated by the SDK's schema (8 MB cap, ETag cache re-verified on 304, revocations refused below the highest seq seen); the shared hostile list runs through the verifier in state/plugins/registry.test.mjs",
    "checks": [
-    "apps/browser/src/state/plugins/officialUpdate.ts#updateWithin",
-    "apps/browser/src/state/plugins/official.ts#officialUpdateVerdict"
+    "apps/browser/src/state/plugins/registryClient.ts#fetchSigned",
+    "packages/plugin-sdk/src/envelope.ts#verifyEnvelope",
+    "apps/browser/src/state/plugins/revocations.ts#refreshRevocations"
    ],
    "detected": false
   },
   {
-   "id": "plugin-install:official",
-   "source": "native",
-   "guard": "Official copies checked against the signed pin on every lookup; one verified snapshot is unpacked within caps of 512 MB downloaded, 1 GB unpacked, 100 times the download and 200 times an entry's compressed size past 4 MB, 20,000 entries and 32 levels (Swift tests in packages/shell/plugin-tests)",
+   "id": "plugin-registry:official-native",
+   "source": "registry",
+   "guard": "An @ardia/* plugin whose downloaded plugin.json declares programs, a sidecar or control installs only with an officialSig the separate official-native key made over its id, version, platform and SHA-256, whatever tier the registry claims; native verifies it again and records the proof beside the store copy, and only that proof lets a copy own reserved programs or run after-update commands; @ardia ids from any other registry, a GitHub repo, a folder or a .tar.gz are refused",
    "checks": [
-    "packages/shell/ios/PluginCore/OfficialTrust.swift",
-    "packages/shell/ios/PluginCore/OfficialArchive.swift"
+    "apps/browser/src/state/plugins/installer.ts#officialDownloadProblem",
+    "packages/plugin-sdk/src/officialArtifact.ts#verifyOfficialArtifact",
+    "packages/shell/ios/PluginCore/PluginOfficial.swift#verify",
+    "packages/shell/ios/PluginCore/PluginStore.swift#isOfficial",
+    "packages/shell/ios/PluginCore/PluginInstaller.swift#localArchive"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-registry:custom-url",
+   "source": "registry",
+   "guard": "A registry the user adds must be https (loopback only from the test override in an unsigned scratch build), carry its own Ed25519 key, name the scopes it serves and can't serve @ardia; the catalog lists a plugin only from the registry its install routes to; a github: spec must be owner/repo, and its release needs a .sha256 beside this computer's archive",
+   "checks": [
+    "apps/browser/src/state/plugins/registryKeys.ts#registryUrl",
+    "apps/browser/src/state/plugins/marketplace.ts#addRegistry",
+    "apps/browser/src/state/plugins/githubSource.ts#parseGithubSpec"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-install:archive",
+   "source": "registry",
+   "guard": "One verified snapshot whose SHA-256 matches the signed entry is unpacked within caps of 512 MB downloaded, 1 GB unpacked, 100 times the download and 200 times an entry's compressed size past 4 MB, 20,000 entries and 32 levels, every entry under the plugin's own folder with no links, devices, .. or duplicates; its plugin.json must be the expected id and version, and the copy is sealed read-only (Swift tests in packages/shell/plugin-tests/PluginStoreTests.swift)",
+   "checks": [
+    "packages/shell/ios/PluginCore/PluginArchive.swift",
+    "packages/shell/ios/PluginCore/PluginInstaller.swift#verifyAndPublish",
+    "packages/shell/ios/PluginCore/PluginStore.swift#publish"
    ],
    "findings": [
     "D1",
     "D2"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-install:folder",
+   "source": "plugin",
+   "guard": "A folder plugin's identity is a SHA-256 over every file and folder in it (sorted paths, sizes, the executable bit and bytes; links and special files refused, 4096 entries and 256 MB at most); its approval binds that digest with plugin.json, and every load, page file and program link re-derives it from the open folder, so a changed script or an added file needs consent again (Swift tests in packages/shell/plugin-tests/PluginStoreTests.swift; native's hostile reasons and folder ids stay inert text in hostileInputs.test.mjs)",
+   "checks": [
+    "packages/shell/ios/PluginCore/PluginFolderDigest.swift#digest",
+    "packages/shell/ios/PluginCore/PluginFiles.swift#approvedFolder",
+    "packages/shell/ios/PluginFolders.swift#localEntry",
+    "apps/browser/src/state/plugins/lifecycle.ts#listingsOf"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-install:deep-link",
+   "source": "other-app",
+   "guard": "ardia://plugin/install/@scope/name only opens Settings › Plugins on that id's Get: the id must match the scoped id pattern after one decode (200 characters at most), nothing installs without the consent sheet",
+   "checks": [
+    "apps/browser/src/lib/pluginIds.ts#pluginInstallLink",
+    "apps/browser/src/state/plugins/installLinks.ts#takePluginInstallLinks"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-socket:devReload",
+   "source": "socket",
+   "guard": "plugins.devReload takes only a scoped id, an absolute path that is the dev link's own folder and the exact dev link ardia-plugin writes under the config folder; it reloads only a plugin Ardia lists from that link with a manifest that loads, and a reload whose security surface grew, or one never approved, answers needs_consent and opens the sheet",
+   "checks": [
+    "apps/browser/src/state/plugins/devReload.ts#devReload",
+    "packages/shell/ios/PluginFolders.swift#devLink"
    ],
    "detected": false
   },

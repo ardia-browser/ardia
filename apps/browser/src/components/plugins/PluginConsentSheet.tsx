@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { consentLines } from "../../state/plugins/actions";
 import { CONSENT_KEYS, CONSENT_KEYS_UP, consentKeyDown, consentKeyUp, FRESH_CONSENT_KEYS, type ConsentButton } from "../../state/plugins/consentKeys";
-import { useConsentListing, useConsentVerb } from "../../state/plugins/hooks";
+import { useConsentBundle, useConsentListing, useConsentVerb } from "../../state/plugins/hooks";
 import { CONSENT_WORDS } from "../../state/plugins/consentWords";
 import type { PluginsStore } from "../../state/plugins/store";
 import { Box, Button, DialogActions, DialogTitle, Sheet, Symbol, Text } from "../ui";
@@ -32,6 +32,8 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
     if (onConfirm(id)) onClosed();
   };
   const changed = !m || listing?.hash !== hash;
+  const bundle = useConsentBundle(request.bundle);
+  const added = request.added ?? [];
   return (
     <Sheet onClose={close} backdropCloses={false}>
       <View
@@ -60,12 +62,25 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
             {changed ? (
               <Text tone="textSecondary">The plugin changed while this was open. Close this and try again.</Text>
             ) : (
-              consentLines(m, { controlOff, official: !!listing?.official, movesProfiles }).map((line, index) => (
-                <Box key={`${index}:${line.text}`} row gap="m">
-                  <Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />
-                  <Text style={LINE}>{line.text}</Text>
-                </Box>
-              ))
+              <>
+                {added.length ? (
+                  <Box gap="xs">
+                    <Text weight="semibold">This update adds</Text>
+                    {added.map((line) => (
+                      <Text key={line} tone="textSecondary" style={LINE}>{`+ ${line}`}</Text>
+                    ))}
+                  </Box>
+                ) : null}
+                {consentLines(m, { controlOff, official: !!listing?.official, movesProfiles }).map((line, index) => (
+                  <Box key={`${index}:${line.text}`} row gap="m">
+                    <Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />
+                    <Text style={LINE}>{line.text}</Text>
+                  </Box>
+                ))}
+                {bundle.map((dep) => (
+                  <BundledPlugin key={dep} name={dep} hash={request.bundle?.find((b) => b.name === dep)?.hash ?? ""} controlOff={controlOff} />
+                ))}
+              </>
             )}
           </Box>
         </ScrollView>
@@ -79,6 +94,23 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
         </DialogActions>
       </View>
     </Sheet>
+  );
+}
+
+function BundledPlugin({ name, hash, controlOff }: { name: string; hash: string; controlOff: boolean }) {
+  const theme = useTheme();
+  const dep = useConsentListing(name, hash)?.manifest;
+  if (!dep) return null;
+  return (
+    <Box gap="s">
+      <Text weight="semibold">{`Also installs ${dep.title} (${dep.id})`}</Text>
+      {consentLines(dep, { controlOff }).map((line, index) => (
+        <Box key={`${index}:${line.text}`} row gap="m">
+          <Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />
+          <Text style={LINE}>{line.text}</Text>
+        </Box>
+      ))}
+    </Box>
   );
 }
 

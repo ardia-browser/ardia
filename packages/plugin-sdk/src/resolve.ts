@@ -19,7 +19,8 @@ export type ResolveInput = {
   installed?: Readonly<Record<string, string>>;
   keepInstalled?: boolean;
   revocations?: RegistryRevocationsPayload | null;
-  registry?: string;
+  registry?: string | ((id: string) => string | undefined);
+  heldBy?: Readonly<Record<string, readonly { from: string; range: string }[]>>;
   includeOptional?: boolean;
   maxSteps?: number;
 };
@@ -115,8 +116,9 @@ export function resolvePluginGraph(input: ResolveInput): ResolveResult {
         rejected.add("platform");
         continue;
       }
+      const registry = typeof input.registry === "function" ? input.registry(detail.id) : input.registry;
       const revoked = matchRevocations(
-        { id: detail.id, version: version.version, sha256: artifact.sha256, repo: version.repo, ...(input.registry ? { registry: input.registry } : {}) },
+        { id: detail.id, version: version.version, sha256: artifact.sha256, repo: version.repo, ...(registry ? { registry } : {}) },
         input.revocations,
       );
       const keptYank = revoked.every((m) => m.action === "yank") && installed === version.version && input.keepInstalled === true;
@@ -137,6 +139,7 @@ export function resolvePluginGraph(input: ResolveInput): ResolveResult {
   function constraintsOn(id: string, picks: Picks, extra: readonly Constraint[]): Constraint[] {
     const out: Constraint[] = [];
     for (const root of input.roots) if (root.id === id) out.push({ from: ROOT, range: root.range ?? "*", channel: root.channel ?? defaultChannel });
+    for (const held of input.heldBy?.[id] ?? []) if (!picks.has(held.from)) out.push({ from: `${held.from} (installed)`, range: held.range, channel: defaultChannel });
     for (const [from, choice] of picks) {
       const range = choice.version.dependencies[id];
       if (range !== undefined) out.push({ from: `${from}@${choice.version.version}`, range, channel: defaultChannel });

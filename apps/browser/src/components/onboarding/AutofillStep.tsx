@@ -34,7 +34,7 @@ export function AutofillStep() {
     <StepActions disabled={phase === "working"} onContinue={() => (phase === "pairing" ? finishAutofillPairing() : void continueAutofillStep())} onSkip={skipAutofillStep} holdScroll />
   );
   return (
-    <StepLayout pageKey="autofill" title="Fill from your Mac?" subtitle="Use what your Mac already keeps. Optional." actions={actions} preview={<AutofillPreview offers={offers} picks={picks} />}>
+    <StepLayout pageKey="autofill" title="Fill from Passwords and Contacts?" subtitle="Use what you already keep there. Optional." actions={actions} preview={<AutofillPreview offers={offers} picks={picks} />}>
       <View style={{ gap: space.m }}>
         {offers.map((offer) => (
           <View key={offer} style={{ gap: space.m }}>

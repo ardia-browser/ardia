@@ -7,6 +7,8 @@ const { useBrowser } = await import("../browser/store.ts");
 const { usePlugins } = await import("../plugins/store.ts");
 const { loadApplePasswords } = await import("../site/applePasswords.ts");
 const { setMeCardFor, useMeCard } = await import("../site/meCard.ts");
+const { useApplePasswords } = await import("../site/applePasswords.ts");
+const { currentPasswordManager } = await import("../site/passwordManager.ts");
 const { activeSteps, questionsFor, startOnboarding, STEPS, useOnboarding } = await import("./onboarding.ts");
 const offers = await import("./autofillOffers.ts");
 const step = await import("./autofillStep.ts");
@@ -94,5 +96,38 @@ test("S11: accepting the Me card asks for Contacts once, turns it on and moves o
   const again = await onboardingOn({ fresh: false, apple: "notEntitled" });
   assert.deepEqual(offers.openAutofillOffers(again), [], "turning it off later doesn't bring the offer back");
   native.contacts.card = null;
+  useOnboarding.setState({ windowId: null });
+});
+
+test("S11: accepting Apple Passwords pairs right in the step with the Passwords app's code, then picks it and moves on", async () => {
+  const profile = await onboardingOn();
+  step.toggleAutofillOffer("applePasswords");
+  await step.continueAutofillStep();
+  assert.deepEqual(native.applePasswords.calls, ["pair"]);
+  assert.equal(step.useAutofillStep.getState().phase, "pairing");
+  assert.equal(useApplePasswords.getState().pairing?.step, "code");
+  assert.equal(useOnboarding.getState().step, "autofill");
+  assert.equal(await step.submitAutofillPairingCode("111111"), false);
+  assert.match(useApplePasswords.getState().pairing?.error ?? "", /didn't match/);
+  assert.equal(useOnboarding.getState().step, "autofill", "a wrong code stays on the step for another try");
+  assert.equal(await step.submitAutofillPairingCode(native.applePasswords.code), true);
+  assert.equal(currentPasswordManager(profile), "apple");
+  assert.equal(useOnboarding.getState().step, "home");
+  assert.deepEqual(useOnboarding.getState().picked.autofill, ["Fills and saves logins with Apple Passwords"]);
+  useOnboarding.setState({ windowId: null });
+});
+
+test("S11: skipping while Pairing cancels it, leaves the Password manager as it was, and declines the offer", async () => {
+  const profile = await onboardingOn();
+  step.toggleAutofillOffer("applePasswords");
+  await step.continueAutofillStep();
+  step.skipAutofillStep();
+  await flush();
+  assert.ok(native.applePasswords.calls.includes("cancelPairing"));
+  assert.equal(useApplePasswords.getState().pairing, null);
+  assert.equal(currentPasswordManager(profile), "ardia");
+  assert.equal(useOnboarding.getState().step, "home");
+  const again = await onboardingOn({ fresh: false });
+  assert.deepEqual(offers.openAutofillOffers(again), [], "the Me card offered beside it is declined too");
   useOnboarding.setState({ windowId: null });
 });

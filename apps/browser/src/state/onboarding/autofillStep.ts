@@ -45,6 +45,25 @@ export async function continueAutofillStep() {
   if (!picked.includes("applePasswords")) return finish(offered, picked);
   useAutofillStep.setState({ phase: "pairing" });
   await startApplePasswordsPairing(id);
+  if (now().phase === "pairing" && inStep() && !useApplePasswords.getState().pairing) finishPicked();
+}
+
+function finishPicked() {
+  const offered = autofillStepOffers(profile());
+  finish(offered, offerPicks(now().picks, offered));
+}
+
+export async function submitAutofillPairingCode(code: string): Promise<boolean> {
+  if (now().phase !== "pairing" || !inStep()) return false;
+  const paired = await submitApplePasswordsCode(code);
+  if (paired && now().phase === "pairing") finishPicked();
+  return paired;
+}
+
+export function finishAutofillPairing() {
+  if (now().phase !== "pairing" || !inStep()) return;
+  if (useApplePasswords.getState().pairing) cancelPairing();
+  finishPicked();
 }
 
 export function skipAutofillStep() {

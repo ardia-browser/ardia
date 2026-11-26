@@ -317,11 +317,13 @@ enum KeyEquivalents {
     return root.accessibilityLabel() == label && !root.visibleRect.isEmpty ? root : nil
   }
 
+  private static let pageViewClasses: Set<String> = ["RenderWidgetHostViewCocoa", "WebKitWebView"]
+
   private static func pageViews(in window: NSWindow) -> [NSView] {
     var views: [NSView] = []
     func walk(_ view: NSView) {
       guard !view.isHidden, view.alphaValue > 0 else { return }
-      if String(describing: type(of: view)) == "RenderWidgetHostViewCocoa", !view.visibleRect.isEmpty { views.append(view) }
+      if pageViewClasses.contains(String(describing: type(of: view))), !view.visibleRect.isEmpty { views.append(view) }
       view.subviews.forEach(walk)
     }
     window.contentView.map(walk)

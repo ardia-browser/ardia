@@ -24,5 +24,5 @@ export type PasswordsCalls = {
 };
 
 export type PasswordsEvents = {
-  "passwords.applePasswordsChanged": { state: ApplePasswordsState };
+  "passwords.applePasswordsChanged": { state: ApplePasswordsState; epoch?: string };
 };

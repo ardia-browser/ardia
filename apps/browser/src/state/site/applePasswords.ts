@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { applePasswordsStatus, cancelApplePasswordsPairing, finishApplePasswordsPairing, onApplePasswordsChanged, pairApplePasswords, type ApplePasswordsPairing, type ApplePasswordsState } from "../../platform/applePasswords";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { noteApplePasswordsPairing, noteApplePasswordsPairingFailed } from "../telemetry/passwordManagerCounts";
 import { choosePasswordManager } from "./passwordManager";
 
 export type PairingStep = "starting" | "code" | "checking" | "failed";
-export type Pairing = { profileId: string | null; step: PairingStep; error: string | null };
+export type Pairing = { profileId: string | null; step: PairingStep; error: string | null; consent: ConsentToken | null };
+export type { ApplePasswordsState };
 type ApplePasswordsStore = { state: ApplePasswordsState | null; pairing: Pairing | null };
 
 export const useApplePasswords = create<ApplePasswordsStore>()(() => ({ state: null, pairing: null }));
@@ -48,15 +50,15 @@ const setPairing = (pairing: Pairing | null) => useApplePasswords.setState({ pai
 const current = (pairing: Pairing) => useApplePasswords.getState().pairing === pairing;
 
 function failed(attempt: Pairing, outcome: keyof typeof PAIRING_FAILURES) {
-  noteApplePasswordsPairingFailed(outcome);
+  noteApplePasswordsPairingFailed(outcome, attempt.consent);
   setPairing({ ...attempt, step: outcome === "wrongCode" ? "code" : "failed", error: PAIRING_FAILURES[outcome] });
   if (outcome !== "wrongCode") void loadApplePasswords();
 }
 
 export async function startApplePasswordsPairing(profileId: string | null) {
-  const attempt: Pairing = { profileId, step: "starting", error: null };
+  const attempt: Pairing = { profileId, step: "starting", error: null, consent: consentToken() };
   setPairing(attempt);
-  noteApplePasswordsPairing("started");
+  noteApplePasswordsPairing("started", attempt.consent);
   const outcome = await pairApplePasswords().catch((): ApplePasswordsPairing => "failed");
   if (!current(attempt)) return;
   if (outcome === "awaitingCode") return setPairing({ ...attempt, step: "code" });
@@ -65,21 +67,25 @@ export async function startApplePasswordsPairing(profileId: string | null) {
 }
 
 function paired(attempt: Pairing) {
-  noteApplePasswordsPairing("paired");
+  noteApplePasswordsPairing("paired", attempt.consent);
   changes += 1;
   useApplePasswords.setState({ state: "connected", pairing: null });
-  if (attempt.profileId) choosePasswordManager(attempt.profileId, "apple");
+  if (attempt.profileId) choosePasswordManager(attempt.profileId, "apple", attempt.consent);
 }
 
-export async function submitApplePasswordsCode(code: string) {
+export async function submitApplePasswordsCode(code: string): Promise<boolean> {
   const waiting = useApplePasswords.getState().pairing;
-  if (!waiting || waiting.step !== "code") return;
-  const attempt: Pairing = { ...waiting, step: "checking", error: null };
+  if (!waiting || waiting.step !== "code") return false;
+  const attempt: Pairing = { ...waiting, step: "checking", error: null, consent: consentToken() };
   setPairing(attempt);
   const outcome = await finishApplePasswordsPairing(code).catch((): ApplePasswordsPairing => "failed");
-  if (!current(attempt)) return;
-  if (outcome === "paired") return paired(attempt);
+  if (!current(attempt)) return false;
+  if (outcome === "paired") {
+    paired(attempt);
+    return true;
+  }
   failed(attempt, outcome === "awaitingCode" ? "failed" : outcome);
+  return false;
 }
 
 export function cancelPairing() {

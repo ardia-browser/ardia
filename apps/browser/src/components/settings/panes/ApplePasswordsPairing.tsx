@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import type { ApplePasswordsState } from "../../../platform/applePasswords";
-import { cancelPairing, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords } from "../../../state/site/applePasswords";
+import { cancelPairing, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords, type ApplePasswordsState } from "../../../state/site/applePasswords";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
-import { Box, Button, DialogActions, DialogTitle, Sheet, Text, TextField } from "../../ui";
+import { Box, Button, DialogActions, DialogTitle, Sheet, space, Text, TextField } from "../../ui";
 import { Row } from "../Form";
 
 const CODE_DIGITS = 6;
-const FIELDS = { marginTop: 12 } as const;
+const FIELDS = { marginTop: space.l } as const;
+const ERROR = { marginTop: space.ml } as const;
 
 const STATUS_TEXT: Record<ApplePasswordsState, string> = {
   connected: "Connected",
@@ -48,8 +48,7 @@ function ApplePasswordsPairingSheet() {
   };
   const connect = async () => {
     if (code.length !== CODE_DIGITS) return;
-    await submitApplePasswordsCode(code);
-    if (!useApplePasswords.getState().pairing) closeSettingsSheet();
+    if (await submitApplePasswordsCode(code)) closeSettingsSheet();
   };
   const prompt = pairing.step === "starting" ? "Opening the Passwords app…" : pairing.step === "failed" ? null : "Enter the six-digit code the Passwords app shows.";
   return (
@@ -62,7 +61,7 @@ function ApplePasswordsPairingSheet() {
         </Box>
       ) : null}
       {pairing.error ? (
-        <Text size="caption" tone="destructive">
+        <Text size="caption" tone="destructive" style={ERROR}>
           {pairing.error}
         </Text>
       ) : null}

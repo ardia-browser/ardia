@@ -143,7 +143,7 @@ export const passwords = defineDomain({
   },
   events: {
     applePasswordsChanged: {
-      payload: "{ state: ApplePasswordsState }",
+      payload: "{ state: ApplePasswordsState; epoch?: string }",
       desktop: "absent",
       mac: "custom",
       windows: "absent",

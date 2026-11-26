@@ -83,9 +83,9 @@ export const neverChosenCount = () => neverChosenProfiles(browser()).length;
 
 let engage = () => {};
 
-export function choosePasswordManager(profileId: string, manager: PasswordManagerChoice) {
+export function choosePasswordManager(profileId: string, manager: PasswordManagerChoice, consent?: ConsentToken | null) {
   const s = browser();
-  notePasswordManagerChosen(choiceKind(manager));
+  notePasswordManagerChosen(choiceKind(manager), consent);
   engage();
   for (const id of profilesSharingData(s, profileId)) s.updateProfile(id, { passwordManager: manager });
 }

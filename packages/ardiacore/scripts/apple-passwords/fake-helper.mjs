@@ -16,9 +16,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 const [stateDir] = process.argv.slice(2);
-if (!stateDir) {
-  process.stderr.write("usage: fake-helper.mjs <state dir> <origin>\n");
-  process.exit(64);
+if (!stateDir || stateDir === "--help" || stateDir === "-h") {
+  const lines = fs.readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1);
+  process.stderr.write(`${lines.slice(0, lines.findIndex((l) => !l.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")}\n`);
+  process.exit(stateDir ? 0 : 64);
 }
 
 const file = (name) => path.join(stateDir, name);

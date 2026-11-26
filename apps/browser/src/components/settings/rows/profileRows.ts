@@ -84,8 +84,8 @@ export const profileRows = {
       rows: {
         passwordManager: {
           title: "Password manager",
-          description: "Ardia's own, a plugin, or none for an extension.",
-          keywords: ["password manager", "passwords app", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords", "password manager plugin", "extension", "logins", "none"],
+          description: "Ardia's own, Apple Passwords, a plugin, or none for an extension.",
+          keywords: ["password manager", "passwords app", "apple passwords", "icloud passwords", "icloud keychain", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords", "password manager plugin", "extension", "logins", "none"],
           shown: () => PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins,
         },
         offerToSavePasswords: {

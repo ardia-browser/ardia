@@ -83,13 +83,13 @@ export const noteOfferToSaveRestore = (restored: boolean, consent?: ConsentToken
 
 export const notePanelHint = (step: PanelHintStep) => bump(HINT_FIELDS[step]);
 
-export const notePasswordManagerChosen = (kind: PasswordManagerKind) => bump(CHOICE_FIELDS[kind]);
+export const notePasswordManagerChosen = (kind: PasswordManagerKind, consent?: ConsentToken | null) => bump(CHOICE_FIELDS[kind], consent);
 
-export const noteApplePasswordsPairing = (step: "started" | "paired") => bump(PAIRING_FIELDS[step]);
+export const noteApplePasswordsPairing = (step: "started" | "paired", consent: ConsentToken | null) => bump(PAIRING_FIELDS[step], consent);
 
-export function noteApplePasswordsPairingFailed(kind: PairingFailure) {
-  bump(PAIRING_FIELDS.failed);
-  bump(PAIRING_FAILURES[kind]);
+export function noteApplePasswordsPairingFailed(kind: PairingFailure, consent: ConsentToken | null) {
+  bump(PAIRING_FIELDS.failed, consent);
+  bump(PAIRING_FAILURES[kind], consent);
 }
 
 export function takePasswordManagerCounts(): Record<string, number> {

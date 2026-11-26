@@ -103,7 +103,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
     let now = state
     guard now != lastState else { return }
     lastState = now
-    ArdiaEvents.emit("passwords.applePasswordsChanged", data: ["state": now])
+    ArdiaEvents.emit("passwords.applePasswordsChanged", data: ArdiaConsentStamp.begin().onto(["state": now]))
   }
 
   private func running() throws -> ApplePasswordsPipe {

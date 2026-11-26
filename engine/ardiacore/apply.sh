@@ -12,6 +12,7 @@ import sys
 mode, path, name = sys.argv[1:4]
 s = open(path).read()
 HOOKS = '#include "ardia/core/ac_hooks.h"  // nogncheck\n'
+MAC_HOOKS = '#include "ardia/core/ac_mac_hooks.h"  // nogncheck\n'
 CONTENT_HOOKS = '#include "ardia/core/ac_content_hooks.h"  // nogncheck\n'
 
 
@@ -504,7 +505,7 @@ def edit(s):
     s = s[:body] + check + s[body:]
     return s.replace(old_fn, decl + old_fn)
 hook(["bool (*g_ardia_autofill_suggestions_suppressed)(\n",
-      "  if (g_ardia_autofill_suggestions_suppressed && IsRootPopup() && web_contents_ &&\n"], edit, HOOKS)
+      "  if (g_ardia_autofill_suggestions_suppressed && IsRootPopup() && web_contents_ &&\n"], edit, MAC_HOOKS)
 PY
 
 hook "$src/components/password_manager/content/browser/content_password_manager_driver.cc" "ContentPasswordManagerDriver fill data" <<'PY'
@@ -524,7 +525,7 @@ def edit(s):
     s = s.replace(old_fn, old_fn + check)
     return s.replace(namespace_open, decl + namespace_open, 1)
 hook(["bool (*g_ardia_password_filling_allowed)(content::WebContents*) = nullptr;\n",
-      "      !g_ardia_password_filling_allowed(\n"], edit, CONTENT_HOOKS)
+      "      !g_ardia_password_filling_allowed(\n"], edit, MAC_HOOKS)
 PY
 
 hook "$src/components/password_manager/core/browser/password_generation_frame_helper.cc" "PasswordGenerationFrameHelper generation" <<'PY'
@@ -542,7 +543,7 @@ def edit(s):
     assert s.count(old_fn) == 1 and s.count(doc) == 1
     return s.replace(old_fn, old_fn + check).replace(doc, decl + doc)
 hook(["bool (*g_ardia_password_generation_allowed)(const PasswordManagerDriver*) = nullptr;\n",
-      "      !g_ardia_password_generation_allowed(driver_.get())) {\n"], edit, CONTENT_HOOKS)
+      "      !g_ardia_password_generation_allowed(driver_.get())) {\n"], edit, MAC_HOOKS)
 PY
 
 hook "$src/content/browser/renderer_host/render_widget_host_view_base.cc" "RenderWidgetHostViewBase" <<'PY'

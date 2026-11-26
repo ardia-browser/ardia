@@ -86,6 +86,7 @@ source_set("core") {
     "ac_host_visibility.h",
     "ac_host_visibility.mm",
     "ac_hooks.h",
+    "ac_mac_hooks.h",
     "ac_icon_fetch.mm",
     "ac_installed_bubble.h",
     "ac_installed_bubble.mm",

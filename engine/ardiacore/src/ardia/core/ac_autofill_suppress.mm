@@ -10,7 +10,7 @@
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "ardia/core/ac_browser.h"
-#include "ardia/core/ac_hooks.h"
+#include "ardia/core/ac_mac_hooks.h"
 
 namespace ardiacore {
 

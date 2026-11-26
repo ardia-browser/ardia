@@ -6,6 +6,7 @@ const { PLATFORM_FEATURES } = await import("../../lib/platformFeatures.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { usePlugins } = await import("../plugins/store.ts");
 const { loadApplePasswords } = await import("../site/applePasswords.ts");
+const { setMeCardFor, useMeCard } = await import("../site/meCard.ts");
 const { activeSteps, questionsFor, startOnboarding, STEPS, useOnboarding } = await import("./onboarding.ts");
 const offers = await import("./autofillOffers.ts");
 const step = await import("./autofillStep.ts");
@@ -75,5 +76,23 @@ test("S11: skipping the step declines what it offered, for good", async () => {
   assert.deepEqual(offers.openAutofillOffers(again), []);
   const entitled = await onboardingOn({ fresh: false });
   assert.deepEqual(offers.openAutofillOffers(entitled), ["applePasswords"], "an offer it never showed still comes once Apple Passwords can work");
+  useOnboarding.setState({ windowId: null });
+});
+
+test("S11: accepting the Me card asks for Contacts once, turns it on and moves on, and the offer doesn't return", async () => {
+  const profile = await onboardingOn({ apple: "notEntitled" });
+  native.contacts.card = { name: "Ada Lovelace", organization: "", emails: ["ada@example.test"], phones: [], addresses: [] };
+  assert.equal(native.contacts.requests, 0, "showing the offer never asks");
+  step.toggleAutofillOffer("meCard");
+  await step.continueAutofillStep();
+  await flush();
+  assert.equal(native.contacts.requests, 1);
+  assert.equal(useMeCard.getState().entries[profile]?.length, 1);
+  assert.equal(useOnboarding.getState().step, "home");
+  assert.deepEqual(useOnboarding.getState().picked.autofill, ["Fills forms from your Me card"]);
+  await setMeCardFor(profile, false);
+  const again = await onboardingOn({ fresh: false, apple: "notEntitled" });
+  assert.deepEqual(offers.openAutofillOffers(again), [], "turning it off later doesn't bring the offer back");
+  native.contacts.card = null;
   useOnboarding.setState({ windowId: null });
 });

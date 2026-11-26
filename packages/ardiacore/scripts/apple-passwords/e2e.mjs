@@ -96,6 +96,26 @@ const CHECKS = {
     assert(fake.launches() === 1, "one helper launch", fake.launches());
     return { state: done.state, choice: done.choice };
   },
+  async E2() {
+    const fake = fakeHelper(path.join(SCRATCH, "E2", "fake"), { mode: { killedAtLaunch: true } });
+    await start("E2", { manifest: fake.manifest });
+    const failed = await pickApplePasswords();
+    assert(failed.step === "failed" && failed.error === "Apple Passwords isn't available on this Mac.", "the sheet says Apple Passwords isn't available", failed);
+    const after = await until(pairingView, (v) => v.state === "refused");
+    assert(after.choice !== "apple", "the choice is unchanged", after);
+    await app.eval(`return ac.applePasswords.startApplePasswordsPairing(null).then(() => true);`, { timeout: 30_000 });
+    assert(fake.launches() === 1, "a helper macOS killed is never started again this run", fake.launches());
+    return { state: after.state, launches: fake.launches() };
+  },
+  async E3() {
+    const missing = path.join(SCRATCH, "E3", "no-such-manifest.json");
+    fs.rmSync(missing, { force: true });
+    await start("E3", { manifest: missing });
+    const shown = await pickApplePasswords();
+    assert(shown.step === "failed" && /Software Update/.test(shown.error ?? ""), "the sheet says how to get the helper back", shown);
+    assert(shown.state === "helperMissing" && shown.choice !== "apple", "nothing is saved", shown);
+    return { state: shown.state };
+  },
 };
 
 const names = wanted.length ? wanted : Object.keys(CHECKS);

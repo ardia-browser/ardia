@@ -4,6 +4,7 @@ import { deleteAddress, saveAddress, type AddressInput } from "../../platform/au
 import { readDocument, saveDocument } from "../../platform/documents";
 import {
   contactsAuthorization,
+  onContactsChanged,
   openMeCardInContacts,
   readMeCard,
   requestContactsAccess,
@@ -12,6 +13,7 @@ import {
   type MeCard,
 } from "../../platform/contacts";
 import { isFields } from "../../lib/decode";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { parseSaved, unchanged, versionedJson } from "../../lib/savedDocument";
 
 type MeCardState = { entries: Record<string, string[]>; hints: Record<string, string | null>; asking: Record<string, boolean> };
@@ -119,3 +121,14 @@ export const useMeCardFor = (profile: string) => ({
 
 const NO_ENTRIES: string[] = [];
 export const useMeCardEntryIds = (profile: string) => useMeCard((s) => s.entries[profile] ?? NO_ENTRIES);
+
+const refreshAll = () => Promise.all(Object.keys(useMeCard.getState().entries).map((profile) => refresh(profile).catch((e: unknown) => console.warn("[me card] refresh failed", e))));
+
+let started = false;
+
+export function startMeCard() {
+  if (started || !PLATFORM_FEATURES.meCard) return;
+  started = true;
+  onContactsChanged(() => void refreshAll());
+  void refreshAll();
+}

@@ -145,7 +145,7 @@ const HOSTILE_PAGE = `<!doctype html><body style="margin:0">
 test("a page that rewrites the helpers the picker calls still can't get a line break or uBlock syntax into a saved rule", { skip: CHROMIUM_MISSING, timeout: 30_000 }, async (t) => {
   const browser = await launchChromium();
   t.after(() => browser.close());
-  const returns = (target, value) => `${target} = () => ${JSON.stringify(value)}`;
+  const returns = (target, value) => `document.querySelectorAll = () => [document.querySelector("div")]; ${target} = () => ${JSON.stringify(value)}`;
   const tricks = [
     ...["\f", "\v", "\u2028", "\u2029", "\u0085", "\u0000", "\t"].flatMap((br) => [
       returns("Element.prototype.getAttribute", `promo${br}*##+js(set-constant, ardiaFixtureMarker, 1)`),
@@ -224,6 +224,24 @@ test("every element the real picker can pick on a varied page saves, and the sav
     const saved = filter.slice("example.com##".length);
     const found = await page.evaluate((saved) => [...document.querySelectorAll(saved)].map((el) => el.hasAttribute("data-fixture-target")), saved);
     assert.ok(found.includes(true), `${target}: ${JSON.stringify(saved)} finds the picked element`);
-    if (target !== "deep anonymous") assert.equal(found.length, 1, `${target}: ${JSON.stringify(saved)} finds only the picked element`);
+    assert.equal(found.length, 1, `${target}: ${JSON.stringify(saved)} finds only the picked element`);
   }
+});
+
+test("an element nested past the depth bound with a look-alike sibling is not picked", { skip: CHROMIUM_MISSING, timeout: 30_000 }, async (t) => {
+  const browser = await launchChromium();
+  t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+  await page.setContent(`<!doctype html><body style="margin:0"><main>${nested(70, "<span>first deep</span>")}${nested(70, "<span>second deep</span>")}</main></body>`);
+  const point = await page.evaluate(() => {
+    const el = [...document.querySelectorAll("span")].find((node) => node.textContent === "first deep");
+    const box = el.getBoundingClientRect();
+    return [box.left + 4, box.top + box.height / 2];
+  });
+  const result = run(page, trustedPickerCall("start", null));
+  await page.waitForFunction(() => !!window[Symbol.for("ardia.elementPicker")]?.session);
+  await page.mouse.click(point[0], point[1]);
+  assert.deepEqual(await result, { cancelled: true });
+  const visible = await page.evaluate(() => [...document.querySelectorAll("span")].map((el) => getComputedStyle(el).display !== "none"));
+  assert.deepEqual(visible, [true, true]);
 });

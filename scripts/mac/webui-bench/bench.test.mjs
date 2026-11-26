@@ -696,23 +696,35 @@ const waitFor = async (check, ms = 1000) => {
 
 test("round 2: the block arms on the gesture itself and fires after the delay", async () => {
   const listeners = new Map();
+  const timers = [];
+  let now = 100;
+  const runBlock = (delay, duration) => new Function("setTimeout", "Date", `return ${blockScript(delay, duration)}`)(
+    (fire, ms) => timers.push({ fire, ms }),
+    { now: () => now++ },
+  );
   const saved = { add: globalThis.addEventListener, remove: globalThis.removeEventListener };
   globalThis.addEventListener = (name, fn) => listeners.set(name, fn);
   globalThis.removeEventListener = (name) => listeners.delete(name);
   try {
-    assert.equal(new Function(`return ${blockScript(5, 10)}`)(), 1);
+    assert.equal(runBlock(5, 10), 1);
     const block = globalThis.__ardiaBenchBlock;
     assert.equal(block.armedBy, null);
-    assert.equal(await waitFor(() => block.start !== null, 30), false);
+    assert.deepEqual(timers, []);
     listeners.get("wheel")();
     assert.equal(block.armedBy, "wheel");
     assert.ok(!listeners.has("wheel"));
-    assert.ok(await waitFor(() => block.end !== null));
-    assert.ok(block.start >= block.triggeredAt + 5);
+    assert.equal(block.start, null);
+    assert.equal(timers.length, 1);
+    const { fire, ms } = timers.shift();
+    assert.equal(ms, 5);
+    now = block.triggeredAt + ms;
+    fire();
+    assert.equal(block.start, block.triggeredAt + 5);
     assert.ok(block.end - block.start >= 10);
-    new Function(`return ${blockScript(0, 1)}`)();
+    runBlock(0, 1);
     performance.mark("ardia-pager-moving");
     assert.ok(await waitFor(() => globalThis.__ardiaBenchBlock.armedBy === "pager"));
+    assert.deepEqual(timers.map(({ ms }) => ms), [0]);
   } finally {
     globalThis.addEventListener = saved.add;
     globalThis.removeEventListener = saved.remove;

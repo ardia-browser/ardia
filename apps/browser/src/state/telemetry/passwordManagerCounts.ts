@@ -35,6 +35,12 @@ const ME_CARD_FIELDS: Record<"on" | "refused", string> = {
   refused: "me_card_access_refused",
 };
 
+type OnboardingOffer = "applePasswords" | "meCard";
+const OFFER_FIELDS: Record<OnboardingOffer, Record<"accepted" | "declined", string>> = {
+  applePasswords: { accepted: "onboarding_offers_apple_passwords_accepted", declined: "onboarding_offers_apple_passwords_declined" },
+  meCard: { accepted: "onboarding_offers_me_card_accepted", declined: "onboarding_offers_me_card_declined" },
+};
+
 const ICLOUD_EXTENSION_FIELDS: Record<"turnedOff" | "turnedBackOn" | "restored" | "failed", string> = {
   turnedOff: "icloud_extension_turned_off",
   turnedBackOn: "icloud_extension_turned_back_on",
@@ -73,7 +79,7 @@ const PAIRING_FAILURES: Record<PairingFailure, string> = {
   notEntitled: "apple_passwords_pairing_failures_not_entitled",
 };
 
-const FIELDS = [...Object.values(PAIRING_FIELDS), ...Object.values(PAIRING_FAILURES), ...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), ...Object.values(ME_CARD_FIELDS), ...Object.values(ICLOUD_EXTENSION_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
+const FIELDS = [...Object.values(PAIRING_FIELDS), ...Object.values(PAIRING_FAILURES), ...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), ...Object.values(ME_CARD_FIELDS), ...Object.values(OFFER_FIELDS).flatMap(Object.values), ...Object.values(ICLOUD_EXTENSION_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
 
 let counts: Record<string, number> = {};
 const bump = (field: string, consent?: ConsentToken | null, by = 1) => countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + by));
@@ -96,6 +102,8 @@ export const noteOfferToSaveRestore = (restored: boolean, consent?: ConsentToken
 export const notePanelHint = (step: PanelHintStep) => bump(HINT_FIELDS[step]);
 
 export const noteMeCardSwitch = (step: keyof typeof ME_CARD_FIELDS, consent?: ConsentToken | null) => bump(ME_CARD_FIELDS[step], consent);
+
+export const noteOnboardingOffer = (offer: OnboardingOffer, answer: "accepted" | "declined", consent?: ConsentToken | null) => bump(OFFER_FIELDS[offer][answer], consent);
 
 export const noteICloudExtension = (step: keyof typeof ICLOUD_EXTENSION_FIELDS, consent?: ConsentToken | null) => bump(ICLOUD_EXTENSION_FIELDS[step], consent);
 

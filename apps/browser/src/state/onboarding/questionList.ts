@@ -1,6 +1,6 @@
 import type { Settings } from "../settings/settings";
 
-export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "plugins" | "outro";
+export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "autofill" | "home" | "plugins" | "outro";
 
 export type QuestionId =
   | "source"
@@ -18,6 +18,7 @@ export type QuestionId =
   | "engine"
   | "crash"
   | "pins"
+  | "autofill"
   | "default"
   | "links"
   | "plugins"
@@ -54,6 +55,7 @@ export const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
     { id: "crash", keys: [] },
   ],
   pins: [{ id: "pins", keys: [] }],
+  autofill: [{ id: "autofill", keys: [] }],
   home: [
     { id: "default", keys: [] },
     { id: "links", keys: ["openLinksInLittleArdia"] },

@@ -59,5 +59,42 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await tab.close();
       }
     },
+    async E7() {
+      const tab = await open("example.localhost");
+      try {
+        const first = FIXTURES.logins.find((l) => l.user === usersFor("example.localhost")[0]);
+        await tab.click("#u");
+        await tab.waitRows();
+        await tab.key("escape");
+        assert(!(await tab.noList(800)), "Escape closes the list", null);
+        await tab.key("down");
+        await tab.waitRows("the list ArrowDown opens");
+        await tab.key("escape");
+        assert(!(await tab.noList(800)), "Escape closes it again", null);
+        await tab.key("down");
+        await tab.waitRows("the list ArrowDown opens again");
+        await tab.key("down");
+        await tab.key("enter");
+        const filled = await waitFor("the keyed fill", async () => {
+          const page = await tab.value(`({ u: document.getElementById("u").value, p: document.getElementById("p").value })`);
+          return page?.p ? page : null;
+        });
+        assert(filled.u === first.user && filled.p === first.password, "Down and Enter fill the first login", { u: filled.u });
+        return { engine: engineName };
+      } finally {
+        await tab.close();
+      }
+    },
+    async E9() {
+      const tab = await open("accounts.example.localhost");
+      try {
+        await tab.click("#u");
+        const rows = await tab.waitRows();
+        assert(q(titles(rows.slice(0, -1))) === q(usersFor("example.localhost")), "example.localhost's logins are offered on its subdomain", rows);
+        return { engine: engineName, rows: titles(rows) };
+      } finally {
+        await tab.close();
+      }
+    },
   };
 }

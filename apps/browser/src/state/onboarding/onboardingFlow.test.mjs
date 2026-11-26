@@ -29,7 +29,7 @@ const S = () => useBrowser.getState();
 const O = () => useOnboarding.getState();
 const settle = () => useOnboarding.setState({ windowId: null, leaving: false, redo: false });
 
-const ALL_STEPS = ["source", "layout", "tabs", "look", "searchPrivacy", "pins", "home", "outro"];
+const ALL_STEPS = ["source", "layout", "tabs", "look", "searchPrivacy", "pins", "autofill", "home", "outro"];
 const asked = () => activeSteps().flatMap((step) => questionsFor(step).map((q) => q.id));
 
 test("every browser walks the full set of steps, and a browser's preset skips only the questions it answers", () => {
@@ -69,7 +69,7 @@ test("Continue goes through the steps in order and Skip moves past the rest of a
   chooseSource("fresh");
   confirmAnswer("source", sourcePatch(), []);
   assert.equal(O().step, "layout");
-  for (const step of ["layout", "tabs", "look", "searchPrivacy", "pins", "home"]) {
+  for (const step of ["layout", "tabs", "look", "searchPrivacy", "pins", "autofill", "home"]) {
     assert.equal(O().step, step);
     skipStep();
   }

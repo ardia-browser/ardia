@@ -3,6 +3,8 @@ import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib
 import type { BrowserSourceId, Preset } from "./presets";
 import type { OnboardingStep, QuestionId } from "./questionList";
 
+type OfferAnswers = Partial<Record<"applePasswords" | "meCard", "accepted" | "declined">>;
+
 const DOC = "onboarding.json";
 const DOC_VERSION = 1;
 const DOC_MIGRATIONS: Migrations = { 0: unchanged };
@@ -17,6 +19,7 @@ export type Saved = {
   defaultBrowserTrialStartedAt?: number;
   defaultBrowserCheckInDoneAt?: number;
   introMusicMuted?: boolean;
+  offers?: OfferAnswers;
 };
 
 export function readSaved(): Saved | null {

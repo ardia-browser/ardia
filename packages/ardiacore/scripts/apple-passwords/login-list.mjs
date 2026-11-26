@@ -7,6 +7,7 @@ export const APPLE_ICON = "Apple Passwords";
 export const FOOTER = "Open Passwords app";
 export const NO_LOGINS = "No saved logins";
 export const NOT_SECURE = "Not secure";
+export const FILL_FAILED = "Apple Passwords didn't fill this login. Unlock the Passwords app and try again.";
 const OPENED_PASSWORDS = "[logins] Passwords app (background mode, not opened)";
 
 const usersFor = (host) =>
@@ -163,6 +164,32 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       } finally {
         await tab.close();
       }
+    },
+    async E16() {
+      const { fake } = await paired();
+      const seen = {};
+      for (const [kind, status] of [["locked", 2], ["refused", 5]]) {
+        const tab = await open("example.localhost");
+        fake.setMode({ status: { 5: status } });
+        try {
+          const login = usersFor("example.localhost")[0];
+          await tab.click("#u");
+          await tab.waitRows();
+          await tab.pick(login);
+          const rows = await waitFor("the failure row", async () => {
+            const shown = await tab.rows();
+            return shown?.[0]?.notice ? shown : null;
+          });
+          assert(rows[0].notice && rows[0].title === FILL_FAILED, "a failure row says the login wasn't filled", rows);
+          const page = await tab.value(`({ u: document.getElementById("u").value, p: document.getElementById("p").value })`);
+          assert(!page.u && !page.p, "nothing is filled", { u: page.u, filled: !!page.p });
+          seen[kind] = rows[0].title;
+        } finally {
+          fake.setMode({ status: {} });
+          await tab.close();
+        }
+      }
+      return { engine: engineName, ...seen };
     },
   };
 }

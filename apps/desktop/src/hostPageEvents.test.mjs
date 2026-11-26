@@ -171,11 +171,11 @@ test("reentrant native delivery waits until the reset and whole snapshot have ap
 
 test("pending command guards capture original reset authority across provisional abort, document changes and disposal", () => {
   const h=setup();assert.equal(h.receiver.captureRequest(),null);h.receiver.install(snapshot());
-  const before=h.receiver.captureRequest();assert.ok(before());h.send(message(2,"status",{text:"hover"}));assert.ok(before());
-  h.send(control(3,"1",{reason:"provisional"}));assert.equal(before(),false);assert.equal(h.receiver.captureRequest(),null);
+  const before=h.receiver.captureRequest();assert.ok(before.current());h.send(message(2,"status",{text:"hover"}));assert.ok(before.current());
+  h.send(control(3,"1",{reason:"provisional"}));assert.equal(before.current(),false);assert.equal(h.receiver.captureRequest(),null);
   assert.equal(h.send(message(4,"security",security)),false);assert.equal(pageOf(h.tab).security,null);
-  h.send(control(5,"1",{action:"snapshot",events:[event("security",security)]}));const restored=h.receiver.captureRequest();assert.ok(restored());assert.equal(before(),false);
-  h.send(control(6,"2"));assert.equal(restored(),false);const current=h.receiver.captureRequest();assert.ok(current());h.receiver.dispose();assert.equal(current(),false);
+  h.send(control(5,"1",{action:"snapshot",events:[event("security",security)]}));const restored=h.receiver.captureRequest();assert.ok(restored.current());assert.equal(before.current(),false);
+  h.send(control(6,"2"));assert.equal(restored.current(),false);const current=h.receiver.captureRequest();assert.ok(current.current());h.receiver.dispose();assert.equal(current.current(),false);
 });
 
 test("reentrant event chains are bounded and fail closed without recursive delivery", () => {
@@ -191,7 +191,7 @@ test("same-claim rebind installs a new binding snapshot and rejects buffered pre
   next.receive("ArdiaWebView","7",message(90,"security",security));
   next.receive("ArdiaWebView","7",message(3,"zoom",{zoom:1.25,host:"example.test",isDefault:false,pinchScale:1},{bindingGeneration:"4"}));
   assert.equal(next.install(snapshot(2,[event("security",{level:"none",url:navigation.url,origin:null})],{bindingGeneration:"4"})),true);
-  assert.equal(old(),false);assert.equal(pageOf(h.tab).security.level,"none");assert.equal(pageOf(h.tab).security.certificate,undefined);
+  assert.equal(old.current(),false);assert.equal(pageOf(h.tab).security.level,"none");assert.equal(pageOf(h.tab).security.certificate,undefined);
   assert.equal(useBrowser.getState().tabs[h.tab].zoom,1.25);
 });
 

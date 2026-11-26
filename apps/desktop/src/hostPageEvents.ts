@@ -10,6 +10,9 @@ type PageLeaseMetadata = {
   bindingGeneration: string;
   documentEpoch: string;
 };
+export type PageRequestScope = Pick<PageLeaseMetadata, "bindingGeneration" | "documentEpoch">;
+export type PageRequest = PageRequestScope & { current(): boolean };
+
 type PageDelivery = PageLeaseMetadata & { type: "pageEvent"; sequence: number; event: PageEvent };
 type PageCreationState = { lease: PageLeaseMetadata; snapshot: { watermark: number; events: PageEvent[] } };
 type PageRebinding = PageCreationState & { browserId: number; chromeTabId: number };
@@ -146,13 +149,17 @@ export class HostPageEvents {
     return this.active;
   }
 
-  captureRequest(): (() => boolean) | null {
+  captureRequest(): PageRequest | null {
     if (!this.active || !this.lease || this.provisional) return null;
     const lease = this.lease;
     const boundary = this.boundary;
-    return () => this.active && this.boundary === boundary && this.lease?.claim === lease.claim &&
-      this.lease.rendererGeneration === lease.rendererGeneration && this.lease.bindingGeneration === lease.bindingGeneration &&
-      this.lease.documentEpoch === lease.documentEpoch;
+    return {
+      bindingGeneration: lease.bindingGeneration,
+      documentEpoch: lease.documentEpoch,
+      current: () => this.active && this.boundary === boundary && this.lease?.claim === lease.claim &&
+        this.lease.rendererGeneration === lease.rendererGeneration && this.lease.bindingGeneration === lease.bindingGeneration &&
+        this.lease.documentEpoch === lease.documentEpoch,
+    };
   }
 
   private drain(values: (PageDelivery | PageLifecycle)[]) {

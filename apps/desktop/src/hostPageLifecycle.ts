@@ -35,6 +35,8 @@ export function resetHostPage(tabId: string, reason: PageResetReason, replaced: 
     if (kinds.has("navigation")) holdThemeColor(tabId);
     return;
   }
+  const browser = useBrowser.getState();
+  if (browser.find[tabId]?.count != null) browser.setFind(tabId, { count: null, active: 0 });
   patchPage(tabId, {
     security: null,
     themeColorSource: null,

@@ -33,9 +33,10 @@ function nativeHost({ snapshot = true } = {}) {
       }
       if (method === "tab.release") { assert.equal(args.claim, active); active = ""; }
       if (method === "tab.command" && args.command === "getSecurityInfo") {
-        beforeSecurityReply?.();
+        await beforeSecurityReply?.();
         return securityReply;
       }
+      if (method === "tab.command" && args.command === "evaluate") return "current page";
       return null;
     },
   };
@@ -145,6 +146,31 @@ test("security results are fenced by the request captured before the command", a
   assert.deepEqual(await tab.pageResult("getSecurityInfo"), security);
   tab.dispose();
   assert.equal(await tab.pageResult("getSecurityInfo"), null);
+  await settle();
+});
+
+test("a queued reader command cannot execute on a replacement document", async () => {
+  const native = nativeHost();
+  const { tab } = mount(native);
+  await tab.ready;
+  const blocked = Promise.withResolvers();
+  native.onSecurityRequest(() => blocked.promise);
+  const blocker = tab.command("getSecurityInfo");
+  await settle();
+  const queued = tab.pageResult("evaluate", ["reader"]);
+  await settle();
+  native.reset("document");
+  blocked.resolve();
+  await blocker;
+  assert.equal(await queued, null);
+  assert.equal(native.requests.filter(({ args }) => args.command === "evaluate").length, 0);
+
+  assert.equal(await tab.pageResult("evaluate", ["reader"]), "current page");
+  assert.deepEqual(native.requests.at(-1).args, {
+    id: 7, claim: native.active(), command: "evaluate", args: ["reader"],
+    bindingGeneration: "5", documentEpoch: "2",
+  });
+  tab.dispose();
   await settle();
 });
 

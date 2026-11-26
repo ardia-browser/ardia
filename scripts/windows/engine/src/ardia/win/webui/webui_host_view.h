@@ -43,12 +43,17 @@ class BrowserWindowInterface;
 class GURL;
 class Profile;
 
+namespace ardiacore {
+class LinuxFind;
+}
+
 namespace aura {
 class Window;
 class WindowTargeter;
 }
 
 namespace content {
+class Page;
 class WebContents;
 class WebUI;
 }
@@ -100,11 +105,18 @@ class PageBinding : public content::WebContentsObserver {
   const std::string& profile() const { return profile_; }
   content::WebContents* contents() const { return web_contents(); }
   void MoveTo(ShellHostView* owner);
+  bool FindText(const std::u16string& text, bool forward, bool find_next);
+  bool StopFinding(bool clear_selection);
+  void ResetPageCommands();
+  base::WeakPtr<PageBinding> PageCommandToken() {
+    return page_command_tokens_.GetWeakPtr();
+  }
 
   std::string claim;
   uint64_t renderer_generation = 0;
   uint64_t sequence = 1;
   uint64_t binding_generation = 1;
+  uint64_t document_epoch = 1;
   raw_ptr<views::WebView> viewport = nullptr;
   bool visible = false;
   bool presented = false;
@@ -118,6 +130,7 @@ class PageBinding : public content::WebContentsObserver {
   void ReportClosed();
 
  private:
+  void PrimaryPageChanged(content::Page& page) override;
   void DidFinishNavigation(content::NavigationHandle* handle) override;
   void TitleWasSet(content::NavigationEntry* entry) override;
   void DidStartLoading() override;
@@ -128,6 +141,8 @@ class PageBinding : public content::WebContentsObserver {
   int id_ = 0;
   std::string key_;
   std::string profile_;
+  std::unique_ptr<ardiacore::LinuxFind> find_;
+  base::WeakPtrFactory<PageBinding> page_command_tokens_{this};
 };
 
 class ShellHostView : public views::View,

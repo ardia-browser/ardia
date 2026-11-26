@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "ardia/core/ac_launch_switches.h"
+#include "ardia/linux/ac_linux_page_evaluation.h"
 #include "ardia/win/profiles.h"
 #include "ardia/win/webui/webui_bridge.h"
 #include "ardia/win/webui/webui_host_internal.h"
@@ -14,6 +15,7 @@
 #include "ardia/win/webui/webui_windows.h"
 #include "base/auto_reset.h"
 #include "base/functional/bind.h"
+#include "base/json/json_reader.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
@@ -24,13 +26,17 @@
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/common/chrome_isolated_world_ids.h"
 #include "components/zoom/page_zoom.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/reload_type.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/common/referrer.h"
 #include "content/public/common/page_zoom.h"
+#include "content/public/common/referrer.h"
+#include "crypto/sha2.h"
+#include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/views/controls/webview/webview.h"
@@ -41,9 +47,71 @@ namespace {
 
 constexpr base::TimeDelta kUnclaimedRetry = base::Milliseconds(25);
 constexpr int kNavigationEntryLimit = 1000;
+constexpr base::TimeDelta kPageEvaluationTimeout = base::Seconds(3);
 
 bool BlankUrl(const GURL& url) {
   return url.is_empty() || url.IsAboutBlank();
+}
+
+void EvaluatePage(PageBinding& binding,
+                  const std::string& code,
+                  ShellHostView::Done done) {
+  auto script = ardiacore::LinuxPageEvaluationScript(
+      code,
+      [](std::string_view text) {
+        return base::HexEncodeLower(crypto::SHA256HashString(text));
+      },
+      [](std::string_view json) {
+        return base::JSONReader::Read(json, base::JSON_PARSE_RFC, 4);
+      });
+  if (!script) {
+    return std::move(done).Run(
+        false, Failure("ERR_PAGE_EVALUATION_REFUSED",
+                       "Ardia runs only its own page operations"));
+  }
+  content::RenderFrameHost* frame = binding.contents()->GetPrimaryMainFrame();
+  if (!frame || !frame->IsActive() || !frame->IsRenderFrameLive()) {
+    return std::move(done).Run(true, base::Value());
+  }
+  const GURL& url = frame->GetLastCommittedURL();
+  if (!url.SchemeIsHTTPOrHTTPS() && !url.SchemeIsFile()) {
+    return std::move(done).Run(true, base::Value());
+  }
+
+  auto reply = std::make_shared<ShellHostView::Done>(std::move(done));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, base::BindOnce(
+                     [](std::shared_ptr<ShellHostView::Done> reply) {
+                       if (*reply) {
+                         std::move(*reply).Run(true, base::Value());
+                       }
+                     },
+                     reply),
+      kPageEvaluationTimeout);
+  frame->ExecuteJavaScriptInIsolatedWorld(
+      base::UTF8ToUTF16(*script),
+      mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+          base::BindOnce(
+              [](base::WeakPtr<PageBinding> binding,
+                 content::WeakDocumentPtr document,
+                 std::shared_ptr<ShellHostView::Done> reply, base::Value value) {
+                if (!*reply) {
+                  return;
+                }
+                auto* frame = document.AsRenderFrameHostIfValid();
+                std::optional<std::string> result;
+                if (frame && binding && binding->contents() &&
+                    frame == binding->contents()->GetPrimaryMainFrame()) {
+                  result = ardiacore::LinuxPageEvaluationResult(value);
+                }
+                std::move(*reply).Run(
+                    true, result ? base::Value(std::move(*result))
+                                 : base::Value());
+              },
+              binding.PageCommandToken(), frame->GetWeakDocumentPtr(),
+              std::move(reply)),
+          base::Value()),
+      ISOLATED_WORLD_ID_ARDIA_PAGE);
 }
 
 }
@@ -66,7 +134,7 @@ base::DictValue ShellHostView::Identity(PageBinding* binding) const {
             base::NumberToString(binding->renderer_generation));
   lease.Set("bindingGeneration",
             base::NumberToString(binding->binding_generation));
-  lease.Set("documentEpoch", "1");
+  lease.Set("documentEpoch", base::NumberToString(binding->document_epoch));
   base::DictValue snapshot;
   snapshot.Set("watermark", static_cast<double>(binding->sequence));
   snapshot.Set("events", base::ListValue().Append(binding->NavigationEvent()));
@@ -168,6 +236,7 @@ void ShellHostView::CreateTabIn(base::DictValue args,
           false, base::Value("This tab already has an active owner"));
     }
     if (existing->contents()->GetBrowserContext() == profile) {
+      existing->ResetPageCommands();
       existing->claim = claim;
       existing->renderer_generation = renderer_generation_;
       ReattachViewports();
@@ -433,6 +502,45 @@ void ShellHostView::TabCommand(const base::DictValue& args, Done done) {
     std::move(done).Run(true, base::Value());
     return CloseContents(contents);
   }
+  if (command == "find") {
+    if (!values || values->size() != 3 || !(*values)[0].is_string() ||
+        !(*values)[1].is_bool() || !(*values)[2].is_bool()) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_ARGUMENT",
+                         "find requires text, forward and findNext"));
+    }
+    if (!binding->FindText(base::UTF8ToUTF16((*values)[0].GetString()),
+                           (*values)[1].GetBool(), (*values)[2].GetBool())) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_UNAVAILABLE", "Find helper is unavailable"));
+    }
+    return std::move(done).Run(true, base::Value());
+  }
+  if (command == "stopFinding") {
+    if (!values || values->size() != 1 || !(*values)[0].is_bool()) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_ARGUMENT",
+                         "stopFinding requires clearSelection"));
+    }
+    if (!binding->StopFinding((*values)[0].GetBool())) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_UNAVAILABLE", "Find helper is unavailable"));
+    }
+    return std::move(done).Run(true, base::Value());
+  }
+  if (command == "evaluate") {
+    if (!values || values->size() != 1 || !(*values)[0].is_string()) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_ARGUMENT", "evaluate requires one script"));
+    }
+    if (Text(args, "documentEpoch") !=
+            base::NumberToString(binding->document_epoch) ||
+        Text(args, "bindingGeneration") !=
+            base::NumberToString(binding->binding_generation)) {
+      return std::move(done).Run(true, base::Value());
+    }
+    return EvaluatePage(*binding, (*values)[0].GetString(), std::move(done));
+  }
   if (command == "navigationEntries") {
     base::ListValue entries;
     const int count = std::min(controller.GetEntryCount(), kNavigationEntryLimit);
@@ -460,6 +568,7 @@ void ShellHostView::ReleaseTab(const base::DictValue& args, Done done) {
   if (binding->claim != Text(args, "claim")) {
     return std::move(done).Run(false, base::Value("No owned live tab"));
   }
+  binding->ResetPageCommands();
   binding->claim.clear();
   binding->visible = false;
   binding->presented = false;

@@ -17,6 +17,7 @@
 #include "ardia/desktop/ac_desktop_webui_process_policy.h"
 #include "ardia/desktop/ac_desktop_window_state.h"
 #include "ardia/desktop/generated/ac_desktop_routes.h"
+#include "ardia/linux/ac_linux_find.h"
 #include "ardia/win/main.h"
 #include "ardia/win/private_sessions.h"
 #include "ardia/win/profiles.h"
@@ -433,6 +434,7 @@ PageBinding::PageBinding(ShellHostView* owner,
       profile_(std::move(profile)) {}
 
 PageBinding::~PageBinding() {
+  ResetPageCommands();
   if (viewport && owner_) {
     viewport->SetWebContents(nullptr);
     owner_->RemoveChildViewT(viewport.get());
@@ -441,6 +443,7 @@ PageBinding::~PageBinding() {
 }
 
 void PageBinding::MoveTo(ShellHostView* owner) {
+  ResetPageCommands();
   if (viewport && owner_) {
     viewport->SetWebContents(nullptr);
     owner_->RemoveChildViewT(viewport.get());
@@ -475,7 +478,7 @@ base::DictValue PageBinding::Envelope(std::string_view type) {
       .Set("claim", claim)
       .Set("rendererGeneration", base::NumberToString(renderer_generation))
       .Set("bindingGeneration", base::NumberToString(binding_generation))
-      .Set("documentEpoch", "1")
+      .Set("documentEpoch", base::NumberToString(document_epoch))
       .Set("sequence", static_cast<double>(++sequence));
 }
 
@@ -523,11 +526,73 @@ bool PageBinding::ReportOpenPrivateWindow(const GURL& url,
 }
 
 void PageBinding::Rebind(content::WebContents* contents) {
+  ResetPageCommands();
   if (viewport) {
     viewport->SetWebContents(nullptr);
   }
   Observe(contents);
   id_ = TabId(contents);
+}
+
+bool PageBinding::FindText(const std::u16string& text,
+                           bool forward,
+                           bool find_next) {
+  if (!find_) {
+    auto binding = PageCommandToken();
+    find_ = std::make_unique<ardiacore::LinuxFind>(
+        contents(),
+        base::BindRepeating(
+            [](base::WeakPtr<PageBinding> binding) {
+              return binding && binding->owner_ && !binding->claim.empty();
+            },
+            binding),
+        base::BindRepeating(
+            [](base::WeakPtr<PageBinding> binding, base::DictValue result) {
+              auto* value = result.FindDict("value");
+              if (!binding || !value) {
+                return;
+              }
+              base::DictValue delivery = binding->Envelope("pageEvent");
+              delivery.Set("event", base::DictValue()
+                                        .Set("name", "find")
+                                        .Set("data", std::move(*value)));
+              binding->owner_->Emit("ArdiaWebView",
+                                    base::NumberToString(binding->id()),
+                                    base::Value(std::move(delivery)));
+            },
+            binding));
+  } else if (!find_next) {
+    find_->Reset();
+  }
+  return find_->Start(text, forward);
+}
+
+bool PageBinding::StopFinding(bool clear_selection) {
+  if (!find_) {
+    return true;
+  }
+  const bool stopped = find_->Stop(clear_selection);
+  find_.reset();
+  return stopped;
+}
+
+void PageBinding::ResetPageCommands() {
+  page_command_tokens_.InvalidateWeakPtrs();
+  find_.reset();
+}
+
+void PageBinding::PrimaryPageChanged(content::Page&) {
+  ResetPageCommands();
+  ++document_epoch;
+  if (!owner_ || claim.empty()) {
+    return;
+  }
+  base::DictValue delivery = Envelope("pageLifecycle");
+  delivery.Set("action", "snapshot");
+  delivery.Set("reason", "document");
+  delivery.Set("events", base::ListValue().Append(NavigationEvent()));
+  owner_->Emit("ArdiaWebView", base::NumberToString(id_),
+               base::Value(std::move(delivery)));
 }
 
 void PageBinding::DidFinishNavigation(content::NavigationHandle* handle) {
@@ -549,6 +614,7 @@ void PageBinding::DidStopLoading() {
 }
 
 void PageBinding::WebContentsDestroyed() {
+  ResetPageCommands();
   ReportClosed();
   if (viewport) {
     viewport->SetWebContents(nullptr);
@@ -1112,6 +1178,7 @@ void ShellHostView::RetireRenderer() {
   }
   RetireDocuments();
   for (auto& [id, binding] : bindings_) {
+    binding->ResetPageCommands();
     binding->claim.clear();
     binding->renderer_generation = 0;
     binding->transferable = false;

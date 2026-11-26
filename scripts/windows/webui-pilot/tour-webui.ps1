@@ -65,6 +65,18 @@ function Check([string]$name, [bool]$ok, [string]$detail) {
 }
 function ShellEval([string]$js) { Cdp-Eval $js 'chrome://ardia/' }
 function PageEval([string]$js, [string]$url) { Cdp-Eval $js $url }
+function Find-State {
+  $json = ShellEval '(() => { const s = ardiaLinux.store.getState(); const w = s.windows[__ardiaHost.bootstrap.windowId]; return JSON.stringify(s.find[w?.activeTabIds?.[w.profileId]] ?? null); })()'
+  if ($json) { $json | ConvertFrom-Json }
+}
+function Search-Page([string]$word) {
+  [Pilot]::Chord(0x11, 0x46)
+  $focused = Wait-Until { (ShellEval 'document.activeElement?.placeholder === "Find on Page"') -eq $true } 5 'Find in Page to take keyboard focus' -NoThrow
+  if (-not $focused) { return $false }
+  [Pilot]::Chord(0x11, 0x41)
+  [Pilot]::Type($word)
+  $true
+}
 function Scale($h) { [Pilot]::GetDpiForWindow($h) / 96.0 }
 function CssToScreen($h, $x, $y) {
   $o = New-Object Pilot+POINT; [Pilot]::ClientToScreen($h, [ref]$o) | Out-Null; $s = Scale $h
@@ -146,7 +158,10 @@ try {
   $pageA = Join-Path $pages 'a.html'; $pageB = Join-Path $pages 'b.html'; $pageC = Join-Path $pages 'download.html'; $pageD = Join-Path $pages 'handed-over.html'; $pageE = Join-Path $pages 'split.html'
   Set-Content -LiteralPath $pageE -Value '<!doctype html><title>Tour split</title><h1 id="t">E</h1>' -Encoding utf8
   Set-Content -LiteralPath $pageD -Value '<!doctype html><title>Tour handed over</title><h1 id="t">D</h1>' -Encoding utf8
-  Set-Content -LiteralPath $pageA -Value '<!doctype html><title>Tour A</title><h1 id="t">A</h1><input id="q">' -Encoding utf8
+  $articleParagraph = '<p>Beaconstone marks the entrance to the harbor. The keepers climbed the tower in the evening to guide ships around the rocks and kept a daily log of the waves and winds.</p>'
+  $articleCopy = '<p>The tower was built from granite brought up from the harbor. The stairs were just wide enough for two people to pass on the way to the lamps.</p>'
+  $article = '<article><h2>Harbor lights</h2>' + $articleParagraph + ($articleCopy * 12) + $articleParagraph + '</article>'
+  Set-Content -LiteralPath $pageA -Value ('<!doctype html><title>Tour A</title><h1 id="t">A</h1><input id="q"><nav>Onlyoutside</nav>' + $article) -Encoding utf8
   Set-Content -LiteralPath $pageB -Value '<!doctype html><title>Tour B</title><h1 id="t">B</h1>' -Encoding utf8
   Set-Content -LiteralPath $pageC -Value "<!doctype html><title>Tour download</title><a id=`"d`" download=`"$downloadName`" href=`"data:text/plain;charset=utf-8,ardia%20tour`">save</a>" -Encoding utf8
   $urlA = ([Uri]$pageA).AbsoluteUri; $urlB = ([Uri]$pageB).AbsoluteUri; $urlC = ([Uri]$pageC).AbsoluteUri; $urlD = ([Uri]$pageD).AbsoluteUri; $urlE = ([Uri]$pageE).AbsoluteUri
@@ -213,6 +228,61 @@ try {
   [Pilot]::SetForegroundWindow($h) | Out-Null
   $navigated = Go $urlA
   Check 'navigate' ([bool]$navigated) "typed $urlA into the address field; pages: $(Page-Urls)"
+  $plainFind = (Search-Page 'Beaconstone') -and (Wait-Until { $f = Find-State; $f.query -ieq 'Beaconstone' -and $f.count -eq 2 -and $f.active -eq 1 } 8 'the two matches on the original page' -NoThrow)
+  Check 'plain-page-find' ([bool]$plainFind) "Ctrl+F on the original page: $(Find-State | ConvertTo-Json -Compress)"
+  [Pilot]::Chord(0x1B)
+  Wait-Until { -not (Find-State).open } 5 'the Find bar to close' -NoThrow | Out-Null
+
+  [Pilot]::Chord(0x78)
+  $readerOpen = Wait-Until { (PageEval '!!document.querySelector("ardia-reader")' $urlA) -eq $true } 8 'Reading Mode to open' -NoThrow
+  $readerFind = $readerOpen -and (Search-Page 'Beaconstone') -and (Wait-Until { $f = Find-State; $f.query -ieq 'Beaconstone' -and $f.count -eq 2 -and $f.active -eq 1 } 8 'the two matches in Reading Mode' -NoThrow)
+  $readerNext = $false
+  $readerPrevious = $false
+  $readerOutside = $false
+  if ($readerFind) {
+    [Pilot]::Chord(0x0D)
+    $readerNext = Wait-Until { (Find-State).active -eq 2 } 5 'the second reader match' -NoThrow
+    [Pilot]::Chord(0x10, 0x0D)
+    $readerPrevious = Wait-Until { (Find-State).active -eq 1 } 5 'the first reader match again' -NoThrow
+    Shot "$Proof\$Label-reader-find.png"
+    $outsideCount = ShellEval @'
+(async () => {
+  const s = ardiaLinux.store.getState();
+  const w = s.windows[__ardiaHost.bootstrap.windowId];
+  const tab = w.activeTabIds[w.profileId];
+  const view = ardiaLinux.webviews.get(tab);
+  const query = "Onlyoutside";
+  if (!view) return null;
+  await view.stopFinding(true);
+  let stop, timer;
+  const result = new Promise(resolve => {
+    stop = __ardiaHost.onEvent((module, id, message) => {
+      const event = message?.event;
+      if (module === "ArdiaWebView" && event?.name === "find" && event.data.final) {
+        resolve(event.data.count);
+      }
+    });
+    timer = setTimeout(() => resolve(null), 1500);
+  });
+  try {
+    s.setFind(tab, { query, count: null, active: 0 });
+    await view.find(query, true, false);
+    return await result;
+  } finally {
+    clearTimeout(timer);
+    stop();
+  }
+})()
+'@
+    $readerOutside = $null -ne $outsideCount -and $outsideCount -eq 0
+  }
+  Check 'reading-mode-find' ($readerOpen -and $readerFind -and $readerNext -and $readerPrevious -and $readerOutside) "Reader opened $readerOpen, found two matches $readerFind, next $readerNext, previous $readerPrevious, skipped hidden page text $readerOutside"
+  [Pilot]::Chord(0x1B)
+  if ($readerOpen) {
+    Wait-Until { -not (Find-State).open } 5 'the Find bar to close in Reading Mode' -NoThrow | Out-Null
+    [Pilot]::Chord(0x78)
+    Wait-Until { (PageEval '!document.querySelector("ardia-reader")' $urlA) -eq $true } 8 'Reading Mode to close' -NoThrow | Out-Null
+  }
   [Pilot]::Chord(0x11, 0x54)
   Wait-Until { Address-Focused } 5 'Ctrl+T to open a new tab' -NoThrow | Out-Null
   [Pilot]::Type($urlB); [Pilot]::Chord(0x0D)

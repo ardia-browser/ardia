@@ -13,9 +13,10 @@ import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addLinkedProfile, appScopeOf, linkedProfileId, linkProfiles, readyToPair, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { noteCycle, timedCycle } from "./cycleWork";
+import { noteCycle, noteFolderUnavailable, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
+import { recreateChainFolder, reseedPendingScopes, unavailableFolderError, type FolderRecreateResult } from "./folderRecovery";
 import { freezeRemovals, markDeviceRemoved, markRemoved, settleRemovals } from "./profileRemoval";
 import { profileScope } from "./records";
 import { queueSend, sendTargetsIn } from "./sentTabs";
@@ -46,10 +47,7 @@ let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
 
-function load() {
-  const loaded = read();
-  if (loaded) doc = loaded;
-}
+const load = () => { const loaded = read(); if (loaded) doc = loaded; };
 
 function publishUi(patch: Partial<SyncUi> = {}) {
   if (!doc.enabled || !typeSyncedFor(doc.types, "settings", true)) settleRetiredDefaultsWithoutSync();
@@ -73,22 +71,16 @@ function watchExtensions() {
   if (profiles.length) watchExtensionIntents(profiles);
 }
 
-function scheduleSync(delay = AFTER_EDIT_MS) {
-  if (!doc.enabled) return;
-  clearTimeout(timer);
-  timer = setTimeout(() => void runCycle(), delay);
-}
+const scheduleSync = (delay = AFTER_EDIT_MS) => void (doc.enabled && (clearTimeout(timer), (timer = setTimeout(() => void runCycle(), delay))));
 
 let stopping = false;
-let moveRun: Promise<FolderMoveResult> | null = null;
-const moveSettled = async () => {
-  while (moveRun) await moveRun.catch(() => {});
-};
+let folderOp: Promise<unknown> | null = null;
+const folderOpSettled = async () => { while (folderOp) await folderOp.catch(() => {}); };
 
 export const syncWritesOpen = () => doc.enabled && !stopping && !["starting", "locked", "off", "unavailable"].includes(useSync.getState().status);
 
 export async function syncNow(stillWanted: () => void = () => {}): Promise<boolean> {
-  while (moveRun || cycle) await (moveRun ?? cycle)!.catch(() => {});
+  while (folderOp || cycle) await (folderOp ?? cycle)!.catch(() => {});
   if (stopping || !doc.enabled || useSync.getState().status === "locked") return false;
   stillWanted();
   await runCycle({ forcePasswords: true });
@@ -98,7 +90,7 @@ export async function syncNow(stillWanted: () => void = () => {}): Promise<boole
 type CycleOptions = { retiring?: boolean; forcePasswords?: boolean };
 
 async function runCycle({ retiring = false, forcePasswords = false }: CycleOptions = {}) {
-  if (!SyncNative || !doc.enabled || moveRun || !doc.folder || !doc.deviceId || useSync.getState().status === "locked") return;
+  if (!SyncNative || !doc.enabled || folderOp || !doc.folder || !doc.deviceId || useSync.getState().status === "locked") return;
   if (cycle) {
     again = true;
     forcePasswordsNext ||= forcePasswords;
@@ -114,6 +106,8 @@ async function runCycle({ retiring = false, forcePasswords = false }: CycleOptio
   }
 }
 
+const clockFor = (device: string) => (editClock().device !== device && startEditClock(device, doc.clock), editClock());
+
 async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring, forcePasswords }: Required<CycleOptions>) {
   const consent = consentToken();
   clearTimeout(timer);
@@ -121,24 +115,19 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
   try {
     watchExtensions();
     const status = await native.chainStatus(folder);
-    if (status === "unavailable") return publishUi({ status: "offline", error: null });
+    if (status === "unavailable") {
+      if (useSync.getState().status !== "offline") noteFolderUnavailable(consent);
+      return publishUi({ status: "offline", error: unavailableFolderError((await native.folderInfo?.(folder).catch(() => null)) ?? null) });
+    }
     if (status === "missing") return await resetFromElsewhere();
-    const transport = folderTransport(native, folder);
-    if (editClock().device !== device) startEditClock(device, doc.clock);
-    const clock = editClock();
+    const transport = folderTransport(native, folder), clock = clockFor(device);
+    if (doc.reseedScopes?.length) await reseedPendingScopes({ native, doc, folder, device, clock, watchScope, persistJournal, save });
     const app = appScopeOf(doc);
     if (freezeRemovals(doc)) save();
     const appSettled = watchScope(APP_SCOPE, app, clock);
     try {
-      noteCycle(consent, await syncScope({
-        scope: APP_SCOPE,
-        state: app,
-        transport,
-        adapters: appAdapters(doc, retiring),
-        clock,
-        device,
-        options: { persist: persistJournal(APP_SCOPE), persistApplying: persistApplying(APP_SCOPE), holdApply: isQuitting },
-      }));
+      const options = { persist: persistJournal(APP_SCOPE), persistApplying: persistApplying(APP_SCOPE), holdApply: isQuitting };
+      noteCycle(consent, await syncScope({ scope: APP_SCOPE, state: app, transport, adapters: appAdapters(doc, retiring), clock, device, options }));
     } finally {
       await appSettled();
     }
@@ -155,15 +144,8 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       const state = (doc.scopes[scope] ??= emptyScope());
       const settled = watchScope(scope, state, clock);
       try {
-        noteCycle(consent, await syncScope({
-          scope,
-          state,
-          transport,
-          adapters: profileAdapters(doc, profileId, retire, forcePasswords),
-          clock,
-          device,
-          options: { expired: historyExpired, persist: persistJournal(scope), persistApplying: persistApplying(scope), holdApply: isQuitting },
-        }));
+        const options = { expired: historyExpired, persist: persistJournal(scope), persistApplying: persistApplying(scope), holdApply: isQuitting };
+        noteCycle(consent, await syncScope({ scope, state, transport, adapters: profileAdapters(doc, profileId, retire, forcePasswords), clock, device, options }));
       } finally {
         await settled();
       }
@@ -198,11 +180,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
   }
 }
 
-export function adoptProfileTheme(profileId: string) {
-  if (!themeChosenHere(doc.profiles[profileId])) return;
-  save();
-  if (doc.enabled) scheduleSync(AFTER_EDIT_MS);
-}
+export const adoptProfileTheme = (profileId: string): void => void (themeChosenHere(doc.profiles[profileId]) && (save(), doc.enabled && scheduleSync(AFTER_EDIT_MS)));
 
 async function loadSavedState() {
   const loading = doc;
@@ -221,11 +199,7 @@ async function resetFromElsewhere() {
 
 export const folderInfo = async (path?: string | null): Promise<FolderInfo | null> => (await SyncNative?.folderInfo(path ?? doc.folder ?? null)) ?? null;
 
-function pointAt(path: string) {
-  doc.folder = path;
-  save();
-  publishUi();
-}
+const pointAt = (path: string) => void ((doc.folder = path), save(), publishUi());
 
 export const setSyncFolder = (path: string) => void (doc.enabled || pointAt(path));
 
@@ -235,20 +209,49 @@ export async function chooseSyncFolder(): Promise<string | null> {
   return picked;
 }
 
-export function moveSyncFolder(to: string): Promise<FolderMoveResult> {
-  const native = SyncNative, from = doc.folder;
-  if (!native || !doc.enabled || !from || stopping || moveRun) return Promise.resolve({ error: "busy" });
-  if (useSync.getState().status === "locked") return Promise.resolve({ error: "locked" });
+function runFolderOp<R>(
+  work: (native: NonNullable<typeof SyncNative>, folder: string) => Promise<R>,
+  after: (result: R | { error: "busy" | "locked" }) => void | Promise<void>,
+  allowStarting = true,
+): Promise<R | { error: "busy" | "locked" }> {
+  const native = SyncNative, status = useSync.getState().status;
+  if (!native || !doc.enabled || !doc.folder || stopping || folderOp || (!allowStarting && status === "starting")) return Promise.resolve({ error: "busy" });
+  if (status === "locked") return Promise.resolve({ error: "locked" });
   clearTimeout(timer);
-  return (moveRun = movingTo(native, from, to).finally(() => ((moveRun = null), scheduleSync(0))));
+  const run = (async (): Promise<R | { error: "busy" | "locked" }> => {
+    while (cycle) await cycle.catch(() => {});
+    if (stopping || !doc.enabled || !doc.folder) return { error: "busy" };
+    if (useSync.getState().status === "locked") return { error: "locked" };
+    return work(native, doc.folder);
+  })().finally(() => (folderOp = null));
+  folderOp = run;
+  return run.then(async (result) => ((await after(result)), result));
 }
 
-async function movingTo(native: NonNullable<typeof SyncNative>, from: string, to: string): Promise<FolderMoveResult> {
-  while (cycle) await cycle.catch(() => {});
-  const result = await moveChain(native, from, to, folderScopes(doc)).catch((error: unknown): FolderMoveResult => ({ error: "failed", message: errorText(error) }));
-  if ("ok" in result && result.ok !== "same") pointAt(to);
-  return noteFolderMove(result);
-}
+export const moveSyncFolder = (to: string): Promise<FolderMoveResult> =>
+  runFolderOp<FolderMoveResult>(
+    async (native, from) => {
+      const result = await moveChain(native, from, to, folderScopes(doc)).catch((error: unknown): FolderMoveResult => ({ error: "failed", message: errorText(error) }));
+      if ("ok" in result && result.ok !== "same") pointAt(to);
+      return noteFolderMove(result);
+    },
+    () => scheduleSync(0),
+  );
+
+export const recreateSyncFolder = (): Promise<FolderRecreateResult> => {
+  const consent = consentToken();
+  return runFolderOp<FolderRecreateResult>(
+    (native, folder) =>
+      doc.deviceId
+        ? recreateChainFolder({ native, doc, folder, device: doc.deviceId, clock: clockFor(doc.deviceId), watchScope, persistJournal, save, consent, onUpdating: () => publishUi({ status: "updating", error: null }), onUploadError: (error) => publishUi({ status: "stalled", error }) })
+        : Promise.resolve({ error: "busy" }),
+    async (result) => {
+      if ("ok" in result && doc.enabled && !stopping && useSync.getState().status !== "locked") await runCycle({ forcePasswords: true });
+      else if (doc.enabled && !stopping) scheduleSync("error" in result && result.error === "exists" ? 0 : CYCLE_MS);
+    },
+    false,
+  );
+};
 
 function begin(folder: string, deviceId: string, joining: boolean) {
   doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining };
@@ -260,7 +263,7 @@ function begin(folder: string, deviceId: string, joining: boolean) {
 export async function turnOnSync(folder: string, how?: TurnOnFolder): Promise<{ ok: true } | { error: string }> {
   const native = SyncNative;
   if (!native) return { error: "Sync isn’t available in this build." };
-  await moveSettled();
+  await folderOpSettled();
   const deviceId = native.newDeviceId();
   try {
     if (!(await native.createPhrase(deviceId))) return { error: `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.` };
@@ -277,7 +280,7 @@ export async function turnOnSync(folder: string, how?: TurnOnFolder): Promise<{ 
 export async function enterRecoveryPhrase(folder: string, phrase: Secret<"syncPhrase">): Promise<PhraseResult | { error: "unavailable" }> {
   const native = SyncNative;
   if (!native) return { error: "unavailable" };
-  await moveSettled();
+  await folderOpSettled();
   if (doc.enabled && doc.deviceId && useSync.getState().status === "locked") {
     const result = await native.enterPhrase(doc.deviceId, reveal(phrase), doc.folder ?? folder);
     if ("ok" in result) {
@@ -295,7 +298,7 @@ export async function enterRecoveryPhrase(folder: string, phrase: Secret<"syncPh
 
 export async function stopSync({ deleteData = false } = {}) {
   const native = SyncNative, consent = consentToken(), shown = doc.folder;
-  await moveSettled();
+  await folderOpSettled();
   if (!native || !doc.enabled || stopping) return;
   stopping = true;
   await retire(native, deleteData ? [...new Set([doc.folder, shown])] : [], consent).finally(() => (stopping = false));
@@ -308,9 +311,7 @@ async function retire(native: NonNullable<typeof SyncNative>, deleteIn: (string 
   if (useSync.getState().status !== "locked") await runCycle({ retiring: true }).catch(reportFailure);
   clearTimeout(timer);
   const folder = doc.folder;
-  for (const target of deleteIn) {
-    if (target) await native.deleteChain(target).catch((error: unknown) => warnFor(consent, "[sync] deleting sync data failed", error));
-  }
+  for (const target of deleteIn) if (target) await native.deleteChain(target).catch((error: unknown) => warnFor(consent, "[sync] deleting sync data failed", error));
   if (doc.deviceId) await native.forget(doc.deviceId);
   doc = { ...emptyDoc(), folder, types: doc.types };
   forgetScopeAdapters();
@@ -320,10 +321,7 @@ async function retire(native: NonNullable<typeof SyncNative>, deleteIn: (string 
 
 const docChanged = () => void (save(), publishUi(), scheduleSync(0));
 
-export function setTypeSynced(type: DataType, enabled: boolean) {
-  doc.types = { ...doc.types, [type]: enabled };
-  docChanged();
-}
+export const setTypeSynced = (type: DataType, enabled: boolean): void => void ((doc.types = { ...doc.types, [type]: enabled }), docChanged());
 
 export function setProfileSynced(profileId: string, enabled: boolean) {
   const link = doc.profiles[profileId];
@@ -333,14 +331,9 @@ export function setProfileSynced(profileId: string, enabled: boolean) {
   docChanged();
 }
 
-export function setOpenTabsSynced(profileId: string, on: boolean) {
-  markOpenTabsSynced(doc, profileId, on);
-  docChanged();
-}
+export const setOpenTabsSynced = (profileId: string, on: boolean): void => void (markOpenTabsSynced(doc, profileId, on), docChanged());
 
-export function sendTargets(profileId: string): SendTarget[] {
-  return useSync.getState().status === "locked" ? [] : sendTargetsIn(doc, profileId);
-}
+export const sendTargets = (profileId: string): SendTarget[] => (useSync.getState().status === "locked" ? [] : sendTargetsIn(doc, profileId));
 
 export function sendTab(tabId: string, deviceId: string): boolean {
   if (useSync.getState().status === "locked" || !queueSend(doc, tabId, deviceId)) return false;
@@ -396,5 +389,5 @@ export function startSync() {
     if (closed || (!cycle && (s.bookmarks !== prev.bookmarks || s.settings !== prev.settings || s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder || s.groups !== prev.groups))) scheduleSync();
   });
   if (__DEV__)
-    exposeDevSync({ useSync, syncNow, turnOnSync, enterRecoveryPhrase: (folder: string, text: string) => enterRecoveryPhrase(folder, asSecret("syncPhrase", text)), stopSync, setTypeSynced, setProfileSynced, setOpenTabsSynced, addRemoteProfile, removeRemoteProfile, removeSyncedDevice, setSyncFolder, moveSyncFolder, folderInfo, doc: () => doc, native: SyncNative });
+    exposeDevSync({ useSync, syncNow, turnOnSync, enterRecoveryPhrase: (folder: string, text: string) => enterRecoveryPhrase(folder, asSecret("syncPhrase", text)), stopSync, setTypeSynced, setProfileSynced, setOpenTabsSynced, addRemoteProfile, removeRemoteProfile, removeSyncedDevice, setSyncFolder, moveSyncFolder, recreateSyncFolder, folderInfo, doc: () => doc, native: SyncNative });
 }

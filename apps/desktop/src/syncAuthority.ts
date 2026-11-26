@@ -26,6 +26,7 @@ export const REMOTE_METHODS = [
   "adoptProfileTheme",
   "useFolder",
   "moveFolder",
+  "recreateFolder",
   "sendTargets",
   "sendTab",
 ] as const;

@@ -59,3 +59,16 @@ test("S1: on an entitled Mac the Password manager menu lists Apple Passwords", a
     ],
   );
 });
+
+const offersApple = (menu) => !!menu?.options.some((o) => o.value === "apple");
+
+test("S2: Apple Passwords is absent on an unentitled build, on macOS before 15.4, on Linux and on Windows", async () => {
+  assert.equal(offersApple(managerMenu(await settingsOn("notEntitled"))), false, "unentitled build");
+  assert.equal(offersApple(managerMenu(await settingsOn("tooOld"))), false, "macOS too old");
+  const { PLATFORM_FEATURES: LINUX } = await import("../../../lib/platformFeatures.linux.ts");
+  const { PLATFORM_FEATURES: WINDOWS } = await import("../../../lib/platformFeatures.win.ts");
+  for (const [name, features] of [["Linux", LINUX], ["Windows", WINDOWS]]) {
+    Object.assign(PLATFORM_FEATURES, features);
+    assert.equal(offersApple(managerMenu(await settingsOn("notConnected"))), false, name);
+  }
+});

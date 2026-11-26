@@ -5,6 +5,8 @@ import { waitFor } from "./webkit.mjs";
 const q = JSON.stringify;
 export const APPLE_ICON = "Apple Passwords";
 export const FOOTER = "Open Passwords app";
+export const NO_LOGINS = "No saved logins";
+const OPENED_PASSWORDS = "[logins] Passwords app (background mode, not opened)";
 
 const usersFor = (host) =>
   FIXTURES.logins
@@ -91,6 +93,22 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await tab.click("#u");
         const rows = await tab.waitRows();
         assert(q(titles(rows.slice(0, -1))) === q(usersFor("example.localhost")), "example.localhost's logins are offered on its subdomain", rows);
+        return { engine: engineName, rows: titles(rows) };
+      } finally {
+        await tab.close();
+      }
+    },
+    async E10() {
+      const { app } = await paired();
+      const tab = await open("empty.localhost");
+      try {
+        await tab.click("#u");
+        const rows = await tab.waitRows();
+        assert(q(rows.map((r) => [r.title, r.notice])) === q([[NO_LOGINS, true], [FOOTER, false]]), `the list says ${NO_LOGINS} and offers ${FOOTER}`, rows);
+        const before = app.output().split(OPENED_PASSWORDS).length;
+        await tab.pick(FOOTER);
+        await waitFor("the Passwords app asked to open", async () => (app.output().split(OPENED_PASSWORDS).length > before ? true : null), 5000);
+        assert(!(await tab.rows())?.length, "the list closes", null);
         return { engine: engineName, rows: titles(rows) };
       } finally {
         await tab.close();

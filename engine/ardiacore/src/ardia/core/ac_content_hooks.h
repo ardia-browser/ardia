@@ -36,6 +36,13 @@ class Rect;
 class Size;
 }
 
+namespace password_manager {
+class PasswordManagerDriver;
+
+extern bool (*g_ardia_password_generation_allowed)(
+    const PasswordManagerDriver* driver);
+}
+
 namespace crypto::apple {
 class KeychainV2;
 }
@@ -54,6 +61,8 @@ struct RequestAction;
 }
 
 extern int g_ardia_disk_space_check_seconds;
+
+extern bool (*g_ardia_password_filling_allowed)(content::WebContents* web_contents);
 
 enum ArdiaDragEnd {
   kArdiaDragEndOwnerGone,

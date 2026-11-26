@@ -398,6 +398,11 @@ ARDIACORE_EXPORT
 - (BOOL)devShowBluetoothChooser:(BOOL)unauthorized;
 @end
 
+@interface ArdiaCoreTab (AutofillSuppression)
+@property(nonatomic, copy) NSSet<NSString*>* suppressedAutofillKinds;
+@property(nonatomic, copy, nullable) NSSet<NSString*>* suppressedAutofillLogins;
+@end
+
 @interface ArdiaCoreTab (Extensions)
 - (NSString*)executeExtensionAction:(NSString*)extensionId;
 - (NSDictionary<NSString*, NSDictionary*>*)actionStatesForExtensions:(NSArray<NSString*>*)extensionIds;

@@ -79,6 +79,9 @@ export function startDevHarness() {
     get history(): typeof import("../../state/history/history") {
       return require("../../state/history/history");
     },
+    get applePasswords(): typeof import("../../state/site/applePasswords") {
+      return require("../../state/site/applePasswords");
+    },
     get profileLoading(): typeof import("../../state/profiles/profileLoading") {
       return require("../../state/profiles/profileLoading");
     },

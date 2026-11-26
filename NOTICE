@@ -42,6 +42,9 @@ Ardia builds on and ships third-party software under its own licenses, including
   of ardia.dev's demo and of the Linux, Windows and pre-Tahoe Mac app; its glass-layer.tsx mount is adapted in
   packages/demo/src/shims/web/liquidGlass.tsx and apps/desktop/src/shims/web/liquidGlass.tsx
 - React Native and React Native macOS (MIT)
+- Yab's Apple Passwords client (Apache-2.0), Sources/Fast/ApplePasswords.swift and ExtensionNative.swift: the SRP-6a
+  numbers and Pairing in packages/ardiacore/ios/ApplePasswordsSRP.swift are ported from it, and the helper launch, framing
+  and fake helper (packages/ardiacore/ios/ApplePasswordsPipe.swift, packages/ardiacore/scripts/apple-passwords) follow it
 - Phonon 31M (Apache-2.0), copyright Gradium, https://huggingface.co/gradium/phonon-31m-en, with its voices from
   https://huggingface.co/gradium/phonon-voices (Apache-2.0), run through Gradium's ptts package (MIT or Apache-2.0),
   https://github.com/gradium-ai/xn-ptts: the iPhone's Talk to Me voice, downloaded from

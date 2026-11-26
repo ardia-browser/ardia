@@ -38,7 +38,7 @@ export const PAIRING_FAILURES: Record<Exclude<ApplePasswordsPairing, "awaitingCo
   wrongCode: "That code didn't match. Enter the new code the Passwords app shows.",
   failed: "Apple Passwords didn't answer. Try again.",
   refused: "Apple Passwords isn't available on this Mac.",
-  helperMissing: "Apple Passwords' browser helper isn't on this Mac.",
+  helperMissing: "Apple Passwords' browser helper is missing from this Mac. Update macOS in System Settings › General › Software Update, then try again.",
   tooOld: "Needs macOS 15.4 or later.",
   notEntitled: "This copy of Ardia can't use Apple Passwords.",
 };

@@ -12,7 +12,7 @@ const STATUS_TEXT: Record<ApplePasswordsState, string> = {
   connected: "Connected",
   notConnected: "Not connected",
   refused: "Apple Passwords isn't available on this Mac.",
-  helperMissing: "Apple Passwords' browser helper isn't on this Mac.",
+  helperMissing: "Apple Passwords' browser helper is missing from this Mac. Update macOS in System Settings › General › Software Update, then try again.",
   tooOld: "Needs macOS 15.4 or later.",
   notEntitled: "This copy of Ardia can't use Apple Passwords.",
 };

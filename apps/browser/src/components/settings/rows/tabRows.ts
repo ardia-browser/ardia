@@ -142,6 +142,11 @@ export const tabRows = {
           description: `Where ${keyText("⌘T")} puts the new tab.`,
           keywords: ["new tab position", "next to current tab", "after current tab", "beside", "right of", "below", "adjacent", "end", "left", "top", "bottom", "order", "cmd t", "new tab button", "plus", "+", "sticky", "docked", "position"],
         },
+        showTabMenuButton: {
+          title: "Show tab menu button",
+          description: "Use the chevron next to New Tab to see open tabs and reopen closed ones.",
+          keywords: ["overflow menu", "hide chevron", "new tab arrow"],
+        },
         appLinksFirst: {
           title: "Put links from other apps first",
           explained: true,

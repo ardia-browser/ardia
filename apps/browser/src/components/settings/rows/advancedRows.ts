@@ -168,6 +168,13 @@ export const advancedRows = {
           keywords: ["cli", "command line", "terminal", "shell", "install", "the ardia command", "devtools", "automation", "remote debugging", "let the ardia command control ardia"],
           shown: () => PLATFORM_FEATURES.ardiaCommand && !PLATFORM_FEATURES.plugins,
         },
+        showCliPill: {
+          title: "Show the control pill",
+          explained: true,
+          description: "Shows who is controlling Ardia at the bottom of the page with a Stop button. You can still stop programs above.",
+          keywords: ["cli", "control pill", "is controlling", "agent", "claude code", "codex", "hide", "dismiss", "turn off", "banner", "indicator", "stop"],
+          shown: () => PLATFORM_FEATURES.ardiaCommand,
+        },
         compactCliPill: {
           title: "Show the control pill as an icon and Stop",
           explained: true,

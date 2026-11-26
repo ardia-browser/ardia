@@ -40,6 +40,7 @@ export const COMMANDS = {
   focusCommandBar: { title: "Open Command Bar", keys: ["⌘L", "⌃F5"], ...inWindow },
   closeTab: { title: "Close Tab", symbol: "xmark", keys: ["⌘W"], ...inWindow },
   closeAllTabs: { title: "Close All Tabs", symbol: "xmark.square", keys: ["⇧⌘K"], ...windowOffInLittleArdia },
+  closeDuplicateTabs: { title: "Close Duplicate Tabs", symbol: "square.on.square", ...windowOffInLittleArdia },
   print: { title: "Print…", symbol: "printer", keys: ["⌘P"], ...pageInLittleArdia },
   copyUrl: { title: "Copy URL", symbol: "link", keys: ["⇧⌘C"], ...pageInLittleArdia, onInternalPages: true },
   copyUrlAsMarkdown: { title: "Copy URL as Markdown", symbol: "link", keys: ["⌥⇧⌘C"], ...pageInLittleArdia, onInternalPages: true },
@@ -141,6 +142,14 @@ export const COMMANDS = {
   newGroupWithTabs: { title: "New Group with Tab", symbol: "folder.badge.plus", keys: ["⌃⌘N", "⌃⌘P"], ...windowOffInLittleArdia },
   cleanUpTabs: { title: "Clean Up Tabs", symbol: "sparkles", keys: ["⌥⌘K"], ...windowOffInLittleArdia },
   tidyPins: { title: "Tidy Pins", symbol: "sparkles" },
+  sortTabs: {
+    symbol: "arrow.up.arrow.down",
+    ...windowOffInLittleArdia,
+    variants: {
+      site: { title: "Sort Tabs by Site" },
+      title: { title: "Sort Tabs by Title" },
+    },
+  },
   searchTabs: { title: "Search Tabs…", symbol: "magnifyingglass", keys: ["⇧⌘A"], ...windowOffInLittleArdia },
   renameTab: { title: "Rename…", barTitle: "Rename Tab", symbol: "pencil", ...windowOffInLittleArdia },
   changeTabIcon: { title: "Change Icon…", ...windowOffInLittleArdia },

@@ -216,6 +216,7 @@ function NewTabsSection() {
         <Row anchor="tabs.newTabPosition">
           <PopUp value={newTabPosition} options={top ? NEW_TABS_ACROSS : NEW_TABS_DOWN} onChange={choosePosition} minWidth={190} />
         </Row>
+        <SettingToggle anchor="tabs.showTabMenuButton" />
         <SettingToggle anchor="tabs.appLinksFirst" />
         <SettingToggle anchor="tabs.shareTabsAcrossWindows" />
       </Group>

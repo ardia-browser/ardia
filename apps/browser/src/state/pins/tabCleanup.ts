@@ -14,6 +14,7 @@ import { activated, apply, removeTabs } from "../tabs/tabs";
 import { shownLiveOf } from "../tabs/tabLive";
 import type { CloseOptions } from "../tabs/tabs";
 import { blankSplitPanes, canUndoClear, clearedTabIds, rejoinedSplits, undoable, type ClearedTabs } from "./clearedTabs";
+import { duplicateTabIds } from "./duplicateTabs";
 
 export function isClosedPin(s: BrowserState, id: string): boolean {
   const t = s.tabs[id];
@@ -213,6 +214,7 @@ export type CleanUpSlice = {
   cleanUpTabs(windowId: string, options?: { inactiveForMs?: number; allProfiles?: boolean; hiddenProfilesUpTo?: number }): number;
   restoreCleaned(entryIds?: string | string[], windowId?: string): void;
   clearUnpinnedTabs(windowId: string, options?: CloseOptions): ClearedTabs | null;
+  closeDuplicateTabs(windowId: string, options?: CloseOptions): ClearedTabs | null;
   undoClearTabs(cleared: ClearedTabs, hasLiveFolder?: (folderId: string) => boolean): void;
   removeClosedPin(id: string): ClearedTabs | null;
   closeAbandonedNewTabs(): void;
@@ -230,6 +232,15 @@ function reselected(s: BrowserState, windowId: string, selected: string | undefi
   if (!tab || !w) return s;
   if (w.kind === "private" || w.profileId === tab.profileId) return apply(s, activated(s, tab.id));
   return { ...s, windows: { ...s.windows, [windowId]: { ...w, activeTabIds: { ...w.activeTabIds, [tab.profileId]: tab.id } } } };
+}
+
+function closeUndoably(get: () => BrowserState, windowId: string, ids: string[], options: CloseOptions | undefined): ClearedTabs | null {
+  const s = get();
+  if (!ids.length) return null;
+  const entries = closedEntries(s, ids);
+  const blankPanes = blankSplitPanes(s, ids);
+  s.closeTabs(ids, options);
+  return undoable(s, get(), windowId, s.windows[windowId]!.profileId, entries, blankPanes);
 }
 
 export const createCleanUpSlice: StateCreator<BrowserState, [], [], CleanUpSlice> = (set, get) => ({
@@ -284,13 +295,11 @@ export const createCleanUpSlice: StateCreator<BrowserState, [], [], CleanUpSlice
   },
 
   clearUnpinnedTabs(windowId, options) {
-    const s = get();
-    const ids = clearedTabIds(s, windowId);
-    if (!ids.length) return null;
-    const entries = closedEntries(s, ids);
-    const blankPanes = blankSplitPanes(s, ids);
-    get().closeTabs(ids, options);
-    return undoable(s, get(), windowId, s.windows[windowId]!.profileId, entries, blankPanes);
+    return closeUndoably(get, windowId, clearedTabIds(get(), windowId), options);
+  },
+
+  closeDuplicateTabs(windowId, options) {
+    return closeUndoably(get, windowId, duplicateTabIds(get(), windowId), options);
   },
 
   undoClearTabs(cleared, hasLiveFolder) {

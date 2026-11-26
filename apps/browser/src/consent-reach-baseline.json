@@ -21,7 +21,7 @@
     "apps/browser/src/state/live/githubClient.ts": 4,
     "apps/browser/src/state/omnibox/newTabBar.ts": 4,
     "apps/browser/src/state/omnibox/openFromBar.ts": 2,
-    "apps/browser/src/state/onboarding/onboarding.ts": 2,
+    "apps/browser/src/state/onboarding/onboarding.ts": 3,
     "apps/browser/src/state/peek/actions.ts": 1,
     "apps/browser/src/state/pins/autoCleanUp.ts": 1,
     "apps/browser/src/state/profiles/profileUnloading.ts": 1,
@@ -132,7 +132,8 @@
     "apps/desktop/src/hostEvents.ts": 1,
     "apps/desktop/src/hostExtensionView.ts": 1,
     "apps/desktop/src/hostTab.ts": 1,
-    "apps/desktop/src/hostTelemetry.ts": 1
+    "apps/desktop/src/hostTelemetry.ts": 1,
+    "apps/desktop/src/main.tsx": 1
   },
   "queues": {
     "apps/browser/src/components/settings/panes/FilterListsSheet.tsx": 1,

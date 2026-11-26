@@ -38,7 +38,7 @@ export function RowCloseButton({
       accessibilityLabel={label}
       style={({ pressed }) => [style, { width: box, height: box, ...continuousCorners(radius), alignItems: "center", justifyContent: "center" }, pressed || hovered ? { backgroundColor: pressed ? theme.toolbarPressed : theme.toolbarHover } : null]}
     >
-      {drawnSymbol({ name: control?.icon ?? icon ?? "xmark", size: iconButton.s.glyph, weight: "semibold", color: theme.icon, style: { width: box, height: box } })}
+      {drawnSymbol({ name: control?.icon ?? icon ?? "xmark", size: iconButton.s.glyph, weight: "semibold", color: theme.icon, centresInk: true, style: { width: box, height: box } })}
     </Pressable>
   );
 }

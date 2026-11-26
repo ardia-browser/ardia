@@ -5,6 +5,8 @@ import { cleanedTabsFor } from "../pins/closedTabs";
 import { canUndoClear, clearedTabIds, type ClearedTabs } from "../pins/clearedTabs";
 import { live } from "../live/store";
 import { noteCleanUp, noteClearClosedSelectedTab } from "../telemetry/usage";
+import { duplicateTabIds } from "../pins/duplicateTabs";
+import { noteDuplicateTabsClosed, noteDuplicateTabsUndo } from "../telemetry/tidyTabsCounts";
 import { showUndoToast } from "./undoToast";
 import { userClose, type ByUser } from "../tabs/closeActivation";
 
@@ -16,6 +18,13 @@ export function closeAllTabs(windowId: string, user?: ByUser) {
   if (!cleared || !count) return;
   if (cleared.selectedTabId) noteClearClosedSelectedTab(user?.consent);
   showClearUndo(cleared, `Cleared ${plural(count, "Tab")}`, "arrow.down");
+}
+
+export function closeDuplicateTabs(windowId: string, user?: ByUser) {
+  const closed = store().closeDuplicateTabs(windowId, user ? userClose(duplicateTabIds(store(), windowId), user) : {});
+  if (!closed?.entries.length) return;
+  noteDuplicateTabsClosed(closed.entries.length, user?.consent);
+  showClearUndo(closed, `Closed ${plural(closed.entries.length, "Duplicate Tab")}`, "square.on.square", () => noteDuplicateTabsUndo(user?.consent));
 }
 
 export function cleanUpWithUndo(windowId: string) {
@@ -41,9 +50,12 @@ export function middleClickTab(tabId: string, user: ByUser) {
   if (removed.entries.length) showClearUndo(removed, "Removed Pinned Tab", "pin.slash");
 }
 
-const showClearUndo = (cleared: ClearedTabs, title: string, icon: string) =>
+const showClearUndo = (cleared: ClearedTabs, title: string, icon: string, onUndo?: () => void) =>
   showUndoToast(cleared.windowId, title, icon, {
-    undo: () => store().undoClearTabs(cleared, (folderId) => !!live().folders[folderId]),
+    undo: () => {
+      store().undoClearTabs(cleared, (folderId) => !!live().folders[folderId]);
+      onUndo?.();
+    },
     watched: (s) => [s.windows[cleared.windowId], s.tabs, s.groups, s.splits, s.closedTabs],
     canUndo: (s) => canUndoClear(s, cleared),
   });

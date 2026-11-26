@@ -58,6 +58,22 @@ final class SymbolInkTests: XCTestCase {
     }
   }
 
+  func testTabCloseGlyphsSitInTheMiddleOfTheirPlate() {
+    let sizes: [(CGFloat, CGFloat)] = [(9, 20), (10, 16), (10, 22), (10, 27), (10, 32)]
+    for name in ["xmark", "minus"] {
+      for (points, box) in sizes {
+        let image = symbol(name, points: points)
+        for density in densities {
+          let rect = placed(image, box: box, density: density, centresInk: true)
+          let off = inkCentreOffset(image, at: rect, box: box, density: density)
+          let label = "\(name) \(points) pt in a \(box) pt plate at \(density)x"
+          XCTAssertLessThanOrEqual(abs(off.x), 0.75, "\(label): ink is \(off.x) px off horizontally")
+          XCTAssertLessThanOrEqual(abs(off.y), 0.75, "\(label): ink is \(off.y) px off vertically")
+        }
+      }
+    }
+  }
+
   func testCentringTheInkIsNeverWorseThanCentringTheImageBox() {
     for name in engineSymbols {
       for points in engineMarkPointSizes {

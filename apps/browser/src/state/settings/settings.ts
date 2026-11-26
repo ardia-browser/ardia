@@ -25,7 +25,6 @@ export const DEFAULT_PROFILE_ID = "default";
 export type SettingSpec<T> = { default: T; valid: (value: unknown) => boolean; synced: boolean; schema: JsonSchema; values?: readonly T[] };
 
 const SYNCED = true;
-
 const isPlain = (v: unknown): v is Record<string, unknown> => isFields(v) && [Object.prototype, null].includes(Object.getPrototypeOf(v));
 const isRecordOf = (v: unknown, item: (x: unknown) => boolean) => isPlain(v) && Object.values(v).every(item);
 const isWidth = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v > 0;
@@ -70,6 +69,7 @@ export const SETTING_SPECS = {
   hideToolbarWhileScrolling: flag(false, SYNCED),
   newTabPosition: oneOf(["top", "bottom", "nextToCurrent"], "bottom", SYNCED),
   newTabButtonPosition: oneOf(["top", "bottom"], "bottom", SYNCED),
+  showTabMenuButton: flag(true, SYNCED),
   appLinksFirst: flag(false, SYNCED),
   newTabOpens: oneOf(["page", "commandBar"], "page", SYNCED),
   newTabUrl: text("", SYNCED),
@@ -139,7 +139,7 @@ export const SETTING_SPECS = {
   showFullUrl: flag(false, SYNCED),
   allowJavaScriptFromAppleEvents: flag(false),
   cliControl: flag(false),
-  compactCliPill: flag(false, SYNCED),
+  showCliPill: flag(true, SYNCED), compactCliPill: flag(false, SYNCED),
   showBookmarks: flag(true, SYNCED),
   bookmarksBar: oneOf(["always", "newTab", "never"], "never", SYNCED),
   bookmarksImportDismissed: flag(false),

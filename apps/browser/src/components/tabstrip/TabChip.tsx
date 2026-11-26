@@ -203,6 +203,7 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
                 <Button variant="icon"
                   icon={tuck ? "minus" : closeControl.icon}
                   size="xs"
+                  centresInk
                   radius={tabCloseRadius()}
                   weight="semibold"
                   color={onBand ? palette.icon : undefined}

@@ -13,6 +13,7 @@ const OWN_METHOD: Partial<Record<SettingKey, string>> = {
   defaultProfileId: "profiles.setDefault",
   customSearchEngines: "search.add, search.update and search.remove",
   cliControl: "nothing: the ardia command can't switch its own control",
+  showCliPill: "nothing: the ardia command can't hide its own control pill",
   allowJavaScriptFromAppleEvents: "nothing: it would let any AppleScript run script in every page",
   extensionSearchEngines: "nothing: it mirrors the search engines extensions add, so install, turn off or remove the extension (extensions.*)",
 };

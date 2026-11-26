@@ -296,13 +296,14 @@ function ProtectedVideo({ p }: { p: ProtectedVideoData }) {
         <Stat source="app" label="Refusals" value={formatExact(t?.refusals ?? 0)} sub={`${formatExact((t?.licence ?? 0) + (t?.keystatus ?? 0))} at licence or key status`} />
         <Stat source="app" label="Keys refused" value={formatExact(t?.createKeys ?? 0)} sub="createMediaKeys refused" />
         <Stat source="app" label="Left in Chromium" value={formatExact(t?.webKitSites ?? 0)} sub={`on sites set to WebKit; ${formatExact(t?.listedSites ?? 0)} on the streaming list`} />
+        <Stat source="app" label="WebKit full screen" value={formatExact(t?.webKitFullscreens ?? 0)} sub={`${formatExact(t?.fullscreenFramesKept ?? 0)} left the page's size to WebKit`} />
       </div>
       <DataTable
         dense
         rows={p.versions}
         rowKey={(r) => r.version}
         limit={8}
-        empty="No protected video refusals in this range"
+        empty="No protected video refusals or WebKit full screens in this range"
         columns={[
           { key: "version", header: "Version", sort: (r) => r.version, cell: (r) => <span className="font-mono text-[12px] whitespace-nowrap">{r.version}</span> },
           { key: "people", header: "People", align: "right", sort: (r) => r.people, cell: (r) => formatExact(r.people) },
@@ -312,6 +313,8 @@ function ProtectedVideo({ p }: { p: ProtectedVideoData }) {
           { key: "keystatus", header: "Key status", align: "right", sort: (r) => r.keystatus, cell: (r) => quiet(r.keystatus) },
           { key: "unstaged", header: "No stage", align: "right", sort: (r) => r.unstaged, cell: (r) => quiet(r.unstaged) },
           { key: "webkitSites", header: "WebKit site", align: "right", sort: (r) => r.webKitSites, cell: (r) => quiet(r.webKitSites) },
+          { key: "fullscreens", header: "Full screen", align: "right", sort: (r) => r.webKitFullscreens, cell: (r) => quiet(r.webKitFullscreens) },
+          { key: "framesKept", header: "Kept", align: "right", sort: (r) => r.fullscreenFramesKept, cell: (r) => quiet(r.fullscreenFramesKept) },
         ]}
       />
     </div>

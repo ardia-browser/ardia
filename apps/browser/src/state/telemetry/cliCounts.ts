@@ -50,6 +50,7 @@ type EngineCliTotals = Partial<Record<EngineCliTotalKey, number>>;
 const NONE = {
   cli_pill_shows: 0,
   cli_pill_compact_shows: 0,
+  cli_pill_dismissals: 0,
   cli_auto_installs: 0,
   cli_auto_install_failures: 0,
   cli_auto_enables: 0,
@@ -115,6 +116,7 @@ export function noteCliPillShown(compact: boolean) {
   counts.cli_pill_shows++;
   if (compact) counts.cli_pill_compact_shows++;
 }
+export const noteCliPillDismissed = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts.cli_pill_dismissals++);
 export function noteSocketCall(family: SocketFamily, failed: boolean, consent?: ConsentToken | null) {
   const field = `cli_socket_calls_${family}` as const;
   countFor(consentOrNow(consent), () => void counts[field]++);

@@ -11,8 +11,11 @@ const native = await import("../../../test-native/ardiacore.ts");
 const { PLATFORM_FEATURES } = await import("../../../lib/platformFeatures.ts");
 const { useBrowser } = await import("../../../state/browser/store.ts");
 const { loadApplePasswords } = await import("../../../state/site/applePasswords.ts");
-const { PopUp } = await import("../../ui/index.ts");
+const ui = await import("../../ui/index.ts");
+const form = await import("../Form.tsx");
+const { useSettingsSheet } = await import("../../../state/settings/sheet.ts");
 const { PasswordManagerRow } = await import("./PasswordManagerRow.tsx");
+const { PopUp, Button, TextField } = ui;
 
 const S = () => useBrowser.getState();
 const flush = () => new Promise((r) => setImmediate(r));
@@ -27,14 +30,44 @@ function find(node, match, found = []) {
   return found;
 }
 
-const expand = (element) => mount(() => element.type(element.props));
+const LEAVES = new Set([...Object.values(ui), ...Object.values(form)]);
+
+function render(node) {
+  if (Array.isArray(node)) return node.map(render);
+  if (!node || typeof node !== "object" || !("props" in node)) return node;
+  if (typeof node.type === "function" && !LEAVES.has(node.type)) return render(mount(() => node.type(node.props)).value);
+  return { ...node, props: { ...node.props, children: render(node.props.children) } };
+}
+
+const rowFor = (profileId) => render(mount(() => PasswordManagerRow({ profileId })).value);
 
 function managerMenu(profileId) {
-  const row = mount(() => PasswordManagerRow({ profileId }));
-  if (!row.value) return null;
-  const [popUp] = find(expand(row.value).value, (n) => n.type === PopUp);
-  return popUp.props;
+  const [popUp] = find(rowFor(profileId), (n) => n.type === PopUp);
+  return popUp?.props ?? null;
 }
+
+function statusOf(profileId) {
+  const [row] = find(rowFor(profileId), (n) => n.type === form.Row && n.props.title === "Apple Passwords");
+  if (!row) return null;
+  const [connect] = find(row, (n) => n.type === Button && n.props.title === "Connect");
+  return { text: row.props.description, connect: connect?.props.onPress ?? null };
+}
+
+function pairingSheet() {
+  const element = useSettingsSheet.getState().sheet;
+  if (!element) return null;
+  const sheet = mount(() => element.type(element.props));
+  const texts = (node) => (typeof node === "string" ? [node] : Array.isArray(node) ? node.flatMap(texts) : node?.props ? texts(node.props.children) : []);
+  return {
+    get text() {
+      return texts(sheet.value).join(" ");
+    },
+    type: (code) => find(sheet.value, (n) => n.type === TextField)[0].props.onChangeText(code),
+    press: (title) => find(sheet.value, (n) => n.type === Button && n.props.title === title)[0].props.onPress(),
+  };
+}
+
+const storedChoice = (profileId) => S().profiles[profileId].passwordManager;
 
 async function settingsOn(state) {
   native.applePasswords.state = state;
@@ -71,4 +104,21 @@ test("S2: Apple Passwords is absent on an unentitled build, on macOS before 15.4
     Object.assign(PLATFORM_FEATURES, features);
     assert.equal(offersApple(managerMenu(await settingsOn("notConnected"))), false, name);
   }
+});
+
+test("S3: picking Apple Passwords asks for the Passwords app's code; the right code saves the choice and the status reads Connected", async () => {
+  const profileId = await settingsOn("notConnected");
+  managerMenu(profileId).onChange("apple");
+  await flush();
+  assert.notEqual(storedChoice(profileId), "apple", "nothing is saved before Pairing");
+  const sheet = pairingSheet();
+  assert.ok(sheet, "a Pairing sheet opens");
+  assert.match(sheet.text, /code/i);
+  sheet.type(native.applePasswords.code);
+  sheet.press("Connect");
+  await flush();
+  assert.equal(storedChoice(profileId), "apple");
+  assert.equal(useSettingsSheet.getState().sheet, null, "the sheet closes once paired");
+  assert.equal(statusOf(profileId).text, "Connected");
+  assert.equal(statusOf(profileId).connect, null);
 });

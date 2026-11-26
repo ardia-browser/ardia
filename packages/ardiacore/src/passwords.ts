@@ -9,6 +9,7 @@ type SystemPanelRefusal = "noTab" | "noProvider" | "stale" | "hidden" | "notFocu
 export type SystemPanelResult = { shown: boolean; reason?: SystemPanelRefusal };
 type VerificationCodeRefusal = "noTab" | "unknownToken" | "stale" | "navigated" | "noProvider" | "frameGone" | "handlerChanged" | "failed";
 export type ApplePasswordsState = "connected" | "notConnected" | "refused" | "helperMissing" | "tooOld" | "notEntitled";
+export type ApplePasswordsPairing = "awaitingCode" | "paired" | "wrongCode" | "failed" | Exclude<ApplePasswordsState, "connected" | "notConnected">;
 export type VerificationCodeSetupResult = { opened: boolean; reason?: VerificationCodeRefusal };
 
 const Passwords = nativeModule("ArdiaPasswords");

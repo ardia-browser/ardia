@@ -889,6 +889,16 @@
           "mac": "custom",
           "desktop": "absent",
           "windows": "absent"
+        },
+        "applePasswordsPair": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "applePasswordsPairCode": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
         }
       },
       "events": {}

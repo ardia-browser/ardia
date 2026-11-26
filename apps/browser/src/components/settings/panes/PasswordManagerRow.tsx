@@ -2,7 +2,9 @@ import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { usePlugins } from "../../../state/plugins/store";
 import { choicePlugin, type ManagerPlugin, type PasswordManagerChoice } from "../../../state/site/passwordManagerChoice";
 import { choosePasswordManager, useManagerPlugins, useProfilePasswordManager, useProfilesSharingChoice, useStoredPasswordManager } from "../../../state/site/passwordManager";
-import { useApplePasswordsOffered } from "../../../state/site/applePasswords";
+import { useEffect } from "react";
+import { applePasswordsConnected, loadApplePasswords, useApplePasswordsOffered } from "../../../state/site/applePasswords";
+import { ApplePasswordsStatusRow, connectApplePasswords } from "./ApplePasswordsPairing";
 import { type Option, PopUp } from "../../ui";
 import { Row } from "../Form";
 
@@ -45,6 +47,11 @@ export function PasswordManagerRow({ profileId }: { profileId: string }) {
   return PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins ? <PasswordManagerChoiceRow profileId={profileId} /> : null;
 }
 
+function pickPasswordManager(profileId: string, manager: PasswordManagerChoice) {
+  if (manager === "apple" && !applePasswordsConnected()) return connectApplePasswords(profileId);
+  choosePasswordManager(profileId, manager);
+}
+
 function PasswordManagerChoiceRow({ profileId }: { profileId: string }) {
   const plugins = useManagerPlugins();
   const effective = useProfilePasswordManager(profileId);
@@ -53,12 +60,16 @@ function PasswordManagerChoiceRow({ profileId }: { profileId: string }) {
   const storedPlugin = useStoredPlugin(stored);
   const unavailable = unavailableNote(stored, effective, storedPlugin);
   const appleOffered = useApplePasswordsOffered();
+  useEffect(() => void loadApplePasswords(), []);
   const popUp = managerPopUp(plugins, stored, effective, storedPlugin, appleOffered);
   const description = [unavailable, sharedChoiceNote(sharing)].filter(Boolean).join(" ") || undefined;
   return (
-    <Row anchor="profiles.passwordManager" description={description}>
-      <PopUp value={popUp.value} options={popUp.options} onChange={(manager) => choosePasswordManager(profileId, manager)} minWidth={210} />
-    </Row>
+    <>
+      <Row anchor="profiles.passwordManager" description={description}>
+        <PopUp value={popUp.value} options={popUp.options} onChange={(manager) => pickPasswordManager(profileId, manager)} minWidth={210} />
+      </Row>
+      {effective === "apple" ? <ApplePasswordsStatusRow /> : null}
+    </>
   );
 }
 

@@ -170,9 +170,18 @@ const providerFakes = {
 };
 export const applePasswords = {
   state: "notEntitled" as CallResult<"passwords.applePasswordsStatus">["state"],
+  code: "246810",
+  calls: [] as string[],
 };
 const applePasswordsFakes = {
   applePasswordsStatus: () => ({ state: applePasswords.state }),
+  applePasswordsPair: () => (applePasswords.calls.push("pair"), { outcome: "awaitingCode" as const }),
+  applePasswordsPairCode: ({ code }: { code: string }) => {
+    applePasswords.calls.push("pairCode");
+    if (code !== applePasswords.code) return { outcome: "wrongCode" as const };
+    applePasswords.state = "connected";
+    return { outcome: "paired" as const };
+  },
 };
 export const current = { device: null as string | null };
 

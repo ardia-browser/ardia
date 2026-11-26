@@ -4,6 +4,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { pagerFor } = await import("./profilePager.ts");
 const { engineProfile } = await import("../browser/model.ts");
 const { nativeWindowProfile } = await import("./hooks.ts");
+const { cycleProfile } = await import("../browser/actions.ts");
 
 const S = () => useBrowser.getState();
 
@@ -14,7 +15,7 @@ test("a window that exists keeps one pager; a missing window gets a throwaway th
   assert.notEqual(pagerFor("w-gone"), pagerFor("w-gone"));
 });
 
-const { pagerSnapshots } = await import("../../test-native/ardiacore.ts");
+const { ardiaCoreNativeModules, pagerSnapshots } = await import("../../test-native/ardiacore.ts");
 const { takePagerCounts } = await import("../telemetry/pagerCounts.ts");
 globalThis.fetch = async () => ({ status: 200 });
 const telemetry = await import("../telemetry/client.ts");
@@ -38,6 +39,115 @@ function threeProfiles() {
   };
   return { w, order, pager, native, b, c, held: () => pager.state.getState().held, warm: () => pager.state.getState().pages.map((p) => p.id) };
 }
+
+function deferProfileSelection(t, index = 1) {
+  const { w, order, pager, native } = threeProfiles();
+  const profileId = order[index];
+  const first = S().newTab(w, { url: "https://first.example", profileId, background: true });
+  S().activate(first);
+  S().switchProfile(w, order[0]);
+  const second = S().newTab(w, { url: "https://second.example", profileId, background: true });
+  const frames = [];
+  const previous = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => frames.push(callback);
+  t.after(() => {
+    if (previous) globalThis.requestAnimationFrame = previous;
+    else delete globalThis.requestAnimationFrame;
+  });
+  const swipe = ardiaCoreNativeModules.ArdiaSwipe;
+  const select = t.mock.method(swipe, "selectPager", async (_windowId, target) => {
+    native("idle", order.indexOf(target), "selected");
+    return true;
+  });
+  t.after(pager.attach());
+  native("idle", 0);
+  S().activate(second);
+  assert.equal(frames.length, 1);
+  assert.equal(pager.hasDeferredSelection, true);
+  return { w, order, pager, native, swipe, select, frames };
+}
+
+test("a lone external selection still waits two frames for the rows", (t) => {
+  const { order, select, frames } = deferProfileSelection(t);
+  frames.shift()();
+  assert.equal(select.mock.callCount(), 0);
+  frames.shift()();
+  assert.equal(select.mock.callCount(), 1);
+  assert.equal(select.mock.calls[0].arguments[1], order[1]);
+});
+
+test("a newer explicit profile choice cancels the deferred selection and an older failed request", async (t) => {
+  const { w, order, pager, native, swipe, select, frames } = deferProfileSelection(t);
+  let fail;
+  const change = t.mock.method(swipe, "switchPager", (_windowId, index) => {
+    if (index === 0) return new Promise((resolve) => { fail = resolve; });
+    native("idle", index, "selected");
+    return Promise.resolve(true);
+  });
+  pager.switchTo(order[0]);
+  pager.switchTo(order[2]);
+  fail(false);
+  await Promise.resolve();
+  while (frames.length) frames.shift()();
+  assert.deepEqual(change.mock.calls.map((call) => call.arguments[1]), [0, 2]);
+  assert.equal(select.mock.callCount(), 0);
+  assert.equal(S().windows[w].profileId, order[2]);
+});
+
+test("an explicit choice after detaching still supersedes an older native fallback", async (t) => {
+  const { w, order, pager } = threeProfiles();
+  const detach = pager.attach();
+  let fail;
+  t.mock.method(ardiaCoreNativeModules.ArdiaSwipe, "switchPager", () => new Promise((resolve) => { fail = resolve; }));
+  pager.switchTo(order[1]);
+  detach();
+  pager.switchTo(order[0]);
+  fail(false);
+  await Promise.resolve();
+  assert.equal(S().windows[w].profileId, order[0]);
+});
+
+test("a newer native choice supersedes an older native fallback", async (t) => {
+  const { w, order, pager, native } = threeProfiles();
+  t.after(pager.attach());
+  let fail;
+  t.mock.method(ardiaCoreNativeModules.ArdiaSwipe, "switchPager", () => new Promise((resolve) => { fail = resolve; }));
+  pager.switchTo(order[1]);
+  native("idle", 2, "selected");
+  fail(false);
+  await Promise.resolve();
+  assert.equal(S().windows[w].profileId, order[2]);
+});
+
+test("a pending profile steps from its logical position and only the shortcut wraps", (t) => {
+  const { w, order, pager, native, swipe, select, frames } = deferProfileSelection(t, 2);
+  const change = t.mock.method(swipe, "switchPager", async (_windowId, index) => {
+    native("idle", index, "selected");
+    return true;
+  });
+  const relative = t.mock.method(swipe, "stepPager", async () => true);
+  pager.step(1);
+  cycleProfile(w, 1, () => false);
+  assert.equal(pager.hasDeferredSelection, true);
+  assert.equal(change.mock.callCount(), 0);
+  cycleProfile(w, 1);
+  while (frames.length) frames.shift()();
+  assert.deepEqual(change.mock.calls.map((call) => call.arguments[1]), [0]);
+  assert.equal(relative.mock.callCount(), 0);
+  assert.equal(select.mock.callCount(), 0);
+  assert.equal(S().windows[w].profileId, order[0]);
+});
+
+test("a native selection between frames supersedes the deferred selection before its event arrives", (t) => {
+  const { w, order, pager, native, select, frames } = deferProfileSelection(t);
+  pager.onNativeState({ ...pagerSnapshots.get(w), phase: "selected" });
+  assert.equal(pager.hasDeferredSelection, true, "the original native selection is stale");
+  frames.shift()();
+  native("idle", 2);
+  frames.shift()();
+  assert.equal(select.mock.callCount(), 0);
+  assert.equal(S().windows[w].profileId, order[2]);
+});
 
 test("a swipe holds the sidebar's page on the profile it started from until the pages come to rest", () => {
   const { w, order, native, held } = threeProfiles();

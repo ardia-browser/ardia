@@ -15,6 +15,7 @@ import { ChoiceCard } from "./ChoiceCard";
 import { OptionCard } from "./OptionCard";
 import { confirmAnswer, confirmDefaultBrowserAnswer, recordDefaultBrowserTrial, setOnboardingDraft, setOnboardingExtras, skipStep, useOnboarding } from "../../state/onboarding/onboarding";
 import { probeOnboardingSystem, type OnboardingSystem } from "../../state/onboarding/systemProbe";
+import { consentToken } from "../../state/telemetry/client";
 import { ChoiceList, type ChoiceOption } from "./ChoiceList";
 import { onboardingMotion } from "./tokens";
 import { useOnboardingColors } from "./Parts";
@@ -57,6 +58,7 @@ function DefaultBrowserQuestion() {
 
   const apply = async () => {
     if (!system || applying) return;
+    const consent = consentToken();
     applying = true;
     setPending(true);
     const slow = setTimeout(() => setBusy(true), onboardingMotion.busyLabelDelay);
@@ -73,7 +75,7 @@ function DefaultBrowserQuestion() {
       applying = false;
       setBusy(false);
       setPending(false);
-      confirmDefaultBrowserAnswer(picked);
+      confirmDefaultBrowserAnswer(picked, consent);
     }
   };
 

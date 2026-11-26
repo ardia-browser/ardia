@@ -69,6 +69,21 @@ test("only a title, icon or last-used change is cosmetic; an address, pin, order
   assert.equal(cosmeticTabsChange(before, { a: t }), false, "a close");
 });
 
+test("the recent tabs switcher scope uses existing session settings", () => {
+  stub.docs.clear();
+  try {
+    stub.docs.set(SESSION_DOCUMENT, session(SESSION_VERSION, tabsAt(5, false)));
+    S().hydrate(loadSession());
+    assert.equal(S().settings.tabSwitcherScope, "currentProfile");
+    S().updateSettings({ tabSwitcherScope: "allProfiles" });
+    stub.docs.set(SESSION_DOCUMENT, newJson());
+    S().hydrate(loadSession());
+    assert.equal(S().settings.tabSwitcherScope, "allProfiles");
+  } finally {
+    stub.docs.clear();
+  }
+});
+
 test("title changes wait 10 s or the next flush; a structural change still saves within 800 ms", () => {
   mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_000_000 });
   try {

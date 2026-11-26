@@ -1,9 +1,9 @@
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "../browser/store";
 import { activeTabId, familyKeyOf, inPinnedContainer, isIncognitoProfile, pinSection, viewTabIds, without } from "../browser/model";
-import { hasPage, isAsleep } from "../tabs/pageSession";
-import { isSwitchableTab } from "../tabs/switchOrder";
+import { hasPage } from "../tabs/pageSession";
 import { holderOf } from "./pinShare";
+import { CLEAN_UP_AFTER_MS } from "../settings/cleanUpAfter";
 import { splitTabIds } from "../splits/splits";
 import { lastUsedOf, restoredAtOf, sharedLastUsed, sharedRestoredAt } from "../tabs/tabShare";
 import type { ClosedTab, Tab } from "../browser/types";
@@ -22,7 +22,6 @@ export function isClosedPin(s: BrowserState, id: string): boolean {
   return !hasPage(t) && activeTabId(s, t.windowId) !== id && !holderOf(s, id);
 }
 
-const CLEAN_UP_AFTER_MS = 12 * 60 * 60 * 1000;
 export const MAX_CLEANED = 100;
 const HIDDEN_REPLACES_CLEANED_AFTER_MS = 24 * 60 * 60 * 1000;
 
@@ -152,56 +151,6 @@ function abandonedNewTabs(s: BrowserState, windowId: string): string[] {
     return !!t && t.windowId === w.id && !t.url && !hasPage(t) && !t.pin && id !== shown && !selected.has(id);
   });
   return out.length >= w.tabIds.length ? out.slice(0, w.tabIds.length - 1) : out;
-}
-
-export function recentTabIds(s: BrowserState, windowId: string, now = Date.now(), staleAfterMs = CLEAN_UP_AFTER_MS): string[] {
-  const current = activeTabId(s, windowId);
-  const open = viewTabIds(s, windowId).map((id) => s.tabs[id]!).filter((t) => !isAsleep(t) || t.id === current);
-  const available = new Map(open.map((t) => [t.id, t]));
-  const place = new Map(open.map((t, i) => [t.id, i]));
-  const newer = (a: Tab, b: Tab) => b.createdAt - a.createdAt || place.get(b.id)! - place.get(a.id)!;
-  const children = new Map<string, Tab[]>();
-  const loose: Tab[] = [];
-  for (const t of open) {
-    if (t.id === current || !t.unseen) continue;
-    const parent = t.openerId && t.openerId !== t.id ? available.get(t.openerId) : undefined;
-    if (!parent) {
-      loose.push(t);
-      continue;
-    }
-    children.set(parent.id, [...(children.get(parent.id) ?? []), t]);
-  }
-  for (const tabs of children.values()) tabs.sort(newer);
-  loose.sort(newer);
-  const recent = open.filter((t) => t.id !== current && !t.unseen).sort((a, b) => b.lastActiveAt - a.lastActiveAt || newer(a, b));
-  const ordered: Tab[] = [];
-  const seen = new Set<string>();
-  const append = (root: Tab) => {
-    const stack = [root];
-    while (stack.length) {
-      const t = stack.pop()!;
-      if (seen.has(t.id)) continue;
-      seen.add(t.id);
-      ordered.push(t);
-      const next = children.get(t.id) ?? [];
-      for (let i = next.length - 1; i >= 0; i--) stack.push(next[i]!);
-    }
-  };
-  const active = current ? available.get(current) : undefined;
-  if (active) append(active);
-  for (const t of recent) append(t);
-  for (const t of loose) append(t);
-  for (const t of [...open].sort(newer)) append(t);
-  return ordered.filter((t, i) => i < 2 || now - t.lastActiveAt < staleAfterMs).map((t) => t.id);
-}
-
-export function sessionTabIds(s: BrowserState, windowId: string, sessionStart: number): string[] {
-  const active = activeTabId(s, windowId);
-  const now = Date.now();
-  const recent = recentTabIds(s, windowId, now, Infinity).filter((id) => id === active || isSwitchableTab(s, id));
-  const fromSession = recent.filter((id) => id === active || s.tabs[id]!.lastActiveAt >= sessionStart || s.tabs[id]!.createdAt >= sessionStart);
-  const fallback = recent.filter((id, index) => index < 2 || now - s.tabs[id]!.lastActiveAt < CLEAN_UP_AFTER_MS);
-  return fromSession.length >= 2 ? fromSession : fallback;
 }
 
 const addCleanedBatch = (list: ClosedTab[], batch: ClosedTab[]) =>

@@ -3,10 +3,12 @@ import { Image, Pressable, ScrollView, StyleSheet, View, type NativeScrollEvent,
 import { displayHost, displayUrl, hostOf } from "@ardia/core";
 import { tabTitle } from "../../state/browser/model";
 import { useTab, useTabLive } from "../../state/browser/hooks";
+import { useProfileRecords } from "../../state/profiles/hooks";
 import { useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { lastPicture, onPicturesChanged } from "../../state/tabs/tabPictures";
 import { commitSwitcher, hoverSwitcherRow, leaveSwitcherRow, subscribeSwitcherTabChanges } from "../../state/sidebar/switcher";
 import { noteTabSwitcherOverflowClick, noteTabSwitcherOverflowOpened, noteTabSwitcherPictureLate, noteTabSwitcherWheelScrolled } from "../../state/telemetry/tabSwitcherOpens";
+import { ProfileBadge } from "../profiles/ProfileIcons";
 import { clippedContinuousCorners, continuousCorners, Symbol, Text, Panel } from "../ui";
 import { useTheme } from "../ui/theme";
 import { TabIcon } from "./TabIcon";
@@ -33,6 +35,7 @@ export function TabSwitcher({ windowId, windowWidth, windowHeight }: { windowId:
 
   if (!switcher || switcher.view === "none") return null;
   const list = switcher.view === "compactList";
+  const showProfileBadges = switcher.scope !== "currentProfile";
   const fits = list
     ? Math.max(1, Math.floor((windowHeight - T.windowMargin - 2 * T.pad) / T.list.row))
     : Math.max(1, Math.floor((windowWidth - T.windowMargin - 2 * T.pad + T.gap) / (T.card + T.gap)));
@@ -61,9 +64,9 @@ export function TabSwitcher({ windowId, windowWidth, windowHeight }: { windowId:
         style={StyleSheet.absoluteFill}
       />
       {list ? (
-        <SwitcherList ids={switcher.ids} index={switcher.index} viewport={viewport} width={width - 2 * T.pad} overflows={count < switcher.ids.length} visible={switcher.visible} />
+        <SwitcherList showProfileBadges={showProfileBadges} ids={switcher.ids} index={switcher.index} viewport={viewport} width={width - 2 * T.pad} overflows={count < switcher.ids.length} visible={switcher.visible} />
       ) : (
-        <SwitcherRow ids={switcher.ids} index={switcher.index} viewport={viewport} overflows={count < switcher.ids.length} accent={theme.accent} visible={switcher.visible} />
+        <SwitcherRow showProfileBadges={showProfileBadges} ids={switcher.ids} index={switcher.index} viewport={viewport} overflows={count < switcher.ids.length} accent={theme.accent} visible={switcher.visible} />
       )}
     </View>
   );
@@ -120,7 +123,7 @@ function useOverflowNoted(visible: boolean, overflows: boolean) {
   }, [visible, overflows]);
 }
 
-function SwitcherRow({ ids, index, viewport, overflows, accent, visible }: { ids: string[]; index: number; viewport: number; overflows: boolean; accent: string; visible: boolean }) {
+function SwitcherRow({ showProfileBadges, ids, index, viewport, overflows, accent, visible }: { showProfileBadges: boolean; ids: string[]; index: number; viewport: number; overflows: boolean; accent: string; visible: boolean }) {
   const { scroll, opening, onScroll, onContentSizeChange } = useRevealedScroll(index, viewport, T.card, STRIDE, true, visible);
   useOverflowNoted(visible, overflows);
 
@@ -139,14 +142,15 @@ function SwitcherRow({ ids, index, viewport, overflows, accent, visible }: { ids
       contentContainerStyle={{ gap: T.gap }}
     >
       {ids.map((id, i) => (
-        <SwitcherCard key={id} tabId={id} index={i} focused={i === index} accent={accent} overflows={overflows} visible={visible} />
+        <SwitcherCard showProfileBadges={showProfileBadges} key={id} tabId={id} index={i} focused={i === index} accent={accent} overflows={overflows} visible={visible} />
       ))}
     </ScrollView>
   );
 }
 
-const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent, overflows, visible }: { tabId: string; index: number; focused: boolean; accent: string; overflows: boolean; visible: boolean }) {
+const SwitcherCard = memo(function SwitcherCard({ showProfileBadges, tabId, index, focused, accent, overflows, visible }: { showProfileBadges: boolean; tabId: string; index: number; focused: boolean; accent: string; overflows: boolean; visible: boolean }) {
   const tab = useTab(tabId);
+  const profile = useProfileRecords((profiles) => showProfileBadges && tab ? profiles[tab.profileId] : undefined);
   const colors = tabSwitcherColors(useTheme().dark);
   const themeColor = useTabLive(tabId, (live) => live.themeColor);
   const picture = useSyncExternalStore(onPicturesChanged, () => lastPicture(tabId));
@@ -168,9 +172,10 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
 
   return (
     <Pressable
+      accessibilityLabel={profile ? `${tabTitle(tab)}, ${profile.name}` : undefined}
       onPressIn={() => {
         if (overflows) noteTabSwitcherOverflowClick();
-        commitSwitcher(index);
+        commitSwitcher(tabId);
       }}
     >
       <View
@@ -219,6 +224,7 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
             <Text lines={1} weight="semibold" color={colors.title} style={{ flex: 1, fontSize: T.titleSize }}>
               {tabTitle(tab)}
             </Text>
+            {profile ? <ProfileBadge profile={profile} size={T.icon.label} /> : null}
           </View>
         </View>
       </View>
@@ -226,7 +232,7 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
   );
 });
 
-function SwitcherList({ ids, index, viewport, width, overflows, visible }: { ids: string[]; index: number; viewport: number; width: number; overflows: boolean; visible: boolean }) {
+function SwitcherList({ showProfileBadges, ids, index, viewport, width, overflows, visible }: { showProfileBadges: boolean; ids: string[]; index: number; viewport: number; width: number; overflows: boolean; visible: boolean }) {
   const { scroll, opening, onScroll, onContentSizeChange } = useRevealedScroll(index, viewport, T.list.row, T.list.row, false, visible);
   useOverflowNoted(visible, overflows);
   return (
@@ -242,14 +248,15 @@ function SwitcherList({ ids, index, viewport, width, overflows, visible }: { ids
       style={{ margin: T.pad, width, height: viewport }}
     >
       {ids.map((id, i) => (
-        <SwitcherListRow key={id} tabId={id} index={i} focused={i === index} overflows={overflows} />
+        <SwitcherListRow showProfileBadges={showProfileBadges} key={id} tabId={id} index={i} focused={i === index} overflows={overflows} />
       ))}
     </ScrollView>
   );
 }
 
-const SwitcherListRow = memo(function SwitcherListRow({ tabId, index, focused, overflows }: { tabId: string; index: number; focused: boolean; overflows: boolean }) {
+const SwitcherListRow = memo(function SwitcherListRow({ showProfileBadges, tabId, index, focused, overflows }: { showProfileBadges: boolean; tabId: string; index: number; focused: boolean; overflows: boolean }) {
   const tab = useTab(tabId);
+  const profile = useProfileRecords((profiles) => showProfileBadges && tab ? profiles[tab.profileId] : undefined);
   const colors = tabSwitcherColors(useTheme().dark);
   useEffect(() => () => leaveSwitcherRow(index), [index]);
   if (!tab) return null;
@@ -257,9 +264,10 @@ const SwitcherListRow = memo(function SwitcherListRow({ tabId, index, focused, o
   const site = url ? displayHost(hostOf(url)) || displayUrl(url) : "";
   return (
     <Pressable
+      accessibilityLabel={profile ? `${tabTitle(tab)}, ${profile.name}` : undefined}
       onPressIn={() => {
         if (overflows) noteTabSwitcherOverflowClick();
-        commitSwitcher(index);
+        commitSwitcher(tabId);
       }}
     >
       <View
@@ -290,6 +298,7 @@ const SwitcherListRow = memo(function SwitcherListRow({ tabId, index, focused, o
             </Text>
           ) : null}
         </View>
+        {profile ? <ProfileBadge profile={profile} size={T.list.icon} /> : null}
       </View>
     </Pressable>
   );

@@ -148,7 +148,7 @@ export const noteImportedSpaces = (made: { spaces: number; containerSpaces: numb
 
 export const noteOnboardingImport = (source: string) => void (counts.onboardingImports++, source === "helium" && counts.onboardingHeliumImports++, ["chromium", "vivaldi", "opera"].includes(source) && counts.onboardingListedOnlyImports++);
 
-export const noteOnboarding = (event: "stepCompleted" | "stepSkipped" | "redoOpened" | "redoCompleted" | "redoCancelled" | "presetKeptImport" | "wheelMove" | "keyMove" | "clickMove") => void counts[(({ stepCompleted: "onboardingStepsCompleted", stepSkipped: "onboardingStepsSkipped", redoOpened: "onboardingRedoOpened", redoCompleted: "onboardingRedoCompleted", redoCancelled: "onboardingRedoCancelled", presetKeptImport: "onboardingPresetKeptImports", wheelMove: "onboardingWheelMoves", keyMove: "onboardingKeyMoves", clickMove: "onboardingClickMoves" }) as const)[event]]++;
+export const noteOnboarding = (event: "stepCompleted" | "stepSkipped" | "redoOpened" | "redoCompleted" | "redoCancelled" | "presetKeptImport" | "wheelMove" | "keyMove" | "clickMove", consent?: ConsentToken | null) => bump(consent, { [(({ stepCompleted: "onboardingStepsCompleted", stepSkipped: "onboardingStepsSkipped", redoOpened: "onboardingRedoOpened", redoCompleted: "onboardingRedoCompleted", redoCancelled: "onboardingRedoCancelled", presetKeptImport: "onboardingPresetKeptImports", wheelMove: "onboardingWheelMoves", keyMove: "onboardingKeyMoves", clickMove: "onboardingClickMoves" }) as const)[event]]: 1 });
 
 export const noteOnboardingStyle = (style: "glass" | "classic", tinted: boolean) => void (counts[style === "glass" ? "onboardingGlassPicks" : "onboardingClassicPicks"]++, style === "glass" && tinted && counts.onboardingTintedGlassPicks++);
 

@@ -110,6 +110,11 @@ export const appearanceRows = {
           description: "Page previews, a compact list of titles, or nothing at all while you switch.",
           keywords: ["tab switcher", "switcher", "compact list", "list", "thumbnails", "previews", "page previews", "pictures", "overlay", "hud", "none", "ctrl tab", "control tab"],
         },
+        tabSwitcherScope: {
+          title: "Profiles in the switcher",
+          description: "With Recent tabs order, choose which profiles in this window to include. Private windows stay separate.",
+          keywords: ["all profiles", "current profile", "cross profile", "share data", "shared data", "scope"],
+        },
         afterClosingTab: {
           title: "After closing a tab",
           description: "Go back to the previously active tab, or to the tab above or below (to the left or right across the top).",

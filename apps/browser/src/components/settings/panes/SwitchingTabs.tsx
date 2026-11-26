@@ -1,11 +1,11 @@
-import { Box, Button, space, Text } from "../../ui";
-import { Anchor, FormField, SectionHeader } from "../Form";
+import { Box, Button, PopUp, space, Text } from "../../ui";
+import { Anchor, FormField, Group, Row, SectionHeader } from "../Form";
 import { PictureChoice } from "../PictureChoice";
 import { AfterClosingTabPreview, TabSwitcherOrderPreview, TabSwitcherViewPreview } from "../ChoicePreviews";
 import { setting } from "../settingsIndex";
 import { ctrlTabCustomQuery, restoreCtrlTab, useCtrlTabKeys } from "../../../state/commands/commandShortcuts";
 import { useSettings, useTabLayout } from "../../../state/browser/hooks";
-import { chooseAfterClosingTab, chooseTabSwitcherOrder, chooseTabSwitcherView } from "../../../state/settings/actions";
+import { chooseAfterClosingTab, chooseTabSwitcherOrder, chooseTabSwitcherView, updateSettings } from "../../../state/settings/actions";
 import type { Settings } from "../../../state/settings/settings";
 import { TAB_SWITCHER_ORDERS, TAB_SWITCHER_VIEWS } from "../ctrlTabChoices";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
@@ -30,6 +30,7 @@ export function SwitchingTabsSection() {
   const keys = useCtrlTabKeys();
   const order = useSettings((s) => s.tabSwitcherOrder);
   const view = useSettings((s) => s.tabSwitcherView);
+  const scope = useSettings((s) => s.tabSwitcherScope);
   const afterClosingTab = useSettings((s) => s.afterClosingTab);
   const top = useTabLayout() === "top";
   const side = useSettings((s) => s.sidebarSide);
@@ -61,6 +62,20 @@ export function SwitchingTabsSection() {
             </Box>
           </FormField>
         </Anchor>
+        <Group>
+          <Row anchor="appearance.tabSwitcherScope">
+            <PopUp
+              value={scope}
+              options={[
+                { value: "currentProfile", title: "Current profile" },
+                { value: "sharedData", title: "Profiles that share data" },
+                { value: "allProfiles", title: "All profiles" },
+              ]}
+              onChange={(tabSwitcherScope) => updateSettings({ tabSwitcherScope })}
+              minWidth={160}
+            />
+          </Row>
+        </Group>
         <Anchor id="appearance.afterClosingTab" shape="card">
           <FormField label={setting("appearance.afterClosingTab").title}>
             <Box row gap="xl" accessibilityRole="radiogroup">

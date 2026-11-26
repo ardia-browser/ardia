@@ -1,14 +1,6 @@
 import { ardiaHost } from "./host";
 import { entryKind } from "./popoverSurface";
-
-function showStartupFailure(error: unknown) {
-  console.error("[ardia linux] startup failed", error);
-  const root = document.getElementById("root");
-  if (root) {
-    root.setAttribute("role", "alert");
-    root.textContent = `Ardia could not start: ${error instanceof Error ? error.message : String(error)}`;
-  }
-}
+import { showStartupFailure } from "./startupFailure";
 
 const entry = entryKind(ardiaHost, location.search);
 void (entry.kind === "popover"

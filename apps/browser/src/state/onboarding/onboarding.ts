@@ -11,6 +11,7 @@ import { choosePresetColor, setProfileTheme } from "../profiles/themeActions";
 import { stepsForThisSurface } from "./demoSteps";
 import { hasSavedSession } from "../session/sessionDocument";
 import { isLiquidGlass } from "../../platform/app";
+import type { ConsentToken } from "../telemetry/client";
 import { noteOnboarding } from "../telemetry/usage";
 import { openSettings } from "../settings/settingsWindows";
 import { pluginsStepShown } from "./pluginsOffer";
@@ -213,7 +214,7 @@ function recordLookBaseline(profileId: string) {
   useOnboarding.setState({ baseline: { ...baseline, ...("color" in baseline ? {} : { color: profile.color }), looks: { ...baseline.looks, [profileId]: look } } });
 }
 
-export function confirmAnswer(question: QuestionId, patch: Partial<Settings>, picked: string[]) {
+export function confirmAnswer(question: QuestionId, patch: Partial<Settings>, picked: string[], consent?: ConsentToken | null) {
   const { windowId, baseline } = useOnboarding.getState();
   if (patch.tabLayout && windowId) setWindowLayout(windowId, patch.tabLayout);
   if (Object.keys(patch).length) useBrowser.getState().updateSettings(patch);
@@ -226,13 +227,13 @@ export function confirmAnswer(question: QuestionId, patch: Partial<Settings>, pi
   const all = { ...useOnboarding.getState().picked, [question]: picked };
   useOnboarding.setState({ baseline: kept, picked: all });
   if (!useOnboarding.getState().redo) save({ picked: all });
-  if (question !== "outro") noteOnboarding("stepCompleted");
+  if (question !== "outro") noteOnboarding("stepCompleted", consent);
   nextStep();
 }
 
-export function confirmDefaultBrowserAnswer(picked: string[]) {
+export function confirmDefaultBrowserAnswer(picked: string[], consent: ConsentToken | null) {
   const { step, sub } = useOnboarding.getState();
-  if (step === "home" && sub === 0) confirmAnswer("default", {}, picked);
+  if (step === "home" && sub === 0) confirmAnswer("default", {}, picked, consent);
 }
 
 export function skipStep(scope: "step" | "question" = "step") {

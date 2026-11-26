@@ -82,7 +82,7 @@ issue	hash	file	test
 1074	d33efd94a4b5c0f1	apps/browser/src/state/drag/drops.test.mjs	⇧-click ranges from the shown tab once it changed without a click: never from a tile clicked before (#1074)
 1074	97893f23a1a1c08a	apps/browser/src/state/drag/drops.test.mjs	a ⇧-click that ranges from the shown tab because it changed since the last click counts as one (#1074 telemetry)
 1138	5b7ab8c17cde2ad5	apps/browser/src/state/windows/toolbarAutoHide.test.mjs	a chat loading older messages while wheeling up (a jump down) doesn't hide the bar again (#1138)
-1190	f655e60f86e99956	apps/browser/src/state/tabs/tabs.test.mjs	a tab opened behind joins the ⌃Tab order only once it is shown, so ⌃Tab still returns to the tab before (#1190)
+1190	e1a5ab89d5f6c095	apps/browser/src/state/tabs/tabs.test.mjs	a tab opened behind joins the ⌃Tab order only once it is shown, so ⌃Tab still returns to the tab before (#1190)
 1192	28bf5dbc850cc09b	apps/browser/src/components/window/dockMotion.test.mjs	while the peek slides away only the window's edge brings it back, not the column it is leaving (#1192)
 1197	dd246ab55f5204e1	apps/browser/src/state/sync/profileRemoval.test.mjs	a profile deleted on the only Mac can be removed from sync: its records go, and no Mac is offered it again (#1197, #1175)
 1239	0864cecf30371cbb	apps/browser/src/state/windows/sidebarFieldPlace.test.mjs	the address panel's anchor follows the sidebar field when the sidebar changes side or the window is resized, on ${name} (#2021, #1239)

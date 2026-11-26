@@ -5,6 +5,7 @@ import { isFields } from "../../lib/decode";
 export const CLEAN_UP_KEY = "cleanUpInactiveTabsAfterMinutes";
 export const LEGACY_CLEAN_UP_KEY = "cleanUpInactiveTabsAfterHours";
 
+export const CLEAN_UP_AFTER_MS = 12 * 60 * 60 * 1000;
 export const DAILY_CLEAN_UP_MINUTES = 24 * 60;
 
 const CLEAN_UP_PRESETS: readonly { minutes: number; title: string }[] = [

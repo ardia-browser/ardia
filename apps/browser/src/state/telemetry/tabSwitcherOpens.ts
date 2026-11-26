@@ -68,7 +68,15 @@ export function takeTabSwitcherScrollCounts() {
   return taken;
 }
 
-const modeCounts = { recent: 0, inOrder: 0, thumbnails: 0, compactList: 0, none: 0, shownThumbnails: 0, shownCompactList: 0, quickSwitches: 0 };
+const modeCounts = { recent: 0, inOrder: 0, thumbnails: 0, compactList: 0, none: 0, shownThumbnails: 0, shownCompactList: 0, quickSwitches: 0, allProfilesOpens: 0, crossProfileCommits: 0 };
+
+onConsentPeriodChange(() => {
+  modeCounts.allProfilesOpens = modeCounts.crossProfileCommits = 0;
+});
+
+export function noteCrossProfileSwitcher(event: "open" | "commit", consent: ConsentToken | null) {
+  countFor(consent, () => void modeCounts[event === "open" ? "allProfilesOpens" : "crossProfileCommits"]++);
+}
 
 type Order = "recent" | "inOrder";
 type View = "thumbnails" | "compactList" | "none";
@@ -96,6 +104,8 @@ export function takeTabSwitcherModeCounts() {
     tab_switcher_shown_thumbnails: modeCounts.shownThumbnails,
     tab_switcher_shown_compact_list: modeCounts.shownCompactList,
     tab_switcher_quick_switches: modeCounts.quickSwitches,
+    tab_switcher_all_profiles_opens: modeCounts.allProfilesOpens,
+    tab_switcher_cross_profile_commits: modeCounts.crossProfileCommits,
   };
   for (const key of Object.keys(modeCounts) as (keyof typeof modeCounts)[]) modeCounts[key] = 0;
   return taken;

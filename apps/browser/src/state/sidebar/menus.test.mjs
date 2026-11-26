@@ -213,6 +213,19 @@ test("a split pane offers Remove from Split View in place of Open in Split View,
   assert.equal(sub(items, "closeTabs").at(-1), "Close Split View");
 });
 
+test("a split pane's menu converts the split between side by side and stacked", async () => {
+  const { w, ids } = windowWith("a", "b", "c");
+  S().createSplit([ids[0], ids[1]]);
+  const split = () => Object.values(S().splits)[0];
+  assert.ok(top(tabMenuItems(S(), w, S().tabs[ids[0]])).includes("Convert to Vertical Split View [rectangle.split.1x2]"));
+  await whileMenuIsUp(() => openTabMenu(w, S().tabs[ids[0]]), () => {}, "convertSplit");
+  assert.equal(split().orientation, "vertical");
+  assert.ok(top(tabMenuItems(S(), w, S().tabs[ids[1]])).includes("Convert to Horizontal Split View [rectangle.split.2x1]"));
+  await whileMenuIsUp(() => openTabMenu(w, S().tabs[ids[1]]), () => {}, "convertSplit");
+  assert.equal(split().orientation, "horizontal");
+  assert.deepEqual(splitTabIdsOf(split()), [ids[0], ids[1]]);
+});
+
 test("several tabs: counts in the titles, destinations under Move to, and Close N Tabs without ⌘W", () => {
   const { w, ids } = windowWith("a", "b", "c");
   S().groupTabs([ids[0]], { name: "G", pinned: false });

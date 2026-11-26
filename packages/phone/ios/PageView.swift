@@ -80,6 +80,7 @@ final class PageView: ExpoView {
   var pinchNavigation: Int?
   var lastHold: PagePinchWatcher.Hold?
   var pageShot: UIImage?
+  var deliveredShotSize: CGSize?
   var pageShotRequest = 0
   var pageShotWaiters: [(UIImage?) -> Void] = []
   let pinchGround = UIView()

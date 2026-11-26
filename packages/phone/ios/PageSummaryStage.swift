@@ -475,9 +475,9 @@ final class PageSummaryStage: UIView, UIScrollViewDelegate {
     if titleLabel.text != session.title { titleLabel.text = session.title }
     let readable: Bool = {
       switch session.phase {
-      case .done, .failed: true
+      case .done, .interrupted, .failed: true
       case .reading: false
-      case .writing: !PageSummaryOutline(session.text, finished: false).isEmpty
+      case .writing: !session.outline(finished: false).isEmpty
       }
     }()
     if phase == .loading, readable { return settle() }

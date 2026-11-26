@@ -1936,10 +1936,8 @@ and appears over it. The phone reads the text from the live tab and processes it
   Both wait for the page to finish loading. `PagePinchWatcher` in `packages/phone/ios/PageSummary.swift` watches beside
   WebKit's own pinch. The decision is `PagePinch` in ArdiaKit's `ArdiaBrowser/Web` (`PagePinchTests`): it starts only
   when the scroll view's `zoomScale` sits at its `minimumZoomScale`, on a visible, loaded http(s) page. Once the fingers
-  close (scale under 1) the watcher takes the pinch: WebKit's zoom recognizer is cancelled for that touch and a zoom
-  that dipped under the minimum is put back, so the page doesn't shrink twice. A pinch that opens past 1.04 never
-  summarizes: one that opened from the start stays WebKit's own zoom, and one that closed first and then opened
-  springs the page back and does nothing more for that touch. No pinch starts while a summary is up or still
+  close (scale under 1), the watcher follows them while WebKit continues tracking both touches. Spreading past 1.04
+  cancels the summary and lets WebKit zoom during the same gesture. No pinch starts while a summary is up or still
   closing (`PagePinchWatcher.mayBegin`).
 - **The pinch, the fold and the numbers.** The page follows the fingers, folds like a sheet of paper and rests as a
   card, in the spirit of Arc Search's gesture; the code, the drawing and the colours are Ardia's own. The numbers live
@@ -1962,11 +1960,11 @@ and appears over it. The phone reads the text from the live tab and processes it
     a blur on a 0.7 s spring, and nothing already shown changes or moves (the layout is never animated, only the
     arriving line). `PageSummaryOutline(_:finished:)` leaves out the line the writer is in the middle of, and its
     rules only ever append: the first line is the lead unless it is a row with a symbol or a label (then there is no
-    lead), a later `= ` line or a line with no mark is a row of its own, and rows run together on a line that isn't
-    a row are split once, the same way whether or not the summary is finished
+    lead), a later `= ` line or a line with no mark is a row of its own, and a run-on row needs an explicit bullet
+    to split it from a lead, the same way whether or not the summary is finished
     (`PageSummaryOutlineTests.whatIsShownWhileWritingNeverChanges` checks every prefix of several shapes). If the
-    writer stops after lines have been shown, they stay as the summary; only while nothing is shown does it start
-    over with half the text and then fall back to key lines. Text with no line in it counts as nothing written.
+    writer stops after lines have been shown, they stay visible with an incomplete-summary notice. If no lines have
+    been shown, generation retries with half the text before falling back to key lines. Text with no line in it counts as nothing written.
   - **Colours.** The stage is drawn in the open space's look (`PageSummaryLook`, from `LaunchLook.recalled()`, the look
     the app last drew; Incognito's on a private page): its `ProfileBackdrop` with its theme, the look's deck blobs and
     swatch as two blurred blooms turning once every 5 and 8 seconds while it waits and fading over 2 s once the

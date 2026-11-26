@@ -28,8 +28,29 @@ public struct PageSummaryOutline: Equatable, Sendable {
     self.rows = rows
   }
 
-  public init(_ text: String, finished: Bool) {
-    self.init(finished ? text : Self.wholeLines(text))
+  public enum Format: Sendable {
+    case written
+    case excerpts
+  }
+
+  public init(_ text: String, finished: Bool, format: Format = .written) {
+    switch format {
+    case .written: self.init(finished ? text : Self.wholeLines(text))
+    case .excerpts: self.init(excerpts: text)
+    }
+  }
+
+  public init(excerpts text: String) {
+    var lead: String?
+    var rows: [Row] = []
+    for raw in text.split(whereSeparator: \.isNewline) {
+      let line = raw.trimmingCharacters(in: .whitespaces)
+      let info = Self.clean(Self.bulletBody(line) ?? line)
+      guard !info.isEmpty, !["-", "•", "*"].contains(info) else { continue }
+      if lead == nil { lead = info } else { rows.append(Row(id: rows.count, info: info)) }
+    }
+    self.lead = lead
+    self.rows = rows
   }
 
   public init(_ text: String) {
@@ -89,7 +110,7 @@ public struct PageSummaryOutline: Equatable, Sendable {
   static func unrun(_ text: String) -> String {
     text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map { line -> String in
       guard bulletBody(line.trimmingCharacters(in: .whitespaces)) == nil else { return String(line) }
-      return String(line).replacing(/([^\s•*\-])[ \t]+(?:[-•*][ \t]*)?((?:[a-z0-9]+\.)*[a-z][a-z0-9]*)[ \t]*\|[ \t]*([^|\n]{2,60}?)[ \t]*\|/) { match in
+      return String(line).replacing(/([.!?](?:["'”’)\]]|\[\d+\])*)[ \t]+[-•*][ \t]+((?:[a-z0-9]+\.)*[a-z][a-z0-9]*)[ \t]*\|[ \t]*([^|\n]{2,60}?)[ \t]*\|/) { match in
         "\(match.1)\n- \(match.2) | \(match.3) |"
       }
     }

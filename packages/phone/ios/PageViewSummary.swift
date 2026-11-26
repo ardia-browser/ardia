@@ -44,24 +44,26 @@ extension PageView {
   func cancelPendingShot() {
     pageShotRequest += 1
     pageShot = nil
+    deliveredShotSize = nil
     pageShotWaiters = []
   }
 
   @MainActor
   func shootPage() {
     cancelPendingShot()
-    guard let webView = hostedWebView else { return deliverShot(nil, request: pageShotRequest) }
+    let size = webViewFrame.size
+    guard let webView = hostedWebView, shotGeometryHolds(size) else { return deliverShot(nil, request: pageShotRequest, size: size) }
     let request = pageShotRequest
     if webView.transform.isIdentity, let copied = PageSnapshots.screenCopy(of: webView, width: webView.bounds.width), !PageSnapshots.isFlat(copied) {
-      return deliverShot(copied, request: request)
+      return deliverShot(copied, request: request, size: size)
     }
     webView.takeSnapshot(with: nil) { [weak self, weak webView] image, _ in
       MainActor.assumeIsolated {
         guard let self, self.pageShotRequest == request else { return }
-        if let image { return self.deliverShot(image, request: request) }
-        guard let webView, webView.bounds.width > 0, webView.bounds.height > 0 else { return self.deliverShot(nil, request: request) }
+        if let image { return self.deliverShot(image, request: request, size: size) }
+        guard let webView, webView.bounds.width > 0, webView.bounds.height > 0 else { return self.deliverShot(nil, request: request, size: size) }
         let drawn = UIGraphicsImageRenderer(bounds: webView.bounds).image { _ in webView.drawHierarchy(in: webView.bounds, afterScreenUpdates: false) }
-        self.deliverShot(drawn, request: request)
+        self.deliverShot(drawn, request: request, size: size)
       }
     }
   }
@@ -81,10 +83,16 @@ extension PageView {
   }
 
   @MainActor
-  func deliverShot(_ image: UIImage?, request: Int) {
+  func deliverShot(_ image: UIImage?, request: Int, size: CGSize) {
     guard request == pageShotRequest else { return }
-    let image = image.map(withStatusStrip)
+    let image = image.flatMap { shot -> UIImage? in
+      let pixel = 1 / shot.scale
+      guard shotGeometryHolds(size), abs(shot.size.width - size.width) < pixel,
+            abs(shot.size.height - size.height) < pixel else { return nil }
+      return withStatusStrip(shot)
+    }
     pageShot = image
+    deliveredShotSize = size
     let waiters = pageShotWaiters
     pageShotWaiters = []
     for waiter in waiters { waiter(image) }
@@ -93,8 +101,16 @@ extension PageView {
 
   @MainActor
   func whenShot(_ done: @escaping (UIImage?) -> Void) {
-    if let pageShot { return done(pageShot) }
+    if deliveredShotSize != nil { return done(shotFitsPage ? pageShot : nil) }
     pageShotWaiters.append(done)
+  }
+
+  @MainActor
+  var shotFitsPage: Bool { pageShot != nil && deliveredShotSize.map(shotGeometryHolds) == true }
+
+  @MainActor
+  func shotGeometryHolds(_ size: CGSize) -> Bool {
+    size.width > 0 && size.height > 0 && webViewFrame.size == size && hostedWebView?.bounds.size == size
   }
 
   @MainActor
@@ -175,7 +191,7 @@ extension PageView {
 
   @MainActor
   func raiseStage(_ image: UIImage) -> PageSummaryStage? {
-    guard let window, let page, let webView = hostedWebView, webViewFrame.width > 0, webViewFrame.height > 0 else { return nil }
+    guard let window, let page, let webView = hostedWebView, webViewFrame.width > 0, webViewFrame.height > 0, image === pageShot, shotFitsPage else { return nil }
     finishLeaving()
     let look = summaryLook
     pinchGround.backgroundColor = look.ground
@@ -195,7 +211,7 @@ extension PageView {
   func pinchHeld(_ hold: PagePinchWatcher.Hold) {
     guard let webView = hostedWebView, summarySession == nil else { return }
     lastHold = hold
-    let transform = Self.pinchTransform(hold)
+    let transform = UIAccessibility.isReduceMotionEnabled ? .identity : Self.pinchTransform(hold)
     let corner = Self.pinchCorner(hold)
     if summaryStage == nil, PagePinch.isEngaged(at: hold.scale), let pageShot { _ = raiseStage(pageShot) }
     if let stage = summaryStage {

@@ -78,8 +78,8 @@ struct PageSummaryText: View {
   private var outline: PageSummaryOutline {
     guard let session = model.session else { return PageSummaryOutline() }
     switch session.phase {
-    case .done: return PageSummaryOutline(session.text)
-    case .writing: return PageSummaryOutline(session.text, finished: false)
+    case .done, .interrupted: return session.outline(finished: true)
+    case .writing: return session.outline(finished: false)
     case .reading, .failed: return PageSummaryOutline()
     }
   }
@@ -123,7 +123,12 @@ struct PageSummaryText: View {
             .accessibilityElement(children: .combine)
             .modifier(SummaryArrival())
           }
-          if let note = session.note, session.phase == .done {
+          if let note = session.note, session.phase == .interrupted {
+            Label(note, systemImage: "exclamationmark.circle")
+              .font(.footnote.weight(.medium))
+              .foregroundStyle(.primary.opacity(0.78))
+              .modifier(SummaryArrival())
+          } else if let note = session.note, session.phase == .done {
             Text(note)
               .font(.footnote)
               .foregroundStyle(.secondary)
@@ -141,7 +146,11 @@ struct PageSummaryText: View {
     .accessibilityElement(children: .contain)
     .accessibilityLabel(Text("Summary"))
     .onChange(of: session(\.phase)) { _, phase in
-      if phase == .done { UIAccessibility.post(notification: .announcement, argument: String(localized: "Summary ready")) }
+      switch phase {
+      case .done: UIAccessibility.post(notification: .announcement, argument: String(localized: "Summary ready"))
+      case .interrupted: UIAccessibility.post(notification: .announcement, argument: String(localized: "Summary incomplete. Apple Intelligence stopped before it finished."))
+      default: break
+      }
     }
   }
 }

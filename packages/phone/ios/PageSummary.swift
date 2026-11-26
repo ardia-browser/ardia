@@ -17,6 +17,7 @@ final class PageSummarySession: Identifiable {
     case reading
     case writing
     case done
+    case interrupted
     case failed(String)
   }
 
@@ -54,7 +55,12 @@ final class PageSummarySession: Identifiable {
 
   var outcome: String {
     if case .failed = phase { return "failed" }
+    if phase == .interrupted { return "failed" }
     return writer?.rawValue ?? "failed"
+  }
+
+  func outline(finished: Bool) -> PageSummaryOutline {
+    PageSummaryOutline(text, finished: finished, format: writer == .excerpts ? .excerpts : .written)
   }
 
   func isCurrent(for tab: WebTab?) -> Bool {
@@ -86,10 +92,10 @@ final class PageSummarySession: Identifiable {
       return settle(failure: String(localized: "There isn’t enough text on this page to summarize."), tab: tab)
     }
     phase = .writing
-    await write(content)
+    let interrupted = await write(content)
     guard !Task.isCancelled, isCurrent(for: tab) else { return }
-    if PageSummaryOutline(text).isEmpty { return settle(failure: String(localized: "Couldn’t summarize this page."), tab: tab) }
-    phase = .done
+    if outline(finished: true).isEmpty { return settle(failure: String(localized: "Couldn’t summarize this page."), tab: tab) }
+    phase = interrupted ? .interrupted : .done
     onSettled?(self)
   }
 
@@ -100,10 +106,11 @@ final class PageSummarySession: Identifiable {
     onSettled?(self)
   }
 
-  private func write(_ content: ReadableContent) async {
+  private func write(_ content: ReadableContent) async -> Bool {
     let model = SystemLanguageModel.default
     guard case .available = model.availability else {
-      return quote(content, reason: Self.unavailableReason(model.availability))
+      quote(content, reason: Self.unavailableReason(model.availability))
+      return false
     }
     let budget = max((model.contextSize - Self.responseTokens - Self.instructionTokens) * Self.charactersPerToken, 2000)
     for share in [budget, budget / 2] {
@@ -115,20 +122,21 @@ final class PageSummarySession: Identifiable {
         }
         writer = .onDevice
         note = String(localized: "Written on this iPhone by Apple Intelligence. Nothing left the phone.")
-        return
+        return false
       } catch {
-        if Task.isCancelled { return }
+        if Task.isCancelled { return false }
         let shown = PageSummaryOutline.wholeLines(text)
         if !PageSummaryOutline(shown).isEmpty {
           text = shown
           writer = .onDevice
-          note = String(localized: "Written on this iPhone by Apple Intelligence. Nothing left the phone.")
-          return
+          note = String(localized: "Apple Intelligence stopped before it finished, so this summary is incomplete. Nothing left the phone.")
+          return true
         }
         text = ""
       }
     }
     quote(content, reason: String(localized: "Apple Intelligence couldn’t summarize this page, so here are its key lines."))
+    return false
   }
 
   private func stream(model: SystemLanguageModel, prompt: String) async throws {
@@ -181,6 +189,8 @@ final class PagePinchWatcher: NSObject, UIGestureRecognizerDelegate {
   private var start = CGPoint.zero
   private var taken = false
   private var engaged = false
+  private weak var heldZoomer: UIScrollView?
+  private var heldZoomerBounced = true
   private lazy var feedback = UIImpactFeedbackGenerator(style: .soft, view: recognizer.view ?? UIView())
 
   init(container: UIView) {
@@ -199,6 +209,7 @@ final class PagePinchWatcher: NSObject, UIGestureRecognizerDelegate {
     pinch = nil
     taken = false
     engaged = false
+    freeZoomer()
     if recognizer.state == .began || recognizer.state == .changed {
       recognizer.isEnabled = false
       recognizer.isEnabled = true
@@ -224,12 +235,23 @@ final class PagePinchWatcher: NSObject, UIGestureRecognizerDelegate {
 
   private func take() {
     taken = true
-    if let zoom = zoomer?.pinchGestureRecognizer, zoom.isEnabled {
-      zoom.isEnabled = false
-      zoom.isEnabled = true
+    if let zoomer {
+      heldZoomer = zoomer
+      heldZoomerBounced = zoomer.bouncesZoom
+      zoomer.bouncesZoom = false
     }
-    if let zoomer, zoomer.zoomScale < zoomer.minimumZoomScale { zoomer.setZoomScale(zoomer.minimumZoomScale, animated: false) }
+    holdZoomerAtMinimum()
     onTaken?()
+  }
+
+  private func holdZoomerAtMinimum() {
+    guard let zoomer = heldZoomer, zoomer.zoomScale != zoomer.minimumZoomScale else { return }
+    zoomer.setZoomScale(zoomer.minimumZoomScale, animated: false)
+  }
+
+  private func freeZoomer() {
+    heldZoomer?.bouncesZoom = heldZoomerBounced
+    heldZoomer = nil
   }
 
   @objc private func pinched(_ recognizer: UIPinchGestureRecognizer) {
@@ -245,6 +267,7 @@ final class PagePinchWatcher: NSObject, UIGestureRecognizerDelegate {
       }
       if !taken, scale < 1 { take() }
       guard taken else { return }
+      holdZoomerAtMinimum()
       let nowEngaged = PagePinch.isEngaged(at: scale)
       if nowEngaged != engaged {
         engaged = nowEngaged
@@ -258,6 +281,7 @@ final class PagePinchWatcher: NSObject, UIGestureRecognizerDelegate {
       self.pinch = nil
       taken = false
       engaged = false
+      freeZoomer()
       pinch.moved(to: scale)
       let ending: PagePinch.Ending = recognizer.state == .ended ? .ended : recognizer.state == .cancelled ? .cancelled : .failed
       let fired = wasTaken && (moment?()).map { pinch.fires(ending, velocity: Double(recognizer.velocity), at: $0) } == true

@@ -1,4 +1,4 @@
-import type { FieldProviderProfile, PasswordExportStatus, SavedPassword, SystemPanelResult, VerificationCodeSetupResult } from "../../passwords";
+import type { ApplePasswordsState, FieldProviderProfile, PasswordExportStatus, SavedPassword, SystemPanelResult, VerificationCodeSetupResult } from "../../passwords";
 import type { Profile } from "../wire";
 
 export type PasswordsCalls = {
@@ -17,6 +17,7 @@ export type PasswordsCalls = {
   "passwords.systemPanelAvailable": [{}, { chromium: boolean; webkit: boolean }];
   "passwords.otpauthHandler": [{}, { app: string | null }];
   "passwords.setUpVerificationCode": [{ tab: string; token: string; generation?: number }, VerificationCodeSetupResult];
+  "passwords.applePasswordsStatus": [{}, { state: ApplePasswordsState }];
 };
 
 export type PasswordsEvents = {};

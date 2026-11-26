@@ -3,7 +3,7 @@ import { defineDomain } from "../define.ts";
 export const passwords = defineDomain({
   kind: "engine",
   imports: {
-    "../../passwords": ["FieldProviderProfile", "PasswordExportStatus", "SavedPassword", "SystemPanelResult", "VerificationCodeSetupResult"],
+    "../../passwords": ["FieldProviderProfile", "PasswordExportStatus", "SavedPassword", "SystemPanelResult", "VerificationCodeSetupResult", "ApplePasswordsState"],
     "../wire": ["Profile"],
   },
   calls: {
@@ -108,6 +108,13 @@ export const passwords = defineDomain({
     setUpVerificationCode: {
       args: "{ tab: string; token: string; generation?: number }",
       result: "VerificationCodeSetupResult",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    applePasswordsStatus: {
+      args: "{}",
+      result: "{ state: ApplePasswordsState }",
       desktop: "absent",
       mac: "custom",
       windows: "absent",

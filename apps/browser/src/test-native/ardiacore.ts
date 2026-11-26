@@ -168,6 +168,12 @@ const providerFakes = {
   otpauthHandler: async () => (passwordProviders.calls.push(["otpauthHandler"]), await passwordProviders.handlerGate, { app: passwordProviders.handlerApp }),
   setUpVerificationCode: ({ tab, token, generation }: { tab: string; token: string; generation?: number }) => (passwordProviders.opened.push({ tab, token, generation }), { opened: passwordProviders.openResult }),
 };
+export const applePasswords = {
+  state: "notEntitled" as CallResult<"passwords.applePasswordsStatus">["state"],
+};
+const applePasswordsFakes = {
+  applePasswordsStatus: () => ({ state: applePasswords.state }),
+};
 export const current = { device: null as string | null };
 
 export const siteSettingsDb = new Map<string, Record<string, string>>();
@@ -597,6 +603,7 @@ const fakeModules = {
         return null;
       },
       ...providerFakes,
+      ...applePasswordsFakes,
     },
     {
       save: async (_profile: string, origin: string, username: string, password: string) => {

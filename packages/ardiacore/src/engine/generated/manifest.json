@@ -884,6 +884,11 @@
           "mac": "custom",
           "desktop": "absent",
           "windows": "absent"
+        },
+        "applePasswordsStatus": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
         }
       },
       "events": {}

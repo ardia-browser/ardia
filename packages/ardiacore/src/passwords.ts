@@ -8,6 +8,7 @@ export type FieldProviderProfile = { profile: string; fields: FieldProviderField
 type SystemPanelRefusal = "noTab" | "noProvider" | "stale" | "hidden" | "notFocused" | "unavailable" | "notKey" | "notEditing" | "throttled" | "refused" | "noPanel" | "tabGone";
 export type SystemPanelResult = { shown: boolean; reason?: SystemPanelRefusal };
 type VerificationCodeRefusal = "noTab" | "unknownToken" | "stale" | "navigated" | "noProvider" | "frameGone" | "handlerChanged" | "failed";
+export type ApplePasswordsState = "connected" | "notConnected" | "refused" | "helperMissing" | "tooOld" | "notEntitled";
 export type VerificationCodeSetupResult = { opened: boolean; reason?: VerificationCodeRefusal };
 
 const Passwords = nativeModule("ArdiaPasswords");

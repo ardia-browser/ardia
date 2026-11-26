@@ -2,17 +2,19 @@ import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { usePlugins } from "../../../state/plugins/store";
 import { choicePlugin, type ManagerPlugin, type PasswordManagerChoice } from "../../../state/site/passwordManagerChoice";
 import { choosePasswordManager, useManagerPlugins, useProfilePasswordManager, useProfilesSharingChoice, useStoredPasswordManager } from "../../../state/site/passwordManager";
+import { useApplePasswordsOffered } from "../../../state/site/applePasswords";
 import { type Option, PopUp } from "../../ui";
 import { Row } from "../Form";
 
 type StoredPlugin = { title: string; installed: boolean } | null;
 
-export function managerPopUp(plugins: readonly ManagerPlugin[], stored: PasswordManagerChoice | undefined, effective: PasswordManagerChoice, storedPlugin: StoredPlugin): { value: PasswordManagerChoice; options: Option<PasswordManagerChoice>[] } {
+export function managerPopUp(plugins: readonly ManagerPlugin[], stored: PasswordManagerChoice | undefined, effective: PasswordManagerChoice, storedPlugin: StoredPlugin, appleOffered = false): { value: PasswordManagerChoice; options: Option<PasswordManagerChoice>[] } {
   const offPlugin = stored !== undefined && stored !== effective && choicePlugin(stored) !== null ? stored : null;
   return {
     value: offPlugin ?? effective,
     options: [
       { value: "ardia", title: "Ardia" },
+      ...(appleOffered || effective === "apple" ? [{ value: "apple" as const, title: "Apple Passwords" }] : []),
       ...plugins.map((p) => ({ value: `plugin:${p.name}` as PasswordManagerChoice, title: p.title })),
       ...(offPlugin ? [{ value: offPlugin, title: `${storedPlugin?.title ?? choicePlugin(offPlugin)} (${storedPlugin?.installed === false ? "not installed" : "off"})` }] : []),
       { value: "none", title: "None (an extension handles logins)", separatorBefore: true },
@@ -50,7 +52,8 @@ function PasswordManagerChoiceRow({ profileId }: { profileId: string }) {
   const sharing = useProfilesSharingChoice(profileId);
   const storedPlugin = useStoredPlugin(stored);
   const unavailable = unavailableNote(stored, effective, storedPlugin);
-  const popUp = managerPopUp(plugins, stored, effective, storedPlugin);
+  const appleOffered = useApplePasswordsOffered();
+  const popUp = managerPopUp(plugins, stored, effective, storedPlugin, appleOffered);
   const description = [unavailable, sharedChoiceNote(sharing)].filter(Boolean).join(" ") || undefined;
   return (
     <Row anchor="profiles.passwordManager" description={description}>

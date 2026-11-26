@@ -44,6 +44,7 @@ const HINT_FIELDS: Record<PanelHintStep, string> = {
 
 const CHOICE_FIELDS: Record<PasswordManagerKind, string> = {
   ardia: "password_manager_chose_ardia",
+  apple: "password_manager_chose_apple",
   none: "password_manager_chose_none",
   plugin: "password_manager_chose_plugin",
 };

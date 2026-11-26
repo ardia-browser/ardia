@@ -83,6 +83,10 @@ public class PasswordsModule: Module {
       let code = try args.text("code")
       ApplePasswordsClient.shared.finishPairing(code: code) { reply.ok(["outcome": $0.rawValue]) }
     },
-    applePasswordsCancelPairing: { _, reply in ApplePasswordsClient.shared.cancelPairing { reply.ok(nil) } }
+    applePasswordsCancelPairing: { _, reply in ApplePasswordsClient.shared.cancelPairing { reply.ok(nil) } },
+    hideChromeLists: { args, reply in
+      ArdiaWebView.hideChromeLists(inProfiles: try args.strings("profiles"))
+      reply.ok(nil)
+    }
   )
 }

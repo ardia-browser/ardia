@@ -904,6 +904,11 @@
           "mac": "custom",
           "desktop": "absent",
           "windows": "absent"
+        },
+        "hideChromeLists": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
         }
       },
       "events": {

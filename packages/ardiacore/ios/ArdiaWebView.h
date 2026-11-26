@@ -138,6 +138,10 @@ NS_ASSUME_NONNULL_BEGIN
     NS_SWIFT_NAME(resolveDisplayMedia(_:sourceId:audio:));
 @end
 
+@interface ArdiaWebView (ChromeLists)
++ (void)hideChromeListsInProfiles:(NSArray<NSString *> *)profiles NS_SWIFT_NAME(hideChromeLists(inProfiles:));
+@end
+
 @interface ArdiaWebView (FieldProviders)
 @property(class, nonatomic, readonly) NSDictionary<NSString *, NSNumber *> *systemPanelAvailability;
 @property(class, nonatomic, readonly, nullable) NSString *otpauthHandlerName;

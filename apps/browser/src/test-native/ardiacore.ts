@@ -174,6 +174,10 @@ export const applePasswords = {
   calls: [] as string[],
   hold: null as Promise<void> | null,
 };
+export const chromeLists = { hidden: null as string[] | null };
+const chromeListsFakes = {
+  hideChromeLists: ({ profiles }: { profiles: string[] }) => ((chromeLists.hidden = [...profiles]), null),
+};
 const applePasswordsFakes = {
   applePasswordsStatus: () => ({ state: applePasswords.state }),
   applePasswordsPair: () => (applePasswords.calls.push("pair"), { outcome: "awaitingCode" as const }),
@@ -627,6 +631,7 @@ const fakeModules = {
       },
       ...providerFakes,
       ...applePasswordsFakes,
+      ...chromeListsFakes,
     },
     {
       save: async (_profile: string, origin: string, username: string, password: string) => {

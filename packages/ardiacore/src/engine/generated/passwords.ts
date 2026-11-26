@@ -21,6 +21,7 @@ export type PasswordsCalls = {
   "passwords.applePasswordsPair": [{}, { outcome: ApplePasswordsPairing }];
   "passwords.applePasswordsPairCode": [{ code: string }, { outcome: ApplePasswordsPairing }];
   "passwords.applePasswordsCancelPairing": [{}, null];
+  "passwords.hideChromeLists": [{ profiles: string[] }, null];
 };
 
 export type PasswordsEvents = {

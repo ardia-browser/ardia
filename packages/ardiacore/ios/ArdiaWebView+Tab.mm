@@ -94,6 +94,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   [self pushPeekModifier];
   [self pushSelectionPopover];
   [self pushFieldProvider];
+  [self pushChromeLists];
   [self bindRestoreKey];
   [self takePageReports];
   [tab deliverHeldPageMessages];

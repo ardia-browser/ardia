@@ -25,6 +25,7 @@ import {
   type ManagerPlugin,
   type PasswordManagerChoice,
 } from "./passwordManagerChoice";
+import { chromeListProfiles, pushChromeLists } from "./chromeLists";
 import { closeVerificationCodePrompts, offerVerificationCode } from "./verificationCodes";
 import { followMode, forgetHeldOffOutside, forgetPendingOfferToSave, offerToSaveHeldOffSomewhere, passwordAutofill, pendingOfferToSave, startOfferToSave, watchPendingOfferToSave, writeOfferToSave } from "./offerToSave";
 
@@ -263,6 +264,7 @@ export function startPasswordManager() {
     const next = engineModes(browser(), current);
     for (const [profile, mode] of next) if (modes.get(profile) !== mode) followMode(profile, mode);
     modes = next;
+    pushChromeLists(chromeListProfiles(next), consentToken());
     void pushProviders(providerPlugins(current), consentToken());
   };
 

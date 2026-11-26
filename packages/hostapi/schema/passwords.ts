@@ -140,6 +140,13 @@ export const passwords = defineDomain({
       mac: "custom",
       windows: "absent",
     },
+    hideChromeLists: {
+      args: "{ profiles: string[] }",
+      result: "null",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
   },
   events: {
     applePasswordsChanged: {

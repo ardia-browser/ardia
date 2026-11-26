@@ -9,6 +9,8 @@ final class WebKitAutofillDropdown: NSObject {
     var enabled = true
     var muted = false
     var spokenLabel: String?
+    var appIcon: String?
+    var iconLabel: String?
   }
 
   private static let rowHeight: CGFloat = 36
@@ -193,8 +195,18 @@ private final class WebKitAutofillRowView: NSView {
     muted = row.muted
     notice = row.enabled ? "" : row.title
     super.init(frame: .zero)
-    icon.image = NSImage(systemSymbolName: row.symbol, accessibilityDescription: nil)
-    icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+    if let app = row.appIcon.flatMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }) {
+      icon.image = NSWorkspace.shared.icon(forFile: app.path)
+      icon.imageScaling = .scaleProportionallyUpOrDown
+    } else {
+      icon.image = NSImage(systemSymbolName: row.symbol, accessibilityDescription: nil)
+      icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+    }
+    if let iconLabel = row.iconLabel {
+      icon.setAccessibilityElement(true)
+      icon.setAccessibilityRole(.image)
+      icon.setAccessibilityLabel(iconLabel)
+    }
     title.stringValue = row.title
     title.font = .menuFont(ofSize: enabled ? 13 : 12)
     title.lineBreakMode = .byTruncatingTail

@@ -11,7 +11,7 @@ import { useCardFrame } from "./cardFrame";
 import { useBookmarksBarHeight } from "../bookmarks/barSize";
 import { useBookmarksBarMode } from "../../state/bookmarks/hooks";
 import { POPOVER_MARGIN } from "../ui";
-import { NO_TOOLBAR, toolbarGeometry, type Rect, type ToolbarGeometry } from "./geometry";
+import { NO_TOOLBAR, outerCorners, toolbarGeometry, type Rect, type ToolbarGeometry } from "./geometry";
 import { startPermissionPrompts } from "../../state/site/permissions";
 import { useFullscreenTab } from "../../state/tabs/pageState";
 import { DropTargets, SplitDividers, SplitFocusRing, SplitToast, type WindowShape } from "../split/SplitChrome";
@@ -197,6 +197,7 @@ export function ContentCard() {
               pageBar={chrome.kind === "none" ? (pageBars[tabId] ?? null) : null}
               sidebarFieldOpen={sidebarFieldOpen}
               cardRadius={frame.radius}
+              squareInnerCorners={frame.inset <= 0}
               toolbarHeight={toolbarRow.height}
               newTabCard={newTabCard}
             />
@@ -209,7 +210,7 @@ export function ContentCard() {
         <FrozenPage windowId={windowId} tabId={activeId} radius={frame.radius} top={(chrome.kind !== "none" && !chrome.autoHide ? toolbarRow.height : activeDeveloperBar) + (barMode === "always" && !small && !hideWhileScrolling ? barHeight : 0)} />
       )}
       {split && !fullscreenTab && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
-      {split && !fullscreenTab && activeRect && <SplitFocusRing rect={activeRect} origin={origin} windowShape={windowFullScreen ? null : windowShape} />}
+      {split && !fullscreenTab && activeRect && <SplitFocusRing rect={activeRect} origin={origin} windowShape={windowFullScreen ? null : windowShape} paneCorners={frame.inset <= 0 && frame.radius > 0 ? outerCorners(activeRect, size.width, size.height, frame.radius) : null} />}
       {size.width > 0 && popoversOverCard && origin && activeRect && peek !== undefined && (
         <BesidePeekPopovers
           tabId={popoversOverCard}

@@ -7,7 +7,7 @@ import { splitOf } from "../../state/splits/splits";
 import type { Tab } from "../../state/browser/types";
 import { BookmarksBar, bookmarksBarShown, type BookmarksBarMode } from "../bookmarks/BookmarksBar";
 import { useBookmarksBarHeight } from "../bookmarks/barSize";
-import type { Rect, ToolbarGeometry } from "./geometry";
+import { outerCorners, type Corners, type Rect, type ToolbarGeometry } from "./geometry";
 import { patchPage, usePages } from "../../state/tabs/pageState";
 import { SplitEmptyState } from "../split/SplitEmptyState";
 import { NewTabPage } from "../ntp/NewTabPage";
@@ -36,6 +36,13 @@ import { continuousCorners } from "../ui";
 
 const LINGERING_PANE = "ardia.lingeringPane";
 
+function paneCornerStyle(corners: Corners | number) {
+  if (typeof corners === "number") return continuousCorners(corners);
+  const { topLeft, topRight, bottomLeft, bottomRight } = corners;
+  if (topLeft === topRight && topLeft === bottomLeft && topLeft === bottomRight) return continuousCorners(topLeft);
+  return { borderTopLeftRadius: topLeft, borderTopRightRadius: topRight, borderBottomLeftRadius: bottomLeft, borderBottomRightRadius: bottomRight, borderCurve: "continuous" as const };
+}
+
 export const TabPane = memo(function TabPane({
   tabId,
   windowId,
@@ -60,6 +67,7 @@ export const TabPane = memo(function TabPane({
   pageBar,
   sidebarFieldOpen,
   cardRadius,
+  squareInnerCorners,
   toolbarHeight,
   newTabCard,
 }: {
@@ -86,6 +94,7 @@ export const TabPane = memo(function TabPane({
   pageBar: PageBarMatch | null;
   sidebarFieldOpen: boolean;
   cardRadius: number;
+  squareInnerCorners: boolean;
   toolbarHeight: number;
   newTabCard: boolean;
 }) {
@@ -144,7 +153,7 @@ export const TabPane = memo(function TabPane({
       style={{
         position: "absolute",
         ...(fills ? { left: 0, top: 0, right: 0, bottom: 0 } : { left: frame.x, top: frame.y, width: frame.width, height: frame.height }),
-        ...continuousCorners(fullscreen ? 0 : cardRadius),
+        ...paneCornerStyle(fullscreen ? 0 : squareInnerCorners && rect && !fills ? outerCorners(rect, fullWidth, fullHeight, cardRadius) : cardRadius),
         overflow: "hidden",
         opacity: covered ? 0 : 1,
         zIndex: lingering ? -1 : undefined,

@@ -3,6 +3,14 @@ import type { SplitView } from "../../state/browser/types";
 
 export type Rect = { x: number; y: number; width: number; height: number };
 
+export type Corners = { topLeft: number; topRight: number; bottomLeft: number; bottomRight: number };
+
+export function outerCorners(rect: Rect, width: number, height: number, radius: number): Corners {
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.5;
+  const left = near(rect.x, 0), top = near(rect.y, 0), right = near(rect.x + rect.width, width), bottom = near(rect.y + rect.height, height);
+  return { topLeft: left && top ? radius : 0, topRight: right && top ? radius : 0, bottomLeft: left && bottom ? radius : 0, bottomRight: right && bottom ? radius : 0 };
+}
+
 const MIN_PANE = 220;
 
 export type Divider = { kind: "root"; index: number; rect: Rect; vertical: boolean } | { kind: "stack"; rect: Rect; vertical: boolean };

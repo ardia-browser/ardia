@@ -5,7 +5,7 @@ import { useTheme } from "../ui/theme";
 import { updateSplit } from "../../state/splits/actions";
 import { useDragFallbackPane } from "../../state/splits/hooks";
 import type { SplitView } from "../../state/browser/types";
-import { evenPair, resize, type Divider, type Rect } from "../window/geometry";
+import { evenPair, resize, type Corners, type Divider, type Rect } from "../window/geometry";
 import { capsule, continuousCorners, Panel, space, Symbol, Text, Toast, usePresence } from "../ui";
 import { hideToast, useToasts } from "../../state/app/toasts";
 import { noteSplit } from "../../state/telemetry/usage";
@@ -30,9 +30,7 @@ export function SplitDividers({ split, dividers, width, height }: { split: Split
 
 export type WindowShape = Size & { radius: number };
 
-type Corners = { topLeft: number; topRight: number; bottomLeft: number; bottomRight: number };
-
-export const SplitFocusRing = memo(function SplitFocusRing({ rect, origin, windowShape }: { rect: Rect; origin: { x: number; y: number } | null; windowShape: WindowShape | null }) {
+export const SplitFocusRing = memo(function SplitFocusRing({ rect, origin, windowShape, paneCorners }: { rect: Rect; origin: { x: number; y: number } | null; windowShape: WindowShape | null; paneCorners: Corners | null }) {
   const theme = useTheme();
   const { inset, radius, splitGap } = useCardFrame();
   const framed = inset > 0;
@@ -41,13 +39,13 @@ export const SplitFocusRing = memo(function SplitFocusRing({ rect, origin, windo
   const outset = Math.min(FOCUS_RING.width + FOCUS_RING.gap, room);
   const box = { x: rect.x - outset, y: rect.y - outset, width: rect.width + outset * 2, height: rect.height + outset * 2 };
   const color = theme.powerUpColor ?? theme.accent;
-  if (radius > 0)
+  if (radius > 0 && !paneCorners)
     return (
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <View style={{ position: "absolute", left: box.x, top: box.y, width: box.width, height: box.height, borderWidth: width, borderColor: color, ...continuousCorners(radius + outset) }} />
       </View>
     );
-  const corners = windowCorners(rect, origin, windowShape);
+  const corners = paneCorners ?? windowCorners(rect, origin, windowShape);
   const edge = (style: { left: number; top: number; width: number; height: number }) => <View style={{ position: "absolute", backgroundColor: color, ...style }} />;
   const corner = (r: number, left: number, top: number, dx: number, dy: number) =>
     r > 0 && (

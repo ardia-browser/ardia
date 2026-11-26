@@ -389,7 +389,7 @@ ArdiaEarlyShown *ShownForWindow(NSWindow *window) {
   LoadLayouts();
   NSDictionary *main = windowId.length && [gLayouts[windowId] isKindOfClass:NSDictionary.class] ? gLayouts[windowId] : @{};
   const double pageFrame = PageFrameOf(settings);
-  const BOOL roundedAtZero = [settings[@"pageCornersRounded"] isEqual:@YES];
+  const BOOL roundedAtZero = ![settings[@"pageCornersRounded"] isEqual:@NO];
   NSNumber *cardInset = @([ArdiaInterfaceScale windowLengthFromRoot:pageFrame]);
   NSNumber *top = @([ArdiaInterfaceScale windowLengthFromRoot:38]);
   NSMutableDictionary *layout = [@{

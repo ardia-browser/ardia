@@ -180,13 +180,13 @@ final class WebKitLogins: NSObject {
     origin.hasSuffix("/") ? String(origin.dropLast()).lowercased() : origin.lowercased()
   }
 
-  private static func manages(_ use: WebKitPasswordGate.Use, for profile: String, _ done: @escaping (Bool) -> Void) {
+  private static func verdict(_ use: WebKitPasswordGate.Use, for profile: String, _ done: @escaping (WebKitPasswordGate.Verdict) -> Void) {
     WebKitAutofill.profileToggles(profile) { toggles in
       let verdict = WebKitPasswordGate.verdict(
         use, passwordsOn: toggles["passwords"] ?? false, systemProvider: ArdiaWebView.fieldProvider(profile: profile) != nil,
-        privateProfile: WebKitStores.isPrivate(profile))
+        applePasswords: ApplePasswordsProfiles.contains(profile), privateProfile: WebKitStores.isPrivate(profile))
       if verdict == .leftToManager { count("passwordsLeftToManager") }
-      done(verdict == .ardia)
+      done(verdict)
     }
   }
 
@@ -263,18 +263,35 @@ final class WebKitLogins: NSObject {
   private func show(_ tab: WebKitTab, data: [String: Any], origin: String) {
     ticket += 1
     let asked = ticket
-    Self.manages(.fill, for: tab.profile) { [weak self, weak tab] on in
+    Self.verdict(.fill, for: tab.profile) { [weak self, weak tab] verdict in
       guard let self, let tab, asked == self.ticket else { return }
-      if on { self.showFilling(tab, data: data, origin: origin) } else { self.close(tab) }
+      switch verdict {
+      case .ardia: self.showFilling(tab, data: data, origin: origin)
+      case .applePasswords: self.showApplePasswords(tab, data: data, origin: origin)
+      default: self.close(tab)
+      }
     }
+  }
+
+  private static func fieldRect(_ data: [String: Any], in view: WKWebView) -> NSRect {
+    let zoom = view.pageZoom * view.magnification
+    return NSRect(
+      x: (data["x"] as? Double ?? 0) * zoom, y: (data["y"] as? Double ?? 0) * zoom,
+      width: max(1, (data["width"] as? Double ?? 0) * zoom), height: max(1, (data["height"] as? Double ?? 0) * zoom))
+  }
+
+  private func showApplePasswords(_ tab: WebKitTab, data: [String: Any], origin: String) {
+    guard let view = tab.webView, let window = tab.window, Self.pageOrigin(tab) == origin else { return close(tab) }
+    let password = data["password"] as? Bool ?? false
+    let field = LoginListField(
+      frameOrigin: origin, screenRect: window.convertToScreen(tab.convert(Self.fieldRect(data, in: view), to: nil)),
+      trigger: data["event"] as? String == "input" ? .typing : .press, typed: password ? "" : data["value"] as? String ?? "")
+    LoginList.shared.show(tab, field: field)
   }
 
   private func showFilling(_ tab: WebKitTab, data: [String: Any], origin: String) {
     guard let view = tab.webView, let url = view.url, let page = Self.pageOrigin(tab), origin == page else { return close(tab) }
-    let zoom = view.pageZoom * view.magnification
-    let rect = NSRect(
-      x: (data["x"] as? Double ?? 0) * zoom, y: (data["y"] as? Double ?? 0) * zoom,
-      width: max(1, (data["width"] as? Double ?? 0) * zoom), height: max(1, (data["height"] as? Double ?? 0) * zoom))
+    let rect = Self.fieldRect(data, in: view)
     let password = data["password"] as? Bool ?? false
     let current = Field(tab: tab, origin: page, url: url.absoluteString, rect: rect, password: password, typed: password ? "" : data["value"] as? String ?? "")
     field = current
@@ -307,6 +324,7 @@ final class WebKitLogins: NSObject {
   }
 
   private func key(_ tab: WebKitTab, _ key: String) {
+    if LoginList.shared.isShown(for: tab) { return LoginList.shared.key(tab, key) }
     guard dropdown.isShown, field?.tab === tab else { return }
     switch key {
     case "down": dropdown.move(1)
@@ -326,6 +344,7 @@ final class WebKitLogins: NSObject {
   }
 
   private func close(_ tab: WebKitTab) {
+    LoginList.shared.close(tab)
     guard field == nil || field?.tab === tab else { return }
     ticket += 1
     dropdown.close()
@@ -368,8 +387,8 @@ final class WebKitLogins: NSObject {
   }
 
   private func submitted(_ tab: WebKitTab, data: [String: Any], frame origin: String) {
-    Self.manages(.offerToSave, for: tab.profile) { [weak self, weak tab] on in
-      guard let self, let tab, on else { return }
+    Self.verdict(.offerToSave, for: tab.profile) { [weak self, weak tab] verdict in
+      guard let self, let tab, verdict == .ardia else { return }
       self.submittedWhileSaving(tab, data: data, origin: origin)
     }
   }

@@ -1,4 +1,4 @@
-import type { ApplePasswordsPairing } from "../../platform/applePasswords";
+import type { ApplePasswordsPairing, LoginListCount } from "../../platform/applePasswords";
 import type { FieldProviderOpened } from "../../platform/passwordProviders";
 import type { PasswordManagerKind } from "../site/passwordManagerChoice";
 import type { ConsentToken } from "./choice";
@@ -79,7 +79,13 @@ const PAIRING_FAILURES: Record<PairingFailure, string> = {
   notEntitled: "apple_passwords_pairing_failures_not_entitled",
 };
 
-const FIELDS = [...Object.values(PAIRING_FIELDS), ...Object.values(PAIRING_FAILURES), ...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), ...Object.values(ME_CARD_FIELDS), ...Object.values(OFFER_FIELDS).flatMap(Object.values), ...Object.values(ICLOUD_EXTENSION_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
+const LOGIN_LIST_FIELDS: Record<LoginListCount, string> = {
+  shown: "apple_passwords_login_list_shown",
+  filled: "apple_passwords_login_list_filled",
+  fillFailed: "apple_passwords_fills_failed",
+};
+
+const FIELDS = [...Object.values(LOGIN_LIST_FIELDS), ...Object.values(PAIRING_FIELDS), ...Object.values(PAIRING_FAILURES), ...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), ...Object.values(ME_CARD_FIELDS), ...Object.values(OFFER_FIELDS).flatMap(Object.values), ...Object.values(ICLOUD_EXTENSION_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
 
 let counts: Record<string, number> = {};
 const bump = (field: string, consent?: ConsentToken | null, by = 1) => countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + by));
@@ -115,6 +121,8 @@ export function noteApplePasswordsPairingFailed(kind: PairingFailure, consent: C
   bump(PAIRING_FIELDS.failed, consent);
   bump(PAIRING_FAILURES[kind], consent);
 }
+
+export const noteLoginList = (name: LoginListCount, consent: ConsentToken | null) => bump(LOGIN_LIST_FIELDS[name], consent);
 
 export function takePasswordManagerCounts(): Record<string, number> {
   const taken = Object.fromEntries(FIELDS.map((field) => [field, counts[field] ?? 0]));

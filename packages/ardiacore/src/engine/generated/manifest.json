@@ -1510,8 +1510,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "824356c4ceb0f526b84811590c1aab1a8ad59aa6b3f949f06ad68fb723cef12f",
-        "swift": "41a93592952890260b4a8e0f8fba27b9931a42b5ee4a4b1b2bb25ca358f7c010"
+        "types": "7c9137a6e428e7a2d12031aea0b160b0124641fdf3120bceb0ecda5af0f04649",
+        "swift": "15f37af9215b2050a17bb1b95a9da6ef72fc3367e0096e9140abe7b02470e362"
       },
       "modules": {
         "ArdiaShell": {
@@ -3163,6 +3163,46 @@
             "onCalendarChanged": {
               "mac": "custom",
               "desktop": "host",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaContacts": {
+          "native": "ContactsNative",
+          "functions": {
+            "authorizationStatus": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "requestAccess": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "meCard": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "openMeCard": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {
+            "onContactsChanged": {
+              "mac": "custom",
+              "desktop": "absent",
               "windows": "absent"
             }
           }

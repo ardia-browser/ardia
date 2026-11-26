@@ -7,12 +7,13 @@ globalThis.__DEV__ = false;
 const nodeRequire = createRequire(import.meta.url);
 globalThis.require = (id) => (/\.png$/.test(id) ? { uri: id } : nodeRequire(id));
 
-await import("../../../test-native/index.ts");
+const native = await import("../../../test-native/index.ts");
 const { PLATFORM_FEATURES } = await import("../../../lib/platformFeatures.ts");
 const { useBrowser } = await import("../../../state/browser/store.ts");
 const { SETTINGS, unshownSettings } = await import("../settingsIndex.ts");
 const { Row } = await import("../Form.tsx");
 const { PasswordsSection } = await import("./ProfilePasswords.tsx");
+const { MeCardRow } = await import("./MeCardRow.tsx");
 
 const S = () => useBrowser.getState();
 const flush = () => new Promise((r) => setImmediate(r));
@@ -54,4 +55,42 @@ test("S7: on a Mac, Use my Me card from Contacts sits right under Save and fill 
   assert.ok(!rowOrder(linux.value).includes("profiles.meCard"));
   assert.ok(unshown().has("profiles.meCard"), "settings search doesn't find it either");
   PLATFORM_FEATURES.meCard = true;
+});
+
+async function meCardRow() {
+  const section = await passwordsSection();
+  const [placed] = named(section.value, "MeCardRow");
+  const row = mount(() => MeCardRow(placed.props));
+  const toggle = () => elements(row.value).find((e) => typeof e.props.onChange === "function" && "value" in e.props);
+  const description = () => elements(row.value).find((e) => e.type === Row).props.description ?? "";
+  const turn = async (on) => {
+    await toggle().props.onChange(on);
+    for (let i = 0; i < 5; i++) await flush();
+  };
+  return { toggle, description, turn };
+}
+
+test("S8: turning it on is what asks macOS for Contacts; a denial turns it back off and says where to allow it", async () => {
+  native.contacts.status = "notDetermined";
+  native.contacts.answer = "denied";
+  native.contacts.requests = 0;
+  const row = await meCardRow();
+  assert.equal(native.contacts.requests, 0, "showing Settings never asks");
+  assert.equal(row.toggle().props.value, false);
+
+  await row.turn(true);
+  assert.equal(native.contacts.requests, 1);
+  assert.equal(row.toggle().props.value, false, "a denial leaves the switch off");
+  assert.match(row.description(), /System Settings › Privacy & Security › Contacts/);
+
+  native.contacts.status = "notDetermined";
+  native.contacts.answer = "authorized";
+  await row.turn(true);
+  assert.equal(native.contacts.requests, 2);
+  assert.equal(row.toggle().props.value, true, "allowing it leaves the switch on");
+  assert.doesNotMatch(row.description(), /System Settings/);
+
+  await row.turn(false);
+  assert.equal(row.toggle().props.value, false);
+  assert.equal(native.contacts.requests, 2, "turning it off never asks");
 });

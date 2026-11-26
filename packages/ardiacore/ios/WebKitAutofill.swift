@@ -353,12 +353,11 @@ final class WebKitAutofill: NSObject, WKScriptMessageHandler {
   }
 
   private func fill(_ current: Target, kind: String, values: [String: Any], counted: String) {
-    guard let tab = current.tab, Self.mainOrigin(tab) == current.origin,
-      let json = try? JSONSerialization.data(withJSONObject: values), let object = String(data: json, encoding: .utf8)
-    else { return }
-    let code = "window.__ardiaAutofill ? window.__ardiaAutofill.fill(\(WebKitTab.jsString(current.token)), \(WebKitTab.jsString(kind)), \(object)) : 0"
-    tab.runInWorld(code, frame: current.frame.isMainFrame ? nil : current.frame) { result in
-      if ((result as? NSNumber)?.intValue ?? 0) > 0 { Self.count(counted) }
+    guard let tab = current.tab, Self.mainOrigin(tab) == current.origin, let view = tab.webView else { return }
+    WebKitAutofillFill.run(
+      in: view, frame: current.frame.isMainFrame ? nil : current.frame, world: WebKitHub.world, token: current.token, kind: kind, values: values
+    ) { filled in
+      if filled > 0 { Self.count(counted) }
     }
   }
 }

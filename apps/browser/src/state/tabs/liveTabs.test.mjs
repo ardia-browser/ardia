@@ -772,3 +772,124 @@ test("an extension that shows a tab of another space that shares data, then disc
   assert.equal(shown(win.w), "b");
   assert.equal(chromeShown(win.strip), "b", "the app doesn't send the tab being discarded back");
 });
+
+test("an extension's new tab in a space that shares data stays in that space instead of switching to another", async () => {
+  const win = windowWith("a");
+  const home = S().windows[win.w].profileId;
+  const work = S().createProfile({ name: "Work", shareWith: home });
+  S().newTab(win.w, { url: "b.com", profileId: work, background: true });
+  await settle(win);
+  const [a] = S().windows[win.w].tabIds;
+  for (const [active, url, expected] of [[true, "e", "e"], [false, "f", "e"]]) {
+    const browser = chrome.made(win.strip, active);
+    await settle();
+    const id = S().newTab(win.w, { url: `${url}.com`, adoptId: `tab:${browser}`, openerId: a, profileId: home });
+    await settle();
+    chrome.adopted(browser, id);
+    await settle(win);
+    assert.equal(S().windows[win.w].profileId, home, `tabs.create({ active: ${active} }) keeps the current space`);
+    assert.equal(shown(win.w), expected, `tabs.create({ active: ${active} })`);
+    assert.equal(chromeShown(win.strip), expected, "Chrome shows what the app shows");
+  }
+});
+
+test("an extension's new tab opened while the shown space is on a blank New Tab doesn't switch to another space sharing the strip", async () => {
+  for (const active of [true, false]) {
+    const win = windowWith();
+    const home = S().windows[win.w].profileId;
+    const work = S().createProfile({ name: "Work", shareWith: home });
+    S().newTab(win.w, { url: "b.com", profileId: work, background: true });
+    await settle(win);
+    assert.equal(S().windows[win.w].profileId, home);
+    assert.equal(chromeShown(win.strip), "b");
+    const browser = chrome.made(win.strip, active);
+    await settle();
+    const id = S().newTab(win.w, { url: "e.com", adoptId: `tab:${browser}`, profileId: home });
+    await settle();
+    chrome.adopted(browser, id);
+    await settle(win);
+    assert.equal(S().windows[win.w].profileId, home, `tabs.create({ active: ${active} }) on blank New Tab keeps the current space`);
+    if (active) {
+      assert.equal(shown(win.w), "e");
+      assert.equal(chromeShown(win.strip), "e");
+    }
+  }
+});
+
+test("an extension's new tab inserted inactive and activated before adoption stays in front", async () => {
+  const win = windowWith("a");
+  const home = S().windows[win.w].profileId;
+  const work = S().createProfile({ name: "Work", shareWith: home });
+  S().newTab(win.w, { url: "b.com", profileId: work, background: true });
+  await settle(win);
+  const [a] = S().windows[win.w].tabIds;
+  const browser = chrome.made(win.strip, false);
+  await settle();
+  const s = chrome.strips.get(win.strip);
+  s.active = browser;
+  s.pickedOnClose = false;
+  chrome.emit(win.strip, null);
+  await settle();
+  assert.equal(chrome.strips.get(win.strip).active, browser, "the unadopted active tab isn't overwritten before adoption");
+  const id = S().newTab(win.w, { url: "e.com", adoptId: `tab:${browser}`, openerId: a, profileId: home });
+  await settle();
+  chrome.adopted(browser, id);
+  await settle(win);
+  assert.equal(S().windows[win.w].profileId, home);
+  assert.equal(shown(win.w), "e");
+  assert.equal(chromeShown(win.strip), "e");
+});
+
+test("opening a tab in the shown space before its view mounts doesn't activate another shared space's tab in Chrome", async () => {
+  const win = windowWith("a");
+  const home = S().windows[win.w].profileId;
+  const work = S().createProfile({ name: "Work", shareWith: home });
+  S().newTab(win.w, { url: "b.com", profileId: work, background: true });
+  await settle(win);
+  S().newTab(win.w, { url: "n.com", profileId: home });
+  await settle();
+  assert.equal(chromeShown(win.strip), "a", "Chrome stays on the previous tab until the new tab mounts");
+  await settle(win);
+  assert.equal(S().windows[win.w].profileId, home);
+  assert.equal(shown(win.w), "n");
+  assert.equal(chromeShown(win.strip), "n");
+});
+
+test("switching to another space before an extension tab adopts doesn't yank the window back", async () => {
+  for (const active of [true, false]) {
+    const win = windowWith("a");
+    const home = S().windows[win.w].profileId;
+    const work = S().createProfile({ name: "Work", shareWith: home });
+    await settle(win);
+    const [a] = S().windows[win.w].tabIds;
+    const browser = chrome.made(win.strip, active);
+    await settle();
+    const id = S().newTab(win.w, { url: "f.com", adoptId: `tab:${browser}`, openerId: a, profileId: home });
+    await settle();
+    S().switchProfile(win.w, work);
+    await settle();
+    chrome.adopted(browser, id);
+    await settle(win);
+    assert.equal(S().windows[win.w].profileId, work, `tabs.create({ active: ${active} }) keeps the space the user switched to`);
+  }
+});
+
+test("a separate-data space's hidden strip keeps its own active tab without switching to another space sharing that strip", async () => {
+  const win = windowWith("a");
+  const home = S().windows[win.w].profileId;
+  const dnd = S().createProfile({ name: "D&D", shareWith: home });
+  const work = S().createProfile({ name: "Work" });
+  const b = S().newTab(win.w, { url: "b.com", profileId: dnd, background: true });
+  await settle(win);
+  S().switchProfile(win.w, dnd);
+  await settle(win);
+  assert.equal(chromeShown(win.strip), "b");
+  S().switchProfile(win.w, work);
+  await settle(win);
+  assert.equal(chromeShown(win.strip), "b", "switching to a separate-data space leaves the hidden strip on its active space");
+  const b2 = S().newTab(win.w, { url: "b2.com", profileId: dnd, background: true });
+  await settle(win);
+  S().closeTab(b);
+  await settle(win);
+  assert.equal(chromeShown(win.strip), "b2", "closing the hidden strip's active tab still projects its replacement");
+});

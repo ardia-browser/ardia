@@ -53,6 +53,19 @@ test("the strip picking a third tab right after a switch counts apart, and each 
   assert.deepEqual(takeStripBounceCounts(), { strip_bounces_back: 0, strip_bounces_back_pip: 0, strip_bounces_back_native_press: 0, strip_bounces_elsewhere: 1 });
 });
 
+test("the strip switching the window to another profile right after a switch counts as a bounce elsewhere", async () => {
+  sharing();
+  const otherProfile = {
+    windows: { w1: { id: "w1", profileId: "work", activeTabIds: { default: "notes", work: "other" } } },
+    tabs: { video: { id: "video", pin: { as: "tile" } }, notes: { id: "notes", pin: null }, other: { id: "other", pin: null } },
+  };
+  recordSelectionByApp(state("video"), state("notes"), client.consentToken(), 1000);
+  judgeStripSelection(state("notes"), otherProfile, 1200);
+  assert.deepEqual(takeStripBounceCounts(), { strip_bounces_back: 0, strip_bounces_back_pip: 0, strip_bounces_back_native_press: 0, strip_bounces_elsewhere: 1 });
+  const logs = await loggedBounces();
+  assert.match(JSON.stringify(logs.at(-1)), /"otherProfile"[^}]*true/);
+});
+
 test("nothing is counted while sharing is off", () => {
   client.setSharing(false, "settings");
   recordSelectionByApp(state("video"), state("notes"), client.consentToken(), 1000);

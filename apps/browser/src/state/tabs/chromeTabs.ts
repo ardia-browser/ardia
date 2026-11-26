@@ -27,6 +27,7 @@ const groups: GroupBindings = new Map();
 const tried = new Map<string, { sig: string; since: number }>();
 const changedAt = new Map<number, number>();
 const madeInFront = new Map<number, { browser: number; over: string | null }>();
+const lastProfile = new Map<number, string>();
 let applyingStrip = false;
 
 if (__DEV__) {
@@ -87,6 +88,7 @@ function receive(tx: TabStripTransaction) {
     if (strip.closed) {
       mirror.delete(strip.strip);
       madeInFront.delete(strip.strip);
+      lastProfile.delete(strip.strip);
       changedAt.delete(strip.strip);
       for (const kind of KINDS) tried.delete(`${strip.strip}:${kind}`);
     } else mirror.set(strip.strip, strip);
@@ -94,8 +96,9 @@ function receive(tx: TabStripTransaction) {
     if (tx.cmd === null) {
       const waiting = inflight.get(strip.strip);
       const siblings = [...mirror.values()].filter((x) => x.window === strip.window && x.strip !== strip.strip);
-      const made = strip.tabs.find((t) => t.active && !t.key && !before?.tabs.some((b) => b.browser === t.browser));
-      if (made) madeInFront.set(strip.strip, { browser: made.browser, over: stripPlan(s, strip)?.active ?? null });
+      const was = (browser: number) => before?.tabs.find((b) => b.browser === browser);
+      const made = strip.tabs.find((t) => t.active && !t.key && !was(t.browser)?.key && !was(t.browser)?.active);
+      if (made) madeInFront.set(strip.strip, { browser: made.browser, over: stripPlan(s, strip, lastProfile.get(strip.strip))?.active ?? null });
       s = chromeChanged(s, before, strip, {
         seen,
         siblings,
@@ -137,8 +140,9 @@ function scheduleProject() {
 function project(s: BrowserState) {
   for (const strip of mirror.values()) {
     if (inflight.has(strip.strip)) continue;
-    const plan = stripPlan(s, strip);
+    const plan = stripPlan(s, strip, lastProfile.get(strip.strip));
     if (!plan) continue;
+    if (plan.active && s.tabs[plan.active]) lastProfile.set(strip.strip, s.tabs[plan.active]!.profileId);
     const actual = stripActual(strip, plan);
     const order = `${plan.keys.join(",")}|${plan.pinned}`;
     const made = madeInFront.get(strip.strip);

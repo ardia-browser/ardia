@@ -69,9 +69,10 @@ export function chromeChanged(
   const home = homeWindow(s, after, siblings, stayed);
   const movedIn = (t: Keyed) =>
     !was.has(t.browser) && !!home && s.tabs[t.key]!.windowId !== home && engineProfile(s, s.tabs[t.key]!.profileId) === after.profile;
-  const taken = new Set(now.filter((t) => firstFromChrome(t) || movedIn(t)).map((t) => t.key));
+  const moved = new Set(now.filter(movedIn).map((t) => t.key));
+  const taken = new Set(now.filter((t) => firstFromChrome(t) || moved.has(t.key)).map((t) => t.key));
 
-  for (const t of now) if (movedIn(t)) s = intoWindow(s, t.key, home!);
+  for (const t of now) if (moved.has(t.key)) s = intoWindow(s, t.key, home!);
 
   const followed = now.filter((t) => (stayed(t) || taken.has(t.key)) && !pending.arranged.has(t.key));
   const weight = (t: Keyed) => (chromeGroupOf(s, t.key) ? 2 : 1);
@@ -109,11 +110,13 @@ export function chromeChanged(
     const previous = before?.tabs.find((t) => t.active);
     const gone = !!previous && !after.tabs.some((t) => t.browser === previous.browser);
     const left = gone && (after.activePickedOnClose ?? true);
-    if (known(s, active) && taken.has(active.key)) s = show(s, active.key);
-    else if (known(s, active) && stayed(active) && active.browser !== previous?.browser && !left) s = show(s, active.key);
+    if (known(s, active) && taken.has(active.key)) {
+      const tab = s.tabs[active.key]!;
+      if (moved.has(active.key) || s.windows[tab.windowId]?.profileId === tab.profileId) s = show(s, active.key);
+    } else if (known(s, active) && stayed(active) && active.browser !== previous?.browser && !left) s = show(s, active.key);
     else if (known(s, active)) {
       const front = now.find((t) => taken.has(t.key) && !t.active && shownIn(s, t.key));
-      if (front) s = show(s, active.key);
+      if (front && s.tabs[active.key]!.profileId === s.tabs[front.key]!.profileId) s = show(s, active.key);
     }
   }
   return s;
@@ -234,7 +237,8 @@ function homeWindow(s: BrowserState, strip: StripState, siblings: StripState[], 
 
 const shownIn = (s: BrowserState, key: string) => {
   const tab = s.tabs[key]!;
-  return s.windows[tab.windowId]?.activeTabIds[tab.profileId] === key;
+  const w = s.windows[tab.windowId];
+  return w?.profileId === tab.profileId && w.activeTabIds[tab.profileId] === key;
 };
 
 function keptOrder<T>(items: T[], oldIndex: (t: T) => number, weight: (t: T) => number): T[] {
@@ -322,18 +326,34 @@ function show(s: BrowserState, key: string): BrowserState {
 
 type StripPlan = { keys: string[]; pinned: number; active: string | null };
 
-export function stripPlan(s: BrowserState, strip: StripState): StripPlan | null {
+export function stripPlan(s: BrowserState, strip: StripState, lastProfile?: string): StripPlan | null {
   const mine = strip.tabs.filter((t): t is Keyed => known(s, t));
   if (!mine.length) return null;
-  const windowId = s.tabs[(mine.find((t) => t.active) ?? mine[0]!).key]!.windowId;
-  const w = s.windows[windowId];
+  const anchor = s.tabs[(mine.find((t) => t.active) ?? mine[0]!).key]!;
+  const w = s.windows[anchor.windowId];
   if (!w) return null;
   const inStrip = new Set(mine.map((t) => t.key));
   const keys = w.tabIds.filter((id) => inStrip.has(id));
   const pinned = keys.filter((id) => s.tabs[id]!.pin);
-  const profiles = [w.profileId, ...new Set(keys.map((id) => s.tabs[id]!.profileId))];
-  const peek = peekTabId(s, windowId);
-  const active = peek && strip.tabs.some((t) => t.key === peek) ? peek : (profiles.map((p) => w.activeTabIds[p]).find((id) => !!id && inStrip.has(id)) ?? null);
+  const peek = peekTabId(s, w.id);
+  let active: string | null;
+  if (peek && strip.tabs.some((t) => t.key === peek)) active = peek;
+  else if (engineProfile(s, w.profileId) === engineProfile(s, anchor.profileId)) {
+    const shown = w.activeTabIds[w.profileId];
+    active = shown && inStrip.has(shown) ? shown : null;
+  } else {
+    const current = strip.tabs.find((t) => t.active);
+    if (current && !current.key) active = null;
+    else {
+      const currentProfile = known(s, current) ? s.tabs[current.key]!.profileId : undefined;
+      const profiles = [...new Set([
+        ...(lastProfile ? [lastProfile] : []),
+        ...(currentProfile ? [currentProfile] : []),
+        ...keys.map((id) => s.tabs[id]!.profileId),
+      ])];
+      active = profiles.map((p) => w.activeTabIds[p]).find((id) => !!id && inStrip.has(id)) ?? null;
+    }
+  }
   return { keys: [...pinned, ...keys.filter((id) => !s.tabs[id]!.pin)], pinned: pinned.length, active };
 }
 

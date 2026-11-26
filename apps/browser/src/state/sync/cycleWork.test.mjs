@@ -6,7 +6,7 @@ await import("../../test-native/index.ts");
 globalThis.fetch = async () => ({ status: 200 });
 
 const client = await import("../telemetry/client.ts");
-const { takeCycleWork, timedCycle } = await import("./cycleWork.ts");
+const { noteChainStatus, takeCycleWork, takeSnapshotWrites, timedCycle } = await import("./cycleWork.ts");
 after(() => client.setSharing(false, "settings"));
 
 const none = { cycles: 0, ms: 0, longestMs: 0 };
@@ -45,4 +45,20 @@ test("with sharing on, cycles add up to a count, a total and the longest", async
   assert.equal(taken.cycles, 2);
   assert.ok(taken.ms >= 110 && taken.longestMs >= 80 && taken.longestMs <= taken.ms, JSON.stringify(taken));
   assert.deepEqual(takeCycleWork(), none);
+});
+
+test("with sharing on, each stretch the sync chain is missing counts once, and so does its return", () => {
+  client.setSharing(true, "onboarding");
+  takeSnapshotWrites();
+  const token = client.consentToken();
+  for (const status of ["ok", "missing", "missing", "ok", "ok"]) noteChainStatus(token, "mac", status);
+  noteChainStatus(token, "mac", "missing");
+  noteChainStatus(token, "set-up-again", "ok");
+  const taken = takeSnapshotWrites();
+  assert.deepEqual([taken.chainMissing, taken.chainReturned], [2, 1], "one count per stretch the chain is gone, and a new setup finding its chain isn't a return");
+  noteChainStatus(token, "mac", "missing");
+  client.setSharing(false, "settings");
+  noteChainStatus(client.consentToken(), "mac", "ok");
+  const off = takeSnapshotWrites();
+  assert.deepEqual([off.chainMissing, off.chainReturned], [0, 0], "turning sharing off forgets the count and nothing is counted while it's off");
 });

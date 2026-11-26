@@ -73,8 +73,6 @@ function SyncIcon({ on }: { on: boolean }) {
 
 function SyncOff({ info }: { info: FolderInfo | null }) {
   const theme = useTheme();
-  const status = useSync((s) => s.status);
-  const error = useSync((s) => s.error);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const chosen = useSync((s) => s.folder);
@@ -127,13 +125,11 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
           icon={<SyncIcon on={false} />}
           anchor="general.sync"
           description={
-            status === "reset" && error
-              ? error
-              : hasData
-                ? "Synced data found. Enter your recovery phrase to join."
-                : asksWhere
-                  ? "End-to-end encrypted through a synced folder you choose."
-                  : `End-to-end encrypted through ${where}.`
+            hasData
+              ? "Synced data found. Enter your recovery phrase to join."
+              : asksWhere
+                ? "End-to-end encrypted through a synced folder you choose."
+                : `End-to-end encrypted through ${where}.`
           }
         >
           <Button title="More" onPress={() => void otherOptions()} />

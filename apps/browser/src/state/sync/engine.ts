@@ -13,7 +13,7 @@ import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addLinkedProfile, appScopeOf, linkedProfileId, linkProfiles, readyToPair, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { noteCycle, timedCycle } from "./cycleWork";
+import { noteChainStatus, noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
 import { freezeRemovals, markDeviceRemoved, markRemoved, settleRemovals } from "./profileRemoval";
@@ -122,7 +122,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     watchExtensions();
     const status = await native.chainStatus(folder);
     if (status === "unavailable") return publishUi({ status: "offline", error: null });
-    if (status === "missing") return await resetFromElsewhere();
+    if (noteChainStatus(consent, device, status) === "missing") return publishUi({ status: "stalled", error: `This device is out of sync. Sync may have been reset from another device, or the sync folder hasn’t finished syncing. Everything on this ${PLATFORM_TERMS.computer} is kept, and sync carries on once its data is back. To set sync up again, choose Stop Syncing.` });
     const transport = folderTransport(native, folder);
     if (editClock().device !== device) startEditClock(device, doc.clock);
     const clock = editClock();
@@ -210,13 +210,6 @@ async function loadSavedState() {
   startEditClock(doc.deviceId ?? "", doc.clock);
   settleSettingsFromSavedSync(doc.scopes[APP_SCOPE], installed && doc === loading && doc.enabled && !stopping && typeSyncedFor(doc.types, "settings", true));
   settleThemeAdoption(doc.profiles, doc.scopes[APP_SCOPE], false);
-}
-
-async function resetFromElsewhere() {
-  await SyncNative?.forget(doc.deviceId!);
-  doc = { ...emptyDoc(), folder: doc.folder, types: doc.types };
-  startOver();
-  publishUi({ status: "reset", error: "This device is out of sync. Sync may have been reset from another device." });
 }
 
 export const folderInfo = async (path?: string | null): Promise<FolderInfo | null> => (await SyncNative?.folderInfo(path ?? doc.folder ?? null)) ?? null;

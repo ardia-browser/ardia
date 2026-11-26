@@ -547,7 +547,12 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
   - Stopping removes this Mac's tabs and name from the other devices and forgets the key. It
     keeps all local data.
   - Deleting removes this phrase's chain folder. The other Macs then show Dia's "This device is
-    out of sync. Sync may have been reset from another device." and stop, keeping their data.
+    out of sync. Sync may have been reset from another device.", followed by "or the sync folder hasn't
+    finished syncing" (a cloud drive that hasn't delivered the folder or evicted it looks the same), and
+    stall. They keep their data, their key, their setup and their unsent changes, write nothing to the
+    folder, and carry on from where they were if the chain comes back. The line ends with "To set sync
+    up again, choose Stop Syncing.": Stop Syncing is how a Mac lets go, for example to join a new chain
+    another Mac set up in the same folder (issue #302). The phone apps still reset here.
 - **Overflow menu.** One other device with open tabs shows "Your %@ Tabs" (the kind of Mac, from
   its name: "Your MacBook Pro Tabs"; "Your iPhone Tabs" for an iPhone). Several roll up into **Your Devices**
   (`macbook.and.iphone`), a submenu per device (`iphone` for a phone, `laptopcomputer` or `desktopcomputer` for a
@@ -559,7 +564,8 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
 
 The engine (`apps/browser/src/state/sync/engine.ts`) runs a cycle 15 s after the last one, 3 s after a
 bookmark, settings, profile or group edit, and on Sync Now. A cycle:
-1. Checks the chain folder: gone means reset elsewhere; the folder missing means offline.
+1. Checks the chain folder: gone means stalled until it's back (nothing read or written, nothing
+   forgotten); the folder missing means offline.
 2. Syncs the app scope and links profiles.
 3. Syncs each synced profile's scope, publishing, flushing, pulling, and then publishing and
    applying per adapter.
@@ -663,8 +669,8 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
   - A third Mac joins from the folder as it is (logs and a snapshot) and converges.
   - Turning sync off on B keeps its bookmarks, history, settings, pinned tabs and passwords, and
     removes its key. A drops B's device and tabs, and what B does while off stays on B.
-  - Delete My Sync Data on A empties the folder. C shows Dia's reset message and stops, and A and C
-    keep all their data.
+  - Delete My Sync Data on A empties the folder. C shows Dia's out of sync message and stalls with
+    its key and setup kept, and A and C keep all their data.
 
   The runs found and fixed:
   - Settings whose value is null bounced between Macs: a null record is a tombstone, so settings

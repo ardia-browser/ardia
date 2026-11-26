@@ -141,5 +141,12 @@ export const passwords = defineDomain({
       windows: "absent",
     },
   },
-  events: {},
+  events: {
+    applePasswordsChanged: {
+      payload: "{ state: ApplePasswordsState }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+  },
 });

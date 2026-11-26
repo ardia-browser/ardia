@@ -1,4 +1,4 @@
-import { call, type ApplePasswordsPairing, type ApplePasswordsState } from "@ardia/ardiacore";
+import { call, on, type ApplePasswordsPairing, type ApplePasswordsState } from "@ardia/ardiacore";
 
 export type { ApplePasswordsPairing, ApplePasswordsState };
 
@@ -6,3 +6,4 @@ export const applePasswordsStatus = async (): Promise<ApplePasswordsState> => (a
 export const pairApplePasswords = async (): Promise<ApplePasswordsPairing> => (await call("passwords.applePasswordsPair", {})).outcome;
 export const finishApplePasswordsPairing = async (code: string): Promise<ApplePasswordsPairing> => (await call("passwords.applePasswordsPairCode", { code })).outcome;
 export const cancelApplePasswordsPairing = () => call("passwords.applePasswordsCancelPairing", {});
+export const onApplePasswordsChanged = (listener: (state: ApplePasswordsState) => void) => on("passwords.applePasswordsChanged", ({ state }) => listener(state));

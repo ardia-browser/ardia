@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
-import { applePasswordsStatus, cancelApplePasswordsPairing, finishApplePasswordsPairing, pairApplePasswords, type ApplePasswordsPairing, type ApplePasswordsState } from "../../platform/applePasswords";
+import { applePasswordsStatus, cancelApplePasswordsPairing, finishApplePasswordsPairing, onApplePasswordsChanged, pairApplePasswords, type ApplePasswordsPairing, type ApplePasswordsState } from "../../platform/applePasswords";
 import { choosePasswordManager } from "./passwordManager";
 
 export type PairingStep = "starting" | "code" | "checking" | "failed";
@@ -17,10 +17,21 @@ export const useApplePasswordsOffered = () => useApplePasswords((s) => applePass
 
 export const applePasswordsConnected = () => useApplePasswords.getState().state === "connected";
 
+let listening = false;
+let changes = 0;
+
 export async function loadApplePasswords() {
   if (!PLATFORM_FEATURES.systemPasswordManagers) return;
+  if (!listening) {
+    listening = true;
+    onApplePasswordsChanged((state) => {
+      changes += 1;
+      useApplePasswords.setState({ state });
+    });
+  }
+  const asked = changes;
   const state = await applePasswordsStatus().catch(() => null);
-  if (state) useApplePasswords.setState({ state });
+  if (state && asked === changes) useApplePasswords.setState({ state });
 }
 
 export const PAIRING_FAILURES: Record<Exclude<ApplePasswordsPairing, "awaitingCode" | "paired">, string> = {
@@ -51,6 +62,7 @@ export async function startApplePasswordsPairing(profileId: string | null) {
 }
 
 function paired(attempt: Pairing) {
+  changes += 1;
   useApplePasswords.setState({ state: "connected", pairing: null });
   if (attempt.profileId) choosePasswordManager(attempt.profileId, "apple");
 }

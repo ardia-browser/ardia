@@ -906,7 +906,14 @@
           "windows": "absent"
         }
       },
-      "events": {}
+      "events": {
+        "applePasswordsChanged": {
+          "topic": "passwords.applePasswordsChanged",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      }
     },
     "permissions": {
       "kind": "engine",

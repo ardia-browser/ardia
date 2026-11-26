@@ -161,3 +161,34 @@ test("S5: Cancel leaves the choice unchanged, even when the right code's answer 
   assert.equal(storedChoice(profileId), before);
   assert.equal(native.applePasswords.calls.at(-1), "cancelPairing", "the Passwords app is told to put its code away");
 });
+
+async function pairedProfile() {
+  const profileId = await settingsOn("notConnected");
+  managerMenu(profileId).onChange("apple");
+  await flush();
+  const sheet = pairingSheet();
+  sheet.type(native.applePasswords.code);
+  sheet.press("Connect");
+  await flush();
+  assert.equal(statusOf(profileId).text, "Connected");
+  return profileId;
+}
+
+test("S6: when Pairing has ended the status reads Not connected, with a Connect button that asks for the code again", async () => {
+  const profileId = await pairedProfile();
+  native.applePasswords.state = "notConnected";
+  native.emitEvent("passwords.applePasswordsChanged", { state: "notConnected" });
+  await flush();
+  const status = statusOf(profileId);
+  assert.equal(status.text, "Not connected");
+  assert.ok(status.connect, "a Connect button");
+  status.connect();
+  await flush();
+  const sheet = pairingSheet();
+  assert.match(sheet.text, /code/i);
+  sheet.type(native.applePasswords.code);
+  sheet.press("Connect");
+  await flush();
+  assert.equal(statusOf(profileId).text, "Connected");
+  assert.equal(storedChoice(profileId), "apple");
+});

@@ -23,4 +23,6 @@ export type PasswordsCalls = {
   "passwords.applePasswordsCancelPairing": [{}, null];
 };
 
-export type PasswordsEvents = {};
+export type PasswordsEvents = {
+  "passwords.applePasswordsChanged": { state: ApplePasswordsState };
+};

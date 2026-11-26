@@ -309,7 +309,7 @@ export function Omnibox({
       onChangeText={onChangeText}
       onSubmitEditing={() => choose(current, "current", true)}
       onFocus={() => (watchAppLeaving(), (editing.current = true), setListAway(false), hero && markNewTabBar("focused", tabId))}
-      onBlur={() => ((editing.current = false), (focusEcho.current = false), onCancel && cancelUnlessLeavingApp(onCancel))}
+      onBlur={() => ((editing.current = false), (focusEcho.current = false), onCancel && cancelUnlessLeavingApp(onCancel, () => !editing.current))}
       keyDownEvents={barKeyDownEvents(asksForBackspace(scope), isRemovable(current))}
       onKeyDown={onKeyDown}
     />

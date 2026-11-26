@@ -11,7 +11,7 @@ export function watchAppLeaving() {
   onAppEvent((e) => e.type === "resignActive" && (leftAt = performance.now()));
 }
 
-export function cancelUnlessLeavingApp(cancel: () => void) {
+export function cancelUnlessLeavingApp(cancel: () => void, stillBlurred: () => boolean) {
   const blurredAt = performance.now();
-  setTimeout(() => leftAt < blurredAt && cancel(), SETTLE_MS);
+  setTimeout(() => leftAt < blurredAt && stillBlurred() && cancel(), SETTLE_MS);
 }

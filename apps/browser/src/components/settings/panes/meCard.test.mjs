@@ -14,6 +14,10 @@ const { SETTINGS, unshownSettings } = await import("../settingsIndex.ts");
 const { Row } = await import("../Form.tsx");
 const { PasswordsSection } = await import("./ProfilePasswords.tsx");
 const { MeCardRow } = await import("./MeCardRow.tsx");
+const { AddressesPage } = await import("./ProfileAutofill.tsx");
+const { Button, TextField } = await import("../../ui/index.ts");
+const { useSettingsSheet } = await import("../../../state/settings/sheet.ts");
+const { currentEngineProfile } = await import("../../../state/browser/current.ts");
 
 const S = () => useBrowser.getState();
 const flush = () => new Promise((r) => setImmediate(r));
@@ -22,7 +26,7 @@ function elements(node, found = []) {
   if (Array.isArray(node)) node.forEach((n) => elements(n, found));
   else if (node && typeof node === "object" && "props" in node) {
     found.push(node);
-    elements(node.props.children, found);
+    for (const value of Object.values(node.props ?? {})) elements(value, found);
   }
   return found;
 }
@@ -93,4 +97,48 @@ test("S8: turning it on is what asks macOS for Contacts; a denial turns it back 
   await row.turn(false);
   assert.equal(row.toggle().props.value, false);
   assert.equal(native.contacts.requests, 2, "turning it off never asks");
+});
+
+const ADA = {
+  name: "Ada Lovelace",
+  organization: "Analytical Engines",
+  emails: ["ada@example.com"],
+  phones: ["+44 20 7946 0000"],
+  addresses: [{ street: "12 St James's Square", city: "London", state: "", postalCode: "SW1Y 4JH", country: "GB" }],
+};
+
+test("S9: entries from Contacts are listed as From Contacts and open read-only with Edit in Contacts", async () => {
+  native.contacts.status = "authorized";
+  native.contacts.card = ADA;
+  native.contacts.opened = 0;
+  const row = await meCardRow();
+  const profile = currentEngineProfile(S().settings.defaultProfileId);
+  native.addressStores.set(profile, new Map([["mine", { id: "mine", name: "Ada at home", street: "1 Home Road", city: "Bath", created: 0, modified: 0 }]]));
+  await row.turn(true);
+
+  const page = mount(() => AddressesPage({ profileId: S().settings.defaultProfileId }));
+  for (let i = 0; i < 5; i++) await flush();
+  const rows = elements(page.value).filter((e) => e.type === Row && e.props.onPress);
+  const fromContacts = rows.filter((r) => /From Contacts/.test(String(r.props.description)));
+  assert.deepEqual(fromContacts.map((r) => r.props.title), ["Ada Lovelace"]);
+  const own = rows.find((r) => r.props.title === "Ada at home");
+  assert.ok(own, `rows: ${rows.map((r) => r.props.title).join(", ")}`);
+  assert.doesNotMatch(String(own.props.description), /From Contacts/);
+
+  fromContacts[0].props.onPress();
+  const sheet = useSettingsSheet.getState().sheet;
+  const opened = mount(() => sheet.type(sheet.props));
+  const buttons = elements(opened.value).filter((e) => e.type === Button).map((b) => b.props.title);
+  assert.ok(buttons.includes("Edit in Contacts"), `buttons: ${buttons.join(", ")}`);
+  assert.ok(!buttons.includes("Delete") && !buttons.includes("Save"), `buttons: ${buttons.join(", ")}`);
+  assert.equal(elements(opened.value).filter((e) => e.type === TextField).length, 0, "nothing to type into");
+  assert.ok(elements(opened.value).some((e) => e.type === Row && e.props.description === "SW1Y 4JH"), "the card's values show as text");
+  elements(opened.value).find((e) => e.type === Button && e.props.title === "Edit in Contacts").props.onPress();
+  await flush();
+  assert.equal(native.contacts.opened, 1);
+
+  own.props.onPress();
+  const editor = useSettingsSheet.getState().sheet;
+  assert.ok(elements(mount(() => editor.type(editor.props)).value).some((e) => e.type === TextField), "an address saved in Ardia still opens the editor");
+  await row.turn(false);
 });

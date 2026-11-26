@@ -37,6 +37,7 @@
       "ScriptingModule",
       "DevModule",
       "CalendarModule",
+      "ContactsModule",
       "KeychainModule",
       "DockSelectionModule",
       "InlineCompletionModule",

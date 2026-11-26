@@ -1045,7 +1045,7 @@ extension ContactsNative where Self: Module {
   }
 
   var meCardFunction: AnyDefinition {
-    AsyncFunction("meCard") { () -> [String: Any]? in self.meCard() }.runOnQueue(.main)
+    AsyncFunction("meCard") { () -> [String: Any]? in self.meCard() }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
   }
 
   var openMeCardFunction: AnyDefinition {

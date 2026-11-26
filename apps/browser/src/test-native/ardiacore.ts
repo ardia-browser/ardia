@@ -24,7 +24,7 @@ import type {
 } from "@ardia/ardiacore";
 import type { EventSubscription } from "expo-modules-core";
 import { nativeEvents, unfaked } from "./events";
-import type { AutofillToggle } from "../platform/autofill";
+import type { AutofillToggle, SavedAddress } from "../platform/autofill";
 
 
 type TabStripHost = {
@@ -409,6 +409,16 @@ export const extensionAnswers = {
 
 const tabStripHost = () => testGlobals.acTestTabStrip!;
 let autofillIds = 0;
+export const addressStores = new Map<string, Map<string, SavedAddress>>();
+const addressStore = (profile: string) => addressStores.get(profile) ?? addressStores.set(profile, new Map()).get(profile)!;
+function saveFakeAddress(profile: string, address: Partial<SavedAddress>) {
+  const store = addressStore(profile);
+  if (address.id && !store.has(address.id)) throw new Error("No such address");
+  const id = address.id ?? `address-${++autofillIds}`;
+  const fields = Object.fromEntries(Object.entries(address).filter(([key, value]) => key !== "id" && typeof value === "string" && value.trim()));
+  store.set(id, { ...fields, id, created: store.get(id)?.created ?? Date.now(), modified: Date.now() });
+  return { id };
+}
 export const profileToggles = {
   user: new Map<string, Partial<Record<AutofillToggle, boolean>>>(),
   extension: new Map<string, Partial<Record<AutofillToggle, boolean>>>(),
@@ -628,10 +638,10 @@ const fakeModules = {
         setProfileToggle(profile, "cards", cards);
         return null;
       },
-      addresses: () => ({ addresses: [] }),
-      saveAddress: () => ({ id: `address-${++autofillIds}` }),
+      addresses: ({ profile }) => ({ addresses: [...addressStore(profile).values()] }),
+      saveAddress: ({ profile, address }) => saveFakeAddress(profile, address),
       cards: () => ({ cards: [] }),
-      remove: () => ({ ok: true }),
+      remove: ({ profile, id }) => (addressStore(profile).delete(id), { ok: true }),
       cardNumber: () => ({ number: null }),
       showSuggestions: () => false,
     },

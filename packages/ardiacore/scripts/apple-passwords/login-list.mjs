@@ -6,6 +6,7 @@ const q = JSON.stringify;
 export const APPLE_ICON = "Apple Passwords";
 export const FOOTER = "Open Passwords app";
 export const NO_LOGINS = "No saved logins";
+export const NOT_SECURE = "Not secure";
 const OPENED_PASSWORDS = "[logins] Passwords app (background mode, not opened)";
 
 const usersFor = (host) =>
@@ -144,6 +145,21 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         const rows = await tab.noList(1500);
         assert(!rows, "another site's login box in a frame gets no Apple Passwords rows", rows);
         return { engine: engineName, list: "none" };
+      } finally {
+        await tab.close();
+      }
+    },
+    async E14() {
+      const tab = await open("plain.localhost");
+      try {
+        await tab.click("#u");
+        const rows = await tab.waitRows();
+        const logins = rows.slice(0, -1);
+        assert(q(titles(logins)) === q(usersFor("http://plain.localhost")), "only the logins saved for http are offered", rows);
+        assert(logins.every((r) => r.label === `${r.title}, ${NOT_SECURE}`), `each is marked ${NOT_SECURE}`, rows);
+        const secure = FIXTURES.logins.filter((l) => l.sites.includes("plain.localhost")).map((l) => l.user);
+        assert(secure.length && !secure.some((u) => titles(rows).includes(u)), "the site's https login is never offered over http", rows);
+        return { engine: engineName, rows: rows.map((r) => r.label) };
       } finally {
         await tab.close();
       }

@@ -205,3 +205,31 @@ test("moving a pinned group's unloaded tab to a window that has its copy shows i
   assert.deepEqual(pinned(a), ["/https://jira.com", "/https://wiki.com"], "one wiki in A's group");
   assert.deepEqual(pinned(b), ["/https://jira.com", "/https://wiki.com"], "B keeps its member, unloaded");
 });
+
+test("a pinned four-pane split mirrors a second stack and its removal to another window", () => {
+  reset();
+  const w = S().createWindow({ url: "https://a.example/" });
+  const a = S().windows[w].tabIds[0];
+  const [b, c, d] = ["b", "c", "d"].map((host) => S().newTab(w, { url: `https://${host}.example/`, background: true }));
+  const splitId = S().createSplit([a, c]);
+  S().openSplitPane(w, { tabId: b, anchorTabId: a, side: "bottom" });
+  S().openSplitPane(w, { tabId: d, anchorTabId: c, side: "right" });
+  S().pinTabs([a], true, true);
+  const other = S().createWindow({ url: "https://other.example/" });
+  const shape = (windowId) => {
+    const split = Object.values(S().splits).find((v) => v.windowId === windowId);
+    return split.slots.map((slot) => ("stack" in slot ? slot.stack : [slot.tabId]).map((id) => new URL(S().tabs[id].url).hostname));
+  };
+  assert.deepEqual(shape(other), [["a.example", "b.example"], ["c.example"], ["d.example"]]);
+  const result = S().openSplitPane(w, { tabId: d, anchorTabId: c, side: "bottom" });
+  assert.ok(result.ok);
+  assert.deepEqual(shape(w), [["a.example", "b.example"], ["c.example", "d.example"]]);
+  assert.deepEqual(shape(other), shape(w));
+  const copy = Object.values(S().splits).find((v) => v.windowId === other);
+  assert.notEqual(copy.id, splitId);
+  assert.ok(copy.slots.every((slot) => "stack" in slot && slot.stack.every((id) => S().tabs[id].windowId === other)));
+  S().toggleSplitOrientation(splitId);
+  assert.equal(Object.values(S().splits).find((v) => v.windowId === other).orientation, "vertical");
+  S().removeTabFromSplit(d);
+  assert.deepEqual(shape(other), [["a.example", "b.example"], ["c.example"]]);
+});

@@ -170,3 +170,41 @@ test("all 8 two- and three-pane split combinations are reachable from drop sides
     assert.ok(panes[c].width === W && panes[a].y < panes[c].y && panes[a].y === panes[b].y && panes[a].x < panes[b].x);
   }
 });
+
+test("pane drop targets offer only insertions and moves the current layout can accept", async () => {
+  const { canDropSplitPane } = await import("../../state/splits/actions.ts");
+  const { S, w, a, b, c } = freshWindow();
+  const d = S().newTab(w, { url: "https://four.example/", background: true });
+  const { splitId } = S().openSplitPane(w, { anchorTabId: a, tabId: b, side: "right" });
+  S().openSplitPane(w, { anchorTabId: b, tabId: c, side: "bottom" });
+  let panes = splitGeometry(S().splits[splitId], 1200, 800, 9).panes;
+  const target = (dragging, id, side) => {
+    const p = panes[id];
+    const x = side === "right" ? p.x + p.width - 1 : p.x + p.width / 2;
+    const y = side === "bottom" ? p.y + p.height - 1 : p.y + p.height / 2;
+    return paneDropTarget([[id, p]], x, y, null, DROP_SIDES, (anchor, edge) => canDropSplitPane(dragging, anchor, edge));
+  };
+  assert.equal(target(d, b, "bottom"), null);
+  assert.deepEqual(target(d, b, "right"), { tabId: b, side: "right" });
+  assert.deepEqual(target(d, a, "bottom"), { tabId: a, side: "bottom" });
+  S().openSplitPane(w, { anchorTabId: a, tabId: d, side: "bottom" });
+  panes = splitGeometry(S().splits[splitId], 1200, 800, 9).panes;
+  assert.equal(target(a, b, "bottom"), null);
+  assert.deepEqual(target(a, b, "right"), { tabId: b, side: "right" });
+});
+
+test("pane drops reject missing tabs, the same tab, other windows and other profiles", async () => {
+  const { canDropSplitPane } = await import("../../state/splits/actions.ts");
+  const { S, w, a, b } = freshWindow();
+  const otherWindow = S().createWindow({ url: "https://other.example/" });
+  const foreignWindowTab = S().windows[otherWindow].tabIds[0];
+  const profileId = S().createProfile({ name: "Other" });
+  const foreignProfileTab = S().newTab(w, { url: "https://profile.example/", profileId, background: true });
+  S().openSplitPane(w, { anchorTabId: a, tabId: b, side: "right" });
+  for (const side of ["left", "right", "top", "bottom", "center"]) {
+    for (const [tab, anchor] of [["missing", a], [a, "missing"], [a, a], [foreignWindowTab, a], [a, foreignWindowTab], [foreignProfileTab, a], [a, foreignProfileTab]]) {
+      assert.equal(canDropSplitPane(tab, anchor, side), false, `${tab} ${side} ${anchor}`);
+    }
+  }
+  assert.equal(canDropSplitPane(b, a, "center"), true);
+});

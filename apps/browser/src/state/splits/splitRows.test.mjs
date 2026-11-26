@@ -324,11 +324,13 @@ test("a full split takes the link in place of the pane after its page, and refus
   const { w, a, b, c, d, splitId } = splitWindow();
   S().openSplitPane(w, { anchorTabId: c, tabId: d, side: "right" });
   assert.deepEqual(splitTabIdsOf(S().splits[splitId]), [b, c, d]);
+  const fourth = S().openSplitPane(w, { anchorTabId: d, url: "https://four.example/", background: true });
+  assert.equal(fourth.ok, true);
   assert.deepEqual(S().openSplitPane(w, { anchorTabId: b, url: "https://e.com/", background: true }), { ok: false, reason: "max" });
   const result = S().openSplitPane(w, { anchorTabId: b, url: "https://e.com/", background: true, inPlaceOf: c });
   assert.equal(result.ok, true);
-  assert.deepEqual(splitTabIdsOf(S().splits[splitId]), [b, result.tabId, d]);
-  assert.deepEqual(S().windows[w].tabIds, [a, b, result.tabId, d, c]);
+  assert.deepEqual(splitTabIdsOf(S().splits[splitId]), [b, result.tabId, d, fourth.tabId]);
+  assert.deepEqual(S().windows[w].tabIds, [a, b, result.tabId, d, fourth.tabId, c]);
 });
 
 test("a link opened into a pinned two-pane split's other pane is pinned in its place, and the other window's copy follows", () => {

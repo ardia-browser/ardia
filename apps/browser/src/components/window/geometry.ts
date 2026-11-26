@@ -5,7 +5,7 @@ export type Rect = { x: number; y: number; width: number; height: number };
 
 const MIN_PANE = 220;
 
-export type Divider = { kind: "root"; index: number; rect: Rect; vertical: boolean } | { kind: "stack"; rect: Rect; vertical: boolean };
+export type Divider = { kind: "root"; index: number; rect: Rect; vertical: boolean } | { kind: "stack"; index: number; rect: Rect; vertical: boolean };
 
 type SplitGeometry = { panes: Record<string, Rect>; dividers: Divider[] };
 
@@ -42,6 +42,7 @@ export function splitGeometry(split: SplitView, width: number, height: number, g
       const d = inner[0]!;
       dividers.push({
         kind: "stack",
+        index: i,
         vertical: !horizontal,
         rect: horizontal ? { x: slotRect.x, y: d.size, width: slotRect.width, height: gap } : { x: d.size, y: slotRect.y, width: gap, height: slotRect.height },
       });

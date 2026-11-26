@@ -6,7 +6,7 @@ import { withOptionAlternate } from "../app/menuSections";
 import { storeAction, useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { MAX_SPLIT_PANES, type OpenPaneOptions, splitOf, type SplitSide, splitTabIds, splitTabIdsOf } from "./splits";
-import { canInsertPane, paneNeighbor, type PaneDirection } from "./layout";
+import { canInsertPane, movePaneTo, paneNeighbor, type PaneDirection } from "./layout";
 import { splitLane, type SplitLane, splitsOnRow } from "./lanes";
 import type { AdoptId, SplitView } from "../browser/types";
 import { noteSplit } from "../telemetry/usage";
@@ -98,6 +98,17 @@ export function openLinkInSplit(sourceTabId: string, url: string, adoptId?: Adop
   const target = panes && (next || panes.length >= MAX_SPLIT_PANES) ? (next ?? panes.at(-1)) : undefined;
   const inPlaceOf = target !== sourceTabId ? target : undefined;
   openSplitPane(source.windowId, { anchorTabId: sourceTabId, url, side: "right", background: true, adoptId, inPlaceOf });
+}
+
+export function canDropSplitPane(tabId: string, anchorTabId: string, side: SplitSide | "center"): boolean {
+  const s = store();
+  const tab = s.tabs[tabId];
+  const anchor = s.tabs[anchorTabId];
+  if (!tab || !anchor || tabId === anchorTabId || tab.windowId !== anchor.windowId || tab.profileId !== anchor.profileId) return false;
+  const split = splitOf(s, anchorTabId);
+  const own = !!split && splitTabIds(split).includes(tabId);
+  if (side === "center") return own;
+  return own ? !!movePaneTo(split!, tabId, anchorTabId, side) : canInsertPane(split, anchorTabId, side);
 }
 
 export function dropTabIntoSplit(tabId: string, targetTabId: string, side: SplitSide): string | null {

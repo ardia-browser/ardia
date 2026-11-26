@@ -147,9 +147,11 @@ test("a third pane dropped on a pinned split row from the list joins it as a pin
   assert.deepEqual(order(w), ["a", "c", "b", "d"]);
   assert.deepEqual(sidebarEntries(S(), w).pinned, [`s:${split}`]);
 
-  assert.equal(dropTabOnRow(id.d, id.a, "right"), null);
-  assert.deepEqual(splitTabIdsOf(S().splits[split]), [id.c, id.a, id.b]);
-  assert.equal(lane(id.d), "list", "a refused drop leaves the tab where it was");
+  assert.deepEqual(dropTabOnRow(id.d, id.a, "right"), { adopted: "row" });
+  const fifth = S().newTab(w, { url: "https://five.example/", background: true });
+  assert.equal(dropTabOnRow(fifth, id.a, "right"), null);
+  assert.deepEqual(splitTabIdsOf(S().splits[split]), [id.c, id.a, id.b, id.d]);
+  assert.equal(lane(fifth), "list", "a refused drop leaves the tab where it was");
   assert.equal(useToasts.getState().toasts[w]?.title, "Cannot Add New Pane");
 });
 
@@ -219,7 +221,9 @@ test("a drop that makes no split says so: a refused pair, a pane already in the 
   S().pinTabs([third], true, true);
   assert.deepEqual(dropTabOnRow(third, id.b, "right"), { adopted: null }, "a pinned row joins a pinned split with no section change");
   const fourth = S().newTab(w, { url: "https://f.com/", background: true });
-  assert.equal(dropTabOnRow(fourth, id.b, "right"), null, "a full split");
-  assert.equal(splitTabIdsOf(S().splits[split]).length, 3);
+  assert.deepEqual(dropTabOnRow(fourth, id.b, "right"), { adopted: "row" });
+  const fifth = S().newTab(w, { url: "https://five.example/", background: true });
+  assert.equal(dropTabOnRow(fifth, id.b, "right"), null, "a full split");
+  assert.equal(splitTabIdsOf(S().splits[split]).length, 4);
   assert.equal(useToasts.getState().toasts[w]?.title, "Cannot Add New Pane");
 });

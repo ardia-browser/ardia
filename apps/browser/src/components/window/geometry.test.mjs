@@ -25,3 +25,29 @@ test("double-clicking a split divider evens the two panes it separates and leave
   assert.deepEqual(evenPair([0.2, 0.5, 0.3], 1), [0.2, 0.4, 0.4]);
   assert.deepEqual(evenPair([0.6, 0.4], 1), [0.6, 0.4]);
 });
+
+test("a grid lays out both stacks with their own sizes and divider identities in either orientation", () => {
+  for (const orientation of ["horizontal", "vertical"]) {
+    const slots = [
+      { size: 0.4, stack: ["a", "b"], stackSizes: [0.3, 0.7] },
+      { size: 0.6, stack: ["c", "d"], stackSizes: [0.6, 0.4] },
+    ];
+    const { panes, dividers } = splitGeometry({ orientation, slots }, 1009, 809, GAP);
+    const horizontal = orientation === "horizontal";
+    const main = horizontal ? "x" : "y";
+    const cross = horizontal ? "y" : "x";
+    const length = horizontal ? "width" : "height";
+    const depth = horizontal ? "height" : "width";
+    assert.equal(panes.a[main], 0);
+    assert.equal(panes.a[length], horizontal ? 400 : 320);
+    assert.equal(panes.a[cross], 0);
+    assert.equal(panes.b[cross], panes.a[depth] + GAP);
+    assert.equal(panes.c[cross], 0);
+    assert.equal(panes.d[cross], panes.c[depth] + GAP);
+    assert.equal(panes.d[main] + panes.d[length], horizontal ? 1009 : 809);
+    assert.equal(panes.b[cross] + panes.b[depth], horizontal ? 809 : 1009);
+    assert.equal(panes.d[cross] + panes.d[depth], horizontal ? 809 : 1009);
+    assert.deepEqual(dividers.map(({ kind, index }) => [kind, index]), [["stack", 0], ["root", 0], ["stack", 1]]);
+    assert.notEqual(dividers[0].rect[cross], dividers[2].rect[cross]);
+  }
+});

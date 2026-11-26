@@ -81,10 +81,10 @@ test("a split keeps every pane even when one of its pages is already pinned", ()
   assert.ok(splitUrls().some((u) => u.join() === "https://spec.example/,https://figma.example/"));
 });
 
-test("an Arc split of four panes becomes a split of three and a tab beside it", () => {
+test("an Arc split of four panes arrives whole", () => {
   start();
   const four = split(...["a", "b", "c", "d"].map((n) => link(`https://${n}.example/`)));
   importArcSpace(P, { id: "S-WORK", name: "Work", profileId: P, pinned: [four], tabs: [] });
-  assert.deepEqual(splitUrls(), [["https://a.example/", "https://b.example/", "https://c.example/"]]);
+  assert.deepEqual(splitUrls(), [["https://a.example/", "https://b.example/", "https://c.example/", "https://d.example/"]]);
   assert.ok(isPinnedRow(Object.values(S().tabs).find((t) => t.url === "https://d.example/")));
 });

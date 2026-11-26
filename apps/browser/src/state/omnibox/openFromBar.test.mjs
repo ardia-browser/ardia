@@ -4,7 +4,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
 const { barSplitsFrom, dispositionFor, openFromBar, switchFromBar } = await import("./openFromBar.ts");
 const { setOpeningGate } = await import("../tabs/openingGate.ts");
-const { splitOf, splitTabIds } = await import("../splits/splits.ts");
+const { MAX_SPLIT_PANES, splitOf, splitTabIds } = await import("../splits/splits.ts");
 await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
@@ -34,15 +34,20 @@ test("⌥↩ into a full split opens a background tab instead of dropping the UR
   S().hydrate({});
   const w = S().createWindow({ url: "https://a.com/" });
   const a = S().windows[w].tabIds[0];
-  const b = S().openSplitPane(w, { anchorTabId: a, url: "https://b.com/" }).tabId;
-  const c = S().openSplitPane(w, { anchorTabId: b, url: "https://c.com/" }).tabId;
+  const panes = [a];
+  const urls = ["https://a.com/"];
+  for (let i = 1; i < MAX_SPLIT_PANES; i++) {
+    const url = `https://pane${i}.com/`;
+    panes.push(S().openSplitPane(w, { anchorTabId: panes.at(-1), url }).tabId);
+    urls.push(url);
+  }
   S().activate(a);
   S().openPanel(w, "https://keep.example/");
   const before = new Set(S().windows[w].tabIds);
   openFromBar("https://d.com/", a, "split");
   assert.deepEqual(
     splitTabIds(splitOf(S(), a)).map((id) => S().tabs[id].url),
-    ["https://a.com/", "https://b.com/", "https://c.com/"],
+    urls,
   );
   const added = S().windows[w].tabIds.filter((id) => !before.has(id));
   assert.equal(added.length, 1);
@@ -50,10 +55,11 @@ test("⌥↩ into a full split opens a background tab instead of dropping the UR
   assert.equal(S().tabs[added[0]].openerId, null, "overflow tab is not an opener child");
   assert.equal(activeTabId(S(), w), a, "the new tab stays in the background");
   assert.equal(S().windowUi[w].panel.open, false);
-  S().activate(c);
-  S().closeTab(c);
+  const last = panes.pop();
+  S().activate(last);
+  S().closeTab(last);
   assert.notEqual(activeTabId(S(), w), added[0], "closing the active last pane does not jump to the overflow tab");
-  assert.ok([a, b].includes(activeTabId(S(), w)), "focus stays on a remaining split pane");
+  assert.ok(panes.includes(activeTabId(S(), w)), "focus stays on a remaining split pane");
   assert.ok(splitOf(S(), a));
 });
 

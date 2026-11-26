@@ -107,3 +107,23 @@ test("a version 7 split or parked split whose slots don't read is dropped, not h
   assert.deepEqual(Object.keys(S().splits), ["ok"]);
   assert.deepEqual(S().parkedPins.default.splits, []);
 });
+
+test("a two-stack split saves and restores both stacks and their independent sizes", async () => {
+  stub.docs.clear();
+  const stop = startPersistence();
+  const w = S().createWindow({ url: "https://a.example/" });
+  const a = S().windows[w].tabIds[0];
+  const [b, c, d] = ["b", "c", "d"].map((host) => S().newTab(w, { url: `https://${host}.example/`, background: true }));
+  const splitId = S().createSplit([a, c]);
+  S().openSplitPane(w, { tabId: b, anchorTabId: a, side: "bottom" });
+  S().openSplitPane(w, { tabId: d, anchorTabId: c, side: "bottom" });
+  const slots = [{ size: 0.6, stack: [a, b], stackSizes: [0.3, 0.7] }, { size: 0.4, stack: [c, d], stackSizes: [0.8, 0.2] }];
+  useBrowser.setState({ splits: { ...S().splits, [splitId]: { ...S().splits[splitId], slots } } });
+  S().updateTab(a, { title: "saved grid" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  flushPersistence();
+  stop();
+  S().hydrate(loadSession());
+  assert.deepEqual(S().splits[splitId].slots, slots);
+  assert.equal(S().splits[splitId].orientation, "horizontal");
+});

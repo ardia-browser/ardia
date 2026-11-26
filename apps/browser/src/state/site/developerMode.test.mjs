@@ -89,7 +89,7 @@ test("Split View Options adds a pane on the side picked, and is disabled once th
     const panes = splitTabIds(split);
     assert.equal(panes.length, 2);
     assert.deepEqual(panes.slice(1), [tabId], "the new pane went to the left of the page");
-    await showSplitSidesMenu(tabId);
+    for (let count = panes.length; count < MAX_SPLIT_PANES; count++) await showSplitSidesMenu(tabId);
     assert.equal(splitTabIds(splitOf(S(), tabId)).length, MAX_SPLIT_PANES);
     await showSplitSidesMenu(tabId);
   } finally {
@@ -97,7 +97,7 @@ test("Split View Options adds a pane on the side picked, and is disabled once th
   }
   const actions = (items) => items.filter((it) => it.id).map((it) => [it.id, it.enabled]);
   assert.deepEqual(actions(shown[0]), [["right", true], ["left", true], ["top", true], ["bottom", true]]);
-  assert.deepEqual(actions(shown[2]), [["right", false], ["left", false], ["top", false], ["bottom", false]]);
+  assert.deepEqual(actions(shown.at(-1)), [["right", false], ["left", false], ["top", false], ["bottom", false]]);
   assert.equal(splitTabIds(splitOf(S(), tabId)).length, MAX_SPLIT_PANES);
 });
 
@@ -107,4 +107,29 @@ test("the address the developer bar shows leaves out a username and password", a
   assert.equal(withoutUserInfo("https://user@example.com/"), "https://example.com/");
   assert.equal(withoutUserInfo("http://localhost:3000/@me"), "http://localhost:3000/@me");
   assert.equal(withoutUserInfo("http://localhost:5173/"), "http://localhost:5173/");
+});
+
+test("Split View Options disables cross-axis additions on a stacked pane with room", async () => {
+  const { shellNativeModules } = await import("../../test-native/shell.ts");
+  const { showSplitSidesMenu } = await import("./developerMode.ts");
+  const S = () => useBrowser.getState();
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://one.example/" });
+  const a = S().windows[w].tabIds[0];
+  const b = S().newTab(w, { url: "https://two.example/", background: true });
+  const id = S().createSplit([a, b], "vertical");
+  const c = S().openSplitPane(w, { anchorTabId: b, side: "right" }).tabId;
+  const menus = shellNativeModules.ArdiaMenus;
+  const real = menus.showMenu;
+  let shown = [];
+  menus.showMenu = (items) => ((shown = items), Promise.resolve(null));
+  try {
+    await showSplitSidesMenu(c);
+    assert.deepEqual(shown.filter((item) => item.id).map((item) => [item.id, item.enabled]), [["right", false], ["left", false], ["top", true], ["bottom", true]]);
+    S().toggleSplitOrientation(id);
+    await showSplitSidesMenu(c);
+    assert.deepEqual(shown.filter((item) => item.id).map((item) => [item.id, item.enabled]), [["right", true], ["left", true], ["top", false], ["bottom", false]]);
+  } finally {
+    menus.showMenu = real;
+  }
 });

@@ -83,6 +83,9 @@ const LOGIN_LIST_FIELDS: Record<LoginListCount, string> = {
   shown: "apple_passwords_login_list_shown",
   filled: "apple_passwords_login_list_filled",
   fillFailed: "apple_passwords_fills_failed",
+  connectShown: "apple_passwords_login_list_connect_shown",
+  connectPicked: "apple_passwords_login_list_connect_picked",
+  notNow: "apple_passwords_login_list_not_now",
 };
 
 const FIELDS = [...Object.values(LOGIN_LIST_FIELDS), ...Object.values(PAIRING_FIELDS), ...Object.values(PAIRING_FAILURES), ...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), ...Object.values(ME_CARD_FIELDS), ...Object.values(OFFER_FIELDS).flatMap(Object.values), ...Object.values(ICLOUD_EXTENSION_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];

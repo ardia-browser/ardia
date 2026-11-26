@@ -226,6 +226,7 @@ Each test is one red → green cycle, written and run one at a time in the order
 | B2 | 3 | A page message that names another site's origin has no effect on which logins are listed | a page pretending to be another site | — |
 | E31 | 1 | After the whole end-to-end run, no fixture password or code appears in the app's or the engine's logs | secrets in logs | logs written outside the instance's data dir |
 | S10 | 2 | The new counts are recorded only while sharing is on, carry no site or text, and are listed in "What's Sent" | telemetry outside the consent model | — |
+| S11 | 2 | Onboarding offers Apple Passwords (entitled Macs only) and the Me card once each; a declined offer never returns | a missing or nagging offer | — |
 
 **Setup the end-to-end check needs:** the fake helper (real framing and SRP, fixture logins and codes, and switches for wrong code, killed at launch, locked, refused, Pairing ended), fixture pages served from two sites plus an http site (sign-in, sign-up, change-password, code, search and newsletter boxes, a cross-site frame, a page that navigates away), and a fixture Me card the reader loads in place of Contacts.
 

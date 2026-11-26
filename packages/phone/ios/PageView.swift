@@ -413,6 +413,10 @@ final class PageView: ExpoView {
   override func layoutSubviews() {
     super.layoutSubviews()
     if let hostedWebView, hostedWebView.superview === self { place(hostedWebView, in: webViewFrame) }
+    MainActor.assumeIsolated {
+      if let stage = summaryStage, stage.phase == .held, stage.pageSize != webViewFrame.size { endPinchNow() }
+      if let leaving, leaving.stage.pageSize != webViewFrame.size { finishLeaving() }
+    }
     if pinsSafeArea { applyObscuredInsets() }
     MainActor.assumeIsolated { reportDrawnSoon() }
   }

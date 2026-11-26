@@ -62,7 +62,7 @@ extension PageView {
         guard let self, self.pageShotRequest == request else { return }
         if let image { return self.deliverShot(image, request: request, size: size) }
         guard let webView, webView.bounds.width > 0, webView.bounds.height > 0 else { return self.deliverShot(nil, request: request, size: size) }
-        let drawn = UIGraphicsImageRenderer(bounds: webView.bounds).image { _ in webView.drawHierarchy(in: webView.bounds, afterScreenUpdates: false) }
+        let drawn = PageSnapshots.screenCopy(of: webView, width: webView.bounds.width)
         self.deliverShot(drawn, request: request, size: size)
       }
     }
@@ -261,13 +261,14 @@ extension PageView {
   func settlePinch(_ webView: WKWebView) {
     guard webView === hostedWebView, window != nil, !UIAccessibility.isReduceMotionEnabled else { return restorePage(webView) }
     lastHold = nil
+    let request = pageShotRequest
     UIView.animate(springDuration: 0.6, bounce: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
       webView.transform = .identity
       webView.layer.cornerRadius = 0
     } completion: { [weak self, weak webView] _ in
       guard let webView else { return }
       guard let self else { return Self.unpinch(webView) }
-      guard self.summaryStage == nil, self.leaving == nil, self.madePinchWatcher?.isHolding != true else { return }
+      guard self.pageShotRequest == request, self.summaryStage == nil, self.leaving == nil, self.madePinchWatcher?.isHolding != true else { return }
       self.restorePage(webView)
     }
   }
@@ -298,7 +299,7 @@ extension PageView {
   @MainActor
   func begin(_ trigger: PageSummarySession.Trigger, on stage: PageSummaryStage) -> Bool {
     guard PageSummarySwitch.shared.isOn, let pageID = registeredPageID, let page, let moment = pinchMoment(), moment.isVisible, !moment.isLoading,
-          stageNavigation == page.navigationGeneration else { return false }
+          stageNavigation == page.navigationGeneration, shotGeometryHolds(stage.pageSize) else { return false }
     let session = PageSummarySession(trigger: trigger, tab: page)
     let isPrivate = page.isPrivate
     session.onSettled = { settled in

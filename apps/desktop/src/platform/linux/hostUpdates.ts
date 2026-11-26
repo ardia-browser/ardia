@@ -32,11 +32,10 @@ const FOLLOW_RUN_EVERY_MS = 2_000;
 const FOLLOW_RUN_FOR_MS = 75 * 60 * 1000;
 export const UPDATE_CHECK_LOCK = "ardia.linux.update-checks";
 const UPDATE_PREFERENCES_LOCK = "ardia.linux.update-preferences";
-export const AUR_UPDATE_COMMAND = "yay -Syu ardia-bin";
-const FLATPAK_ID = "dev.ardia.Ardia";
+const KNOWN_MANAGERS: ReadonlySet<unknown> = new Set(["pacman", "rpm", "flatpak"]);
 
 type InstallKind = UpdateInstallKind | "managed" | "unsupported";
-type PackageManager = "flatpak" | "package";
+export type PackageManager = "pacman" | "rpm" | "flatpak" | "package";
 type Phase = "idle" | "downloading" | "installing" | "ready" | "failed";
 type EngineStatus = { phase: Phase; version: string | null; reason: string | null; kind: InstallKind; run: number };
 type Preferences = { automaticChecks: boolean; automaticDownloads: boolean; lastCheck: number | null; channel: UpdateChannel | null; notified: string | null; failed: string | null; readyNotified: string | null };
@@ -59,6 +58,7 @@ type UpdateDeps = {
   offerInstall: (release: Release, install: () => void) => void;
   ready: (version: string, restart: () => void) => void;
   managed: (release: Release, current: string, asked: boolean, manager: PackageManager) => Promise<void>;
+  packageManager: () => Promise<PackageManager>;
   open: (url: string) => boolean;
   showsToasts?: boolean;
   locks?: UpdateLocks;
@@ -89,7 +89,7 @@ function readEngineStatus(answer: unknown): EngineStatus | null {
 const knownKinds = new WeakMap<ArdiaHost, InstallKind>();
 export const installsUpdates = (host: ArdiaHost | undefined) => !!host && installs(knownKinds.get(host));
 const selfUpdateAvailable = (host: ArdiaHost) => SELF_UPDATE_METHODS.every((method) => hostSupports(method, host));
-export const packageManager = (host: ArdiaHost): PackageManager => (hostLaunchConfig(host).configDirectory.includes(`/.var/app/${FLATPAK_ID}/`) ? "flatpak" : "package");
+export const readPackageManager = (named: unknown): PackageManager => (KNOWN_MANAGERS.has(named) ? (named as PackageManager) : "package");
 const releasePage = (version: string): Release => ({ version, url: `${RELEASES_PAGE}/tag/v${version}`, prerelease: channelOf(version) === "nightly" });
 
 function readPreferences(read: UpdateDeps["read"]): Preferences {
@@ -246,7 +246,7 @@ export function linuxUpdater(deps: UpdateDeps) {
   async function deliver(release: Release, current: string, asked: boolean, saved: Preferences, consent: ConsentToken | null) {
     const status = await engineStatus();
     if (status?.kind === "managed") {
-      const manager = packageManager(deps.host);
+      const manager = await deps.packageManager().catch((): PackageManager => "package");
       if (!asked && !(await offeredOnce(release))) return;
       noteManagedUpdateOffer(manager, consent);
       return deps.managed(release, current, asked, manager);

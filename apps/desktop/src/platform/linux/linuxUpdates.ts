@@ -1,6 +1,6 @@
 import { cleanUrl } from "@ardia/core";
 import type { ArdiaHost } from "../../host";
-import { AUR_UPDATE_COMMAND, linuxUpdater, scheduleUpdateChecks, updatesAvailable, type LinuxUpdater, type UpdateLocks } from "./hostUpdates.ts";
+import { linuxUpdater, readPackageManager, scheduleUpdateChecks, updatesAvailable, type LinuxUpdater, type PackageManager, type UpdateLocks } from "./hostUpdates.ts";
 import { isLinuxUtility } from "../../session.ts";
 import { refreshDocument } from "../../shims/shellBase";
 import { systemInfo } from "../../../../browser/src/platform/app";
@@ -15,6 +15,27 @@ import { noteUpdateNoticeDismissed, noteUpdatePageOpened } from "../../../../bro
 
 const updaters = new WeakMap<ArdiaHost, LinuxUpdater>();
 const UPDATE_ICON = "arrow.down.circle";
+
+const MANAGED_UPDATE: Record<PackageManager, { toast: string; dialog: string }> = {
+  pacman: {
+    toast: "Build the new ardia-bin package from its release page.",
+    dialog: "This Arch package was built from its source package, and ardia-bin isn't on the AUR yet: download the new ardia-bin source package from its release page and build it with makepkg -si.",
+  },
+  rpm: {
+    toast: "Install the new .rpm from its release page.",
+    dialog: "This .rpm was installed from a downloaded file, so dnf and zypper have no repository to update it from: install the new .rpm from its release page.",
+  },
+  flatpak: {
+    toast: "Install the new .flatpak from its release page.",
+    dialog: "This Flatpak was installed from a .flatpak file, which flatpak update can't update: install the new .flatpak from its release page.",
+  },
+  package: {
+    toast: "Update it with your package manager, or download it from its release page.",
+    dialog: "Another package manager installed Ardia, so update it there, or download the new version from its release page.",
+  },
+};
+
+const loadPackageManager = () => import("chrome://ardia/package-manager.js").then((marker) => readPackageManager(marker.default));
 
 const browserLocks = (): UpdateLocks | undefined => (typeof navigator === "undefined" ? undefined : (navigator as { locks?: UpdateLocks }).locks);
 
@@ -32,6 +53,7 @@ export function linuxUpdaterFor(host: ArdiaHost): LinuxUpdater {
       windowId,
     }).then((answer) => void (answer.confirmed && copyAddress(cleanUrl(url))), () => {});
   const open = (url: string) => (browserWindow ? (openUrls([url], windowId), true) : openUrlFromSettings(url) || (offerLink(url), false));
+  let installedBy: Promise<PackageManager> | undefined;
   const toast: typeof showToast = (...args) => {
     if (browserWindow) showToast(...args);
   };
@@ -80,33 +102,27 @@ export function linuxUpdaterFor(host: ArdiaHost): LinuxUpdater {
         secondary: { title: "Later", run: noteUpdateNoticeDismissed },
       }),
     managed: async (release, current, asked, manager) => {
-      const flatpak = manager === "flatpak";
+      const consent = consentToken();
+      const words = MANAGED_UPDATE[manager];
       if (!asked) {
-        toast(
-          windowId,
-          `Ardia ${release.version} is available`,
-          flatpak ? "Install the new .flatpak from its release page." : `Update it with your package manager, like ${AUR_UPDATE_COMMAND}, or install the new .rpm from its release page.`,
-          {
-            icon: UPDATE_ICON,
-            sticky: true,
-            action: { title: "View", run: () => void (open(release.url) && noteUpdatePageOpened()) },
-            secondary: { title: "Later", run: noteUpdateNoticeDismissed },
-          },
-        );
+        toast(windowId, `Ardia ${release.version} is available`, words.toast, {
+          icon: UPDATE_ICON,
+          sticky: true,
+          action: { title: "View", run: () => void (open(release.url) && noteUpdatePageOpened()) },
+          secondary: { title: "Later", run: noteUpdateNoticeDismissed },
+        });
         return;
       }
-      const consent = consentToken();
       const answer = await confirm({
         title: `Ardia ${release.version} is available`,
-        message: flatpak
-          ? `You have Ardia ${current}. This Flatpak was installed from a .flatpak file, which flatpak update can't update: install the new .flatpak from its release page.`
-          : `You have Ardia ${current}. Your package manager installed Ardia, so update it there: for the AUR package, run ${AUR_UPDATE_COMMAND} or use your AUR helper; for the .rpm, install the new one from its release page with dnf or zypper.`,
+        message: `You have Ardia ${current}. ${words.dialog}`,
         confirmTitle: "Open Release Page",
         cancelTitle: "Later",
         windowId,
       }).catch(() => null);
       if (answer?.confirmed && open(release.url)) noteUpdatePageOpened(consent);
     },
+    packageManager: () => (installedBy ??= loadPackageManager().catch((): PackageManager => "package")),
     open,
     showsToasts: browserWindow,
     locks: browserLocks(),

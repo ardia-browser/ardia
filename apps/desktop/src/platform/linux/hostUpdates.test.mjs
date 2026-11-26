@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CHECK_EVERY_MS, FIRST_CHECK_AFTER_MS, UPDATE_CHECK_LOCK, UPDATE_PREFERENCES, WATCH_EVERY_MS, installsUpdates, linuxUpdater, packageManager, scheduleUpdateChecks } from "./hostUpdates.ts";
+import { CHECK_EVERY_MS, FIRST_CHECK_AFTER_MS, UPDATE_CHECK_LOCK, UPDATE_PREFERENCES, WATCH_EVERY_MS, installsUpdates, linuxUpdater, readPackageManager, scheduleUpdateChecks } from "./hostUpdates.ts";
 import { SELF_UPDATE_METHODS } from "../../hostCapabilities.ts";
 import { compareVersions, linuxReleases, newestRelease } from "./updateReleases.ts";
 import { takeUpdateCounts } from "../../../../browser/src/state/telemetry/updateCounts.ts";
@@ -81,7 +81,7 @@ function lockManager() {
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-function harness({ version = "0.2.45", body = JSON.stringify(LIST), status = 200, launch = {}, capabilities = ["ArdiaUpdates.releases"], disk, engine, locks, slowDisk = false, wait, showsToasts, opens = true } = {}) {
+function harness({ version = "0.2.45", body = JSON.stringify(LIST), status = 200, launch = {}, capabilities = ["ArdiaUpdates.releases"], disk, engine, locks, slowDisk = false, wait, showsToasts, opens = true, manager = async () => "package" } = {}) {
   const docs = new Map();
   const seen = { asked: [], told: [], offered: [], offeredInstalls: [], ready: [], managed: [], opened: [], requests: 0, statuses: 0 };
   const host = {
@@ -114,7 +114,8 @@ function harness({ version = "0.2.45", body = JSON.stringify(LIST), status = 200
     offer: (r, failed) => void seen.offered.push(failed ? `${r.version} failed` : r.version),
     offerInstall: (r, run) => void seen.offeredInstalls.push({ version: r.version, run }),
     ready: (v, restart) => void seen.ready.push({ version: v, restart }),
-    managed: async (r, current, asked, manager) => void seen.managed.push([r.version, current, asked, manager]),
+    managed: async (r, current, asked, named) => void seen.managed.push([r.version, current, asked, named]),
+    packageManager: async () => (seen.managerReads = (seen.managerReads ?? 0) + 1, manager()),
     open: (url) => (seen.opened.push(url), opens),
     showsToasts,
     locks,
@@ -424,20 +425,36 @@ test("an install the package manager owns gets the managed offer, never a self-u
   assert.equal(installsUpdates(host), false, "Settings hides Automatically update Ardia");
 });
 
-test("a Flatpak is told apart by its data folder, so the offer names Flatpak, and each offer is counted by manager", async () => {
+test("the offer names the manager the package marked, falls back to package when it can't tell, and each offer is counted by manager", async () => {
   takeUpdateCounts();
-  const flatpak = harness({ engine: fakeEngine({ kind: "managed" }), launch: { configDirectory: "/home/u/.var/app/dev.ardia.Ardia/config/ardia/config" } });
-  await flatpak.updater.methods.checkForUpdates();
-  await flatpak.updater.check(false);
-  await flatpak.updater.check(false);
-  assert.deepEqual(flatpak.seen.managed, [["0.2.46", "0.2.45", true, "flatpak"], ["0.2.46", "0.2.45", false, "flatpak"]]);
-  const other = harness({ engine: fakeEngine({ kind: "managed" }), launch: { configDirectory: "/home/u/.config/ardia/config" } });
-  await other.updater.check(false);
-  assert.deepEqual(other.seen.managed, [["0.2.46", "0.2.45", false, "package"]]);
+  for (const named of ["pacman", "rpm", "flatpak"]) {
+    const { updater, seen } = harness({ engine: fakeEngine({ kind: "managed" }), manager: async () => named });
+    await updater.methods.checkForUpdates();
+    await updater.check(false);
+    await updater.check(false);
+    assert.deepEqual(seen.managed, [["0.2.46", "0.2.45", true, named], ["0.2.46", "0.2.45", false, named]]);
+  }
+  const unreadable = harness({ engine: fakeEngine({ kind: "managed" }), manager: async () => { throw new Error("no marker"); } });
+  await unreadable.updater.check(false);
+  assert.deepEqual(unreadable.seen.managed, [["0.2.46", "0.2.45", false, "package"]]);
   const counts = takeUpdateCounts();
-  assert.equal(counts.update_offers_managed_flatpak, 2);
-  assert.equal(counts.update_offers_managed_package, 1);
-  assert.equal(packageManager({ bootstrap: { launchConfig: { configDirectory: "/srv/.var/app/dev.ardia.Ardia.Devel/config" } } }), "package");
+  assert.deepEqual(
+    [counts.update_offers_managed_pacman, counts.update_offers_managed_rpm, counts.update_offers_managed_flatpak, counts.update_offers_managed_package],
+    [2, 2, 2, 1],
+  );
+});
+
+test("a self-updating install never reads the package manager marker", async () => {
+  const { updater, seen } = harness({ engine: fakeEngine({ kind: "tarball" }), manager: async () => "pacman" });
+  await updater.check(false);
+  await settled(() => seen.ready.length === 1);
+  takeUpdateCounts();
+  assert.deepEqual([seen.managerReads, seen.managed], [undefined, []]);
+});
+
+test("only the managers Ardia ships a package for are read from the marker", () => {
+  assert.deepEqual(["pacman", "rpm", "flatpak"].map(readPackageManager), ["pacman", "rpm", "flatpak"]);
+  for (const other of [undefined, null, "", "dpkg", "Pacman", 1, {}, "package"]) assert.equal(readPackageManager(other), "package");
 });
 
 test("an install that can't update itself, and an engine without self-update, keep the release page", async () => {

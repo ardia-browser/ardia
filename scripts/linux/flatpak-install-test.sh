@@ -110,6 +110,9 @@ echo "ok   Import reads host browser profiles at \$XDG_CONFIG_HOME and ~/.mozill
 kind=$(flatpak run --command=/app/lib/ardia/ardia-update "$app" kind) || fail "ardia-update kind exited $?"
 [ "$kind" = managed ] || fail "ardia-update kind says $kind, not managed"
 echo "ok   updates are left to Flatpak (ardia-update kind: managed)"
+marker=$(flatpak run --command=cat "$app" /app/lib/ardia/ardia-ui/package-manager.js 2>&1) || fail "no package-manager.js in the Flatpak: $marker"
+[ "$marker" = "export default \"flatpak\";" ] || fail "the UI is not told Flatpak installed Ardia: $marker"
+echo "ok   the update dialog is told Flatpak installed it"
 flatpak run --env=ARDIA_BACKGROUND=1 "$app" --ozone-platform=headless --use-angle=swiftshader --remote-debugging-port=9333 about:blank >/tmp/run.log 2>&1 &
 started=""
 for _ in $(seq 1 60); do

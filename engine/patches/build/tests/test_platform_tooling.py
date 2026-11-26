@@ -737,6 +737,7 @@ class PackagingTests(unittest.TestCase):
             self.assertTrue((pkgdir / 'usr/share/polkit-1/actions/dev.ardia.linux.policy').is_file())
             self.assertTrue((pkgdir / 'usr/bin/ardia').is_file())
             self.assertTrue((pkgdir / 'usr/lib/ardia/chrome').is_file())
+            self.assertEqual((pkgdir / 'usr/lib/ardia/ardia-ui/package-manager.js').read_text(), 'export default "pacman";\n')
         if shutil.which('makepkg'):
             with tempfile.TemporaryDirectory() as scratch:
                 shutil.copy(REPO / 'scripts/linux/arch/PKGBUILD', scratch)

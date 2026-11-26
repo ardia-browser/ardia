@@ -252,6 +252,22 @@ def deb_md5sums(tree):
     return ''.join(lines)
 
 
+PACKAGE_MANAGER_MODULE = 'ardia-ui/package-manager.js'
+
+
+def package_manager_module(manager):
+    if manager not in ('pacman', 'rpm', 'flatpak'):
+        raise ValueError(f'no package manager named {manager!r}')
+    return f'export default "{manager}";'
+
+
+def mark_package_manager(runtime, manager):
+    marker = runtime / PACKAGE_MANAGER_MODULE
+    if not (marker.parent / 'index.html').is_file():
+        raise ValueError(f'{marker.parent} has no index.html to mark as installed by {manager}')
+    marker.write_text(package_manager_module(manager) + '\n')
+
+
 def stage_usr(root, tree):
     usr = tree / 'usr'
     (usr / 'lib').mkdir(parents=True)
@@ -403,6 +419,7 @@ cp -a '{tree}/.' %{{buildroot}}/
 
 def stage_rpm_tree(root, tree, version):
     usr = stage_usr(root, tree)
+    mark_package_manager(usr / 'lib/ardia', 'rpm')
     policy = usr / 'share/polkit-1/actions/dev.ardia.linux.policy'
     policy.write_text(without_update_action(policy.read_text()))
     licenses = usr / 'share/licenses/ardia'
@@ -465,6 +482,7 @@ def flatpak_manifest(source):
                 'install -d /app/lib /app/bin',
                 'cp -a lib/ardia /app/lib/ardia',
                 'chmod 0755 /app/lib/ardia/chrome-sandbox',
+                f"test -f /app/lib/ardia/ardia-ui/index.html && echo '{package_manager_module('flatpak')}' > /app/lib/ardia/{PACKAGE_MANAGER_MODULE}",
                 'ln -s ../lib/ardia/ardia-launch /app/bin/ardia',
                 'install -Dm644 cobalt.ini /app/etc/cobalt.ini',
                 f'sed -e "s/^Icon=ardia$/Icon={FLATPAK_ID}/" share/applications/ardia.desktop > {FLATPAK_ID}.desktop',

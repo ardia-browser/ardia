@@ -24,7 +24,7 @@ string, a concurrent run, a relative folder and an AppImage replaced after
 Ardia started, that the reads it makes as the user hold no descriptor to its
 private copies, and that its watchdog stops a stalled step. In archlinux (default) it
 installs the AUR PKGBUILD built from the OLD tarball and checks kind is
-managed.
+managed and that the update dialog is told pacman installed it.
 
   --work DIR            build the releases and fixtures in DIR (default: a
                         temporary directory, removed afterwards)
@@ -502,6 +502,8 @@ su builder -c 'cd /home/builder/build && makepkg -d --noconfirm >/tmp/makepkg.lo
 pacman -U --noconfirm -dd /home/builder/build/*.pkg.tar.* >/dev/null
 got=$(su builder -c '/usr/lib/ardia/ardia-update kind')
 if [[ "$got" == managed ]]; then echo "ok   pacman install kind: managed"; else echo "FAIL pacman install kind: wanted managed, got '$got'"; exit 1; fi
+marker=$(cat /usr/lib/ardia/ardia-ui/package-manager.js 2>&1 || true)
+if [[ "$marker" == 'export default "pacman";' ]]; then echo "ok   the update dialog is told pacman installed it"; else echo "FAIL the UI isn't told pacman installed Ardia: '$marker'"; exit 1; fi
 echo "all checks passed"
 CHECK
 

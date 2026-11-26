@@ -24,4 +24,5 @@ sha256sums=('fc7d5072887c578f84f93364b15706bc8e57c67aee5ca9cd5ce6fa9d887ac7b3')
 package() {
   "$srcdir/ardia/install.sh" --prefix /usr --destdir "$pkgdir"
   [ ! -f "$pkgdir/usr/lib/ardia/chrome-sandbox" ] || chmod 4755 "$pkgdir/usr/lib/ardia/chrome-sandbox"
+  printf '%s\n' 'export default "pacman";' > "$pkgdir/usr/lib/ardia/ardia-ui/package-manager.js"
 }

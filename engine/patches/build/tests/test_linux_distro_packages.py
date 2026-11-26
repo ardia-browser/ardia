@@ -203,6 +203,8 @@ class RpmTests(unittest.TestCase):
                 shutil.copyfile(ELF, runtime / name)
                 (runtime / name).chmod(0o755)
             (runtime / 'ardia-launch').write_text('#!/usr/bin/env bash\n')
+            (runtime / 'ardia-ui').mkdir()
+            (runtime / 'ardia-ui/index.html').write_text('<html></html>')
             (root / 'share/applications').mkdir(parents=True)
             for name, entry in formats.desktop_entries().items():
                 (root / 'share/applications' / name).write_text(entry)
@@ -220,9 +222,63 @@ class RpmTests(unittest.TestCase):
         self.assertIn('libsecret-1.so.0()(64bit)', requires)
         self.assertRegex(listing, r'-rwsr-xr-x\s+1 root\s+root .* /usr/lib/ardia/chrome-sandbox\n')
         self.assertRegex(listing, r'/usr/bin/ardia -> \.\./lib/ardia/ardia-launch\n')
+        self.assertRegex(listing, r'-rw-r--r--\s+1 root\s+root .* /usr/lib/ardia/ardia-ui/package-manager\.js\n')
         self.assertNotRegex(listing, r'(?m)^\S+\s+\d+ (?!root\s+root)')
         for name in formats.desktop_entries():
             self.assertRegex(listing, rf'-rw-r--r--\s+1 root\s+root .* /usr/share/applications/{re.escape(name)}\n')
+
+
+class PackageManagerMarkerTests(unittest.TestCase):
+    def staged_root(self, scratch, ui=True):
+        root = pathlib.Path(scratch) / 'ardia'
+        runtime = root / 'lib/ardia'
+        runtime.mkdir(parents=True)
+        if ui:
+            (runtime / 'ardia-ui').mkdir()
+            (runtime / 'ardia-ui/index.html').write_text('<html></html>')
+        (root / 'share/applications').mkdir(parents=True)
+        for name, entry in formats.desktop_entries().items():
+            (root / 'share/applications' / name).write_text(entry)
+        (root / 'share/polkit-1/actions').mkdir(parents=True)
+        shutil.copyfile(LINUX / 'dev.ardia.linux.policy', root / 'share/polkit-1/actions/dev.ardia.linux.policy')
+        (root / 'share/apparmor.d').mkdir(parents=True)
+        shutil.copyfile(LINUX / 'ardia.apparmor', root / 'share/apparmor.d/ardia')
+        return root
+
+    def test_the_rpm_tree_tells_the_ui_rpm_installed_it(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            tree = pathlib.Path(scratch) / 'tree'
+            formats.stage_rpm_tree(self.staged_root(scratch), tree, '0.2.48')
+            marker = tree / 'usr/lib/ardia/ardia-ui/package-manager.js'
+            self.assertEqual(marker.read_text(), 'export default "rpm";\n')
+            self.assertEqual(marker.stat().st_mode & 0o777, 0o644)
+
+    def test_an_rpm_tree_without_the_ui_fails_instead_of_shipping_unmarked(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            with self.assertRaisesRegex(ValueError, 'has no index.html to mark as installed by rpm'):
+                formats.stage_rpm_tree(self.staged_root(scratch, ui=False), pathlib.Path(scratch) / 'tree', '0.2.48')
+
+    def test_the_flatpak_build_tells_the_ui_flatpak_installed_it_and_fails_without_the_ui(self):
+        ardia = formats.flatpak_manifest(FlatpakTests.SOURCE)['modules'][1]
+        [command] = [line for line in ardia['build-commands'] if 'package-manager.js' in line]
+        with tempfile.TemporaryDirectory() as scratch:
+            app = pathlib.Path(scratch) / 'app'
+            local = command.replace('/app/', f'{app}/')
+            (app / 'lib/ardia/ardia-ui').mkdir(parents=True)
+            self.assertNotEqual(subprocess.run(['sh', '-ec', local]).returncode, 0)
+            self.assertFalse((app / 'lib/ardia/ardia-ui/package-manager.js').exists())
+            (app / 'lib/ardia/ardia-ui/index.html').write_text('<html></html>')
+            self.assertEqual(subprocess.run(['sh', '-ec', local]).returncode, 0)
+            self.assertEqual((app / 'lib/ardia/ardia-ui/package-manager.js').read_text(), 'export default "flatpak";\n')
+
+    def test_the_aur_package_writes_the_same_marker_the_formats_write(self):
+        line = f"""  printf '%s\\n' '{formats.package_manager_module('pacman')}' > "$pkgdir/usr/lib/ardia/{formats.PACKAGE_MANAGER_MODULE}"\n"""
+        self.assertIn(line, (ARCH / 'PKGBUILD').read_text())
+
+    def test_only_managers_ardia_packages_for_are_written(self):
+        for manager in ('dpkg', '', 'pacman"; alert(1); "', None):
+            with self.assertRaisesRegex(ValueError, 'no package manager named'):
+                formats.package_manager_module(manager)
 
 
 class FlatpakTests(unittest.TestCase):

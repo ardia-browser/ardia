@@ -162,6 +162,8 @@ command -v curl >/dev/null || fail "no curl, which the bundled CLI installer nee
 kind=$(/usr/lib/ardia/ardia-update kind) || fail "ardia-update kind exited $?"
 [ "$kind" = managed ] || fail "ardia-update kind says $kind, not managed"
 echo "ok   updates are left to $family (ardia-update kind: managed)"
+grep -qx "export default \"rpm\";" /usr/lib/ardia/ardia-ui/package-manager.js || fail "the UI is not told rpm installed Ardia: $(cat /usr/lib/ardia/ardia-ui/package-manager.js 2>&1)"
+echo "ok   the update dialog is told rpm installed it"
 if [ -e /etc/apparmor.d/abi/4.0 ]; then
   grep -q "profile ardia /usr/lib/ardia/chrome " /etc/apparmor.d/ardia || fail "no AppArmor profile for /usr/lib/ardia/chrome"
   echo "ok   AppArmor profile installed"

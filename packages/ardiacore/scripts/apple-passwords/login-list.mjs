@@ -114,5 +114,22 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await tab.close();
       }
     },
+    async E11() {
+      const seen = {};
+      for (const [pathname, field] of [["/search", "#q"], ["/newsletter", "#email"]]) {
+        const tab = await open("example.localhost", pathname);
+        try {
+          await tab.click(field);
+          await waitFor(`${field} focused`, () => tab.value(`${PAGE_EVENTS}.some((e) => e[0] === "focusin" && e[1] === ${q(field.slice(1))}) || null`), 5000);
+          await tab.key("down");
+          const rows = await tab.noList(1500);
+          assert(!rows, `${pathname} opens no list`, rows);
+          seen[pathname] = "no list";
+        } finally {
+          await tab.close();
+        }
+      }
+      return { engine: engineName, ...seen };
+    },
   };
 }

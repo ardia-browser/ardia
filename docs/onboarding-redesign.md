@@ -21,9 +21,10 @@ reflects every choice so far and animates from one state to the next.
 | 5 | Look | Theme color · Auto / Light / Dark · Page frame: Framed / Thin / Edge to edge and a slider (asked with every preset) · Website color in the tab bar on / off. More options: app icon, hide toolbar while scrolling, bookmarks bar. |
 | 6 | Search & privacy | Search engine tiles · Block ads, trackers, cookie banners · Crash reports (today's receipt). |
 | 7 | Pin your apps | today's step, preselected from the imported history once the import has finished |
-| 8 | Make it home | Default browser (7-day trial), Dock, open at login, links from other apps in Little Ardia / a tab |
-| 9 | Want the extras? | Official plugins (`docs/plugins.md` › where they're offered): Command Line, ticked. Install shows what it gets and asks before anything is installed. Left out where no official plugin can be offered. |
-| 10 | Outro | postcard listing what you picked · Get Started / Take the Tour |
+| 8 | Fill from Passwords and Contacts? | Mac only: Use Apple Passwords (entitled Macs only; Continue asks for the Passwords app's code right in the step) · Use my Me card from Contacts (Continue asks macOS for Contacts). Both start unticked. Each offer is asked once: an unticked offer, or Skip, is declined and never shown again. Left out when nothing can be offered. |
+| 9 | Make it home | Default browser (7-day trial), Dock, open at login, links from other apps in Little Ardia / a tab |
+| 10 | Want the extras? | Official plugins (`docs/plugins.md` › where they're offered): Command Line, ticked. Install shows what it gets and asks before anything is installed. Left out where no official plugin can be offered. |
+| 11 | Outro | postcard listing what you picked · Get Started / Take the Tour |
 
 Every screen has Skip, which keeps the preset, and the progress dots. Going back keeps your choices. The `ardia`
 command is offered as an official plugin on screen 9 and in Settings › Plugins.

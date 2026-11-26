@@ -122,3 +122,22 @@ test("S3: picking Apple Passwords asks for the Passwords app's code; the right c
   assert.equal(statusOf(profileId).text, "Connected");
   assert.equal(statusOf(profileId).connect, null);
 });
+
+test("S4: a wrong code shows an error, allows a retry and leaves the choice unchanged until the right code", async () => {
+  const profileId = await settingsOn("notConnected");
+  const before = storedChoice(profileId);
+  managerMenu(profileId).onChange("apple");
+  await flush();
+  const sheet = pairingSheet();
+  sheet.type("111111");
+  sheet.press("Connect");
+  await flush();
+  assert.match(sheet.text, /didn't match/);
+  assert.equal(storedChoice(profileId), before);
+  assert.notEqual(useSettingsSheet.getState().sheet, null, "the sheet stays open for another try");
+  assert.equal(statusOf(profileId), null, "the profile still isn't on Apple Passwords");
+  sheet.type(native.applePasswords.code);
+  sheet.press("Connect");
+  await flush();
+  assert.equal(storedChoice(profileId), "apple");
+});

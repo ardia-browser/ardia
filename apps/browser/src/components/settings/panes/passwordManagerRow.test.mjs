@@ -7,7 +7,7 @@ const nodeRequire = createRequire(import.meta.url);
 globalThis.require = (id) => (/\.png$/.test(id) ? { uri: id } : nodeRequire(id));
 
 await import("../../../test-native/index.ts");
-const { managerPopUp, unavailableNote } = await import("./PasswordManagerRow.tsx");
+const { managerPopUp, offerToSaveHandedOver, unavailableNote } = await import("./PasswordManagerRow.tsx");
 
 const MANAGER = { name: "password-manager", title: "Test Passwords", spec: { fill: "system", fields: ["login"] }, builtIn: true, approval: "h" };
 
@@ -44,4 +44,11 @@ test("a stored plugin that was removed says it isn't installed, never to turn it
   assert.equal(managerPopUp([], "plugin:old-passwords", "ardia", gone).options[1].title, "old-passwords (not installed)");
   assert.match(unavailableNote("plugin:password-manager", "ardia", { title: "Test Passwords", installed: true }), /is off/);
   assert.equal(unavailableNote("plugin:password-manager", "plugin:password-manager", { title: "Test Passwords", installed: true }), null);
+});
+
+test("offer to save stays Ardia's own on Apple Passwords, and is handed over for None and plugins", () => {
+  assert.equal(offerToSaveHandedOver("ardia", [MANAGER]), null);
+  assert.equal(offerToSaveHandedOver("apple", [MANAGER]), null);
+  assert.match(offerToSaveHandedOver("none", [MANAGER]), /extension handles logins/);
+  assert.match(offerToSaveHandedOver("plugin:password-manager", [MANAGER]), /^Test Passwords handles logins/);
 });

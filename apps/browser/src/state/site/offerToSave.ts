@@ -6,7 +6,7 @@ import { resource, store as storeResource } from "../settings/resources";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
 import { noteOfferToSaveRestore, notePasswordManagerRecordFailed } from "../telemetry/passwordManagerCounts";
-import type { PasswordManagerChoice } from "./passwordManagerChoice";
+import { keepsOfferToSave, type PasswordManagerChoice } from "./passwordManagerChoice";
 
 export const passwordAutofill = resource("passwordAutofill", (profile: string) => getPasswordAutofill(profile).catch(() => true));
 
@@ -211,7 +211,7 @@ function offerToSave(profile: string, on: boolean) {
   writeOfferToSave(profile);
 }
 
-export const followMode = (profile: string, mode: PasswordManagerChoice) => offerToSave(profile, mode === "ardia");
+export const followMode = (profile: string, mode: PasswordManagerChoice) => offerToSave(profile, keepsOfferToSave(mode));
 
 export function forgetHeldOffOutside(live: ReadonlySet<string>): Promise<boolean> {
   const gone = (profile: string) => !live.has(profile);

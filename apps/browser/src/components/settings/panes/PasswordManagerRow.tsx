@@ -1,6 +1,6 @@
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { usePlugins } from "../../../state/plugins/store";
-import { choicePlugin, type ManagerPlugin, type PasswordManagerChoice } from "../../../state/site/passwordManagerChoice";
+import { choicePlugin, keepsOfferToSave, type ManagerPlugin, type PasswordManagerChoice } from "../../../state/site/passwordManagerChoice";
 import { choosePasswordManager, useManagerPlugins, useProfilePasswordManager, useProfilesSharingChoice, useStoredPasswordManager } from "../../../state/site/passwordManager";
 import { useEffect } from "react";
 import { applePasswordsConnected, loadApplePasswords, useApplePasswordsOffered } from "../../../state/site/applePasswords";
@@ -74,7 +74,7 @@ function PasswordManagerChoiceRow({ profileId }: { profileId: string }) {
 }
 
 export function offerToSaveHandedOver(effective: PasswordManagerChoice, plugins: readonly ManagerPlugin[]): string | null {
-  if (effective === "ardia") return null;
+  if (keepsOfferToSave(effective)) return null;
   if (effective === "none") return "Your password manager extension handles logins in this profile, so Ardia doesn't offer to save them.";
   const plugin = plugins.find((p) => `plugin:${p.name}` === effective);
   return `${plugin?.title ?? "Another password manager"} handles logins in this profile, so Ardia doesn't offer to save them. Logins already saved in Ardia still fill.`;

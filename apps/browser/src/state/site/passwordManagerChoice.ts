@@ -16,6 +16,7 @@ export const choicePlugin = (choice: string): string | null => (choice.startsWit
 const isPasswordManagerChoice = (value: unknown): value is PasswordManagerChoice =>
   value === "ardia" || value === "apple" || value === "none" || (typeof value === "string" && PLUGIN_CHOICE.test(value));
 export const choiceKind = (choice: PasswordManagerChoice): PasswordManagerKind => (choice === "ardia" || choice === "apple" || choice === "none" ? choice : "plugin");
+export const keepsOfferToSave = (choice: PasswordManagerChoice) => choice === "ardia" || choice === "apple";
 
 type PluginsView = Pick<PluginsStore, "listings" | "records" | "order">;
 

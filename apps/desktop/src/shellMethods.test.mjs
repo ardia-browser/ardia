@@ -51,7 +51,7 @@ const generatedNative = readFileSync(new URL("generated/native.ts", SHELL_SOURCE
 const MAC_ONLY_HOOKS = new Set([
   "ArdiaReport.devRenderCost", "ArdiaReport.devSnapshotPill", "ArdiaReport.devRecordingPages", "ArdiaReport.devPlaceWindow", "ArdiaReport.devWindowServerAlpha",
   "ArdiaReport.devPages", "ArdiaFieldGlow.show", "ArdiaFieldGlow.progress", "ArdiaFieldGlow.pulse", "ArdiaFieldGlow.finish", "ArdiaFieldGlow.reset",
-  "ArdiaAppWindows.setWindowShown", "ArdiaWheelArea.devWheel", "ArdiaWheelArea.glideScroll", "ArdiaWheelArea.steerScroll", "ArdiaWheelArea.steerScroll",
+  "ArdiaAppWindows.setWindowShown", "ArdiaContacts.authorizationStatus", "ArdiaContacts.requestAccess", "ArdiaContacts.meCard", "ArdiaContacts.openMeCard", "ArdiaWheelArea.devWheel", "ArdiaWheelArea.glideScroll", "ArdiaWheelArea.steerScroll", "ArdiaWheelArea.steerScroll",
 ]);
 
 function moduleMap(type) {

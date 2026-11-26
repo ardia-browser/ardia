@@ -35,6 +35,7 @@ import { useGrowingRows } from "../../../state/settings/growingRows";
 import { notePasswordListShown } from "../../../state/telemetry/exportCounts";
 import { useManagerPlugins, useProfilePasswordManager } from "../../../state/site/passwordManager";
 import { offerToSaveHandedOver, PasswordManagerRow } from "./PasswordManagerRow";
+import { MeCardRow } from "./MeCardRow";
 
 function passwordManagerAppsNote() {
   const apps = `1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their ${PLATFORM_TERMS.computer} apps.`;
@@ -65,6 +66,7 @@ export function PasswordsSection({ profileId }: { profileId: string }) {
         <Row anchor="profiles.addresses" description={keptByExtensionNote(enabled?.addresses, addressesAsked)}>
           <Toggle value={enabled?.addresses ?? true} disabled={!enabled} onChange={(v) => setAutofillFor(profile, "addresses", v)} />
         </Row>
+        {PLATFORM_FEATURES.meCard ? <MeCardRow profile={profile} /> : null}
         <Row anchor="profiles.savedAddresses" onPress={() => open(SETTINGS_DETAIL.addresses)} />
         <Row anchor="profiles.cards" description={keptByExtensionNote(enabled?.cards, cardsAsked)}>
           <Toggle value={enabled?.cards ?? true} disabled={!enabled} onChange={(v) => setAutofillFor(profile, "cards", v)} />

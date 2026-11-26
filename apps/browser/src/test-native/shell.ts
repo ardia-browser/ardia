@@ -2,10 +2,12 @@ import type {
   AppEvent,
   BangListReply,
   CommandEvent,
+  ContactsAuthorization,
   CrashReport,
   DiagnosticsSample,
   HardwareInfo,
   LaunchConfig,
+  MeCard,
   NativeDevtoolsEndpoint,
   OpenSurface,
   OpenWindowOptions,
@@ -419,6 +421,30 @@ const calendar: Modules["ArdiaCalendar"] = {
   requestAccess: () => Promise.resolve({ granted: false, status: "notDetermined", error: null, responsible: "self", ms: 0 }),
   calendars: () => Promise.resolve([]),
   events: () => Promise.resolve([]),
+};
+
+const contactsEvents = nativeEvents();
+export const contacts = {
+  status: "notDetermined" as ContactsAuthorization,
+  answer: "authorized" as ContactsAuthorization,
+  requests: 0,
+  card: null as MeCard | null,
+  opened: 0,
+  changed: (epoch?: string) => contactsEvents.emit("onContactsChanged", { epoch }),
+};
+const contactsModule: Modules["ArdiaContacts"] = {
+  addListener: contactsEvents.addListener,
+  authorizationStatus: () => contacts.status,
+  requestAccess: () => {
+    contacts.requests++;
+    if (contacts.status === "notDetermined") contacts.status = contacts.answer;
+    return Promise.resolve({ granted: contacts.status === "authorized", status: contacts.status, error: null });
+  },
+  meCard: () => Promise.resolve(contacts.status === "authorized" && contacts.card ? structuredClone(contacts.card) : null),
+  openMeCard: () => {
+    contacts.opened++;
+    return Promise.resolve();
+  },
 };
 
 const keychainReads = { values: new Map<string, string>(), errors: new Map<string, string>() };
@@ -856,6 +882,7 @@ export const shellNativeModules: Modules = {
   ArdiaDev: dev,
   ArdiaSystem: system,
   ArdiaCalendar: calendar,
+  ArdiaContacts: contactsModule,
   ArdiaKeychain: keychain,
   ArdiaGlassEffect: { isLiquidGlass: () => false },
   ArdiaDockSelection: { iconTheme: () => Promise.resolve(null), iconAccent: () => Promise.resolve(null) },

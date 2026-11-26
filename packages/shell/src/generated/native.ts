@@ -3,6 +3,7 @@ import type { ControlApprovals, ControlPeerAnswer, ControlPeerAsk, ControlPeerOu
 import type { CliInstallResult } from "../cli";
 import type { CommandEvent } from "../commands";
 import type { ConfigFileRead } from "../config";
+import type { ContactsAccessRequest, ContactsAuthorization, MeCard } from "../contacts";
 import type { Click, ClickResult, KeyPress, KeyPressResult, KeyTiming, PointerSweep, PointerSweepResult, SidebarEdgeStats } from "../dev";
 import type { ChooseOptions, ConfirmOptions, PromptOptions } from "../dialogs";
 import type { BangListReply } from "../documents";
@@ -273,6 +274,18 @@ export type CalendarNativeEvents = {
   onCalendarChanged: void;
 };
 
+export type ContactsNative = {
+  authorizationStatus(): ContactsAuthorization;
+  requestAccess(): Promise<ContactsAccessRequest>;
+  meCard(): Promise<MeCard | null>;
+  openMeCard(): Promise<void>;
+  addListener(name: "onContactsChanged", listener: (event: ContactsNativeEvents["onContactsChanged"]) => void): { remove(): void };
+};
+
+export type ContactsNativeEvents = {
+  onContactsChanged: { epoch?: string };
+};
+
 export type KeychainNative = {
   get(account: string): Promise<string | null>;
   read(account: string): Promise<KeychainReadResult>;
@@ -509,6 +522,7 @@ export type ShellModules = {
   ArdiaDev: DevNative;
   ArdiaSystem: SystemNative;
   ArdiaCalendar: CalendarNative;
+  ArdiaContacts: ContactsNative;
   ArdiaKeychain: KeychainNative;
   ArdiaGlassEffect: GlassEffectNative;
   ArdiaDockSelection: DockSelectionNative;

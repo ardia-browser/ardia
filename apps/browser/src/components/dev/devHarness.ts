@@ -104,6 +104,9 @@ export function startDevHarness() {
     get translate(): typeof import("../../state/site/translate") {
       return require("../../state/site/translate");
     },
+    get meCard(): typeof import("../../state/site/meCard") {
+      return require("../../state/site/meCard");
+    },
     get reactNative(): typeof import("react-native") | null {
       return __DEV__ || require("../../platform/launchConfig").isTestInstance() ? require("react-native") : null;
     },

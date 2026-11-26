@@ -13,6 +13,7 @@ export * from "./focus";
 export * from "./inlineCompletion";
 export * from "./lifecycle";
 export * from "./live";
+export * from "./contacts";
 export * from "./menus";
 export * from "./notifications";
 export * from "./plugins";

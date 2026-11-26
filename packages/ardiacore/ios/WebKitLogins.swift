@@ -96,7 +96,7 @@ final class WebKitLogins: NSObject {
       e.preventDefault();
       e.stopImmediatePropagation();
     }
-    post("loginField", { event: "key", key });
+    post("loginField", { event: "key", key, origin: location.origin });
   }, true);
   addEventListener("focusout", (e) => {
     if (active && e.target === active.el) hide();

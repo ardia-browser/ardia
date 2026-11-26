@@ -23,11 +23,13 @@ import { useResource } from "../../../state/settings/resources";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { setting } from "../settingsIndex";
 import { ProfileSubPage } from "./ProfileSubPage";
+import { openMeCard, useMeCardEntryIds } from "../../../state/site/meCard";
 
 export function AddressesPage({ profileId }: { profileId: string }) {
   const theme = useTheme();
   const profile = currentEngineProfile(profileId);
   const [addresses, reload] = useResource(addressList, profile);
+  const fromContacts = useMeCardEntryIds(profile);
   const load = () => void reload();
 
   return (
@@ -41,15 +43,18 @@ export function AddressesPage({ profileId }: { profileId: string }) {
         {addresses && !addresses.length ? (
           <Row title="No saved addresses" description="Addresses you enter in forms can be saved here." />
         ) : (
-          (addresses ?? []).map((a) => (
-            <Row
-              key={a.id}
-              icon={<Symbol name="person.crop.circle" size={15} color={theme.icon} style={PERSON_ICON} />}
-              title={a.name || firstLine(a.street) || a.email || "Address"}
-              description={addressSummary(a)}
-              onPress={() => showSettingsSheet(<AddressSheet profile={profile} saved={a} onChanged={load} />)}
-            />
-          ))
+          (addresses ?? []).map((a) => {
+            const contact = fromContacts.includes(a.id);
+            return (
+              <Row
+                key={a.id}
+                icon={<Symbol name={contact ? "person.crop.square" : "person.crop.circle"} size={15} color={theme.icon} style={PERSON_ICON} />}
+                title={a.name || firstLine(a.street) || a.email || "Address"}
+                description={contact ? [FROM_CONTACTS, addressSummary(a)].filter(Boolean).join(" · ") : addressSummary(a)}
+                onPress={() => showSettingsSheet(contact ? <ContactsAddressSheet saved={a} /> : <AddressSheet profile={profile} saved={a} onChanged={load} />)}
+              />
+            );
+          })
         )}
       </Group>
     </ProfileSubPage>
@@ -201,6 +206,45 @@ function AddressSheet({ profile, saved, onChanged }: { profile: string; saved?: 
   );
 }
 
+const FROM_CONTACTS = "From Contacts";
+
+const CONTACT_FIELDS: { key: keyof SavedAddress; title: string }[] = [
+  { key: "name", title: "Name" },
+  { key: "organization", title: "Organization" },
+  { key: "street", title: "Street Address" },
+  { key: "city", title: "City" },
+  { key: "state", title: "State / Province" },
+  { key: "postalCode", title: "ZIP / Postal Code" },
+  { key: "country", title: "Country / Region" },
+  { key: "phone", title: "Phone" },
+  { key: "email", title: "Email" },
+];
+
+function ContactsAddressSheet({ saved }: { saved: SavedAddress }) {
+  const shown = CONTACT_FIELDS.flatMap((f) => {
+    const value = saved[f.key];
+    return typeof value === "string" && value.trim() ? [{ ...f, value: value.split("\n").join(", ") }] : [];
+  });
+  return (
+    <Sheet size="l" onClose={closeSettingsSheet}>
+      <DialogTitle>{saved.name || FROM_CONTACTS}</DialogTitle>
+      <Text size="small" tone="textSecondary" style={SHEET_NOTE}>
+        From your Me card in Contacts. Change it there and Ardia updates its copy.
+      </Text>
+      <View style={SHEET_BODY}>
+        <Group>
+          {shown.map((f) => (
+            <Row key={f.key} title={f.title} description={f.value} />
+          ))}
+        </Group>
+      </View>
+      <DialogActions leading={<Button title="Edit in Contacts" onPress={openMeCard} />}>
+        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+      </DialogActions>
+    </Sheet>
+  );
+}
+
 const MONTHS: Option<string>[] = [{ value: "", title: "Month" }, ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), title: pad(i + 1) }))];
 function yearOptions(current?: number): Option<string>[] {
   const now = new Date().getFullYear();
@@ -211,6 +255,7 @@ function yearOptions(current?: number): Option<string>[] {
 
 const FIELD_WIDTH = 250;
 const SHEET_BODY = { marginTop: space.xl } as const;
+const SHEET_NOTE = { marginTop: space.s } as const;
 const ERROR = { marginTop: space.ml } as const;
 
 function CardSheet({ profile, saved, onChanged }: { profile: string; saved?: SavedCard; onChanged: () => void }) {

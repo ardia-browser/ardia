@@ -2,6 +2,7 @@ import { counted, onConsentPeriodChange, type ConsentToken } from "./choice";
 
 const WIRE = {
   autofillAddressFill: "webkit_autofill_address_fills",
+  autofillMeCardFill: "webkit_autofill_me_card_fills",
   autofillCardFill: "webkit_autofill_card_fills",
   autofillCardReauthRefused: "webkit_autofill_card_reauths_refused",
   autofillAddressSaveOffer: "webkit_autofill_address_save_offers",

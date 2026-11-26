@@ -8,6 +8,7 @@ export const shell = defineModuleDomain({
     "../automation": ["ControlApprovals", "ControlPeerAnswer", "ControlPeerAsk", "ControlPeerOutcome", "ControlRequest", "ControlSocketStatus", "FileArmClaim", "FileArmResult", "FileArmRow", "FileArmSpec", "NativeDevtoolsEndpoint", "PlacedDownload"],
     "../cli": ["CliInstallResult"],
     "../commands": ["CommandEvent"],
+    "../contacts": ["ContactsAccessRequest", "ContactsAuthorization", "MeCard"],
     "../config": ["ConfigFileRead"],
     "../dev": ["Click", "ClickResult", "KeyPress", "KeyPressResult", "KeyTiming", "PointerSweep", "PointerSweepResult", "SidebarEdgeStats"],
     "../dialogs": ["ChooseOptions", "ConfirmOptions", "PromptOptions"],
@@ -293,6 +294,17 @@ export const shell = defineModuleDomain({
       },
       events: {
         onCalendarChanged: { payload: "void", mac: "custom", desktop: "host", windows: "absent" },
+      },
+    },
+    ArdiaContacts: {
+      functions: {
+        authorizationStatus: { args: [], result: "ContactsAuthorization", swiftResult: "String", async: false, mac: "custom", desktop: "absent", windows: "absent" },
+        requestAccess: { args: [], result: "ContactsAccessRequest", async: true, promise: true, queue: "main", instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
+        meCard: { args: [], result: "MeCard | null", swiftResult: "[String: Any]?", async: true, queue: "userInitiated", instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
+        openMeCard: { args: [], result: "void", async: true, queue: "main", instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
+      },
+      events: {
+        onContactsChanged: { payload: "{ epoch?: string }", mac: "custom", desktop: "absent", windows: "absent" },
       },
     },
     ArdiaKeychain: {

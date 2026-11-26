@@ -18,6 +18,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { isAlive } from "../../../../scripts/lib/pid.mjs";
 
 const MARKER_VARIABLES = ["ARDIA_DATA_DIR", "HOME"];
 
@@ -121,11 +122,7 @@ export function findMarked(dirs, { exclude = ancestors() } = {}) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function exited(pid) {
-  try {
-    process.kill(pid, 0);
-  } catch {
-    return true;
-  }
+  if (!isAlive(pid)) return true;
   try {
     if (process.platform === "linux") return readFileSync(`/proc/${pid}/stat`, "utf8").split(") ").pop().startsWith("Z");
     return execFileSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim().startsWith("Z");

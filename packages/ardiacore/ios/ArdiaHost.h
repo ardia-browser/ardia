@@ -54,6 +54,11 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)beginPressLoop:(NSString *)name NS_SWIFT_NAME(beginPressLoop(_:));
 + (void)endPressLoop;
 + (void)notePointer:(NSEvent *)event swallowedBy:(NSString *)name NS_SWIFT_NAME(notePointer(_:swallowedBy:));
++ (void)reportHoverLossAtQuit;
++ (BOOL)hoverLossReportedAtQuitIsOpen;
++ (NSInteger)hoverLossReportedAtQuitSeconds;
++ (void)markHoverLossCommittedAtQuit;
++ (void)cancelHoverLossAtQuit;
 + (NSString *)baseProfileOf:(NSString *)profile NS_SWIFT_NAME(baseProfile(of:));
 + (void)resolvePermission:(NSString *)requestId result:(NSString *)result remember:(BOOL)remember
     NS_SWIFT_NAME(resolvePermission(_:result:remember:));
@@ -84,6 +89,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable NSDictionary<NSString *, id> *)senderOfOpenedURL:(NSString *)url NS_SWIFT_NAME(senderOfOpenedURL(_:));
 @property(class, readonly) BOOL holdsIncomingLinks;
 @property(class, readonly) NSDictionary<NSString *, NSNumber *> *launchMarks;
+@property(class, readonly) NSDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *> *launchUsage;
 @property(class, readonly) NSDictionary<NSString *, NSNumber *> *nativeMessagingHosts;
 @property(class, readonly, nullable) NSNumber *launchedHidden;
 @property(class, readonly, nullable) NSString *launchSource;

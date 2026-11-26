@@ -167,7 +167,9 @@ class RpmTests(unittest.TestCase):
             self.assertIn(f'Requires: {name}\n', spec)
         self.assertIn('Recommends: /usr/bin/pkexec\n', spec)
         files = spec[spec.index('%files'):spec.index('%changelog')]
-        for owned in ('/usr/lib/ardia\n', '/usr/bin/ardia\n', '%dir /usr/share/polkit-1/actions\n', '/usr/share/licenses/ardia\n'):
+        for owned in ('/usr/lib/ardia\n', '/usr/bin/ardia\n', '%dir /usr/share/polkit-1/actions\n', '/usr/share/licenses/ardia\n',
+                      '/usr/share/applications/ardia.desktop\n', '/usr/share/applications/ardia-little.desktop\n',
+                      '/usr/share/applications/ardia-settings.desktop\n', '/usr/share/applications/ardia-import.desktop\n'):
             self.assertIn(owned, files)
         self.assertIn('%defattr(-,root,root,-)', files)
         self.assertIn('* Mon Nov 23 2026 Ardia <hello@ardia.dev> - 0.2.47~nightly.3-1', spec)
@@ -202,7 +204,8 @@ class RpmTests(unittest.TestCase):
                 (runtime / name).chmod(0o755)
             (runtime / 'ardia-launch').write_text('#!/usr/bin/env bash\n')
             (root / 'share/applications').mkdir(parents=True)
-            (root / 'share/applications/ardia.desktop').write_text('[Desktop Entry]\nType=Application\nName=Ardia\nExec=ardia %U\n')
+            for name, entry in formats.desktop_entries().items():
+                (root / 'share/applications' / name).write_text(entry)
             (root / 'share/icons/hicolor/256x256/apps').mkdir(parents=True)
             (root / 'share/icons/hicolor/256x256/apps/ardia.png').write_bytes(b'png')
             (root / 'share/polkit-1/actions').mkdir(parents=True)
@@ -218,6 +221,8 @@ class RpmTests(unittest.TestCase):
         self.assertRegex(listing, r'-rwsr-xr-x\s+1 root\s+root .* /usr/lib/ardia/chrome-sandbox\n')
         self.assertRegex(listing, r'/usr/bin/ardia -> \.\./lib/ardia/ardia-launch\n')
         self.assertNotRegex(listing, r'(?m)^\S+\s+\d+ (?!root\s+root)')
+        for name in formats.desktop_entries():
+            self.assertRegex(listing, rf'-rw-r--r--\s+1 root\s+root .* /usr/share/applications/{re.escape(name)}\n')
 
 
 class FlatpakTests(unittest.TestCase):
@@ -237,6 +242,9 @@ class FlatpakTests(unittest.TestCase):
         self.assertIn('ln -s ../lib/ardia/ardia-launch /app/bin/ardia', commands)
         self.assertIn('install -Dm644 cobalt.ini /app/etc/cobalt.ini', commands)
         self.assertIn('/app/share/applications/dev.ardia.Ardia.desktop', commands)
+        for window_class, exported in (('ardia-little', 'little'), ('ardia-settings', 'settings'), ('ardia-import', 'import')):
+            self.assertIn(f'share/applications/{window_class}.desktop > dev.ardia.Ardia.{exported}.desktop', commands)
+            self.assertIn(f'/app/share/applications/dev.ardia.Ardia.{exported}.desktop', commands)
         self.assertIn('/app/share/icons/hicolor/256x256/apps/dev.ardia.Ardia.png', commands)
         self.assertEqual(manifest, json.loads(json.dumps(manifest)))
         for bad in ({'url': self.SOURCE['url']}, {'path': '/x', 'sha256': 'SKIP'}, {'url': 'u', 'path': 'p', 'sha256': DIGEST}):

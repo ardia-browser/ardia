@@ -278,10 +278,8 @@ BOOL TracingPictureInPicture() {
                          active ? @"-" : state[@"closedBy"] ?: @"unknown", active ? _reports.autoPictureInPictureActive : [state[@"auto"] boolValue], NSApp.isActive, _reports.seenByUser);
   if (!active) {
     ardia_pip::RefreshPinchesFromOtherApps();
-    ardia_pip::ForgetSavedSize();
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 300 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
       ardia_pip::RefreshPinchesFromOtherApps();
-      ardia_pip::ForgetSavedSize();
     });
   }
   if (!active && state[@"closedBy"]) {

@@ -9,8 +9,10 @@ import { linuxSystemMethod } from "./hostFiles.ts";
 import { linuxModuleMethod } from "./hostSystem.ts";
 import { linuxShellMethod, watchSidebarEdgeBesideNativeLeftEdge } from "./shellMethods.ts";
 import { appModuleFallback } from "./appModuleFallbacks.ts";
+import { shareModuleMethod } from "./hostShare.ts";
 import { cliModuleMethod } from "./hostCli.ts";
 import { configModuleMethod } from "./hostConfig.ts";
+import { glassAppearanceSupported } from "./liquidGlassSupport.ts";
 import { BOOKMARKS_EXPORT_CALL, bookmarksExportCall } from "./hostBookmarksExport.ts";
 
 const synchronousDefaults: Record<string, Record<string, unknown>> = {
@@ -20,7 +22,6 @@ const synchronousDefaults: Record<string, Record<string, unknown>> = {
 };
 
 const synchronousMethods: Record<string, Record<string, unknown>> = {
-  ArdiaGlassEffect: { isLiquidGlass: false },
   ArdiaCli: { installedVersion: null },
   ArdiaConfig: { readFile: { status: "missing" } },
   ArdiaAutomation: { reply: undefined, broadcast: undefined },
@@ -37,11 +38,17 @@ export const PAGE_OPTION_CALLS = [
 ] as const;
 const pageOptionCalls: ReadonlySet<string> = new Set(PAGE_OPTION_CALLS);
 
+const SHARED_FOLDER_LOCATION = "ArdiaSharedFolders.location";
+const NO_SHARED_LOCATION = { path: "", iCloudAvailable: false, iCloudPath: "" };
+
 const nativeFallthroughs = new WeakSet<object>();
 export const reachesNativeHostUnchecked = (resolved: unknown) => typeof resolved === "function" && nativeFallthroughs.has(resolved);
 
 export function resolveHostModule(host: ArdiaHost, name: string, method: string): unknown {
   if (name === "ArdiaApp" && method === "launchConfig") return () => hostLaunchConfig(host);
+  if (name === "ArdiaSharedFolders" && method === "location" && hostSupports(SHARED_FOLDER_LOCATION, host)) {
+    return () => host.bootstrap.nativeModules?.ArdiaSharedFolders?.location ?? NO_SHARED_LOCATION;
+  }
   if (name === "ArdiaShell" && method === "watchSidebarEdge" && !hostSupports("ArdiaShell.watchSidebarEdge", host) && hostSupports("ArdiaShell.watchLeftEdge", host)) {
     return watchSidebarEdgeBesideNativeLeftEdge(host);
   }
@@ -65,6 +72,8 @@ export function resolveHostModule(host: ArdiaHost, name: string, method: string)
   if (cli !== undefined) return cli;
   const config = configModuleMethod(host, name, method);
   if (config !== undefined) return config;
+  const share = shareModuleMethod(host, name, method);
+  if (share) return share;
   const fallback = appModuleFallback(host, name, method);
   if (fallback) return fallback;
   if (name === "ArdiaDocuments" && method === "call") {
@@ -89,6 +98,7 @@ export function resolveHostModule(host: ArdiaHost, name: string, method: string)
       return callHost(call, profile, args, host);
     };
   }
+  if (name === "ArdiaGlassEffect" && method === "isLiquidGlass") return () => glassAppearanceSupported(host);
   const constants = host.bootstrap.nativeModules?.[name];
   const sync = synchronousMethods[name];
   if (sync && method in sync) return () => constants?.[method] ?? sync[method];

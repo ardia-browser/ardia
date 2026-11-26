@@ -41,6 +41,7 @@ chromium-component-extension-disk-messages.patch
 chromium-helium-ublock-off.patch
 chromium-helium-onboarding-off.patch
 chromium-helium-services-page-off.patch
+chromium-helium-behavior-switches-off.patch
 chromium-helium-search-assets-off.patch
 chromium-helium-bangs-off.patch
 chromium-helium-web-push-off.patch

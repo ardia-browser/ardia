@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { layoutDock, layoutStrip, newTabPinned } = await import("./stripGroups.ts");
+const { layoutDock, layoutStrip, newTabPinned, stripFit } = await import("./stripGroups.ts");
 const { COMPACT_CHIP, GAP, ITEM_HEIGHT, MAX_CHIP, NEW_TAB_ROOM, SELECTED_MIN_CHIP } = await import("./tokens.ts");
 
 const tab = (id, group = null) => ({ kind: "tab", id, group });
@@ -51,6 +51,18 @@ test("+ and the chevron take 58 pt: the 32 pt button, a 4 pt gap and the sidebar
   assert.equal(strip.chip, 148);
   assert.equal(strip.tabsEnd, 5 * 148 + MAX_CHIP + 5 * GAP);
   assert.ok(strip.tabsEnd + GAP + NEW_TAB_ROOM <= 1000);
+});
+
+test("without the menu button the strip reclaims its width and pins only the plus when tabs overflow", () => {
+  const entries = Array.from({ length: 9 }, (_, i) => tab(`t${i}`));
+  const page = 8 * COMPACT_CHIP + 128 + 9 * GAP + ITEM_HEIGHT;
+  const m = { ...measured(), newTabRoom: ITEM_HEIGHT };
+  const fit = stripFit(entries, "t0", page, m, null);
+  const strip = layoutStrip(entries, "t0", page, m, null, undefined, "t0", fit.selectedMin, fit.titledMin, fit.compactMin);
+  assert.equal(strip.tabsEnd + GAP + ITEM_HEIGHT, page);
+  assert.equal(newTabPinned(strip.chip, strip.tabsEnd, page, strip.tabsShrink, ITEM_HEIGHT), false);
+  assert.equal(newTabPinned(strip.chip, strip.tabsEnd, page, strip.tabsShrink), true);
+  assert.equal(newTabPinned(strip.chip, strip.tabsEnd, page - 1, strip.tabsShrink, ITEM_HEIGHT), true);
 });
 
 test("+ and the chevron stay inline after the tabs while they fit, and pin to the trailing end once the tabs overflow at the compact chip", () => {

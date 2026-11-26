@@ -150,6 +150,8 @@ inline constexpr bool ReservedWindowsDocumentName(std::string_view name) {
 
 inline constexpr const char* kEngineOwnedWindowsDocumentNames[] = {
     "launch-guard.json",
+    "shell-recovery.json",
+    "shell-recovery-previous.json",
 };
 
 inline constexpr bool EngineOwnedWindowsDocumentName(std::string_view name) {

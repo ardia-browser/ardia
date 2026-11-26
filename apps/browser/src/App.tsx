@@ -36,6 +36,7 @@ import { currentBasePalette } from "./state/config/basePalette";
 import { focusedWindowOf } from "./state/windows/ui";
 import { SETTLE_MS, useSettled } from "./components/ui/useSettled";
 import { forgetWindowRootSize, setWindowRootSize } from "./state/windows/rootSize";
+import { usePagerPages } from "./state/windows/profilePager";
 
 provideProfileLooks({ accent: profileAccent, theme: (profile, appDark, source) => profileTheme(profile, appDark, source, currentBasePalette()) });
 
@@ -78,6 +79,7 @@ function BrowserWindow() {
   const windowId = useWindowId();
   const topTabs = useTabLayout() === "top";
   const fullscreen = !!useFullscreenTab(windowId);
+  const { paging } = usePagerPages(windowId);
   const pluginPanels = usePluginChrome(PLUGIN_CHROME.panels);
   const pluginOverlays = usePluginChrome(PLUGIN_CHROME.overlays);
   const frame = usePageFrameInset();
@@ -98,7 +100,7 @@ function BrowserWindow() {
 
   return (
     <CrxDropArea style={{ flex: 1, flexDirection: "row" }} onLayout={(e) => (setWindowRootSize(windowId, e.nativeEvent.layout.width, e.nativeEvent.layout.height), settleWidth(e.nativeEvent.layout.width))}>
-      <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />
+      {paging ? null : <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />}
       <WindowProfile />
       <ProfileTint />
       <DockedLayout

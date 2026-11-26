@@ -4,7 +4,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { prepareApp, untouchedCopy } from "./app-copy.mjs";
+import { identityFromCodesign, prepareApp, untouchedCopy } from "./app-copy.mjs";
 
 const macTest = (name, fn) => test(name, { skip: process.platform !== "darwin" && "codesign is macOS only" }, fn);
 
@@ -126,4 +126,12 @@ macTest("a cached copy isn't reused when any sealed resource of the source chang
   prepareApp(app, join(dir, "out"), { bundle: own });
   writeFileSync(join(app, "Contents/Resources/strings.txt"), "edited in place");
   assert.throws(() => prepareApp(app, join(dir, "out"), { bundle: own }), /re-sign the source app/);
+});
+
+test("signingIdentity only falls back to ad-hoc when codesign succeeds without an Authority", () => {
+  assert.equal(identityFromCodesign({ status: 0, stderr: "Executable=/x\nAuthority=Developer ID Application: Ardia (ABC)\nAuthority=Apple Root CA\n" }), "Developer ID Application: Ardia (ABC)");
+  assert.equal(identityFromCodesign({ status: 0, stderr: "Executable=/x\nSignature=adhoc\n" }), "-");
+  assert.throws(() => identityFromCodesign({ status: null, signal: "SIGTERM", error: Object.assign(new Error("spawnSync codesign ETIMEDOUT"), { code: "ETIMEDOUT" }), stderr: "" }, "/b/A.app"), /could not read \/b\/A\.app's signature: ETIMEDOUT/);
+  assert.throws(() => identityFromCodesign({ status: 1, stderr: "/b/A.app: code object is not signed at all\n" }, "/b/A.app"), /exited 1: \/b\/A\.app: code object is not signed at all/);
+  assert.throws(() => identityFromCodesign({ status: null, signal: "SIGKILL", stderr: "" }), /exited SIGKILL/);
 });

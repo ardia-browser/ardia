@@ -29,6 +29,7 @@
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/drop_data.h"
+#include "third_party/blink/public/mojom/context_menu/context_menu.mojom.h"
 #include "ardia/core/ac_browser.h"
 #include "ardia/core/ac_context_menu_share.h"
 #include "ardia/core/ac_extension_drop.h"
@@ -224,6 +225,42 @@ class ACContextMenu : public RenderViewContextMenuMacCocoa {
     }
   }
 
+  void AddPageItems() {
+    const content::ContextMenuParams& page = params();
+    ArdiaCoreTab* tab = TabOf(source_web_contents_);
+    id<ArdiaCoreTabDelegate> delegate = tab.delegate;
+    if (!page.selection_text.empty() || page.is_editable || !page.link_url.is_empty() ||
+        page.media_type != blink::mojom::ContextMenuDataMediaType::kNone ||
+        ![delegate respondsToSelector:@selector(tab:contextMenuItemsForPage:)]) {
+      return;
+    }
+    NSArray<NSDictionary*>* items =
+        [delegate tab:tab contextMenuItemsForPage:base::SysUTF8ToNSString(page.page_url.spec())];
+    std::optional<size_t> before = menu_model_.GetIndexOfCommandId(IDC_VIEW_SOURCE);
+    if (!before) {
+      before = menu_model_.GetIndexOfCommandId(IDC_CONTENT_CONTEXT_INSPECTELEMENT);
+    }
+    size_t at = before.value_or(menu_model_.GetItemCount());
+    while (before && at > 0 && menu_model_.GetTypeAt(at - 1) == ui::MenuModel::TYPE_SEPARATOR) {
+      --at;
+    }
+    bool added = false;
+    for (NSDictionary* item in items) {
+      NSString* item_id = [item[@"id"] isKindOfClass:NSString.class] ? item[@"id"] : nil;
+      NSString* title = [item[@"title"] isKindOfClass:NSString.class] ? item[@"title"] : nil;
+      const int command = kHostFirst + static_cast<int>(host_items_.size());
+      if (!item_id.length || !title.length || command > kHostLast) {
+        continue;
+      }
+      if (!added && at > 0) {
+        menu_model_.InsertSeparatorAt(at++, ui::NORMAL_SEPARATOR);
+      }
+      host_items_.push_back(base::SysNSStringToUTF8(item_id));
+      menu_model_.InsertItemAt(at++, command, base::SysNSStringToUTF16(title));
+      added = true;
+    }
+  }
+
   void AddShareItems() {
     ArdiaCoreTab* tab = TabOf(source_web_contents_);
     if (![tab.delegate respondsToSelector:@selector(tab:shareFromContextMenu:)]) {
@@ -378,6 +415,7 @@ class ACViewDelegate : public ChromeWebContentsViewDelegateViewsMac {
     menu->ArrangeLikeDia();
     menu->RemoveViewlessItems();
     menu->AddHostItems();
+    menu->AddPageItems();
     menu->AddShareItems();
     return menu;
   }

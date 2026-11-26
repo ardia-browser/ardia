@@ -313,6 +313,12 @@ test("the settings snapshot reports borderless mode and its default without chan
   assert.deepEqual(cleanProperties(snap), snap);
 });
 
+test("the settings snapshot reports whether the tab menu button is shown and its default", () => {
+  const snap = settingsSnapshot({ ...DEFAULT_SETTINGS, showTabMenuButton: false });
+  assert.equal(snap.setting_showTabMenuButton, "false");
+  assert.equal(snap.default_showTabMenuButton, "true");
+});
+
 test("the snapshot says how many profiles have a custom colour, never which", () => {
   const theme = { stops: [{ x: 0, y: 0, color: { r: 0.88, g: 0.88, b: 0.88, a: 1 } }], intensity: 1, mode: "dark" };
   const counted = customColorProfiles({ a: { name: "Work", theme }, b: { name: "Home" }, c: { name: "Play", theme: null } });

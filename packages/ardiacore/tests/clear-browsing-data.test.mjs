@@ -89,7 +89,7 @@ test("the production engine aggregate waits for both engines and rejects the mod
   run(compiler, ["-swift-version", "5"], `
 import Foundation
 var chromiumDone: ((String?) -> Void)?
-var webKitDone: (() -> Void)?
+var webKitDone: ((String?) -> Void)?
 var requests: [(String, [String], Double)] = []
 var replies: [String] = []
 protocol PageEngine {
@@ -102,7 +102,7 @@ enum ArdiaServices {
 }
 class WebKitHub {
   static let shared = WebKitHub()
-  func clearBrowsingData(profile: String, types: [String], since: Double, completion: @escaping () -> Void) {
+  func clearBrowsingData(profile: String, types: [String], since: Double, completion: @escaping (String?) -> Void) {
     requests.append((profile, types, since)); webKitDone = completion
   }
 }
@@ -135,10 +135,10 @@ for chromiumFirst in [true, false] {
     try handler(Args(), Reply())
     precondition(requests.count == 2)
     for request in requests { precondition(request.0 == "requested-profile" && request.1 == ["history", "siteData"] && request.2 == 1234567) }
-    if chromiumFirst { chromiumDone?(error) } else { webKitDone?() }
+    if chromiumFirst { chromiumDone?(error) } else { webKitDone?(nil) }
     drain()
     precondition(replies.isEmpty)
-    if chromiumFirst { webKitDone?() } else { chromiumDone?(error) }
+    if chromiumFirst { webKitDone?(nil) } else { chromiumDone?(error) }
     drain()
     precondition(replies == [error.map { "ERR_ENGINE:" + $0 } ?? "ok"])
   }

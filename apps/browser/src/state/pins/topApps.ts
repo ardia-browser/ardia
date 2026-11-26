@@ -75,7 +75,7 @@ function withParkedTiles(s: BrowserState, profileId: string, tiles: Item[]): Bro
   const entries: ParkedPin[] = tiles.map(({ tab }) => {
     const id = pinKeyOf(tab);
     const was = old.get(id);
-    const kept = { pin: tab.pin, customTitle: tab.customTitle, customIcon: tab.customIcon, pinnedUrl: tab.pinnedUrl };
+    const kept = { pin: tab.pin, customTitle: tab.customTitle, customIcon: tab.customIcon, tileLetters: tab.tileLetters, pinnedUrl: tab.pinnedUrl };
     const home = tab.pinnedUrl || tab.url;
     return was && (was.pinnedUrl || was.url) === home ? { ...was, ...kept } : { ...snapshotTab(tab), url: home, profileId, id, groupId: null };
   });
@@ -88,7 +88,7 @@ type Member = { window: string | null; profileId: string };
 
 const keyOf = (i: Item) => pinKeyOf(i.tab);
 
-const EDITABLE = ["pinnedUrl", "customTitle", "customIcon", "pin"] as const;
+const EDITABLE = ["pinnedUrl", "customTitle", "customIcon", "tileLetters", "pin"] as const;
 const sameField = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
 function withChange(target: Item[], before: Item[], after: Item[], blocked: Set<string>): Item[] {

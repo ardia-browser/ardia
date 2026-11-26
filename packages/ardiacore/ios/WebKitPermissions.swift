@@ -79,7 +79,7 @@ final class WebKitPermissions {
       if Self.sharesChromiumRules(request.profile) {
         for key in request.keys { ArdiaServices.setSiteSetting(allowed ? "allow" : "block", profile: request.profile, origin: key.site, type: key.kind) }
       } else {
-        stores.update(request.store) { state in for key in request.keys { state.remembered[key] = allowed } }
+        stores.update(request.store) { state in for key in request.keys { state.remember(key, allowed: allowed) } }
       }
     }
     request.decide(allowed)
@@ -127,9 +127,9 @@ final class WebKitPermissions {
       let key = SiteKey(site: origin, kind: kind)
       stores.update(stores.id(of: profile)) { state in
         switch value {
-        case "allow": state.remembered[key] = true
-        case "block": state.remembered[key] = false
-        default: state.remembered.removeValue(forKey: key)
+        case "allow": state.remember(key, allowed: true)
+        case "block": state.remember(key, allowed: false)
+        default: state.forgetAnswer(key)
         }
       }
     }
@@ -172,9 +172,9 @@ final class WebKitPermissions {
     let key = SiteKey(site: origin, kind: kind)
     stores.update(stores.id(of: profile)) { state in
       switch value {
-      case "allow": state.remembered[key] = true
-      case "block": state.remembered[key] = false
-      default: state.remembered.removeValue(forKey: key)
+      case "allow": state.remember(key, allowed: true)
+      case "block": state.remember(key, allowed: false)
+      default: state.forgetAnswer(key)
       }
     }
   }

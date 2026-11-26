@@ -1,7 +1,7 @@
 import type { SearchScope } from "@ardia/core";
 import { useLayoutEffect, useRef, type ComponentProps, type RefObject } from "react";
 import { findNodeHandle, TextInput } from "react-native";
-import { useTheme } from "../ui";
+import { caretColor, useTheme } from "../ui";
 import { barFieldMarks } from "../../state/omnibox/barMarks";
 import { PASTED_TYPES } from "./omniboxKeys";
 import { useHeldEscape } from "../ui/fieldKeys";
@@ -79,6 +79,7 @@ export function BarField({
       placeholderTextColor={theme.placeholder}
       pastedTypes={PASTED_TYPES}
       selectionColor={theme.selection}
+      cursorColor={caretColor(theme)}
       enableFocusRing={false}
       ardiaCentersCapitals
       style={{

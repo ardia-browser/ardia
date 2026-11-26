@@ -6,6 +6,7 @@ final class PeekStage: ExpoView {
   let onPeekState = EventDispatcher()
   let onPeekDone = EventDispatcher()
   let onPeekPinch = EventDispatcher()
+  let onPeekAsked = EventDispatcher()
   var gestures = true
   var meshAllowed = false { didSet { refreshWarp() } }
   var reduceMotion = false { didSet { motion.reduce = reduceMotion || Self.forcedReduce } }
@@ -24,8 +25,10 @@ final class PeekStage: ExpoView {
   private var backup: Timer?
   private var lastLinkTick = 0.0
   private var announced = ""
+  private var published: [String: Bool] = [:]
   private var meshFailure: String?
   private var meshShown = false
+  private var askingToLeave = false
   var pressInPage = false
   var pressMapping: PeekAffine?
   private var donorWatch: CFRunLoopObserver?
@@ -53,6 +56,8 @@ final class PeekStage: ExpoView {
     wantsLayer = true
     addSubview(scrim)
     addSubview(card)
+    chrome.hitsOnlyWhenShown = true
+    scrim.hitsOnlyWhenShown = true
     card.addSubview(chrome)
     card.addSubview(page)
     page.layer?.mask = pageMask
@@ -135,6 +140,26 @@ final class PeekStage: ExpoView {
 
   func close(_ generation: Int) -> Bool { command(generation, "close") { motion.close(at: $0) } }
 
+  func close(_ generation: Int, answer: @escaping (Bool) -> Void) {
+    guard generation == motion.generation, !motion.terminal, !askingToLeave else { return answer(false) }
+    guard let web = pageWebView, web.asksBeforeLeaving else { return answer(close(generation)) }
+    askToLeave(web) { [weak self] leave in answer(leave && self?.close(generation) == true) }
+  }
+
+  private func askToLeave(_ web: ArdiaWebView, then: @escaping (Bool) -> Void) {
+    guard !askingToLeave else { return then(false) }
+    askingToLeave = true
+    let generation = motion.generation
+    note("asked", [:])
+    web.askBeforeLeaving { [weak self] leave in
+      guard let self else { return then(false) }
+      self.askingToLeave = false
+      self.note("answered", ["leave": leave])
+      self.onPeekAsked(["generation": generation, "leave": leave])
+      then(leave && generation == self.motion.generation)
+    }
+  }
+
   func promote(_ generation: Int) -> Bool { command(generation, "promote") { motion.promote(at: $0) } }
 
   private func command(_ generation: Int, _ name: String, _ run: (Double) -> Bool) -> Bool {
@@ -171,9 +196,20 @@ final class PeekStage: ExpoView {
     case "changed":
       motion.gestureChanged(total, at: now)
     default:
-      let outcome = motion.gestureEnded(total, cancelled: phase == "cancelled", at: now)
+      let asking = askingToLeave ? nil : pageWebView.flatMap { $0.asksBeforeLeaving ? $0 : nil }
+      let outcome = motion.gestureEnded(total, cancelled: phase == "cancelled", closes: asking == nil && !askingToLeave, at: now)
       note("release", ["total": total, "outcome": outcome.rawValue])
-      onPeekPinch(["generation": motion.generation, "outcome": outcome.rawValue])
+      let generation = motion.generation
+      if outcome == .close, let asking {
+        askToLeave(asking) { [weak self] leave in
+          guard let self else { return }
+          self.onPeekPinch(["generation": generation, "outcome": (leave ? PeekMotion.PinchOutcome.close : .stay).rawValue])
+          if leave { _ = self.close(generation) }
+        }
+      } else {
+        let shown: PeekMotion.PinchOutcome = outcome == .close && asking == nil && motion.phase != .closing ? .stay : outcome
+        onPeekPinch(["generation": generation, "outcome": shown.rawValue])
+      }
     }
     render(at: now)
     announce()
@@ -236,6 +272,7 @@ final class PeekStage: ExpoView {
   }
 
   private func render(at now: Double) {
+    defer { announce() }
     let f = motion.frame(at: now)
     lastFrame = f
     guard bounds.width > 0, bounds.height > 0 else { return }
@@ -346,13 +383,17 @@ final class PeekStage: ExpoView {
   }
 
   private func announce() {
-    let key = "\(motion.generation):\(motion.phase.rawValue):\(motion.entrance.rawValue)"
+    let least = Double(PeekContainer.leastShownOpacity)
+    let chromeShown = lastFrame.cardAlpha * lastFrame.chromeAlpha >= least
+    let scrimShown = lastFrame.scrimAlpha >= least
+    let key = "\(motion.generation):\(motion.phase.rawValue):\(motion.entrance.rawValue):\(chromeShown):\(scrimShown)"
     guard key != announced else { return }
     announced = key
+    published = ["chromeShown": chromeShown, "scrimShown": scrimShown]
     note("state", ["entrance": motion.entrance.rawValue, "canWarp": motion.canWarp, "valid": motion.geometry.valid, "interrupted": motion.interrupted])
     var payload: [String: Any] = [
       "generation": motion.generation, "phase": motion.phase.rawValue, "entrance": motion.entrance.rawValue,
-      "interrupted": motion.interrupted, "readyTimedOut": motion.readyTimedOut,
+      "interrupted": motion.interrupted, "readyTimedOut": motion.readyTimedOut, "chromeShown": chromeShown, "scrimShown": scrimShown,
     ]
     if let fallback = unavailable { payload["fallback"] = fallback }
     onPeekState(payload)
@@ -433,11 +474,29 @@ final class PeekStage: ExpoView {
       "generation": motion.generation, "phase": motion.phase.rawValue, "entrance": motion.entrance.rawValue, "windowNumber": window?.windowNumber ?? 0,
       "meshFailure": unavailable as Any, "meshShown": meshShown, "meshAllowed": meshAllowed, "meshInspected": ArdiaPeekMesh.inspected,
       "layerHasMesh": meshAllowed ? card.layer.map { ArdiaPeekMesh.hasMesh($0) } ?? false : false,
-      "topDown": page.topDown, "geometry": ["page": rect(g.page), "rest": rect(g.rest), "card": rect(g.card), "source": rect(g.source)],
+      "topDown": page.topDown, "geometry": ["page": rect(g.page), "tab": rect(g.tab), "rest": rect(g.rest), "card": rect(g.card), "source": rect(g.source)],
       "stageInWindow": rect(topLeft(convert(bounds, to: nil))),
       "pageInWindow": rect(topLeft(page.subviews.first.map { $0.convert($0.bounds, to: nil) } ?? .zero)),
-      "trace": trace, "events": events, "freezes": freezes, "layers": devLayers(),
+      "trace": trace, "events": events, "freezes": freezes, "layers": devLayers(), "chromeTargets": devChromeTargets(), "published": published,
     ]
+  }
+
+  private func devChromeTargets() -> [[String: Any]] {
+    guard let window, let root = window.contentView?.superview else { return [] }
+    let height = window.contentView?.frame.height ?? 0
+    var out: [[String: Any]] = []
+    var queue: [(NSView, Bool)] = [(chrome, true), (scrim, false)]
+    while !queue.isEmpty {
+      let (view, onCard) = queue.removeFirst()
+      queue.append(contentsOf: view.subviews.map { ($0, onCard) })
+      guard let label = view.accessibilityLabel(), !label.isEmpty else { continue }
+      let rest = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: self)
+      let shown = convert(onCard ? lastFrame.card.apply(rest) : rest, to: nil)
+      let hit = root.hitTest(shown)
+      let reaches = hit.map { $0 === view || $0.isDescendant(of: view) } ?? false
+      out.append(["label": label, "x": shown.x, "y": height - shown.y, "reaches": reaches, "surface": onCard ? "bar" : "side"])
+    }
+    return out
   }
 }
 

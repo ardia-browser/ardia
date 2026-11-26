@@ -1,8 +1,9 @@
 # Peek motion: Genie in, Seamless after
 
 The owner picked the hybrid from a prototype of three motions (2026-11-16): a Peek opens with a Genie warp out of the link it
-came from, and everything after that (pinch, settle, close, Open as Tab) is Seamless, one uniform scale of a page that
-is already laid out at the size it will have as a tab.
+came from, and everything after that (pinch, settle, close, Open as Tab) is Seamless, one uniform scale of the page.
+A resting Peek lays its page out at the card's own size and draws it 1:1, like Arc and Dia (#3150); Open as Tab lays it
+out once at the tab's size as it starts.
 
 ## Design
 
@@ -19,11 +20,15 @@ is already laid out at the size it will have as a tab.
   comes back with its tab appears at rest. There the card is the old frame (5.5 % inset, the page filling it under the
   bar, `nativePeekMotion` off in `lib/platformFeatures`), and the page hand-over between hosts (a Mac engine feature)
   is skipped. Pinch isn't there, as before (no trackpad gestures).
-- **Fixed viewport.** The page is laid out from the first frame at the rectangle it will fill as a tab
-  (`components/peek/peekGeometry.ts`: the card minus the toolbar row, the bookmarks bar when it shows and the share bar),
-  and shown at one uniform scale `k` inside the card. Its rounded clip is a mask in the page's own (unscaled)
-  coordinates, because a layer's mask is drawn through its `sublayerTransform`. Open as Tab springs the scale to 1 and the
-  page origin to its tab position.
+- **The page at 100 %.** The card keeps the shape of the rectangle the page will fill as a tab
+  (`components/peek/peekGeometry.ts`: `tab` is the card minus the toolbar row, the bookmarks bar when it shows and the
+  share bar; `rest` is that shape fitted into the card at one scale `k`), and the page is laid out at `rest` itself, so
+  text and controls are drawn 1:1 and crisp, as in a tab. Laying it out at the tab's size and showing it at `k` (#2168)
+  drew every resting Peek at about 90 % (#3150). When Open as Tab starts (the button, ⌘O or a spread pinch past the
+  open threshold), the page is laid out once at `tab` and the stage shows it at `rest`'s scale, then springs the scale to
+  1 and the page origin to its tab position; that one relayout is the price of drawing the resting Peek at 100 %. A
+  geometry change that only moves `page` never ends a running motion. Its rounded clip is a mask in the page's own
+  (unscaled) coordinates, because a layer's mask is drawn through its `sublayerTransform`.
 - **Hand-over.** Open as Tab keeps the Peek's host mounted (`state/peek/donors.ts`) until the tab's own host has the
   page: the tab's `ArdiaWebView` adopts it straight from the Peek's (`takeTransferredTab`, same window, once it has a
   size), leaving the page view in the window throughout, so Chrome sees no hide, no resize and no reload. The Peek's host
@@ -68,9 +73,19 @@ is already laid out at the size it will have as a tab.
   rectangle centred on that point, widened to 12 % of the card.
 - **Test keys.** `ARDIA_TEST=peekMesh=unavailable|throws`, `peekReady=never`, `peekReduceMotion`, `peekSlow=<n>`;
   `ARDIA_SWITCHES=peekGenie=off`.
+- **Leaving asks first.** Every close (×, Escape, ⌘W, a click on the dim, a pinch-in) asks the page's `beforeunload`
+  first when it has a handler (`-[ArdiaCoreTab askBeforeLeaving:]`, which runs Chrome's own leave-site prompt without
+  starting the close, #985): Stay leaves the card open at rest with what was typed, Leave closes it as before. A page
+  without a handler closes at once. Open as Tab never asks, since the page stays. While the prompt is up, a tab close
+  (`closeNow`, `close`, the delegate's `CloseContents`, which an extension's `tabs.remove` reaches) waits for the
+  answer and closes only after Leave (Stay keeps the page and what was typed), a window close waits and then asks for itself, quitting is refused, and discards are refused. Not covered: an
+  extension's `windows.remove` (`ACBrowserWindow::Close` runs Chrome's own unload scan) and profile deletion, which both
+  need a background caller since the prompt is app-modal; a window close that waited on the prompt asks the page again
+  after Leave; and a Peek whose site opens in WebKit closes without asking (the ask is Chromium's).
 - **Known limits.** Chrome's own popups, context menus, autofill and IME candidate window are placed by the engine from
-  the page's unscaled position while the Peek is at rest; fixing that needs an engine change (a visual transform in the
-  render widget's view-to-screen conversions).
+  the page's unscaled position while the page is scaled (a pinch, Open as Tab); at rest it is drawn 1:1, so they line
+  up. Fixing the scaled case needs an engine change (a visual transform in the render widget's view-to-screen
+  conversions).
 
 ## Failure scenarios
 
@@ -79,7 +94,7 @@ that catches it. Every check writes its geometry, identity and frame trace to th
 
 | # | Failure | How it shows | Check |
 | --- | --- | --- | --- |
-| P1 | The Peek's page is laid out smaller than the tab it becomes and reflows on promotion | the page's `innerWidth`/`innerHeight` differ between Peek and tab; a resize event fires in the page | `viewport`: inner size before, during and after Open as Tab are equal; the page's resize counter stays 0 |
+| P1 | The resting Peek's page is drawn scaled instead of laid out at the card's size (#3150) | text in the Peek is smaller than in a tab; the page's `innerWidth` is the tab's, not the card slot's | `viewport-identity-handoff`: at rest the page scale is 1 and `innerWidth` is the slot's width; from the start of Open as Tab it is the tab's size |
 | P2 | The card scales unevenly (x ≠ y) or the page scale disagrees with its rectangle | trace frames with `sx ≠ sy`, or the page's shown rect isn't `k ×` the tab rect | `uniform`: every trace frame has one scale; at rest `shown = k · tab`, at the last promote frame `shown = tab` exactly |
 | P3 | The page lands at a different origin than its tab and jumps at handoff | the last promote frame's page origin differs from the tab pane's web view origin | `handoff`: last frame origin equals the tab's native web view frame within 0.5 pt |
 | P4 | Promotion reloads or swaps the document | a nonce set in the page is gone; history length, form text, scroll offset or media time reset; the Chrome tab id changes | `identity`: nonce, `history.length`, an input's value, `scrollY` and a playing audio element's `currentTime` survive; `browserId` is unchanged |
@@ -111,7 +126,7 @@ that catches it. Every check writes its geometry, identity and frame trace to th
 | P25 | An interruption recomputes the warp at the event's time instead of starting from what was last on screen | first frame after a pinch differs from the last drawn frame | `regrab-genie-*`: the frame at the freeze equals the last committed frame, and no vertex moves more per frame after the freeze than the fastest one did before it |
 | P26 | Promotion parks the page outside the window between the two hosts | the page sees `visibilitychange` hidden → visible and a `resize` | `handoff-direct`: no `visibilitychange`, no `resize`, same `browserId`, the Peek host keeps the tab until the tab's host has it, and neither host's teardown closes or clears it |
 | P27 | Cancelling the hand-over (the tab closes, the window closes) leaks or closes the wrong page | a page left parked, or the donor's page closed | `handoff-cancel`: close the promoted tab within the hand-over: the tab is gone, no page is left parked |
-| P28 | With auto-hide toolbars the tab's first frame lays the page out under a different toolbar state | inner height changes after the hand-over | `handoff-autohide`: `hideToolbarWhileScrolling` on: inner size constant |
+| P28 | With auto-hide toolbars the tab's first frame lays the page out under a different toolbar state | inner height changes after the hand-over | `handoff-autohide`: `hideToolbarWhileScrolling` on: inner size the tab's from the start of Open as Tab |
 | P29 | Chrome's popups and IME rect use the unscaled page position while the page is scaled | a `<select>` menu or IME candidate window opens away from the field | `outgoing-coords`: the field's on-screen rect from the engine matches the drawn rect |
 | P30 | The Genie runs without a way to turn it off remotely, or the private API is inspected before the switch is read | no switch, or an inspection with the switch off | `kill-switch`: `ARDIA_SWITCHES=peekGenie=off`: `affine`, and the mesh runtime was never inspected |
 | P31 | Scroll and hover over the scaled page land at the wrong point | the page reports wheel/mousemove at unscaled coords | `input`: wheel scrolls the page under the pointer; mousemove over a target fires its `mouseover` |
@@ -120,3 +135,10 @@ that catches it. Every check writes its geometry, identity and frame trace to th
 | P34 | The tests overclaim the blip's length (assertion time, not hidden time) | wrong evidence | `handoff-direct` records the page's own `visibilitychange` timestamps |
 | P35 | A residual mesh failure mid-interruption leaves a warped card | mesh stays applied after a failed apply | `fallback-throws` also pinches during the entrance: no mesh after |
 | P36 | Full screen during the entrance or a pinch leaves warp or gesture state | warped full-screen page | `fullscreen`: full screen requested during the entrance: identity, no mesh |
+
+### Round 3 (2026-11-25, #985 and #3150), written before the fixes
+
+| # | Failure | How it shows | Check |
+| --- | --- | --- | --- |
+| P37 | Closing a Peek whose page asks before leaving loses what was typed (#985) | the card closes with no prompt | `close-asks-before-leaving`: ×, Escape, ⌘W, a click on the dim and a pinch-in each show the page's leave prompt; Stay keeps the card open at rest with the typed text; Leave closes it and its page |
+| P38 | Open as Tab runs `beforeunload` | a leave prompt while promoting | `close-asks-before-leaving`: Open as Tab on a page with a handler shows no prompt and keeps the typed text |

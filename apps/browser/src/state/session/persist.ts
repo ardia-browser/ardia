@@ -11,7 +11,7 @@ import type { Tab } from "../browser/types";
 import { downloadSession } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
-import { noteSessionBackup, noteSessionSetAside, noteSessionSetAsideFailure, noteSessionWrite, timeSessionSave } from "../telemetry/sessionWrites";
+import { noteSessionBackup, noteSessionFromOtherShell, noteSessionSetAside, noteSessionSetAsideFailure, noteSessionWrite, timeSessionSave } from "../telemetry/sessionWrites";
 import { saveBeforeQuit } from "../app/quit";
 import { landHeldPins, pinGuard, savedAfterPins } from "./pinGuard";
 import { fromNewerBuild, keepAsideGate, rollingBackups, writeGate, type WriteGate } from "./sessionSafety";
@@ -162,6 +162,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   const consent = consentToken();
   if (launch.session.state === "unusable") noteSessionSetAside(true, launch.session.reason, launch.restored?.ageDays ?? null, consent);
   if (launch.downloads.state === "unusable") noteSessionSetAside(false, launch.downloads.reason, null, consent);
+  if (launch.rowTables) noteSessionFromOtherShell(consent);
   restoredAtLaunch = !!loaded?.windowOrder?.length;
   realignedAtLaunch = loaded?.windowsAgainstAutoHideTabs ?? 0;
   const retiredDefaultsApplied = launch.session.state === "usable" && !!loaded && retiredDefaultsAppliedSince({ settings: loaded.settings, settingsMeta: parseSettingsMeta(loaded.settingsMeta) }, useBrowser.getState());
@@ -289,7 +290,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     cosmeticOnly = false;
     schedule(SAVE_DELAY_MS);
   }
-  if (realignedAtLaunch || retiredDefaultsApplied) {
+  if (realignedAtLaunch || retiredDefaultsApplied || (launch.rowTables && launch.session.state === "usable")) {
     dirty.add(DOCS.find((d) => d.name === SESSION_DOCUMENT)!);
     cosmeticOnly = false;
     schedule(SAVE_DELAY_MS);

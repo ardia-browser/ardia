@@ -1,5 +1,6 @@
 import { create, type StateCreator, type StoreApi, type UseBoundStore } from "zustand";
 import { withRetiredDefaults } from "../settings/retiredDefaults";
+import { withTabSwitcherModes } from "../settings/tabSwitcherUpgrade";
 import { setHeldReportsTransaction } from "../../platform/nativeEvents";
 import { createBookmarksSlice, ensureRoots, type BookmarksSlice } from "../bookmarks/bookmarks";
 import { changedIds } from "./changes";
@@ -20,6 +21,7 @@ import { createSplitsSlice, type SplitsSlice } from "../splits/splits";
 import { activated, apply } from "../tabs/tabs";
 import { createTabsSlice, type TabsSlice } from "../tabs/tabsSlice";
 import { bindLiveToBrowser, forgetAllLive } from "../tabs/tabLive";
+import { resetSuggestStores } from "../omnibox/suggestStore";
 import { settle, SettleDidNotConverge } from "./settle";
 import { transactional, type SubscribeTo } from "./transaction";
 import { actionsApart } from "./actionsApart";
@@ -123,17 +125,19 @@ const createdBrowser = create<BrowserState>()(actionsApart(transactions.middlewa
     const s = get();
     const { profiles, windows, windowOrder, tabs, groups, splits } = hydratedLayout(data);
     const profileOrder = [
-      ...(data.profileOrder ?? []).filter((id) => profiles[id]),
+      ...(data.profileOrder ?? []).filter((id) => Object.hasOwn(profiles, id)),
       ...Object.keys(profiles).filter((id) => !data.profileOrder?.includes(id)),
     ];
-    const kept = withRetiredDefaults(data.settings, parseSettingsMeta(data.settingsMeta), { waitForSync: data.retiredDefaultsWaitForSync });
+    const retired = withRetiredDefaults(data.settings, parseSettingsMeta(data.settingsMeta), { waitForSync: data.retiredDefaultsWaitForSync });
+    const kept = withTabSwitcherModes(retired.settings, retired.settingsMeta);
     const settings = parseSettings(kept.settings);
-    if (!profiles[settings.defaultProfileId]) settings.defaultProfileId = profileOrder[0]!;
+    if (!Object.hasOwn(profiles, settings.defaultProfileId)) settings.defaultProfileId = profileOrder[0]!;
 
     notePinChoices(data.pinChoices ?? {});
+    resetSuggestStores();
     let bookmarks = s.bookmarks;
     for (const engine of engineProfiles({ profiles })) bookmarks = ensureRoots(bookmarks, engine)[0];
-    const focused = data.focusedWindowId && windows[data.focusedWindowId] ? data.focusedWindowId : (windowOrder.at(-1) ?? null);
+    const focused = data.focusedWindowId && Object.hasOwn(windows, data.focusedWindowId) ? data.focusedWindowId : (windowOrder.at(-1) ?? null);
 
     const engines = new Set(Object.keys(profiles).map((id) => engineProfile({ profiles }, id)));
     let next: BrowserState = {
@@ -150,9 +154,9 @@ const createdBrowser = create<BrowserState>()(actionsApart(transactions.middlewa
       splits,
       closedTabs: data.closedTabs ?? [],
       closedWindows: data.closedWindows ?? [],
-      parkedPins: Object.fromEntries(Object.entries(data.parkedPins ?? {}).filter(([p]) => profiles[p])),
-      pinChoices: Object.fromEntries(Object.entries(data.pinChoices ?? {}).filter(([p]) => profiles[p])),
-      pinSync: Object.fromEntries(Object.entries(data.pinSync ?? {}).filter(([p]) => profiles[p])),
+      parkedPins: Object.fromEntries(Object.entries(data.parkedPins ?? {}).filter(([p]) => Object.hasOwn(profiles, p))),
+      pinChoices: Object.fromEntries(Object.entries(data.pinChoices ?? {}).filter(([p]) => Object.hasOwn(profiles, p))),
+      pinSync: Object.fromEntries(Object.entries(data.pinSync ?? {}).filter(([p]) => Object.hasOwn(profiles, p))),
       topAppsMerged: data.topAppsMerged ?? "",
       closedGroups: data.closedGroups ?? [],
       deletedGroups: keptDeletedGroups(data.deletedGroups ?? []),
@@ -171,7 +175,7 @@ const createdBrowser = create<BrowserState>()(actionsApart(transactions.middlewa
       ui: {
         ...s.ui,
         focusOrder: focused ? [focused, ...windowOrder.filter((id) => id !== focused).reverse()] : [],
-        lastProfileId: data.lastProfileId && profiles[data.lastProfileId] ? data.lastProfileId : null,
+        lastProfileId: data.lastProfileId && Object.hasOwn(profiles, data.lastProfileId) ? data.lastProfileId : null,
       },
     };
     for (const id of next.ui.focusOrder) next = apply(next, activated(next, windows[id]!.activeTabIds[windows[id]!.profileId]!));

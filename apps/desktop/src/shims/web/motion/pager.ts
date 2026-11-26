@@ -1,18 +1,9 @@
 import type { NativePagerConfig, PagerSnapshot, PagerStateEvent } from "@ardia-real/ardiacore";
+import { PagerSpring, sequenceSource, type MirroredFrame, type PagerFrame, type PagerInput } from "./pagerSpring";
 
-const TRACKING_SCALE = 0.5;
-const RUBBER_DIMENSION = 255;
-const RUBBER_COEFFICIENT = 0.15;
-const FLICK_VELOCITY = 5;
-const OMEGA = (2 * Math.PI) / 0.25;
-const REST_DISPLACEMENT = 0.003;
-const REST_SPEED = 0.1;
-const HISTORY_WINDOW = 0.1;
+export type { PagerInput } from "./pagerSpring";
 
-const rubberBand = (value: number, dimension: number) => (1 - 1 / ((value * RUBBER_COEFFICIENT) / dimension + 1)) * dimension;
-
-type PagerPhase = PagerSnapshot["phase"];
-export type PagerInput = "prepare" | "abandon" | "began" | "changed" | "ended" | "cancelled";
+export type NativePagerFrame = MirroredFrame & { frame: number; sequence: number; selectionSequence: number; profileId?: string | null };
 
 export type PagerArea = {
   pageWidth: () => number;
@@ -21,36 +12,73 @@ export type PagerArea = {
   onState: (event: PagerStateEvent) => void;
 };
 
-type Drag = { start: number; raw: number; lo: number; hi: number; home: number; detent: number; area: PagerArea | null };
-type Spring = { from: number; target: number; velocity: number; start: number };
+export type PagerClock = {
+  now: () => number;
+  request: (step: (timestampMs: number) => void) => number;
+  cancel: (id: number) => void;
+  reduceMotion: () => boolean;
+  watchReduceMotion: (listener: () => void) => () => void;
+};
 
-const now = () => performance.now() / 1000;
-const clamp = (value: number, lo: number, hi: number) => Math.min(Math.max(value, lo), hi);
+const FRAME_INTERVAL = 1 / 60;
+const LONG_FRAME = FRAME_INTERVAL * 1.5;
+export const NATIVE_FRAME_TIMEOUT = 0.25;
 
-let counter = 0;
-const next = () => ++counter;
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+const reducedMotionQuery = () => (typeof matchMedia === "function" ? matchMedia(REDUCED_MOTION) : null);
 
+export const browserClock: PagerClock = {
+  now: () => performance.now() / 1000,
+  request: (step) => requestAnimationFrame(step),
+  cancel: (id) => cancelAnimationFrame(id),
+  reduceMotion: () => !!reducedMotionQuery()?.matches,
+  watchReduceMotion: (listener) => {
+    const query = reducedMotionQuery();
+    query?.addEventListener?.("change", listener);
+    return () => query?.removeEventListener?.("change", listener);
+  },
+};
+
+let clock: PagerClock = browserClock;
+
+export function setPagerClock(next: PagerClock) {
+  const was = clock;
+  clock = next;
+  return () => void (clock = was);
+}
+
+let motions = 0;
+export const PAGER_MOVING_MARK = "ardia-pager-moving";
+export const PAGER_REST_MARK = "ardia-pager-rest";
+export const PAGER_MARKS_KEPT = 16;
+
+const mark = (name: string) => {
+  const timing = globalThis.performance;
+  if (typeof timing?.mark !== "function") return;
+  if (typeof timing.getEntriesByName === "function" && typeof timing.clearMarks === "function" && timing.getEntriesByName(name, "mark").length >= PAGER_MARKS_KEPT) timing.clearMarks(name);
+  timing.mark(name);
+};
+
+const sequences = sequenceSource();
 const pagers = new Map<string, Pager>();
 
-const sameOrder = (a: readonly string[], b: readonly string[] | null) => !!b && a.length === b.length && a.every((id, i) => id === b[i]);
+type SettleStats = { last: number | null; frames: number; long: number; worst: number };
 
 export class Pager {
   private areas = new Set<PagerArea>();
-  private configured = false;
-  private count = 1;
-  private order: readonly string[] | null = null;
-  private selected = 0;
-  private position = 0;
-  private velocity = 0;
-  private phase: PagerPhase = "idle";
-  private sequence = 0;
-  private selectionSequence = 0;
-  private propSelected = 0;
-  private propAck = 0;
-  private drag: Drag = { start: 0, raw: 0, lo: 0, hi: 0, home: 0, detent: 0, area: null };
-  private history: { time: number; position: number }[] = [];
-  private spring: Spring | null = null;
+  private dragArea: PagerArea | null = null;
+  private readonly spring = new PagerSpring(sequences);
   private frameId = 0;
+  private motion = 0;
+  private stats: SettleStats | null = null;
+  private owner: "js" | "native" = "js";
+  private nativeFrameSeen = 0;
+  private nativeSelection = 0;
+  private revokedSelection: number | null = null;
+  private nativeAt = 0;
+  private nativeWatch: ReturnType<typeof setTimeout> | undefined;
+  private stopReduceMotion: () => void;
+  private moving = false;
 
   static named(key: string) {
     let pager = pagers.get(key);
@@ -66,288 +94,280 @@ export class Pager {
 
   private constructor(key: string) {
     this.key = key;
+    this.spring.setReduceMotion(clock.reduceMotion());
+    this.stopReduceMotion = clock.watchReduceMotion(() => {
+      const reduce = clock.reduceMotion();
+      this.spring.setReduceMotion(reduce);
+      if (reduce) this.revokeNative();
+      this.flush();
+    });
   }
 
   attach(area: PagerArea) {
     this.areas.add(area);
-    if (this.configured) area.onPosition(this.position);
+    if (this.spring.configured) area.onPosition(this.spring.position);
   }
 
   detach(area: PagerArea) {
     this.areas.delete(area);
-    if (this.drag.area === area) this.drag.area = null;
+    if (this.dragArea === area) this.dragArea = null;
     if (this.areas.size || pagers.get(this.key) !== this) return;
-    this.stopSpring();
+    this.stopFrames();
+    this.stopNativeWatch();
+    this.stopReduceMotion();
+    this.stopMoving();
     pagers.delete(this.key);
   }
 
-  configure({ selected, count: rawCount, ack, order }: NativePagerConfig) {
-    const count = Math.max(1, rawCount);
-    this.propSelected = clamp(selected, 0, count - 1);
-    this.propAck = Math.max(this.propAck, ack ?? 0);
-    const newOrder = order ?? null;
-    if (!this.configured) {
-      this.configured = true;
-      this.count = count;
-      this.setOrder(newOrder);
-      this.selected = this.propSelected;
-      this.position = this.selected;
-      this.sequence = next();
-      this.emitPosition();
-      return;
-    }
-    if (count !== this.count || (newOrder !== null && !sameOrder(newOrder, this.order))) {
-      let index = this.propSelected;
-      const old = this.order;
-      this.count = count;
-      this.setOrder(newOrder);
-      if (this.propAck < this.selectionSequence && old && this.selected < old.length) {
-        const moved = this.order?.indexOf(old[this.selected]!) ?? -1;
-        if (moved >= 0) index = moved;
-      }
-      this.cancelMotion();
-      this.jump(index);
-      return;
-    }
-    this.reconcile();
-  }
-
-  private setOrder(order: readonly string[] | null) {
-    this.order = order;
-  }
-
-  private reconcile() {
-    if (this.phase !== "idle" || this.propAck < this.selectionSequence || this.propSelected === this.selected) return;
-    this.jump(this.propSelected);
-  }
-
-  private jump(index: number, selection = false) {
-    this.selected = index;
-    this.position = index;
-    this.velocity = 0;
-    this.sequence = next();
-    if (selection) this.selectionSequence = this.sequence;
-    this.emitPosition();
+  configure({ selected, count, ack, order }: NativePagerConfig) {
+    const first = !this.spring.configured;
+    const remapped = this.spring.configure(count, selected, ack ?? 0, order ?? null);
+    if (remapped && this.owner === "native") {
+      this.releaseNative();
+      this.revokedSelection = this.nativeSelection;
+    } else if (this.spring.phase === "idle") this.releaseNative();
+    this.flush(first ? { quiet: true } : undefined);
   }
 
   input(area: PagerArea, input: PagerInput, distance: number, direction: number, timestamp: number) {
-    switch (input) {
-      case "prepare":
-        if (this.phase === "settling") {
-          this.stopSpring();
-          this.phase = "holding";
-        }
-        return;
-      case "abandon":
-        if (this.phase === "holding") this.settle(this.selected, 0);
-        else if (this.phase === "tracking" && this.drag.area === area) this.release(0, false);
-        return;
-      case "began":
-        this.begin(area);
-        this.track(distance, direction, timestamp, true);
-        return;
-      case "changed":
-        if (this.phase !== "tracking" || this.drag.area !== area) return;
-        this.track(distance, direction, timestamp, true);
-        return;
-      case "ended":
-      case "cancelled":
-        if (this.phase !== "tracking" || this.drag.area !== area) return;
-        this.track(distance, direction, timestamp, false);
-        this.release(this.releaseVelocity(timestamp), input === "cancelled");
-    }
-  }
-
-  private begin(area: PagerArea) {
-    this.stopSpring();
-    const home = this.selected;
-    const x = this.position;
-    const lo = Math.max(0, Math.min(home - 1, Math.floor(x)));
-    const hi = Math.min(this.count - 1, Math.max(home + 1, Math.ceil(x)));
-    this.drag = { start: x, raw: x, lo, hi, home, detent: clamp(Math.round(x), lo, hi), area };
-    this.history = [];
-    this.velocity = 0;
-    this.phase = "tracking";
-    this.sequence = next();
-    this.emitState("began");
-  }
-
-  private track(distance: number, direction: number, timestamp: number, sample: boolean) {
-    const area = this.drag.area;
-    if (!area) return;
-    const width = area.pageWidth();
-    if (!(width > 0)) return;
-    const raw = this.drag.start + (direction > 0 ? -1 : 1) * ((distance * TRACKING_SCALE) / width);
-    this.drag.raw = raw;
-    const { lo, hi } = this.drag;
-    const x = raw > hi ? hi + rubberBand((raw - hi) * width, RUBBER_DIMENSION) / width : raw < lo ? lo - rubberBand((lo - raw) * width, RUBBER_DIMENSION) / width : raw;
-    this.position = x;
-    if (sample) {
-      const time = Math.max(timestamp, this.history.at(-1)?.time ?? timestamp);
-      this.history.push({ time, position: x });
-      this.history = this.history.filter((h) => time - h.time <= HISTORY_WINDOW);
-    }
-    this.drag.detent = clamp(Math.round(x), lo, hi);
-    this.emitPosition();
-  }
-
-  private releaseVelocity(timestamp: number) {
-    const recent = this.history.filter((h) => timestamp - h.time <= HISTORY_WINDOW);
-    const first = recent[0];
-    const last = recent.at(-1);
-    if (recent.length < 2 || !first || !last || last.time <= first.time) return 0;
-    return (last.position - first.position) / (last.time - first.time);
-  }
-
-  private release(v: number, cancelled: boolean) {
-    const { home, lo, hi } = this.drag;
-    const width = this.drag.area?.pageWidth() ?? 0;
-    this.drag.area = null;
-    let target = home;
-    if (!cancelled) {
-      const flick = Math.abs(v * width) >= FLICK_VELOCITY;
-      const aim = (position: number) => Math.max(0, home - 1, Math.min(this.count - 1, home + 1,
-        !flick ? Math.round(position) : v > 0 ? Math.floor(position) + 1 : Math.ceil(position) - 1));
-      target = clamp(aim(this.position), lo, hi);
-    }
-    this.settle(target, this.towards(target, v));
-  }
-
-  private towards(target: number, v: number) {
-    const d = target - this.position;
-    return d !== 0 && v !== 0 && d > 0 === v > 0 ? v : 0;
+    if (!this.spring.configured) return;
+    if (input === "abandon" && this.spring.phase === "tracking" && this.dragArea !== area) return;
+    if ((input === "changed" || input === "ended" || input === "cancelled") && this.dragArea !== area) return;
+    this.revokeNative();
+    if (input === "began") this.dragArea = area;
+    const width = (this.dragArea ?? area).pageWidth();
+    this.spring.input(input, distance, direction, width, timestamp);
+    if (this.spring.phase !== "tracking") this.dragArea = null;
+    this.flush();
   }
 
   switchTo(index: number, order?: readonly string[]) {
-    if (!this.configured) return false;
-    this.sync(order);
-    const target = clamp(index, 0, this.count - 1);
-    this.drag.area = null;
-    const v = this.phase === "settling" ? this.velocity : 0;
-    this.settle(target, this.towards(target, v));
-    return true;
-  }
-
-  private sync(order?: readonly string[]) {
-    if (order === undefined || sameOrder(order, this.order)) return;
-    const ids = order;
-    if (!ids.length) return;
-    const current = this.order && this.selected < this.order.length ? this.order[this.selected] : undefined;
-    const id = current !== undefined && ids.includes(current) ? current : ids[clamp(this.propSelected, 0, ids.length - 1)]!;
-    this.select(id, order);
-  }
-
-  select(profileId: string, order: readonly string[]) {
-    if (!this.configured) return false;
-    const ids = order;
-    const index = ids.indexOf(profileId);
-    if (index < 0) return false;
-    this.cancelMotion();
-    this.count = ids.length;
-    this.setOrder(order);
-    this.jump(index, true);
-    this.emitState("selected");
-    return true;
+    this.revokeNative();
+    this.dragArea = null;
+    const ok = this.spring.switchTo(index, order);
+    this.flush();
+    return ok;
   }
 
   step(delta: number, wrap: boolean, order?: readonly string[]) {
-    if (!this.configured) return false;
-    this.sync(order);
-    const target = wrap ? (((this.selected + delta) % this.count) + this.count) % this.count : clamp(this.selected + delta, 0, this.count - 1);
-    return target === this.selected || this.switchTo(target);
+    this.revokeNative();
+    const ok = this.spring.step(delta, wrap, order);
+    if (this.spring.phase !== "tracking") this.dragArea = null;
+    this.flush();
+    return ok;
   }
 
-  private settle(target: number, v: number) {
-    if (target !== this.selected) {
-      this.selected = target;
-      this.sequence = next();
-      this.selectionSequence = this.sequence;
-      this.emitState("selected");
+  select(profileId: string, order: readonly string[]) {
+    if (!this.spring.configured || !order.includes(profileId)) return false;
+    this.revokeNative();
+    if (!this.spring.select(profileId, order)) return false;
+    this.dragArea = null;
+    this.stopFrames();
+    this.flush({ outOfMotion: true });
+    return true;
+  }
+
+  applyNativeFrame(native: NativePagerFrame) {
+    if (!this.spring.configured || native.frame <= this.nativeFrameSeen) return false;
+    if (this.dragArea !== null && this.spring.phase === "tracking") return false;
+    if (native.count !== this.spring.count || !Number.isFinite(native.position) || !Number.isFinite(native.velocity)) return false;
+    if (native.profileId !== undefined && native.profileId !== null) {
+      const index = this.spring.orderIndex(native.profileId);
+      if (index < 0) return false;
+      if (index !== native.selected) {
+        if (this.owner === "native") {
+          this.nativeSelection = Math.max(this.nativeSelection, native.selectionSequence);
+          this.revokeNative();
+          this.flush();
+        }
+        return false;
+      }
     }
-    this.stopSpring();
-    this.phase = "settling";
-    this.velocity = v;
-    this.spring = { from: this.position, target, velocity: v, start: now() };
-    const frame = () => {
-      this.frameId = 0;
-      if (!this.spring) return;
-      this.stepSpring();
-      if (this.spring) this.frameId = requestAnimationFrame(frame);
-    };
-    this.frameId = requestAnimationFrame(frame);
+    if (this.revokedSelection !== null) {
+      if (!native.began) return false;
+      this.revokedSelection = null;
+    }
+    if (!this.spring.mirror(native)) return false;
+    this.nativeFrameSeen = native.frame;
+    this.nativeSelection = Math.max(this.nativeSelection, native.selectionSequence);
+    this.dragArea = null;
+    this.stopFrames();
+    this.sampleNative(native.phase, native.settled);
+    if (native.phase === "settling" && this.spring.reduceMotion) {
+      this.owner = "native";
+      this.revokeNative();
+    } else if (native.phase === "idle") this.releaseNative();
+    else {
+      this.owner = "native";
+      this.nativeAt = clock.now();
+      this.armNativeWatch();
+    }
+    this.flush();
+    return true;
   }
 
-  private stepSpring() {
-    const s = this.spring;
-    if (!s) return;
-    const t = now() - s.start;
-    const x0 = s.from - s.target;
-    const b = s.velocity + OMEGA * x0;
-    const decay = Math.exp(-OMEGA * t);
-    const x = (x0 + b * t) * decay;
-    const v = (s.velocity - OMEGA * b * t) * decay;
-    if (Math.abs(x) < REST_DISPLACEMENT && Math.abs(v) < REST_SPEED) {
-      this.stopSpring();
-      this.position = s.target;
-      this.velocity = 0;
-      this.phase = "idle";
-      this.sequence = next();
-      this.emitPosition();
-      this.emitState("settled");
-      this.reconcile();
+  private sampleNative(phase: NativePagerFrame["phase"], settled: boolean) {
+    if (settled && this.stats && this.stats.last !== null) {
+      this.sampleGap(this.stats, clock.now());
       return;
     }
-    this.position = s.target + x;
-    this.velocity = v;
-    this.emitPosition();
+    if (phase !== "settling") {
+      if (this.stats) this.stats.last = null;
+      return;
+    }
+    this.stats ??= { last: null, frames: 0, long: 0, worst: 0 };
+    this.sampleGap(this.stats, clock.now());
   }
 
-  private stopSpring() {
-    if (this.frameId) cancelAnimationFrame(this.frameId);
+  private sampleGap(stats: SettleStats, now: number) {
+    if (stats.last === null) {
+      stats.last = now;
+      return;
+    }
+    const gap = now - stats.last;
+    if (!(gap > 0)) return;
+    stats.worst = Math.max(stats.worst, gap);
+    if (gap > LONG_FRAME) stats.long++;
+    stats.frames++;
+    stats.last = now;
+  }
+
+  get drivenNatively() {
+    return this.owner === "native";
+  }
+
+  private armNativeWatch() {
+    if (this.nativeWatch) return;
+    const check = () => {
+      this.nativeWatch = undefined;
+      if (this.owner !== "native") return;
+      const quiet = clock.now() - this.nativeAt;
+      if (quiet < NATIVE_FRAME_TIMEOUT) {
+        this.nativeWatch = setTimeout(check, (NATIVE_FRAME_TIMEOUT - quiet) * 1000);
+        return;
+      }
+      this.revokeNative();
+      this.flush();
+    };
+    this.nativeWatch = setTimeout(check, NATIVE_FRAME_TIMEOUT * 1000);
+  }
+
+  private stopNativeWatch() {
+    clearTimeout(this.nativeWatch);
+    this.nativeWatch = undefined;
+  }
+
+  private releaseNative() {
+    this.owner = "js";
+    this.stopNativeWatch();
+  }
+
+  private revokeNative() {
+    if (this.owner !== "native") return;
+    this.releaseNative();
+    this.revokedSelection = this.nativeSelection;
+    this.spring.takeOver();
+  }
+
+  private flush(options: { quiet?: boolean; outOfMotion?: boolean } = {}) {
+    const wasIdle = this.motion === 0;
+    const frame = this.spring.drain();
+    if (frame.phase !== "settling" || this.owner !== "js") this.stopFrames();
+    if ((frame.phase === "holding" || frame.phase === "tracking") && this.stats) this.stats.last = null;
+    if (!options.outOfMotion && wasIdle && frame.phase !== "idle") {
+      this.motion = ++motions;
+      this.startMoving();
+    }
+    this.emit(frame, options);
+    if (frame.phase === "settling" && this.owner === "js") {
+      if (!this.stats) this.stats = { last: clock.now(), frames: 0, long: 0, worst: 0 };
+      else if (!this.frameId) this.stats.last = clock.now();
+      this.startFrames();
+    }
+  }
+
+  private emit(frame: PagerFrame, { quiet, outOfMotion }: { quiet?: boolean; outOfMotion?: boolean }) {
+    if (quiet) {
+      if (frame.moved) this.emitPosition(frame.position);
+      return;
+    }
+    const motion = outOfMotion ? undefined : this.motion || undefined;
+    if (frame.began) this.emitState("began", frame, motion);
+    if (frame.selectedChanged) this.emitState("selected", frame, motion);
+    if (frame.moved) this.emitPosition(frame.position);
+    if (frame.settled) {
+      const stats = this.stats;
+      this.stats = null;
+      this.emitState("settled", frame, motion, stats ? { frames: stats.frames, longFrames: stats.long, worstGapMs: Math.round(stats.worst * 1000) } : undefined);
+    }
+    if (frame.phase === "idle") {
+      this.motion = 0;
+      this.stats = null;
+      this.stopMoving();
+    }
+  }
+
+  private startMoving() {
+    if (this.moving) return;
+    this.moving = true;
+    mark(PAGER_MOVING_MARK);
+  }
+
+  private stopMoving() {
+    if (!this.moving) return;
+    this.moving = false;
+    mark(PAGER_REST_MARK);
+  }
+
+  private startFrames() {
+    if (this.frameId) return;
+    const step = (timestampMs: number) => {
+      this.frameId = 0;
+      if (this.owner !== "js" || this.spring.phase !== "settling") return;
+      const now = Number.isFinite(timestampMs) ? timestampMs / 1000 : clock.now();
+      if (this.stats) this.sampleGap(this.stats, now);
+      this.emit(this.spring.stepFrame(now), {});
+      if (this.spring.phase === "settling") this.frameId = clock.request(step);
+    };
+    this.frameId = clock.request(step);
+  }
+
+  private stopFrames() {
+    if (this.frameId) clock.cancel(this.frameId);
     this.frameId = 0;
-    this.spring = null;
   }
 
-  private cancelMotion() {
-    this.stopSpring();
-    this.drag.area = null;
-    this.phase = "idle";
-    this.velocity = 0;
-  }
-
-  private emitPosition() {
-    const tracking = this.phase === "tracking" ? this.drag.area : null;
+  private emitPosition(position: number) {
+    const tracking = this.spring.phase === "tracking" ? this.dragArea : null;
     const all = [...this.areas];
-    (tracking ?? all.find((a) => a.attached()) ?? all[0])?.onPosition(this.position);
+    (tracking ?? all.find((a) => a.attached()) ?? all[0])?.onPosition(position);
   }
 
-  private emitState(phase: PagerStateEvent["phase"]) {
-    const event: PagerStateEvent = { phase, sequence: this.sequence, position: this.position, selected: this.selected, velocity: this.velocity };
-    if (this.order) event.profileId = this.selectedId();
+  private emitState(phase: PagerStateEvent["phase"], frame: PagerFrame, motion: number | undefined, extra?: Partial<PagerStateEvent>) {
+    const event: PagerStateEvent = { phase, sequence: frame.sequence, position: frame.position, selected: frame.selected, velocity: frame.velocity };
+    if (motion !== undefined) event.motion = motion;
+    if (extra) Object.assign(event, extra);
+    if (this.spring.hasOrder()) event.profileId = this.spring.selectedId();
     for (const area of [...this.areas]) area.onState(event);
   }
 
-  private selectedId() {
-    const ids = this.order;
-    return ids && this.selected >= 0 && this.selected < ids.length ? ids[this.selected]! : null;
-  }
-
   snapshot(): PagerSnapshot {
+    const s = this.spring;
     const snapshot: PagerSnapshot = {
-      sequence: this.sequence,
-      selectionSequence: this.selectionSequence,
-      position: this.position,
-      selected: this.selected,
-      phase: this.phase,
-      velocity: this.velocity,
-      count: this.count,
+      sequence: s.sequence,
+      selectionSequence: s.selectionSequence,
+      position: s.position,
+      selected: s.selected,
+      phase: s.phase,
+      velocity: s.velocity,
+      count: s.count,
     };
-    if (this.order) snapshot.profileId = this.selectedId();
+    if (s.hasOrder()) snapshot.profileId = s.selectedId();
     return snapshot;
   }
 
   debug() {
-    return { ...this.snapshot(), areas: this.areas.size, propSelected: this.propSelected, propAck: this.propAck, history: this.history.length, drag: this.phase === "tracking" ? { ...this.drag, area: undefined } : undefined };
+    return { ...this.snapshot(), areas: this.areas.size, propSelected: this.spring.pendingSelection, propAck: this.spring.ack, history: this.spring.historySize, owner: this.owner, revokedSelection: this.revokedSelection, reduceMotion: this.spring.reduceMotion };
   }
 }
 

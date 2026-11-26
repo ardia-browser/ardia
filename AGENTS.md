@@ -21,12 +21,17 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   transcript activity, a pending tool call, `/tmp/ac-*.holder`, its processes). A stuck agent means a root
   cause to fix (a lock, a wait, a hang), not just a restart. Send new feedback to the agent that owns
   that area (SendMessage) instead of starting a new one, and batch finished fixes into the next release.
+- **Say when an instruction caused it.** When the owner asks for a change to something you did and it came out
+  that way because you followed an instruction (this file, a doc, a skill), say so at once and name the
+  instruction, so it can be fixed where it is written.
 - **Ask Codex for a second opinion** on risky logic (races, lifetimes, security, migrations, sync) and reviews,
   before and after the change. Ask a Codex subagent, not the CLI: T3's `delegate_task` with
   `target: {providerInstanceId: "codex", model: "gpt-6.2-sol", options: {reasoningEffort: "high", serviceTier: "priority"}}`,
-  `role: "review"`, `mode: "async"`, and a new `clientRequestId` per round. Tell it to review only and edit
-  nothing, and give it the full brief each round (it doesn't share your context). It reads more than it runs:
-  reproduce each finding before fixing it. Cap review loops at 5 rounds per PR (stop earlier once approved
+  `role: "review"`, `mode: "async"`, and a new `clientRequestId` per round. Codex may run any command it needs
+  (builds, tests, scripts, hidden instances, captures) in its own target and data dirs, but never writes, edits,
+  formats or stages code. Give it the full brief each round (it doesn't share your context), including what you
+  changed since the last round, how you verified it and which earlier findings you fixed or rejected and why.
+  Reproduce each finding before fixing it. Cap review loops at 5 rounds per PR (stop earlier once approved
   or only nits remain; if blockers stay open after round 5, stop and escalate to the owner).
 - **Worktrees are fine.** Use a git worktree or a scratch clone for isolated feature, PR and full-send work, so
   you can switch branches, reset and stash without touching anyone else. `scripts/agent/guard-git` only blocks
@@ -105,9 +110,12 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   (`@ts-expect-error`, `eslint-disable`, `#pragma`, `swiftlint:`, `# noqa`), and the header a script prints as its
   `--help`.
 - **The Chromium build cache is sacred.** Never touch `~/chromium-build/chromium_git/chromium/src/out`,
-  and never run `gclient sync` or `gn clean`: a full rebuild costs about 5 hours. Engine changes are
-  incremental builds only, holding the chromium lock (`scripts/agent/locked chromium`,
-  `docs/engine-build.md`). When freeing disk space, stay out of `~/chromium-build`.
+  and never run `gclient sync` or `gn clean`: a full rebuild costs about 5 hours. `engine/` itself is
+  not off-limits: when a fix or feature belongs in the engine, make the change, run an incremental
+  build under the chromium lock (`scripts/agent/engine-build` on a plugged-in Mac, `scripts/linux/build.sh --apply`
+  on `msi` WSL 2, or the Windows engine cross-build in `docs/engine-build-windows.md`), and publish
+  the updated prebuilt engine (`scripts/publish-engine.sh`, `docs/engine-build.md`) rather than working
+  around it in JS or parking the PR. When freeing disk space, stay out of `~/chromium-build`.
 - **Never steal focus.** Run builds only as hidden instances:
   `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<throwaway dir> --env ARDIA_REMOTE_DEBUGGING_PORT=<port> <app>`.
   Never use plain `open`. Background mode logs context menus and file panels instead of showing them.

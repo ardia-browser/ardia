@@ -216,6 +216,10 @@ const lightRoles: ColorRoles = {
 
 export const colorRoles = { dark: darkRoles, light: lightRoles } as const;
 
+export const fieldInk = { caret: { dark: "#FFFFFF", light: "#787D86" }, quietGlyphLight: "#0000007A" } as const;
+
+export const popoverMenuMaterial = { light: "rgba(246,246,246,0.72)", dark: "rgba(40,40,42,0.72)" } as const;
+
 export type ColorRole = { [K in keyof ColorRoles]: ColorRoles[K] extends string ? K : never }[keyof ColorRoles];
 
 export const closeOnArt = { rest: "rgba(255,255,255,0.1)", hover: "rgba(255,255,255,0.2)", pressed: "rgba(255,255,255,0.3)", glyph: "#FFFFFF8C" } as const;

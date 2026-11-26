@@ -8,13 +8,15 @@ import { recentlyClosedIn } from "../windows/recentlyClosedList";
 import { awayFromPin, selectedTabIds } from "../pins/organize";
 import { groupOf } from "../pins/tabGrouping";
 import { newGroupWithSelection, openIconPicker, startRename } from "./actions";
-import { cleanUpWithUndo, closeAllTabs } from "./clearTabs";
+import { cleanUpWithUndo, closeAllTabs, closeDuplicateTabs } from "./clearTabs";
 import { toggleNewTabBar } from "../omnibox/newTabBar";
 import { hiddenEmptyCard, newTabOpensBar } from "../omnibox/newTabBarPolicy";
 import { movePinnedTitle, togglePinnedRows } from "./movePinned";
 import { PINNED_FOLD_TITLES, pinnedCollapsed, togglePinnedFold } from "./pinnedFold";
 import { setSidebarUi } from "./sidebarUi";
 import { tidy } from "./tidyUi";
+import { sortTabs } from "./sortTabsUi";
+import { variantArg } from "../commands/commandCatalog";
 import { switcherStep } from "./switcher";
 import type { ByUser } from "../tabs/closeActivation";
 
@@ -52,9 +54,17 @@ export function runSidebarCommand(command: BrowserCommand, arg: string | null, w
     case "closeAllTabs":
       closeAllTabs(windowId, user);
       return true;
+    case "closeDuplicateTabs":
+      closeDuplicateTabs(windowId, user);
+      return true;
     case "tidyPins":
       tidy(windowId, "pins");
       return true;
+    case "sortTabs": {
+      const key = variantArg("sortTabs", arg);
+      if (key) sortTabs({ windowId }, key);
+      return true;
+    }
     case "searchTabs":
       setSidebarUi({ searchTabs: windowId, hover: null });
       return true;

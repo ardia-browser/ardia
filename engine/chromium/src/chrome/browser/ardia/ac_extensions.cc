@@ -17,6 +17,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
+#include "chrome/browser/ardia/ac_extension_sites_internal.h"
 #include "chrome/browser/ardia/ac_scripts_policy.h"
 #include "chrome/browser/extensions/api/developer_private/extension_info_generator.h"
 #include "chrome/browser/extensions/extension_install_prompt.h"
@@ -502,7 +503,25 @@ AC_PROFILE_CALL(ac_extensions_configure) {
   if (!ardia::Find(profile, id)) {
     return call.TakeReply().Error("No such extension");
   }
-  if (std::optional<bool> pinned = call.args().FindBool("pinned")) {
+  const base::DictValue* nested = call.args().FindDict("options");
+  const base::DictValue& options = nested ? *nested : call.args();
+  const std::string* grant = options.FindString("grantSite");
+  const std::string* revoke = options.FindString("revokeSite");
+  if ((options.contains("grantSite") && !grant) ||
+      (options.contains("revokeSite") && !revoke)) {
+    return call.TakeReply().Error("A site must be text");
+  }
+  if (grant && revoke) {
+    return call.TakeReply().Error("Grant or revoke one site at a time");
+  }
+  if (grant || revoke) {
+    const std::string problem = ardia::extension_sites_internal::SiteProblem(
+        profile, *ardia::Find(profile, id), grant ? *grant : *revoke, !!grant);
+    if (!problem.empty()) {
+      return call.TakeReply().Error(problem);
+    }
+  }
+  if (std::optional<bool> pinned = options.FindBool("pinned")) {
     ToolbarActionsModel* model = ToolbarActionsModel::Get(profile);
     if (!model->HasAction(id)) {
       return call.TakeReply().Error(
@@ -512,7 +531,7 @@ AC_PROFILE_CALL(ac_extensions_configure) {
       model->SetActionVisibility(id, *pinned);
     }
   }
-  if (std::optional<int> index = call.args().FindInt("pinnedIndex")) {
+  if (std::optional<int> index = options.FindInt("pinnedIndex")) {
     ToolbarActionsModel* model = ToolbarActionsModel::Get(profile);
     if (profile->IsOffTheRecord()) {
       return call.TakeReply().Error(
@@ -524,13 +543,13 @@ AC_PROFILE_CALL(ac_extensions_configure) {
     const int last = static_cast<int>(model->pinned_action_ids().size()) - 1;
     model->MovePinnedAction(id, static_cast<size_t>(std::clamp(*index, 0, last)));
   }
-  if (std::optional<bool> allow = call.args().FindBool("fileAccess")) {
+  if (std::optional<bool> allow = options.FindBool("fileAccess")) {
     extensions::util::SetAllowFileAccess(id, profile, *allow);
   }
-  if (std::optional<bool> allow = call.args().FindBool("incognito")) {
+  if (std::optional<bool> allow = options.FindBool("incognito")) {
     extensions::util::SetIsIncognitoEnabled(id, profile, *allow);
   }
-  if (std::optional<bool> allow = call.args().FindBool("userScripts")) {
+  if (std::optional<bool> allow = options.FindBool("userScripts")) {
     const extensions::Extension* extension = ardia::Find(profile, id);
     extensions::UserScriptManager* manager =
         extensions::ExtensionSystem::Get(profile)->user_script_manager();
@@ -542,7 +561,7 @@ AC_PROFILE_CALL(ac_extensions_configure) {
     }
     manager->SetUserScriptPrefEnabled(id, *allow);
   }
-  if (const std::string* access = call.args().FindString("siteAccess")) {
+  if (const std::string* access = options.FindString("siteAccess")) {
     const extensions::Extension* extension = ardia::Find(profile, id);
     extensions::PermissionsManager* manager =
         extensions::PermissionsManager::Get(profile);
@@ -564,5 +583,13 @@ AC_PROFILE_CALL(ac_extensions_configure) {
       return call.TakeReply().Error("unknown site access");
     }
   }
-  call.TakeReply().Ok();
+  if (!grant && !revoke) {
+    return call.TakeReply().Ok();
+  }
+  const extensions::Extension* extension = ardia::Find(profile, id);
+  if (!extension) {
+    return call.TakeReply().Error("No such extension");
+  }
+  ardia::extension_sites_internal::ChangeSite(
+      profile, *extension, grant ? *grant : *revoke, !!grant, call.TakeReply());
 }

@@ -72,7 +72,7 @@ test("the old default on that the user never touched turns off and stays unchose
 
 test("an on filled in before Ardia tracked choices (chosen and inferred) turns off; a session with no meta turns off", () => {
   assert.deepEqual(load(doc({ ...DEFAULT_SETTINGS, [KEY]: true }, { chosen: [KEY, "tabLayout"], inferred: [KEY, "tabLayout"] })), { on: false, chosen: false, inferred: false });
-  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout"], inferred: ["tabLayout", TOOLBAR_SCROLL_DEFAULT_APPLIED, APPLIED] });
+  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout"], inferred: ["tabLayout", TOOLBAR_SCROLL_DEFAULT_APPLIED, APPLIED, "tabSwitcherOrder:fromShortcuts"] });
   assert.equal(load(doc({ ...DEFAULT_SETTINGS, [KEY]: true })).on, false);
 });
 

@@ -4,17 +4,21 @@ source_set("policies") {
   sources = [
     "ac_desktop_bang_list_policy.h",
     "ac_desktop_favicon_policy.h",
+    "ac_desktop_gesture_router.h",
     "ac_desktop_glass_geometry.h",
     "ac_desktop_idle_policy.h",
     "ac_desktop_page_keys.h",
     "ac_desktop_page_swipe.h",
+    "ac_desktop_pager_spring.h",
     "ac_desktop_paths.h",
     "ac_desktop_policy.h",
     "ac_desktop_search_engine_policy.h",
     "ac_desktop_status_geometry.h",
     "ac_desktop_suggest_policy.h",
     "ac_desktop_switcher_keys.h",
+    "ac_desktop_tab_reveal.h",
     "ac_desktop_telemetry_policy.h",
+    "ac_desktop_webui_process_policy.h",
     "ac_desktop_window_commands.h",
     "ac_desktop_window_corners.h",
     "ac_desktop_window_state.h",
@@ -38,6 +42,13 @@ source_set("cores") {
   ]
 }
 
+source_set("layout_sync") {
+  sources = [
+    "ac_desktop_layout_sync.cc",
+    "ac_desktop_layout_sync.h",
+  ]
+}
+
 source_set("platform") {
   sources = [
     "ac_desktop_platform.cc",
@@ -49,6 +60,7 @@ source_set("platform") {
 group("desktop") {
   public_deps = [
     ":cores",
+    ":layout_sync",
     ":platform",
     ":policies",
   ]

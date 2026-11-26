@@ -2,6 +2,7 @@ import { formatShortcut as sharedFormat, resolveShortcuts as sharedResolve, type
 
 import { migrateProfileShortcuts, unshiftedShortcutOverrides } from "./shortcutOverrides";
 import { CONTROL_KEY_NAME } from "@platform/keyNames";
+import { SHORTCUTS_SHOWN_AS_GLYPHS } from "@platform/shortcutKeys";
 
 export * from "../../browser/src/state/commands/shortcuts";
 
@@ -14,6 +15,7 @@ const keyNames: Record<string, string> = {
 
 export function formatShortcut({ key, modifiers }: Shortcut): string {
   if (!key) return "";
+  if (SHORTCUTS_SHOWN_AS_GLYPHS) return sharedFormat({ key, modifiers });
   const names = modifierOrder.filter((modifier) => modifiers.includes(modifier)).map((modifier) => modifierNames[modifier]);
   return [...names, keyNames[key] ?? sharedFormat({ key, modifiers: [] })].join("+");
 }

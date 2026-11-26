@@ -10,7 +10,7 @@ import { newCapture } from "../../state/sidebar/listCapture";
 import { useCapturedGroupEntries, useGroupTabIds, useKeptEntries, useShowsExtraTabs } from "../../state/sidebar/hooks";
 import { MeetingTimeLabel, useMeetingCountdown } from "../live/MeetingCountdown";
 import { HoverSlot } from "../ui/HoverSlot";
-import { Button, ContextMenuArea, clippedContinuousCorners, ink, Symbol, weight, withAlpha } from "../ui";
+import { Button, colorRoles, ContextMenuArea, clippedContinuousCorners, ink, Symbol, weight, withAlpha } from "../ui";
 import { commitRename, endRename } from "../../state/sidebar/actions";
 import { useDragFolded, useDragItem, useDropInto } from "./DragProvider";
 import { useShift, type EntryMotion } from "./EntryMotion";
@@ -222,6 +222,8 @@ const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, op
                   initial={group.name}
                   placeholder={label}
                   color={tokens.groupTitle}
+                  surface={dropInto ? theme.tabPressed : ink.clear}
+                  stockSurface={dropInto ? colorRoles[theme.dark ? "dark" : "light"].tabPressed : ink.clear}
                   weight={weight.medium}
                   onDone={(text) => (text === null ? endRename(target) : commitRename(target, text))}
                 />

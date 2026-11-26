@@ -259,7 +259,7 @@ function importHistoryRows(profile: string, { rows }: { rows: { u: string; t: st
   return heldHistoryImports.reply ? heldHistoryImports.reply.then(() => ({})) : {};
 }
 
-export const bookmarkModel = { loading: new Set<string>(), treeFails: false, treeHangs: false };
+export const bookmarkModel = { loading: new Set<string>(), treeFails: false, treeHangs: false, applyHeld: null as Promise<void> | null };
 export const historyDeletes = { failNext: false };
 
 function deleteHistoryUrls(profile: string, { urls }: { urls: string[] }) {
@@ -725,6 +725,7 @@ const fakeModules = {
     },
     apply: ({ profile, ...args }) => {
       if (bookmarkModel.loading.has(profile)) throw new Error("bookmarks.apply ran inside Chrome's bookmark model load");
+      if (bookmarkModel.applyHeld) return bookmarkModel.applyHeld.then(() => applyBookmarkOps(profile, args));
       return applyBookmarkOps(profile, args);
     },
     watch: () => null,

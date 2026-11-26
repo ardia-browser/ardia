@@ -9,7 +9,7 @@ import { GlassFill, useGlass } from "../ui/Glass";
 import { hex, useTheme } from "../ui/theme";
 import { useSelectedTopApp } from "../../state/app/theme";
 import { useMinimalism } from "../../state/windows/layout";
-import { tileLetterOf } from "../../lib/tileLetter";
+import { tileLettersOf } from "../../lib/tileLetter";
 import { useSidebarTokens } from "../sidebar/tokens";
 import { ITEM_HEIGHT, PINNED_CELL, PINNED_FACE_INSET, pinnedFaceRadius, PINNED_RING_STROKE } from "./tokens";
 
@@ -21,6 +21,7 @@ export function PinnedFace({ tabId, active, hovered, pressed, frame = "cell" }: 
   const badges = useSettings((st) => st.showTopAppBadges);
   const topApp = useSelectedTopApp();
   const minimal = useMinimalism();
+  const letters = useSettings((st) => st.minimalismPinnedIcons === "letters");
   const quiet = useSidebarTokens();
   if (!tab) return null;
   const glassRing = active && glass;
@@ -67,9 +68,9 @@ export function PinnedFace({ tabId, active, hovered, pressed, frame = "cell" }: 
         </View>
       )}
       <View pointerEvents="none">
-        {minimal ? (
+        {minimal && letters ? (
           <Text size="small" weight="medium" color={hex(withAlpha(theme.textTab, active ? quiet.quietActiveText : quiet.quietText))}>
-            {tileLetterOf(tab.url, tab.customTitle ?? tab.title)}
+            {tileLettersOf(tab)}
           </Text>
         ) : (
           <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} />

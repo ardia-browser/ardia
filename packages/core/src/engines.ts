@@ -128,8 +128,15 @@ export function engineById(engines: readonly SearchEngine[], id: string | undefi
 
 export const searchUrl = (engine: Pick<SearchEngine, "url">, query: string) => searchUrlFor(engine.url, query);
 
-export const suggestRequestUrl = (engine: SearchEngine, query: string) =>
-  engine.suggestUrl && !engine.custom && query.trim() ? searchUrlFor(engine.suggestUrl, query) : null;
+export const MAX_SUGGEST_QUERY = 200;
+const MAX_SUGGEST_URL = 2048;
+
+export const suggestRequestUrl = (engine: SearchEngine, query: string) => {
+  const trimmed = query.trim();
+  if (!engine.suggestUrl || engine.custom || !trimmed || trimmed.length > MAX_SUGGEST_QUERY) return null;
+  const url = searchUrlFor(engine.suggestUrl, trimmed);
+  return url.length <= MAX_SUGGEST_URL ? url : null;
+};
 
 export const engineHost = (engine: Pick<SearchEngine, "url">) => hostOf(engine.url.replace(/%s/g, "q"));
 
@@ -141,8 +148,11 @@ export type RemoteSuggestions = { queries: string[]; sites: RemoteSite[] };
 
 export const suggestReplyJson = (text: string): unknown => JSON.parse(text.replace(/^\)\]\}'\s*/, ""));
 
+export const isSuggestReplyShape = (body: unknown): body is [unknown, unknown[], ...unknown[]] =>
+  Array.isArray(body) && Array.isArray(body[1]);
+
 export function parseRemoteSuggestions(body: unknown): RemoteSuggestions {
-  if (!Array.isArray(body) || !Array.isArray(body[1])) return { queries: [], sites: [] };
+  if (!isSuggestReplyShape(body)) return { queries: [], sites: [] };
   const extras = body[4] as { "google:suggesttype"?: unknown } | undefined;
   const types = Array.isArray(extras?.["google:suggesttype"]) ? (extras["google:suggesttype"] as unknown[]) : [];
   const titles = Array.isArray(body[2]) ? (body[2] as unknown[]) : [];

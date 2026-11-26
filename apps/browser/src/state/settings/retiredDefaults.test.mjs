@@ -6,6 +6,7 @@ const { parseSaved, versionedJson } = await import("../../lib/savedDocument.ts")
 const { savedDocumentValue } = await import("../session/documentJson.ts");
 const { TOOLBAR_SCROLL_DEFAULT_APPLIED: APPLIED, CMD_CLICK_GROUPS_DEFAULT_APPLIED } = await import("./retiredDefaults.ts");
 const { DEFAULT_SETTINGS } = await import("./settings.ts");
+const { TAB_SWITCHER_MODES_APPLIED } = await import("./tabSwitcherUpgrade.ts");
 const { settingsAdapter } = await import("../sync/settingsAdapter.ts");
 const stub = await import("../../test-native/index.ts");
 
@@ -50,7 +51,7 @@ test("a saved on the user never touched turns off and stays unchosen, so sync do
 
 test("an on from before Ardia tracked choices (every key chosen and inferred) turns off", () => {
   assert.deepEqual(load(doc(SESSION_VERSION, { ...DEFAULT_SETTINGS, [KEY]: true }, { chosen: [KEY, "tabLayout"], inferred: [KEY, "tabLayout"] })), { on: false, chosen: false, inferred: false });
-  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout"], inferred: ["tabLayout", APPLIED, CMD_CLICK_GROUPS_DEFAULT_APPLIED] });
+  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout"], inferred: ["tabLayout", APPLIED, CMD_CLICK_GROUPS_DEFAULT_APPLIED, TAB_SWITCHER_MODES_APPLIED] });
   assert.equal(load(doc(6, { ...DEFAULT_SETTINGS, [KEY]: true })).on, false);
 });
 

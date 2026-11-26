@@ -6,7 +6,7 @@ import { Symbol } from "./Symbol";
 import { useEffect, useRef, type Ref } from "react";
 import { Animated, Pressable, StyleSheet, Text, TextInput, View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
 import { buttonMotion, curve, duration, usePressScaleMotion } from "./motion";
-import { useTheme } from "./theme";
+import { caretColor, useTheme, type FieldSurface } from "./theme";
 import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
@@ -25,7 +25,7 @@ export function SearchField({
   autoFocus,
   width,
   style,
-  look = "field",
+  look = "field", surface = "ntpBarSolid",
   onSubmit,
   onEscape,
   onArrow,
@@ -41,6 +41,7 @@ export function SearchField({
   width?: DimensionValue;
   style?: StyleProp<ViewStyle>;
   look?: "field" | "bare";
+  surface?: FieldSurface;
   onSubmit?: (shift: boolean) => void;
   onEscape?: () => void;
   onArrow?: (step: 1 | -1) => void;
@@ -80,6 +81,7 @@ export function SearchField({
         placeholder={placeholder}
         placeholderTextColor={bare ? theme.placeholder : theme.textTertiary}
         selectionColor={theme.selection}
+        cursorColor={caretColor(theme, bare ? surface : "field")}
         autoFocus={autoFocus}
         enableFocusRing={false}
         ardiaCentersCapitals
@@ -168,6 +170,7 @@ export function TextField({
           placeholder={placeholder}
           placeholderTextColor={theme.textTertiary}
           selectionColor={theme.selection}
+          cursorColor={caretColor(theme, "field")}
           autoFocus={autoFocus}
           secureTextEntry={secure}
           enableFocusRing={false}

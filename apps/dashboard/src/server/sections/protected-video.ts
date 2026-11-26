@@ -38,6 +38,8 @@ export async function healthProtectedVideo(range: RangeKey, signal?: AbortSignal
       keystatus: num(r[6]),
       listedSites: num(r[7]),
       webKitSites: num(r[8]),
+      webKitFullscreens: num(r[9]),
+      fullscreenFramesKept: num(r[10]),
     })),
     { installed: num(cdm[0]?.[0]), reported: num(cdm[0]?.[1]) },
   );

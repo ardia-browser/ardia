@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "ardia/core/ac_hooks.h"
+#include "ardia/desktop/ac_desktop_webui_process_policy.h"
 #include "ardia/win/hooks.h"
 #include "ardia/win/launch_guard.h"
 #include "ardia/win/main.h"
@@ -150,6 +151,7 @@ class ShellDataSource : public content::URLDataSource {
                            : nullptr);
             },
             std::move(callback), path == "index.html"));
+    host->NoteAssetServed(path);
   }
 };
 
@@ -170,7 +172,9 @@ class ShellController : public content::WebUIController {
 
 class ShellConfig : public content::DefaultWebUIConfig<ShellController> {
  public:
-  ShellConfig() : DefaultWebUIConfig("chrome", "ardia") {}
+  ShellConfig()
+      : DefaultWebUIConfig(ardia::desktop_webui_process::kShellScheme,
+                           ardia::desktop_webui_process::kShellHost) {}
   bool IsWebUIEnabled(content::BrowserContext* context) override {
     return !Profile::FromBrowserContext(context)->IsOffTheRecord();
   }

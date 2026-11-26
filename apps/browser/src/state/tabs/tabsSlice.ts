@@ -22,6 +22,7 @@ import { splitOf } from "../splits/splits";
 import { hasPage, loadedPage, navigationOf, renavigated, wakeOf, withWake } from "./pageSession";
 import { cancelOpening, gateOpening, isGatedUrl, settleOpening } from "./openingGate";
 import { drainLive, setLive, stageLive } from "./tabLive";
+import { steppedTabId } from "./switchOrder";
 
 
 export type TabsSlice = {
@@ -157,10 +158,8 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
   },
 
   cycle(windowId, delta) {
-    const s = get();
-    const view = viewTabIds(s, windowId);
-    const i = view.indexOf(s.windows[windowId]?.activeTabIds[s.windows[windowId]!.profileId] ?? "");
-    if (view.length) get().activate(view[(i + delta + view.length) % view.length]!);
+    const next = steppedTabId(get(), windowId, delta);
+    if (next) get().activate(next);
   },
 
   navigate(id, input, { userInitiated = true, gated = false } = {}) {

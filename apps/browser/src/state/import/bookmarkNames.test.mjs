@@ -42,10 +42,10 @@ const root = {
   ],
 };
 
-test("an imported bookmark with an empty name keeps it empty, named ones, folders and order are unchanged, and the Bookmarks menu names it by its URL", () => {
+test("an imported bookmark with an empty name keeps it empty, named ones, folders and order are unchanged, and the Bookmarks menu names it by its URL", async () => {
   S().hydrate({});
   S().createWindow({ url: "https://home.example/" });
-  assert.equal(importBookmarks(P, root, "Helium"), 5);
+  assert.equal(await importBookmarks(P, root, "Helium"), 5);
   const roots = bookmarkRoots(S(), P);
   assert.deepEqual(tree(roots.bar)[1], [
     ["", "https://icon-only.example/"],
@@ -64,7 +64,7 @@ test("an imported bookmark with an empty name keeps it empty, named ones, folder
   assert.ok(menus.recentBookmarks.every((b) => b.title));
 });
 
-test("the untitled count covers every empty-named link in the bar, its folders and Other Bookmarks, once per hour", () => {
+test("the untitled count covers every empty-named link in the bar, its folders and Other Bookmarks, once per hour", async () => {
   assert.equal(untitledLinks(root), 3);
   assert.equal(untitledLinks(undefined), 0);
   takeImportRuns();
@@ -73,11 +73,11 @@ test("the untitled count covers every empty-named link in the bar, its folders a
   assert.equal(takeImportRuns().import_untitled_bookmarks, 0);
 });
 
-test("a reader that sends no name at all still gets the URL as the name, and isn't counted as untitled", () => {
+test("a reader that sends no name at all still gets the URL as the name, and isn't counted as untitled", async () => {
   S().hydrate({});
   S().createWindow({ url: "https://home.example/" });
   const nameless = { type: "folder", title: "", children: [{ type: "folder", title: "Bar", role: "toolbar", children: [{ type: "url", url: "https://untitled.example/" }] }] };
-  assert.equal(importBookmarks("second", nameless, "Safari"), 1);
+  assert.equal(await importBookmarks("second", nameless, "Safari"), 1);
   assert.equal(untitledLinks(nameless), 0);
   assert.deepEqual(tree(bookmarkRoots(S(), "second").bar)[1], [["https://untitled.example/", "https://untitled.example/"]]);
 });

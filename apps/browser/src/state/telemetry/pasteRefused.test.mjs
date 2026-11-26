@@ -65,15 +65,13 @@ test("a refused menu Paste records the first responder's class", () => {
   assert.equal(event.properties.responder, "NSTextView");
 });
 
-test("a deferred menu Paste records its reason, and a later one without a responder is still recorded", () => {
-  stub.emitAppEvent({ type: "pasteRefused", epoch: client.consentEpoch(), reason: "deferred", gateOpen: false, responder: "RCTUIPlainPasteFieldEditor" });
-  const first = queued().at(-1);
-  assert.equal(first.properties.reason, "deferred");
-  assert.equal(first.properties.gate_open, false);
-  assert.equal(first.properties.responder, "RCTUIPlainPasteFieldEditor");
+test("a deferred reason from an older build reads as unknown, and a later refusal without a responder is still recorded", () => {
+  stub.emitAppEvent({ type: "pasteRefused", epoch: client.consentEpoch(), reason: "deferred", gateOpen: true, responder: "RCTUIPlainPasteFieldEditor" });
+  assert.equal(queued().at(-1).properties.reason, "unknown");
   const before = queued().length;
-  stub.emitAppEvent({ type: "pasteRefused", epoch: client.consentEpoch(), reason: "deferred", gateOpen: false });
+  stub.emitAppEvent({ type: "pasteRefused", epoch: client.consentEpoch(), reason: "refused", gateOpen: false });
   assert.equal(queued().length, before + 1);
+  assert.equal(queued().at(-1).properties.reason, "refused");
   assert.equal("responder" in queued().at(-1).properties, false);
 });
 

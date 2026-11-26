@@ -487,7 +487,7 @@ test("an engine with only the native left-edge watcher keeps it for a left sideb
 
 test("the traffic lights follow a sidebar on the right: a trailing center is measured from the window's right edge, as the Mac anchors them", async () => {
   const lights = () => [0, 1, 2].map((index) => trafficLightPosition(trafficLightsPlace("main"), index));
-  assert.match(read("./shims/shellBase.tsx"), /setTrafficLightsCenter: async \(id: string, center: \[number, number\] \| null, trailing = false\) => setTrafficLightsCenter\(id, center, trailing\)/);
+  assert.match(read("./shims/shellBase.tsx"), /setTrafficLightsCenter: async \(id: string, center: \[number, number\] \| null, trailing = false\) => \{\n\s+await setTrafficLightsCenter\(id, center, trailing\);\n\s+await placeNativeTrafficLights\(id, center, trailing\);/);
   await setTrafficLightsCenter("main", [215, 30], true);
   assert.deepEqual(lights(), [{ right: 208, top: 23 }, { right: 185, top: 23 }, { right: 162, top: 23 }]);
   await setTrafficLightsCenter("main", [25, 30]);

@@ -1,35 +1,18 @@
 import { useRef, useState } from "react";
-import { consentEpoch } from "../../browser/src/state/telemetry/client";
-import { Symbol, closeWindow, emitCommand } from "@ardia/shell";
+import { Symbol } from "@ardia/shell";
 import { useBrowser } from "../../browser/src/state/browser/store";
 import { menuState } from "../../browser/src/state/commands/menuState";
 import { useTheme } from "../../browser/src/components/ui/theme";
 import { menuButtonPresses, showMenu } from "./menus";
 import { linuxMenuShortcuts } from "./shortcuts";
-import { appMenuChoice, appMenuCommandEvent, appMenuItems } from "./appMenu";
-import { minimizeAllWindows } from "./windowMenu";
-import { currentEditMenu, currentEditTarget, runEdit } from "./editTargets";
-import { ardiaHost, hostModuleMethod, reportHostError } from "./host";
-import { linuxCapabilities, unavailableCommands } from "./hostCapabilities";
-import { videoTourUrl } from "../../browser/src/state/onboarding/tour";
-import { showToast } from "../../browser/src/state/app/toasts";
-import { checkForUpdates, engineInfo, systemInfo } from "../../browser/src/platform/app";
-import { runMenuUpdate, updateMenuItem } from "@platform/updater";
+import { appMenuChoice, appMenuItems } from "./appMenu";
+import { currentEditMenu, currentEditTarget } from "./editTargets";
+import { ardiaHost, reportHostError } from "./host";
+import { updateMenuItem } from "@platform/updater";
+import { hiddenAppMenuCommands, runAppMenuChoice } from "./appMenuActions";
 import "./linkShareSurface";
-
-const hiddenCommands = () => {
-  const hidden = unavailableCommands(linuxCapabilities());
-  hidden.delete("emailPageLocation");
-  if (!videoTourUrl()) hidden.add("videoTour");
-  if (!systemInfo().releaseNotesURL) hidden.add("releaseNotes");
-  return hidden;
-};
-
-async function showAbout(windowId: string) {
-  const { appName, appVersion, appBuild } = systemInfo();
-  const engine = await engineInfo().catch(() => null);
-  showToast(windowId, `${appName} ${appVersion} (${appBuild})`, engine?.chromiumVersion ? `ArdiaCore on Chromium ${engine.chromiumVersion}` : undefined);
-}
+import { refreshShareServices } from "./linkShare";
+import { beginAppMenuOpen, mayPublishAppMenu } from "./appMenuOpen";
 
 export async function openAppMenu(windowId: string, button: HTMLElement) {
   const state = useBrowser.getState();
@@ -37,26 +20,18 @@ export async function openAppMenu(windowId: string, button: HTMLElement) {
     shortcut.id,
     "key" in shortcut ? { key: shortcut.key, modifiers: shortcut.modifiers } : { key: "", modifiers: [] },
   ]));
+  const current = beginAppMenuOpen(windowId);
   const focusOrder = [windowId, ...state.ui.focusOrder.filter((id) => id !== windowId)];
   const editTarget = currentEditTarget();
   const updates = ardiaHost ? await updateMenuItem(ardiaHost).catch(() => null) : null;
-  const items = appMenuItems(menuState({ ...state, ui: { ...state.ui, focusOrder } }), shortcuts, hiddenCommands(), { fullScreen: !!state.windows[windowId]?.fullScreen, edit: currentEditMenu(windowId, editTarget), updates });
+  await refreshShareServices();
+  if (!mayPublishAppMenu(current, button)) return;
+  const items = appMenuItems(menuState({ ...state, ui: { ...state.ui, focusOrder } }), shortcuts, hiddenAppMenuCommands(), { fullScreen: !!state.windows[windowId]?.fullScreen, edit: currentEditMenu(windowId, editTarget), updates });
   const { left, bottom } = button.getBoundingClientRect();
   const openedByPointer = !button.matches(":focus-visible");
   const id = await showMenu(items, undefined, { x: left, y: bottom + 4 });
   if (openedByPointer && document.activeElement === button) button.blur();
-  const choice = id ? appMenuChoice(id) : null;
-  if (!choice) return;
-  if (choice.kind === "about") return showAbout(windowId);
-  if (choice.kind === "updates") {
-    const update = ardiaHost ? runMenuUpdate(ardiaHost, choice.restart) : null;
-    return void (update ?? checkForUpdates()).catch(reportHostError);
-  }
-  if (choice.kind === "edit") return runEdit(windowId, choice.action, editTarget).catch(reportHostError);
-  if (choice.kind === "command") return emitCommand(appMenuCommandEvent(choice, windowId, consentEpoch()));
-  if (choice.action === "close") return void closeWindow(windowId).catch(reportHostError);
-  if (choice.action === "minimizeAll") return void minimizeAllWindows(useBrowser.getState().windowOrder);
-  void hostModuleMethod("ArdiaShell", choice.action === "minimize" ? "minimizeWindow" : "toggleMaximizeWindow")(windowId).catch(reportHostError);
+  return runAppMenuChoice(windowId, id ? appMenuChoice(id) : null, editTarget);
 }
 
 export function AppMenuButton({ windowId, size }: { windowId: string; size?: number }) {

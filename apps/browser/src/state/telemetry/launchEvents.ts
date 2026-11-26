@@ -1,6 +1,7 @@
 import { useBrowser } from "../browser/store";
 import { capture, type ConsentToken, type startClient } from "./usageClient";
 import { contextProperties, hardwareProperties, launchGuardProperties } from "./diagnostics";
+import { shellRecoveryProperties } from "./shellRecovery";
 import { topAppsSharingAtLaunch } from "./topAppsSharing";
 import { appInfo } from "./transport";
 import { call } from "../../platform/engine";
@@ -33,7 +34,7 @@ export async function launchEvents(session: ReturnType<typeof startClient>, cons
   const nativeMessaging = probeNativeMessaging(consent);
   const hardware = await hardwareProperties();
   const previous = session.previous === "unclean" ? { ...contextProperties(session.context, "prev_", Date.now()), rebooted_since: rebootedSince(session.lastLaunchAt) } : {};
-  capture("app_launched", { previous_session: session.previous, ...hardware, ...previous, ...launchGuardProperties(), ...engineMatchProperties(appInfo().engineMatch), ...nativeMessagingProperties(await nativeMessaging) }, consent);
+  capture("app_launched", { previous_session: session.previous, ...hardware, ...previous, ...launchGuardProperties(), ...shellRecoveryProperties(), ...engineMatchProperties(appInfo().engineMatch), ...nativeMessagingProperties(await nativeMessaging) }, consent);
   if (session.updatedFrom) capture("app_updated", { from_version: session.updatedFrom }, consent);
   capture("top_apps_sharing", topApps, consent);
   await reportShellMigrationAtLaunch(consent);

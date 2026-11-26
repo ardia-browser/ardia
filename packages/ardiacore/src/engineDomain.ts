@@ -73,7 +73,7 @@ export type CursorRestore = { hidden: boolean; epoch: string };
 
 export type HoverLostEpisode = {
   reason: "halfActive" | "staleMenu" | "notKeyOrMain" | "coveredByView" | "responderLost" | "coveredByWindow";
-  trigger: "move" | "click";
+  trigger: "move" | "click" | "key";
   keyWindow: string;
   mainWindow: string;
   preventKey: boolean;
@@ -87,6 +87,9 @@ export type HoverLostEpisode = {
   overPage: boolean;
   cover: "none" | "reactNative" | "chromium" | "other";
   coverClear: boolean;
+  coverView?: string;
+  coverClearView?: string;
+  coverSize?: "none" | "small" | "large" | "full";
   responder?: "none" | "window" | "otherWindow" | "page" | "control";
   coverWindow?: string;
   healed: boolean;
@@ -95,9 +98,10 @@ export type HoverLostEpisode = {
   healRefusedLast?: string;
   healRefusedWindow?: string;
   otherWindowClicks?: number;
-  endedBy: "hover" | "heal" | "appInactive" | "windowClosed";
+  endedBy: "hover" | "heal" | "appInactive" | "windowClosed" | "quit";
   seconds: number;
   episode: number;
+  serial?: number;
   epoch: string;
 };
 

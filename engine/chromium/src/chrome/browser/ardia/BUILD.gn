@@ -33,6 +33,8 @@ ardia_sources = [
   "ac_engine.cc",
   "ac_engine.h",
   "ac_extension_actions.cc",
+  "ac_extension_sites.cc",
+  "ac_extension_sites_internal.h",
   "ac_extensions.cc",
   "ac_extensions_load_health.cc",
   "ac_extensions_sync.cc",

@@ -1,5 +1,6 @@
 #include "ardia/desktop/ac_desktop_telemetry_policy.h"
 #include "ardia/desktop/generated/ac_desktop_routes.h"
+#include "ardia/desktop/ac_desktop_webui_process_policy.h"
 #include "ardia/win/webui/webui_policy.h"
 
 #include <cassert>
@@ -81,7 +82,10 @@ void TestDocumentNames() {
   assert(!ReservedWindowsDocumentName("launch-starts.json"));
   assert(!ReservedWindowsDocumentName("launch-look.json"));
   for (const char* owned : {"launch-guard.json", "LAUNCH-GUARD.JSON",
-                            "Launch-Guard.Json"}) {
+                            "Launch-Guard.Json", "shell-recovery.json",
+                            "Shell-Recovery.JSON",
+                            "shell-recovery-previous.json",
+                            "SHELL-RECOVERY-PREVIOUS.JSON"}) {
     assert(ValidWindowsDocumentName(owned));
     assert(!ReservedWindowsDocumentName(owned));
     assert(EngineOwnedWindowsDocumentName(owned));
@@ -90,6 +94,14 @@ void TestDocumentNames() {
   }
   assert(!EngineOwnedWindowsDocumentName("launch-guard.json.tmp"));
   assert(!EngineOwnedWindowsDocumentName("launch-guard.jsonx"));
+  assert(!EngineOwnedWindowsDocumentName("shell-recovery.json.tmp"));
+  assert(!EngineOwnedWindowsDocumentName("shell-recovery-prev.json"));
+  for (const char* recovery :
+       {ardia::desktop_webui_process::kShellRecoveryDocument,
+        ardia::desktop_webui_process::kPreviousShellRecoveryDocument}) {
+    assert(ardia::desktop_webui_process::ShellRecoveryDocument(recovery));
+    assert(EngineOwnedWindowsDocumentName(recovery));
+  }
   assert(WritableWindowsDocumentName("launch-look.json"));
   assert(WritableWindowsDocumentName("telemetry.json"));
   assert(!WritableWindowsDocumentName("session.json"));

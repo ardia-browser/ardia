@@ -4,6 +4,8 @@ export type CaptureOptions = {
   raw?: Record<string, unknown>;
   urgent?: boolean;
   persist?: boolean;
+  uuid?: string;
+  at?: number;
 };
 
 export type SharingSource = "settings" | "onboarding" | "ask" | "watch" | "watch_ended";

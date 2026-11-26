@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "ardia/desktop/ac_desktop_webui_process_policy.h"
 #include "ardia/win/webui/desktop_platform_win.h"
 #include "ardia/win/webui/webui_documents.h"
 #include "ardia/win/webui/webui_frame.h"
@@ -62,6 +63,7 @@ namespace ardia_win::webui {
 class FilePicker;
 class ShellBridge;
 class ShellHostView;
+class ShellRecovery;
 class ShellTransparency;
 
 struct WindowConfig {
@@ -193,6 +195,9 @@ class ShellHostView : public views::View,
   void NoteRequest(base::WeakPtr<ShellBridge> handler, uint64_t generation);
 
   std::string BootstrapJson() const;
+  void NoteAssetServed(std::string_view asset) {
+    launch_bootstrap_.Served(asset);
+  }
   void Invoke(const std::string& method, const base::DictValue& args, Done done);
   void EngineCall(const std::string& name,
                   const std::string& profile,
@@ -337,6 +342,7 @@ class ShellHostView : public views::View,
   raw_ptr<BrowserView> browser_view_;
   raw_ptr<Profile> app_profile_;
   WindowConfig config_;
+  ardia::desktop_webui_process::LaunchBootstrap launch_bootstrap_;
   int id_ = 0;
   int private_ordinal_ = 0;
   bool closing_ = false;
@@ -351,6 +357,7 @@ class ShellHostView : public views::View,
 
   raw_ptr<views::WebView> shell_ = nullptr;
   std::unique_ptr<ShellTransparency> transparency_;
+  std::unique_ptr<ShellRecovery> recovery_;
   std::vector<gfx::Rect> pass_;
   size_t logged_pass_regions_ = static_cast<size_t>(-1);
   std::map<int, std::unique_ptr<PageBinding>> bindings_;

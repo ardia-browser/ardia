@@ -37,7 +37,7 @@ export const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
   tabs: [
     { id: "newTab", keys: ["newTabOpens"] },
     { id: "newTabPosition", keys: ["newTabPosition", "newTabButtonPosition"] },
-    { id: "ctrlTab", keys: ["shortcuts"], askedWithPreset: true },
+    { id: "ctrlTab", keys: ["tabSwitcherOrder", "tabSwitcherView"], askedWithPreset: true },
     { id: "tidy", keys: ["cleanUpInactiveTabsAfterMinutes"] },
     { id: "quit", keys: ["restoreSession"] },
     { id: "windows", keys: ["shareTabsAcrossWindows"] },

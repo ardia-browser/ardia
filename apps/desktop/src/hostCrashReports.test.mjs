@@ -248,7 +248,8 @@ test("a dump written without a crash, and bytes that aren't a minidump, are neve
   assert.doesNotThrow(() => parseMinidump(truncated));
 });
 
-const HOST_PLATFORM = process.env.ARDIA_DESKTOP_MODE === "win" ? 2 : 0x8201;
+const HOST_PLATFORM = { win: 2, mac: 0x8101 }[process.env.ARDIA_DESKTOP_MODE] ?? 0x8201;
+const READS_HOST_DUMPS = HOST_PLATFORM !== 0x8101;
 
 test("ArdiaApp.crashReports reads the engine's crashpad dumps after the cursor, newest five of each kind, and skips a dump it can't read", async () => {
   const at = (n) => 1_794_770_000_000 + n * 1000;
@@ -264,7 +265,7 @@ test("ArdiaApp.crashReports reads the engine's crashpad dumps after the cursor, 
   const host = crashHost(dumps);
   assert.equal(servesCrashDumps(host), true);
   const reports = await resolveHostModule(host, "ArdiaApp", "crashReports")(at(5));
-  assert.deepEqual(reports.map((report) => report.incidentId), ["r2", "r3", "r4", "r5", "r6", "b1"]);
+  assert.deepEqual(reports.map((report) => report.incidentId), READS_HOST_DUMPS ? ["r2", "r3", "r4", "r5", "r6", "b1"] : []);
   assert.deepEqual(host.invoked[0], ["ArdiaCrash.list", at(5)]);
   assert.equal(host.invoked.some(([method, id]) => method === "ArdiaCrash.read" && id === "old"), false);
 });
@@ -330,7 +331,7 @@ test("a Windows dump written without a crash is never reported, and a Linux dump
 test("ArdiaApp.crashReports reads only dumps of the platform the host was built for, with that platform's reader", async () => {
   const host = crashHost([{ id: "w", time: 5, text: base64(windowsDump({ ptype: "browser" })) }, { id: "l", time: 6, text: base64(minidump(chainedStack())) }]);
   const reports = await resolveHostModule(host, "ArdiaApp", "crashReports")(0);
-  const expected = HOST_PLATFORM === 2 ? [["w", "WIN32_EXCEPTION"]] : [["l", "SIGNAL"]];
+  const expected = { 2: [["w", "WIN32_EXCEPTION"]], 0x8201: [["l", "SIGNAL"]] }[HOST_PLATFORM] ?? [];
   assert.deepEqual(reports.map((report) => [report.incidentId, report.terminationNamespace]), expected);
 });
 
@@ -343,6 +344,7 @@ test("a dump without system info, or whose platform contradicts the host, is nev
   assert.equal(hostCrashReport(parseMinidump(minidump(chainedStack())), entry, 2), null);
   assert.equal(hostCrashReport(parseMinidump(windowsDump({})), entry, 2).terminationNamespace, "WIN32_EXCEPTION");
   assert.equal(hostCrashReport(parseMinidump(minidump(chainedStack())), entry, 0x8201).terminationNamespace, "SIGNAL");
+  assert.equal(hostCrashReport(parseMinidump(minidump({ ...chainedStack(), platform: 0x8101 })), entry, 0x8101), null, "the Mac WebUI has no Mac dump reader yet, so it never reports a Mac dump as a Linux signal");
 });
 
 test("a Windows module path in a Linux dump leaves only its file name", () => {

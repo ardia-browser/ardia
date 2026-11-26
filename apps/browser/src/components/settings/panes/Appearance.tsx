@@ -50,6 +50,11 @@ const SELECTED_TOP_APP: Option<Settings["selectedTopApp"]>[] = [
   { value: "outline", title: "Outline only" },
 ];
 
+const MINIMALISM_PINNED_ICONS: Option<Settings["minimalismPinnedIcons"]>[] = [
+  { value: "letters", title: "Letters" },
+  { value: "logos", title: "Site Logos" },
+];
+
 const SIDEBAR_TEXT_SIZES: Option<Settings["sidebarTextSize"]>[] = [
   { value: "default", title: "Default" },
   { value: "large", title: "Large" },
@@ -191,6 +196,7 @@ function ToolbarSection() {
   const placement = useSettings((s) => s.commandBarPlacement);
   const buttons = useSettings((s) => s.addressBarButtons);
   const minimal = useSettings((s) => s.minimalismMode);
+  const pinnedIcons = useSettings((s) => s.minimalismPinnedIcons);
   const place: CommandBarPlace = placement === "field" ? "field" : "centred";
   const addressBarFixed = useHiddenSetting()(setting("appearance.addressBar"));
   const fieldIn = addressBar === "sidebar" && !addressBarFixed ? "sidebar" : "toolbar";
@@ -241,6 +247,9 @@ function ToolbarSection() {
             <PopUp value={buttons} options={ADDRESS_BAR_BUTTONS} onChange={(v) => updateSettings({ addressBarButtons: v })} minWidth={160} />
           </Row>
           <SettingToggle anchor="appearance.minimalismMode" />
+          <Row anchor="appearance.minimalismPinnedIcons">
+            <PopUp value={pinnedIcons} options={MINIMALISM_PINNED_ICONS} onChange={(v) => updateSettings({ minimalismPinnedIcons: v })} minWidth={160} />
+          </Row>
           <BookmarksBarRow />
         </Group>
       </Box>

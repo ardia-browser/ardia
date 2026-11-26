@@ -8,6 +8,7 @@ import { useFullscreenTab } from "../../browser/src/state/tabs/pageState";
 import { useWindowButtonStyle } from "../../browser/src/state/windows/windowButtons";
 import { useWindowFullScreen } from "../../browser/src/state/browser/hooks";
 import { lightPressKeepsFocusWhereItWas, trafficLightsShown } from "./windowControlsRules";
+import { drawsNativeTrafficLights } from "./nativeTrafficLights";
 
 const controls = [
   { light: "close", label: "Close window", press: closeFromWindowControls },
@@ -21,7 +22,7 @@ export function TrafficLights({ windowId }: { windowId: string }) {
   const windowFullScreen = useWindowFullScreen(windowId);
   const theme = useBrowser((state) => state.ui.appDark ? "dark" : "light");
   const style = useWindowButtonStyle();
-  if (!trafficLightsShown({ style, pageFullScreen, windowFullScreen })) return null;
+  if (drawsNativeTrafficLights() || !trafficLightsShown({ style, pageFullScreen, windowFullScreen })) return null;
   return (
     <div className="ardia-traffic-lights" aria-label="Window controls" role="group" inert={trafficLightsOffWindow(place) || undefined} onMouseDown={(e) => {
       if (lightPressKeepsFocusWhereItWas(e)) e.preventDefault();

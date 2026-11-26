@@ -16,7 +16,6 @@ const REASONS = new Set([
   "mouse_down",
   "window_left",
   "no_text",
-  "deferred",
   "refused",
 ]);
 

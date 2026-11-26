@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, TextInput, View, type GestureResponderEvent, type Insets, type TextStyle } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
-import { hex, layout, useTheme } from "../ui/theme";
+import { caretColorOnRow, hex, layout, useTheme } from "../ui/theme";
+import { arcSelectedFill } from "../ui/tokens";
 import { useIsActiveTab, usePageProfileId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
 import { returnToPinnedUrl } from "../../state/pins/actions";
 import { useSplitRowPanes } from "../../state/sidebar/hooks";
@@ -178,6 +179,8 @@ export const TabRow = memo(function TabRow({
                 initial={tab.customTitle ?? tab.title}
                 placeholder={tab.title || "Tab name"}
                 color={active ? theme.rowSelectedText : theme.textPrimary}
+                surface={fill}
+                stockSurface={active && !quiet ? arcSelectedFill[theme.dark ? "dark" : "light"] : fill}
                 onDone={(text) => (text === null ? endRename({ kind: "tab", id: tabId }) : commitRename({ kind: "tab", id: tabId }, text))}
               />
             ) : away ? (
@@ -231,6 +234,8 @@ export function RenameField({
   initial,
   placeholder,
   color,
+  surface = ink.clear,
+  stockSurface = surface,
   fontSize = SIDEBAR_TYPE.title,
   weight,
   onDone,
@@ -238,6 +243,8 @@ export function RenameField({
   initial: string;
   placeholder: string;
   color: string;
+  surface?: string;
+  stockSurface?: string;
   fontSize?: number;
   weight?: TextStyle["fontWeight"];
   onDone(text: string | null): void;
@@ -264,6 +271,7 @@ export function RenameField({
         placeholder={placeholder}
         placeholderTextColor={theme.placeholder}
         selectionColor={theme.selection}
+        cursorColor={caretColorOnRow(theme, surface, stockSurface)}
         selectTextOnFocus
         enableFocusRing={false}
         onSubmitEditing={() => finish(text)}

@@ -1,7 +1,7 @@
 import type { SearchScope } from "@ardia/core";
 import { memo, type ReactNode, type RefObject } from "react";
 import { View } from "react-native";
-import { Button, capsule, ContextMenuArea, ink, useHover, useTheme } from "../ui";
+import { Button, capsule, ContextMenuArea, ink, quietBarGlyph, useHover, useTheme } from "../ui";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { GoButton } from "./GoButton";
 import { ScopeChip } from "./ScopeChip";
@@ -102,7 +102,7 @@ const DictateButton = memo(function DictateButton({ onPress }: { onPress(): void
   const theme = useTheme();
   const glass = useGlass();
   const { hovered, hoverProps } = useHover();
-  if (!glass) return <Button variant="icon" icon="mic" glyph={BAR.bottom.mic} color={theme.textTertiary} tooltip="Dictate" onPress={onPress} />;
+  if (!glass) return <Button variant="icon" icon="mic" glyph={BAR.bottom.mic} color={quietBarGlyph(theme)} tooltip="Dictate" onPress={onPress} />;
   return (
     <View {...hoverProps}>
       <GlassFill radius={capsule(GO_BUTTON.height)} state={hovered ? "lit" : "rest"} />
@@ -112,8 +112,8 @@ const DictateButton = memo(function DictateButton({ onPress }: { onPress(): void
         box={GO_BUTTON.height}
         capsule
         glyph={BAR.bottom.mic}
-        color={theme.textTertiary}
-        palette={{ icon: theme.textTertiary, iconDisabled: theme.iconDisabled, hover: ink.clear, pressed: theme.toolbarPressed }}
+        color={quietBarGlyph(theme)}
+        palette={{ icon: quietBarGlyph(theme), iconDisabled: theme.iconDisabled, hover: ink.clear, pressed: theme.toolbarPressed }}
         tooltip="Dictate"
         onPress={onPress}
       />

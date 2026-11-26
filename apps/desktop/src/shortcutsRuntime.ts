@@ -3,6 +3,7 @@ import { useBrowser } from "../../browser/src/state/browser/store";
 import { consentEpoch } from "../../browser/src/state/telemetry/client";
 import { emitNativeEvent, provideNativeModuleProvider } from "./shims/expo-modules-core";
 import { ardiaHost, reportHostError, type ArdiaHost } from "./host";
+import { MODIFIER_FLAGS, MODIFIER_KEYS } from "@platform/shortcutKeys";
 import { composingKey, dispatchesKeyPress, keyboardCombo, linuxBindings, linuxNativeBindings, recordableShortcut, utilityBindings, type Binding } from "./shortcuts";
 
 let capturing = false;
@@ -58,7 +59,7 @@ export async function startLinuxShortcuts(host: ArdiaHost) {
   };
   const bindingsFor = (encoded: string) => JSON.parse(encoded) as Binding[];
   const hold = (binding: Binding) => {
-    holding = [4, 16, 8].find((flag) => binding.modifiers & flag) ?? 0;
+    holding = [MODIFIER_FLAGS.command, MODIFIER_FLAGS.control, MODIFIER_FLAGS.option].find((flag) => binding.modifiers & flag) ?? 0;
     holdingCode = holding ? null : binding.keyCode;
   };
   provideNativeModuleProvider((module, method) => {
@@ -110,7 +111,8 @@ export async function startLinuxShortcuts(host: ArdiaHost) {
     emitNativeEvent("ArdiaShell", "onCommand", { command: binding.command, arg: binding.arg, windowId: host.bootstrap.windowId, epoch: consentEpoch() });
   }, true);
   window.addEventListener("keyup", (event) => {
-    const flag = event.key === "Control" ? 4 : event.key === "Meta" ? 16 : event.key === "Alt" ? 8 : event.key === "Shift" ? 2 : 0;
+    const modifier = MODIFIER_KEYS[event.key];
+    const flag = modifier ? MODIFIER_FLAGS[modifier] : 0;
     if (flag && holding & flag || holdingCode && keyboardCombo(event).keyCode === holdingCode) releaseSwitcher();
   }, true);
   window.addEventListener("blur", () => { releaseSwitcher(); void cancelShortcutRecording(); });

@@ -2,6 +2,7 @@ import { copyDocument, createDocument, documentExists, listDocuments, readDocume
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 import { isFields } from "../../lib/decode";
 import { readSaved, readSavedValue, type Migrations, type SavedObject, type SavedProblem } from "../../lib/savedDocument";
+import { SESSION_ROWS } from "./savedShapes";
 
 type UnusableReason = SavedProblem | "unreadable" | "rows";
 export type FoundDocument =
@@ -38,11 +39,14 @@ export function findDocument(name: string, version: number, migrations: Migratio
 const listOrAbsent = (value: unknown) => value === undefined || Array.isArray(value);
 const fieldsOrAbsent = (value: unknown) => value === undefined || isFields(value);
 
-const SESSION_LISTS = ["windows", "tabs", "groups", "splits", "windowOrder", "profileOrder"];
+const SESSION_ROW_KEYS: readonly string[] = SESSION_ROWS;
+const SESSION_LISTS = ["windowOrder", "profileOrder"];
 const SESSION_OBJECTS = ["profiles", "settings", "parkedPins"];
+const rowsOrAbsent = (value: unknown) => listOrAbsent(value) || isFields(value);
 
 export const wholeSession = (doc: SavedObject) =>
-  [...SESSION_LISTS, ...SESSION_OBJECTS].some((key) => doc[key] !== undefined) &&
+  [...SESSION_ROW_KEYS, ...SESSION_LISTS, ...SESSION_OBJECTS].some((key) => doc[key] !== undefined) &&
+  SESSION_ROW_KEYS.every((key) => rowsOrAbsent(doc[key])) &&
   SESSION_LISTS.every((key) => listOrAbsent(doc[key])) &&
   SESSION_OBJECTS.every((key) => fieldsOrAbsent(doc[key]));
 

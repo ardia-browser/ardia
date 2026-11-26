@@ -85,6 +85,7 @@ export const snapshotTab = (t: Tab): TabSnapshot => ({
   customIcon: t.customIcon,
   pinnedUrl: t.pinnedUrl,
   ...(t.engine ? { engine: t.engine } : {}),
+  ...(t.tileLetters ? { tileLetters: t.tileLetters } : {}),
   profileId: t.profileId,
   lastActiveAt: t.lastActiveAt,
 });

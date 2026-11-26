@@ -1,9 +1,11 @@
 #ifndef ARDIA_CORE_AC_MODAL_DIALOG_HOST_H_
 #define ARDIA_CORE_AC_MODAL_DIALOG_HOST_H_
 
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/task/sequenced_task_runner_helpers.h"
 #include "components/web_modal/web_contents_modal_dialog_host.h"
-#include "content/public/browser/web_contents_user_data.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
@@ -28,12 +30,14 @@ bool WindowIsForeground(NSWindow* window);
 void DialogHostObserverAdded();
 void DialogHostObserverRemoved();
 
-class ACTabDialogHost : public web_modal::WebContentsModalDialogHost,
-                        public content::WebContentsUserData<ACTabDialogHost> {
+class ACTabDialogHost : public web_modal::WebContentsModalDialogHost {
  public:
   ACTabDialogHost(const ACTabDialogHost&) = delete;
   ACTabDialogHost& operator=(const ACTabDialogHost&) = delete;
-  ~ACTabDialogHost() override;
+
+  static ACTabDialogHost* GetOrCreateForWebContents(
+      content::WebContents* contents);
+  static ACTabDialogHost* FromWebContents(content::WebContents* contents);
 
   gfx::NativeView GetHostView() const override;
   gfx::Point GetDialogPosition(const gfx::Size& size) override;
@@ -44,13 +48,21 @@ class ACTabDialogHost : public web_modal::WebContentsModalDialogHost,
   void NotifyPositionRequiresUpdate() override;
 
  private:
-  friend class content::WebContentsUserData<ACTabDialogHost>;
-  explicit ACTabDialogHost(content::WebContents* contents);
+  class Anchor;
+  friend class base::DeleteHelper<ACTabDialogHost>;
 
+  explicit ACTabDialogHost(content::WebContents* contents);
+  ~ACTabDialogHost() override;
+
+  void ContentsDestroyed();
+  void CloseOrphanedDialogs();
+  void DeleteIfOrphaned();
   WindowHost* window_host() const;
 
+  raw_ptr<content::WebContents> contents_;
   base::ObserverList<web_modal::ModalDialogHostObserver> observers_;
-  WEB_CONTENTS_USER_DATA_KEY_DECL();
+  bool deletion_scheduled_ = false;
+  base::WeakPtrFactory<ACTabDialogHost> weak_factory_{this};
 };
 
 }

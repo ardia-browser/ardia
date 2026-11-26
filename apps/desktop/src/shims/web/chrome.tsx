@@ -1,16 +1,21 @@
-import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { View, type ViewProps, type ViewStyle } from "react-native";
 import { useBrowser } from "../../../../browser/src/state/browser/store";
 import { useScopedTheme } from "../../../../browser/src/components/ui/theme";
+import { materialFill } from "./materials";
 import { ardiaHost, hostModuleMethod, hostSupports, reportHostError } from "../../host";
 import { shellOverPages, useInputRegion } from "../../shellAbove";
-import { GlassInside, GlassOptIn, useGlassSurface, useVisualEffectMark } from "../../shellGlass";
+import { GlassGroupContext, GlassInside, GlassOptIn, glassTint, nativeGlassBehindWindow, useGlassLook, useGlassSurface, useVisualEffectMark } from "../../shellGlass";
+import type { GlassMaterial } from "../../glassRegions";
 import { watchPageFocus } from "../../pageFocus";
 import { menuShown } from "../../menus";
 import { watchOutsidePresses } from "../../outsidePress";
 import { OutsidePressIgnoreContext } from "../../outsidePressScope";
 import { markWindowDrag, WINDOW_DRAG_ROUTES, watchWindowDrag, type WindowDragHost } from "../../windowDrag";
 import type { MiddleClickEvent } from "./MouseArea";
+import { LiquidGlassLayer } from "./liquidGlass";
+import { backdropKeyOf, DOCK_GLASS, glassGlow } from "./liquidGlassOptics";
+import { nativeLiquidGlass, webLiquidGlassAllowed } from "../../liquidGlassSupport";
 import { edgeGain, fallbackRadius, highlightMask, maskStyle, peakGain, shapeMask, type RimCurve, type RimProfile, type ShadeProfile } from "./glassRim";
 
 type Style = ViewStyle & Record<string, unknown>;
@@ -107,29 +112,40 @@ export function Surface({ fill, fillColors, fillStops, fade, fadeStops, cornerRa
   );
 }
 
-type MaterialFill = { light: string; dark: string };
-
-const MATERIAL_FILL: Record<string, MaterialFill> = {
-  popover: { light: "rgba(246,246,246,0.72)", dark: "rgba(40,40,42,0.72)" },
-  menu: { light: "rgba(246,246,246,0.72)", dark: "rgba(40,40,42,0.72)" },
-  hudWindow: { light: "rgba(246,246,246,0.6)", dark: "rgba(30,30,30,0.6)" },
-  sidebar: { light: "rgba(240,240,240,0.5)", dark: "rgba(46,46,48,0.5)" },
-  underWindowBackground: { light: "rgba(240,240,240,0.4)", dark: "rgba(30,30,30,0.4)" },
-};
-const PLAIN_MATERIAL: MaterialFill = { light: "rgba(246,246,246,0.6)", dark: "rgba(40,40,42,0.6)" };
-
 export function useSurfaceDark(): boolean {
   const appDark = useBrowser((s) => s.ui.appDark);
   return useScopedTheme()?.dark ?? appDark;
 }
+
+const NATIVE_MATERIALS: Record<string, GlassMaterial> = {
+  popover: "popover",
+  menu: "menu",
+  toolTip: "popover",
+  hudWindow: "hud",
+  sidebar: "sidebar",
+  headerView: "header",
+  titlebar: "header",
+  sheet: "window",
+  windowBackground: "window",
+  underWindowBackground: "underWindow",
+  fullScreenUI: "hud",
+  contentBackground: "window",
+};
+
+export const nativeMaterial = (material: string): GlassMaterial => NATIVE_MATERIALS[material] ?? "popover";
+
+export const nativeGlassFor = (overPages: boolean) => overPages && nativeGlassBehindWindow();
 
 export type VisualEffectProps = ViewProps & { material?: string; blendingMode?: "withinWindow" | "behindWindow"; cornerRadius?: number };
 
 export function VisualEffect({ material = "popover", cornerRadius, style, ...props }: VisualEffectProps) {
   const mark = useRef<View & Element>(null);
   useVisualEffectMark(mark);
-  const fill = (MATERIAL_FILL[material] ?? PLAIN_MATERIAL)[useSurfaceDark() ? "dark" : "light"];
-  const opaque = shellOverPages();
+  const dark = useSurfaceDark();
+  const fill = materialFill(material, dark);
+  const native = nativeGlassBehindWindow();
+  const opaque = shellOverPages() || native;
+  useGlassLook(mark, { material: nativeMaterial(material), appearance: dark ? "dark" : "light" }, native);
   const glass: Style = {
     backgroundColor: opaque ? opaqueColor(fill) : fill,
     backdropFilter: opaque ? undefined : "blur(24px) saturate(180%)",
@@ -217,6 +233,7 @@ function fallbackBands(rim: RimProfile) {
 }
 
 const layer: React.CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none" };
+const GLASS_LAYERS = { "data-ardia-glass-layers": "" };
 
 function backdrop(filter: string, extra?: Record<string, string>): React.CSSProperties {
   return { ...layer, backdropFilter: filter, WebkitBackdropFilter: filter, ...extra };
@@ -249,22 +266,50 @@ function scrolledGlassSurface(theme: "light" | "dark", clear: boolean, cornerRad
   };
 }
 
-export function GlassEffect({ cornerRadius = 0, tint, glassStyle = "regular", dark, style, ...props }: GlassEffectProps) {
+export function GlassGroup({ strength: _strength, children, ...props }: ViewProps & { strength?: number }) {
+  const id = `group-${useId().replace(/[^A-Za-z0-9_-]/g, "")}`;
+  return (
+    <View {...props}>
+      <GlassGroupContext.Provider value={id}>{children}</GlassGroupContext.Provider>
+    </View>
+  );
+}
+
+export function glassFrameStyles(style: GlassEffectProps["style"], cornerRadius: number) {
+  const flat = ([style] as unknown[]).flat(Infinity).reduce<ViewStyle>((all, part) => (part && typeof part === "object" ? { ...all, ...(part as ViewStyle) } : all), {});
+  const { opacity, ...outer } = flat;
+  const glassLayer: ViewStyle = { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, borderRadius: cornerRadius, ...(opacity === undefined ? {} : { opacity }) };
+  return { outer, glassLayer };
+}
+
+export function GlassEffect({ cornerRadius = 0, tint, glassStyle = "regular", dark, style, children, ...props }: GlassEffectProps) {
   const surfaceDark = useSurfaceDark();
   const theme = (dark ?? surfaceDark) ? "dark" : "light";
   const g = GLASS[theme];
   const clear = glassStyle === "clear";
   const filter = clear ? glassFilter(1, (1 + g.slope) / 2, g.offset / 2) : glassFilter(g.saturate, g.slope, g.offset);
   const host = useRef<HTMLDivElement | null>(null);
-  const [scrolled, setScrolled] = useState(false);
-  useLayoutEffect(() => setScrolled(inScrollView(host.current)), []);
+  const frame = useRef<View & Element>(null);
+  const group = useContext(GlassGroupContext);
+  const [scrolled, setScrolled] = useState<boolean | null>(null);
+  useLayoutEffect(() => {
+    setScrolled(inScrollView(host.current));
+    frame.current?.setAttribute("data-ardia-glass-effect", "");
+  }, []);
+  const tahoe = nativeLiquidGlass(ardiaHost);
+  const backdropKey = backdropKeyOf(useScopedTheme()?.backdrop, theme === "dark");
+  useGlassLook(frame, { material: clear ? "clear" : "regular", tint: glassTint(tint), group: group ?? undefined, appearance: theme }, tahoe && nativeGlassBehindWindow());
+  const { outer, glassLayer } = glassFrameStyles(style, cornerRadius);
   if (scrolled) {
     const radiusStyle: React.CSSProperties = { borderRadius: fallbackRadius(cornerRadius) };
     return (
-      <View pointerEvents="none" {...props} style={style}>
-        <div ref={host} style={scrolledGlassSurface(theme, clear, cornerRadius)}>
-          {tint ? <div style={{ ...layer, ...radiusStyle, background: tint }} /> : null}
-        </div>
+      <View pointerEvents="none" {...props} style={outer}>
+        <View ref={frame} pointerEvents="none" style={glassLayer}>
+          <div ref={host} data-ardia-glass-layers="" style={scrolledGlassSurface(theme, clear, cornerRadius)}>
+            {tint ? <div style={{ ...layer, ...radiusStyle, background: tint }} /> : null}
+          </div>
+        </View>
+        {children}
       </View>
     );
   }
@@ -272,13 +317,30 @@ export function GlassEffect({ cornerRadius = 0, tint, glassStyle = "regular", da
   const shape = shapeMask(cornerRadius);
   const clip: React.CSSProperties = shape ? {} : { borderRadius: fallbackRadius(cornerRadius), overflow: "hidden" };
   const shaped = shape ? maskStyle(shape) : {};
+  const fallback = (
+    <div style={{ ...layer, ...clip }}>
+      <div style={backdrop(filter, shaped)} />
+      {tint ? <div style={{ ...layer, ...shaped, background: tint }} /> : null}
+      <div style={backdrop(`brightness(${1 + peakGain(g.rim)})`, highlight ? maskStyle(highlight) : { mask: fallbackBands(g.rim), WebkitMask: fallbackBands(g.rim) })} />
+    </div>
+  );
   return (
-    <View pointerEvents="none" {...props} style={style}>
-      <div ref={host} style={{ ...layer, ...clip }}>
-        <div style={backdrop(filter, shaped)} />
-        {tint ? <div style={{ ...layer, ...shaped, background: tint }} /> : null}
-        <div style={backdrop(`brightness(${1 + peakGain(g.rim)})`, highlight ? maskStyle(highlight) : { mask: fallbackBands(g.rim), WebkitMask: fallbackBands(g.rim) })} />
-      </div>
+    <View pointerEvents="none" {...props} style={outer}>
+      <View ref={frame} pointerEvents="none" style={glassLayer}>
+        <LiquidGlassLayer
+          hostRef={(node) => void (host.current = node)}
+          hostProps={GLASS_LAYERS}
+          theme={theme}
+          glassStyle={glassStyle}
+          cornerRadius={cornerRadius}
+          radius={fallbackRadius(cornerRadius)}
+          tint={tint}
+          enabled={scrolled === false && webLiquidGlassAllowed(ardiaHost)}
+          backdropKey={backdropKey}
+          fallback={fallback}
+        />
+      </View>
+      {children}
     </View>
   );
 }
@@ -373,8 +435,30 @@ export function WindowDragRegion({
   return <View {...props} ref={(view) => void (node.current = view as unknown as HTMLElement | null)} />;
 }
 
-export type DockSelectionProps = ViewProps & { fill?: string; stroke?: string; cornerRadius?: number; strokeWidth?: number; dark: boolean; outline?: boolean };
+export type DockSelectionProps = ViewProps & { image?: string; emoji?: string; theme?: string; fill?: string; stroke?: string; cornerRadius?: number; strokeWidth?: number; iconSize?: number; dark: boolean; glass?: boolean; colorRing?: boolean; outline?: boolean };
 
-export function DockSelection({ fill, stroke, cornerRadius, strokeWidth, dark: _dark, outline, style, ...props }: DockSelectionProps & Record<string, unknown>) {
-  return <View {...props} style={[{ backgroundColor: outline ? undefined : fill, borderColor: stroke, borderWidth: stroke ? (strokeWidth ?? 1) : 0, borderRadius: cornerRadius }, style]} />;
+const BLURRED_ICON_SPREAD = 250;
+const BLURRED_ICON_BLUR = { glow: 10, ring: 6 };
+
+function BlurredFavicon({ image, blur }: { image: string; blur: number }) {
+  return <img alt="" aria-hidden draggable={false} src={image} style={{ position: "absolute", left: "50%", top: "50%", width: `${BLURRED_ICON_SPREAD}%`, height: `${BLURRED_ICON_SPREAD}%`, transform: "translate(-50%, -50%)", objectFit: "contain", filter: `blur(${blur}px) saturate(1.8)`, pointerEvents: "none" }} />;
+}
+
+export function DockSelection({ fill, stroke, cornerRadius, strokeWidth, dark, glass, colorRing, outline, image, emoji: _emoji, theme, iconSize: _iconSize, style, ...props }: DockSelectionProps & Record<string, unknown>) {
+  if (!glass) return <View {...props} style={[{ backgroundColor: outline ? undefined : fill, borderColor: stroke, borderWidth: stroke ? (strokeWidth ?? 1) : 0, borderRadius: cornerRadius }, style]} />;
+  const look = dark ? "dark" : "light";
+  const blurred = theme === "blur" && image ? image : null;
+  const glow = outline || !fill || blurred ? null : glassGlow(parseColor(fill));
+  const ringWidth = colorRing ? (strokeWidth ?? 1) : 0;
+  const shape: React.CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none", borderRadius: cornerRadius, overflow: "hidden" };
+  const ring: React.CSSProperties = { ...shape, boxSizing: "border-box", padding: ringWidth, mask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)", maskComposite: "exclude", WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)", WebkitMaskComposite: "xor" };
+  return (
+    <View pointerEvents="none" {...props} style={[{ borderRadius: cornerRadius }, style]}>
+      {glow ? <div style={{ ...shape, background: glow, opacity: DOCK_GLASS.hue[look] }} /> : null}
+      {blurred && !outline ? <div style={{ ...shape, opacity: DOCK_GLASS.hue[look] }}><BlurredFavicon image={blurred} blur={BLURRED_ICON_BLUR.glow} /></div> : null}
+      {outline ? null : <div style={{ ...shape, background: `linear-gradient(to bottom, rgba(255,255,255,${DOCK_GLASS.sheen[look]}), rgba(255,255,255,0) ${DOCK_GLASS.sheenEnd}%)` }} />}
+      {ringWidth > 0 && blurred && !stroke ? <div style={ring}><BlurredFavicon image={blurred} blur={BLURRED_ICON_BLUR.ring} /></div> : null}
+      {ringWidth > 0 && !(blurred && !stroke) ? <div style={{ ...shape, boxSizing: "border-box", border: `${ringWidth}px solid ${stroke ?? `rgba(255,255,255,${DOCK_GLASS.ring[look]})`}`, mixBlendMode: stroke ? undefined : "soft-light" }} /> : null}
+    </View>
+  );
 }

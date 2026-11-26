@@ -4,7 +4,8 @@ import { Symbol } from "./Symbol";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useHover } from "./useHover";
 import { HoverFill, HoverSwap } from "./HoverFill";
-import { hex, useTheme, type Theme } from "./theme";
+import { hex, themeFor, useTheme, type Theme } from "./theme";
+import { ThemeOverride } from "./ThemeOverride";
 import { capsule, closeOnArt, clippedContinuousCorners, continuousCorners, opacity, pillHeight, radius as radii, space, stepperSize, font as typeScale, weight as weights } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "./motion";
 import type { CloseProps, PillProps, PushProps, StepperProps } from "./Button";
@@ -167,7 +168,9 @@ export function CloseButtonView(props: CloseProps) {
     <View {...hoverProps} style={style} tooltip={tooltip}>
       <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={label ?? tooltip}>
         <View style={HUD_PLATE}>
-          <VisualEffect material="hudWindow" blendingMode="withinWindow" cornerRadius={capsule(HUD_CLOSE_BOX)} style={StyleSheet.absoluteFill} />
+          <ThemeOverride theme={themeFor(HUD_PLATE_THEME)}>
+            <VisualEffect material="hudWindow" blendingMode="withinWindow" cornerRadius={capsule(HUD_CLOSE_BOX)} style={StyleSheet.absoluteFill} />
+          </ThemeOverride>
           <Surface style={StyleSheet.absoluteFill} fill={hex(fill)} cornerRadius={capsule(HUD_CLOSE_BOX)} borderColor={theme.hudCloseBorder} borderWidth={1} />
           <ScaledGlyph scale={pressMotion.scale} size={HUD_CLOSE_BOX}><Symbol name="xmark" size={10} weight="medium" color={theme.hudCloseGlyph} style={HUD_GLYPH} /></ScaledGlyph>
         </View>
@@ -180,6 +183,7 @@ const PANEL_CLOSE_BOX = 22;
 export const PANEL_CLOSE_GLYPH = 7;
 export const PANEL_CLOSE_SIZE = PANEL_CLOSE_BOX;
 const HUD_CLOSE_BOX = 23;
+const HUD_PLATE_THEME = "plum:dark";
 const ART_CLOSE_BOX = 22;
 const HUD_PLATE = { width: HUD_CLOSE_BOX, height: HUD_CLOSE_BOX, borderRadius: capsule(HUD_CLOSE_BOX), overflow: "hidden", alignItems: "center", justifyContent: "center" } as const;
 const HUD_GLYPH = { width: HUD_CLOSE_BOX, height: HUD_CLOSE_BOX } as const;

@@ -1,4 +1,4 @@
-import { diagnosticsSample, hardwareInfo, type HardwareInfo } from "../../platform/app";
+import { diagnosticsSample, hardwareInfo, onAppEvent, type HardwareInfo } from "../../platform/app";
 import { onHoverLost, onWindowUnpainted, systemState, type HoverLostEpisode, type WindowUnpaintedRecord } from "../../platform/performance";
 import { controlStatus } from "../../platform/control";
 import { call } from "../../platform/engine";
@@ -6,9 +6,10 @@ import { withDeadline } from "../../lib/deadline";
 import { hermesHeapMegabytes } from "../../lib/hermesHeap";
 import { activeTab } from "../browser/model";
 import { useBrowser } from "../browser/store";
-import { capture, consentNow, consentToken, counted, isSharing, saveContext, stillValid, onConsentPeriodChange } from "./client";
+import { capture, consentNow, consentToken, counted, isSharing, saveContext, stillValid, onConsentPeriodChange, type ConsentToken } from "./client";
 import { nativeConsent } from "./nativeConsent";
 import { hoverLostProperties, oneOf } from "./hoverLost";
+import { dropHeldQuitEpisode, dropQuitEpisodes, holdQuitEpisode, retireHeldQuitEpisode, sendCommittedQuitEpisode } from "./hoverLostAtQuit";
 import { formatRecentPages, readRecentPages, type RecentPage, type SavedContext } from "./savedContext";
 import { noteDragsEnded } from "./stuckDrags";
 import { noteEngineCliTotals } from "./cliCounts";
@@ -297,10 +298,17 @@ export function trackPageProcessGone(info: { reason: string; code: number }, vis
 
 export function trackHoverLost(e: HoverLostEpisode) {
   const consent = nativeConsent(e);
+  if (e.endedBy === "quit") return holdHoverLostAtQuit(e, consent);
+  retireHeldQuitEpisode(e.serial);
   if (hoverLostEvents >= MAX_HOVER_LOST_EVENTS) return;
   const valid = stillValid(consent);
   if (valid) hoverLostEvents++;
   capture("page_hover_lost", { ...hoverLostProperties(e, sessionMinutes()), episode: valid ? hoverLostEvents : null }, consent);
+}
+
+function holdHoverLostAtQuit(e: HoverLostEpisode, consent: ConsentToken | null) {
+  if (!stillValid(consent) || hoverLostEvents >= MAX_HOVER_LOST_EVENTS) return;
+  holdQuitEpisode(e.serial, { ...hoverLostProperties(e, sessionMinutes()), episode: hoverLostEvents + 1 }, consent);
 }
 
 const UNPAINTED_WINDOWS = new Set(["regular", "private"]);
@@ -342,7 +350,12 @@ export function trackWindowUnpainted(r: WindowUnpaintedRecord) {
 }
 
 export function watchEngineReports() {
+  void sendCommittedQuitEpisode();
   onHoverLost(trackHoverLost);
+  onAppEvent((e) => {
+    if (e.type === "quitCancelled") dropHeldQuitEpisode();
+  });
+  onConsentPeriodChange(dropQuitEpisodes);
   onWindowUnpainted(trackWindowUnpainted);
 }
 

@@ -69,8 +69,14 @@ test("a lost-hover episode keeps the stamp it opened with, and its close sends t
   assert.match(open, /gEpisode\.stamp = stamp;/);
   const close = probe.slice(probe.indexOf("void CloseEpisode"), probe.indexOf("bool Recovered"));
   assert.ok(close.indexOf("ArdiaConsentStamp *stamp = gEpisode.stamp;") < close.indexOf("gEpisode = HoverEpisode{};"), "the stamp is kept before the episode is cleared");
-  assert.match(close, /\[ArdiaEvents emit:@"engine\.hoverLost" data:\[stamp onto:payload\]\]/);
+  assert.match(close, /EmitEpisode\(payload, stamp\);/);
   assert.doesNotMatch(close, /ArdiaConsentStamp\.begin/);
+  const episode = read("../ios/ArdiaHoverProbe+Episode.mm");
+  const emit = episode.slice(episode.indexOf("void EmitEpisode"), episode.indexOf("using namespace hover_probe;"));
+  assert.match(emit, /\[ArdiaEvents emit:@"engine\.hoverLost" data:\[stamp onto:payload\]\]/);
+  const atQuit = episode.slice(episode.indexOf("void ReportHoverEpisodeAtQuit"));
+  assert.match(atQuit, /EmitEpisode\(EpisodePayload\(@"quit"\), gEpisode\.stamp\);/);
+  assert.doesNotMatch(episode, /ArdiaConsentStamp\.begin/);
 });
 
 test("a Picture in Picture window is stamped when the page enters it, and the retries that find its window send that stamp", () => {

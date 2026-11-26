@@ -1,6 +1,6 @@
 import { SecretEscapeError, withoutSecrets, type SecretFree } from "@ardia/core";
 import { engineInfo, updaterState } from "../../platform/app";
-import { readDocument, saveDocument, writeDocument } from "../../platform/documents";
+import { readDocument, saveDocument, syncDocument, writeDocument } from "../../platform/documents";
 import { MAX_BODY_BYTES } from "./config";
 import { logRecord, outcome, type OtlpLogRecord, type QueuedEvent } from "./otlp";
 import { cleanProperties } from "./sanitize";
@@ -82,26 +82,23 @@ function persistQueue(now = false) {
   else persistTimer = setTimeout(write, 2000);
 }
 
-function saveQueueDoc(timeoutMs: number): Promise<boolean> {
+function saveQueueDoc(timeoutMs: number, sync = false): Promise<boolean> {
   if (!saved().sharing) return Promise.resolve(false);
   clearTimeout(persistTimer);
   persistTimer = undefined;
   try {
     loadQueue();
-    return withDeadline(saveDocument(QUEUE_DOC, queueDoc()).then(() => true, () => false), timeoutMs, false);
-  } catch {
-    return Promise.resolve(false);
-  }
+    const landed = saveDocument(QUEUE_DOC, queueDoc()).then(() => (sync ? syncDocument(QUEUE_DOC) : undefined));
+    return withDeadline(landed.then(() => true, () => false), timeoutMs, false);
+  } catch { return Promise.resolve(false); }
 }
 
 export function saveQueueNow(timeoutMs = 1000): Promise<void> {
-  try {
-    flushLocalNow();
-  } catch {}
+  try { flushLocalNow(); } catch {}
   return saveQueueDoc(timeoutMs).then(() => undefined);
 }
 
-export const queueSavedDurably = (timeoutMs = 5000): Promise<boolean> => (telemetryRelay() ? Promise.resolve(false) : saveQueueDoc(timeoutMs));
+export const queueSavedDurably = (timeoutMs = 5000): Promise<boolean> => (telemetryRelay() ? Promise.resolve(false) : saveQueueDoc(timeoutMs, true));
 
 function clearQueue() {
   queue = { events: [], logs: [] };
@@ -150,20 +147,20 @@ export function capture<P extends Record<string, unknown>, R extends Record<stri
   }
   try {
     const { installId } = saved();
-    const at = Date.now();
+    const at = options.at ?? Date.now();
     const record: QueuedEvent = {
-      uuid: uuidv7(),
+      uuid: options.uuid ?? uuidv7(),
       event,
       distinct_id: installId ?? "",
       timestamp: new Date(at).toISOString(),
       properties: { ...context(), ...cleanProperties(props), ...withoutSecrets(options.raw, "telemetry") },
     };
-    recordLocal("event", sharing, { event, uuid: record.uuid, distinct_id: sharing ? installId : null, properties: record.properties }, at);
-    if (!sharing) {
-      droppedWhileOff++;
-      return false;
+    if (sharing) {
+      loadQueue();
+      if (options.uuid && queue.events.some((queued) => queued.uuid === options.uuid)) return (persistQueue(options.persist), true);
     }
-    loadQueue();
+    recordLocal("event", sharing, { event, uuid: record.uuid, distinct_id: sharing ? installId : null, properties: record.properties }, at);
+    if (!sharing) return (droppedWhileOff++, false);
     queue.events.push(record);
     if (queue.events.length > MAX_EVENTS) queue.events.splice(0, queue.events.length - MAX_EVENTS);
     persistQueue(options.persist);

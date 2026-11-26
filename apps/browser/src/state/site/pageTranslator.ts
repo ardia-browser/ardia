@@ -1,3 +1,4 @@
+import { PASSAGE_RETRIES } from "./translateDrain";
 
 const INSTALL = String.raw`
 const KEY = Symbol.for("ardia.translator");
@@ -8,16 +9,25 @@ if (!window[KEY]) {
   const MAX_WATCHED = 20000;
   const MAX_TEXT = 20000;
   const MAX_PIECES = 40;
-  const MAX_RETRIES = 2;
+  const MAX_RETRIES = ${PASSAGE_RETRIES};
   const MARGIN = 300;
   const MAX_SORTED = 2000;
   const ENDS_IN_SPACE = /\s$/;
   const STARTS_WITH_SPACE = /^\s/;
+  const SPACE_RUN = /[ \t\n\r\f]+/g;
+  const PRESERVED = /^(pre|break-spaces)/;
   const skipCache = new WeakMap();
   const skipped = (el) => {
     if (!el) return true;
     let v = skipCache.get(el);
     if (v === undefined) skipCache.set(el, (v = !!el.closest(SKIP)));
+    return v;
+  };
+  let spaceCache = new WeakMap();
+  const preservesSpace = (el) => {
+    if (!el) return false;
+    let v = spaceCache.get(el);
+    if (v === undefined) spaceCache.set(el, (v = PRESERVED.test(getComputedStyle(el).whiteSpace)));
     return v;
   };
   const blockCache = new WeakMap();
@@ -26,6 +36,7 @@ if (!window[KEY]) {
     if (b === undefined) blockCache.set(el, (b = el.closest(BLOCK) || document.documentElement));
     return b;
   };
+  const nearScreen = (r, margin) => r.bottom >= -margin && r.top <= innerHeight + margin && r.right >= 0 && r.left <= innerWidth;
   const eligible = (n) => n.nodeType === 3 && n.nodeValue.length <= MAX_TEXT && LETTER.test(n.nodeValue) && !skipped(n.parentElement);
   const root = () => document.body || document.documentElement;
   const t = (window[KEY] = {
@@ -65,13 +76,12 @@ if (!window[KEY]) {
         const w = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
         for (let n = w.nextNode(); n; n = w.nextNode()) if (eligible(n)) blocks.add(blockOf(n.parentElement));
       }
-      const top = -MARGIN, bottom = innerHeight + MARGIN;
       for (const b of blocks) {
         if (this.shown.has(b)) this.enqueue(b);
         else if (this.watched.has(b) || this.watchedCount >= MAX_WATCHED) continue;
         else {
           const r = b.getBoundingClientRect();
-          if (r.bottom >= top && r.top <= bottom && (r.width || r.height)) {
+          if (nearScreen(r, MARGIN) && (r.width || r.height)) {
             this.shown.add(b);
             this.enqueue(b);
           } else {
@@ -104,7 +114,7 @@ if (!window[KEY]) {
       const near = [], far = [];
       for (let i = 0; i < limit; i++) {
         const r = this.queue[i].getBoundingClientRect();
-        (r.bottom >= 0 && r.top <= innerHeight ? near : far).push(this.queue[i]);
+        (nearScreen(r, 0) ? near : far).push(this.queue[i]);
       }
       if (near.length && far.length) this.queue = near.concat(far, this.queue.slice(limit));
     },
@@ -116,6 +126,7 @@ if (!window[KEY]) {
     },
     start(token) {
       if (this.active) return this.token === token;
+      spaceCache = new WeakMap();
       this.active = true;
       this.token = token;
       this.visibility = new IntersectionObserver((entries) => {
@@ -159,17 +170,22 @@ if (!window[KEY]) {
           }
           const pieces = [];
           let previous = null;
+          let attempt = 0;
           for (const { node, gap } of nodes.slice(i, i + MAX_PIECES)) {
+            attempt = Math.max(attempt, this.retries.get(node) || 0);
             const id = ++this.seq;
             const spaced = gap && previous !== null;
             if (spaced) previous.gapAfter = true;
             previous = { orig: node.nodeValue, applied: null, gapBefore: spaced, gapAfter: false };
             this.byId.set(id, node);
             this.records.set(node, previous);
-            pieces.push([id, spaced ? " " + node.nodeValue : node.nodeValue]);
+            const text = preservesSpace(node.parentElement) ? node.nodeValue : node.nodeValue.replace(SPACE_RUN, " ");
+            pieces.push([id, spaced ? " " + text : text]);
             chars += node.nodeValue.length;
           }
-          passages.push([++this.seq, pieces]);
+          pieces[0][1] = pieces[0][1].trimStart();
+          pieces[pieces.length - 1][1] = pieces[pieces.length - 1][1].trimEnd();
+          passages.push([++this.seq, pieces, attempt]);
         }
       }
       this.done += passages.length;

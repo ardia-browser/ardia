@@ -61,6 +61,7 @@ export type Tab = {
   zoom: number;
   customTitle: string | null;
   customIcon: string | null;
+  tileLetters?: string;
   pinnedUrl: string | null;
   page: TabPage;
   openerId: string | null;
@@ -153,7 +154,7 @@ export type TabSnapshot = Pick<
   Tab,
   "url" | "title" | "favicon" | "pin" | "muted" | "zoom" | "customTitle" | "customIcon" | "profileId"
 > &
-  Partial<Pick<Tab, "pinnedUrl" | "engine" | "lastActiveAt">>;
+  Partial<Pick<Tab, "pinnedUrl" | "engine" | "lastActiveAt" | "tileLetters">>;
 
 export type ClosedTab = {
   kind: "tab";

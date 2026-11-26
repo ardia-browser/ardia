@@ -1,15 +1,16 @@
 import { readDocument, removeDocument, saveDocument, writeDocument } from "../../platform/documents";
-import { Clock, emptyScope, restoreJournal, SyncNative, trackTouchedKeys, writtenSeq, type LogFile, type ScopeState, type SyncRecord } from "../../platform/sync";
+import { Clock, emptyScope, restoreJournal, SyncNative, trackTouchedKeys, writtenSeq, type ApplyBatch, type LogFile, type ScopeState, type SyncRecord } from "../../platform/sync";
 import { parseSaved, unchanged, versionedJson, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { profileScope } from "./records";
 import { APP_SCOPE, DOC, DOC_MIGRATIONS, DOC_VERSION, JOURNAL, STATE, defaultTypes, emptyDoc, type SyncDoc } from "./syncDoc";
 import { isFields, numberOr, stringOr } from "../../lib/decode";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { chunksOf, holdsApplying, replayApplying, restOf, savedScope, scopeFromRest, type Assembly, type ScopeRest } from "./applyJournal";
 
 type Journal = Record<string, LogFile[]>;
-type ScopeChange = { records: Record<string, SyncRecord | null>; base: Record<string, string | null>; rest: Partial<ScopeState> };
-type JournalPart = { id: number; journal?: Journal; device?: string | null; clock?: string; changes?: Record<string, ScopeChange> };
+type ScopeChange = { records: Record<string, SyncRecord | null>; base: Record<string, string | null>; rest: ScopeRest };
+type JournalPart = { id: number; journal?: Journal; device?: string | null; clock?: string; changes?: Record<string, ScopeChange>; applying?: unknown };
 type Checkpoint = { covers: number; clock?: string; scopes: SyncDoc["scopes"] };
 
 const CHECKPOINT_VERSION = 1;
@@ -21,7 +22,7 @@ function readScopes(v: unknown): SyncDoc["scopes"] {
   const scopes: SyncDoc["scopes"] = {};
   if (!isFields(v)) return scopes;
   for (const [name, scope] of Object.entries(v)) {
-    if (isFields(scope) && isFields(scope.records) && isFields(scope.base)) scopes[name] = { ...emptyScope(), ...(scope as Partial<ScopeState>) };
+    if (isFields(scope) && isFields(scope.records) && isFields(scope.base)) scopes[name] = savedScope(scope);
   }
   return scopes;
 }
@@ -39,6 +40,7 @@ function readPart(doc: SavedObject | null): JournalPart {
     device: stringOr(doc.device, null),
     clock: stringOr(doc.clock, undefined),
     changes: isFields(doc.changes) ? (doc.changes as Record<string, ScopeChange>) : undefined,
+    applying: doc.applying,
   };
 }
 
@@ -46,6 +48,7 @@ const STATE_EVERY_MS = 60 * 60_000;
 const JOURNAL_BYTES_LIMIT = 1_000_000;
 const JOURNAL_PARTS_LIMIT = 400;
 const DOC_IDLE_MS = 5 * 60_000;
+const APPLYING_HOLD_MS = 2 * 60_000;
 
 const journalPart = (n: number) => `sync-journal-${n}.nns`;
 
@@ -65,13 +68,6 @@ function addBatches(into: Journal, part: Journal | undefined, added: Map<string,
   }
 }
 
-function restOf(state: ScopeState): Partial<ScopeState> {
-  const rest: Partial<ScopeState> = { ...state };
-  delete rest.records;
-  delete rest.base;
-  return rest;
-}
-
 function entriesOf<T>(keys: Set<string>, now: Record<string, T>): Record<string, T | null> {
   const entries: Record<string, T | null> = {};
   for (const key of keys) entries[key] = key in now ? now[key]! : null;
@@ -81,7 +77,8 @@ function entriesOf<T>(keys: Set<string>, now: Record<string, T>): Record<string,
 function replayChanges(scopes: SyncDoc["scopes"], changes: Record<string, ScopeChange>, live: Set<string>) {
   for (const [scope, change] of Object.entries(changes)) {
     if (!live.has(scope)) continue;
-    const { records, base } = scopes[scope] ?? emptyScope();
+    const before = scopes[scope];
+    const { records, base } = before ?? emptyScope();
     for (const [key, record] of Object.entries(change.records)) {
       if (record) records[key] = record;
       else delete records[key];
@@ -90,14 +87,14 @@ function replayChanges(scopes: SyncDoc["scopes"], changes: Record<string, ScopeC
       if (json !== null) base[key] = json;
       else delete base[key];
     }
-    scopes[scope] = { ...emptyScope(), ...change.rest, records, base };
+    scopes[scope] = scopeFromRest(change.rest, records, base, before);
   }
 }
 
 export function syncFiles(current: () => SyncDoc) {
   const docFile = { json: "", lasting: "", savedAt: 0 };
   const journal = { batches: {} as Journal, parts: null as number | null, bytes: 0, legacy: false, lastId: 0 };
-  const state = { json: "", onDisk: false, loaded: false, savedAt: 0, wanted: false, clock: null as Clock | null };
+  const state = { json: "", onDisk: false, loaded: false, savedAt: 0, wanted: false, clock: null as Clock | null, heldSince: undefined as number | undefined };
   const writtenRest = new Map<string, string>();
   let queue: Promise<void> = Promise.resolve();
 
@@ -153,14 +150,16 @@ export function syncFiles(current: () => SyncDoc) {
       if (savedClock) clock.observe(savedClock);
       const batches: Journal = {};
       const added = new Map<string, Set<string>>();
+      const assembly: Assembly = new Map();
       journal.lastId = Math.max(covers, 0);
       for (const part of parts) {
         journal.lastId = Math.max(journal.lastId, part.id);
         if (part.id <= covers) continue;
         addBatches(batches, part.journal, added);
-        if (!part.changes || part.device !== doc.deviceId) continue;
+        if ((!part.changes && !part.applying) || part.device !== doc.deviceId) continue;
         if (part.clock) clock.observe(part.clock);
-        replayChanges(scopes, part.changes, live);
+        if (part.changes) replayChanges(scopes, part.changes, live);
+        if (part.applying) replayApplying(scopes, part.applying, live, assembly);
       }
       journal.batches = {};
       for (const [scope, files] of Object.entries(batches)) {
@@ -239,6 +238,14 @@ export function syncFiles(current: () => SyncDoc) {
     };
   }
 
+  const persistApplying = (scope: string) => (batch: ApplyBatch) => {
+    const device = current().deviceId;
+    const parts = chunksOf(batch).map((chunk) => ({ device, applying: { [scope]: [chunk] } }));
+    return serial(async () => {
+      for (const part of parts) await writePart(part);
+    });
+  };
+
   function clearJournal() {
     journal.batches = {};
     for (let n = countedParts(); n > 0; n--) removeDocument(journalPart(n));
@@ -270,6 +277,8 @@ export function syncFiles(current: () => SyncDoc) {
   function stateDue() {
     if (state.wanted) return true;
     if (!state.loaded) return false;
+    if (holdsApplying(current().scopes) && Date.now() - (state.heldSince ??= Date.now()) < APPLYING_HOLD_MS) return false;
+    state.heldSince = undefined;
     return countedParts() >= JOURNAL_PARTS_LIMIT || journal.bytes >= JOURNAL_BYTES_LIMIT || Date.now() - state.savedAt >= STATE_EVERY_MS;
   }
 
@@ -326,5 +335,5 @@ export function syncFiles(current: () => SyncDoc) {
     });
   }
 
-  return { read, loadState, persistJournal, watchScope, save, startOver, checkpoint };
+  return { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint };
 }

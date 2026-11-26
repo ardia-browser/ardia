@@ -13,7 +13,7 @@ import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addLinkedProfile, appScopeOf, linkedProfileId, linkProfiles, readyToPair, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { noteSnapshot, timedCycle } from "./cycleWork";
+import { noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
 import { freezeRemovals, markDeviceRemoved, markRemoved, settleRemovals } from "./profileRemoval";
@@ -44,7 +44,7 @@ let cycle: Promise<void> | null = null;
 let again = false;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
-const { read, loadState, persistJournal, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
+const { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
 
 function load() {
   const loaded = read();
@@ -130,14 +130,14 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     if (freezeRemovals(doc)) save();
     const appSettled = watchScope(APP_SCOPE, app, clock);
     try {
-      noteSnapshot(await syncScope({
+      noteCycle(consent, await syncScope({
         scope: APP_SCOPE,
         state: app,
         transport,
         adapters: appAdapters(doc, retiring),
         clock,
         device,
-        options: { persist: persistJournal(APP_SCOPE), holdApply: isQuitting },
+        options: { persist: persistJournal(APP_SCOPE), persistApplying: persistApplying(APP_SCOPE), holdApply: isQuitting },
       }));
     } finally {
       await appSettled();
@@ -155,14 +155,14 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       const state = (doc.scopes[scope] ??= emptyScope());
       const settled = watchScope(scope, state, clock);
       try {
-        noteSnapshot(await syncScope({
+        noteCycle(consent, await syncScope({
           scope,
           state,
           transport,
           adapters: profileAdapters(doc, profileId, retire, forcePasswords),
           clock,
           device,
-          options: { expired: historyExpired, persist: persistJournal(scope), holdApply: isQuitting },
+          options: { expired: historyExpired, persist: persistJournal(scope), persistApplying: persistApplying(scope), holdApply: isQuitting },
         }));
       } finally {
         await settled();

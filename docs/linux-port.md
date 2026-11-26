@@ -35,6 +35,44 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
 - **Assets.** These come from `lib/ardia/ardia-ui` beside the executable, or from `--ardia-ui-dir` during development.
   The data source serves them only to a host's own shell `WebContents`. An ordinary tab that navigates to
   `chrome://ardia/` gets nothing.
+- **One shell renderer.** The shells of every regular window (Little Ardia and the settings and import windows
+  included) share one renderer per profile instead of one each. Each host builds its shell `WebContents` itself
+  (`CreateShellContents`) and gives it `PrivilegedParams` with Ardia's feature id when `SharedRendererFeature`
+  (`ac_desktop_webui_process_policy.h`) allows it, which is never for a private window or an off-the-record profile.
+  Chromium uses one process per site for privileged contents and keys that by profile, site (`chrome://ardia/`, the
+  site Chromium derives for any shell URL) and feature id, and it never puts privileged and ordinary contents in the
+  same process, so a private window's shell never joins the regular shells' renderer, even under the
+  renderer-process limit. Private shells are ordinary WebUI contents, so at that limit Chromium may still put two of
+  them in one ordinary renderer. No Chromium patch is involved. Each window still has its own document, `WebUI` and bridge (`Trusted`, `OwnsHandler` and
+  the renderer generation belong to one `WebContents`). Privileged contents can't open windows (`window.open` returns
+  null), which the shell never does.
+- **Shell recovery.** One crash now blanks every regular window, so each window reloads its shell after an abnormal
+  renderer exit (`ShellRecovery`, driven by `ShellRecoveryState`), at most 3 times a minute. A crash before the
+  shell's first commit loads `chrome://ardia/` instead of reloading. A crash while a reversible close or an app quit
+  is pending spends nothing and waits: a cancelled close resumes it, and so does a cancelled quit, seen at once when
+  `chrome::AddClosingAllBrowsersCallback` reports `false` and otherwise within 250 ms by polling
+  `IsTryingToQuit()` (Chromium can cancel a quit without that callback when no tab has a `beforeunload` handler); a
+  finished close or a started shutdown drops it. A recovery navigation, or the shell's initial load, that ends without
+  committing or commits an error page is retried within the same budget, whether or not an early-swapped frame looks
+  live; only a real document commit ends a recovery. The first reload starts the new renderer and the rest join it. Only the launch window's first `host-bootstrap.js` says
+  `startup: true` (`LaunchBootstrap`), and a recovery disarms it first, so a recovered or reloaded launch window,
+  even one that crashed before it ever fetched its bootstrap, never boots as a fresh launch and never replaces the
+  saved session.
+- **Recovery telemetry.** The host counts, for the whole run, how many recovery reloads it started (`attempts`), how
+  many windows came back with a committed shell (`recovered`) and how many it gave up on once the budget ran out
+  (`exhausted`), and writes them to `shell-recovery.json` in the profile's `Ardia` documents folder
+  (`ShellRecoveryTally`). At the next start, before any shell reads its bootstrap, it moves that file to
+  `shell-recovery-previous.json` (`RotateShellRecoveryDocuments`), and `app_launched` reports it as
+  `prev_shell_recovery_attempts`, `prev_shell_recovery_recovered` and `prev_shell_recovery_exhausted`, counts only and
+  only while sharing is on. Pages can read both files but not write or remove them. Exhaustion is reported at the next
+  launch because by then no shell is left to report it. On the dashboard, a session with `exhausted` above 0 is one
+  that left windows blank.
+- **What the tests cover.** `engine/ardiacore-desktop/tests/test_desktop_layer.py` runs the policy test
+  (`webui_process_policy_test.cc`) and compiles each host's real `CreateShellContents` and `ShellRecovery` against
+  stubbed content and base types to drive crashes, close and quit waits, cancellations, uncommitted recovery
+  navigations and pre-commit crashes. Only a built
+  engine shows the rest: three windows on one `chrome://ardia/` renderer, a private window on its own, and every
+  window coming back after the renderer is killed.
 - **Code cache.** `chromium-linux-auto-pip.patch` turns on Chromium's `WebUICodeCache`, so V8 keeps the shell's
   compiled scripts between launches. Chromium keys each entry by the script's URL and a hash of its source, so an
   updated bundle never runs old code. On an existing profile (Xvfb, llvmpipe, a shared box, median of 5 interleaved
@@ -237,6 +275,34 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
   saved window into a closed window the way `closedForLaunch` does (tab layout kept, macOS's last-window marks and
   empty entries dropped). The snapshot saves every field the shared session saves except the Mac's early launch tab,
   including which settings were chosen (`settingsMeta`); `session.test.mjs` fails when the shared session adds one.
+- **One session format for both shells.** The React Native Mac app saves `windows`, `tabs`, `groups` and `splits` as
+  lists; a WebUI shell's own file keeps them as tables keyed by row id, which the Linux engine's startup tab reads. Both
+  readers take either form, row collection by row collection, so a mixed file loads whole. The Mac app lists tables
+  before its migrations and its row checks (`sessionWithListedRows`), and the WebUI keys lists before shaping, so
+  shaping a second time changes nothing.
+- **Writing.** The native merges (`MergeLinuxSession` and `mergeSession`) only merge row by row when the base, the
+  save and the file use the same form; otherwise the save replaces the collection. So the WebUI's writer sends each
+  collection in the form the file holds it in, as last seen at launch, in a write reply or in a session event, and a
+  WebUI window on a Mac list file keeps writing lists. Its first write after shaping changed the file merges against
+  the file as read, so migrated, repaired or cleaned collections are written back whole. The Mac app saves a table
+  file back as lists at launch, edited or not. A Mac app write that changes a collection's form while a WebUI window is
+  running is the one case still replaced whole; the two shells don't run on one profile at once.
+- **What the WebUI keeps for the Mac app.** A sleeping tab's `page.wake` restore handle (left out of the WebUI's live
+  tab, written back while the tab keeps its address and the WebUI hasn't loaded it since launch) and the early launch hints (`launchTab`, `launchBackdrop`,
+  `linkProfile`), kept while the focused window's profile, tabs and active tabs, the profiles, Restore Session and the
+  engine mode are unchanged.
+- **Rows the readers drop.** Rows that aren't objects, ids the object prototype holds (`__proto__`, `constructor`,
+  `toString`), tabs without a string `windowId`, `profileId` and `url`, windows without a `profileId`, a `tabIds` list
+  and `activeTabIds`, groups without a `windowId`, `profileId` and `tabIds` list, and splits whose `slots` don't
+  read as slots are dropped by both readers; a valid row filed under a key that isn't its id is recovered only when no correctly keyed copy exists
+  (the correctly keyed row wins), and the Mac app keeps any file with dropped or misfiled rows aside first.
+- **Startup prewarm.** Native prewarm reads only its own form. `ArdiaSavedSession.mm` on the Mac needs every row
+  collection as a list; `ac_linux_startup_tab.cc` on Linux needs `windows` and `tabs` as tables (list-shaped `groups`
+  or `splits` alone don't stop it). A file that misses that finds no launch tab and is left to the JS session loader,
+  which loads it losslessly.
+- `sessionShells.test.mjs` (desktop and browser) round-trips Mac → WebUI → Mac and WebUI → Mac → WebUI. Telemetry
+  counts launches whose file held collections in the other shell's form, before any migration, as
+  `session_from_other_shell`.
 
 ### Pages
 
@@ -1155,6 +1221,31 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
     engines: a window that fills the work area without being maximized shows restore, and on Wayland, where
     `windowFrame` is null and the work area is the whole output, a maximized window beside a panel, a bar or gaps
     keeps the maximize glyph. Clicking toggles correctly either way.
+- **Tiling window managers.** Little Ardia, Settings and Import float over the main window on niri, sway and i3 with
+  no rule (tested on the Chromium 157 engine; other compositors that float fixed-size windows do the same), as the Mac
+  floats them since #1905. The host opens them with their own window class, the Wayland app id and the X11 `WM_CLASS`
+  instance `ardia-little`, `ardia-settings` and `ardia-import` (`linux_window::WindowClass`, through
+  `g_ardia_linux_window_class` in `chromium-linux-floating-windows.patch`, at the end of `GetWindowClass()`), and maps
+  them with their minimum size equal to their maximum (`g_ardia_linux_pins_window_size`,
+  `BrowserWidget::GetMinimumSize` and `GetMaximumSize`), which those compositors float by default. The host releases
+  the pin 400 ms after the window's first frame (3 s at most), so the window resizes like any other afterwards; a
+  window restored to full screen lets go of it first. The pin isn't released on tiled edges: niri sends them to
+  floating windows too when it draws their decorations. A window saved maximized opens unpinned. Main windows keep the
+  `ardia` class and tile. Hidden desktop entries (`NoDisplay=true`, `StartupWMClass` set to the class, `Icon=ardia`)
+  give the three classes Ardia's name and icon in bars and switchers; `install.sh` (so the tarball and the AUR
+  package), the `.deb` and the `.rpm` install them (`linux_formats.desktop_entries`), and the Flatpak exports them as
+  `dev.ardia.Ardia.little.desktop`, `.settings` and `.import`, since its entries must start with its app id; a bar
+  matches those by `StartupWMClass` alone, and GNOME Shell groups a Flatpak's windows under its app id. The AppImage
+  carries them but installs nothing, so there the bars show the bare class. Outside the Flatpak on GNOME, Little Ardia
+  now shows in docks and switchers as its own app rather than grouped with Ardia, as Settings and Import already did.
+  A compositor rule can still match the class, for niri
+  `window-rule { match app-id="^ardia-little$"; open-floating false; }` to tile it again; Chromium holds such a window
+  at its pinned size until the pin is released and the compositor configures it again (untested on the Chromium 158
+  engine). Settings' app id was `chrome-ArdiaSettings-Default` before, so an existing rule naming it needs the new id.
+  A window that the shell turns into Little Ardia after it opened, or back (`set_small`), keeps the class and the
+  tiling it opened with: the host answers the class hook with the class the window opened with.
+  `usage_counts.little_ardia_opened_floating` and `utility_windows_opened_floating` count windows that opened with
+  Chromium reading the pin, once per window, in the first shell that loads in it.
 - **Header drag and double-click.** Dragging the header moves the window (`DispatchHostWindowDragMovement`).
   Double-clicking it runs the desktop's titlebar action.
 - **Outer frame.** The host overlays Chromium's client view, and what happens to Chromium's frame around it depends on

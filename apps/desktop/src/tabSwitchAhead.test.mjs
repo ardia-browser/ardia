@@ -4,6 +4,7 @@ import { HostTab, showInPlaceOf } from "./hostTab.ts";
 import { reserveTab } from "./hostTabQueue.ts";
 import { forgetSwitchViews, registerSwitchView, tabsSwitchedAhead, watchTabSwitches } from "./tabSwitchAhead.ts";
 import { createInputRegions } from "./inputRegions.ts";
+import { createStageController, createWebAnimator, PEEK_MOVING_ATTRIBUTE } from "./peekStageMotion.ts";
 
 const RECT = { x: 240, y: 8, width: 1192, height: 884 };
 
@@ -287,4 +288,87 @@ test("a viewport send is counted by the consent in force when the host was hande
   } finally {
     t.client.setSharing(false, "settings");
   }
+});
+
+test("a Peek being expanded to a tab is not switched in early: it publishes its own viewport once the stage settles", async () => {
+  const { sent, store, view, regions } = stage();
+  const a = await view("a");
+  const b = await view("b");
+  await a.viewport({ rect: RECT, visible: true });
+  await b.viewport({ rect: { x: 400, y: 100, width: 600, height: 500 }, visible: false });
+  const attributes = new Map();
+  const root = { setAttribute: (name, value) => attributes.set(name, value), removeAttribute: (name) => attributes.delete(name) };
+  const slot = { key: "b", closest: (selector) => (selector === `[${PEEK_MOVING_ATTRIBUTE}]` && attributes.has(PEEK_MOVING_ATTRIBUTE) ? root : null) };
+  registerSwitchView("b", { tab: () => b, slot, regions: { setPage: (node, visible) => regions.set(node.key, visible) } });
+  const finishes = [];
+  const animated = { animate: () => { let resolve; const finished = new Promise((done) => (resolve = done)); finishes.push(resolve); return { finished, cancel() {} }; }, setAttribute() {}, removeAttribute() {} };
+  let settledBounds = 0;
+  const geometry = { width: 1200, height: 900, card: { x: 300, y: 100, width: 600, height: 600 }, source: { x: 0, y: 0, width: 10, height: 10 }, fullscreen: false };
+  const controller = createStageController(createWebAnimator(() => root, () => animated, () => animated, () => settledBounds++), { state() {}, done: () => store.activate("b") }, () => ({ geometry, reduceMotion: false }));
+  const stop = watchTabSwitches(store);
+  controller.begin(1);
+  for (const finish of finishes.splice(0)) finish();
+  await new Promise((resolve) => setImmediate(resolve));
+  sent.length = 0;
+  controller.promote(1);
+  assert.ok(attributes.has(PEEK_MOVING_ATTRIBUTE));
+  for (const finish of finishes.splice(0)) finish();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(sent, [], "the promoted page is not shown in the source tab's rect while the stage still moves");
+  assert.equal(attributes.has(PEEK_MOVING_ATTRIBUTE), false);
+  assert.equal(settledBounds, 2);
+  stop();
+});
+
+test("an early switch hands the shown page's rect to the regions as the switched-in page's acknowledged rect", async () => {
+  const { store, view } = stage();
+  const a = await view("a");
+  const b = await view("b");
+  await a.viewport({ rect: RECT, visible: true });
+  await b.viewport({ rect: { ...RECT, x: 0 }, visible: false });
+  const acknowledged = [];
+  registerSwitchView("b", { tab: () => b, slot: { key: "b" }, regions: { setPage() {}, pageViewport: (slot, rect) => acknowledged.push([slot.key, rect]) } });
+  const stop = watchTabSwitches(store);
+  store.activate("b");
+  assert.deepEqual(acknowledged, [], "nothing is recorded before the host accepts the switched-in viewport");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(acknowledged, [["b", RECT]]);
+  stop();
+});
+
+test("an early switch whose switched-in viewport the host refuses records no rect for that page", async () => {
+  const { host, store, view } = stage();
+  const a = await view("a");
+  const b = await view("b");
+  await a.viewport({ rect: RECT, visible: true });
+  await b.viewport({ rect: { ...RECT, x: 0 }, visible: false });
+  const areas = [];
+  const regions = createInputRegions({
+    send: null,
+    viewport: () => ({ width: 1600, height: 1000 }),
+    rectOf: (element) => element.rect,
+    receivesPointer: () => true,
+    watch: () => () => {},
+    animating: () => false,
+    conceal() {},
+    microtask: (run) => queueMicrotask(run),
+    frame: () => {},
+    frameTime: () => 0,
+    timeout: () => 0,
+    clearTimeout() {},
+    pagesChanged: (pages) => areas.push(pages.map((page) => page.rect)),
+  });
+  const domRect = { x: 5, y: 6, width: 70, height: 80 };
+  const slot = { key: "b", isConnected: true, rect: domRect, children: [] };
+  registerSwitchView("b", { tab: () => b, slot, regions });
+  const invoke = host.invoke;
+  host.invoke = (method, args) => (method === "tab.viewport" && args.id === b.identity.browserId && args.visible ? Promise.reject(new Error("refused")) : invoke(method, args));
+  const stop = watchTabSwitches(store);
+  store.activate("b");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(tabsSwitchedAhead(), 1);
+  assert.equal(b.shownViewport(), undefined, "the refused show is forgotten by the tab");
+  regions.flushNow();
+  assert.deepEqual(areas.at(-1), [domRect], "the regions never adopted the refused rect");
+  stop();
 });

@@ -17,8 +17,11 @@ const FAILURE_TITLES: Record<string, string> = {
 };
 const realClock: Clock = { now: () => Date.now(), schedule: (run, ms) => setTimeout(run, ms) };
 
+export type FileStatus = "present" | "missing" | "unknown";
+
 type HostFiles = {
   fileExists(path: string): boolean;
+  fileStatus(path: string): FileStatus;
   expect(path: string): void;
   setNotice(notice: Notice): void;
   openFile(path: string): Promise<boolean>;
@@ -33,7 +36,7 @@ const localPath = (path: unknown): path is string => typeof path === "string" &&
 
 export function createHostFiles(host: ArdiaHost, clock: Clock = realClock, notice: Notice = () => {}): HostFiles {
   let currentNotice = notice;
-  const cache = new Map<string, { exists: boolean; at: number }>();
+  const cache = new Map<string, { exists: boolean; at: number; confirmed: boolean }>();
   const queued = new Set<string>();
   const inflight = new Set<string>();
   const listeners = new Set<() => void>();
@@ -42,12 +45,12 @@ export function createHostFiles(host: ArdiaHost, clock: Clock = realClock, notic
   const notify = () => {
     for (const listener of [...listeners]) listener();
   };
-  const remember = (path: string, exists: boolean) => {
+  const remember = (path: string, exists: boolean, confirmed = true) => {
     const previous = cache.get(path);
     cache.delete(path);
-    cache.set(path, { exists, at: clock.now() });
+    cache.set(path, { exists, at: clock.now(), confirmed });
     while (cache.size > FILE_STATUS_CACHE) cache.delete(cache.keys().next().value!);
-    return (previous?.exists ?? false) !== exists;
+    return (previous?.exists ?? false) !== exists || (previous?.confirmed ?? false) !== confirmed;
   };
   const flush = () => {
     scheduled = false;
@@ -62,11 +65,14 @@ export function createHostFiles(host: ArdiaHost, clock: Clock = realClock, notic
       .then((reply) => {
         if (!Array.isArray(reply) || reply.length !== paths.length) throw Object.assign(new Error("Invalid file status reply"), { code: "ERR_BAD_REPLY" });
         let changed = false;
-        paths.forEach((path, index) => (changed = remember(path, reply[index] === true) || changed));
+        paths.forEach((path, index) => {
+          const answer: unknown = reply[index];
+          changed = remember(path, typeof answer === "boolean" ? answer : cache.get(path)?.exists ?? false, typeof answer === "boolean") || changed;
+        });
         if (changed) notify();
       })
       .catch((error) => {
-        for (const path of paths) remember(path, cache.get(path)?.exists ?? false);
+        for (const path of paths) remember(path, cache.get(path)?.exists ?? false, cache.get(path)?.confirmed ?? false);
         reportHostError(error);
       })
       .finally(() => {
@@ -77,6 +83,14 @@ export function createHostFiles(host: ArdiaHost, clock: Clock = realClock, notic
     if (scheduled) return;
     scheduled = true;
     clock.schedule(flush, FILE_STATUS_BATCH_MS);
+  };
+  const look = (path: string) => {
+    const entry = cache.get(path);
+    if ((!entry || clock.now() - entry.at > FILE_STATUS_FRESH_MS) && !inflight.has(path)) {
+      queued.add(path);
+      schedule();
+    }
+    return entry;
   };
   const action = (method: string, path: string) =>
     localPath(path)
@@ -91,12 +105,12 @@ export function createHostFiles(host: ArdiaHost, clock: Clock = realClock, notic
   return {
     fileExists(path) {
       if (!localPath(path) || !hostSupports(FILE_STATUS, host)) return false;
-      const entry = cache.get(path);
-      if ((!entry || clock.now() - entry.at > FILE_STATUS_FRESH_MS) && !inflight.has(path)) {
-        queued.add(path);
-        schedule();
-      }
-      return entry?.exists ?? false;
+      return look(path)?.exists ?? false;
+    },
+    fileStatus(path) {
+      if (!localPath(path) || !hostSupports(FILE_STATUS, host)) return "unknown";
+      const entry = look(path);
+      return !entry?.confirmed ? "unknown" : entry.exists ? "present" : "missing";
     },
     setNotice(next) {
       currentNotice = next;
@@ -104,7 +118,7 @@ export function createHostFiles(host: ArdiaHost, clock: Clock = realClock, notic
     expect(path) {
       if (!localPath(path) || !hostSupports(FILE_STATUS, host) || cache.get(path)?.exists) return;
       cache.delete(path);
-      cache.set(path, { exists: true, at: -Infinity });
+      cache.set(path, { exists: true, at: -Infinity, confirmed: false });
       while (cache.size > FILE_STATUS_CACHE) cache.delete(cache.keys().next().value!);
       if (!inflight.has(path)) {
         queued.add(path);

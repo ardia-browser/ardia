@@ -1,4 +1,5 @@
 #include "ardia/linux/ac_linux_contract.h"
+#include "ardia/desktop/ac_desktop_webui_process_policy.h"
 #include <cassert>
 #include <cstdint>
 #include <map>
@@ -6,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+namespace desktop_webui_process = ardia::desktop_webui_process;
 struct GURL {
   std::string text;
   explicit GURL(std::string value) : text(std::move(value)) {}

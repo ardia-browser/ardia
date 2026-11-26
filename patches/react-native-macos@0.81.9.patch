@@ -34,7 +34,7 @@ index 253c2a49e4ed04ef7cce283ae905e218d438a007..90bdecb170c2aaf8848d1551727e1855
        onChange: true,
        onSelectionChange: true,
 diff --git a/Libraries/Components/TextInput/TextInput.js b/Libraries/Components/TextInput/TextInput.js
-index 1ae22ed66776941c33b2c0a78038b2b997506aa7..6d2be668a23e199bc587a493eee55b44dfbb0a7b 100644
+index 1ae22ed66776941c33b2c0a78038b2b997506aa7..a730fccccc3c305560434145ae943ed7bb180d46 100644
 --- a/Libraries/Components/TextInput/TextInput.js
 +++ b/Libraries/Components/TextInput/TextInput.js
 @@ -208,6 +208,7 @@ function useTextInputStateSynchronization({
@@ -95,6 +95,14 @@ index 1ae22ed66776941c33b2c0a78038b2b997506aa7..6d2be668a23e199bc587a493eee55b44
      setLastNativeSelection({
        selection: event.nativeEvent.selection,
        mostRecentEventCount,
+@@ -809,6 +826,7 @@ function InternalTextInput(props: TextInputProps): React.Node {
+         onSelectionChangeShouldSetResponder={emptyFunctionThatReturnsTrue}
+         selection={selection}
+         selectionColor={selectionColor}
++        cursorColor={cursorColor}
+         style={StyleSheet.compose(
+           useMultilineDefaultStyle ? styles.multilineDefault : null,
+           _style,
 diff --git a/Libraries/Image/RCTImageView.mm b/Libraries/Image/RCTImageView.mm
 index 879e36bc2483226756011b21948f2dd1760d7cf8..383f676c62b23f008964002aeb3940f1f55f8907 100644
 --- a/Libraries/Image/RCTImageView.mm
@@ -393,6 +401,23 @@ index bbee6d1e1865359b350da78b745c6c0061a2dc5d..c645bfead1814173bef35608504aa5ec
  };
  
  function convertPointerEventToMouseEvent(input: PointerEvent): MouseEvent {
+diff --git a/Libraries/Text/Text/RCTTextShadowView.mm b/Libraries/Text/Text/RCTTextShadowView.mm
+index 8c1c394..8f54306 100644
+--- a/Libraries/Text/Text/RCTTextShadowView.mm
++++ b/Libraries/Text/Text/RCTTextShadowView.mm
+@@ -114,8 +114,10 @@ - (void)uiManagerWillPerformMounting
+         }];
+ 
+     // Removing all references to Shadow Views to avoid unnecessary retaining.
+-    [textStorage removeAttribute:RCTBaseTextShadowViewEmbeddedShadowViewAttributeName
+-                           range:NSMakeRange(0, textStorage.length)];
++    if (descendantViewTags.count > 0) {
++      [textStorage removeAttribute:RCTBaseTextShadowViewEmbeddedShadowViewAttributeName
++                             range:NSMakeRange(0, textStorage.length)];
++    }
+ 
+     [textView setTextStorage:textStorage contentFrame:contentFrame descendantViews:descendantViews];
+   }];
 diff --git a/Libraries/Text/Text/RCTTextView.h b/Libraries/Text/Text/RCTTextView.h
 index 3de368b73b6bbad86f1b27dd0ba56abb516f89e8..84d3218318dc1771ca52ed445f9cd0f82e931b27 100644
 --- a/Libraries/Text/Text/RCTTextView.h
@@ -417,10 +442,10 @@ index 3de368b73b6bbad86f1b27dd0ba56abb516f89e8..84d3218318dc1771ca52ed445f9cd0f8
  - (void)setTextStorage:(NSTextStorage *)textStorage
            contentFrame:(CGRect)contentFrame
 diff --git a/Libraries/Text/Text/RCTTextView.mm b/Libraries/Text/Text/RCTTextView.mm
-index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf6d6cb257 100644
+index abff88e..3077405 100644
 --- a/Libraries/Text/Text/RCTTextView.mm
 +++ b/Libraries/Text/Text/RCTTextView.mm
-@@ -37,6 +37,108 @@ - (BOOL)canBecomeKeyView
+@@ -37,6 +37,165 @@ - (BOOL)canBecomeKeyView
  
  @end
  
@@ -434,28 +459,76 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
 +  return MAX(0, round((font.capHeight - font.xHeight) * 0.375 * scale)) / scale;
 +}
 +
++static BOOL RCTTextGlyphGroupHasHidden(NSLayoutManager *layoutManager, NSRange actualGlyphs)
++{
++  if (actualGlyphs.length <= 1) {
++    return NO;
++  }
++  if ([layoutManager notShownAttributeForGlyphAtIndex:actualGlyphs.location] ||
++      [layoutManager notShownAttributeForGlyphAtIndex:NSMaxRange(actualGlyphs) - 1]) {
++    return YES;
++  }
++  NSUInteger limit = MIN(NSMaxRange(actualGlyphs), actualGlyphs.location + 32);
++  for (NSUInteger glyph = actualGlyphs.location + 1; glyph < limit; glyph++) {
++    if ([layoutManager notShownAttributeForGlyphAtIndex:glyph]) {
++      return YES;
++    }
++  }
++  return NO;
++}
++
 +static NSArray<NSValue *> *RCTTextShownCharacters(NSAttributedString *text, NSLayoutManager *_Nullable layoutManager, NSTextContainer *_Nullable textContainer)
 +{
++  static const NSUInteger kMaxSampleGlyphs = 512;
++  static const NSUInteger kMaxInspectGlyphs = 2048;
 +  if (layoutManager == nil || textContainer == nil) {
-+    return @[ [NSValue valueWithRange:NSMakeRange(0, text.length)] ];
++    return @[ [NSValue valueWithRange:NSMakeRange(0, MIN(text.length, kMaxSampleGlyphs))] ];
++  }
++  NSRange glyphs = [layoutManager glyphRangeForTextContainer:textContainer];
++  if (glyphs.length == 0) {
++    return @[];
 +  }
 +  NSMutableIndexSet *shownCharacters = [NSMutableIndexSet indexSet];
 +  NSMutableIndexSet *hiddenCharacters = [NSMutableIndexSet indexSet];
-+  NSRange glyphs = [layoutManager glyphRangeForTextContainer:textContainer];
-+  for (NSUInteger glyph = glyphs.location; glyph < NSMaxRange(glyphs); glyph++) {
-+    if ([layoutManager notShownAttributeForGlyphAtIndex:glyph]) {
-+      [hiddenCharacters addIndex:[layoutManager characterIndexForGlyphAtIndex:glyph]];
-+    }
-+  }
-+  for (NSUInteger glyph = glyphs.location; glyph < NSMaxRange(glyphs); glyph++) {
-+    if ([layoutManager notShownAttributeForGlyphAtIndex:glyph]) {
-+      continue;
-+    }
-+    NSRange characters = [layoutManager characterRangeForGlyphRange:NSMakeRange(glyph, 1) actualGlyphRange:NULL];
-+    if (![hiddenCharacters intersectsIndexesInRange:characters]) {
++  __block NSUInteger sampledGlyphs = 0;
++  __block NSUInteger inspectedGlyphs = 0;
++  [layoutManager enumerateLineFragmentsForGlyphRange:glyphs
++                                          usingBlock:^(__unused NSRect rect, __unused NSRect usedRect, __unused NSTextContainer *container, NSRange lineGlyphRange, BOOL *stop) {
++    NSRange truncated = [layoutManager truncatedGlyphRangeInLineFragmentForGlyphAtIndex:lineGlyphRange.location];
++    NSUInteger lineEnd = NSMaxRange(lineGlyphRange);
++    for (NSUInteger glyph = lineGlyphRange.location; glyph < lineEnd && sampledGlyphs < kMaxSampleGlyphs && inspectedGlyphs < kMaxInspectGlyphs; ) {
++      inspectedGlyphs++;
++      if (truncated.location != NSNotFound && truncated.length > 0 && glyph >= truncated.location && glyph < NSMaxRange(truncated)) {
++        NSUInteger skipEnd = MIN(NSMaxRange(truncated), lineEnd);
++        [hiddenCharacters addIndex:[layoutManager characterIndexForGlyphAtIndex:glyph]];
++        if (skipEnd > glyph + 1) {
++          [hiddenCharacters addIndex:[layoutManager characterIndexForGlyphAtIndex:skipEnd - 1]];
++        }
++        glyph = skipEnd;
++        continue;
++      }
++      if ([layoutManager notShownAttributeForGlyphAtIndex:glyph]) {
++        [hiddenCharacters addIndex:[layoutManager characterIndexForGlyphAtIndex:glyph]];
++        glyph++;
++        continue;
++      }
++      NSRange actualGlyphs = NSMakeRange(NSNotFound, 0);
++      NSRange characters = [layoutManager characterRangeForGlyphRange:NSMakeRange(glyph, 1) actualGlyphRange:&actualGlyphs];
++      if (actualGlyphs.location != NSNotFound && actualGlyphs.length > 1 && RCTTextGlyphGroupHasHidden(layoutManager, actualGlyphs)) {
++        [hiddenCharacters addIndexesInRange:characters];
++        NSUInteger nextGlyph = NSMaxRange(actualGlyphs);
++        glyph = nextGlyph > glyph ? nextGlyph : glyph + 1;
++        continue;
++      }
++      sampledGlyphs++;
 +      [shownCharacters addIndexesInRange:characters];
++      glyph++;
 +    }
-+  }
++    if (sampledGlyphs >= kMaxSampleGlyphs || inspectedGlyphs >= kMaxInspectGlyphs) {
++      *stop = YES;
++    }
++  }];
++  [shownCharacters removeIndexes:hiddenCharacters];
 +  NSMutableArray<NSValue *> *shown = [NSMutableArray array];
 +  [shownCharacters enumerateRangesUsingBlock:^(NSRange range, __unused BOOL *stop) {
 +    [shown addObject:[NSValue valueWithRange:range]];
@@ -524,33 +597,46 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
 +  }
 +  return NO;
 +}
++
++static NSFont *_Nullable RCTTextOpticalFont(NSAttributedString *text, NSLayoutManager *_Nullable layoutManager, NSTextContainer *_Nullable textContainer, NSUInteger descendantCount)
++{
++  if (descendantCount > 0 || text.length == 0 || RCTTextHasAttachments(text)) {
++    return nil;
++  }
++  NSArray<NSValue *> *shown = RCTTextShownCharacters(text, layoutManager, textContainer);
++  return RCTTextShowsLowercase(text.string, shown) ? RCTTextDominantFont(text, shown) : nil;
++}
 +// Ardia]
 +
  #endif // macOS]
  
  #if !TARGET_OS_OSX // [macOS]
-@@ -62,6 +164,9 @@ @implementation RCTTextView {
+@@ -62,6 +221,10 @@ @implementation RCTTextView {
    NSArray<RCTUIView *> *_Nullable _descendantViews; // [macOS]
    NSTextStorage *_Nullable _textStorage;
    CGRect _contentFrame;
 +#if TARGET_OS_OSX // [Ardia
 +  NSFont *_Nullable _opticalFont;
++  BOOL _opticalFontNeedsUpdate;
 +#endif // Ardia]
  }
  
  // [macOS
-@@ -171,6 +276,10 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+@@ -171,6 +334,13 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
  #if TARGET_OS_OSX // [macOS
    NSLayoutManager *layoutManager = textStorage.layoutManagers.firstObject;
    NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
-+  NSArray<NSValue *> *shown = descendantViews.count > 0 || RCTTextHasAttachments(textStorage) // [Ardia: inline views and attachments are placed apart from the glyphs, and text with no lowercase has no x-height to centre, so neither is lifted
-+      ? nil
-+      : RCTTextShownCharacters(textStorage, layoutManager, textContainer);
-+  _opticalFont = shown != nil && RCTTextShowsLowercase(textStorage.string, shown) ? RCTTextDominantFont(textStorage, shown) : nil; // Ardia]
++  if (_ardiaCentersCapitals) {
++    _opticalFont = nil;
++    _opticalFontNeedsUpdate = YES;
++  } else {
++    _opticalFont = RCTTextOpticalFont(textStorage, layoutManager, textContainer, descendantViews.count);
++    _opticalFontNeedsUpdate = NO;
++  }
  
    [_textView replaceTextContainer:textContainer];
  
-@@ -187,7 +296,7 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+@@ -187,7 +357,7 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
  
    _textView.minSize = contentFrame.size;
    _textView.maxSize = contentFrame.size;
@@ -559,7 +645,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
    _textView.textStorage.attributedString = textStorage;
  #endif // macOS]
  
-@@ -205,6 +314,39 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+@@ -205,6 +375,46 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
    [self setNeedsDisplay];
  }
  
@@ -572,7 +658,14 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
 +
 +- (void)setArdiaCentersCapitals:(BOOL)ardiaCentersCapitals
 +{
++  if (_ardiaCentersCapitals == ardiaCentersCapitals) {
++    return;
++  }
 +  _ardiaCentersCapitals = ardiaCentersCapitals;
++  if (!_ardiaCentersCapitals && _opticalFontNeedsUpdate) {
++    _opticalFont = RCTTextOpticalFont(_textView.textStorage, _textView.layoutManager, _textView.textContainer, _descendantViews.count);
++    _opticalFontNeedsUpdate = NO;
++  }
 +  [self ardia_applyOpticalLift];
 +}
 +
@@ -599,7 +692,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
  - (void)drawRect:(CGRect)rect
  {
    [super drawRect:rect];
-@@ -293,6 +435,11 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
+@@ -293,6 +503,11 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
    CGFloat fraction;
    NSLayoutManager *layoutManager = _textStorage.layoutManagers.firstObject;
    NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
@@ -611,7 +704,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
    NSUInteger characterIndex = [layoutManager characterIndexForPoint:point
                                                      inTextContainer:textContainer
                             fractionOfDistanceBetweenInsertionPoints:&fraction];
-@@ -310,6 +457,12 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
+@@ -310,6 +525,12 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
  - (void)didMoveToWindow
  {
    [super didMoveToWindow];
@@ -624,7 +717,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
  
    if (!self.window) {
      self.layer.contents = nil;
-@@ -318,6 +471,9 @@ - (void)didMoveToWindow
+@@ -318,6 +539,9 @@ - (void)didMoveToWindow
        _highlightLayer = nil;
      }
    } else if (_textStorage) {
@@ -648,6 +741,61 @@ index 769a3e556d96b2b9f6c2795303b675b749cdeb61..078288af5be55afc260a48d0860a902e
  
  - (void)setBridge:(RCTBridge *)bridge
  {
+diff --git a/Libraries/Text/TextInput/Multiline/RCTUITextView.mm b/Libraries/Text/TextInput/Multiline/RCTUITextView.mm
+index a5b5a6a71c7b50f49666e966ed8d8906835ff43e..59e19ca80574e7fdf17521506a85592def69c754 100644
+--- a/Libraries/Text/TextInput/Multiline/RCTUITextView.mm
++++ b/Libraries/Text/TextInput/Multiline/RCTUITextView.mm
+@@ -28,6 +28,7 @@ @implementation RCTUITextView {
+ #if TARGET_OS_OSX // [macOS
+   BOOL _enableFocusRing;
+   NSArray<NSPasteboardType> *_readablePasteboardTypes;
++  RCTUIColor *_ardiaSelectionColor;
+ #endif // macOS]
+ }
+ 
+@@ -176,13 +177,20 @@ - (void)toggleGrammarChecking:(id)sender
+   [_textInputDelegate grammarCheckingDidChange:self.isGrammarCheckingEnabled];
+ }
+ 
+-- (void)setSelectionColor:(RCTUIColor *)selectionColor
++- (void)ardia_refreshSelectionLook
+ {
+-  NSMutableDictionary *selectTextAttributes = self.selectedTextAttributes.mutableCopy;
+-  selectTextAttributes[NSBackgroundColorAttributeName] = selectionColor ?: [NSColor selectedControlColor];
++  NSMutableDictionary *selectTextAttributes = [self.selectedTextAttributes mutableCopy] ?: [NSMutableDictionary new];
++  selectTextAttributes[NSBackgroundColorAttributeName] = _ardiaSelectionColor ?: [NSColor selectedControlColor];
++  selectTextAttributes[NSForegroundColorAttributeName] = _defaultTextAttributes[NSForegroundColorAttributeName] ?: [NSColor selectedTextColor];
+   self.selectedTextAttributes = selectTextAttributes.copy;
+ }
+ 
++- (void)setSelectionColor:(RCTUIColor *)selectionColor
++{
++  _ardiaSelectionColor = selectionColor;
++  [self ardia_refreshSelectionLook];
++}
++
+ - (RCTUIColor*)selectionColor
+ {
+   return (RCTUIColor*)self.selectedTextAttributes[NSBackgroundColorAttributeName];
+@@ -191,7 +199,7 @@ - (RCTUIColor*)selectionColor
+ - (void)setCursorColor:(NSColor *)cursorColor
+ {
+   _cursorColor = cursorColor;
+-  self.insertionPointColor = cursorColor;
++  self.insertionPointColor = cursorColor ?: [NSColor textColor];
+ }
+ 
+ - (void)setEnabledTextCheckingTypes:(NSTextCheckingTypes)checkingType
+@@ -291,6 +299,9 @@ - (void)setDefaultTextAttributes:(NSDictionary<NSAttributedStringKey, id> *)defa
+   _defaultTextAttributes = defaultTextAttributes;
+   self.typingAttributes = defaultTextAttributes;
+   [self _updatePlaceholder];
++#if TARGET_OS_OSX
++  [self ardia_refreshSelectionLook];
++#endif
+ }
+ 
+ - (NSDictionary<NSAttributedStringKey, id> *)defaultTextAttributes
 diff --git a/Libraries/Text/TextInput/RCTBackedTextInputDelegateAdapter.mm b/Libraries/Text/TextInput/RCTBackedTextInputDelegateAdapter.mm
 index 18bbe64f657a36596563b3eb6d135284e28c674a..6ba0e25c3b67676b92c011fade92884aa69a759f 100644
 --- a/Libraries/Text/TextInput/RCTBackedTextInputDelegateAdapter.mm
@@ -945,7 +1093,7 @@ index fac5699dedeaaa35bb22b8f8d5d96a3817ca92b1..692ea640ba83db5b0bfe3fc1a24fda68
        RCTBaseTextInputShadowView *shadowView =
            (RCTBaseTextInputShadowView *)[self.bridge.uiManager shadowViewForReactTag:viewTag];
 diff --git a/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm b/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm
-index 9973da7611fc92df7e66010350504bf077a9f2d9..66f7f05ae27762b12e41f92c02bd3997212ed092 100644
+index 9973da7611fc92df7e66010350504bf077a9f2d9..2786db490b29ba8cf114bd885311b18ee2a46658 100644
 --- a/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm
 +++ b/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm
 @@ -26,7 +26,9 @@ - (instancetype)initWithBridge:(RCTBridge *)bridge
@@ -981,8 +1129,11 @@ index 9973da7611fc92df7e66010350504bf077a9f2d9..66f7f05ae27762b12e41f92c02bd3997
  - (void)setUseSecureTextField:(BOOL)useSecureTextField {
    if (_useSecureTextField != useSecureTextField) {
      _useSecureTextField = useSecureTextField;
-@@ -84,10 +97,11 @@ - (void)setUseSecureTextField:(BOOL)useSecureTextField {
+@@ -82,12 +95,14 @@ - (void)setUseSecureTextField:(BOOL)useSecureTextField {
+     _backedTextInputView.placeholder = previousTextField.placeholder;
+     _backedTextInputView.placeholderColor = previousTextField.placeholderColor;
      _backedTextInputView.selectionColor = previousTextField.selectionColor;
++    _backedTextInputView.cursorColor = previousTextField.cursorColor;
      _backedTextInputView.textAlignment = previousTextField.textAlignment;
      _backedTextInputView.textContainerInset = previousTextField.textContainerInset;
 -    _backedTextInputView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -1014,21 +1165,23 @@ index 386405335b411e70a82909033febc7dd5b4adabe..ace454e53458fb82d2fd6b456c4e9562
  
  @end
 diff --git a/Libraries/Text/TextInput/Singleline/RCTUITextField.h b/Libraries/Text/TextInput/Singleline/RCTUITextField.h
-index 61242af88da2f235e5ae506e79dfb9898742eb51..259868183aa018ac6c0e7a83a9008ad63a2bb3dd 100644
+index 61242af88da2f235e5ae506e79dfb9898742eb51..dccbeb45af839f0e55953b458d8861599644cde6 100644
 --- a/Libraries/Text/TextInput/Singleline/RCTUITextField.h
 +++ b/Libraries/Text/TextInput/Singleline/RCTUITextField.h
-@@ -50,6 +50,9 @@ NS_ASSUME_NONNULL_BEGIN
+@@ -50,6 +50,11 @@ NS_ASSUME_NONNULL_BEGIN
  @property (nonatomic, assign, readonly) CGPoint contentOffset;
  @property (nonatomic, assign, readonly) UIEdgeInsets contentInset;
  @property (nonatomic, assign) BOOL disableKeyboardShortcuts;
 +#if TARGET_OS_OSX
 +@property (nonatomic, assign) BOOL ardiaCentersCapitals;
++@property (nonatomic, strong, nullable) RCTUIColor *cursorColor;
++- (void)ardia_applySelectionLookToEditor:(NSTextView *)editor;
 +#endif
  
  #if TARGET_OS_OSX // [macOS
  @property (nonatomic, copy, nullable) NSString *text;
 diff --git a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
-index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6b93a6f98 100644
+index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..553bf9666a4d3be878f1dee204d6ac1943d76a10 100644
 --- a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
 +++ b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
 @@ -10,6 +10,7 @@
@@ -1039,7 +1192,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  #import <React/RCTUtils.h>
  #import <React/UIView+React.h>
  
-@@ -17,8 +18,140 @@
+@@ -17,8 +18,209 @@
  
  #if TARGET_OS_OSX // [macOS
  
@@ -1050,8 +1203,10 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
 +// pasted the title.
 +static NSString *RCTUISingleLinePastedText(NSString *text)
 +{
-+  NSCharacterSet *space = NSCharacterSet.whitespaceAndNewlineCharacterSet;
-+  NSCharacterSet *lineBreak = [NSCharacterSet characterSetWithCharactersInString:@"\r\n"];
++  static const unichar lineBreaks[] = {'\r', '\n', '\v', '\f', 0x0085, 0x2028, 0x2029};
++  NSCharacterSet *lineBreak = [NSCharacterSet characterSetWithCharactersInString:[NSString stringWithCharacters:lineBreaks length:7]];
++  NSMutableCharacterSet *space = [NSCharacterSet.whitespaceAndNewlineCharacterSet mutableCopy];
++  [space formUnionWithCharacterSet:lineBreak];
 +  NSUInteger length = text.length;
 +  NSUInteger index = 0;
 +  while (index < length && [space characterIsMember:[text characterAtIndex:index]]) {
@@ -1092,6 +1247,70 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
 +    [joined insertString:fill atIndex:at.unsignedIntegerValue];
 +  }
 +  return joined;
++}
++
++static NSStringEncoding RCTUIHTMLEncoding(NSData *data)
++{
++  NSData *head = [data subdataWithRange:NSMakeRange(0, MIN(data.length, (NSUInteger)65536))];
++  NSString *markup = [[NSString alloc] initWithData:head encoding:NSISOLatin1StringEncoding];
++  NSRegularExpression *meta = [NSRegularExpression regularExpressionWithPattern:@"<meta[^>]*charset\\s*=\\s*[\"']?\\s*([A-Za-z0-9_.:-]+)"
++                                                                        options:NSRegularExpressionCaseInsensitive
++                                                                          error:nil];
++  NSTextCheckingResult *found = [meta firstMatchInString:markup options:0 range:NSMakeRange(0, markup.length)];
++  if (found) {
++    CFStringEncoding declared = CFStringConvertIANACharSetNameToEncoding((__bridge CFStringRef)[markup substringWithRange:[found rangeAtIndex:1]]);
++    if (declared != kCFStringEncodingInvalidId) {
++      return CFStringConvertEncodingToNSStringEncoding(declared);
++    }
++  }
++  return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ? NSUTF8StringEncoding : NSWindowsCP1252StringEncoding;
++}
++
++static NSString *RCTUIPlainTextOfHTML(NSData *data)
++{
++  NSString *html = [[NSString alloc] initWithData:data encoding:RCTUIHTMLEncoding(data)]
++      ?: [[NSString alloc] initWithData:data encoding:NSWindowsCP1252StringEncoding];
++  NSXMLDocument *document = [[NSXMLDocument alloc] initWithXMLString:html ?: @""
++                                                             options:NSXMLDocumentTidyHTML | NSXMLNodeLoadExternalEntitiesNever
++                                                               error:nil];
++  if (!document.rootElement) {
++    return nil;
++  }
++  for (NSXMLNode *hidden in [document nodesForXPath:@"//head|//script|//style|//noscript|//template" error:nil]) {
++    [hidden detach];
++  }
++  for (NSXMLElement *block in [document nodesForXPath:@"//br|//p|//div|//li|//tr|//td|//th|//h1|//h2|//h3|//h4|//h5|//h6|//pre|//blockquote" error:nil]) {
++    [block addChild:[NSXMLNode textWithStringValue:@"\n"]];
++  }
++  return document.rootElement.stringValue;
++}
++
++static NSString *RCTUIPlainTextOfRichPasteboard(NSPasteboard *pasteboard)
++{
++  NSPasteboardItem *item = pasteboard.pasteboardItems.firstObject;
++  NSString *fileURL = [item stringForType:NSPasteboardTypeFileURL];
++  NSURL *file = fileURL.length ? [NSURL URLWithString:fileURL] : nil;
++  if (file.isFileURL) {
++    return file.absoluteString;
++  }
++  NSString *attachment = [NSString stringWithFormat:@"%C", (unichar)NSAttachmentCharacter];
++  for (NSPasteboardType type in @[ NSPasteboardTypeRTFD, NSPasteboardTypeRTF, NSPasteboardTypeHTML ]) {
++    NSData *data = [item dataForType:type];
++    if (!data) {
++      continue;
++    }
++    NSString *text = type == NSPasteboardTypeHTML
++        ? RCTUIPlainTextOfHTML(data)
++        : [[NSAttributedString alloc] initWithData:data
++                                           options:@{NSDocumentTypeDocumentAttribute : type == NSPasteboardTypeRTFD ? NSRTFDTextDocumentType : NSRTFTextDocumentType}
++                                documentAttributes:nil
++                                             error:nil].string;
++    text = [text stringByReplacingOccurrencesOfString:attachment withString:@""];
++    if ([text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) {
++      return text;
++    }
++  }
++  return nil;
 +}
 +
 +@interface RCTUIPlainPasteFieldEditor : NSTextView
@@ -1151,6 +1370,9 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
 +      break;
 +    }
 +  }
++  if (!text && [types containsObject:NSPasteboardTypeString]) {
++    text = RCTUIPlainTextOfRichPasteboard(pasteboard);
++  }
 +  if (!text) {
 +    NSArray<NSPasteboardType> *offered = pasteboard.types ?: @[];
 +    [NSNotificationCenter.defaultCenter postNotificationName:@"ArdiaPasteboardTextMissing"
@@ -1180,7 +1402,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  @property (nonatomic, assign) UIEdgeInsets textContainerInset;
  @property (nonatomic, getter=isAutomaticTextReplacementEnabled) BOOL automaticTextReplacementEnabled;
  @property (nonatomic, getter=isAutomaticSpellingCorrectionEnabled) BOOL automaticSpellingCorrectionEnabled;
-@@ -29,7 +162,29 @@ @interface RCTUITextFieldCell : NSTextFieldCell
+@@ -29,7 +231,29 @@ @interface RCTUITextFieldCell : NSTextFieldCell
  
  @end
  
@@ -1211,7 +1433,26 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  
  - (NSRect)titleRectForBounds:(NSRect)rect
  {
-@@ -84,6 +239,8 @@ @implementation RCTUITextField {
+@@ -63,10 +287,14 @@ - (NSText *)setUpFieldEditorAttributes:(NSText *)textObj
+   fieldEditor.automaticTextReplacementEnabled = self.isAutomaticTextReplacementEnabled;
+   fieldEditor.continuousSpellCheckingEnabled = self.isContinuousSpellCheckingEnabled;
+   fieldEditor.grammarCheckingEnabled = self.isGrammarCheckingEnabled;
+-  NSMutableDictionary *selectTextAttributes = fieldEditor.selectedTextAttributes.mutableCopy;
+-  selectTextAttributes[NSBackgroundColorAttributeName] = self.selectionColor ?: [NSColor selectedControlColor];
+-  fieldEditor.selectedTextAttributes = selectTextAttributes;
+-  fieldEditor.insertionPointColor = self.insertionPointColor ?: [NSColor textColor];
++  if ([self.controlView isKindOfClass:[RCTUITextField class]]) {
++    [(RCTUITextField *)self.controlView ardia_applySelectionLookToEditor:fieldEditor];
++  } else {
++    NSMutableDictionary *selectTextAttributes = fieldEditor.selectedTextAttributes.mutableCopy;
++    selectTextAttributes[NSBackgroundColorAttributeName] = self.selectionColor ?: [NSColor selectedControlColor];
++    fieldEditor.selectedTextAttributes = selectTextAttributes;
++    fieldEditor.insertionPointColor = self.insertionPointColor ?: [NSColor textColor];
++  }
+   return fieldEditor;
+ }
+ 
+@@ -84,6 +312,8 @@ @implementation RCTUITextField {
  #if TARGET_OS_OSX // [macOS
    BOOL _isUpdatingPlaceholderText;
    NSArray<NSPasteboardType> *_readablePasteboardTypes;
@@ -1220,7 +1461,49 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  #endif // macOS]
  }
  
-@@ -155,6 +312,11 @@ - (BOOL)hasMarkedText
+@@ -136,14 +366,38 @@ - (void)_textDidChange
+ {
+   _textWasPasted = NO;
+ #if TARGET_OS_OSX // [macOS
+-  [self setAttributedText:[[NSAttributedString alloc] initWithString:[self text]
+-                                                          attributes:[self defaultTextAttributes]]];
++  NSAttributedString *styledText = [[NSAttributedString alloc] initWithString:[self text]
++                                                                   attributes:[self defaultTextAttributes]];
++  if (![self ardia_restyleEditorKeepingUndo:styledText]) {
++    [self setAttributedText:styledText];
++  }
+   if([[self text] length] == 0) {
+-    self.font = [[self defaultTextAttributes] objectForKey:NSFontAttributeName];
++    NSFont *font = [[self defaultTextAttributes] objectForKey:NSFontAttributeName];
++    if (![self.font isEqual:font]) {
++      self.font = font;
++    }
+   }
+ #endif // macOS]
+ }
+ 
++#if TARGET_OS_OSX
++- (BOOL)ardia_restyleEditorKeepingUndo:(NSAttributedString *)styledText
++{
++  NSDictionary<NSAttributedStringKey, id> *attributes = [self defaultTextAttributes];
++  NSTextView *editor = [self.currentEditor isKindOfClass:[NSTextView class]] ? (NSTextView *)self.currentEditor : nil;
++  if (!attributes || !editor || editor.hasMarkedText || ![editor.string isEqualToString:styledText.string]) {
++    return NO;
++  }
++  NSTextStorage *storage = editor.textStorage;
++  if (storage.length > 0 && ![storage isEqualToAttributedString:styledText]) {
++    [storage beginEditing];
++    [storage setAttributes:attributes range:NSMakeRange(0, storage.length)];
++    [storage endEditing];
++  }
++  return YES;
++}
++#endif
++
+ #if TARGET_OS_OSX // [macOS
+ - (BOOL)hasMarkedText
+ {
+@@ -155,6 +409,11 @@ - (BOOL)hasMarkedText
  	return ((NSTextView *)self.currentEditor).validAttributesForMarkedText ?: @[];
  }
  
@@ -1232,7 +1515,41 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  #endif // macOS]
  
  #pragma mark - Accessibility
-@@ -304,8 +466,110 @@ - (RCTUIColor*)cursorColor
+@@ -284,6 +543,25 @@ - (BOOL)isGrammarCheckingEnabled
+ - (void)setSelectionColor:(RCTUIColor *)selectionColor
+ {
+   ((RCTUITextFieldCell*)self.cell).selectionColor = selectionColor;
++  [self ardia_refreshSelectionLook];
++}
++
++- (void)ardia_refreshSelectionLook
++{
++  NSTextView *editor = (NSTextView *)self.currentEditor;
++  if ([editor isKindOfClass:[NSTextView class]]) {
++    [self ardia_applySelectionLookToEditor:editor];
++  }
++}
++
++- (void)ardia_applySelectionLookToEditor:(NSTextView *)editor
++{
++  RCTUITextFieldCell *cell = (RCTUITextFieldCell *)self.cell;
++  NSMutableDictionary *selectTextAttributes = editor.selectedTextAttributes.mutableCopy;
++  selectTextAttributes[NSBackgroundColorAttributeName] = cell.selectionColor ?: [NSColor selectedControlColor];
++  selectTextAttributes[NSForegroundColorAttributeName] = self.defaultTextAttributes[NSForegroundColorAttributeName] ?: [NSColor selectedTextColor];
++  editor.selectedTextAttributes = selectTextAttributes;
++  editor.insertionPointColor = cell.insertionPointColor ?: [NSColor textColor];
+ }
+ 
+ - (RCTUIColor*)selectionColor
+@@ -294,6 +572,7 @@ - (RCTUIColor*)selectionColor
+ - (void)setCursorColor:(NSColor *)cursorColor
+ {
+     ((RCTUITextFieldCell*)self.cell).insertionPointColor = cursorColor;
++  [self ardia_refreshSelectionLook];
+ }
+ 
+ - (RCTUIColor*)cursorColor
+@@ -304,8 +583,110 @@ - (RCTUIColor*)cursorColor
  - (void)setFont:(UIFont *)font
  {
    ((RCTUITextFieldCell*)self.cell).font = font;
@@ -1343,7 +1660,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  - (UIFont *)font
  {
    return ((RCTUITextFieldCell*)self.cell).font;
-@@ -330,7 +594,9 @@ - (void)setPlaceholder:(NSString *)placeholder
+@@ -330,7 +711,9 @@ - (void)setPlaceholder:(NSString *)placeholder
  #if !TARGET_OS_OSX // [macOS]
    [super setPlaceholder:placeholder];
  #else // [macOS
@@ -1353,7 +1670,15 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  #endif // macOS]
    [self _updatePlaceholder];
  }
-@@ -385,6 +651,20 @@ - (void)_updatePlaceholder
+@@ -367,6 +750,7 @@ - (void)setDefaultTextAttributes:(NSDictionary<NSAttributedStringKey, id> *)defa
+                                                           attributes:[self defaultTextAttributes]]];
+ 
+   self.font = [[self defaultTextAttributes] objectForKey:NSFontAttributeName];
++  [self ardia_refreshSelectionLook];
+ #endif // macOS]
+ }
+ 
+@@ -385,6 +769,20 @@ - (void)_updatePlaceholder
    _isUpdatingPlaceholderText = YES;
    self.placeholderAttributedString = [[NSAttributedString alloc] initWithString:self.placeholder ?: @""
  																	 attributes:[self _placeholderTextAttributes]];
@@ -1374,7 +1699,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
    _isUpdatingPlaceholderText = NO;
  #endif // macOS]
  }
-@@ -710,6 +990,9 @@ - (void)keyUp:(NSEvent *)event {
+@@ -710,6 +1108,9 @@ - (void)keyUp:(NSEvent *)event {
  - (void)setReadablePasteBoardTypes:(NSArray<NSPasteboardType> *)readablePasteboardTypes
  {
    _readablePasteboardTypes = readablePasteboardTypes;
@@ -1385,7 +1710,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  #endif // macOS]
  
 diff --git a/Libraries/Text/TextInput/Singleline/macOS/RCTUISecureTextField.mm b/Libraries/Text/TextInput/Singleline/macOS/RCTUISecureTextField.mm
-index 6f332dc1701cada0aff0e9a2678fa7bdcea0ef85..462853ec8b76f004cd5b9e92291473bc673a7ed1 100644
+index 6f332dc1701cada0aff0e9a2678fa7bdcea0ef85..8a552a32ee23e7ba7a0e10ed1e2e3ec0e4eb07ba 100644
 --- a/Libraries/Text/TextInput/Singleline/macOS/RCTUISecureTextField.mm
 +++ b/Libraries/Text/TextInput/Singleline/macOS/RCTUISecureTextField.mm
 @@ -14,6 +14,11 @@
@@ -1400,7 +1725,26 @@ index 6f332dc1701cada0aff0e9a2678fa7bdcea0ef85..462853ec8b76f004cd5b9e92291473bc
  @interface RCTUISecureTextFieldCell : NSSecureTextFieldCell
  
  @property (nonatomic, assign) UIEdgeInsets textContainerInset;
-@@ -71,13 +76,53 @@ - (NSText *)setUpFieldEditorAttributes:(NSText *)textObj
+@@ -60,10 +65,14 @@ - (NSText *)setUpFieldEditorAttributes:(NSText *)textObj
+   fieldEditor.automaticTextReplacementEnabled = self.isAutomaticTextReplacementEnabled;
+   fieldEditor.continuousSpellCheckingEnabled = self.isContinuousSpellCheckingEnabled;
+   fieldEditor.grammarCheckingEnabled = self.isGrammarCheckingEnabled;
+-  NSMutableDictionary *selectTextAttributes = fieldEditor.selectedTextAttributes.mutableCopy;
+-  selectTextAttributes[NSBackgroundColorAttributeName] = self.selectionColor ?: [NSColor selectedControlColor];
+-  fieldEditor.selectedTextAttributes = selectTextAttributes;
+-  fieldEditor.insertionPointColor = self.insertionPointColor ?: [NSColor textColor];
++  if ([self.controlView isKindOfClass:[RCTUITextField class]]) {
++    [(RCTUITextField *)self.controlView ardia_applySelectionLookToEditor:fieldEditor];
++  } else {
++    NSMutableDictionary *selectTextAttributes = fieldEditor.selectedTextAttributes.mutableCopy;
++    selectTextAttributes[NSBackgroundColorAttributeName] = self.selectionColor ?: [NSColor selectedControlColor];
++    fieldEditor.selectedTextAttributes = selectTextAttributes;
++    fieldEditor.insertionPointColor = self.insertionPointColor ?: [NSColor textColor];
++  }
+   return fieldEditor;
+ }
+ 
+@@ -71,13 +80,53 @@ - (NSText *)setUpFieldEditorAttributes:(NSText *)textObj
  
  #pragma mark - RCTUISecureTextField
  
@@ -1468,7 +1812,7 @@ index 37027e5da92b30d4c8c8f72235890c4e6dfbf043..5b3fb284b52ee9e9150d53a4530eb40a
    directEventTypes: {
      topTextLayout: {
 diff --git a/React/Base/RCTTouchHandler.m b/React/Base/RCTTouchHandler.m
-index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32f52ee33b 100644
+index b85ee3dd203f88bf2daaa47e912031ea200ff910..7cfb6ef470087501e0d485991f8e4e5383424913 100644
 --- a/React/Base/RCTTouchHandler.m
 +++ b/React/Base/RCTTouchHandler.m
 @@ -7,6 +7,8 @@
@@ -1491,7 +1835,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  #if !TARGET_OS_OSX // [macOS]
      // `cancelsTouchesInView` and `delaysTouches*` are needed in order to be used as a top level
      // event delegated recognizer. Otherwise, lower-level components not built
-@@ -100,6 +106,114 @@ - (void)detachFromView:(RCTPlatformView *)view // [macOS]
+@@ -100,6 +106,129 @@ - (void)detachFromView:(RCTPlatformView *)view // [macOS]
  
  #pragma mark - Bookkeeping for touch indices
  
@@ -1603,10 +1947,25 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
 +}
 +#endif // Ardia]
 +
++#if TARGET_OS_OSX
++static CALayer *RCTArdiaRootLayer(CALayer *layer)
++{
++  while (layer.superlayer) {
++    layer = layer.superlayer;
++  }
++  return layer;
++}
++
++static BOOL RCTArdiaLayersShareTree(CALayer *a, CALayer *b)
++{
++  return a && b && RCTArdiaRootLayer(a) == RCTArdiaRootLayer(b);
++}
++#endif
++
  - (void)_recordNewTouches:(NSSet *)touches
  {
  #if !TARGET_OS_OSX // [macOS]
-@@ -108,7 +222,13 @@ - (void)_recordNewTouches:(NSSet *)touches
+@@ -108,7 +237,13 @@ - (void)_recordNewTouches:(NSSet *)touches
    for (NSEvent *touch in touches) {
  #endif // macOS]
  
@@ -1620,7 +1979,18 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  
      // Find closest React-managed touchable view
      
-@@ -204,19 +324,27 @@ - (void)_recordRemovedTouches:(NSSet *)touches
+@@ -161,7 +296,9 @@ - (void)_recordNewTouches:(NSSet *)touches
+       targetView = targetView.superview;
+     }
+ 
+-    const CGPoint touchLocationInSelf = [targetView convertPoint:touchLocationInSuperview fromView:self.view.superview];
++    const CGPoint touchLocationInSelf = RCTArdiaLayersShareTree(superview.layer, targetView.layer)
++      ? [targetView.layer convertPoint:touchLocationInSuperview fromLayer:superview.layer]
++      : [targetView convertPoint:touchLocationInSuperview fromView:superview];
+     NSNumber *reactTag = [targetView reactTagAtPoint:touchLocationInSelf];
+     BOOL isUserInteractionEnabled = NO;
+     if ([((RCTUIView*)targetView) respondsToSelector:@selector(isUserInteractionEnabled)]) { // [macOS]
+@@ -204,19 +341,27 @@ - (void)_recordRemovedTouches:(NSSet *)touches
    for (UITouch *touch in touches) {
      NSInteger index = [_nativeTouches indexOfObject:touch];
  #else // [macOS
@@ -1652,7 +2022,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  }
  
  - (void)_updateReactTouchAtIndex:(NSInteger)touchIndex
-@@ -303,15 +431,17 @@ - (void)_updateAndDispatchTouches:(NSSet<NSEvent *> *)touches eventName:(NSStrin
+@@ -303,15 +448,17 @@ - (void)_updateAndDispatchTouches:(NSSet<NSEvent *> *)touches eventName:(NSStrin
    for (UITouch *touch in touches) {
      NSInteger index = [_nativeTouches indexOfObject:touch];
  #else // [macOS
@@ -1673,7 +2043,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
      
  #if TARGET_OS_OSX // [macOS
      _nativeTouches[index] = touch;
-@@ -431,34 +561,34 @@ - (void)interactionsMoved:(NSSet *)touches // [macOS]
+@@ -431,34 +578,34 @@ - (void)interactionsMoved:(NSSet *)touches // [macOS]
  
  - (void)interactionsEnded:(NSSet *)touches withEvent:(UIEvent*)event // [macOS]
  {
@@ -1717,7 +2087,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  }
    
  #if !TARGET_OS_OSX // [macOS]
-@@ -497,6 +627,7 @@ - (BOOL)acceptsFirstMouse:(NSEvent *)event
+@@ -497,6 +644,7 @@ - (BOOL)acceptsFirstMouse:(NSEvent *)event
  - (void)mouseDown:(NSEvent *)event
  {
    [super mouseDown:event];
@@ -1725,7 +2095,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
    [self interactionsBegan:[NSSet setWithObject:event]];
    // [macOS
    if (_shouldSendMouseUpOnSystemBehalf) {
-@@ -519,6 +650,7 @@ - (void)mouseDown:(NSEvent *)event
+@@ -519,6 +667,7 @@ - (void)mouseDown:(NSEvent *)event
  - (void)rightMouseDown:(NSEvent *)event
  {
    [super rightMouseDown:event];
@@ -1734,10 +2104,18 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  }
    
 diff --git a/React/Base/RCTUIKit.h b/React/Base/RCTUIKit.h
-index 8f1094a71ed431fcecb6f760ffe8d6da643f04cb..67404c8656b69d9cf28d9eb5862e991400be8276 100644
+index 8f1094a71ed431fcecb6f760ffe8d6da643f04cb..10a989e11842f9db0d1c0409401d159b36c26407 100644
 --- a/React/Base/RCTUIKit.h
 +++ b/React/Base/RCTUIKit.h
-@@ -604,6 +604,11 @@ NS_INLINE RCTPlatformView *RCTUIViewHitTestWithEvent(RCTPlatformView *view, CGPo
+@@ -529,6 +529,7 @@ void UIBezierPathAppendPath(UIBezierPath *path, UIBezierPath *appendPath);
+  * containing window is in the background.
+  */
+ @property (nonatomic, assign) BOOL acceptsFirstMouse;
++@property (nonatomic, assign) BOOL ardiaKeepsHitsWhileClear;
+ 
+ @property (nonatomic, assign) BOOL mouseDownCanMoveWindow;
+ 
+@@ -604,6 +605,11 @@ NS_INLINE RCTPlatformView *RCTUIViewHitTestWithEvent(RCTPlatformView *view, CGPo
    return [view hitTest:pointInSuperview];
  }
  
@@ -1750,7 +2128,7 @@ index 8f1094a71ed431fcecb6f760ffe8d6da643f04cb..67404c8656b69d9cf28d9eb5862e9914
  {
    view.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
 diff --git a/React/Base/macOS/RCTUIKit.m b/React/Base/macOS/RCTUIKit.m
-index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88eed20374cd 100644
+index a37a1c106a04752c1baeb6dd2170402ce5f34f71..12b9296d163bf8cf6297b55c53653f6b5d0cd7c6 100644
 --- a/React/Base/macOS/RCTUIKit.m
 +++ b/React/Base/macOS/RCTUIKit.m
 @@ -15,6 +15,7 @@
@@ -1806,7 +2184,7 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
  - (BOOL)acceptsFirstMouse:(NSEvent *)event
  {
    if (self.acceptsFirstMouse || [super acceptsFirstMouse:event]) {
-@@ -284,20 +323,53 @@ - (CATransform3D)transform3D
+@@ -284,23 +323,59 @@ - (CATransform3D)transform3D
    return _transform3D;
  }
  
@@ -1847,8 +2225,8 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
    _hasCustomTransform3D = !CATransform3DEqualToTransform(transform3D, CATransform3DIdentity);
 -  self.layer.transform = transform3D;
 +  self.layer.transform = RCTUIViewLayerTransform(self);
-+}
-+
+ }
+ 
 +- (void)setFrameOrigin:(NSPoint)newOrigin
 +{
 +  [super setFrameOrigin:newOrigin];
@@ -1863,12 +2241,18 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
 +  if (_hasCustomTransform3D) {
 +    RCTUIViewApplyTransform3D(self);
 +  }
- }
++}
 +// Ardia]
- 
++
  - (NSView *)hitTest:(NSPoint)point
  {
-@@ -308,7 +380,11 @@ - (NSView *)hitTest:(NSPoint)point
++  if (!self.ardiaKeepsHitsWhileClear && (self.alphaValue < 0.01 || self.layer.opacity < 0.01)) {
++    return nil;
++  }
+   // NSView's hitTest: receives a point in superview coordinates. Convert to local
+   // coordinates using CALayer, which correctly accounts for layer.transform.
+   // NSView's convertPoint:fromView: does NOT account for layer transforms.
+@@ -308,7 +383,11 @@ - (NSView *)hitTest:(NSPoint)point
    if (self.layer.superlayer) {
      localPoint = [self.layer convertPoint:point fromLayer:self.layer.superlayer];
    } else {
@@ -1881,7 +2265,7 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
    }
    return [self hitTest:localPoint withEvent:nil];
  }
-@@ -331,8 +407,8 @@ - (void)updateLayer
+@@ -331,8 +410,8 @@ - (void)updateLayer
    // On macOS, AppKit's layer-backed view system resets layer.transform to identity
    // during its layout/display cycle because NSView has no built-in transform property
    // (unlike UIView on iOS). We must re-apply the stored transform after each cycle.
@@ -1892,7 +2276,7 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
    }
  
    if (_respondsToDisplayLayer) {
-@@ -822,6 +898,13 @@ - (instancetype)initWithFrame:(CGRect)frame
+@@ -822,6 +901,13 @@ - (instancetype)initWithFrame:(CGRect)frame
    return self;
  }
  

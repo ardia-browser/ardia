@@ -211,7 +211,7 @@ test("the repository job starts on the parity doc, the promises lock and every t
 test("Mac starts on the paths its jobs read, and its Swift tests run for the plugin sandbox, archive and import readers", () => {
   const text = workflow("mac.yml");
   const filters = changeFilters(text);
-  assert.deepEqual(Object.keys(filters).sort(), ["app", "swift"]);
+  assert.deepEqual(Object.keys(filters).sort(), ["app", "swift", "webui"]);
   assertTriggersMatchFilters(triggerPaths(text, "pull_request"), filters, ".github/workflows/mac.yml");
   assert.match(text, /^  push:\n    branches: \[main\]\n    paths: \*native$/m);
   for (const path of [
@@ -230,7 +230,7 @@ test("Mac starts on the paths its jobs read, and its Swift tests run for the plu
   }
   assert.ok(read.size >= 3, "the plugin tests still name the repository files they read");
   for (const path of read) assert.ok(matched(filters.swift, path), `a change to ${path}, which the plugin tests read, runs the Swift tests`);
-  for (const name of ["app", "swift"]) {
+  for (const name of ["app", "swift", "webui"]) {
     assert.ok(text.includes(`      ${name}: \${{ steps.filter.outcome != 'success' || steps.filter.outputs.${name} == 'true' }}`), `${name} falls back to running`);
     assert.match(text, new RegExp(`\\(needs\\.changes\\.result != 'success' \\|\\| needs\\.changes\\.outputs\\.${name} == 'true'\\)`), `${name} runs when the changes job failed`);
   }

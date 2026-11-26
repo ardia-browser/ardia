@@ -31,6 +31,7 @@ type IconBase = {
   children?: ReactNode;
   box?: number;
   glyphBox?: number;
+  centresInk?: SymbolProps["centresInk"];
   radius?: number;
   weight?: SymbolProps["weight"];
   tooltip?: string;
@@ -139,7 +140,7 @@ function IconButtonView(props: IconProps) {
       <Image source={{ uri: image }} style={{ width: IMAGE_SIZE, height: IMAGE_SIZE, opacity: disabled ? opacity.disabled : 1 }} />
     </View>
   ) : icon ? (
-    drawnSymbol({ name: icon, size: metrics.glyph, weight, color: ink, style: { width: glyphFrame, height: glyphFrame } })
+    drawnSymbol({ name: icon, size: metrics.glyph, weight, color: ink, centresInk: props.centresInk, style: { width: glyphFrame, height: glyphFrame } })
   ) : null);
   const [lit, setLit] = useState(() => !disabled && !!active);
   if (!lit && !disabled && (hovered || !!active)) setLit(true);

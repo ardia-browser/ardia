@@ -400,7 +400,9 @@ final class FocusHandoff {
         if selector == Selector(("pasteAndMatchStyle:")), !responder.responds(to: selector) {
           selector = #selector(NSTextView.pasteAsPlainText(_:))
         }
-        NSApp.sendAction(selector, to: responder, from: nil)
+        if !NSApp.sendAction(selector, to: responder, from: nil) {
+          PasteRefusal.reportMenuPaste(action, .refused, ["dropped": 1], stamp: ArdiaConsentStamp(epoch: epoch))
+        }
       }
     }
   }

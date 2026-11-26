@@ -31,7 +31,7 @@ export { Swatch } from "./Swatch";
 export { tintedImage, tintedImageKey } from "./TintedImage";
 export { Toggle } from "./Switch";
 export { Text, TextScopeContext, type TextProps, type TextScope } from "./Text";
-export { hex, layout, PROFILE_COLORS, useTheme, type Theme } from "./theme";
+export { caretColor, caretColorOnRow, hex, layout, popoverFieldSurface, PROFILE_COLORS, quietBarGlyph, quietGoLabel, useTheme, type FieldSurface, type Theme } from "./theme";
 export { capsule, colorRoles, concentric, clippedContinuousCorners, continuousCorners, display, monoFace, perLook, sidebarFont, sidebarIconSize, sidebarLineHeight, sidebarPoints, typeFace, withFace, withMono, emptyState, font, hairline, iconButton, ink, lineHeight, opacity, pillHeight, POPOVER_WIDTH, proseLineHeight, radius, shadow, sheetWidth, space, swatch, tabularNums, TOOLTIP, tracking, weight, withAlpha, type ColorRole, type IconButtonSize, type Radius, type ShadowLevel, type SheetSize, type Space, type TypeSize, type Weight } from "./tokens";
 export { Toast } from "./Toast";
 export { ToolbarRowContext, useToolbarRowContext } from "./toolbarRowContext";

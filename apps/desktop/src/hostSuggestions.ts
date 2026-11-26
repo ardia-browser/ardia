@@ -45,6 +45,8 @@ function canonicalSuggestionRequest(url: string) {
 const failure = (code: string, message: string) => Object.assign(new Error(message), { code });
 const aborted = () => Object.assign(new Error("The suggestion request was cancelled"), { name: "AbortError" });
 const empty = { ok: false, text: async () => "" };
+const blockedReply = { ok: false, blocked: true, text: async () => "" };
+const BLOCKED_STATUSES = new Set([403, 429]);
 let sequence = 0;
 
 export function hostSuggestFetch(host: ArdiaHost, extensionEndpoints: () => readonly string[] = () => []): FetchLike {
@@ -73,6 +75,8 @@ export function hostSuggestFetch(host: ArdiaHost, extensionEndpoints: () => read
         signal.removeEventListener("abort", abort);
         if (settled) return;
         settled = true;
+        const status = reply && typeof reply === "object" && typeof (reply as { status?: unknown }).status === "number" ? (reply as { status: number }).status : undefined;
+        if (status !== undefined && (status < 200 || status >= 300)) return resolve(BLOCKED_STATUSES.has(status) ? blockedReply : empty);
         const body = reply && typeof reply === "object" && typeof (reply as { body?: unknown }).body === "string" ? (reply as { body: string }).body : null;
         if (body === null || body.length > SUGGEST_REPLY_LIMIT) return resolve(empty);
         resolve({ ok: true, text: async () => body });

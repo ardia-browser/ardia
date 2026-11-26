@@ -109,6 +109,7 @@ kernel=$root/ac-$lock.lockf
 legacy=$root/ac-$lock.lock
 holder=$root/ac-$lock.holder
 now() { date +%s; }
+pid_alive() { local why; [[ "$1" =~ ^[1-9][0-9]{0,9}$ ]] && (( $1 <= 2147483647 )) || return 1; why=$(LC_ALL=C; kill -0 "$1" 2>&1) || [[ "$why" == *"Operation not permitted"* ]]; }
 
 field() { awk -v n="$1" '{print $n; exit}' "$holder" 2>/dev/null; }
 taken_by() { [[ "$(field 1)" == take && "$(field 3)" == "$1" ]]; }
@@ -124,12 +125,22 @@ describe() {
   fi
 }
 
+held_file() { printf '%s.held' "${1%.lockf}"; }
+
+own_record() { [[ -f "$1" && ! -L "$1" && -O "$1" ]]; }
+
 held_by_caller() {
-  local pid path want=${1:-$kernel}
-  while read -r pid path; do
-    [[ -n "$pid" && "$path" == "$want" ]] && kill -0 "$pid" 2>/dev/null && { echo "$pid"; return 0; }
-  done <<<"${AC_LOCKED_HELD:-}"
-  return 1
+  local want=${1:-$kernel} record
+  [[ -n "${AC_LOCKED_HELD:-}" ]] || return 1
+  record=$(held_file "$want")
+  own_record "$record" || return 1
+  printf '%s\n' "$AC_LOCKED_HELD" | {
+    while read -r pid nonce path; do
+      [[ -n "$pid" && ${#nonce} -eq 32 && "$path" == "$want" ]] || continue
+      [[ "$(cat "$record" 2>/dev/null)" == "$pid $nonce" ]] && pid_alive "$pid" && { echo "$pid"; exit 0; }
+    done
+    exit 1
+  }
 }
 
 rw_perl='
@@ -157,15 +168,34 @@ waitpid($pid, 0);
 exit(($? & 127) ? 128 + ($? & 127) : $? >> 8);
 '
 
+release_held() { own_record "$held" && [[ "$(cat "$held" 2>/dev/null)" == "$$ $nonce" ]] && rm -f "$held"; }
+
+write_held() {
+  local staged
+  staged=$(umask 077 && mktemp "$held.XXXXXX" 2>/dev/null) || return 1
+  if printf '%s %s\n' "$$" "$nonce" >"$staged" && perl -e 'rename($ARGV[0], $ARGV[1]) or exit 1' -- "$staged" "$held"; then return 0; fi
+  rm -f "$staged"
+  return 1
+}
+
 run() {
-  AC_LOCKED_HELD="${AC_LOCKED_HELD:+$AC_LOCKED_HELD
-}$$ $kernel" AC_LOCKED_AS="$as" "$@" &
+  held=$(held_file "$kernel")
+  nonce=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+  local held_list=${AC_LOCKED_HELD:-}
+  if write_held 2>/dev/null; then
+    held_list="${held_list:+$held_list
+}$$ $nonce $kernel"
+  fi
+  AC_LOCKED_HELD="$held_list" AC_LOCKED_AS="$as" "$@" &
   child=$!
-  trap 'kill -INT "$child" 2>/dev/null; wait "$child"; exit 130' INT
-  trap 'kill -TERM "$child" 2>/dev/null; wait "$child"; exit 143' TERM
-  trap 'kill -HUP "$child" 2>/dev/null; wait "$child"; exit 129' HUP
+  trap 'kill -INT "$child" 2>/dev/null; wait "$child"; release_held; exit 130' INT
+  trap 'kill -TERM "$child" 2>/dev/null; wait "$child"; release_held; exit 143' TERM
+  trap 'kill -HUP "$child" 2>/dev/null; wait "$child"; release_held; exit 129' HUP
   "${on_start:-true}" "$child"
   wait "$child"
+  local status=$?
+  release_held
+  return $status
 }
 
 if [[ -n "${AC_LOCKED_INNER:-}" && "$(ps -o comm= -p "$PPID" 2>/dev/null)" != *"$locker" ]]; then
@@ -259,7 +289,7 @@ while ! mkdir "$legacy" 2>/dev/null; do
   case "$(field 1)" in
     pid)
       pid=$(field 2)
-      kill -0 "$pid" 2>/dev/null || stale="its holder (pid $pid) has exited"
+      pid_alive "$pid" || stale="its holder (pid $pid) has exited"
       ;;
     take)
       [[ $(now) -gt $(field 2) ]] && stale="$(field 3)'s take expired"

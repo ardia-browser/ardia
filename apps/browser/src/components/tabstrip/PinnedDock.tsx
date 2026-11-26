@@ -1,4 +1,5 @@
 import { useContext, useMemo } from "react";
+import { registerStripTile } from "../../state/pins/tileLetters";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { useIsActiveTab, useTab, useWindowId } from "../../state/browser/hooks";
 import { folderIdOfCell } from "../../state/pins/tileFolders";
@@ -96,6 +97,7 @@ function PinnedCell({ tabId, geometry, from }: { tabId: string; geometry: DragGe
     <Animated.View ref={drag.ref} {...card} mouseDownCanMoveWindow={false} style={[drag.style, { width: PINNED_CELL, height: ITEM_HEIGHT - 1 }]}>
       <Animated.View pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
       <View
+        ref={(v) => registerStripTile(windowId, tabId, v)}
         {...drag.panHandlers}
         {...hover.hoverProps}
         style={{

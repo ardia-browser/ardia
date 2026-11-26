@@ -6,8 +6,8 @@ Installs the single-file Flatpak bundle with flatpak install --user --bundle in
 fresh privileged containers (docker or podman; bubblewrap needs them), as an
 ordinary user, and checks that its runtime comes from Flathub, it is
 dev.ardia.Ardia on the stable branch at the bundle'"'"'s version, ardia --version
-runs, the desktop entry and icon are exported under the app id and the entry
-opens links, cobalt.ini and zypak are there and chrome-sandbox is not setuid, the permissions hold the network,
+runs, the desktop entry, the hidden Little Ardia, Settings and Import entries
+and the icon are exported under the app id and the entry opens links, cobalt.ini and zypak are there and chrome-sandbox is not setuid, the permissions hold the network,
 display, sound, downloads, keyring and import grants and nothing of the home
 folder beyond them, ardia-update leaves updates to Flatpak (kind: managed),
 Ardia starts headless with Chromium'"'"'s sandbox through zypak (renderers without
@@ -69,7 +69,13 @@ grep -q "^Exec=.*flatpak run .*--command=ardia .*$app @@u %U @@" "$desktop" || f
 grep -q "^MimeType=.*x-scheme-handler/https;" "$desktop" || fail "the exported entry does not take https links"
 grep -q "^Icon=$app$" "$desktop" || fail "the exported entry has no $app icon"
 test -f "$exports/icons/hicolor/256x256/apps/$app.png" || fail "no exported icon"
-echo "ok   desktop entry and icon exported, links open in $app"
+for window in little settings import; do
+  hidden=$exports/applications/$app.$window.desktop
+  grep -q "^StartupWMClass=ardia-$window$" "$hidden" || fail "no exported $app.$window.desktop for the ardia-$window windows"
+  grep -q "^NoDisplay=true$" "$hidden" || fail "$app.$window.desktop is not hidden"
+  grep -q "^Icon=$app$" "$hidden" || fail "$app.$window.desktop has no $app icon"
+done
+echo "ok   desktop entries and icon exported, links open in $app"
 flatpak run --command=sh "$app" -c "test -f /app/lib/ardia/chrome-sandbox && test ! -u /app/lib/ardia/chrome-sandbox && test -f /app/etc/cobalt.ini && test -x /app/bin/zypak-wrapper.sh" || fail "the Flatpak lacks cobalt.ini, zypak or a plain chrome-sandbox for zypak to stand in for"
 permissions=$(flatpak info --user --show-permissions "$app")
 for want in shared=network shared=ipc sockets=wayland sockets=fallback-x11 sockets=pulseaudio devices=all filesystems=xdg-download; do
@@ -126,6 +132,9 @@ test -d "$HOME/.var/app/$app" || fail "no data folder under ~/.var/app/$app afte
 flatpak uninstall --user -y --noninteractive --delete-data "$app" >/tmp/uninstall.log 2>&1 || { cat /tmp/uninstall.log; fail "flatpak uninstall"; }
 test ! -e "$HOME/.local/share/flatpak/app/$app" || fail "the app folder is left behind"
 test ! -e "$desktop" || fail "the desktop entry is left behind"
+for window in little settings import; do
+  test ! -e "$exports/applications/$app.$window.desktop" || fail "$app.$window.desktop is left behind"
+done
 test ! -e "$exports/icons/hicolor/256x256/apps/$app.png" || fail "the icon is left behind"
 test ! -e "$HOME/.var/app/$app" || fail "the data folder is left behind after --delete-data"
 echo "ok   flatpak uninstall --delete-data leaves nothing behind"

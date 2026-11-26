@@ -19,13 +19,29 @@ import { SESSION_MIGRATIONS, SESSION_VERSION } from "../../browser/src/state/ses
 import { unclaimedAdoptId } from "./unclaimedTabs.ts";
 import { adoptedPage } from "../../browser/src/state/tabs/pageSession";
 import { noteSavedTopAppsMerged } from "../../browser/src/state/telemetry/topAppsSharing";
+import { isOwnId, pageFromDisk, SESSION_ROWS, sessionWithListedRows, slotsFromDisk, tableRows } from "../../browser/src/state/session/savedShapes";
+import { savedProfileRows } from "../../browser/src/state/session/savedSession";
+import { isFields, isString } from "../../browser/src/lib/decode";
 
 type StoredWindow = Partial<BrowserWindow> & { incognito?: unknown; originalProfileId?: unknown; sidebarOpen?: unknown };
 
 const windowKind = (w: StoredWindow): BrowserWindow["kind"] => w.kind === "small" || w.kind === "private" || w.kind === "main" ? w.kind : w.incognito === true ? "private" : "main";
 const shapedWindow = ({ incognito: _i, originalProfileId: _o, ...w }: StoredWindow) => ({ ...w, kind: windowKind(w) }) as BrowserWindow;
-const keyedById = <T,>(list: unknown): Record<string, T> | undefined =>
-  Array.isArray(list) ? Object.fromEntries(list.filter((v): v is T & { id: string } => !!v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string").map((v) => [v.id, v])) : undefined;
+const ROW_REFERENCES = ["windowId", "profileId"] as const;
+const savedRow = (v: unknown): v is Record<string, unknown> & { id: string } =>
+  isFields(v) && isOwnId(v.id) && ROW_REFERENCES.every((key) => !(key in v) || isOwnId(v[key]));
+type SessionRows = (typeof SESSION_ROWS)[number];
+const tabIdList = (v: unknown) => Array.isArray(v) && v.every(isString);
+const ROW_SHAPES: Record<SessionRows, (row: Record<string, unknown>) => boolean> = {
+  windows: (w) => isOwnId(w.profileId) && tabIdList(w.tabIds) && isFields(w.activeTabIds) && Object.values(w.activeTabIds).every(isString),
+  tabs: (t) => isOwnId(t.windowId) && isOwnId(t.profileId) && isString(t.url),
+  groups: (g) => isOwnId(g.windowId) && isOwnId(g.profileId) && tabIdList(g.tabIds),
+  splits: (v) => isOwnId(v.windowId) && (!("slots" in v) || slotsFromDisk(v.slots) !== null),
+};
+const rowOf = (rows?: SessionRows) => (v: unknown): v is Record<string, unknown> & { id: string } => savedRow(v) && (!rows || ROW_SHAPES[rows](v));
+const keyedById = <T,>(list: unknown, rows?: SessionRows): Record<string, T> | undefined =>
+  Array.isArray(list) ? Object.fromEntries(list.filter(rowOf(rows)).map((v) => [v.id, v])) as Record<string, T> : undefined;
+const keyedTable = (table: Record<string, unknown>, rows: SessionRows) => Object.entries(table).every(([key, row]) => rowOf(rows)(row) && row.id === key);
 
 function currentSessionShape(saved: HydrateData): HydrateData {
   const doc = { ...saved, tabs: Object.values(saved.tabs ?? {}), splits: Object.values(saved.splits ?? {}) } as unknown as SavedObject;
@@ -111,35 +127,45 @@ const withoutWindowTabsShown = (session: HydrateData): HydrateData => {
   };
 };
 
+const withRowsKeyed = (saved: HydrateData): HydrateData => {
+  const rowsOf = (value: unknown): unknown[] => (Array.isArray(value) ? value : isFields(value) ? tableRows(value) : []);
+  const reshaped = SESSION_ROWS.filter((key) => saved[key] !== undefined && !(isFields(saved[key]) && keyedTable(saved[key], key)));
+  const profiles = saved.profiles === undefined ? undefined : savedProfileRows(saved.profiles);
+  const profilesChanged = !!profiles && (!isFields(saved.profiles) || Object.keys(profiles).length !== Object.keys(saved.profiles).length);
+  if (!reshaped.length && !profilesChanged) return saved;
+  return { ...saved, ...Object.fromEntries(reshaped.map((key) => [key, keyedById(rowsOf(saved[key]), key) ?? {}])), ...(profilesChanged ? { profiles } : {}) };
+};
+
 const sniffedSessionShape = (saved: HydrateData): HydrateData => {
-  const settled = settledSession(saved);
+  const settled = settledSession(withRowsKeyed(saved));
   return withoutWindowTabsShown(withAutoHideTabsSetting(withPinChoiceStamps(legacySession(settled) ? withoutAbsent(currentSessionShape(settled)) : settled)));
 };
 
 export const SNIFFED_SESSION_VERSION = 9;
-const DISK_LISTS = ["windows", "tabs", "groups", "splits"] as const;
 
 export const linuxSessionVersion = (saved: HydrateData): number | undefined => {
   const version = (saved as { version?: unknown }).version;
   return typeof version === "number" && Number.isSafeInteger(version) && version >= 0 ? version : undefined;
 };
 
-function migratedSession(session: HydrateData, from: number): HydrateData {
+function migratedSession(session: HydrateData, from: number): HydrateData | null {
   if (from >= SESSION_VERSION) return session;
-  const tables = DISK_LISTS.filter((key) => !!session[key] && !Array.isArray(session[key]));
-  const disk = { ...session, ...Object.fromEntries(tables.map((key) => [key, Object.values(session[key]!)])), version: from } as unknown as SavedObject;
+  const disk = { ...sessionWithListedRows(session as unknown as SavedObject), version: from };
   const next = upgraded(disk, SESSION_VERSION, SESSION_MIGRATIONS);
-  if (!next) return session;
-  return withoutAbsent({ ...next, ...Object.fromEntries(tables.map((key) => [key, keyedById(next[key]) ?? {}])) } as unknown as HydrateData);
+  return next ? withoutAbsent(withRowsKeyed(next as unknown as HydrateData)) : null;
 }
 
 export const linuxSessionShape = (saved: HydrateData): HydrateData => {
   const stamped = linuxSessionVersion(saved);
   if (stamped !== undefined && stamped >= SESSION_VERSION) return sniffedSessionShape(saved);
-  return migratedSession(sniffedSessionShape(saved), Math.max(stamped ?? SNIFFED_SESSION_VERSION, SNIFFED_SESSION_VERSION));
+  if (stamped !== undefined) {
+    const migrated = migratedSession(withRowsKeyed(saved), stamped);
+    return sniffedSessionShape(migrated ?? saved);
+  }
+  const sniffed = sniffedSessionShape(saved);
+  return migratedSession(sniffed, SNIFFED_SESSION_VERSION) ?? sniffed;
 };
 
-const unmigratedSessionShape = (saved: HydrateData): HydrateData => sniffedSessionShape(saved);
 const sessionOnDisk = (saved: HydrateData): HydrateData => withPinChoicesOnDisk(linuxSessionShape(saved), saved);
 
 const inClosingOrder = <T extends { closedAt: number }>(entries: T[]) => [...entries].sort((a, b) => a.closedAt - b.closedAt).slice(-MAX_CLOSED_WINDOWS);
@@ -178,8 +204,10 @@ function seedTabs({ adoptTabs }: ArdiaHost["bootstrap"]): SeedTab[] {
 
 const LAUNCH_WINDOW_ID = "main";
 
+const ownRow = <T,>(table: Record<string, T> | undefined, id: string | null | undefined): T | undefined =>
+  table && isOwnId(id) && Object.hasOwn(table, id) ? table[id] : undefined;
 const hasSavedTabs = (saved: HydrateData, id: string | null | undefined) =>
-  !!id && !!saved.windows?.[id]?.tabIds.some((tabId) => saved.tabs?.[tabId]);
+  !!ownRow(saved.windows, id)?.tabIds.some((tabId) => !!ownRow(saved.tabs, tabId));
 
 const movedTo = <T extends { windowId: string }>(from: string, to: string) => (entry: T): T => entry.windowId === from ? { ...entry, windowId: to } : entry;
 const movedTable = <T extends { windowId: string }>(table: Record<string, T> | undefined, from: string, to: string) =>
@@ -187,7 +215,7 @@ const movedTable = <T extends { windowId: string }>(table: Record<string, T> | u
 
 function withLaunchWindowAdopted(saved: HydrateData, windowId: string): HydrateData {
   if (hasSavedTabs(saved, windowId)) return saved;
-  const adoptable = (id: string | null | undefined): id is string => id !== windowId && saved.windows?.[id ?? ""]?.kind === "main" && hasSavedTabs(saved, id);
+  const adoptable = (id: string | null | undefined): id is string => id !== windowId && ownRow(saved.windows, id)?.kind === "main" && hasSavedTabs(saved, id);
   const from = [saved.focusedWindowId, ...(saved.windowOrder ?? [])].find(adoptable);
   if (!from) return saved;
   const { [from]: adopted, [windowId]: _empty, ...others } = saved.windows!;
@@ -207,7 +235,54 @@ function withLaunchWindowAdopted(saved: HydrateData, windowId: string): HydrateD
   });
 }
 
+export const withoutTabWakes = (session: HydrateData): HydrateData => {
+  const tabs = session.tabs;
+  if (!tabs || !Object.values(tabs).some((t) => isFields(t?.page) && "wake" in t.page)) return session;
+  return { ...session, tabs: Object.fromEntries(Object.entries(tabs).map(([id, t]) => [id, isFields(t?.page) && "wake" in t.page ? { ...t, page: { kind: t.page.kind } as Tab["page"] } : t])) };
+};
+
+type LaunchHints = { launchTab?: { id?: unknown; url?: unknown }; launchBackdrop?: unknown; linkProfile?: unknown };
+const LAUNCH_HINTS = ["launchTab", "launchBackdrop", "linkProfile"] as const;
+const focusedWindowOf = (session: HydrateData) => ownRow(session.windows, session.focusedWindowId);
+const activeTabOf = (session: HydrateData) => {
+  const w = focusedWindowOf(session);
+  return w ? ownRow(session.tabs, w.activeTabIds[w.profileId]) : undefined;
+};
+
+function launchHintsHold(snapshot: HydrateData, canonical: HydrateData): boolean {
+  const was = focusedWindowOf(canonical);
+  const now = focusedWindowOf(snapshot);
+  const hint = (canonical as LaunchHints).launchTab;
+  const active = activeTabOf(snapshot);
+  return !!was && !!now && now.profileId === was.profileId && equalSessionValue(now.tabIds, was.tabIds) &&
+    equalSessionValue(now.activeTabIds, was.activeTabIds) && snapshot.lastProfileId === canonical.lastProfileId &&
+    equalSessionValue(snapshot.profiles, canonical.profiles) && snapshot.settings?.restoreSession === canonical.settings?.restoreSession &&
+    (snapshot.settings?.engineMode ?? "automatic") === (canonical.settings?.engineMode ?? "automatic") &&
+    (!hint || (hint.id === active?.id && hint.url === active?.url && active?.url === activeTabOf(canonical)?.url));
+}
+
+const UNLOADED_PAGES: ReadonlySet<Tab["page"]["kind"]> = new Set(["idle", "asleep", "frozen"]);
+
+export function withSavedOnlyFields(snapshot: HydrateData, canonical: HydrateData, live?: Record<string, Tab>, loaded: ReadonlySet<string> = new Set()): HydrateData {
+  let tabs = snapshot.tabs;
+  for (const [id, tab] of Object.entries(snapshot.tabs ?? {})) {
+    const saved = ownRow(canonical.tabs, id);
+    const wake = saved && saved.url === tab.url && saved.profileId === tab.profileId ? pageFromDisk(saved.page).wake : undefined;
+    const runtime = ownRow(live, id)?.page ?? tab.page;
+    if (!wake || loaded.has(id) || !UNLOADED_PAGES.has(runtime.kind) || (tab.page.kind !== "idle" && tab.page.kind !== "asleep")) continue;
+    if (tabs === snapshot.tabs) tabs = { ...snapshot.tabs };
+    tabs![id] = { ...tab, page: { kind: tab.page.kind, wake } };
+  }
+  const hints = LAUNCH_HINTS.filter((key) => (canonical as LaunchHints)[key] !== undefined);
+  const kept = hints.length && launchHintsHold(snapshot, canonical) ? Object.fromEntries(hints.map((key) => [key, (canonical as LaunchHints)[key]])) : {};
+  return tabs === snapshot.tabs && !Object.keys(kept).length ? snapshot : { ...snapshot, tabs, ...kept };
+}
+
 export function initialHostSession(host: ArdiaHost, saved: HydrateData | null | undefined, now = Date.now(), onRestored?: (windowId: string) => void): HydrateData {
+  return withoutTabWakes(initialSessionWithWakes(host, saved, now, onRestored));
+}
+
+function initialSessionWithWakes(host: ArdiaHost, saved: HydrateData | null | undefined, now: number, onRestored?: (windowId: string) => void): HydrateData {
   const { windowId } = host.bootstrap;
   const profileId = seedProfile(host.bootstrap);
   if (!windowId || !profileId || /[\\/\0]/.test(windowId + profileId)) throw new Error("Invalid Ardia host bootstrap IDs");
@@ -222,7 +297,7 @@ export function initialHostSession(host: ArdiaHost, saved: HydrateData | null | 
   const profile = { id: profileId, name: "Personal", color: "plum" as const, icon: null, createdAt: now };
   const profiles = { ...saved?.profiles };
   profiles[profileId] ??= profile;
-  if (saved?.windows?.[windowId]?.tabIds.some((id) => saved.tabs?.[id])) {
+  if (saved && hasSavedTabs(saved, windowId)) {
     onRestored?.(windowId);
     return { ...saved, profiles, focusedWindowId: windowId };
   }
@@ -280,7 +355,20 @@ export function snapshotHostSession(s: BrowserState): HydrateData {
 type SessionPair = { base: HydrateData; session: HydrateData };
 const sessionObject = (value: unknown): value is HydrateData => value !== null && typeof value === "object" && !Array.isArray(value);
 
-export function createSessionWriter(host: ArdiaHost, initial: HydrateData = {}, onCanonical?: (base: HydrateData, session: HydrateData) => void) {
+const listRowsKeyed = (session: HydrateData): HydrateData => {
+  const lists = SESSION_ROWS.filter((key) => Array.isArray(session[key]));
+  return lists.length ? { ...session, ...Object.fromEntries(lists.map((key) => [key, keyedById(session[key])])) } : session;
+};
+const listedOnDisk = (onDisk: unknown) => new Set(SESSION_ROWS.filter((key) => sessionObject(onDisk) && Array.isArray(onDisk[key])));
+const inDiskForm = (session: HydrateData, listed: ReadonlySet<SessionRows>): HydrateData => {
+  const tables = [...listed].filter((key) => isFields(session[key]));
+  return tables.length ? { ...session, ...Object.fromEntries(tables.map((key) => [key, Object.values(session[key]!)])) } as HydrateData : session;
+};
+
+export function createSessionWriter(host: ArdiaHost, initial: HydrateData = {}, onCanonical?: (base: HydrateData, session: HydrateData) => void, onDisk: unknown = initial) {
+  let listed = listedOnDisk(onDisk);
+  const noteDisk = (raw: unknown) => void (sessionObject(raw) && (listed = listedOnDisk(raw)));
+  const diskPair = (pair: SessionPair): SessionPair => listed.size ? { base: inDiskForm(pair.base, listed), session: inDiskForm(pair.session, listed) } : pair;
   let writes = Promise.resolve();
   let canonical = cloneSessionValue(initial);
   let observation = 0;
@@ -319,7 +407,8 @@ export function createSessionWriter(host: ArdiaHost, initial: HydrateData = {}, 
       const observed = observation;
       inFlight = pair;
       try {
-        const reply = await host.invoke("session.write", pair);
+        const reply = await host.invoke("session.write", diskPair(pair));
+        noteDisk(reply);
         if (finalized) return;
         const reconciled = generation;
         if (observed === observation && sessionObject(reply)) {
@@ -327,7 +416,7 @@ export function createSessionWriter(host: ArdiaHost, initial: HydrateData = {}, 
           acceptCanonical(onDisk);
           onCanonical?.(pair.session, onDisk);
         } else if (sessionObject(reply)) {
-          canonical = mergeSession(pair.base, pair.session, canonical);
+          canonical = mergeSession(listRowsKeyed(pair.base), pair.session, canonical);
         }
         const stale = sessionObject(reply) && generation === reconciled && dirty && latest !== pair ? latest : undefined;
         const requeue = !!stale && !pending;
@@ -373,16 +462,16 @@ export function createSessionWriter(host: ArdiaHost, initial: HydrateData = {}, 
     generation++;
     pending = undefined;
     if (!dirty || !latest || latest === issued && !issuedFailed) return finalWrite;
-    const final = inFlight ? { base: mergeSession(inFlight.base, inFlight.session, latest.base), session: latest.session } : latest;
+    const final = inFlight ? { base: mergeSession(listRowsKeyed(inFlight.base), inFlight.session, listRowsKeyed(latest.base)), session: latest.session } : latest;
     issued = latest;
     try {
-      finalWrite = Promise.resolve(host.invoke("session.write", final)).then(() => {});
+      finalWrite = Promise.resolve(host.invoke("session.write", diskPair(final))).then(() => {});
     } catch (error) {
       finalWrite = Promise.reject(error);
     }
     return finalWrite;
   };
-  return { queue: (session: HydrateData) => reconcile(session, true), reconcile, acceptCanonical, flush, drain, flushFinal };
+  return { queue: (session: HydrateData) => reconcile(session, true), reconcile, acceptCanonical, noteDisk, diskPair, flush, drain, flushFinal };
 }
 
 type SessionStore = {
@@ -420,9 +509,20 @@ export function startHostPersistence(host: ArdiaHost, store: SessionStore, store
   const initial = linuxSessionShape(stored);
   let canonical = initial;
   let standIn = windowStandIn(host, store.getState(), initial);
-  const snapshotOf = (state: BrowserState) => snapshot(withoutStandIn(state, standIn), canonical);
-  const written = withPinChoicesOnDisk(linuxSessionVersion(stored) === linuxSessionVersion(initial) ? initial : unmigratedSessionShape(stored), stored);
-  const writer = createSessionWriter(host, written, (base, session) => receive(base, session));
+  const loadedTabs = new Set<string>();
+  let trackedTabs: BrowserState["tabs"] | undefined;
+  const trackLoaded = (state: BrowserState) => {
+    if (state.tabs === trackedTabs) return;
+    trackedTabs = state.tabs;
+    for (const id of loadedTabs) if (!Object.hasOwn(state.tabs, id)) loadedTabs.delete(id);
+    for (const [id, tab] of Object.entries(state.tabs)) if (!UNLOADED_PAGES.has(tab.page.kind)) loadedTabs.add(id);
+  };
+  const snapshotOf = (state: BrowserState) => {
+    trackLoaded(state);
+    return withSavedOnlyFields(snapshot(withoutStandIn(state, standIn), canonical), canonical, state.tabs, loadedTabs);
+  };
+  const written = withPinChoicesOnDisk(equalSessionValue(initial, stored) ? initial : stored, stored);
+  const writer = createSessionWriter(host, written, (base, session) => receive(base, session), stored);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let last = canonicalSessionValue(equalSessionValue({ ...initial, version: undefined }, { ...written, version: undefined }) ? initial : written)!;
   let lastSources: unknown[] = [];
@@ -455,7 +555,7 @@ export function startHostPersistence(host: ArdiaHost, store: SessionStore, store
     canonical = session;
     const merged = mergeSession(base, local, session);
     if (standIn && merged.windows?.[standIn.windowId]) standIn = undefined;
-    const runtime = { ...merged, ...(merged.closedWindows && { closedWindows: inClosingOrder(merged.closedWindows) }), settings: { ...state.settings, ...merged.settings } };
+    const runtime = withoutTabWakes({ ...merged, ...(merged.closedWindows && { closedWindows: inClosingOrder(merged.closedWindows) }), settings: { ...state.settings, ...merged.settings } });
     const patch = sessionStatePatch(state, snapshotHostSession(withoutStandIn(state, standIn)), runtime);
     applying = true;
     try {
@@ -494,12 +594,15 @@ export function startHostPersistence(host: ArdiaHost, store: SessionStore, store
     },
   });
   queue(store.getState());
+  trackLoaded(store.getState());
+  const stopTracking = store.subscribe(trackLoaded);
   const stop = store.subscribe(queue);
   const stopEvents = host.onEvent((module, event, payload) => {
     if (closing || module !== "ArdiaHost" || event !== "session" || !sessionObject(payload)) return;
     const update = payload as { base?: unknown; session?: unknown };
     if (!sessionObject(update.base) || !sessionObject(update.session)) return;
     const session = sessionOnDisk(update.session);
+    writer.noteDisk(update.session);
     writer.acceptCanonical(session);
     receive(linuxSessionShape(update.base), session);
   });
@@ -507,6 +610,7 @@ export function startHostPersistence(host: ArdiaHost, store: SessionStore, store
     void Promise.resolve(host.invoke("session.read", {})).then((saved) => {
       if (closing || !sessionObject(saved)) return;
       const session = sessionOnDisk(saved);
+      writer.noteDisk(saved);
       writer.acceptCanonical(session);
       receive(canonical, session);
     }).catch(reportHostError);
@@ -527,6 +631,7 @@ export function startHostPersistence(host: ArdiaHost, store: SessionStore, store
   const dispose = () => {
     stopCloseHooks();
     stop();
+    stopTracking();
     stopEvents();
     if (!closing) flush();
     stopClosing?.();
@@ -535,7 +640,7 @@ export function startHostPersistence(host: ArdiaHost, store: SessionStore, store
   };
   const departure = (windowId: string) => {
     const state = store.getState();
-    return { base: snapshotOf(state), session: snapshotOf(windowDeparture(state, windowId)) };
+    return writer.diskPair({ base: snapshotOf(state), session: snapshotOf(windowDeparture(state, windowId)) });
   };
   return Object.assign(dispose, { flush: () => { queue(store.getState()); clearTimeout(timer); timer = undefined; return writer.drain(); }, departure });
 }

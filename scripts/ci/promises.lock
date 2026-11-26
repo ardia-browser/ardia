@@ -104,6 +104,35 @@ issue	hash	file	test
 2245	73e18a6e4be80bc4	apps/browser/src/state/extensions/extensions.test.mjs	Add on an install prompt the engine no longer holds says so in the dialog, and Cancel on one rejects nothing
 2245	fe17442fdad3de61	apps/desktop/src/pageFocus.test.mjs	focusIfUnfocused gives the page the keyboard unless a shell field has it, and answers whether it did
 2260	cb2884a57b51a848	apps/browser/src/state/sync/scopeWrites.test.mjs	a sync record or base is written only through putRecord, dropRecord, putBase and dropBase, so the cycle's journal sees every change
+2389	943be910bfe4c200	apps/browser/src/state/import/bookmarksHtmlFailure.test.mjs	a bookmarks file whose profile's bookmarks never load from Chrome shows bookmarks as failed on the done step (#2389)
+2389	c14bf4c0d2ca5409	apps/browser/src/state/import/importUnloadedProfile.test.mjs	an import into a profile not opened since launch reads its bookmarks from Chrome first, so it neither doubles one Chrome has nor skips one only a stale cache showed
+2389	ca71dce9a296515e	apps/browser/src/state/import/repeatBookmarks.test.mjs	1,000 folders of the same name holding 150 pages, each page in 16 existing folders, stay within the matching budget
+2389	ea7586d6de0d4ab3	apps/browser/src/state/import/repeatBookmarks.test.mjs	1,001 folders of the same name linked in a ring of shared pages, past the exact pairing's limit, still all pair by their links
+2389	2ca2c2e5a0cf8d6e	apps/browser/src/state/import/repeatBookmarks.test.mjs	18 folders of the same name that share most of their links each take their own new link, whatever order they come in
+2389	e81e4bae79031fdb	apps/browser/src/state/import/repeatBookmarks.test.mjs	3,000 folders of the same name each take their own new link, in one store write
+2389	4238802f601ef6a1	apps/browser/src/state/import/repeatBookmarks.test.mjs	3,000 folders of the same name that all hold one common page still pair by their own pages, quickly
+2389	8dd414bad6b769f4	apps/browser/src/state/import/repeatBookmarks.test.mjs	65 folders of the same name linked in a ring of shared pages are all paired by their links, not by position
+2389	7763c672e72699df	apps/browser/src/state/import/repeatBookmarks.test.mjs	a folder an import from before this fix put on the bar takes the links its source adds, while a folder of the same name made by hand doesn't
+2389	3ded75d7adfcd333	apps/browser/src/state/import/repeatBookmarks.test.mjs	a folder an import made inside an Imported from Dia folder made by hand counts as reused when it takes more
+2389	8f47f47aaefe2b8b	apps/browser/src/state/import/repeatBookmarks.test.mjs	a folder another browser's import made keeps that browser's name on it when moved out of its parent into Imported from Dia
+2389	368c7d874061b483	apps/browser/src/state/import/repeatBookmarks.test.mjs	a folder another browser's import nested inside its own Imported from folder doesn't take a Dia import after it is moved
+2389	679ff220e54e1d8b	apps/browser/src/state/import/repeatBookmarks.test.mjs	a folder that went straight onto the bar keeps taking its new links after a later import made an Imported from folder
+2389	68a56ed28f190412	apps/browser/src/state/import/repeatBookmarks.test.mjs	a link with the scheme's default port is the page already bookmarked without it
+2389	b01cfd213c22a671	apps/browser/src/state/import/repeatBookmarks.test.mjs	a page too costly to count doesn't stop cheaper evidence after it from counting
+2389	176b9fa5e15941cd	apps/browser/src/state/import/repeatBookmarks.test.mjs	a port written with leading zeros is the scheme's default port, or the same port without them
+2389	f47d6ff977c2d201	apps/browser/src/state/import/repeatBookmarks.test.mjs	a repeat import brings only what's new, into the folders it made, and keeps what the person added or moved (#2389)
+2389	006bd740dd467199	apps/browser/src/state/import/repeatBookmarks.test.mjs	a repeat import of bookmarks that went straight onto an empty bar adds nothing (#2389)
+2389	355b3e891ece6267	apps/browser/src/state/import/repeatBookmarks.test.mjs	an empty folder an import put on the bar takes the links the source adds to it later
+2389	65ed5eeae05d4c07	apps/browser/src/state/import/repeatBookmarks.test.mjs	an import that adds nothing to a folder from before this fix doesn't claim it for its browser
+2389	279b2426bb094a09	apps/browser/src/state/import/repeatBookmarks.test.mjs	another browser's folder moved into Imported from Dia doesn't take a Dia import
+2389	31804195f0ebd156	apps/browser/src/state/import/repeatBookmarks.test.mjs	another browser's folder that shares a link with one an earlier import put on the bar gets its own Imported from folder
+2389	9a56cc2218ce04b2	apps/browser/src/state/import/repeatBookmarks.test.mjs	another browser's folder that went straight onto the bar never takes a Dia import, even when Dia's folder holds all its links
+2389	f8a35b62afbcb3a4	apps/browser/src/state/import/repeatBookmarks.test.mjs	folders of the same name are matched as a whole, so one that shares a link with both doesn't take the other's
+2389	affc307be7057ade	apps/browser/src/state/import/repeatBookmarks.test.mjs	folders with no links come over: on a first import, and as a new folder in a repeat whose links are all there
+2389	14ed37635f4fce5e	apps/browser/src/state/import/repeatBookmarks.test.mjs	importing the same Dia bookmarks again adds no second Imported from Dia folder (#2389)
+2389	0564a4d815d4127c	apps/browser/src/state/import/repeatBookmarks.test.mjs	two folders of the same name each take their own new links, matched by the links they share
+2389	00c411150f35c758	apps/browser/src/state/import/repeatBookmarks.test.mjs	which folders an import made is saved, so a relaunch keeps matching them
+2389	f31b9e996d103eab	apps/browser/src/state/tabs/pageKeys.test.mjs	a line break or tab inside an address is dropped, as the URL parser does, and never throws
 2492	f666f5d810bba18b	apps/browser/src/state/tabs/tabs.test.mjs	tabs closed together come back to their places, from ⇧⌘T or Recently Closed in any order (#2492)
 2572	80a3ca73b2bdbcc1	apps/browser/src/state/commands/menuState.test.mjs	the menu state tells the shell whether links from other apps open in Little Ardia
 2695	382756f4c8c1feb5	apps/browser/src/components/ui/pressFeedback.test.mjs	a pressed glyph dips a little and comes back without a bounce
@@ -115,6 +144,7 @@ issue	hash	file	test
 2725	9ac4b2b0e43d971e	apps/browser/src/components/window/dockMotion.test.mjs	a peek's light moves that stay wholly off the window at one height aren't sent; the first visible one and the rest place are
 2772	acb0667a718a650c	apps/browser/src/state/import/importWithheld.test.mjs	an import the engine withheld for a secret says why on the done step and is counted
 2772	dd1a07cd2aaa81a4	apps/browser/src/state/import/importWithheld.test.mjs	with several profiles, the note names the one held back and the others still import
+2814	148cd91a5404f5f6	apps/browser/src/state/import/arcProfilePins.test.mjs	Arc spaces imported as profiles keep their pinned tabs and pinned folders when ${name} (#2814)
 2862	4c9b8a5196785550	apps/browser/src/state/tabs/tabs.test.mjs	switching tabs in one profile keeps another profile's opener links in the same window
 2917	100e6018b1abfeeb	apps/browser/src/components/profiles/dotsRow.test.mjs	a row too wide to clear the button when centred starts just past it (#2917)
 2933	cbd652ee75784494	apps/browser/src/state/sync/adapters.test.mjs	history: a title Chrome reports while synced visits are being written stays in the list

@@ -65,7 +65,7 @@ const EXPECTED = [
   ["state/downloads/downloadMenu.ts", ["title: \"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
   ["state/bookmarks/exportHtml.ts", ["title: \"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
   ["state/browser/actions.ts", ["stay installed on this computer, turned off."], ["on this ${PLATFORM_TERMS.computer}"]],
-  ["state/onboarding/tour.ts", ["Ctrl+S hides the sidebar.", "press Super+Shift+=.", "Settings (Ctrl+,)."], ["menu bar", "⌘"]],
+  ["state/onboarding/tour.ts", ["Hide Tabs hides the sidebar", "press Super+Shift+=.", "Settings (Ctrl+,)."], ["menu bar", "⌘"]],
   ["state/presets/setupCode.ts", ["Appearance follows your desktop", "Ctrl+T opens the command bar"], ["your ${PLATFORM_TERMS.computer}", "⌘T"]],
   ["state/releaseNotes/releaseNotes.ts", ["from any page with Ctrl+L."], ["⌘L"]],
   ["state/sync/scopeAdapters.ts", ["`This Computer`"], ["This ${PLATFORM_TERMS.computerTitle}"]],
@@ -112,6 +112,13 @@ test("search rows describing reworded panes read as Linux too", () => {
   const profile = read("components/settings/rows/profileRows.ts");
   assert.match(section(profile, "section: \"Passwords and autofill\"", "savedCards: {"), /keychain|PLATFORM_TERMS\.deviceUnlock/);
   assert.doesNotMatch(section(linuxCopy("components/settings/rows/profileRows.ts"), "section: \"Passwords and autofill\"", "savedCards: {"), /Touch ID|keychain|Keychain|\bMac\b/);
+});
+
+test("Linux's What's Sent leaves out the Mac's crash report details, which its crash dump reader doesn't send", () => {
+  const copy = linuxCopy("state/telemetry/copy.ts");
+  assert.ok(read("state/telemetry/copy.ts").includes("near address zero"));
+  for (const said of ["near address zero", "which kind of thread crashed", "whether it was the main queue"]) assert.ok(!copy.includes(said), `Linux says ${said}`);
+  assert.equal(LINUX_FEATURES.crashReportDetails, false);
 });
 
 test("open-tab sync telemetry describes this computer on Linux", () => {

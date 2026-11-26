@@ -54,7 +54,7 @@ Shared code: `Model.swift` (`ImportKind`, `ImportResult` and the other result ty
    (`engine/chromium/src/chrome/browser/ardia/ac_cookies.cc`, `ac_autofill.cc`).
 5. `apps/browser/src/components/import/ImportWindow.tsx` is the wizard: choose, then profiles, then unlock, then
    progress, then done. `apps/browser/src/state/import/apply.ts` writes the JS-side kinds into the store (bookmarks, history, tabs, Arc spaces,
-   Dia profiles) and saves passwords with `savePassword` (`@ardia/ardiacore`). For cookies and autofill it calls
+   Dia profiles; a repeat import adds only the bookmarks the profile lacks, into the `Imported from <browser>` folder an earlier one made) and saves passwords with `savePassword` (`@ardia/ardiacore`). For cookies and autofill it calls
    `importNative`, which calls `writeImported`. Before any tab is made, the result's `favicons` for the pages that
    profile gets go to `adoptFavicons` (`apps/browser/src/state/favicons/favicons.ts`): into the sidebar's icon cache at once, and
    into the profile's Chrome favicon database with `ac_favicons_set`, so they survive a relaunch without a page load.

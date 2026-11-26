@@ -9,7 +9,10 @@
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "chrome/browser/lifetime/browser_shutdown.h"
+#include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
 #include "chrome/browser/ui/recently_audible_helper.h"
+#include "chrome/browser/ui/unload_controller.h"
 #include "components/favicon/content/content_favicon_driver.h"
 #include "components/find_in_page/find_notification_details.h"
 #include "components/find_in_page/find_tab_helper.h"
@@ -94,6 +97,7 @@ void TabBridge::OnFindTabHelperDestroyed(find_in_page::FindTabHelper* helper) {
 
 
 constexpr base::TimeDelta kCloseStepDeadline = base::Seconds(2);
+constexpr base::TimeDelta kLeaveApprovalLifetime = base::Seconds(5);
 
 void TabBridge::CloseAfterUnloadHandlers(bool window_closing) {
   if (!closing_after_unload()) {
@@ -104,7 +108,9 @@ void TabBridge::CloseAfterUnloadHandlers(bool window_closing) {
       base::BindOnce(&TabBridge::EnforceCloseDeadline,
                      weak_factory_.GetWeakPtr(), false),
       kCloseStepDeadline);
-  if (window_closing) {
+  const bool leave_approved =
+      base::TimeTicks::Now() < std::exchange(leave_approved_until_, base::TimeTicks());
+  if (window_closing || leave_approved) {
     StartUnload();
     return;
   }
@@ -132,7 +138,73 @@ void TabBridge::EnforceCloseDeadline(bool unload_given) {
   StartUnload();
 }
 
+void TabBridge::AskBeforeLeaving(base::OnceCallback<void(bool)> answer) {
+  if (leave_answer_) {
+    std::move(answer).Run(false);
+    return;
+  }
+  BrowserWindowInterface* browser =
+      GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(web_contents());
+  if (browser_shutdown::IsTryingToQuit() ||
+      (browser &&
+       UnloadController::From(browser)->is_attempting_to_close_browser())) {
+    std::move(answer).Run(false);
+    return;
+  }
+  if (closing_after_unload() || !web_contents()->NeedToFireBeforeUnload()) {
+    std::move(answer).Run(true);
+    return;
+  }
+  leave_answer_ = std::move(answer);
+  leave_ask_answered_ = false;
+  leave_approved_until_ = base::TimeTicks();
+  web_contents()->DispatchBeforeUnload(false);
+}
+
+void TabBridge::ForgetLeaveAsk() {
+  leave_ask_answered_ = false;
+  leave_approved_until_ = base::TimeTicks();
+  AnswerLeaveAsk(false);
+  ++leave_ask_generation_;
+}
+
+bool TabBridge::TakeAnsweredLeaveAsk() {
+  return std::exchange(leave_ask_answered_, false);
+}
+
+void TabBridge::AnswerLeaveAsk(bool leave) {
+  if (!leave_answer_) {
+    return;
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          [](base::WeakPtr<TabBridge> bridge, int generation,
+             base::OnceCallback<void(bool)> answer, bool leave) {
+            const bool stale =
+                bridge && bridge->leave_ask_generation_ != generation;
+            std::move(answer).Run(leave && !stale);
+            const bool deferred_close =
+                bridge && std::exchange(bridge->close_after_leave_ask_, false);
+            if (deferred_close && leave && !stale) {
+              [bridge->tab_ closeNow];
+            }
+            base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+                FROM_HERE,
+                base::BindOnce(&WindowHost::ResumeClosesAfterLeaveAsk));
+          },
+          weak_factory_.GetWeakPtr(), leave_ask_generation_,
+          std::move(leave_answer_), leave));
+}
+
 void TabBridge::BeforeUnloadFired(bool proceed) {
+  if (leave_answer_) {
+    leave_ask_answered_ = true;
+    leave_approved_until_ = proceed ? base::TimeTicks::Now() + kLeaveApprovalLifetime
+                                    : base::TimeTicks();
+    AnswerLeaveAsk(proceed);
+    return;
+  }
   if (proceed) {
     if (close_step_ == CloseStep::kAwaitingBeforeUnload) {
       close_step_ = CloseStep::kUnloading;
@@ -182,6 +254,7 @@ const char* TerminationName(base::TerminationStatus status) {
 void TabBridge::PrimaryMainFrameRenderProcessGone(
     base::TerminationStatus status) {
   ScopedNotifying notifying(ScopedNotifying::Kind::kNavigation);
+  AnswerLeaveAsk(true);
   if (status == base::TERMINATION_STATUS_NORMAL_TERMINATION ||
       status == base::TERMINATION_STATUS_STILL_RUNNING) {
     return;
@@ -367,6 +440,7 @@ void TabBridge::DidUpdateAudioMutingState(bool muted) {
 }
 
 void TabBridge::WebContentsDestroyed() {
+  AnswerLeaveAsk(true);
   audible_subscription_ = {};
   if (LivePopups()) {
     popups_->manager()->RemoveObserver(this);

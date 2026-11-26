@@ -22,6 +22,12 @@ textarea:focus,
   outline: none;
 }
 
+input[data-ardia-selection]::selection,
+textarea[data-ardia-selection]::selection {
+  background-color: var(--ardia-selection-bg);
+  color: var(--ardia-selection-fg);
+}
+
 .ardia-desktop {
   position: fixed;
   inset: 0;
@@ -314,7 +320,9 @@ html.embed body {
 }
 
 .ardia-shell-above,
-.ardia-shell-above body {
+.ardia-shell-above body,
+.ardia-utility-glass,
+.ardia-utility-glass body {
   background: transparent;
 }
 
@@ -516,4 +524,18 @@ div:has(> div > div > [data-testid="ardia-sidebar-peek"]) > div,
 
 [data-testid="ardia-downloads-popover"][data-open="true"] > * > :not(:first-child) {
   pointer-events: auto !important;
+}
+
+[data-ardia-glass-effect][data-ardia-glass="on"] > [data-ardia-glass-layers] {
+  visibility: hidden;
+}
+
+[data-ardia-visual-effect][data-ardia-glass="on"] {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-ardia-bubble-body][data-ardia-glass="on"] + .ardia-bubble-fill {
+  clip-path: var(--ardia-bubble-arrow-band);
 }

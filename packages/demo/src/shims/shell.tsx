@@ -7,6 +7,7 @@ import { setTrafficLightsCenter } from "./web/windowChrome";
 
 export { Symbol } from "./web/Symbol";
 export { ActivitySpinner } from "./web/motion/ActivitySpinner";
+export { Breathe } from "./web/motion/Breathe";
 export {
   ContextMenuArea,
   DockSelection,

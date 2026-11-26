@@ -44,8 +44,8 @@ For each fix:
    ```
    - Version: `<next stable>-nightly.<n>`, where the next stable is `$stable` with the patch bumped and `<n>` counts up
      from 1 since `$stable` (`git tag -l "v<next stable>-nightly.*"`). The build number goes up by one, as always.
-   - Notes: `docs/release-notes/<version>.md` with the usual frontmatter, the headline and one to three
-     bullets (`docs/release-notes/README.md` › Nightlies). Source: `git log $prev..HEAD -- apps/browser packages engine`.
+   - Notes: `docs/release-notes/<version>.md` with the usual frontmatter and headline
+     (`docs/release-notes/README.md` › Nightlies). Source: `git log $prev..HEAD -- apps/browser packages engine`.
    - Bump and build: step 3 below, with `scripts/release.sh <version>` (the `-nightly.<n>` version makes it a nightly).
    - Smoke test: `.claude/skills/release/scripts/smoke.sh <version> ${prev#v}`. Its update test runs the nightly's own
      appcast item twice: a copy of the previous build on Stable must not be offered it, one on Nightly must install it.

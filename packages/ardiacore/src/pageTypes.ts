@@ -71,8 +71,10 @@ export type PageShare = {
   text?: string;
   fileUrl?: string;
 };
+export type PageMenuItem = { id: PageMenuCommand; title: string };
+export type PageMenuCommand = "translatePage" | "showOriginal";
 export type PageCommand = {
-  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement";
+  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement" | PageMenuCommand;
   text: string;
   point?: [number, number];
   modifiers?: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean };
@@ -202,6 +204,7 @@ export type WebViewProps = ViewProps & {
   pageColor?: string;
   shownUrl?: string;
   autoPictureInPicture?: boolean;
+  pageMenuItems?: PageMenuItem[];
   onNavigationChange?: (state: NavigationState) => void;
   onProgress?: (progress: number) => void;
   onFavicon?: (url: string, candidates: string[]) => void;

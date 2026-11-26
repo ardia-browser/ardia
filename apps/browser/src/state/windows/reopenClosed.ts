@@ -11,7 +11,7 @@ import { holderOf, swapPinPage } from "../pins/pinShare";
 import { isOpenRegularWindow, lastActiveProfile } from "./small";
 import { activated, apply, withNewTab } from "../tabs/tabs";
 import type { ClosedTab, ClosedWindow, SplitView, TabGroup } from "../browser/types";
-import { mapSlotIds, slotTabIds } from "../splits/splits";
+import { mapSlotIds, normalized, slotTabIds } from "../splits/splits";
 import { emptyWindow, smallWindow, withWindow } from "./newWindow";
 import { orderSections } from "../groups/groups";
 import { clearableRecentlyClosed, newestClosed } from "./recentlyClosedList";
@@ -186,7 +186,7 @@ function restoredSplits(splits: Record<string, SplitView>, entry: ClosedWindow, 
     if (panes.length < 2 || panes.some((p) => !p || taken.has(p))) continue;
     panes.forEach((p) => taken.add(p));
     const splitId = newId("split");
-    next = { ...next, [splitId]: { id: splitId, windowId, orientation: v.orientation, slots } };
+    next = { ...next, [splitId]: normalized({ id: splitId, windowId, orientation: v.orientation, slots }) };
   }
   return next;
 }

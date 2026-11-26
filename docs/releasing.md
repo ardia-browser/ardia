@@ -477,7 +477,13 @@ The same script uploads the engine's symbols: `ArdiaCore-<tree:12>-symbols.tar.x
 beside the framework in `out/Release_GN_arm64` (`Chromium Framework.dSYM` and the helpers'; function names only, as
 `symbol_level=0` builds no line tables), and `ArdiaCore-<tree:12>-uuids.txt`, a `<uuid> <arch> <DWARF file>` row per
 image. It copies them with the framework under the chromium lock and refuses a framework whose own dSYM doesn't carry its
-UUID. The framework itself is already stripped, so strip-engine.sh's copies in `symbols/` name almost nothing. A crash's
+UUID. After its upload it runs `scripts/lib/engine-symbols-published.sh` on the release and the packed framework: the
+release must carry both files, non-empty, the uuids file must name a DWARF file for each of the framework's UUIDs, and
+that file in the archive must be a dSYM with that UUID and the build's full symbol table (over 100,000 names; the
+stripped framework has a few thousand); otherwise it stops before the table line is written. The Release
+workflow runs the same check on the engine `fetch-engine.sh` picked (its `engine-match` `version=`) before it builds,
+so no app ships an engine whose crashes can't be named, as 0.2.45, 0.2.46 and the early 0.2.47 nightlies did (#2371).
+The framework itself is already stripped, so strip-engine.sh's copies in `symbols/` name almost nothing. A crash's
 "Chromium Framework + 0x2e2334" is named with `scripts/symbolicate-crash.sh <Chromium Framework UUID> 0x2e2334 …`: it
 finds the engine release whose rows hold that UUID, downloads that dSYM into `dist/engine-symbols` and runs
 `atos -arch arm64 -offset` on the offsets. `-offset` reads each one as relative to the image's `__TEXT` segment, which is

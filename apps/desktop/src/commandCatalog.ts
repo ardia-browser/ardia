@@ -2,29 +2,10 @@ import { COMMANDS, shortcutSources as sharedSources, staticShortcutSources as sh
 import { parseShortcut, storedShortcut, type Shortcut, type ShortcutSource } from "../../browser/src/state/commands/shortcuts";
 import { linuxCapabilities, unavailableCommands } from "./hostCapabilities";
 import { SHIFTED_KEYS } from "./shortcutOverrides";
+import { DEFAULT_KEYS } from "@platform/shortcutKeys";
 
 export * from "../../browser/src/state/commands/commandCatalog";
 
-const linuxKeys: Record<string, readonly string[]> = {
-  focusCommandBar: ["⌘L", "F6", "⌥D"],
-  reload: ["⌘R", "F5"],
-  forceReload: ["⇧⌘R", "⇧F5"],
-  devTools: ["⇧⌘I", "⌥⌘I"],
-  emailPageLocation: [],
-  jumpToSelection: [],
-  downloads: ["⌘J", "⌥⌘L"],
-  javaScriptConsole: ["⇧⌘J", "⌥⌘J"],
-  zoomIn: ["⌘=", "⇧⌘="],
-  openSplitPane: ["⌘\\"],
-  back: ["⌘[", "⌥←"],
-  forward: ["⌘]", "⌥→"],
-  nextTab: ["⇧⌘]", "⌘⇟", "⌥⌘↓"],
-  previousTab: ["⇧⌘[", "⌘⇞", "⌥⌘↑"],
-  "tabSwitcher:forward": ["⌘⇥"],
-  "tabSwitcher:backward": ["⇧⌘⇥"],
-  "std:quit:": ["⇧⌘Q"],
-  "std:toggleFullScreen:": ["F11"],
-};
 type CatalogSpec = { title?: string; variants?: Readonly<Record<string, { title?: string }>> };
 export const commandSpec = (command: string): CatalogSpec | undefined => (COMMANDS as Readonly<Record<string, CatalogSpec>>)[command];
 export const LINUX_STANDARD_ITEMS: Readonly<Record<string, { command: string; title: string; path: string }>> = {
@@ -40,7 +21,7 @@ const adapt = (sources: ShortcutSource[]): ShortcutSource[] => {
   unavailable.delete("emailPageLocation");
   return sources.filter((source) => !unavailable.has(source.id) && (source.id in LINUX_STANDARD_ITEMS || (!source.id.startsWith("std:") && (source.id.includes(":") || commandSpec(source.id)?.title)))).map((source) => ({
     ...source,
-    keys: (linuxKeys[source.id]?.map(parseShortcut) ?? source.keys).map(unshifted),
+    keys: (DEFAULT_KEYS[source.id]?.map(parseShortcut) ?? source.keys).map(unshifted),
   }));
 };
 

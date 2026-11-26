@@ -4,7 +4,7 @@ import MachO
 import ExpoModulesCore
 
 public class AppModule: Module, AppNative {
-  static var apiVersion: Int { 98 }
+  static var apiVersion: Int { 99 }
 
   static func interfaceScale() -> Double { Double(InterfaceScale.scale) }
 
@@ -67,6 +67,7 @@ public class AppModule: Module, AppNative {
       "processStart": Self.processStart as Any,
       "bootTime": Self.bootTime as Any,
       "launchMarks": ArdiaHost.launchMarks,
+      "launchUsage": ArdiaHost.launchUsage,
       "launchedHidden": ArdiaHost.launchedHidden as Any,
       "launchSource": ArdiaHost.launchSource as Any,
       "loadAverage1m": Self.loadAverage1m as Any,

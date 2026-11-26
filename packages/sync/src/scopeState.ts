@@ -16,6 +16,8 @@ export type SnapshotFile = {
 };
 export type SyncFile = LogFile | SnapshotFile;
 
+export type ApplyBatch = { id: number; p: string; l: string; at: number; done?: number; r?: 1; f?: 1; ok?: 1; cut?: string[]; k: Record<string, [from: string | null, to: string | null]> };
+
 type FileMeta = { d: string; k: "log" | "snapshot" | "bad"; s?: number; vv?: Record<string, number>; at: number; b?: number };
 
 export type ScopeState = {
@@ -34,6 +36,7 @@ export type ScopeState = {
   joined: boolean;
   awaitRemote?: boolean;
   applyAs?: Record<string, "joined" | "joining">;
+  applying?: ApplyBatch[];
   snapshotAt: number;
   pending: number;
 };
@@ -101,6 +104,8 @@ export interface Adapter {
   extractsOnlyFrom?(): object | undefined;
   adoptRemoteOnJoin?: boolean;
   publishAfterPull?: boolean;
+  extractUsesBase?: boolean;
+  savesWhole?: boolean;
 }
 
 export type ScopeOptions = {
@@ -114,4 +119,8 @@ export type ScopeOptions = {
   damagedGiveUp?: number;
   persist?: (batches: LogFile[]) => Promise<void>;
   holdApply?: () => boolean;
+  persistApplying?: (batch: ApplyBatch) => Promise<void>;
+  launch?: string;
+  nativeSaveMs?: number;
+  monotonic?: () => number;
 };

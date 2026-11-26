@@ -11,6 +11,7 @@ import { unchanged, type Migrations, type SavedObject } from "../../lib/savedDoc
 import { findDocument, fromNewerBuild, sessionBackups, usableSessionValue, wholeDownloads, wholeSession, type FoundDocument, type RestoredBackup } from "./sessionSafety";
 import { isString } from "../../lib/decode";
 import { droppedRows, rows, sessionFromSaved, SESSION_MIGRATIONS, SESSION_VERSION, type SavedSession } from "./savedSession";
+import { sessionRowTables } from "./savedShapes";
 
 const downloadsWithStagingPathOnly = (doc: SavedObject): SavedObject => ({
   ...doc,
@@ -87,12 +88,12 @@ function closedForLaunch(session: SavedSession): HydrateData {
   return { ...session, parkedPins, closedWindows, windows: {}, windowOrder: [], tabs: {} };
 }
 
-type Prepared = { session: SavedSession; partial: boolean };
+type Prepared = { session: SavedSession; partial: boolean; rowTables: boolean };
 type Candidate = { prepare: () => Prepared; backup: RestoredBackup<Prepared> | null; olderBuild: boolean };
 
 const prepared = (doc: SavedObject): Prepared => {
   const session = sessionFromSaved(doc);
-  return { session, partial: droppedRows(doc, session) };
+  return { session, partial: droppedRows(doc, session), rowTables: sessionRowTables(doc) };
 };
 
 export function wholeBackup(value: unknown): boolean {
@@ -150,7 +151,7 @@ export function loadSession(overrides: LaunchOverrides = {}): LoadedSession | nu
   return null;
 }
 
-export type Launch = { loaded: LoadedSession | null; session: FoundDocument; olderBuild: FoundDocument | null; downloads: FoundDocument; restored: RestoredBackup<Prepared> | null; droppedPrivateDownloads: boolean };
+export type Launch = { loaded: LoadedSession | null; session: FoundDocument; olderBuild: FoundDocument | null; downloads: FoundDocument; restored: RestoredBackup<Prepared> | null; droppedPrivateDownloads: boolean; rowTables: boolean };
 
 const textOf = (found: FoundDocument) => (found.state === "usable" || found.state === "unusable" ? found.text : null);
 
@@ -170,13 +171,13 @@ export function hydrateAtLaunch(overrides: LaunchOverrides): Launch {
   };
   const attempt = (candidate: Candidate) => {
     try {
-      const { session: value, partial } = candidate.prepare();
+      const { session: value, partial, rowTables } = candidate.prepare();
       const list = downloadsFor({ profiles: value.profiles ?? {} });
       const data = launchData(value, list.list, overrides);
       noteSavedTopAppsMerged(data.topAppsMerged ?? "");
       useBrowser.getState().hydrate(data);
       cleanStaging(list);
-      return { data, list, partial };
+      return { data, list, partial, rowTables };
     } catch (error) {
       console.warn("Couldn't restore a saved session", error);
       return null;
@@ -207,11 +208,11 @@ export function hydrateAtLaunch(overrides: LaunchOverrides): Launch {
     try {
       useBrowser.getState().hydrate({ downloads: list.list });
       cleanStaging(list);
-      won = { data: { downloads: list.list, windowsAgainstAutoHideTabs: 0 }, list, partial: false };
+      won = { data: { downloads: list.list, windowsAgainstAutoHideTabs: 0 }, list, partial: false, rowTables: false };
     } catch {
       useBrowser.getState().hydrate({});
     }
   }
   if (won?.list.rejected && downloads.state === "usable") downloads = { state: "unusable", reason: "rows", text: downloads.text };
-  return { loaded, session, olderBuild, downloads, restored, droppedPrivateDownloads: !!won?.list.droppedPrivate };
+  return { loaded, session, olderBuild, downloads, restored, droppedPrivateDownloads: !!won?.list.droppedPrivate, rowTables: !!won?.rowTables };
 }

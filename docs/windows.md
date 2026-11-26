@@ -800,7 +800,9 @@ folder and refused all 3 launches), the concurrent-runs check (`ports.ps1`) and
   restore-state recovery and launch log at the WebUI folder, and `GuardBrowserLaunch` waits on the WebUI profile's own
   mutex, so a relaunch waits for the closing WebUI instance, never for the RNW one.
 - A second `--ardia-shell=webui` launch reaches the first through Chromium's process singleton (`g_ardia_win_relaunched`),
-  which raises the existing window instead of opening a Chromium browser window.
+  which raises the existing window instead of opening a Chromium browser window. A launch that carries links raises
+  nothing itself while a window takes links and is listening (`NextStartStep` in `webui_window_policy.h`): the app opens them where they
+  belong and focuses that window, so a link into Little Ardia never brings the main window forward.
 
 ### What the pilot is
 
@@ -908,6 +910,20 @@ in `webui_frame.cc`: top-edge resize, `HTMAXBUTTON` over the shell's maximize bu
   offered as unclaimed. It tracks activation order (focus, links from other apps), private window ordinals
   (`ArdiaShell.privateWindows`), placement (`window-placement.txt`, the RNW format, cascaded 28 px from the window
   in front, fitted to the display's work area) and quits when the last browser window closes.
+- Every regular window's `chrome://ardia/` shell shares one renderer per profile, as on Linux: `CreateShellContents`
+  gives it `PrivilegedParams` with Ardia's feature id (`SharedRendererFeature`), and a private window's shell gets
+  none, so it never joins that renderer. A crashed shell reloads at most 3 times a minute, or loads
+  `chrome://ardia/` if it crashed before its first commit (`ShellRecovery`), and a recovery navigation that never
+  commits is retried within that budget. A crash during an app quit waits and resumes if the quit is cancelled (the
+  closing-all-browsers callback, or a 250 ms poll of `IsTryingToQuit()` for a downloads-warning cancel that skips
+  it); a Windows window close is final, so a crash while closing is dropped. Only the launch window's first
+  `host-bootstrap.js` says `startup: true` (`LaunchBootstrap`), and a recovery disarms it first. The shell's initial
+  load and any recovery that commits an error page are retried too. The run's recovery tally goes to
+  `shell-recovery.json` beside `launch-guard.json` and is reported by the next launch's `app_launched` as
+  `prev_shell_recovery_attempts`, `prev_shell_recovery_recovered` and `prev_shell_recovery_exhausted`; both
+  `shell-recovery.json` and `shell-recovery-previous.json` are engine-owned names pages can read but not write.
+  `tests/webui_process_policy_test.cc` and `test_desktop_layer.py` (which compiles this host's recovery code against
+  stubs) cover the rules; sharing and recovery themselves need a built engine.
 - `ShellHostView` (`webui_host_view.cc`) is a child view over the `BrowserView`: the `chrome://ardia/` shell
   `WebView` on top and one viewport `WebView` per shown tab under it. Tabs are real `TabStripModel` tabs created with
   `Navigate` (`kNewBackgroundTab`), so popups, `beforeunload`, session tab ids and tab helpers are Chromium's own. A
@@ -1307,7 +1323,7 @@ In order, as the next PRs:
    `setActiveProfile`, `openWindow`, `setMenuBookmarks`, `setMenuState`, `shellPainted`, `ArdiaTabs.unclaimedTabs`/
    `claimLaunchTab`, `tab.presentations`, `tab.command` `setMuted`/`evaluate`/`capturePicture`, and the `engine.call`s
    `documents.watch`, `profiles.loaded`, `engine.info`, `downloads.list`, `engine.memorySaver`, `engine.systemState`,
-   `tabs.strips`, `search.setEngineName`, `webView.*`, `webKit.setFraudWarnings`, `profiles.ctrlTabMru`), then Track 3's
+   `tabs.strips`, `search.setEngineName`, `webView.*`, `webKit.setFraudWarnings`), then Track 3's
    generated routes so the list stops being hand-kept.
 5. Windows wording (`--mode win`, `.win.ts`), Mica, the installer and the upgrade migration (Track 4's cutover), and a
    CI job that runs `run.ps1`'s checks plus the Linux acceptance tour over CDP.

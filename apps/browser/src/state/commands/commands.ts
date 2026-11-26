@@ -41,7 +41,7 @@ import { tabEngine } from "../engines/engines";
 import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
-import { focusSplitPane, openSplitPane } from "../splits/actions";
+import { runSplitCommand } from "../splits/commands";
 import { chooseSidebarSide, switchTabLayout } from "../settings/actions";
 import { isAppCommand, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
@@ -176,6 +176,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
   const ui = s.windowUi[windowId];
   if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id))) return;
   if (!targeted && runSidebarCommand(command, arg, windowId, user)) return;
+  if (runSplitCommand(command, windowId, user)) return;
 
   switch (command) {
     case "newTab":
@@ -257,11 +258,6 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       if (tabLayoutOf(useBrowser.getState(), windowId) !== want) switchTabLayout(windowId);
       return;
     }
-    case "openSplitPane":
-      return void openSplitPane(windowId);
-    case "focusNextPane":
-    case "focusPreviousPane":
-      return focusSplitPane(windowId, command === "focusNextPane" ? 1 : -1);
     case "toggleSidebar":
       return s.toggleSidebar(windowId);
     case "zoomIn":

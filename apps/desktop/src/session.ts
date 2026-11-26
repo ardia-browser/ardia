@@ -1,6 +1,6 @@
 import type { ArdiaHost } from "./host";
 import type { BrowserState, HydrateData } from "../../browser/src/state/browser/store";
-import { initialHostSession, linuxSessionShape, snapshotHostSession } from "./hostSession";
+import { initialHostSession, linuxSessionShape, snapshotHostSession, withoutTabWakes } from "./hostSession";
 import { mergeSession } from "./hostSessionMerge";
 
 export const isLinuxUtility = (id: string) => id === "settings" || id === "import";
@@ -8,7 +8,7 @@ export const isLinuxUtility = (id: string) => id === "settings" || id === "impor
 
 export function initialLinuxSession(host: ArdiaHost, saved: HydrateData | null | undefined, onRestored?: (windowId: string) => void): HydrateData {
   if (!isLinuxUtility(host.bootstrap.windowId)) return initialHostSession(host, saved, undefined, onRestored);
-  return saved ? linuxSessionShape(saved) : {};
+  return saved ? withoutTabWakes(linuxSessionShape(saved)) : {};
 }
 
 export function initialLinuxLaunch(host: ArdiaHost, saved: HydrateData | null | undefined): { initial: HydrateData; restored: string[] } {

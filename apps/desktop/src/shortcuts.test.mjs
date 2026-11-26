@@ -180,6 +180,16 @@ test("Email Page Location has no default shortcut, since Ctrl+Shift+I opens the 
   assert.equal(linuxBindings({ emailPageLocation: ["e", "command"] }).some((binding) => binding.command === "emailPageLocation"), true);
 });
 
+test("Ctrl+Shift+\\ opens a split pane below and Alt+Shift+arrows move split panes, since GNOME takes Ctrl+Alt+arrows for workspaces", () => {
+  const bindings = linuxBindings();
+  const backslash = keyboardCombo(event("Backslash", { ctrlKey: true, shiftKey: true }));
+  assert.equal(commandAt(bindings, backslash.keyCode, backslash.flags)?.command, "openSplitPaneBelow");
+  for (const [code, command] of [["ArrowLeft", "moveSplitPaneLeft"], ["ArrowRight", "moveSplitPaneRight"], ["ArrowUp", "moveSplitPaneUp"], ["ArrowDown", "moveSplitPaneDown"]]) {
+    const moved = keyboardCombo(event(code, { altKey: true, shiftKey: true }));
+    assert.equal(commandAt(bindings, moved.keyCode, moved.flags)?.command, command);
+  }
+});
+
 test("a held Ctrl+L runs Open Command Bar once: its repeats are swallowed, and a release then a fresh press toggles again", () => {
   const binding = commandAt(linuxBindings(), keyboardCombo(event("KeyL", { ctrlKey: true })).keyCode, 4);
   assert.equal(binding?.command, "focusCommandBar");

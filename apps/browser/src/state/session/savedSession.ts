@@ -6,29 +6,33 @@ import { parseSettingsMeta, sessionWithNewTabLinksInLittleArdia, sessionWithSett
 import { sessionWithOwnTabMutes } from "../tabs/mute";
 import { pinChoicesFromDisk, sessionWithPinChoiceStamps } from "../pins/pinChoices";
 import { isFields, isString, isStringList } from "../../lib/decode";
-import { pageFromDisk, pinFromDisk, splitsChecked, sessionWithSplitSlots, sessionWithTabPages, sessionWithTabPins, slotsFromDisk } from "./savedShapes";
+import { isOwnId, pageFromDisk, pinFromDisk, sessionRowsMisfiled, splitsChecked, sessionWithListedRows, sessionWithSplitSlots, sessionWithTabPages, sessionWithTabPins, slotsFromDisk } from "./savedShapes";
 import { profilesKeepingLegacyDots } from "../profiles/switcherMark";
 import { profilesWithOwnLooks } from "../../lib/presetLook";
 import { layoutDrops } from "../browser/hydratedLayout";
 
 export const SESSION_VERSION = 11;
-export const SESSION_MIGRATIONS: Migrations = { 2: sessionWithCleanUpMinutes, 3: sessionWithOwnTabMutes, 4: sessionWithTabPages, 5: sessionWithTabPins, 6: sessionWithSplitSlots, 7: sessionWithSettingsMeta, 8: sessionWithPinChoiceStamps, 9: sessionWithNewTabLinksInLittleArdia, 10: sessionWithUnreadCountsOffByDefault };
+const onListedRows = (migrations: Migrations): Migrations =>
+  Object.fromEntries(Object.entries(migrations).map(([version, migrate]) => [version, (doc: SavedObject) => migrate(sessionWithListedRows(doc))]));
+export const SESSION_MIGRATIONS: Migrations = onListedRows({ 2: sessionWithCleanUpMinutes, 3: sessionWithOwnTabMutes, 4: sessionWithTabPages, 5: sessionWithTabPins, 6: sessionWithSplitSlots, 7: sessionWithSettingsMeta, 8: sessionWithPinChoiceStamps, 9: sessionWithNewTabLinksInLittleArdia, 10: sessionWithUnreadCountsOffByDefault });
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter(isString) : []);
 const has = (o: SavedObject, keys: readonly string[]) => keys.every((k) => isString(o[k]));
+const ownIds = (o: SavedObject, keys: readonly string[]) => keys.every((k) => isOwnId(o[k]));
 export const rows = <T,>(v: unknown, ok: (o: SavedObject) => boolean): T[] => (Array.isArray(v) ? v.filter((o): o is SavedObject => isFields(o) && ok(o)) : []) as T[];
 const byProfile = <T,>(v: unknown, ok: (o: SavedObject) => boolean = () => true): Record<string, T> =>
-  (isFields(v) ? Object.fromEntries(Object.entries(v).filter(([, o]) => isFields(o) && ok(o))) : {}) as Record<string, T>;
+  (isFields(v) ? Object.fromEntries(Object.entries(v).filter(([key, o]) => isOwnId(key) && isFields(o) && ok(o))) : {}) as Record<string, T>;
+export const savedProfileRows = (v: unknown) => byProfile<Profile>(v, profileOk);
 const byId = <T extends { id: string }>(list: T[]) => Object.fromEntries(list.map((x) => [x.id, x]));
 
-const windowOk = (o: SavedObject) => has(o, ["id", "profileId"]) && isStringList(o.tabIds) && isFields(o.activeTabIds) && Object.values(o.activeTabIds).every(isString);
-const tabOk = (o: SavedObject) => has(o, ["id", "windowId", "profileId", "url"]);
-const groupOk = (o: SavedObject) => has(o, ["id", "windowId", "profileId"]) && isStringList(o.tabIds);
-const splitOk = (o: SavedObject) => has(o, ["id", "windowId"]) && (o.orientation === "horizontal" || o.orientation === "vertical") && !!slotsFromDisk(o.slots);
+const windowOk = (o: SavedObject) => ownIds(o, ["id", "profileId"]) && isStringList(o.tabIds) && isFields(o.activeTabIds) && Object.values(o.activeTabIds).every(isString);
+const tabOk = (o: SavedObject) => ownIds(o, ["id", "windowId", "profileId"]) && isString(o.url);
+const groupOk = (o: SavedObject) => ownIds(o, ["id", "windowId", "profileId"]) && isStringList(o.tabIds);
+const splitOk = (o: SavedObject) => ownIds(o, ["id", "windowId"]) && (o.orientation === "horizontal" || o.orientation === "vertical") && !!slotsFromDisk(o.slots);
 const snapshotOk = (o: unknown) => isFields(o) && has(o, ["url", "profileId"]);
 const closedTabOk = (o: SavedObject) => isString(o.id) && snapshotOk(o.tab);
 const tabListOk = (o: SavedObject) => isString(o.id) && Array.isArray(o.tabs) && o.tabs.every(snapshotOk);
-const profileOk = (o: SavedObject) => has(o, ["id", "name"]);
+const profileOk = (o: SavedObject) => isOwnId(o.id) && isString(o.name);
 const parkedOk = (o: SavedObject) => Array.isArray(o.tabs) && o.tabs.every(snapshotOk) && Array.isArray(o.groups) && o.groups.every((g) => isFields(g) && isString(g.id));
 
 export type SavedSession = Omit<HydrateData, "history" | "bookmarks" | "downloads"> & {
@@ -62,7 +66,8 @@ export function parseSession(json: string | null | undefined): SavedSession | nu
   return raw ? sessionFromSaved(raw) : null;
 }
 
-export function sessionFromSaved(raw: SavedObject): SavedSession {
+export function sessionFromSaved(saved: SavedObject): SavedSession {
+  const raw = sessionWithListedRows(saved);
   const savedWindowRows = rows<SavedObject>(raw.windows, windowOk);
   const settings = settingsWithAutoHideTabs(raw.settings, savedWindowRows);
   return {
@@ -95,7 +100,8 @@ const listed = (value: unknown) => (Array.isArray(value) ? value.length : 0);
 const keyed = (value: unknown) => (isFields(value) ? Object.keys(value).length : 0);
 const CLOSED_LISTS = ["closedTabs", "closedWindows", "closedGroups", "deletedGroups", "cleanedTabs"] as const;
 
-export const droppedRows = (raw: SavedObject, session: SavedSession) =>
+export const droppedRows = (saved: SavedObject, session: SavedSession, raw = sessionWithListedRows(saved)) =>
+  sessionRowsMisfiled(saved) ||
   layoutDrops(session) ||
   listed(raw.windows) > Object.keys(session.windows).length ||
   listed(raw.tabs) > Object.keys(session.tabs).length ||

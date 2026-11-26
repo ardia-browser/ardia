@@ -37,7 +37,7 @@ test("a refused painted call leaves the curtain to its deadline without throwing
 });
 
 test("the first window commit announces the paint and the engine lifts the curtain on it", () => {
-  const main = readFileSync(new URL("./main.tsx", import.meta.url), "utf8");
+  const main = readFileSync(new URL("./shellEntry.tsx", import.meta.url), "utf8");
   const committed = main.slice(main.indexOf("function FirstWindowCommitted"), main.indexOf("async function start()"));
   assert.match(committed, /announceShellPainted\(ardiaHost\)/);
   const engine = readFileSync(new URL("../../../engine/ardiacore-linux/src/ardia/linux/ac_linux_host.cc", import.meta.url), "utf8");

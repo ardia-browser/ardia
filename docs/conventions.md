@@ -208,7 +208,7 @@ writeDocument(DOC, versionedJson(data, VERSION));
   integer, a missing step, or anything that isn't a plain object reads as nothing (the document's defaults), and is
   overwritten on the next save. Downgrades aren't supported.
 - `session.json` and `downloads.json` are the exception (`state/session/sessionSafety.ts`). One that exists but is
-  empty, broken, of an unknown shape (no session field at all, or core lists that aren't lists), or unreadable is
+  empty, broken, of an unknown shape (no session field at all, or core lists that aren't lists or row tables), or unreadable is
   never written over until the store has copied its bytes to `<name>-unreadable-<ms>-<n>.json`
   (`copyDocument`; a copy rebuilt from the decoded text doesn't count). The same goes for one that loading would
   partly drop: rows the reader rejects (windows, tabs, groups, splits, profiles, parked pins, the closed and cleaned
@@ -269,7 +269,7 @@ writeDocument(DOC, versionedJson(data, VERSION));
 - Covered: `session.json` (10), `downloads.json` (3), `launch-look.json` (2), `air-traffic.json` (2), `bookmarks-cache.json`, `telemetry.json`,
   `telemetry-queue.json`, `telemetry-daily.json`, `release-notes.json`, `onboarding.json`,
   `default-browser-offer.json`, `sync.json`, `sync-extensions.json`, `live.json`, `shared-folders.json`, `ardia-cli.json`,
-  `bangs-state.json`, `Scripts/status.json`, `link-sources.json` and `freeze-sends.json` (all 1).
+  `bangs-state.json`, `Scripts/status.json`, `link-sources.json`, `freeze-sends.json` and `imported-bookmarks.json` (all 1).
 - Native code reads through `ArdiaSavedDocument` (packages/ardiacore/ios), with the same rules: `session.json` and
   `onboarding.json` (any version up to the one JS writes; a test pins each). `ArdiaSavedSession` also reads nothing
   when a field the early launch uses has the wrong type, so a malformed window falls back to the JS launch. and `launch-layout.json` (5, written and
@@ -295,9 +295,9 @@ writeDocument(DOC, versionedJson(data, VERSION));
 
 - Components are `PascalCase.tsx`; every other module is `camelCase.ts`. Tests sit next to the code as
   `camelCase.test.mjs` (or `PascalCase.test.mjs` for a component). A platform's twin of a file adds its suffix:
-  `.macos`, `.ios`, `.windows`, `.linux`, `.win`, `.desktop`, `.web`, `.native`. `apps/desktop` resolves `.linux.*`
-  (`--mode linux`) or `.win.*` (`--mode win`), then `.desktop.*` (the Chromium desktop host, shared by both), ahead
-  of `.web.*`.
+  `.macos`, `.ios`, `.windows`, `.linux`, `.win`, `.mac`, `.desktop`, `.web`, `.native`. `apps/desktop` resolves
+  `.linux.*` (`--mode linux`), `.win.*` (`--mode win`) or `.mac.*` (`--mode mac`, the Mac WebUI shell), then
+  `.desktop.*` (the Chromium desktop host, shared by all three), ahead of `.web.*`.
 - At most 400 lines per TS/TSX file (`apps/browser/src`, `packages/*/src`), 600 per native file (`packages/*/ios`,
   `engine/ardiacore/src`, `engine/chromium/src`). Tests, fixtures and generated files (`packages/core/src/bangList.ts`,
   `packages/demo/src/shims/web/symbols/data.ts`, `apps/browser/src/lib/emojiData.ts` from `apps/browser/scripts/emoji-data.mjs`)

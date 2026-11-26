@@ -15,7 +15,7 @@ const outline = (id) => {
 };
 const otherBookmarks = () => S().bookmarks.nodes[bookmarkRoots(S(), P).other].children.map(outline);
 
-test("a Chrome bookmarks HTML file keeps the folders it lists beside the bookmarks bar", () => {
+test("a Chrome bookmarks HTML file keeps the folders it lists beside the bookmarks bar", async () => {
   S().hydrate({});
   useBrowser.setState({ bookmarks: { nodes: {} } });
   const exported = folder("Bookmarks", [
@@ -24,26 +24,26 @@ test("a Chrome bookmarks HTML file keeps the folders it lists beside the bookmar
     folder("Archive", []),
     link("Loose link", "https://loose.example/"),
   ]);
-  assert.equal(importBookmarks(P, exported, "HTML File"), 4);
+  assert.equal(await importBookmarks(P, exported, "HTML File"), 4);
   assert.deepEqual(otherBookmarks(), [{ Work: [{ Spec: ["Spec doc"] }, "Work home"] }, { Archive: [] }, "Loose link"]);
 });
 
-test("a Firefox bookmarks HTML file still empties its Other Bookmarks folder into Other Bookmarks", () => {
+test("a Firefox bookmarks HTML file still empties its Other Bookmarks folder into Other Bookmarks", async () => {
   S().hydrate({});
   useBrowser.setState({ bookmarks: { nodes: {} } });
   const exported = folder("Bookmarks", [
     folder("Menu folder", [link("Menu link", "https://menu.example/")]),
     folder("Other Bookmarks", [link("Later", "https://later.example/"), folder("Reading", [link("Essay", "https://essay.example/")])], "other"),
   ]);
-  assert.equal(importBookmarks(P, exported, "HTML File"), 3);
+  assert.equal(await importBookmarks(P, exported, "HTML File"), 3);
   assert.deepEqual(otherBookmarks(), [{ "Menu folder": ["Menu link"] }, "Later", { Reading: ["Essay"] }]);
 });
 
-test("an untitled folder no parser marked as a list stays a folder, whatever its date", () => {
+test("an untitled folder no parser marked as a list stays a folder, whatever its date", async () => {
   S().hydrate({});
   useBrowser.setState({ bookmarks: { nodes: {} } });
   const exported = folder("Bookmarks", [folder("", []), folder("", [link("Example", "https://example.org/")])]);
-  assert.equal(importBookmarks(P, exported, "HTML File"), 1);
+  assert.equal(await importBookmarks(P, exported, "HTML File"), 1);
   assert.deepEqual(otherBookmarks(), [{ "": [] }, { "": ["Example"] }]);
 });
 
@@ -53,20 +53,20 @@ const fresh = () => {
 };
 const ADDED = 1_700_000_000_000;
 
-test("a folder the file names with an empty title stays a folder, empty or holding links", () => {
+test("a folder the file names with an empty title stays a folder, empty or holding links", async () => {
   fresh();
   const exported = folder("Bookmarks", [
     { type: "folder", title: "", dateAdded: ADDED, children: [] },
     { type: "folder", title: "", dateAdded: ADDED, children: [folder("Inner", [link("Deep", "https://deep.example/")]), link("Kept", "https://kept.example/")] },
   ]);
-  assert.equal(importBookmarks(P, exported, "HTML File"), 2);
+  assert.equal(await importBookmarks(P, exported, "HTML File"), 2);
   assert.deepEqual(otherBookmarks(), [{ "": [] }, { "": [{ Inner: ["Deep"] }, "Kept"] }]);
 });
 
-test("a list the parser marks as unnamed lands loose in Other Bookmarks", () => {
+test("a list the parser marks as unnamed lands loose in Other Bookmarks", async () => {
   fresh();
   const exported = folder("Bookmarks", [folder("", [link("Loose", "https://loose.example/")], "list")]);
-  assert.equal(importBookmarks(P, exported, "HTML File"), 1);
+  assert.equal(await importBookmarks(P, exported, "HTML File"), 1);
   assert.deepEqual(otherBookmarks(), ["Loose"]);
 });
 

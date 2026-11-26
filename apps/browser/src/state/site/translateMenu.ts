@@ -24,3 +24,10 @@ export function translateMenuItems({ translated, target, languages, neverTransla
     [neverTranslate !== null && { id: "never" as const, title: "Never Translate This Site", checked: neverTranslate }],
   );
 }
+
+type TranslatePageMenuState = { status: "idle" | "translating" | "translated"; source: string | null };
+
+export function translatePageMenuItems({ status, source }: TranslatePageMenuState, targetName: string): { id: "translatePage" | "showOriginal"; title: string }[] {
+  if (status !== "idle") return [{ id: "showOriginal", title: "Show Original" }];
+  return source ? [{ id: "translatePage", title: `Translate to ${targetName}` }] : [];
+}

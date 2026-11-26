@@ -3,10 +3,10 @@ import { commandSpec, LINUX_STANDARD_ITEMS, shortcutSources } from "./commandCat
 import { resolveShortcuts, type ShortcutOverrides } from "./shortcutFormat";
 import { BROWSER_WINDOW_COMMANDS } from "./browserCommandRoute";
 import { KEY_REPEAT_IGNORED_COMMANDS } from "../../browser/src/state/commands/commandInteraction";
+import { COMMAND_PRESSED, CONTROL_PRESSED, EDITS_TEXT, MODIFIER_FLAGS } from "@platform/shortcutKeys";
 
 export type Binding = { keyCode: number; modifiers: number; command: BrowserCommand; arg: string | null; notInText: boolean };
 
-const modifierFlags: Record<ShortcutModifier, number> = { command: 4, control: 16, option: 8, shift: 2, function: 0 };
 const specialKeys: Record<string, [string, number]> = {
   Comma: [",", 188], Period: [".", 190], Equal: ["=", 187], Minus: ["-", 189],
   Semicolon: [";", 186], Quote: ["'", 222], Backquote: ["`", 192], Backslash: ["\\", 220], Slash: ["/", 191],
@@ -72,12 +72,12 @@ export function linuxBindings(overrides: ShortcutOverrides = {}, profiles: reado
   return [...resolved.bindings].flatMap(([id, shortcuts]) => shortcuts.flatMap((shortcut) => {
     const keyCode = codeOf(shortcut.key);
     if (!keyCode || shortcut.modifiers.includes("function")) return [];
-    const modifiers = shortcut.modifiers.reduce((flags, mod) => flags | modifierFlags[mod], 0);
+    const modifiers = shortcut.modifiers.reduce((flags, mod) => flags | MODIFIER_FLAGS[mod], 0);
     const combo = `${keyCode}:${modifiers}`;
     if (bound.has(combo)) return [];
     bound.add(combo);
     const command = commandOf(id);
-    return [{ keyCode, modifiers, command, arg: argOf(id), notInText: command === "returnToPinnedUrl" }];
+    return [{ keyCode, modifiers, command, arg: argOf(id), notInText: command === "returnToPinnedUrl" || EDITS_TEXT(keyCode, modifiers) }];
   }));
 }
 
@@ -88,11 +88,11 @@ export const utilityBindings = (bindings: Binding[]) => bindings.filter((binding
 export function keyboardCombo(event: Pick<KeyboardEvent, "code" | "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">) {
   const key = keyOf(event.code)?.[0] ?? (event.key.length === 1 ? event.key.toLowerCase() : "");
   const modifiers: ShortcutModifier[] = [];
-  if (event.ctrlKey) modifiers.push("command");
-  if (event.metaKey) modifiers.push("control");
+  if (COMMAND_PRESSED(event)) modifiers.push("command");
+  if (CONTROL_PRESSED(event)) modifiers.push("control");
   if (event.altKey) modifiers.push("option");
   if (event.shiftKey) modifiers.push("shift");
-  return { key, modifiers, keyCode: codeOf(key), flags: modifiers.reduce((flags, mod) => flags | modifierFlags[mod], 0) };
+  return { key, modifiers, keyCode: codeOf(key), flags: modifiers.reduce((flags, mod) => flags | MODIFIER_FLAGS[mod], 0) };
 }
 
 export function recordableShortcut(event: Pick<KeyboardEvent, "code" | "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">) {

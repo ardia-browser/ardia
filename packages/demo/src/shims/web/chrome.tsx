@@ -1,7 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, View, type ViewProps, type ViewStyle } from "react-native";
 import { useBrowser } from "../../../../../apps/browser/src/state/browser/store";
+import { useScopedTheme } from "../../../../../apps/browser/src/components/ui/theme";
+import { materialFill } from "./materials";
 import type { MiddleClickEvent } from "./MouseArea";
+import { LiquidGlassLayer } from "./liquidGlass";
+import { backdropKeyOf, DOCK_GLASS, glassGlow } from "./liquidGlassOptics";
 import { edgeGain, fallbackRadius, highlightMask, maskStyle, peakGain, shapeMask, type RimCurve, type RimProfile, type ShadeProfile } from "./glassRim";
 
 type Style = ViewStyle & Record<string, unknown>;
@@ -88,19 +92,17 @@ export function Surface({ fill, fillColors, fillStops, fade, fadeStops, cornerRa
   );
 }
 
-const MATERIAL_FILL: Record<string, string> = {
-  popover: "rgba(246,246,246,0.72)",
-  menu: "rgba(246,246,246,0.72)",
-  hudWindow: "rgba(30,30,30,0.6)",
-  sidebar: "rgba(240,240,240,0.5)",
-  underWindowBackground: "rgba(240,240,240,0.4)",
-};
+export function useSurfaceDark(): boolean {
+  const appDark = useBrowser((s) => s.ui.appDark);
+  return useScopedTheme()?.dark ?? appDark;
+}
 
 export type VisualEffectProps = ViewProps & { material?: string; blendingMode?: "withinWindow" | "behindWindow"; cornerRadius?: number };
 
 export function VisualEffect({ material = "popover", cornerRadius, style, ...props }: VisualEffectProps) {
+  const fill = materialFill(material, useSurfaceDark());
   const glass: Style = {
-    backgroundColor: MATERIAL_FILL[material] ?? "rgba(246,246,246,0.6)",
+    backgroundColor: fill,
     backdropFilter: "blur(24px) saturate(180%)",
     WebkitBackdropFilter: "blur(24px) saturate(180%)",
     borderRadius: cornerRadius,
@@ -219,13 +221,14 @@ function scrolledGlassSurface(theme: "light" | "dark", clear: boolean, cornerRad
 }
 
 export function GlassEffect({ cornerRadius = 0, tint, glassStyle = "regular", dark, style, children, ...props }: GlassEffectProps) {
-  const appDark = useBrowser((s) => s.ui.appDark);
-  const theme = (dark ?? appDark) ? "dark" : "light";
+  const surfaceDark = useSurfaceDark();
+  const theme = (dark ?? surfaceDark) ? "dark" : "light";
   const g = GLASS[theme];
   const clear = glassStyle === "clear";
   const filter = clear ? glassFilter(1, (1 + g.slope) / 2, g.offset / 2) : glassFilter(g.saturate, g.slope, g.offset);
+  const backdropKey = backdropKeyOf(useScopedTheme()?.backdrop, theme === "dark");
   const host = useRef<HTMLDivElement | null>(null);
-  const [scrolled, setScrolled] = useState(false);
+  const [scrolled, setScrolled] = useState<boolean | null>(null);
   useLayoutEffect(() => setScrolled(inScrollView(host.current)), []);
   const { opacity, ...rest } = StyleSheet.flatten(style) ?? {};
   const fade: React.CSSProperties = opacity === undefined ? {} : { opacity: Number(opacity) };
@@ -244,13 +247,27 @@ export function GlassEffect({ cornerRadius = 0, tint, glassStyle = "regular", da
   const shape = shapeMask(cornerRadius);
   const clip: React.CSSProperties = shape ? {} : { borderRadius: fallbackRadius(cornerRadius), overflow: "hidden" };
   const shaped = shape ? maskStyle(shape) : {};
+  const fallback = (
+    <div style={{ ...layer, ...clip }}>
+      <div style={backdrop(filter, shaped)} />
+      {tint ? <div style={{ ...layer, ...shaped, background: tint }} /> : null}
+      <div style={backdrop(`brightness(${1 + peakGain(g.rim)})`, highlight ? maskStyle(highlight) : { mask: fallbackBands(g.rim), WebkitMask: fallbackBands(g.rim) })} />
+    </div>
+  );
   return (
     <View pointerEvents="none" {...props} style={rest}>
-      <div ref={host} style={{ ...layer, ...clip }}>
-        <div style={{ ...backdrop(filter, shaped), ...fade }} />
-        {tint ? <div style={{ ...layer, ...shaped, background: tint, ...fade }} /> : null}
-        <div style={{ ...backdrop(`brightness(${1 + peakGain(g.rim)})`, highlight ? maskStyle(highlight) : { mask: fallbackBands(g.rim), WebkitMask: fallbackBands(g.rim) }), ...fade }} />
-      </div>
+      <LiquidGlassLayer
+        hostRef={(node) => void (host.current = node)}
+        theme={theme}
+        glassStyle={glassStyle}
+        cornerRadius={cornerRadius}
+        radius={fallbackRadius(cornerRadius)}
+        tint={tint}
+        opacity={opacity === undefined ? undefined : Number(opacity)}
+        enabled={scrolled === false}
+        backdropKey={backdropKey}
+        fallback={fallback}
+      />
       {children}
     </View>
   );
@@ -313,8 +330,30 @@ export function WindowDragRegion({
   return <Region {...props} onClick={onRegionClick} onDoubleClick={onRegionDoubleClick} />;
 }
 
-export type DockSelectionProps = ViewProps & { fill?: string; stroke?: string; cornerRadius?: number; strokeWidth?: number; dark: boolean; outline?: boolean };
+export type DockSelectionProps = ViewProps & { image?: string; emoji?: string; theme?: string; fill?: string; stroke?: string; cornerRadius?: number; strokeWidth?: number; iconSize?: number; dark: boolean; glass?: boolean; colorRing?: boolean; outline?: boolean };
 
-export function DockSelection({ fill, stroke, cornerRadius, strokeWidth, dark: _dark, outline, style, ...props }: DockSelectionProps & Record<string, unknown>) {
-  return <View {...props} style={[{ backgroundColor: outline ? undefined : fill, borderColor: stroke, borderWidth: stroke ? (strokeWidth ?? 1) : 0, borderRadius: cornerRadius }, style]} />;
+const BLURRED_ICON_SPREAD = 250;
+const BLURRED_ICON_BLUR = { glow: 10, ring: 6 };
+
+function BlurredFavicon({ image, blur }: { image: string; blur: number }) {
+  return <img alt="" aria-hidden draggable={false} src={image} style={{ position: "absolute", left: "50%", top: "50%", width: `${BLURRED_ICON_SPREAD}%`, height: `${BLURRED_ICON_SPREAD}%`, transform: "translate(-50%, -50%)", objectFit: "contain", filter: `blur(${blur}px) saturate(1.8)`, pointerEvents: "none" }} />;
+}
+
+export function DockSelection({ fill, stroke, cornerRadius, strokeWidth, dark, glass, colorRing, outline, image, emoji: _emoji, theme, iconSize: _iconSize, style, ...props }: DockSelectionProps & Record<string, unknown>) {
+  if (!glass) return <View {...props} style={[{ backgroundColor: outline ? undefined : fill, borderColor: stroke, borderWidth: stroke ? (strokeWidth ?? 1) : 0, borderRadius: cornerRadius }, style]} />;
+  const look = dark ? "dark" : "light";
+  const blurred = theme === "blur" && image ? image : null;
+  const glow = outline || !fill || blurred ? null : glassGlow(parseColor(fill));
+  const ringWidth = colorRing ? (strokeWidth ?? 1) : 0;
+  const shape: React.CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none", borderRadius: cornerRadius, overflow: "hidden" };
+  const ring: React.CSSProperties = { ...shape, boxSizing: "border-box", padding: ringWidth, mask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)", maskComposite: "exclude", WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)", WebkitMaskComposite: "xor" };
+  return (
+    <View pointerEvents="none" {...props} style={[{ borderRadius: cornerRadius }, style]}>
+      {glow ? <div style={{ ...shape, background: glow, opacity: DOCK_GLASS.hue[look] }} /> : null}
+      {blurred && !outline ? <div style={{ ...shape, opacity: DOCK_GLASS.hue[look] }}><BlurredFavicon image={blurred} blur={BLURRED_ICON_BLUR.glow} /></div> : null}
+      {outline ? null : <div style={{ ...shape, background: `linear-gradient(to bottom, rgba(255,255,255,${DOCK_GLASS.sheen[look]}), rgba(255,255,255,0) ${DOCK_GLASS.sheenEnd}%)` }} />}
+      {ringWidth > 0 && blurred && !stroke ? <div style={ring}><BlurredFavicon image={blurred} blur={BLURRED_ICON_BLUR.ring} /></div> : null}
+      {ringWidth > 0 && !(blurred && !stroke) ? <div style={{ ...shape, boxSizing: "border-box", border: `${ringWidth}px solid ${stroke ?? `rgba(255,255,255,${DOCK_GLASS.ring[look]})`}`, mixBlendMode: stroke ? undefined : "soft-light" }} /> : null}
+    </View>
+  );
 }

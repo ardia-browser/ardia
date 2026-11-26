@@ -347,6 +347,15 @@ void StartEarlyWindow() {
 
 + (void)markMainStarted {
   ArdiaLaunchSequence.shared.mainStartedAt = LaunchNowMs();
+  ArdiaLaunchSequence.shared.mainUsage = ArdiaLaunchSequence.processUsageNow;
+}
+
++ (NSDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *> *)launchUsage {
+  ArdiaLaunchSequence *launch = ArdiaLaunchSequence.shared;
+  NSMutableDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *> *usage = [NSMutableDictionary dictionary];
+  if (launch.mainUsage.count) usage[@"main"] = launch.mainUsage;
+  if (launch.engineStartUsage.count) usage[@"engineStarted"] = launch.engineStartUsage;
+  return usage;
 }
 
 + (nullable NSNumber *)launchedHidden {

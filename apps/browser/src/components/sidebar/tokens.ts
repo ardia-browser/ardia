@@ -98,6 +98,7 @@ export const SIDEBAR_SHADOW = {
 } satisfies Record<string, ShadowLevel>;
 
 export const TAB_SWITCHER_SCROLL_ID = "ardia-tab-switcher";
+export const TAB_SWITCHER_LIST_ID = "ardia-tab-switcher-list";
 
 export const TAB_SWITCHER = {
   card: 168,
@@ -109,7 +110,9 @@ export const TAB_SWITCHER = {
   labelInset: space.xxs,
   cardInset: space.xs,
   windowMargin: 80,
+  maxCards: 7,
   panelRadius: 18,
+  list: { width: 380, row: 40, maxRows: 8, icon: 16, gap: space.ml, inset: space.ml, lineGap: 1 },
   get cardRadius() {
     return radius.panel;
   },

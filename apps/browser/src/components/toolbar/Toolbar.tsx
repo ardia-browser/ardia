@@ -19,7 +19,7 @@ import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { toggleBookmarkOfTab } from "../../state/bookmarks/actions";
 import { useBookmarksShown } from "../../state/bookmarks/hooks";
 import { copyPageUrl } from "../../state/site/selection";
-import { openSplitPane, pressClosePane, showSplitMenu } from "../../state/splits/actions";
+import { openSplitPane, pressClosePane } from "../../state/splits/actions";
 import { splitViewAvailable } from "../../state/splits/splits";
 import { useEasedColor, type ToolbarPalette } from "../ui/toolbarColors";
 import { useSitePalette } from "./useSitePalette";
@@ -49,6 +49,7 @@ import { DeveloperToolsButtons } from "./DeveloperToolsButtons";
 import { TabSwipeArea } from "../window/TabSwipe";
 import { useDeveloperMode } from "../../state/site/developerMode";
 import { PageBarFieldButtons, usePageBarOf } from "../plugins/PageBarScope";
+import { PaneSplitButton } from "../split/PaneSplitButton";
 
 type ToolbarTab = Pick<Tab, "id" | "url" | "title" | "windowId" | "zoom">;
 const toolbarTab = (t: Tab | undefined): ToolbarTab | undefined =>
@@ -115,7 +116,6 @@ export const Toolbar = memo(function Toolbar({
     if (!focused) activate(tabId);
   });
   const toggleTabs = useCallback(() => toggleSidebar(windowId), [windowId]);
-  const splitMenu = useCallback(() => showSplitMenu(tabId), [tabId]);
   const closeThisPane = useCallback(() => pressClosePane(tabId), [tabId]);
   const at = useMemo(() => toolbarButtonPlacements(geometry, row), [geometry, row]);
   const trailing = useMemo(
@@ -156,7 +156,7 @@ export const Toolbar = memo(function Toolbar({
         </View>
         {inSplit && (
           <View style={{ position: "absolute", top: at.top, right: trailing.splitRight + geometry.trailing, flexDirection: "row" }}>
-            <Button variant="icon" toolbar palette={palette} icon="rectangle.split.2x1" look="row" onPress={splitMenu} tooltip="Split View" />
+            <PaneSplitButton tabId={tabId} palette={palette} />
             <Button variant="icon" toolbar palette={palette} icon="xmark" look="row" weight="medium" onPress={closeThisPane} tooltip="Close Pane" />
           </View>
         )}

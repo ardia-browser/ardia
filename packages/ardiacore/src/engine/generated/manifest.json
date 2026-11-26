@@ -948,11 +948,6 @@
           "desktop": "custom",
           "windows": "absent"
         },
-        "ctrlTabMru": {
-          "mac": "custom",
-          "desktop": "absent",
-          "windows": "absent"
-        },
         "release": {
           "mac": "custom",
           "desktop": "custom",

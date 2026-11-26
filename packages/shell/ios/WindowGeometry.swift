@@ -70,6 +70,27 @@ extension WindowManager {
     fullScreenChanged(Notification(name: on ? NSWindow.didEnterFullScreenNotification : NSWindow.didExitFullScreenNotification, object: window))
   }
 
+  func placeRelative(_ window: NSWindow, source: NSWindow, placement: String?) -> Bool {
+    guard let mode = placement.flatMap(NewWindowPlacement.init(rawValue:)),
+          let screen = source.screen ?? NSScreen.main,
+          let result = NewWindowPlacement.resolve(
+            mode: mode,
+            source: source.frame,
+            visible: screen.visibleFrame,
+            minSize: window.minSize,
+            sourceMinSize: source.minSize,
+            sourceFixed: source.styleMask.contains(.fullScreen) || source.isMiniaturized
+          )
+    else { return false }
+    if let sourceFrame = result.sourceFrame {
+      source.setFrame(source.constrainFrameRect(sourceFrame, to: screen), display: true)
+      relayoutRoot(source)
+      reportFrame(source)
+    }
+    window.setFrame(window.constrainFrameRect(result.windowFrame, to: screen), display: false)
+    return true
+  }
+
   private func marked(_ id: String, _ key: String, _ value: String) -> [String: Any]? {
     guard var answer = geometry(id: id) else { return nil }
     answer[key] = value

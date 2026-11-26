@@ -32,7 +32,7 @@ import { startWindowCloseGuard } from "../windows/windowClose";
 import { openLastWindowOrNew } from "../windows/lastWindow";
 import { noteDockReopen } from "../telemetry/usage";
 import { noteSparkleUpdate } from "../telemetry/updateCounts";
-import { noteWindowReopenedMaximized } from "../telemetry/windowPlacementCounts";
+import { noteNewWindowPlaced, noteWindowReopenedMaximized } from "../telemetry/windowPlacementCounts";
 import { noteLittleArdiaAppHandoff, noteLittleArdiaLinkKeptBehind, noteLittleArdiaReturnsDropped } from "../telemetry/littleArdiaEscapes";
 import { notePageFocusReturnRequestAfterMenu } from "../telemetry/pageFocusReturns";
 import { startExtensionsBridge } from "../extensions/bridge";
@@ -51,6 +51,7 @@ const QUIT_SAVES_WAIT_MS = 3_000;
 const shellWindowPort: WindowPort = {
   open(id, options, lightsCenter) {
     if (options.maximized) noteWindowReopenedMaximized();
+    if (options.placement === "beside" || options.placement === "equal") noteNewWindowPlaced(options.placement);
     void setTrafficLightsCenter(id, lightsCenter);
     void openWindow(id, options);
   },

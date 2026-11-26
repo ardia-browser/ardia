@@ -4,7 +4,7 @@ import MachO
 import ExpoModulesCore
 
 public class AppModule: Module, AppNative {
-  static var apiVersion: Int { 99 }
+  static var apiVersion: Int { 100 }
 
   static func interfaceScale() -> Double { Double(InterfaceScale.scale) }
 

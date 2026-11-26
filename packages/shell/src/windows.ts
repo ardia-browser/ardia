@@ -24,6 +24,8 @@ export type WindowEvent =
   | { type: "sidebarEdge"; id: string; over: boolean; point: [number, number]; screenEdge?: "crossed" | "returned" }
   | { type: "closeRequest"; id: string };
 
+export type NewWindowPlacement = "cascade" | "beside" | "equal";
+
 export type OpenWindowOptions = {
   frame?: [number, number, number, number] | null;
   display?: string;
@@ -41,6 +43,7 @@ export type OpenWindowOptions = {
   returnTo?: string;
   animated?: boolean;
   maximized?: boolean;
+  placement?: NewWindowPlacement;
 };
 
 export type WindowGeometry = { frame: Rect4; zoomed: boolean; fullScreen: boolean; pageFullScreen?: boolean; miniaturized: boolean; visible: boolean; display: string | null; refused?: "offscreen" | "invalid"; transition?: "busy" | "timeout" };

@@ -5,6 +5,8 @@ import { nativeConsent } from "./nativeConsent";
 
 let centeredResizes = 0;
 let reopenedMaximized = 0;
+let newWindowBeside = 0;
+let newWindowEqual = 0;
 let titlesRead = 0;
 let closePinsKept = 0;
 let closePinIdsRenewed = 0;
@@ -44,6 +46,11 @@ onAppEvent((e) => {
 });
 
 export const noteWindowReopenedMaximized = () => void (isSharing() && reopenedMaximized++);
+export const noteNewWindowPlaced = (placement: "beside" | "equal") => {
+  if (!isSharing()) return;
+  if (placement === "beside") newWindowBeside++;
+  else newWindowEqual++;
+};
 export function noteWindowClosePinsKept(n: number, renewed: number) {
   closePinsKept += n;
   closePinIdsRenewed += renewed;
@@ -62,10 +69,12 @@ export function noteWindowOpenedFloating(little: boolean, consent: ConsentToken 
 }
 
 export function takeWindowPlacementCounts() {
-  const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_drags_native: nativeDrags, window_drag_takeovers: dragTakeovers, window_close_pins_kept: closePinsKept, window_close_pin_ids_renewed: closePinIdsRenewed, little_ardia_opened_floating: littleOpenedFloating, utility_windows_opened_floating: utilityOpenedFloating, ...linuxCounts };
+  const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, new_window_placed_beside: newWindowBeside, new_window_placed_equal: newWindowEqual, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_drags_native: nativeDrags, window_drag_takeovers: dragTakeovers, window_close_pins_kept: closePinsKept, window_close_pin_ids_renewed: closePinIdsRenewed, little_ardia_opened_floating: littleOpenedFloating, utility_windows_opened_floating: utilityOpenedFloating, ...linuxCounts };
   linuxCounts = { ...NO_LINUX_COUNTS };
   centeredResizes = 0;
   reopenedMaximized = 0;
+  newWindowBeside = 0;
+  newWindowEqual = 0;
   titlesRead = 0;
   dragLoops = 0;
   nativeDrags = 0;

@@ -31,6 +31,12 @@ export const generalRows = {
           description: `What you see the next time you open it. ${PLATFORM_FEATURES.menuBar ? "Closed windows stay in History › Recently Closed." : `${keyText("⇧⌘T")} reopens closed windows too.`}`,
           keywords: ["restore", "session", "reopen", "preserve tabs", "start fresh", "windows and tabs"],
         },
+        newWindowPlacement: {
+          title: "New windows open",
+          description: "Where a new window appears when one is already open.",
+          keywords: ["new window", "cmd n", "overlap", "overlapping", "cascade", "beside", "side by side", "equal width", "equal length", "tile", "ultrawide", "window placement", "other side"],
+          shown: () => PLATFORM_FEATURES.windowGeometry,
+        },
         askBefore: {
           title: "Ask before",
           description: "Ardia asks before doing any of these.",

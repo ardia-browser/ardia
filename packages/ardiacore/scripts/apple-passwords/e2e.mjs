@@ -9,13 +9,15 @@
 //   E4  a Release build ignores the fake-helper override: the fake never starts (needs --release)
 //
 // Each check launches its own instance (scripts/lib/instance.mjs) with ARDIA_TEST applePasswordsManifest at the fake's
-// manifest, drives the same Settings state the Password manager menu and Pairing sheet use (ac.applePasswords), and
+// manifest and Chromium resolving the fixture sites (sites.mjs: https example.test, accounts.example.test and other.test,
+// http plain.test), drives the same Settings state the Password manager menu and Pairing sheet use (ac.applePasswords), and
 // prints one PASS or FAIL line; details go to <scratch dir>/e2e.log. METRO_PORT picks the Metro serving this tree.
 // Exit code 1 if any check failed.
 import fs from "node:fs";
 import path from "node:path";
 import { launch, reporter, sleep } from "../../../../scripts/lib/instance.mjs";
 import { fakeHelper } from "./fake.mjs";
+import { fixtureSites } from "./sites.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -42,12 +44,13 @@ fs.mkdirSync(SCRATCH, { recursive: true });
 const report = reporter(path.join(SCRATCH, "e2e.log"), { name: "apple passwords e2e" });
 const note = report.log;
 
+const sites = await fixtureSites(path.join(SCRATCH, "tls"));
 const READY = { timeout: 90_000, test: "return ac.store.getState().windowOrder.length > 0" };
 let app = null;
 
 async function start(name, { manifest, binary = APP, files = {} }) {
   const data = path.join(SCRATCH, name, "data");
-  app = await launch(binary, { data, fresh: true, onboarded: true, test: { applePasswordsManifest: manifest }, files, ready: READY });
+  app = await launch(binary, { data, fresh: true, onboarded: true, test: { applePasswordsManifest: manifest }, switches: sites.switches, files, ready: READY });
   note("launched", name, "pid", app.pid, "log", app.log);
   return app;
 }
@@ -137,4 +140,5 @@ for (const name of names) {
   await report.check(name, CHECKS[name], { onFail: async () => app && note("app log tail:", app.output().slice(-3000)) });
   await stop();
 }
+await sites.close();
 process.exit(report.summary() ? 0 : 1);

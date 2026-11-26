@@ -141,3 +141,23 @@ test("S4: a wrong code shows an error, allows a retry and leaves the choice unch
   await flush();
   assert.equal(storedChoice(profileId), "apple");
 });
+
+test("S5: Cancel leaves the choice unchanged, even when the right code's answer comes after it", async () => {
+  const profileId = await settingsOn("notConnected");
+  const before = storedChoice(profileId);
+  managerMenu(profileId).onChange("apple");
+  await flush();
+  let release;
+  native.applePasswords.hold = new Promise((r) => (release = r));
+  const sheet = pairingSheet();
+  sheet.type(native.applePasswords.code);
+  sheet.press("Connect");
+  await flush();
+  sheet.press("Cancel");
+  release();
+  await flush();
+  await flush();
+  assert.equal(useSettingsSheet.getState().sheet, null);
+  assert.equal(storedChoice(profileId), before);
+  assert.equal(native.applePasswords.calls.at(-1), "cancelPairing", "the Passwords app is told to put its code away");
+});

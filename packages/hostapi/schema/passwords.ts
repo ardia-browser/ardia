@@ -133,6 +133,13 @@ export const passwords = defineDomain({
       mac: "custom",
       windows: "absent",
     },
+    applePasswordsCancelPairing: {
+      args: "{}",
+      result: "null",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
   },
   events: {},
 });

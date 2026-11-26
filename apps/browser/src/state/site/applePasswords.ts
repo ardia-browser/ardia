@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
-import { applePasswordsStatus, finishApplePasswordsPairing, pairApplePasswords, type ApplePasswordsPairing, type ApplePasswordsState } from "../../platform/applePasswords";
+import { applePasswordsStatus, cancelApplePasswordsPairing, finishApplePasswordsPairing, pairApplePasswords, type ApplePasswordsPairing, type ApplePasswordsState } from "../../platform/applePasswords";
 import { choosePasswordManager } from "./passwordManager";
 
 export type PairingStep = "starting" | "code" | "checking" | "failed";
@@ -64,4 +64,12 @@ export async function submitApplePasswordsCode(code: string) {
   if (!current(attempt)) return;
   if (outcome === "paired") return paired(attempt);
   failed(attempt, outcome === "awaitingCode" ? "failed" : outcome);
+}
+
+export function cancelPairing() {
+  if (!useApplePasswords.getState().pairing) return;
+  setPairing(null);
+  void cancelApplePasswordsPairing()
+    .catch(() => null)
+    .then(loadApplePasswords);
 }

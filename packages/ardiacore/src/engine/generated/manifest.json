@@ -899,6 +899,11 @@
           "mac": "custom",
           "desktop": "absent",
           "windows": "absent"
+        },
+        "applePasswordsCancelPairing": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
         }
       },
       "events": {}

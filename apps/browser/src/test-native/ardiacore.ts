@@ -172,12 +172,16 @@ export const applePasswords = {
   state: "notEntitled" as CallResult<"passwords.applePasswordsStatus">["state"],
   code: "246810",
   calls: [] as string[],
+  hold: null as Promise<void> | null,
 };
 const applePasswordsFakes = {
   applePasswordsStatus: () => ({ state: applePasswords.state }),
   applePasswordsPair: () => (applePasswords.calls.push("pair"), { outcome: "awaitingCode" as const }),
-  applePasswordsPairCode: ({ code }: { code: string }) => {
+  applePasswordsCancelPairing: () => (applePasswords.calls.push("cancelPairing"), null),
+  applePasswordsPairCode: async ({ code }: { code: string }) => {
     applePasswords.calls.push("pairCode");
+    await applePasswords.hold;
+    applePasswords.hold = null;
     if (code !== applePasswords.code) return { outcome: "wrongCode" as const };
     applePasswords.state = "connected";
     return { outcome: "paired" as const };

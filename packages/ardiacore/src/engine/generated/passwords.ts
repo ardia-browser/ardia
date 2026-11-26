@@ -20,6 +20,7 @@ export type PasswordsCalls = {
   "passwords.applePasswordsStatus": [{}, { state: ApplePasswordsState }];
   "passwords.applePasswordsPair": [{}, { outcome: ApplePasswordsPairing }];
   "passwords.applePasswordsPairCode": [{ code: string }, { outcome: ApplePasswordsPairing }];
+  "passwords.applePasswordsCancelPairing": [{}, null];
 };
 
 export type PasswordsEvents = {};

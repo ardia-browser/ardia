@@ -8,6 +8,10 @@ The words Ardia uses for its own concepts. One term per concept; the ones under 
 The logins, passwords and verification codes the user keeps in Apple's Passwords app, synced across their Apple devices.
 _Avoid_: iCloud Keychain, Keychain, iCloud Passwords
 
+**iCloud Passwords extension**:
+Apple's browser extension that reaches Apple Passwords from Chromium tabs. It is separate from Ardia's own Apple Passwords support.
+_Avoid_: Apple Passwords extension
+
 **Password manager**:
 The one place a profile fills logins from and saves new logins to: Ardia, Apple Passwords, a password-manager plugin, or None.
 _Avoid_: password source, provider, vault

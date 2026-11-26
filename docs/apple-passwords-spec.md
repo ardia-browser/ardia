@@ -1,6 +1,6 @@
 # Apple Passwords and Me card autofill
 
-Status: proposed. Terms follow `docs/GLOSSARY.md`; the route to Apple Passwords follows `docs/adr/0001-apple-passwords-through-apples-helper.md`.
+Status: proposed. Terms follow `docs/GLOSSARY.md`; the route to Apple Passwords follows `docs/adr/0001-apple-passwords-through-apples-helper.md`. Built on main on its own, not on another contributor's open password work; `docs/research/luke-apple-passwords.md` records what that work is and why.
 
 ## Problem Statement
 
@@ -105,6 +105,13 @@ Separately, a profile can turn on "Use my Me card from Contacts". The Me card th
 61. As a user, I want Me card entries to fill in both Chromium and WebKit tabs, so that the engine doesn't matter.
 62. As a Linux or Windows user, I want no Me card switch, so that Settings never offers something that can't work.
 
+### Apple's iCloud Passwords extension
+
+65. As a user who has the iCloud Passwords extension and picks Apple Passwords, I want Ardia to turn the extension off in that profile and tell me, so that one sign-in field never shows two lists.
+66. As that user, I want a "Turn it back on" button next to that message, so that I stay in control of my extensions.
+67. As a user who switches away from Apple Passwords, I want the extension turned back on if Ardia turned it off, and left alone if I turned it off myself, so that switching never leaves my extensions changed.
+68. As a user, I want Ardia never to uninstall the extension, so that nothing I installed disappears.
+
 ### Usage counts
 
 63. As the maintainer, I want counts of Pairings, fills, saves, Verification codes filled, Me card fills, and each kind of failure, sent only when the user shares usage, so that I can see the feature working and catch it breaking.
@@ -125,6 +132,13 @@ Separately, a profile can turn on "Use my Me card from Contacts". The Me card th
 - **Me card.** A native Me card reader requests Contacts access only from the Settings switch or the onboarding offer, reads the unified Me contact, and writes one Chrome address entry per postal address (or one with no address) into the profile's address store through the existing address calls, tagged as from Contacts. It refreshes on the Contacts change notification and removes its entries when switched off. Ardia's address editor shows tagged entries read-only with "Edit in Contacts". The app gains the Contacts entitlement and a Contacts usage description.
 - **Onboarding.** One step offers Apple Passwords (entitled Macs only) and the Me card, each declinable once.
 - **Platforms.** Everything here is Mac only and hidden through the platform feature table on Linux and Windows; shared UI copy needs no Linux or Windows wording because it never shows there.
+- **Built on its own.** Everything here builds on main, not on another contributor's closed Apple Passwords PR or open password-manager stack. Where both touch the same engine seam (hiding Chrome's own password and address lists), this work uses that stack's names for it, so the two can meet later without a rename.
+- **Chrome's password manager on an Apple Passwords profile.** Today every choice except Ardia turns Chrome's offer to save off. For `apple` it stays on so Chrome keeps detecting sign-ins and holding the submitted password, its own list and generation popup are hidden, and Ardia's save prompt, on Save or Update, hands the pending login to the Apple Passwords client natively instead of committing it to Chrome's store. JS never sees the password, so this hand-off is native (an engine change).
+- **WebKit gate.** The WebKit password gate gains an Apple Passwords verdict, so an Apple Passwords profile never fills from or saves to Chrome's store in WebKit tabs.
+- **Entitlement read and the fake helper.** The entitlement check reuses the app's existing read used for passkeys. Debug builds never carry the entitlement, so the fake-helper override, honored only in Debug builds, also stands in for the entitlement check; Release builds ignore it.
+- **Me card entries.** Chrome's address entries carry no tag, so a sidecar record of which entry ids came from Contacts marks them; no engine change.
+- **iCloud Passwords extension.** Picking Apple Passwords in a profile where the iCloud Passwords extension is installed and on turns it off (never uninstalls it), records that Ardia did so, and shows "Ardia now fills from Apple Passwords itself. You can remove the iCloud Passwords extension." with a "Turn it back on" button. Switching away from Apple Passwords turns it back on only if Ardia turned it off.
+- **Open Passwords app.** The footer row opens Apple's Passwords app.
 - **Telemetry.** Counters added to the existing password-manager and WebKit autofill count events: pairing started, paired, pairing failed; login list shown, filled; saved, save failed; strong password used; code filled; Me card on, Me card fill; failure kind enum. No sites, names or text.
 
 ## Testing Decisions
@@ -152,7 +166,8 @@ Each test is one red → green cycle, written and run one at a time in the order
 | E1 | 1 | In a hidden instance pointed at the fake helper, Pairing with the fixture code reads Connected | the client's framing, SRP and sealing against a peer that checks them | how Apple's helper differs from Yab's reading of it |
 | E2 | 1 | A fake helper that is killed at launch shows "Apple Passwords isn't available" | the refused path | — |
 | E3 | 1 | With no helper manifest, Settings shows how to install it | the missing path | — |
-| E4 | 1 | A Release build ignores the fake-helper override (the fake writes a marker file when started; none appears) | a shipped way to swap Apple's helper | — |
+| E4 | 1 | A Release build ignores the fake-helper override (the fake writes a marker file when started; none appears) | a shipped way to swap Apple's helper | a build signed differently from the release |
+| E32 | 1 | Picking Apple Passwords in a profile with the iCloud Passwords extension on turns it off and shows the message; "Turn it back on" turns it on; switching back to Ardia turns it on only if Ardia turned it off | two lists on one field; extensions left changed | — |
 
 **Slice 2: the Login list and fill**
 
@@ -223,11 +238,13 @@ Each test is one red → green cycle, written and run one at a time in the order
 - Passkeys, which Ardia already supports through Apple's public passkey API.
 - Codes delivered by text message or email.
 - Editing or deleting Apple Passwords logins from inside Ardia.
-- Replacing Apple's iCloud Passwords extension; it keeps working for whoever installed it.
+- Uninstalling Apple's iCloud Passwords extension; Ardia only turns it off in profiles that pick Apple Passwords.
+- Building on another contributor's password-manager stack, or making Apple Passwords a source inside another password manager.
 
 ## Further Notes
 
 - The helper's protocol is not public; a macOS update can change it. The failure rows and counts exist so a break is visible to users and to the maintainer at once.
-- Needs the owner's call before merging: trusting the author for a feature, base browser versus a first-party plugin on the existing Password manager extension point, adding the Contacts entitlement to the signing setup, and a signed build for the hand check.
-- An open stack of password-manager PRs from another contributor adds its own fill menu; its fill-menu PRs are read before the Login list work starts, and the list is built so both can use it.
+- Decided without further owner questions: the feature lives in the base browser, not a plugin; the app gains the Contacts entitlement; Apple Passwords is its own Password manager choice.
+- Only a build signed with Apple's entitlement can reach the real helper, so the one hand check needs such a build.
+- Another contributor's open password-manager stack adds a Chromium-only fill menu and an engine hook that hides Chrome's lists; this work shares that hook's names but does not depend on the stack.
 - Yab's open-source Apple Passwords client is the protocol reference; its pairing, list, fill, save and code flows map one to one onto this spec.

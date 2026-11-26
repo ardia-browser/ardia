@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
-const { barSplitsFrom, dispositionFor, openFromBar, switchFromBar } = await import("./openFromBar.ts");
+const { barSplitSide, barSplitsFrom, dispositionFor, openFromBar, switchFromBar } = await import("./openFromBar.ts");
 const { setOpeningGate } = await import("../tabs/openingGate.ts");
 const { splitOf, splitTabIds } = await import("../splits/splits.ts");
+const { setWindowRootSize, windowRootSize } = await import("../windows/rootSize.ts");
 await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
@@ -17,13 +18,61 @@ test("⌥↩ is split, ⌘↩ is a new tab, ⇧↩ is a new window", () => {
   assert.equal(dispositionFor({}), "current");
 });
 
-test("openFromBar with split puts the URL in a right pane beside the tab", () => {
+test("barSplitSide prefers the split orientation, then the window shape, defaulting to right", () => {
+  const wide = { width: 1400, height: 900 };
+  const tall = { width: 800, height: 1200 };
+  assert.equal(barSplitSide(undefined, wide), "right");
+  assert.equal(barSplitSide(undefined, tall), "bottom");
+  assert.equal(barSplitSide(undefined, { width: 900, height: 900 }), "right");
+  assert.equal(barSplitSide(undefined, undefined), "right");
+  for (const size of [wide, tall, undefined]) {
+    assert.equal(barSplitSide({ orientation: "horizontal" }, size), "right");
+    assert.equal(barSplitSide({ orientation: "vertical" }, size), "bottom");
+  }
+});
+
+for (const [shape, width, height, orientation] of [
+  ["wide", 1400, 900, "horizontal"],
+  ["tall", 800, 1200, "vertical"],
+]) {
+  test(`openFromBar creates a ${orientation} split in a ${shape} window`, () => {
+    S().hydrate({});
+    const w = S().createWindow({ url: "https://a.com/" });
+    const a = S().windows[w].tabIds[0];
+    setWindowRootSize(w, width, height);
+    openFromBar("https://b.com/", a, "split");
+    const split = splitOf(S(), a);
+    const b = S().windows[w].tabIds.find((id) => id !== a);
+    assert.equal(split.orientation, orientation);
+    assert.deepEqual(split.slots.map((slot) => slot.tabId), [a, b]);
+    assert.equal(S().tabs[b].url, "https://b.com/");
+  });
+
+  test(`openFromBar preserves an existing ${orientation} split in a ${shape === "wide" ? "tall" : "wide"} window`, () => {
+    S().hydrate({});
+    const w = S().createWindow({ url: "https://a.com/" });
+    const a = S().windows[w].tabIds[0];
+    const b = S().newTab(w, { url: "https://b.com/" });
+    S().createSplit([a, b], orientation);
+    setWindowRootSize(w, height, width);
+    openFromBar("https://c.com/", b, "split");
+    const split = splitOf(S(), a);
+    const c = S().windows[w].tabIds.find((id) => id !== a && id !== b);
+    assert.equal(split.orientation, orientation);
+    assert.deepEqual(split.slots.map((slot) => slot.tabId), [a, b, c]);
+    assert.equal(S().tabs[c].url, "https://c.com/");
+  });
+}
+
+test("openFromBar with unknown window size puts the URL in a right pane beside the tab", () => {
   S().hydrate({});
   const w = S().createWindow({ url: "https://a.com/" });
   const a = S().windows[w].tabIds[0];
+  assert.equal(windowRootSize(S(), w), undefined);
   openFromBar("https://b.com/", a, "split");
   const split = splitOf(S(), a);
   assert.ok(split);
+  assert.equal(split.orientation, "horizontal");
   assert.deepEqual(
     splitTabIds(split).map((id) => S().tabs[id].url),
     ["https://a.com/", "https://b.com/"],

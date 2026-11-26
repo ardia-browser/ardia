@@ -160,11 +160,13 @@ test("two upgraded Macs that inferred stepping from an older Mac both keep it wh
   for (const device of [a, b, c]) assert.equal(device.with(() => ctrlTabKeys()), "switcher", device.id);
 });
 
-test("shortcuts chosen here, a legacy stepping record and an idle sync leave a joining Mac stepping too", async () => {
+test("shortcuts chosen here, a legacy stepping record and an idle sync leave a joining Mac stepping too", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
   const folder = new Folder();
   const b = new Device("B", folder);
   b.with(() => S().updateSettings({ shortcuts: { reload: ["r", "command", "shift"] } }));
   await b.sync();
+  t.mock.timers.tick(1);
   const legacy = new Peer("old", folder, { shortcuts: STEP });
   await legacy.sync();
   await b.sync();

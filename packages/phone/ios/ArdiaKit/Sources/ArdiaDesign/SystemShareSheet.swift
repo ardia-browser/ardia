@@ -185,8 +185,7 @@
             .foregroundStyle(BrowsePalette.foregroundSecondary)
             .frame(width: 30, height: 30)
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
+        .buttonStyle(LiquidGlassButtonStyle(outline: .circle))
         .accessibilityLabel("Close")
       }
     }

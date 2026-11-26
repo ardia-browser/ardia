@@ -103,7 +103,7 @@ struct WebKitPageEngine: PageEngine {
 
   func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping (String?) -> Void) {
     guard Self.hasData(profile) else { return done(nil) }
-    hub.clearBrowsingData(profile: profile, types: types, since: since) { done(nil) }
+    hub.clearBrowsingData(profile: profile, types: types, since: since, completion: done)
   }
 
   func deleteProfileData(profile: String, done: @escaping ([String]) -> Void) {

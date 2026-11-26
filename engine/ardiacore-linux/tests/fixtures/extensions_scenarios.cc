@@ -80,6 +80,12 @@ void Requests() {
   assert(!Configuration(Dict().Set("id", kId).Set("options", Dict().Set("pinned", "true"))));
   assert(!Configuration(Dict().Set("id", kId).Set("options", Dict().Set("siteAccess", "everywhere"))));
   assert(!Configuration(Dict().Set("id", "extension").Set("options", Dict().Set("pinned", base::Value(true)))));
+  auto granted = Configuration(Dict().Set("id", kId).Set("options", Dict().Set("siteAccess", "specificSites").Set("grantSite", "https://example.com/*")));
+  assert(granted && *granted->FindString("grantSite") == "https://example.com/*" && *granted->FindString("siteAccess") == "specificSites");
+  assert(Configuration(Dict().Set("id", kId).Set("options", Dict().Set("revokeSite", "https://example.com/*"))));
+  assert(!Configuration(Dict().Set("id", kId).Set("options", Dict().Set("grantSite", base::Value(1)))));
+  assert(!Configuration(Dict().Set("id", kId).Set("options", Dict().Set("revokeSite", ""))));
+  assert(!Configuration(Dict().Set("id", kId).Set("options", Dict().Set("grantSite", std::string(4096, 'a')))));
 }
 
 void Manifests() {

@@ -54,6 +54,11 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)beginPressLoop:(NSString *)name NS_SWIFT_NAME(beginPressLoop(_:));
 + (void)endPressLoop;
 + (void)notePointer:(NSEvent *)event swallowedBy:(NSString *)name NS_SWIFT_NAME(notePointer(_:swallowedBy:));
++ (void)reportHoverLossAtQuit;
++ (BOOL)hoverLossReportedAtQuitIsOpen;
++ (NSInteger)hoverLossReportedAtQuitSeconds;
++ (void)markHoverLossCommittedAtQuit;
++ (void)cancelHoverLossAtQuit;
 + (NSString *)baseProfileOf:(NSString *)profile NS_SWIFT_NAME(baseProfile(of:));
 + (void)resolvePermission:(NSString *)requestId result:(NSString *)result remember:(BOOL)remember
     NS_SWIFT_NAME(resolvePermission(_:result:remember:));
@@ -84,6 +89,8 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable NSDictionary<NSString *, id> *)senderOfOpenedURL:(NSString *)url NS_SWIFT_NAME(senderOfOpenedURL(_:));
 @property(class, readonly) BOOL holdsIncomingLinks;
 @property(class, readonly) NSDictionary<NSString *, NSNumber *> *launchMarks;
+@property(class, readonly) NSDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *> *launchUsage;
+@property(class, readonly) NSDictionary<NSString *, NSNumber *> *nativeMessagingHosts;
 @property(class, readonly, nullable) NSNumber *launchedHidden;
 @property(class, readonly, nullable) NSString *launchSource;
 + (void)markMainStarted;
@@ -91,6 +98,20 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSString *)fileStampOfDescriptor:(int)fd NS_SWIFT_NAME(fileStamp(ofDescriptor:));
 @property(class, readonly) NSString *missingFileStamp;
 
+@end
+
+@interface ArdiaHost (FileArms)
++ (void)armFiles:(NSDictionary<NSString *, id> *)spec completion:(void (^)(NSDictionary<NSString *, id> *result))completion NS_SWIFT_NAME(armFiles(_:completion:));
++ (NSInteger)disarmFiles:(nullable NSArray<NSString *> *)ids purge:(BOOL)purge NS_SWIFT_NAME(disarmFiles(_:purge:));
+@property(class, readonly) NSArray<NSDictionary<NSString *, id> *> *fileArms;
+@end
+
+@interface ArdiaHost (FileArmDownloads)
++ (NSDictionary<NSString *, id> *)claimArmedDownload:(NSString *)armId download:(NSString *)downloadId path:(NSString *)path
+    NS_SWIFT_NAME(claimArmedDownload(_:download:path:));
++ (void)placeArmedDownload:(NSString *)armId download:(NSString *)downloadId path:(NSString *)path completion:(void (^)(NSDictionary<NSString *, id> *result))completion
+    NS_SWIFT_NAME(placeArmedDownload(_:download:path:completion:));
++ (BOOL)releaseArmedDownload:(NSString *)armId download:(NSString *)downloadId state:(NSString *)state NS_SWIFT_NAME(releaseArmedDownload(_:download:state:));
 @end
 
 NS_ASSUME_NONNULL_END

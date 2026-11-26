@@ -9,6 +9,7 @@ import { useTheme } from "./theme";
 import { faviconInk, faviconLayout, smoothCorners } from "./tokens";
 
 const failedIcons = new Set<string>();
+const settledAnswers = new Map<string, Chosen>();
 const looks = new Map<string, Promise<FaviconLookResult>>();
 const readsLooks = requireOptionalNativeModule("ArdiaPhoneFavicons") !== null;
 
@@ -34,18 +35,22 @@ export const Favicon = memo(function Favicon({ iconUrl, pageUrl, size }: Props) 
   const [answer, setAnswer] = useState<{ asked: string; chosen: Chosen }>({ asked: "", chosen: null });
   useEffect(() => {
     if (!readsLooks) {
-      setAnswer({ asked, chosen: candidates[0] ? { url: candidates[0], backing: null } : "none" });
+      const chosen: Chosen = candidates[0] ? { url: candidates[0], backing: null } : "none";
+      settledAnswers.set(asked, chosen);
+      setAnswer({ asked, chosen });
       return;
     }
     let live = true;
     void firstUsable(candidates, (url) => lookOf(url, dark)).then((found) => {
-      if (live) setAnswer({ asked, chosen: found ?? "none" });
+      const chosen: Chosen = found ?? "none";
+      settledAnswers.set(asked, chosen);
+      if (live) setAnswer({ asked, chosen });
     });
     return () => {
       live = false;
     };
   }, [asked]);
-  const chosen = answer.asked === asked ? answer.chosen : null;
+  const chosen = answer.asked === asked ? answer.chosen : (settledAnswers.get(asked) ?? null);
   const corner = size * faviconLayout.cornerShare;
   if (!chosen || chosen === "none") return <MonogramTile pageUrl={pageUrl} size={size} corner={corner} />;
   const plate = chosen.backing ? (chosen.backing === "light" ? faviconInk.lightPlate : faviconInk.darkPlate) : null;

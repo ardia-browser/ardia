@@ -20,7 +20,7 @@ import { browseForMeOffered, refreshChatGPTConnected, useChatGPTConnected } from
 import { pageSummariesSwitchable, refreshPageSummariesEnabled, setPageSummariesEnabled, usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 import { PAGE_SUMMARY_COPY } from "../../state/pageSummary/copy";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { bouncesOnlyWhenScrollable, contentMargins, modifierList, settingsChrome, settingsLayout, settingsSwitchStyle } from "../ui";
+import { neverBounces, contentMargins, modifierList, settingsChrome, settingsLayout, settingsSwitchStyle } from "../ui";
 import { ExpoRowText } from "./ExpoRowLabel";
 import { ExpoChoiceRow } from "./ExpoSettingsParts";
 
@@ -35,7 +35,7 @@ const link = (route: SettingsRoute) => settingsRouteKey(route);
 function PaneForm({ title, children }: { title: string; children: ReactNode }) {
   useEffect(() => countUsage("settings_panes_opened"), []);
   return (
-    <Form modifiers={modifierList(navigationTitle(title), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), bouncesOnlyWhenScrollable(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+    <Form modifiers={modifierList(navigationTitle(title), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       {children}
     </Form>
   );

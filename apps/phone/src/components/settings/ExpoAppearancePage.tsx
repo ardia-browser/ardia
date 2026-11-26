@@ -13,7 +13,7 @@ import { settingsRouteKey } from "../../state/settings/nav";
 import { matchMyMac } from "../../state/sync/actions";
 import { useSyncEnabled } from "../../state/sync/hooks";
 import { syncOffered } from "../../state/sync/offer";
-import { ColorSwatch, contentMargins, controlSize, modifierList, PROFILE_COLORS, settingsChrome, settingsLayout, settingsSwitchStyle, settingsTint, settingsUIAvailable, themeEditorLayout, useProfileLook, type ProfileColor } from "../ui";
+import { ColorSwatch, contentMargins, controlSize, modifierList, PROFILE_COLORS, neverBounces, settingsChrome, settingsLayout, settingsSwitchStyle, settingsTint, settingsUIAvailable, themeEditorLayout, useProfileLook, type ProfileColor } from "../ui";
 import { ExpoChoiceRow } from "./ExpoSettingsParts";
 
 const COLORS = Object.keys(PROFILE_COLORS) as ProfileColor[];
@@ -33,7 +33,7 @@ export function ExpoAppearancePage() {
   const chosen = usePreferences((p) => p.colorChoice);
   const look = useProfileLook();
   return (
-    <Form modifiers={modifierList(navigationTitle("Appearance"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+    <Form modifiers={modifierList(navigationTitle("Appearance"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       <Section>
         <VStack alignment="leading" spacing={12} modifiers={[padding({ vertical: 4 })]}>
           <Text>{actionWords.color}</Text>

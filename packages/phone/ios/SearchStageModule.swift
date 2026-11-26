@@ -49,7 +49,6 @@ final class SearchStageView: ExpoView {
   private var contentIsLate = false
   private(set) var isStarted = false
   private var contentGaveUp = false
-  private var pendingAnchor: StageAnchor?
   private var startWaiters: [() -> Void] = []
   var fieldCenter = BrowseLayout.stageFieldCenter(fieldHeight: BrowseLayout.searchFieldHeight)
   var commandTop: CGFloat?
@@ -260,9 +259,8 @@ final class SearchStageView: ExpoView {
     stopAnticipating()
     dropMorph()
     endEmergence()
-    let anchor = resolveAnchor()
-    face = anchor.flatMap(renderFace(of:))
-    pendingAnchor = anchor
+    face = nil
+    if PhoneTestBuild.isOn { NSLog("PAGELAB time stage present %.0f", Date().timeIntervalSince1970 * 1000) }
     move(.immediate) { [self] in
       isShown = true
       isStarted = false
@@ -279,20 +277,20 @@ final class SearchStageView: ExpoView {
     contentIsLate = false
     contentGaveUp = false
     focusPending = focusNativeId != nil
+    focusField()
     startWaitingForContent()
     startIfLaidOut()
-    DispatchQueue.main.async { [weak self] in self?.startIfLaidOut() }
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.startIfLaidOut()
+      if self.isShown, !self.isClosing, self.face == nil { self.face = self.resolveAnchor().flatMap(self.renderFace(of:)) }
+    }
   }
 
   private func startIfLaidOut() {
     guard isShown, !isStarted, !isClosing, contentIsLaidOut || contentGaveUp, let panel else { return }
     isStarted = true
     holdReveals()
-    if let anchor = pendingAnchor, !keyboardUp, !isCommandBar, !reduceMotion {
-      revealsContents = false
-      emergence = StageEmergence(pill: convert(anchor.frame, from: nil), fieldCenter: fieldCenter, corners: corners, place: cardPlace, face: face?.makeView(), on: panel)
-    }
-    pendingAnchor = nil
     place()
     focusField()
     releaseStartWaiters()
@@ -305,7 +303,7 @@ final class SearchStageView: ExpoView {
         self.settleWithoutKeyboard()
       }
     }
-    rise = move(.timing(reduceMotion ? Motion.stageReduced : Motion.riseCurve)) { [self] in self.hasLanded = true }
+    rise = move(.immediate) { [self] in self.hasLanded = true }
   }
 
   private var keyboardGeometry: StageKeyboardGeometry? {

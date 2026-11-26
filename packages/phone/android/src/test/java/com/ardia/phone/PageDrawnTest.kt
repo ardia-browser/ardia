@@ -38,7 +38,12 @@ class PageDrawnTest {
 
     private val surface = Surface()
     private var drawn = 0
-    private val watch = PageDrawnWatch(surface) { drawn += 1 }
+    private var document = 1L
+    private val drawnDocuments = ArrayList<Long>()
+    private val watch = PageDrawnWatch(surface, document = { document }) { generation ->
+        drawn += 1
+        drawnDocuments += generation
+    }
 
     @Test
     fun aHiddenPageAsksTheWebViewForNothing() {
@@ -155,5 +160,22 @@ class PageDrawnTest {
         assertSame(web, PageDrawnWatch.webViewIn(web))
         assertNull(PageDrawnWatch.webViewIn(FrameLayout(activity)))
         assertNull(PageDrawnWatch.webViewIn(null))
+    }
+
+    @Test
+    fun aDrawOfADocumentThatWasReplacedMeanwhileIsNotReportedAndTheNewDocumentIsAskedFor() {
+        surface.shown = true
+        watch.frame()
+        document = 2L
+        surface.visualStates.single()()
+        assertEquals("asked again for the new document", 2, surface.visualStates.size)
+        assertTrue(surface.commits.isEmpty())
+        surface.visualStates[surface.visualStates.size - 1]()
+        document = 3L
+        surface.commits.single()()
+        assertEquals("a frame committed after another replacement isn't that document's either", 0, drawn)
+        surface.visualStates[surface.visualStates.size - 1]()
+        surface.commits[surface.commits.size - 1]()
+        assertEquals(listOf(3L), drawnDocuments)
     }
 }

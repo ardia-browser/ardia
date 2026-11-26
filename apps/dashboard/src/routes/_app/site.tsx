@@ -32,6 +32,7 @@ function SitePage() {
   const clicks = useSection("site.clicks");
   const friction = useSection("site.friction");
   const experiment = useSection("site.experiment");
+  const donateExperiment = useSection("site.donateExperiment");
   const vitals = useSection("site.vitals");
 
   return (
@@ -118,7 +119,12 @@ function SitePage() {
         </Panel>
         <Panel source="site" title="Experiment: download-band" description="Mac visitors exposed to each variant in the range, and how many clicked Download after exposure. Stop at 300+ per variant and 7+ days.">
           <Loaded query={experiment} skeleton={<TableSkeleton rows={2} columns={5} />}>
-            {(d) => <Experiment data={d} />}
+            {(d) => <Experiment data={d} secondary="Band clicks" />}
+          </Loaded>
+        </Panel>
+        <Panel source="site" title="Experiment: donate-floor" description="Visitors who reached the donate amounts, by the lowest amount shown ($10 or $5), and how many then clicked an amount. Money raised per variant is in Stripe, by client reference donate-floor_ten or donate-floor_five. Stop at 300+ per variant and 7+ days.">
+          <Loaded query={donateExperiment} skeleton={<TableSkeleton rows={2} columns={5} />}>
+            {(d) => <Experiment data={d} secondary="$5 or $10 clicks" />}
           </Loaded>
         </Panel>
       </div>
@@ -184,7 +190,7 @@ function ClicksTable({ rows }: { rows: Clicks["clicks"] }) {
   );
 }
 
-function Experiment({ data }: { data: SectionData<"site.experiment"> }) {
+function Experiment({ data, secondary }: { data: SectionData<"site.experiment">; secondary: string }) {
   const exposedMin = Math.min(...data.variants.map((v) => v.exposed), Number.POSITIVE_INFINITY);
   const ready = data.variants.length >= 2 && exposedMin >= 300;
   return (
@@ -199,7 +205,7 @@ function Experiment({ data }: { data: SectionData<"site.experiment"> }) {
           { key: "exposed", header: "Exposed", align: "right", sort: (r) => r.exposed, cell: (r) => formatExact(r.exposed) },
           { key: "clicked", header: "Clicked", align: "right", sort: (r) => r.clicked, cell: (r) => formatExact(r.clicked) },
           { key: "rate", header: "Rate", align: "right", sort: (r) => (r.exposed ? r.clicked / r.exposed : 0), cell: (r) => <span className="font-semibold">{formatPercent(r.exposed ? r.clicked / r.exposed : null)}</span> },
-          { key: "band", header: "Band clicks", align: "right", sort: (r) => r.bandClicks, cell: (r) => formatExact(r.bandClicks) },
+          { key: "secondary", header: secondary, align: "right", sort: (r) => r.secondary, cell: (r) => formatExact(r.secondary) },
         ]}
       />
       <p className="mt-3 text-xs text-muted-foreground">

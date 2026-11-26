@@ -6,17 +6,17 @@ import { updateSplit } from "../../state/splits/actions";
 import { useDragFallbackPane } from "../../state/splits/hooks";
 import type { SplitView } from "../../state/browser/types";
 import { evenPair, resize, type Divider, type Rect } from "../window/geometry";
-import { capsule, OverPage, space, Symbol, Text, Toast, withAlpha } from "../ui";
+import { capsule, Panel, space, Symbol, Text, Toast, usePresence } from "../ui";
 import { hideToast, useToasts } from "../../state/app/toasts";
 import { noteSplit } from "../../state/telemetry/usage";
 import { useTab, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { useCardFrame } from "../window/cardFrame";
 import type { Size } from "../ui/useSettled";
 import { overPeek } from "../../state/windows/dockMotion";
-import { zoneHit, zoneRect, type ZoneStage } from "./splitDrop";
-import { setDropTarget, setOnPage, setTargetResolver, useTabDrag } from "../../state/drag/tabDrag";
+import { DROP_SIDES, dropPreviewRect, PANE_SIDES, paneDropTarget } from "./splitDrop";
+import { setPageDrop, setTargetResolver, useTabDrag, type PaneDropSide } from "../../state/drag/tabDrag";
 import { splitViewAvailable } from "../../state/splits/splits";
-import { FOCUS_RING, SPLIT_MOTION, splitColors, TOAST_ACTION_MS, TOAST_MS, ZONE_ACCENT_ALPHA, ZONE_DASH_INSET, ZONE_SLIDE_MS, zoneDashRadius, zoneRadius } from "./tokens";
+import { DROP_PREVIEW, dropPreviewRadius, FOCUS_RING, SPLIT_MOTION, TOAST_ACTION_MS, TOAST_MS } from "./tokens";
 
 export function SplitDividers({ split, dividers, width, height }: { split: SplitView; dividers: Divider[]; width: number; height: number }) {
   return (
@@ -181,7 +181,9 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   const draggedProfile = useTab(dragging ?? undefined, (t) => t?.profileId);
   const windowProfile = useWindowProfileId();
   const foreign = !!dragging && draggedProfile !== windowProfile;
-  const full = Object.keys(panes).length >= 3;
+  const ownPane = !!dragging && dragging in panes && Object.keys(panes).length > 1;
+  const full = Object.keys(panes).length >= 3 && !ownPane;
+  const sides = ownPane ? PANE_SIDES : DROP_SIDES;
   const fallback = useDragFallbackPane(dragging, panes, windowId);
   const candidates = useMemo((): [string, Rect][] => {
     if (fallback && dragging) return [[fallback, panes[dragging]!]];
@@ -192,125 +194,64 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   const py = origin ? y - origin.y : -1;
   const overPage = !!origin && x >= 0 && !overPeek(windowId, x) && Object.values(panes).some((r) => px >= r.x && px <= r.x + r.width && py >= r.y && py <= r.y + r.height);
   const shown = !!dragging && !foreign && !!origin && !full && !outside && candidates.length > 0 && (lifted ?? overPage);
-  const [grown, setGrown] = useState(false);
-  useEffect(() => {
-    setGrown(false);
-    if (!shown) return;
-    const timer = setTimeout(() => setGrown(true), ZONE_SLIDE_MS);
-    return () => clearTimeout(timer);
-  }, [shown]);
-
-  const hit = splitViewAvailable && shown && grown && overPage ? zoneHit(candidates, px, py, target) : null;
+  const hit = splitViewAvailable && shown && overPage ? paneDropTarget(candidates, px, py, target, sides) : null;
   const preview = shown && overPage;
-  const resolver = useRef({ candidates, origin, panes, ready: false });
-  resolver.current = { candidates, origin, panes, ready: !!dragging && !foreign && !!origin && !full && candidates.length > 0 && grown && lifted !== false };
+  const resolver = useRef({ candidates, origin, sides, ready: false });
+  resolver.current = { candidates, origin, sides, ready: !!dragging && !foreign && !!origin && !full && candidates.length > 0 && lifted !== false };
   useEffect(() => {
     if (!dragging) return;
     setTargetResolver((x, y, current, outside) => {
-      const { candidates, origin, panes, ready } = resolver.current;
+      const { candidates, origin, sides, ready } = resolver.current;
       if (!ready || outside || !origin || overPeek(windowId, x)) return null;
-      const px = x - origin.x, py = y - origin.y;
-      if (!Object.values(panes).some((r) => px >= r.x && px <= r.x + r.width && py >= r.y && py <= r.y + r.height)) return null;
-      return zoneHit(candidates, px, py, current);
+      return paneDropTarget(candidates, x - origin.x, y - origin.y, current, sides);
     });
     return () => setTargetResolver(null);
   }, [dragging]);
-  useEffect(() => setDropTarget(hit), [hit?.tabId, hit?.side]);
-  useEffect(() => setOnPage(preview), [preview]);
-  useEffect(
-    () => () => {
-      setDropTarget(null);
-      setOnPage(false);
-    },
-    [],
-  );
-  const [mounted, setMounted] = useState<[string, Rect][]>([]);
-  useEffect(() => {
-    if (shown && splitViewAvailable) setMounted(candidates);
-  }, [shown, candidates]);
-
-  if (!mounted.length) return null;
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {mounted.flatMap(([tabId, rect]) =>
-        (["left", "right"] as const).map((side) => (
-          <DropZone
-            key={`${tabId}${side}`}
-            pane={rect}
-            side={side}
-            shown={shown}
-            stage={target?.tabId === tabId && target.side === side ? "active" : grown ? "grown" : "rest"}
-            pointerX={px}
-            onHidden={() => setMounted([])}
-          />
-        )),
-      )}
-    </View>
-  );
+  useEffect(() => setPageDrop(hit, preview), [hit?.tabId, hit?.side, preview]);
+  useEffect(() => () => setPageDrop(null, false), []);
+  const pane = hit ? candidates.find(([tabId]) => tabId === hit.tabId)?.[1] : undefined;
+  const from = ownPane ? panes[dragging!]! : null;
+  const landing = hit && pane ? { rect: dropPreviewRect(pane, hit.side), side: hit.side, stacked: !!from && stackedPanes(from, pane) } : null;
+  return <DropPreview landing={landing} />;
 }
 
-const ZONE_SPRING = { ...SPLIT_MOTION.zoneSpring, useNativeDriver: false } as const;
+const stackedPanes = (a: Rect, b: Rect) => Math.abs(a.y + a.height / 2 - (b.y + b.height / 2)) > Math.abs(a.x + a.width / 2 - (b.x + b.width / 2));
 
-function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect; side: "left" | "right"; shown: boolean; stage: ZoneStage; pointerX: number; onHidden(): void }) {
-  const theme = useTheme();
-  const rect = zoneRect(pane, side, stage, pointerX);
-  const [anim] = useState(() => ({ x: new Animated.Value(rect.x), y: new Animated.Value(rect.y), w: new Animated.Value(rect.width), h: new Animated.Value(rect.height) }));
-  const glow = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(0)).current;
-  const active = stage === "active";
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(anim.x, { toValue: rect.x, ...ZONE_SPRING }),
-      Animated.spring(anim.y, { toValue: rect.y, ...ZONE_SPRING }),
-      Animated.spring(anim.w, { toValue: rect.width, ...ZONE_SPRING }),
-      Animated.spring(anim.h, { toValue: rect.height, ...ZONE_SPRING }),
-    ]).start();
-  }, [rect.x, rect.y, rect.width, rect.height]);
-  useEffect(() => {
-    Animated.timing(glow, { toValue: active ? 1 : 0, ...SPLIT_MOTION.zoneGlow, useNativeDriver: false }).start();
-  }, [active]);
-  useEffect(() => {
-    Animated.timing(slide, { toValue: shown ? 1 : 0, ...(shown ? SPLIT_MOTION.zoneIn : SPLIT_MOTION.zoneOut), useNativeDriver: false }).start(
-      ({ finished }) => finished && !shown && onHidden(),
-    );
-  }, [shown]);
-  const away = side === "left" ? -(rect.x - pane.x + rect.width) : pane.x + pane.width - rect.x;
-  const dark = theme.dark;
-  const colors = splitColors(dark);
-  const rest = colors.zoneRest;
+const STACKED_SWAP_SYMBOL = "arrow.up.arrow.down";
+const LANDING_COPY: Record<PaneDropSide, { symbol: string; label: string; shortLabel: string }> = {
+  left: { symbol: "rectangle.lefthalf.filled", label: "Add left split", shortLabel: "Left" },
+  right: { symbol: "rectangle.righthalf.filled", label: "Add right split", shortLabel: "Right" },
+  top: { symbol: "rectangle.tophalf.filled", label: "Add top split", shortLabel: "Top" },
+  bottom: { symbol: "rectangle.bottomhalf.filled", label: "Add bottom split", shortLabel: "Bottom" },
+  center: { symbol: "arrow.left.arrow.right", label: "Swap panes", shortLabel: "Swap" },
+};
+
+type Landing = { rect: Rect; side: PaneDropSide; stacked: boolean };
+
+function DropPreview({ landing }: { landing: Landing | null }) {
+  const { shown, appear } = usePresence(landing, SPLIT_MOTION.dropPreview, true);
+  if (!shown) return null;
+  const { rect, side, stacked } = shown;
+  const copy = LANDING_COPY[side];
+  const symbol = side === "center" && stacked ? STACKED_SWAP_SYMBOL : copy.symbol;
+  const text = rect.width < 160 ? copy.shortLabel : copy.label;
   return (
-    <Animated.View
-      style={{
-        position: "absolute",
-        left: anim.x,
-        top: anim.y,
-        width: anim.w,
-        height: anim.h,
-        borderRadius: zoneRadius(),
-        borderWidth: 0.5,
-        borderColor: colors.zoneBorder,
-        backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: [colors.zoneFill, withAlpha(theme.accent, dark ? ZONE_ACCENT_ALPHA.dark : ZONE_ACCENT_ALPHA.light)] }),
-        alignItems: "center",
-        justifyContent: "center",
-        transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [away, 0] }) }],
-      }}
-    >
-      <OverPage radius={zoneRadius()} />
-      <View
-        style={{
-          position: "absolute",
-          left: ZONE_DASH_INSET,
-          right: ZONE_DASH_INSET,
-          top: ZONE_DASH_INSET,
-          bottom: ZONE_DASH_INSET,
-          borderRadius: zoneDashRadius(),
-          borderStyle: "dashed",
-          borderWidth: active ? 2.33 : 2,
-          borderColor: active ? theme.accent : colors.zoneDash,
-        }}
-      />
-      <Symbol name={side === "left" ? "rectangle.lefthalf.filled" : "rectangle.righthalf.filled"} size={18} color={active ? theme.accent : rest} style={{ width: 24, height: 20 }} />
-      <Text weight="semibold" color={active ? theme.accent : rest} style={{ marginTop: space.l }}>{side === "left" ? "Add left split" : "Add right split"}</Text>
+    <Animated.View pointerEvents="none" style={{ position: "absolute", left: rect.x, top: rect.y, width: rect.width, height: rect.height, opacity: appear }}>
+      <Panel
+        radius={dropPreviewRadius()}
+        fill={DROP_PREVIEW.fill}
+        border={DROP_PREVIEW.border}
+        borderWidth={DROP_PREVIEW.borderWidth}
+        shadow={DROP_PREVIEW.shadow}
+        style={[StyleSheet.absoluteFill, { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: space.l }]}
+      >
+        <Symbol name={symbol} size={16} color={DROP_PREVIEW.label} style={{ width: 22, height: 18 }} />
+        {rect.width >= 96 && rect.height >= 40 ? (
+          <Text weight="semibold" numberOfLines={1} color={DROP_PREVIEW.label} style={{ marginLeft: space.s, flexShrink: 1 }}>
+            {text}
+          </Text>
+        ) : null}
+      </Panel>
     </Animated.View>
   );
 }

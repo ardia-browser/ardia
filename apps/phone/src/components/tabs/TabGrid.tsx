@@ -9,7 +9,7 @@ import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { isUnseenReceived } from "../../lib/tabFace";
-import { ChromeSurface, controlRadius, controlSize, deckChromeLayout, FadeView, font, shadowCss, smoothCorners, stroke, Symbol, TabFace, Tappable, tabsLayout, tabsMotion, usePressStyle, useTheme } from "../ui";
+import { capsule, ChromeSurface, controlSize, deckChromeLayout, FadeView, font, shadowCss, smoothCorners, stroke, Symbol, TabFace, Tappable, tabsLayout, tabsMotion, usePressStyle, useTheme } from "../ui";
 import { CardIcon, CardMenu, deckHeaderTitle, ReceivedBadge, type Reads } from "./DeckCard";
 import { CLOSE_TAB, tabCardAccess, tabCardTitle, tabCardTitleText } from "./tabCard";
 import { nativeMenus } from "../ui/MenuTrigger";
@@ -68,7 +68,7 @@ export function TabGrid({ tabs, selectedId, geometry: g, reduceMotion, shown = t
   const leave = FadeOut.duration(tabsMotion.fade);
   return (
     <FadeView testID="tabGrid" top={{ length: tabGridLayout.topFade }} style={[styles.viewport, { top: viewportTop }]}>
-      <ScrollView
+      <ScrollView bounces={false} overScrollMode="never"
         testID="tabGridScroll"
         ref={scroll}
         contentOffset={{ x: 0, y: startOffset }}
@@ -127,7 +127,7 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
           {deckHeaderTitle(tab, title)}
         </Text>
         <Tappable testID="tabGridClose" kind="icon" label={CLOSE_TAB} onPress={close} style={styles.closeSlot}>
-          <ChromeSurface testID="tabGridClosePlate" shape="rounded" cornerRadius={CLOSE_CORNER} dark={theme.dark} style={styles.closePlate}>
+          <ChromeSurface testID="tabGridClosePlate" shape="circle" cornerRadius={CLOSE_CORNER} dark={theme.dark} style={styles.closePlate}>
             <Symbol name="xmark" size={tabGridLayout.closeGlyph} color={theme.secondaryLabel} />
           </ChromeSurface>
         </Tappable>
@@ -159,7 +159,7 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
   );
 });
 
-const CLOSE_CORNER = controlRadius(tabGridLayout.closePlate);
+const CLOSE_CORNER = capsule(tabGridLayout.closePlate);
 
 const styles = StyleSheet.create({
   viewport: { position: "absolute", left: 0, right: 0, bottom: 0 },
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: tabGridLayout.headerSpacing, height: tabGridCloseSlot.side },
   title: { flex: 1, fontWeight: "500" },
   closeSlot: { width: tabGridCloseSlot.side, height: tabGridCloseSlot.side, marginLeft: tabGridCloseSlot.lead, alignItems: "center", justifyContent: "center" },
-  closePlate: { width: tabGridLayout.closePlate, height: tabGridLayout.closePlate, alignItems: "center", justifyContent: "center", ...smoothCorners },
+  closePlate: { width: tabGridLayout.closePlate, height: tabGridLayout.closePlate, alignItems: "center", justifyContent: "center", borderRadius: CLOSE_CORNER },
   card: { borderRadius: tabsLayout.cardRadius, ...smoothCorners, overflow: "hidden" },
   edge: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: tabsLayout.cardRadius, ...smoothCorners },
 });

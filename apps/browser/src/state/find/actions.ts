@@ -16,10 +16,10 @@ export function openFind(tabId: string, options: { replace?: boolean; query?: st
   setFind(tabId, { open: true, ...options, focusRequest: Date.now() });
 }
 
-export function closeFind(tabId: string) {
+export function closeFind(tabId: string, { refocus = true }: { refocus?: boolean } = {}) {
   setFind(tabId, { open: false, count: null, active: 0 });
   void webviews.get(tabId)?.stopFinding(false);
-  void webviews.get(tabId)?.focus();
+  if (refocus) void webviews.get(tabId)?.focus();
 }
 
 export function findStep(tabId: string, backwards: boolean) {

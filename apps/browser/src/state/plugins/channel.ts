@@ -13,6 +13,7 @@ import { acceptsLine, onProcessStopped, processExited } from "./process";
 import { valuesFor } from "./values";
 import { dropHiddenRetainedSidePanels } from "./surfaces";
 import { answerMethod } from "./channelApi";
+import { dropStateSubscriptions } from "./stateEvents";
 
 export { pluginWebUrl } from "../../lib/pluginWebUrl";
 
@@ -133,6 +134,7 @@ export function startChannels() {
   onProcessStopped(dropConnections);
   onProcessStopped(dropCalls);
   onProcessStopped(dropHiddenRetainedSidePanels);
+  onProcessStopped(dropStateSubscriptions);
   setFeedConsumer("plugins", { subscriptions: () => [...connections.values()].flatMap((c) => (c.sub ? [c.sub] : [])), deliver });
 }
 

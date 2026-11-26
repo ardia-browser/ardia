@@ -12,6 +12,7 @@ import {
   offersEngineChoice,
   protectedVideoSite,
   recommendedEngineFor,
+  refusedVideoSite,
   ruleFor,
   siteOf,
   switchableEngine,
@@ -379,4 +380,17 @@ test("many tabs don't make an open tab record its page again", () => {
 
 test("the Mac always offers a page engine choice, so Site Controls keeps Opens in for every page, local files included", () => {
   assert.equal(offersEngineChoice(), true);
+});
+
+test("a refused protected video is told apart by whether its site is on the streaming list and whether Ardia's settings send it to WebKit", () => {
+  const on = state([], { protectedVideoInWebKit: true, websiteEngines: { "https://www.hulu.com": "chromium", "https://video.example": "webkit" } });
+  assert.deepEqual(refusedVideoSite(on, "https://www.netflix.com/watch/1"), { listed: true, routedToWebKit: true });
+  assert.deepEqual(refusedVideoSite(on, "https://www.hulu.com/watch/1"), { listed: true, routedToWebKit: false });
+  assert.deepEqual(refusedVideoSite(on, "https://video.example/film"), { listed: false, routedToWebKit: true });
+  assert.deepEqual(refusedVideoSite(on, "https://www.amazon.com/gp/video/detail/1"), { listed: false, routedToWebKit: false });
+  const off = state([], { protectedVideoInWebKit: false });
+  assert.deepEqual(refusedVideoSite(off, "https://www.netflix.com/"), { listed: true, routedToWebKit: false });
+  const chromiumOnly = state([], { protectedVideoInWebKit: true, engineMode: "chromium" });
+  assert.deepEqual(refusedVideoSite(chromiumOnly, "https://www.netflix.com/"), { listed: true, routedToWebKit: false });
+  assert.deepEqual(refusedVideoSite(on, undefined), { listed: false, routedToWebKit: false });
 });

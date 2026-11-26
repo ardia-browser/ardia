@@ -171,7 +171,7 @@ def seed_content_blocker(runtime, blocker):
                    check=True, stdout=subprocess.DEVNULL)
 
 
-def package(output, ui, destination, content_blocker=None, version=None, cli=None, deb=None, appimage=None, ubo_seed=False, update_verify=None):
+def package(output, ui, destination, content_blocker=None, version=None, cli=None, deb=None, appimage=None, ubo_seed=False, update_verify=None, rpm=None):
     if version is not None:
         check_version(version)
     if deb is not None:
@@ -180,6 +180,10 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
         linux_formats.deb_version(version)
     if update_verify is not None and not update_verify.is_file():
         raise ValueError(f'no ardia-update-verify at {update_verify}')
+    if rpm is not None:
+        if version is None:
+            raise ValueError('a package with an .rpm needs --version')
+        linux_formats.rpm_version(version)
     cli_digest = None
     if cli is not None:
         if version is None:
@@ -192,7 +196,7 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
         raise ValueError(f'no UI bundle at {ui}/index.html')
     if not os.access(output / 'chrome', os.X_OK):
         raise ValueError('chrome is not executable')
-    for path in (destination, deb, appimage):
+    for path in (destination, deb, appimage, rpm):
         if path is not None and path.exists():
             raise ValueError(f'refusing to overwrite {path}')
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -230,9 +234,10 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
         launcher.parent.mkdir()
         launcher.write_text('#!/usr/bin/env sh\nardia_bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$ardia_bin_dir/../lib/ardia/ardia-launch" "$@"\n')
         launcher.chmod(0o755)
-        desktop = root / 'share/applications/ardia.desktop'
-        desktop.parent.mkdir(parents=True)
-        desktop.write_text('[Desktop Entry]\nType=Application\nName=Ardia\nExec=ardia %U\nIcon=ardia\nTerminal=false\nCategories=Network;WebBrowser;\nMimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;\nStartupWMClass=ardia\n')
+        applications = root / 'share/applications'
+        applications.mkdir(parents=True)
+        for name, entry in linux_formats.desktop_entries().items():
+            (applications / name).write_text(entry)
         policy = root / 'share/polkit-1/actions/dev.ardia.linux.policy'
         policy.parent.mkdir(parents=True)
         shutil.copyfile(pathlib.Path(__file__).resolve().parent / 'dev.ardia.linux.policy', policy)
@@ -255,6 +260,8 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
             linux_formats.build_deb(root, deb, version)
         if appimage is not None:
             linux_formats.build_appimage(root, appimage)
+        if rpm is not None:
+            linux_formats.build_rpm(root, rpm, version)
     return destination
 
 
@@ -291,12 +298,14 @@ def main():
     parser.add_argument('--deb', type=pathlib.Path, help='also build a .deb at this path (dpkg-deb and readelf; needs --version)')
     parser.add_argument('--appimage', type=pathlib.Path, help='also build an AppImage at this path (a pinned type 2 runtime and mksquashfs)')
     parser.add_argument('--update-verify', type=pathlib.Path, help=f'the {UPDATE_VERIFY_TARGET} ardia-update-verify to bundle in lib/ardia, as scripts/linux/update-verify.sh builds it (without it the package never updates itself)')
+    parser.add_argument('--rpm', type=pathlib.Path, help='also build an .rpm at this path (rpmbuild; needs --version)')
     parser.add_argument('--no-ubo-seed', action='store_true', help="don't seed the content blocker (by default package.py runs the staged chrome once to save uBlock Origin's compiled engine, so a new profile filters from its first page)")
     args = parser.parse_args()
     if args.cli is not None and args.version is None:
         parser.error('--cli needs --version')
-    if args.deb is not None and args.version is None:
-        parser.error('--deb needs --version')
+    for flag in ('deb', 'rpm'):
+        if getattr(args, flag) is not None and args.version is None:
+            parser.error(f'--{flag} needs --version')
     try:
         blocker = args.content_blocker.resolve() if args.content_blocker else None
         cli = args.cli.resolve() if args.cli else None
@@ -305,8 +314,9 @@ def main():
         update_verify = args.update_verify.resolve() if args.update_verify else None
         if update_verify is None:
             print('package.py: no --update-verify, so this package has no lib/ardia/ardia-update-verify and its kind is "unsupported noVerifier": it never updates itself', file=sys.stderr)
+        rpm = args.rpm.resolve() if args.rpm else None
         print(package(args.out.resolve(), args.ui.resolve(), args.destination.resolve(), blocker, args.version, cli, deb, appimage, ubo_seed=not args.no_ubo_seed,
-                      update_verify=update_verify))
+                      update_verify=update_verify, rpm=rpm))
     except (ValueError, OSError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
 

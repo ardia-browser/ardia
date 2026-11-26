@@ -4,6 +4,7 @@ import ExpoModulesCore
 import ExpoUI
 import Observation
 import SwiftUI
+import UIKit
 
 enum SettingsTintChoice {
   static let swatch = "swatch"
@@ -361,15 +362,14 @@ struct SettingsPageModifier: ViewModifier, Record {
 struct ChromeSurfaceModifier: ViewModifier, Record {
   @Field var shape: String = "capsule"
   @Field var cornerRadius: Double = 0
-  @Field var interactive: Bool = true
   @Field var tinted: Bool = false
 
   @ViewBuilder
   func body(content: Content) -> some View {
     switch shape {
-    case "circle": content.chromeSurface(in: Circle(), interactive: interactive, tinted: tinted)
-    case "rounded": content.chromeSurface(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), interactive: interactive, tinted: tinted)
-    default: content.chromeSurface(in: Capsule(), interactive: interactive, tinted: tinted)
+    case "circle": content.chromeSurface(in: Circle(), tinted: tinted)
+    case "rounded": content.chromeSurface(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), tinted: tinted)
+    default: content.chromeSurface(in: Capsule(), tinted: tinted)
     }
   }
 }
@@ -474,12 +474,6 @@ struct ContentMarginsModifier: ViewModifier, Record {
   }
 }
 
-struct BouncesOnlyWhenScrollableModifier: ViewModifier, Record {
-  func body(content: Content) -> some View {
-    content.scrollBounceBehavior(.basedOnSize)
-  }
-}
-
 struct ProfileLookModifier: ViewModifier, Record {
   @Field var color: String? = nil
   @Field var themeColors: [String] = []
@@ -494,7 +488,7 @@ struct ProfileLookModifier: ViewModifier, Record {
 }
 
 enum SettingsUIModifiers {
-  static let names = ["ardia.navigationBarBackButtonHidden", "ardia.minListRowHeight", "ardia.spaceBackdrop", "ardia.settingsChrome", "ardia.settingsPage", "ardia.chromeSurface", "ardia.settingsSwitchStyle", "ardia.pressableStyle", "ardia.legibleInk", "ardia.profileLook", "ardia.contentMargins", "ardia.bouncesOnlyWhenScrollable", "ardia.accessibilityFocusRequest", "ardia.widthChange"]
+  static let names = ["ardia.navigationBarBackButtonHidden", "ardia.minListRowHeight", "ardia.spaceBackdrop", "ardia.settingsChrome", "ardia.settingsPage", "ardia.chromeSurface", "ardia.settingsSwitchStyle", "ardia.pressableStyle", "ardia.legibleInk", "ardia.profileLook", "ardia.contentMargins", "ardia.neverBounces", "ardia.accessibilityFocusRequest", "ardia.widthChange"]
 
   static func register() {
     ViewModifierRegistry.register("ardia.navigationBarBackButtonHidden") { params, context, _ in try BackButtonHiddenModifier(from: params, appContext: context) }
@@ -508,7 +502,7 @@ enum SettingsUIModifiers {
     ViewModifierRegistry.register("ardia.legibleInk") { params, context, _ in try LegibleInkModifier(from: params, appContext: context) }
     ViewModifierRegistry.register("ardia.profileLook") { params, context, _ in try ProfileLookModifier(from: params, appContext: context) }
     ViewModifierRegistry.register("ardia.contentMargins") { params, context, _ in try ContentMarginsModifier(from: params, appContext: context) }
-    ViewModifierRegistry.register("ardia.bouncesOnlyWhenScrollable") { params, context, _ in try BouncesOnlyWhenScrollableModifier(from: params, appContext: context) }
+    ViewModifierRegistry.register("ardia.neverBounces") { params, context, _ in try NeverBouncesModifier(from: params, appContext: context) }
     ViewModifierRegistry.register("ardia.accessibilityFocusRequest") { params, context, _ in try AccessibilityFocusRequestModifier(from: params, appContext: context) }
     ViewModifierRegistry.register("ardia.widthChange") { params, context, dispatcher in try WidthChangeModifier(from: params, appContext: context, eventDispatcher: dispatcher) }
   }
@@ -531,6 +525,7 @@ public final class SettingsUIModule: Module {
 
     OnCreate {
       SettingsUIModifiers.register()
+      DispatchQueue.main.async { MainActor.assumeIsolated { ScrollBounceProbe.startIfAsked() } }
     }
 
     OnDestroy {

@@ -12,6 +12,24 @@ enum KeyEquivalents {
   private static var menuKeyIMP: IMP?
   private(set) static var trace: [String] = []
 
+  private static func fieldEditorLook(_ responder: NSResponder?) -> [String: Any] {
+    guard let editor = responder as? NSTextView, editor.isFieldEditor else { return [:] }
+    var look: [String: Any] = [:]
+    editor.effectiveAppearance.performAsCurrentDrawingAppearance {
+      let hex = { (value: Any?) -> String in
+        guard let color = (value as? NSColor)?.usingColorSpace(.sRGB) else { return "" }
+        let channel = { (part: CGFloat) in Int((max(0, min(1, part)) * 255).rounded()) }
+        return String(format: "#%02X%02X%02X%02X", channel(color.redComponent), channel(color.greenComponent), channel(color.blueComponent), channel(color.alphaComponent))
+      }
+      look = [
+        "insertionPoint": hex(editor.insertionPointColor), "selectedText": hex(editor.selectedTextAttributes[.foregroundColor]),
+        "selectedBackground": hex(editor.selectedTextAttributes[.backgroundColor]), "text": hex(editor.textColor),
+        "appearance": editor.effectiveAppearance.name.rawValue,
+      ]
+    }
+    return look
+  }
+
   private static func note(_ line: String) {
     trace.append(String(format: "%.1f ", CACurrentMediaTime() * 1000) + line)
     if trace.count > 40 { trace.removeFirst(trace.count - 40) }
@@ -66,6 +84,7 @@ enum KeyEquivalents {
     matched = []
     var result: [String: Any] = [
       "firstResponder": window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil", "keyWindow": NSApp.keyWindow === window,
+      "fieldEditor": fieldEditorLook(window.firstResponder),
     ]
     var lostEvents = 0, misaimedEvents = 0
     var wait = press["wait"] as? Int ?? 250
@@ -169,7 +188,9 @@ enum KeyEquivalents {
       "firstResponder": responderName(), "hit": hit.map { String(describing: type(of: $0)) } ?? "nil", "root": [inRoot.x, inRoot.y],
     ]
     let restoreKeyWindow = click["asKey"] as? Bool == false ? nil : standInKeyWindow(window)
-    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+    let only = click["only"] as? String
+    let types: [NSEvent.EventType] = only == "down" ? [.leftMouseDown] : only == "up" ? [.leftMouseUp] : [.leftMouseDown, .leftMouseUp]
+    for type in types {
       guard let event = NSEvent.mouseEvent(
         with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
         windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)

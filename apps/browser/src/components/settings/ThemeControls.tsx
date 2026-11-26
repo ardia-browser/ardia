@@ -24,7 +24,7 @@ export function DirectionDial({ angle, onChange }: { angle: number; onChange: (a
   const ui = useTheme();
   const ref = useRef<View>(null);
   const centre = useRef({ x: 0, y: 0 });
-  const measure = () => ref.current?.measureInWindow((x, y, width, height) => (centre.current = { x: x + width / 2, y: y + height / 2 }));
+  const measure = () => ref.current?.measure((_x, _y, width, height, pageX, pageY) => (centre.current = { x: pageX + width / 2, y: pageY + height / 2 }));
   const at = (e: GestureResponderEvent) => {
     const dx = e.nativeEvent.pageX - centre.current.x, dy = e.nativeEvent.pageY - centre.current.y;
     const degrees = ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
@@ -109,7 +109,7 @@ export function ColorPad({
   const dragging = useRef(0);
   const latest = useRef(theme);
   latest.current = theme;
-  const measure = () => ref.current?.measureInWindow((x, y) => (origin.current = { x, y }));
+  const measure = () => ref.current?.measure((_x, _y, _width, _height, pageX, pageY) => (origin.current = { x: pageX, y: pageY }));
   const point = (e: GestureResponderEvent) => ({
     x: clamp01((e.nativeEvent.pageX - origin.current.x) / PAD),
     y: clamp01((e.nativeEvent.pageY - origin.current.y) / PAD),
@@ -276,7 +276,7 @@ function Track({
 }) {
   const ref = useRef<View>(null);
   const frame = useRef({ x: 0, width: 0 });
-  const measure = () => ref.current?.measureInWindow((x, _y, width) => (frame.current = { x, width }));
+  const measure = () => ref.current?.measure((_x, _y, width, _height, pageX) => (frame.current = { x: pageX, width }));
   const press = useRef(trackPress()).current;
   const report = (e: GestureResponderEvent, settle: boolean) => {
     const value = press.at(e.nativeEvent.pageX, frame.current.x, frame.current.width, snapTo);

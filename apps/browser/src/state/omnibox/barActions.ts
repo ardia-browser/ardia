@@ -122,6 +122,13 @@ const actionId = (d: Pick<ActionDef, "command" | "arg">) => (d.arg ? `${d.comman
 
 const LITTLE_ARDIA_HIDDEN: ReadonlySet<string> = new Set(LITTLE_ARDIA_DISABLED_COMMANDS);
 
+const KEYWORDS_BY_ACTION: ReadonlyMap<string, readonly string[]> = DEFS.reduce((byId, d) => {
+  if (d.keywords) byId.set(actionId(d), [...(byId.get(actionId(d)) ?? []), ...d.keywords]);
+  return byId;
+}, new Map<string, string[]>());
+
+export const commandBarKeywords = (id: string): readonly string[] => KEYWORDS_BY_ACTION.get(id) ?? [];
+
 export function barActions(s: BrowserState, windowId: string): CommandAction[] {
   const w = s.windows[windowId];
   const small = isSmallWindow(w);

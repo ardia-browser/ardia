@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "pe-imports.ps1")
+. (Join-Path $PSScriptRoot "shell-layout.ps1")
 
 $windowsShips = @(
   "advapi32.dll", "bcp47langs.dll", "bcp47mrm.dll", "bcrypt.dll", "bcryptprimitives.dll", "bthprops.cpl",
@@ -27,13 +28,21 @@ if ($ListSystem) {
 
 if (-not (Test-Path -LiteralPath $App -PathType Container)) { throw "'$App' is not a folder" }
 $root = (Resolve-Path -LiteralPath $App).Path
+$shellKind = Get-ShellLayout $root
+if ($shellKind -eq "mixed") { Write-Host "::error::'$App' holds both the React Native shell's $($ShellLayout.RnwLibrary) and the WebUI shell's $($ShellLayout.UiEntry)"; exit 1 }
+if ($shellKind -eq "webui") {
+  $layoutProblems = Get-ShellLayoutProblems $root "webui" -AllowTestBuild
+  foreach ($problem in $layoutProblems) { Write-Host "::error::the WebUI build $problem" }
+  if ($layoutProblems.Count) { exit 1 }
+}
 $files = @(Get-PeFiles $root)
 if (-not $files.Count) { throw "'$App' holds no PE files" }
 $unmet = @(Find-UnmetDependencies $root $windowsShips $files)
 $cpus = ($files | ForEach-Object { $_.Image.Cpu } | Group-Object | Sort-Object Count -Descending | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ", "
 
+$layoutNote = if ($shellKind -eq "none") { "" } else { "$shellKind shell, " }
 if (-not $unmet.Count) {
-  Write-Host "dependency-check: every import, delay-load and forwarded export of the $($files.Count) PE files in $root ($cpus) is in the app folder, an API set or part of a clean Windows 11"
+  Write-Host "dependency-check: ${layoutNote}every import, delay-load and forwarded export of the $($files.Count) PE files in $root ($cpus) is in the app folder, an API set or part of a clean Windows 11"
   exit 0
 }
 

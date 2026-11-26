@@ -11,6 +11,7 @@ class ImportError extends Error {
 }
 
 const MACOS = /\bMac\b|macOS|Keychain|keychain|iCloud|Touch ID/;
+const FOREIGN = process.env.ARDIA_DESKTOP_MODE === "mac" ? /Secret Service|KWallet|polkit|Windows/ : MACOS;
 const CHROME = { id: "chrome", name: "Google Chrome", family: "chromium", needsKeychain: true, keychainService: "Chrome Safe Storage", profiles: [{ id: "Default" }, { id: "Profile 1" }] };
 const FIREFOX = {
   id: "firefox", name: "Firefox", family: "firefox", needsKeychain: true,
@@ -41,12 +42,12 @@ function host() {
   return { api: createHostImport(bridge, ImportError), calls, replies };
 }
 
-test("the unlock step never names the Mac or its keychain", () => {
+test("the unlock step never names another platform's keychain", () => {
   for (const copy of [unlockCopy(CHROME, ["Default"], ["passwords"]), unlockCopy(CHROME, ["Default", "Profile 1"], ["passwords"]), unlockCopy(FIREFOX, ["locked.default"], ["passwords"]), unlockCopy(FIREFOX, ["cards.default"], ["autofill"])]) {
-    for (const text of [copy.title, copy.subtitle, copy.lead, copy.detail, copy.waiting]) assert.doesNotMatch(text, MACOS);
+    for (const text of [copy.title, copy.subtitle, copy.lead, copy.detail, copy.waiting]) assert.doesNotMatch(text, FOREIGN);
   }
   for (const code of ["locked", "denied", "notFound", "unavailable", "timeout", "cancelled", "unreadable", undefined]) {
-    for (const source of [CHROME, FIREFOX]) assert.doesNotMatch(unlockFailure(source, code), MACOS);
+    for (const source of [CHROME, FIREFOX]) assert.doesNotMatch(unlockFailure(source, code), FOREIGN);
   }
   assert.equal(unlockCopy(CHROME, ["Default"], ["passwords"]).field, false);
   assert.match(unlockFailure(FIREFOX, "denied"), /isn't Firefox's primary password/);

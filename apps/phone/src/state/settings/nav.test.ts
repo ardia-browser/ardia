@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { closeSettings, followSettingsPath, offerBrowseForMePage, offerSyncPages, openSettings, pushSettings, settingsNav, settingsPath, settingsRouteFromKey, settingsRouteKey, type SettingsRoute } from "./nav.ts";
+import { closeSettings, followSettingsPath, offerBrowseForMePage, offerSyncPages, openSettings, pushSettings, settingsDestinationKeys, settingsNav, settingsPath, settingsRouteFromKey, settingsRouteKey, type SettingsRoute } from "./nav.ts";
 
 test("every settings route turns into a path key and back, a filter list keeping its id", () => {
   const routes: SettingsRoute[] = [{ page: "appearance" }, { page: "siteSettings" }, { page: "filterList", id: "easylist:v2" }, { page: "syncConnect" }, { page: "whatsSent" }];
@@ -52,4 +52,16 @@ test("Browse for Me's page opens only where the phone offers it, as on iPhone, a
   assert.deepEqual(settingsNav().stack.map((route) => route.page), ["root", "browseForMe"]);
   closeSettings();
   offerBrowseForMePage(() => false);
+});
+
+test("the pages a Settings screen links to are mounted before the tap, so a pushed pane has its title from its first frame", () => {
+  offerSyncPages(() => true);
+  offerBrowseForMePage(() => false);
+  assert.deepEqual(settingsDestinationKeys([{ page: "root" }]), ["sync", "general", "tabs", "appearance", "search", "siteSettings", "experimental"]);
+  assert.deepEqual(settingsDestinationKeys([{ page: "root" }, { page: "general" }]), ["general", "defaultBrowser", "clearData", "whatsSent", "about"]);
+  assert.deepEqual(settingsDestinationKeys([{ page: "root" }, { page: "siteSettings" }, { page: "filterLists" }, { page: "filterList", id: "easylist" }]), ["siteSettings", "filterLists", "filterList:easylist"]);
+  assert.deepEqual(settingsDestinationKeys([{ page: "root" }, { page: "experimental" }]), ["experimental"]);
+  offerSyncPages(() => false);
+  assert.equal(settingsDestinationKeys([{ page: "root" }]).includes("sync"), false);
+  offerSyncPages(() => true);
 });

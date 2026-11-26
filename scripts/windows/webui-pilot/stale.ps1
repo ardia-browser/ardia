@@ -10,12 +10,12 @@ function Send-Then-Barrier([string]$request) {
 }
 function Crash-And-Reload([int]$after, [string[]]$expect) {
   Cdp-Command 'Page.crash' @{} -NoReply | Out-Null
-  Wait-Until { (Shell-Lines-Matching 'shell document retired; generation is now' $after).Count -ge 1 } 20 'the crashed document to retire' -NoThrow | Out-Null
+  Wait-Until { (Shell-Lines-Matching 'shell document retired in window \S+; generation is now' $after).Count -ge 1 } 20 'the crashed document to retire' -NoThrow | Out-Null
   $live = (Shell-Lines-Matching 'shell document \d+ is live' $after).Count
   Cdp-Command 'Page.reload' @{ ignoreCache = $true } | Out-Null
   Wait-Until { (Shell-Lines-Matching 'shell document \d+ is live' $after).Count -gt $live } 30 'the reloaded document to go live' -NoThrow | Out-Null
   foreach ($pattern in $expect) { Wait-Until { (Shell-Lines-Matching $pattern $after).Count -ge 1 } 20 "a log line matching '$pattern'" -NoThrow | Out-Null }
-  Wait-Until { (Cdp-Eval '__ardiaHost.invoke("ArdiaShell.windowIdentity", {})') -eq 'main' } 30 'the reloaded document to answer' -NoThrow | Out-Null
+  Wait-Until { Is-Window (Window-Identity) } 30 'the reloaded document to answer' -NoThrow | Out-Null
 }
 Stop-Engine
 Start-Shell -Fresh | Out-Null
@@ -26,28 +26,30 @@ Cdp-Eval '__ardiaHost.invoke("tab.create", { key: "stale-probe", claim: "stale-c
 Wait-Until { @(Cdp-List | Where-Object { $_.url -like 'file:///C:/pilot/form.html*' }).Count -ge 1 } 15 'the probe page' -NoThrow | Out-Null
 $before = (Shell-Lines).Count
 $origin = Cdp-Eval 'String(performance.timeOrigin)'
+$identityBefore = Window-Identity
 Send-Then-Barrier 'window.__ardiaHost.invoke("ArdiaShell.testDelayedReply", { args: [3000] })' | Out-Null
 Crash-And-Reload $before @('reply dropped: shell document')
 $after = @(Shell-Lines | Select-Object -Skip $before)
 $after | ForEach-Object { Log "log $_" }
-$retired = @($after | Where-Object { $_ -match 'shell document retired; generation is now (\d+), (\d+) pages of the old document dropped' })
+$retired = @($after | Where-Object { $_ -match 'shell document retired in window main; generation is now (\d+)' })
 $dropped = @($after | Where-Object { $_ -match 'reply dropped: shell document (\d+) is not the live one \((\d+)\)' })
-$live = @($after | Where-Object { $_ -match 'shell document (\d+) is live' })
+$live = @($after | Where-Object { $_ -match 'shell document (\d+) is live in window main' })
 Check 'crash-retires-document' ($retired.Count -ge 1) "$($retired -join ' / ')"
 Check 'old-reply-dropped' ($dropped.Count -ge 1) "$($dropped -join ' / ')"
 Check 'reload-is-a-new-generation' ($live.Count -ge 1) "$($live -join ' / ')"
 $reloaded = Cdp-Eval 'String(performance.timeOrigin)'
-$answer = Cdp-Eval '__ardiaHost.invoke("ArdiaShell.windowIdentity", {})'
-Check 'new-document-answers' (($answer -eq 'main') -and ($reloaded -ne $origin)) "new document (time origin $origin -> $reloaded) answers '$answer'"
+$answer = Window-Identity
+$newerGeneration = (Is-Window $identityBefore) -and (Is-Window $answer) -and ([decimal]$answer.rendererGeneration -gt [decimal]$identityBefore.rendererGeneration)
+Check 'new-document-answers' ((Is-Window $answer) -and $newerGeneration -and ($reloaded -ne $origin)) "new document (time origin $origin -> $reloaded) answers $(Identity-Text $answer), before the crash $(Identity-Text $identityBefore)"
 $targets = (Cdp-List)
 Log ("targets after reload: " + (($targets | ForEach-Object { $_.url }) -join ' | '))
 
 $before = (Shell-Lines).Count
 Send-Then-Barrier 'window.__ardiaHost.invoke("tab.create", { key: "orphan-probe", claim: "orphan-claim", profile: "default", url: "file:///C:/pilot/form.html?orphan", testDelayMs: 4000 })' | Out-Null
-Crash-And-Reload $before @('page creation dropped')
+Crash-And-Reload $before @('reply dropped: shell document')
 $after = @(Shell-Lines | Select-Object -Skip $before)
 $after | ForEach-Object { Log "log $_" }
-$orphanDropped = @($after | Where-Object { $_ -match 'page creation dropped( before its profile loaded)?: shell document (\d+) is not the live one' })
+$orphanDropped = @($after | Where-Object { $_ -match 'reply dropped: shell document (\d+) is not the live one' })
 $targets = (Cdp-List)
 $orphan = @($targets | Where-Object { $_.url -like '*form.html?orphan*' })
 Check 'retired-document-makes-no-page' (($orphanDropped.Count -ge 1) -and ($orphan.Count -eq 0)) "$($orphanDropped -join ' / '); targets: $(($targets | ForEach-Object { $_.url }) -join ' | ')"
@@ -55,10 +57,10 @@ Check 'retired-document-makes-no-page' (($orphanDropped.Count -ge 1) -and ($orph
 $before = (Shell-Lines).Count
 $orphanProfile = "$Data\Chromium\Ardia orphanprofile"
 Send-Then-Barrier 'window.__ardiaHost.invoke("tab.create", { key: "orphan-profile-probe", claim: "orphan-profile-claim", profile: "orphanprofile", url: "file:///C:/pilot/form.html?orphanprofile", testDelayMs: 4000 })' | Out-Null
-Crash-And-Reload $before @('page creation dropped before its profile loaded')
+Crash-And-Reload $before @('reply dropped: shell document')
 $after = @(Shell-Lines | Select-Object -Skip $before)
 $after | ForEach-Object { Log "log $_" }
-$profileDropped = @($after | Where-Object { $_ -match 'page creation dropped before its profile loaded: shell document (\d+) is not the live one' })
+$profileDropped = @($after | Where-Object { $_ -match 'reply dropped: shell document (\d+) is not the live one' })
 $targets = (Cdp-List)
 $orphan = @($targets | Where-Object { $_.url -like '*form.html?orphanprofile*' })
 $madeProfile = Test-Path -LiteralPath $orphanProfile

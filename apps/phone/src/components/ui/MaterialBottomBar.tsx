@@ -171,7 +171,7 @@ function OverviewControls({ scheme, search, incognito, privateCount = 0, onClose
   const { input, text, change, focus, blur } = search;
   const fabLabel = incognito ? actionWords.newIncognitoTab : actionWords.newTab;
   const closesIncognito = menusShown && privateCount > 0 && onCloseIncognito !== undefined;
-  const closeItems = onCloseIncognito ? [{ label: incognitoWords.closeIncognitoTabs, destructive: true, onPress: onCloseIncognito }] : [];
+  const closeItems = onCloseIncognito ? [{ label: incognitoWords.closeIncognitoTabs, icon: "xmark" as const, destructive: true, onPress: onCloseIncognito }] : [];
   return (
     <>
       <MenuTrigger

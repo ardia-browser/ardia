@@ -135,6 +135,8 @@ namespace {
 
 const NSTimeInterval kWindowServerRecheck = 1;
 
+BOOL UserInAnotherApp() { return !NSApp.isActive || ArdiaChromeWindowHost.activeOnlyForPictureInPicture; }
+
 ardia_window_sight::Rect SightRect(CGRect r) { return {r.origin.x, r.origin.y, r.size.width, r.size.height}; }
 
 BOOL WindowServerShows(NSWindow *window) {
@@ -261,7 +263,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   if (!window) return NO;
   if ([self occlusionActed] && !objc_getAssociatedObject(window, kActedOcclusionKey)) return YES;
   const BOOL appKitShows = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
-  const BOOL inactive = !NSApp.isActive;
+  const BOOL inactive = UserInAnotherApp();
   const BOOL windowServerShows = (inactive || !appKitShows) && WindowServerShows(window);
   const BOOL overruled = !appKitShows && windowServerShows;
   if (overruled != _overruled) {
@@ -278,7 +280,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   NSWindow *window = _coreWindow.window;
   if (!window || _closed) return NO;
   if ([self occlusionActed] && !objc_getAssociatedObject(window, kActedOcclusionKey)) return NO;
-  if (NSApp.isActive && (window.occlusionState & NSWindowOcclusionStateVisible) != 0) return NO;
+  if (!UserInAnotherApp() && (window.occlusionState & NSWindowOcclusionStateVisible) != 0) return NO;
   return [ArdiaWebView playsForAutoPictureInPictureInWindow:window];
 }
 
@@ -334,7 +336,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
 - (void)updateSeen {
   if (![self occlusionActed] && [CFBridgingRelease(CGSessionCopyCurrentDictionary())[@"CGSSessionScreenIsLocked"] boolValue]) return;
   if (_settling && !_transitioning && [self windowVisible]) _settling = NO;
-  const BOOL seen = _settling || [self windowVisible] || (NSApp.isActive && !ArdiaChromeWindowHost.activeOnlyForPictureInPicture && IsWindowFullScreen(_coreWindow.window));
+  const BOOL seen = _settling || [self windowVisible] || (!UserInAnotherApp() && IsWindowFullScreen(_coreWindow.window));
   if ([ArdiaLaunchConfig.shared traced:@"visibility"])
     NSLog(@"[ardiacore-vis] window %ld seen=%d (transitioning=%d settling=%d)", (long)_coreWindow.window.windowNumber, seen, _transitioning, _settling);
   const BOOL overruleChanged = _overruleChanged;

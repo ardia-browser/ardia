@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTO_ARCHIVE_INTERVALS, coverIsCapturable, offersArchiveCard, isAutoArchiveDue, pageStatePatch, POSITION_STEP, tabMatchesQuery, titleAfterFailedLoad } from "./tabModels.ts";
+import { AUTO_ARCHIVE_INTERVALS, autoArchiveSymbol, coverIsCapturable, offersArchiveCard, isAutoArchiveDue, pageStatePatch, POSITION_STEP, tabMatchesQuery, titleAfterFailedLoad } from "./tabModels.ts";
 import {
   isPrivateOnScreen,
   archiveTabs,
@@ -302,4 +302,9 @@ test("Search Tabs matches a tab's title or address as main's TabText.matches doe
   assert.equal(tabMatchesQuery(tab, "incognito"), false);
   assert.equal(tabMatchesQuery({ ...tab, isPrivate: true }, "incognito"), true);
   assert.equal(tabMatchesQuery(tab, "   "), true);
+});
+
+test("every Archive Inactive Tabs choice has its own icon in the menu", () => {
+  const symbols = (Object.keys(AUTO_ARCHIVE_INTERVALS) as (keyof typeof AUTO_ARCHIVE_INTERVALS)[]).map((interval) => [interval, autoArchiveSymbol(interval)]);
+  assert.deepEqual(Object.fromEntries(symbols), { oneHour: "clock", fourHours: "clock", twelveHours: "clock", day: "calendar", threeDays: "calendar", week: "calendar", never: "infinity" });
 });

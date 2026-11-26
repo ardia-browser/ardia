@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createInputRegions, REVEAL_DEADLINE_MS, subtract } from "./inputRegions.ts";
-import { createPageHoles, holeClipPath, holesOf, localHoles, pagesAbove, paintersBeneath, PAGE_CORNER_RADIUS, separateHoles, windowCornerRadii } from "./pageHoles.ts";
+import { createPageHoles, holeClipPath, holesOf, localHoles, pagesAbove, pagesPaintedThrough, paintersBeneath, PAGE_CORNER_RADIUS, separateHoles, windowCornerRadii, engineEnclosedRect } from "./pageHoles.ts";
 
 function node(rect, { children = [], pointer = true } = {}) {
   const element = { rect, children, pointer, isConnected: true, parent: null };
@@ -13,7 +13,7 @@ function node(rect, { children = [], pointer = true } = {}) {
   return element;
 }
 
-function harness({ send = true, animating = false } = {}) {
+function harness({ send = true, animating = false, frozen = null } = {}) {
   const sent = [];
   const replies = [];
   const concealed = new Set();
@@ -32,6 +32,7 @@ function harness({ send = true, animating = false } = {}) {
     } : null,
     viewport: () => ({ width: 1000, height: 800 }),
     rectOf: (element) => element.rect,
+    ...(frozen ? { pageFrozen: (slot) => frozen.has(slot) } : {}),
     receivesPointer: (element) => element.pointer,
     watch: () => () => {},
     animating: () => animating,
@@ -624,5 +625,183 @@ test("the shell cuts the same corners the engine clips, at fractional edges, any
       const radii = windowCornerRadii({ x: inset, y: inset, width: 800 - 2 * inset, height: 600 - 2 * inset }, { width: 800, height: 600 }, 12, 1, frame);
       assert.equal(radii.upperLeft, inset === 0 ? 0 : inset < windowRadius ? Math.max(12, windowRadius - inset) : 12, `inset ${inset} at radius ${windowRadius}`);
     }
+  }
+});
+
+test("a page inside a moving Peek stage keeps its cutout and hit-region rect until the stage settles, then commits once", async () => {
+  const frozen = new Set();
+  const h = harness({ frozen });
+  const peekPage = node({ x: 300, y: 100, width: 600, height: 500 });
+  const overlay = node({ x: 280, y: 60, width: 640, height: 560 }, { children: [peekPage] });
+  h.registry.setPage(peekPage, true);
+  const stop = h.registry.addOverlay(overlay, "box", false);
+  await h.settle();
+  h.replies.splice(0).forEach((reply) => reply.resolve());
+  await h.settle();
+  const before = h.pagesSeen.length;
+  const sentBefore = h.sent.length;
+  frozen.add(peekPage);
+  for (const x of [320, 340, 360, 380]) {
+    peekPage.rect = { x, y: 100, width: 600 - (x - 300), height: 500 };
+    h.registry.refresh();
+    await h.nextFrame();
+    h.replies.splice(0).forEach((reply) => reply.resolve());
+    await h.settle();
+  }
+  assert.equal(h.pagesSeen.length, before, "the cutout never moves mid-motion");
+  for (const regions of h.sent.slice(sentBefore)) assert.deepEqual(regions.pages, [{ x: 300, y: 100, width: 600, height: 500 }]);
+  frozen.delete(peekPage);
+  h.registry.refresh();
+  await h.settle();
+  assert.equal(h.pagesSeen.length, before + 1);
+  assert.deepEqual(h.pagesSeen.at(-1), [{ x: 380, y: 100, width: 520, height: 500 }]);
+  assert.deepEqual(h.sent.at(-1).pages, [{ x: 380, y: 100, width: 520, height: 500 }]);
+  stop();
+});
+
+test("a page whose first viewport ack lands mid-motion is cut and routed at the rect the host was sent, not the transformed DOM rect", async () => {
+  const frozen = new Set();
+  const h = harness({ frozen });
+  const peekPage = node({ x: 300, y: 100, width: 600, height: 500 });
+  h.registry.pageViewport(peekPage, { x: 300, y: 100, width: 600, height: 500 });
+  frozen.add(peekPage);
+  peekPage.rect = { x: 360, y: 130, width: 480, height: 400 };
+  h.registry.setPage(peekPage, true);
+  await h.settle();
+  assert.deepEqual(h.pagesSeen.at(-1), [{ x: 300, y: 100, width: 600, height: 500 }]);
+  assert.deepEqual(h.sent.at(-1).pages, [{ x: 300, y: 100, width: 600, height: 500 }]);
+  frozen.delete(peekPage);
+  h.registry.refresh();
+  await h.settle();
+  assert.deepEqual(h.pagesSeen.at(-1), [{ x: 300, y: 100, width: 600, height: 500 }], "unfrozen but not yet accepted: still where the host holds the page");
+  h.registry.pageViewport(peekPage, { x: 360, y: 130, width: 480, height: 400 });
+  await h.settle();
+  assert.deepEqual(h.pagesSeen.at(-1), [{ x: 360, y: 130, width: 480, height: 400 }]);
+});
+
+test("after a stage settles, the cutout and routing stay on the host's acknowledged rect until it accepts the settled one, and stay there if it refuses", async () => {
+  const frozen = new Set();
+  const h = harness({ frozen });
+  const peekPage = node({ x: 300, y: 100, width: 600, height: 500 });
+  h.registry.pageViewport(peekPage, { x: 300, y: 100, width: 600, height: 500 });
+  h.registry.setPage(peekPage, true);
+  await h.settle();
+  h.replies.splice(0).forEach((reply) => reply.resolve());
+  await h.settle();
+  frozen.add(peekPage);
+  peekPage.rect = { x: 200, y: 80, width: 800, height: 600 };
+  h.registry.refresh();
+  await h.settle();
+  frozen.delete(peekPage);
+  h.registry.refresh();
+  await h.settle();
+  h.replies.splice(0).forEach((reply) => reply.resolve());
+  await h.settle();
+  const held = { x: 300, y: 100, width: 600, height: 500 };
+  assert.deepEqual(h.pagesSeen.at(-1), [held]);
+  assert.deepEqual(h.sent.at(-1).pages, [held]);
+  h.registry.refresh();
+  await h.settle();
+  assert.deepEqual(h.pagesSeen.at(-1), [held], "a refused settled viewport leaves the cutout where the native page still is");
+  h.registry.pageViewport(peekPage, { x: 200, y: 80, width: 800, height: 600 });
+  await h.settle();
+  assert.deepEqual(h.pagesSeen.at(-1), [{ x: 200, y: 80, width: 800, height: 600 }]);
+  h.registry.dropPage(peekPage);
+  h.registry.setPage(peekPage, true);
+  peekPage.rect = { x: 10, y: 10, width: 100, height: 100 };
+  await h.settle();
+  assert.deepEqual(h.pagesSeen.at(-1), [{ x: 10, y: 10, width: 100, height: 100 }], "a dropped page forgets its acknowledged rect");
+});
+
+
+test("painters moving with a Peek stage drop the frozen page's hole, while painters that stay put keep it at the window rect the native page holds", () => {
+  const stage = { moving: true };
+  const inStage = (element) => element.stage === stage && stage.moving;
+  const peekSlot = { stage };
+  const tabSlot = {};
+  const pages = [{ slot: peekSlot, rect: { x: 300, y: 100, width: 600, height: 500 } }, { slot: tabSlot, rect: { x: 0, y: 0, width: 200, height: 800 } }];
+  const card = { stage };
+  const windowLayer = {};
+  assert.deepEqual(pagesPaintedThrough(card, pages, inStage).map((page) => page.slot), [tabSlot]);
+  assert.deepEqual(pagesPaintedThrough(windowLayer, pages, inStage).map((page) => page.rect), pages.map((page) => page.rect));
+  stage.moving = false;
+  assert.equal(pagesPaintedThrough(card, pages, inStage).length, 2);
+
+  const saved = { ResizeObserver: globalThis.ResizeObserver, MutationObserver: globalThis.MutationObserver };
+  globalThis.ResizeObserver = class { observe() {} unobserve() {} };
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  try {
+    const root = { ownerDocument: { documentElement: { getBoundingClientRect: () => ({ width: 1200, height: 800 }) } }, closest: () => null };
+    let cardBox = { x: 300, y: 100, width: 600, height: 500 };
+    const movingLayer = { style: { clipPath: "" }, offsetWidth: 600, offsetHeight: 500, closest: () => null, stage, getBoundingClientRect: () => cardBox };
+    const fixedLayer = { style: { clipPath: "" }, offsetWidth: 1200, offsetHeight: 800, closest: () => null, getBoundingClientRect: () => ({ x: 0, y: 0, width: 1200, height: 800 }) };
+    const peekPage = { slot: { parentElement: root, stage }, rect: { x: 300, y: 100, width: 600, height: 500 } };
+    const painter = createPageHoles(root, () => 1, undefined, (element) => inStage(element));
+    painter.addLayer(movingLayer);
+    painter.addLayer(fixedLayer);
+    painter.pagesChanged([peekPage]);
+    assert.notEqual(movingLayer.style.clipPath, "");
+    const fixedBefore = fixedLayer.style.clipPath;
+    stage.moving = true;
+    cardBox = { x: 360, y: 130, width: 480, height: 400 };
+    painter.windowChanged();
+    assert.equal(movingLayer.style.clipPath, "", "the card no longer carries a hole that would slide off the native page");
+    assert.equal(fixedLayer.style.clipPath, fixedBefore, "the window's hole stays where the native page is");
+    stage.moving = false;
+    cardBox = { x: 300, y: 100, width: 600, height: 500 };
+    painter.windowChanged();
+    assert.notEqual(movingLayer.style.clipPath, "");
+  } finally {
+    globalThis.ResizeObserver = saved.ResizeObserver;
+    globalThis.MutationObserver = saved.MutationObserver;
+  }
+});
+
+test("native behind-window glass cuts its own rounded hole through the backdrop and tint layers", () => {
+  const saved = { ResizeObserver: globalThis.ResizeObserver, MutationObserver: globalThis.MutationObserver };
+  globalThis.ResizeObserver = class { observe() {} unobserve() {} };
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  try {
+    const viewport = { width: 900, height: 700 };
+    const root = { ownerDocument: { defaultView: { visualViewport: viewport } }, closest: () => null };
+    const layer = { style: { clipPath: "" }, offsetWidth: 900, offsetHeight: 700, closest: () => null, getBoundingClientRect: () => ({ x: 0, y: 0, width: 900, height: 700 }) };
+    const pillRadii = { upperLeft: 9, upperRight: 9, lowerRight: 9, lowerLeft: 9 };
+    const pill = { slot: { parentElement: root }, rect: { x: 12, y: 60, width: 52, height: 52 }, radii: pillRadii };
+    const page = { slot: { parentElement: root }, rect: { x: 240, y: 0, width: 660, height: 700 } };
+    const painter = createPageHoles(root);
+    painter.addLayer(layer);
+    assert.equal(layer.style.clipPath, "");
+    painter.glassChanged([pill]);
+    assert.equal(layer.style.clipPath, holeClipPath({ width: 900, height: 700 }, [{ ...pill.rect, radii: pillRadii }]));
+    painter.pagesChanged([page]);
+    assert.equal(layer.style.clipPath, holeClipPath({ width: 900, height: 700 }, localHoles({ x: 0, y: 0, width: 900, height: 700 }, { x: 1, y: 1 }, holesOf([page, pill], viewport))));
+    painter.glassChanged([]);
+    assert.equal(layer.style.clipPath, holeClipPath({ width: 900, height: 700 }, localHoles({ x: 0, y: 0, width: 900, height: 700 }, { x: 1, y: 1 }, holesOf([page], viewport))));
+  } finally {
+    globalThis.ResizeObserver = saved.ResizeObserver;
+    globalThis.MutationObserver = saved.MutationObserver;
+  }
+});
+
+test("a page at a fractional edge cuts its hole on the whole points the engine places the page at, so no half-covered seam shows", () => {
+  assert.deepEqual(engineEnclosedRect({ x: 190.3, y: 50.6, width: 700.2, height: 400.1 }), { x: 190, y: 50, width: 701, height: 401 });
+  assert.deepEqual(engineEnclosedRect({ x: 190.3, y: 50, width: 10, height: 10 }, 2), { x: 190, y: 50, width: 10.5, height: 10 });
+  assert.deepEqual(engineEnclosedRect({ x: 12, y: 8, width: 100, height: 40 }), { x: 12, y: 8, width: 100, height: 40 });
+  assert.deepEqual(engineEnclosedRect({ x: 12, y: 8, width: 100, height: 40 }, Number.NaN), { x: 12, y: 8, width: 100, height: 40 });
+  const saved = { ResizeObserver: globalThis.ResizeObserver, MutationObserver: globalThis.MutationObserver };
+  globalThis.ResizeObserver = class { observe() {} unobserve() {} };
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  try {
+    const viewport = { width: 1000, height: 700 };
+    const root = { ownerDocument: { defaultView: { visualViewport: viewport } }, closest: () => null };
+    const layer = { style: { clipPath: "" }, offsetWidth: 1000, offsetHeight: 700, closest: () => null, getBoundingClientRect: () => ({ x: 0, y: 0, width: 1000, height: 700 }) };
+    const painter = createPageHoles(root);
+    painter.addLayer(layer);
+    painter.pagesChanged([{ slot: { parentElement: root }, rect: { x: 190.3, y: 50.6, width: 700.2, height: 400.1 } }]);
+    assert.match(layer.style.clipPath, /M\d+(\.\d+)? 50H/);
+    assert.ok(!/190\.3|50\.6/.test(layer.style.clipPath), layer.style.clipPath);
+  } finally {
+    globalThis.ResizeObserver = saved.ResizeObserver;
+    globalThis.MutationObserver = saved.MutationObserver;
   }
 });

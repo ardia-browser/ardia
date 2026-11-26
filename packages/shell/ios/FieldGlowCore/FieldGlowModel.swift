@@ -65,11 +65,22 @@ public struct FieldGlowTimings: Equatable {
   public static let standard = FieldGlowTimings(milliseconds: [])
 }
 
+public struct FieldGlowPulse: Equatable {
+  let period: Double
+  let low: Double
+
+  public init(period: Double, low: Double) {
+    self.period = period
+    self.low = low
+  }
+}
+
 public struct FieldGlowModel {
   public private(set) var phase: FieldGlowPhase = .idle
   public private(set) var generation = 0
   public private(set) var targets: [FieldGlowProperty: Double] = [.filled: 0, .opacity: 0, .comet: 0]
   public private(set) var progress: Double?
+  public private(set) var pulse: FieldGlowPulse?
   public var timings: FieldGlowTimings
 
   public init(timings: FieldGlowTimings = .standard) {
@@ -77,6 +88,12 @@ public struct FieldGlowModel {
   }
 
   public var animates: Bool { phase != .idle }
+
+  mutating func setPulse(_ next: FieldGlowPulse?) -> Bool {
+    guard phase == .loading, next != pulse else { return false }
+    pulse = next
+    return true
+  }
 
   public mutating func show() -> [FieldGlowMove] {
     begin(.loading)
@@ -121,6 +138,7 @@ public struct FieldGlowModel {
 
   private mutating func begin(_ next: FieldGlowPhase) {
     phase = next
+    pulse = nil
     generation += 1
   }
 

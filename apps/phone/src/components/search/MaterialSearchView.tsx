@@ -215,7 +215,7 @@ export function MaterialSearchResults({ scrollY }: { scrollY: SharedValue<number
   const rowRoles = incognito ? rolesFromScheme(scheme, true) : theme;
   return (
     <View testID="materialSearchResults" style={styles.results}>
-      <Animated.ScrollView testID="materialSearchRows" onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
+      <Animated.ScrollView bounces={false} overScrollMode="never" testID="materialSearchRows" onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
         {rows.length ? (
           <View testID="materialSearchGroup" style={[styles.group, styles.segments]}>
             {rows.map((row, index) => (

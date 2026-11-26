@@ -22,7 +22,7 @@ extension PageView {
       var flatProbes = 0
       var navigation = page?.navigationGeneration ?? 0
       for attempt in 0..<PageView.drawnProbeTries {
-        if attempt > 0 { try? await Task.sleep(for: PageView.drawnProbeGap) }
+        if attempt > 0, !(await NextFramePresented.wait()) { return }
         guard !Task.isCancelled, let self, let probed = webView, let page else { return }
         if page.navigationGeneration != navigation {
           navigation = page.navigationGeneration
@@ -47,6 +47,9 @@ extension PageView {
         self.drawnTask = nil
         guard !self.drawnSent else { return }
         self.drawnSent = true
+        if PhoneTestBuild.isOn { NSLog("PAGELAB time page drawn %.0f", Date().timeIntervalSince1970 * 1000) }
+        if PhoneTestBuild.isOn { NSLog("PAGELAB page drawn %.0f ms after hosting, %@, probe %d", (CACurrentMediaTime() - self.hostedAt) * 1000, self.lastFrameView == nil ? "no last frame" : "over its last frame", attempt + 1) }
+        self.removeLastFrame()
         self.drawnDelivered = true
         self.drawnDocument = navigation
         self.handOverCover(reason: "drawn")
@@ -55,7 +58,24 @@ extension PageView {
       }
       guard !Task.isCancelled, let self else { return }
       self.drawnTask = nil
+      self.removeLastFrame()
     }
+  }
+
+  @MainActor
+  func showLastFrame(of webView: WKWebView) {
+    removeLastFrame()
+    guard let page, let frame = PageLastFrame.take(webView, document: page.navigationGeneration, size: webView.frame.size) else { return }
+    frame.frame = webView.frame
+    insertSubview(frame, aboveSubview: webView)
+    lastFrameView = frame
+    if coverNativeID != nil { _ = hideCover(reason: "lastFrame") }
+  }
+
+  @MainActor
+  func removeLastFrame() {
+    lastFrameView?.removeFromSuperview()
+    lastFrameView = nil
   }
 
   @MainActor
@@ -73,6 +93,7 @@ extension PageView {
     restoreHiddenCover()
     coverHandedOver = false
     guard coverNativeID != nil else { return }
+    if lastFrameView != nil, hideCover(reason: "lastFrame") { return }
     if currentDocumentDrawn {
       handOverCover(reason: "drawn")
       return
@@ -89,6 +110,7 @@ extension PageView {
       self.coverCapTask = nil
       self.coverRetryTask?.cancel()
       self.coverRetryTask = nil
+      self.removeLastFrame()
       if !self.hideCover(reason: "cap") { self.finishCover(reason: "cap", found: false) }
     }
   }

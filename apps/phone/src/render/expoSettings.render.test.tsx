@@ -6,11 +6,12 @@ import * as deckGrid from "../state/browse/deckGrid";
 import { writePreference } from "../state/store/browserDatabase";
 import { browserDatabase } from "../state/store/database";
 import * as telemetry from "../state/telemetry/telemetry";
-import { openSettings, pushSettings, settingsNav } from "../state/settings/nav";
+import { followSettingsPath, openSettings, pushSettings, settingsNav } from "../state/settings/nav";
 import { usePreferences } from "../state/settings/store";
 import { PHONE_SHARING_COPY } from "../lib/telemetryCopy";
 import { appVersion } from "../state/settings/actions";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
+import { pages as platformPages } from "../platform/pages";
 
 const onIos = Platform.OS === "ios" ? test : test.skip;
 
@@ -169,4 +170,56 @@ onIos("the Sync card keeps main's 6-point vertical padding and 14-point gap", ()
   const syncStack = again.root.findAll((node) => typeof node.type === "string" && node.props.spacing === 14 && Array.isArray(node.props.modifiers) && (node.props.modifiers as { $type: string }[]).some((modifier) => modifier.$type === "padding"))[0];
   expect((syncStack?.props.modifiers as { $type: string; vertical?: number }[]).find((modifier) => modifier.$type === "padding")?.vertical).toBe(6);
   unmount(again);
+});
+
+const TITLE_TYPES = ["navigationTitle", "ardia.settingsPage"];
+const titleModifierOf = (node: ReactTestInstance) => {
+  const holder = node.findAll((inner) => typeof inner.type === "string" && Array.isArray(inner.props.modifiers) && (inner.props.modifiers as ({ $type: string } | null)[]).some((modifier) => modifier !== null && TITLE_TYPES.includes(modifier.$type)))[0];
+  return holder ? (holder.props.modifiers as ({ $type: string; title?: string } | null)[]).find((modifier) => modifier !== null && TITLE_TYPES.includes(modifier.$type)) ?? null : null;
+};
+const firstFrameTitle = (node: ReactTestInstance) => {
+  const modifier = titleModifierOf(node);
+  return modifier === null || modifier.$type === "ardia.settingsPage" ? "" : (modifier.title ?? "");
+};
+const isPlaceholder = (node: ReactTestInstance) => node.findAll((inner) => typeof inner.type === "string" && Array.isArray(inner.props.modifiers) && (inner.props.modifiers as ({ $type: string } | null)[]).some((modifier) => modifier?.$type === "accessibilityHidden")).length > 0 && textsIn(node).length === 0;
+const destinationKeys = (root: Root) => hosts(root, (props) => props.name === "destination").map((node) => (node.props.extraProps as { value: string }).value);
+
+const quietNativeReads = () => {
+  jest.spyOn(platformPages, "listsSitePermissions").mockReturnValue(false);
+  jest.spyOn(platformPages, "clearsWebsiteDataSince").mockReturnValue(false);
+};
+
+onIos("every page a Settings screen links to is mounted before the tap with the same first-frame title the page itself shows, hero or inline, and is hidden from VoiceOver until pushed", () => {
+  quietNativeReads();
+  const tops = [{ page: "root" }, { page: "general" }, { page: "appearance" }, { page: "search" }, { page: "siteSettings" }, { page: "sync" }, { page: "about" }] as const;
+  let compared = 0;
+  for (const top of tops) {
+    openSettings(top);
+    const root = renderSurface(<SettingsView />);
+    const pushed = new Set<string>(top.page === "root" ? [] : [top.page]);
+    const links = destinationKeys(root).filter((key) => !pushed.has(key));
+    for (const key of links) {
+      const placeholder = paneOf(root, key);
+      expect(isPlaceholder(placeholder)).toBe(true);
+      const before = firstFrameTitle(placeholder);
+      act(() => pushSettings({ page: key } as never));
+      expect(isPlaceholder(paneOf(root, key))).toBe(false);
+      expect(`${key}: ${firstFrameTitle(paneOf(root, key))}`).toBe(`${key}: ${before}`);
+      compared += 1;
+      act(() => followSettingsPath(top.page === "root" ? [] : [top.page]));
+    }
+    unmount(root);
+  }
+  expect(compared).toBeGreaterThan(10);
+});
+
+onIos("a pane being popped keeps its real content through the pop instead of turning back into its placeholder", () => {
+  openSettings({ page: "general" });
+  const root = renderSurface(<SettingsView />);
+  expect(isPlaceholder(paneOf(root, "general"))).toBe(false);
+  act(() => followSettingsPath([]));
+  expect(settingsNav().stack.map((route) => route.page)).toEqual(["root"]);
+  expect(isPlaceholder(paneOf(root, "general"))).toBe(false);
+  expect(textsIn(paneOf(root, "general"))).toContain("About Ardia");
+  unmount(root);
 });

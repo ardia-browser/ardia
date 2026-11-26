@@ -82,7 +82,7 @@ fn hex_digit(byte: u8) -> Option<u8> {
     }
 }
 
-fn sha256_hex(text: &str) -> Option<[u8; SHA256_BYTES]> {
+pub(crate) fn sha256_hex(text: &str) -> Option<[u8; SHA256_BYTES]> {
     let bytes = text.as_bytes();
     if bytes.len() != SHA256_BYTES * 2 {
         return None;

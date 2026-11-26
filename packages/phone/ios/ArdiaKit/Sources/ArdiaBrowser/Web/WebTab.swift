@@ -73,6 +73,9 @@ public final class WebTab: DiscardablePage, Identifiable {
   public private(set) var pageZoom = 1.0
   public private(set) var isFindingInPage = false
   public private(set) var navigationGeneration = 0
+  public private(set) var committedDocuments = 0
+  public private(set) var sameDocumentNavigations = 0
+  public static var labScrollCountsAsTouch = false
   public private(set) var hasCommittedLoad = true
   public var request: PageRequest?
   public let blockedResources = BlockedResourceCounter()
@@ -344,10 +347,9 @@ public final class WebTab: DiscardablePage, Identifiable {
       if let value = tab.progressThrottle.offer(view.estimatedProgress, at: .now) { tab.progress = value }
     }
     watch(\.isLoading) { tab, view in
-      if view.isLoading, !tab.isLoading {
-        tab.navigationGeneration += 1
-        tab.hasCommittedLoad = false
-      }
+      if view.isLoading, !tab.isLoading { tab.navigationGeneration += 1 }
+      let committed = PageLoadCommit.after(loading: view.isLoading, wasLoading: tab.isLoading, committed: tab.hasCommittedLoad)
+      if committed != tab.hasCommittedLoad { tab.hasCommittedLoad = committed }
       if tab.isLoading != view.isLoading { tab.isLoading = view.isLoading }
       if !view.isLoading {
         tab.progressThrottle.reset()
@@ -370,7 +372,8 @@ public final class WebTab: DiscardablePage, Identifiable {
     if let webView { securityChanged(webView) }
     engine?.tabs.update(id, url: newURL.absoluteString)
     if !isPrivate, let language = PageTranslation.chosenLanguage(in: newURL) { engine?.preferences.rememberTranslation(into: language) }
-    let sameDocument = !(webView?.isLoading ?? false) && previous != nil
+    let sameDocument = PageLoadCommit.sameDocument(loading: webView?.isLoading ?? false, hadURL: previous != nil)
+    if sameDocument { sameDocumentNavigations += 1 }
     if sameDocument, let previous, Self.withoutFragment(previous) != Self.withoutFragment(newURL) {
       lastVisit = engine?.tabs.recordVisit(url: newURL.absoluteString, title: title, transition: .link, fromTab: id)
       engine?.onVisit?(id, PageVisit(url: newURL.absoluteString, title: title, kind: .sameDocument))
@@ -463,6 +466,7 @@ public final class WebTab: DiscardablePage, Identifiable {
 
   fileprivate func didCommit() {
     hasCommittedLoad = true
+    committedDocuments += 1
     capturingOrigins = [:]
     blockedResources.reset()
     scrollTracker.reset()
@@ -537,7 +541,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
     let atTop = offset <= 1
     if atTop != isScrolledToTop { isScrolledToTop = atTop }
-    guard scrollView.isTracking || scrollView.isDecelerating else { return }
+    guard scrollView.isTracking || scrollView.isDecelerating || Self.labScrollCountsAsTouch else { return }
     if let next = scrollTracker.offer(offset: offset, contentHeight: scrollView.contentSize.height, viewportHeight: scrollView.bounds.height - scrollView.adjustedContentInset.top - scrollView.adjustedContentInset.bottom) {
       scrollDirection = next
     }

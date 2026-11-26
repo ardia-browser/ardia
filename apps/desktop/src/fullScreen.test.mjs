@@ -15,14 +15,19 @@ delete globalThis.window;
 
 const F11 = String.fromCharCode(0xf70e);
 
-test("a host that goes full screen gets the entry, its F11 shortcut and a row in Keyboard Shortcuts", () => {
+const MAC = process.env.ARDIA_DESKTOP_MODE === "mac";
+const FULL_SCREEN = MAC
+  ? { key: "f", modifiers: ["function"], binding: { keyCode: 70, modifiers: 16 | 4, command: "toggleFullScreen", arg: null, notInText: false } }
+  : { key: F11, modifiers: [], binding: { keyCode: 122, modifiers: 0, command: "toggleFullScreen", arg: null, notInText: false } };
+
+test("a host that goes full screen gets the entry, its platform's shortcut (F11, or the Mac's 🌐F and ⌃⌘F) and a row in Keyboard Shortcuts", () => {
   const capabilities = linuxCapabilities();
   assert.equal(capabilities.fullScreen, true);
   assert.equal(capabilities.pageEdits, true);
   assert.equal(unavailableCommands(capabilities).has("std:toggleFullScreen:"), false);
   const row = linuxMenuShortcuts().find((item) => item.id === "std:toggleFullScreen:");
-  assert.deepEqual([row.title, row.path, row.key, row.modifiers, row.remappable], ["Enter Full Screen", ["View"], F11, [], true]);
-  assert.deepEqual(linuxBindings().find((binding) => binding.command === "toggleFullScreen"), { keyCode: 122, modifiers: 0, command: "toggleFullScreen", arg: null, notInText: false });
+  assert.deepEqual([row.title, row.path, row.key, row.modifiers, row.remappable], ["Enter Full Screen", ["View"], FULL_SCREEN.key, FULL_SCREEN.modifiers, true]);
+  assert.deepEqual(linuxBindings().find((binding) => binding.command === "toggleFullScreen"), FULL_SCREEN.binding);
   assert.deepEqual(linuxBindings({ "std:toggleFullScreen:": ["f", "command", "control"] }).find((binding) => binding.command === "toggleFullScreen").keyCode, 70, "and it can be remapped");
 });
 

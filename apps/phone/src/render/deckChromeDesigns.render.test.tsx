@@ -144,7 +144,7 @@ test("the redesigned cards stack as Arc Search's: two thirds of the screen wide 
   unmount(root);
 });
 
-test("the header is centred 26 points under the safe top, 24 in from the sides like the bottom bar, and its More is a 44-point glass rounded rectangle", () => {
+test("the header is centred 26 points under the safe top, 24 in from the sides like the bottom bar, and its More is a 44-point glass circle, whose menu lifts out as a circle", () => {
   const root = deck();
   const header = style(root, "deckHeader");
   expect(header.top + header.height / 2).toBe(SAFE_TOP + 26);
@@ -152,8 +152,9 @@ test("the header is centred 26 points under the safe top, 24 in from the sides l
   expect(style(root, "deckBottomBar")).toMatchObject({ paddingLeft: header.paddingHorizontal, paddingRight: header.paddingHorizontal });
   const more = root.root.findAll((node) => Array.isArray(node.props.items) && node.props.place && node.props.items.some((item: { label?: string }) => item?.label === "Settings"))[0]!;
   expect(more.props.place).toMatchObject({ right: 24 });
-  expect(style(root, "deckHeaderMore")).toMatchObject({ width: 44, height: 44, borderRadius: 12, borderCurve: "continuous" });
-  expect(root.root.findAll((node) => node.props.testID === "deckHeaderMore" && node.props.shape === "rounded").length).toBeGreaterThan(0);
+  expect(style(root, "deckHeaderMore")).toMatchObject({ width: 44, height: 44, borderRadius: 22 });
+  expect(root.root.findAll((node) => node.props.testID === "deckHeaderMore" && node.props.shape === "circle").length).toBeGreaterThan(0);
+  expect(more.props.previewRadius).toBe(22);
   unmount(root);
 });
 
@@ -564,11 +565,11 @@ test("the redesigned deck shows no Archive banner, icon or link, even when the o
   unmount(original);
 });
 
-test("the space switcher sits on a glass rounded rectangle as tall as More, and dims on the press", () => {
+test("the space switcher sits on a glass capsule as tall as More, and dims on the press", () => {
   withSpaces([profile("work", "Work"), profile("home", "Home")]);
   const root = deck();
-  expect(style(root, "deckSwitcherGlass")).toMatchObject({ borderRadius: 12, borderCurve: "continuous" });
-  expect(root.root.findAll((node) => node.props.testID === "deckSwitcherGlass" && node.props.shape === "rounded").length).toBeGreaterThan(0);
+  expect(style(root, "deckSwitcherGlass")).toMatchObject({ borderRadius: 22 });
+  expect(root.root.findAll((node) => node.props.testID === "deckSwitcherGlass" && node.props.shape === "capsule").length).toBeGreaterThan(0);
   const switcher = root.root.findAll((node) => node.props.accessibilityLabel === "Space, Work" && typeof node.props.style === "function")[0]!;
   expect(StyleSheet.flatten(switcher.props.style({ pressed: true }))).toMatchObject({ opacity: 0.35 });
   expect(StyleSheet.flatten(switcher.props.style({ pressed: false })).opacity).toBeUndefined();

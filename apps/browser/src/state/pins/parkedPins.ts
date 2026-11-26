@@ -7,7 +7,7 @@ import { samePage } from "../../lib/url";
 import { historyOf } from "../history/history";
 import { isRegularWindow } from "../windows/small";
 import { ASLEEP, withWake } from "../tabs/pageSession";
-import { mapSlotIds, slotTabIds, splitOf, splitTabIds } from "../splits/splits";
+import { mapSlotIds, normalized, slotTabIds, splitOf, splitTabIds } from "../splits/splits";
 
 type PinSource = Pick<BrowserState, "tabs" | "groups" | "history" | "profiles"> & Partial<Pick<BrowserState, "windows" | "splits">>;
 
@@ -133,7 +133,7 @@ export function adoptParkedPins(s: BrowserState, windowId: string, profileId: st
     const panes = slots.flatMap(slotTabIds);
     if (!panes.every(Boolean)) continue;
     const id = newId("split");
-    splits = { ...splits, [id]: { id, windowId, orientation: v.orientation, slots } };
+    splits = { ...splits, [id]: normalized({ id, windowId, orientation: v.orientation, slots }) };
     order = placeBlock(order, order.filter((x) => panes.includes(x)));
   }
   const window = { ...w, tabIds: orderSections(order, tabs, groups) };

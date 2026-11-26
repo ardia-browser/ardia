@@ -1,13 +1,23 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { AccessibilityInfo } from "react-native";
 
 const calls = [];
+const motionListeners = new Set();
+const initialMotion = Promise.withResolvers();
+AccessibilityInfo.isReduceMotionEnabled = () => initialMotion.promise;
+AccessibilityInfo.addEventListener = (event, listener) => {
+  if (event === "reduceMotionChanged") motionListeners.add(listener);
+  return { remove: () => motionListeners.delete(listener) };
+};
+const reduceMotion = (on) => { for (const listener of motionListeners) listener(on); };
 globalThis.acTestNativeModules = {
   ...(globalThis.acTestNativeModules ?? {}),
   ArdiaFieldGlow: {
     show: (...args) => calls.push(["show", ...args]),
     progress: (...args) => calls.push(["progress", ...args]),
+    pulse: (...args) => calls.push(["pulse", ...args]),
     finish: (...args) => calls.push(["finish", ...args]),
     reset: (...args) => calls.push(["reset", ...args]),
   },
@@ -18,16 +28,41 @@ const { setLive } = await import("../../state/tabs/tabLive.ts");
 const { FieldLoadFill } = await import("./FieldLoadFill.tsx");
 const { FieldGlowFill, FIELD_GLOW_TIMINGS, fieldGlowLook, nativeSink } = await import("./FieldGlowFill.tsx");
 const { driveFieldLoad } = await import("./fieldLoadDrive.ts");
+const { setPageProgress } = await import("../../state/tabs/pageProgress.ts");
 const { FIELD_LOAD } = await import("./tokens.ts");
 const { parseColor } = await import("../../lib/color.ts");
 const { fieldGlowFixture } = await import("./fieldGlowFixture.mjs");
 const { colorRoles } = await import("../ui/tokens.ts");
+const { reduceMotionKnown } = await import("../ui/reduceMotion.ts");
 
 const S = () => useBrowser.getState();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 S().hydrate({ profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } }, profileOrder: ["default"] });
 const w = S().createWindow({ url: "https://a.example/" });
 const tab = S().windows[w].tabIds[0];
+
+test("the glow does not pulse before the startup Reduce Motion preference is known", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  calls.length = 0;
+  const drive = driveFieldLoad(tab, nativeSink("startup"));
+  try {
+    setLive(tab, { isLoading: true });
+    t.mock.timers.tick(150);
+    t.mock.timers.tick(FIELD_LOAD.pulse.wait);
+    assert.ok(calls.some(([name]) => name === "show"));
+    assert.equal(calls.some(([name]) => name === "pulse"), false);
+    initialMotion.resolve(true);
+    await reduceMotionKnown;
+    t.mock.timers.tick(FIELD_LOAD.pulse.wait);
+    assert.equal(calls.some(([name]) => name === "pulse"), false);
+  } finally {
+    initialMotion.resolve(true);
+    await reduceMotionKnown;
+    drive.stop();
+    setLive(tab, { isLoading: false });
+    reduceMotion(false);
+  }
+});
 
 test("with the native glow present, the field's fill is one native host with no layout callback, no Animated value and no timer", () => {
   assert.equal(FieldLoadFill, FieldGlowFill);
@@ -65,6 +100,68 @@ test("the timings and the look sent to the native view are the field load tokens
   assert.deepEqual(look.rgba, parseColor(colorRoles.dark.accent));
   assert.deepEqual(look.glow, FIELD_LOAD.glow.map(([at, alpha]) => [at, alpha]));
   assert.deepEqual([look.tail, look.cap, look.frontShare, look.tailCeiling, look.line, look.floor], [FIELD_LOAD.tail, FIELD_LOAD.cap, FIELD_LOAD.frontShareOfField, FIELD_LOAD.tailCeiling, FIELD_LOAD.line, FIELD_LOAD.floor]);
+});
+
+test("slow progress pulses, refits and tiny updates do not delay it, and real progress turns it off", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { wait, period, low } = FIELD_LOAD.pulse;
+  calls.length = 0;
+  const drive = driveFieldLoad(tab, nativeSink("stall"));
+  const pulses = () => calls.filter(([name]) => name === "pulse");
+  try {
+    setPageProgress(tab, 0.2);
+    setLive(tab, { isLoading: true });
+    t.mock.timers.tick(150);
+    t.mock.timers.tick(wait - 1);
+    drive.refit();
+    setPageProgress(tab, 0.21);
+    assert.deepEqual(pulses(), []);
+    t.mock.timers.tick(1);
+    assert.deepEqual(pulses(), [["pulse", "stall", period, low]]);
+    setPageProgress(tab, 0.22);
+    assert.equal(pulses().length, 1);
+    setPageProgress(tab, 0.23);
+    assert.deepEqual(pulses().at(-1), ["pulse", "stall", 0, low]);
+    t.mock.timers.tick(wait);
+    assert.deepEqual(pulses().at(-1), ["pulse", "stall", period, low]);
+    setLive(tab, { isLoading: false });
+    assert.deepEqual(calls.slice(-2), [["pulse", "stall", 0, low], ["finish", "stall", false]]);
+    setLive(tab, { isLoading: true });
+    t.mock.timers.tick(150);
+    drive.stop();
+    t.mock.timers.tick(wait * 2);
+    assert.deepEqual(calls.at(-1), ["reset", "stall"]);
+    assert.equal(pulses().length, 4);
+  } finally {
+    drive.stop();
+    setLive(tab, { isLoading: false });
+    setPageProgress(tab, 0);
+  }
+});
+
+test("reduce motion stops a running pulse and prevents one from starting", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { wait, period, low } = FIELD_LOAD.pulse;
+  calls.length = 0;
+  const drive = driveFieldLoad(tab, nativeSink("reduced"));
+  const pulses = () => calls.filter(([name]) => name === "pulse");
+  try {
+    reduceMotion(true);
+    setLive(tab, { isLoading: true });
+    t.mock.timers.tick(150);
+    t.mock.timers.tick(wait);
+    assert.deepEqual(pulses(), []);
+    reduceMotion(false);
+    t.mock.timers.tick(wait);
+    assert.deepEqual(pulses(), [["pulse", "reduced", period, low]]);
+    reduceMotion(true);
+    t.mock.timers.tick(wait);
+    assert.deepEqual(pulses(), [["pulse", "reduced", period, low], ["pulse", "reduced", 0, low]]);
+  } finally {
+    drive.stop();
+    setLive(tab, { isLoading: false });
+    reduceMotion(false);
+  }
 });
 
 test("the native geometry fixture is today's JavaScript plates, so the Swift test checks the native view against the real look", () => {

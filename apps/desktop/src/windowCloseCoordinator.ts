@@ -137,8 +137,8 @@ export function createWindowCloseCoordinator(hooks: WindowCloseCoordinatorHooks)
     if (!hooks.utility && !attempt.quitting && drain?.endsSession === true)
       await hooks.closeUtilities?.().catch((error) => hooks.report?.(error));
     if (!current(attempt, key)) throw attempt.cancelled ? cancelledClose() : staleClose();
-    if (!hooks.utility && hooks.settleTelemetry) {
-      attempt.endedTelemetry = await hooks.settleTelemetry(attempt.quitting || drain?.endsSession === true).catch((error) => {
+    if (hooks.settleTelemetry) {
+      attempt.endedTelemetry = await hooks.settleTelemetry(!hooks.utility && (attempt.quitting || drain?.endsSession === true)).catch((error) => {
         hooks.report?.(error);
         return null;
       });

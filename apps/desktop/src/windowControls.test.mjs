@@ -90,6 +90,7 @@ test("with the traffic lights or the buttons hidden a hamburger is drawn even wh
   const little = source("../../browser/src/components/littleArdia/LittleArdiaWindow.tsx");
   assert.match(little, /const appMenu = useAppMenuInHeader\(\);/);
   assert.match(little, /\.\.\.\(appMenu \? \[<HeaderAppMenu key="menu" size=\{SMALL_BAR_BUTTON\} \/>\] : \[\]\)/, "Little Ardia's bar holds the hamburger");
+  const inWindowMenu = (process.env.ARDIA_DESKTOP_MODE ?? "linux") === "mac" ? 0 : 1;
   const S = () => useBrowser.getState();
   S().hydrate({ profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } }, profileOrder: ["default"] });
   const windowId = S().createWindow({ url: "https://menu.ardia.test/" });
@@ -109,8 +110,8 @@ test("with the traffic lights or the buttons hidden a hamburger is drawn even wh
       for (const [name, chrome] of [["trafficLights", TRAFFIC_LIGHTS_CHROME], ["hidden", HIDDEN_BUTTONS_CHROME]]) {
         Object.assign(WINDOW_CHROME, chrome);
         const label = JSON.stringify([settings, name]);
-        assert.equal(menus(false), 1, `profile hidden: ${label}`);
-        assert.equal(menus(true), 1, `profile shown: ${label}`);
+        assert.equal(menus(false), inWindowMenu, `profile hidden: ${label}`);
+        assert.equal(menus(true), inWindowMenu, `profile shown: ${label}`);
       }
       Object.assign(WINDOW_CHROME, windowsChrome);
       assert.equal(menus(false), 0, `native: ${JSON.stringify(settings)}`);
@@ -126,7 +127,7 @@ test("with the traffic lights or the buttons hidden a hamburger is drawn even wh
     };
     for (const [name, chrome] of [["trafficLights", TRAFFIC_LIGHTS_CHROME], ["hidden", HIDDEN_BUTTONS_CHROME]]) {
       Object.assign(WINDOW_CHROME, chrome);
-      assert.equal(barMenus(), 1, `Little Ardia: ${name}`);
+      assert.equal(barMenus(), inWindowMenu, `Little Ardia: ${name}`);
     }
     Object.assign(WINDOW_CHROME, windowsChrome);
     assert.equal(barMenus(), 0, "Little Ardia: native keeps the menu beside its buttons");
@@ -749,4 +750,74 @@ test("the drawn header toggle and Linux's header threshold both read the one tog
   for (const [name, source] of [["AddressBar.tsx", shared], ["SidebarAddressBar.tsx", linux]]) {
     assert.doesNotMatch(source, /headerToggleXFor|HEADER_TOOLS\.toggleX/, `${name} doesn't bypass useHeaderToggleX`);
   }
+});
+
+test("HTMAXBUTTON hover and press events drive the maximize button visual state per window and ignore malformed payloads", async () => {
+  const { readFileSync } = await import("node:fs");
+  const {
+    IDLE_MAXIMIZE_BUTTON_STATE,
+    MAXIMIZE_BUTTON_STATE_EVENT,
+    followMaximizeButtonState,
+    noteMaximizeButtonState,
+    parseMaximizeButtonState,
+    resetMaximizeButtonState,
+    useMaximizeButtonState,
+  } = await import("./maximizeButtonState.ts");
+  const { mount } = await import("../../browser/src/test-hooks.mjs");
+
+  assert.deepEqual(parseMaximizeButtonState({ windowId: "main", hovered: true, pressed: false }), {
+    windowId: "main",
+    state: { hovered: true, pressed: false },
+  });
+  assert.deepEqual(parseMaximizeButtonState({ hovered: true, pressed: true }), {
+    windowId: "",
+    state: { hovered: true, pressed: true },
+  });
+  for (const bad of [null, undefined, "hover", 42, {}, { hovered: true }, { pressed: false }, { windowId: 7, hovered: true, pressed: false }, { hovered: "yes", pressed: false }]) {
+    assert.equal(parseMaximizeButtonState(bad), null, JSON.stringify(bad));
+  }
+
+  const listeners = new Set();
+  const host = {
+    bootstrap: { windowId: "main", profileId: "default" },
+    invoke: async () => null,
+    onEvent: (listener) => (listeners.add(listener), () => listeners.delete(listener)),
+  };
+  const emit = (module, event, payload) => listeners.forEach((listener) => listener(module, event, payload));
+  const stop = followMaximizeButtonState(host, "main");
+  const mounted = mount(() => useMaximizeButtonState("main"));
+  try {
+    assert.deepEqual(mounted.value, IDLE_MAXIMIZE_BUTTON_STATE);
+    emit("ArdiaShell", MAXIMIZE_BUTTON_STATE_EVENT, { windowId: "other", hovered: true, pressed: false });
+    assert.deepEqual(mounted.value, IDLE_MAXIMIZE_BUTTON_STATE);
+    emit("ArdiaTabs", MAXIMIZE_BUTTON_STATE_EVENT, { windowId: "main", hovered: true, pressed: false });
+    assert.deepEqual(mounted.value, IDLE_MAXIMIZE_BUTTON_STATE);
+    emit("ArdiaShell", "windowState", { windowId: "main", hovered: true, pressed: true });
+    assert.deepEqual(mounted.value, IDLE_MAXIMIZE_BUTTON_STATE);
+    emit("ArdiaShell", MAXIMIZE_BUTTON_STATE_EVENT, { windowId: "main", hovered: true, pressed: false });
+    assert.deepEqual(mounted.value, { hovered: true, pressed: false });
+    emit("ArdiaShell", MAXIMIZE_BUTTON_STATE_EVENT, { windowId: "main", hovered: true, pressed: true });
+    assert.deepEqual(mounted.value, { hovered: true, pressed: true });
+    emit("ArdiaShell", MAXIMIZE_BUTTON_STATE_EVENT, { windowId: "main", hovered: "bad", pressed: false });
+    assert.deepEqual(mounted.value, { hovered: true, pressed: true }, "malformed event never clobbers live state");
+    emit("ArdiaShell", MAXIMIZE_BUTTON_STATE_EVENT, { windowId: "main", hovered: false, pressed: false });
+    assert.deepEqual(mounted.value, IDLE_MAXIMIZE_BUTTON_STATE);
+
+    noteMaximizeButtonState("main", { hovered: true, pressed: false });
+    assert.deepEqual(mounted.value, { hovered: true, pressed: false });
+    stop();
+    assert.deepEqual(mounted.value, IDLE_MAXIMIZE_BUTTON_STATE, "cleanup resets hover and press state");
+    assert.equal(listeners.size, 0);
+  } finally {
+    mounted.unmount();
+    resetMaximizeButtonState("main");
+  }
+
+  const wrapper = readFileSync(new URL("./WindowControls.tsx", import.meta.url), "utf8");
+  const shared = readFileSync(new URL("../../browser/src/components/window/WindowControls.tsx", import.meta.url), "utf8");
+  const entry = readFileSync(new URL("./shellEntry.tsx", import.meta.url), "utf8");
+  assert.match(wrapper, /useMaximizeButtonState\(props\.windowId\)/);
+  assert.match(wrapper, /maximizeState=\{maximizeState\}/);
+  assert.match(shared, /forced=\{button === "maximize" \? maximizeState : undefined\}/);
+  assert.match(entry, /followMaximizeButtonState\(ardiaHost, windowId\)/);
 });

@@ -73,8 +73,8 @@ test("turning it on and off is counted, and the daily settings snapshot says whe
   useBrowser.getState().updateSettings({ minimalismMode: true });
   useBrowser.getState().updateSettings({ minimalismMode: true });
   useBrowser.getState().updateSettings({ minimalismMode: false });
-  assert.deepEqual(takeMinimalismCounts(), { minimalism_turned_on: 1, minimalism_turned_off: 1 });
-  assert.deepEqual(takeMinimalismCounts(), { minimalism_turned_on: 0, minimalism_turned_off: 0 });
+  assert.deepEqual(takeMinimalismCounts(), { minimalism_turned_on: 1, minimalism_turned_off: 1, minimalism_pinned_icons_letters: 0, minimalism_pinned_icons_logos: 0, tile_letters_set: 0, tile_letters_reset: 0 });
+  assert.deepEqual(takeMinimalismCounts(), { minimalism_turned_on: 0, minimalism_turned_off: 0, minimalism_pinned_icons_letters: 0, minimalism_pinned_icons_logos: 0, tile_letters_set: 0, tile_letters_reset: 0 });
   const snap = settingsSnapshot({ ...DEFAULT_SETTINGS, minimalismMode: true });
   assert.equal(snap.setting_minimalismMode, "true");
   assert.equal(snap.default_minimalismMode, "false");

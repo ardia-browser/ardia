@@ -93,6 +93,10 @@ function idleRowsNow(): TrayRow[] {
   return rows;
 }
 
+export const preparedIdleRows = (): TrayRow[] => withPasteRow(idleRowsNow(), "", paste);
+
+export const preparedIdleKey = () => `${idleScope()}|${idleRevision()}|${paste === null ? "" : "paste"}`;
+
 function rowsAtPress(text: string): TrayRow[] {
   if (text.trim()) return rowsFor(text, []);
   const made = idleMade.get(idleScope());
@@ -207,15 +211,25 @@ export function applySearchEngine() {
   else setSearchEngine(currentPreferences().searchEngineId);
 }
 
+export type SearchPresenting = { text: string; origin: SearchOrigin; incognito: boolean; editsPage: boolean; prepared: string };
+
+let presentsWith: ((presenting: SearchPresenting) => string | null) | null = null;
+
+export function whenSearchPresents(hook: ((presenting: SearchPresenting) => string | null) | null) {
+  presentsWith = hook;
+}
+
 export function presentSearch(origin: SearchOrigin, text = "", incognitoOnCancel: boolean | null = null, page: SuggestContext | null = null, arrival: TrayArrival = "rises") {
   markSearchPressed();
   beginInteraction("tray open", INTERACTION_WINDOW_MS.trayOpen);
-  inFlight?.abort();
+  dropQueuedDraft();
   remote = { text: "", values: [] };
   context = page ?? { currentUrl: null, currentTabId: null };
   paste = null;
   const editsPage = page?.currentUrl != null;
-  const shownText = editsPage && clearsPagePrefill ? "" : text;
+  const asked = editsPage && clearsPagePrefill ? "" : text;
+  const adopted = useSearch.getState().open ? null : (presentsWith?.({ text: asked, origin, incognito: useTabs.getState().incognito, editsPage, prepared: preparedIdleKey() }) ?? null);
+  const shownText = asked === "" && adopted ? adopted : asked;
   if (!shownText.trim() && !idleMade.has(idleScope()) && !useTabs.getState().incognito) countUsage("search_opens_cold");
   useSearch.setState((state) => ({
     open: true,
@@ -233,23 +247,44 @@ export function presentSearch(origin: SearchOrigin, text = "", incognitoOnCancel
     editsPage,
   }));
   markSearchPhase("open");
+  if (shownText !== asked) typeSearch(shownText);
   offerPaste(useSearch.getState().session);
   refreshAfterOpening(useSearch.getState().session);
 }
 
 export function dismissSearch(ending: SearchEnding = "cancelled") {
   if (useSearch.getState().open) markSearchClosing();
-  inFlight?.abort();
   useSearch.setState({ open: false, ending, incognitoOnCancel: null });
+  paste = null;
+  dropQueuedDraft();
 }
 
 const REMOTE_DELAY_MS = 150;
 
-let typed: string | null = null;
+type Draft = { text: string; session: number; incognito: boolean };
+
+let typed: Draft | null = null;
 let frame: ReturnType<typeof requestAnimationFrame> | null = null;
 let remoteTimer: ReturnType<typeof setTimeout> | null = null;
 
+const draftNow = (text: string): Draft => ({ text, session: useSearch.getState().session, incognito: useTabs.getState().incognito });
+
+const ownsSearch = (draft: Draft) => {
+  const state = useSearch.getState();
+  return state.open && state.session === draft.session && useTabs.getState().incognito === draft.incognito;
+};
+
+function dropQueuedDraft() {
+  if (frame !== null) cancelAnimationFrame(frame);
+  frame = null;
+  typed = null;
+  if (remoteTimer !== null) clearTimeout(remoteTimer);
+  remoteTimer = null;
+  inFlight?.abort();
+}
+
 function showRows(text: string) {
+  const draft = draftNow(text);
   catchUpSources();
   const carried = remote.text && text.startsWith(remote.text) ? remote.values : [];
   const suggested = suggestionsFor(text, carried);
@@ -259,10 +294,11 @@ function showRows(text: string) {
   if (!text.trim() || !currentPreferences().searchSuggestions) return;
   remoteTimer = setTimeout(() => {
     remoteTimer = null;
+    if (!ownsSearch(draft)) return;
     const controller = new AbortController();
     inFlight = controller;
     void remoteSuggestions(text, controller.signal).then((outcome) => {
-      if (controller.signal.aborted || useSearch.getState().text !== text) return;
+      if (controller.signal.aborted || !ownsSearch(draft) || useSearch.getState().text !== text) return;
       remote = { text, values: outcome.values };
       const merged = suggestionsFor(text, outcome.values);
       useSearch.setState({ rows: merged.rows, completion: merged.completion, completedFor: text });
@@ -271,13 +307,13 @@ function showRows(text: string) {
 }
 
 export function typeSearch(text: string) {
-  typed = text;
+  typed = draftNow(text);
   if (frame !== null) return;
   frame = requestAnimationFrame(() => {
     frame = null;
     const next = typed;
     typed = null;
-    if (next !== null) showRows(next);
+    if (next !== null && ownsSearch(next)) showRows(next.text);
   });
 }
 

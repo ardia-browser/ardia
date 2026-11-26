@@ -106,14 +106,13 @@ NSString *DescribePanel(NSSavePanel *panel, NSWindow *parent, NSString *how) {
   const bool open = [panel isKindOfClass:NSOpenPanel.class];
   [parts addObject:[NSString stringWithFormat:@"%@ panel (not shown): %@", open ? @"open" : @"save", how]];
   if (parent)
-    [parts addObject:[NSString stringWithFormat:@"parent %@ #%ld \"%@\"%@", parent.className, (long)parent.windowNumber,
-                                                parent.title, parent.isVisible ? @"" : @" (hidden)"]];
+    [parts addObject:[NSString stringWithFormat:@"parent %@ #%ld%@", parent.className, (long)parent.windowNumber, parent.isVisible ? @"" : @" (hidden)"]];
   if (open) {
     NSOpenPanel *o = (NSOpenPanel *)panel;
     [parts addObject:[NSString stringWithFormat:@"multiple=%d files=%d directories=%d", o.allowsMultipleSelection,
                                                 o.canChooseFiles, o.canChooseDirectories]];
   } else {
-    [parts addObject:[NSString stringWithFormat:@"name=\"%@\"", panel.nameFieldStringValue]];
+    [parts addObject:[NSString stringWithFormat:@"name of %lu characters", (unsigned long)panel.nameFieldStringValue.length]];
   }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -130,31 +129,62 @@ NSString *DescribePanel(NSSavePanel *panel, NSWindow *parent, NSString *how) {
                                                   (long)((NSPopUpButton *)v).indexOfSelectedItem]];
     [views addObjectsFromArray:v.subviews];
   }
-  if (panel.directoryURL) [parts addObject:[NSString stringWithFormat:@"directory=%@", panel.directoryURL.path]];
   return [parts componentsJoinedByString:@" | "];
 }
 
 NSModalResponse AnswerPanel(NSSavePanel *panel, NSWindow *parent, NSString *how) {
   NSArray<NSURL *> *picks = TakePicks();
-  NSString *answer = picks ? [NSString stringWithFormat:@"chose %@", [[picks valueForKey:@"path"] componentsJoinedByString:@", "]]
-                           : @"cancelled";
+  NSString *answer = picks ? [NSString stringWithFormat:@"chose %lu", (unsigned long)picks.count] : @"cancelled";
   Log([NSString stringWithFormat:@"%@ | %@", DescribePanel(panel, parent, how), answer], @[]);
   if (picks) ReturnPicks(panel, picks);
   return picks ? NSModalResponseOK : NSModalResponseCancel;
 }
 
-void InterceptFilePanels() {
-  for (Class cls : {NSSavePanel.class, NSOpenPanel.class}) {
-    ReplaceMethodWith(cls, @selector(beginSheetModalForWindow:completionHandler:),
-            ^(NSSavePanel *panel, NSWindow *window, void (^handler)(NSModalResponse)) {
-              NSModalResponse response = AnswerPanel(panel, window, @"sheet");
-              if (handler) dispatch_async(dispatch_get_main_queue(), ^{ handler(response); });
-            });
-    ReplaceMethodWith(cls, @selector(beginWithCompletionHandler:), ^(NSSavePanel *panel, void (^handler)(NSModalResponse)) {
-      NSModalResponse response = AnswerPanel(panel, nil, [NSString stringWithFormat:@"free-standing, level %ld", (long)panel.level]);
-      if (handler) dispatch_async(dispatch_get_main_queue(), ^{ handler(response); });
+bool AnswerArmed(NSSavePanel *panel, NSWindow *parent, NSString *how, NSModalResponse *response) {
+  if (!HasArmedPanels() || !FromChromium(NSThread.callStackSymbols)) return false;
+  bool handled = false;
+  NSString *armId = nil;
+  NSArray<NSURL *> *picks = ArmedPanelPicks(panel, parent, &handled, &armId);
+  if (!handled) return false;
+  Log([NSString stringWithFormat:@"%@ panel (not shown): %@ | armed %@ %@", [panel isKindOfClass:NSOpenPanel.class] ? @"open" : @"save", how, armId,
+                                 picks ? [NSString stringWithFormat:@"chose %lu", (unsigned long)picks.count] : @"cancelled"],
+      @[]);
+  if (picks) ReturnPicks(panel, picks);
+  *response = picks ? NSModalResponseOK : NSModalResponseCancel;
+  return true;
+}
+
+void InterceptFilePanels(bool background) {
+  for (Class cls : {NSOpenPanel.class, NSSavePanel.class}) {
+    ReplaceMethod(cls, @selector(beginSheetModalForWindow:completionHandler:), ^id(IMP original) {
+      return ^(NSSavePanel *panel, NSWindow *window, void (^handler)(NSModalResponse)) {
+        NSModalResponse response = NSModalResponseCancel;
+        if (!AnswerArmed(panel, window, @"sheet", &response)) {
+          if (!background) return ((void (*)(id, SEL, NSWindow *, void (^)(NSModalResponse)))original)(panel, @selector(beginSheetModalForWindow:completionHandler:), window, handler);
+          response = AnswerPanel(panel, window, @"sheet");
+        }
+        if (handler) dispatch_async(dispatch_get_main_queue(), ^{ handler(response); });
+      };
     });
-    ReplaceMethodWith(cls, @selector(runModal), ^NSModalResponse(NSSavePanel *panel) { return AnswerPanel(panel, nil, @"app-modal"); });
+    ReplaceMethod(cls, @selector(beginWithCompletionHandler:), ^id(IMP original) {
+      return ^(NSSavePanel *panel, void (^handler)(NSModalResponse)) {
+        NSModalResponse response = NSModalResponseCancel;
+        NSString *how = [NSString stringWithFormat:@"free-standing, level %ld", (long)panel.level];
+        if (!AnswerArmed(panel, nil, how, &response)) {
+          if (!background) return ((void (*)(id, SEL, void (^)(NSModalResponse)))original)(panel, @selector(beginWithCompletionHandler:), handler);
+          response = AnswerPanel(panel, nil, how);
+        }
+        if (handler) dispatch_async(dispatch_get_main_queue(), ^{ handler(response); });
+      };
+    });
+    ReplaceMethod(cls, @selector(runModal), ^id(IMP original) {
+      return ^NSModalResponse(NSSavePanel *panel) {
+        NSModalResponse response = NSModalResponseCancel;
+        if (AnswerArmed(panel, nil, @"app-modal", &response)) return response;
+        if (!background) return ((NSModalResponse (*)(id, SEL))original)(panel, @selector(runModal));
+        return AnswerPanel(panel, nil, @"app-modal");
+      };
+    });
   }
 }
 
@@ -383,6 +413,8 @@ void InstallActivationGuardsEarly() {
     if ([app isEqual:NSRunningApplication.currentApplication] && !Allow(@"activateWithOptions:")) return NO;
     return originalActivate(app, @selector(activateWithOptions:), options);
   });
+  InterceptFilePanels(Background());
+  SweepFileArmsAtLaunch();
 
   if (!Background()) return;
   FakeKeyWindows();
@@ -448,7 +480,6 @@ void InstallActivationGuardsEarly() {
     ReportMenu(menu, @"pop-up menu");
     return NO;
   });
-  InterceptFilePanels();
   InterceptAlerts();
 }
 

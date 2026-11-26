@@ -11,6 +11,7 @@ export {
   PeekStage,
   MouseArea,
   OutsidePressArea,
+  WheelArea,
   PageCoverGate,
   PluginPageView,
   PopoverBubble,

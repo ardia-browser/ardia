@@ -1,11 +1,12 @@
-import { createContext, useLayoutEffect, useSyncExternalStore, type RefObject } from "react";
+import { createContext, useLayoutEffect, useRef, useSyncExternalStore, type RefObject } from "react";
 import { parseColor } from "../../browser/src/lib/color";
 import { hostSupports, invokeHost, reportHostError, type ArdiaHost } from "./host.ts";
-import { createGlassRegions, GLASS_METHOD, GLASS_MODULE, type GlassApplied, type GlassGeometry, type GlassRegistry } from "./glassRegions.ts";
+import { createGlassRegions, GLASS_BEHIND_WINDOW, GLASS_METHOD, GLASS_MODULE, type GlassApplied, type GlassGeometry, type GlassHole, type GlassLook, type GlassRegistry } from "./glassRegions.ts";
 import { intersection, type Rect } from "./inputRegions.ts";
 
 export const GlassOptIn = createContext(false);
 export const GlassInside = createContext(false);
+export const GlassGroupContext = createContext<string | null>(null);
 
 const GLASS_ATTRIBUTE = "data-ardia-glass";
 const GLASS_ID_ATTRIBUTE = "data-ardia-glass-id";
@@ -27,6 +28,19 @@ const subscribeAvailability = (listener: () => void) => {
 };
 const glassAvailable = () => registry?.available() ?? false;
 const useGlassAvailable = () => useSyncExternalStore(subscribeAvailability, glassAvailable, glassAvailable);
+export const useNativeGlass = useGlassAvailable;
+export const nativeGlassBehindWindow = () => registry?.behindWindow() ?? false;
+
+export function glassTint(color: string | undefined): string | undefined {
+  if (!color) return undefined;
+  const parsed = parseColor(color);
+  if (!parsed) return undefined;
+  const [r, g, b, a] = parsed;
+  const channel = (value: number) => Math.min(255, Math.max(0, Math.round(value)));
+  const alpha = Math.min(1, Math.max(0, a));
+  if (![r, g, b, a].every(Number.isFinite)) return undefined;
+  return `rgba(${channel(r)},${channel(g)},${channel(b)},${+alpha.toFixed(4)})`;
+}
 
 function glassFill(fill: string) {
   const parsed = parseColor(fill);
@@ -121,7 +135,7 @@ function animating(element: Element) {
   });
 }
 
-export function startShellGlass(host: ArdiaHost) {
+export function startShellGlass(host: ArdiaHost, holes?: (holes: readonly GlassHole[]) => void) {
   const supported = hostSupports(GLASS_METHOD, host);
   const mutations = new MutationObserver(() => registry?.refresh());
   const glass = createGlassRegions(
@@ -137,12 +151,14 @@ export function startShellGlass(host: ArdiaHost) {
       clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
       report: reportHostError,
       availability: announceAvailability,
+      holes,
       activity: (on) => {
         if (on) mutations.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["style", "class"] });
         else mutations.disconnect();
       },
     },
     supported && host.bootstrap.glassPanels === true,
+    { behindWindow: supported && hostSupports(GLASS_BEHIND_WINDOW, host) },
   );
   registry = glass;
   announceAvailability();
@@ -161,13 +177,16 @@ export function startShellGlass(host: ArdiaHost) {
   const motion = (event: Event) => {
     if (event.target instanceof Element) glass.motion(event.target);
   };
+  const scrolled = (event: Event) => glass.motion(event.target instanceof Element ? event.target : document.documentElement, true);
   for (const type of MOTION_EVENTS) document.addEventListener(type, motion, true);
+  document.addEventListener("scroll", scrolled, { capture: true, passive: true });
   return {
     glass,
     stop() {
       unsubscribe();
       mutations.disconnect();
       for (const type of MOTION_EVENTS) document.removeEventListener(type, motion, true);
+      document.removeEventListener("scroll", scrolled, { capture: true });
       if (registry === glass) {
         registry = null;
         announceAvailability();
@@ -201,6 +220,29 @@ export function useGlassSurface(ref: RefObject<Element | null>, fill: string | u
       element.removeAttribute(GLASS_ATTRIBUTE);
     };
   }, [enabled, available, fill]);
+}
+
+export function useGlassLook(ref: RefObject<Element | null>, look: GlassLook, enabled: boolean) {
+  const available = useGlassAvailable();
+  const latest = useRef(look);
+  latest.current = look;
+  const active = enabled && available && !!registry;
+  useLayoutEffect(() => {
+    const element = ref.current;
+    const glass = registry;
+    if (!active || !element || !glass) return;
+    const remove = glass.add(element, undefined, latest.current);
+    return () => {
+      remove();
+      element.removeAttribute(GLASS_ATTRIBUTE);
+    };
+  }, [active]);
+  const key = JSON.stringify(look);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (active && element) registry?.restyle(element, latest.current);
+  }, [active, key]);
+  return active;
 }
 
 export function useVisualEffectMark(ref: RefObject<Element | null>) {

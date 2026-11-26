@@ -114,7 +114,7 @@ struct ResearchView: View {
       }
       .clipShape(.rect(cornerRadius: Radius.control, style: .continuous))
     }
-    .chromeSurface(in: .rect(cornerRadius: Radius.control, style: .continuous), interactive: false)
+    .chromeSurface(in: .rect(cornerRadius: Radius.control, style: .continuous))
     .accessibilityElement(children: .contain)
   }
 
@@ -349,7 +349,7 @@ struct ResearchView: View {
         .font(.subheadline.weight(.semibold))
         .padding(.horizontal, Spacing.medium)
         .padding(.vertical, Spacing.small)
-        .chromeSurface(in: .rect(cornerRadius: Radius.control, style: .continuous), interactive: false)
+        .chromeSurface(in: .rect(cornerRadius: Radius.control, style: .continuous))
         .padding(.bottom, Spacing.section * 3)
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .accessibilityAddTraits(.updatesFrequently)

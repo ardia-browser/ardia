@@ -35,7 +35,7 @@ export function SetupCodeOutro() {
       subtitle="Paste it into Ardia after you download it, on its first screen or in Settings › General. Ardia sets itself up just like this."
       actions={
         <>
-          <StepActions icon="arrow.right" continueTitle="Done" onContinue={() => finishOnboarding()} />
+          <StepActions icon="arrow.right" continueTitle="Done" onContinue={() => finishOnboarding()} holdScroll />
           <SecondaryButton title={copied ? "Copied, downloading" : "Download & Copy"} filled onPress={downloadAndCopy} />
         </>
       }

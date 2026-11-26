@@ -72,7 +72,7 @@ function RoundButton({ icon, label, dark, incognito, enabled, onPress, buttonRef
   const roles = rolesFor(dark);
   return (
     <PressInPlace ref={buttonRef} label={label} disabled={!enabled} onPress={onPress} onPressIn={haptics.barPress} style={styles.round}>
-      <ChromeSurface testID={`duoToolbar:${label}`} shape="rounded" cornerRadius={controlRadius(DUO.toolbarButton)} incognito={incognito} dark={dark} style={[styles.round, smoothCorners]}>
+      <ChromeSurface testID={`duoToolbar:${label}`} shape="circle" cornerRadius={capsule(DUO.toolbarButton)} incognito={incognito} dark={dark} style={styles.round}>
         <Symbol name={icon} size={DUO.toolbarGlyph} color={enabled ? roles.foregroundPrimary : roles.foregroundTertiary} />
       </ChromeSurface>
     </PressInPlace>

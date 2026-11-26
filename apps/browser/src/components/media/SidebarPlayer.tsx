@@ -1,4 +1,4 @@
-import { Dot, Panel, Symbol, Button, tabularNums, Text, useHover, reduceMotion } from "../ui";
+import { continuousCorners, Dot, Panel, Symbol, Button, tabularNums, Text, useHover, reduceMotion } from "../ui";
 import { useShallow } from "zustand/react/shallow";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Animated, Image, Pressable, View } from "react-native";
@@ -248,7 +248,7 @@ const PlayerRow = memo(function PlayerRow({ tabId, hovered, reveal }: { tabId: s
       style={{ flex: 1, minWidth: 0, alignSelf: "stretch", flexDirection: "row", alignItems: "center", marginRight: TRAILING_INSET }}
     >
       <Animated.View tooltip="Back to Tab" style={artScaleStyle}>
-        <View style={{ width: ART, height: ART, borderRadius: radius.control, overflow: "hidden", backgroundColor: media.artPlaceholder, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ width: ART, height: ART, ...continuousCorners(radius.control), overflow: "hidden", backgroundColor: media.artPlaceholder, alignItems: "center", justifyContent: "center" }}>
           {artwork ? <Image source={{ uri: artwork }} resizeMode="cover" style={{ width: ART, height: ART }} /> : <Favicon url={tab.url} favicon={tab.favicon} size={16} profileId={tab.profileId} />}
         </View>
       </Animated.View>
@@ -312,10 +312,10 @@ export function SidebarPlayer({ tabId, motion, docked }: { tabId: string; motion
         style={{ position: "absolute", left: -HOVER_SLOP, right: -HOVER_SLOP, bottom: -below, height: (expanded ? EXPANDED_HEIGHT : ROW_HEIGHT) + HOVER_SLOP + below }}
       >
         <View pointerEvents="box-none" style={{ position: "absolute", left: HOVER_SLOP, right: HOVER_SLOP, bottom: below, height: EXPANDED_HEIGHT }}>
-          <Animated.View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: EXPANDED_HEIGHT, borderRadius: radius.panel, overflow: "hidden", transform: [{ translateY: reveal.mask }] }}>
+          <Animated.View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: EXPANDED_HEIGHT, ...continuousCorners(radius.panel), overflow: "hidden", transform: [{ translateY: reveal.mask }] }}>
             <Animated.View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: EXPANDED_HEIGHT, transform: [{ translateY: reveal.unmask }] }}>
               {glass ? (
-                <View style={{ flex: 1, overflow: "hidden", borderRadius: radius.panel }}>
+                <View style={{ flex: 1, ...continuousCorners(radius.panel), overflow: "hidden" }}>
                   <GlassFill radius={radius.panel} state={want ? "lit" : "rest"} />
                 </View>
               ) : (

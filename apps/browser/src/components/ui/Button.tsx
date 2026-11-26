@@ -12,7 +12,7 @@ import { useTheme } from "./theme";
 import { buttonMotion, usePressMotion, usePressScaleMotion } from "./motion";
 import { capsule, iconButton, opacity, radius as radii, space, font as typeScale, weight as weights, type ColorRole, type IconButtonSize, type Space, type TypeSize, type Weight } from "./tokens";
 
-export type ButtonHit = { width: number; height: number; plateX: number; plateY: number; box?: number; radius?: number };
+export type ButtonHit = { width: number; height: number; plateX: number; plateY: number; box?: number; radius?: number; topLeftRadius?: number };
 
 export type IconPalette = { icon: string; iconDisabled: string; hover: string; pressed: string };
 
@@ -31,6 +31,7 @@ type IconBase = {
   children?: ReactNode;
   box?: number;
   glyphBox?: number;
+  centresInk?: SymbolProps["centresInk"];
   radius?: number;
   weight?: SymbolProps["weight"];
   tooltip?: string;
@@ -62,6 +63,7 @@ type TextProps = {
   tone?: ColorRole;
   hoverTone?: ColorRole;
   label?: string;
+  centersCapitals?: boolean;
 };
 
 type PillSize = "m" | "l" | "xl";
@@ -138,7 +140,7 @@ function IconButtonView(props: IconProps) {
       <Image source={{ uri: image }} style={{ width: IMAGE_SIZE, height: IMAGE_SIZE, opacity: disabled ? opacity.disabled : 1 }} />
     </View>
   ) : icon ? (
-    drawnSymbol({ name: icon, size: metrics.glyph, weight, color: ink, style: { width: glyphFrame, height: glyphFrame } })
+    drawnSymbol({ name: icon, size: metrics.glyph, weight, color: ink, centresInk: props.centresInk, style: { width: glyphFrame, height: glyphFrame } })
   ) : null);
   const [lit, setLit] = useState(() => !disabled && !!active);
   if (!lit && !disabled && (hovered || !!active)) setLit(true);
@@ -160,7 +162,7 @@ function IconButtonView(props: IconProps) {
         justifyContent: "center",
       }}
     >
-      {lit ? <HoverFill shown={!disabled && (pressed || !!active || hovered)} instant={!!active} color={pressed || active ? pressedFill : hover} radius={plateRadius} /> : null}
+      {lit ? <HoverFill shown={!disabled && (pressed || !!active || hovered)} instant={!!active} color={pressed || active ? pressedFill : hover} radius={plateRadius} topLeftRadius={hit?.topLeftRadius} /> : null}
       {face}
       {badge}
     </View>
@@ -204,7 +206,7 @@ const TEXT_LOOKS: Record<TextLook, { plate: "toolbar" | "hover" | "none"; height
 const UNDERLINE = { textDecorationLine: "underline" } as const;
 
 function TextButtonView(props: TextProps) {
-  const { title, onPress, disabled, look, hoverTone, padY, label } = props;
+  const { title, onPress, disabled, look, hoverTone, padY, label, centersCapitals } = props;
   const base = look ? TEXT_LOOKS[look] : null;
   const plate = props.plate ?? base?.plate ?? "toolbar";
   const height = props.height ?? base?.height;
@@ -230,7 +232,7 @@ function TextButtonView(props: TextProps) {
     return (
       <View {...hoverProps}>
         <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
-          <Label style={[textStyle(hovered && hoverTone ? theme[hoverTone] : theme[tone]), { paddingVertical: padY ? space[padY] : undefined }, look === "link" && hovered ? UNDERLINE : null, scaleStyle]}>{title}</Label>
+          <Label ardiaCentersCapitals={centersCapitals} style={[textStyle(hovered && hoverTone ? theme[hoverTone] : theme[tone]), { paddingVertical: padY ? space[padY] : undefined }, look === "link" && hovered ? UNDERLINE : null, scaleStyle]}>{title}</Label>
         </Pressable>
       </View>
     );
@@ -241,7 +243,7 @@ function TextButtonView(props: TextProps) {
         {({ pressed }) => (
           <Plate style={[{ height, paddingHorizontal: space[pad], justifyContent: "center" }, scaleStyle]}>
             {lit ? <HoverFill shown={shows(pressed)} color={plate === "toolbar" && pressed ? theme.toolbarPressed : theme.toolbarHover} radius={radii.control} /> : null}
-            <Text style={textStyle(disabled ? theme.iconDisabled : hovered && hoverTone ? theme[hoverTone] : theme[tone])}>{title}</Text>
+            <Text ardiaCentersCapitals={centersCapitals} style={textStyle(disabled ? theme.iconDisabled : hovered && hoverTone ? theme[hoverTone] : theme[tone])}>{title}</Text>
           </Plate>
         )}
       </Pressable>

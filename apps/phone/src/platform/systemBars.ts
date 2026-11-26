@@ -6,5 +6,5 @@ export function setSystemBarIcons(lightStatus: boolean, lightNavigation: boolean
     system.setSystemBarIcons(lightStatus, lightNavigation);
     return;
   }
-  StatusBar.setBarStyle(lightStatus ? "light-content" : "dark-content", true);
+  StatusBar.setBarStyle(lightStatus ? "light-content" : "dark-content", false);
 }

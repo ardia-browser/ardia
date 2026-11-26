@@ -27,7 +27,7 @@ test("About's hero is the 72-point app icon on the icon's own cream, with a shad
   unmount(root);
 });
 
-test("the licences list this phone's own native code: Ardia's Swift packages on iPhone, the Android libraries on Android", () => {
+test("the licences list this phone's own native code: Ardia's Swift packages on iPhone, the Android libraries on Android, and the glass shader both ship", () => {
   const root = renderSurface(<LicensesPage />);
   const text = textOf(root);
   if (Platform.OS === "ios") {
@@ -36,9 +36,8 @@ test("the licences list this phone's own native code: Ardia's Swift packages on 
   } else {
     expect(text).toContain("Android Jetpack");
     expect(text).not.toContain("ArdiaKit");
-    expect(text).toContain("Copyright (c) 2026 Andras Prifer");
-    expect(text).toContain("The above copyright notice and this permission notice shall be included");
   }
-  if (Platform.OS === "ios") expect(text).not.toContain("Andras Prifer");
+  expect(text).toContain("Copyright (c) 2026 Andras Prifer");
+  expect(text).toContain("The above copyright notice and this permission notice shall be included");
   unmount(root);
 });

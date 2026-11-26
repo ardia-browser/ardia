@@ -12,7 +12,8 @@ type PeekLayoutInput = {
   paneRadius: number;
   from: { x: number; y: number } | null;
   fullscreen: boolean;
-  pageAtTabSize?: boolean;
+  fitToTab?: boolean;
+  atTabSize?: boolean;
   sideRoom?: { left: number; right: number };
 };
 
@@ -33,7 +34,7 @@ export function peekGeometry(o: PeekLayoutInput): PeekStageGeometry {
   const restSize = { width: page.width * k, height: page.height * k };
   const cardWidth = restSize.width + 2 * o.inset;
   const cardHeight = restSize.height + o.bar + o.inset;
-  const fitted = o.pageAtTabSize !== false;
+  const fitted = o.fitToTab !== false;
   const card: PeekRect = fitted
     ? { x: left + (o.width - left - right - cardWidth) / 2, y: (o.height - cardHeight) / 2, width: cardWidth, height: cardHeight }
     : { x: left, y: iy, width: Math.max(1, o.width - left - right), height: Math.max(1, o.height - 2 * iy) };
@@ -50,7 +51,8 @@ export function peekGeometry(o: PeekLayoutInput): PeekStageGeometry {
   return {
     width: o.width,
     height: o.height,
-    page: fitted || o.fullscreen ? page : rest,
+    page: o.fullscreen || (fitted && o.atTabSize) ? page : rest,
+    tab: page,
     rest,
     card,
     source,

@@ -4,6 +4,10 @@
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
 static NSString *JPEGOfImage(CGImageRef image, CGSize size);
+static NSString *FlatnessOfImage(CGImageRef image);
+
+static NSString *const kBlankPreviews = @"@blank";
+static NSString *const kBlackPreviews = @"@black";
 static BOOL ParseSourceNumber(NSString *text, uint32_t *number);
 
 @implementation ArdiaHost (Thumbnails)
@@ -25,6 +29,7 @@ static BOOL ParseSourceNumber(NSString *text, uint32_t *number);
                completion:(void (^)(NSDictionary<NSString *, NSString *> *))completion {
   dispatch_group_t group = dispatch_group_create();
   NSMutableDictionary<NSString *, NSString *> *found = [NSMutableDictionary dictionary];
+  NSMutableArray<NSString *> *flat = [NSMutableArray array];
   for (NSString *sourceId in sourceIds) {
     SCContentFilter *filter = content ? [self filterForSource:sourceId content:content] : nil;
     if (!filter) continue;
@@ -34,12 +39,24 @@ static BOOL ParseSourceNumber(NSString *text, uint32_t *number);
     dispatch_group_enter(group);
     [self captureFilter:filter
                    size:size
-             completion:^(NSString *jpeg) {
-               if (jpeg.length) @synchronized(found) { found[sourceId] = jpeg; }
+             completion:^(NSString *jpeg, NSString *flatness) {
+               @synchronized(found) {
+                 if (jpeg.length) found[sourceId] = jpeg;
+                 if (jpeg.length && flatness) [flat addObject:flatness];
+               }
                dispatch_group_leave(group);
              }];
   }
-  dispatch_group_notify(group, dispatch_get_main_queue(), ^{ completion([found copy]); });
+  dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+    NSUInteger blank = 0, black = 0;
+    for (NSString *flatness in flat) {
+      blank++;
+      if ([flatness isEqualToString:@"black"]) black++;
+    }
+    if (blank) found[kBlankPreviews] = [NSString stringWithFormat:@"%lu", (unsigned long)blank];
+    if (black) found[kBlackPreviews] = [NSString stringWithFormat:@"%lu", (unsigned long)black];
+    completion([found copy]);
+  });
 }
 
 + (SCContentFilter *)filterForSource:(NSString *)sourceId content:(SCShareableContent *)content {
@@ -58,7 +75,7 @@ static BOOL ParseSourceNumber(NSString *text, uint32_t *number);
   return nil;
 }
 
-+ (void)captureFilter:(SCContentFilter *)filter size:(CGSize)size completion:(void (^)(NSString *))completion {
++ (void)captureFilter:(SCContentFilter *)filter size:(CGSize)size completion:(void (^)(NSString *, NSString *))completion {
   SCStreamConfiguration *config = [[SCStreamConfiguration alloc] init];
   config.width = (size_t)size.width;
   config.height = (size_t)size.height;
@@ -67,7 +84,7 @@ static BOOL ParseSourceNumber(NSString *text, uint32_t *number);
   [SCScreenshotManager captureImageWithFilter:filter
                                  configuration:config
                             completionHandler:^(CGImageRef image, NSError *) {
-    completion(JPEGOfImage(image, size));
+    completion(JPEGOfImage(image, size), FlatnessOfImage(image));
   }];
 }
 
@@ -86,4 +103,31 @@ static NSString *JPEGOfImage(CGImageRef image, CGSize size) {
   bitmap.size = size;
   NSData *jpeg = [bitmap representationUsingType:NSBitmapImageFileTypeJPEG properties:@{NSImageCompressionFactor : @(0.6)}];
   return [jpeg base64EncodedStringWithOptions:0];
+}
+
+static NSString *FlatnessOfImage(CGImageRef image) {
+  if (!image) return nil;
+  constexpr size_t side = 16;
+  uint8_t pixels[side * side * 4] = {};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, side, side, 8, side * 4, space, (CGBitmapInfo)kCGImageAlphaNoneSkipLast);
+  CGColorSpaceRelease(space);
+  if (!context) return nil;
+  CGContextSetInterpolationQuality(context, kCGInterpolationLow);
+  CGContextDrawImage(context, CGRectMake(0, 0, side, side), image);
+  CGContextRelease(context);
+  int low[3] = {255, 255, 255}, high[3] = {0, 0, 0};
+  long sum = 0;
+  for (size_t i = 0; i < side * side; i++) {
+    for (int c = 0; c < 3; c++) {
+      const int value = pixels[i * 4 + c];
+      low[c] = MIN(low[c], value);
+      high[c] = MAX(high[c], value);
+      sum += value;
+    }
+  }
+  constexpr int kFlatSpread = 6, kBlackMean = 8;
+  for (int c = 0; c < 3; c++)
+    if (high[c] - low[c] > kFlatSpread) return nil;
+  return sum / (long)(side * side * 3) < kBlackMean ? @"black" : @"flat";
 }

@@ -61,6 +61,13 @@ int main(void) {
   if (ardia_update_channel_of((const uint8_t *)"0.2.48-nightly.9", 16, &channel) != ARDIA_UPDATE_STATUS_OK || channel != ARDIA_UPDATE_CHANNEL_NIGHTLY) status = fail("channel");
   if (ardia_update_check_offer((const uint8_t *)"0.2.49-nightly.1", 16, (const uint8_t *)"0.2.48", 6, ARDIA_UPDATE_CHANNEL_STABLE) != ARDIA_UPDATE_STATUS_CHANNEL) status = fail("stable channel skips nightlies");
   if (ardia_update_check_offer(NULL, 3, (const uint8_t *)"0.2.48", 6, ARDIA_UPDATE_CHANNEL_STABLE) != ARDIA_UPDATE_STATUS_INVALID_ARGUMENT) status = fail("null input");
+  ardia_update_windows_package win_package = {0};
+  const char win_prefix[] = "https://github.com/ardia-browser/ardia/releases/download/";
+  if (ardia_update_verify_windows((const uint8_t *)"{}", 2, NULL, 0, key, ARDIA_UPDATE_PUBLIC_KEY_BYTES,
+                                  (const uint8_t *)win_prefix, sizeof win_prefix - 1, ARDIA_UPDATE_WINDOWS_CPU_X64, 1,
+                                  &win_package) != ARDIA_UPDATE_STATUS_SIGNATURE ||
+      win_package.build != 0)
+    status = fail("unsigned windows manifest");
   if (status == 0) printf("ardia_update smoke passed\n");
   return status;
 }

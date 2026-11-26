@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync,
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launch, sleep } from "../../../scripts/lib/instance.mjs";
+import { signalableFrom } from "../../../scripts/lib/pid.mjs";
 import { COMMAND_QUERY, DEMO_WINDOW, fieldScript, HOVER_ROW, newTabScript, profileScript, realLayoutScript, resetScript, STATES, THEMES } from "./states.mjs";
 import { referenceSession } from "./seedSession.mjs";
 
@@ -36,16 +37,6 @@ const out = resolve(option("out", `${scratch}/ref`));
 const themes = option("themes", THEMES.join(",")).split(",");
 const states = option("states", STATES.join(",")).split(",");
 
-function trainServes() {
-  try {
-    const pid = Number(readFileSync("/tmp/ac-train/serve.pid", "utf8").trim());
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function trainApp() {
   const train = join(repo, "scripts/agent/train");
   execFileSync(train, ["request", "--as", "demo-layout", "--note", "demo reference captures"], { stdio: "inherit" });
@@ -56,7 +47,7 @@ function trainApp() {
 }
 
 function debugApps() {
-  if (trainServes()) return [trainApp()];
+  if (signalableFrom("/tmp/ac-train/serve.pid")) return [trainApp()];
   const builds = join(repo, "apps/browser");
   const out = join(builds, "build-train/out");
   const candidates = readdirSync(builds)

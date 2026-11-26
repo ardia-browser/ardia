@@ -3,11 +3,15 @@
 #import <AppKit/AppKit.h>
 
 #include <algorithm>
+#include <vector>
 
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_user_data.h"
 #include "ardia/core/ac_browser.h"
 
 namespace ardiacore {
@@ -93,21 +97,82 @@ void DialogHostObserverRemoved() {
   g_frame_change_observer = nil;
 }
 
-ACTabDialogHost::ACTabDialogHost(content::WebContents* contents)
-    : content::WebContentsUserData<ACTabDialogHost>(*contents) {}
+class ACTabDialogHost::Anchor
+    : public content::WebContentsUserData<ACTabDialogHost::Anchor> {
+ public:
+  ~Anchor() override {
+    ACTabDialogHost* host = host_.get();
+    host_ = nullptr;
+    host->ContentsDestroyed();
+  }
 
-ACTabDialogHost::~ACTabDialogHost() {
+  ACTabDialogHost* host() const { return host_; }
+
+ private:
+  friend class content::WebContentsUserData<Anchor>;
+
+  explicit Anchor(content::WebContents* contents)
+      : content::WebContentsUserData<Anchor>(*contents),
+        host_(new ACTabDialogHost(contents)) {}
+
+  raw_ptr<ACTabDialogHost> host_;
+  WEB_CONTENTS_USER_DATA_KEY_DECL();
+};
+
+WEB_CONTENTS_USER_DATA_KEY_IMPL(ACTabDialogHost::Anchor);
+
+ACTabDialogHost* ACTabDialogHost::GetOrCreateForWebContents(
+    content::WebContents* contents) {
+  return Anchor::GetOrCreateForWebContents(contents)->host();
+}
+
+ACTabDialogHost* ACTabDialogHost::FromWebContents(
+    content::WebContents* contents) {
+  Anchor* anchor = contents ? Anchor::FromWebContents(contents) : nullptr;
+  return anchor ? anchor->host() : nullptr;
+}
+
+ACTabDialogHost::ACTabDialogHost(content::WebContents* contents)
+    : contents_(contents) {}
+
+ACTabDialogHost::~ACTabDialogHost() = default;
+
+void ACTabDialogHost::ContentsDestroyed() {
+  contents_ = nullptr;
+  if (!observers_.empty()) {
+    base::SequencedTaskRunner::GetCurrentDefault()->PostNonNestableTask(
+        FROM_HERE, base::BindOnce(&ACTabDialogHost::CloseOrphanedDialogs,
+                                  weak_factory_.GetWeakPtr()));
+  }
+  DeleteIfOrphaned();
+}
+
+void ACTabDialogHost::CloseOrphanedDialogs() {
   for (auto& observer : observers_) {
     observer.OnHostDestroying();
   }
-  for ([[maybe_unused]] auto& observer : observers_) {
-    DialogHostObserverRemoved();
+  std::vector<web_modal::ModalDialogHostObserver*> remaining;
+  for (auto& observer : observers_) {
+    remaining.push_back(&observer);
   }
+  for (auto* observer : remaining) {
+    RemoveObserver(observer);
+  }
+  DeleteIfOrphaned();
+}
+
+void ACTabDialogHost::DeleteIfOrphaned() {
+  if (contents_ || !observers_.empty() || deletion_scheduled_) {
+    return;
+  }
+  deletion_scheduled_ = true;
+  base::SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE, this);
 }
 
 WindowHost* ACTabDialogHost::window_host() const {
-  auto* tab = tabs::TabInterface::MaybeGetFromContents(
-      const_cast<content::WebContents*>(&GetWebContents()));
+  auto* tab = contents_ ? tabs::TabInterface::MaybeGetFromContents(
+                             contents_.get())
+                       : nullptr;
   return tab ? WindowHost::ForBrowser(tab->GetBrowserWindowInterface())
              : nullptr;
 }
@@ -121,12 +186,13 @@ gfx::Point ACTabDialogHost::GetDialogPosition(const gfx::Size& size) {
   WindowHost* host = window_host();
   NSView* host_view = host ? host->host_view() : nil;
   return DialogPositionInHostView(
-      host_view, PageRectInHostView(host_view, &GetWebContents()), size);
+      host_view, PageRectInHostView(host_view, contents_.get()), size);
 }
 
 bool ACTabDialogHost::ShouldActivateDialog() const {
-  auto* tab = tabs::TabInterface::MaybeGetFromContents(
-      const_cast<content::WebContents*>(&GetWebContents()));
+  auto* tab = contents_ ? tabs::TabInterface::MaybeGetFromContents(
+                             contents_.get())
+                       : nullptr;
   WindowHost* host = window_host();
   return tab && tab->GetBrowserWindowInterface() && host &&
          GetLastActiveBrowserWindowInterfaceWithAnyProfile() ==
@@ -136,7 +202,7 @@ bool ACTabDialogHost::ShouldActivateDialog() const {
 
 gfx::Size ACTabDialogHost::GetMaximumDialogSize() {
   WindowHost* host = window_host();
-  return PageRectInHostView(host ? host->host_view() : nil, &GetWebContents())
+  return PageRectInHostView(host ? host->host_view() : nil, contents_.get())
       .size();
 }
 
@@ -155,13 +221,12 @@ void ACTabDialogHost::RemoveObserver(
   }
   observers_.RemoveObserver(observer);
   DialogHostObserverRemoved();
+  DeleteIfOrphaned();
 }
 
 void ACTabDialogHost::NotifyPositionRequiresUpdate() {
   observers_.Notify(
       &web_modal::ModalDialogHostObserver::OnPositionRequiresUpdate);
 }
-
-WEB_CONTENTS_USER_DATA_KEY_IMPL(ACTabDialogHost);
 
 }

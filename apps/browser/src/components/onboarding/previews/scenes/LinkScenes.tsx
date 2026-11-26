@@ -10,7 +10,7 @@ import { Cursor } from "../Floating";
 import { mockArt, mockInk, sceneMs } from "../tokens";
 import { font, radius, space } from "../../../ui/tokens";
 import type { Scene } from "../scene";
-import { Desktop, MINI_SIDE, MiniArdia, Window } from "./SceneParts";
+import { AwayToDesktop, MINI_SIDE, MiniArdia, Window } from "./SceneParts";
 
 function Bubble({ g, look, mine, children, style }: { g: Geo; look: Look; mine?: boolean; children: ReactNode; style?: object }) {
   return (
@@ -27,8 +27,9 @@ function Bubble({ g, look, mine, children, style }: { g: Geo; look: Look; mine?:
 }
 
 export function links(little: boolean): Scene {
-  return ({ g, look, p }) => {
-    const t = tracker(p, sceneMs.links);
+  return ({ g, look, p, opts }) => {
+    const away = tracker(p, sceneMs.links);
+    const t = tracker(p, sceneMs.links, 520);
     const chat: Rect = { x: 18, y: 40, w: 300, h: g.H - 80 };
     const ardia: Rect = { x: 300, y: 22, w: g.W - 318, h: g.H - 44 };
     const cursorFrom = { x: chat.x + 250, y: chat.y + chat.h - 40 };
@@ -36,8 +37,7 @@ export function links(little: boolean): Scene {
     const float: Rect = { x: ardia.x + 70, y: 70, w: 430, h: g.H - 120 };
     const arrived = { opacity: t.in(560, 240), transform: [{ translateX: t([[560, -12 * g.s], [860, 0]]) }] };
     return (
-      <>
-        <Desktop look={look} />
+      <AwayToDesktop g={g} look={look} opts={opts} t={away} out={300} back={3400}>
         <MiniArdia
           g={g}
           look={look}
@@ -102,7 +102,7 @@ export function links(little: boolean): Scene {
         <Cursor
           g={g}
           style={{
-            opacity: t([[60, 0], [200, 1], [1150, 1], [1400, 0]]),
+            opacity: t([[60, 0], [200, 1], [2300, 1], [2500, 0]]),
             transform: [
               { translateX: t([[60, cursorFrom.x * g.s], [440, cursorTo.x * g.s]]) },
               { translateY: t([[60, cursorFrom.y * g.s], [440, cursorTo.y * g.s]]) },
@@ -110,7 +110,7 @@ export function links(little: boolean): Scene {
             ],
           }}
         />
-      </>
+      </AwayToDesktop>
     );
   };
 }

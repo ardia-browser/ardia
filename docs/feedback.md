@@ -82,6 +82,23 @@ contract the app, the CLI, the feedback service and the dashboard build against.
 - `node infra/feedback/server.mjs --local <dir>` runs it with no ClickHouse, SeaweedFS or GitHub, writing
   to `<dir>`, for tests. The app reads `ARDIA_FEEDBACK_URL`, the CLI `ARDIA_FEEDBACK_URL` too.
 
+### Donations and sponsors
+
+The same service answers two donation routes, both off until the Hexclave secret `DONATE_STRIPE_KEY` is set.
+It is a Stripe restricted key that needs **Checkout Sessions: Write**, **Subscriptions: Read** and
+**Prices: Read** (the live key has all three).
+
+- `POST /api/donate/monthly` turns a typed monthly amount into a subscription Checkout Session and 303s to it.
+  Every monthly checkout, from the custom route and the four monthly Payment Links, asks for an optional
+  public name (`sponsorname`, 40 characters).
+- `GET /api/sponsors` lists the active monthly donors who gave a name, as `{ sponsors: [{ name, tier }] }`,
+  with `no-store`. It starts from active subscriptions on the donation product, reads each one's checkout once
+  for its name and fetches a price only when its default currency isn't the subscription's. A list is
+  published only from a refresh that read every page and every lookup it needed; it is kept 10 minutes. A
+  refresh that fails or hasn't finished within 3 seconds answers 503, and ardia.dev then shows company sponsors
+  only. A failed refresh isn't retried for a minute. Names that look like a link, an email, an IP address or
+  carry 5 or more digits are dropped, and a subscription with metadata `ardia_sponsor=hide` is left off.
+
 ### Local mode
 
 ```

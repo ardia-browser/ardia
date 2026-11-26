@@ -4,6 +4,7 @@ import { DEFAULT_MAIN_MB, KEYWORD_PATTERN, LIMITS, VERSION_PATTERN } from "./plu
 import { SPLIT_SIDES } from "./pluginCommands";
 import { MENU_SLOTS, PANEL_MODES } from "./pluginContributions";
 import { TAB_ACCESS } from "./pluginPermissions";
+import { STATE_INTENTS, STATE_TOPICS, TOPICS_NEEDING_TABS } from "./pluginState";
 import { MAX_WHEN_LENGTH } from "./pluginWhen";
 import { BUTTON_DIVIDER, HOST_ACTION_NAMES, PAGE_BAR_LIMITS, PAGE_BAR_LOOKS } from "./pluginPageBar";
 import { builtInFlags, closed, commandBase, key, name, openCommandProperties, passwordManagerSchema, pluginPath, processSchema, programsSchemaV2, rowSchema, symbol, textOf, toolsSchema } from "./pluginSchemaParts";
@@ -17,7 +18,15 @@ type PluginRules = { untabbedEvents: readonly string[]; approvedSettings: readon
 const when: JsonSchema = { type: "string", pattern: `^[\\s\\S]{1,${MAX_WHEN_LENGTH}}$`, description: "Shows only when this holds, like urlHost == \"github.com\" && !isPinned" };
 const list = (max: number, items: JsonSchema, description?: string): JsonSchema => ({ type: "array", maxItems: max, items, ...(description ? { description } : {}) });
 
-const permissions = closed({
+const intentsNone: JsonSchema = { type: "object", properties: { intents: { maxItems: 0 } } };
+const tabTopicsNone: JsonSchema = { type: "object", properties: { events: { type: "array", items: { enum: STATE_TOPICS.filter((t) => !TOPICS_NEEDING_TABS.includes(t)) } }, intents: { maxItems: 0 } } };
+const statePrerequisites: JsonSchema[] = [
+  { properties: { state: { anyOf: [{ const: false }, tabTopicsNone] } } },
+  { required: ["tabs"], properties: { tabs: { enum: [...TAB_ACCESS] }, state: { anyOf: [{ const: false }, intentsNone] } } },
+  { required: ["tabs"], properties: { tabs: { const: "write" } } },
+];
+
+const permissionKeys = closed({
   tabs: { enum: [...TAB_ACCESS, false], description: "read: see your tabs. write: also open them" },
   fullUrls: { type: "boolean", description: "See whole addresses, with what follows ? and #" },
   activePage: { type: "boolean", description: "Read the text of the tab you're on, for 30 seconds after you use the plugin" },
@@ -27,7 +36,19 @@ const permissions = closed({
   secrets: { type: "boolean", description: "Keep secrets in the Keychain" },
   network: { anyOf: [{ const: false }, { const: "*" }, { type: "array", minItems: 1, maxItems: LIMITS.allowedHosts, items: { type: "string", pattern: "^(\\*\\.)?[a-z0-9.-]{1,253}$" } }], description: "false, \"*\" or hosts like api.example.com and *.example.com" },
   control: { type: "boolean", description: "Let programs you run fully control Ardia, including your signed-in sites" },
+  state: {
+    anyOf: [
+      { const: false },
+      closed({
+        events: { type: "array", maxItems: STATE_TOPICS.length * 2, items: { enum: [...STATE_TOPICS] }, description: "State changes main or the sidecar hears after Ardia commits them, redacted: tabs, workspace and navigation need tabs" },
+        intents: { type: "array", maxItems: STATE_INTENTS.length * 2, items: { enum: [...STATE_INTENTS] }, description: "Tab and group changes it may ask Ardia to make (needs tabs: write)" },
+      }),
+    ],
+    description: "Redacted state events it hears and tab and group intents it may ask for",
+  },
 });
+
+const permissions: JsonSchema = { ...permissionKeys, anyOf: statePrerequisites };
 
 const menuItem = closed({ command: name, title: textOf(LIMITS.title), icon: symbol, when }, ["command"]);
 

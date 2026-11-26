@@ -1,45 +1,53 @@
 import { Animated } from "react-native";
-import { fill, type Rect, ROW, rowY, sideCard, TOOLBAR_H } from "../geometry";
+import { fill, type Rect, ROW, rowY, TOOLBAR_H } from "../geometry";
 import { BLANK, tab, TRIP } from "../content";
 import { linear, tracker } from "../timeline";
-import { Backdrop, Card, Glyph, Highlight, Label, NewTabButton, TabRow } from "../Kit";
+import { Backdrop, Glyph, Highlight, Label } from "../Kit";
 import { NewTabPage, Page } from "../MockPages";
 import { Cursor, Pill } from "../Floating";
 import { sceneMs } from "../tokens";
 import { font } from "../../../ui/tokens";
 import type { Scene } from "../scene";
-import { Chrome, Desktop, KeyPress, listTop, MINI_SIDE, MiniArdia, Std } from "./SceneParts";
+import { along, AwayToDesktop, cardOf, KeyPress, ListItem, MINI_SIDE, MiniArdia, NewTabRow, pitchOf, Rest, Selected, tabCount, tabsSlot } from "./SceneParts";
 import { keyText } from "../../../../state/commands/keyText";
+
+const STALE = new Set([1, 3, 4]);
 
 export function tidy(auto: boolean): Scene {
   return ({ g, look, p, opts }) => {
     const t = tracker(p, sceneMs.tidy);
-    const c = sideCard(g);
-    const list = listTop(opts);
-    const old = new Set([1, 3, 4]);
-    const gone = auto ? { opacity: t([[850, 1], [1000, 0.4], [1060, 0.4], [1300, 0]]), transform: [{ translateX: t([[1060, 0], [1300, -10 * g.s]]) }, { scaleY: t([[1060, 1], [1300, 0.6]]) }] } : null;
-    const rise = (n: number) => (auto && n ? { transform: [{ translateY: t([[1140, 0], [1460, -n * ROW.pitch * g.s]]) }] } : null);
-    const above = (i: number) => [...old].filter((o) => o < i).length;
+    const c = cardOf(g, opts);
+    const n = tabCount(g, opts);
+    const pitch = pitchOf(opts) * g.s;
+    const back = 2500;
+    const stale = (i: number) => STALE.has(i) && i < n;
+    const above = (i: number) => [...STALE].filter((o) => o < i && o < n).length;
+    const gone = auto ? { opacity: t([[850, 1], [1000, 0.4], [1060, 0.4], [1300, 0], [back, 0], [back + 400, 1]]), transform: [{ scale: t([[1060, 1], [1300, 0.92], [back, 0.92], [back + 400, 1]]) }] } : null;
+    const rise = (k: number) => (auto && k ? { transform: along(opts, t([[1140, 0], [1460, -k * pitch], [back, -k * pitch], [back + 400, 0]])) } : null);
+    const list = (
+      <>
+        {opts.top ? <Selected g={g} look={look} opts={opts} /> : null}
+        {Array.from({ length: n }, (_, i) => (
+          <ListItem key={i} g={g} look={look} opts={opts} t={tab(i)} i={i} selected={i === 0} style={stale(i) ? gone : rise(above(i))} />
+        ))}
+        <NewTabRow g={g} look={look} opts={opts} i={n} style={rise(above(n))} />
+      </>
+    );
     return (
-      <Std
+      <Rest
         g={g}
         look={look}
         opts={opts}
-        rows={
-          <>
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <TabRow key={i} g={g} look={look} t={tab(i)} y={rowY(i, list)} selected={i === 0} style={old.has(i) ? gone : rise(above(i))} />
-            ))}
-            <NewTabButton g={g} look={look} y={rowY(6, list)} style={rise(3)} />
-            <Pill g={g} look={look} place={{ right: (g.W - c.x - c.w + 16) * g.s, top: (c.y + 54) * g.s }} style={{ opacity: t.in(80, 220), transform: [{ translateY: t([[80, -6 * g.s], [360, 0]]) }] }}>
-              <Animated.View style={{ transform: [{ rotate: t.deg([[150, 0], [850, 360]]) }] }}>
-                <Glyph g={g} name="clock" size={13} color={look.t.textPrimary} weight="medium" box={16} />
-              </Animated.View>
-              <Label g={g} size={font.body.fontSize} color={look.t.textPrimary} weight="500">
-                12 hours later
-              </Label>
-            </Pill>
-          </>
+        {...tabsSlot(opts, list)}
+        over={
+          <Pill g={g} look={look} place={{ right: (g.W - c.x - c.w + 16) * g.s, top: (c.y + 54) * g.s }} style={{ opacity: t.pulse(120, back + 200, 220, 260), transform: [{ translateY: t.trip(-6 * g.s, 0, 120, back + 200, 280, 260) }] }}>
+            <Animated.View style={{ transform: [{ rotate: t.deg([[200, 0], [900, 360]]) }] }}>
+              <Glyph g={g} name="clock" size={13} color={look.t.textPrimary} weight="medium" box={16} />
+            </Animated.View>
+            <Label g={g} size={font.body.fontSize} color={look.t.textPrimary} weight="500">
+              12 hours later
+            </Label>
+          </Pill>
         }
       />
     );
@@ -49,35 +57,48 @@ export function tidy(auto: boolean): Scene {
 export function quit(fresh: boolean): Scene {
   return ({ g, look, p, opts }) => {
     const t = tracker(p, sceneMs.quit);
-    const c = sideCard(g);
-    const away = { opacity: t([[180, 1], [420, 0]]), transform: [{ scale: t([[180, 1], [420, 0.97]]) }] };
-    const back = { opacity: t([[760, 0], [1080, 1]]), transform: [{ scale: t([[760, 0.97], [1080, 1]]) }] };
-    const both = { opacity: t([[180, 1], [420, 0], [760, 0], [1080, 1]]), transform: [{ scale: t([[180, 1], [420, 0.97], [760, 0.97], [1080, 1]]) }] };
-    const quiet = { ...opts };
+    const c = cardOf(g, opts);
+    const leave = 360;
+    const arrive = 900;
+    const leaveAgain = 2100;
+    const returnAt = 2600;
+    const window = fresh
+      ? { opacity: t([[leave, 1], [leave + 240, 0], [returnAt, 0], [returnAt + 320, 1]]), transform: [{ scale: t([[leave, 1], [leave + 240, 0.97], [returnAt, 0.97], [returnAt + 320, 1]]) }] }
+      : { opacity: t([[leave, 1], [leave + 240, 0], [arrive, 0], [arrive + 320, 1]]), transform: [{ scale: t([[leave, 1], [leave + 240, 0.97], [arrive, 0.97], [arrive + 320, 1]]) }] };
+    const blank = { opacity: t([[arrive, 0], [arrive + 320, 1], [leaveAgain, 1], [leaveAgain + 240, 0]]), transform: [{ scale: t([[arrive, 0.97], [arrive + 320, 1], [leaveAgain, 1], [leaveAgain + 240, 0.97]]) }] };
     return (
       <>
         <Backdrop look={look} />
-        <Animated.View style={[fill, fresh ? away : both]}>
-          <Std g={g} look={look} opts={quiet} n={5} sel={0} />
+        <Animated.View style={[fill, window]}>
+          <Rest g={g} look={look} opts={opts} />
         </Animated.View>
         {fresh ? (
-          <Animated.View style={[fill, back]}>
-            <Chrome g={g} look={look} opts={quiet} />
-            <TabRow g={g} look={look} t={BLANK} y={rowY(0, listTop(opts))} selected />
-            <NewTabButton g={g} look={look} y={rowY(1, listTop(opts))} />
-            <Card g={g} look={look} rect={c}>
-              <NewTabPage g={g} look={look} width={c.w} />
-            </Card>
+          <Animated.View style={[fill, blank]}>
+            <Rest
+              g={g}
+              look={look}
+              opts={opts}
+              {...tabsSlot(
+                opts,
+                <>
+                  {opts.top ? <Selected g={g} look={look} opts={opts} /> : null}
+                  <ListItem g={g} look={look} opts={opts} t={BLANK} i={0} selected />
+                  <NewTabRow g={g} look={look} opts={opts} i={1} />
+                </>,
+              )}
+              crumb={null}
+              page={<NewTabPage g={g} look={look} width={c.w} top={TOOLBAR_H} />}
+            />
           </Animated.View>
         ) : null}
-        <KeyPress g={g} t={t} label={keyText("⌘Q")} />
+        <KeyPress g={g} t={t} label={keyText("⌘Q")} ms={leave - 260} back={leave + 300} />
       </>
     );
   };
 }
 
 export function windows(shared: boolean): Scene {
-  return ({ g, look, p }) => {
+  return ({ g, look, p, opts }) => {
     const t = tracker(p, sceneMs.windows);
     const w = (g.W - 50) / 2;
     const h = g.H - 56;
@@ -87,28 +108,29 @@ export function windows(shared: boolean): Scene {
     const other = shared ? list : [tab(4), tab(5), tab(6)];
     const cursorFrom = { x: a.x + w * 0.62, y: a.y + h * 0.78 };
     const cursorTo = { x: a.x + 70, y: a.y + rowY(2) + 14 };
+    const click = 1100;
+    const back = 3000;
     const dimB = (i: number) => {
       if (!shared) return null;
-      if (i === 0) return { opacity: t([[560, 0.4], [820, 1]]) };
-      if (i === 2) return { opacity: t([[560, 1], [820, 0.4]]) };
+      if (i === 0) return { opacity: t([[click + 40, 0.4], [click + 300, 1]]) };
+      if (i === 2) return { opacity: t([[click + 40, 1], [click + 300, 0.4]]) };
       return null;
     };
     return (
-      <>
-        <Desktop look={look} />
+      <AwayToDesktop g={g} look={look} opts={opts} t={t} out={300} back={back}>
         <MiniArdia
           g={g}
           look={look}
           rect={a}
           tabs={list}
           dim={(i) => (shared && i === 1 ? { opacity: 0.4 } : null)}
-          extra={<Highlight g={g} look={look} y={rowY(0)} w={MINI_SIDE - 12} style={{ transform: [{ translateY: t([[520, 0], [820, 2 * ROW.pitch * g.s]]) }] }} />}
+          extra={<Highlight g={g} look={look} y={rowY(0)} w={MINI_SIDE - 12} style={{ transform: [{ translateY: t([[click, 0], [click + 300, 2 * ROW.pitch * g.s]]) }] }} />}
           cardContent={
             <>
-              <Animated.View style={[fill, { opacity: t.out(560, 200) }]}>
+              <Animated.View style={[fill, { opacity: t.out(click + 40, 200) }]}>
                 <Page g={g} look={look} top={TOOLBAR_H} />
               </Animated.View>
-              <Animated.View style={[fill, { opacity: t.in(600, 260) }]}>
+              <Animated.View style={[fill, { opacity: t.in(click + 80, 260) }]}>
                 <Page g={g} look={look} a={TRIP} top={TOOLBAR_H} />
               </Animated.View>
             </>
@@ -118,15 +140,15 @@ export function windows(shared: boolean): Scene {
         <Cursor
           g={g}
           style={{
-            opacity: t([[100, 0], [260, 1], [1150, 1], [1380, 0]]),
+            opacity: t([[600, 0], [760, 1], [back - 400, 1], [back - 160, 0]]),
             transform: [
-              { translateX: t([[100, cursorFrom.x * g.s], [460, cursorTo.x * g.s]]) },
-              { translateY: t([[100, cursorFrom.y * g.s], [460, cursorTo.y * g.s]]) },
-              { scale: t([[480, 1], [520, 0.85], [640, 1]], linear) },
+              { translateX: t([[600, cursorFrom.x * g.s], [click - 40, cursorTo.x * g.s]]) },
+              { translateY: t([[600, cursorFrom.y * g.s], [click - 40, cursorTo.y * g.s]]) },
+              { scale: t([[click - 20, 1], [click + 20, 0.85], [click + 140, 1]], linear) },
             ],
           }}
         />
-      </>
+      </AwayToDesktop>
     );
   };
 }

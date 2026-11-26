@@ -2,31 +2,12 @@ A Linux background instance (ARDIA_BACKGROUND=1 or --ardia-background) never ask
 BrowserView::Show maps a hidden window inactive (maximizing it afterwards when its saved state was maximized, which
 Widget::ShowInactive would otherwise drop) and leaves an already visible one alone, and BrowserView::Activate keeps
 the active-browser bookkeeping but skips the platform activation. On X11 an inactive map sets _NET_WM_USER_TIME to 0
-so the window manager doesn't focus it; Wayland compositors decide focus on map themselves. Chrome shows its startup
-window before the Ardia host starts, so the launch environment is read in BasicStartupComplete instead of waiting for
-StartLinuxHost.
+so the window manager doesn't focus it; Wayland compositors decide focus on map themselves. The switch is read only on
+Linux, so the code is inert where Windows applies this patch (series-win takes it).
 
---- a/chrome/app/chrome_main_delegate.cc
-+++ b/chrome/app/chrome_main_delegate.cc
-@@ -44,6 +44,7 @@
- 
- #if BUILDFLAG(IS_LINUX)
- #include "ardia/core/ac_content_hooks.h"  // nogncheck
-+#include "ardia/linux/ac_linux_launch_config.h"  // nogncheck
- #endif
- #include "chrome/common/buildflags.h"
- #include "chrome/common/channel_info.h"
-@@ -1209,6 +1210,7 @@
- std::optional<int> ChromeMainDelegate::BasicStartupComplete() {
- #if BUILDFLAG(IS_LINUX)
-   g_ardia_restricted_component_extension = &IsArdiaLinuxContentBlocker;
-+  ardiacore::InitializeLinuxLaunchConfig();
-   auto* ardia_command = base::CommandLine::ForCurrentProcess();
-   std::string ardia_features =
-       ardia_command->GetSwitchValueASCII(switches::kEnableFeatures);
 --- a/chrome/browser/ui/views/frame/browser_view.cc
 +++ b/chrome/browser/ui/views/frame/browser_view.cc
-@@ -437,6 +437,14 @@
+@@ -441,6 +441,14 @@
  
  namespace {
  
@@ -41,7 +22,7 @@ StartLinuxHost.
  // The visible height of the shadow above the tabs. Clicks in this area are
  // treated as clicks to the frame, rather than clicks to the tab.
  const int kTabShadowSize = 2;
-@@ -2302,6 +2310,9 @@
+@@ -2340,6 +2348,9 @@
  
    // If the window is already visible, just activate it.
    if (browser_widget_->IsVisible()) {
@@ -51,7 +32,7 @@ StartLinuxHost.
      browser_widget_->Activate();
      return;
    }
-@@ -2318,10 +2329,21 @@
+@@ -2356,10 +2367,21 @@
  
    // Guard against destruction by platform event handlers called during Show().
    auto weak_ptr = weak_ptr_factory_.GetWeakPtr();
@@ -74,7 +55,7 @@ StartLinuxHost.
  
    OnWindowDidShow();
  
-@@ -2400,7 +2422,9 @@
+@@ -2438,7 +2460,9 @@
    // `BrowserView::Show()` does.
    BrowserActiveStateManager::From(browser_)->DidBecomeActive();
  #endif

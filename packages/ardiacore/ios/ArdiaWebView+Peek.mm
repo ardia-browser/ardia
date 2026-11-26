@@ -334,3 +334,18 @@ static NSString *LinkKeyAction(NSString *key) {
 }
 
 @end
+
+@implementation ArdiaWebView (LeavePrompt)
+
+- (BOOL)asksBeforeLeaving {
+  ArdiaCoreTab *tab = _tab;
+  return tab && !tab.closed && tab.asksBeforeLeaving;
+}
+
+- (void)askBeforeLeaving:(void (^)(BOOL leave))answer {
+  ArdiaCoreTab *tab = _tab;
+  if (!tab || tab.closed) return answer(YES);
+  [tab askBeforeLeaving:answer];
+}
+
+@end

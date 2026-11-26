@@ -78,7 +78,7 @@ onIos("Settings' primary actions share one role: Default Browser and Sync's conn
   defaultBrowser.useDefaultBrowser.setState({ status: { isDefault: false, canAsk: false, isOffered: true } as never });
   const browser = await open({ page: "defaultBrowser" });
   const sync = await open({ page: "sync" });
-  const actions = [...browser.root.findAll((node) => node.type === ExpoSettingsAction), ...sync.root.findAll((node) => node.type === ExpoSettingsAction)];
+  const actions = [...destination(browser, "defaultBrowser").findAll((node) => node.type === ExpoSettingsAction), ...destination(sync, "sync").findAll((node) => node.type === ExpoSettingsAction)];
   expect(actions.map((action) => action.props.size)).toEqual(["full", "full"]);
   for (const action of actions) {
     const button = within(action, (props) => Array.isArray(props.modifiers))[0]!;

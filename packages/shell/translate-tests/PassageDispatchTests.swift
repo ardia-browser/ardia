@@ -89,6 +89,20 @@ final class PassageDispatchTests: XCTestCase {
     XCTAssertTrue(model.linkedCalls.isEmpty)
   }
 
+  func testLeadingLineBreaksNeverReachTheModelAndStayInTheAnswer() async {
+    let model = Model()
+    let parts = await dispatch(["\n\t\tMitmachen\n\t"], model)
+    XCTAssertEqual(parts, ["\n\t\tMITMACHEN\n\t"])
+    XCTAssertEqual(model.plainCalls, ["Mitmachen\n\t"])
+  }
+
+  func testWhitespaceOnlyTextIsNotSentToTheModel() async {
+    let model = Model()
+    let parts = await dispatch(["\n  "], model)
+    XCTAssertEqual(parts, ["\n  "])
+    XCTAssertTrue(model.plainCalls.isEmpty)
+  }
+
   func testGroupsCoverEveryPieceInOrder() {
     XCTAssertEqual(PassageDispatch.groups(["aaaa", "bb", "cccccc", "d"], limit: 6), [0..<2, 2..<3, 3..<4])
     XCTAssertEqual(PassageDispatch.groups(["a"], limit: 6), [0..<1])

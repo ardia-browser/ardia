@@ -1,3 +1,5 @@
+import { counted, type ConsentToken } from "./consentPeriod";
+
 export type IntroScene = "animated" | "poster" | "fallback";
 
 const FIRST_FRAME_STEP_MS = 100;
@@ -15,13 +17,15 @@ export function noteIntroShown(musicMuted: boolean) {
   if (musicMuted) mutedAtStart += 1;
 }
 
-export const noteIntroSkipped = () => void (skipped += 1);
+export const noteIntroSkipped = (consent: ConsentToken | null) => counted(consent, () => void (skipped += 1));
 export const noteIntroMusicFailed = () => void (musicFailed += 1);
 
-export function noteIntroEnded(ended: { skipped: boolean; shown: IntroScene | null; firstFrameMs: number | null }) {
-  if (!ended.skipped) finished += 1;
-  if (ended.shown) scenes[ended.shown] += 1;
-  if (ended.shown === "animated" && ended.firstFrameMs !== null) firstFrameMs += Math.round(Math.max(0, ended.firstFrameMs) / FIRST_FRAME_STEP_MS) * FIRST_FRAME_STEP_MS;
+export function noteIntroEnded(ended: { skipped: boolean; shown: IntroScene | null; firstFrameMs: number | null }, consent: ConsentToken | null) {
+  counted(consent, () => {
+    if (!ended.skipped) finished += 1;
+    if (ended.shown) scenes[ended.shown] += 1;
+    if (ended.shown === "animated" && ended.firstFrameMs !== null) firstFrameMs += Math.round(Math.max(0, ended.firstFrameMs) / FIRST_FRAME_STEP_MS) * FIRST_FRAME_STEP_MS;
+  });
 }
 
 export function takeIntroCounts() {

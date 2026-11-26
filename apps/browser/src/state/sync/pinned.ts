@@ -4,6 +4,7 @@ import { groupLooksAdapter } from "./groupLooksAdapter";
 import { applyPinned, type PinPageWrites } from "./pinnedApply";
 import { extractPinned } from "./pinnedExtract";
 import { pinnedHomesAdapter } from "./pinnedHomesAdapter";
+import { pinnedLettersAdapter } from "./pinnedLettersAdapter";
 import { pinnedOrderAdapter } from "./pinnedOrderAdapter";
 import { pinnedRowsAdapter } from "./pinnedRowsAdapter";
 import { tileFoldersAdapter } from "./tileFoldersAdapter";
@@ -16,6 +17,7 @@ export function pinnedAreaAdapters(profileId: string, pageWrites?: PinPageWrites
     groupLooksAdapter(profileId),
     inTodaysNames(pinnedHomesAdapter(profileId)),
     inTodaysNames(pinnedAdapter(profileId, pageWrites)),
+    pinnedLettersAdapter(profileId),
   ];
 }
 

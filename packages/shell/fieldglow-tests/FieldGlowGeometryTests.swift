@@ -79,6 +79,69 @@ final class FieldGlowLayersTests: XCTestCase {
     return layers
   }
 
+  func testRimUsesTheFieldRadiusAndStaysFixedDuringProgress() throws {
+    let layers = try layers()
+    layers.radius = 10
+    let rim = layers.capPlate.rim
+    XCTAssertEqual(rim.bounds.height, 10)
+    XCTAssertEqual(rim.position.y, 20)
+    XCTAssertEqual(rim.sublayers?.first?.cornerRadius, 10)
+    XCTAssertEqual(rim.sublayers?.first?.borderWidth, CGFloat(layers.look.line))
+    let taper = try XCTUnwrap(rim.mask as? CAGradientLayer)
+    XCTAssertEqual(taper.startPoint.y, 0)
+    XCTAssertEqual(taper.endPoint.y, 0.85, accuracy: 0.0001)
+    XCTAssertEqual((taper.colors as? [CGColor])?.map(\.alpha), [0, 1])
+    var model = FieldGlowModel()
+    layers.run(model.show(), model: model)
+    layers.run(model.progress(to: 0.4, still: false), model: model)
+    XCTAssertEqual(rim.position.x + layers.slide.position.x, 0)
+    let samples = (rim.animation(forKey: "filled") as? CAKeyframeAnimation)?.values as? [Double]
+    let slide = (layers.slide.animation(forKey: "filled") as? CAKeyframeAnimation)?.values as? [Double]
+    XCTAssertNotNil(samples)
+    XCTAssertEqual(samples, slide?.map { -$0 })
+    layers.resize(CGSize(width: 18, height: 20), flipped: false)
+    XCTAssertEqual(rim.bounds.height, 9)
+    XCTAssertEqual(rim.position.y, 0)
+    XCTAssertEqual(taper.startPoint.y, 1)
+    XCTAssertEqual(taper.endPoint.y, 1.5 / 9, accuracy: 0.0001)
+    layers.cancel()
+    XCTAssertNil(rim.animation(forKey: "filled"))
+  }
+
+  func testPulseChangesOnlyBrightnessAndEndsWithTheLoad() throws {
+    let layers = try layers()
+    let hub = FieldGlowHub()
+    final class Target: FieldGlowTarget {
+      let layers: FieldGlowLayers
+      init(_ layers: FieldGlowLayers) { self.layers = layers }
+      func run(_ moves: [FieldGlowMove], model: FieldGlowModel) { layers.run(moves, model: model) }
+      func settle(at model: FieldGlowModel) { layers.settle(at: model) }
+    }
+    let target = Target(layers)
+    hub.attach("field", target)
+    hub.show("field", timings: .standard)
+    hub.progress("field", to: 0.4, still: false)
+    let position = layers.slide.position
+    hub.pulse("field", FieldGlowPulse(period: 1.8, low: 0.87))
+    let animation = try XCTUnwrap(layers.clip.animation(forKey: "pulse") as? CABasicAnimation)
+    XCTAssertEqual(animation.keyPath, "opacity")
+    XCTAssertEqual(animation.toValue as? Double, 0.87)
+    XCTAssertEqual(animation.duration, 0.9)
+    XCTAssertTrue(animation.autoreverses)
+    XCTAssertTrue(animation.repeatCount.isInfinite)
+    XCTAssertEqual(layers.slide.position, position)
+    XCTAssertNotNil(layers.slide.animation(forKey: "filled"))
+    hub.pulse("field", FieldGlowPulse(period: 2.4, low: 0.7))
+    let updated = try XCTUnwrap(layers.clip.animation(forKey: "pulse") as? CABasicAnimation)
+    XCTAssertEqual(updated.duration, 1.2)
+    XCTAssertEqual(updated.toValue as? Double, 0.7)
+    XCTAssertEqual(layers.slide.position, position)
+    hub.finish("field", still: false)
+    XCTAssertNil(layers.clip.animation(forKey: "pulse"))
+    hub.pulse("field", FieldGlowPulse(period: 1.8, low: 0.87))
+    XCTAssertNil(layers.clip.animation(forKey: "pulse"))
+  }
+
   func testAResizeWhileIdleRepaintsWithoutAttachingAnAnimation() throws {
     let layers = try layers()
     layers.settle(at: FieldGlowModel())

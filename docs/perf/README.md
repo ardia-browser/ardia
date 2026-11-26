@@ -688,7 +688,8 @@ run on the main thread right after the same tab changes that schedule a save.
 `freeze_duration` (400ms_1s … over_30s), `freeze_ms`, `input_wait_ms`, `gc_ms`, `gc_count`, `heap_mb_floor`,
 `activity`, `js_activity` (main-thread freezes: the JS-only job alongside), `tabs_floor`, `windows`, `sync_on`, `layout`, `action_in_flight` (the journeys' pending new tab, switch,
 navigation or launch), `memory_pressure`, `thermal`, `on_battery`, `uptime`, `signature` (`sig_` and the FNV-1a, in hex, of the top three frames
-from our own images), `samples`, and `freeze_frames`/`freeze_images` in the crash reports' shape. At most 5 a session and
+from our own images), `samples`, `freeze_frames`/`freeze_images` in the crash reports' shape, and `freeze_system_cache` (the
+dyld shared cache UUID that `system` frames are offsets into, from its base, or null without a system frame). At most 5 a session and
 20 a UTC day, one per signature a day, counted in `freeze-sends.json` (the day, its send count and its signatures; apart from the 20-slot local ring, which wraps). The dashboard's Performance › Freezes card
 ranks signatures over 7 days by people affected, then total time frozen.
 

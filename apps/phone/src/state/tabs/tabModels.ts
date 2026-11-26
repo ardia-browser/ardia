@@ -49,6 +49,12 @@ export function autoArchiveTitle(interval: AutoArchiveInterval): string {
   return `After ${duration >= 24 * HOUR ? plural(duration / (24 * HOUR), "day") : plural(duration / HOUR, "hour")}`;
 }
 
+export function autoArchiveSymbol(interval: AutoArchiveInterval): "infinity" | "calendar" | "clock" {
+  const duration = AUTO_ARCHIVE_INTERVALS[interval];
+  if (duration === null) return "infinity";
+  return duration >= 24 * HOUR ? "calendar" : "clock";
+}
+
 export function isAutoArchiveDue(lastActive: number, now: number, interval: AutoArchiveInterval, isBeingViewed: boolean): boolean {
   const duration = AUTO_ARCHIVE_INTERVALS[interval];
   if (duration === null || isBeingViewed || lastActive > now) return false;

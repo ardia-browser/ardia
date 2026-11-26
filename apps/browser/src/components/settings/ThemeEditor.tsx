@@ -10,7 +10,7 @@ import type { ProfileColor, ProfileTheme, ThemeMode, ThemeTexture } from "../../
 import { Box, Button, curve, duration, Group, PopUp, Segmented, space, Swatch, swatch, Text, ThemeSwatch } from "../ui";
 import { importArcTheme } from "../../state/profiles/arcThemes";
 import { noteThemePreset } from "../../state/telemetry/themePresetCounts";
-import { themeGesture, type ThemeEdit } from "../../lib/themeGesture";
+import { sameData, themeGesture, type ThemeEdit } from "../../lib/themeGesture";
 import { Row, SectionHeader } from "./Form";
 import type { SettingId } from "./settingsIndex";
 import { ColorPad, DirectionDial, LABEL, Labelled, LightnessBar, Preview, Slider } from "./ThemeControls";
@@ -25,7 +25,7 @@ const MODES: { value: ThemeMode; symbol: string; title: string }[] = [
 
 const TEXTURE_NAMES: Record<ThemeTexture, string> = { grain: "Grain", sand: "Sand", denim: "Denim", tweed: "Tweed" };
 
-function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined, target: string, showing: () => string, apply: (theme: ProfileTheme | null) => void) {
+function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined, target: string, showing: () => string, apply: (theme: ProfileTheme | null, final: boolean) => void) {
   const [draft, setDraft] = useState<ThemeEdit | null>(null);
   const applyLatest = useRef(apply);
   applyLatest.current = apply;
@@ -35,9 +35,10 @@ function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined,
   profileLatest.current = profileId;
   const gesture = useRef<ReturnType<typeof themeGesture> | null>(null);
   gesture.current ??= themeGesture({
-    apply: (next) => applyLatest.current(next),
+    apply: (next, final) => applyLatest.current(next, final),
     showing: () => showingLatest.current(),
     current: () => showingTheme(profileLatest.current),
+    same: sameData,
     draft: setDraft,
     requestFrame: requestAnimationFrame,
     cancelFrame: cancelAnimationFrame,
@@ -45,10 +46,11 @@ function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined,
   useEffect(() => () => gesture.current?.dispose(), []);
   useEffect(() => onPresetSelection(profileId, () => gesture.current?.selectionChanged()), [profileId]);
   const change = (next: ProfileTheme | null, settle = false) => gesture.current!.change(next, target, settle);
-  return { theme: draft && draft.target === target ? draft.theme : (theme ?? null), change, cancel: () => gesture.current!.cancel(), begin: () => gesture.current!.begin(target) };
+  const dragging = !!draft && draft.target === target;
+  return { theme: dragging ? draft.theme : (theme ?? null), dragging, change, cancel: () => gesture.current!.cancel(), begin: () => gesture.current!.begin(target) };
 }
 
-export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme | null) => void) {
+export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme | null, final: boolean) => void) {
   const profile = useProfile(profileId, (p) => p);
   const color = profile?.color ?? "plum";
   const live = useLiveTheme(profileId, profile?.theme, `${profileId}:${color}`, () => `${profileId}:${showingPreset(profileId)}`, apply);
@@ -65,7 +67,7 @@ export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme | n
     if (kept && !stored) noteThemePreset("edited");
     live.change(kept, settle);
   };
-  return { profile, stored, editing, editsDark, shown, followsApp: source === "app", change, cancel: live.cancel, begin: live.begin, original };
+  return { profile, stored, editing, editsDark, shown, followsApp: source === "app", change, cancel: live.cancel, begin: live.begin, original, dragging: live.dragging };
 }
 
 export function ThemeSection({ profileId, anchor }: { profileId: string; anchor: SettingId }) {
@@ -109,16 +111,26 @@ export function ThemePicker({
   gap,
   onPreset,
   onTheme,
+  onLiveTheme,
+  frame = (editor: ReactNode) => editor,
 }: {
   windowId: string;
   size?: number;
   gap?: number;
   onPreset?: (color: ProfileColor) => void;
   onTheme?: (theme: ProfileTheme | null) => void;
+  onLiveTheme?: (theme: ProfileTheme | null | undefined) => void;
+  frame?: (editor: ReactNode) => ReactNode;
 }) {
   const profileId = useWindow(windowId, (w) => w?.profileId) ?? "";
   const incognito = useWindow(windowId, (w) => w?.kind === "private");
-  const look = useThemeDraft(profileId, (theme) => (onTheme ? onTheme(theme) : setProfileTheme(profileId, theme)));
+  const look = useThemeDraft(profileId, (theme, final) => (onLiveTheme && !final ? onLiveTheme(theme) : onTheme ? onTheme(theme) : setProfileTheme(profileId, theme)));
+  useEffect(() => {
+    if (!look.dragging) onLiveTheme?.(undefined);
+  }, [look.dragging]);
+  const liveTheme = useRef(onLiveTheme);
+  liveTheme.current = onLiveTheme;
+  useEffect(() => () => liveTheme.current?.(undefined), []);
   if (!profileId || incognito || !look.profile) return null;
   const reset = () => {
     look.cancel();
@@ -129,7 +141,7 @@ export function ThemePicker({
     <View style={{ gap: space.xxxl }}>
       <ThemeSwatches size={size} gap={gap} color={look.profile.color} edits={look.profile} onPreset={(c) => (onPreset ? onPreset(c) : choosePresetColor(profileId, c))} />
       <FadeIn>
-        <ThemeEditor theme={look.editing} start={look.original} onChange={look.change} onBegin={look.begin} onReset={look.stored ? reset : undefined} resetLabel={presetLabel(look.profile.color, false)} />
+        {frame(<ThemeEditor theme={look.editing} start={look.original} onChange={look.change} onBegin={look.begin} onReset={look.stored ? reset : undefined} resetLabel={presetLabel(look.profile.color, false)} />)}
       </FadeIn>
     </View>
   );

@@ -66,12 +66,13 @@ class LookCostTest {
     }
 
     @Test
-    fun aFrostBlursAtAQuarterToAnEighthOfItsSizeKeepingSixPixelsOfBlur() {
+    fun aFrostBlursSmallEnoughThatSkiaBlursItInOnePassWhereItCan() {
         assertEquals(8f, FrostScale.of(30f * 2.75f))
         assertEquals(8f, FrostScale.of(20f * 2.75f))
-        assertEquals(5f, FrostScale.of(12f * 2.75f))
+        assertEquals("the glass's 12 dp: 5.5 px in the small layer, a sigma under Skia's 4", 6f, FrostScale.of(12f * 2.75f))
         assertEquals(1f, FrostScale.of(4f))
-        assertTrue(30f * 2.75f / FrostScale.of(30f * 2.75f) >= FrostScale.MIN_LOW_RES_BLUR)
+        assertTrue(12f * 2.75f / FrostScale.of(12f * 2.75f) <= FrostScale.MAX_LOW_RES_BLUR)
+        assertTrue("a big frost is capped at an eighth", 30f * 2.75f / FrostScale.of(30f * 2.75f) > FrostScale.MAX_LOW_RES_BLUR)
     }
 
     @Test

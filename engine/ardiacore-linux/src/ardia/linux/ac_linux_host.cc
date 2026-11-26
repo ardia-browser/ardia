@@ -108,6 +108,7 @@
 #include "ardia/linux/ac_linux_tab_bindings.h"
 #include "ardia/linux/ac_linux_telemetry.h"
 #include "ardia/desktop/ac_desktop_telemetry_policy.h"
+#include "ardia/desktop/ac_desktop_webui_process_policy.h"
 #include "ardia/linux/ac_linux_self_update.h"
 #include "ardia/linux/ac_linux_updates.h"
 #include "ardia/linux/ac_linux_system_signals.h"
@@ -161,6 +162,7 @@
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/picture_in_picture/auto_picture_in_picture_tab_helper.h"
 #include "chrome/browser/picture_in_picture/picture_in_picture_window_manager.h"
@@ -318,6 +320,8 @@ extern void (*g_ardia_linux_devtools_open_url)(Profile*, const GURL&);
 extern void (*g_ardia_linux_drag_ended)(BrowserWindowInterface*);
 extern void (*g_ardia_linux_unhandled_key)(content::WebContents*, const input::NativeWebKeyboardEvent&);
 extern void (*g_ardia_linux_minimum_size)(const BrowserWindowInterface*, gfx::Size* minimum);
+extern bool (*g_ardia_linux_pins_window_size)(const BrowserWindowInterface*);
+extern const char* (*g_ardia_linux_window_class)(const BrowserWindowInterface*);
 extern void (*g_ardia_devtools_dock_changed)(BrowserWindowInterface* browser,
                                              content::WebContents* inspected,
                                              content::WebContents* devtools);
@@ -403,6 +407,100 @@ class ShellTransparency : public content::WebContentsObserver {
     web_contents()->SetPageBaseBackgroundColor(SK_ColorTRANSPARENT);
     if (auto* view = web_contents()->GetRenderWidgetHostView()) view->SetBackgroundColor(SK_ColorTRANSPARENT);
   }
+};
+
+std::unique_ptr<content::WebContents> CreateShellContents(Profile* profile, bool private_window) {
+  content::WebContents::CreateParams params(profile);
+  if (const auto feature = desktop_webui_process::SharedRendererFeature(
+          {.private_window = private_window, .off_the_record_profile = profile->IsOffTheRecord()})) {
+    params.privileged_params = content::WebContents::PrivilegedParams{.feature_id = *feature};
+  }
+  return content::WebContents::Create(params);
+}
+
+class ShellRecovery : public content::WebContentsObserver {
+ public:
+  ShellRecovery(content::WebContents* shell,
+                base::RepeatingCallback<desktop_webui_process::WindowState()> window_state,
+                base::RepeatingClosure before_recovery,
+                base::RepeatingCallback<void(desktop_webui_process::RecoveryOutcome)> note_outcome)
+      : content::WebContentsObserver(shell),
+        window_state_(std::move(window_state)),
+        before_recovery_(std::move(before_recovery)),
+        note_outcome_(std::move(note_outcome)) {
+    state_.InitialLoadStarted();
+    quit_cancelled_ = chrome::AddClosingAllBrowsersCallback(base::BindRepeating(
+        [](base::WeakPtr<ShellRecovery> recovery, bool closing) {
+          if (recovery && !closing) recovery->Resume();
+        },
+        weak_factory_.GetWeakPtr()));
+  }
+
+  void PrimaryMainFrameRenderProcessGone(base::TerminationStatus status) override {
+    state_.RendererGone(status == base::TERMINATION_STATUS_NORMAL_TERMINATION ||
+                        status == base::TERMINATION_STATUS_STILL_RUNNING);
+    Resume();
+  }
+  void DidFinishNavigation(content::NavigationHandle* handle) override {
+    if (!handle->IsInPrimaryMainFrame() || handle->IsSameDocument()) return;
+    if (handle->HasCommitted() && !handle->IsErrorPage()) {
+      if (state_.DocumentCommitted()) note_outcome_.Run(desktop_webui_process::RecoveryOutcome::kRecovered);
+      return;
+    }
+    state_.NavigationEndedWithoutCommit();
+    Resume();
+  }
+
+  void Resume() {
+    if (!state_.owed()) return;
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(&ShellRecovery::Step, weak_factory_.GetWeakPtr()));
+  }
+
+ private:
+  void Step() {
+    quit_poll_.Stop();
+    if (!web_contents()) return;
+    content::NavigationController& controller = web_contents()->GetController();
+    const content::NavigationEntry* entry = controller.GetLastCommittedEntry();
+    const bool shutdown_started = browser_shutdown::HasShutdownStarted();
+    const bool trying_to_quit = browser_shutdown::IsTryingToQuit();
+    switch (state_.Next((base::TimeTicks::Now() - base::TimeTicks()).InSecondsF(),
+                        desktop_webui_process::ShellWindowState(shutdown_started, trying_to_quit,
+                                                                window_state_.Run()),
+                        entry && !entry->IsInitialEntry())) {
+      case desktop_webui_process::RecoveryStep::kReloadDocument:
+        before_recovery_.Run();
+        note_outcome_.Run(desktop_webui_process::RecoveryOutcome::kAttempted);
+        controller.Reload(content::ReloadType::NORMAL, false);
+        break;
+      case desktop_webui_process::RecoveryStep::kLoadShellUrl:
+        before_recovery_.Run();
+        note_outcome_.Run(desktop_webui_process::RecoveryOutcome::kAttempted);
+        controller.LoadURL(GURL(desktop_webui_process::kShellUrl), content::Referrer(),
+                           ui::PAGE_TRANSITION_AUTO_TOPLEVEL, std::string());
+        break;
+      case desktop_webui_process::RecoveryStep::kWaitForResume:
+        if (desktop_webui_process::QuitMayStillBeCancelled(shutdown_started, trying_to_quit)) {
+          quit_poll_.Start(FROM_HERE, base::Milliseconds(desktop_webui_process::kQuitPollMilliseconds),
+                           base::BindOnce(&ShellRecovery::Resume, weak_factory_.GetWeakPtr()));
+        }
+        break;
+      case desktop_webui_process::RecoveryStep::kGaveUp:
+        note_outcome_.Run(desktop_webui_process::RecoveryOutcome::kExhausted);
+        break;
+      case desktop_webui_process::RecoveryStep::kNothing:
+        break;
+    }
+  }
+
+  base::RepeatingCallback<desktop_webui_process::WindowState()> window_state_;
+  base::RepeatingClosure before_recovery_;
+  base::RepeatingCallback<void(desktop_webui_process::RecoveryOutcome)> note_outcome_;
+  desktop_webui_process::ShellRecoveryState state_;
+  base::CallbackListSubscription quit_cancelled_;
+  base::OneShotTimer quit_poll_;
+  base::WeakPtrFactory<ShellRecovery> weak_factory_{this};
 };
 
 constexpr base::TimeDelta kShellCurtainSettle = base::Milliseconds(100);
@@ -499,6 +597,9 @@ struct RequestedWindow {
   std::string id;
   std::string kind;
   bool small = false;
+  bool pinned = false;
+  bool pin_read = false;
+  const char* window_class = nullptr;
   std::string title;
   base::DictValue utility;
   base::WeakPtr<BrowserWindowInterface> browser;
@@ -574,6 +675,11 @@ base::Value SharedFrameValue(const gfx::Rect& bounds) {
 
 constexpr char kWindowOutputs[] = "ArdiaLinuxWindowOutputs";
 
+const char*& OpeningWindowClass() {
+  static const char* window_class = nullptr;
+  return window_class;
+}
+
 void ShowNativeWindow(BrowserWindowInterface* browser, linux_window::Presentation presentation) {
   if (presentation == linux_window::Presentation::kInactive) return browser->GetWindow()->ShowInactive();
   browser->GetWindow()->Show();
@@ -633,6 +739,16 @@ uint64_t& ActivationClock() {
 int& CliActiveOwner() {
   static int owner = 0;
   return owner;
+}
+
+std::map<int, int>& CliDevToolsSessionHosts() {
+  static base::NoDestructor<std::map<int, int>> hosts;
+  return *hosts;
+}
+
+std::map<std::string, base::WeakPtr<content::WebContents>>& OffscreenTabsByKey() {
+  static base::NoDestructor<std::map<std::string, base::WeakPtr<content::WebContents>>> tabs;
+  return *tabs;
 }
 
 int& Revision() {
@@ -903,6 +1019,49 @@ scoped_refptr<base::SequencedTaskRunner> FileRunner() {
           {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
            base::TaskShutdownBehavior::BLOCK_SHUTDOWN}));
   return *runner;
+}
+
+desktop_webui_process::ShellRecoveryTally& RecoveryTally() {
+  static desktop_webui_process::ShellRecoveryTally tally;
+  return tally;
+}
+
+desktop_webui_process::RecoveryDocuments& RecoveryArchive() {
+  static desktop_webui_process::RecoveryDocuments archive;
+  return archive;
+}
+
+auto ReadRecoveryDocument(const base::FilePath& directory) {
+  return [directory](const std::string& name) {
+    StoredDocument stored = ReadStoredDocument(directory, name);
+    return desktop_webui_process::RecoveryDocumentRead{stored.outcome, std::move(stored.contents)};
+  };
+}
+
+auto WriteRecoveryDocument(const base::FilePath& directory) {
+  return [directory](const std::string& name, const std::string& contents) {
+    return WriteDocument(directory, name, contents);
+  };
+}
+
+void NoteShellRecovery(const base::FilePath& directory, desktop_webui_process::RecoveryOutcome outcome) {
+  RecoveryTally().Record(outcome);
+  FileRunner()->PostTask(FROM_HERE, base::BindOnce(
+      [](const base::FilePath& directory, const std::string& tally) {
+        RecoveryArchive().Save(ReadRecoveryDocument(directory), WriteRecoveryDocument(directory), tally);
+      },
+      directory, RecoveryTally().Json()));
+}
+
+void RotateShellRecoveryDocuments(const base::FilePath& directory) {
+  static bool rotated = false;
+  if (rotated) return;
+  rotated = true;
+  FileRunner()->PostTask(FROM_HERE, base::BindOnce(
+      [](const base::FilePath& directory) {
+        RecoveryArchive().Rotate(ReadRecoveryDocument(directory), WriteRecoveryDocument(directory));
+      },
+      directory));
 }
 
 LinuxDocumentRead ReadCanonicalDocument(const base::FilePath& directory,
@@ -1223,6 +1382,18 @@ class ShellHostView : public views::View,
   int id() const { return id_; }
   const std::string& window_id() const { return window_id_; }
   bool is_utility() const { return !kind_.empty(); }
+  bool ReadPinnedSize() {
+    if (pinned_) pin_read_ = true;
+    return pinned_;
+  }
+  bool TakeOpenedFloating() { return std::exchange(opened_floating_, false) && pin_read_; }
+  const char* window_class() const { return window_class_; }
+  void ReleasePinnedSize() {
+    if (!pinned_) return;
+    pinned_ = false;
+    pinned_size_timer_.Stop();
+    if (GetWidget()) GetWidget()->OnSizeConstraintsChanged();
+  }
   void set_small(bool small) {
     if (small_ == small) return;
     small_ = small;
@@ -1249,6 +1420,10 @@ class ShellHostView : public views::View,
     window_id_ = std::move(request.id);
     kind_ = std::move(request.kind);
     small_ = request.small;
+    pinned_ = request.pinned;
+    pin_read_ = request.pin_read;
+    opened_floating_ = request.pinned;
+    window_class_ = request.window_class;
     title_ = std::move(request.title);
     utility_ = std::move(request.utility);
     page_profile_ = std::move(request.page_profile);
@@ -1373,6 +1548,7 @@ class ShellHostView : public views::View,
   void DocumentCall(std::string verb, base::DictValue request,
                     base::OnceCallback<void(LinuxDocumentResult)> done);
   base::DictValue Bootstrap() const;
+  void NoteAssetServed(std::string_view asset) { launch_bootstrap_.Served(asset); }
   void HandUnclaimedTabsToShell();
   base::DictValue Strip() const;
   base::DictValue Transaction(std::optional<int> command, bool advance);
@@ -1620,6 +1796,10 @@ class ShellHostView : public views::View,
   ardiacore::LinuxPeekSiteTabs peek_site_tabs_;
   std::set<int> closing_offers_;
   bool small_ = false;
+  bool pinned_ = false;
+  bool pin_read_ = false;
+  bool opened_floating_ = false;
+  const char* window_class_ = nullptr;
   bool reports_commits_ = false;
   std::map<int, base::WeakPtr<content::WebContents>> offered_;
   std::map<std::string, uint64_t> pending_restores_;
@@ -1640,6 +1820,8 @@ class ShellHostView : public views::View,
   std::optional<StartupTab> startup_tab_;
   base::OneShotTimer startup_tab_timer_;
   void StartStartupTab();
+  void StartShellRecovery();
+  desktop_webui_process::WindowState RecoveryWindowState() const;
   void StartedStartupTab(std::optional<linux_startup_tab::StartupTab> saved);
   void OpenStartupTab(linux_startup_tab::StartupTab saved, std::string history);
   content::WebContents* TakeStartupTabForKey(const std::string& key, const GURL& url, Profile* profile);
@@ -1823,6 +2005,7 @@ class ShellHostView : public views::View,
   std::vector<std::unique_ptr<views::ViewTracker>> under_glass_;
   std::vector<gfx::Rect> shell_pass_;
   std::unique_ptr<ShellTransparency> shell_transparency_;
+  std::unique_ptr<ShellRecovery> shell_recovery_;
   raw_ptr<views::View> curtain_ = nullptr;
   std::optional<desktop_window_corners::Corners> window_corners_;
   std::optional<std::pair<bool, desktop_window_corners::DecorationAnswer>> followed_decorations_;
@@ -1830,6 +2013,8 @@ class ShellHostView : public views::View,
   bool default_size_followed_ = false;
   bool sized_by_default_ = false;
   base::OneShotTimer curtain_timer_;
+  base::OneShotTimer pinned_size_timer_;
+  base::TimeTicks pinned_at_;
   raw_ptr<HostMessageHandler> handler_ = nullptr;
   uint64_t renderer_generation_ = 0;
   std::optional<uint64_t> live_generation_;
@@ -1883,6 +2068,7 @@ class ShellHostView : public views::View,
   base::WeakPtr<content::WebContents> switcher_source_;
   int id_;
   bool startup_;
+  desktop_webui_process::LaunchBootstrap launch_bootstrap_;
   std::unique_ptr<ardia::linux_suggest::SuggestionClient> suggestions_ =
       std::make_unique<ardia::linux_suggest::SuggestionClient>();
   std::unique_ptr<ardia::linux_telemetry::TelemetryClient> telemetry_ =
@@ -2084,6 +2270,11 @@ class HostMessageHandler : public content::WebUIMessageHandler,
         if (host != reply->handler->host_.get()) host->EngineEvent(change, changed);
       }
     }
+    if (reply->name == "engine.cliDevToolsOpen" && value->is_dict() && reply->handler->host_) {
+      if (const std::optional<int> session = value->GetDict().FindInt("session")) {
+        CliDevToolsSessionHosts()[*session] = reply->handler->host_->id();
+      }
+    }
     reply->handler->Resolve(reply->id, std::move(*value));
   }
   void Resolve(const std::string& id, base::Value value) {
@@ -2127,6 +2318,46 @@ class HostMessageHandler : public content::WebUIMessageHandler,
     if (!json) return Fail(id, "ERR_BAD_REPLY", "CLI control arguments are not JSON");
     ac_engine_call("ac_cli_control", "", json->c_str(), Replied, new EngineReply{name, weak_factory_.GetWeakPtr(), id});
   }
+  void EngineCliCall(const std::string& id, const ardiacore::linux_automation_window::EngineCliRoute& route,
+                     const base::Value* value) {
+    std::optional<base::Value> parsed;
+    if (value && value->is_string()) {
+      parsed = base::JSONReader::Read(value->GetString(), base::JSON_PARSE_RFC);
+    } else if (!value || value->is_none()) {
+      parsed = base::Value(base::DictValue());
+    }
+    if (!parsed || !parsed->is_dict()) return Fail(id, "ERR_ENGINE", "Engine arguments require a JSON object");
+    base::DictValue request = std::move(parsed->GetDict());
+    if (route.tab) {
+      const std::string* key = request.FindString("tabId");
+      if (!key) return Fail(id, "ERR_ENGINE", std::string(route.name) + " requires {tabId}");
+      content::WebContents* contents = nullptr;
+      for (const auto& [window, other] : Hosts()) {
+        TabBinding* binding = other->BindingForKey(*key);
+        if (binding && binding->contents()) {
+          contents = binding->contents();
+          break;
+        }
+      }
+      if (!contents) {
+        auto offscreen = OffscreenTabsByKey().find(*key);
+        if (offscreen != OffscreenTabsByKey().end()) {
+          contents = offscreen->second.get();
+          if (!contents) OffscreenTabsByKey().erase(offscreen);
+        }
+      }
+      if (!contents) return Fail(id, "ERR_ENGINE", "no such tab");
+      if (contents->GetBrowserContext()->IsOffTheRecord()) {
+        return ProfileFail(id, ardiacore::linux_profiles::ProfileError::kPrivateService);
+      }
+      request.Remove("tabId");
+      request.Set("tab", TabId(contents));
+    }
+    const auto json = base::WriteJson(request);
+    if (!json) return Fail(id, "ERR_BAD_REPLY", "CLI arguments are not JSON");
+    ac_engine_call(route.service, "", json->c_str(), Replied,
+                   new EngineReply{route.name, weak_factory_.GetWeakPtr(), id});
+  }
   void ProfileFail(const std::string& id, ardiacore::linux_profiles::ProfileError error) {
     Fail(id, ardiacore::linux_profiles::ProfileErrorCode(error), ardiacore::linux_profiles::ProfileErrorMessage(error));
   }
@@ -2159,6 +2390,10 @@ class HostMessageHandler : public content::WebUIMessageHandler,
           if (refused != ardiacore::linux_profiles::ProfileError::kNone) return ProfileFail(id, refused);
         }
         return CliControlCall(id, name, args.Find("args"));
+      }
+      if (const auto* route = ardiacore::linux_automation_window::EngineCliRouteFor(name)) {
+        if (private_page) return ProfileFail(id, ardiacore::linux_profiles::ProfileError::kPrivateService);
+        return EngineCliCall(id, *route, args.Find("args"));
       }
       if (name == "profiles.release") {
         bool live_elsewhere = false;
@@ -2668,11 +2903,15 @@ class ShellDataSource : public content::URLDataSource {
         url.host() != "ardia") {
       return std::move(callback).Run(nullptr);
     }
-    if (AssetPath(url) == "host-bootstrap.js") host->HandUnclaimedTabsToShell();
+    const bool shell_bootstrap = AssetPath(url) == "host-bootstrap.js";
+    if (shell_bootstrap) host->HandUnclaimedTabsToShell();
+    base::DictValue bootstrap = host->Bootstrap();
+    host->NoteAssetServed(AssetPath(url));
+    if (shell_bootstrap && host->TakeOpenedFloating()) bootstrap.Set("openedFloating", true);
     FileRunner()->PostTaskAndReplyWithResult(
         FROM_HERE,
         base::BindOnce(&ReadAsset, AssetDirectory(), AssetPath(url),
-                       DocumentDirectory(host->profile()), host->Bootstrap()),
+                       DocumentDirectory(host->profile()), std::move(bootstrap)),
         base::BindOnce(
             [](GotDataCallback callback, std::optional<std::string> contents) {
               std::move(callback).Run(
@@ -2698,7 +2937,7 @@ class ShellController : public content::WebUIController {
 
 class ShellConfig : public content::DefaultWebUIConfig<ShellController> {
  public:
-  ShellConfig() : DefaultWebUIConfig("chrome", "ardia") {}
+  ShellConfig() : DefaultWebUIConfig(desktop_webui_process::kShellScheme, desktop_webui_process::kShellHost) {}
   bool IsWebUIEnabled(content::BrowserContext* context) override {
     return !Profile::FromBrowserContext(context)->IsOffTheRecord();
   }
@@ -2707,7 +2946,7 @@ class ShellConfig : public content::DefaultWebUIConfig<ShellController> {
 ShellHostView::ShellHostView(BrowserWindowInterface* browser, BrowserView* parent,
                              bool startup, Profile* app_profile)
     : browser_(browser), browser_view_(parent), app_profile_(app_profile->GetWeakPtr()),
-      id_(browser->GetSessionID().id()), startup_(startup),
+      id_(browser->GetSessionID().id()), startup_(startup), launch_bootstrap_(startup),
       window_id_(Hosts().empty() ? "main" : "window-" + base::NumberToString(id_)) {
   Hosts()[id_] = this;
   SetBackground(views::CreateSolidBackground(kColorWebContentsBackground));
@@ -2784,6 +3023,10 @@ ShellHostView::~ShellHostView() {
 
 void ShellHostView::Initialize() {
   sized_by_default_ = ArdiaLinuxTakeDefaultSizedBrowser(browser_);
+  if (Profile* app_profile = app_profile_.get()) {
+    shell_->SetOwnedWebContents(CreateShellContents(app_profile, private_window()));
+    RotateShellRecoveryDocuments(DocumentDirectory(app_profile));
+  }
   documents_ = DocumentsFor(profile());
   dialogs_ = std::make_unique<LinuxWindowDialogs>(window_id_, DialogProfile(), GetWidget(),
                                                   ardiacore::BackgroundInstance());
@@ -2792,6 +3035,11 @@ void ShellHostView::Initialize() {
     presentation_observation_.Observe(compositor);
   } else {
     presented_ = true;
+  }
+  if (pinned_) {
+    pinned_at_ = base::TimeTicks::Now();
+    pinned_size_timer_.Start(FROM_HERE, presented_ ? base::TimeDelta() : base::Milliseconds(linux_window::kPinnedSizeLimitMs),
+                             base::BindOnce(&ShellHostView::ReleasePinnedSize, base::Unretained(this)));
   }
   SeedWindowActivation();
   RestoreFullScreenNow();
@@ -2838,13 +3086,38 @@ void ShellHostView::Initialize() {
     }
     if (startup_ && !small_ && private_window_.empty() && unclaimed_.empty()) StartStartupTab();
   }
-  shell_->LoadInitialURL(GURL("chrome://ardia/"));
+  shell_->LoadInitialURL(GURL(desktop_webui_process::kShellUrl));
   shell_transparency_ = std::make_unique<ShellTransparency>(shell());
+  StartShellRecovery();
   curtain_timer_.Start(FROM_HERE, kShellCurtainLimit,
                        base::BindOnce(&ShellHostView::LiftCurtain, base::Unretained(this)));
   ApplyShellInput();
   ardiacore::WatchLinuxShellInput(shell());
   settled_window_state_.Settle(NativeWindowFacts());
+}
+
+desktop_webui_process::WindowState ShellHostView::RecoveryWindowState() const {
+  if (!GetWidget() || GetWidget()->IsClosed() || close_.Irreversible())
+    return desktop_webui_process::WindowState::kGone;
+  return closing() ? desktop_webui_process::WindowState::kPaused : desktop_webui_process::WindowState::kOpen;
+}
+
+void ShellHostView::StartShellRecovery() {
+  Profile* app_profile = app_profile_.get();
+  if (!app_profile) return;
+  shell_recovery_ = std::make_unique<ShellRecovery>(
+      shell(),
+      base::BindRepeating(
+          [](base::WeakPtr<ShellHostView> host) {
+            return host ? host->RecoveryWindowState() : desktop_webui_process::WindowState::kGone;
+          },
+          GetWeakPtr()),
+      base::BindRepeating(
+          [](base::WeakPtr<ShellHostView> host) {
+            if (host) host->launch_bootstrap_.NoteRecovery();
+          },
+          GetWeakPtr()),
+      base::BindRepeating(&NoteShellRecovery, DocumentDirectory(app_profile)));
 }
 
 void ShellHostView::StartStartupTab() {
@@ -3333,7 +3606,7 @@ bool ShellHostView::Trusted(content::WebUI* ui) const {
   if (!browser_ || !ui || ui->GetWebContents() != shell()) return false;
   auto* frame = shell()->GetPrimaryMainFrame();
   return frame && frame->IsRenderFrameLive() && ui->GetRenderFrameHost() == frame && frame->GetWebUI() == ui && frame->GetLastCommittedOrigin() ==
-                      url::Origin::Create(GURL("chrome://ardia/")) &&
+                      url::Origin::Create(GURL(desktop_webui_process::kShellUrl)) &&
          shell()->GetLastCommittedURL().host() == "ardia";
 }
 
@@ -3426,6 +3699,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   for (const char* capability : ardiacore::linux_capture::kCaptureCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_cast::kCastCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_automation_window::kCapabilities) capabilities.Append(capability);
+  for (const auto& route : ardiacore::linux_automation_window::kEngineCliRoutes) capabilities.Append(route.name);
   if (!is_utility()) {
     for (const char* capability : ardia::desktop_keys::kPageKeyCapabilities) capabilities.Append(capability);
   }
@@ -3448,7 +3722,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   }
   auto bootstrap = base::DictValue()
       .Set("windowId", window_id_)
-      .Set("startup", startup_)
+      .Set("startup", launch_bootstrap_.startup())
       .Set("profileId", "default")
       .Set("nativeModules", std::move(native_modules))
       .Set("launchConfig", ardiacore::LinuxLaunchConfig(DocumentDirectory(profile()), user_data_directory))
@@ -3677,6 +3951,7 @@ std::optional<std::string> ShellHostView::MoveTabOffscreen(TabBinding* binding) 
   if (!window) return std::string("Ardia couldn't take that tab off-screen.");
   const int id = TabId(contents);
   auto weak = GetWeakPtr();
+  if (binding && !binding->key().empty()) OffscreenTabsByKey()[binding->key()] = contents->GetWeakPtr();
   app_operation_ = true;
   auto owned = std::move(bindings_[id]);
   bindings_.erase(id);
@@ -4464,6 +4739,7 @@ void ShellHostView::CancelDocumentSeal(LinuxClose::Identity identity, bool chrom
               return;
             }
             if (!host->close_.Cancelled(identity)) return;
+            if (host->shell_recovery_) host->shell_recovery_->Resume();
             for (const auto& companion : host->companions_) {
               if (companion) UnloadController::From(companion.get())->ResetBeforeUnloadForShutdown();
             }
@@ -4680,6 +4956,11 @@ void ShellHostView::OnDidPresentCompositorFrame(ui::Compositor*, uint32_t, const
   WindowFocus().Presented(id_, FocusClockMs());
   presentation_observation_.Reset();
   presented_ = true;
+  if (pinned_) {
+    const int64_t pinned_for = (base::TimeTicks::Now() - pinned_at_).InMilliseconds();
+    pinned_size_timer_.Start(FROM_HERE, base::Milliseconds(linux_window::PinnedSizeReleaseDelayMs(pinned_for)),
+                             base::BindOnce(&ShellHostView::ReleasePinnedSize, base::Unretained(this)));
+  }
   RestoreFullScreenNow();
 }
 
@@ -4744,6 +5025,7 @@ void ShellHostView::RestoreFullScreenNow() {
   if (!manager) return;
   FullscreenController* fullscreen = manager->fullscreen_controller();
   if (FullScreenRestorer().Enter(window_id_, fullscreen->IsFullscreenForBrowser())) {
+    ReleasePinnedSize();
     if (const auto output = SavedWindowOutput()) {
       output_target_ = output->second;
       widget->SetFullscreen(true, output->first);
@@ -6941,6 +7223,7 @@ void OpenNativeWindow(WindowOpening opening, uint64_t generation, Profile* page,
     return fail(ProfileFailure(ardiacore::linux_profiles::ProfileError::kUnavailable));
   }
   BrowserWindowCreateParams params(page, true);
+  bool maximized = false;
   if (opening.requested) {
     const auto& b = opening.requested->bounds;
     params.initial_bounds = opening.requested->positioned ? gfx::Rect(b.x, b.y, b.width, b.height)
@@ -6963,6 +7246,7 @@ void OpenNativeWindow(WindowOpening opening, uint64_t generation, Profile* page,
     const base::DictValue* placement = chrome::GetWindowPlacementDictionaryReadOnly(
         params.app_name, app->GetPrefs());
     const bool saved = ValidUtilityPlacement(placement);
+    maximized = saved && placement->FindBool("maximized").value_or(false);
     if (opening.kind == "import" || !saved) {
       const bool settings = opening.kind == "settings";
       params.initial_bounds = gfx::Rect(settings ? kSettingsWindowWidth : kImportWindowWidth,
@@ -6976,12 +7260,20 @@ void OpenNativeWindow(WindowOpening opening, uint64_t generation, Profile* page,
       params.initial_bounds = gfx::Rect();
     }
   }
-  BrowserWindowInterface* created = CreateBrowserWindow(std::move(params));
+  const bool pinned = linux_window::OpensPinned(opening.kind, opening.small, maximized);
+  const char* const window_class = linux_window::WindowClass(opening.kind, opening.small);
+  BrowserWindowInterface* created = nullptr;
+  {
+    base::AutoReset<const char*> opening_class(&OpeningWindowClass(), window_class);
+    created = CreateBrowserWindow(std::move(params));
+  }
   if (!created) return fail(base::Value("Chrome could not create a window"));
   RequestedWindow request;
   request.id = id;
   request.kind = opening.kind;
   request.small = opening.small;
+  request.pinned = pinned;
+  request.window_class = window_class;
   request.title = opening.title;
   if (opening.utility) request.utility = std::move(*opening.utility);
   request.browser = created->GetWeakPtr();
@@ -7521,7 +7813,7 @@ void ShellHostView::Invoke(
       method == "ArdiaShell.removeDocument") {
     const std::string name = ArgumentString(values, 0);
     if (!desktop_policy::ValidDocumentName(name) || name == kSessionName ||
-        LinuxDocuments::Reserved(name)) {
+        LinuxDocuments::Reserved(name) || desktop_webui_process::ShellRecoveryDocument(name)) {
       return std::move(done).Run(false, base::Value("Invalid or reserved document name"));
     }
     std::optional<std::string> contents;
@@ -8577,6 +8869,17 @@ void EngineEvent(void*, const char* topic, const char* json) {
   if (!topic || !json) return;
   const auto payload = base::JSONReader::Read(json, base::JSON_PARSE_RFC);
   if (!payload || !payload->is_dict()) return;
+  if (std::string_view(topic) == "cliDevTools") {
+    const std::optional<int> session = payload->GetDict().FindInt("session");
+    auto owner = session ? CliDevToolsSessionHosts().find(*session) : CliDevToolsSessionHosts().end();
+    if (owner == CliDevToolsSessionHosts().end()) return;
+    auto host = Hosts().find(owner->second);
+    if (payload->GetDict().Find("closed")) CliDevToolsSessionHosts().erase(owner);
+    if (host == Hosts().end()) return;
+    host->second->Event("ArdiaEngine", "engine", base::Value(base::DictValue()
+        .Set("name", "engine.cliDevTools").Set("data", payload->GetDict().Clone())));
+    return;
+  }
   if (std::string_view(topic) == "cliControl") {
     for (const auto& [id, host] : Hosts()) {
       host->Event("ArdiaEngine", "engine", base::Value(base::DictValue()
@@ -8685,6 +8988,22 @@ void StartLinuxHost() {
     if (!browser || !minimum) return;
     const auto found = Hosts().find(browser->GetSessionID().id());
     if (found != Hosts().end()) found->second->MinimumSize(minimum);
+  };
+  g_ardia_linux_window_class = [](const BrowserWindowInterface* browser) -> const char* {
+    if (OpeningWindowClass() || !browser) return OpeningWindowClass();
+    const int session = browser->GetSessionID().id();
+    if (const auto host = Hosts().find(session); host != Hosts().end()) return host->second->window_class();
+    const auto requested = RequestedWindows().find(session);
+    return requested != RequestedWindows().end() && requested->second.browser.get() == browser ? requested->second.window_class : nullptr;
+  };
+  g_ardia_linux_pins_window_size = [](const BrowserWindowInterface* browser) {
+    if (!browser) return false;
+    const int session = browser->GetSessionID().id();
+    if (const auto host = Hosts().find(session); host != Hosts().end()) return host->second->ReadPinnedSize();
+    const auto requested = RequestedWindows().find(session);
+    if (requested == RequestedWindows().end() || requested->second.browser.get() != browser || !requested->second.pinned) return false;
+    requested->second.pin_read = true;
+    return true;
   };
   g_ardia_linux_unhandled_key = [](content::WebContents* contents, const input::NativeWebKeyboardEvent& event) {
     const int modifiers = event.GetModifiers();

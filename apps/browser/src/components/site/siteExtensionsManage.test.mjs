@@ -12,6 +12,7 @@ const client = await import("../../state/telemetry/client.ts");
 const usage = await import("../../state/telemetry/usage.ts");
 const { useBrowser } = await import("../../state/browser/store.ts");
 const { useSettingsNav, SETTINGS_WINDOW_ID } = await import("../../state/settings/settingsWindows.ts");
+const { useSettingsSearch } = await import("../../state/settings/searchState.ts");
 const { SiteExtensions } = await import("./SiteExtensions.tsx");
 
 const S = () => useBrowser.getState();
@@ -45,11 +46,11 @@ function renderPanel(windowId, tabId, onClose) {
   return (label) => pressables.find((p) => p.accessibilityLabel === label);
 }
 
-test("the Extensions header has a visible Manage button that closes the panel, then opens Settings › Extensions for the panel window's profile", async () => {
+test("the Extensions header has a visible Manage button that closes the panel, then opens Settings › Profiles at the Extensions section for the panel window's profile", async () => {
   const { work, workWindow, tabId } = workWindowBehindDefaultWindow();
   client.setSharing(true, "onboarding");
   windows.open.delete(SETTINGS_WINDOW_ID);
-  useSettingsNav.setState({ pane: "general", profileId: null, detail: null, back: [], forward: [] });
+  useSettingsNav.setState({ pane: "general", profileId: null, detail: null, scroll: 0, visit: 0, back: [], forward: [] });
   const events = [];
   const pressable = renderPanel(workWindow, tabId, () => events.push(windows.open.has(SETTINGS_WINDOW_ID) ? "close after open" : "close"));
   const manage = pressable("Manage Extensions");
@@ -60,6 +61,8 @@ test("the Extensions header has a visible Manage button that closes the panel, t
   const nav = useSettingsNav.getState();
   assert.equal(nav.pane, "profiles");
   assert.equal(nav.profileId, work);
+  assert.equal(nav.detail, null);
+  assert.equal(useSettingsSearch.getState().reveal?.id, "profiles.extensions");
   usage.sessionEnding();
   assert.deepEqual((await usageCounts()).map((e) => e.extensions_manage_opens_from_site_controls), [1]);
 });
@@ -75,4 +78,19 @@ test("the + tile still closes the panel and opens the Chrome Web Store in the pa
   const tabs = S().windows[workWindow].tabIds;
   assert.equal(tabs.length, before + 1);
   assert.match(S().tabs[tabs.find((id) => id !== tabId)].url, /^https:\/\/chromewebstore\.google\.com\//);
+});
+
+test("Manage Extensions from an extension's page goes back to the profile overview, scrolled to Extensions, even with a search open", async () => {
+  const { openManageExtensions } = await import("../../state/extensions/actions.ts");
+  const { setSettingsQuery } = await import("../../state/settings/searchState.ts");
+  const { workWindow } = workWindowBehindDefaultWindow();
+  useSettingsNav.setState({ pane: "profiles", profileId: S().windows[workWindow].profileId, detail: "extension:abc", back: [], forward: [] });
+  setSettingsQuery("cookies");
+  openManageExtensions(workWindow);
+  const nav = useSettingsNav.getState();
+  assert.equal(nav.pane, "profiles");
+  assert.equal(nav.detail, null);
+  const search = useSettingsSearch.getState();
+  assert.equal(search.query, "");
+  assert.equal(search.reveal?.id, "profiles.extensions");
 });

@@ -1,7 +1,7 @@
 --- a/chrome/browser/ui/views/frame/browser_widget.cc
 +++ b/chrome/browser/ui/views/frame/browser_widget.cc
-@@ -36,6 +36,7 @@
- #include "chrome/browser/ui/views/helium/native_frame_materials.h"
+@@ -34,6 +34,7 @@
+ #include "chrome/browser/ui/views/frame/top_container_view.h"
  #include "chrome/browser/ui/web_applications/app_browser_controller.h"
  #include "chrome/common/chrome_switches.h"
 +#include "ardia/win/hooks.h"  // nogncheck

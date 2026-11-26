@@ -1,4 +1,5 @@
-import { MENU_SLOTS, type PluginManifest } from "../../lib/pluginManifest";
+import { MENU_SLOTS, type PluginManifest, type PluginPermissions } from "../../lib/pluginManifest";
+import type { StateIntent, StateTopic } from "../../lib/pluginState";
 import type { PasswordField } from "../../lib/pluginPasswordManager";
 import { pageBarConsent } from "../../lib/pluginPageBar";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
@@ -62,6 +63,33 @@ function networkLines(m: PluginManifest): ConsentLine[] {
   return [];
 }
 
+const TOPIC_WORDS: Record<StateTopic, string> = {
+  tabs: "your tabs change",
+  workspace: "your windows and groups change",
+  navigation: "a tab goes to a new page",
+  downloads: "a download starts, moves along or finishes",
+};
+
+const INTENT_WORDS: Record<StateIntent, string> = {
+  "tabs.group": "group tabs",
+  "tabs.ungroup": "ungroup tabs",
+  "tabs.move": "move tabs",
+  "tabs.pin": "pin tabs",
+  "tabs.unpin": "unpin tabs",
+  "tabs.mute": "mute tabs",
+  "tabs.unmute": "unmute tabs",
+  "tabs.activate": "switch tabs",
+  "groups.update": "rename, recolour and fold groups",
+};
+
+function stateLines(p: PluginPermissions): ConsentLine[] {
+  if (!p.state) return [];
+  const lines: ConsentLine[] = [];
+  if (p.state.events.length) lines.push({ icon: "dot.radiowaves.left.and.right", text: `Hears when ${p.state.events.map((t) => TOPIC_WORDS[t]).join(", when ")}. Never private windows${p.state.events.includes("downloads") ? ", private downloads or where a file was saved" : ""}` });
+  if (p.state.intents.length) lines.push({ icon: "arrow.up.arrow.down.square", text: `Can ${p.state.intents.map((i) => INTENT_WORDS[i]).join(", ")}. Never in private windows` });
+  return lines;
+}
+
 function permissionLines(m: PluginManifest): ConsentLine[] {
   const p = m.permissions;
   const lines: ConsentLine[] = [];
@@ -70,6 +98,7 @@ function permissionLines(m: PluginManifest): ConsentLine[] {
   if (p.workspace) lines.push({ icon: "square.grid.2x2", text: "Sees and rearranges every window, tab and group: it can move, close and group your tabs" });
   if (p.activePage) lines.push({ icon: "text.magnifyingglass", text: "Reads the text of the tab you're on, for 30 seconds after you use it. Never in private windows" });
   if (m.hooks.length) lines.push({ icon: "bell", text: `Hears these events: ${m.hooks.join(", ")}` });
+  lines.push(...stateLines(p));
   if (p.commands) lines.push({ icon: "command", text: "Runs Ardia commands, like opening and closing tabs" });
   if (p.storage) lines.push({ icon: "internaldrive", text: "Keeps its own data on this " + PLATFORM_TERMS.computer });
   if (p.secrets) lines.push({ icon: "key", text: "Keeps secrets, like sign-in tokens, in your Keychain" });

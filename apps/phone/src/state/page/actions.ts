@@ -19,7 +19,7 @@ import { blockersToast, searchQuery, translationAsks, translationUrl, type Night
 import { backLayer, downloadedToast, downloadFailedToast, downloadingToast, pressPlan, stoppedPrivateDownloadsToast, type PressAction, type Request } from "./pagePrompts";
 import { onboardingBack } from "../onboarding/store";
 import { refreshSettings } from "../settings/actions";
-import { openSettings, openSettingsPage, popSettings, type SettingsRoute } from "../settings/nav";
+import { openSettings, openSettingsPage, popSettings, settingsNav, type SettingsRoute } from "../settings/nav";
 import { pinToMac, sendTab } from "../sync/actions";
 import type { SyncedDevice } from "../../platform/sync";
 import { linkToCopy } from "./linkCopy";
@@ -385,6 +385,31 @@ export const closeMenuSubpage = () => usePageUi.setState({ menuPage: "main" });
 
 export function openSiteSettingsSheet() {
   afterPageMenu(() => openSettingsPage({ page: "siteSettings" }), { sameDocument: false });
+}
+
+function somethingElseOverPage(tabId: string) {
+  const ui = pageUi();
+  const browse = useBrowse.getState();
+  return pageRequest(tabId) !== null || pageIsFullscreen(tabId) || ui.menuOpen || ui.findOpen || ui.readerTabId !== null || ui.press !== null || browse.surface !== "browsing" || browse.sheet !== null || searchState().open || settingsNav().open || useLibrary.getState().open || useVoice.getState().presented;
+}
+
+export function openSiteSettingsOverMenu() {
+  const document = currentDocument();
+  markMenuPhase("siteSettingsPressed");
+  afterMenu = null;
+  closePageMenu();
+  const open = () => {
+    markMenuPhase("siteSettingsOpened");
+    openSettingsPage({ page: "siteSettings" });
+  };
+  if (!document) {
+    open();
+    return;
+  }
+  requestAnimationFrame(() => {
+    if (opening?.id !== document.opening || selectedId() !== document.tabId || somethingElseOverPage(document.tabId)) return;
+    open();
+  });
 }
 
 export function openSiteSettingsRoute(route: SettingsRoute, { direct = false } = {}) {

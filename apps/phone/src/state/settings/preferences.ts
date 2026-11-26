@@ -27,6 +27,7 @@ export type Preferences = {
   interfaceStyle: InterfaceStyleChoice;
   schemeChoice: SchemeChoice;
   readerStep: number;
+  keyboardHeights: string;
   readerSerif: boolean;
   readerTheme: "light" | "sepia" | "dark" | null;
 };
@@ -50,6 +51,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   interfaceStyle: "matchMac",
   schemeChoice: "matchMac",
   readerStep: 2,
+  keyboardHeights: "",
   readerSerif: true,
   readerTheme: null,
 };
@@ -73,6 +75,7 @@ export const PREFERENCE_KEYS: Record<keyof Preferences, string> = {
   interfaceStyle: "settings.interfaceStyle",
   schemeChoice: "settings.schemeChoice",
   readerStep: "reader.sizeStep",
+  keyboardHeights: "search.keyboardHeights",
   readerSerif: "reader.serif",
   readerTheme: "reader.theme",
 };
@@ -111,13 +114,14 @@ const PARSERS: { [K in keyof Preferences]: (raw: string) => Preferences[K] | und
   interfaceStyle: oneOf<InterfaceStyleChoice>(["matchMac", "glass", "classic"]),
   schemeChoice: oneOf<SchemeChoice>(["matchMac", "system", "light", "dark"]),
   readerStep: (raw) => (/^\d$/.test(raw) && Number(raw) <= 6 ? Number(raw) : undefined),
+  keyboardHeights: (raw) => (/^(\d{1,4}x\d{1,4}=\d{1,4})?(;\d{1,4}x\d{1,4}=\d{1,4}){0,3}$/.test(raw) ? raw : undefined),
   readerSerif: flag,
   readerTheme: oneOf<"light" | "sepia" | "dark">(["light", "sepia", "dark"]),
 };
 
 export const acceptsPreference = (name: keyof Preferences, raw: string) => PARSERS[name](raw) !== undefined;
 
-export const defaultPreferences = (platform?: string): Preferences => ({ ...DEFAULT_PREFERENCES, collapsesBottomBar: platform === "android" });
+export const defaultPreferences = (platform?: string): Preferences => ({ ...DEFAULT_PREFERENCES, collapsesBottomBar: platform === "android" || platform === "ios" });
 
 export function parsePreferences(stored: Record<string, string>, platform?: string): Preferences {
   const out = { ...defaultPreferences(platform) } as Record<keyof Preferences, unknown>;

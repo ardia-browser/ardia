@@ -13,7 +13,7 @@ import { setConnectPhrase, useConnectDraft } from "../../state/sync/connectDraft
 import { IDLE_CONNECT, type ConnectState } from "../../state/sync/connectSession";
 import { canScanCodes } from "../../state/sync/scan";
 import { chooseFolderTitle, connectMessage, MAC_HINT } from "../../state/sync/syncRules";
-import { legibleInk, modifierList, navigationBarBackButtonHidden, settingsChrome, settingsPage, useReduceMotion, useTheme } from "../ui";
+import { legibleInk, modifierList, navigationBarBackButtonHidden, neverBounces, settingsChrome, settingsPage, useReduceMotion, useTheme } from "../ui";
 import { SyncScan } from "../sync/SyncScan";
 import { ExpoHero, ExpoSettingsAction, ExpoStep } from "./ExpoSettingsParts";
 
@@ -122,7 +122,7 @@ export function ExpoSyncConnectPage() {
   };
 
   const page = (
-    <Form modifiers={modifierList(settingsPage(syncWords.connect), tint(PlatformColor("systemBlue")), settingsChrome(), interactiveDismissDisabled(busy), isRoot ? null : navigationBarBackButtonHidden(busy))}>
+    <Form modifiers={modifierList(settingsPage(syncWords.connect), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), interactiveDismissDisabled(busy), isRoot ? null : navigationBarBackButtonHidden(busy))}>
       <ExpoHero title={syncWords.connect} subtitle="Two steps, and your Mac’s tabs are here." systemImage="macbook.and.iphone" tint="sync" />
       <Section title="Two Steps" footer={<Text>{copy().phraseStays}</Text>}>
         <ExpoStep number={1} title="Show the code on your Mac" detail={MAC_HINT} progress={hasPhrase ? "done" : "current"}>

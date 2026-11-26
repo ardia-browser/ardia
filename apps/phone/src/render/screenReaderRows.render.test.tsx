@@ -29,15 +29,17 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+const SUGGESTIONS_ROW = "Search suggestions, Suggestions from your search engine as you type.";
+
 onAndroid("on the hand-built Settings Android keeps, a switch row is one screen-reader element with the switch role, and the whole row toggles, as Compose's toggleable row", () => {
   const setting = jest.spyOn(settingsActions, "setSearchSuggestions").mockImplementation(() => undefined);
-  openSettings();
+  openSettings({ page: "search" });
   const root = renderSurface(<SettingsView />);
-  const nodes = exposed(root, "Search Suggestions");
+  const nodes = exposed(root, SUGGESTIONS_ROW);
   expect(nodes).toHaveLength(1);
   expect(nodes[0]!.props.accessibilityRole).toBe("switch");
   expect(nodes[0]!.props.accessibilityState).toMatchObject({ checked: expect.any(Boolean) });
-  const row = root.root.findAll((node) => node.props.accessibilityLabel === "Search Suggestions" && typeof node.props.onPress === "function")[0]!;
+  const row = root.root.findAll((node) => node.props.accessibilityLabel === SUGGESTIONS_ROW && typeof node.props.onPress === "function")[0]!;
   act(() => row.props.onPress());
   expect(setting).toHaveBeenCalledTimes(1);
   setting.mockRestore();

@@ -2,7 +2,7 @@ import { useShortcutHint, withShortcut } from "../../state/commands/commandShort
 import { claimFocusTag, findFocus } from "../../state/focus/focusClaims";
 import { useEffect, useRef, useState } from "react";
 import { Animated, findNodeHandle, TextInput, View } from "react-native";
-import { useTheme } from "../ui/theme";
+import { caretColor, useTheme } from "../ui/theme";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { useFind, useTab } from "../../state/browser/hooks";
 import { currentTab } from "../../state/browser/current";
@@ -95,6 +95,7 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
             placeholder="Find on Page"
             placeholderTextColor={theme.placeholder}
             selectionColor={theme.selection}
+            cursorColor={caretColor(theme, "panel")}
             enableFocusRing={false}
             onSubmitEditing={() => {
               if (!submitRepeatsKey(enterAt.current, Date.now())) run(false);
@@ -140,6 +141,7 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
               placeholder="Replace"
               placeholderTextColor={theme.placeholder}
               selectionColor={theme.selection}
+              cursorColor={caretColor(theme, "panel")}
               enableFocusRing={false}
               onSubmitEditing={() => void replace(false)}
               keyDownEvents={[{ key: "Escape" }]}

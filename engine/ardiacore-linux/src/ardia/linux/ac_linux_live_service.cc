@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "ardia/core/ac_launch_switches.h"
+#include "ardia/desktop/ac_desktop_paths.h"
 #include "ardia/linux/ac_linux_live.h"
 #include "ardia/linux/ac_linux_sync_json.h"
 #include "ardia/linux/ac_linux_sync_keystore.h"
@@ -93,8 +94,8 @@ std::string KeyDirectory() {
   base::PathService::Get(chrome::DIR_USER_DATA, &user_data);
   chrome::GetDefaultUserDataDirectory(&default_user_data);
   if (linux_sync::UseFileKeyStore(ardiacore::BackgroundInstance(), command.HasSwitch(switches::kUserDataDir),
-                                  user_data.value(), default_user_data.value())) {
-    return user_data.Append(live::kKeyDirectory).value();
+                                  ardia::desktop_paths::Text(user_data), ardia::desktop_paths::Text(default_user_data))) {
+    return ardia::desktop_paths::Text(user_data.AppendASCII(live::kKeyDirectory));
   }
   return std::string();
 }

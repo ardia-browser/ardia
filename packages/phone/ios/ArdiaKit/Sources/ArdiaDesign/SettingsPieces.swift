@@ -420,8 +420,8 @@ private struct ChromeButtonStyle: ViewModifier {
   @ViewBuilder
   func body(content: Content) -> some View {
     switch (usesGlass, prominent) {
-    case (true, true): content.buttonStyle(.glassProminent)
-    case (true, false): content.buttonStyle(.glass)
+    case (true, true): content.buttonStyle(LiquidGlassButtonStyle(prominent: true))
+    case (true, false): content.buttonStyle(LiquidGlassButtonStyle())
     case (false, true): content.buttonStyle(.borderedProminent)
     case (false, false): content.buttonStyle(.bordered)
     }

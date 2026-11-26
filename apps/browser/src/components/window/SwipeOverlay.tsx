@@ -226,6 +226,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
         canSwipeBack={history.back || !!swipeClose}
         canSwipeForward={history.forward}
         allowsVerticalMotion={!!shown?.list}
+        pageTabId={tabId}
         onSwipe={onSwipe}
         onLayout={(e) => void (sizeRef.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
       />

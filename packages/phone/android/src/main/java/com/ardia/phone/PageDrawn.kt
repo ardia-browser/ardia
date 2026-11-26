@@ -12,7 +12,7 @@ internal interface DrawnSurface {
     fun afterNextFrameCommits(done: () -> Unit)
 }
 
-internal class PageDrawnWatch(private val surface: DrawnSurface, private val onDrawn: () -> Unit) {
+internal class PageDrawnWatch(private val surface: DrawnSurface, private val document: () -> Long = { 0L }, private val onDrawn: (document: Long) -> Unit) {
     enum class Stage { Hidden, Waiting, Drawn }
 
     var stage = Stage.Hidden
@@ -41,17 +41,25 @@ internal class PageDrawnWatch(private val surface: DrawnSurface, private val onD
     private fun arm() {
         request += 1
         val mine = request
+        val asked = document()
         stage = Stage.Waiting
         onVisible()
         val posted = surface.postVisualState {
             if (mine != request) return@postVisualState
+            if (document() != asked) return@postVisualState rearm()
             surface.afterNextFrameCommits {
                 if (mine != request) return@afterNextFrameCommits
+                if (document() != asked) return@afterNextFrameCommits rearm()
                 stage = Stage.Drawn
-                onDrawn()
+                onDrawn(asked)
             }
         }
         if (!posted) forget()
+    }
+
+    private fun rearm() {
+        forget()
+        if (surface.visible()) arm()
     }
 
     companion object {

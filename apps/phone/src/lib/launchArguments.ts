@@ -25,6 +25,7 @@ export type LaunchArguments = {
   opensSettings: boolean;
   settingsPage: string | null;
   restingStart: boolean;
+  collapseBar: boolean;
   color: string | null;
   interfaceStyle: string | null;
   colorScheme: string | null;
@@ -33,10 +34,12 @@ export type LaunchArguments = {
   pagerFreeze: number | null;
   pagerScript: boolean;
   loadFreeze: number | null;
+  scrollProbe: string | null;
   demoScale: number;
   openingCard: boolean;
   oneContainerScroll: boolean;
   redesign: boolean;
+  pillHold: boolean;
 };
 
 export const LAUNCH_TIMING = { delaySeconds: 6, stepGapSeconds: 1.5, deckOpenMs: 3000, sheetMs: 600, toastMs: 1500, deckScriptStartMs: 1200, snapWaitMs: 5000 } as const;
@@ -106,6 +109,7 @@ export function parseLaunchArguments(values: Record<string, LaunchValue>): Launc
     opensSettings: flag(values, "ArdiaOpenSettings"),
     settingsPage: text(values, "ArdiaSettingsPage"),
     restingStart: flag(values, "ArdiaRestingStart"),
+    collapseBar: flag(values, "ArdiaCollapseBar"),
     color: text(values, "ArdiaColor"),
     interfaceStyle: text(values, "ArdiaInterfaceStyle"),
     colorScheme: text(values, "ArdiaColorScheme"),
@@ -114,10 +118,12 @@ export function parseLaunchArguments(values: Record<string, LaunchValue>): Launc
     pagerFreeze: isDemo ? number(values, "BrowsePagerFreeze") : null,
     pagerScript: isDemo && flag(values, "BrowsePagerScript"),
     loadFreeze: isDemo ? number(values, "BrowseLoadFreeze") : null,
+    scrollProbe: isDemo ? text(values, "ScrollProbe") : null,
     demoScale: isDemo ? Math.max(0, whole(values, "ArdiaDemoScale") ?? 0) : 0,
     openingCard: flag(values, "ArdiaOpeningCard"),
     oneContainerScroll: flag(values, "ArdiaOneContainerScroll"),
     redesign: flag(values, "ArdiaRedesign"),
+    pillHold: flag(values, "ArdiaPillHold"),
   };
 }
 

@@ -1,3 +1,4 @@
+#import "ArdiaDownloadPrompts.h"
 #import "ArdiaEvents.h"
 #import "ArdiaDownloadMover.h"
 
@@ -20,6 +21,8 @@ NSString *DomainOf(NSString *name) {
 
 }
 
+NSNotificationName const ArdiaConsentEpochDidChangeNotification = @"ArdiaConsentEpochDidChange";
+
 @implementation ArdiaEvents
 
 + (void)setSender:(void (^)(NSString *, NSDictionary *))sender forDomain:(NSString *)domain {
@@ -31,7 +34,10 @@ NSString *DomainOf(NSString *name) {
 }
 
 + (void)emit:(NSString *)name data:(NSDictionary *)data {
-  if ([name isEqualToString:@"downloads.changed"] && data) data = [ArdiaDownloadMover.shared noteDownloadEvent:data];
+  if ([name isEqualToString:@"downloads.changed"] && data) {
+    ardia_files::NoteDownloadEvent(data, NSDate.date.timeIntervalSince1970);
+    data = [ArdiaDownloadMover.shared noteDownloadEvent:data];
+  }
   if (void (^sender)(NSString *, NSDictionary *) = Senders()[DomainOf(name)]) sender(name, data ?: @{});
 }
 
@@ -45,8 +51,13 @@ NSString *DomainOf(NSString *name) {
 + (void)setConsentEpoch:(NSString *)epoch {
   NSString *copied = [epoch copy] ?: @"";
   os_unfair_lock_lock(&gConsentEpochLock);
+  const BOOL changed = ![gConsentEpoch isEqualToString:copied];
   gConsentEpoch = copied;
   os_unfair_lock_unlock(&gConsentEpochLock);
+  if (!changed) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [NSNotificationCenter.defaultCenter postNotificationName:ArdiaConsentEpochDidChangeNotification object:nil];
+  });
 }
 
 @end

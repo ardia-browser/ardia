@@ -7,6 +7,7 @@ export type ToolbarRow = {
   fieldRadius: number;
   fieldButton: number;
   fieldButtonRadius: number;
+  fieldTrailingInset?: number;
   extensionButton: number;
 };
 

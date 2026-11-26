@@ -52,3 +52,50 @@ test("history.removed reaches a plugin without queries or fragments unless it ho
   const full = await removalsSeen(await enabledWith(["fullUrls"]));
   assert.deepEqual(full[0].data.urls, ["https://bank.example/statement?account=42#row", "https://plain.example/"]);
 });
+
+test("a state event's address is http or https only, never a file, internal, plugin or credentialed page", async () => {
+  const { pluginStateUrl } = await import("./pluginEventRedaction.ts");
+  const short = { full: false, urls: true };
+  const full = { full: true, urls: true };
+  for (const url of [
+    "file:///Users/me/taxes.pdf",
+    "ardia://history",
+    "ardia://settings",
+    "ardia://vault",
+    "chrome://settings/passwords",
+    "chrome://password-manager/passwords",
+    "about:blank",
+    "about:settings",
+    "data:text/html,<b>x</b>",
+    "javascript:alert(1)",
+    "blob:https://a.example/123",
+    "view-source:https://a.example/",
+    "ardia-plugin://other/page",
+    "https://user:hunter2@login.example/",
+    "https://:pw@login.example/",
+    "https://login.example\u0000/",
+    "",
+  ]) {
+    assert.equal(pluginStateUrl(url, short), null, url);
+    assert.equal(pluginStateUrl(url, full), null, url);
+  }
+  assert.equal(pluginStateUrl("https://a.example/x?y=1#z", { full: true, urls: false }), null);
+  assert.equal(pluginStateUrl("https://bank.example/s?account=42#row", short), "https://bank.example/s");
+  assert.equal(pluginStateUrl("https://bank.example/s?account=42#row", full), "https://bank.example/s?account=42");
+  for (const secret of ["access_token=abc", "api_key=1", "password=x", "sessionid=9", "code=123", "X-Amz-Signature=f", "auth=t"]) {
+    assert.equal(pluginStateUrl(`https://a.example/cb?ok=1&${secret}#f`, full), "https://a.example/cb", secret);
+  }
+});
+
+test("a query name is decoded before it is judged, and a query that can't be decoded is cut whole", async () => {
+  const { pluginStateUrl, hasSecretParam } = await import("./pluginEventRedaction.ts");
+  const full = { full: true, urls: true };
+  for (const query of ["%74oken=secret", "%61pi_key=x", "%2574oken=y", "a=1&%73ession=z", "pass%77ord=1", "q=%E0%A4%A", "%E0%A4%A=1", "x+token=1"]) {
+    assert.equal(hasSecretParam(query), true, query);
+    assert.equal(pluginStateUrl(`https://a.example/cb?${query}#f`, full), "https://a.example/cb", query);
+  }
+  for (const query of ["page=2", "q=a+b%20c", "lang=%C3%A9"]) {
+    assert.equal(hasSecretParam(query), false, query);
+    assert.equal(pluginStateUrl(`https://a.example/cb?${query}#f`, full), `https://a.example/cb?${query}`, query);
+  }
+});

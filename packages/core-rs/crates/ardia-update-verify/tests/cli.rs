@@ -616,3 +616,159 @@ fn a_key_checked_out_with_crlf_line_endings_still_verifies() {
         "a CRLF key, package",
     );
 }
+
+#[test]
+fn every_windows_shared_vector_gets_its_recorded_answer() {
+    let vectors_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/update-vectors.json");
+    let vectors: Value = serde_json::from_str(&fs::read_to_string(vectors_path).unwrap()).unwrap();
+    let scratch = Scratch::new();
+    for case in vectors["windows"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let key = scratch.file("key.pem", pem(&unhex(case["publicKey"].as_str().unwrap())));
+        let manifest = scratch.file("manifest.json", case["manifest"].as_str().unwrap());
+        let signature = scratch.file("manifest.json.sig", unhex(case["signature"].as_str().unwrap()));
+        let build = case["currentBuild"].as_u64().unwrap().to_string();
+        let outcome = run(&[
+            "windows-manifest",
+            "--key",
+            key.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--signature",
+            signature.to_str().unwrap(),
+            "--published-under",
+            case["publishedUnder"].as_str().unwrap(),
+            "--cpu",
+            case["cpu"].as_str().unwrap(),
+            "--current-build",
+            &build,
+        ]);
+        let want = case.get("helper").unwrap_or(&case["outcome"]);
+        let line = match want.get("error") {
+            Some(error) => format!("failed {}", error.as_str().unwrap()),
+            None => format!(
+                "ok {} {} {} {} {}",
+                want["version"].as_str().unwrap(),
+                want["build"],
+                want["url"].as_str().unwrap(),
+                want["sha256"].as_str().unwrap(),
+                want["bytes"]
+            ),
+        };
+        let status = if want.get("error").is_some() { 1 } else { 0 };
+        expect(outcome, &line, status, name);
+    }
+}
+
+#[test]
+fn windows_package_verifies_installer_checksum_and_refuses_tampering_or_bad_usage() {
+    let scratch = Scratch::new();
+    let installer = b"windows installer bytes".repeat(256);
+    let sha = hex(&Sha256::digest(&installer));
+    let prefix = "https://github.com/ardia-browser/ardia/releases/download/";
+    let url = format!("{prefix}windows-alpha/Ardia-Setup-x64-60.exe");
+    let manifest_text = format!(
+        "{{\"version\":\"0.2.48\",\"build\":60,\"x64\":{{\"url\":\"{url}\",\"sha256\":\"{sha}\",\"bytes\":{}}}}}\n",
+        installer.len()
+    );
+    let key = scratch.file(
+        "key.pem",
+        pem(&SigningKey::from_bytes(&RELEASE_SEED).verifying_key().to_bytes()),
+    );
+    let manifest = scratch.file("windows-update.json", &manifest_text);
+    let signature = scratch.file(
+        "windows-update.json.sig",
+        SigningKey::from_bytes(&RELEASE_SEED)
+            .sign(manifest_text.as_bytes())
+            .to_bytes(),
+    );
+    let package = scratch.file("Ardia-Setup-x64-60.exe", &installer);
+    let ok_line = format!("ok 0.2.48 60 {url} {sha} {}", installer.len());
+    expect(
+        run(&[
+            "windows-package",
+            "--key",
+            key.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--signature",
+            signature.to_str().unwrap(),
+            "--published-under",
+            prefix,
+            "--cpu",
+            "x64",
+            "--current-build",
+            "59",
+            "--package",
+            package.to_str().unwrap(),
+        ]),
+        &ok_line,
+        0,
+        "valid windows package",
+    );
+    let mut tampered = installer.clone();
+    tampered[0] ^= 0xff;
+    scratch.file("Ardia-Setup-x64-60.exe", &tampered);
+    expect(
+        run(&[
+            "windows-package",
+            "--key",
+            key.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--signature",
+            signature.to_str().unwrap(),
+            "--published-under",
+            prefix,
+            "--cpu",
+            "x64",
+            "--current-build",
+            "59",
+            "--package",
+            package.to_str().unwrap(),
+        ]),
+        "failed checksum",
+        1,
+        "tampered windows package",
+    );
+    expect(
+        run(&[
+            "windows-manifest",
+            "--key",
+            key.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--signature",
+            signature.to_str().unwrap(),
+            "--published-under",
+            prefix,
+            "--cpu",
+            "x86",
+            "--current-build",
+            "59",
+        ]),
+        "failed usage",
+        2,
+        "bad cpu",
+    );
+    expect(
+        run(&[
+            "windows-manifest",
+            "--key",
+            key.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--signature",
+            signature.to_str().unwrap(),
+            "--published-under",
+            prefix,
+            "--cpu",
+            "x64",
+            "--current-build",
+            "01",
+        ]),
+        "failed usage",
+        2,
+        "leading zero build arg",
+    );
+}

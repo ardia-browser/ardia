@@ -45,10 +45,14 @@ const remember = (storage: FolderStorage | undefined, folder: string) => {
   }
 };
 
+const WINDOWS_DRIVE_PATH = /^[A-Za-z]:\\/;
+
+export const draftFilePath = (folder: string, name: string) => `${folder}${WINDOWS_DRIVE_PATH.test(folder) ? "\\" : "/"}${name}`;
+
 export function hostReportExport(host: ArdiaHost | undefined, storage: FolderStorage | undefined = ownStorage()): ((text: string) => Promise<ReportFile | null>) | undefined {
   if (!host || !servesReportFiles(host)) return undefined;
   const gzipInto = async (folder: string, text: string): Promise<ReportFile> => {
-    const path = `${folder}/${LOCAL_EVENTS_FILE}`;
+    const path = draftFilePath(folder, LOCAL_EVENTS_FILE);
     const bytes = await invokeHost<number>("ArdiaReport.gzipText", { args: [text, path] }, host);
     return { path, bytes };
   };

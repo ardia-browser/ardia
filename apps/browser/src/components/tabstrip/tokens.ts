@@ -8,6 +8,7 @@ export const ITEM_HEIGHT = 32;
 export const ITEM_TOP = MID - ITEM_HEIGHT / 2;
 export const TAB_TOP = 3;
 export const tabRadius = () => radius.chrome;
+export const tabCloseRadius = () => concentric(tabRadius(), (ITEM_HEIGHT - iconButton.xs.box) / 2);
 export const FLARE = 15;
 export const RIM_HEIGHT = 27.5;
 export const RIM_WIDTH = 0.5;

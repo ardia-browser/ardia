@@ -9,6 +9,47 @@ public final class LookModule: Module {
 
     Function("hasGlass") { () -> Bool in true }
 
+    Function("glassRender") { () -> String in
+      GlassReport.render(classic: false).rawValue
+    }
+
+    OnCreate {
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          GlassMetal.shared.onFailed = { PendingCounts.add(PendingCounts.glassShadersFailed) }
+          GlassMetal.shared.prepare()
+          if PhoneTestBuild.isOn, let seconds = UserDefaults.standard.object(forKey: "ArdiaGlassScroll").flatMap({ Double(String(describing: $0)) }), seconds > 0 {
+            let period = UserDefaults.standard.object(forKey: "ArdiaGlassScrollPeriod").flatMap { Double(String(describing: $0)) } ?? 4
+            let reach = UserDefaults.standard.object(forKey: "ArdiaGlassScrollReach").flatMap { Double(String(describing: $0)) } ?? 2400
+            let zoom = UserDefaults.standard.object(forKey: "ArdiaGlassZoom").flatMap { Double(String(describing: $0)) }
+            GlassLabScroll.start(after: 8, for: seconds, period: max(period, 0.2), reach: CGFloat(reach), zoom: zoom.map { CGFloat($0) })
+          }
+          if PhoneTestBuild.isOn, let delay = UserDefaults.standard.object(forKey: "ArdiaGlassNavigate").flatMap({ Double(String(describing: $0)) }), let target = UserDefaults.standard.string(forKey: "ArdiaGlassNavigateTo").flatMap(URL.init(string:)) {
+            GlassLabNavigate.start(after: delay, to: target, stopAfter: UserDefaults.standard.object(forKey: "ArdiaGlassStopAfter").flatMap { Double(String(describing: $0)) })
+          }
+          if PhoneTestBuild.flag("ArdiaGlassRimProbe") { GlassLabRim.start(after: 6) }
+          if PhoneTestBuild.isOn, let delay = UserDefaults.standard.object(forKey: "ArdiaGlassReload").flatMap({ Double(String(describing: $0)) }), delay > 0 { GlassLabReload.start(after: delay) }
+          if PhoneTestBuild.flag("ArdiaGlassProbe") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+              MainActor.assumeIsolated {
+                let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+                if let window = windows.first(where: \.isKeyWindow) ?? windows.first { GlassProbe.run(in: window) }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    OnAppEntersForeground {
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          GlassMetal.shared.retryFailed()
+          GlassFrames.shared.retryBudget()
+        }
+      }
+    }
+
     Function("setPageFrost") { (mode: String) throws -> String in
       guard PhoneTestBuild.isOn else { throw LookLabOnly() }
       let solid = mode == "solid"
@@ -59,11 +100,12 @@ public final class LookModule: Module {
 
     View(FrostSourceView.self) {
       ViewName("FrostSource")
-      Prop("name") { (_: FrostSourceView, _: String?) in }
+      Prop("name") { (view: FrostSourceView, value: String?) in view.name = value }
     }
 
     View(GlassView.self) {
       ViewName("Glass")
+      Prop("source") { (view: GlassView, value: String?) in view.source = value }
       Prop("shape") { (view: GlassView, value: String?) in view.shape = GlassView.Shape(rawValue: value ?? "") ?? .capsule }
       Prop("cornerRadius") { (view: GlassView, value: Double?) in view.cornerRadius = CGFloat(value ?? 0) }
       Prop("tint") { (view: GlassView, value: UIColor?) in view.tint = value }
@@ -222,9 +264,24 @@ final class FilmGrainView: LookHostView {
   }
 }
 
-final class FrostSourceView: ExpoView {}
+final class FrostSourceView: ExpoView {
+  var name: String? {
+    didSet {
+      guard name != oldValue else { return }
+      if let oldValue { GlassSources.unregister(oldValue, self) }
+      if window != nil, let name { GlassSources.register(name, self) }
+    }
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    guard let name else { return }
+    if window != nil { GlassSources.register(name, self) } else { GlassSources.unregister(name, self) }
+  }
+}
 
 struct ClassicChrome: Record {
+  @Field var fill: UIColor? = nil
   @Field var edgeWidth: Double = 0
   @Field var edge: UIColor? = nil
   @Field var shadowRadius: Double = 0
@@ -257,32 +314,46 @@ final class GlassView: ExpoView {
   var shown = true
   var shownDuration: TimeInterval = 0.2
   var colors = LookColors()
+  var source: String?
 
-  private let effectView = UIVisualEffectView()
-  private var applied: (tint: UIColor?, interactive: Bool, classic: Bool, tinted: Bool, shown: Bool, colors: LookColors)?
+  private let glass = LiquidGlassSurface()
+  private let classicView = UIView()
+  private let pressLayer = CALayer()
+  private lazy var press = GlassPress { [weak self] down in self?.pressed(down) }
+  private var applied: (tint: UIColor?, interactive: Bool, classic: Bool, tinted: Bool, shown: Bool, colors: LookColors, source: String?, dark: Bool?)?
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     backgroundColor = .clear
-    effectView.isAccessibilityElement = false
-    super.insertSubview(effectView, at: 0)
+    classicView.isUserInteractionEnabled = false
+    classicView.isAccessibilityElement = false
+    classicView.layer.cornerCurve = .continuous
+    pressLayer.backgroundColor = UIColor.white.cgColor
+    pressLayer.opacity = 0
+    pressLayer.cornerCurve = .circular
+    glass.layer.addSublayer(pressLayer)
+    super.insertSubview(classicView, at: 0)
+    super.insertSubview(glass, at: 1)
+    addGestureRecognizer(press)
     registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: GlassView, _: UITraitCollection) in
       view.applyClassicEdgeAndShadow()
     }
   }
 
   override func insertSubview(_ view: UIView, at index: Int) {
-    if view === effectView || effectView.superview !== self {
+    if view === glass || view === classicView || glass.superview !== self {
       super.insertSubview(view, at: index)
     } else {
-      super.insertSubview(view, at: index + 1)
+      super.insertSubview(view, at: index + 2)
     }
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    effectView.frame = bounds
-    sendSubviewToBack(effectView)
+    classicView.frame = bounds
+    glass.frame = bounds
+    sendSubviewToBack(glass)
+    sendSubviewToBack(classicView)
     applyShape()
   }
 
@@ -291,25 +362,27 @@ final class GlassView: ExpoView {
   func render() {
     overrideUserInterfaceStyle = dark.map { $0 ? .dark : .light } ?? .unspecified
     let classic = isSolid
-    if let applied, applied.tint == tint, applied.interactive == interactive, applied.classic == classic, applied.tinted == tinted, applied.shown == shown, applied.colors == colors {
+    glass.batch {
+      glass.label = accessibilityIdentifier ?? "-"
+      glass.source = source
+      glass.dark = dark
+      glass.tint = tint
+      glass.solidFill = classicChrome.fill
+      glass.classic = classic
+    }
+    press.isEnabled = interactive && !classic
+    if let applied, applied.tint == tint, applied.interactive == interactive, applied.classic == classic, applied.tinted == tinted, applied.shown == shown, applied.colors == colors, applied.source == source, applied.dark == dark {
       applyShape()
       return
     }
     let turning = applied.map { $0.shown != shown } ?? false
-    applied = (tint, interactive, classic, tinted, shown, colors)
+    applied = (tint, interactive, classic, tinted, shown, colors, source, dark)
     let surface = { [self] in
-      if classic {
-        effectView.effect = nil
-        effectView.backgroundColor = tinted ? UIColor(colors.look.surface) : .systemBackground
-        effectView.alpha = shown ? 1 : 0
-      } else {
-        let glass = UIGlassEffect(style: .regular)
-        glass.isInteractive = interactive
-        glass.tintColor = tint
-        effectView.backgroundColor = .clear
-        effectView.alpha = 1
-        effectView.effect = shown ? glass : nil
-      }
+      classicView.backgroundColor = tinted ? UIColor(colors.look.surface) : .systemBackground
+      classicView.isHidden = !classic
+      glass.isHidden = classic
+      classicView.alpha = shown ? 1 : 0
+      glass.alpha = shown ? 1 : 0
     }
     if turning, PhoneTestBuild.isOn { traceShown("turning") }
     if turning, window != nil, shownDuration > 0, !UIAccessibility.isReduceMotionEnabled {
@@ -325,6 +398,18 @@ final class GlassView: ExpoView {
     applyShape()
   }
 
+  private func pressed(_ down: Bool) {
+    let target: Float = down ? Float(LiquidGlassRules.pressedLight) : 0
+    let from = pressLayer.presentation()?.opacity ?? pressLayer.opacity
+    let fade = CABasicAnimation(keyPath: "opacity")
+    fade.fromValue = from
+    fade.toValue = target
+    fade.duration = down ? 0.06 : 0.18
+    fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+    pressLayer.opacity = target
+    pressLayer.add(fade, forKey: "press")
+  }
+
   private func traceShown(_ moment: String) {
     var shownAlpha = alpha
     var hiddenBy = isHidden ? "self" : "none"
@@ -334,30 +419,30 @@ final class GlassView: ExpoView {
       if view.isHidden, hiddenBy == "none" { hiddenBy = view.accessibilityIdentifier ?? String(describing: type(of: view)) }
       ancestor = view.superview
     }
-    NSLog("PAGELAB glass native %@ %@ shown=%@ ms=%ld window=%@ alpha=%.2f shownAlpha=%.2f hiddenBy=%@ effect=%@ at=%.3f", accessibilityIdentifier ?? "-", moment, shown ? "yes" : "no", Int(shownDuration * 1000), window == nil ? "no" : "yes", alpha, shownAlpha, hiddenBy, effectView.effect == nil ? "none" : "glass", CACurrentMediaTime())
+    NSLog("PAGELAB glass ours %@ %@ shown=%@ ms=%ld window=%@ alpha=%.2f shownAlpha=%.2f hiddenBy=%@ surface=%@ at=%.3f", accessibilityIdentifier ?? "-", moment, shown ? "yes" : "no", Int(shownDuration * 1000), window == nil ? "no" : "yes", alpha, shownAlpha, hiddenBy, isSolid ? "classic" : "glass", CACurrentMediaTime())
   }
 
   private func applyShape() {
-    switch shape {
-    case .capsule, .circle:
-      effectView.cornerConfiguration = .capsule()
-    case .rounded:
-      effectView.cornerConfiguration = .uniformCorners(radius: .fixed(Double(cornerRadius)))
-    }
-    effectView.clipsToBounds = isSolid
-    effectView.layer.cornerRadius = isSolid ? classicRadius : 0
-    effectView.layer.cornerCurve = .continuous
+    glass.capsule = shape != .rounded
+    glass.cornerRadius = cornerRadius
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    pressLayer.frame = bounds
+    pressLayer.cornerRadius = classicRadius
+    CATransaction.commit()
+    classicView.clipsToBounds = true
+    classicView.layer.cornerRadius = classicRadius
     applyClassicEdgeAndShadow()
   }
 
   private var classicRadius: CGFloat {
-    shape == .rounded ? cornerRadius : min(bounds.width, bounds.height) / 2
+    shape == .rounded ? min(cornerRadius, min(bounds.width, bounds.height) / 2) : min(bounds.width, bounds.height) / 2
   }
 
   private func applyClassicEdgeAndShadow() {
     let classic = isSolid
-    effectView.layer.borderWidth = classic ? CGFloat(classicChrome.edgeWidth) : 0
-    effectView.layer.borderColor = classic ? classicChrome.edge?.resolvedColor(with: traitCollection).cgColor : nil
+    classicView.layer.borderWidth = classic ? CGFloat(classicChrome.edgeWidth) : 0
+    classicView.layer.borderColor = classic ? classicChrome.edge?.resolvedColor(with: traitCollection).cgColor : nil
     let shadows = classic && barShadow && classicChrome.shadow != nil
     layer.shadowOpacity = shadows ? 1 : 0
     guard shadows else {
@@ -369,6 +454,54 @@ final class GlassView: ExpoView {
     layer.shadowOffset = CGSize(width: 0, height: classicChrome.shadowY)
     layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: classicRadius).cgPath
   }
+}
+
+final class GlassPress: UIGestureRecognizer, UIGestureRecognizerDelegate {
+  private let changed: (Bool) -> Void
+  private var down = false
+
+  init(_ changed: @escaping (Bool) -> Void) {
+    self.changed = changed
+    super.init(target: nil, action: nil)
+    cancelsTouchesInView = false
+    delaysTouchesBegan = false
+    delaysTouchesEnded = false
+    delegate = self
+  }
+
+  override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+    super.touchesBegan(touches, with: event)
+    if !down {
+      down = true
+      changed(true)
+    }
+  }
+
+  override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+    super.touchesEnded(touches, with: event)
+    lift()
+  }
+
+  override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+    super.touchesCancelled(touches, with: event)
+    lift()
+  }
+
+  override func reset() {
+    super.reset()
+    if down {
+      down = false
+      changed(false)
+    }
+  }
+
+  private func lift() {
+    state = .failed
+  }
+
+  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
+
+  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool { false }
 }
 
 final class FrostView: LookHostView {

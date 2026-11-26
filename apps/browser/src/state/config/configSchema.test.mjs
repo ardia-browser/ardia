@@ -126,3 +126,30 @@ test("the schema files are written as 2-space JSON with a final newline", () => 
     assert.equal(text, `${JSON.stringify(JSON.parse(text), null, 2)}\n`);
   }
 });
+
+test("plugin.schema.json states the prerequisites of permissions.state the way the manifest reader does", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { readManifest } = await import("../../lib/pluginManifest.ts");
+  const schema = JSON.parse(readFileSync(new URL("../../../../../docs/plugin.schema.json", import.meta.url), "utf8"));
+  const permissions = schema.then.properties.permissions;
+  assert.ok(permissions.anyOf, "permissions carries the state prerequisites");
+  const cases = [
+    {},
+    { state: false },
+    { state: { events: ["downloads"] } },
+    { state: { events: ["tabs"] } },
+    { state: { events: ["navigation", "downloads"] } },
+    { state: { events: ["workspace"] }, tabs: "read" },
+    { state: { events: ["tabs"] }, tabs: "write" },
+    { state: { intents: ["tabs.pin"] } },
+    { state: { intents: ["tabs.pin"] }, tabs: "read" },
+    { state: { intents: ["tabs.pin"] }, tabs: "write" },
+    { state: { events: ["tabs"], intents: ["tabs.move"] }, tabs: "write" },
+    { state: { events: ["downloads"], intents: [] } },
+  ];
+  for (const given of cases) {
+    const doc = { manifest: 2, name: "p", title: "P", main: "index.js", permissions: given, contributes: { commands: [{ name: "go", title: "Go" }] } };
+    const valid = readManifest(JSON.stringify(doc)).problems.length === 0;
+    assert.equal(accepts(permissions, given), valid, JSON.stringify(given));
+  }
+});

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SF_SYMBOL_ALIASES } from "../../lib/sfSymbols.ts";
-import { SF_SYMBOL_NAMES, sfName } from "./sfSymbolNames.ts";
+import { menuSfName, SF_SYMBOL_NAMES, sfName } from "./sfSymbolNames.ts";
 
 const canonical: [string, string][] = Object.entries(SF_SYMBOL_NAMES).flatMap(([symbol, systemName]) => (systemName ? [[symbol, systemName as string] as [string, string]] : []));
 
@@ -27,4 +27,11 @@ test("Copy Link and copying text keep separate glyphs", () => {
   assert.equal(SF_SYMBOL_NAMES.link, "link");
   assert.equal(SF_SYMBOL_NAMES.docOnDoc, "doc.on.doc");
   assert.equal(SF_SYMBOL_NAMES.sidebarLeft, "sidebar.left");
+});
+
+test("every app symbol has a system image in a native menu, so no menu row loses its icon", () => {
+  for (const symbol of Object.keys(SF_SYMBOL_NAMES)) assert.ok(menuSfName(symbol), symbol);
+  assert.equal(menuSfName("eyes"), "eyes");
+  assert.equal(menuSfName("link"), "link");
+  assert.equal(menuSfName("notASymbol"), undefined);
 });

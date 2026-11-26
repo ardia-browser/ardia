@@ -49,9 +49,7 @@
         "$TURBO_ROOT$/packages/*/ios/*.swift",
         "$TURBO_ROOT$/engine/ardiacore-desktop/src/**",
         "$TURBO_ROOT$/engine/ardiacore-linux/src/**",
-        "$TURBO_ROOT$/scripts/windows/engine/src/**",
-        "$TURBO_ROOT$/apps/browser/windows/**/*.cpp",
-        "$TURBO_ROOT$/apps/browser/windows/**/*.h"
+        "$TURBO_ROOT$/scripts/windows/engine/src/**"
       ]
     },
     "test:portable": {

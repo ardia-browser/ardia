@@ -7,7 +7,17 @@ import { TabIcon } from "../../browser/src/components/sidebar/TabIcon";
 import { useSidebarTokens } from "../../browser/src/components/sidebar/tokens";
 import { radius } from "../../browser/src/components/ui/tokens";
 
+import { RestingTile as GlassRestingTile, TileFace as GlassTileFace } from "../../browser/src/components/sidebar/TileFace.tsx";
+import { useGlass } from "../../browser/src/components/ui/Glass";
+import { nativeGlassBehindWindow, useNativeGlass } from "./shellGlass";
+
 export { FolderDropRing, useSlotPosition } from "../../browser/src/components/sidebar/TileFace.tsx";
+
+function useNativeGlassTiles() {
+  const available = useNativeGlass();
+  const glass = useGlass();
+  return glass && available && nativeGlassBehindWindow();
+}
 
 const DARK = {
   resting: "rgba(255,255,255,0.04)",
@@ -31,6 +41,8 @@ type FaceState = { width: number; active: boolean; selected: boolean; hovered: b
 
 export function TileFace({ tabId, badge, ...state }: FaceState & { tabId: string; badge?: ReactNode }) {
   const tab = useTab(tabId);
+  const native = useNativeGlassTiles();
+  if (native) return <GlassTileFace tabId={tabId} badge={badge} {...state} />;
   if (!tab) return null;
   return (
     <FlatTile {...state}>
@@ -44,6 +56,8 @@ export function TileFace({ tabId, badge, ...state }: FaceState & { tabId: string
 }
 
 export function RestingTile(props: Omit<FaceState, "active"> & { children: ReactNode }) {
+  const native = useNativeGlassTiles();
+  if (native) return <GlassRestingTile {...props} />;
   return <FlatTile {...props} active={false} />;
 }
 

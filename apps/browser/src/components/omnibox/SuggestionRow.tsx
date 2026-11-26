@@ -1,9 +1,12 @@
-import { displayHost, displayUrl, hostOf, type Suggestion } from "@ardia/core";
+import type { Suggestion } from "@ardia/core";
 import { memo } from "react";
 import { Image, Pressable, Text as NativeText, View } from "react-native";
 import { Button, Symbol, Text, useHover, useTheme, withAlpha, type Theme } from "../ui";
 import { Favicon } from "../favicon/Favicon";
+import { suggestionLabels } from "./suggestionLabels";
 import { SELECTED_SUGGESTION_ALPHA, SUGGESTION } from "./tokens";
+
+export { suggestionLabels };
 
 const ICON_BOX = { width: SUGGESTION.iconBox, height: SUGGESTION.iconBox } as const;
 
@@ -32,27 +35,6 @@ export function SuggestionIcon({ suggestion: s, color }: { suggestion: Suggestio
       );
     case "provider":
       return <Favicon url={s.url} favicon={s.icon} />;
-  }
-}
-
-function labels(s: Suggestion): [string, string | null] {
-  switch (s.kind) {
-    case "page":
-      if (s.tabId) return [s.title || displayUrl(s.url), "Switch to Tab"];
-      return s.title ? [s.title, displayUrl(s.url)] : [displayUrl(s.url), null];
-    case "search":
-      return [s.bang ? `Search ${s.engine} for ${s.query}` : s.query, null];
-    case "calc":
-      return [s.value, s.expression];
-    case "action":
-    case "create":
-      return [s.title, null];
-    case "extension":
-      return [s.title, s.open === "action" ? "Open Extension" : "Extension Options"];
-    case "provider": {
-      const host = displayHost(hostOf(s.url)) || displayUrl(s.url);
-      return [s.title, s.subtitle ? `${host} · ${s.subtitle}` : host];
-    }
   }
 }
 
@@ -112,7 +94,7 @@ const SuggestionRow = memo(
   }) {
     const theme = useTheme();
     const { hovered, hoverProps } = useHover();
-    const [title, accessory] = labels(s);
+    const [title, accessory] = suggestionLabels(s);
     const hint = trailing ?? (s.kind === "action" ? s.hint : s.kind === "provider" ? s.provider : null);
     const onRemove = isRemovable(s) ? () => actions.remove(s.url) : undefined;
     const removable = !!onRemove && (hovered || selected);

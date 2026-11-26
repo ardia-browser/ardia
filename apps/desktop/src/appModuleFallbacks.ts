@@ -115,6 +115,12 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
     revokeApproval: answer(false),
     devtoolsEndpoint: answer({ problem: "unreadable" }),
     cutOff: now(true),
+    armFiles: answer({ ok: false, reason: "unsupported" }),
+    disarmFiles: now(0),
+    fileArms: answer([]),
+    claimArmedDownload: now({ ok: false, reason: "unsupported" }),
+    placeArmedDownload: answer({ ok: false, reason: "unsupported" }),
+    releaseArmedDownload: now(false),
   },
   ArdiaSystemSignals: {
     watchIdle: () => undefined,

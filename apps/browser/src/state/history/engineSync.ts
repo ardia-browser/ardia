@@ -4,6 +4,7 @@ import { readDocument } from "../../platform/documents";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { afterFirstWindow } from "../../lib/afterFirstWindow";
 import { MAX_HISTORY, MAX_VISIT_TIMES } from "./history";
+import { applyHistoryChanges, historyListIndexed, indexHistoryList, isListChange, type HistoryGap, type ListChange, type NoteGap } from "./historyChanges";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import type { HistoryEntry } from "../browser/types";
 import { isWebPageUrl } from "../../lib/url";
@@ -11,10 +12,12 @@ import { engineProfiles } from "../profiles/engineProfiles";
 import { onProfilesOpened, onProfilesUnloaded, openedEngineProfiles } from "../profiles/profileLoading";
 import { migrateLegacyFile } from "../app/legacyFiles";
 import { during } from "../app/jobActivity";
+import { isQuitting, onQuittingChanged } from "../app/quit";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 
 const LEGACY_FILE = "history.json";
+export const INDEX_WHEN_QUIET_MS = 2000;
 const LEGACY_TOLERANCE_MS = 60_000;
 const CHUNK = 500;
 const LEGACY_KEPT_MS = 15_000;
@@ -24,8 +27,6 @@ const MAX_GAP_REPORTS = 10;
 const store = () => useBrowser.getState();
 const profileLabel = (engine: string) => (engine ? "another profile" : "the default profile");
 
-type HistoryGap = `${HistoryChange["kind"]}-${"unloaded" | "moving"}` | "modified-unknown" | "visit-untitled";
-type NoteGap = (gap: HistoryGap, count?: number) => void;
 
 const gaps = new Map<string, Map<HistoryGap, number>>();
 let gapTimer: ReturnType<typeof setTimeout> | null = null;
@@ -90,112 +91,56 @@ function setView(engine: string, list: HistoryEntry[], floor?: number) {
 
 const byLastVisit = (a: HistoryEntry, b: HistoryEntry) => b.lastVisit - a.lastVisit;
 
-type ListChange = Exclude<HistoryChange, { kind: "deleted"; all: true }>;
-type Touched = { entry: HistoryEntry | undefined; index: number; moved: boolean; seq: number };
+const indexTimers = new Map<string, { timer: ReturnType<typeof setTimeout>; list: readonly HistoryEntry[] }>();
 
-const isListChange = (change: HistoryChange): change is ListChange => change.kind !== "deleted" || !change.all;
-
-const urlsOf = (change: ListChange): string[] =>
-  change.kind === "visit" ? [change.url] : change.kind === "modified" ? change.rows.map((r) => r.url) : change.urls;
-
-export function applyHistoryChanges(list: HistoryEntry[], changes: readonly ListChange[], note?: NoteGap): HistoryEntry[] {
-  const wanted = new Set(changes.flatMap(urlsOf));
-  const touched = new Map<string, Touched>();
-  for (let i = 0; i < list.length; i++) {
-    const h = list[i]!;
-    if (wanted.has(h.url) && !touched.has(h.url)) touched.set(h.url, { entry: h, index: i, moved: false, seq: 0 });
-  }
-  const stateOf = (url: string) => {
-    let state = touched.get(url);
-    if (!state) touched.set(url, (state = { entry: undefined, index: -1, moved: false, seq: 0 }));
-    return state;
-  };
-  let seq = 0;
-  let dirty = false;
-  for (const change of changes) {
-    switch (change.kind) {
-      case "visit": {
-        if (!isWebPageUrl(change.url)) break;
-        const state = stateOf(change.url);
-        const old = state.entry;
-        if (old?.visitTimes?.includes(change.at)) break;
-        const times = [...(old?.visitTimes ?? []), change.at].sort((a, b) => a - b).slice(-MAX_VISIT_TIMES);
-        state.entry = {
-          url: change.url,
-          title: change.title || old?.title || "",
-          favicon: null,
-          visits: Math.max(change.visits, 1),
-          lastVisit: times[times.length - 1]!,
-          visitTimes: times,
-        };
-        if (!state.entry.title) note?.("visit-untitled");
-        state.moved = true;
-        state.seq = ++seq;
-        dirty = true;
-        break;
-      }
-      case "modified": {
-        for (const row of new Map(change.rows.map((r) => [r.url, r])).values()) {
-          const state = touched.get(row.url);
-          const h = state?.entry;
-          if (!h && isWebPageUrl(row.url)) note?.("modified-unknown");
-          if (!state || !h || ((row.title === h.title || !row.title) && row.visits === h.visits)) continue;
-          state.entry = { ...h, title: row.title || h.title, visits: row.visits };
-          dirty = true;
-        }
-        break;
-      }
-      case "deleted": {
-        for (const url of change.urls) {
-          const state = touched.get(url);
-          if (!state?.entry) continue;
-          state.entry = undefined;
-          dirty = true;
-        }
-        break;
-      }
-    }
-  }
-  if (!dirty) return list;
-
-  const replaced: Touched[] = [];
-  const moved: Touched[] = [];
-  for (const state of touched.values()) {
-    if (state.moved && state.entry) moved.push(state);
-    if (state.index >= 0) replaced.push(state);
-  }
-  replaced.sort((a, b) => a.index - b.index);
-  moved.sort((a, b) => b.entry!.lastVisit - a.entry!.lastVisit || b.seq - a.seq);
-  const next: HistoryEntry[] = [];
-  let m = 0;
-  let r = 0;
-  for (let i = 0; i < list.length && next.length < MAX_HISTORY; i++) {
-    let h: HistoryEntry | undefined = list[i]!;
-    if (r < replaced.length && replaced[r]!.index === i) {
-      const state = replaced[r++]!;
-      h = state.moved ? undefined : state.entry;
-    }
-    if (!h) continue;
-    while (m < moved.length && moved[m]!.entry!.lastVisit >= h.lastVisit) next.push(moved[m++]!.entry!);
-    next.push(h);
-  }
-  while (m < moved.length) next.push(moved[m++]!.entry!);
-  if (next.length > MAX_HISTORY) next.length = MAX_HISTORY;
-  return next;
+function forgetIndexTimer(engine: string) {
+  const pending = indexTimers.get(engine);
+  if (pending) clearTimeout(pending.timer);
+  indexTimers.delete(engine);
 }
 
-type Load = { running: Promise<void>; again: boolean; queued: HistoryChange[] };
+function forgetReplacedIndexTimers() {
+  for (const [engine, { list }] of [...indexTimers]) if (viewOf(engine) !== list) forgetIndexTimer(engine);
+}
+
+export const historyIndexesPending = () => indexTimers.size;
+
+function forgetIndexTimers() {
+  for (const engine of [...indexTimers.keys()]) forgetIndexTimer(engine);
+}
+
+function indexWhenQuiet(engine: string) {
+  forgetIndexTimer(engine);
+  const list = viewOf(engine);
+  if (isQuitting() || !list.length || historyListIndexed(list)) return;
+  const timer = setTimeout(() => {
+    indexTimers.delete(engine);
+    if (!isQuitting() && loaded.has(engine) && inApp(engine) && viewOf(engine) === list) indexHistoryList(list);
+  }, INDEX_WHEN_QUIET_MS);
+  indexTimers.set(engine, { timer, list });
+}
+
+type Load = { running: Promise<void>; again: boolean; queued: HistoryChange[]; epoch: string };
 const loads = new Map<string, Load>();
+let syncSession = 0;
+const unloads = new Map<string, number>();
+const readEpoch = (engine: string) => `${syncSession}:${unloads.get(engine) ?? 0}`;
+
+function currentLoad(engine: string): Load | undefined {
+  const running = loads.get(engine);
+  return running && running.epoch === readEpoch(engine) ? running : undefined;
+}
 const loaded = new Set<string>();
 const migrating = new Set<string>();
 
 function load(engine: string): Promise<void> {
-  const running = loads.get(engine);
+  const running = currentLoad(engine);
   if (running) {
     running.again = true;
     return running.running;
   }
-  const state: Load = { running: Promise.resolve(), again: false, queued: [] };
+  const epoch = readEpoch(engine);
+  const state: Load = { running: Promise.resolve(), again: false, queued: [], epoch };
   loads.set(engine, state);
   const consent = consentToken();
   state.running = (async () => {
@@ -204,20 +149,23 @@ function load(engine: string): Promise<void> {
         state.again = false;
         state.queued = [];
         await watchHistory(engine);
-        if (!inApp(engine)) return;
+        if (!inApp(engine) || readEpoch(engine) !== epoch) return;
         const read = await queryHistory(engine, MAX_HISTORY, MAX_VISIT_TIMES);
+        if (readEpoch(engine) !== epoch) return;
         const floor = read.length >= MAX_HISTORY ? read.reduce((oldest, e) => Math.min(oldest, e.visitTimes.at(-1) ?? 0), Infinity) : -Infinity;
         let list = read.filter((e) => isWebPageUrl(e.url)).map(toEntry).sort(byLastVisit);
-        list = applyHistoryChanges(list, state.queued.filter(isListChange), gapNoter(engine));
+        const replayed = state.queued.filter(isListChange);
+        list = applyHistoryChanges(list, replayed, gapNoter(engine));
         if (state.queued.some((c) => c.kind === "deleted" && c.all)) state.again = true;
         setView(engine, list, floor);
         if (inApp(engine)) loaded.add(engine);
-      } while (state.again && inApp(engine));
+        if (replayed.length && loaded.has(engine)) indexWhenQuiet(engine);
+      } while (state.again && inApp(engine) && readEpoch(engine) === epoch);
     } catch (error) {
       const failure = ardiaError(error);
       warnFor(consent, `[history] couldn't read ${profileLabel(engine)}'s history: ${failure.code} ${failure.message}`, error);
     } finally {
-      loads.delete(engine);
+      if (loads.get(engine) === state) loads.delete(engine);
     }
   })();
   return state.running;
@@ -236,7 +184,10 @@ function applyPending() {
   const batches = new Map<string, ListChange[]>();
   const show = () => {
     during("historyApply", () => {
-      for (const [engine, batch] of batches) setView(engine, applyHistoryChanges(viewOf(engine), batch, gapNoter(engine)));
+      for (const [engine, batch] of batches) {
+        setView(engine, applyHistoryChanges(viewOf(engine), batch, gapNoter(engine)));
+        indexWhenQuiet(engine);
+      }
     });
     batches.clear();
   };
@@ -246,7 +197,7 @@ function applyPending() {
       noteGap(engine, `${change.kind}-moving`);
       continue;
     }
-    const running = loads.get(engine);
+    const running = currentLoad(engine);
     if (running) {
       running.queued.push(change);
       continue;
@@ -300,7 +251,7 @@ async function moveHistory(file: LegacyFile) {
 export function startHistory() {
   const events = onHistoryChanged(changed);
   const loadAll = (s: Pick<BrowserState, "profiles">) => {
-    for (const engine of openedEngineProfiles(s)) if (!loaded.has(engine) && !loads.has(engine)) void load(engine);
+    for (const engine of openedEngineProfiles(s)) if (!loaded.has(engine) && !currentLoad(engine)) void load(engine);
   };
   let moving = readDocument(LEGACY_FILE) !== null;
   let stopped = false;
@@ -322,20 +273,31 @@ export function startHistory() {
     if (s.profiles === prev.profiles) return;
     const inStore = engineProfiles(s);
     for (const engine of loaded) if (!inStore.includes(engine)) loaded.delete(engine);
+    for (const engine of [...indexTimers.keys()]) if (!inStore.includes(engine)) forgetIndexTimer(engine);
     if (!moving) loadAll(s);
   });
   const opened = onProfilesOpened(() => {
     if (!moving) loadAll(store());
   });
   const unloaded = onProfilesUnloaded((engines) => {
-    for (const engine of engines) loaded.delete(engine);
+    for (const engine of engines) {
+      unloads.set(engine, (unloads.get(engine) ?? 0) + 1);
+      loaded.delete(engine);
+      forgetIndexTimer(engine);
+    }
   });
+  const quitting = onQuittingChanged((on) => on && forgetIndexTimers());
+  const replaced = useBrowser.subscribeTo(["history"], (s, prev) => s.history !== prev.history && indexTimers.size > 0 && forgetReplacedIndexTimers());
   return () => {
     stopped = true;
+    syncSession++;
     events.remove();
     stop();
     opened();
     unloaded();
+    quitting();
+    replaced();
+    forgetIndexTimers();
     pending = [];
     loaded.clear();
     forgetGaps();
@@ -343,6 +305,6 @@ export function startHistory() {
   };
 }
 
-export const reloadEngineHistory = (engine: string) => (loaded.has(engine) || loads.has(engine) ? load(engine) : Promise.resolve());
+export const reloadEngineHistory = (engine: string) => (loaded.has(engine) || currentLoad(engine) ? load(engine) : Promise.resolve());
 
 export const reloadHistory = () => Promise.all(openedEngineProfiles(store()).map(load));

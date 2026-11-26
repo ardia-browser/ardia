@@ -84,6 +84,7 @@ export function AdvancedPane(_: SettingsPlace) {
       <SectionHeader title="Browsing" />
       <Group>
         <SettingToggle anchor="advanced.showFullUrl" />
+        <SettingToggle anchor="advanced.commandScrollZoom" />
         <Row anchor="advanced.chromeSettings">
           <Button title="Open Chromium Settings" onPress={openChromeSettings} />
         </Row>

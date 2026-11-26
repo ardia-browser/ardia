@@ -26,14 +26,13 @@ public extension EnvironmentValues {
 }
 
 public extension View {
-  func chromeSurface(in shape: some Shape, interactive: Bool = true, tinted: Bool = false) -> some View {
-    modifier(ChromeSurface(shape: shape, interactive: interactive, tinted: tinted))
+  func chromeSurface(in shape: some Shape, tinted: Bool = false) -> some View {
+    modifier(ChromeSurface(shape: shape, tinted: tinted))
   }
 }
 
 private struct ChromeSurface<S: Shape>: ViewModifier {
   let shape: S
-  let interactive: Bool
   let tinted: Bool
 
   @Environment(\.usesGlass) private var usesGlass
@@ -41,7 +40,7 @@ private struct ChromeSurface<S: Shape>: ViewModifier {
 
   func body(content: Content) -> some View {
     if usesGlass {
-      content.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+      content.background { LiquidGlassFill(shape) }
     } else {
       content
         .background(tinted ? AnyShapeStyle(look.surface) : AnyShapeStyle(.background), in: shape)

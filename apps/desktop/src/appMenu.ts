@@ -1,6 +1,7 @@
-import type { BrowserCommand, MenuBookmark, MenuItem, MenuState, ShortcutModifier } from "@ardia-real/shell";
+import type { BrowserCommand, CommandEvent, MenuBookmark, MenuItem, MenuState, ShortcutModifier } from "@ardia-real/shell";
 import { commandSpec, LINUX_STANDARD_ITEMS } from "./commandCatalog";
 import { EDIT_ITEMS, editActionOf, type EditAction, type EditMenu } from "./editCommands";
+import { MORE_SHARE_SERVICE, shareServices, shareServicesListed } from "./linkShare";
 
 type MenuModifier = "command" | "shift" | "option" | "control";
 type AppMenuShortcuts = ReadonlyMap<string, { key: string; modifiers: readonly ShortcutModifier[] }>;
@@ -58,7 +59,7 @@ export function appMenuItems(state: MenuState, shortcuts: AppMenuShortcuts = new
     item.action,
     { id: item.id, title: item.title, enabled: !context.edit!.disabled.has(item.id), key: item.key, modifiers: [...item.modifiers] },
   ])) as Record<EditAction, MenuItem> : null;
-  const tidy = (items: MenuItem[]) => items.filter((item, i) => !("separator" in item) || (i > 0 && i < items.length - 1 && !("separator" in items[i - 1]!)));
+  const tidy = (items: MenuItem[]) => items.filter((item, i) => !("separator" in item) || (items.slice(0, i).some((before) => !("separator" in before)) && !("separator" in items[i - 1]!) && items.slice(i + 1).some((after) => !("separator" in after))));
   const sub = (title: string, children: MenuItem[]): MenuItem => ({ id: `menu:${title}`, title, children: tidy(children.filter((child) => !("id" in child && unavailable.has(child.id)))) });
   const header = (title: string): MenuItem => ({ id: `header:${title}`, title, enabled: false });
   const empty: MenuItem = { id: "empty", title: "Empty", enabled: false };
@@ -113,7 +114,13 @@ export function appMenuItems(state: MenuState, shortcuts: AppMenuShortcuts = new
       cmd("cleanUpTabs"),
       separator,
       cmd("savePage"),
-      sub("Share", [cmd("share", "via:copy", "Copy Link"), cmd("share", "via:email", "Email Link")]),
+      sub("Share", [
+        cmd("share", "via:copy", "Copy Link"),
+        cmd("share", "via:email", "Email Link"),
+        ...(shareServicesListed()
+          ? [separator, ...shareServices().map((service) => cmd("share", `via:${service.title}`, service.menuTitle)), cmd("share", `via:${MORE_SHARE_SERVICE}`, "More\u2026")]
+          : []),
+      ]),
       cmd("print"),
       cmd("printWithSystemDialog"),
     ]),
@@ -165,8 +172,13 @@ export function appMenuItems(state: MenuState, shortcuts: AppMenuShortcuts = new
       ]),
       sub("Split View", [
         cmd("openSplitPane"),
+        cmd("openSplitPaneBelow"),
         cmd("focusNextPane"),
         cmd("focusPreviousPane"),
+        cmd("moveSplitPaneLeft"),
+        cmd("moveSplitPaneRight"),
+        cmd("moveSplitPaneUp"),
+        cmd("moveSplitPaneDown"),
       ]),
       separator,
       cmd("cast"),
@@ -256,6 +268,8 @@ export function appMenuItems(state: MenuState, shortcuts: AppMenuShortcuts = new
       cmd("releaseNotes"),
       separator,
       cmd("copyDiagnostics"),
+      separator,
+      cmd("showOnboarding"),
     ]),
   ];
 }
@@ -276,3 +290,5 @@ export function appMenuChoice(id: string): AppMenuChoice | null {
   if (!commandSpec(command)) return null;
   return { kind: "command", command: command as BrowserCommand, arg: colon < 0 ? null : id.slice(colon + 1) };
 }
+
+export const appMenuCommandEvent = (choice: Extract<AppMenuChoice, { kind: "command" }>, windowId: string, epoch: string): CommandEvent => ({ command: choice.command, arg: choice.arg, windowId, epoch });

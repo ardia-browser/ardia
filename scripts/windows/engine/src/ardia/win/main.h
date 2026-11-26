@@ -13,6 +13,8 @@ void AfterChromeMain(int exit_code);
 
 void QuitApp();
 
+void QuitAppWithExitCode(int exit_code);
+
 const char* TestGateDecision();
 
 }

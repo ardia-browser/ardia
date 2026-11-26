@@ -121,9 +121,9 @@ public class PeekStageModule: Module, PeekStageNative {
       Prop("reduceMotion") { (view: PeekStage, on: Bool) in view.reduceMotion = on }
       Prop("gestures") { (view: PeekStage, on: Bool) in view.gestures = on }
       Prop("meshAllowed") { (view: PeekStage, on: Bool) in view.meshAllowed = on }
-      Events("onPeekState", "onPeekDone", "onPeekPinch")
+      Events("onPeekState", "onPeekDone", "onPeekPinch", "onPeekAsked")
       AsyncFunction("begin") { (view: PeekStage, generation: Int, animated: Bool) -> Bool in view.begin(generation, animated: animated) }.runOnQueue(.main)
-      AsyncFunction("close") { (view: PeekStage, generation: Int) -> Bool in view.close(generation) }.runOnQueue(.main)
+      AsyncFunction("close") { (view: PeekStage, generation: Int, promise: Promise) in view.close(generation) { promise.resolve($0) } }.runOnQueue(.main)
       AsyncFunction("promote") { (view: PeekStage, generation: Int) -> Bool in view.promote(generation) }.runOnQueue(.main)
     }
   }

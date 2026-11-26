@@ -4,7 +4,7 @@ import MachO
 import ExpoModulesCore
 
 public class AppModule: Module, AppNative {
-  static var apiVersion: Int { 96 }
+  static var apiVersion: Int { 99 }
 
   static func interfaceScale() -> Double { Double(InterfaceScale.scale) }
 
@@ -27,7 +27,7 @@ public class AppModule: Module, AppNative {
 
   static func addToDock() -> Bool { DockTile.add() }
 
-  static func appIcons(_ size: Double) -> [[String: Any]] { AppIcons.variants.map { ["id": $0.id, "name": $0.name, "preview": AppIcons.preview($0.id, size: size) as Any] } }
+  static func appIcons(_ size: Double) -> [[String: Any]] { AppIcons.variants.map { ["id": $0.id, "name": $0.name, "flat": $0.flat, "preview": AppIcons.preview($0.id, size: size) as Any] } }
 
   static func appIcon() -> String { AppIcons.current }
 
@@ -67,6 +67,7 @@ public class AppModule: Module, AppNative {
       "processStart": Self.processStart as Any,
       "bootTime": Self.bootTime as Any,
       "launchMarks": ArdiaHost.launchMarks,
+      "launchUsage": ArdiaHost.launchUsage,
       "launchedHidden": ArdiaHost.launchedHidden as Any,
       "launchSource": ArdiaHost.launchSource as Any,
       "loadAverage1m": Self.loadAverage1m as Any,

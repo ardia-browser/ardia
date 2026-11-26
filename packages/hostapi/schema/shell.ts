@@ -5,7 +5,7 @@ export const shell = defineModuleDomain({
   package: "packages/shell",
   imports: {
     "../app": ["AppIcon", "CleanedTitle", "CleanedUrl", "CrashReport", "DiagnosticsSample", "HardwareInfo", "IntroMusicCues", "LaunchConfig", "ShareAnchor", "SystemInfo"],
-    "../automation": ["ControlApprovals", "ControlPeerAnswer", "ControlPeerAsk", "ControlPeerOutcome", "ControlRequest", "ControlSocketStatus", "NativeDevtoolsEndpoint"],
+    "../automation": ["ControlApprovals", "ControlPeerAnswer", "ControlPeerAsk", "ControlPeerOutcome", "ControlRequest", "ControlSocketStatus", "FileArmClaim", "FileArmResult", "FileArmRow", "FileArmSpec", "NativeDevtoolsEndpoint", "PlacedDownload"],
     "../cli": ["CliInstallResult"],
     "../commands": ["CommandEvent"],
     "../config": ["ConfigFileRead"],
@@ -59,6 +59,7 @@ export const shell = defineModuleDomain({
         setTrafficLightsCenter: { args: [["id", "string"], ["center", "[number, number] | null", "CGPoint?"], ["trailing", "boolean"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
         watchSidebarEdge: { args: [["id", "string"], ["on", "boolean"], ["hold", "number"], ["right", "boolean"], ["whilePressed", "boolean"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
         focusWindow: { args: [["id", "string"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
+        setWindowShown: { args: [["id", "string"], ["shown", "boolean"], ["burst", "boolean"]], result: "void", async: true, queue: "main", optional: true, mac: "custom", desktop: "absent", windows: "absent" },
         restoreFullScreen: { args: [["ids", "string[]"], ["focus", "string | null", "String?"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
         dragPreviewBegin: { args: [["windowId", "string"], ["chip", "Rect4", "CGRect"], ["grab", "[number, number]", "CGPoint"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "absent" },
         dragPreviewPage: { args: [["base64", "string"], ["frame", "Rect4", "CGRect"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "absent" },
@@ -267,10 +268,10 @@ export const shell = defineModuleDomain({
       functions: {
         isDefaultBrowser: { args: [], result: "boolean", async: true, queue: "main", mac: "custom", desktop: "host", windows: "custom" },
         setAsDefaultBrowser: { args: [], result: "boolean", async: true, promise: true, queue: "main", mac: "custom", desktop: "host", windows: "custom" },
-        launchAtLoginStatus: { args: [], result: "LaunchAtLoginStatus", swiftResult: "String", async: true, queue: "main", mac: "custom", desktop: "host", windows: "custom" },
+        launchAtLoginStatus: { args: [], result: "LaunchAtLoginStatus", swiftResult: "String", async: true, queue: "utility", mac: "custom", desktop: "host", windows: "custom" },
         setLaunchAtLogin: { args: [["enabled", "boolean"]], result: "void", async: true, queue: "main", throws: true, mac: "custom", desktop: "host", windows: "custom" },
         fileExists: { args: [["path", "string"]], result: "boolean", async: false, mac: "custom", desktop: "custom", windows: "custom" },
-        openFile: { args: [["path", "string"]], result: "boolean", async: true, queue: "main", mac: "custom", desktop: "adapted", windows: "custom" },
+        openFile: { args: [["path", "string"]], result: "boolean", async: true, promise: true, queue: "main", mac: "custom", desktop: "adapted", windows: "custom" },
         revealFile: { args: [["path", "string"]], result: "boolean", async: true, queue: "main", mac: "custom", desktop: "custom", windows: "custom" },
         moveToTrash: { args: [["path", "string"]], result: "boolean", async: true, queue: "main", mac: "custom", desktop: "adapted", windows: "custom" },
         fileIcon: { args: [["path", "string"], ["size", "number"]], result: "string | null", swiftResult: "String?", async: true, queue: "main", mac: "custom", desktop: "adapted", windows: "custom" },
@@ -349,6 +350,14 @@ export const shell = defineModuleDomain({
       },
       events: {},
     },
+    ArdiaWheelArea: {
+      functions: {
+        devWheel: { args: [["windowId", "string"], ["x", "number"], ["y", "number"], ["steps", "{ phase?: string; dy: number; momentum?: boolean; precise?: boolean; afterMs?: number }[]", "[[String: Any]]"]], result: "{ claimed?: boolean[]; inputs?: { t: number; dy: number }[]; frames?: { t: number; model: number; shown: number }[]; error?: string }", async: true, promise: true, queue: "main", mac: "custom", desktop: "absent", windows: "absent" },
+        glideScroll: { args: [["tag", "number", "Int"], ["y", "number"], ["durationMs", "number"]], result: "void", async: true, queue: "main", instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
+        steerScroll: { args: [["tag", "number", "Int"], ["lo", "number"], ["hi", "number"], ["glideMs", "number"], ["canForward", "boolean"], ["canBack", "boolean"]], result: "void", async: true, queue: "main", instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
+      },
+      events: {},
+    },
     ArdiaPeekStage: {
       functions: {
         devState: { args: [["windowId", "string"]], result: "Record<string, unknown>[]", swiftResult: "[[String: Any]]", async: true, queue: "main", mac: "custom", desktop: "custom", windows: "absent" },
@@ -408,6 +417,12 @@ export const shell = defineModuleDomain({
         answerPeer: { args: [["ask", "number", "Int"], ["outcome", "ControlPeerAnswer", "String"]], result: "boolean", async: true, optional: true, promise: true, mac: "custom", desktop: "custom", windows: "absent" },
         approvals: { args: [], result: "ControlApprovals", async: true, optional: true, promise: true, mac: "custom", desktop: "custom", windows: "absent" },
         revokeApproval: { args: [["key", "string"]], result: "boolean", async: true, optional: true, promise: true, mac: "custom", desktop: "custom", windows: "absent" },
+        armFiles: { args: [["spec", "FileArmSpec", "[String: Any]"]], result: "FileArmResult", async: true, optional: true, promise: true, mac: "custom", desktop: "custom", windows: "absent" },
+        disarmFiles: { args: [["ids", "string[] | null", "[String]?"], ["purge", "boolean"]], result: "number", async: false, optional: true, mac: "custom", desktop: "custom", windows: "absent" },
+        fileArms: { args: [], result: "FileArmRow[]", swiftResult: "[[String: Any]]", async: true, queue: "userInitiated", optional: true, mac: "custom", desktop: "custom", windows: "absent" },
+        claimArmedDownload: { args: [["arm", "string"], ["download", "string"], ["path", "string"]], result: "FileArmClaim", swiftResult: "[String: Any]", async: false, optional: true, mac: "custom", desktop: "custom", windows: "absent" },
+        placeArmedDownload: { args: [["arm", "string"], ["download", "string"], ["path", "string"]], result: "PlacedDownload", async: true, optional: true, promise: true, mac: "custom", desktop: "custom", windows: "absent" },
+        releaseArmedDownload: { args: [["arm", "string"], ["download", "string"], ["state", "string"]], result: "boolean", async: false, optional: true, mac: "custom", desktop: "custom", windows: "absent" },
       },
       events: {
         onRequest: { payload: "ControlRequest", mac: "custom", desktop: "adapted", windows: "absent" },
@@ -506,6 +521,7 @@ export const shell = defineModuleDomain({
       functions: {
         show: { args: [["id", "string"], ["timings", "number[]"]], result: "void", async: false, mac: "custom", desktop: "absent", windows: "absent" },
         progress: { args: [["id", "string"], ["progress", "number"], ["still", "boolean"]], result: "void", async: false, mac: "custom", desktop: "absent", windows: "absent" },
+        pulse: { args: [["id", "string"], ["period", "number"], ["low", "number"]], result: "void", async: false, mac: "custom", desktop: "absent", windows: "absent" },
         finish: { args: [["id", "string"], ["still", "boolean"]], result: "void", async: false, mac: "custom", desktop: "absent", windows: "absent" },
         reset: { args: [["id", "string"]], result: "void", async: false, mac: "custom", desktop: "absent", windows: "absent" },
       },

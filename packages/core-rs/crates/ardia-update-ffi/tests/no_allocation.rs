@@ -96,4 +96,40 @@ fn no_call_allocates_for_any_vector() {
         });
         assert_eq!(count, 0, "{left} vs {right}");
     }
+    for case in vectors["windows"].as_array().unwrap() {
+        let manifest = case["manifest"].as_str().unwrap().as_bytes().to_vec();
+        let signature = hex(case["signature"].as_str().unwrap());
+        let key = hex(case["publicKey"].as_str().unwrap());
+        let prefix = case["publishedUnder"].as_str().unwrap().as_bytes().to_vec();
+        let cpu = match case["cpu"].as_str().unwrap() {
+            "x64" => ARDIA_UPDATE_WINDOWS_CPU_X64,
+            _ => ARDIA_UPDATE_WINDOWS_CPU_ARM64,
+        };
+        let current_build = case["currentBuild"].as_u64().unwrap();
+        let mut out = ardia_update_windows_package {
+            build: 0,
+            bytes: 0,
+            sha256: [0; ARDIA_UPDATE_SHA256_BYTES],
+            version_len: 0,
+            version: [0; ARDIA_UPDATE_MAX_VERSION_BYTES],
+            url_len: 0,
+            url: [0; ARDIA_UPDATE_WINDOWS_MAX_URL_BYTES],
+        };
+        let count = allocations_during(|| unsafe {
+            ardia_update_verify_windows(
+                manifest.as_ptr(),
+                manifest.len(),
+                signature.as_ptr(),
+                signature.len(),
+                key.as_ptr(),
+                key.len(),
+                prefix.as_ptr(),
+                prefix.len(),
+                cpu,
+                current_build,
+                &mut out,
+            );
+        });
+        assert_eq!(count, 0, "windows: {}", case["name"]);
+    }
 }

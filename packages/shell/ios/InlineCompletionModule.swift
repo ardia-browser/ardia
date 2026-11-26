@@ -5,28 +5,9 @@ public final class InlineCompletionModule: Module, InlineCompletionNative {
   func complete(_ tag: Int, _ typed: String, _ completion: String) -> Int {
     guard let host = self.appContext?.findView(withTag: tag, ofType: NSView.self),
           let field = textField(in: host),
-          let editor = field.currentEditor() as? NSTextView,
-          !editor.hasMarkedText()
+          let editor = field.currentEditor() as? NSTextView
     else { return 0 }
-    let text = editor.string as NSString
-    let typedLength = (typed as NSString).length
-    let selection = editor.selectedRange()
-    guard text.length >= typedLength, text.substring(to: typedLength) == typed,
-          selection.location == typedLength, NSMaxRange(selection) == text.length
-    else { return 0 }
-    let tail = NSRange(location: typedLength, length: text.length - typedLength)
-    var result = 1
-    if text.substring(with: tail) != completion {
-      guard editor.shouldChangeText(in: tail, replacementString: completion) else { return 0 }
-      editor.replaceCharacters(in: tail, with: completion)
-      editor.didChangeText()
-      result = 2
-    }
-    editor.setSelectedRange(NSRange(location: typedLength, length: (completion as NSString).length))
-    editor.scrollRangeToVisible(NSRange(location: 0, length: 0))
-    editor.scrollRangeToVisible(NSRange(location: typedLength, length: 0))
-    InlineKeep.arm(editor, tag: tag, typedLength: typedLength, keeps: InlineKeep.fields.contains(tag) && !completion.isEmpty)
-    return result
+    return InlineKeep.complete(editor, tag: tag, typed: typed, completion: completion)
   }
 
   static func keepWhileTyping(_ tag: Int, _ on: Bool) {

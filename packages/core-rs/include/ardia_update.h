@@ -27,6 +27,16 @@
 
 #define ARDIA_UPDATE_CHANNEL_NIGHTLY 1
 
+#define ARDIA_UPDATE_WINDOWS_MAX_MANIFEST_BYTES 65536
+
+#define ARDIA_UPDATE_WINDOWS_MAX_INSTALLER_BYTES 1073741824
+
+#define ARDIA_UPDATE_WINDOWS_MAX_URL_BYTES 512
+
+#define ARDIA_UPDATE_WINDOWS_CPU_X64 0
+
+#define ARDIA_UPDATE_WINDOWS_CPU_ARM64 1
+
 typedef enum ardia_update_status {
   ARDIA_UPDATE_STATUS_OK = 0,
   ARDIA_UPDATE_STATUS_INVALID_ARGUMENT = 1,
@@ -43,6 +53,16 @@ typedef struct ardia_update_package {
   uint64_t size;
   uint8_t sha256[ARDIA_UPDATE_SHA256_BYTES];
 } ardia_update_package;
+
+typedef struct ardia_update_windows_package {
+  uint64_t build;
+  uint64_t bytes;
+  uint8_t sha256[ARDIA_UPDATE_SHA256_BYTES];
+  size_t version_len;
+  uint8_t version[ARDIA_UPDATE_MAX_VERSION_BYTES];
+  size_t url_len;
+  uint8_t url[ARDIA_UPDATE_WINDOWS_MAX_URL_BYTES];
+} ardia_update_windows_package;
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,6 +82,18 @@ enum ardia_update_status ardia_update_verify_linux(const uint8_t *manifest,
                                                    size_t installed_len,
                                                    uint32_t kind,
                                                    struct ardia_update_package *out);
+
+enum ardia_update_status ardia_update_verify_windows(const uint8_t *manifest,
+                                                     size_t manifest_len,
+                                                     const uint8_t *signature,
+                                                     size_t signature_len,
+                                                     const uint8_t *public_key,
+                                                     size_t public_key_len,
+                                                     const uint8_t *published_under,
+                                                     size_t published_under_len,
+                                                     uint32_t cpu,
+                                                     uint64_t current_build,
+                                                     struct ardia_update_windows_package *out);
 
 enum ardia_update_status ardia_update_compare_versions(const uint8_t *left,
                                                        size_t left_len,

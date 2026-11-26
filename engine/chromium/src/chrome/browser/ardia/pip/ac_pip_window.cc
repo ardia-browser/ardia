@@ -242,7 +242,15 @@ void ArdiaVideoOverlayWindow::SetMediaPosition(
   ac_progress_bar_->SetMediaPosition(position);
 }
 
+gfx::Rect ArdiaVideoOverlayWindow::GetWorkAreaForWindow() const {
+  if (ac_opening_work_area_ && !views::Widget::IsVisible()) {
+    return *ac_opening_work_area_;
+  }
+  return VideoOverlayWindowViews::GetWorkAreaForWindow();
+}
+
 gfx::Rect ArdiaVideoOverlayWindow::CalculateAndUpdateWindowBounds() {
+  ac_opening_work_area_.reset();
   std::optional<gfx::Rect> saved;
   if (!has_been_shown_ || !views::Widget::IsVisible()) {
     saved = LoadArdiaPictureInPictureBounds();
@@ -259,6 +267,7 @@ gfx::Rect ArdiaVideoOverlayWindow::CalculateAndUpdateWindowBounds() {
     const gfx::Rect work_area =
         on_a_display ? screen->GetDisplayMatching(*saved).work_area()
                      : screen->GetPrimaryDisplay().work_area();
+    ac_opening_work_area_ = work_area;
     UpdateMaxSize(work_area);
     gfx::Rect rect = *saved;
     gfx::Size size = rect.size();

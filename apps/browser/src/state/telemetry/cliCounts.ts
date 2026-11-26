@@ -1,6 +1,7 @@
 import { onConsentPeriodChange, stillValid, type ConsentToken } from "./choice";
 import { consentOrNow, countFor } from "./countFor";
 import { SOCKET_FAMILIES, type SocketFamily } from "../automation/socketCatalog";
+import { INPUT_ACTIONS, type InputAction } from "../automation/tabInputActions";
 
 const TOKEN_COMMAND_DOMAINS = ["accessibility", "ardia", "browser", "dom", "emulation", "fetch", "input", "network", "page", "runtime", "storage", "target", "other"] as const;
 type TokenCommandDomain = (typeof TOKEN_COMMAND_DOMAINS)[number];
@@ -13,6 +14,38 @@ export type DoorbellOutcome = (typeof DOORBELL_OUTCOMES)[number];
 
 const DEVTOOLS_ENDPOINT_OUTCOMES = ["given", "control_off", "unsupported", "server_off", "unreadable", "stale", "left"] as const;
 export type DevtoolsEndpointOutcome = (typeof DEVTOOLS_ENDPOINT_OUTCOMES)[number];
+
+const ENGINE_CLI_TOTALS = {
+  sessionsOpened: "sessions_opened",
+  sessionsRefused: "sessions_refused",
+  sessionCommands: "session_commands",
+  sessionEvents: "session_events",
+  sessionEventsCut: "session_events_cut",
+  snapshots: "snapshots",
+  snapshotsFailed: "snapshots_failed",
+  snapshotRefs: "snapshot_refs",
+  snapshotsModal: "snapshots_modal",
+  occludedRefs: "occluded_refs",
+  settles: "settles",
+  settlesTimedOut: "settles_timed_out",
+  settleMs: "settle_ms",
+  hitTests: "hit_tests",
+  clicks: "clicks",
+  clicksBlocked: "clicks_blocked",
+  dismissFound: "dismiss_found",
+  refsRebound: "refs_rebound",
+  refsStale: "refs_stale",
+  screenshots: "screenshots",
+  screenshotsHidden: "screenshots_hidden",
+  screenshotsFailed: "screenshots_failed",
+  cancelled: "cancelled",
+  clicksUnverified: "clicks_unverified",
+  refused: "refused",
+} as const;
+type EngineCliTotalKey = keyof typeof ENGINE_CLI_TOTALS;
+type EngineCliField = (typeof ENGINE_CLI_TOTALS)[EngineCliTotalKey];
+const ENGINE_CLI_FIELDS = Object.values(ENGINE_CLI_TOTALS);
+type EngineCliTotals = Partial<Record<EngineCliTotalKey, number>>;
 
 const NONE = {
   cli_pill_shows: 0,
@@ -38,6 +71,7 @@ const NONE = {
   cli_page_signal_hit_tests_cancelled: 0,
   cli_page_signal_remote_frames: 0,
   cli_page_signal_occluded: 0,
+  ...(Object.fromEntries(ENGINE_CLI_FIELDS.map((field) => [`cli_engine_${field}`, 0])) as Record<`cli_engine_${EngineCliField}`, number>),
   ...(Object.fromEntries(DOORBELL_OUTCOMES.map((outcome) => [`cli_socket_doorbell_${outcome}`, 0])) as Record<`cli_socket_doorbell_${DoorbellOutcome}`, number>),
   ...(Object.fromEntries(DEVTOOLS_ENDPOINT_OUTCOMES.map((outcome) => [`cli_socket_devtools_endpoint_${outcome}`, 0])) as Record<`cli_socket_devtools_endpoint_${DevtoolsEndpointOutcome}`, number>),
   cli_devtools_traces: 0,
@@ -50,6 +84,18 @@ const NONE = {
   cli_devtools_style_lookups: 0,
   cli_devtools_logpoints_set: 0,
   cli_devtools_logpoints_refused: 0,
+  cli_files_upload_arms: 0,
+  cli_files_download_arms: 0,
+  cli_files_uploads_answered: 0,
+  cli_files_downloads_placed: 0,
+  cli_files_arm_failures: 0,
+  cli_tab_diagnostics_reads: 0,
+  cli_tab_diagnostics_gaps: 0,
+  cli_tab_diagnostics_refusals: 0,
+  cli_tab_input_refusals: 0,
+  cli_tab_input_unacked: 0,
+  cli_tab_tools_engine_missing: 0,
+  ...(Object.fromEntries(INPUT_ACTIONS.map((action) => [`cli_tab_input_${action}`, 0])) as Record<`cli_tab_input_${InputAction}`, number>),
   ...(Object.fromEntries(SOCKET_FAMILIES.map((family) => [`cli_socket_calls_${family}`, 0])) as Record<`cli_socket_calls_${SocketFamily}`, number>),
   ...(Object.fromEntries(TOKEN_COMMAND_DOMAINS.map((domain) => [`cli_cdp_commands_${domain}`, 0])) as Record<`cli_cdp_commands_${TokenCommandDomain}`, number>),
 };
@@ -85,6 +131,30 @@ export type DevToolsCount = "traces" | "trace_failures" | "trace_analysis_ms" | 
 export function noteDevTools(kind: DevToolsCount, amount = 1, consent?: ConsentToken | null) {
   const add = Math.max(0, Math.round(amount));
   if (add) countFor(consentOrNow(consent), () => void (counts[`cli_devtools_${kind}`] += add));
+}
+export type FileArmCount = "upload_arms" | "download_arms" | "uploads_answered" | "downloads_placed" | "arm_failures";
+export function noteFileArm(kind: FileArmCount, amount = 1, consent?: ConsentToken | null) {
+  const add = Math.max(0, Math.round(amount));
+  if (add) countFor(consentOrNow(consent), () => void (counts[`cli_files_${kind}`] += add));
+}
+export type TabToolOutcome = "done" | "refused" | "missing";
+export function noteTabDiagnostics(outcome: TabToolOutcome, gap: boolean, consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => {
+    if (outcome === "done") counts.cli_tab_diagnostics_reads++;
+    else if (outcome === "refused") counts.cli_tab_diagnostics_refusals++;
+    else counts.cli_tab_tools_engine_missing++;
+    if (gap) counts.cli_tab_diagnostics_gaps++;
+  });
+}
+export function noteTabInput(action: InputAction, outcome: TabToolOutcome, acked: boolean, consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => {
+    if (outcome === "refused") counts.cli_tab_input_refusals++;
+    else if (outcome === "missing") counts.cli_tab_tools_engine_missing++;
+    else {
+      counts[`cli_tab_input_${action}`]++;
+      if (!acked) counts.cli_tab_input_unacked++;
+    }
+  });
 }
 export const noteCliAutoEnabled = () => void counts.cli_auto_enables++;
 
@@ -157,10 +227,33 @@ export function notePageSignals(totals: PageSignalTotals | undefined, consent?: 
   if (sent.some(([, delta]) => delta)) countFor(token, () => sent.forEach(([key, delta]) => (counts[PAGE_SIGNAL_FIELDS[key]] += delta)));
 }
 
-export function noteEngineCliTotals(status: { windowlessPages?: { given: number; missed: number }; tokenCommands?: TokenCommandTotals; pageSignals?: PageSignalTotals }, consent: ConsentToken) {
+let engineCliSeen: Record<EngineCliTotalKey, number> = Object.fromEntries(Object.keys(ENGINE_CLI_TOTALS).map((key) => [key, 0])) as Record<EngineCliTotalKey, number>;
+let engineCliBaselineStale = false;
+onConsentPeriodChange(() => void (engineCliBaselineStale = true));
+
+export function noteEngineCli(totals: EngineCliTotals | undefined, consent?: ConsentToken | null) {
+  if (!totals) return;
+  const token = consentOrNow(consent);
+  const fresh = stillValid(token) && !engineCliBaselineStale;
+  if (stillValid(token)) engineCliBaselineStale = false;
+  const keys = Object.keys(ENGINE_CLI_TOTALS) as EngineCliTotalKey[];
+  const sent = keys.map((key) => {
+    const total = Number(totals[key]) || 0;
+    const delta = fresh ? Math.max(0, total - engineCliSeen[key]) : 0;
+    engineCliSeen[key] = Math.max(total, engineCliSeen[key]);
+    return [key, delta] as const;
+  });
+  if (sent.some(([, delta]) => delta)) countFor(token, () => sent.forEach(([key, delta]) => (counts[`cli_engine_${ENGINE_CLI_TOTALS[key]}`] += delta)));
+}
+
+export function noteEngineCliTotals(
+  status: { windowlessPages?: { given: number; missed: number }; tokenCommands?: TokenCommandTotals; pageSignals?: PageSignalTotals; engineCli?: EngineCliTotals },
+  consent: ConsentToken,
+) {
   noteWindowlessPages(status.windowlessPages, consent);
   noteTokenCommands(status.tokenCommands, consent);
   notePageSignals(status.pageSignals, consent);
+  noteEngineCli(status.engineCli, consent);
 }
 
 export function takeCliCounts() {

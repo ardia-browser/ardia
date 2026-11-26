@@ -27,6 +27,8 @@ export type DecideHandler<D = Record<string, unknown>, R = unknown> = (data: D, 
 
 export type EventListener<D = Record<string, unknown>> = (data: D, event: { name: string; time: number | undefined }) => void;
 
+export type StateListener<D = Record<string, unknown>> = (data: D, event: { name: string; time: number | undefined }) => void;
+
 export type PageMessageListener = (message: unknown, view: string) => void;
 
 export type SettingsListener = (values: Readonly<Record<string, unknown>>) => void;
@@ -60,6 +62,7 @@ export type Registry = {
   omnibox: Set<OmniboxProvider>;
   decide: Map<string, DecideHandler<any>>;
   events: Map<string, Set<EventListener<any>>>;
+  state: Map<string, Set<StateListener<any>>>;
   pages: Set<PageMessageListener>;
   settings: Set<SettingsListener>;
 };
@@ -72,6 +75,7 @@ export function createRegistry(): Registry {
     omnibox: new Set(),
     decide: new Map(),
     events: new Map(),
+    state: new Map(),
     pages: new Set(),
     settings: new Set(),
   };

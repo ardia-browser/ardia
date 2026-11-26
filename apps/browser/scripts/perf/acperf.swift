@@ -69,7 +69,7 @@ case "waitwindow":
       print(String(format: "%.0f", nowMs()))
       exit(0)
     }
-    if kill(pid, 0) != 0 { exit(3) }
+    if pid <= 0 || (kill(pid, 0) != 0 && errno == ESRCH) { exit(3) }
     usleep(4000)
   }
   exit(2)
@@ -85,7 +85,7 @@ case "newwindow":
       print(String(format: "{\"at\":%.1f,\"id\":%d}", nowMs(), new["id"] as? Int ?? 0))
       exit(0)
     }
-    if kill(pid, 0) != 0 { exit(3) }
+    if pid <= 0 || (kill(pid, 0) != 0 && errno == ESRCH) { exit(3) }
     usleep(2000)
   }
   exit(2)
@@ -282,7 +282,39 @@ case "postmouse":
   usleep(useconds_t(holdMs * 1000))
   click(middle ? .otherMouseUp : right ? .rightMouseUp : .leftMouseUp)
   printJSON(["heldMs": holdMs])
+case "postdrag":
+  guard args.count >= 11, let pid = pid_t(args[2]), pid > 1, let window = Int64(args[3]), let x0 = Double(args[4]), let y0 = Double(args[5]),
+        let x1 = Double(args[6]), let y1 = Double(args[7]), let windowX = Double(args[8]), let windowY = Double(args[9]), let durationMs = Double(args[10]),
+        durationMs > 0 else {
+    FileHandle.standardError.write("usage: acperf postdrag <pid> <window id> <x0> <y0> <x1> <y1> <window x> <window y> <ms> [events/s]\n".data(using: .utf8)!)
+    exit(64)
+  }
+  let rate = args.count > 11 ? max(1, Double(args[11]) ?? 120) : 120
+  typealias SetDragWindowLocation = @convention(c) (CGEvent, CGPoint) -> Void
+  let setDragWindowLocation = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGEventSetWindowLocation").map { unsafeBitCast($0, to: SetDragWindowLocation.self) }
+  func post(_ type: CGEventType, _ x: Double, _ y: Double) {
+    guard let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: CGPoint(x: x, y: y), mouseButton: .left) else { return }
+    event.setIntegerValueField(.mouseEventClickState, value: 1)
+    event.setIntegerValueField(CGEventField(rawValue: 51)!, value: window)
+    setDragWindowLocation?(event, CGPoint(x: x - windowX, y: y - windowY))
+    event.postToPid(pid)
+  }
+  let steps = max(1, Int((durationMs / 1000 * rate).rounded()))
+  let tick = 1 / rate
+  post(.leftMouseDown, x0, y0)
+  let startAt = nowMs()
+  let start = CFAbsoluteTimeGetCurrent()
+  for step in 1...steps {
+    let t = Double(step) / Double(steps)
+    post(.leftMouseDragged, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
+    let wake = start + Double(step) * tick
+    let left = wake - CFAbsoluteTimeGetCurrent()
+    if left > 0 { usleep(useconds_t(left * 1_000_000)) }
+  }
+  let endAt = nowMs()
+  post(.leftMouseUp, x1, y1)
+  printJSON(["events": steps, "startAt": (startAt * 10).rounded() / 10, "endAt": (endAt * 10).rounded() / 10])
 default:
-  FileHandle.standardError.write("usage: acperf rusage <pid>... | windows <pid> | quit <pid> | waitwindow <pid> <secs> | newwindow <pid> <secs> | input <pid> <secs> | postkeys <pid> <gap ms> <spec>... | postscroll <pid> <window id> <x> <y> <window x> <window y> <gesture>[-x] [events/s] [reverse] | postmouse <pid> <window id> <x> <y> <window x> <window y> <hold ms> [left|middle|right]\n".data(using: .utf8)!)
+  FileHandle.standardError.write("usage: acperf rusage <pid>... | windows <pid> | quit <pid> | waitwindow <pid> <secs> | newwindow <pid> <secs> | input <pid> <secs> | postkeys <pid> <gap ms> <spec>... | postscroll <pid> <window id> <x> <y> <window x> <window y> <gesture>[-x] [events/s] [reverse] | postmouse <pid> <window id> <x> <y> <window x> <window y> <hold ms> [left|middle|right] | postdrag <pid> <window id> <x0> <y0> <x1> <y1> <window x> <window y> <ms> [events/s]\n".data(using: .utf8)!)
   exit(64)
 }

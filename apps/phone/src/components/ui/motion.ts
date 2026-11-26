@@ -114,7 +114,7 @@ export const toastMotion = { snappy: spring(0.3, 1) } as const;
 
 export const snapSpring = { stiffness: 1500, damping: 2 * Math.sqrt(1500), mass: 1 } as const;
 
-export const settingsMotion = { swatchRing: spring(0.3, 0.86), titleFade: snapSpring } as const;
+export const settingsMotion = { swatchPick: { duration: 150, easing: WorkletEasing.out(WorkletEasing.cubic) }, titleFade: snapSpring } as const;
 
 export const departBezier = [0.2, 0, 0, 1] as const;
 

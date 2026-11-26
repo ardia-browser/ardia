@@ -176,6 +176,65 @@ final class OfficialPluginsTests: XCTestCase {
     XCTAssertEqual(again.copy, made.copy, "the same download is reused, not replaced")
   }
 
+  func testADownloadIsPutInPlaceOnKernelsThatWontRenameAReadOnlyFolder() throws {
+    var moved: [String] = []
+    store.moveFolder = { from, to in
+      var info = stat()
+      guard lstat(from, &info) == 0 else { return -1 }
+      if (info.st_mode & S_IFMT) == S_IFDIR && info.st_mode & S_IWUSR == 0 {
+        errno = EACCES
+        return -1
+      }
+      moved.append(to)
+      return renamex_np(from, to, UInt32(RENAME_EXCL))
+    }
+    let archive = try pluginArchive(manifest())
+    let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
+    let made = try publish(archive, entry: entry(sha: sha)).get()
+    XCTAssertEqual(moved, ["\(root)/OfficialPlugins/tool/\(sha)"], "macOS 15 and 26.3 refuse to rename a 0555 folder, so the copy moves before its root is sealed")
+    XCTAssertTrue(PluginPrograms.isSealed(made.copy.path, keepingRootWritable: false), "the copy is read-only once it is in place")
+    XCTAssertEqual(store.copy("tool", sha: sha, fresh: true), made.copy)
+  }
+
+  func testAFailedMoveReportsItsCauseAndLeavesNothingBehind() throws {
+    store.moveFolder = { _, _ in
+      errno = EACCES
+      return -1
+    }
+    let archive = try pluginArchive(manifest())
+    let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
+    guard case .failure(let failure) = publish(archive, entry: entry(sha: sha)) else { return XCTFail("a refused move was published") }
+    XCTAssertEqual(failure.code, "failed")
+    XCTAssertEqual(failure.cause, .permission)
+    XCTAssertEqual(failure.reason, "its copy couldn't be put in place (Permission denied)")
+    let left = try FileManager.default.contentsOfDirectory(atPath: "\(root)/OfficialPlugins/tool").filter { !$0.hasPrefix(".fetch-") }
+    XCTAssertEqual(left, [], "no half-made copy or download stays behind")
+  }
+
+  func testTransferFailuresAreClassifiedByWhatFailed() {
+    let posix = { (code: Int32) in NSError(domain: NSPOSIXErrorDomain, code: Int(code)) }
+    let cases: [(Error, FailureCause)] = [
+      (URLError(.timedOut), .timeout),
+      (URLError(.notConnectedToInternet), .network),
+      (URLError(.badServerResponse), .network),
+      (URLError(.cannotCreateFile, userInfo: [NSUnderlyingErrorKey: posix(EACCES)]), .permission),
+      (URLError(.cannotWriteToFile, userInfo: [NSUnderlyingErrorKey: posix(ENOSPC)]), .disk),
+      (URLError(.cannotMoveFile, userInfo: [NSUnderlyingErrorKey: posix(EXDEV)]), .folder),
+      (URLError(.cannotMoveFile), .io),
+      (URLError(.noPermissionsToReadFile), .permission),
+      (NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError), .permission),
+      (NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError), .disk),
+      (NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut), .timeout),
+      (NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet), .network),
+      (NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotCreateFile, userInfo: [NSUnderlyingErrorKey: posix(EACCES)]), .permission),
+      (NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotWriteToFile, userInfo: [NSUnderlyingErrorKey: posix(ENOSPC)]), .disk),
+      (NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotMoveFile), .io),
+    ]
+    for (error, expected) in cases { XCTAssertEqual(FailureCause(transfer: error), expected, "\(error)") }
+    XCTAssertEqual(FailureCause.urlCode(of: NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)), .cancelled, "a raw delegate error is read by domain and code")
+    XCTAssertNil(FailureCause.urlCode(of: NSError(domain: NSPOSIXErrorDomain, code: Int(NSURLErrorCancelled))))
+  }
+
   func testPromotionTakesOnlyTheExactApprovalOfTheDownload() throws {
     let archive = try pluginArchive(manifest())
     let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))

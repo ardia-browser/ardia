@@ -25,7 +25,7 @@ export function chromeStyle(design: Design, choice: InterfaceStyleChoice, mac: M
 }
 
 export function preferredScheme(design: Design, choice: SchemeChoice, mac: MacLook | null): PreferredScheme {
-  if (design !== "redesigned" || choice === "system") return null;
+  if (design === "original" || choice === "system") return null;
   if (choice === "light" || choice === "dark") return choice;
   return mac?.appearance === "light" || mac?.appearance === "dark" ? mac.appearance : null;
 }
@@ -48,13 +48,12 @@ const TELEMETRY_SCHEME = { matchMac: "match_mac", system: "system", light: "ligh
 
 export const colorChoiceTelemetry = (choice: string | null): "match_mac" | "preset" | "custom" => (choice === null ? "match_mac" : choice === "custom" ? "custom" : "preset");
 
-export type GlassRender = "lens" | "frost" | "solid" | "classic" | "native" | "none";
+export type GlassRender = "lens" | "frost" | "clear" | "solid" | "classic" | "native" | "none";
 
-export function glassRenderTelemetry(os: string, design: Design, chrome: ChromeStyle, nativeRender: "lens" | "frost" | "solid" | null): GlassRender {
+export function glassRenderTelemetry(os: string, design: Design, chrome: ChromeStyle, nativeRender: "lens" | "frost" | "clear" | "solid" | null): GlassRender {
   if (design === "material") return "none";
   if (chrome === "classic") return "classic";
-  if (os === "ios") return "native";
-  return nativeRender ?? "solid";
+  return nativeRender ?? (os === "ios" ? "native" : "solid");
 }
 
 export const appearanceTelemetry = (style: InterfaceStyleChoice, scheme: SchemeChoice) => ({ interface_style: TELEMETRY_STYLE[style], color_scheme: TELEMETRY_SCHEME[scheme] });

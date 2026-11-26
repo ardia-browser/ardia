@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { PlatformColor, StyleSheet } from "react-native";
-import { BottomSheet, Button, ConfirmationDialog, ContentUnavailableView, ContextMenu, Divider, Host, List, Menu, NavigationStack, Picker, Section, Text, Toolbar, ToolbarItem, useNativeState } from "@expo/ui/swift-ui";
+import { BottomSheet, Button, ConfirmationDialog, ContentUnavailableView, ContextMenu, Divider, Host, Label, List, Menu, NavigationStack, Picker, Section, Text, Toolbar, ToolbarItem, useNativeState } from "@expo/ui/swift-ui";
 import { accessibilityLabel, disabled, environment, listRowInsets, listStyle, navigationBarTitleDisplayMode, navigationTitle, onAppear, pickerStyle, searchable, tag, tint } from "@expo/ui/swift-ui/modifiers";
 import { actionWords, destinationWords, dismissWords } from "../../lib/sharedWords";
 import { DoneToolbarItem } from "../settings/ExpoSettingsDone";
@@ -14,10 +14,10 @@ import { display } from "../../state/search/omnibox";
 import { usePreferences } from "../../state/settings/hooks";
 import { useArchiveDays, useArchiveLoaded } from "../../state/tabs/hooks";
 import { archiveInMemory, clearArchivedTabs, loadArchiveUnlessPrepared, searchArchive, setAutoArchiveInterval } from "../../state/tabs/store";
-import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval, type BrowserTab } from "../../state/tabs/tabModels";
+import { AUTO_ARCHIVE_INTERVALS, autoArchiveSymbol, autoArchiveTitle, type AutoArchiveInterval, type BrowserTab } from "../../state/tabs/tabModels";
 import { LinkMenuItems, ListLoading, ListNoResults, ListRow, listSheetWords, opensPage } from "../library/listSheet";
 import { listSheetInsets } from "../library/listSheetTokens";
-import { iconRoles, modifierList, settingsChrome, sfName } from "../ui";
+import { iconRoles, modifierList, neverBounces, settingsChrome, sfName } from "../ui";
 
 const INTERVALS = Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[];
 
@@ -81,7 +81,7 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
     if (onScreen) loadArchiveUnlessPrepared();
   }, [onScreen]);
   const now = Date.now();
-  const page = modifierList(navigationTitle(destinationWords.archive), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), searchable(searchText, { placement: "navigationBarDrawer", prompt: SEARCH_PROMPT, onChange: setQuery }));
+  const page = modifierList(navigationTitle(destinationWords.archive), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), searchable(searchText, { placement: "navigationBarDrawer", prompt: SEARCH_PROMPT, onChange: setQuery }));
   const content = !loaded ? (
     <ListLoading modifiers={page} />
   ) : !hasArchive ? (
@@ -128,9 +128,7 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
                 <>
                   <Picker label="Archive Inactive Tabs" systemImage="archivebox" selection={interval} onSelectionChange={(next: AutoArchiveInterval) => setAutoArchiveInterval(next)} modifiers={[pickerStyle("menu")]}>
                     {INTERVALS.map((option) => (
-                      <Text key={option} modifiers={[tag(option)]}>
-                        {autoArchiveTitle(option)}
-                      </Text>
+                      <Label key={option} title={autoArchiveTitle(option)} systemImage={autoArchiveSymbol(option)} modifiers={[tag(option)]} />
                     ))}
                   </Picker>
                   <Divider />

@@ -4,9 +4,9 @@ Ardia runs one browser UI on three platforms today. Below the UI boundary it run
 
 | | macOS | Linux | Windows |
 | --- | --- | --- | --- |
-| UI runtime | React Native macOS | Chromium `chrome://ardia/` WebUI (`apps/desktop`) | React Native Windows (`apps/browser/windows`, `packages/expo-windows`) |
-| Host code | Swift pods + `engine/ardiacore` (Objective-C++) | `engine/ardiacore-linux` (C++) | RNW C++/WinRT modules + `scripts/windows/engine` (C++) |
-| JS → native | Expo modules, `CallTable` | `chrome.send("ardiaRequest")`, `kRoutes`, `ShellHostView::Invoke` | RNW turbo modules, `forwarded.json` |
+| UI runtime | React Native macOS | Chromium `chrome://ardia/` WebUI (`apps/desktop`) | Chromium `chrome://ardia/` WebUI (`apps/desktop`, its `--mode win` build) |
+| Host code | Swift pods + `engine/ardiacore` (Objective-C++) | `engine/ardiacore-linux` (C++) | `engine/ardiacore-desktop` (C++, shared with Linux) + `scripts/windows/engine/src/ardia/win/webui` (C++) |
+| JS → native | Expo modules, `CallTable` | `chrome.send("ardiaRequest")`, `kRoutes`, `ShellHostView::Invoke` | `chrome.send("ardiaRequest")`, the shared desktop routes, `webui_bridge.cc` |
 | Engine call registry | dlsym of `ac_*` | `gen_engine_dispatch.py` table | `series_win.py` `ac_calls.cc` |
 
 So sync, import, plugin policy, updater checks, the engine call map and most of the Chromium host are written more than once. This doc is the plan that brings it down to **one shared core and two hosts**:
@@ -41,7 +41,7 @@ engine/ardiacore                          macOS: AppKit only
 
 ## Engine keys are the first constraint
 
-`engine/engine-key.py` hashes everything under `engine/`, minus what it can prove belongs to other platforms. It knows three platforms: series selectors are `all` or platform sets (`linux,win`), and GN conditions on `is_mac`, `is_linux` and `is_win` joined by `!`, `&&` and `||` parse into the platforms they can hold on; any other condition counts toward every key. A Mac key move means a Mac engine build, which runs only on the Mac mini's incremental tree, and a new framework for every agent's next build.
+`engine/engine-key.py` hashes everything under `engine/`, minus what it can prove belongs to other platforms. It knows three platforms: series selectors are `all` or platform sets (`linux,win`), and GN conditions on `is_mac`, `is_linux` and `is_win` joined by `!`, `&&` and `||` parse into the platforms they can hold on; any other condition counts toward every key. A Mac key move means an incremental Mac engine build on whichever plugged-in Mac (`mbp1`, `mbp2`, `mini`; `mini` when both MacBooks are on battery) is free (fresh Mac Chromium rebuilds run on `mbp1` and sync to the others), and a new framework for every agent's next build.
 
 So the first change is tooling. It changes no artifact, and it must not move a published key:
 
@@ -54,8 +54,8 @@ After that, the rule for every later change is:
 
 | Where the change lands | Keys it moves | Build it needs |
 | --- | --- | --- |
-| `engine/ardiacore` | mac | Mac mini, incremental |
-| `engine/ardiacore-desktop` (`linux,win`, after selector sets) | linux, win | Boat builder for Linux; `~/chromium-build-win` for Windows |
+| `engine/ardiacore` | mac | Free Mac (`mbp1`/`mbp2`/`mini`), incremental (`mbp1` for fresh builds) |
+| `engine/ardiacore-desktop` (`linux,win`, after selector sets) | linux, win | `msi` WSL for Linux and Win x64; `mini` for Win arm64 |
 | `engine/ardiacore-linux`, `engine/ardiacore-win` | that one | that one |
 | `engine/chromium` | all | all; batch these |
 | `packages/core-rs` (via `copies.tsv`) | linux, win | as above; macOS links it into the pods instead |
@@ -67,7 +67,7 @@ After that, the rule for every later change is:
 
 - **Sync** (first). The vault format is already byte-compatible on macOS, Linux, Windows and Android: `NNS1` magic, HKDF-SHA256 info strings `file-key`, `name-key`, `password-key`, `password-nonce-key`, AES-256-GCM with the `NNS1 + "<chain>/<scope>/<file>"` associated data, u32be length + 1024-byte padding, the deterministic password nonce, base32 folder tags, BIP39 English with 4-letter prefixes (`docs/sync.md`). Rust replaces `SyncCrypto.swift`, `RecoveryPhrase.swift`, `Wordlist.swift`, `ac_linux_sync_{crypto,wordlist}.cc` and later the Kotlin copy. Keychain, libsecret and DPAPI key storage stay native, and so does the legacy `pw:` password rewrite and the JSON it walks (`SyncModule.swift`, `ac_linux_sync_json.cc`, which the Linux host also uses for every other call).
 - **Import parsers.** Netscape HTML, CSV, Chromium bookmarks and search engines, SNSS sessions, Firefox and Zen session JSON, Arc and Dia sidebars, ZIP, Firefox key4/PBE/JWE, Chromium v10/v11 blobs once the key is known. The output is the existing `ImportResult` JSON. Chromium bookmarks came first, in `ardia-import-core` behind its own `libardia_import` (`include/ardia_import.h`, outside every engine key until a host switches), with `tests/import-bookmarks-vectors.json` recording where Swift, Linux and Windows read differently today. The Mac switched first (#3996): `ChromiumBookmarks.swift` calls `ardia_import_chromium_bookmarks` through `ArdiaCoreRS.xcframework` and the hand-written Swift parser is gone. Netscape HTML came next behind the same library (`ardia_import_netscape_bookmarks`), with `tests/import-netscape-vectors.json` running all three hosts' parsers, Linux's included, against it. Discovery, the OS key unlock (Keychain safe storage, libsecret/KWallet, DPAPI), Safari Full Disk Access and SQLite snapshots stay native.
-- **Update manifest signatures.** Ed25519 over the manifest. Linux checks one today; Windows checks only an unsigned SHA-256 and gets the check for the first time. `ardia-update-core` verifies the Linux manifest with the helper's exact rules and the shared vectors in `packages/core-rs/tests/update-vectors.json` (#3963), and the Linux root helper now calls it through the static `ardia-update-verify` command line instead of bash and `openssl` (#3997); its C ABI is `libardia_update` (`packages/core-rs/ABI.md`) until an engine calls it, so neither engine key moves before then.
+- **Update manifest signatures.** Ed25519 over the manifest. `ardia-update-core` verifies both the Linux manifest with the helper's exact rules (#3963) and the Windows JSON manifest (`windows-update.json` + `windows-update.json.sig`, #4061) using `ardia-crypto`'s Ed25519 backend and shared vectors in `packages/core-rs/tests/update-vectors.json`. The Linux root helper calls it through static `ardia-update-verify` (#3997); Windows ships `ardia-update-verify.exe` and `windows-update.pem` beside `Ardia.exe`, signs `windows-update.json` in `scripts/windows/publish-alpha.sh` (`scripts/windows/sign-update.mjs`), and verifies every fetched feed in `scripts/windows/engine/src/ardia/win/webui/webui_updates.cc` (`webui_update_policy.h`) before `apps/desktop/src/platform/win/hostUpdates.ts` downloads or installs anything. Its C ABI is `libardia_update` (`packages/core-rs/ABI.md`, including `ardia_update_verify_windows`) until an engine calls it, so no engine key moves before then.
 - **Plugin policy.** Fetch policy, URL parsing, archive and pin checks, storage limits and budgets out of `packages/shell/ios/PluginCore`, shared with `packages/plugin-broker`'s QuickJS host. This happens when the desktop host gets a plugin manager, not before. `packages/plugin-broker` joins the same CI job now so it stops rotting.
 
 **Not moved:** crash dump parsing (each platform's format differs, 56 shared lines on Linux) and config/document I/O (mostly file calls). They don't repay a boundary.
@@ -108,7 +108,7 @@ Today `engine/chromium` holds the services (`ac_*`), and each platform reimpleme
 - **Hooks.** The `g_ardia_linux_*` and `g_ardia_win_*` hook names (autoplay, devtools) become neutral `g_ardia_desktop_*` names in a desktop hooks header, not in `ac_hooks.h`, which would move both keys. Of the two autoplay implementations, the Windows one (Blink commit parameter) is kept.
 - **Patches.** About 30 of the 35 `linux` patches change only Views, browser or content code behind `IS_LINUX`. Widening those guards to `IS_LINUX || IS_WIN` makes them `linux,win` patches. The Ozone, GTK and Wayland ones stay `linux`.
 
-Changes under `engine/chromium` move the Mac key, so they are batched: one Mac engine build per group, on the Mac mini, coordinated for the mini's chromium lock.
+Changes under `engine/chromium` move the Mac key, so they are batched: one incremental Mac engine build per group, on whichever Mac (`mbp1`, `mbp2`, `mini`) has resources free, holding that Mac's chromium lock.
 
 ## Track 3: the host API schema
 
@@ -130,7 +130,7 @@ A call's bindings default to `service` on every host; a host that needs code say
 
 - **TS:** `packages/ardiacore/src/engine/generated/<domain>.ts` (`<D>Calls`, `<D>Events`), merged into `EngineCalls` (the `engine` domain's own types are imported as `EngineDomainCalls` and `EngineDomainEvents`), and `generated/manifest.json`, which the existing drift tests (`api.test.mjs`, `test_contract.py`, `hostContract.test.mjs`) read instead of regex-parsing source.
 - **Swift:** a fully service-backed domain gets its whole `<Domain>Module.swift`; a mixed one gets `<Domain>Calls.swift` with a handler table merged into `CallTable`.
-- **Desktop host:** `engine/ardiacore-desktop/src/ardia/desktop/generated/ac_desktop_routes.h`, every call whose desktop binding is `route` with its service and `routeField` (`kRoutes`, `FindRoute`, in `ardia::desktop_routes`), which `ac_linux_contract.h` takes in with `using` declarations, so the Linux host and Windows' `webui_shell.cc` route and advertise exactly the schema's routes with no table of their own; and the two deadline maps in `engine/ardiacore-linux/src/ardia/linux/bootstrap.js` (which Windows embeds too), rewritten in place: `engineDeadlines` from each engine call's `deadline`, `hostDeadlines` from each module function's `deadline` (only on `desktop: host` or `adapted`) and from `schema/desktop.ts`, the native desktop host's own methods no module domain lists (`ArdiaPasswords.*`, `ArdiaLive.*`). A deadline is milliseconds above the ordinary 30 s and at most 900 s; the manifest lists it beside the bindings.
+- **Desktop host:** `engine/ardiacore-desktop/src/ardia/desktop/generated/ac_desktop_routes.h`, every call whose desktop binding is `route` with its service and `routeField` (`kRoutes`, `FindRoute`, in `ardia::desktop_routes`), which `ac_linux_contract.h` takes in with `using` declarations, so the Linux host and Windows' WebUI host (`webui_host_calls.cc`) route and advertise exactly the schema's routes with no table of their own; and the two deadline maps in `engine/ardiacore-linux/src/ardia/linux/bootstrap.js` (which Windows embeds too), rewritten in place: `engineDeadlines` from each engine call's `deadline`, `hostDeadlines` from each module function's `deadline` (only on `desktop: host` or `adapted`) and from `schema/desktop.ts`, the native desktop host's own methods no module domain lists (`ArdiaPasswords.*`, `ArdiaLive.*`). A deadline is milliseconds above the ordinary 30 s and at most 900 s; the manifest lists it beside the bindings.
 - **No React Native Windows output.** Until the cutover, Windows only gets a check that `forwarded.json` agrees with the schema.
 - **Events** carry the same per-host bindings as calls (`forward`, `custom`, `absent`) and the engine `topic` when it differs from the event's name, so the Mac's `ForwardedTopics`, Linux's `EventName` and Windows' `topics` are each checked exactly against the schema.
 
@@ -203,4 +203,4 @@ The order is built around two integration proofs, the Windows WebUI pilot and th
 
 ## What to watch
 
-Every switch ships with the telemetry that shows it working: `sync_core` (`backend: rust|native`, open failures by code), `import_core` per format (Chromium bookmarks: the hourly `usage_counts.import_core_chromium_bookmarks_{rust,native,unreadable,too_large}`, from `ImportResult.importCore`), and `host_shell` (`webui|rnw`) on Windows. A vault that fails to open after a switch is the regression these catch; the vectors gate it before release.
+Every switch ships with the telemetry that shows it working: `sync_core` (`backend: rust|native`, open failures by code), `import_core` per format (Chromium bookmarks: the hourly `usage_counts.import_core_chromium_bookmarks_{rust,native,unreadable,too_large}`, from `ImportResult.importCore`), Windows update manifest verification (`usage_counts.windows_update_manifest_verified` and `windows_update_manifest_failures_{signature,manifest,too_large,missing,network,verifier,other}`), and `host_shell` (`webui|rnw`) on Windows. A vault that fails to open after a switch is the regression these catch; the vectors gate it before release.

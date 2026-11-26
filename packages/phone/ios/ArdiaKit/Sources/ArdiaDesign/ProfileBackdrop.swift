@@ -116,7 +116,7 @@ public struct LookFrost: View {
           shape.fill(.regularMaterial)
           shape.fill(look.surface.opacity(profileSheetTintShare))
         case .glass:
-          Color.clear.glassEffect(.regular, in: shape)
+          LiquidGlassFill(shape)
         case .thin:
           shape.fill(.ultraThinMaterial)
         }

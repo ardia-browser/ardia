@@ -8,8 +8,8 @@ use std::process::ExitCode;
 
 use ardia_crypto::Backend;
 use ardia_update_core::{
-    verify_linux_update, Package, PackageKind, UpdateError, Version, MAX_MANIFEST_BYTES, PUBLIC_KEY_BYTES,
-    SIGNATURE_BYTES,
+    verify_linux_update, verify_windows_update, Package, PackageKind, UpdateError, Version, WindowsCpu,
+    MAX_MANIFEST_BYTES, MAX_WINDOWS_BUILD, MAX_WINDOWS_MANIFEST_BYTES, PUBLIC_KEY_BYTES, SHA256_BYTES, SIGNATURE_BYTES,
 };
 use base64::Engine;
 use sha2::{Digest, Sha256};
@@ -17,30 +17,39 @@ use sha2::{Digest, Sha256};
 const USAGE: &str = "usage: ardia-update-verify version <V>
        ardia-update-verify manifest <flags>
        ardia-update-verify package <flags> --package <file>
+       ardia-update-verify windows-manifest <win-flags>
+       ardia-update-verify windows-package <win-flags> --package <file>
 
-Checks a signed Ardia update for Linux with ardia-update-core, for
-lib/ardia/ardia-update.
+Checks a signed Ardia update manifest and package with ardia-update-core.
 
-  version <V>  exits 0 when <V> is an Ardia version (<major>.<minor>.<patch>
-               or <major>.<minor>.<patch>-nightly.<n>, each part 1 to 9 digits)
-  manifest     verifies the manifest's Ed25519 signature against the key,
-               then that it is a canonical format 1 manifest for --version,
-               that --version is newer than --installed, and that it lists a
-               package for --kind
-  package      does what manifest does, then checks that --package is a
-               regular file of the listed size whose SHA-256 is the listed one
+  version <V>       exits 0 when <V> is an Ardia version (<major>.<minor>.<patch>
+                    or <major>.<minor>.<patch>-nightly.<n>, each part 1 to 9 digits)
+  manifest          verifies the Linux manifest's Ed25519 signature against the key,
+                    then that it is a canonical format 1 manifest for --version,
+                    that --version is newer than --installed, and that it lists a
+                    package for --kind
+  package           does what manifest does, then checks that --package is a
+                    regular file of the listed size whose SHA-256 is the listed one
+  windows-manifest  verifies the Windows JSON manifest's Ed25519 signature against
+                    --key, then its schema, allowed --published-under URL prefix,
+                    build > --current-build and installer entry for --cpu
+  windows-package   does what windows-manifest does, then checks that --package is
+                    a regular file of the listed size whose SHA-256 is the listed one
 
-  --key <pem>        the Ed25519 public key (SubjectPublicKeyInfo PEM)
-  --manifest <file>  Ardia-<V>-linux-update.txt, at most 4096 bytes
-  --signature <file> its 64-byte signature
-  --version <V>      the version the manifest's file name gives
-  --installed <V>    the version installed now
-  --kind <kind>      deb, tarball or appimage
+  --key <pem>              the Ed25519 public key (SubjectPublicKeyInfo PEM)
+  --manifest <file>        manifest file (at most 4096 bytes for Linux, 65536 for Windows)
+  --signature <file>       its 64-byte raw Ed25519 signature
+  --version <V>            Linux: the version the manifest's file name gives
+  --installed <V>          Linux: the version installed now
+  --kind <kind>            Linux: deb, tarball or appimage
+  --published-under <url>  Windows: allowed installer URL prefix
+  --cpu <cpu>              Windows: x64 or arm64
+  --current-build <n>      Windows: installed build number (0 to accept any build >= 1)
 
-Paths are absolute and never followed through a symbolic link. The last line
-on stdout is \"ok <package name> <sha256> <size>\" (exit 0) or \"failed
-<reason>\" (exit 1; exit 2 for usage), with reason one of usage, missing,
-manifest, signature, notNewer, kind, checksum or version.";
+Paths are absolute and never followed through a symbolic link or reparse point.
+The last line on stdout is \"ok ...\" (exit 0) or \"failed <reason>\" (exit 1;
+exit 2 for usage), with reason one of usage, missing, manifest, signature,
+notNewer, kind, checksum or version.";
 
 const MAX_KEY_BYTES: u64 = 4096;
 const MAX_PATH_BYTES: usize = 4096;
@@ -119,10 +128,31 @@ struct Request {
 }
 
 #[derive(Debug)]
+struct WindowsRequest {
+    key: PathBuf,
+    manifest: PathBuf,
+    signature: PathBuf,
+    published_under: String,
+    cpu: WindowsCpu,
+    current_build: u64,
+    package: Option<PathBuf>,
+}
+
+#[derive(Debug)]
+struct VerifiedWindows {
+    version: String,
+    build: u64,
+    url: String,
+    sha256: [u8; SHA256_BYTES],
+    bytes: u64,
+}
+
+#[derive(Debug)]
 enum Command {
     Help,
     Version(String),
     Check(Request),
+    CheckWindows(WindowsRequest),
 }
 
 enum ReadFailure {
@@ -141,13 +171,31 @@ fn absolute_path(value: String, flag: &str) -> Result<PathBuf, Refusal> {
     let path = PathBuf::from(value);
     let length = path.as_os_str().len();
     let traverses = path.components().any(|component| component == Component::ParentDir);
-    if length > MAX_PATH_BYTES || !path.is_absolute() || traverses || path.to_string_lossy().contains('\n') {
+    let lossy = path.to_string_lossy();
+    if length > MAX_PATH_BYTES || !path.is_absolute() || traverses || lossy.contains('\n') || lossy.contains('\r') {
         return Err(refuse(
             Reason::Usage,
             format!("{flag} takes an absolute path of at most {MAX_PATH_BYTES} bytes, without .."),
         ));
     }
     Ok(path)
+}
+
+fn parse_build_arg(value: &str) -> Result<u64, Refusal> {
+    let bytes = value.as_bytes();
+    if bytes.is_empty() || !bytes.iter().all(u8::is_ascii_digit) || (bytes.len() > 1 && bytes[0] == b'0') {
+        return Err(refuse(
+            Reason::Usage,
+            "--current-build takes a non-negative integer without leading zeros",
+        ));
+    }
+    let build = value
+        .parse::<u64>()
+        .map_err(|_| refuse(Reason::Usage, "--current-build is out of range"))?;
+    if build > MAX_WINDOWS_BUILD {
+        return Err(refuse(Reason::Usage, "--current-build is out of range"));
+    }
+    Ok(build)
 }
 
 fn parse(args: Vec<OsString>) -> Result<Command, Refusal> {
@@ -165,6 +213,9 @@ fn parse(args: Vec<OsString>) -> Result<Command, Refusal> {
             Ok(Command::Version(text(version, "the version")?))
         }
         "manifest" | "package" => parse_request(args, command == "package").map(Command::Check),
+        "windows-manifest" | "windows-package" => {
+            parse_windows_request(args, command == "windows-package").map(Command::CheckWindows)
+        }
         _ => Err(refuse(Reason::Usage, "unknown command")),
     }
 }
@@ -216,6 +267,56 @@ fn parse_request(mut args: impl Iterator<Item = OsString>, with_package: bool) -
     })
 }
 
+fn parse_windows_request(
+    mut args: impl Iterator<Item = OsString>,
+    with_package: bool,
+) -> Result<WindowsRequest, Refusal> {
+    let mut key = None;
+    let mut manifest = None;
+    let mut signature = None;
+    let mut published_under = None;
+    let mut cpu = None;
+    let mut current_build = None;
+    let mut package = None;
+    while let Some(flag) = args.next() {
+        let flag = text(flag, "a flag")?;
+        let slot = match flag.as_str() {
+            "--key" => &mut key,
+            "--manifest" => &mut manifest,
+            "--signature" => &mut signature,
+            "--published-under" => &mut published_under,
+            "--cpu" => &mut cpu,
+            "--current-build" => &mut current_build,
+            "--package" if with_package => &mut package,
+            _ => return Err(refuse(Reason::Usage, "unknown flag")),
+        };
+        if slot.is_some() {
+            return Err(refuse(Reason::Usage, format!("{flag} given twice")));
+        }
+        let value = text(
+            args.next()
+                .ok_or_else(|| refuse(Reason::Usage, format!("{flag} needs a value")))?,
+            &flag,
+        )?;
+        *slot = Some(value);
+    }
+    let required = |value: Option<String>, flag: &str| value.ok_or_else(|| refuse(Reason::Usage, format!("no {flag}")));
+    let cpu = required(cpu, "--cpu")?;
+    let current_build = parse_build_arg(&required(current_build, "--current-build")?)?;
+    Ok(WindowsRequest {
+        key: absolute_path(required(key, "--key")?, "--key")?,
+        manifest: absolute_path(required(manifest, "--manifest")?, "--manifest")?,
+        signature: absolute_path(required(signature, "--signature")?, "--signature")?,
+        published_under: required(published_under, "--published-under")?,
+        cpu: WindowsCpu::from_name(&cpu).ok_or_else(|| refuse(Reason::Usage, "--cpu is x64 or arm64"))?,
+        current_build,
+        package: match (with_package, package) {
+            (true, value) => Some(absolute_path(required(value, "--package")?, "--package")?),
+            (false, _) => None,
+        },
+    })
+}
+
 #[cfg(unix)]
 fn open_without_following(path: &Path) -> io::Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
@@ -225,7 +326,23 @@ fn open_without_following(path: &Path) -> io::Result<File> {
         .open(path)
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn open_without_following(path: &Path) -> io::Result<File> {
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)?;
+    let metadata = file.metadata()?;
+    if (metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT) != 0 || metadata.file_type().is_symlink() {
+        return Err(io::Error::other("a reparse point"));
+    }
+    Ok(file)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn open_without_following(path: &Path) -> io::Result<File> {
     if std::fs::symlink_metadata(path)?.file_type().is_symlink() {
         return Err(io::Error::other("a symbolic link"));
@@ -325,19 +442,63 @@ fn verify(request: &Request) -> Result<Package, Refusal> {
     })
 }
 
-fn check_package(path: &Path, package: &Package) -> Result<(), Refusal> {
+fn verify_windows(request: &WindowsRequest) -> Result<VerifiedWindows, Refusal> {
+    let key = read_key(&request.key)?;
+    let manifest = read_input(
+        &request.manifest,
+        MAX_WINDOWS_MANIFEST_BYTES as u64,
+        "manifest",
+        Reason::Manifest,
+    )?;
+    let signature = read_input(
+        &request.signature,
+        SIGNATURE_BYTES as u64,
+        "signature",
+        Reason::Signature,
+    )?;
+    let verified = verify_windows_update::<Backend>(
+        &key,
+        &manifest,
+        &signature,
+        &request.published_under,
+        request.cpu,
+        request.current_build,
+    )
+    .map_err(|error| {
+        let message = match error {
+            UpdateError::Signature => "the manifest's signature doesn't verify".to_owned(),
+            UpdateError::NotNewer => "the update is not newer than the installed build".to_owned(),
+            UpdateError::Kind => format!("the manifest has no {} installer", request.cpu.name()),
+            UpdateError::TooLarge => "the manifest is too large".to_owned(),
+            UpdateError::Version => "the build number is invalid".to_owned(),
+            UpdateError::Manifest | UpdateError::Channel => {
+                "the manifest isn't a valid Windows update manifest".to_owned()
+            }
+        };
+        refuse(Reason::of_update(error), message)
+    })?;
+    Ok(VerifiedWindows {
+        version: verified.version.to_owned(),
+        build: verified.build,
+        url: verified.installer.url.to_owned(),
+        sha256: verified.installer.sha256,
+        bytes: verified.installer.bytes,
+    })
+}
+
+fn check_file_digest(path: &Path, expected_size: u64, expected_sha256: &[u8; SHA256_BYTES]) -> Result<(), Refusal> {
     let unreadable = || refuse(Reason::Missing, "couldn't read the package");
     let (file, length) = open_regular(path).map_err(|failure| match failure {
         ReadFailure::NotRegular => refuse(Reason::Missing, "the package is not a regular file"),
         ReadFailure::Unreadable | ReadFailure::TooLarge => unreadable(),
     })?;
-    if length != package.size {
+    if length != expected_size {
         return Err(refuse(
             Reason::Checksum,
-            format!("the package is {length} bytes, not {}", package.size),
+            format!("the package is {length} bytes, not {expected_size}"),
         ));
     }
-    let mut reader = file.take(package.size + 1);
+    let mut reader = file.take(expected_size + 1);
     let mut hasher = Sha256::new();
     let mut chunk = vec![0u8; HASH_CHUNK_BYTES];
     let mut total = 0u64;
@@ -351,10 +512,10 @@ fn check_package(path: &Path, package: &Package) -> Result<(), Refusal> {
         total += read as u64;
         hasher.update(&chunk[..read]);
     }
-    if total != package.size {
+    if total != expected_size {
         return Err(refuse(Reason::Checksum, "the package changed size while it was read"));
     }
-    if hasher.finalize().as_slice() != package.sha256.as_slice() {
+    if hasher.finalize().as_slice() != expected_sha256.as_slice() {
         return Err(refuse(
             Reason::Checksum,
             "the package doesn't match the manifest's sha256",
@@ -376,13 +537,27 @@ fn run(args: Vec<OsString>) -> Result<String, Refusal> {
         Command::Check(request) => {
             let package = verify(&request)?;
             if let Some(path) = &request.package {
-                check_package(path, &package)?;
+                check_file_digest(path, package.size, &package.sha256)?;
             }
             Ok(format!(
                 "ok {} {} {}",
                 package.kind.package_name(&request.version),
                 hex(&package.sha256),
                 package.size
+            ))
+        }
+        Command::CheckWindows(request) => {
+            let verified = verify_windows(&request)?;
+            if let Some(path) = &request.package {
+                check_file_digest(path, verified.bytes, &verified.sha256)?;
+            }
+            Ok(format!(
+                "ok {} {} {} {} {}",
+                verified.version,
+                verified.build,
+                verified.url,
+                hex(&verified.sha256),
+                verified.bytes
             ))
         }
     }
@@ -413,12 +588,17 @@ mod tests {
     use super::*;
 
     const RELEASE_PEM: &str = include_str!("../../../../../scripts/linux/linux-update.pem");
+    const WINDOWS_RELEASE_PEM: &str = include_str!("../../../../../scripts/windows/windows-update.pem");
 
     #[test]
     fn the_release_pem_is_the_core_release_key() {
         assert_eq!(
             public_key_from_pem(RELEASE_PEM.as_bytes()),
             Some(ardia_update_core::LINUX_UPDATE_PUBLIC_KEY)
+        );
+        assert_eq!(
+            public_key_from_pem(WINDOWS_RELEASE_PEM.as_bytes()),
+            Some(ardia_update_core::WINDOWS_UPDATE_PUBLIC_KEY)
         );
     }
 

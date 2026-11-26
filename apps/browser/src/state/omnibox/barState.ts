@@ -6,7 +6,8 @@ import { expectFocus, heroBarFocus } from "../focus/focusClaims";
 import { webviews } from "../../platform/webviews";
 import { clickBarPlacement } from "./barPlacement";
 import { notePageFocusReturnAfterBar } from "../telemetry/pageFocusReturns";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
+import { noteCommandBarKeyDismissal } from "../telemetry/inlineCompletionCounts";
 
 export type BarSnapshot = {
   typed: string;
@@ -56,7 +57,7 @@ export function openEmptySidebarField(windowId: string) {
   openBarFromAddress(windowId, "");
 }
 
-export type BarDismissal = "escape" | "closeKey";
+export type BarDismissal = "escape" | "closeKey" | "commandKey";
 
 export function cancelPanel(windowId: string) {
   const consent = consentToken();
@@ -69,6 +70,11 @@ export function cancelPanel(windowId: string) {
       if (focused) notePageFocusReturnAfterBar(consent);
     });
   }, 0);
+}
+
+export function dismissBarByCommandKey(windowId: string, tabId: string, consent: ConsentToken | null) {
+  closePanelToHeroBar(windowId, tabId, "commandKey");
+  noteCommandBarKeyDismissal(consent);
 }
 
 export function closePanelToHeroBar(windowId: string, tabId: string, reason?: BarDismissal) {

@@ -1,7 +1,9 @@
 import {
   DeckBackdrop,
   Frost,
+  FrostSource,
   Glass,
+  GlassBackdrop,
   glassIsNative,
   INCOGNITO_LOOK,
   lookIsNative,
@@ -9,8 +11,9 @@ import {
   type FrostVariant,
   type GlassShape,
 } from "@ardia/phone-native";
-import { createContext, useContext, type ReactNode, type RefObject } from "react";
-import { Pressable, StyleSheet, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
+import { createContext, useContext, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
+import Animated from "react-native-reanimated";
+import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   backdropStops,
@@ -39,8 +42,33 @@ export const START_FROST = "start";
 
 const GlassSourceContext = createContext<string>(SURFACES_FROST);
 
+const makeHeldFrostSource = () => Animated.createAnimatedComponent(FrostSource);
+
+let heldFrostSource: ReturnType<typeof makeHeldFrostSource> | null = null;
+
+export function HeldFrostSource(props: ComponentProps<ReturnType<typeof makeHeldFrostSource>>) {
+  const Held = (heldFrostSource ??= makeHeldFrostSource());
+  return <Held {...props} />;
+}
+
 export function GlassSource({ name, children }: { name: string; children: ReactNode }) {
   return <GlassSourceContext.Provider value={name}>{children}</GlassSourceContext.Provider>;
+}
+
+export const drawsGlassBehindItsLayers = (os: string, nativeGlass: boolean) => os === "android" && nativeGlass;
+
+const GlassBranchContext = createContext<boolean | null>(null);
+
+export function GlassBranch({ attached, children }: { attached: boolean; children: ReactNode }) {
+  return <GlassBranchContext.Provider value={attached}>{children}</GlassBranchContext.Provider>;
+}
+
+export const splitsGlassFromFace = (os: string, nativeGlass: boolean, branch: boolean | null) => branch !== null && drawsGlassBehindItsLayers(os, nativeGlass);
+
+export function GlassBehind() {
+  const attached = useContext(GlassBranchContext) ?? true;
+  if (!attached || !drawsGlassBehindItsLayers(Platform.OS, glassIsNative())) return null;
+  return <GlassBackdrop testID="glassBehind" pointerEvents="none" style={StyleSheet.absoluteFill} />;
 }
 
 function BackdropBase({ color }: { color: string | undefined }) {
@@ -174,6 +202,7 @@ export function CustomLookBackdrop({ look, dark, testID, style }: { look: Profil
 
 type FrostProps = {
   source: string;
+  name?: string;
   variant: FrostVariant;
   cornerRadius: number;
   fill: string;
@@ -183,6 +212,8 @@ type FrostProps = {
   style?: StyleProp<ViewStyle>;
   children?: ReactNode;
 };
+
+export const frostGlassIsNative = (os: string, nativeGlass: boolean) => os === "android" && nativeGlass;
 
 export const chromeIsSolid = (style: ChromeStyle, reduceTransparency: boolean, frostIsNative: boolean) => style === "classic" || reduceTransparency || !frostIsNative;
 
@@ -202,6 +233,7 @@ export const plateMaterial = (face: PlateFace, solid: boolean, glassIsLive: bool
 
 export function LookFrost({
   source,
+  name,
   variant,
   cornerRadius,
   fill,
@@ -224,9 +256,26 @@ export function LookFrost({
       </View>
     );
   const shade = incognito || (dark ?? theme.dark);
+  if (variant === "glass" && frostGlassIsNative(Platform.OS, glassIsNative()))
+    return (
+      <Glass
+        source={source}
+        name={name}
+        shape="rounded"
+        cornerRadius={cornerRadius}
+        interactive={false}
+        {...lookColors(look, incognito, shade)}
+        dark={shade}
+        reduceTransparency={reduceTransparency}
+        style={[style, { borderRadius: cornerRadius, backgroundColor: fill }]}
+      >
+        {children}
+      </Glass>
+    );
   return (
     <Frost
       source={source}
+      name={name}
       variant={variant}
       cornerRadius={cornerRadius}
       {...lookColors(look, incognito, shade)}
@@ -256,6 +305,8 @@ export function ChromeSurface({
   dark,
   shown,
   shownMs,
+  underlay = false,
+  sampleHold = null,
   testID,
   style,
   children,
@@ -269,6 +320,8 @@ export function ChromeSurface({
   dark?: boolean;
   shown?: boolean;
   shownMs?: number;
+  underlay?: boolean;
+  sampleHold?: string | null;
   testID?: string;
   style?: StyleProp<ViewStyle>;
   children?: ReactNode;
@@ -279,12 +332,30 @@ export function ChromeSurface({
   const privateContext = useIncognitoLook();
   const incognito = incognitoChosen ?? privateContext;
   const source = useContext(GlassSourceContext);
+  const branch = useContext(GlassBranchContext);
+  const [box, setBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const laidOut = ({ nativeEvent: { layout } }: LayoutChangeEvent) => setBox((was) => (was && was.x === layout.x && was.y === layout.y && was.width === layout.width && was.height === layout.height ? was : layout));
   if (glassIsNative()) {
     const shade = dark ?? (incognito || theme.dark);
-    return (
-      <Glass testID={testID} source={source} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} classicChrome={nativeClassicChrome} {...lookColors(look, incognito, shade)} dark={shade} style={[style, { borderRadius: cornerRadius }]}>
+    const glassProps = { source, name: testID, shape, cornerRadius, tint: incognito ? undefined : lookGlassTint(look), interactive, tinted, surface, barShadow, shown, shownMs, sampleHold, classicChrome: nativeClassicChrome, ...lookColors(look, incognito, shade), dark: shade };
+    const split = splitsGlassFromFace(Platform.OS, true, branch);
+    const glass = split ? (
+      <View testID={testID ? `${testID}Face` : undefined} collapsable={false} style={[style, { borderRadius: cornerRadius }]} onLayout={underlay ? laidOut : undefined}>
+        {branch ? <Glass testID={testID} {...glassProps} style={[StyleSheet.absoluteFill, { borderRadius: cornerRadius }]} /> : null}
+        {children}
+      </View>
+    ) : (
+      <Glass testID={testID} {...glassProps} style={[style, { borderRadius: cornerRadius }]} onLayout={underlay ? laidOut : undefined}>
         {children}
       </Glass>
+    );
+    if (!underlay) return glass;
+    const sampleInk = shade ? chromeInk.dark : chromeInk.light;
+    return (
+      <>
+        {box ? <View testID={testID ? `${testID}Sample` : undefined} pointerEvents="none" style={{ position: "absolute", left: box.x, top: box.y, width: box.width, height: box.height, borderRadius: cornerRadius, backgroundColor: sampleInk.surface, borderWidth: chromeLayout.edge, borderColor: sampleInk.edge }} /> : null}
+        {glass}
+      </>
     );
   }
   const ink = dark ?? (incognito || theme.dark) ? chromeInk.dark : chromeInk.light;
@@ -319,6 +390,7 @@ export function LookGlass({
     <Glass
       testID="deckGlass"
       source={frost.source}
+      name={frost.name ?? "deckGlass"}
       shape={shape}
       tint={frost.incognito ? undefined : lookGlassTint(look)}
       classicChrome={nativeClassicChrome}

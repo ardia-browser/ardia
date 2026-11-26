@@ -35,7 +35,7 @@ import { addList, applyMyFilters, openFromSettings, removeList, resetLists, setL
 import { popSettings, pushSettings, settingsRouteKey, type SettingsRoute } from "../../state/settings/nav";
 import { FILTER_LIST_ADDRESS, filterListAddress, formatNumber, listFacts, listIsBusy, listsStatus, listStatus, listsText, listUpdatedAt, myFiltersCount, myFiltersSummary, resetMessage, rulesText } from "../../state/settings/settingsRules";
 import { PasteAction, SYSTEM_PASTE_SIZE } from "../sync/SyncPage";
-import { FilterTextEditor, legibleInk, modifierList, navigationBarBackButtonHidden, settingsChrome, settingsLayout, settingsPage, settingsSwitchStyle } from "../ui";
+import { FilterTextEditor, legibleInk, modifierList, navigationBarBackButtonHidden, neverBounces, settingsChrome, settingsLayout, settingsPage, settingsSwitchStyle } from "../ui";
 import { haptics } from "../../state/app/haptics";
 import { ExpoBusyButton, ExpoBusyToolbarAction, ExpoHero } from "./ExpoSettingsParts";
 import { actionWords, blockingWords, dismissWords } from "../../lib/sharedWords";
@@ -153,7 +153,7 @@ function AddListSheet({ open, onOpen, onClose }: { open: boolean; onOpen: () => 
       <Group modifiers={[presentationDetents(["medium", "large"]), presentationDragIndicator("hidden"), interactiveDismissDisabled(adding)]}>
         <NavigationStack>
           <Toolbar>
-            <Form modifiers={modifierList(navigationTitle("Add a List"), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome())}>
+            <Form modifiers={modifierList(navigationTitle("Add a List"), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome(), neverBounces())}>
               <Section title="List Address" footer={footer}>
                 <TextField
                   text={text}
@@ -204,13 +204,13 @@ export function ExpoFilterListPage({ route }: { route: SettingsRoute }) {
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   if (!list) {
     return (
-      <Form modifiers={modifierList(navigationTitle("Filter List"), navigationBarTitleDisplayMode("inline"), settingsChrome())}>
+      <Form modifiers={modifierList(navigationTitle("Filter List"), navigationBarTitleDisplayMode("inline"), settingsChrome(), neverBounces())}>
         <ContentUnavailableView title="List Removed" systemImage="list.bullet.rectangle" />
       </Form>
     );
   }
   return (
-    <Form modifiers={modifierList(navigationTitle(list.title), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome())}>
+    <Form modifiers={modifierList(navigationTitle(list.title), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome(), neverBounces())}>
       <Section footer={list.isDefault ? <Text>On by default in uBlock Origin.</Text> : undefined}>
         <Toggle isOn={list.isEnabled} onIsOnChange={(on) => setListEnabled(list.id, on)} modifiers={modifierList(settingsSwitchStyle())}>
           <Text>Use This List</Text>
@@ -278,11 +278,11 @@ export function ExpoTrustedSitesPage() {
   const [editing, setEditing] = useState(false);
   const page = [navigationTitle("Trusted Sites"), navigationBarTitleDisplayMode("inline"), tint(BLUE)];
   if (hosts.length === 0) {
-    return <ContentUnavailableView title={TRUSTED_SITES_EMPTY.title} systemImage="checkmark.shield" description={TRUSTED_SITES_EMPTY.message} modifiers={modifierList(...page, frame({ maxWidth: FILL, maxHeight: FILL }), settingsChrome())} />;
+    return <ContentUnavailableView title={TRUSTED_SITES_EMPTY.title} systemImage="checkmark.shield" description={TRUSTED_SITES_EMPTY.message} modifiers={modifierList(...page, frame({ maxWidth: FILL, maxHeight: FILL }), settingsChrome(), neverBounces())} />;
   }
   return (
     <Toolbar>
-      <List modifiers={modifierList(...page, settingsChrome(), environment("editMode", editing ? "active" : "inactive"))}>
+      <List modifiers={modifierList(...page, settingsChrome(), neverBounces(), environment("editMode", editing ? "active" : "inactive"))}>
         <Section>
           <List.ForEach onDelete={(indices) => indices.forEach((index) => hosts[index] && trustSite(hosts[index], false))}>
             {hosts.map((host) => (
@@ -324,7 +324,7 @@ export function ExpoMyFiltersPage() {
   };
   return (
     <Toolbar>
-      <VStack spacing={0} modifiers={modifierList(navigationTitle("My Filters"), navigationBarTitleDisplayMode("inline"), navigationBarBackButtonHidden(changed), tint(BLUE), settingsChrome())}>
+      <VStack spacing={0} modifiers={modifierList(navigationTitle("My Filters"), navigationBarTitleDisplayMode("inline"), navigationBarBackButtonHidden(changed), tint(BLUE), settingsChrome(), neverBounces())}>
         <ZStack alignment="topLeading" modifiers={[disabled(applying)]}>
           <FilterTextEditor text={text} onTextChange={setDraft} />
           {text ? null : (

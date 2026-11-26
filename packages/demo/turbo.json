@@ -3,7 +3,7 @@
   "extends": ["//"],
   "tasks": {
     "typecheck": {
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/browser/src/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/browser/src/**", "$TURBO_ROOT$/apps/desktop/scaledAssets.ts"]
     }
   }
 }

@@ -5,6 +5,7 @@ import { switchOn } from "../../state/app/switches";
 import { useTheme } from "../ui/theme";
 import { curve, keepAttached, useGated } from "../ui/motion";
 import { Panel, reduceMotion, WindowBackdrop, WindowDragRegion } from "../ui";
+import { PeekEdge } from "./PeekEdge";
 import { useSidebarSide, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useSidebarDockState } from "../../state/windows/hooks";
 import { useShownSidebarWidth } from "../../state/sidebar/shownWidth";
@@ -369,7 +370,7 @@ function SidebarDock({
               style={{ position: "absolute", top: 0, bottom: 0, [edgeSide]: -bleed, [right ? "left" : "right"]: 0, opacity: panelOn }}
               onLayout={(e) => setPanelHeight(e.nativeEvent.layout.height)}
             >
-              <Panel fill={theme.windowTint[0]} radius={peekAt.radius} shadow={SHADOWS.sidebarPeek} style={StyleSheet.absoluteFill} />
+              <Panel fill={theme.windowTint[0]} radius={peekAt.radius} border={null} shadow={SHADOWS.sidebarPeek} style={StyleSheet.absoluteFill} />
               {peeking && (
                 <View style={[StyleSheet.absoluteFill, { borderRadius: peekAt.radius, overflow: "hidden" }]}>
                   <WindowBackdrop
@@ -390,6 +391,7 @@ function SidebarDock({
             </Animated.View>
           )}
           <View style={[{ flex: 1, paddingTop: controlsRow }, peeking ? { borderRadius: peekAt.radius, overflow: "hidden" } : null]}>{sidebar}</View>
+          {strip.current && peeking ? <PeekEdge side={edgeSide} bleed={bleed} right={right} radius={peekAt.radius} shown={panelOn} /> : null}
           <ResizeHandle windowId={windowId} />
         </Animated.View>
       </Animated.View>

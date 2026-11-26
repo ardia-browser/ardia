@@ -19,6 +19,8 @@ import { valuesFor } from "./values";
 import { netFetch, readActivePage, secretsMethod, storageMethod } from "./channelData";
 import { UI_METHODS, uiMethod } from "./channelUi";
 import { programsStatus, relinkOwnPrograms } from "./programs";
+import { subscribeState } from "./stateEvents";
+import { runIntent } from "./stateIntents";
 
 const CHANNEL_PROTOCOL = 2;
 const LEGACY_CHANNEL_PROTOCOL = 1;
@@ -118,6 +120,10 @@ export function answerMethod(c: ChannelCaller, m: PluginManifest, method: string
     case "workspace":
     case "apply":
       return workspace(c, m, method, params);
+    case "state.subscribe":
+      return subscribeState(c, m, params);
+    case "state.intent":
+      return runIntent(c, m, params);
     case "tabs.readActivePage":
       return readActivePage(c, m);
     case "page.open":

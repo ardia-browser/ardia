@@ -23,6 +23,16 @@ const KNOWN_SCHEMES = new Set([
   "cursor", "notion", "figma", "spotify", "linear", "obsidian", "raycast",
 ]);
 
+const NON_SEARCH_EXTRA_SCHEMES = new Set(["javascript", "vbscript", "edge"]);
+const SCHEME_HEAD = /^([a-z][a-z0-9+.-]*):/i;
+
+export function hasKnownScheme(input: string): boolean {
+  const m = SCHEME_HEAD.exec(input);
+  if (!m) return false;
+  const scheme = m[1]!.toLowerCase();
+  return input.startsWith("://", scheme.length) || KNOWN_SCHEMES.has(scheme) || NON_SEARCH_EXTRA_SCHEMES.has(scheme);
+}
+
 const LOCAL_TLDS = new Set(["meta", "local", "localhost", "test", "internal", "lan"]);
 let registries: Set<string> | undefined;
 const knownTld = (tld: string) => LOCAL_TLDS.has(tld) || (registries ??= new Set(PSL_TLDS.split(/\s+/))).has(tld);

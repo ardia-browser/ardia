@@ -23,6 +23,7 @@
 #include "ardia/win/test_gate.h"
 #include "ardia/win/webui/webui_mode.h"
 #include "ardia/win/webui/webui_shell.h"
+#include "ardia/win/webui/webui_window_policy.h"
 #include "base/base_paths.h"
 #include "base/base_paths_win.h"
 #include "base/base_switches.h"
@@ -41,6 +42,7 @@
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/devtools/chrome_devtools_manager_delegate.h"
+#include "chrome/chrome_elf/chrome_elf_main.h"
 #include "chrome/install_static/user_data_dir.h"
 #include "chrome/browser/chrome_browser_main.h"
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
@@ -74,6 +76,11 @@ App& TheApp() {
   return app;
 }
 
+int& RequestedExitCode() {
+  static int exit_code = 0;
+  return exit_code;
+}
+
 struct Gate {
   std::string refusal = "no scratch ARDIA_DATA_DIR";
   bool asked = false;
@@ -88,26 +95,6 @@ Gate& TheGate() {
 std::unique_ptr<ScopedKeepAlive>& KeepAlive() {
   static base::NoDestructor<std::unique_ptr<ScopedKeepAlive>> keep_alive;
   return *keep_alive;
-}
-
-std::wstring AppLibraryPath() {
-  std::wstring path(MAX_PATH, L'\0');
-  DWORD length = ::GetModuleFileNameW(nullptr, path.data(),
-                                      static_cast<DWORD>(path.size()));
-  path.resize(length);
-  size_t slash = path.find_last_of(L'\\');
-  if (slash == std::wstring::npos) {
-    return std::wstring();
-  }
-  path.resize(slash + 1);
-  path.append(L"ArdiaApp.dll");
-  return path;
-}
-
-bool AppLibraryPresent() {
-  std::wstring path = AppLibraryPath();
-  return !path.empty() &&
-         ::GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
 std::wstring Environment(const wchar_t* name) {
@@ -174,13 +161,21 @@ bool BrowserProcess(const base::CommandLine& command_line) {
   return command_line.GetSwitchValueNative(switches::kProcessType).empty();
 }
 
+constexpr size_t kLongestUserDataDirectory = 32768;
+
 std::wstring ChromiumUserDataDir() {
-  std::wstring user_data_dir;
-  std::wstring invalid;
-  if (!install_static::GetUserDataDirectory(&user_data_dir, &invalid) ||
-      !invalid.empty()) {
+  std::wstring user_data_dir(kLongestUserDataDirectory, L'\0');
+  std::wstring invalid(kLongestUserDataDirectory, L'\0');
+  if (!GetUserDataDirectoryThunk(user_data_dir.data(), user_data_dir.size(),
+                                 invalid.data(), invalid.size()) ||
+      invalid[0] != L'\0') {
     return std::wstring();
   }
+  const size_t end = user_data_dir.find(L'\0');
+  if (end == std::wstring::npos) {
+    return std::wstring();
+  }
+  user_data_dir.resize(end);
   return user_data_dir;
 }
 
@@ -481,11 +476,16 @@ void ClaimGuardUntilOwned(int attempts_left) {
 
 bool StartApp() {
   App& app = TheApp();
-  std::wstring path = AppLibraryPath();
-  app.module =
-      ::LoadLibraryExW(path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+  const std::wstring path = install_static::ReactNativeAppLibraryPath();
+  const DWORD load_flags =
+      path.starts_with(L"\\\\?\\")
+          ? LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
+          : LOAD_WITH_ALTERED_SEARCH_PATH;
+  app.module = path.empty()
+                   ? nullptr
+                   : ::LoadLibraryExW(path.c_str(), nullptr, load_flags);
   if (!app.module) {
-    const DWORD error = ::GetLastError();
+    const DWORD error = path.empty() ? ERROR_MOD_NOT_FOUND : ::GetLastError();
     FailStart(error == ERROR_MOD_NOT_FOUND
                   ? L"A file Ardia needs is missing from its folder "
                     L"(Windows error 126)."
@@ -613,10 +613,29 @@ void AddWebUIMainParts(ChromeBrowserMainParts* main_parts) {
   main_parts->AddParts(std::make_unique<WebUIMainParts>());
 }
 
+base::ListValue WebUIRelaunchUrls(const base::CommandLine& command_line,
+                             const base::FilePath& cur_dir) {
+  base::ListValue urls;
+  for (const base::CommandLine::StringType& argument :
+       command_line.GetArgs()) {
+    GURL url(base::WideToUTF8(argument));
+    if (!url.is_valid()) {
+      url = url_formatter::FixupRelativeFile(cur_dir,
+                                             base::FilePath(argument));
+    }
+    if (url.is_valid() &&
+        webui_window::RelaunchUrlAccepted(url.scheme(), url.spec().size(),
+                                          urls.size())) {
+      urls.Append(url.spec());
+    }
+  }
+  return urls;
+}
+
 bool WebUIRelaunched(const base::CommandLine& command_line,
                      const base::FilePath& cur_dir) {
   ClearExiting();
-  OpenWebUIShell();
+  OpenWebUIShellWithUrls(WebUIRelaunchUrls(command_line, cur_dir));
   return true;
 }
 
@@ -651,15 +670,15 @@ void RefuseReactNativeFolders(const std::wstring& app_data,
 }
 
 void RefuseShellModeDisagreement(bool webui) {
-  const bool early = install_static::IsWebUIShellCommandLine(::GetCommandLineW());
+  const bool early = IsWebUIShellSelectedForUserDataDirectory();
   const bool reparsed = WebUIShellRequested(
       base::CommandLine::FromString(::GetCommandLineW()));
   if (webui == early && reparsed == early) {
     return;
   }
   LOG(ERROR) << "Ardia engine: install_static read the shell mode as "
-             << (early ? "webui" : "default") << " and Chromium as "
-             << (webui ? "webui" : "default") << "; not starting";
+             << (early ? "webui" : "rnw") << " and Chromium as "
+             << (webui ? "webui" : "rnw") << "; not starting";
   base::Process::TerminateCurrentProcessImmediately(1);
 }
 
@@ -723,6 +742,7 @@ void BeforeWebUIChromeMain(base::CommandLine* command_line) {
   }
   g_ardia_win_add_main_parts = &AddWebUIMainParts;
   g_ardia_win_relaunched = &WebUIRelaunched;
+  InstallWebUIShellHooks();
 }
 
 bool KeepsWindowWithoutTabs(const BrowserWindowInterface* browser) {
@@ -774,7 +794,8 @@ void BeforeChromeMain() {
     BeforeWebUIChromeMain(command_line);
     return;
   }
-  if (!AppLibraryPresent()) {
+  if (command_line->HasSwitch(kHeadlessSwitch) ||
+      !install_static::ReactNativeAppLibraryBesideExe()) {
     return;
   }
   std::wstring data_dir = Environment(L"ARDIA_DATA_DIR");
@@ -799,7 +820,8 @@ void AfterChromeMain(int exit_code) {
   if (!g_ardia_win_add_main_parts) {
     return;
   }
-  base::Process::TerminateCurrentProcessImmediately(exit_code);
+  base::Process::TerminateCurrentProcessImmediately(
+      exit_code != 0 ? exit_code : RequestedExitCode());
 }
 
 const char* TestGateDecision() {
@@ -812,6 +834,11 @@ void QuitApp() {
   KeepAlive().reset();
   ChromeDevToolsManagerDelegate::AllowBrowserToClose();
   chrome::CloseAllBrowsersAndQuit();
+}
+
+void QuitAppWithExitCode(int exit_code) {
+  RequestedExitCode() = exit_code;
+  QuitApp();
 }
 
 }

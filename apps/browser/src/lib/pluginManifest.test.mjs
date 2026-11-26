@@ -266,7 +266,7 @@ test("a v1 manifest migrates into v2's shape: process is the sidecar, page the d
   const { manifest } = readManifest(FIXTURE);
   assert.equal(manifest.manifest, 2);
   assert.equal(manifest.declaredManifest, 1);
-  assert.deepEqual(manifest.permissions, { tabs: "read", fullUrls: false, activePage: false, workspace: false, commands: true, storage: false, secrets: false, network: false, control: false });
+  assert.deepEqual(manifest.permissions, { tabs: "read", fullUrls: false, activePage: false, workspace: false, commands: true, storage: false, secrets: false, network: false, control: false, state: false });
   assert.equal(manifest.sidecar, manifest.process);
   assert.equal(manifest.commands, manifest.contributes.commands);
   assert.equal(manifest.main, null);

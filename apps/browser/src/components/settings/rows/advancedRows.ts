@@ -1,6 +1,7 @@
 import { WEBKIT_LIMITS_KEYWORDS, type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import type { Settings } from "../../../state/settings/settings";
+import { keyText } from "../../../state/commands/keyText";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { keptSitesListed } from "../../../state/tabs/keptSites";
 
@@ -19,6 +20,13 @@ export const advancedRows = {
           title: "Show full URL in the address bar",
           description: "Instead of the site alone.",
           keywords: ["address", "url", "https"],
+        },
+        commandScrollZoom: {
+          title: `Zoom pages with ${keyText("⌘")}-scroll`,
+          explained: true,
+          description: `Sites that use ${keyText("⌘")}-scroll themselves, like maps, still get it.`,
+          keywords: ["scroll wheel", "mouse wheel", "command scroll", "cmd scroll", "ctrl scroll", "mouse zoom", "wheel zoom", "accidental zoom", "page zoom", "pinch", "bettermouse"],
+          shown: () => PLATFORM_FEATURES.commandScrollZoom,
         },
         chromeSettings: {
           title: "Chromium settings",

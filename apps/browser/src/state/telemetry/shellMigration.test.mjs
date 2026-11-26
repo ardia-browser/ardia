@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 const { shellMigrationReport, pendingShellMigration, reportShellMigration, SHELL_MIGRATION_ATTEMPT_DOC, SHELL_MIGRATION_REPORTED_DOC } = await import("./shellMigration.ts");
 const { HOST_SHELL } = await import("./hostShell.ts");
-const { HOST_SHELL: RNW } = await import("./hostShell.windows.ts");
 const { HOST_SHELL: WEBUI } = await import("./hostShell.win.ts");
 
 const RUN = "0123456789abcdef0123456789abcdef";
@@ -23,9 +22,8 @@ function documents(initial) {
   return { docs, read: (name) => docs.get(name) ?? null, save: async (name, contents) => void docs.set(name, contents) };
 }
 
-test("host_shell is rnw on React Native Windows, webui on the Windows WebUI build and absent elsewhere", () => {
+test("host_shell is webui on the Windows WebUI build and absent elsewhere", () => {
   assert.equal(HOST_SHELL, null);
-  assert.equal(RNW, "rnw");
   assert.equal(WEBUI, "webui");
 });
 
@@ -42,11 +40,21 @@ test("the migration's attempt report becomes enums and counts only", () => {
   for (const value of Object.values(properties)) assert.ok(typeof value === "number" || /^[a-z_]+$/.test(value));
 });
 
+test("a retry that succeeds still says which stage the attempt before it failed at", () => {
+  const { properties } = shellMigrationReport(attempt({ outcome: "migrated", attempt: 3, prior_failed_stage: "credentials" }));
+  assert.equal(properties.outcome, "migrated");
+  assert.equal(properties.attempt, 3);
+  assert.equal(properties.prior_failed_stage, "credentials");
+  assert.equal(properties.failed_stage, undefined);
+});
+
 test("anything unexpected in the report is not sent", () => {
   for (const text of [null, "", "{", "[]", attempt({ version: 2 }), attempt({ run: "C:\\Users" }), attempt({ run: RUN.toUpperCase() }), attempt({ outcome: "exploded" })]) {
     assert.equal(shellMigrationReport(text), null, String(text));
   }
   assert.equal(shellMigrationReport(attempt({ failed_stage: "C:\\x" })).properties.failed_stage, undefined);
+  assert.equal(shellMigrationReport(attempt({ prior_failed_stage: "C:\\x" })).properties.prior_failed_stage, undefined);
+  assert.equal("prior_failed_stage" in shellMigrationReport(attempt()).properties, false);
   assert.equal(shellMigrationReport(attempt({ attempt: 0, duration_ms: 1e12 })).properties.attempt, 1);
   assert.equal(shellMigrationReport(attempt({ duration_ms: 1e12 })).properties.duration_ms, 3_600_000);
 });
@@ -159,7 +167,7 @@ test("a failed save of the reported mark leaves the run pending for the next lau
 test("hostile values in the migration's report never reach an event", async () => {
   const { HOSTILE_VALUES } = await import("../../../../../scripts/security/hostile-inputs.mjs");
   for (const { id, value } of HOSTILE_VALUES) {
-    for (const field of ["run", "outcome", "failed_stage", "attempt", "duration_ms", "counts", "version"]) {
+    for (const field of ["run", "outcome", "failed_stage", "prior_failed_stage", "attempt", "duration_ms", "counts", "version"]) {
       const report = shellMigrationReport(attempt({ [field]: value }));
       if (!report) continue;
       for (const sent of Object.values(report.properties)) assert.ok(typeof sent === "number" ? Number.isSafeInteger(sent) && sent >= 0 : /^[a-z_]+$/.test(sent), `${id} in ${field}`);

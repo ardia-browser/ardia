@@ -99,7 +99,7 @@ export function ContentCard() {
     if (chrome.kind === "none") return NO_TOOLBAR;
     const leading = !!rect && rect.x === 0 && rect.y === 0;
     const trailing = !!rect && rect.y === 0 && rect.x + rect.width === size.width ? captionRoom : 0;
-    return toolbarGeometry({ sidebarButton: leading && showSidebarButton, trailing, cardRadius: frame.radius });
+    return toolbarGeometry({ sidebarButton: leading && showSidebarButton, trailing, cardRadius: frame.radius, leadingAtCardCorner: leading });
   };
 
   const focusedRect = activeId ? panes[activeId] : undefined;

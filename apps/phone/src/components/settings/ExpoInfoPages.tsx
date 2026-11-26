@@ -5,7 +5,7 @@ import { accessibilityAddTraits, accessibilityElement, background, clipShape, fi
 import { PHONE_SHARING_COPY, PHONE_WHATS_SENT } from "../../lib/telemetryCopy";
 import { askForDefaultBrowser, refreshDefaultBrowser, useDefaultBrowser } from "../../state/settings/defaultBrowser";
 import { defaultBrowserCopy } from "../../state/settings/settingsRules";
-import { AppIconPreview, modifierList, settingsChrome, SettingsIconTile, settingsUIAvailable } from "../ui";
+import { AppIconPreview, modifierList, neverBounces, settingsChrome, SettingsIconTile, settingsUIAvailable } from "../ui";
 import { ExpoSettingsAction } from "./ExpoSettingsParts";
 
 const FILL = Number.MAX_SAFE_INTEGER;
@@ -23,7 +23,7 @@ export function ExpoDefaultBrowserPage() {
   }, []);
   const copy = status ? defaultBrowserCopy(status) : null;
   return (
-    <ScrollView modifiers={modifierList(navigationTitle("Default Browser"), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome())}>
+    <ScrollView modifiers={modifierList(navigationTitle("Default Browser"), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome(), neverBounces())}>
       {copy ? (
         <VStack spacing={24} modifiers={[padding({ horizontal: 20, top: 24, bottom: 32 })]}>
           <VStack spacing={12}>
@@ -60,7 +60,7 @@ function StepIcon({ index, count, inSettings }: { index: number; count: number; 
 
 export function ExpoWhatsSentPage() {
   return (
-    <Form modifiers={modifierList(navigationTitle(PHONE_SHARING_COPY.whatsSent), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome())}>
+    <Form modifiers={modifierList(navigationTitle(PHONE_SHARING_COPY.whatsSent), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome(), neverBounces())}>
       {PHONE_WHATS_SENT.map((section, index) => (
         <Section key={section.title} title={section.title} footer={index === PHONE_WHATS_SENT.length - 1 ? <Text>{PHONE_SHARING_COPY.footnote}</Text> : undefined}>
           {section.items.map((item) => (

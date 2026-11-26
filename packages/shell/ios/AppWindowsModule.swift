@@ -26,6 +26,8 @@ public class AppWindowsModule: Module, AppWindowsNative {
 
   static func focusWindow(_ id: String) { WindowManager.shared.focus(id: id) }
 
+  static func setWindowShown(_ id: String, _ shown: Bool, _ burst: Bool) { WindowManager.shared.setShown(id: id, shown: shown, burst: burst) }
+
   static func restoreFullScreen(_ ids: [String], _ focus: String?) { WindowManager.shared.fullScreen.restore(ids: ids, focus: focus) }
 
   static func dragPreviewBegin(_ windowId: String, _ chip: CGRect, _ grab: CGPoint) { DragPreview.shared.begin(windowId: windowId, chip: chip, grab: grab) }
@@ -115,6 +117,7 @@ public class AppWindowsModule: Module, AppWindowsNative {
     Self.setTrafficLightsCenterFunction
     Self.watchSidebarEdgeFunction
     Self.focusWindowFunction
+    Self.setWindowShownFunction
     Self.restoreFullScreenFunction
     Self.dragPreviewBeginFunction
     Self.dragPreviewPageFunction

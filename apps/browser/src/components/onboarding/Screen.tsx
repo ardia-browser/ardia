@@ -9,12 +9,16 @@ import { useWindowProfileValue } from "../../state/profiles/hooks";
 import type { Settings } from "../../state/settings/settings";
 import { MockWindow, StylePreview, type PreviewId } from "./previews";
 import { draftPreset, resolveDraft, useOnboarding } from "../../state/onboarding/onboarding";
+import { shallowEqual } from "../../state/tabs/tabWatch";
+
+let lastSettings: Settings | null = null;
+const steadySettings = (settings: Settings) => (lastSettings && shallowEqual(lastSettings, settings) ? lastSettings : (lastSettings = settings));
 
 export function useScreen<K extends keyof Settings>(keys: readonly K[]) {
   const windowId = useOnboarding((s) => s.windowId);
   const draft = useOnboarding((s) => s.draft);
   const preset = useOnboarding(draftPreset);
-  const settings = useSettings((st) => st);
+  const settings = useSettings(steadySettings);
   const tabLayout = useTabLayout(windowId);
   const base = { ...settings, tabLayout };
   const chosen = useChosenSettings();
@@ -31,14 +35,14 @@ const MOCK_SIZE = { width: 420, height: 300 } as const;
 const MOCK_OVERLAY_FADE = { duration: onboardingMotion.mockOverlay, easing: curve.enter };
 const MOCK_OVERLAY_PRESENCE = { show: MOCK_OVERLAY_FADE, hide: MOCK_OVERLAY_FADE };
 
-export function MockPanel({ settings, focus, overlay }: { settings: Partial<Settings>; focus: PreviewId | null; overlay?: ReactNode }) {
+export function MockPanel({ settings, focus, overlay, size = MOCK_SIZE }: { settings: Partial<Settings>; focus: PreviewId | null; overlay?: ReactNode; size?: { width: number; height: number } }) {
   const accent = useAccent();
   const windowId = useOnboarding((s) => s.windowId);
   const custom = useWindowProfileValue(windowId ?? "", (p) => p?.theme ?? null);
   const { shown, appear: t } = usePresence(overlay || null, MOCK_OVERLAY_PRESENCE);
   return (
     <View style={{ alignItems: "center", justifyContent: "center" }}>
-      <Animated.View style={{ width: MOCK_SIZE.width, height: MOCK_SIZE.height, opacity: t.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>
+      <Animated.View style={{ width: size.width, height: size.height, opacity: t.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>
         <MockWindow settings={settings} accent={accent} theme={custom} focus={focus} />
       </Animated.View>
       {shown ? (

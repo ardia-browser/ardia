@@ -176,6 +176,17 @@ test("a refused download says why and installs nothing: a SHA-256 mismatch, offl
   const counts = takePluginCounts();
   assert.equal(counts.official_verify_failures, 1);
   assert.equal(counts.official_fetch_offline, 1);
+  assert.equal(counts.official_fetch_cause_other, 2, "a failure the native side doesn't explain counts as other");
+  for (const [cause, field] of [["permission", "official_fetch_cause_permission"], ["server", "official_fetch_cause_server"], ["timeout", "official_fetch_cause_timeout"], ["https://x.invalid/secret", "official_fetch_cause_other"]]) {
+    host.officialFetchResults.cli = { ok: false, code: "failed", reason: "native reason", cause };
+    await installOfficialPlugin("cli", { showSheet: false });
+    const noted = takePluginCounts();
+    assert.equal(noted.official_fetch_failures, 1, cause);
+    assert.equal(noted[field], 1, `${cause} is counted as ${field}, never as free text`);
+  }
+  host.officialFetchResults.cli = { ok: false, code: "cancelled", reason: "Cancelled.", cause: "other" };
+  await installOfficialPlugin("cli", { showSheet: false });
+  assert.equal(takePluginCounts().official_fetch_cause_other, 0, "a cancel isn't a failure");
   delete host.officialFetchResults.cli;
 });
 

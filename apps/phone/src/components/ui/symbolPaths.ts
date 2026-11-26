@@ -189,6 +189,15 @@ export const SYMBOLS = {
     { d: "M12 2.8L4.5 5.7v5.6c0 4.8 3.1 8.6 7.5 10z", fill: true },
   ],
   gearshape: [{ d: gear(12, 12, 9.6, 7.6, 8) + circle(12, 12, 3.1), stroke: 1.8 }],
+  gearshapeFill: [{ d: gear(12, 12, 10.2, 8, 8) + circle(12, 12, 3.4), fill: true, evenOdd: true }],
+  circleLefthalfFill: [
+    { d: circle(12, 12, 8.6), stroke: STROKE },
+    { d: "M12 3.4A8.6 8.6 0 0 0 12 20.6z", fill: true },
+  ],
+  squareOnSquareFill: [
+    { d: "M8 7.5V6.5A2.5 2.5 0 0 1 10.5 4h7A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H16.5V10A2.5 2.5 0 0 0 14 7.5z", fill: true },
+    { d: roundRect(3.5, 8.8, 12, 12, 2.6), fill: true },
+  ],
   docText: [{ d: DOCUMENT + DOCUMENT_FOLD + line(8.5, 13, 15.5, 13) + line(8.5, 16.5, 13.5, 16.5), stroke: STROKE }],
   code: [{ d: polyline(7.5, 7, 2.5, 12, 7.5, 17) + polyline(16.5, 7, 21.5, 12, 16.5, 17) + line(14, 4.5, 10, 19.5), stroke: STROKE }],
   handWave: [{ d: HAND + "M18.5 4.5c1.2.6 2 1.6 2.3 2.8M20 2.5c1.6.8 2.7 2.2 3 3.8", stroke: STROKE }],
@@ -294,6 +303,10 @@ export const SYMBOLS = {
       shift: 4.5,
     },
     { d: line(4.39, 17.1, 7.62, 14.58), stroke: 2.5, rotate: -15, scale: 0.62, shift: 4.5 },
+  ],
+  paintbrushFill: [
+    { d: "M14.2 3.4a2 2 0 0 1 2.83 0l3.57 3.57a2 2 0 0 1 0 2.83l-5.3 5.3-6.4-6.4z", fill: true },
+    { d: "M7.6 9.4l7 7-1.3 1.3a1.6 1.6 0 0 1-2.26 0l-.7-.7-2.1 2.1c-1.6 1.6-4.4 1.4-5.5.9.9-.6 1.5-1.6 1.2-2.6l2.3-2.3-.7-.7a1.6 1.6 0 0 1 0-2.26z", fill: true },
   ],
   sidebarLeft: [{ d: roundRect(2.5, 5.5, 19, 13, 2) + line(9, 5.5, 9, 18.5) + line(5, 9, 7, 9) + line(5, 11.5, 7, 11.5) + line(5, 14, 7, 14), stroke: 1.6 }],
 } satisfies Record<string, SymbolLayer[]>;

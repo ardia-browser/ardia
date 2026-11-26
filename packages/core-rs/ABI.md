@@ -88,7 +88,7 @@ words itself before the core checks them, still does.
 ## Update manifests: `ardia_update`
 
 `include/ardia_update.h` (`ARDIA_WRITE_HEADER=1 cargo test -p ardia-update-ffi --test header`) is a second, separate
-library, `libardia_update`, built by `crates/ardia-update-ffi` over `crates/ardia-update-core`. It exports exactly the 5
+library, `libardia_update`, built by `crates/ardia-update-ffi` over `crates/ardia-update-core`. It exports exactly the 6
 functions its header declares, every name starts with `ardia_update`, and both headers can be included in one
 translation unit. It stays its own library, outside `ardia_core.h`, `BUILD.gn` and `ardia-ffi`, until a platform calls
 it: the Linux engine copies those three, so adding to them moves the Linux engine key. The cutover that wires the
@@ -96,7 +96,8 @@ Linux or Windows updater to it folds it into `ardia_core` (one `use` in `ardia-f
 don't link both cargo static libraries into one binary: each carries Rust's standard library.
 
 It verifies the signed Linux self-update manifest (`ardia-linux-update 1`, see `docs/linux-port.md` › Signed
-manifest) and compares versions and channels, with the rules of the root helper `scripts/linux/ardia-update`:
+manifest), the signed Windows JSON update manifest (`windows-update.json` + `.sig`, see `docs/windows.md` › Updates),
+and compares versions and channels:
 
 - `ardia_update_verify_linux` checks, in this order: the kind (`ARDIA_UPDATE_KIND_*`) and the 32-byte public key
   (`ARDIA_UPDATE_STATUS_INVALID_ARGUMENT`), the requested and installed versions (`VERSION`), the manifest's size,
@@ -104,6 +105,13 @@ manifest) and compares versions and channels, with the rules of the root helper 
   other length is a bad signature and isn't read), the strict canonical parse (`MANIFEST`), that the manifest is for the
   requested version (`MANIFEST`), that it is newer than the installed one (`NOT_NEWER`), and that it has a line for this
   kind (`KIND`). On `OK` it writes the package's size and sha256; on any other status it zeroes the output.
+- `ardia_update_verify_windows` checks, in this order: the CPU (`ARDIA_UPDATE_WINDOWS_CPU_*`) and the 32-byte public
+  key (`INVALID_ARGUMENT`), the `published_under` URL prefix (`MANIFEST`; HTTPS or local test host `127.0.0.1`,
+  `localhost`, `10.0.2.2`), the manifest's size, at most 64 KiB (`TOO_LARGE`), the raw 64-byte Ed25519 signature over
+  the manifest's exact bytes (`SIGNATURE`), the strict JSON parse with no escapes, duplicate keys, unknown keys or
+  trailing bytes (`MANIFEST`), that `build > current_build` (`NOT_NEWER`), and that the manifest lists an installer for
+  that CPU (`KIND`). On `OK` it writes `build`, `bytes`, `sha256`, `version` and `url` into `ardia_update_windows_package`
+  without heap allocation; on any other status it zeroes the output.
 - Versions are `<major>.<minor>.<patch>` or `<major>.<minor>.<patch>-nightly.<n>`, each number 1 to 9 ASCII digits,
   compared by value (leading zeros don't count). A nightly sorts after the previous stable and before its own stable.
   `ardia_update_compare_versions` writes -1, 0 or 1. A version over 64 bytes or not UTF-8 is `VERSION`, unread.
@@ -123,11 +131,14 @@ keys and `R` values and a non-canonical `S`. OpenSSL, which the helper used befo
 small-order key's trivial signature; that can't matter for a release, since installs pin
 `scripts/linux/linux-update.pem`, but it's recorded.
 
-`crates/ardia-update-verify` is the command line the root helper calls today (`lib/ardia/ardia-update-verify`, built
-static for `x86_64-unknown-linux-musl` by `scripts/linux/update-verify.sh`): `version <V>`, `manifest` and
-`package` over `verify_linux_update`, with no rule of its own besides reading the key's PEM, capping and refusing
-to follow its inputs, and hashing the package. It links `ardia-update-core` as a Rust crate, not `libardia_update`,
-and nothing in `BUILD.gn` builds it, so no engine key moves.
+`crates/ardia-update-verify` is the command line called by both the Linux root helper (`lib/ardia/ardia-update-verify`,
+built static for `x86_64-unknown-linux-musl` by `scripts/linux/update-verify.sh`) and the Windows updater
+(`ardia-update-verify.exe`, built static with `+crt-static` by `scripts/windows/update-verify.ps1`, plus
+`scripts/windows/publish-alpha.sh` self-verification): `version <V>`, `manifest` and `package` over
+`verify_linux_update`, and `windows-manifest` and `windows-package` over `verify_windows_update`, with no rule of its
+own besides reading the key's PEM, capping and refusing to follow its inputs (including Windows reparse points), and
+hashing the package. It links `ardia-update-core` as a Rust crate, not `libardia_update`, and nothing in `BUILD.gn`
+builds it, so no engine key moves.
 
 `tests/update-vectors.json` holds the shared vectors (`ARDIA_WRITE_UPDATE_VECTORS=1 cargo test -p ardia-update-core
 --test vectors` regenerates them from fixed test keys, and fails when they drift). Each manifest case records the full

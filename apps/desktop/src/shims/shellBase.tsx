@@ -11,6 +11,7 @@ import { createHostDocuments } from "../hostDocuments";
 import { createAppearance, type AppearanceMode } from "../hostAppearance";
 import { createHostWindowOpener, dropRefusedWindow } from "../hostWindowProfiles";
 import { createLinuxWindowIds } from "../windowSweep";
+import { handKeyboardToShell } from "../pageFocus";
 import { useBrowser } from "../../../browser/src/state/browser/store";
 
 export { Symbol } from "./web/Symbol";
@@ -21,6 +22,7 @@ export {
   ContextMenuArea,
   DockSelection,
   GlassEffect,
+  GlassGroup,
   OutsidePressArea,
   Surface,
   VisualEffect,
@@ -29,10 +31,12 @@ export {
 export { FadeLabel } from "./web/FadeLabel";
 export { EdgeFadeMask } from "./web/EdgeFadeMask";
 export { MouseArea } from "./web/MouseArea";
+export { WheelArea } from "./web/WheelArea";
 export { FileDropArea } from "./web/FileDropArea";
 export { PopoverBubble } from "./web/PopoverBubble";
 export { showMenu } from "../menus";
 import { setTrafficLightsCenter } from "./web/windowChrome";
+import { placeNativeTrafficLights } from "../nativeTrafficLights";
 export { setTrafficLightsCenter };
 export { fetchBangList } from "../shellMethods";
 
@@ -104,7 +108,10 @@ export const launchConfig = () => hostLaunchConfig(ardiaHost);
 
 const claimHostFocus = async (generation: number, tag: number) => {
   const node = tag as unknown;
-  if (node instanceof HTMLElement) node.focus();
+  if (node instanceof HTMLElement) {
+    node.focus();
+    await handKeyboardToShell(node);
+  }
   else await hostModuleMethod("ArdiaShell", "claimFocus")(generation, tag);
 };
 const openHostWindow = ardiaHost ? createHostWindowOpener(ardiaHost, () => useBrowser.getState(), (event) => emitWindowEvent(event), (id) => dropRefusedWindow(useBrowser, id)) : undefined;
@@ -116,7 +123,10 @@ const shellLocals: Record<string, unknown> = {
   setAppearance,
   isDarkAppearance,
   windowIds,
-  setTrafficLightsCenter: async (id: string, center: [number, number] | null, trailing = false) => setTrafficLightsCenter(id, center, trailing),
+  setTrafficLightsCenter: async (id: string, center: [number, number] | null, trailing = false) => {
+    await setTrafficLightsCenter(id, center, trailing);
+    await placeNativeTrafficLights(id, center, trailing);
+  },
 };
 provideNativeModuleProvider((module, method) => module === "ArdiaShell" && Object.hasOwn(shellLocals, method) ? shellLocals[method] : undefined);
 

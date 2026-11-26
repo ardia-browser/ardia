@@ -12,24 +12,29 @@ const valueAt = (stops, ms) => {
   return stops[stops.length - 1][1];
 };
 
-test("swapping the address crumb never shows the old and the new page on top of each other", () => {
-  const at = 520;
-  const { leaving, arriving } = crumbSwap(at);
-  for (let ms = 0; ms <= 1300; ms += 1) {
-    const old = valueAt(leaving.opacity, ms);
-    const next = valueAt(arriving.opacity, ms);
-    assert.ok(old <= 0.01 || next <= 0.01, `at ${ms} ms the old crumb is at ${old.toFixed(2)} and the new one at ${next.toFixed(2)}`);
+test("swapping the address crumb never shows the old and the new page on top of each other, there or back", () => {
+  const { first, second } = crumbSwap(520, 1700);
+  for (let ms = 0; ms <= 2600; ms += 1) {
+    const a = valueAt(first.opacity, ms);
+    const b = valueAt(second.opacity, ms);
+    assert.ok(a <= 0.01 || b <= 0.01, `at ${ms} ms the first crumb is at ${a.toFixed(2)} and the second at ${b.toFixed(2)}`);
   }
-  assert.equal(valueAt(leaving.opacity, at - 1), 1);
-  assert.equal(valueAt(arriving.opacity, at - 1), 0);
-  assert.equal(valueAt(leaving.opacity, 1300), 0);
-  assert.equal(valueAt(arriving.opacity, 1300), 1);
+  assert.equal(valueAt(first.opacity, 519), 1);
+  assert.equal(valueAt(second.opacity, 519), 0);
+  assert.equal(valueAt(first.opacity, 1200), 0);
+  assert.equal(valueAt(second.opacity, 1200), 1);
 });
 
-test("the crumb slides the way the tab rows do: the old one leaves to the left, the new one comes in from the right", () => {
-  const { leaving, arriving } = crumbSwap(520);
-  assert.equal(valueAt(leaving.x, 520), 0);
-  assert.ok(valueAt(leaving.x, 1300) < 0);
-  assert.ok(valueAt(arriving.x, 520) > 0);
-  assert.equal(valueAt(arriving.x, 1300), 0);
+test("the crumb loop ends where it starts, so a looping scene has no seam", () => {
+  const { first, second } = crumbSwap(520, 1700);
+  for (const stops of [first.opacity, first.x, second.opacity, second.x]) assert.equal(valueAt(stops, 0), valueAt(stops, 2600));
+});
+
+test("the crumb slides the way the tab rows do: the leaving one goes left, the arriving one comes in from the right", () => {
+  const { first, second } = crumbSwap(520, 1700);
+  assert.ok(valueAt(first.x, 640) < 0);
+  assert.ok(valueAt(second.x, 640) > 0);
+  assert.equal(valueAt(second.x, 1200), 0);
+  assert.ok(valueAt(second.x, 1820) < 0);
+  assert.ok(valueAt(first.x, 1820) > 0);
 });

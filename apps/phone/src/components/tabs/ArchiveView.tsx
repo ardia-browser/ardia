@@ -9,7 +9,7 @@ import { canShareTab, copyTabLink, deleteArchivedTab, menuOpenedHaptic, openArch
 import { display } from "../../state/search/omnibox";
 import { usePreferences } from "../../state/settings/hooks";
 import { useArchiveDays, useArchiveLoaded } from "../../state/tabs/hooks";
-import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval, type BrowserTab } from "../../state/tabs/tabModels";
+import { AUTO_ARCHIVE_INTERVALS, autoArchiveSymbol, autoArchiveTitle, type AutoArchiveInterval, type BrowserTab } from "../../state/tabs/tabModels";
 import { clearArchivedTabs, loadArchive, searchArchive, setAutoArchiveInterval } from "../../state/tabs/store";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
 import { MaterialEmptyIcon, MaterialIconAction, MaterialSearchField, MaterialTopBar } from "../ui/MaterialTopBar";
@@ -73,6 +73,7 @@ export function ArchiveView() {
       icon: "archivebox",
       children: (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[]).map((option) => ({
         label: autoArchiveTitle(option),
+        systemImage: autoArchiveSymbol(option),
         checked: option === interval,
         onPress: () => setAutoArchiveInterval(option),
       })),
@@ -154,7 +155,7 @@ export function ArchiveView() {
             <NoResultsState testID="archiveNoResults" query={searched} />
           </View>
         ) : (
-          <SectionList
+          <SectionList bounces={false} overScrollMode="never"
             sections={sections}
             keyExtractor={(tab) => tab.id}
             keyboardShouldPersistTaps="handled"

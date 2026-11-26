@@ -14,7 +14,6 @@ import kotlin.math.sqrt
 
 internal object LiquidGlassRules {
     const val FLAT_GLASS_ARGUMENT = "ArdiaFlatGlass"
-    const val GLASS_OVER_PAGE_ARGUMENT = "ArdiaGlassOverPage"
     const val LENS_MIN_SDK = Build.VERSION_CODES.TIRAMISU
     const val BLUR_MIN_SDK = Build.VERSION_CODES.S
     const val CIRCULAR_CORNER_EXPONENT = 2f
@@ -55,8 +54,6 @@ internal object LiquidGlassRules {
 
     fun flatAsked(arguments: Map<String, Any>): Boolean = arguments[FLAT_GLASS_ARGUMENT] == true
 
-    fun overPageAsked(arguments: Map<String, Any>): Boolean = arguments[GLASS_OVER_PAGE_ARGUMENT] == true
-
     fun render(sdk: Int, classic: Boolean, flat: Boolean, blurs: Boolean): Render = when {
         classic -> Render.Classic
         !blurs || sdk < BLUR_MIN_SDK -> Render.Solid
@@ -64,7 +61,9 @@ internal object LiquidGlassRules {
         else -> Render.Lens
     }
 
-    fun pageLive(sdk: Int, classic: Boolean, overPageAsked: Boolean): Boolean = overPageAsked && !classic && sdk >= LENS_MIN_SDK
+    fun pageLive(sdk: Int, classic: Boolean): Boolean = !classic && sdk >= LENS_MIN_SDK
+
+    fun samplesBackdrop(sdk: Int, classic: Boolean, flat: Boolean, lensFailed: Boolean): Boolean = !lensFailed && lensWanted(sdk, classic, flat, livePath = true)
 
     fun rimWanted(sdk: Int, classic: Boolean, flat: Boolean, blurs: Boolean): Boolean = blurs && !classic && !flat && sdk >= LENS_MIN_SDK
 
@@ -115,36 +114,51 @@ internal object LiquidGlassRules {
 
     fun light(angle: Float): Pair<Float, Float> = sin(angle) to -cos(angle)
 
-    data class LensShape(
+    const val MAX_LENSES = 12
+
+    data class StripLens(
         val left: Float,
         val top: Float,
         val right: Float,
         val bottom: Float,
         val radius: Float,
-        val exponent: Float,
         val bezel: Float,
-        val depth: Float,
         val maxShift: Float,
+    )
+
+    data class LensField(
+        val lenses: List<StripLens>,
+        val exponent: Float,
+        val depth: Float,
         val ior: Float,
         val dispersion: Float,
         val maxSlope: Float,
+        val saturation: Float,
     )
 
-    fun lensShape(widthPx: Int, heightPx: Int, marginPx: Float, scale: Float, radiusPx: Float, density: Float, bezelDp: Float, shiftDp: Float, params: Params = defaults): LensShape {
+    fun stripLens(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, scale: Float, radiusPx: Float, density: Float, bezelDp: Float, shiftDp: Float): StripLens {
         val toLayer = density / scale
-        return LensShape(
-            left = marginPx / scale,
-            top = marginPx / scale,
-            right = (marginPx + widthPx) / scale,
-            bottom = (marginPx + heightPx) / scale,
+        return StripLens(
+            left = xPx / scale,
+            top = yPx / scale,
+            right = (xPx + widthPx) / scale,
+            bottom = (yPx + heightPx) / scale,
             radius = min(radiusPx, min(widthPx, heightPx) / 2f).coerceAtLeast(0f) / scale,
-            exponent = CIRCULAR_CORNER_EXPONENT,
             bezel = max(bezelDp * toLayer, 1f),
-            depth = params.depthDp * toLayer,
             maxShift = shiftDp * toLayer,
+        )
+    }
+
+    fun lensField(lenses: List<StripLens>, density: Float, scale: Float, saturation: Float = 1f, params: Params = defaults): LensField? {
+        if (lenses.isEmpty()) return null
+        return LensField(
+            lenses = lenses.take(MAX_LENSES),
+            exponent = CIRCULAR_CORNER_EXPONENT,
+            depth = params.depthDp * density / scale,
             ior = params.ior,
             dispersion = params.dispersion,
             maxSlope = params.maxSlope,
+            saturation = saturation,
         )
     }
 
@@ -184,8 +198,6 @@ internal object LiquidGlassRules {
     const val DARK_RIM_SHARE = 0.7f
 
     private const val SHAPE = """
-uniform float4 box;
-uniform float radius;
 uniform float exponent;
 
 float pnorm(float2 v) {
@@ -194,7 +206,7 @@ float pnorm(float2 v) {
     return pow(pow(a.x, exponent) + pow(a.y, exponent), 1.0 / exponent);
 }
 
-float shapeDistance(float2 p) {
+float boxDistance(float2 p, float4 box, float radius) {
     float2 centre = (box.xy + box.zw) * 0.5;
     float2 extent = (box.zw - box.xy) * 0.5;
     float r = clamp(radius, 0.0, min(extent.x, extent.y));
@@ -202,7 +214,7 @@ float shapeDistance(float2 p) {
     return pnorm(max(q, float2(0.0))) + min(max(q.x, q.y), 0.0) - r;
 }
 
-float2 shapeNormal(float2 p) {
+float2 boxNormal(float2 p, float4 box, float radius) {
     float2 centre = (box.xy + box.zw) * 0.5;
     float2 extent = (box.zw - box.xy) * 0.5;
     float r = clamp(radius, 0.0, min(extent.x, extent.y));
@@ -220,39 +232,63 @@ float2 shapeNormal(float2 p) {
     val LENS_SHADER = """
 uniform shader backdrop;
 $SHAPE
-uniform float bezel;
+uniform float4 boxes[$MAX_LENSES];
+uniform float4 shapes[$MAX_LENSES];
+uniform float count;
 uniform float depth;
-uniform float maxShift;
 uniform float ior;
 uniform float dispersion;
 uniform float maxSlope;
+uniform float saturation;
+
+half4 saturated(half4 colour) {
+    if (colour.a <= 0.0) return colour;
+    half3 straight = colour.rgb / colour.a;
+    half grey = dot(straight, half3(0.213, 0.715, 0.072));
+    return half4(clamp(grey + (straight - grey) * half(saturation), 0.0, 1.0) * colour.a, colour.a);
+}
 
 float3 bend(float3 normal, float index) {
     return refract(float3(0.0, 0.0, -1.0), normal, 1.0 / max(index, 1.0001));
 }
 
-float2 shift(float3 ray, float height) {
+float2 shift(float3 ray, float height, float maxShift) {
     float2 moved = ray.xy / max(-ray.z, 0.0001) * height;
     float travel = length(moved);
     return travel > maxShift ? moved * (maxShift / travel) : moved;
 }
 
 half4 main(float2 p) {
-    float edge = shapeDistance(p);
-    if (edge > 1.0) return backdrop.eval(p);
+    float edge = 1000000.0;
+    float4 box = float4(0.0);
+    float4 shape = float4(0.0);
+    for (int i = 0; i < $MAX_LENSES; i++) {
+        if (float(i) < count) {
+            float d = boxDistance(p, boxes[i], shapes[i].x);
+            if (d < edge) {
+                edge = d;
+                box = boxes[i];
+                shape = shapes[i];
+            }
+        }
+    }
+    if (edge > 1.0) return saturated(backdrop.eval(p));
+    float bezel = shape.y;
+    float maxShift = shape.z;
     float inward = max(-edge, 0.0);
     float progress = clamp(inward / bezel, 0.0, 1.0);
     float u = 1.0 - progress;
     float inside = max(1.0 - u * u * u * u, 0.0001);
     float slope = inward > bezel ? 0.0 : min(2.0 * u * u * u / sqrt(inside), maxSlope);
-    if (slope <= 0.0) return backdrop.eval(p);
+    if (slope <= 0.0) return saturated(backdrop.eval(p));
     float height = depth + sqrt(inside) * bezel;
-    float3 normal = normalize(float3(shapeNormal(p) * slope, 1.0));
-    half4 green = backdrop.eval(p + shift(bend(normal, ior), height));
-    half red = backdrop.eval(p + shift(bend(normal, ior + dispersion), height)).r;
-    half blue = backdrop.eval(p + shift(bend(normal, max(ior - dispersion, 1.0001)), height)).b;
+    float3 normal = normalize(float3(boxNormal(p, box, shape.x) * slope, 1.0));
+    half4 green = backdrop.eval(p + shift(bend(normal, ior), height, maxShift));
+    half red = backdrop.eval(p + shift(bend(normal, ior + dispersion), height, maxShift)).r;
+    half blue = backdrop.eval(p + shift(bend(normal, max(ior - dispersion, 1.0001)), height, maxShift)).b;
     half coverage = green.a;
-    return half4(min(red, coverage), min(green.g, coverage), min(blue, coverage), coverage);
+    half4 lensed = half4(min(red, coverage), min(green.g, coverage), min(blue, coverage), coverage);
+    return saturated(lensed);
 }
 """
 
@@ -265,15 +301,17 @@ uniform float opposite;
 uniform float falloff;
 uniform float sharpness;
 uniform float opacity;
+uniform float4 box;
+uniform float radius;
 
 half4 main(float2 p) {
-    float edge = shapeDistance(p);
+    float edge = boxDistance(p, box, radius);
     float inward = max(-edge, 0.0);
     float outer = 1.0 - smoothstep(0.0, $EDGE_FEATHER_PX, edge);
     float inner = 1.0 - smoothstep(band, band + $EDGE_FEATHER_PX, inward);
     float mask = outer * inner;
     if (mask <= 0.0) return half4(0.0);
-    float2 normal = shapeNormal(p);
+    float2 normal = boxNormal(p, box, radius);
     float progress = clamp(inward / max(band, $EDGE_FEATHER_PX), 0.0, 1.0);
     float fade = falloff * progress * progress;
     float lit = clamp(pow(max(dot(normal, light), 0.0), sharpness) * (strength - fade), 0.0, 1.0);
@@ -331,9 +369,13 @@ internal object GlassShaders {
         private set
     var rim = ShaderSlot("rim")
         private set
-    var makeLens: ((LiquidGlassRules.LensShape) -> RenderEffect)? = null
+    var makeLens: ((LiquidGlassRules.LensField) -> RenderEffect)? = null
     var makeRim: (() -> RuntimeShader)? = null
     var onFailed: (() -> Unit)? = null
+
+    fun lensFor(field: LiquidGlassRules.LensField, cached: () -> RuntimeShader): RenderEffect? = lens.attempt {
+        makeLens?.invoke(field) ?: LiquidGlassShaders.lensEffect(LiquidGlassShaders.apply(cached(), field))
+    }
 
     fun retryFailed(): Boolean {
         val anyFailed = lens.failed || rim.failed
@@ -353,19 +395,32 @@ internal object GlassShaders {
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 internal object LiquidGlassShaders {
-    fun lens(shape: LiquidGlassRules.LensShape): RuntimeShader = RuntimeShader(LiquidGlassRules.LENS_SHADER).apply {
-        setFloatUniform("box", shape.left, shape.top, shape.right, shape.bottom)
-        setFloatUniform("radius", shape.radius)
-        setFloatUniform("exponent", shape.exponent)
-        setFloatUniform("bezel", shape.bezel)
-        setFloatUniform("depth", shape.depth)
-        setFloatUniform("maxShift", shape.maxShift)
-        setFloatUniform("ior", shape.ior)
-        setFloatUniform("dispersion", shape.dispersion)
-        setFloatUniform("maxSlope", shape.maxSlope)
+    fun lens(): RuntimeShader = RuntimeShader(LiquidGlassRules.LENS_SHADER)
+
+    fun apply(shader: RuntimeShader, field: LiquidGlassRules.LensField): RuntimeShader = shader.apply {
+        val boxes = FloatArray(LiquidGlassRules.MAX_LENSES * 4)
+        val shapes = FloatArray(LiquidGlassRules.MAX_LENSES * 4)
+        field.lenses.forEachIndexed { index, lens ->
+            boxes[index * 4] = lens.left
+            boxes[index * 4 + 1] = lens.top
+            boxes[index * 4 + 2] = lens.right
+            boxes[index * 4 + 3] = lens.bottom
+            shapes[index * 4] = lens.radius
+            shapes[index * 4 + 1] = lens.bezel
+            shapes[index * 4 + 2] = lens.maxShift
+        }
+        setFloatUniform("boxes", boxes)
+        setFloatUniform("shapes", shapes)
+        setFloatUniform("count", field.lenses.size.toFloat())
+        setFloatUniform("exponent", field.exponent)
+        setFloatUniform("depth", field.depth)
+        setFloatUniform("ior", field.ior)
+        setFloatUniform("dispersion", field.dispersion)
+        setFloatUniform("maxSlope", field.maxSlope)
+        setFloatUniform("saturation", field.saturation)
     }
 
-    fun lensEffect(shape: LiquidGlassRules.LensShape): RenderEffect = RenderEffect.createRuntimeShaderEffect(lens(shape), "backdrop")
+    fun lensEffect(shader: RuntimeShader): RenderEffect = RenderEffect.createRuntimeShaderEffect(shader, "backdrop")
 
     fun rim(): RuntimeShader = RuntimeShader(LiquidGlassRules.RIM_SHADER)
 

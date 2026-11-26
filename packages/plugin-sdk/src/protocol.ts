@@ -129,6 +129,50 @@ export type WorkspaceOp = Record<string, unknown> & { op: string };
 
 export type WorkspaceApplyResult = { ok: boolean; results?: unknown[] };
 
+export const STATE_TOPICS = ["tabs", "workspace", "navigation", "downloads"] as const;
+
+export type StateTopic = (typeof STATE_TOPICS)[number];
+
+export type StateTab = { id: string; windowId: string; index: number; url: string | null; title: string | null; pinned: boolean; active: boolean; groupId: string | null; muted: boolean };
+
+export type StateWindow = { id: string; kind: "normal" | "little"; focused: boolean; activeTabId: string | null; tabCount: number };
+
+export type StateGroup = { id: string; windowId: string; name: string; color: string; icon: string | null; collapsed: boolean; pinned: boolean; parentId: string | null; tabIds: string[]; tabIdsPage?: { index: number; count: number } };
+
+export type StateDownload = { id: string; state: "downloading" | "finished" | "failed" | "cancelled"; paused: boolean; dangerous: boolean; received: number; total: number; mimeType: string; filename: string; url: string | null };
+
+export type TabsChange = { initial?: true; more?: true; tabs: StateTab[]; removed: string[] };
+
+export type WorkspaceChange = { initial?: true; more?: true; windows: StateWindow[]; groups: StateGroup[]; removedWindows: string[]; removedGroups: string[] };
+
+export type NavigationCommit = { tabId: string; windowId: string; url: string; title: string | null; sameDocument: boolean };
+
+export type NavigationChange = { more?: true; commits: NavigationCommit[] };
+
+export type DownloadsChange = { initial?: true; more?: true; downloads: StateDownload[]; removed: string[] };
+
+export type StateEventMap = { tabs: TabsChange; workspace: WorkspaceChange; navigation: NavigationChange; downloads: DownloadsChange };
+
+export type GroupColorName = "neutral" | "none" | "grey" | "blue" | "red" | "yellow" | "green" | "pink" | "purple" | "cyan" | "orange";
+
+export type GroupLook = { name?: string; color?: GroupColorName; icon?: string | null; collapsed?: boolean };
+
+export type StateIntentArgs = {
+  "tabs.group": { tabs: string[] } & GroupLook;
+  "tabs.ungroup": { group: string };
+  "tabs.move": { tabs: string[]; before?: string; after?: string; group?: string | null; window?: string };
+  "tabs.pin": { tabs: string[]; as?: "tile" | "row" };
+  "tabs.unpin": { tabs: string[] };
+  "tabs.mute": { tabs: string[] };
+  "tabs.unmute": { tabs: string[] };
+  "tabs.activate": { tab: string };
+  "groups.update": { group: string } & GroupLook;
+};
+
+export type StateIntent = keyof StateIntentArgs;
+
+export type StateIntentResult = { ok: true; group?: string };
+
 export type PanelResult = { ok: boolean; windowId: string; tabId?: string };
 
 export type FetchRequest = {
@@ -241,6 +285,8 @@ export const HOST_METHODS = {
   fetch: "net.fetch",
   programsStatus: "programs.status",
   programsRelink: "programs.relink",
+  stateSubscribe: "state.subscribe",
+  stateIntent: "state.intent",
   surfaceRender: "surface.render",
   surfaceClose: "surface.close",
 } as const;

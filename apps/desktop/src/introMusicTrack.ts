@@ -1,1 +1,1 @@
-export { default as introMusicTrack } from "../../browser/windows/Ardia/IntroMusic.wav?url";
+export { default as introMusicTrack } from "./assets/IntroMusic.wav?url";

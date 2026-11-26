@@ -6,6 +6,11 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Move fast.** Don't break work into phases or ask about details you can decide. Ask only when the answer changes what you build.
 - **Be thorough in analysis, bold in suggestions.** Read the real code before you judge it, and propose the
   better design even when it means rewriting what exists, not the smallest patch on top of it.
+- **Standard for every change.** When making changes, make sure it:
+  - Looks right
+  - Runs faster
+  - Fails gracefully
+  - Pipes cleanly
 - **Speed is the point.** Do independent work in parallel: agents, builds, test instances, tool calls. Batch what you
   plan to check into one script or one call instead of one step at a time. Only timing measurements run one at a
   time, interleaved with their control, because sharing the CPU skews them.
@@ -16,6 +21,9 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   transcript activity, a pending tool call, `/tmp/ac-*.holder`, its processes). A stuck agent means a root
   cause to fix (a lock, a wait, a hang), not just a restart. Send new feedback to the agent that owns
   that area (SendMessage) instead of starting a new one, and batch finished fixes into the next release.
+- **Say when an instruction caused it.** When the owner asks for a change to something you did and it came out
+  that way because you followed an instruction (this file, a doc, a skill), say so at once and name the
+  instruction, so it can be fixed where it is written.
 - **Ask Codex for a second opinion** on risky logic (races, lifetimes, security, migrations, sync) and reviews,
   before and after the change. Ask a Codex subagent, not the CLI: T3's `delegate_task` with
   `target: {providerInstanceId: "codex", model: "gpt-6.2-sol", options: {reasoningEffort: "high", serviceTier: "priority"}}`,
@@ -68,15 +76,27 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Merging.** The owner's own PRs (`mantrakp04`) may merge on local verification without waiting for GitHub CI,
   when the owner says so or in a full send; run CI's checks for what changed locally first, then watch the merged
   run and fix forward if it fails. Every other PR waits for its CI to pass.
-- **Pick the free Mac.** Before CPU-heavy work (Xcode or Chromium builds, full test runs, video renders), check the
-  MacBook and the linked Mac mini for free CPU, RAM and disk and for the shorter queue of builds and runs, and use
-  that one. Stay on it until it's short of resources while the other has room or a shorter queue; then move.
-- **Coordinate compute across running threads.** When blocked on compute (Boat VM start quota, a busy Chromium
-  builder, a Windows 11 QEMU guest, or a loaded Mac), inspect all running threads across both machines
-  (`t3_thread_list` with `includeSubagents: true`, plus `boat list`) and message the owning thread or subagent
-  (`t3_thread_send`) to hand off warm resources instead of waiting. Coordinators relay to their subagents to keep
-  a live builder or guest running across handoffs (skip `boat stop` when another thread is queued behind you),
-  pass its layout and lock state along, and stop it only once no thread needs it.
+- **Fleet and routing.** Four machines on the tailnet (`~/.ssh/config`):
+  - **MacBook M5 Pro (`mbp1`, 18 cores / 48 GB):** runs fresh Mac Chromium builds (full rebuilds and Chromium version
+    bumps) and syncs `~/chromium-build` over to the other Macs (`mbp2`, `mini`).
+  - **MacBook (`mbp2`, M6, 12 cores / 32 GB) and Mac mini (`mini`, M4, 10 cores / 24 GB):** receive fresh Mac
+    `~/chromium-build` trees from `mbp1`. Release site benchmarks stay on `mini`.
+  - **MSI (`msi`, Intel Core i9-13900H, 14c/20t, 32 GB, Windows 11 + WSL 2 Ubuntu):** primary host for x64 Windows
+    and x64 Linux builds and development (native Windows 11 for app/WebUI runs and testing; WSL 2 Ubuntu for x64
+    Windows engine cross-builds in `~/chromium-build-win` and x64 Linux engine and UI builds).
+  - **ARM64 Windows engines** run on **`mini`** (ARM64 host) while x86_64 hosts hit V8's `mksnapshot` arm64 simulator
+    crash (`docs/engine-build-windows.md`); check free disk on `mini` first. Linux ARM64 isn't built or shipped yet.
+  - **Incremental builds and testing** run on whichever Mac (`mbp1`, `mbp2`, `mini`) or Windows/WSL machine (`msi`)
+    has free CPU, RAM and disk and the shorter queue — **prioritizing plugged-in (AC power) machines** (`pmset -g batt`
+    on Macs; `mini` is always on AC). If both MacBooks (`mbp1`, `mbp2`) are on battery, run Mac builds and heavy tests
+    on **`mini`** instead; likewise avoid heavy builds on an unplugged laptop when a plugged-in machine can take them.
+    Check before CPU-heavy work (Xcode or Chromium builds, full test runs, video renders) and stay on that machine
+    until it's short of resources (or goes on battery) while another plugged-in machine has room or a shorter queue;
+    then move.
+- **Coordinate compute across running threads.** When blocked on compute (a busy Chromium tree or builder, a loaded
+  Mac, or `msi`), inspect all running threads across linked environments (`t3_thread_list` with
+  `includeSubagents: true`, plus `ssh msi`) and message the owning thread or subagent (`t3_thread_send`) to hand off
+  warm resources and lock state instead of waiting.
 - **Progress reports.** Keep them short and plain: what shipped, what's left, what needs the owner.
 - **Clean up.** Quit your test instances, stop the servers and background jobs you started, and never
   kill processes you didn't start.
@@ -88,9 +108,12 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   (`@ts-expect-error`, `eslint-disable`, `#pragma`, `swiftlint:`, `# noqa`), and the header a script prints as its
   `--help`.
 - **The Chromium build cache is sacred.** Never touch `~/chromium-build/chromium_git/chromium/src/out`,
-  and never run `gclient sync` or `gn clean`: a full rebuild costs about 5 hours. Engine changes are
-  incremental builds only, holding the chromium lock (`scripts/agent/locked chromium`,
-  `docs/engine-build.md`). When freeing disk space, stay out of `~/chromium-build`.
+  and never run `gclient sync` or `gn clean`: a full rebuild costs about 5 hours. `engine/` itself is
+  not off-limits: when a fix or feature belongs in the engine, make the change, run an incremental
+  build under the chromium lock (`scripts/agent/engine-build` on a plugged-in Mac, `scripts/linux/build.sh --apply`
+  on `msi` WSL 2, or the Windows engine cross-build in `docs/engine-build-windows.md`), and publish
+  the updated prebuilt engine (`scripts/publish-engine.sh`, `docs/engine-build.md`) rather than working
+  around it in JS or parking the PR. When freeing disk space, stay out of `~/chromium-build`.
 - **Never steal focus.** Run builds only as hidden instances:
   `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<throwaway dir> --env ARDIA_REMOTE_DEBUGGING_PORT=<port> <app>`.
   Never use plain `open`. Background mode logs context menus and file panels instead of showing them.
@@ -114,15 +137,9 @@ One browser UI (`apps/browser/src` and `packages/*/src`) runs on three platforms
 engine. A change to the shared UI reaches all three, so check the other two before calling it done: Linux's
 `pnpm -C apps/desktop typecheck`, `test:graph` and `test:host` (each covers `--mode linux` and `--mode win`), and the Windows workflow, which runs on any pull
 request touching shared code. Copy that names Mac things (⌘, "macOS", the menu bar) needs its Linux and Windows
-wording. When the machine you're on isn't the platform you're changing, use a Boat VM (`boat` CLI, signed in) sized
-to the job: `--type small` (2 vCPU / 4 GB, half rate) for quick Linux scripts and unit tests, `--type default`
-(4 vCPU / 8 GB, 1× rate) for Linux UI checks, `boat desktop`, X11 real-input runs and screen recordings, `--type large`
-(8 vCPU / 16 GB, 2× rate) for heavier test suites, and `--type xlarge` (16 vCPU / 32 GB, $0.20/hr, 5.56× `default`)
-**only** for Chromium engine builds or Windows 11 QEMU. Leave Boat's built-in auto-stop on (never pass
-`--no-auto-stop`), set `--ttl` (`7200` for normal tasks, `21600` for engine builds), pass `--no-snapshots` on
-throwaway VMs so stopping erases them cleanly, and stop or delete VMs as soon as you finish — keep named
-`boat snapshot`s only for reusable Chromium builders and keep them stopped between builds. A Boat VM's desktop is
-yours: the hidden-instance and focus rules are for the owner's Mac.
+wording. When the machine you're on isn't the platform you're changing, use **`msi`** (native Windows 11 for x64
+Windows; WSL 2 Ubuntu for x64 Linux and x64 Windows engine cross-builds) or **`mini`** for ARM64 Windows engine
+cross-builds. Don't spin up Boat VMs.
 - **macOS** is the main app: `apps/browser` (React Native macOS) on `engine/ardiacore` and the Mac engine. The rest
   of this file is written for it.
 - **Linux** (`docs/linux-port.md`): Chromium's own `chrome` is the app and serves the UI from `chrome://ardia/`;
@@ -130,19 +147,23 @@ yours: the hidden-instance and focus rules are for the owner's Mac.
   `vite build --mode linux`, and `--mode win` builds the same UI for the coming Windows WebUI host. Linux-only code
   sits in `src/platform/linux`, reached through `@platform/<name>` seams that resolve `<name>.linux.ts` or
   `<name>.win.ts` before `<name>.desktop.ts`. `engine/ardiacore-linux` plus `engine/patches/chromium-linux-*.patch`
-  are Linux's native layer. The engine is built from
-  source on a Boat builder VM (`scripts/linux/build.sh --apply`, incremental like the Mac's), published with
+  are Linux's native layer. The x64 engine is built from
+  source in `msi`'s WSL 2 Ubuntu (`scripts/linux/build.sh --apply`, incremental like the Mac's), published with
   `scripts/linux/publish-engine.sh --upload`, and pinned by a row in `packages/ardiacore/prebuilt-engines-linux.tsv`.
   Each platform has its own engine key (`engine/engine-key.sh --platform macos|linux`): a change only Linux builds
   (`engine/ardiacore-linux`, a `linux` line of `engine/patches/series` and its patch) needs a new Linux engine and
   keeps the Mac's, and the reverse; a shared change needs both. CI: `.github/workflows/linux.yml` (`docs/linux-ci.md`); acceptance: `docs/linux-acceptance.md`.
-- **Windows** (`docs/windows.md`): `apps/browser/windows` (React Native Windows) and `packages/expo-windows` host
-  Chromium's `chrome.dll`, renamed Ardia, with each tab's page in its own window under the app's. The engine is
-  cross-built on a Mac in `~/chromium-build-win` (`docs/engine-build-windows.md`; never `~/chromium-build`), its
+- **Windows** (`docs/windows.md`): Chromium's `chrome.exe`, renamed `Ardia.exe`, is the app and serves the shared
+  desktop UI (`apps/desktop`, its `--mode win` build) from `chrome://ardia/`, as on Linux; `scripts/windows/engine/src/ardia/win`
+  is its native layer. The React Native Windows app is gone (#4143); `ardia-webui-migrate.exe` still moves an old
+  install's data on its first WebUI start. The x64 engine is
+  cross-built in `msi`'s WSL 2 Ubuntu in `~/chromium-build-win`, and the ARM64 engine
+  is cross-built on `mini` in `~/chromium-build-win` (`docs/engine-build-windows.md`; never `~/chromium-build`), because
+  x86_64 hosts hit V8's `mksnapshot` arm64 simulator crash. Its
   sources and patches live in `scripts/windows/engine/` (never under `engine/`, which would move the Mac's engine
   key), and `scripts/windows/engine/prebuilt.json` pins the release CI fetches. CI: `.github/workflows/windows.yml`
-  builds x64 and ARM64 on Windows runners, launches the app, tours pages with real input and installs the
-  installer. To use it yourself, run Windows 11 in QEMU on a Boat VM (nested KVM, `dockurr/windows`).
+  builds the WebUI shell for x64 and ARM64 on Windows runners, tours it with real input and installs the
+  installer. To run or test it yourself, use **`msi`** natively on Windows 11.
 
 ## Building features
 - **Conventions.** Folders, import direction, tokens, state, names, the translation layer and environment
@@ -263,8 +284,8 @@ yours: the hidden-instance and focus rules are for the owner's Mac.
 - Write simple, concise English. Pinned attention items are goals: show progress and the next step, not the original issue again.
 
 ## Repo map
-`apps/browser` is the React Native macOS app; `apps/browser/windows` and `packages/expo-windows` are the Windows
-app (`docs/windows.md`), and `apps/desktop` the Linux UI (and the Windows WebUI build, `--mode win`) with `scripts/linux` for its build, packaging and engine. `scripts/windows` holds
+`apps/browser` is the React Native macOS app; `apps/desktop` is the Linux UI and the Windows app (its `--mode win`
+WebUI build, `docs/windows.md`; `apps/browser/windows/Ardia` keeps only the icon and `EngineApi.h`, which the Windows engine reads, and `SyncWordlist.h`, which the sync vectors check) with `scripts/linux` for its build, packaging and engine. `scripts/windows` holds
 the Windows packaging, checks and engine build. The native Expo modules are in `packages/{ardiacore,shell,shaders,import,sync}`; `engine/chromium` is our Chrome-services code (the `ac_*` C calls) and `engine/ardiacore` ArdiaCore's window and tab layer
 (`engine/ardiacore-linux` on Linux),
 and `packages/core` holds the omnibox logic and its tests. `packages/demo` is the app on the web (the site's demo).

@@ -10,7 +10,7 @@ import { settingsRouteKey } from "../../state/settings/nav";
 import { formatNumber } from "../../state/settings/settingsRules";
 import { refreshSitePermissions, revokeSiteAccess, useSitePermissions } from "../../state/settings/sitePermissions";
 import type { SitePermissionGrant } from "../../platform/pages";
-import { contentMargins, Favicon, modifierList, settingsChrome, settingsLayout, settingsSwitchStyle, useDesign } from "../ui";
+import { contentMargins, Favicon, modifierList, neverBounces, settingsChrome, settingsLayout, settingsSwitchStyle, useDesign } from "../ui";
 import { ExpoRowText } from "./ExpoRowLabel";
 import { NIGHT_SHADE, SWIPE_NAVIGATION } from "./SitePages";
 
@@ -26,7 +26,7 @@ export function ExpoSiteSettingsPage() {
   const enabledLists = state?.lists.filter((list) => list.isEnabled).length ?? 0;
   const trusted = state?.exemptHosts.length ?? 0;
   return (
-    <Form modifiers={modifierList(navigationTitle("Site settings"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+    <Form modifiers={modifierList(navigationTitle("Site settings"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       <Section title="Content blocking">
         <Toggle isOn={state?.blocksAds ?? true} onIsOnChange={(on) => setBlockingCategory("ads", on)} modifiers={modifierList(settingsSwitchStyle())}>
           <ExpoRowText title="Block ads" />

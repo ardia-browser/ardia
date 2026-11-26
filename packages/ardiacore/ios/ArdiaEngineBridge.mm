@@ -38,12 +38,12 @@ bool gForwarding = false;
 NSMutableArray<NSArray *> *gPendingForwards;
 
 NSSet<NSString *> *ForwardedTopics() {
-  static NSSet *topics = [NSSet setWithArray:@[ @"history.changed", @"bookmarks.changed", @"extensions.action", @"extensions.sync", @"cliControl" ]];
+  static NSSet *topics = [NSSet setWithArray:@[ @"history.changed", @"bookmarks.changed", @"extensions.action", @"extensions.sync", @"cliControl", @"cliDevTools" ]];
   return topics;
 }
 
 NSString *AppEventOfTopic(NSString *topic) {
-  return [topic isEqualToString:@"cliControl"] ? @"engine.cliControl" : topic;
+  return [topic isEqualToString:@"cliControl"] ? @"engine.cliControl" : [topic isEqualToString:@"cliDevTools"] ? @"engine.cliDevTools" : topic;
 }
 
 void *Symbol(const char *name) {
@@ -85,17 +85,42 @@ bool Forwarded(NSString *topic) {
   return gForwarding && [ForwardedTopics() containsObject:topic];
 }
 
+NSUInteger gPendingDevToolsEvents = 0;
+const NSUInteger kMaxPendingDevToolsEvents = 2000;
+
+NSMutableDictionary<id, NSNumber *> *DroppedDevToolsEvents() {
+  static NSMutableDictionary<id, NSNumber *> *dropped = [NSMutableDictionary dictionary];
+  return dropped;
+}
+
 void FlushForwards() {
   NSArray<NSArray *> *events = gPendingForwards;
   gPendingForwards = nil;
+  gPendingDevToolsEvents = 0;
   for (NSArray *event in events)
     [ArdiaEvents emit:AppEventOfTopic(event[0]) data:event[1]];
 }
 
 void Forward(NSString *topic, NSDictionary *payload) {
+  const bool devtools = [topic isEqualToString:@"cliDevTools"];
+  id session = payload[@"session"] ?: NSNull.null;
+  if (devtools && payload[@"closed"] == nil && gPendingDevToolsEvents >= kMaxPendingDevToolsEvents) {
+    DroppedDevToolsEvents()[session] = @(DroppedDevToolsEvents()[session].unsignedIntegerValue + 1);
+    return;
+  }
+  if (devtools) {
+    NSNumber *dropped = DroppedDevToolsEvents()[session];
+    [DroppedDevToolsEvents() removeObjectForKey:session];
+    if (dropped && payload[@"closed"] == nil) {
+      NSMutableDictionary *marked = [payload mutableCopy];
+      marked[@"droppedByHost"] = dropped;
+      payload = marked;
+    }
+  }
+  if (devtools) ++gPendingDevToolsEvents;
   NSArray *event = @[ topic, [payload copy] ];
   if (gPendingForwards) {
-    if (![gPendingForwards.lastObject isEqualToArray:event]) [gPendingForwards addObject:event];
+    if (devtools || ![gPendingForwards.lastObject isEqualToArray:event]) [gPendingForwards addObject:event];
     return;
   }
   gPendingForwards = [NSMutableArray arrayWithObject:event];

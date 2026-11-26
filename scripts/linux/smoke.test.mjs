@@ -4,7 +4,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchArguments, launchEnvironment } from "../../apps/desktop/scripts/acceptance/lib/ardia.mjs";
-import { ASSERTIONS, SYNC_CORE_PHRASES, syncCoreProblems, syncCoreVerdict, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, UNKNOWN_WINDOW_ERROR, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, WINDOW_STATE_CAPABILITIES, windowStateProblems, windowStateSupport, windowStateVerdict, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, privateFolder, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
+import { ASSERTIONS, SYNC_CORE_PHRASES, syncCoreProblems, syncCoreVerdict, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, UNKNOWN_WINDOW_ERROR, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, WINDOW_STATE_CAPABILITIES, windowStateProblems, windowStateSupport, windowStateVerdict, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, rpmLayoutProblems, privateFolder, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
 
 test("the package checks are named in the usage and keep the original eight first", () => {
   assert.deepEqual(ASSERTIONS.slice(0, 8), ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install"]);
@@ -111,10 +111,11 @@ test("the packaged uBlock Origin carries a seed that its start sequence loads", 
   assert.deepEqual(uboSeedProblems(JSON.stringify({ storage: base }), start, storageSource), keys.map((key) => `the seed has no ${key}`));
 });
 
-test("the gate takes a tarball, a .deb or an AppImage and refuses anything else", () => {
+test("the gate takes a tarball, a .deb, an .rpm or an AppImage and refuses anything else", () => {
   assert.equal(packageFormat("/x/Ardia-0.2.47-linux-x64.tar.xz"), "tar");
   assert.equal(packageFormat("/x/Ardia-0.2.47-linux-x64.deb"), "deb");
   assert.equal(packageFormat("/x/Ardia-0.2.47-linux-x64.AppImage"), "appimage");
+  assert.equal(packageFormat("/x/Ardia-0.2.47-linux-x64.rpm"), "rpm");
   assert.equal(packageFormat("/x/Ardia.zip"), null);
   assert.equal(parseArgs(["--package", "a", "--results", "b"]).format, undefined);
   assert.equal(parseArgs(["--package", "a.deb", "--results", "b"]).format, "deb");
@@ -131,6 +132,9 @@ test("a .deb is root-owned with a setuid root helper, the launcher link, the pol
     line("-rw-r--r--", "./usr/share/polkit-1/actions/dev.ardia.linux.policy"),
     line("-rw-r--r--", "./usr/share/ardia/apparmor/ardia"),
     line("-rw-r--r--", "./usr/share/applications/ardia.desktop"),
+    line("-rw-r--r--", "./usr/share/applications/ardia-little.desktop"),
+    line("-rw-r--r--", "./usr/share/applications/ardia-settings.desktop"),
+    line("-rw-r--r--", "./usr/share/applications/ardia-import.desktop"),
   ];
   const fields = { Package: "ardia", Architecture: "amd64" };
   assert.deepEqual(debLayoutProblems(good.join("\n"), fields), []);
@@ -140,6 +144,41 @@ test("a .deb is root-owned with a setuid root helper, the launcher link, the pol
   assert.ok(problems.some((p) => p.includes("chrome-sandbox is not setuid root")));
   assert.ok(problems.some((p) => p.includes("apparmor/ardia is missing")));
   assert.ok(problems.some((p) => p.includes("owned by user/user")));
+});
+
+test("an .rpm is root-owned with a setuid root helper, the launcher link, the policy, the AppArmor profile and its scriptlet", () => {
+  const line = (mode, path, extra = "", owner = "root     root") => `${mode}    1 ${owner}                   10 Nov 23 10:00 ${path}${extra}`;
+  const good = [
+    line("drwxr-xr-x", "/usr/lib/ardia"),
+    line("-rwxr-xr-x", "/usr/lib/ardia/chrome"),
+    line("-rwxr-xr-x", "/usr/lib/ardia/ardia-launch"),
+    line("-rwsr-xr-x", "/usr/lib/ardia/chrome-sandbox"),
+    line("lrwxrwxrwx", "/usr/bin/ardia", " -> ../lib/ardia/ardia-launch"),
+    line("-rw-r--r--", "/usr/share/polkit-1/actions/dev.ardia.linux.policy"),
+    line("-rw-r--r--", "/usr/share/ardia/apparmor/ardia"),
+    line("-rw-r--r--", "/usr/share/applications/ardia.desktop"),
+    line("-rw-r--r--", "/usr/share/applications/ardia-little.desktop"),
+    line("-rw-r--r--", "/usr/share/applications/ardia-settings.desktop"),
+    line("-rw-r--r--", "/usr/share/applications/ardia-import.desktop"),
+    line("-rw-r--r--", "/usr/share/licenses/ardia/copyright"),
+  ];
+  const fields = { name: "ardia", arch: "x86_64", scripts: "postinstall scriptlet (using /bin/sh):\n  install -m 0644 /usr/share/ardia/apparmor/ardia /etc/apparmor.d/ardia\n" };
+  assert.deepEqual(rpmLayoutProblems(good.join("\n"), fields), []);
+  const broken = good.filter((entry) => !entry.endsWith("/copyright") && !entry.endsWith("/ardia-little.desktop")).map((entry) => entry.replace("-rwsr-xr-x", "-rwxr-xr-x"));
+  const problems = rpmLayoutProblems(`${broken.join("\n")}\n${line("-rw-r--r--", "/usr/x", "", "user     user")}`, { name: "ardia", arch: "aarch64", scripts: "" });
+  assert.equal(problems.length, 6, problems.join("\n"));
+  assert.ok(problems.some((p) => p.includes("ardia-little.desktop is missing")));
+  assert.ok(problems.some((p) => p.includes("chrome-sandbox is not setuid root")));
+  assert.ok(problems.some((p) => p.includes("copyright is missing")));
+  assert.ok(problems.some((p) => p.includes("owned by user/user")));
+  assert.ok(problems.some((p) => p.includes("aarch64")));
+  assert.ok(problems.some((p) => p.includes("AppArmor profile")));
+});
+
+test("an .rpm that requires a library Ardia bundles, or the Qt its shims load only where installed, fails the layout check", () => {
+  const requires = ["libc.so.6()(64bit)", "libvulkan.so.1()(64bit)", "libQt6Core.so.6()(64bit)", "libQt5Widgets.so.5(Qt_5)(64bit)", "/usr/bin/curl", "libgtk-3.so.0()(64bit)"].join("\n");
+  const problems = rpmLayoutProblems("", { name: "ardia", arch: "x86_64", scripts: "/etc/apparmor.d/ardia", requires, bundled: ["libvulkan.so.1", "libEGL.so", "libqt6_shim.so"] }).filter((p) => p.startsWith("the .rpm requires"));
+  assert.deepEqual(problems.map((p) => p.split(" ")[3].replace(/,$/, "")), ["libvulkan.so.1()(64bit)", "libQt6Core.so.6()(64bit)", "libQt5Widgets.so.5(Qt_5)(64bit)"]);
 });
 
 test("profile folders stay private under a login umask that lets the group write, so the engine opens its control socket there", async () => {

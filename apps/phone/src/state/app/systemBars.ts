@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { setSystemBarIcons } from "../../platform/systemBars";
 
 export type BarIcons = { lightStatus: boolean; lightNavigation: boolean };
@@ -24,7 +24,7 @@ function apply() {
 
 export function useSystemBars(lightStatus: boolean, lightNavigation: boolean = lightStatus) {
   const id = useRef(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     next += 1;
     id.current = next;
     stack.push({ id: next, icons: { lightStatus, lightNavigation } });
@@ -35,7 +35,7 @@ export function useSystemBars(lightStatus: boolean, lightNavigation: boolean = l
       apply();
     };
   }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const entry = stack.find((item) => item.id === id.current);
     if (!entry) return;
     entry.icons = { lightStatus, lightNavigation };
@@ -44,7 +44,7 @@ export function useSystemBars(lightStatus: boolean, lightNavigation: boolean = l
 }
 
 export function useBaseSystemBars(light: boolean) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     base = { lightStatus: light, lightNavigation: light };
     apply();
   }, [light]);

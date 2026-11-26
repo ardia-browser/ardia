@@ -53,4 +53,6 @@ export async function postTelemetry(body: string, signal: AbortSignal): Promise<
 
 export const takePendingCounts = (): Record<string, unknown> => system.takePendingCounts();
 
+export const takeExits = (): unknown[] => system.takeExits();
+
 export const setUsageConsent = (sharing: boolean) => system.setUsageConsent(sharing);

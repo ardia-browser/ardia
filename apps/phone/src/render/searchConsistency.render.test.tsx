@@ -124,13 +124,13 @@ test("in Classic the resting search panel draws the same chrome edge its native 
   }
 });
 
-test("one placement decides the panel's corners, card and keyboard gaps: the phone's panel runs on under the keyboard, a floating panel sits above it", () => {
+test("one placement decides the panel's corners, card and keyboard gaps: the phone's panel runs on under the keyboard with side margins, its rows lined up with the field, and a floating panel sits above it", () => {
   expect(searchPanelPlacement(true, false)).toBe("underKeyboard");
   expect(searchPanelPlacement(false, false)).toBe("aboveKeyboard");
   expect(searchPanelPlacement(true, true)).toBe("commandBar");
-  expect(searchPanelPlace("underKeyboard", 300, false)).toMatchObject({ corners: "top", cardInset: 0, cardGap: 0, underKeyboard: 300, gapAboveKeyboard: 0, fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset });
-  expect(searchPanelPlace("underKeyboard", 300, true).cardInset).toBe(floatingPanelLayout.inset);
-  expect(searchPanelPlace("aboveKeyboard", 300, false)).toMatchObject({ corners: "all", cardInset: floatingPanelLayout.inset, cardGap: floatingPanelLayout.aboveKeyboard, underKeyboard: 0, fieldInset: searchPanel.fieldInset });
+  expect(searchPanelPlace("underKeyboard", 300)).toMatchObject({ corners: "top", cardInset: floatingPanelLayout.inset, cardGap: 0, underKeyboard: 300, gapAboveKeyboard: 0, fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset });
+  expect(searchPanel.rowInset).toBe(searchPanel.fieldInset);
+  expect(searchPanelPlace("aboveKeyboard", 300)).toMatchObject({ corners: "all", cardInset: floatingPanelLayout.inset, cardGap: floatingPanelLayout.aboveKeyboard, underKeyboard: 0, fieldInset: searchPanel.fieldInset });
   const fixed = searchPanelPreferredHeight("underKeyboard", searchPanel.fieldHeight, 1, 10);
   expect(searchPanelPreferredHeight("underKeyboard", searchPanel.fieldHeight, 1, 5000)).toBe(fixed);
   expect(searchPanelPreferredHeight("aboveKeyboard", searchPanel.fieldHeight, 1, 10)).toBeLessThan(fixed);

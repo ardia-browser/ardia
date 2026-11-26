@@ -38,6 +38,13 @@ public class TabsModule: Module {
 
   static func browserId(_ args: CallArgs) throws -> Int32 { ArdiaWebView.browserId(ofTab: try args.text("tabId")) }
 
+  static func engineTab(_ args: CallArgs) throws -> [String: Any] {
+    var values = args.values
+    values.removeValue(forKey: "tabId")
+    values["tab"] = ArdiaHost.chromeTabId(ofTab: try args.text("tabId"))
+    return values
+  }
+
   static let calls = tabsCallTable(
     routeLinkTabs: { args, reply in reply.ok(ArdiaWebView.routeLinkTabs(try args.strings("urls"))) },
     stripCommand: { args, reply in
@@ -45,6 +52,12 @@ public class TabsModule: Module {
       reply.ok()
     },
     strips: { _, reply in reply.ok(ArdiaTabStrip.allStrips) },
+    diagnostics: { args, reply in
+      EngineCall.passing("ac_tab_diagnostics", profile: args.profile, args: try engineTab(args), reply: reply)
+    },
+    input: { args, reply in
+      EngineCall.passing("ac_tab_input", profile: args.profile, args: try engineTab(args), reply: reply)
+    },
     reportCommits: { args, reply in
       ArdiaWebView.reportsCommits = try args.bool("on")
       reply.ok()

@@ -138,7 +138,7 @@ export function SpacesView() {
           </View>
         ) : null}
         {profile ? (
-          <FlatList
+          <FlatList overScrollMode="never"
             ref={pager}
             testID="spacesPager"
             style={styles.fill}

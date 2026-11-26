@@ -7,6 +7,7 @@ import { engineProfile, isIncognitoProfile, privateSession } from "../browser/mo
 import { focusedWindowOf, patchWindowUi } from "../windows/ui";
 import { awaitsKeep } from "./status";
 import { noteDownloadsPanel } from "../telemetry/downloadsPanelCounts";
+import { noteDownloadSeen } from "../telemetry/downloadWork";
 import { forgetDownloadProgress, showDownloadProgress, withoutProgress } from "./progress";
 
 export type DownloadsSlice = {
@@ -64,6 +65,7 @@ export const createDownloadsSlice: StateCreator<BrowserState, [], [], DownloadsS
   downloads: [],
 
   upsertDownload(d) {
+    noteDownloadSeen(d);
     const before = get().downloads;
     set((s) => {
       const listed = s.downloads.find((x) => x.id === d.id);

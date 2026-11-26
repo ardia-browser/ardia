@@ -83,6 +83,14 @@ final class FieldGlowTimingTests: XCTestCase {
     FieldGlowTimings(milliseconds: ["show", "progress", "finish", "hold", "hide"].map { motion[$0]?.duration ?? -1 })
   }
 
+  func testClipKeepsContinuousCornersWhenTheFieldRadiusChanges() {
+    let (layers, _, _) = layers()
+    layers.radius = 10
+    XCTAssertTrue(layers.clip.masksToBounds)
+    XCTAssertEqual(layers.clip.cornerCurve, .continuous)
+    XCTAssertEqual(layers.clip.cornerRadius, 10)
+  }
+
   func testEachNativeCurveIsTheJavaScriptEasingItReplaces() {
     for step in ["show", "progress", "finish", "hide"] { assertCurve(nativeCurve(step), matches: step) }
     XCTAssertEqual(nativeCurve("show"), .enter)

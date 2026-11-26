@@ -38,6 +38,7 @@ export const CURATED = {
   "arrow.triangle.swap": "L:arrow-up-down T:arrows-exchange-2 P:arrows-down-up M:swap-vertical T:arrows-up-down L:repeat-2",
   "arrow.up": "L:arrow-up T:arrow-up P:arrow-up I:arrow-up M:arrow-up",
   "arrow.up.arrow.down": "L:arrow-up-down T:arrows-up-down P:arrows-down-up I:data-transfer-both M:swap-vertical L:arrow-down-up",
+  "arrow.up.arrow.down.square": "T:square-arrow-up-down M:swap-vertical-variant L:arrow-up-down T:arrows-up-down P:arrows-down-up M:swap-vertical",
   "arrow.up.forward": "L:arrow-up-right T:arrow-up-right P:arrow-up-right I:arrow-up-right M:arrow-top-right",
   "arrow.up.forward.app": "L:square-arrow-out-up-right L:square-arrow-up-right T:square-arrow-up-right P:arrow-square-up-right I:open-new-window M:open-in-new",
   "arrow.up.forward.square": "L:square-arrow-up-right T:square-arrow-up-right P:arrow-square-up-right L:square-arrow-out-up-right",

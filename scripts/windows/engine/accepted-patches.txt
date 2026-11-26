@@ -23,6 +23,9 @@ chromium-capture-wake-lock-awake-only.patch
 chromium-device-emulation-size-reset.patch
 chromium-devtools-find-detach-keeps-selection.patch
 chromium-extension-install-prompt-hook.patch
+chromium-linux-action-popup-hook.patch
+chromium-linux-settings-overrides.patch
+chromium-linux-extension-keybindings.patch
 chromium-webstore-direct.patch
 chromium-extension-updates.patch
 chromium-component-updater-security-only.patch
@@ -38,6 +41,7 @@ chromium-component-extension-disk-messages.patch
 chromium-helium-ublock-off.patch
 chromium-helium-onboarding-off.patch
 chromium-helium-services-page-off.patch
+chromium-helium-behavior-switches-off.patch
 chromium-helium-search-assets-off.patch
 chromium-helium-bangs-off.patch
 chromium-helium-web-push-off.patch
@@ -58,6 +62,8 @@ chromium-os-crypt-decrypt-erase.patch
 chromium-window-docked-devtools.patch
 chromium-window-hosted.patch
 chromium-window-hosted-mac.patch
+chromium-linux-document-close.patch
+chromium-linux-devtools-authority.patch
 chromium-extension-installed-bubble.patch
 chromium-pip-overlay-window.patch
 chromium-tab-sharing-capturer.patch
@@ -71,6 +77,12 @@ chromium-memory-saver-pinned-tabs.patch
 chromium-temporary-tab-restore-hook.patch
 chromium-hosted-browsers-no-session-service.patch
 chromium-auto-pip-global-switch.patch
+chromium-linux-auto-pip.patch
+chromium-linux-pip-placement.patch
+chromium-linux-page-status.patch
+chromium-linux-wheel-zoom.patch
+chromium-linux-private-links.patch
+chromium-linux-devtools-open-tab.patch
 chromium-media-session-main-frame-handler.patch
 chromium-pip-user-agent-ignores-page-opt-out.patch
 chromium-widevine-without-cdm.patch
@@ -84,6 +96,19 @@ chromium-extension-tab-move-closing-window.patch
 chromium-webstore-icon-optional.patch
 chromium-enterprise-context-info.patch
 chromium-ardia-layer.patch
+chromium-linux-background-windows.patch
+chromium-linux-companion-browsers.patch
+chromium-linux-page-agent.patch
+chromium-linux-page-prompts.patch
+chromium-linux-navigation-hold-hook.patch
+chromium-linux-web-store-uninstall.patch
+chromium-linux-media-player-pip.patch
+chromium-linux-shell-above-input.patch
+chromium-linux-pip-in-window.patch
+chromium-linux-thin-scroll-bars.patch
+chromium-linux-unhandled-key.patch
+chromium-linux-window-minimum-size.patch
+chromium-linux-geolocation.patch
 chromium-win-rtl-unittest-domsub.patch
 chromium-win-load-local-state-delegate.patch
 chromium-win-ardia-layer-calls-mac-only.patch
@@ -107,3 +132,4 @@ chromium-win-devtools-other-clients.patch
 chromium-win-autoplay-policy.patch
 chromium-win-hosted-theme-change.patch
 chromium-win-renderer-efficiency.patch
+chromium-win-app-user-model-id.patch

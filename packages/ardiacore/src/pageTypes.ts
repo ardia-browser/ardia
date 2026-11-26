@@ -71,8 +71,10 @@ export type PageShare = {
   text?: string;
   fileUrl?: string;
 };
+export type PageMenuItem = { id: PageMenuCommand; title: string };
+export type PageMenuCommand = "translatePage" | "showOriginal";
 export type PageCommand = {
-  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement";
+  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement" | PageMenuCommand;
   text: string;
   point?: [number, number];
   modifiers?: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean };
@@ -129,7 +131,9 @@ type PictureInPictureReleaseOutcome = "corner" | "flickTuck" | "tuck" | "pullOut
 export type PictureInPictureRelease = { outcome: PictureInPictureReleaseOutcome; epoch: string };
 export type PictureInPictureActivation = { move: boolean; activated: boolean; epoch: string };
 export type PictureInPictureResize = { inside: boolean; cursorShown: boolean; epoch: string };
-type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying";
+export const AUTO_PICTURE_IN_PICTURE_MISSES = ["missedTabSwitch", "missedAppSwitch", "missedSpaceSwitch", "missedOther", "missedSiteAsked", "leftOnSpaceSwitch", "leftOnSpaceSwitchJoining"] as const;
+export type AutoPictureInPictureMiss = (typeof AUTO_PICTURE_IN_PICTURE_MISSES)[number];
+type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying" | AutoPictureInPictureMiss;
 export type MediaFault = { reason: string; muted?: boolean; blockerActive?: boolean };
 export type ControlPress = { clickAt: number; control: number };
 export type ActivateRequest = { reason: "pictureInPicture" | "page" | "window"; fromOtherApp?: boolean };
@@ -200,6 +204,7 @@ export type WebViewProps = ViewProps & {
   pageColor?: string;
   shownUrl?: string;
   autoPictureInPicture?: boolean;
+  pageMenuItems?: PageMenuItem[];
   onNavigationChange?: (state: NavigationState) => void;
   onProgress?: (progress: number) => void;
   onFavicon?: (url: string, candidates: string[]) => void;

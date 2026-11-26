@@ -85,16 +85,15 @@ holds the rest.
   push to `main`, with no paths filter and no install, so a file in a folder no other workflow watches is checked
   too. `expiring-skips.yml` runs its expiry part every Monday and lists skips past their date, as warnings, in the
   run's summary.
-- When GitHub's runners are busy, the long jobs of `checks.yml`, `linux.yml` and `android.yml` move to Boat CI
-  (`boat-large`); the `which checks run` job or a `route` job decides, and each run's summary says why
-  ([ci-boat-overflow.md](ci-boat-overflow.md)).
+- CI runs on Blacksmith's Linux and macOS runners; only the Windows jobs stay on GitHub's
+  ([ci-runners.md](ci-runners.md)).
 - `linux.yml` starts on what the Linux build and its fixture suites read (`apps/desktop`, the shared UI and the desktop
   packages' sources, the engine sources, its scripts, and the few Mac files the parity fixtures compare against,
   which `workflow-paths.test.mjs` finds in the suites and checks), not on the rest of the Mac, iPhone, Android or
   Windows native code; `windows.yml`
   leaves out `packages/phone`; `windows-engine-inputs.yml` starts on the engine inputs `check_inputs.py` reads;
   `deploy.yml` starts on `main` only for paths one of its services deploys from.
-- `mac.yml` compiles the Mac app (Debug, unsigned, `xcode-27`) on pull requests and pushes that touch its native code:
+- `mac.yml` compiles the Mac app (Debug, unsigned, on Blacksmith's macOS 27 with Xcode 27.1) on pull requests and pushes that touch its native code:
   `apps/browser/macos`, the packages' `ios` folders, the Dock tile and plugin host, the engine's public headers, the
   workspace manifests, the patches and the lockfile. It builds against this commit's engine, or the nearest published
   one before it, and any compiler error fails it. When `engine/ardiacore/src/ardia/core/public` changed since that
@@ -105,9 +104,11 @@ holds the rest.
   superseded pull request runs: each push runs on its own); manual and release runs each have their own
   group and are never cancelled. `windows.yml` reads the `full-ci` label in its `identity` job: from the event on a
   first attempt, with no API call, and live on a re-run, so adding the label and re-running all jobs gives the full run.
-- Caches that would fill the 10 GB limit are saved on pushes to `main` only and pruned to the newest per branch by
-  `caches.yml`: Gradle (`gradle-phone-`, which `--main-only` also deletes from every other branch), Xcode compilation
-  caches (`xcode-cas-`), Pods (`pods-`, shared by `mac.yml` and the Release workflow, and `phone-pods-`).
+- Jobs on Blacksmith keep their `actions/cache` entries in Blacksmith's cache (25 GB per repo, least recently used
+  entries over 7 days old evicted; `blacksmith cache list` or the Blacksmith dashboard shows them). GitHub's cache
+  REST API doesn't see those, so `caches.yml` prunes only what GitHub's runners save (the Windows jobs). Caches that
+  would fill a limit are saved on pushes to `main` only, and `caches.yml`'s sweep covers Gradle (`gradle-phone-`,
+  which `--main-only` also deletes from every other branch), Xcode compilation caches (`xcode-cas-`), Pods (`pods-`, shared by `mac.yml` and the Release workflow, and `phone-pods-`).
 
 ## ArdiaCore acceptance
 
@@ -257,6 +258,10 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   `"hoverProbe:check:<x>,<y>,click"` runs the hover probe as a click there; `"hoverProbe"` lists the episodes it emitted.
   `"hoverProbe:watch:1"` turns on the click and move watch in a hidden instance (`:0` turns it off), so a `devClick`
   after `responderNil:1` goes through the same path as a user's click.
+  `"hoverProbe:cover:<how>:<x>,<y>"` lays a test view over the page at that point and answers with the class the window
+  hit-tests there: `rn` is a React view at alpha 0 (it takes no hits, so the page answers), `rnShown` a React view at
+  full opacity and `clear` a plain AppKit view at alpha 0 (both block the page), `off` removes it;
+  `"hoverProbe:seeThrough"` lists every see-through view still covering the page.
 - **Windows:** they stay behind every other app's windows: each window's level is set a band below normal (normal at
   CoreGraphics layer -1000000, floating at -999997…; `-level` answers the one asked for), so no ordering, activation
   attempt or AppKit reshuffle lifts one over the owner's, the app's own keep production's order, and Mission Control

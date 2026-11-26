@@ -96,6 +96,7 @@ test("a drag wakes only the rows whose source, landing or split mark it changes"
 test("a selection change re-renders a row's hover fill only while it shows, and the row's hit slop stays one object", () => {
   const parts = src("./RowHoverParts.tsx");
   assert.match(parts, /if \(!cell\.plain \|\| !\(hovered \|\| pressed\)\) return null;/);
+  assert.match(parts, /continuousCorners\(radius\)/);
   const row = src("./TabRow.tsx");
   assert.match(row, /cell\.plain = plain;/);
   assert.match(row, /const gapSlops = new Map<number, Insets>\(\);/);

@@ -18,10 +18,17 @@ $realLocal = [Environment]::GetFolderPath('LocalApplicationData')
 $realBefore = @(Get-ChildItem -Force $realLocal -ErrorAction SilentlyContinue | ForEach-Object Name) -join '|'
 Log "run $run; LOCALAPPDATA and APPDATA for every launch point inside it"
 
-function Clear-WebUI {
+function Remove-WebUI {
   $item = Get-Item -LiteralPath $web -Force -ErrorAction SilentlyContinue
-  if (-not $item) { return }
-  if ($item.PSIsContainer) { cmd /c rmdir /s /q "$web" | Out-Null } else { Remove-Item -LiteralPath $web -Force }
+  if (-not $item) { return $true }
+  if ($item.PSIsContainer) { cmd /c rmdir /s /q "$web" 2>$null | Out-Null } else { Remove-Item -LiteralPath $web -Force -ErrorAction SilentlyContinue }
+  -not (Get-Item -LiteralPath $web -Force -ErrorAction SilentlyContinue)
+}
+function Clear-WebUI {
+  Wait-Until { ((Engine-Processes).Count -eq 0) -and ((App-Processes).Count -eq 0) } 30 'the last engine to exit and let go of Ardia WebUI' -NoThrow | Out-Null
+  $cleared = [bool](Wait-Until { Remove-WebUI } 30 'Ardia WebUI to be removed' -NoThrow)
+  if (-not $cleared) { Log "Ardia WebUI is still there after 30 s; still running from ${App}: $((App-Processes | ForEach-Object { "$($_.Name) $($_.ProcessId)" }) -join ', ')" }
+  $cleared
 }
 function Link([string]$kind, [string]$link, [string]$target) {
   $flag = @{ junction = '/J'; symlink = '/D'; file = '' }[$kind]
@@ -119,12 +126,12 @@ Refused 'junction-app-data-to-react-native' @('--ardia-shell=webui')
 foreach ($variant in @('--ARDIA-SHELL=webui', '-ardia-shell=webui', '/ardia-shell=webui', '--Ardia-Shell=webui', ' --ardia-shell=webui ', '--SINGLE-ARGUMENT --ardia-shell=webui')) {
   Refused "switch-spelling '$variant' with the junction" @($variant -split '(?<=\S) (?=--)')
 }
-Clear-WebUI
+Clear-WebUI | Out-Null
 
 New-Item -ItemType Directory $web | Out-Null
 Link junction (Join-Path $web 'Chromium') "$rn\User Data" | Out-Null
 Refused 'junction-profile-to-react-native' @('--ardia-shell=webui')
-Clear-WebUI
+Clear-WebUI | Out-Null
 
 $own = @(
   @{ name = 'junction at depth 1 to the React Native profile'; kind = 'junction'; link = 'Chromium\Default'; target = $rnDefault },
@@ -144,7 +151,7 @@ foreach ($case in $own) {
   } else {
     Check "own-tree link: $($case.name)" $false "the $($case.kind) fixture at $path could not be made"
   }
-  Clear-WebUI
+  Clear-WebUI | Out-Null
 }
 
 Refused 'user-data-dir-into-react-native' @('--ardia-shell=webui', "--user-data-dir=$rn\User Data")
@@ -167,7 +174,7 @@ Refused 'ardia-data-dir-at-react-native' @('--ardia-shell=webui') $rn
 Set-Content -LiteralPath $web 'not a folder'
 Log "fixture: $web is a file, so the WebUI profile can't be created"
 Refused 'uncreatable-webui-folder' @('--ardia-shell=webui')
-Clear-WebUI
+Clear-WebUI | Out-Null
 
 $before = Snapshot
 $p = Start-Pilot @('--ardia-shell=webui') '' '15000'
@@ -182,25 +189,133 @@ try { $h = Wait-Shell 60 } catch {}
 $opened = ($h -ne $null) -and ($h -ne [IntPtr]::Zero)
 Stop-Engine
 Check 'pin-alone-blocks-rename' ($p.ArgvOk -and $early.Count -eq 1 -and -not $chromeDll -and $profileRename -eq 'refused' -and $parentRename -eq 'refused' -and $opened -and ((Snapshot) -eq $before)) "paused right after the pin: $($early.Count) engine process, chrome.dll loaded $chromeDll; renaming Ardia WebUI\Chromium $profileRename, renaming Ardia WebUI $parentRename; window after the pause $opened"
-Clear-WebUI
+$webCleared = Clear-WebUI
 
 Rename-Item -LiteralPath "$rn\User Data" -NewName 'User Data moved'
 Move-Item -LiteralPath "$rn\User Data moved" -Destination (Join-Path $elsewhere 'profile')
-Link junction "$rn\User Data" (Join-Path $elsewhere 'profile') | Out-Null
-New-Item -ItemType Directory $web | Out-Null
-Link junction (Join-Path $web 'Chromium') (Join-Path $elsewhere 'profile') | Out-Null
-Refused 'relocated-react-native-profile' @('--ardia-shell=webui')
-Clear-WebUI
+$profileLinked = Link junction "$rn\User Data" (Join-Path $elsewhere 'profile')
+$webMade = $webCleared -and [bool](New-Item -ItemType Directory $web -ErrorAction SilentlyContinue)
+$webLinked = $webMade -and (Link junction (Join-Path $web 'Chromium') (Join-Path $elsewhere 'profile'))
+if ($profileLinked -and $webLinked) {
+  Refused 'relocated-react-native-profile' @('--ardia-shell=webui')
+} else {
+  Check 'relocated-react-native-profile' $false "fixture not built: Ardia WebUI cleared $webCleared, made $webMade, Chromium junction $webLinked, React Native profile junction $profileLinked"
+}
+Clear-WebUI | Out-Null
 
 Opens 'control-starts-in-webui-folder' @('--ardia-shell=webui')
-Clear-WebUI
+Clear-WebUI | Out-Null
 Opens 'control-switch-spelling-uppercase' @('--ARDIA-SHELL=webui')
-Clear-WebUI
+Clear-WebUI | Out-Null
 Opens 'control-switch-spelling-single-dash' @('-ardia-shell=webui')
 Shot "$Proof\junction-control.png"
-Clear-WebUI
+Clear-WebUI | Out-Null
 Opens 'control-user-data-dir-with-a-space' @('--ardia-shell=webui', "--user-data-dir=$web\Chromium")
-Clear-WebUI
+Clear-WebUI | Out-Null
+
+$webReal = Join-Path $run 'webui-real'
+New-Item -ItemType Directory -Force $webReal | Out-Null
+Set-Content -LiteralPath (Join-Path $webReal 'pilot-root-a.json') '{"a":1}' -NoNewline
+Set-Content -LiteralPath (Join-Path $webReal 'pilot-root-b.json') '{"b":2}' -NoNewline
+$rootLinked = Link junction $web $webReal
+$rootPilot = Start-Pilot @('--ardia-shell=webui', '--ardia-no-migrate', '--enable-logging', '--v=0')
+$rootWindow = $null
+try { $rootWindow = Wait-Shell 60 } catch {}
+$rootLog = Join-Path $webReal 'Chromium\chrome_debug.log'
+$rootLine = Wait-Until { Get-Content -LiteralPath $rootLog -ErrorAction SilentlyContinue | Select-String 'Ardia WebUI shell: bootstrap documents: (\d+)' | Select-Object -Last 1 } 30 'the shell to read bootstrap.documents' -NoThrow
+$rootCount = if ($rootLine) { [int]$rootLine.Matches[0].Groups[1].Value } else { -1 }
+Stop-Engine
+$rootStillLinked = [bool]((Get-Item -LiteralPath $web -Force -ErrorAction SilentlyContinue).LinkType -eq 'Junction')
+$rootDocsIntact = ((Get-Content -LiteralPath (Join-Path $webReal 'pilot-root-a.json') -Raw) -ceq '{"a":1}') -and ((Get-Content -LiteralPath (Join-Path $webReal 'pilot-root-b.json') -Raw) -ceq '{"b":2}')
+$rootOpened = ($null -ne $rootWindow) -and ($rootWindow -ne [IntPtr]::Zero)
+$rootGuardPath = Join-Path $webReal 'launch-guard.json'
+$rootGuardWritten = Test-Path -LiteralPath $rootGuardPath -PathType Leaf
+$rootGuardJson = $false
+if ($rootGuardWritten) {
+  try {
+    $rootGuard = Get-Content -LiteralPath $rootGuardPath -Raw | ConvertFrom-Json
+    $rootGuardJson = ($null -ne $rootGuard) -and ($null -ne $rootGuard.PSObject.Properties['unfinishedStartsBefore'])
+  } catch {}
+}
+$rootPresent = @('launch-guard.json', 'pilot-root-a.json', 'pilot-root-b.json' | Where-Object { Test-Path -LiteralPath (Join-Path $webReal $_) -PathType Leaf })
+Check 'documents-read-under-junction-app-data-root' ($rootLinked -and $rootPilot.ArgvOk -and $rootOpened -and $rootGuardWritten -and $rootGuardJson -and ($rootPresent.Count -eq 3) -and ($rootCount -eq 3) -and $rootStillLinked -and $rootDocsIntact) "Ardia WebUI is a junction to $webReal (made $rootLinked, still a junction $rootStillLinked); window $rootOpened; launch-guard written $rootGuardWritten (valid JSON $rootGuardJson); present [$($rootPresent -join ', ')]; bootstrap read $rootCount of 3 expected documents through the junction; seeded documents intact $rootDocsIntact"
+Clear-WebUI | Out-Null
+
+$assetUi = Join-Path $run 'asset-ui'
+$assetSecretDir = Join-Path $run 'asset-outside'
+New-Item -ItemType Directory -Force $assetSecretDir | Out-Null
+$pngBytes = [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+[System.IO.File]::WriteAllBytes((Join-Path $assetSecretDir 'secret.png'), $pngBytes)
+Copy-Item -LiteralPath (Join-Path $App 'ardia-ui') -Destination $assetUi -Recurse
+[System.IO.File]::WriteAllBytes((Join-Path $assetUi 'control.png'), $pngBytes)
+$assetLinkOk = Link junction (Join-Path $assetUi 'escape') $assetSecretDir
+$assetData = Join-Path $run 'asset-data'
+New-Item -ItemType Directory -Force $assetData | Out-Null
+$script:Data = $assetData
+Start-Shell -Extra @("--ardia-ui-dir=$assetUi") | Out-Null
+$assetReady = $false
+try {
+  Wait-ShellReady 60 | Out-Null
+  $assetReady = $true
+} catch {
+  Log "asset containment shell did not become ready: $($_.Exception.Message)"
+}
+function Asset-Sink {
+  $answer = Cdp-Eval "__ardiaHost.invoke('ArdiaShell.testAssetSink', {}).then(r => JSON.stringify(r), () => 'null')"
+  if ($answer) { $answer | ConvertFrom-Json } else { $null }
+}
+$controlLoad = $null
+$escapeLoad = $null
+$sinkStart = $null
+$sinkControl = $null
+$sinkEscape = $null
+$sinkCorpus = $null
+$corpusLoaded = @()
+$corpusMisrouted = @()
+$corpusChecked = 0
+$corpusKinds = @{ sink = 0; crossOrigin = 0; shellPage = 0 }
+if ($assetReady) {
+  $imgProbe = "src => new Promise(resolve => { const img = new Image(); const done = ok => resolve({ ok, width: img.naturalWidth, height: img.naturalHeight }); img.onload = () => done(true); img.onerror = () => done(false); img.src = src; })"
+  $sinkStart = Wait-Settled { (Asset-Sink) | ConvertTo-Json -Compress } 10 | ConvertFrom-Json
+  $controlLoad = Cdp-Eval "($imgProbe)('/control.png').then(r => JSON.stringify(r))" | ConvertFrom-Json
+  $sinkControl = Asset-Sink
+  $escapeLoad = Cdp-Eval "($imgProbe)('/escape/secret.png').then(r => JSON.stringify(r))" | ConvertFrom-Json
+  $sinkEscape = Asset-Sink
+  $corpus = Get-Content -LiteralPath 'C:\pilot\hostile-corpus.json' -Raw -Encoding UTF8 | ConvertFrom-Json
+  $asText = "v => { try { return String(v); } catch { return Object.prototype.toString.call(v); } }"
+  foreach ($case in $corpus.cases) {
+    $answer = Cdp-Eval "(async () => { const text = ($asText)($($case.expression)); const probe = $imgProbe; const sink = () => __ardiaHost.invoke('ArdiaShell.testAssetSink', {}); const request = async path => { const url = new URL(path, location.href); const sameOrigin = url.origin === location.origin; if (sameOrigin && (url.pathname === '/' || url.pathname === '/index.html')) return { kind: 'shellPage', ok: false, width: 0 }; const before = await sink(); const loaded = await probe(url.href); const after = await sink(); const delta = name => after[name] - before[name]; return { kind: sameOrigin ? 'sink' : 'crossOrigin', ...loaded, served: delta('served'), refused: delta('refused'), outsideRoot: delta('outsideRoot'), unreadable: delta('unreadable') }; }; const raw = await request('/' + text); const encoded = await request('/' + encodeURIComponent(text.toWellFormed())); return JSON.stringify({ raw, encoded }); })()"
+    $loads = if ($answer) { $answer | ConvertFrom-Json } else { $null }
+    $corpusChecked++
+    if (-not $loads) {
+      $corpusLoaded += $case.id
+      Log "asset corpus $($case.id) gave no answer"
+      continue
+    }
+    foreach ($variant in @(@{ name = 'raw'; probe = $loads.raw }, @{ name = 'encoded'; probe = $loads.encoded })) {
+      $probe = $variant.probe
+      $label = "$($case.id) $($variant.name)"
+      if ($corpusKinds.ContainsKey([string]$probe.kind)) { $corpusKinds[[string]$probe.kind]++ } else { $corpusMisrouted += "$label kind=$($probe.kind)" }
+      if ($probe.ok -or $probe.width -ne 0) { $corpusLoaded += $label }
+      $reached = [int]$probe.served + [int]$probe.refused + [int]$probe.outsideRoot + [int]$probe.unreadable
+      $misrouted = switch ([string]$probe.kind) {
+        'sink' { ($reached -ne 1) -or ($probe.served -ne 0) -or ($probe.outsideRoot -ne 0) }
+        'crossOrigin' { $reached -ne 0 }
+        default { $false }
+      }
+      if ($misrouted) { $corpusMisrouted += "$label kind=$($probe.kind) served=$($probe.served) refused=$($probe.refused) outsideRoot=$($probe.outsideRoot) unreadable=$($probe.unreadable)" }
+    }
+  }
+  $sinkCorpus = Asset-Sink
+}
+Stop-Engine
+$controlServed = $sinkStart -and $sinkControl -and ($sinkControl.served -eq $sinkStart.served + 1) -and ($sinkControl.outsideRoot -eq $sinkStart.outsideRoot)
+$escapeRefusedAtSink = $sinkControl -and $sinkEscape -and ($sinkEscape.served -eq $sinkControl.served) -and ($sinkEscape.outsideRoot -eq $sinkControl.outsideRoot + 1)
+Check 'asset-junction-escape-refused' ($assetLinkOk -and $assetReady -and $controlLoad.ok -and ($controlLoad.width -eq 1) -and ($controlLoad.height -eq 1) -and $controlServed -and (-not $escapeLoad.ok) -and ($escapeLoad.width -eq 0) -and $escapeRefusedAtSink) "control=$($controlLoad | ConvertTo-Json -Compress); escape=$($escapeLoad | ConvertTo-Json -Compress); sink start=$($sinkStart | ConvertTo-Json -Compress) after control=$($sinkControl | ConvertTo-Json -Compress) after escape=$($sinkEscape | ConvertTo-Json -Compress)"
+$corpusAtSink = $sinkEscape -and $sinkCorpus -and ($sinkCorpus.served -eq $sinkEscape.served) -and ($sinkCorpus.outsideRoot -eq $sinkEscape.outsideRoot) -and ($sinkCorpus.refused -gt $sinkEscape.refused)
+Check 'asset-sink-refuses-hostile-corpus' ($assetReady -and ($corpusChecked -gt 0) -and ($corpusChecked -eq @($corpus.cases).Count) -and ($corpusKinds.sink -gt 0) -and ($corpusLoaded.Count -eq 0) -and ($corpusMisrouted.Count -eq 0) -and $corpusAtSink) "$corpusChecked corpus values requested raw and URL-encoded under chrome://ardia/: $($corpusKinds.sink) same-origin requests each moved exactly one ReadAsset counter and none was served or opened outside the root, $($corpusKinds.crossOrigin) went to another origin and reached no counter (CSP), $($corpusKinds.shellPage) resolved to the shell page in the URL parser and were not sent; loaded: $($corpusLoaded -join ', '); misrouted: $($corpusMisrouted -join '; '); sink after escape=$($sinkEscape | ConvertTo-Json -Compress) after corpus=$($sinkCorpus | ConvertTo-Json -Compress)"
+cmd /c rmdir "$(Join-Path $assetUi 'escape')" | Out-Null
+Remove-Item -LiteralPath $assetSecretDir -Recurse -Force -ErrorAction SilentlyContinue
 
 cmd /c rmdir "$rn\User Data" | Out-Null
 Move-Item -LiteralPath (Join-Path $elsewhere 'profile') -Destination "$rn\User Data"

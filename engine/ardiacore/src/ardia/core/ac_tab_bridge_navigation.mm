@@ -160,6 +160,10 @@ void TabBridge::DidFinishNavigation(content::NavigationHandle* handle) {
   EnsureZoomObserved();
   EnsureAudibleObserved();
   NotePostedDocument(handle);
+  if (handle->IsInPrimaryMainFrame() && handle->HasCommitted() &&
+      !handle->IsSameDocument()) {
+    ForgetLeaveAsk();
+  }
   if (made_ahead_ && handle->IsInPrimaryMainFrame() && handle->HasCommitted() &&
       !handle->GetURL().IsAboutBlank()) {
     made_ahead_ = false;

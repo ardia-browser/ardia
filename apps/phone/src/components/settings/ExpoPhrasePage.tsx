@@ -9,7 +9,7 @@ import { checkPhrase } from "../../state/sync/actions";
 import { setConnectPhrase, useConnectDraft } from "../../state/sync/connectDraft";
 import { phraseFooter } from "../../state/sync/syncRules";
 import { PasteAction, SYSTEM_PASTE_SIZE } from "../sync/SyncPage";
-import { legibleInk, modifierList, settingsChrome } from "../ui";
+import { legibleInk, modifierList, neverBounces, settingsChrome } from "../ui";
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 
@@ -34,7 +34,7 @@ export function ExpoPhrasePage() {
   const footerInk = footer.tone === "problem" ? legibleInk("red") : footer.tone === "good" ? legibleInk("green") : null;
   return (
     <Toolbar>
-      <Form modifiers={modifierList(navigationTitle(syncWords.enterRecoveryPhrase), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), scrollDismissesKeyboard("interactively"))}>
+      <Form modifiers={modifierList(navigationTitle(syncWords.enterRecoveryPhrase), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), scrollDismissesKeyboard("interactively"))}>
         <Section
           header={
             <HStack>

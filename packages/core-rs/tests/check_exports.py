@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 CORE = pathlib.Path(__file__).resolve().parents[1]
-LIBRARIES = [('ardia_core', ['ardia_core'], 'ardia_', 15), ('ardia_update', ['ardia_update'], 'ardia_update_', 5),
+LIBRARIES = [('ardia_core', ['ardia_core'], 'ardia_', 15), ('ardia_update', ['ardia_update'], 'ardia_update_', 6),
              ('ardia_import', ['ardia_import'], 'ardia_import_', 4),
              ('ardia_apple', ['ardia_core', 'ardia_import'], 'ardia_', 19)]
 DARWIN = platform.system() == 'Darwin'

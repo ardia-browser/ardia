@@ -485,7 +485,7 @@ test("Warn about busy background tabs: off stops the watch and its reads, on arm
   timers.clear();
   webviews.clear();
   const read = (name) => readFileSync(new URL(`../../lib/${name}`, import.meta.url), "utf8");
-  for (const name of ["platformFeatures.linux.ts", "platformFeatures.windows.ts"]) assert.match(read(name), /busyTabWatch: false/, name);
+  for (const name of ["platformFeatures.linux.ts", "platformFeatures.win.ts"]) assert.match(read(name), /busyTabWatch: false/, name);
   assert.match(read("platformFeatures.ts"), /busyTabWatch: true/);
   const env = { top: false, glass: true, syncOn: false, calendarAccess: false, officialPlugins: [] };
   assert.ok(!unshownSettings(parseSettings({}), env).split("\n").includes("advanced.busyTabWarnings"), "shown on macOS");

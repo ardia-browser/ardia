@@ -16,7 +16,7 @@
 <p align="center">
   134 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
   Like your paint wet? <a href="https://ardia.dev/nightly">The nightly</a> has every fix the day it’s made, smudges and all.<br>
-  Homebrew: <code>brew install ardia-browser/tap/ardia</code><br>
+  Homebrew: <code>brew install ardia-browser/tap/ardia</code> · nightly: <code>brew install ardia-browser/tap/ardia@nightly</code><br>
   On your phone: <a href="https://testflight.apple.com/join/yXHasDmr">iPhone (TestFlight)</a> · <a href="https://github.com/ardia-browser/ardia/releases/download/android-v1.0.2/Ardia-1.0.2.apk">Android (APK)</a><br>
   <a href="https://ardia.dev">ardia.dev</a> · <a href="https://ardia.dev/release-notes">What’s new</a> · <a href="https://github.com/ardia-browser/ardia/releases">All releases</a> · <a href="https://discord.gg/TdhuXrbcA6">Discord</a>
 </p>
@@ -118,8 +118,9 @@ packages/
 ## Run it
 
 The Linux desktop target is `apps/desktop`, for x86-64 Linux on Wayland or X11. Releases ship it as a `.deb`
-(`sudo apt install ./Ardia-<version>-linux-x64.deb`), an AppImage, a tarball and an Arch source package, and stables as
-`ardia-bin` on the AUR: [docs/linux-port.md › Installing on Linux](docs/linux-port.md#installing-on-linux). The same
+(`sudo apt install ./Ardia-<version>-linux-x64.deb`), an `.rpm` (`sudo dnf install ./Ardia-<version>-linux-x64.rpm`),
+a Flatpak (`flatpak install --user ./Ardia-<version>-linux-x64.flatpak`), an AppImage, a tarball and an Arch source
+package, and stables as `ardia-bin` on the AUR: [docs/linux-port.md › Installing on Linux](docs/linux-port.md#installing-on-linux). The same
 file has the source-build and packaging instructions. It builds against the dedicated Linux Chromium host.
 
 The macOS app requires Xcode 26+, CocoaPods, Node 24 (pinned in `.nvmrc`), pnpm 12.
@@ -236,6 +237,10 @@ Feature parity with Dia (everything but its AI) is tracked row by row in
 Greptile reads every pull request before we do.
 
 <a href="https://www.greptile.com/?utm_source=oss_badge&utm_medium=readme&utm_campaign=greptile_for_open_source"><img src="https://www.greptile.com/badge.svg" alt="Greptile: The War on Bugs"></a>
+
+[Blacksmith](https://www.blacksmith.sh) runs our CI.
+
+Monthly donors who asked to be listed are on [ardia.dev](https://ardia.dev/#sponsors). [Chip in](https://ardia.dev/#donate) to join them.
 
 ## License
 

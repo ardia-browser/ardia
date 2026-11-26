@@ -1,6 +1,7 @@
 #import "ArdiaPictureInPicture.h"
 #import "ArdiaWebViewInternal.h"
 #import "ArdiaPiPThrowMath.h"
+#import "ArdiaPiPGestureLog.h"
 
 #include <vector>
 
@@ -75,6 +76,7 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
   NSRect _pullStart;
   BOOL _keepOnTop;
   NSMutableArray *_observers;
+  id _spaceObserver;
   NSTimer *_slide;
   BOOL _animating;
   BOOL _sawDrag;
@@ -119,6 +121,7 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)fitCorners:(BOOL)animated;
 - (void)bendCornersTo:(CGFloat)radius animated:(BOOL)animated;
 - (void)screenChanged;
+- (void)activeSpaceChanged;
 - (NSScreen *)homeScreen;
 - (ArdiaPiPEdge)edgeBeyond;
 - (BOOL)throwFrom:(NSPoint)grab velocity:(NSPoint)velocity;

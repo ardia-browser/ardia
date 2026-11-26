@@ -120,7 +120,7 @@ test("devtools methods are listed in their own family and say plainly when the e
   const { tab } = await freshWindow("https://shop.example/");
   const client = socketClient(41);
   const names = (await client.ok("methods")).filter((m) => m.area === "devtools").map((m) => m.name);
-  assert.deepEqual(names.sort(), ["devtools.causeChainFunction", "devtools.clearLogpoint", "devtools.issues", "devtools.logpoint", "devtools.logpoints", "devtools.perfInsight", "devtools.perfTrace", "devtools.stackTrace", "devtools.styles"]);
+  assert.deepEqual(names.sort(), ["devtools.attach", "devtools.batch", "devtools.causeChainFunction", "devtools.clearLogpoint", "devtools.detach", "devtools.issues", "devtools.logpoint", "devtools.logpoints", "devtools.perfInsight", "devtools.perfTrace", "devtools.send", "devtools.sessions", "devtools.stackTrace", "devtools.styles"]);
   setInspectionTransport(null);
   const reply = await client.call("devtools.perfTrace", { tab, durationMs: 250 });
   assert.deepEqual(reply.error, { code: "failed", message: UNAVAILABLE });

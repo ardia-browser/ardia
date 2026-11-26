@@ -83,7 +83,7 @@ export function Switcher({ profiles, selected, onChoose, bottom }: { profiles: S
   const theme = useTheme();
   return (
     <View style={[styles.switcherRow, { paddingBottom: bottom + space.xs }]}>
-      <ScrollView
+      <ScrollView overScrollMode="never"
         horizontal
         testID="spacesSwitcher"
         showsHorizontalScrollIndicator={false}

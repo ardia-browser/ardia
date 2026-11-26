@@ -61,11 +61,11 @@ export const PageView = forwardRef<PageViewHandle, PageViewProps>(function PageV
       const { name, ...state } = nativeEvent;
       onPageState?.(normalizeState(state, props.isPrivate ?? false));
     } else if (nativeEvent.name === "tone") {
-      onPageTone?.({ top: nativeEvent.top ?? null, bottom: nativeEvent.bottom ?? null });
+      onPageTone?.({ top: nativeEvent.top ?? null, bottom: nativeEvent.bottom ?? null, ...(typeof nativeEvent.barDark === "boolean" ? { barDark: nativeEvent.barDark } : {}) });
     } else if (nativeEvent.name === "drawn") {
       onPageDrawn?.(typeof nativeEvent.document === "number" ? nativeEvent.document : undefined);
     } else if (nativeEvent.name === "coverHidden") {
-      onPageCoverHidden?.(nativeEvent.reason, nativeEvent.found, typeof nativeEvent.cover === "string" ? nativeEvent.cover : undefined);
+      onPageCoverHidden?.(nativeEvent.reason, nativeEvent.found, typeof nativeEvent.cover === "string" ? nativeEvent.cover : undefined, typeof nativeEvent.document === "number" ? nativeEvent.document : undefined);
     } else if (nativeEvent.name === "swipedPastHistory") {
       onSwipedPastHistory?.(nativeEvent.direction);
     } else {

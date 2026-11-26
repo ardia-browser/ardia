@@ -1,0 +1,63 @@
+name: Publish Windows Alpha
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Green Windows workflow run id to publish to windows-alpha
+        required: true
+        type: string
+      dry_run:
+        description: Sign and verify without publishing
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: ${{ inputs.dry_run && format('ardia-windows-alpha-dry-run-{0}', github.run_id) || 'ardia-windows-alpha-publish' }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  publish:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            packages/core-rs/target
+          key: win-update-verify-${{ runner.os }}-${{ hashFiles('packages/core-rs/rust-toolchain.toml', 'packages/core-rs/Cargo.lock') }}
+          restore-keys: win-update-verify-${{ runner.os }}-
+      - name: Build ardia-update-verify
+        working-directory: packages/core-rs
+        run: |
+          set -euo pipefail
+          PATH="$HOME/.cargo/bin:$PATH" rustup toolchain install
+          PATH="$HOME/.cargo/bin:$PATH" cargo build --locked --release --quiet -p ardia-update-verify
+      - name: Publish Windows alpha build
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          WINDOWS_UPDATE_ED_PRIVATE_KEY: ${{ secrets.WINDOWS_UPDATE_ED_PRIVATE_KEY || secrets.LINUX_UPDATE_ED_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo "::error::run_id must be a numeric GitHub Actions run id"; exit 1; }
+          args=(--out "$RUNNER_TEMP/windows-alpha" --verify-bin "$GITHUB_WORKSPACE/packages/core-rs/target/release/ardia-update-verify")
+          if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
+          args+=("$RUN_ID")
+          scripts/windows/publish-alpha.sh "${args[@]}"

@@ -1,6 +1,7 @@
 const FIREFLY_COUNT = 34;
 const PETAL_LIMIT = 90;
 const SPARK_LIMIT = 70;
+const SMOKE_LIMIT = 64;
 const FLOATS_PER_PARTICLE = 9;
 const PETAL_COLORS: [number, number, number][] = [
   [0.95, 0.66, 0.72],
@@ -29,6 +30,19 @@ interface Spark {
   size: number;
 }
 
+interface Puff {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+  life: number;
+  angle: number;
+  spin: number;
+  size: number;
+  shade: number;
+}
+
 interface Petal {
   x: number;
   y: number;
@@ -43,17 +57,39 @@ interface Petal {
 }
 
 export class Particles {
-  readonly data = new Float32Array((FIREFLY_COUNT + PETAL_LIMIT + SPARK_LIMIT) * FLOATS_PER_PARTICLE);
+  readonly data = new Float32Array((FIREFLY_COUNT + PETAL_LIMIT + SPARK_LIMIT + SMOKE_LIMIT) * FLOATS_PER_PARTICLE);
   private readonly fireflies: Firefly[] = [];
   private readonly petals: Petal[] = [];
   private readonly sparks: Spark[] = [];
+  private readonly puffs: Puff[] = [];
   private sparkDebt = 0;
   private width = 1;
   private height = 1;
   private time = 0;
 
   get busy() {
-    return this.petals.length > 0 || this.sparks.length > 0;
+    return this.petals.length > 0 || this.sparks.length > 0 || this.puffs.length > 0;
+  }
+
+  smoke(x: number, y: number, spreadX: number, spreadY: number, reach: number) {
+    for (let i = 0; i < SMOKE_LIMIT; i++) {
+      if (this.puffs.length >= SMOKE_LIMIT) this.puffs.shift();
+      const angle = Math.random() * Math.PI * 2;
+      const along = Math.sqrt(Math.random());
+      const speed = reach * (0.5 + Math.random() * 1.1);
+      this.puffs.push({
+        x: x + Math.cos(angle) * spreadX * along,
+        y: y + Math.sin(angle) * spreadY * along,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed * 0.8 - reach * 0.25,
+        age: 0,
+        life: 0.7 + Math.random() * 0.9,
+        angle: (Math.random() - 0.5) * 0.5,
+        spin: (Math.random() - 0.5) * 1.6,
+        size: Math.min(150, reach * (0.14 + Math.random() * 0.22)),
+        shade: 0.5 + Math.random() * 0.45,
+      });
+    }
   }
 
   sparkle(dt: number, x: number, y: number, speed: number, night: number) {
@@ -170,6 +206,18 @@ export class Particles {
       spark.x += spark.vx * dt;
       spark.y += spark.vy * dt;
     }
+    for (const puff of this.puffs) {
+      puff.age += dt;
+      const drag = Math.exp(-dt * 3.4);
+      puff.vx *= drag;
+      puff.vy = puff.vy * drag - 40 * dt;
+      puff.x += puff.vx * dt;
+      puff.y += puff.vy * dt;
+      puff.angle += puff.spin * dt;
+    }
+    for (let i = this.puffs.length - 1; i >= 0; i--) {
+      if (this.puffs[i].age > this.puffs[i].life) this.puffs.splice(i, 1);
+    }
     for (let i = this.sparks.length - 1; i >= 0; i--) {
       if (this.sparks[i].age > this.sparks[i].life) this.sparks.splice(i, 1);
     }
@@ -208,6 +256,12 @@ export class Particles {
     for (const petal of this.petals) {
       const fade = Math.min(1, (petal.life - petal.age) / 0.6) * Math.min(1, petal.age / 0.05);
       write(petal.x, petal.y, petal.size, petal.angle, petal.color[0] * fade, petal.color[1] * fade, petal.color[2] * fade, fade, 1);
+    }
+    for (const puff of this.puffs) {
+      const t = puff.age / puff.life;
+      const fade = Math.min(1, puff.age / 0.04) * (1 - t * t) * 0.92;
+      const grow = 0.75 + 0.5 * Math.min(1, t * 3) - 0.35 * t * t;
+      write(puff.x, puff.y, puff.size * grow, puff.angle, puff.shade, puff.shade, puff.shade, fade, 2);
     }
     return cursor / FLOATS_PER_PARTICLE;
   }

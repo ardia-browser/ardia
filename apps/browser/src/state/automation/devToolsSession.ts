@@ -7,8 +7,11 @@ export type CdpEventListener = (method: string, params: CdpParams) => void;
 export type DevToolsTransport = {
   send(method: string, params: CdpParams): Promise<CdpParams>;
   onEvent(listener: CdpEventListener): () => void;
+  onClosed?(listener: () => void): () => void;
   close(): Promise<void>;
 };
+
+export const TRANSPORT_LOSS = "Ardia.transportLoss";
 
 export type TransportOpener = (tabId: string, signal: AbortSignal) => Promise<DevToolsTransport>;
 
@@ -85,9 +88,14 @@ export class InspectionSession {
     const own = byConnection.get(connection) ?? new Set<InspectionSession>();
     own.add(this);
     byConnection.set(connection, own);
-    this.unsubscribe = transport.onEvent((method, params) => {
+    const stopEvents = transport.onEvent((method, params) => {
       for (const listener of [...this.listeners]) listener(method, params);
     });
+    const stopClosed = transport.onClosed?.(() => void this.close()) ?? (() => {});
+    this.unsubscribe = () => {
+      stopEvents();
+      stopClosed();
+    };
   }
 
   get isClosed() {

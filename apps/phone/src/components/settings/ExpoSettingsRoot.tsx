@@ -4,7 +4,7 @@ import { accessibilityElement, contentTransition, font, foregroundStyle, listSec
 import { useSyncStatus } from "../../state/sync/hooks";
 import { syncRowSubtitle } from "../../state/sync/syncRules";
 import { settingsRouteKey, type SettingsRoute } from "../../state/settings/nav";
-import { bouncesOnlyWhenScrollable, contentMargins, modifierList, settingsChrome, settingsLayout, SettingsIconTile, settingsTint, settingsUIAvailable, useWarningInk, type SettingsTintName } from "../ui";
+import { neverBounces, contentMargins, modifierList, settingsChrome, settingsLayout, SettingsIconTile, settingsTint, settingsUIAvailable, useWarningInk, type SettingsTintName } from "../ui";
 import { ExpoPaneLabel } from "./ExpoRowLabel";
 import { ExpoSettingsDone } from "./ExpoSettingsDone";
 import { syncOffered } from "../../state/sync/offer";
@@ -35,7 +35,7 @@ const paneShown = (pane: PaneLook) => pane.page !== "experimental" || experiment
 export function ExpoSettingsRoot() {
   return (
     <ExpoSettingsDone>
-      <Form modifiers={modifierList(navigationTitle(destinationWords.settings), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), bouncesOnlyWhenScrollable(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+      <Form modifiers={modifierList(navigationTitle(destinationWords.settings), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
         {syncOffered() ? (
           <Section modifiers={[listSectionSpacing(TOP_SECTION_SPACING)]}>
             <NavigationLink value={settingsRouteKey({ page: "sync" })}>

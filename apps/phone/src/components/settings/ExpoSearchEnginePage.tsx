@@ -5,7 +5,7 @@ import { setSearchEngine, useEngines } from "../../state/settings/actions";
 import { usePreferences } from "../../state/settings/hooks";
 import { useSyncEnabled, useSyncView } from "../../state/sync/hooks";
 import { syncedEngineName } from "../../state/sync/syncRules";
-import { modifierList, settingsChrome } from "../ui";
+import { modifierList, neverBounces, settingsChrome } from "../ui";
 import { ExpoChoiceRow } from "./ExpoSettingsParts";
 
 export function ExpoSearchEnginePage() {
@@ -14,7 +14,7 @@ export function ExpoSearchEnginePage() {
   const syncEnabled = useSyncEnabled();
   const synced = useSyncView().search;
   return (
-    <Form modifiers={modifierList(navigationTitle("Search Engine"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome())}>
+    <Form modifiers={modifierList(navigationTitle("Search Engine"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces())}>
       {syncEnabled && synced ? (
         <Section footer={<Text>Set on your Mac.</Text>}>
           <LabeledContent label="From Your Mac">

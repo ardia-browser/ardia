@@ -38,6 +38,7 @@ export function PinnedTabsStep() {
           continueTitle={selected.length ? `Pin ${selected.length} ${selected.length === 1 ? "Tab" : "Tabs"}` : "Continue"}
           onContinue={pinSelected}
           onSkip={() => skipStep()}
+          holdScroll
         />
       }
       preview={<PinnedPreview selected={selected} />}

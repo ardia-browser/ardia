@@ -181,7 +181,7 @@ test("main's grid layout: adaptive columns of 150 to 260 pt, 14 pt apart, rows 1
   unmount(root);
 });
 
-test("the grid's Close is a 24-point rounded glass plate in a real 44-point slot inside its header, with no slop the header would clip, and dims on the press", () => {
+test("the grid's Close is a 24-point glass circle in a real 44-point slot inside its header, with no slop the header would clip, and dims on the press", () => {
   const root = deck();
   toggle();
   const close = hosts(root, "tabGridClose")[0]!;
@@ -191,8 +191,8 @@ test("the grid's Close is a 24-point rounded glass plate in a real 44-point slot
   expect(reachesTarget(width, height)).toBe(true);
   expect(flat(hosts(root, "tabGridHeader")[0]!).height).toBeGreaterThanOrEqual(height);
   expect(tabGridCloseSlot).toMatchObject({ side: 44, reach: 7, lead: -8 });
-  expect(flat(hosts(root, "tabGridClosePlate")[0]!)).toMatchObject({ width: 24, height: 24, borderRadius: 7, borderCurve: "continuous" });
-  expect(byTestId(root, "tabGridClosePlate").some((node) => node.props.shape === "rounded")).toBe(true);
+  expect(flat(hosts(root, "tabGridClosePlate")[0]!)).toMatchObject({ width: 24, height: 24, borderRadius: 12 });
+  expect(byTestId(root, "tabGridClosePlate").some((node) => node.props.shape === "circle")).toBe(true);
   const pressable = root.root.findAll((node) => node.props.testID === "tabGridClose" && typeof node.props.style === "function")[0]!;
   expect(StyleSheet.flatten(pressable.props.style({ pressed: true }))).toMatchObject({ opacity: 0.35 });
   unmount(root);

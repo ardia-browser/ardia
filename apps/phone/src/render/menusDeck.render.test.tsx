@@ -205,7 +205,7 @@ nativeTest("holding the Incognito switch offers Close Incognito Tabs, which asks
   const root = deck();
   const pill = menuAround(root, "Incognito");
   expect(pill.props.trigger).toBe("longPress");
-  expect(items(pill)).toEqual([{ id: "0", title: "Close Incognito Tabs", destructive: true }]);
+  expect(items(pill)).toEqual([{ id: "0", title: "Close Incognito Tabs", systemImage: "xmark", destructive: true }]);
   choose(pill, "Close Incognito Tabs");
   await act(async () => undefined);
   expect(mockNative.sheets[0]).toMatchObject({ title: "Close Incognito Tabs?", message: "Their pages, cookies and history are cleared." });
@@ -595,5 +595,16 @@ drawnTest("a Tab Options measurement asked before the deck went away opens nothi
   act(() => withMenu()[1]!.props.onAccessibilityAction({ nativeEvent: { actionName: "menu" } }));
   await act(async () => pending[pending.length - 1]!({ x: 60, y: 200, width: 280, height: 520 }));
   expect(menuitems(root).length).toBeGreaterThan(0);
+  unmount(root);
+});
+
+const leavesWithoutImage = (list: NativeItem[]): string[] => list.flatMap((item) => (item.children ? (item.inline || item.systemImage ? leavesWithoutImage(item.children) : [item.title, ...leavesWithoutImage(item.children)]) : item.systemImage ? [] : [item.title]));
+
+nativeTest("every row of every deck menu has its icon, New Incognito Tab's eyes included", () => {
+  const root = deck();
+  const menus = contextMenus(root);
+  expect(menus.length).toBeGreaterThan(2);
+  for (const menu of menus) expect(leavesWithoutImage(items(menu))).toEqual([]);
+  expect(menus.flatMap((menu) => items(menu)).some((item) => JSON.stringify(item).includes('"systemImage":"eyes"'))).toBe(true);
   unmount(root);
 });

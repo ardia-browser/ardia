@@ -79,6 +79,7 @@ export const windows = {
   open: new Map<string, FakeWindow>(),
   closed: [] as string[],
   focused: null as string | null,
+  shown: new Map<string, boolean>(),
   emit: (event: WindowEvent) => shellEvents.emit("onWindowEvent", event),
   geometry: windowGeometries,
 };
@@ -112,6 +113,10 @@ const windowsModule: Modules["ArdiaAppWindows"] & { requestClose(id: string): Pr
     windows.open.delete(id);
     windows.closed.push(id);
     if (windows.focused === id) windows.focused = null;
+    return Promise.resolve();
+  },
+  setWindowShown: (id, shown) => {
+    windows.shown.set(id, shown);
     return Promise.resolve();
   },
   focusWindow: (id) => {
@@ -445,6 +450,7 @@ const translate: Modules["ArdiaTranslate"] = {
 };
 
 const magnifyArea: Modules["ArdiaMagnifyArea"] = { devMagnify: () => unfaked("ArdiaMagnifyArea", "devMagnify") };
+const wheelArea: Modules["ArdiaWheelArea"] = { devWheel: () => unfaked("ArdiaWheelArea", "devWheel"), glideScroll: async () => {}, steerScroll: async () => {} };
 const fileDrop: Modules["ArdiaFileDrop"] = {
   devDrag: () => unfaked("ArdiaFileDrop", "devDrag"),
   devLastFileDrag: () => Promise.resolve([]),
@@ -515,6 +521,30 @@ export function writeHeldReplies() {
   const tickets = controlSocket.held.splice(0);
   if (tickets.length) controlEvents.emit("onWritten", { tickets });
 }
+export const fileArmsNative = {
+  rows: [] as Record<string, unknown>[],
+  specs: [] as Record<string, unknown>[],
+  placed: [] as [string, string, string][],
+  claims: [] as [string, string, string][],
+  released: [] as [string, string, string][],
+  disarmed: [] as [string[] | null, boolean][],
+  disarmedAfter: [] as (string | undefined)[],
+  refuse: null as null | { reason: string; path?: string },
+  place: null as null | ((arm: string, path: string) => Record<string, unknown>),
+  supported: true,
+  generation: 0,
+  gate: null as Promise<void> | null,
+  answerSavePanel(armId: string): string | null {
+    const row = fileArmsNative.rows.find((r) => r.id === armId);
+    if (!row || row.state !== "armed") return null;
+    const target = (row.paths as string[])[0]!;
+    const staging = `${target.slice(0, target.lastIndexOf("/"))}/.ardia-arm-${armId}-test`;
+    row.staging = [...((row.staging as string[] | undefined) ?? []), staging];
+    row.answered = (row.answered as number) + 1;
+    if (row.once) row.state = "answered";
+    return `${staging}/${target.slice(target.lastIndexOf("/") + 1)}`;
+  },
+};
 const automation: Modules["ArdiaAutomation"] = {
   start: async () => {
     if (!controlSocket.running) controlSocket.generation++;
@@ -545,6 +575,75 @@ const automation: Modules["ArdiaAutomation"] = {
   },
   addListener: controlEvents.addListener,
 };
+const inStaging = (row: Record<string, unknown>, path: string) => ((row.staging as string[] | undefined) ?? []).includes(path.slice(0, path.lastIndexOf("/")));
+for (const [name, run] of Object.entries({
+  armFiles: async (spec: Record<string, unknown>) => {
+    fileArmsNative.specs.push(spec);
+    const generation = fileArmsNative.generation;
+    if (fileArmsNative.gate) await fileArmsNative.gate;
+    if (generation !== fileArmsNative.generation) return { ok: false, reason: "stopped" };
+    if (fileArmsNative.refuse) return { ok: false, ...fileArmsNative.refuse };
+    const busy = spec.kind === "upload" && fileArmsNative.rows.find((r) => r.kind === "upload" && r.state === "armed" && r.window === spec.window);
+    if (busy) return { ok: false, reason: "windowBusy", arm: busy.id };
+    const now = Date.now();
+    const kind = spec.kind as string;
+    const paths = spec.paths as string[];
+    const folder = kind === "download" && paths[0]!.endsWith("/folder");
+    const row = { id: spec.id, kind, tab: spec.tab, window: spec.window, paths, folder, once: spec.once, armedAt: now, expiresAt: now + (spec.seconds as number) * 1000, state: "armed", landed: [] as string[], answered: 0, claimed: {} as Record<string, string> };
+    fileArmsNative.rows.push(row);
+    return { ok: true, arm: { ...row } };
+  },
+  disarmFiles: (ids: string[] | null, purge: boolean) => {
+    fileArmsNative.disarmed.push([ids, purge]);
+    fileArmsNative.disarmedAfter.push(controlSocket.calls.at(-1));
+    if (!ids) fileArmsNative.generation++;
+    let cleared = 0;
+    for (const row of fileArmsNative.rows) {
+      if (row.state !== "armed" || (ids && !ids.includes(row.id as string))) continue;
+      row.state = "cleared";
+      cleared++;
+    }
+    return cleared;
+  },
+  fileArms: async () => fileArmsNative.rows.map((row) => ({ ...row })),
+  claimArmedDownload: (arm: string, download: string, path: string) => {
+    fileArmsNative.claims.push([arm, download, path]);
+    const row = fileArmsNative.rows.find((r) => r.id === arm);
+    if (!row) return { ok: false, reason: "noArm" };
+    const claimed = row.claimed as Record<string, string>;
+    if (claimed[download]) return { ok: true, mode: "automatic" };
+    const owner = fileArmsNative.rows.find((r) => r.kind === "download" && inStaging(r, path));
+    if (owner && owner !== row) return { ok: false, reason: "stagedForAnother" };
+    if (inStaging(row, path)) {
+      claimed[download] = path;
+      return { ok: true, mode: "prompted" };
+    }
+    if (row.state !== "armed") return { ok: false, reason: "taken" };
+    claimed[download] = path;
+    row.answered = (row.answered as number) + 1;
+    if (row.once) row.state = "claimed";
+    return { ok: true, mode: "automatic" };
+  },
+  releaseArmedDownload: (arm: string, download: string, state: string) => {
+    fileArmsNative.released.push([arm, download, state]);
+    const row = fileArmsNative.rows.find((r) => r.id === arm);
+    const claimed = row?.claimed as Record<string, string> | undefined;
+    if (!claimed?.[download]) return false;
+    delete claimed[download];
+    return true;
+  },
+  placeArmedDownload: async (arm: string, download: string, path: string) => {
+    fileArmsNative.placed.push([arm, download, path]);
+    if (fileArmsNative.place) return fileArmsNative.place(arm, path);
+    const row = fileArmsNative.rows.find((r) => r.id === arm);
+    if (!row || !(row.claimed as Record<string, string>)[download]) return { ok: false, reason: "notClaimed" };
+    const target = (row.paths as string[])[0] as string;
+    row.landed = [...(row.landed as string[]), target];
+    return { ok: true, path: target, bytes: 42 };
+  },
+})) {
+  Object.defineProperty(automation, name, { enumerable: true, get: () => (fileArmsNative.supported ? run : undefined) });
+}
 Object.defineProperty(automation, "devtoolsEndpoint", {
   enumerable: true,
   get: () =>
@@ -590,7 +689,7 @@ export const pluginHost = {
   }[],
   pinned: undefined as undefined | null | { name: string; version: string; folderId: string }[],
   officialArtifacts: {} as Record<string, string>,
-  officialFetchResults: {} as Record<string, { ok: false; code: "offline" | "failed" | "verify" | "cancelled" | "unsupported"; reason: string }>,
+  officialFetchResults: {} as Record<string, { ok: false; code: "offline" | "failed" | "verify" | "cancelled" | "unsupported"; reason: string; cause?: string }>,
   officialFetchGate: null as null | Promise<void>,
   officialFetchLog: [] as string[],
   officialCancels: [] as string[],
@@ -763,6 +862,7 @@ export const shellNativeModules: Modules = {
   ArdiaInlineCompletion: { complete: () => Promise.resolve(0), copyFieldAs: () => Promise.resolve() },
   ArdiaTranslate: translate,
   ArdiaMagnifyArea: magnifyArea,
+  ArdiaWheelArea: wheelArea,
   ArdiaPeekStage: { devState: () => Promise.resolve([]), devPageFrames: () => Promise.resolve([]) },
   ArdiaFileDrop: fileDrop,
   ArdiaCli: cli,

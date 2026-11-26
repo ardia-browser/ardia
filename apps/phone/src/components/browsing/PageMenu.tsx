@@ -1,5 +1,5 @@
 import { countUsage } from "../../state/telemetry/telemetry";
-import { useEffect, useState, type ReactNode } from "react";
+import { Activity, memo, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Pressable as GesturePressable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,6 +7,7 @@ import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, useAnimatedScrollHand
 import { copy } from "../../lib/platformCopy";
 import { actionWords, blockingWords } from "../../lib/sharedWords";
 import type { MaterialScheme } from "../../lib/material/schemes";
+import type { Design } from "../../lib/design";
 import {
   canPrintPages,
   canSummarizePages,
@@ -45,8 +46,9 @@ import {
   zoomOut,
 } from "../../state/page/actions";
 import { menuSwitchHint, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
-import { useMenuDocked, useMenuModel, useMenuPage, useMenuTitle, useTitleFeedback, useTranslationAsk } from "../../state/page/hooks";
-import type { MenuPage } from "../../state/page/store";
+import { useMenuDocked, useMenuModel, useMenuOpen, useMenuOpening, useMenuPage, useMenuTitle, usePageQuiet, useTitleFeedback, useTranslationAsk } from "../../state/page/hooks";
+import { endMenuTiming, markMenuPhase } from "../../state/page/menuTiming";
+import { pageUi, type MenuPage } from "../../state/page/store";
 import { SiteSettingsGroups } from "../settings/SitePages";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { useSearchFromDockedMenu, useSearchOpen, useSearchSession } from "../../state/search/hooks";
@@ -61,6 +63,7 @@ import { PageMenuWords, usePageMenuInk } from "./PageMenuWords";
 import { classicPageMenu, pageMenuCards } from "./pageMenuTokens";
 import { SystemPageMenu, usesSystemPageMenu } from "./SystemPageMenu";
 import { MaterialAddressContent } from "../ui/MaterialBottomBar";
+import { FABRIC_CATCH_UP_PING_MS } from "../ui/FabricCatchUp";
 import { useMaterialTheme } from "../ui/materialTheme";
 import { MaterialSheet, useMaterialRipple } from "../ui/MaterialSurfaces";
 import { materialBottomBar, materialShape, materialSize, materialType } from "../ui/materialTokens";
@@ -69,21 +72,55 @@ import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 
 const PAGE_MENU_LIST_HEIGHT_RATIO = 0.52;
 const countPageMenuExpansion = () => countUsage("site_settings_sheet_expanded");
+const menuArrived = () => markMenuPhase("appeared");
+const MENU_CATCH_UP_PING_MS = Platform.OS === "android" ? FABRIC_CATCH_UP_PING_MS : undefined;
+const FLOATING_MENU = Platform.OS === "android";
 
-type PageMenuProps = { tabId: string; open: boolean; onHidden: () => void };
+type PageMenuProps = { tabId: string; open: boolean; onHidden: (showing: number) => void };
+
+export const usesWarmPageMenu = (design: Design, systemMenu: boolean) => design === "redesigned" && !systemMenu;
+
+export const WarmPageMenuHost = memo(function WarmPageMenuHost({ tabId }: { tabId: string }) {
+  const open = useMenuOpen();
+  const [armed, setArmed] = useState(open);
+  const quiet = usePageQuiet(tabId, armed);
+  if (!armed && (open || quiet)) setArmed(true);
+  return armed ? <ArmedPageMenu tabId={tabId} open={open} /> : null;
+});
+
+function ArmedPageMenu({ tabId, open }: { tabId: string; open: boolean }) {
+  const opening = useMenuOpening();
+  const [showing, setShowing] = useState<number | null>(open ? opening : null);
+  if (open && showing !== opening) setShowing(opening);
+  const hidden = useCallback((gone: number) => setShowing((now) => (now === gone ? null : now)), []);
+  const live = open || showing !== null;
+  const model = useMenuModel(tabId, live);
+  return (
+    <Activity mode={live ? "visible" : "hidden"}>
+      <DrawnPageMenu tabId={tabId} model={model} open={open} onHidden={hidden} />
+    </Activity>
+  );
+}
 
 export function PageMenu(props: PageMenuProps) {
   if (usesSystemPageMenu(useDesign())) return <SystemPageMenu tabId={props.tabId} open={props.open} onPresentation={(event) => presentSystemPageMenu(event, props.onHidden)} />;
-  return <DrawnPageMenu {...props} />;
+  return <ColdPageMenu {...props} />;
 }
 
-function presentSystemPageMenu(event: MenuPresentation, onHidden: () => void) {
+function ColdPageMenu(props: PageMenuProps) {
+  return <DrawnPageMenu {...props} model={useMenuModel(props.tabId)} />;
+}
+
+function presentSystemPageMenu(event: MenuPresentation, onHidden: (showing: number) => void) {
   pageMenuPresentation(event);
-  if (event.phase === "dismiss") onHidden();
+  if (event.phase === "dismiss") onHidden(event.token);
 }
 
-function DrawnPageMenu({ tabId, open, onHidden }: PageMenuProps) {
-  const model = useMenuModel(tabId);
+function DrawnPageMenu({ tabId, model, open, onHidden }: PageMenuProps & { model: MenuModel }) {
+  const opening = useMenuOpening();
+  useLayoutEffect(() => {
+    if (open) markMenuPhase("rendered");
+  }, [open, opening]);
   const ask = useTranslationAsk();
   const tab = useTab(tabId);
   const isPrivate = tab?.isPrivate ?? false;
@@ -94,8 +131,9 @@ function DrawnPageMenu({ tabId, open, onHidden }: PageMenuProps) {
   const redesigned = design === "redesigned";
   const ink = usePageMenuInk();
   const hidden = () => {
-    onHidden();
-    pageMenuHidden();
+    onHidden(opening);
+    pageMenuHidden(opening);
+    if (!pageUi().menuOpen && pageUi().menuOpening === opening) endMenuTiming();
   };
   const confirmation = ask ? (
     <ConfirmDialog
@@ -109,9 +147,9 @@ function DrawnPageMenu({ tabId, open, onHidden }: PageMenuProps) {
   }
   if (redesigned) {
     return (
-      <Sheet open={open} onDismiss={closePageMenu} onHidden={hidden} fill={ink.solid} onTapAway={tappedAway} halfOpen={Platform.OS === "android"} onExpand={isPrivate ? undefined : countPageMenuExpansion}>
+      <Sheet open={open} onDismiss={closePageMenu} onHidden={hidden} onShown={menuArrived} fill={ink.solid} onTapAway={tappedAway} grabber floating={FLOATING_MENU} catchUpPingMs={MENU_CATCH_UP_PING_MS}>
         {confirmation}
-        <PageMenuWords tabId={tabId} model={model} onTranslate={translate} />
+        <PageMenuWords tabId={tabId} model={model} onTranslate={translate} showing={opening} />
       </Sheet>
     );
   }

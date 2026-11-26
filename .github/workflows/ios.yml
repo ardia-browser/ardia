@@ -52,7 +52,7 @@ env:
 jobs:
   gate:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     permissions:
       contents: read
@@ -76,7 +76,7 @@ jobs:
   app:
     needs: gate
     if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
-    runs-on: xcode-27
+    runs-on: blacksmith-12vcpu-macos-27
     timeout-minutes: 75
     env:
       SCRATCH: ${{ github.workspace }}/.ci
@@ -129,7 +129,7 @@ jobs:
   packages:
     needs: gate
     if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
-    runs-on: xcode-27
+    runs-on: blacksmith-6vcpu-macos-27
     timeout-minutes: 45
     env:
       SCRATCH: ${{ github.workspace }}/.ci

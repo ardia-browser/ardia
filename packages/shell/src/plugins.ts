@@ -19,7 +19,7 @@ export type PluginFolderEntry = {
 export type OfficialCandidate = { folderId: string; text: string; legacyHash: string; version: string };
 export type OfficialPinned = { name: string; version: string; folderId: string };
 type OfficialFetchCode = "offline" | "failed" | "verify" | "cancelled" | "unsupported";
-export type OfficialFetchResult = { ok: true; candidate: OfficialCandidate; reused?: boolean } | { ok: false; code: OfficialFetchCode; reason: string };
+export type OfficialFetchResult = { ok: true; candidate: OfficialCandidate; reused?: boolean } | { ok: false; code: OfficialFetchCode; reason: string; cause?: string };
 export type OfficialFetchProgress = { name: string; received: number; total: number };
 
 export type PluginProgramsSpec = {
@@ -32,7 +32,7 @@ export type PluginProgramsSpec = {
 export type PluginAfterUpdateQuitStops = { consent: string; exitedOnTerm: number; killed: number };
 export type PluginProgramRegistry = { claims: Record<string, string>; failClosed: boolean; legacyOwners: string[] };
 export type PluginProgramsResult =
-  | { ok: true; linked: string[]; refused: Record<string, string>; binDir: string; adopted: boolean; adoptBusy?: boolean; kept?: string }
+  | { ok: true; linked: string[]; refused: Record<string, string>; causes?: Record<string, string>; binDir: string; adopted: boolean; adoptBusy?: boolean; kept?: string }
   | { ok: false; reason?: string; stale?: true };
 
 export type PluginStartSpec = {

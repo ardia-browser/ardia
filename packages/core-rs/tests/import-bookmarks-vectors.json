@@ -2,7 +2,6 @@
   "sources": {
     "rust": "packages/core-rs/crates/ardia-import-core, the answer under expect",
     "swift": "run: packages/import/ios/Core/ChromiumBookmarks.swift (ChromiumBookmarks.load, which calls ardia_import_chromium_bookmarks in libardia_apple and maps its tooLarge to the app's unreadable) on macOS 27.2, by tests/import-bookmarks/test_import_bookmarks.py",
-    "windows": "run: packages/expo-windows/src/import/chromium.ts (chromiumBookmarks) on Node 24 with apps/browser/windows/Ardia/ImportFiles.h ReadOpened and TextOf emulated, by tests/import-bookmarks/test_import_bookmarks.py",
     "linux": "read from engine/ardiacore-linux/src/ardia/linux/ac_linux_import_readers.cc (ReadChromiumBookmarks, base::JSONReader with JSON_PARSE_RFC), not run"
   },
   "inputs": {
@@ -1221,96 +1220,6 @@
               }
             ]
           }
-        },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "folder",
-                "title": "Bookmarks Bar",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "plain",
-                    "url": "https://0.example/",
-                    "dateAdded": 1655526400000
-                  },
-                  {
-                    "type": "url",
-                    "title": "plus sign",
-                    "url": "https://1.example/",
-                    "dateAdded": 1655526400000
-                  },
-                  {
-                    "type": "url",
-                    "title": "leading space",
-                    "url": "https://2.example/",
-                    "dateAdded": 1655526400000
-                  },
-                  {
-                    "type": "url",
-                    "title": "before 1970",
-                    "url": "https://3.example/",
-                    "dateAdded": -11644473599999.996
-                  },
-                  {
-                    "type": "url",
-                    "title": "the unix epoch",
-                    "url": "https://4.example/",
-                    "dateAdded": 0
-                  },
-                  {
-                    "type": "url",
-                    "title": "negative",
-                    "url": "https://5.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "exponent",
-                    "url": "https://6.example/",
-                    "dateAdded": -1644473600000
-                  },
-                  {
-                    "type": "url",
-                    "title": "hex",
-                    "url": "https://7.example/",
-                    "dateAdded": 201163685670715.4
-                  },
-                  {
-                    "type": "url",
-                    "title": "empty",
-                    "url": "https://8.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "number, not string",
-                    "url": "https://9.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "past int64",
-                    "url": "https://10.example/",
-                    "dateAdded": 99988355526400000
-                  },
-                  {
-                    "type": "url",
-                    "title": "odd past 2^53",
-                    "url": "https://11.example/",
-                    "dateAdded": 1655526400123.456
-                  },
-                  {
-                    "type": "url",
-                    "title": "fraction",
-                    "url": "https://12.example/",
-                    "dateAdded": 1655526400000
-                  }
-                ],
-                "role": "toolbar"
-              }
-            ]
-          }
         }
       }
     },
@@ -1452,28 +1361,6 @@
       },
       "expect": {
         "error": "unreadable"
-      },
-      "platforms": {
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "folder",
-                "title": "Other Bookmarks",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "\u00ff",
-                    "url": "https://a.example/"
-                  }
-                ],
-                "role": "other"
-              }
-            ]
-          }
-        }
       }
     },
     {
@@ -1485,15 +1372,6 @@
       },
       "expect": {
         "error": "unreadable"
-      },
-      "platforms": {
-        "windows": {
-          "shape": {
-            "links": 1,
-            "folders": 1,
-            "depth": 1
-          }
-        }
       }
     },
     {
@@ -1627,28 +1505,6 @@
       },
       "expect": {
         "error": "unreadable"
-      },
-      "platforms": {
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "folder",
-                "title": "Other Bookmarks",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "A",
-                    "url": "https://a.example/"
-                  }
-                ],
-                "role": "other"
-              }
-            ]
-          }
-        }
       }
     },
     {
@@ -1981,15 +1837,6 @@
           "folders": 65,
           "depth": 65
         }
-      },
-      "platforms": {
-        "windows": {
-          "shape": {
-            "links": 71,
-            "folders": 71,
-            "depth": 71
-          }
-        }
       }
     },
     {
@@ -2001,15 +1848,6 @@
       },
       "expect": {
         "error": "unreadable"
-      },
-      "platforms": {
-        "windows": {
-          "shape": {
-            "links": 121,
-            "folders": 121,
-            "depth": 121
-          }
-        }
       }
     },
     {
@@ -2027,13 +1865,6 @@
         }
       },
       "platforms": {
-        "windows": {
-          "shape": {
-            "links": 250001,
-            "folders": 1,
-            "depth": 1
-          }
-        },
         "linux": {
           "shape": {
             "links": 250000,
@@ -2077,13 +1908,6 @@
         }
       },
       "platforms": {
-        "windows": {
-          "shape": {
-            "links": 250001,
-            "folders": 2,
-            "depth": 1
-          }
-        },
         "linux": {
           "shape": {
             "links": 250000,
@@ -2167,9 +1991,6 @@
       },
       "platforms": {
         "linux": {
-          "error": "unreadable"
-        },
-        "windows": {
           "error": "unreadable"
         },
         "swift": {

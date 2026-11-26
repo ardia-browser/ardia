@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useRef, type ComponentType, type ForwardedRef, type ReactNode } from "react";
 import { Animated as WebAnimated, Pressable as WebPressable, StyleSheet, View as WebView } from "react-native-web";
 import "./sidebarEdge";
+import { borderBoxClip } from "./borderClip";
 import { currentPointer, watchPointer, type PointerSample } from "./pointer";
 
 type MouseHandler = (e: MacMouseEvent) => void;
@@ -164,31 +165,27 @@ function strip(props: MacProps) {
 
 const BaseView = WebView as unknown as ComponentType<Record<string, unknown>>;
 
-type ClipStyle = { overflow?: string; borderWidth?: number; borderTopWidth?: number; borderRightWidth?: number; borderBottomWidth?: number; borderLeftWidth?: number };
-
-const BORDER_BOX_CLIP = { overflow: "clip", overflowClipMargin: "border-box" };
-
 function clipAtBorderBox(style: unknown) {
-  if (!style) return style;
-  const flat = StyleSheet.flatten(style as never) as ClipStyle | undefined;
-  if (flat?.overflow !== "hidden") return style;
-  const bordered = [flat.borderWidth, flat.borderTopWidth, flat.borderRightWidth, flat.borderBottomWidth, flat.borderLeftWidth].some((w) => (w ?? 0) > 0);
-  if (!bordered) return style;
-  return [style, BORDER_BOX_CLIP];
+  const clip = style ? borderBoxClip(StyleSheet.flatten(style as never) as Record<string, unknown> | undefined) : null;
+  return { style: clip ? [style, clip.style] : style, ring: clip?.ring ?? null };
 }
 
 export const MacView = forwardRef<unknown, MacProps>(function MacView(props, ref) {
   const { node, domHover } = useMacBehaviour(props);
+  const clip = clipAtBorderBox(props.style);
   return (
     <BaseView
       {...strip(props)}
       {...domHover}
-      style={clipAtBorderBox(props.style)}
+      style={clip.style}
       ref={(value: HTMLElement | null) => {
         node.current = value;
         assign(ref, value);
       }}
-    />
+    >
+      {props.children}
+      {clip.ring ? <div aria-hidden data-border-ring="" style={clip.ring} /> : null}
+    </BaseView>
   );
 }) as unknown as typeof WebView;
 

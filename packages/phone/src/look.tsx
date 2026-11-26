@@ -18,7 +18,7 @@ export type ProfileBackdropProps = ViewProps & LookColors & { dark?: boolean; th
 
 export type FilmGrainProps = ViewProps & { opacity?: number; children?: ReactNode };
 
-export type FrostSourceProps = ViewProps & { name: string; children?: ReactNode };
+export type FrostSourceProps = ViewProps & { name: string; heldFill?: string | null; heldUntil?: string | null; children?: ReactNode };
 
 export type FrostVariant = "bar" | "sheet" | "glass" | "thin";
 
@@ -33,9 +33,9 @@ export type LookDynamicColor = { dynamic: { light: string; dark: string } };
 
 export type ClassicChrome = { fill?: string | LookDynamicColor; edgeWidth?: number; edge?: string | LookDynamicColor; shadowRadius?: number; shadowY?: number; shadow?: string | LookDynamicColor };
 
-export type GlassProps = FrostProps & { shape?: GlassShape; tint?: string; interactive?: boolean; surface?: GlassSurface; tinted?: boolean; barShadow?: boolean; classicChrome?: ClassicChrome; shown?: boolean; shownMs?: number };
+export type GlassProps = FrostProps & { shape?: GlassShape; tint?: string; interactive?: boolean; surface?: GlassSurface; tinted?: boolean; barShadow?: boolean; classicChrome?: ClassicChrome; shown?: boolean; shownMs?: number; sampleHold?: string | null };
 
-export type NativeGlassRender = "lens" | "frost" | "solid";
+export type NativeGlassRender = "lens" | "frost" | "clear" | "solid";
 
 type LookNative = {
   hasGlass?: () => boolean;
@@ -72,6 +72,9 @@ export type LookCounts = {
   backdropFrames?: number;
   sourceRecordings?: number;
   blurLayerRenders?: number;
+  stripRecords?: number;
+  stripRefreshes?: number;
+  strips?: number;
   retints?: number;
   restingLayerHolds?: number;
   restingLayered?: number;
@@ -122,7 +125,7 @@ export const glassIsNative = () => hasNativeGlass;
 
 export function nativeGlassRender(): NativeGlassRender | null {
   const drawn = lookNative?.glassRender?.();
-  return drawn === "lens" || drawn === "frost" || drawn === "solid" ? drawn : null;
+  return drawn === "lens" || drawn === "frost" || drawn === "clear" || drawn === "solid" ? drawn : null;
 }
 
 export const DeckBackdrop = look<DeckBackdropProps>("DeckBackdrop");
@@ -133,13 +136,19 @@ export const FilmGrain = look<FilmGrainProps>("FilmGrain");
 
 export const FrostSource = look<FrostSourceProps>("FrostSource");
 
+export const GlassBackdrop = look<ViewProps>("GlassBackdrop");
+
+export type FrameMarkProps = ViewProps & { mark?: string; drawn?: boolean; markWhenShown?: string };
+
+export const FrameMark = look<FrameMarkProps>("FrameMark");
+
 export const Frost = look<FrostProps>("Frost");
 
 const NativeGlass = look<GlassProps>("Glass");
 
 export function Glass(props: GlassProps) {
   if (hasNativeGlass) return createElement(NativeGlass, props);
-  const { shape, tint, interactive, surface, tinted, barShadow, shown, shownMs, ...frost } = props;
+  const { shape, tint, interactive, surface, tinted, barShadow, shown, shownMs, sampleHold, ...frost } = props;
   const cornerRadius = frost.cornerRadius ?? (shape === "rounded" ? 0 : 999);
   const classic = surface === "classic" || frost.reduceTransparency === true;
   return createElement(Frost, { ...frost, variant: frost.variant ?? "glass", cornerRadius, reduceTransparency: classic ? true : frost.reduceTransparency });

@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
 import { SearchTray } from "../components/search/SearchTray";
 import { searchFieldHeight, searchFieldRadius, searchPanel, searchPanelPlace, searchPanelPreferredHeight, searchPanelRadius } from "../components/search/searchPanelTokens";
@@ -31,10 +31,10 @@ const host = (root: ReturnType<typeof renderSurface>, testID: string) => root.ro
 
 const departure = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => node.type === MotionView)[0]!;
 
-test("in the redesign search is Arc's panel: edge to edge, sitting on the keyboard and running on under it, smooth top corners concentric with the field, 16 + 23.75 = 39.75 points, the field 16 in and 16 down", () => {
+test("in the redesign search is Arc's panel: 8 points in from each side, sitting on the keyboard and running on under it, smooth top corners concentric with the field, 16 + 23.75 = 39.75 points, the field 16 in and 16 down", () => {
   const root = open("redesigned");
   const panel = StyleSheet.flatten(host(root, "trayPanel")!.props.style);
-  expect(panel).toMatchObject({ position: "absolute", left: 0, right: 0, borderTopLeftRadius: 39.75, borderTopRightRadius: 39.75, borderCurve: "continuous" });
+  expect(panel).toMatchObject({ position: "absolute", left: 8, right: 8, borderTopLeftRadius: 39.75, borderTopRightRadius: 39.75, borderCurve: "continuous" });
   expect(panel.bottom as number).toBeLessThan(0);
   expect(panel.boxShadow).toBe(shadowCss("floating", false));
   expect(StyleSheet.flatten(host(root, "searchPanelFieldRow")!.props.style)).toMatchObject({ paddingHorizontal: 16, paddingTop: 16 });
@@ -46,7 +46,7 @@ test("in the original design the fallback tray is the floating above-keyboard ca
   const root = open("original");
   expect(host(root, "trayPanel")).toBeUndefined();
   const fieldHeight = searchFieldHeight(1);
-  const place = searchPanelPlace("aboveKeyboard", 0, false);
+  const place = searchPanelPlace("aboveKeyboard", 0);
   const card = StyleSheet.flatten(host(root, "traySheet")!.props.style);
   const panelRadius = searchPanelRadius(fieldHeight);
   expect(card).toMatchObject({ position: "absolute", left: place.cardInset, right: place.cardInset, bottom: place.cardGap, borderRadius: panelRadius, borderCurve: "continuous" });

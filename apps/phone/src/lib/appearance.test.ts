@@ -44,6 +44,8 @@ test("Light or Dark: a fixed choice wins, System follows the device, Match My Ma
   assert.equal(preferredScheme("redesigned", "matchMac", glassLightMac), "light");
   assert.equal(preferredScheme("redesigned", "matchMac", autoMac), null);
   assert.equal(preferredScheme("redesigned", "matchMac", null), null);
+  assert.equal(preferredScheme("material", "dark", null), "dark");
+  assert.equal(preferredScheme("material", "light", classicDarkMac), "light");
   assert.equal(appliedDark(null, true), true);
   assert.equal(appliedDark(null, false), false);
   assert.equal(appliedDark("light", true), false);
@@ -70,7 +72,10 @@ test("each launch says how the glass is drawn: Android's lens, frost or solid, C
   assert.equal(glassRenderTelemetry("android", "redesigned", "glass", "solid"), "solid");
   assert.equal(glassRenderTelemetry("android", "redesigned", "glass", null), "solid", "no native look module draws the flat fallback");
   assert.equal(glassRenderTelemetry("android", "redesigned", "classic", "lens"), "classic");
-  assert.equal(glassRenderTelemetry("ios", "redesigned", "glass", null), "native");
+  assert.equal(glassRenderTelemetry("ios", "redesigned", "glass", "lens"), "lens");
+  assert.equal(glassRenderTelemetry("ios", "redesigned", "glass", "solid"), "solid");
+  assert.equal(glassRenderTelemetry("ios", "redesigned", "glass", "clear"), "clear", "a failed shader draws clear glass on iPhone");
+  assert.equal(glassRenderTelemetry("ios", "redesigned", "glass", null), "native", "a build without the native glassRender still drew Apple's glass");
   assert.equal(glassRenderTelemetry("ios", "redesigned", "classic", null), "classic");
   assert.equal(glassRenderTelemetry("android", "material", "glass", "lens"), "none");
 });

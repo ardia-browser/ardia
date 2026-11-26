@@ -3,9 +3,9 @@ import { test } from "node:test";
 import { importPreferences } from "../legacy/importRules.ts";
 import { defaultPreferences, parsePreferences, serializePreference } from "./preferences.ts";
 
-test("only Android defaults to collapsing the bottom bar, including missing or invalid saved values", () => {
+test("both phones default to folding the bottom bar into the pill on scroll, including missing or invalid saved values", () => {
   for (const platform of [undefined, "ios", "android"]) {
-    const expected = platform === "android";
+    const expected = platform !== undefined;
     assert.equal(defaultPreferences(platform).collapsesBottomBar, expected);
     assert.equal(parsePreferences({}, platform).collapsesBottomBar, expected);
     assert.equal(parsePreferences({ "settings.collapseBottomBar": "invalid" }, platform).collapsesBottomBar, expected);

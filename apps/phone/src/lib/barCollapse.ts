@@ -6,7 +6,7 @@ export type BarCollapse = { tabId: string | null; page: string | null; direction
 
 export const BAR_SHOWN: BarCollapse = { tabId: null, page: null, direction: "up", hidden: false };
 
-export const bottomBarCollapses = (design: Design, preference: boolean | null): boolean => preference ?? design === "material";
+export const bottomBarCollapses = (design: Design, preference: boolean | null): boolean => preference ?? design !== "original";
 
 export function followScroll(state: BarCollapse, tabId: string | null, page: string | null, direction: ScrollDirection, collapses: boolean): BarCollapse {
   if (!collapses || tabId !== state.tabId || page !== state.page) {

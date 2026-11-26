@@ -1,43 +1,49 @@
 import type { SplitSide } from "../../state/splits/splits";
+import type { DropTarget, PaneDropSide } from "../../state/drag/tabDrag";
 import type { Rect } from "../window/geometry";
 
-const STAGES = {
-  rest: { width: 0.1324, height: 0.383, inset: 0.025 },
-  grown: { width: 0.215, height: 0.611, inset: 0.02 },
-  active: { width: 0.241, height: 0.69, inset: 0.02 },
-} as const;
-export type ZoneStage = keyof typeof STAGES;
-const LEAN = 0.43;
+export const DROP_SIDES: readonly SplitSide[] = ["left", "right", "top", "bottom"];
+export const PANE_SIDES: readonly PaneDropSide[] = [...DROP_SIDES, "center"];
 
-const PREVIEW = { width: 209, height: 110 };
+const EDGE_BAND = { share: 0.25, min: 48, max: 180 } as const;
+const HELD_SLACK = 16;
+export const DROP_PREVIEW_INSET = 6;
 
-export function zoneRect(pane: Rect, side: SplitSide, stage: ZoneStage, pointerX = 0): Rect {
-  const s = STAGES[stage];
-  const width = pane.width * s.width;
-  const height = pane.height * s.height;
-  const inset = pane.width * s.inset;
-  const y = pane.y + (pane.height - height) / 2;
-  if (stage !== "active") return { x: side === "left" ? pane.x + inset : pane.x + pane.width - inset - width, y, width, height };
-  const home = zoneRect(pane, side, "grown");
-  const centre = home.x + home.width / 2;
-  const lean = centre + (pointerX - centre) * LEAN;
-  const x = Math.max(pane.x + inset, Math.min(pane.x + pane.width - inset - width, lean - width / 2));
-  return { x, y, width, height };
+export const isVerticalSplitSide = (side: PaneDropSide): boolean => side === "top" || side === "bottom";
+
+const edgeBand = (length: number) => Math.min(EDGE_BAND.max, Math.max(EDGE_BAND.min, length * EDGE_BAND.share), length / 2);
+const contains = (r: Rect, x: number, y: number) => x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height;
+
+export function paneSideAt(pane: Rect, px: number, py: number, sides: readonly PaneDropSide[] = DROP_SIDES, held: PaneDropSide | null = null): PaneDropSide | null {
+  const depth: Record<SplitSide, number> = { left: px - pane.x, right: pane.x + pane.width - px, top: py - pane.y, bottom: pane.y + pane.height - py };
+  let best: { side: SplitSide; reach: number } | null = null;
+  for (const side of sides) {
+    if (side === "center") continue;
+    const band = edgeBand(isVerticalSplitSide(side) ? pane.height : pane.width);
+    const reach = (depth[side] + (held === side ? -HELD_SLACK : held === "center" ? HELD_SLACK : 0)) / band;
+    if (reach <= 1 && (!best || reach < best.reach)) best = { side, reach };
+  }
+  if (best) return best.side;
+  return sides.includes("center") ? "center" : null;
 }
 
-const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
-
-export function zoneHit(panes: [string, Rect][], px: number, py: number, current: { tabId: string; side: SplitSide } | null) {
-  const card = { x: px - PREVIEW.width / 2, y: py - PREVIEW.height / 2, width: PREVIEW.width, height: PREVIEW.height };
-  let best: { tabId: string; side: SplitSide; distance: number } | null = null;
+export function paneDropTarget(panes: [string, Rect][], px: number, py: number, current: DropTarget | null, sides: readonly PaneDropSide[] = DROP_SIDES): DropTarget | null {
   for (const [tabId, pane] of panes) {
-    for (const side of ["left", "right"] as const) {
-      const keep = current?.tabId === tabId && current.side === side;
-      const r = zoneRect(pane, side, keep ? "active" : "grown", px);
-      if (!overlaps(card, r)) continue;
-      const distance = keep ? -1 : Math.abs(r.x + r.width / 2 - px);
-      if (!best || distance < best.distance) best = { tabId, side, distance };
-    }
+    if (!contains(pane, px, py)) continue;
+    const side = paneSideAt(pane, px, py, sides, current?.tabId === tabId ? current.side : null);
+    return side && { tabId, side };
   }
-  return best && { tabId: best.tabId, side: best.side };
+  return null;
+}
+
+export function dropPreviewRect(pane: Rect, side: PaneDropSide): Rect {
+  const inset = DROP_PREVIEW_INSET;
+  const whole = { x: pane.x + inset, y: pane.y + inset, width: pane.width - inset * 2, height: pane.height - inset * 2 };
+  if (side === "center") return whole;
+  if (isVerticalSplitSide(side)) {
+    const height = pane.height / 2 - inset * 1.5;
+    return { ...whole, y: side === "top" ? whole.y : pane.y + pane.height - inset - height, height };
+  }
+  const width = pane.width / 2 - inset * 1.5;
+  return { ...whole, x: side === "left" ? whole.x : pane.x + pane.width - inset - width, width };
 }

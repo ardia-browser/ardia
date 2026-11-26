@@ -263,7 +263,7 @@ function HistoryList({ query, bottom, onMenu }: { query: string; bottom: number;
   if (!entries.length) return <EmptyState title="No History" message="Pages you visit here and on your Mac show up here." icon="clockArrow" />;
   if (!shown.length) return noResults(query);
   return (
-    <SectionList
+    <SectionList bounces={false} overScrollMode="never"
       testID="libraryHistory"
       sections={sections}
       keyExtractor={(entry) => entry.url}
@@ -335,7 +335,7 @@ function BookmarkList({ bookmarks, query, bottom, onMenu }: { bookmarks: Bookmar
   if (!bookmarks.length) return <EmptyState title="No Bookmarks" message={enabled ? "Bookmarks you save on your Mac show up here." : "Sync with your Mac to see its bookmarks here."} icon="star" />;
   if (matches && !matches.length) return noResults(trimmed);
   return (
-    <SectionList
+    <SectionList bounces={false}
       testID="libraryBookmarks"
       sections={sections}
       keyExtractor={(item) => item.key}
@@ -356,7 +356,7 @@ function BookmarkFolder({ folder, bottom, onMenu }: { folder: BookmarkItem | nul
   const children = folder?.children ?? [];
   if (!children.length) return <EmptyState title="Empty Folder" message="" icon="folderFill" />;
   return (
-    <FlatList
+    <FlatList bounces={false} overScrollMode="never"
       testID="libraryFolder"
       data={children}
       keyExtractor={(item) => item.key}

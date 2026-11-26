@@ -156,16 +156,29 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache,
   ])
 
-  func clearBrowsingData(profile: String, types: [String], since: Double, completion: @escaping () -> Void) {
+  func clearBrowsingData(profile: String, types: [String], since: Double, completion: @escaping (String?) -> Void) {
     if types.contains("history") { WebKitTabHistory.cleared(profile: profile) }
-    if types.contains("siteData") { certificates.forgetTransportSecurity(profile: profile) }
-    guard stores.hasStore(for: profile) else { return completion() }
-    var kinds = Set<String>()
-    if types.contains("siteData") { kinds.formUnion(Self.siteDataTypes) }
-    if types.contains("cache") { kinds.formUnion([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache]) }
-    if types.contains("siteData") { stores.forgetSitePermissions(of: profile) }
-    guard !kinds.isEmpty else { return completion() }
-    stores.dataStore(for: profile).removeData(ofTypes: kinds, modifiedSince: Date(timeIntervalSince1970: since / 1000), completionHandler: completion)
+    let rangeStart = WebKitSiteChoices.rangeStart(sinceMilliseconds: since)
+    let finished = DispatchGroup()
+    var failure: String?
+    if types.contains("siteData") {
+      finished.enter()
+      certificates.forgetTransportSecurity(profile: profile, since: rangeStart) { error in
+        failure = failure ?? error
+        finished.leave()
+      }
+    }
+    if stores.hasStore(for: profile) {
+      var kinds = Set<String>()
+      if types.contains("siteData") { kinds.formUnion(Self.siteDataTypes) }
+      if types.contains("cache") { kinds.formUnion([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache]) }
+      if types.contains("siteData") { stores.forgetSitePermissions(of: profile, since: rangeStart) }
+      if !kinds.isEmpty {
+        finished.enter()
+        stores.dataStore(for: profile).removeData(ofTypes: kinds, modifiedSince: rangeStart ?? .distantPast) { finished.leave() }
+      }
+    }
+    finished.notify(queue: .main) { completion(failure) }
   }
 
   static func covers(_ domain: String, host: String) -> Bool {

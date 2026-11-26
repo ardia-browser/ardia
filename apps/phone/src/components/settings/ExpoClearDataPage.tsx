@@ -6,7 +6,7 @@ import { haptics } from "../../state/app/haptics";
 import { clearBrowsingData, websiteDataClearsByTime } from "../../state/settings/actions";
 import { popSettings, type SettingsRoute } from "../../state/settings/nav";
 import { CLEAR_RANGES, clearChoice, clearFooter, clearIsEmpty, clearMessage, clearTitle, type ClearRange } from "../../state/settings/settingsRules";
-import { modifierList, settingsChrome, settingsSwitchStyle } from "../ui";
+import { modifierList, neverBounces, settingsChrome, settingsSwitchStyle } from "../ui";
 import { ExpoBusyButton } from "./ExpoSettingsParts";
 import { destinationWords } from "../../lib/sharedWords";
 
@@ -33,7 +33,7 @@ export function ExpoClearDataPage({ onCleared = popSettings }: { route?: Setting
     </Toggle>
   );
   return (
-    <Form modifiers={modifierList(navigationTitle("Clear Browsing Data"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome())}>
+    <Form modifiers={modifierList(navigationTitle("Clear Browsing Data"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces())}>
       <Section>
         <Picker label="Time Range" selection={range} onSelectionChange={(next: ClearRange) => setRange(next)} modifiers={[pickerStyle("menu"), tint("secondary"), disabled(clearing)]}>
           {CLEAR_RANGES.map((option) => (

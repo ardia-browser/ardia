@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/desktop/ac_desktop_paths.h"
 #include "ardia/linux/ac_linux_contract.h"
 #include "ardia/linux/ac_linux_extension_views.h"
 #include "ardia/linux/ac_linux_extensions.h"
@@ -177,7 +178,7 @@ std::string ReadIcon(const base::FilePath& root, const std::string& relative) {
   const auto clean = ext::ResourcePath(relative);
   if (!clean) return "";
   const base::FilePath real_root = base::MakeAbsoluteFilePath(root);
-  const base::FilePath real_file = base::MakeAbsoluteFilePath(root.Append(*clean));
+  const base::FilePath real_file = base::MakeAbsoluteFilePath(root.Append(ardia::desktop_paths::FromText<base::FilePath>(*clean)));
   if (real_root.empty() || real_file.empty() || !real_root.IsParent(real_file)) return "";
   std::string bytes;
   if (!base::ReadFileToStringWithMaxSize(real_file, &bytes, ext::kMaxIconBytes)) return "";
@@ -281,7 +282,7 @@ void Forward(Profile* profile, const std::string& name, base::DictValue input, D
   if (!json) return Fail(std::move(done), "ERR_EXTENSION_REQUEST", "The request is not JSON");
   KeepDeveloperModeForReload(profile, name, input);
   const std::string service(route->service);
-  const std::string path = profile->GetPath().value();
+  const std::string path = ardia::desktop_paths::Text(profile->GetPath());
   ac_engine_call(service.c_str(), path.c_str(), json->c_str(), &EngineReplied,
                  new EngineReply{name, std::move(input), profile->GetWeakPtr(), std::move(done)});
 }
@@ -311,7 +312,7 @@ Inspected Inspect(base::FilePath path) {
 void InspectUnpacked(const base::DictValue& input, Done done) {
   const std::string path = *input.FindString("path");
   base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, kFileReads, base::BindOnce(&Inspect, base::FilePath(path)),
+      FROM_HERE, kFileReads, base::BindOnce(&Inspect, ardia::desktop_paths::FromText<base::FilePath>(path)),
       base::BindOnce(
           [](std::string path, Done done, Inspected inspected) {
             if (!inspected.facts) return Fail(std::move(done), "ERR_EXTENSION_INVALID", inspected.error);
@@ -330,7 +331,7 @@ class FolderChooser : public ui::SelectFileDialog::Listener {
   }
 
   void FileSelected(const ui::SelectedFileInfo& file, int) override {
-    const std::string path = file.path().value();
+    const std::string path = ardia::desktop_paths::Text(file.path());
     Finish(ext::ValidFolderPath(path) ? base::Value(path) : base::Value());
   }
   void FileSelectionCanceled() override { Finish(base::Value()); }

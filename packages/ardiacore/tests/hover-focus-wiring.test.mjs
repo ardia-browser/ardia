@@ -10,9 +10,14 @@ const sources = [
   "../ios/ArdiaWebView+StandIn.mm",
   "../ios/ArdiaHoverProbe.mm",
   "../ios/ArdiaHoverProbe+Refusal.mm",
+  "../ios/ArdiaHoverProbe+Cover.mm",
+  "../ios/ArdiaHoverProbe+Episode.mm",
   "../ios/ArdiaHoverProbeInternal.h",
   "../ios/ArdiaHoverProbe+Dev.mm",
   "../../shell/ios/FocusHandoff.swift",
+  "../../shell/ios/QuitFlow.swift",
+  "../../shell/ios/UpdaterCore/HoverLossQuitCommit.swift",
+  "../../../apps/browser/src/state/telemetry/hoverLost.ts",
 ];
 const read = (name) => (existsSync(path(name)) ? readFileSync(path(name), "utf8") : "");
 const painting = read("../ios/ArdiaWebView+Painting.mm");
@@ -23,6 +28,11 @@ const probeRefusal = read("../ios/ArdiaHoverProbe+Refusal.mm");
 const probeInternal = read("../ios/ArdiaHoverProbeInternal.h");
 const probeDev = read("../ios/ArdiaHoverProbe+Dev.mm");
 const handoff = read("../../shell/ios/FocusHandoff.swift");
+const probeCover = read("../ios/ArdiaHoverProbe+Cover.mm");
+const probeEpisode = read("../ios/ArdiaHoverProbe+Episode.mm");
+const quitFlow = read("../../shell/ios/QuitFlow.swift");
+const quitCommit = read("../../shell/ios/UpdaterCore/HoverLossQuitCommit.swift");
+const hoverLostJs = read("../../../apps/browser/src/state/telemetry/hoverLost.ts");
 
 const body = (source, header, closer = "\n}\n") => {
   const start = source.indexOf(header);
@@ -125,7 +135,7 @@ test("SafeToHeal names the first guard that refuses, in the order the guards are
   assert.match(panel, /NSSavePanel\.class\]\) return HealRefusal::savePanel;/);
 
   const safe = body(probe, "bool SafeToHeal(");
-  assert.match(safe, /HoverReason::halfActive\) \{\s*if \(trigger != HoverTrigger::click\) refusal = HealRefusal::notClick;\s*else if \(check\.key == FocusWindowKind::popup\) refusal = HealRefusal::keyPopup;/);
+  assert.match(safe, /HoverReason::halfActive\) \{\s*if \(trigger != HoverTrigger::click && trigger != HoverTrigger::key\) refusal = HealRefusal::notClick;\s*else if \(check\.key == FocusWindowKind::popup\) refusal = HealRefusal::keyPopup;/);
   assert.match(safe, /HoverReason::notKeyOrMain && check\.activation\.appActive && Unseen\(check\.key\) && !OtherArdiaWindowActive\(window\)\)\) \{\s*refusal = HealRefusal::notEligible;/);
   assert.match(safe, /return refusal == HealRefusal::none;/);
 
@@ -168,12 +178,12 @@ test("a click in another browser window while an episode is open is counted, and
   const handle = body(probe, "void HandleHoverCheck(");
   assert.match(
     handle,
-    /if \(!window\) return;\s*if \(gEpisode\.open && gEpisode\.owner != window\) \{\s*if \(trigger != HoverTrigger::click\) return;\s*gEpisode\.otherWindowClicks\+\+;\s*if \(gEpisode\.first\.reason != HoverReason::halfActive \|\| gEpisode\.healed\) return;\s*gEpisode\.owner = window;\s*\}\s*const HoverCheck check = Probe\(window/,
+    /if \(!window\) return;\s*if \(gEpisode\.open && gEpisode\.owner != window && trigger != HoverTrigger::key\) \{\s*if \(trigger != HoverTrigger::click\) return;\s*gEpisode\.otherWindowClicks\+\+;\s*if \(gEpisode\.first\.reason != HoverReason::halfActive \|\| gEpisode\.healed\) return;\s*gEpisode\.owner = window;\s*\}\s*const HoverCheck check = Probe\(window/,
   );
 });
 
 test("the episode record carries the refusal, the matched window and the other-window clicks out to page_hover_lost and the dev state", () => {
-  const close = body(probe, "void CloseEpisode(");
+  const close = body(probeEpisode, "NSDictionary *EpisodePayload(");
   assert.match(close, /@"healRefused" : HealRefusalName\(gEpisode\.firstRefusal\),/);
   assert.match(close, /@"healRefusedLast" : HealRefusalName\(gEpisode\.lastRefusal\),/);
   assert.match(close, /@"healRefusedWindow" : MenuWindowName\(gEpisode\.refusedWindow\),/);
@@ -182,4 +192,85 @@ test("the episode record carries the refusal, the matched window and the other-w
   assert.match(probeDev, /@"healRefusedLast" : HealRefusalName\(gEpisode\.lastRefusal\),/);
   assert.match(probeDev, /@"healRefusedWindow" : MenuWindowName\(gEpisode\.refusedWindow\),/);
   assert.match(probeDev, /@"otherWindowClicks" : @\(gEpisode\.otherWindowClicks\),/);
+});
+
+const jsSet = (name) => new Set([...(new RegExp(`const ${name} = new Set\\(\\[([^\\]]*)\\]`).exec(hoverLostJs)?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+
+test("an episode still open when Ardia quits is reported as ended by quit before JS hears willQuit, and stays open in case the quit is cancelled", () => {
+  const terminate = body(quitFlow, "func shouldTerminate()", "\n  }\n");
+  const reported = terminate.indexOf("ArdiaHost.reportHoverLossAtQuit()");
+  const told = terminate.indexOf('ShellEvents.send(.app, ["type": "willQuit"])');
+  assert.ok(reported > 0 && told > reported, "JS holds the episode before it saves for the quit");
+  const atQuit = body(probeEpisode, "void ReportHoverEpisodeAtQuit(");
+  assert.match(atQuit, /if \(!gEpisode\.open\) return;/);
+  assert.match(atQuit, /EmitEpisode\(EpisodePayload\(@"quit"\), gEpisode\.stamp\);/);
+  assert.doesNotMatch(atQuit, /CloseEpisode|HoverEpisode\{\}/, "the episode stays open until the quit commits");
+  assert.doesNotMatch(probeDev, /@"quit"/, "no dev shortcut stands in for the real quit");
+  assert.ok(jsSet("HOVER_ENDINGS").has("quit"), "JS keeps the quit ending");
+});
+
+test("a page covered by a view reports the kind of view, the kind that made it see-through and how much it covered, as enums JS knows", () => {
+  const reason = body(probe, "HoverReason PageReason(");
+  assert.match(reason, /check\.coverView = CoverViewOf\(hit\);\s*NSView \*clear = SeeThroughView\(hit\);\s*check\.coverClear = clear != nil;\s*check\.coverClearView = CoverViewOf\(clear\);\s*check\.coverSize = CoverSizeOver\(clear \?: hit, page\);/);
+  const close = body(probeEpisode, "NSDictionary *EpisodePayload(");
+  assert.match(close, /@"coverView" : CoverViewName\(first\.coverView\),/);
+  assert.match(close, /@"coverClearView" : CoverViewName\(first\.coverClearView\),/);
+  assert.match(close, /@"coverSize" : CoverSizeName\(first\.coverSize\),/);
+  const names = (header) => [...body(probeCover, header).matchAll(/@"([A-Za-z]+)"/g)].map((m) => m[1]);
+  const enumOf = (name) => (new RegExp(`enum class ${name} \\{([^}]*)\\}`).exec(probeInternal)?.[1] ?? "").split(",").map((v) => v.trim());
+  assert.deepEqual(names("NSString *CoverViewName("), enumOf("CoverView"), "CoverViewName follows the enum's order");
+  assert.deepEqual(names("NSString *CoverSizeName("), enumOf("CoverSize"), "CoverSizeName follows the enum's order");
+  assert.deepEqual([...jsSet("HOVER_COVER_VIEWS")].sort(), [...enumOf("CoverView")].sort());
+  assert.deepEqual([...jsSet("HOVER_COVER_SIZES")].sort(), [...enumOf("CoverSize")].sort());
+  const kinds = body(probeCover, "CoverView CoverViewOf(");
+  assert.doesNotMatch(kinds, /return name|stringWithFormat/, "a class name is only compared, never kept");
+});
+
+test("a quit report commits only on real termination past cancellation points, stays open on Stay, and writes durably before pruning", () => {
+  assert.match(body(probeEpisode, "NSDictionary *EpisodePayload("), /@"serial" : @\(gEpisode\.serial\),/);
+  assert.match(body(probeEpisode, "void ReportHoverEpisodeAtQuit("), /gReportedAtQuit = gEpisode\.serial;\s*gQuitWindowClosed = false;\s*EmitEpisode\(/);
+  assert.match(body(probeEpisode, "bool HoverEpisodeReportedAtQuitOpen("), /return gReportedAtQuit != 0 && gEpisode\.open && gEpisode\.serial == gReportedAtQuit;/);
+  assert.match(body(probeEpisode, "NSInteger HoverEpisodeReportedAtQuitSeconds("), /if \(!HoverEpisodeReportedAtQuitOpen\(\)\) return -1;\s*return MIN\(86400, lround\(MAX\(0, Uptime\(\) - gEpisode\.startedAt\)\)\);/);
+  assert.match(body(probeEpisode, "void MarkHoverEpisodeCommittedAtQuit("), /gEpisode = HoverEpisode\{\};\s*gPendingReason = HoverReason::fine;\s*ClearQuitReport\(\);/);
+  assert.match(body(probeEpisode, "void CancelHoverEpisodeAtQuit("), /const bool windowClosed = QuitWindowClosedPending\(\);\s*ClearQuitReport\(\);\s*if \(windowClosed\) CloseEpisode\(@"windowClosed"\);/);
+  assert.match(body(probe, "void CloseOwnerWindow("), /if \(!gEpisode\.open \|\| DeferWindowCloseForQuit\(\)\) return;\s*CloseEpisode\(@"windowClosed"\);/);
+  assert.match(body(probe, "void WatchHover("), /if \(gEpisode\.open && note\.object == gEpisode\.owner\) CloseOwnerWindow\(\);/);
+  assert.match(quitFlow, /forName: NSApplication\.willTerminateNotification, object: nil, queue: nil\s*\) \{ _ in commitHeldHoverLoss\(\) \}/);
+  assert.match(quitFlow, /forName: PluginProgramLinks\.quitCancelledNotification, object: nil, queue: nil\s*\) \{ _ in cancelHeldHoverLoss\(\) \}/);
+  const commit = body(quitFlow, "static func commitHeldHoverLoss()", "\n  }\n");
+  assert.match(commit, /guard ArdiaHost\.hoverLossReportedAtQuitIsOpen\(\), let held = DocumentStore\.read\(heldHoverLoss\) else \{ return \}/);
+  assert.match(commit, /ArdiaHost\.hoverLossReportedAtQuitSeconds\(\)/);
+  assert.match(commit, /HoverLossQuitCommit\.commit\(/);
+  assert.match(commit, /DocumentStore\.writeDurablySync\(\$0, \$1, allowWhenClosed: true\)/);
+  assert.match(commit, /ArdiaHost\.markHoverLossCommittedAtQuit\(\)/);
+  assert.match(commit, /DocumentStore\.removeSync\(heldHoverLoss, allowWhenClosed: true\)/);
+  const cancel = body(quitFlow, "static func cancelHeldHoverLoss()", "\n  }\n");
+  assert.match(cancel, /ArdiaHost\.cancelHoverLossAtQuit\(\)\s*DocumentStore\.removeSync\(heldHoverLoss, allowWhenClosed: true\)/);
+  const settled = body(quitFlow, "private func quitAfterUpdaterSettles()", "\n  }\n");
+  assert.doesNotMatch(settled, /commitHeldHoverLoss/, "does not commit before Chromium's beforeunload prompt can cancel quit");
+  const reply = body(quitFlow, "func replyToTerminate(", "\n  }\n");
+  assert.match(reply, /Self\.cancelHeldHoverLoss\(\)\s*return NSApp\.reply\(toApplicationShouldTerminate: false\)/);
+  const terminate = body(quitFlow, "func shouldTerminate()", "\n  }\n");
+  assert.ok(terminate.indexOf("_ = Self.commitsHoverLossOnTerminate") < terminate.indexOf("ArdiaHost.reportHoverLossAtQuit()"), "the commit watch is in place before the report");
+  assert.ok(terminate.indexOf("_ = Self.cancelsHoverLossOnQuitCancelled") < terminate.indexOf("ArdiaHost.reportHoverLossAtQuit()"), "the cancel watch is in place before the report");
+  const helper = body(quitCommit, "static func commit(", "\n  }\n");
+  assert.ok(helper.indexOf("guard write(target, prepared.json) else { return false }") > 0);
+  assert.ok(helper.indexOf("guard write(target, prepared.json) else { return false }") < helper.indexOf("list(prefix)"), "writes durably before listing or pruning committed records");
+});
+
+test("a key press in a half-active Ardia repairs it as a click does, and a key never opens any other episode", () => {
+  const check = body(probe, "bool CheckKeyInHalfActiveApp(NSEvent *event)");
+  assert.match(check, /if \(event\.type != NSEventTypeKeyDown\) return false;/);
+  assert.match(check, /if \(event\.isARepeat \|\| NSApp\.isActive \|\| !CurrentActivation\(\)\.inFront\(\)\) return true;/);
+  assert.match(check, /HandleHoverCheck\(weakWindow, point, HoverTrigger::key, stamp\)/);
+  assert.match(body(probe, "NSWindow *BrowserWindowForKey(NSEvent *event)"), /if \(event\.window\) return IsBrowserWindow\(event\.window\) \? event\.window : nil;/);
+  assert.match(probe, /NSEventMaskMouseMoved \| NSEventMaskLeftMouseDown \| NSEventMaskKeyDown[\s\S]*?if \(CheckKeyInHalfActiveApp\(event\)\) return event;/);
+  const handle = body(probe, "void HandleHoverCheck(NSWindow *window, NSPoint point, HoverTrigger trigger, ArdiaConsentStamp *stamp)");
+  const keyGuard = handle.indexOf("if (trigger == HoverTrigger::key && check.reason != HoverReason::halfActive) return;");
+  assert.ok(keyGuard >= 0 && handle.indexOf("OpenEpisode(") >= 0 && keyGuard < handle.indexOf("OpenEpisode("), "a key never opens any other kind of episode");
+  const keyMove = handle.indexOf("if (trigger == HoverTrigger::key && gEpisode.open && gEpisode.owner != window) {");
+  assert.ok(handle.indexOf("if (trigger == HoverTrigger::key && check.reason != HoverReason::halfActive) return;") < keyMove && keyMove > 0, "a key moves or ends another window's episode only once the probe confirms halfActive");
+  assert.match(handle.slice(keyMove), /^if \(trigger == HoverTrigger::key && gEpisode\.open && gEpisode\.owner != window\) \{\s*if \(gEpisode\.first\.reason != HoverReason::halfActive\) CloseEpisode\(@"appInactive"\);\s*else if \(gEpisode\.healed\) return;\s*else gEpisode\.owner = window;/);
+  assert.match(probeInternal, /enum class HoverTrigger \{ move, click, recheck, key \};/);
+  assert.match(probe, /@"move", @"click", @"recheck", @"key"/);
 });

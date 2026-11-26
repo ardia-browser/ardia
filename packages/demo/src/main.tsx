@@ -8,7 +8,7 @@ import { startTabPages } from "../../../apps/browser/src/state/tabs/tabPages";
 import { setStoreBatching, useBrowser } from "../../../apps/browser/src/state/browser/store";
 import { liveOf } from "../../../apps/browser/src/state/tabs/tabLive";
 import { Customize } from "./Customize";
-import { demoSettings } from "./customizeFlow";
+import { demoSettings, syncOnboardingCover } from "./customizeFlow";
 import { startEmbed } from "./embed";
 import { isFrameable } from "./frameable";
 import { pageTitle } from "./pages";
@@ -25,6 +25,7 @@ useBrowser.getState().hydrate({ ...demoSession(), settings: demoSettings() });
 useBrowser.setState((s) => ({ history: demoHistory(s) }));
 startTabPages();
 startNativeSync();
+syncOnboardingCover();
 
 const params = new URLSearchParams(location.search);
 const embed = params.has("embed");

@@ -88,7 +88,7 @@ export function StartSpaces({ geometry, dark, incognito, interactive = true }: {
         accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
         onAccessibilityAction={(event) => step(event.nativeEvent.actionName === "increment" ? 1 : -1)}
       >
-        <FlatList
+        <FlatList overScrollMode="never"
           ref={pager}
           testID="startPager"
           style={StyleSheet.absoluteFill}

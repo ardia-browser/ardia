@@ -200,3 +200,25 @@ test("a launch that clears a saved Top Apps merge marker reports it cleared, not
     { merge_recorded: true, merge_recorded_this_launch: false, merge_marker_cleared: true },
   );
 });
+
+test("Linux hydrates with the sync wait: an unchosen old ⌘-click grouping on waits for sync instead of retiring before unlock", async () => {
+  const { settingsSyncWaitsAtDesktopLaunch } = await import("./syncLaunch.ts");
+  const S = () => useBrowser.getState();
+  const grouping = () => ({ on: S().settings.cmdClickCreatesTabGroup, retired: S().settingsMeta.inferred.includes("cmdClickCreatesTabGroup:offByDefault") });
+  S().hydrate(initialHostSession(hostFor("a"), null));
+  const snapshot = cloneSessionValue(snapshotHostSession(S()));
+  const saved = { ...snapshot, settings: { ...snapshot.settings, cmdClickCreatesTabGroup: true }, settingsMeta: { chosen: [], inferred: ["hideToolbarWhileScrolling:offByDefault"] } };
+  const order = [];
+  const waits = await settingsSyncWaitsAtDesktopLaunch(async (name) => (order.push(`refresh ${name}`), true), () => (order.push("read"), true));
+  assert.deepEqual(order, ["refresh sync.json", "read"], "sync.json is fetched from the host before it's read");
+  S().hydrate({});
+  hydrateLaunchSession(saved, initialHostSession(hostFor("a", true), saved), { retiredDefaultsWaitForSync: waits });
+  assert.deepEqual(grouping(), { on: true, retired: false });
+  S().hydrate({});
+  hydrateLaunchSession(saved, initialHostSession(hostFor("a", true), saved));
+  assert.deepEqual(grouping(), { on: false, retired: true }, "without Settings sync it retires at hydration");
+  const failed = await settingsSyncWaitsAtDesktopLaunch(async () => {
+    throw new Error("host unavailable");
+  }, () => false);
+  assert.equal(failed, false, "a failed refresh still answers from what's there");
+});

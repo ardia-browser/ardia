@@ -38,6 +38,13 @@ int main() {
                                 &package) != ARDIA_UPDATE_STATUS_SIGNATURE ||
       package.size != 0)
     status = Fail("unsigned manifest");
+  ardia_update_windows_package win_package{};
+  const std::string win_prefix = "https://github.com/ardia-browser/ardia/releases/download/";
+  if (ardia_update_verify_windows(reinterpret_cast<const uint8_t*>("{}"), 2, nullptr, 0, key, sizeof key,
+                                  reinterpret_cast<const uint8_t*>(win_prefix.data()), win_prefix.size(),
+                                  ARDIA_UPDATE_WINDOWS_CPU_X64, 1, &win_package) != ARDIA_UPDATE_STATUS_SIGNATURE ||
+      win_package.build != 0)
+    status = Fail("unsigned windows manifest");
   if (status == 0) std::printf("ardia_update C++ smoke passed\n");
   return status;
 }

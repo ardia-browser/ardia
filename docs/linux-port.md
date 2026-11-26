@@ -35,6 +35,44 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
 - **Assets.** These come from `lib/ardia/ardia-ui` beside the executable, or from `--ardia-ui-dir` during development.
   The data source serves them only to a host's own shell `WebContents`. An ordinary tab that navigates to
   `chrome://ardia/` gets nothing.
+- **One shell renderer.** The shells of every regular window (Little Ardia and the settings and import windows
+  included) share one renderer per profile instead of one each. Each host builds its shell `WebContents` itself
+  (`CreateShellContents`) and gives it `PrivilegedParams` with Ardia's feature id when `SharedRendererFeature`
+  (`ac_desktop_webui_process_policy.h`) allows it, which is never for a private window or an off-the-record profile.
+  Chromium uses one process per site for privileged contents and keys that by profile, site (`chrome://ardia/`, the
+  site Chromium derives for any shell URL) and feature id, and it never puts privileged and ordinary contents in the
+  same process, so a private window's shell never joins the regular shells' renderer, even under the
+  renderer-process limit. Private shells are ordinary WebUI contents, so at that limit Chromium may still put two of
+  them in one ordinary renderer. No Chromium patch is involved. Each window still has its own document, `WebUI` and bridge (`Trusted`, `OwnsHandler` and
+  the renderer generation belong to one `WebContents`). Privileged contents can't open windows (`window.open` returns
+  null), which the shell never does.
+- **Shell recovery.** One crash now blanks every regular window, so each window reloads its shell after an abnormal
+  renderer exit (`ShellRecovery`, driven by `ShellRecoveryState`), at most 3 times a minute. A crash before the
+  shell's first commit loads `chrome://ardia/` instead of reloading. A crash while a reversible close or an app quit
+  is pending spends nothing and waits: a cancelled close resumes it, and so does a cancelled quit, seen at once when
+  `chrome::AddClosingAllBrowsersCallback` reports `false` and otherwise within 250 ms by polling
+  `IsTryingToQuit()` (Chromium can cancel a quit without that callback when no tab has a `beforeunload` handler); a
+  finished close or a started shutdown drops it. A recovery navigation, or the shell's initial load, that ends without
+  committing or commits an error page is retried within the same budget, whether or not an early-swapped frame looks
+  live; only a real document commit ends a recovery. The first reload starts the new renderer and the rest join it. Only the launch window's first `host-bootstrap.js` says
+  `startup: true` (`LaunchBootstrap`), and a recovery disarms it first, so a recovered or reloaded launch window,
+  even one that crashed before it ever fetched its bootstrap, never boots as a fresh launch and never replaces the
+  saved session.
+- **Recovery telemetry.** The host counts, for the whole run, how many recovery reloads it started (`attempts`), how
+  many windows came back with a committed shell (`recovered`) and how many it gave up on once the budget ran out
+  (`exhausted`), and writes them to `shell-recovery.json` in the profile's `Ardia` documents folder
+  (`ShellRecoveryTally`). At the next start, before any shell reads its bootstrap, it moves that file to
+  `shell-recovery-previous.json` (`RotateShellRecoveryDocuments`), and `app_launched` reports it as
+  `prev_shell_recovery_attempts`, `prev_shell_recovery_recovered` and `prev_shell_recovery_exhausted`, counts only and
+  only while sharing is on. Pages can read both files but not write or remove them. Exhaustion is reported at the next
+  launch because by then no shell is left to report it. On the dashboard, a session with `exhausted` above 0 is one
+  that left windows blank.
+- **What the tests cover.** `engine/ardiacore-desktop/tests/test_desktop_layer.py` runs the policy test
+  (`webui_process_policy_test.cc`) and compiles each host's real `CreateShellContents` and `ShellRecovery` against
+  stubbed content and base types to drive crashes, close and quit waits, cancellations, uncommitted recovery
+  navigations and pre-commit crashes. Only a built
+  engine shows the rest: three windows on one `chrome://ardia/` renderer, a private window on its own, and every
+  window coming back after the renderer is killed.
 - **Code cache.** `chromium-linux-auto-pip.patch` turns on Chromium's `WebUICodeCache`, so V8 keeps the shell's
   compiled scripts between launches. Chromium keys each entry by the script's URL and a hash of its source, so an
   updated bundle never runs old code. On an existing profile (Xvfb, llvmpipe, a shared box, median of 5 interleaved
@@ -237,6 +275,34 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
   saved window into a closed window the way `closedForLaunch` does (tab layout kept, macOS's last-window marks and
   empty entries dropped). The snapshot saves every field the shared session saves except the Mac's early launch tab,
   including which settings were chosen (`settingsMeta`); `session.test.mjs` fails when the shared session adds one.
+- **One session format for both shells.** The React Native Mac app saves `windows`, `tabs`, `groups` and `splits` as
+  lists; a WebUI shell's own file keeps them as tables keyed by row id, which the Linux engine's startup tab reads. Both
+  readers take either form, row collection by row collection, so a mixed file loads whole. The Mac app lists tables
+  before its migrations and its row checks (`sessionWithListedRows`), and the WebUI keys lists before shaping, so
+  shaping a second time changes nothing.
+- **Writing.** The native merges (`MergeLinuxSession` and `mergeSession`) only merge row by row when the base, the
+  save and the file use the same form; otherwise the save replaces the collection. So the WebUI's writer sends each
+  collection in the form the file holds it in, as last seen at launch, in a write reply or in a session event, and a
+  WebUI window on a Mac list file keeps writing lists. Its first write after shaping changed the file merges against
+  the file as read, so migrated, repaired or cleaned collections are written back whole. The Mac app saves a table
+  file back as lists at launch, edited or not. A Mac app write that changes a collection's form while a WebUI window is
+  running is the one case still replaced whole; the two shells don't run on one profile at once.
+- **What the WebUI keeps for the Mac app.** A sleeping tab's `page.wake` restore handle (left out of the WebUI's live
+  tab, written back while the tab keeps its address and the WebUI hasn't loaded it since launch) and the early launch hints (`launchTab`, `launchBackdrop`,
+  `linkProfile`), kept while the focused window's profile, tabs and active tabs, the profiles, Restore Session and the
+  engine mode are unchanged.
+- **Rows the readers drop.** Rows that aren't objects, ids the object prototype holds (`__proto__`, `constructor`,
+  `toString`), tabs without a string `windowId`, `profileId` and `url`, windows without a `profileId`, a `tabIds` list
+  and `activeTabIds`, groups without a `windowId`, `profileId` and `tabIds` list, and splits whose `slots` don't
+  read as slots are dropped by both readers; a valid row filed under a key that isn't its id is recovered only when no correctly keyed copy exists
+  (the correctly keyed row wins), and the Mac app keeps any file with dropped or misfiled rows aside first.
+- **Startup prewarm.** Native prewarm reads only its own form. `ArdiaSavedSession.mm` on the Mac needs every row
+  collection as a list; `ac_linux_startup_tab.cc` on Linux needs `windows` and `tabs` as tables (list-shaped `groups`
+  or `splits` alone don't stop it). A file that misses that finds no launch tab and is left to the JS session loader,
+  which loads it losslessly.
+- `sessionShells.test.mjs` (desktop and browser) round-trips Mac → WebUI → Mac and WebUI → Mac → WebUI. Telemetry
+  counts launches whose file held collections in the other shell's form, before any migration, as
+  `session_from_other_shell`.
 
 ### Pages
 
@@ -452,6 +518,9 @@ fake device, "Ardia Test Sink", and records routes without sending anything anyw
 
 ## Building on Linux
 
+x64 Linux engine builds and development run in **`msi`'s WSL 2 Ubuntu**. ARM64 Linux builds (`AC_TARGET_CPU=arm64`)
+are configured in the scripts but untested and not shipped yet.
+
 Use a dedicated build root, apart from any Mac Chromium tree. `01-sync.sh` is for a fresh tree and refuses to run
 when an output directory exists; after that, builds are incremental.
 
@@ -523,6 +592,32 @@ a `.sha256` file beside it (`sha256sum -c <asset>.sha256` checks a download):
   (`0.2.47~nightly.3`) sorts before its stable, so `apt install` of the stable upgrades it. `sudo apt remove ardia`
   removes it and `sudo apt purge ardia` leaves nothing behind outside your home folder, where your profile
   (`~/.config/ardia`) and the `ardia` command, if you turned it on (`~/.local/share/ardia`), stay.
+- **Fedora, RHEL-family and openSUSE: the `.rpm`.**
+
+  ```bash
+  sudo dnf install ./Ardia-<version>-linux-x64.rpm
+  sudo zypper install --allow-unsigned-rpm ./Ardia-<version>-linux-x64.rpm
+  ```
+
+  dnf and zypper pull in the libraries Ardia needs, computed from its binaries. The package makes `chrome-sandbox`
+  setuid root and, where AppArmor reads the 4.0 ABI, installs the AppArmor profile. The `.rpm` isn't signed yet, which
+  is why zypper needs `--allow-unsigned-rpm`. A newer `.rpm` installs over an older one (a nightly's version,
+  `0.2.47~nightly.3`, sorts before its stable). There is no repository yet (#3644), so updates are the same command
+  with the new release's `.rpm`; Ardia says when one is out but leaves installing it to dnf or zypper. `sudo dnf remove ardia`
+  or `sudo zypper remove ardia` leaves nothing behind outside your home folder.
+- **Immutable distributions and any distribution with Flatpak: the `.flatpak`.**
+
+  ```bash
+  flatpak install --user ./Ardia-<version>-linux-x64.flatpak
+  flatpak run dev.ardia.Ardia
+  ```
+
+  It is `dev.ardia.Ardia` on Flathub's `org.freedesktop.Platform` runtime and Chromium base app, which flatpak
+  fetches from Flathub on the first install. Chromium's sandbox runs through zypak, so it needs neither user
+  namespaces nor a setuid helper. Your profile lives in `~/.var/app/dev.ardia.Ardia`. Updates are the same command
+  with the new release's `.flatpak` (`flatpak update` takes over once Ardia is on Flathub); Ardia says when one is out.
+  `flatpak uninstall --delete-data dev.ardia.Ardia` removes it and its data. What works differently in the sandbox is
+  under Packaging and installing › Flatpak.
 - **Arch: `ardia-bin`.** Once the package is on the AUR, which follows stable releases:
 
   ```bash
@@ -561,7 +656,8 @@ a `.sha256` file beside it (`sha256sum -c <asset>.sha256` checks a download):
 
 The `.deb`, a tarball installed with `install.sh` and the AppImage update themselves from each release's signed
 self-update manifest (`lib/ardia/ardia-update`, under Packaging and installing). `ardia-bin` updates with pacman like
-any AUR package.
+any AUR package, the `.rpm` with dnf or zypper and the Flatpak with flatpak: Ardia tells you about a new release and
+leaves installing it to them.
 
 ## Packaging and installing
 
@@ -576,8 +672,9 @@ python3 scripts/linux/package.py \
   --destination "$CB/artifacts/ardia-linux-$AC_TARGET_CPU.tar.xz"
 ```
 
-- **Formats.** `--deb <path>` and `--appimage <path>` build a `.deb` and an AppImage from the same tree. `release.sh`
-  builds all three and smoke-tests each.
+- **Formats.** `--deb <path>`, `--rpm <path>` and `--appimage <path>` build a `.deb`, an `.rpm` and an AppImage from
+  the same tree. The Flatpak is built from the finished tarball (`linux_formats.py from-tarball --flatpak <path>`).
+  `release.sh` builds all five and smoke-tests the tarball, the `.deb`, the `.rpm` and the AppImage.
 - **Launcher.** Every format starts through `lib/ardia/ardia-launch`, which decides the sandbox before it runs
   `chrome`: user namespaces when the kernel allows them and AppArmor doesn't restrict them (or a profile grants
   `userns` to this `chrome`), else the setuid-root `chrome-sandbox` beside it on a mount without `nosuid`. Otherwise it
@@ -588,6 +685,8 @@ python3 scripts/linux/package.py \
   the shell says so once per launch and counts `launches_without_sandbox`.
 - **`.deb`.** Installs under `/usr` (`/usr/bin/ardia` links the launcher), with `chrome-sandbox` setuid root, the
   polkit policy and the AppArmor profile; details under Debian package below.
+- **`.rpm`.** The `.deb`'s `/usr` tree with rpm's dependency generator; details under RPM package below.
+- **Flatpak.** `dev.ardia.Ardia`, whose launcher hands Chromium to cobalt and zypak; details under Flatpak below.
 - **AppImage.** AppImage's static type 2 runtime and `mksquashfs` (zstd) from a toolset pinned by SHA-256, cached in
   `~/.cache/ardia-appimage`. It carries no setuid helper and no polkit policy, so reauth falls back to the login
   password, and it needs user namespaces: where they're restricted (Ubuntu 24.04 and later) it refuses to start.
@@ -683,6 +782,71 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   `chrome-sandbox` is setuid root, the browser alternatives and `curl` are there, the profile appears only with the
   4.0 ABI, and `apt purge` leaves the file system as it was before the install. apt retries each download and each
   image pull is retried, so a network flake doesn't fail it.
+- **RPM package.** `package.py --rpm <path> --version <version>` (`linux_formats.build_rpm`) builds it with
+  `rpmbuild` from the same `/usr` tree as the `.deb` (`apt install rpm cpio` on Ubuntu, `dnf install rpm-build`):
+  - `/usr/lib/ardia`, `/usr/bin/ardia` (a link to the launcher), the desktop entry pointed at `/usr/bin/ardia`, the
+    icon, the polkit policy, the AppArmor profile at `/usr/share/ardia/apparmor/ardia` and
+    `/usr/share/licenses/ardia/copyright`, all owned by root, with `chrome-sandbox` setuid root (mode 4755 in the
+    payload, so no scriptlet has to set it). It co-owns the polkit, icon and licence folders it puts files in, so
+    removing it leaves no empty folder on a system without polkit or the hicolor theme;
+  - its version is the Ardia version with `-` turned into `~` (`0.2.47~nightly.3`), which rpm sorts before
+    `0.2.47`; release `1`, architecture `x86_64`, named `Ardia-<version>-linux-x64.rpm`;
+  - `Requires` comes from rpm's own generator over the ELF files and scripts, minus every library `lib/ardia`
+    bundles (`__requires_exclude`, built from the tree's `*.so*` names) and the Qt shims' libraries
+    (`__requires_exclude_from`); it provides none of its bundled libraries. It adds what Chromium loads at run time
+    (GTK 3 and libsecret by soname, Liberation fonts, xdg-utils, ca-certificates), `curl` or `curl-minimal` for the CLI installer and
+    `openssl`, and recommends polkit and `/usr/bin/pkexec`. No build-id links, debuginfo or brp scripts, so the
+    binaries ship as built;
+  - the policy leaves out the `dev.ardia.linux.update` action: rpm owns the files, so `ardia-update kind` says
+    `managed` and Ardia never installs an update itself (Updates and kill switches);
+  - `%post` installs and loads the AppArmor profile where `/etc/apparmor.d/abi/4.0` exists and refreshes the desktop
+    and icon caches; `%postun` takes the profile away only on removal (`$1` is 0), not on an upgrade.
+
+  `scripts/linux/rpm-install-test.sh <rpm>` installs it in `fedora:43` and `almalinux:9` with dnf (AlmaLinux
+  keeps its `curl-minimal`, so a `curl` requirement would conflict there) and `opensuse/tumbleweed` with
+  zypper (Tumbleweed with AppArmor's parser and ABI files, so its run covers the profile): the dependencies resolve,
+  an older build made from this one (`--older`, by default the version before it with a file only it carries)
+  upgrades to it and its own file goes, `rpm --verify` passes, `ldd` finds every library, `ardia --version` runs,
+  `chrome-sandbox` is setuid root, the desktop entries validate, the policy has no update action, `ardia-update kind`
+  is `managed`, and removing it leaves the file system as it was (the desktop and icon caches the distribution
+  regenerates aside).
+- **Flatpak.** `linux_formats.py from-tarball --tarball <tarball> --version <version> --flatpak <path>` writes the
+  manifest (`flatpak_manifest`) and builds it with `flatpak-builder --user` and `flatpak build-bundle`, fetching the
+  runtime, SDK and base app from Flathub. It needs `flatpak` and `flatpak-builder`, and a system D-Bus where flatpak
+  checks parental controls (Ubuntu's does).
+  - **Manifest.** `dev.ardia.Ardia` on `org.freedesktop.Platform` and `org.chromium.Chromium.BaseApp`, both
+    `FLATPAK_BRANCH`. Two modules: zypak, pinned by tag and commit, and `ardia`, whose source is the release
+    tarball (an `archive` with its sha256). It copies `lib/ardia` to `/app/lib/ardia`, links `/app/bin/ardia` to the
+    launcher, installs `/app/etc/cobalt.ini` and exports the desktop entry, icon and metainfo under the app id.
+    `linux_formats.py flathub --version <version> --sha256 <tarball sha256> --out <folder>` writes the same manifest
+    with the published tarball's URL, its metainfo and `cobalt.ini`: the files a Flathub submission needs.
+  - **Sandbox.** In a Flatpak (`/.flatpak-info` and `FLATPAK_ID`), `ardia-launch` execs `cobalt`, the BaseApp's
+    launcher, which starts `/app/lib/ardia/chrome` through `zypak-wrapper.sh`: zypak stands in for the setuid
+    `chrome-sandbox` (kept, not setuid) with Flatpak's own sandbox. cobalt reads extra switches from
+    `~/.var/app/dev.ardia.Ardia/config/ardia-flags.conf`, one per line. `ExposePids` is optional, so a host without
+    Flatpak's expose-pids still starts without a dialog.
+  - **Permissions.** Network, IPC, Wayland with X11 as fallback, PulseAudio, CUPS, smart cards (FIDO keys), all
+    devices (GPU, webcams, security keys), Downloads, PipeWire, notifications, the Secret Service and KWallet,
+    the file manager, the screensaver inhibitor, UPower and Chromium's MPRIS name, and read-only access to every
+    folder Import reads (Chromium-family profiles under `xdg-config`, Firefox, LibreWolf and Zen, and their Flatpak
+    and Snap folders). A test reads the import table out of `ac_linux_import_readers.cc` and fails if a folder is
+    missing from the grants.
+  - **Updates.** `ardia-update kind` says `managed` inside a Flatpak, so Ardia only tells you about a release and
+    offers its page, saying to install the new `.flatpak` (it knows it is a Flatpak by its data folder under
+    `~/.var/app/dev.ardia.Ardia/`). It names no `flatpak update` command: the bundle has no remote, so that command
+    finds nothing.
+  - **Known limits.** Native messaging hosts (password managers' browser bridges) run outside the sandbox, so
+    Flatpak Ardia can't start them (#3642). Setting Ardia as the default browser from Settings needs `xdg-settings`,
+    which the runtime lacks: set it in the desktop's settings (#3643). The bundle has no remote, so `flatpak update`
+    doesn't see new releases until Ardia is on Flathub (#3645). The polkit reauthentication action can't be installed
+    from a Flatpak, so revealing saved passwords falls back to the login password.
+
+  `scripts/linux/flatpak-install-test.sh <bundle>` installs the bundle as an ordinary user in privileged
+  `ubuntu:24.04` and `fedora:43` containers: the runtime comes from Flathub, the ref is `app/dev.ardia.Ardia/x86_64/stable`
+  at the release's version, `ardia --version` runs, the exported desktop entry opens links in the app and has its
+  icon, `cobalt.ini` and zypak are there, the permissions hold the grants above and nothing more of the home folder,
+  `ardia-update kind` is `managed`, Ardia starts headless with renderers and no `--no-sandbox` through zypak and
+  opens a page over DevTools, and `flatpak uninstall --delete-data` leaves no app, export or data folder.
 - **Arch.** `scripts/linux/arch/PKGBUILD` is the AUR package `ardia-bin`: it downloads
   `Ardia-<version>-linux-x64.tar.xz` from the `v<version>` release, checks its pinned sha256 and installs it with the
   tarball's `install.sh`, then makes `chrome-sandbox` setuid root, as Arch's own `chromium` does, for kernels without
@@ -710,10 +874,10 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
 
 - **Self-update helper.** `lib/ardia/ardia-update` (`scripts/linux/ardia-update`, bash) installs a release the
   browser downloaded. `ardia-update kind` prints one line: `appimage` (`$APPIMAGE` names a file whose folder the user
-  can write, and when `$APPDIR` is set the helper runs from it), `managed` (pacman or rpm owns `lib/ardia/chrome`, or
-  a dpkg package other than `ardia`), `deb` (dpkg's `ardia` owns it), `tarball`, or `unsupported <reason>`: `noVerifier`
-  (no `lib/ardia/ardia-update-verify` that runs here), `noVersion`, `noKey`, and for deb and tarball `noPkexec` (no
-  setuid pkexec) and
+  can write, and when `$APPDIR` is set the helper runs from it), `managed` (inside a Flatpak, or pacman or rpm owns
+  `lib/ardia/chrome`, or a dpkg package other than `ardia`), `deb` (dpkg's `ardia` owns it), `tarball`, or
+  `unsupported <reason>`: `noVerifier` (no `lib/ardia/ardia-update-verify` that runs here), `noVersion`, `noKey`, and
+  for deb and tarball `noPkexec` (no setuid pkexec) and
   `noPolicy` (the installed policy's update action doesn't name this helper, as for a tarball run in place).
   `ardia-update install <dir>` runs as root through `pkexec` for a `.deb` or tarball and as the user for an AppImage.
   It takes a lock (`/run/ardia-update.lock`, or the AppImage's folder), refuses a folder or file that isn't a regular,
@@ -866,10 +1030,15 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
   instance or a build without `lib/ardia/VERSION`. Where Ardia can update itself (below), a newer release is
   downloaded and installed in the background, with "Automatically update Ardia" on (the default), or on Check Now, the
   app menu's Check for Updates or the offer toast's Update when it's off. Then a sticky toast says the release is
-  ready, and Check Now and the app menu read Restart to Update. Where it can't (an engine without the methods, or
+  ready, and Check Now and the app menu read Restart to Update. Every update toast has Later, which only closes it:
+  the same version isn't offered again, and a dismissed Restart toast isn't shown again by another window. Where it can't (an engine without the methods, or
   `unsupported`), Check Now asks before opening the release page and an automatic check offers it once as a toast, and
-  the toggle is hidden. An install pacman or rpm owns (`managed`, the AUR's `ardia-bin`) is told to update with its
-  package manager. A failed download or install falls back to the release page once and isn't retried automatically.
+  the toggle is hidden. An install a package manager owns (`managed`: the AUR's `ardia-bin`, the `.rpm`, the Flatpak)
+  is told to update there and offered the release page (Open Release Page, or the toast's View): a Flatpak to
+  install the new `.flatpak`, the others the AUR command or the new `.rpm`. No command is copied: the `.rpm` and the
+  Flatpak bundle have no repository or remote to update from, and `ardia-update kind` says only `managed`, so the
+  dialog can't tell an AUR install apart (#4078). When Check Now runs in Settings and no regular window is open to show the page, a dialog gives
+  its link with Copy Link instead. A failed download or install falls back to the release page once and isn't retried automatically.
 - **Self-update.** `ac_linux_self_update.cc` serves `ArdiaUpdates.installKind`, `update(version)`, `status()`,
   `claimOutcome(run)` and `restart`; the rules are in `ac_linux_self_update_policy.h`. The engine owns each run, so it
   carries on whatever window started it or closes.
@@ -904,8 +1073,10 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
 - **Kill switches.** `ArdiaShell.fetchKillSwitches` fetches `ardia.dev/switches.json` (at most 16 KiB) once per
   browser process for every window, and the shared refresh runs under the Mac's rule (automatic checks on).
 - **Telemetry.** `update_checks_asked`, `update_checks_automatic`, `update_check_failures`, `update_checks_found`,
-  `update_release_page_opens`, `kill_switch_refreshes`, `kill_switch_refresh_failures`, and for self-update
-  `update_downloads_started`, `update_downloads_finished`, `update_download_failures_<reason>`,
+  `update_release_page_opens`, `update_notices_dismissed`, `update_offers_managed_flatpak` and
+  `update_offers_managed_package` (a release offered to an install Flatpak or another package manager updates),
+  `kill_switch_refreshes`, `kill_switch_refresh_failures`, and for self-update `update_downloads_started`,
+  `update_downloads_finished`, `update_download_failures_<reason>`,
   `update_installs_<deb|tarball|appimage>`, `update_install_failures_<reason>` and `update_restarts`. Watch installs
   against found updates, and the `signature`, `polkit` and `network` failures.
 
@@ -1050,6 +1221,31 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
     engines: a window that fills the work area without being maximized shows restore, and on Wayland, where
     `windowFrame` is null and the work area is the whole output, a maximized window beside a panel, a bar or gaps
     keeps the maximize glyph. Clicking toggles correctly either way.
+- **Tiling window managers.** Little Ardia, Settings and Import float over the main window on niri, sway and i3 with
+  no rule (tested on the Chromium 157 engine; other compositors that float fixed-size windows do the same), as the Mac
+  floats them since #1905. The host opens them with their own window class, the Wayland app id and the X11 `WM_CLASS`
+  instance `ardia-little`, `ardia-settings` and `ardia-import` (`linux_window::WindowClass`, through
+  `g_ardia_linux_window_class` in `chromium-linux-floating-windows.patch`, at the end of `GetWindowClass()`), and maps
+  them with their minimum size equal to their maximum (`g_ardia_linux_pins_window_size`,
+  `BrowserWidget::GetMinimumSize` and `GetMaximumSize`), which those compositors float by default. The host releases
+  the pin 400 ms after the window's first frame (3 s at most), so the window resizes like any other afterwards; a
+  window restored to full screen lets go of it first. The pin isn't released on tiled edges: niri sends them to
+  floating windows too when it draws their decorations. A window saved maximized opens unpinned. Main windows keep the
+  `ardia` class and tile. Hidden desktop entries (`NoDisplay=true`, `StartupWMClass` set to the class, `Icon=ardia`)
+  give the three classes Ardia's name and icon in bars and switchers; `install.sh` (so the tarball and the AUR
+  package), the `.deb` and the `.rpm` install them (`linux_formats.desktop_entries`), and the Flatpak exports them as
+  `dev.ardia.Ardia.little.desktop`, `.settings` and `.import`, since its entries must start with its app id; a bar
+  matches those by `StartupWMClass` alone, and GNOME Shell groups a Flatpak's windows under its app id. The AppImage
+  carries them but installs nothing, so there the bars show the bare class. Outside the Flatpak on GNOME, Little Ardia
+  now shows in docks and switchers as its own app rather than grouped with Ardia, as Settings and Import already did.
+  A compositor rule can still match the class, for niri
+  `window-rule { match app-id="^ardia-little$"; open-floating false; }` to tile it again; Chromium holds such a window
+  at its pinned size until the pin is released and the compositor configures it again (untested on the Chromium 158
+  engine). Settings' app id was `chrome-ArdiaSettings-Default` before, so an existing rule naming it needs the new id.
+  A window that the shell turns into Little Ardia after it opened, or back (`set_small`), keeps the class and the
+  tiling it opened with: the host answers the class hook with the class the window opened with.
+  `usage_counts.little_ardia_opened_floating` and `utility_windows_opened_floating` count windows that opened with
+  Chromium reading the pin, once per window, in the first shell that loads in it.
 - **Header drag and double-click.** Dragging the header moves the window (`DispatchHostWindowDragMovement`).
   Double-clicking it runs the desktop's titlebar action.
 - **Outer frame.** The host overlays Chromium's client view, and what happens to Chromium's frame around it depends on
@@ -1182,11 +1378,15 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
     alternate (Copy Links → Copy Links as Markdown in the tab and multi-tab menus), Ctrl for a ⌘ one (a profile's
     New Window entry).
   - Quit is Ctrl+Shift+Q. Ctrl+Tab commits on release of the physical Control key.
+  - Copy URL is Ctrl+Shift+C (and Copy URL as Markdown Ctrl+Alt+Shift+C), as ⇧⌘C is on the Mac and Ctrl+Shift+C in the
+    Windows app. Inspect Elements is Ctrl+Alt+C, the Mac's ⌥⌘C, not Chrome's Ctrl+Shift+C (#4095). Ardia's bindings
+    run before docked DevTools sees the key, so with DevTools focused Ctrl+Shift+C still copies the URL instead of
+    toggling Select an Element (#4096, an engine change). Watch `usage_counts.url_copies` on Linux.
   - `--ardia-keyboard-diagnostics` with `--enable-logging=stderr` logs each key, its binding and the focused view.
 - **Ctrl-scroll zoom.** Chromium zooms a tab when a page leaves a Ctrl-wheel event unhandled
   (`BrowserWebContentsDelegate::ContentsZoomChange`). `chromium-linux-wheel-zoom.patch` puts one gate there,
   `g_ardia_linux_wheel_zoom_off`, and `webView.setCommandScrollZoom {enabled}` sets it for every window and profile
-  (`SetLinuxPageOption`), so Settings › Privacy › Zoom works. The host advertises the call.
+  (`SetLinuxPageOption`), so Settings › Advanced › Browsing › Zoom pages with Ctrl-scroll works. The host advertises the call.
 - **Typeahead.** Keys typed before a new window's UI is ready are held and replayed into the focused text field. The
   hold takes at most 512 events and lasts at most 10 s.
 - **Wayland placement.** Wayland gives clients no global window position. `windowFrame` returns null there, only
@@ -1649,9 +1849,26 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
     helper's stdin write reads from; submit, cancel, closing the window, a superseding request and teardown all zero
     it. What it can't cover: each keystroke's own event, the IME's commit buffer for that keystroke, and the kernel's
     socket buffer.
+  - Text an input method commits or composes passes through Chromium's IME layer first.
+    `chromium-linux-ime-password-copies.patch` zeroes that layer's copies before their memory is freed or reused: the
+    text-input-v3 event strings, the Wayland and GTK contexts' conversions, and `InputMethodAuraLinux`'s composition
+    and pending commit. Those conversions write into a buffer sized for the worst case up front, so none is grown or
+    shrunk, which would free a partial copy (`base::UTF8ToUTF16` shrinks its result for non-ASCII text). On Wayland,
+    `SurroundingTextTracker` sees a password client's text only as a same-length mask, which keeps delete-surrounding
+    offsets right. Outside Chromium, libwayland's message buffers, the compositor and the input method itself still
+    hold their own copies.
   - `scripts/linux/password-heap-check.mjs` types random passwords into the real dialog of a package under Xvfb and
     scans the browser process's memory, as UTF-8 and UTF-16: while typed the password must exist exactly once, text
-    typed over or erased must be gone while the dialog is still open, and nothing may be left once it closes.
+    typed over or erased must be gone while the dialog is still open, and nothing may be left once it closes. With
+    `--wayland` it runs under sway and also acts as the seat's input method (`wayland-input-method.mjs`, the
+    zwp_input_method_v2 wire protocol in Node). It commits one password whole, composes one and commits it, and
+    composes one it then abandons; all three mix ASCII with accented and CJK letters. While that composition is open,
+    the scan must find each of the three somewhere in the browser process's memory as UTF-16. That shows each reached
+    the browser, not which allocation holds it: a committed string could match an earlier preedit copy. Missing
+    evidence gives `ime-not-delivered` once the flow checks pass (a wrong answer or a non-password field purpose gives
+    `flows-wrong` first). The abandoned one must be gone once it's dropped. A run that can't seed its profile, bind
+    the input method or start Ardia reports `setup-failed`, an error after setup reports `run-failed`, and every
+    failure to finish exits 2, never 1.
   - Wrong passwords back off 2 s, 5 s, 30 s, then 60 s. The grant window and supersession are polkit's.
   - `ProbeReauth` reports such a system as available (`loginPassword`), and `reauth.requested` says which method ran.
 - **Secret routes.**
@@ -2336,7 +2553,7 @@ These were open at the time of the PR.
   `apps/desktop/src/fieldTiming.ts`, which reports no timing data (`lastInput` is `[0, 0]`, `drain` is empty), so the
   field journeys send no samples from Linux. UI only; the engine key is unchanged.
 - **Settings rows without a backend are hidden**, each until the host advertises its capability
-  (`unavailableSettingIds` in `hostCapabilities.ts`): Zoom with Ctrl and the mouse wheel
+  (`unavailableSettingIds` in `hostCapabilities.ts`): Zoom pages with Ctrl-scroll
   (`webView.setCommandScrollZoom`), Keep new-tab links inside a Little Ardia window
   (`webView.setLittleArdiaOpensNewTabLinks`), Open a Peek window when clicking on links to other sites
   (`webView.setPeekOtherSiteTabs`), Scroll bars (`ArdiaSystem.setThinScrollBars`), all four advertised by the

@@ -231,7 +231,7 @@ struct PageSummaryCard: View {
     }
     .padding(16)
     .frame(maxWidth: 560, maxHeight: maxHeight, alignment: .topLeading)
-    .chromeSurface(in: .rect(cornerRadius: 24), interactive: false)
+    .chromeSurface(in: .rect(cornerRadius: 24))
     .accessibilityElement(children: .contain)
     .accessibilityLabel(Text("Summary"))
     .accessibilityAction(.escape) { onClose() }

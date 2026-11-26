@@ -4,11 +4,13 @@ import { useShortcutHint, withShortcut } from "../../state/commands/commandShort
 import { toggleDownloadsOpen } from "../../state/windows/actions";
 import { useWindowUiOf } from "../../state/windows/hooks";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
-import { Button } from "../ui";
+import { Button, ContextMenuArea } from "../ui";
 import { perLook } from "../ui/tokens";
 import { anchorInside, type Rect } from "./downloadsPlacement";
 import { DOWNLOADS_BUTTON } from "./tokens";
 import { noteDownloadsPanelToggle } from "../../state/telemetry/downloadsPanelCauses";
+import { openDownloadsMenu } from "../../state/downloads/downloadsMenu";
+import { DOWNLOADS_BUTTON_TEST_ID } from "./downloadsButtonId";
 
 const downloadsButtons = new Map<string, Set<View>>();
 
@@ -48,19 +50,21 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
       pressedAt.current = press.nativeEvent.timestamp;
       return false;
     }}>
-      <Button variant="icon"
-        icon="arrow.down.circle"
-        glyph={DOWNLOADS_BUTTON.icon}
-        hit={DOWNLOADS_HIT()}
-        active={open}
-        tooltip={open ? undefined : withShortcut("Downloads", hint)}
-        onPress={(press: GestureResponderEvent) => {
-          const startedAt = pressedAt.current;
-          pressedAt.current = undefined;
-          noteDownloadsPanelToggle(!open, "button");
-          toggleDownloadsOpen(windowId, "key" in press.nativeEvent ? undefined : startedAt);
-        }}
-      />
+      <ContextMenuArea testID={DOWNLOADS_BUTTON_TEST_ID} onContextMenu={() => void openDownloadsMenu(windowId)}>
+        <Button variant="icon"
+          icon="arrow.down.circle"
+          glyph={DOWNLOADS_BUTTON.icon}
+          hit={DOWNLOADS_HIT()}
+          active={open}
+          tooltip={open ? undefined : withShortcut("Downloads", hint)}
+          onPress={(press: GestureResponderEvent) => {
+            const startedAt = pressedAt.current;
+            pressedAt.current = undefined;
+            noteDownloadsPanelToggle(!open, "button");
+            toggleDownloadsOpen(windowId, "key" in press.nativeEvent ? undefined : startedAt);
+          }}
+        />
+      </ContextMenuArea>
     </View>
   );
 }

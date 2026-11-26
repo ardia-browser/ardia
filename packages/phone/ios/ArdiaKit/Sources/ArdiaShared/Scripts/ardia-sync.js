@@ -174,58 +174,30 @@ function assignPositions(existing                        )           {
 
 });
 __define("packages/sync/src/scope.ts", function (exports, __require) {
-  __export(exports, "parseSyncFile", () => parseSyncFile);
   __export(exports, "ingestSnapshot", () => ingestSnapshot);
   __export(exports, "flush", () => flush);
   __export(exports, "restoreJournal", () => restoreJournal);
   __export(exports, "writtenSeq", () => writtenSeq);
   __export(exports, "pull", () => pull);
-  __export(exports, "compactionDue", () => compactionDue);
   __export(exports, "compact", () => compact);
   __export(exports, "syncScope", () => syncScope);
   __exportAll(exports, __require("packages/sync/src/scopeKeys.ts"));
+  __export(exports, "compactionDue", () => __require("packages/sync/src/compaction.ts")["compactionDue"]);
+  __export(exports, "parseSyncFile", () => __require("packages/sync/src/syncFile.ts")["parseSyncFile"]);
 const { canonical } = __require("packages/sync/src/canon.ts");
 const { hlcWall } = __require("packages/sync/src/hlc.ts");
 const { holdsBack, noteFileHealth } = __require("packages/sync/src/fileHealth.ts");
 const { baseKeysWith, baseWritesUnder, dropBase, dropRecord, putBase, putRecord, visible } = __require("packages/sync/src/scopeKeys.ts");
 
 const { covered, isApplied, markApplied, raiseApplied } = __require("packages/sync/src/applied.ts");
+const { awaitsRecovery, cancelIfRaced, countReapplied, failedTargets, finishBatch, settleOwedRetirements, startApplying, takeReapplied, writeAhead } = __require("packages/sync/src/applyBatches.ts");
+const { recoverBatches } = __require("packages/sync/src/applyRecovery.ts");
+const { parseSyncFile } = __require("packages/sync/src/syncFile.ts");
+const { DEFAULTS, newestSnapshot, prune, retiredBy, compactionDue } = __require("packages/sync/src/compaction.ts");
+
+
                                                                                                                                  
 
-const DEFAULTS                                                        = {
-  expired: () => false,
-  tombstoneTTL: 45 * 86_400_000,
-  compactAfterFiles: 40,
-  compactAfterLogs: 400,
-  compactLogShare: 0.25,
-  compactInterval: 10 * 60_000,
-  pruneGrace: 60 * 60_000,
-  damagedGiveUp: 86_400_000,
-};
-
-const isObject = (v         )                               => typeof v === "object" && v !== null && !Array.isArray(v);
-const isCount = (v         )              => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
-const isTime = (v         )              => typeof v === "number" && Number.isFinite(v);
-const isMapOf = (v         , item                         ) => isObject(v) && Object.values(v).every(item);
-const isOrigin = (v         ) => Array.isArray(v) && v.length === 2 && typeof v[0] === "string" && isCount(v[1]);
-const isValue = (o                         ) => Object.prototype.hasOwnProperty.call(o, "v") && o.v !== undefined;
-const isOp = (v         ) => isObject(v) && typeof v.k === "string" && typeof v.h === "string" && isValue(v);
-const isRecord = (v         ) => isObject(v) && typeof v.h === "string" && isOrigin(v.o) && isValue(v);
-
-function parseSyncFile(payload        )                  {
-  let file         ;
-  try {
-    file = JSON.parse(payload);
-  } catch {
-    return null;
-  }
-  if (!isObject(file) || file.v !== 1 || typeof file.device !== "string" || !isTime(file.at)) return null;
-  if (file.kind === "log") return isCount(file.seq) && Array.isArray(file.ops) && file.ops.every(isOp) ? (file           ) : null;
-  if (file.kind === "snapshot") {
-    return isMapOf(file.vv, isCount) && isMapOf(file.seen, isTime) && isMapOf(file.records, isRecord) ? (file                ) : null;
-  }
-  return null;
-}
 
 function see(state            , device        , at        ) {
   if (!(device in state.seen) || at > state.seen[device] ) state.seen[device] = at;
@@ -299,26 +271,31 @@ function noteExtracted(state            , adapter         , source              
   byPrefix.set(adapter.prefix, { source, baseWrites: baseWritesUnder(state, adapter.prefix), joined: state.joined });
 }
 
-async function changesOf(state            , adapter         , now        ) {
+async function changesOf(state            , adapter         , now        , options               = {}) {
   if (adapter.adoptRemoteOnJoin && !state.joined) return null;
   const source = adapter.extractsOnlyFrom?.();
   if (unchangedSinceExtracted(state, adapter, source)) return { changes: [], settle: undefined, source: undefined };
   let pending                     = null;
   const queued = (key        ) => (pending ??= new Set([...state.outbox, ...(state.journal ?? []).flatMap((f) => f.ops)].map((op) => op.k))).has(key);
-  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h, (key) => state.base[key]);
+  const extractWith = (baseJson                                     ) =>
+    Promise.resolve(adapter.extract((key) => parseBase(baseJson(key)), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h, baseJson));
+  const first = await extractWith((key) => state.base[key]);
+  const extraction = first && state.applying ? await recoverBatches(state, adapter.prefix, first, adapter.extractUsesBase ? extractWith : null, !!adapter.savesWhole, options) : first;
   if (!extraction) return null;
   const changes           = [];
   const { values, json: knownJson, republish, ignore } = extraction;
+  const unsettled = failedTargets(state, adapter.prefix, options);
   values.forEach((value, key) => {
     if (value === null || value === undefined) throw new Error(`[sync] ${key}: a live value can't be null`);
     const json = knownJson?.(key, value) ?? canonical(value);
-    if (state.base[key] === json && !republish?.(key)) return;
+    if (unsettled?.get(key)?.has(json)) return;
+    if (state.base[key] === json && (!republish?.(key) || awaitsRecovery(state, key))) return;
     changes.push({ key, value, json });
   });
   const keys = baseKeysWith(state, adapter.prefix);
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i] ;
-    if (!(key in state.base) || values.has(key) || ignore?.(key)) continue;
+    if (!(key in state.base) || values.has(key) || ignore?.(key) || unsettled?.get(key)?.has("null")) continue;
     changes.push({ key, value: null, json: "null" });
   }
   return { changes, settle: extraction.published, source };
@@ -329,14 +306,14 @@ function stampOf(state            , adapter         , clock       , { key, value
   return editedAt !== undefined ? clock.at(editedAt) : clock.tick();
 }
 
-async function candidateStamps(state            , adapter         , clock       , now        )                  {
-  const found = await changesOf(state, adapter, now);
+async function candidateStamps(state            , adapter         , clock       , now        , options               )                  {
+  const found = await changesOf(state, adapter, now, options);
   return new Map((found?.changes ?? []).map((change) => [change.key, { json: change.json, h: stampOf(state, adapter, clock, change) }]));
 }
 
-async function publishAdapter(state            , adapter         , clock       , device        , now        , stamps         )                       {
+async function publishAdapter(state            , adapter         , clock       , device        , now        , options                          , stamps         )                       {
   const published = new Set        ();
-  const found = await changesOf(state, adapter, now);
+  const found = await changesOf(state, adapter, now, options);
   if (!found) return published;
   for (const change of found.changes) {
     const { key, value, json } = change;
@@ -437,6 +414,7 @@ async function applyAdapter(state            , adapter         , keys           
     else dropBase(state, key);
   };
   const landed = new Set        ();
+  const changing = new Set([...mine].filter((key) => (state.base[key] ?? "null") !== (view.has(key) ? canonical(view.get(key)) : "null")));
   let ok                 = false;
   try {
     const records = {
@@ -448,7 +426,7 @@ async function applyAdapter(state            , adapter         , keys           
       landed: (key        ) => void landed.add(key),
       defer: (key        ) => void (mine.has(key) && deferred.add(key)),
     };
-    ok = await adapter.apply(view, mine, (key) => parseBase(state.base[key]), records);
+    ok = held() ? false : await adapter.apply(view, mine, (key) => parseBase(state.base[key]), records);
   } catch (error) {
     console.warn(`[sync] applying ${adapter.prefix} failed`, error);
   }
@@ -458,55 +436,13 @@ async function applyAdapter(state            , adapter         , keys           
       settle(key);
       keys.delete(key);
     }
+    countReapplied(state, [...landed].filter((key) => mine.has(key)), deferred, changing);
     return false;
   }
   applyAs[adapter.prefix] = "joined";
   for (const key of mine) if (!deferred.has(key)) settle(key);
+  countReapplied(state, mine, deferred, changing);
   return true;
-}
-
-                                                       
-
-const dominates = (vv                        , other                        ) => Object.entries(other).every(([d, s]) => (vv[d] ?? 0) >= s);
-
-function newestSnapshot(entries             , device         ) {
-  let newest                       ;
-  for (const entry of entries) if (entry[1].k === "snapshot" && (!device || entry[1].d === device) && (!newest || entry[1].at > newest[1].at)) newest = entry;
-  return newest;
-}
-
-function retiredBy(entries             , snapshotId        , vv                        , now        , pruneGrace        , kinds                             ) {
-  return entries
-    .filter(([fileId, f]) => {
-      if (fileId === snapshotId || now - f.at < pruneGrace) return false;
-      if (f.k === "log") return covered(vv, [f.d, f.s ?? Infinity]);
-      if (f.k === "snapshot") return kinds === "logsAndSnapshots" && dominates(vv, f.vv ?? {});
-      return false;
-    })
-    .map(([fileId]) => fileId);
-}
-
-async function prune(state            , transport           , scope        , ids          ) {
-  if (!ids.length) return;
-  await transport.remove(scope, ids);
-  for (const fileId of ids) delete state.files[fileId];
-}
-
-function compactionDue(state            , now        , options               = {}) {
-  const o = { ...DEFAULTS, ...options };
-  const entries = Object.entries(state.files);
-  const latest = newestSnapshot(entries);
-  if (now - Math.max(state.snapshotAt, latest?.[1].at ?? 0) < o.compactInterval) return false;
-  const base = latest?.[1].vv ?? {};
-  let logs = 0;
-  let logBytes = 0;
-  for (const [, f] of entries) {
-    if (f.k !== "log" || covered(base, [f.d, f.s ?? Infinity]) || !covered(state.vv, [f.d, f.s ?? Infinity])) continue;
-    logs++;
-    logBytes += f.b ?? 0;
-  }
-  if (logs <= o.compactAfterFiles) return false;
-  return logs >= o.compactAfterLogs || logBytes >= o.compactLogShare * (latest?.[1].b ?? 0);
 }
 
 async function compact(state            , transport           , scope        , device        , now        , options               = {}, force = false) {
@@ -534,7 +470,7 @@ async function compact(state            , transport           , scope        , d
   return true;
 }
 
-                                                                                                                      
+                                                                                                                                         
 
 async function syncScope(args   
                 
@@ -548,11 +484,13 @@ async function syncScope(args
  )                       {
   const { scope, state, transport, adapters, clock, device, options } = args;
   const now = args.now ?? Date.now;
+  startApplying(state, now(), options);
+  await settleOwedRetirements(state, options);
   let published = 0;
   const stamps = new Map                 ();
   for (const adapter of adapters) {
-    if (adapter.publishAfterPull) stamps.set(adapter, await candidateStamps(state, adapter, clock, now()));
-    else published += (await publishAdapter(state, adapter, clock, device, now())).size;
+    if (adapter.publishAfterPull) stamps.set(adapter, await candidateStamps(state, adapter, clock, now(), options));
+    else published += (await publishAdapter(state, adapter, clock, device, now(), options)).size;
   }
   await flush(state, transport, scope, device, now(), options);
   const changed = await pull(state, transport, scope, clock, now(), options);
@@ -560,14 +498,25 @@ async function syncScope(args
   const keys = new Set([...state.unapplied, ...changed]);
   const unapplied           = [];
   let heldApply = false;
+  let journalFailed = false;
   const applyHeld = () => !!options?.holdApply?.();
   for (const adapter of adapters) {
-    const late = adapter.publishAfterPull && held ? new Set        () : await publishAdapter(state, adapter, clock, device, now(), stamps.get(adapter));
-    published += late.size;
-    for (const key of late) keys.delete(key);
+    const publishLate = async () => {
+      const late = adapter.publishAfterPull && held ? new Set        () : await publishAdapter(state, adapter, clock, device, now(), options, stamps.get(adapter));
+      published += late.size;
+      for (const key of late) keys.delete(key);
+      return late;
+    };
+    const late = await publishLate();
+    for (const key of state.unapplied) if (key.startsWith(adapter.prefix) && !late.has(key)) keys.add(key);
     heldApply ||= applyHeld();
     const deferred = new Set        ();
-    const applied = !heldApply && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld, deferred));
+    const ahead                    = heldApply ? null : await writeAhead(state, adapter.prefix, keys, now(), options);
+    const cancelled = !!ahead?.batch && (await cancelIfRaced(state, ahead.batch, await publishLate(), options));
+    journalFailed ||= !!ahead?.failed;
+    heldApply ||= !!ahead?.failed;
+    const applied = !heldApply && !cancelled && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld, deferred));
+    finishBatch(ahead?.batch ?? null, applied, options);
     heldApply ||= applyHeld();
     if (!applied) for (const key of keys) if (key.startsWith(adapter.prefix)) unapplied.push(key);
     if (applied) for (const key of deferred) unapplied.push(key);
@@ -578,9 +527,10 @@ async function syncScope(args
     delete state.awaitRemote;
   }
   await flush(state, transport, scope, device, now(), options);
+  if (journalFailed) throw new Error("[sync] couldn't journal what this cycle was about to apply");
   const compacted = await compact(state, transport, scope, device, now(), options);
   const snapshotBytes = compacted ? (newestSnapshot(Object.entries(state.files), device)?.[1].b ?? 0) : 0;
-  return { published, changed: changed.size, pending: state.pending, compacted, snapshotBytes };
+  return { published, changed: changed.size, pending: state.pending, compacted, snapshotBytes, reapplied: takeReapplied(state) };
 }
 
 });
@@ -704,39 +654,70 @@ function dropBase(state            , key        ) {
 }
 
 });
-__define("packages/sync/src/fileHealth.ts", function (exports, __require) {
-  __export(exports, "noteFileHealth", () => noteFileHealth);
-  __export(exports, "holdsBack", () => holdsBack);
-  __export(exports, "pullSettled", () => pullSettled);
-                                                  
+__define("packages/sync/src/compaction.ts", function (exports, __require) {
+  __export(exports, "DEFAULTS", () => DEFAULTS);
+  __export(exports, "newestSnapshot", () => newestSnapshot);
+  __export(exports, "retiredBy", () => retiredBy);
+  __export(exports, "prune", () => prune);
+  __export(exports, "compactionDue", () => compactionDue);
+const { covered } = __require("packages/sync/src/applied.ts");
+                                                                           
 
-                                                                                                     
+const DEFAULTS                                                                                                                      = {
+  expired: () => false,
+  tombstoneTTL: 45 * 86_400_000,
+  compactAfterFiles: 40,
+  compactAfterLogs: 400,
+  compactLogShare: 0.25,
+  compactInterval: 10 * 60_000,
+  pruneGrace: 60 * 60_000,
+  damagedGiveUp: 86_400_000,
+};
 
-function noteFileHealth(state            , files             , now        , giveUp        ) {
-  const setAside = (id        ) => state.files[id]?.k === "bad";
-  for (const id of files.read) delete state.damaged[id];
-  for (const id of files.unreadable) {
-    if (setAside(id)) continue;
-    const since = Math.min(state.damaged[id] ?? now, now);
-    if (now - since > giveUp) {
-      state.files[id] = { d: "", k: "bad", at: now };
-      delete state.damaged[id];
-    } else {
-      state.damaged[id] = since;
-    }
-  }
-  for (const id of Object.keys(state.damaged)) if (!files.present.has(id)) delete state.damaged[id];
-  const pending = files.pending.filter((id) => !setAside(id));
-  state.pending = pending.length;
-  if (pending.length) state.pendingSince = Object.fromEntries(pending.map((id) => [id, Math.min(state.pendingSince?.[id] ?? now, now)]));
-  else delete state.pendingSince;
+                                                       
+
+const dominates = (vv                        , other                        ) => Object.entries(other).every(([d, s]) => (vv[d] ?? 0) >= s);
+
+function newestSnapshot(entries             , device         ) {
+  let newest                       ;
+  for (const entry of entries) if (entry[1].k === "snapshot" && (!device || entry[1].d === device) && (!newest || entry[1].at > newest[1].at)) newest = entry;
+  return newest;
 }
 
-const holdsBack = (state            , now        , window        ) =>
-  Object.keys(state.damaged).length > 0 || Object.values(state.pendingSince ?? {}).some((at) => now - at <= window);
+function retiredBy(entries             , snapshotId        , vv                        , now        , pruneGrace        , kinds                             ) {
+  return entries
+    .filter(([fileId, f]) => {
+      if (fileId === snapshotId || now - f.at < pruneGrace) return false;
+      if (f.k === "log") return covered(vv, [f.d, f.s ?? Infinity]);
+      if (f.k === "snapshot") return kinds === "logsAndSnapshots" && dominates(vv, f.vv ?? {});
+      return false;
+    })
+    .map(([fileId]) => fileId);
+}
 
-const pullSettled = (state            ) =>
-  state.pending === 0 && Object.keys(state.damaged).length === 0 && !Object.values(state.files).some((f) => f.k === "bad");
+async function prune(state            , transport           , scope        , ids          ) {
+  if (!ids.length) return;
+  await transport.remove(scope, ids);
+  for (const fileId of ids) delete state.files[fileId];
+}
+
+function compactionDue(state            , now        , options               = {}) {
+  const o = { ...DEFAULTS, ...options };
+  const entries = Object.entries(state.files);
+  const latest = newestSnapshot(entries);
+  if (now - Math.max(state.snapshotAt, latest?.[1].at ?? 0) < o.compactInterval) return false;
+  const base = latest?.[1].vv ?? {};
+  let logs = 0;
+  let logBytes = 0;
+  for (const [, f] of entries) {
+    if (f.k !== "log" || covered(base, [f.d, f.s ?? Infinity]) || !covered(state.vv, [f.d, f.s ?? Infinity])) continue;
+    logs++;
+    logBytes += f.b ?? 0;
+  }
+  if (logs <= o.compactAfterFiles) return false;
+  return logs >= o.compactAfterLogs || logBytes >= o.compactLogShare * (latest?.[1].b ?? 0);
+}
+
 
 });
 __define("packages/sync/src/applied.ts", function (exports, __require) {
@@ -791,6 +772,384 @@ function raiseApplied(state            , device        , seq        ) {
 }
 
 });
+__define("packages/sync/src/syncFile.ts", function (exports, __require) {
+  __export(exports, "parseSyncFile", () => parseSyncFile);
+                                                                       
+
+const isObject = (v         )                               => typeof v === "object" && v !== null && !Array.isArray(v);
+const isCount = (v         )              => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+const isTime = (v         )              => typeof v === "number" && Number.isFinite(v);
+const isMapOf = (v         , item                         ) => isObject(v) && Object.values(v).every(item);
+const isOrigin = (v         ) => Array.isArray(v) && v.length === 2 && typeof v[0] === "string" && isCount(v[1]);
+const isValue = (o                         ) => Object.prototype.hasOwnProperty.call(o, "v") && o.v !== undefined;
+const isOp = (v         ) => isObject(v) && typeof v.k === "string" && typeof v.h === "string" && isValue(v);
+const isRecord = (v         ) => isObject(v) && typeof v.h === "string" && isOrigin(v.o) && isValue(v);
+
+function parseSyncFile(payload        )                  {
+  let file         ;
+  try {
+    file = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (!isObject(file) || file.v !== 1 || typeof file.device !== "string" || !isTime(file.at)) return null;
+  if (file.kind === "log") return isCount(file.seq) && Array.isArray(file.ops) && file.ops.every(isOp) ? (file           ) : null;
+  if (file.kind === "snapshot") {
+    return isMapOf(file.vv, isCount) && isMapOf(file.seen, isTime) && isMapOf(file.records, isRecord) ? (file                ) : null;
+  }
+  return null;
+}
+
+});
+__define("packages/sync/src/fileHealth.ts", function (exports, __require) {
+  __export(exports, "noteFileHealth", () => noteFileHealth);
+  __export(exports, "holdsBack", () => holdsBack);
+  __export(exports, "pullSettled", () => pullSettled);
+                                                  
+
+                                                                                                     
+
+function noteFileHealth(state            , files             , now        , giveUp        ) {
+  const setAside = (id        ) => state.files[id]?.k === "bad";
+  for (const id of files.read) delete state.damaged[id];
+  for (const id of files.unreadable) {
+    if (setAside(id)) continue;
+    const since = Math.min(state.damaged[id] ?? now, now);
+    if (now - since > giveUp) {
+      state.files[id] = { d: "", k: "bad", at: now };
+      delete state.damaged[id];
+    } else {
+      state.damaged[id] = since;
+    }
+  }
+  for (const id of Object.keys(state.damaged)) if (!files.present.has(id)) delete state.damaged[id];
+  const pending = files.pending.filter((id) => !setAside(id));
+  state.pending = pending.length;
+  if (pending.length) state.pendingSince = Object.fromEntries(pending.map((id) => [id, Math.min(state.pendingSince?.[id] ?? now, now)]));
+  else delete state.pendingSince;
+}
+
+const holdsBack = (state            , now        , window        ) =>
+  Object.keys(state.damaged).length > 0 || Object.values(state.pendingSince ?? {}).some((at) => now - at <= window);
+
+const pullSettled = (state            ) =>
+  state.pending === 0 && Object.keys(state.damaged).length === 0 && !Object.values(state.files).some((f) => f.k === "bad");
+
+});
+__define("packages/sync/src/applyBatches.ts", function (exports, __require) {
+  __export(exports, "ABSENT", () => ABSENT);
+  __export(exports, "UNSEEN_KEPT_MS", () => UNSEEN_KEPT_MS);
+  __export(exports, "launchOf", () => launchOf);
+  __export(exports, "isApplyBatch", () => isApplyBatch);
+  __export(exports, "validBatches", () => validBatches);
+  __export(exports, "writeAhead", () => writeAhead);
+  __export(exports, "cancelIfRaced", () => cancelIfRaced);
+  __export(exports, "settleOwedRetirements", () => settleOwedRetirements);
+  __export(exports, "finishBatch", () => finishBatch);
+  __export(exports, "startApplying", () => startApplying);
+  __export(exports, "queueRecovered", () => queueRecovered);
+  __export(exports, "awaitsRecovery", () => awaitsRecovery);
+  __export(exports, "countReapplied", () => countReapplied);
+  __export(exports, "failedTargets", () => failedTargets);
+  __export(exports, "takeReapplied", () => takeReapplied);
+const { canonical } = __require("packages/sync/src/canon.ts");
+const { visible } = __require("packages/sync/src/scopeKeys.ts");
+                                                                            
+
+const ABSENT = "null";
+const NATIVE_SAVE_MS = 30_000;
+const UNSEEN_KEPT_MS = 86_400_000;
+
+const thisLaunch = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+const steadyNow = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
+const launchOf = (options               = {}) => options.launch ?? thisLaunch;
+const monotonicOf = (options               = {}) => (options.monotonic ?? steadyNow)();
+
+function isJsonOrNull(v         ) {
+  if (v === null) return true;
+  if (typeof v !== "string") return false;
+  try {
+    JSON.parse(v);
+    return true;
+  } catch {
+    return false;
+  }
+}
+const isStep = (v         ) => Array.isArray(v) && v.length === 2 && isJsonOrNull(v[0]) && isJsonOrNull(v[1]);
+const isFiniteNumber = (v         )              => typeof v === "number" && Number.isFinite(v);
+
+function isApplyBatch(v         )                  {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  const b = v                           ;
+  if (!isFiniteNumber(b.id) || typeof b.p !== "string" || typeof b.l !== "string" || !isFiniteNumber(b.at)) return false;
+  if (b.done !== undefined && !isFiniteNumber(b.done)) return false;
+  if ([b.r, b.f, b.ok].some((flag) => flag !== undefined && flag !== 1)) return false;
+  if (b.cut !== undefined && !(Array.isArray(b.cut) && b.cut.every((key) => typeof key === "string"))) return false;
+  return typeof b.k === "object" && b.k !== null && !Array.isArray(b.k) && Object.values(b.k).every(isStep);
+}
+
+const validBatches = (v         )               => (Array.isArray(v) ? v.filter(isApplyBatch) : []);
+
+function noteBatch(state            , prefix        , keys                  , now        , options              )                    {
+  const view = visible(state, prefix);
+  const k                  = {};
+  let noted = false;
+  for (const key of keys) {
+    if (!key.startsWith(prefix)) continue;
+    const from = state.base[key];
+    const to = view.has(key) ? canonical(view.get(key)) : ABSENT;
+    if ((from ?? ABSENT) === to && !awaitsRecovery(state, key)) continue;
+    k[key] = [from ?? null, to === ABSENT ? null : to];
+    noted = true;
+  }
+  if (!noted) return null;
+  const batches = (state.applying ??= []);
+  const id = Math.max(now, ...batches.map((b) => b.id + 1));
+  const batch             = { id, p: prefix, l: launchOf(options), at: now, k };
+  batches.push(batch);
+  return batch;
+}
+
+function dropBatch(state            , batch            ) {
+  state.applying = state.applying?.filter((b) => b !== batch);
+  if (!state.applying?.length) delete state.applying;
+}
+
+                                                                       
+
+async function writeAhead(state            , prefix        , keys                  , now        , options               = {})                      {
+  const persist = options.persistApplying;
+  const batch = persist ? noteBatch(state, prefix, keys, now, options) : null;
+  if (!persist || !batch) return { batch: null, failed: false };
+  try {
+    await persist(batch);
+    return { batch, failed: false };
+  } catch (error) {
+    console.warn(`[sync] couldn't journal what ${prefix} is about to apply`, error);
+    dropBatch(state, batch);
+    return { batch: null, failed: true };
+  }
+}
+
+const owedRetirements = new WeakMap                          ();
+
+async function retire(state            , batch            , options              ) {
+  try {
+    await options.persistApplying?.({ ...batch, k: {} });
+  } catch (error) {
+    owedRetirements.set(state, [...(owedRetirements.get(state) ?? []).filter((b) => b.id !== batch.id), batch]);
+    throw error;
+  }
+}
+
+async function cancelIfRaced(state            , batch                   , raced             , options               = {})                   {
+  if (!batch || !Object.keys(batch.k).some((key) => raced.has(key))) return false;
+  dropBatch(state, batch);
+  await retire(state, batch, options);
+  return true;
+}
+
+async function settleOwedRetirements(state            , options               = {}) {
+  const owed = owedRetirements.get(state);
+  if (!owed?.length) return;
+  owedRetirements.delete(state);
+  for (const batch of owed) await retire(state, batch, options);
+}
+
+function finishBatch(batch                   , applied         , options               = {}) {
+  if (!batch) return;
+  batch.done = monotonicOf(options);
+  if (applied) batch.ok = 1;
+  else batch.f = 1;
+}
+
+function startApplying(state            , now        , options               = {}) {
+  takeReapplied(state);
+  if (!state.applying) return;
+  const launch = launchOf(options);
+  const steady = monotonicOf(options);
+  const saveMs = options.nativeSaveMs ?? NATIVE_SAVE_MS;
+  const retrying = new Set(state.unapplied);
+  const live = (b            ) => {
+    if (b.l === launch && b.f && Object.keys(b.k).some((key) => retrying.has(key))) return true;
+    if (b.l === launch) return b.done === undefined || steady - b.done < saveMs;
+    return !b.r || now - b.at < UNSEEN_KEPT_MS;
+  };
+  state.applying = state.applying.filter(live);
+  if (!state.applying.length) delete state.applying;
+}
+
+                                           
+const recovering = new WeakMap                        ();
+const reapplied = new WeakMap                    ();
+
+function queueRecovered(state            , keys          ) {
+  if (!keys.length) return;
+  const queued = new Set(state.unapplied);
+  let marks = recovering.get(state);
+  if (!marks) recovering.set(state, (marks = { pending: new Set() }));
+  for (const key of keys) {
+    marks.pending.add(key);
+    if (queued.has(key)) continue;
+    queued.add(key);
+    state.unapplied.push(key);
+  }
+}
+
+const awaitsRecovery = (state            , key        ) => !!recovering.get(state)?.pending.has(key);
+
+function countReapplied(state            , applied                  , deferred             , changed             ) {
+  const marks = recovering.get(state);
+  if (!marks?.pending.size) return;
+  let count = 0;
+  for (const key of applied) {
+    if (deferred.has(key) || !marks.pending.delete(key)) continue;
+    if (changed.has(key)) count++;
+  }
+  if (count) reapplied.set(state, (reapplied.get(state) ?? 0) + count);
+}
+
+function failedTargets(state            , prefix        , options               = {})                                  {
+  const launch = launchOf(options);
+  let targets                                  = null;
+  for (const batch of state.applying ?? []) {
+    if (!batch.f || batch.l !== launch || batch.p !== prefix) continue;
+    targets ??= new Map();
+    for (const [key, [, to]] of Object.entries(batch.k)) {
+      let held = targets.get(key);
+      if (!held) targets.set(key, (held = new Set()));
+      held.add(to ?? ABSENT);
+    }
+  }
+  return targets;
+}
+
+function takeReapplied(state            )         {
+  const count = reapplied.get(state) ?? 0;
+  reapplied.delete(state);
+  return count;
+}
+
+});
+__define("packages/sync/src/applyRecovery.ts", function (exports, __require) {
+  __export(exports, "recoverBatches", () => recoverBatches);
+const { canonical } = __require("packages/sync/src/canon.ts");
+const { ABSENT, launchOf, queueRecovered } = __require("packages/sync/src/applyBatches.ts");
+const { dropBase, putBase, visible } = __require("packages/sync/src/scopeKeys.ts");
+                                                                                        
+
+                                                                       
+                                                                                                        
+
+const nativeJson = (extraction            , key        ) => {
+  if (!extraction.values.has(key)) return ABSENT;
+  const value = extraction.values.get(key);
+  return extraction.json?.(key, value) ?? canonical(value);
+};
+
+function setBase(state            , key        , json        ) {
+  if (json === ABSENT) dropBase(state, key);
+  else putBase(state, key, json);
+}
+
+function chainsOf(batches              , skip                          ) {
+  const chains = new Map                ();
+  batches.forEach((batch, at) => {
+    for (const [key, [from, to]] of Object.entries(batch.k)) {
+      if (skip(key)) continue;
+      let chain = chains.get(key);
+      if (!chain) chains.set(key, (chain = []));
+      chain.push({ at, from: from ?? ABSENT, to: to ?? ABSENT, partial: !batch.ok });
+    }
+  });
+  return chains;
+}
+
+function valueAt(chain        , hypothesis        )         {
+  let last                  ;
+  for (const step of chain) if (step.at < hypothesis) last = step;
+  return last ? last.to : chain[0] .from;
+}
+
+const holds = (chain                    , json        ) => !!chain?.some((s) => s.to === json || s.from === json);
+const leftOver = (chain        , json        , savesWhole         ) => (!savesWhole || chain.some((s) => s.partial)) && holds(chain, json);
+
+                                                                                                                            
+
+async function tryHypothesis(state            , chains                     , hypothesis        , first            , extractWith                    )                 {
+  const overrides = new Map                ();
+  for (const [key, chain] of chains) overrides.set(key, valueAt(chain, hypothesis));
+  const baseJson = (key        ) => {
+    const json = overrides.has(key) ? overrides.get(key)  : state.base[key];
+    return json === ABSENT ? undefined : json;
+  };
+  const same = [...overrides].every(([key, json]) => (state.base[key] ?? ABSENT) === json);
+  const extraction = same || !extractWith ? first : await extractWith(baseJson);
+  if (!extraction) return { hypothesis, extraction: first, matches: -1, baseJson };
+  let matches = 0;
+  for (const [key, chain] of chains) {
+    if (extraction.ignore?.(key)) continue;
+    if (nativeJson(extraction, key) === valueAt(chain, hypothesis)) matches++;
+  }
+  return { hypothesis, extraction, matches, baseJson };
+}
+
+function keepUnresolved(state            , batches              , resolved             ) {
+  const kept               = [];
+  for (const batch of state.applying ?? []) {
+    if (!batches.includes(batch)) {
+      kept.push(batch);
+      continue;
+    }
+    const left = Object.entries(batch.k).filter(([key]) => !resolved.has(key));
+    const cut = Object.keys(batch.k).filter((key) => resolved.has(key));
+    if (left.length) kept.push({ ...batch, r: 1, ...(cut.length ? { cut: [...(batch.cut ?? []), ...cut] } : {}), k: Object.fromEntries(left) });
+  }
+  if (kept.length) state.applying = kept;
+  else delete state.applying;
+}
+
+async function recoverBatches(state            , prefix        , first            , extractWith                    , savesWhole         , options               = {})                             {
+  const launch = launchOf(options);
+  const batches = (state.applying ?? []).filter((b) => b.p === prefix && b.l !== launch).sort((a, z) => a.id - z.id);
+  if (!batches.length) return first;
+  const chains = chainsOf(batches, (key) => !!first.ignore?.(key));
+  if (!chains.size) {
+    if (batches.some((b) => !b.r)) keepUnresolved(state, batches, new Set());
+    return first;
+  }
+  let best               = null;
+  for (let hypothesis = 0; hypothesis <= batches.length; hypothesis++) {
+    const trial = await tryHypothesis(state, chains, hypothesis, first, extractWith);
+    if (trial.matches < 0) return null;
+    if (!best || trial.matches > best.matches) best = trial;
+  }
+  const { extraction, hypothesis, baseJson } = best ;
+  const view = visible(state, prefix);
+  const sinceRestart = chainsOf((state.applying ?? []).filter((b) => b.p === prefix && b.l === launch), (key) => !chains.has(key));
+  const resolved = new Set        ();
+  const queue           = [];
+  for (const [key, chain] of chains) {
+    if (extraction.ignore?.(key)) continue;
+    resolved.add(key);
+    const actual = nativeJson(extraction, key);
+    if (actual !== valueAt(chain, hypothesis) && !leftOver(chain, actual, savesWhole) && !holds(sinceRestart.get(key), actual)) {
+      setBase(state, key, baseJson(key) ?? ABSENT);
+      continue;
+    }
+    setBase(state, key, actual);
+    const target = view.has(key) ? canonical(view.get(key)) : ABSENT;
+    const recordBehind = target !== actual && chain.some((s) => s.from === target) && !chain.some((s) => s.to === target);
+    if (recordBehind) continue;
+    queue.push(key);
+  }
+  keepUnresolved(state, batches, resolved);
+  queueRecovered(state, queue);
+  return extraction;
+}
+
+});
 __define("packages/sync/src/scopeState.ts", function (exports, __require) {
   __export(exports, "emptyScope", () => emptyScope);
                                     
@@ -811,6 +1170,8 @@ __define("packages/sync/src/scopeState.ts", function (exports, __require) {
   
                                               
 
+                                                                                                                                                                                            
+
                                                                                                                               
 
                           
@@ -829,6 +1190,7 @@ __define("packages/sync/src/scopeState.ts", function (exports, __require) {
                   
                         
                                                  
+                          
                      
                   
   
@@ -896,6 +1258,8 @@ const emptyScope = ()             => ({
                                           
                               
                              
+                            
+                       
  
 
                             
@@ -909,6 +1273,10 @@ const emptyScope = ()             => ({
                          
                                                   
                             
+                                                         
+                  
+                        
+                           
   
 
 });

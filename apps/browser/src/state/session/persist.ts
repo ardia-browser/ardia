@@ -11,15 +11,17 @@ import type { Tab } from "../browser/types";
 import { downloadSession } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
-import { noteSessionBackup, noteSessionSetAside, noteSessionSetAsideFailure, noteSessionWrite, timeSessionSave } from "../telemetry/sessionWrites";
+import { noteSessionBackup, noteSessionFromOtherShell, noteSessionSetAside, noteSessionSetAsideFailure, noteSessionWrite, timeSessionSave } from "../telemetry/sessionWrites";
 import { saveBeforeQuit } from "../app/quit";
 import { landHeldPins, pinGuard, savedAfterPins } from "./pinGuard";
-import { keepAsideGate, rollingBackups, writeGate, type WriteGate } from "./sessionSafety";
+import { fromNewerBuild, keepAsideGate, rollingBackups, writeGate, type WriteGate } from "./sessionSafety";
 import { consentToken } from "../telemetry/consentPeriod";
 import { isRegularWindow } from "../windows/small";
 import { savedPage } from "./savedShapes";
 import { SESSION_VERSION } from "./savedSession";
-import { DOWNLOADS_DOCUMENT, DOWNLOADS_VERSION, hydrateAtLaunch, wholeBackup, type LaunchOverrides } from "./launchSession";
+import { parseSettingsMeta } from "../settings/settings";
+import { retiredDefaultsAppliedSince } from "../settings/retiredDefaults";
+import { DOWNLOADS_DOCUMENT, DOWNLOADS_VERSION, hydrateAtLaunch, OLDER_BUILD_SESSION_DOCUMENT, wholeBackup, type LaunchOverrides } from "./launchSession";
 
 export { parseSession, SESSION_MIGRATIONS, SESSION_VERSION } from "./savedSession";
 
@@ -89,6 +91,8 @@ const DOWNLOADS_FIELDS = {
 
 const DOCS: Doc[] = [doc(DOWNLOADS_DOCUMENT, DOWNLOADS_VERSION, DOWNLOADS_FIELDS), doc(SESSION_DOCUMENT, SESSION_VERSION, SESSION_FIELDS)];
 
+let sessionFile = SESSION_DOCUMENT;
+
 function write(name: string, json: string): boolean {
   try {
     writeDocument(name, json);
@@ -121,7 +125,7 @@ export function flushPersistence({ final = false } = {}): boolean {
 export async function sessionSaved(): Promise<boolean> {
   if (!(await savedAfterPins(flushPersistence, unstaged, pinsLanding))) return false;
   try {
-    await documentSaved(SESSION_DOCUMENT);
+    await documentSaved(sessionFile);
     return !frozen;
   } catch {
     return false;
@@ -148,11 +152,20 @@ export const windowsRealignedToAutoHideTabsAtLaunch = () => realignedAtLaunch;
 export function startPersistence(overrides: LaunchOverrides = {}) {
   const launch = hydrateAtLaunch(overrides);
   const loaded = launch.loaded;
+  const newerSessionKept = fromNewerBuild(launch.session);
+  const ownSessionFile = newerSessionKept ? OLDER_BUILD_SESSION_DOCUMENT : SESSION_DOCUMENT;
+  const fileOf = (name: string) => (name === SESSION_DOCUMENT ? ownSessionFile : name);
+  sessionFile = ownSessionFile;
+  let stopped = false;
+  let signalStopped: () => void = () => {};
+  const whenStopped = new Promise<void>((resolve) => (signalStopped = resolve));
   const consent = consentToken();
   if (launch.session.state === "unusable") noteSessionSetAside(true, launch.session.reason, launch.restored?.ageDays ?? null, consent);
   if (launch.downloads.state === "unusable") noteSessionSetAside(false, launch.downloads.reason, null, consent);
+  if (launch.rowTables) noteSessionFromOtherShell(consent);
   restoredAtLaunch = !!loaded?.windowOrder?.length;
   realignedAtLaunch = loaded?.windowsAgainstAutoHideTabs ?? 0;
+  const retiredDefaultsApplied = launch.session.state === "usable" && !!loaded && retiredDefaultsAppliedSince({ settings: loaded.settings, settingsMeta: parseSettingsMeta(loaded.settingsMeta) }, useBrowser.getState());
   restoreLaunchLook();
 
   const keepDroppedPins = pinGuard(useBrowser.getState(), (delay) => unstaged() && schedule(delay));
@@ -162,9 +175,14 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   pinsLanding = () => gates.get(SESSION_DOCUMENT)?.landing() ?? keepDroppedPins.landing();
   sessionGated = () => !(gates.get(SESSION_DOCUMENT)?.open() ?? true);
   const anyLanding = () => [...gates.values()].map((g) => g.landing()).find((l) => l !== null) ?? keepDroppedPins.landing();
-  saveBeforeQuit(() => {
+  const stopSavingBeforeQuit = saveBeforeQuit(async () => {
+    if (stopped) return;
     for (const gate of gates.values()) gate.tryNow();
-    return landHeldPins(() => dirty.size > 0 && frozen, anyLanding, () => ((frozen = false), save(), (frozen = true)));
+    const landingUntilStopped = () => {
+      const landing = anyLanding();
+      return landing && Promise.race([landing, whenStopped]);
+    };
+    return landHeldPins(() => !stopped && dirty.size > 0 && frozen, landingUntilStopped, () => ((frozen = false), save(), (frozen = true)));
   });
   const lastSources = new Map<string, unknown[]>();
   const lastJson = new Map<string, string>();
@@ -174,6 +192,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   let cosmeticOnly = true;
 
   const schedule = (delay: number) => {
+    if (stopped) return;
     const at = Date.now() + delay;
     if (timer !== undefined && due <= at) return;
     clearTimeout(timer);
@@ -184,7 +203,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   const save = () => {
     clearTimeout(timer);
     timer = undefined;
-    if (frozen) return;
+    if (frozen || stopped) return;
     const s = useBrowser.getState();
     const done = timeSessionSave();
     const held = new Set<string>();
@@ -212,12 +231,12 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
         holdFor(pins.againIn);
         continue;
       }
-      if (saved || write(doc.name, json)) {
+      if (saved || write(fileOf(doc.name), json)) {
         pins?.commit();
         if (!saved && doc.name === DOWNLOADS_DOCUMENT) noteDownloadHistoryWrite(json.length);
         if (!saved && doc.name === SESSION_DOCUMENT) {
           noteSessionWrite(json.length, cosmeticOnly);
-          backups.afterSave(json);
+          if (!newerSessionKept) backups.afterSave(json);
         }
         lastJson.set(doc.name, json);
         dirty.delete(doc);
@@ -247,9 +266,14 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     if (urgent) cosmeticOnly = false;
     if (dirty.size) schedule(urgent || !cosmeticOnly ? SAVE_DELAY_MS : COSMETIC_SAVE_DELAY_MS);
   };
-  for (const [name, found] of [[SESSION_DOCUMENT, launch.session], [DOWNLOADS_DOCUMENT, launch.downloads]] as const) {
+  const sessionFound = newerSessionKept ? (launch.olderBuild ?? { state: "missing" as const }) : launch.session;
+  for (const [name, found] of [[SESSION_DOCUMENT, sessionFound], [DOWNLOADS_DOCUMENT, launch.downloads]] as const) {
     const session = name === SESSION_DOCUMENT;
-    const gate = keepAsideGate(name, found, (delay) => schedule(delay), { unreadable: () => noteSessionSetAside(session, "unreadable", null, consent), failed: () => noteSessionSetAsideFailure(session, consent) }, () => createDocument(name, DOCS.find((d) => d.name === name)!.json(useBrowser.getState())));
+    const file = fileOf(name);
+    const gate = keepAsideGate(file, found, (delay) => schedule(delay), { unreadable: () => noteSessionSetAside(session, "unreadable", null, consent), failed: () => noteSessionSetAsideFailure(session, consent) }, async () => {
+      if (stopped) return;
+      await createDocument(file, DOCS.find((d) => d.name === name)!.json(useBrowser.getState()));
+    });
     if (gate) gates.set(name, gate);
   }
   if (launch.session.state === "usable" && launch.session.from < SESSION_VERSION) {
@@ -266,7 +290,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     cosmeticOnly = false;
     schedule(SAVE_DELAY_MS);
   }
-  if (realignedAtLaunch) {
+  if (realignedAtLaunch || retiredDefaultsApplied || (launch.rowTables && launch.session.state === "usable")) {
     dirty.add(DOCS.find((d) => d.name === SESSION_DOCUMENT)!);
     cosmeticOnly = false;
     schedule(SAVE_DELAY_MS);
@@ -275,5 +299,13 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     check(useBrowser.getState());
     save();
   };
-  return useBrowser.subscribe((s) => check(s));
+  const unsubscribe = useBrowser.subscribe((s) => check(s));
+  return () => {
+    stopped = true;
+    signalStopped();
+    stopSavingBeforeQuit();
+    clearTimeout(timer);
+    timer = undefined;
+    unsubscribe();
+  };
 }

@@ -9,7 +9,7 @@ const heightFor = (placement: SearchPanelPlacement, overrides: { rowsHeight?: nu
   searchTrayHeight({
     commandBarMaxHeight: overrides.commandBarMaxHeight ?? null,
     placement,
-    place: searchPanelPlace(placement, resting, overrides.hinged ?? false),
+    place: searchPanelPlace(placement, resting),
     fieldHeight,
     fontScale: 1,
     rowsHeight: overrides.rowsHeight ?? 2 * searchPanel.rowPitch,
@@ -36,7 +36,7 @@ test("the card above the keyboard grows with its rows up to the four-row panel, 
   expect(heightFor("aboveKeyboard", { rowsHeight: rows })).toBe(searchPanelFieldBlock(fieldHeight) + rows);
   expect(heightFor("aboveKeyboard", { rowsHeight: 9 * searchPanel.rowPitch })).toBe(fullPanel);
   const short = 560;
-  const clearance = searchPanelPlace("aboveKeyboard", resting, false).gapAboveKeyboard;
+  const clearance = searchPanelPlace("aboveKeyboard", resting).gapAboveKeyboard;
   expect(clearance).toBeGreaterThan(0);
   expect(heightFor("aboveKeyboard", { rowsHeight: 9 * searchPanel.rowPitch, windowHeight: short })).toBe(short - safeTop - resting - clearance);
   expect(heightFor("aboveKeyboard", { windowHeight: safeTop + resting })).toBe(0);

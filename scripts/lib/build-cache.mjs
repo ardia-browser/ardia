@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { groupAlive, isAlive as pidAlive } from "./pid.mjs";
 
 const STAMP_VERSION = 6;
 
@@ -618,16 +619,6 @@ export function lockHolderPath(derivedData, root = process.env.AC_LOCK_ROOT || "
   return join(root, `ac-xcodebuild-${base.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 40)}-${digest}.holder`);
 }
 
-const pidAlive = (pid) => {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return e.code === "EPERM";
-  }
-};
-
 export function canonical(path) {
   try {
     return fs.realpathSync(path);
@@ -642,15 +633,7 @@ export function canonical(path) {
 
 export const slotGroupFile = (slot) => join(slot, "children.pgid");
 
-export function groupAlive(pgid) {
-  if (!Number.isInteger(pgid) || pgid <= 1) return false;
-  try {
-    process.kill(-pgid, 0);
-    return true;
-  } catch (e) {
-    return e.code === "EPERM";
-  }
-}
+export { groupAlive };
 
 export const slotGroup = (slot) => Number(readJson(slotGroupFile(slot), {}).pgid);
 

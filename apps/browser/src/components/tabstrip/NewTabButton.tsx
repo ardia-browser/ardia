@@ -12,7 +12,7 @@ import { consentToken } from "../../state/telemetry/client";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { Button, useHover, type IconPalette } from "../ui";
 import { useTheme } from "../ui/theme";
-import { perLook, radius } from "../ui/tokens";
+import { concentric, perLook } from "../ui/tokens";
 import type { DragGeometry } from "./stripGroups";
 import { registerSlot } from "./stripReorder";
 import { NEW_TAB_SLOT, useStripSlide } from "./stripMotion";
@@ -22,7 +22,10 @@ import { GAP, ITEM_HEIGHT, ITEM_TOP, NEW_TAB_ICON, OVERFLOW_BUTTON, tabRadius } 
 import { keyText } from "../../state/commands/keyText";
 
 const NEW_TAB_HIT = perLook(() => ({ width: ITEM_HEIGHT, height: ITEM_HEIGHT, plateX: 0, plateY: 0, box: ITEM_HEIGHT, radius: tabRadius() }));
-const OVERFLOW_HIT = perLook(() => ({ width: OVERFLOW_BUTTON.box, height: ITEM_HEIGHT, plateX: 0, plateY: (ITEM_HEIGHT - OVERFLOW_BUTTON.box) / 2, box: OVERFLOW_BUTTON.box, radius: radius.control }));
+const OVERFLOW_HIT = perLook(() => {
+  const inset = (ITEM_HEIGHT - OVERFLOW_BUTTON.box) / 2;
+  return { width: OVERFLOW_BUTTON.box, height: ITEM_HEIGHT, plateX: 0, plateY: inset, box: OVERFLOW_BUTTON.box, radius: concentric(tabRadius(), inset) };
+});
 const OVERFLOW_STYLE = { marginLeft: GAP };
 
 export function openTabStripMenu(windowId: string) {
@@ -30,7 +33,7 @@ export function openTabStripMenu(windowId: string) {
   void openSidebarMenu(windowId);
 }
 
-export function NewTabButton({ windowId, geometry, pinned }: { windowId: string; geometry: DragGeometry; pinned: boolean }) {
+export function NewTabButton({ windowId, geometry, pinned, showTabMenuButton }: { windowId: string; geometry: DragGeometry; pinned: boolean; showTabMenuButton: boolean }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const newTabHint = useShortcutHint("newTab");
@@ -58,7 +61,7 @@ export function NewTabButton({ windowId, geometry, pinned }: { windowId: string;
     <Animated.View {...hoverProps} pointerEvents="box-none" style={{ marginTop: ITEM_TOP, flexDirection: "row", transform: [{ translateX: shift }] }}>
       <View {...slid} ref={slidRef} pointerEvents="box-none" style={[NEW_TAB_ROW, slid.style as object]}>
         <Button variant="icon" toolbar icon="plus" glyph={NEW_TAB_ICON} hit={NEW_TAB_HIT()} palette={palette} tooltip={splitViewAvailable ? `${withShortcut("New Tab", newTabHint)} — ${keyText("⌥")}-click to open in Split View` : withShortcut("New Tab", newTabHint)} onPress={open} onContextMenu={() => openTabStripMenu(windowId)} />
-        <Button variant="icon" toolbar icon="chevron.down" glyph={OVERFLOW_BUTTON.glyph} weight="semibold" hit={OVERFLOW_HIT()} palette={palette} color={hovered ? theme.textSecondary : theme.textTertiary} style={OVERFLOW_STYLE} tooltip="Open and recently closed tabs" onPress={openOverflow} onContextMenu={() => openTabStripMenu(windowId)} />
+        {showTabMenuButton && <Button variant="icon" toolbar icon="chevron.down" glyph={OVERFLOW_BUTTON.glyph} weight="semibold" hit={OVERFLOW_HIT()} palette={palette} color={hovered ? theme.textSecondary : theme.textTertiary} style={OVERFLOW_STYLE} tooltip="Open and recently closed tabs" onPress={openOverflow} onContextMenu={() => openTabStripMenu(windowId)} />}
       </View>
     </Animated.View>
   );

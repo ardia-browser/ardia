@@ -20,7 +20,7 @@ export const nativeSymbolFor = (name: SymbolName) => (Platform.OS === "ios" && n
 
 export function Symbol({ name, size, color, weight = "regular" }: { name: SymbolName; size: number; color: string; weight?: SymbolWeight }) {
   const design = useDesign();
-  const drawn = design === "material" && Platform.OS === "android" ? materialSymbolFor(name) : null;
+  const drawn = Platform.OS === "android" ? materialSymbolFor(name) : null;
   const systemName = design === "material" ? null : nativeSymbolFor(name);
   if (systemName) return <NativeGlyph systemName={systemName} pointSize={size * sfPointSizePerSide(name)} weight={weight} color={color} style={{ width: size, height: size }} />;
   const icon = drawn ? materialSymbolIcon(drawn) : null;

@@ -6,6 +6,13 @@ public class FieldGlowModule: Module, FieldGlowNative {
 
   static func progress(_ id: String, _ to: Double, _ still: Bool) { DispatchQueue.main.async { FieldGlow.hub.progress(id, to: to, still: still) } }
 
+  static func pulse(_ id: String, _ period: Double, _ low: Double) {
+    DispatchQueue.main.async {
+      let pulse = period.isFinite && period > 0 && (0...1).contains(low) ? FieldGlowPulse(period: period / 1000, low: low) : nil
+      FieldGlow.hub.pulse(id, pulse)
+    }
+  }
+
   static func finish(_ id: String, _ still: Bool) { DispatchQueue.main.async { FieldGlow.hub.finish(id, still: still) } }
 
   static func reset(_ id: String) { DispatchQueue.main.async { FieldGlow.hub.reset(id) } }
@@ -15,6 +22,7 @@ public class FieldGlowModule: Module, FieldGlowNative {
 
     Self.showFunction
     Self.progressFunction
+    Self.pulseFunction
     Self.finishFunction
     Self.resetFunction
 

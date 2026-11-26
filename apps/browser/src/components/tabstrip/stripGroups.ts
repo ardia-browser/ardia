@@ -138,7 +138,7 @@ export const tabsOf = (m: StripMember) => (m.kind === "tab" ? [m.id] : m.tabIds)
 export const CELL_STEP = PINNED_CELL + PINNED_SPACING;
 export const dockWidth = (cells: number) => cells * CELL_STEP - PINNED_SPACING;
 
-type StripMeasures = { groupChip: (groupId: string) => number | undefined; folderChip: (groupId: string) => number | undefined; needsTitle?: (tabId: string) => boolean };
+type StripMeasures = { groupChip: (groupId: string) => number | undefined; folderChip: (groupId: string) => number | undefined; needsTitle?: (tabId: string) => boolean; newTabRoom?: number };
 type StripLayout = {
   chip: number;
   selected: number;
@@ -188,7 +188,7 @@ export function layoutStrip(entries: StripEntry[], activeId: string, pageWidth: 
     selectedShown: wideShown,
     fixed: visible.reduce((n, m) => n + (m.kind === "folder" ? folderChip(m) + (holds(m, activeId) ? MEMBERS_INSET : GAP) : 0), 0),
     gap: GAP,
-    plus: NEW_TAB_ROOM,
+    plus: measured.newTabRoom ?? NEW_TAB_ROOM,
     min: compactMin,
     titledMin,
     selectedMin,
@@ -257,7 +257,7 @@ export function keyedWidths(ids: readonly string[], widths: readonly (number | u
 export type StripFit = { selectedMin: number; titledMin: number; compactMin: number };
 
 export function stripFit(entries: StripEntry[], activeId: string, pageWidth: number, measured: StripMeasures, dockLayout: Dock | null, wideId: string = activeId): StripFit {
-  const limit = pageWidth + 0.5 - GAP - NEW_TAB_ROOM;
+  const limit = pageWidth + 0.5 - GAP - (measured.newTabRoom ?? NEW_TAB_ROOM);
   const tight = SELECTED_STEPS.at(-1)!;
   const layout = (selectedMin: number, held?: TabWidths, titledMin: number = TITLED_CHIP, compactMin: number = COMPACT_CHIP) =>
     layoutStrip(entries, activeId, pageWidth, measured, dockLayout, held, wideId, selectedMin, titledMin, compactMin);
@@ -297,5 +297,5 @@ export function stripCaptionRoom(floating: boolean, fullScreen: boolean, chrome:
   return captionRoom(floating ? PEEK_LEFT + PEEK_BORDER : 0, 0, chrome);
 }
 
-export const newTabPinned = (chip: number, tabsEnd: number, pageWidth: number, tabsShrink = true) =>
-  (chip <= COMPACT_CHIP || !tabsShrink) && tabsEnd + GAP + NEW_TAB_ROOM > pageWidth + 0.5;
+export const newTabPinned = (chip: number, tabsEnd: number, pageWidth: number, tabsShrink = true, newTabRoom = NEW_TAB_ROOM) =>
+  (chip <= COMPACT_CHIP || !tabsShrink) && tabsEnd + GAP + newTabRoom > pageWidth + 0.5;

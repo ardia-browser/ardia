@@ -25,3 +25,11 @@ test("the translate button's menu puts the other languages in a submenu", () => 
   ]);
   assert.deepEqual(render(translateMenuItems({ translated: false, target: "English", languages: [], neverTranslate: null })), ["Translate to English [translate]"]);
 });
+
+test("the page's right-click menu offers the translation only where the translate button shows", async () => {
+  const { translatePageMenuItems } = await import("./translateMenu.ts");
+  assert.deepEqual(translatePageMenuItems({ status: "idle", source: "de" }, "English"), [{ id: "translatePage", title: "Translate to English" }]);
+  assert.deepEqual(translatePageMenuItems({ status: "idle", source: null }, "English"), []);
+  assert.deepEqual(translatePageMenuItems({ status: "translating", source: "de" }, "English"), [{ id: "showOriginal", title: "Show Original" }]);
+  assert.deepEqual(translatePageMenuItems({ status: "translated", source: "ja" }, "English"), [{ id: "showOriginal", title: "Show Original" }]);
+});

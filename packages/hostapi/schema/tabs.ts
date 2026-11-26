@@ -3,7 +3,7 @@ import { defineDomain } from "../define.ts";
 export const tabs = defineDomain({
   kind: "engine",
   imports: {
-    "../../tabs": ["LinkRoute", "TabStripCommand", "TabStripTransaction"],
+    "../../tabs": ["LinkRoute", "TabDiagnosticsRead", "TabEngineRefusal", "TabInputArgs", "TabInputDone", "TabInputPrimed", "TabStripCommand", "TabStripTransaction"],
   },
   calls: {
     routeLinkTabs: {
@@ -32,6 +32,20 @@ export const tabs = defineDomain({
       result: "{ closesWindow: boolean }",
       service: "ac_tabs_last_tab_policy",
       desktop: "route",
+    },
+    diagnostics: {
+      args: "{ tabId: string; since?: number; clearBefore?: number }",
+      result: "TabDiagnosticsRead | TabEngineRefusal",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    input: {
+      args: "TabInputArgs",
+      result: "TabInputDone | TabInputPrimed | TabEngineRefusal",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
     },
     reportCommits: {
       args: "{ on: boolean }",

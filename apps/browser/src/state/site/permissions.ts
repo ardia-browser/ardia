@@ -14,6 +14,8 @@ import { startDeviceChoosers } from "./deviceChoosers";
 import { originForSecurityDisplay } from "../../lib/url";
 import { permissionGate } from "./permissionGate";
 import { noteNotificationRequestAutoDenied } from "../telemetry/notificationRequestCounts";
+import { noteMultipleDownloadsAnswered } from "../telemetry/downloadWork";
+import { consentToken } from "../telemetry/choice";
 
 const queues = new Map<string, PermissionRequest[]>();
 let started = false;
@@ -83,8 +85,10 @@ function drop(id: string) {
 }
 
 export function answerPermission(tabId: string, requestId: string, result: PermissionResult) {
+  const consent = consentToken();
   const request = pageOf(tabId).permission;
   if (!request || request.id !== requestId) return;
+  if (request.permissions.includes("multipleDownloads")) noteMultipleDownloadsAnswered(result, consent);
   void resolvePermission(request.id, result, result !== "dismiss");
   if (result === "accept" && request.permissions.includes("notifications")) {
     void ensureNotificationPermission(useBrowser.getState().tabs[tabId]?.windowId);

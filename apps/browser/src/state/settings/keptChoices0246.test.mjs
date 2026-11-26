@@ -62,7 +62,7 @@ function hiddenPlayers() {
 
 const adaptiveInk = () => mount(() => useProfileTheme("default")).value.adaptiveInk;
 
-test("the four choices load from a 0.2.46 file: three kept as hidden settings, the Import button's under its new name", () => {
+test("the four 0.2.46 choices still load from a 0.2.46 file, with the Import button's under its new name", () => {
   load({ ...OFF_IN_0246, hideBookmarksBarImport: true });
   for (const [key, value] of Object.entries(OFF_IN_0246)) {
     assert.equal(S().settings[key], value, key);

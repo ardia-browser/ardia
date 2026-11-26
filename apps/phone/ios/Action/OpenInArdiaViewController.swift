@@ -73,8 +73,8 @@ struct OpenFallbackView: View {
           .font(.headline)
           .frame(maxWidth: .infinity, minHeight: 50)
       }
-      .buttonStyle(.glassProminent)
-      .primaryActionColors()
+      .buttonStyle(LiquidGlassButtonStyle(prominent: true, label: Palette.onPrimaryAction))
+      .tint(Palette.primaryAction)
     }
     .padding(Spacing.large)
     .frame(maxWidth: .infinity)

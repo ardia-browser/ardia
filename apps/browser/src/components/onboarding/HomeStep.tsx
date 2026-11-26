@@ -15,9 +15,11 @@ import { ChoiceCard } from "./ChoiceCard";
 import { OptionCard } from "./OptionCard";
 import { confirmAnswer, confirmDefaultBrowserAnswer, recordDefaultBrowserTrial, setOnboardingDraft, setOnboardingExtras, skipStep, useOnboarding } from "../../state/onboarding/onboarding";
 import { probeOnboardingSystem, type OnboardingSystem } from "../../state/onboarding/systemProbe";
-import { ChoiceList, useMockFocus, type ChoiceOption } from "./ChoiceList";
+import { ChoiceList, type ChoiceOption } from "./ChoiceList";
+import { onboardingMotion } from "./tokens";
 import { useOnboardingColors } from "./Parts";
-import { MockPanel, useScreen } from "./Screen";
+import { useScreen } from "./Screen";
+import { useSection, useSharedMockFocus } from "./sectionContext";
 import { StepActions, StepLayout } from "./StepLayout";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
@@ -31,15 +33,18 @@ const LINK_CHOICES: ChoiceOption<boolean>[] = [
 ];
 
 export function HomeStep() {
-  const sub = useOnboarding((s) => s.sub);
+  const { sub } = useSection();
   return sub === 0 ? <DefaultBrowserQuestion /> : <LinksQuestion />;
 }
+
+let applying = false;
 
 function DefaultBrowserQuestion() {
   const extras = useOnboarding((s) => s.extras);
   const redo = useOnboarding((s) => s.redo);
   const [system, setSystem] = useState<OnboardingSystem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState(false);
   const setDefault = extras.setDefault ?? !backgroundInstance;
   const trial = !redo && PLATFORM_FEATURES.setsDefaultBrowser && (extras.trial ?? false);
   const dock = extras.dock ?? true;
@@ -51,8 +56,10 @@ function DefaultBrowserQuestion() {
   }, []);
 
   const apply = async () => {
-    if (!system) return;
-    setBusy(true);
+    if (!system || applying) return;
+    applying = true;
+    setPending(true);
+    const slow = setTimeout(() => setBusy(true), onboardingMotion.busyLabelDelay);
     const picked: string[] = [];
     try {
       if (!system.isDefault && (setDefault || trial) && (await setAsDefaultBrowser())) {
@@ -62,7 +69,10 @@ function DefaultBrowserQuestion() {
       if (login !== system.loginEnabled) await setLaunchAtLogin(login).catch(() => {});
       if (dock && system.dockAvailable && !system.inDock) await addToDock();
     } finally {
+      clearTimeout(slow);
+      applying = false;
       setBusy(false);
+      setPending(false);
       confirmDefaultBrowserAnswer(picked);
     }
   };
@@ -78,8 +88,10 @@ function DefaultBrowserQuestion() {
         <StepActions
           continueTitle={busy ? "Setting Up…" : "Continue"}
           disabled={!system || busy}
+          holdForward={pending}
           onContinue={() => void apply()}
-          onSkip={() => skipStep()}
+          onSkip={() => skipStep("question")}
+          holdScroll
         />
       }
       preview={<SystemPreview isDefault={!!(defaultOn || trying)} dock={!!(system?.inDock || (dock && system?.dockAvailable !== false))} login={login} />}
@@ -107,8 +119,8 @@ function DefaultBrowserQuestion() {
 }
 
 function LinksQuestion() {
-  const { values, mock } = useScreen(["openLinksInLittleArdia"]);
-  const focus = useMockFocus("links");
+  const { values } = useScreen(["openLinksInLittleArdia"]);
+  const focus = useSharedMockFocus();
   const little = values.openLinksInLittleArdia;
   return (
     <StepLayout
@@ -120,10 +132,9 @@ function LinksQuestion() {
           onContinue={() =>
             confirmAnswer("links", { openLinksInLittleArdia: little }, [little ? "Links from other apps open in Little Ardia" : "Links from other apps open in a tab"])
           }
-          onSkip={() => skipStep()}
+          onSkip={() => skipStep("question")}
         />
       }
-      preview={<MockPanel settings={mock} focus={focus.focus} />}
     >
       <ChoiceList options={LINK_CHOICES} value={little} onChange={(v) => setOnboardingDraft({ openLinksInLittleArdia: v })} mock={focus} />
     </StepLayout>

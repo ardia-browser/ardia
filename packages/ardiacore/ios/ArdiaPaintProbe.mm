@@ -40,6 +40,7 @@ namespace ardia_host {
 namespace {
 
 constexpr NSTimeInterval kPaintCheckAfter = 0.5;
+constexpr NSTimeInterval kPaintCheckAfterProfileSwitch = 1.5;
 
 NSString *gLastPaintCheck;
 NSString *gLastPaintRecord;
@@ -101,7 +102,7 @@ void CheckPainting(NSWindow *window, NSString *trigger, ArdiaConsentStamp *stamp
   [ArdiaEvents emit:@"engine.windowUnpainted" data:[stamp onto:record]];
 }
 
-void SchedulePaintCheck(NSWindow *window, NSString *trigger) {
+void SchedulePaintCheck(NSWindow *window, NSString *trigger, NSTimeInterval after = kPaintCheckAfter) {
   if (![window isKindOfClass:NSWindow.class] || ![ArdiaWindowController forNSWindow:window]) return;
   ArdiaPaintWatch *watch = [PaintWatches() objectForKey:window];
   if (!watch) {
@@ -111,13 +112,17 @@ void SchedulePaintCheck(NSWindow *window, NSString *trigger) {
   const NSUInteger generation = ++watch->_generation;
   ArdiaConsentStamp *stamp = ArdiaConsentStamp.begin;
   __weak NSWindow *weakWindow = window;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kPaintCheckAfter * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(after * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
     NSWindow *checked = weakWindow;
     ArdiaPaintWatch *current = checked ? [PaintWatches() objectForKey:checked] : nil;
     if (current && current->_generation == generation) CheckPainting(checked, trigger, stamp);
   });
 }
 
+}
+
+void CheckPaintingAfterProfileSwitch(NSWindow *window) {
+  if (window) SchedulePaintCheck(window, @"profileSwitch", kPaintCheckAfterProfileSwitch);
 }
 
 NSString *PaintProbeLine() {

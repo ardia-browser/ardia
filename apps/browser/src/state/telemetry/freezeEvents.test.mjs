@@ -134,6 +134,19 @@ test("app_freeze carries buckets, counts, enums, the signature and scrubbed fram
   assert.ok(sent.freeze_frames.every((f) => f.lang === "native" && /^(hermes|Ardia|system) \+ 0x[0-9a-f]+$/.test(f.function)));
 });
 
+test("app_freeze names the macOS shared cache its system frames are offsets into, and only that", async () => {
+  client.setSharing(true, "settings");
+  const cache = "ABCDEF01-2345-6789-ABCD-EF0123456789";
+  await reportFreeze(record({ images: [{ name: "hermes", uuid: "11111111-2222-3333-4444-555555555555" }, { name: "system", uuid: cache }] }));
+  await reportFreeze(record({ samples: [{ state: 1, frames: frames(["Ardia", 0x5500]) }], images: [{ name: "system", uuid: cache }] }));
+  await reportFreeze(record({ samples: [{ state: 1, frames: frames(["Ardia", 0x6600], ["system", 0x10]) }], images: [{ name: "system", uuid: "not-a-cache" }] }));
+  const [withSystem, withoutSystem, malformed] = await sentFreezes();
+  assert.equal(withSystem.freeze_system_cache, cache.toLowerCase());
+  assert.deepEqual(withSystem.freeze_images, [{ name: "hermes", uuid: "11111111-2222-3333-4444-555555555555" }]);
+  assert.equal(withoutSystem.freeze_system_cache, null);
+  assert.equal(malformed.freeze_system_cache, null);
+});
+
 test("a signature whose hash is all digits survives the property scrub, stays distinct and keeps its one send a day", async () => {
   const { cleanProperties } = await import("./sanitize.ts");
   client.setSharing(true, "settings");

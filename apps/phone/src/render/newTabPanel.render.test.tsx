@@ -3,7 +3,7 @@ import { State } from "react-native-gesture-handler";
 import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { sheetPullTranslation } from "../components/ui/Sheet";
-import { Symbol } from "../components/ui";
+import { floatingPanelLayout, Symbol } from "../components/ui";
 import { IncognitoEyes } from "../components/ui/IncognitoEyes";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { searchPanelShown, SearchTray } from "../components/search/SearchTray";
@@ -175,7 +175,7 @@ onIPhone("the panel runs edge to edge and on under the keyboard to the screen's 
   expect(flat(host(root, "trayRowsReveal")).paddingBottom).toBe(300);
   expect(flat(host(root, "traySurface"))).toMatchObject({ borderTopLeftRadius: PANEL_RADIUS, borderTopRightRadius: PANEL_RADIUS });
   expect(flat(host(root, "traySurface")).borderBottomLeftRadius).toBeUndefined();
-  expect(mockSeen.props).toMatchObject({ cardInset: 0, cardGap: 0, fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset, morphCorners: { panel: PANEL_RADIUS } });
+  expect(mockSeen.props).toMatchObject({ cardInset: floatingPanelLayout.inset, cardGap: 0, fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset, morphCorners: { panel: PANEL_RADIUS } });
   unmount(root);
   act(() => dismissSearch());
   editPage();

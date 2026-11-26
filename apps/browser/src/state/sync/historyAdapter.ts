@@ -89,6 +89,7 @@ export function historyAdapter(profileId: string): Adapter {
   };
   return withSyncWorkCounts("history", {
     prefix: HISTORY,
+    extractUsesBase: true,
     extractsOnlyFrom: () => windowToken(historyViewOf(store(), profileId), Date.now() - HISTORY_WINDOW_MS),
     extract: (_base, _queued, _now, _known, _remote, _stamp, baseJson) => {
       if (!ready()) return null;

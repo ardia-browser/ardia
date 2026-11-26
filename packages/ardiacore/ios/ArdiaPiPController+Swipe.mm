@@ -11,6 +11,8 @@ using namespace ardia_pip;
 
 static __weak NSWindow *gSwipeWindow;
 static __weak NSWindow *gSwipeMomentum;
+static NSInteger gSwipeSteps;
+static NSPoint gSwipeTravel;
 
 + (void)abandonSwipeOn:(NSWindow *)window {
   if (!window) return;
@@ -38,6 +40,7 @@ static __weak NSWindow *gSwipeMomentum;
   if (momentum != NSEventPhaseNone) {
     NSWindow *coasting = gSwipeMomentum;
     if (momentum & (NSEventPhaseEnded | NSEventPhaseCancelled)) gSwipeMomentum = nil;
+    if (coasting && (momentum & NSEventPhaseBegan)) NoteGesture(@"swipe momentum window=%ld", (long)coasting.windowNumber);
     if (momentum & NSEventPhaseBegan) [[self forWindow:coasting] swipeCoasted:event];
     return coasting != nil;
   }
@@ -46,12 +49,15 @@ static __weak NSWindow *gSwipeMomentum;
     if (NSWindow *waiting = gSwipeMomentum) [[self forWindow:waiting] swipeInterrupted];
     gSwipeMomentum = nil;
     [self abandonSwipeOn:gSwipeWindow];
-    if (phase != NSEventPhaseBegan || !ThrowEnabled() || !event.hasPreciseScrollingDeltas ||
-        (event.modifierFlags & NSEventModifierFlagCommand))
-      return NO;
+    if (phase != NSEventPhaseBegan) return NO;
     ArdiaPiPController *controller = [self swipeTargetFor:event];
     if (!controller) return NO;
+    NSString *passes = !ThrowEnabled() ? @"throw off" : !event.hasPreciseScrollingDeltas ? @"not precise" : (event.modifierFlags & NSEventModifierFlagCommand) ? @"command held" : nil;
+    NoteGesture(@"swipe %@ window=%ld appActive=%d", passes ? [@"passed: " stringByAppendingString:passes] : @"began", (long)controller.window.windowNumber, NSApp.isActive);
+    if (passes) return NO;
     gSwipeWindow = controller.window;
+    gSwipeSteps = 0;
+    gSwipeTravel = NSZeroPoint;
     ActivateWithOnlyPictureInPicture(controller, YES);
     [controller swipeBegan:event];
     return YES;
@@ -62,8 +68,12 @@ static __weak NSWindow *gSwipeMomentum;
   if (phase & (NSEventPhaseEnded | NSEventPhaseCancelled)) {
     gSwipeWindow = nil;
     gSwipeMomentum = window;
+    NoteGesture(@"swipe %@ window=%ld steps=%ld travel=%.0f,%.0f", (phase & NSEventPhaseCancelled) ? @"cancelled" : @"ended", (long)window.windowNumber,
+                (long)gSwipeSteps, gSwipeTravel.x, gSwipeTravel.y);
     [controller swipeEnded:event cancelled:(phase & NSEventPhaseCancelled) != 0];
   } else {
+    gSwipeSteps++;
+    gSwipeTravel = NSMakePoint(gSwipeTravel.x + event.scrollingDeltaX, gSwipeTravel.y + event.scrollingDeltaY);
     [controller swipeMoved:event];
   }
   return YES;
@@ -190,6 +200,7 @@ static __weak NSWindow *gSwipeMomentum;
     }
   }
   NSString *outcome = [how isEqual:@"cameOut"] ? @"pullOut" : [how isEqual:@"settledInCorner"] ? @"cornerPull" : [how isEqual:@"flickedAway"] ? @"flickTuck" : edge != ArdiaPiPEdgeNone ? @"tuck" : thrown ? @"corner" : @"placed";
+  NoteGesture(@"swipe settled window=%ld outcome=%@ how=%@ velocity=%.0f,%.0f", (long)_window.windowNumber, outcome, how, velocity.x, velocity.y);
   if ([how isEqual:@"placed"]) {
     _placementStamp = _swipeStamp;
     [self performSelector:@selector(reportPlacement) withObject:nil afterDelay:ardia_pip_throw::kMomentumLate];

@@ -15,6 +15,7 @@ export type RegionDeps = {
   viewport: () => { width: number; height: number };
   rectOf: (element: Element) => Rect;
   pageRectOf?: (element: Element) => Rect;
+  pageFrozen?: (slot: Element) => boolean;
   receivesPointer: (element: Element) => boolean;
   watch: (element: Element, changed: () => void) => () => void;
   animating: (elements: readonly Element[]) => boolean;
@@ -101,7 +102,20 @@ export function createInputRegions(deps: RegionDeps) {
     for (const child of element.children) hitRects(child, out);
   };
 
-  const pageRectOf = deps.pageRectOf ?? deps.rectOf;
+  const measuredPageRect = deps.pageRectOf ?? deps.rectOf;
+  const settledPageRects = new WeakMap<Element, Rect>();
+  const hostPageRects = new WeakMap<Element, Rect>();
+  const pageRectOf = (slot: Element) => {
+    const acknowledged = hostPageRects.get(slot);
+    if (acknowledged) return acknowledged;
+    if (deps.pageFrozen?.(slot)) {
+      const settled = settledPageRects.get(slot);
+      if (settled) return settled;
+    }
+    const rect = measuredPageRect(slot);
+    settledPageRects.set(slot, rect);
+    return rect;
+  };
 
   const measurePages = () => {
     const window = { x: 0, y: 0, ...deps.viewport() };
@@ -220,7 +234,14 @@ export function createInputRegions(deps: RegionDeps) {
       pages.set(slot, { visible, ...(keptRadii ? { radii: keptRadii } : {}), ...(keptCardRadii ? { cardRadii: keptCardRadii } : {}) });
       schedule();
     },
+    pageViewport(slot: Element, rect: Rect) {
+      const known = hostPageRects.get(slot);
+      if (known && known.x === rect.x && known.y === rect.y && known.width === rect.width && known.height === rect.height) return;
+      hostPageRects.set(slot, { ...rect });
+      schedule();
+    },
     dropPage(slot: Element) {
+      hostPageRects.delete(slot);
       if (pages.delete(slot)) schedule();
     },
     addOverlay(element: Element, shape: RegionShape = "box", gated = true) {

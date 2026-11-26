@@ -1,6 +1,6 @@
 import type { ReactNode, Ref } from "react";
 import { Animated, Pressable, View } from "react-native";
-import { Symbol, Text, useHover, type SymbolProps } from "../ui";
+import { GlassFill, Symbol, Text, useGlass, useHover, type SymbolProps } from "../ui";
 import { ink, space } from "../ui/tokens";
 import { useOnboardingColors } from "./Parts";
 import { onboardingButton } from "./tokens";
@@ -34,6 +34,7 @@ function PressScale({ title, onPress, disabled, scale, tooltip, pressRef, childr
 
 export function PrimaryButton({ title, onPress, disabled, icon }: { title: string; onPress: () => void; disabled?: boolean; icon?: string }) {
   const colors = useOnboardingColors();
+  const glass = useGlass();
   return (
     <PressScale title={title} onPress={onPress} disabled={!!disabled} scale={onboardingButton.pressScale}>
       {({ hovered }) => (
@@ -46,10 +47,11 @@ export function PrimaryButton({ title, onPress, disabled, icon }: { title: strin
             alignItems: "center",
             justifyContent: "center",
             gap: space.s,
-            backgroundColor: hovered && !disabled ? colors.primaryHover : colors.primary,
+            backgroundColor: glass ? ink.clear : hovered && !disabled ? colors.primaryHover : colors.primary,
           }}
         >
-          <Text weight="semibold" color={colors.primaryText}>
+          {glass ? <GlassFill radius={onboardingButton.height / 2} panelFill={hovered && !disabled ? colors.primaryHover : colors.primary} /> : null}
+          <Text weight="semibold" color={colors.primaryText} ardiaCentersCapitals>
             {title}
           </Text>
           {icon ? <Symbol name={icon} size={11} weight="semibold" color={colors.primaryText} style={{ width: 12, height: 12 }} /> : null}
@@ -61,6 +63,7 @@ export function PrimaryButton({ title, onPress, disabled, icon }: { title: strin
 
 export function SecondaryButton({ title, onPress, filled, pressRef }: { title: string; onPress: () => void; filled?: boolean; pressRef?: Ref<View> }) {
   const colors = useOnboardingColors();
+  const glass = useGlass();
   return (
     <PressScale title={title} onPress={onPress} scale={onboardingButton.pressScale} pressRef={pressRef}>
       {({ hovered }) => (
@@ -71,12 +74,13 @@ export function SecondaryButton({ title, onPress, filled, pressRef }: { title: s
             paddingHorizontal: onboardingButton.secondaryPad,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: filled ? (hovered ? colors.buttonHover : colors.button) : hovered ? colors.outlinedHover : ink.clear,
-            borderWidth: filled ? 0 : 1,
+            backgroundColor: glass ? ink.clear : filled ? (hovered ? colors.buttonHover : colors.button) : hovered ? colors.outlinedHover : ink.clear,
+            borderWidth: filled || glass ? 0 : 1,
             borderColor: colors.noThanksBorder,
           }}
         >
-          <Text weight="medium" color={filled ? colors.buttonText : colors.noThanksText}>
+          {glass ? <GlassFill radius={onboardingButton.height / 2} state={hovered ? "lit" : "rest"} /> : null}
+          <Text weight="medium" color={filled ? colors.buttonText : colors.noThanksText} ardiaCentersCapitals>
             {title}
           </Text>
         </View>
@@ -105,6 +109,7 @@ export function CircleButton({
   pressRef?: Ref<View>;
 }) {
   const colors = useOnboardingColors();
+  const glass = useGlass();
   return (
     <PressScale title={title} onPress={onPress} scale={onboardingButton.circlePressScale} tooltip={tooltip} pressRef={pressRef}>
       {({ hovered }) => (
@@ -115,11 +120,12 @@ export function CircleButton({
             borderRadius: onboardingButton.height / 2,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: hovered ? colors.outlinedHover : ink.clear,
-            borderWidth: 1,
+            backgroundColor: glass ? ink.clear : hovered ? colors.outlinedHover : ink.clear,
+            borderWidth: glass ? 0 : 1,
             borderColor: colors.noThanksBorder,
           }}
         >
+          {glass ? <GlassFill radius={onboardingButton.height / 2} state={hovered ? "lit" : "rest"} /> : null}
           <Symbol name={icon} size={size} weight={symbolWeight} color={colors.noThanksText} style={{ width: box, height: box }} />
         </View>
       )}

@@ -6,11 +6,11 @@ import { Symbol } from "./Symbol";
 import { useEffect, useRef, type Ref } from "react";
 import { Animated, Pressable, StyleSheet, Text, TextInput, View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
 import { buttonMotion, curve, duration, usePressScaleMotion } from "./motion";
-import { useTheme } from "./theme";
+import { caretColor, useTheme, type FieldSurface } from "./theme";
 import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
-import { useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
+import { useHeldEscape, useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
 
 const SEARCH_KEYS = [{ key: "Escape" }];
 const SEARCH_KEYS_WITH_ENTER = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }];
@@ -25,7 +25,7 @@ export function SearchField({
   autoFocus,
   width,
   style,
-  look = "field",
+  look = "field", surface = "ntpBarSolid",
   onSubmit,
   onEscape,
   onArrow,
@@ -41,6 +41,7 @@ export function SearchField({
   width?: DimensionValue;
   style?: StyleProp<ViewStyle>;
   look?: "field" | "bare";
+  surface?: FieldSurface;
   onSubmit?: (shift: boolean) => void;
   onEscape?: () => void;
   onArrow?: (step: 1 | -1) => void;
@@ -50,6 +51,7 @@ export function SearchField({
   const theme = useTheme();
   const bare = look === "bare";
   const keyDownEvents = useKeyDownEvents(onArrow ? SEARCH_KEYS_WITH_ARROWS : onSubmit ? SEARCH_KEYS_WITH_ENTER : SEARCH_KEYS, extraKeys);
+  const heldEscape = useHeldEscape();
   const clearMotion = usePressScaleMotion(!!value && !bare, buttonMotion.iconPressScale);
   return (
     <View
@@ -71,11 +73,7 @@ export function SearchField({
         style,
       ]}
     >
-      {bare ? (
-        <Symbol name="magnifyingglass" size={BARE_SEARCH.glyph} color={theme.textSecondary} style={{ width: BARE_SEARCH.glyphBox, height: BARE_SEARCH.glyphBox }} />
-      ) : (
-        <Symbol name="magnifyingglass" size={12} color={theme.textSecondary} style={{ width: 14, height: 14 }} />
-      )}
+      <Symbol name="magnifyingglass" size={bare ? BARE_SEARCH.glyph : 12} color={theme.textSecondary} style={bare ? { width: BARE_SEARCH.glyphBox, height: BARE_SEARCH.glyphBox } : { width: 14, height: 14 }} />
       <TextInput
         ref={inputRef}
         value={value}
@@ -83,13 +81,16 @@ export function SearchField({
         placeholder={placeholder}
         placeholderTextColor={bare ? theme.placeholder : theme.textTertiary}
         selectionColor={theme.selection}
+        cursorColor={caretColor(theme, bare ? surface : "field")}
         autoFocus={autoFocus}
         enableFocusRing={false}
         ardiaCentersCapitals
         onBlur={onBlur}
         keyDownEvents={keyDownEvents}
+        {...heldEscape.upProps}
         onKeyDown={(e) => {
           const { key, shiftKey } = e.nativeEvent;
+          if (heldEscape.down(e)) return;
           if (key === "Escape") (onEscape ?? (() => onChangeText("")))();
           else if (key === "Enter") onSubmit?.(!!shiftKey);
           else if (key === "ArrowDown") onArrow?.(1);
@@ -169,6 +170,7 @@ export function TextField({
           placeholder={placeholder}
           placeholderTextColor={theme.textTertiary}
           selectionColor={theme.selection}
+          cursorColor={caretColor(theme, "field")}
           autoFocus={autoFocus}
           secureTextEntry={secure}
           enableFocusRing={false}

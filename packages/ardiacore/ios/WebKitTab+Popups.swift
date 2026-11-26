@@ -80,7 +80,7 @@ extension WebKitTab {
     if WebKitPermissions.sharesChromiumRules(profile) {
       return ArdiaServices.setSiteSetting("allow", profile: profile, origin: origin, type: Self.popupSetting)
     }
-    hub.stores.update(hub.stores.id(of: profile)) { $0.remembered[WebKitStores.SiteKey(site: origin, kind: Self.popupSetting)] = true }
+    hub.stores.update(hub.stores.id(of: profile)) { $0.remember(WebKitStores.SiteKey(site: origin, kind: Self.popupSetting), allowed: true) }
   }
 }
 

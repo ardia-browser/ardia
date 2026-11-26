@@ -44,6 +44,14 @@ void KeepWebsiteLanguages(NSString *userDataDir) {
 
 }
 
+NSString *WithPageMetrics(NSString *script, NSString *metrics) {
+  NSCharacterSet *space = NSCharacterSet.whitespaceAndNewlineCharacterSet;
+  NSString *page = [script stringByTrimmingCharactersInSet:space];
+  NSString *extra = [metrics stringByTrimmingCharactersInSet:space];
+  if (![page hasPrefix:@"("] || ![page hasSuffix:@")"] || ![extra hasPrefix:@"("] || ![extra hasSuffix:@")"]) return script;
+  return [NSString stringWithFormat:@"(function (post) {\nconst receive = (%@)(post);\nlet metrics = null;\ntry {\nmetrics = (%@)(post);\n} catch (e) {}\nif (typeof receive !== \"function\" || typeof metrics !== \"function\") return receive;\nreturn (kind, json) => {\ntry {\nmetrics(kind, json);\n} catch (e) {}\nreturn receive(kind, json);\n};\n})", page, extra];
+}
+
 void PrepareStartup(NSString *userDataDir) {
   KeepWebsiteLanguages(userDataDir);
   static dispatch_queue_t syncQueue = dispatch_queue_create("ardia.native-messaging", DISPATCH_QUEUE_SERIAL);

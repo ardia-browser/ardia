@@ -1,3 +1,4 @@
+import ArdiaDesign
 import ExpoModulesCore
 import UIKit
 
@@ -65,6 +66,15 @@ enum MenuBuilder {
 final class MenuButton: UIButton {
   var opened: (() -> Void)?
   var closed: (() -> Void)?
+  var preview: (() -> UITargetedPreview?)?
+
+  override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+    preview?() ?? super.contextMenuInteraction(interaction, configuration: configuration, highlightPreviewForItemWithIdentifier: identifier)
+  }
+
+  override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+    preview?() ?? super.contextMenuInteraction(interaction, configuration: configuration, dismissalPreviewForItemWithIdentifier: identifier)
+  }
 
   override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
     super.contextMenuInteraction(interaction, willDisplayMenuFor: configuration, animator: animator)
@@ -86,6 +96,7 @@ final class ContextMenuView: ExpoView, UIContextMenuInteractionDelegate {
   var fixedOrder = false { didSet { refreshMenu() } }
   var dark: Bool? { didSet { applyStyle() } }
   var trigger = "longPress" { didSet { if trigger != oldValue { applyTrigger() } } }
+  var previewRadius: CGFloat?
 
   private var interaction: UIContextMenuInteraction?
   private var tapButton: MenuButton?
@@ -118,6 +129,7 @@ final class ContextMenuView: ExpoView, UIContextMenuInteractionDelegate {
       let button = MenuButton(type: .custom)
       button.opened = { [weak self] in self?.onOpen() }
       button.closed = { [weak self] in self?.onClose() }
+      button.preview = { [weak self] in self?.targetedPreview() }
       button.frame = bounds
       button.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       button.showsMenuAsPrimaryAction = true
@@ -176,7 +188,7 @@ final class ContextMenuView: ExpoView, UIContextMenuInteractionDelegate {
   private func targetedPreview() -> UITargetedPreview? {
     guard window != nil, bounds.width > 0, bounds.height > 0 else { return nil }
     let parameters = UIPreviewParameters()
-    let radius = max(layer.cornerRadius, subviews.first(where: { $0 !== tapButton })?.layer.cornerRadius ?? 0)
+    let radius = MenuPreviewShape.radius(given: previewRadius, own: layer.cornerRadius, child: subviews.first(where: { $0 !== tapButton })?.layer.cornerRadius ?? 0, size: bounds.size)
     parameters.visiblePath = UIBezierPath(roundedRect: bounds, cornerRadius: radius)
     parameters.backgroundColor = .clear
     return UITargetedPreview(view: self, parameters: parameters)
@@ -238,6 +250,10 @@ public final class MenusModule: Module {
 
       Prop("appearance") { (view: ContextMenuView, value: MenuAppearanceRecord?) in
         view.dark = value?.dark
+      }
+
+      Prop("previewRadius") { (view: ContextMenuView, value: Double?) in
+        view.previewRadius = value.map { CGFloat($0) }
       }
     }
   }

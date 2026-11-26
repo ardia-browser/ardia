@@ -109,6 +109,24 @@ export function settingsRouteFromKey(key: string): SettingsRoute | null {
 
 export const settingsPath = (stack: readonly SettingsRoute[]): string[] => stack.slice(1).map(settingsRouteKey);
 
+const LINKED_PAGES: Partial<Record<SettingsRoute["page"], readonly SettingsRoute["page"][]>> = {
+  root: ["sync", "general", "tabs", "appearance", "search", "siteSettings", "experimental"],
+  general: ["defaultBrowser", "clearData", "whatsSent", "about"],
+  appearance: ["theme"],
+  search: ["searchEngine"],
+  experimental: ["browseForMe"],
+  siteSettings: ["filterLists", "trustedSites"],
+  filterLists: ["myFilters"],
+  sync: ["syncConnect"],
+  about: ["licenses"],
+};
+
+export function settingsDestinationKeys(stack: readonly SettingsRoute[]): string[] {
+  const top = stack[stack.length - 1] ?? { page: "root" as const };
+  const linked = (LINKED_PAGES[top.page] ?? []).map((page) => ({ page }) as SettingsRoute).filter(settingsRouteOffered);
+  return [...new Set([...settingsPath(stack), ...linked.map(settingsRouteKey)])];
+}
+
 export function followSettingsPath(path: readonly string[]) {
   const { open, stack } = useSettingsNav.getState();
   if (!open) return;

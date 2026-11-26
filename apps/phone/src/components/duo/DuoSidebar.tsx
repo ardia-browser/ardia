@@ -112,14 +112,14 @@ const noop = () => undefined;
 function MoreMenu({ dark, hasTabs, syncEnabled, onCloseAll }: { dark: boolean; hasTabs: boolean; syncEnabled: boolean; onCloseAll: () => void }) {
   const canReopen = useCanReopen();
   const items: MenuItem[] = [
-    { label: destinationWords.archive, onPress: openArchive },
-    ...(syncEnabled ? [{ label: destinationWords.spaces, onPress: openSpaces }] : []),
+    { label: destinationWords.archive, icon: "archivebox", onPress: openArchive },
+    ...(syncEnabled ? [{ label: destinationWords.spaces, icon: "macAndPhone" as const, onPress: openSpaces }] : []),
     "divider",
-    { label: actionWords.newIncognitoTab, onPress: newIncognitoTab },
-    ...(canReopen ? [{ label: "Reopen Closed Tab", onPress: reopenLastClosed }] : []),
-    ...(hasTabs ? [{ label: "Close All Tabs", destructive: true, onPress: onCloseAll }] : []),
+    { label: actionWords.newIncognitoTab, icon: "eyes", onPress: newIncognitoTab },
+    ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
+    ...(hasTabs ? [{ label: "Close All Tabs", icon: "xmark" as const, destructive: true, onPress: onCloseAll }] : []),
     "divider",
-    { label: destinationWords.settings, onPress: () => openSettings() },
+    { label: destinationWords.settings, icon: "gearshape", onPress: () => openSettings() },
   ];
   return (
     <MenuTrigger frost={null} items={items} trigger="tap" fixedOrder haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }}>
@@ -165,7 +165,7 @@ function SpacePages({ spaces, current, showsTiles, dark, onChoose, onClose }: { 
     <>
       <View style={styles.pages} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
         {width > 0 ? (
-          <FlatList
+          <FlatList overScrollMode="never"
             ref={pager}
             testID="duoSidebarPager"
             data={spaces}
@@ -209,7 +209,7 @@ function SpaceList({ space, isCurrent, showsTiles, dark, onClose }: { space: Syn
   const selected = useSelectedTab();
   const tiles = showsTiles ? (space?.pinned.tiles ?? []) : [];
   return (
-    <ScrollView testID="duoSidebarList" style={styles.pages} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+    <ScrollView bounces={false} overScrollMode="never" testID="duoSidebarList" style={styles.pages} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
       {tiles.length && space ? <SidebarTiles tiles={tiles} profileId={space.syncId} dark={dark} onClose={onClose} /> : null}
       <Text accessibilityRole="header" style={[font.subheadline, styles.heading, { color: roles.secondaryLabel }]}>
         Today
@@ -252,7 +252,7 @@ function TabRow({ tab, dark, selected, onOpen, onCloseTab }: { tab: BrowserTab; 
   const host = barAddress(tab).host;
   const rowHitStyle = usePressStyle("text", { style: styles.rowHit });
   return (
-    <MenuTrigger frost={null} items={[{ label: CLOSE_TAB, destructive: true, onPress: onCloseTab }]} haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }} style={styles.rowPitch}>
+    <MenuTrigger frost={null} items={[{ label: CLOSE_TAB, icon: "xmark", destructive: true, onPress: onCloseTab }]} haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }} style={styles.rowPitch}>
       {({ onLongPress }) => (
         <View testID={`duoSidebarRow:${tab.id}`} style={styles.row}>
           {selected ? <ChromeSurface testID="duoSidebarRowGlass" shape="rounded" cornerRadius={DUO.sidebarRowRadius} interactive={false} incognito={tab.isPrivate} dark={dark} style={StyleSheet.absoluteFill} /> : null}

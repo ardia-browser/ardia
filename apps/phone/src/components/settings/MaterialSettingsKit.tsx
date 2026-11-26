@@ -132,19 +132,47 @@ function ItemText({ title, supporting, color }: { title: string; supporting?: st
 
 export function MaterialSettingsLeading({ icon }: { icon?: SymbolName }) {
   const { scheme } = useMaterialTheme();
-  return <View testID="materialSettingsIconSlot" style={styles.leading}>{icon ? <Symbol name={icon} size={materialSize.icon} color={scheme.onSurfaceVariant} /> : null}</View>;
+  if (!icon) return null;
+  return (
+    <View testID="materialSettingsIconSlot" style={styles.leading}>
+      <Symbol name={icon} size={materialSize.icon} color={scheme.onSurfaceVariant} />
+    </View>
+  );
+}
+
+export function MaterialCheckRow({ title, checked, onPress, disabled = false }: { title: string; checked: boolean; onPress: () => void; disabled?: boolean; divider?: boolean }) {
+  const { scheme } = useMaterialTheme();
+  const ripple = useMaterialRipple();
+  const ink = disabled ? withAlpha(scheme.onSurface, MATERIAL_STATE.disabledContent) : scheme.onSurface;
+  const ring = disabled ? ink : checked ? scheme.primary : scheme.onSurfaceVariant;
+  return (
+    <Pressable
+      testID={`materialSettingsRow:${title}`}
+      accessibilityRole="radio"
+      accessibilityLabel={title}
+      accessibilityState={{ selected: checked, checked, ...(disabled ? { disabled } : {}) }}
+      disabled={disabled}
+      android_ripple={ripple}
+      onPress={onPress}
+      style={styles.row}
+    >
+      <ItemText title={title} color={ink} />
+      <View style={[styles.radio, { borderColor: ring }]}>{checked ? <View style={[styles.radioDot, { backgroundColor: ring }]} /> : null}</View>
+    </Pressable>
+  );
 }
 
 type RowBase = { title: string; icon?: SymbolName; tint?: string; divider?: boolean };
 
 const rowStyle = (supporting: unknown) => [styles.row, supporting ? styles.rowTwoLine : null];
 
-export function MaterialNavRow({ title, icon, value, onPress }: RowBase & { value?: string; onPress: () => void }) {
+export function MaterialNavRow({ title, icon, value, detail, onPress }: RowBase & { value?: string; detail?: string; onPress: () => void }) {
   const ripple = useMaterialRipple();
+  const supporting = value ?? detail;
   return (
-    <Pressable testID={`materialSettingsRow:${title}`} accessibilityRole="button" accessibilityLabel={title} accessibilityValue={value ? { text: value } : undefined} android_ripple={ripple} onPress={onPress} style={rowStyle(value)}>
+    <Pressable testID={`materialSettingsRow:${title}`} accessibilityRole="button" accessibilityLabel={detail ? `${title}, ${detail}` : title} accessibilityValue={value ? { text: value } : undefined} android_ripple={ripple} onPress={onPress} style={rowStyle(supporting)}>
       <MaterialSettingsLeading icon={icon} />
-      <ItemText title={title} supporting={value} />
+      <ItemText title={title} supporting={supporting} />
     </Pressable>
   );
 }

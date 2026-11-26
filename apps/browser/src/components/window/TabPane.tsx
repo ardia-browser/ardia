@@ -32,6 +32,7 @@ import { PageOverlays } from "./PageOverlays";
 import { useProfileTheme } from "./ThemeScope";
 import { markNewTabPane } from "../../state/omnibox/newTabMarks";
 import { useNewTabKeptForPage } from "../../state/tabs/newTabKeep";
+import { continuousCorners } from "../ui";
 
 const LINGERING_PANE = "ardia.lingeringPane";
 
@@ -143,7 +144,7 @@ export const TabPane = memo(function TabPane({
       style={{
         position: "absolute",
         ...(fills ? { left: 0, top: 0, right: 0, bottom: 0 } : { left: frame.x, top: frame.y, width: frame.width, height: frame.height }),
-        borderRadius: fullscreen ? 0 : cardRadius,
+        ...continuousCorners(fullscreen ? 0 : cardRadius),
         overflow: "hidden",
         opacity: covered ? 0 : 1,
         zIndex: lingering ? -1 : undefined,

@@ -319,6 +319,184 @@ fn the_c_constants_match_the_core() {
     assert_eq!(ARDIA_UPDATE_SHA256_BYTES, ardia_update_core::SHA256_BYTES);
     assert_eq!(ARDIA_UPDATE_MAX_VERSION_BYTES, ardia_update_core::MAX_VERSION_BYTES);
     assert_eq!(ARDIA_UPDATE_MAX_PACKAGE_BYTES, ardia_update_core::MAX_PACKAGE_BYTES);
+    assert_eq!(
+        ARDIA_UPDATE_WINDOWS_MAX_MANIFEST_BYTES,
+        ardia_update_core::MAX_WINDOWS_MANIFEST_BYTES
+    );
+    assert_eq!(
+        ARDIA_UPDATE_WINDOWS_MAX_INSTALLER_BYTES,
+        ardia_update_core::MAX_WINDOWS_INSTALLER_BYTES
+    );
+    assert_eq!(
+        ARDIA_UPDATE_WINDOWS_MAX_URL_BYTES,
+        ardia_update_core::MAX_WINDOWS_URL_BYTES
+    );
+}
+
+fn empty_windows() -> ardia_update_windows_package {
+    ardia_update_windows_package {
+        build: 0,
+        bytes: 0,
+        sha256: [0; ARDIA_UPDATE_SHA256_BYTES],
+        version_len: 0,
+        version: [0; ARDIA_UPDATE_MAX_VERSION_BYTES],
+        url_len: 0,
+        url: [0; ARDIA_UPDATE_WINDOWS_MAX_URL_BYTES],
+    }
+}
+
+fn windows_cpu(name: &str) -> u32 {
+    match name {
+        "x64" => ARDIA_UPDATE_WINDOWS_CPU_X64,
+        "arm64" => ARDIA_UPDATE_WINDOWS_CPU_ARM64,
+        _ => panic!("{name}"),
+    }
+}
+
+#[test]
+fn every_windows_manifest_vector_gives_its_outcome_through_the_c_abi() {
+    let vectors = vectors();
+    let cases = vectors["windows"].as_array().unwrap();
+    assert!(cases.len() >= 40);
+    for case in cases {
+        let name = case["name"].as_str().unwrap();
+        let manifest = case["manifest"].as_str().unwrap().as_bytes();
+        let signature = hex(case["signature"].as_str().unwrap());
+        let key = hex(case["publicKey"].as_str().unwrap());
+        let published_under = case["publishedUnder"].as_str().unwrap().as_bytes();
+        let cpu = windows_cpu(case["cpu"].as_str().unwrap());
+        let current_build = case["currentBuild"].as_u64().unwrap();
+        let mut out = ardia_update_windows_package {
+            build: 7,
+            bytes: 7,
+            sha256: [7; ARDIA_UPDATE_SHA256_BYTES],
+            version_len: 7,
+            version: [7; ARDIA_UPDATE_MAX_VERSION_BYTES],
+            url_len: 7,
+            url: [7; ARDIA_UPDATE_WINDOWS_MAX_URL_BYTES],
+        };
+        let status = unsafe {
+            ardia_update_verify_windows(
+                manifest.as_ptr(),
+                manifest.len(),
+                signature.as_ptr(),
+                signature.len(),
+                key.as_ptr(),
+                key.len(),
+                published_under.as_ptr(),
+                published_under.len(),
+                cpu,
+                current_build,
+                &mut out,
+            )
+        };
+        let outcome = &case["outcome"];
+        match outcome["error"].as_str() {
+            Some(code) => {
+                assert_eq!(status_code(status), code, "{name}");
+                assert_eq!(out, empty_windows(), "{name}: a refusal zeroes the output");
+            }
+            None => {
+                assert_eq!(status, ardia_update_status::Ok, "{name}");
+                assert_eq!(out.build, outcome["build"].as_u64().unwrap(), "{name}");
+                assert_eq!(out.bytes, outcome["bytes"].as_u64().unwrap(), "{name}");
+                assert_eq!(to_hex(&out.sha256), outcome["sha256"].as_str().unwrap(), "{name}");
+                assert_eq!(
+                    std::str::from_utf8(&out.version[..out.version_len]).unwrap(),
+                    outcome["version"].as_str().unwrap(),
+                    "{name}"
+                );
+                assert_eq!(
+                    std::str::from_utf8(&out.url[..out.url_len]).unwrap(),
+                    outcome["url"].as_str().unwrap(),
+                    "{name}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn windows_arguments_are_checked_by_null_length_and_range_only() {
+    let vectors = vectors();
+    let valid = &vectors["windows"][0];
+    let manifest = valid["manifest"].as_str().unwrap().as_bytes();
+    let signature = hex(valid["signature"].as_str().unwrap());
+    let key = hex(valid["publicKey"].as_str().unwrap());
+    let prefix = valid["publishedUnder"].as_str().unwrap().as_bytes();
+    let mut out = empty_windows();
+    assert_eq!(
+        unsafe {
+            ardia_update_verify_windows(
+                manifest.as_ptr(),
+                manifest.len(),
+                signature.as_ptr(),
+                signature.len(),
+                key.as_ptr(),
+                key.len(),
+                prefix.as_ptr(),
+                prefix.len(),
+                ARDIA_UPDATE_WINDOWS_CPU_X64,
+                59,
+                ptr::null_mut(),
+            )
+        },
+        ardia_update_status::InvalidArgument
+    );
+    assert_eq!(
+        unsafe {
+            ardia_update_verify_windows(
+                manifest.as_ptr(),
+                manifest.len(),
+                signature.as_ptr(),
+                signature.len(),
+                key.as_ptr(),
+                key.len(),
+                prefix.as_ptr(),
+                prefix.len(),
+                2,
+                59,
+                &mut out,
+            )
+        },
+        ardia_update_status::InvalidArgument
+    );
+    assert_eq!(
+        unsafe {
+            ardia_update_verify_windows(
+                ptr::null(),
+                ARDIA_UPDATE_WINDOWS_MAX_MANIFEST_BYTES + 1,
+                signature.as_ptr(),
+                signature.len(),
+                key.as_ptr(),
+                key.len(),
+                prefix.as_ptr(),
+                prefix.len(),
+                ARDIA_UPDATE_WINDOWS_CPU_X64,
+                59,
+                &mut out,
+            )
+        },
+        ardia_update_status::TooLarge
+    );
+    assert_eq!(
+        unsafe {
+            ardia_update_verify_windows(
+                manifest.as_ptr(),
+                manifest.len(),
+                ptr::null(),
+                0,
+                key.as_ptr(),
+                key.len(),
+                prefix.as_ptr(),
+                prefix.len(),
+                ARDIA_UPDATE_WINDOWS_CPU_X64,
+                59,
+                &mut out,
+            )
+        },
+        ardia_update_status::Signature
+    );
 }
 
 #[test]

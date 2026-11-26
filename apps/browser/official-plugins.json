@@ -6,16 +6,16 @@
       "title": "Command Line",
       "blurb": "Drive Ardia from your terminal or an agent.",
       "icon": "terminal.fill",
-      "version": "0.6.0",
-      "release": "https://github.com/ardia-browser/plugins/releases/download/cli-v0.6.0",
+      "version": "0.7.0",
+      "release": "https://github.com/ardia-browser/plugins/releases/download/cli-v0.7.0",
       "artifacts": {
         "macos-arm64": {
-          "file": "cli-plugin-0.6.0-macos-arm64.tar.gz",
-          "sha256": "ca438f2159460804a8e8f1eef50cfb6a3d0149ada247cc463b04586df39feadb"
+          "file": "cli-plugin-0.7.0-macos-arm64.tar.gz",
+          "sha256": "e59c2ac4c30d950cd39fbfe1023921fc12d3ef045b3e53c4c635554db388b9d9"
         },
         "linux-x64": {
-          "file": "ardia-cli-0.6.0-linux-x64.tar.gz",
-          "sha256": "66708ff75287552142d84a74ced51493a84e56d32d0a21c07547d57ce0ac088c"
+          "file": "ardia-cli-0.7.0-linux-x64.tar.gz",
+          "sha256": "f820a3e4feb41acf9c721c2b7aa4e7c0158bf6f2d054e4cb0c4f0296c01450a5"
         },
         "installer": {
           "file": "install.sh",
@@ -31,10 +31,11 @@
       "telemetry": {
         "title": "The ardia command",
         "items": [
-          "Each command's name (like history or browse snapshot), its exit and error codes, the names of the options it was given (never their values) and, for a batch, which step failed: its number and command name",
-          "How long it took, step by step (starting up, starting its helper, connecting to Ardia, finding the tab, the command itself, waiting for the page to settle), plus counts and sizes: browser calls, steps in a batch, how many coding agents the install gave the agent skill to or skipped, the length of a page snapshot and of the output, how many requests an action sent, how many reading tabs it had to open again, and whether the output was cut short, the input humanized, it gave up waiting for its helper, it set a viewport size, it reloaded a crashed page or Ardia refused it a tab. Times, counts and yes or no only",
+          "Each command's name (like history or browse snapshot), its exit and error codes, the names of the options it was given (never their values) and, for a batch, which step failed: its number and command name. For ardia computer, the error code says which setup step failed (driver not installed, a permission CuaDriver.app is missing, its background service not starting, bad arguments, a failed tool, or that it was interrupted or its output was closed), never the app, window, text or arguments involved",
+          "How long it took, step by step (starting up, starting its helper, connecting to Ardia, finding the tab, the command itself, waiting for the page to settle), plus counts and sizes: browser calls, steps in a batch, how many coding agents the install gave the agent skill to or skipped, the length of a page snapshot and of the output, how many requests an action sent, how many reading tabs it had to open again, how many site menus a read printed as one line and how many characters they held, and whether the output was cut short, the input humanized, it gave up waiting for its helper, it set a viewport size, it reloaded a crashed page or Ardia refused it a tab. Times, counts and yes or no only",
+          "For scripts, REPL and MCP sessions: run and call counts, inline images shown, child frames and masked fields in a snapshot, and whether positioned or mouse clicks, native tab diagnostics or native tab input were used. Counts and yes or no only",
           "Its version, whether it's a release or test build, and this Mac's install ID",
-          "After a crash: the error's type, and its message only when it's one of a fixed list (like “division by zero”); never the stack trace",
+          "After a crash: the error's type, and its message only when it's one of a fixed list (like \u201cdivision by zero\u201d); never the stack trace",
           "Nothing from commands pointed at a test browser (--port, --ws), and nothing at all with DO_NOT_TRACK=1 or ARDIA_TELEMETRY=0 set"
         ]
       },

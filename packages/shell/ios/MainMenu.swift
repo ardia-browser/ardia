@@ -18,7 +18,7 @@ enum MainMenu {
 
   static func performAppWideKey(_ event: NSEvent) -> Bool {
     guard let item = appWideItem(for: event, in: NSApp.mainMenu), MenuTarget.shared.validateMenuItem(item) else { return false }
-    if item.action == #selector(MenuTarget.quit(_:)) { MenuTarget.shared.quit(item) } else { MenuTarget.shared.performCommand(item) }
+    if item.action == #selector(MenuTarget.quit(_:)) { MenuTarget.shared.quit(item) } else { KeyRepeatGate.withKeyEquivalent(event) { MenuTarget.shared.performCommand(item) } }
     return true
   }
 
@@ -35,7 +35,7 @@ enum MainMenu {
   static func build() -> NSMenu {
     ArdiaWebView.setAppWideKeys { MainMenu.performAppWideKey($0) }
     let appName = ProcessInfo.processInfo.processName
-    let main = NSMenu()
+    let main = KeyEquivalentMenu()
     moveToProfile = NSMenu(title: "Move to Profile")
     moveToWindow = NSMenu(title: "Move to Window")
     profiles = NSMenu(title: "Profiles")
@@ -44,7 +44,7 @@ enum MainMenu {
 
     func std(_ title: String, _ action: Selector) -> StandardItem { StandardItem(title, action) }
     func sub(_ title: String, _ items: [NSMenuItem], menu: NSMenu? = nil) -> NSMenuItem {
-      let submenu = menu ?? NSMenu(title: title)
+      let submenu = menu ?? KeyEquivalentMenu(title: title)
       submenu.autoenablesItems = true
       items.flatMap(withAliases).forEach(submenu.addItem)
       let root = NSMenuItem(title: title, action: nil, keyEquivalent: "")
@@ -218,8 +218,13 @@ enum MainMenu {
       ]),
       sub("Split View", [
         cmd(.openSplitPane),
+        cmd(.openSplitPaneBelow),
         cmd(.focusNextPane),
         cmd(.focusPreviousPane),
+        cmd(.moveSplitPaneLeft),
+        cmd(.moveSplitPaneRight),
+        cmd(.moveSplitPaneUp),
+        cmd(.moveSplitPaneDown),
       ]),
       .separator(),
       cmd(.cast),

@@ -1,4 +1,5 @@
 import ArdiaBrowser
+import ArdiaDesign
 import ExpoModulesCore
 import Observation
 import SwiftUI
@@ -36,6 +37,8 @@ final class PageView: ExpoView {
   private var failedID: String?
   private var sampled: PageTone?
   private var sentTone: PageTone?
+  private var glassBarDark: Bool?
+  private var sentBarDark: Bool?
   private var sentState: NSDictionary?
   private var wasLoading = false
   var observing = 0
@@ -55,15 +58,16 @@ final class PageView: ExpoView {
   var hiddenCoverWasHidden = false
   var coverCapTask: Task<Void, Never>?
   var coverRetryTask: Task<Void, Never>?
+  var lastFrameView: UIView?
+  var hostedAt: CFTimeInterval = 0
   var coverNativeID: String? {
     didSet { if coverNativeID != oldValue { MainActor.assumeIsolated { coverChanged() } } }
   }
   static let coverCap: Duration = .milliseconds(200)
   static let coverRetryGap: Duration = .milliseconds(16)
   static let coverRetries = 12
-  static let drawnProbeTries = 8
+  static let drawnProbeTries = 30
   static let flatProbesAccepted = 3
-  static let drawnProbeGap: Duration = .milliseconds(50)
   static let scrollRest: TimeInterval = 0.5
   static let drawnProbeWidth: Double = 64
   private var madeGestures: PageGestures?
@@ -122,6 +126,13 @@ final class PageView: ExpoView {
     sideMargins.isUserInteractionEnabled = false
     sideMargins.isHidden = true
     addSubview(sideMargins)
+    NotificationCenter.default.addObserver(self, selector: #selector(glassToneChanged(_:)), name: GlassTone.changed, object: nil)
+  }
+
+  @objc private func glassToneChanged(_ note: Notification) {
+    guard let web = note.object as? WKWebView, web === hostedWebView, let page else { return }
+    glassBarDark = note.userInfo?[GlassTone.darkKey] as? Bool
+    sendTone(theme: page.themeColor, underPage: page.underPageBackgroundColor)
   }
 
   @MainActor
@@ -174,13 +185,18 @@ final class PageView: ExpoView {
     failedID = nil
     sampled = nil
     sentTone = nil
+    glassBarDark = nil
+    sentBarDark = nil
     sentState = nil
   }
 
   @MainActor
   private func host(_ webView: WKWebView?) {
     guard webView !== hostedWebView || webView?.superview !== self else { return }
-    if let hostedWebView, hostedWebView.superview === self { hostedWebView.removeFromSuperview() }
+    if let hostedWebView, hostedWebView.superview === self {
+      if webView !== hostedWebView, let page { PageLastFrame.keep(hostedWebView, document: page.navigationGeneration) }
+      hostedWebView.removeFromSuperview()
+    }
     if webView !== hostedWebView { forgetHostedWebView() }
     hostedWebView = webView
     scrollObservation = nil
@@ -193,6 +209,9 @@ final class PageView: ExpoView {
     webView.frame = webViewFrame
     webView.autoresizingMask = []
     addSubview(webView)
+    hostedAt = CACurrentMediaTime()
+    showLastFrame(of: webView)
+    if PhoneTestBuild.isOn { NSLog("PAGELAB time page hosted %.0f", Date().timeIntervalSince1970 * 1000) }
     if let summaryLayer { bringSubviewToFront(summaryLayer) }
     applyObscuredInsets()
     gestures.attach(webView, page: page)
@@ -208,6 +227,8 @@ final class PageView: ExpoView {
 
   @MainActor
   private func forgetHostedWebView() {
+    glassBarDark = nil
+    removeLastFrame()
     drawnTask?.cancel()
     drawnTask = nil
     drawnSent = false
@@ -262,9 +283,11 @@ final class PageView: ExpoView {
   @MainActor
   private func sendTone(theme: UIColor?, underPage: UIColor?) {
     let tone = PageTone.resolve(theme: theme, underPage: underPage, sampled: sampled, stored: nil)
-    guard tone != sentTone, tone.top != nil || tone.bottom != nil else { return }
+    guard GlassToneSend.needed(toneChanged: tone != sentTone, hasColors: tone.top != nil || tone.bottom != nil, barDark: glassBarDark, sentBarDark: sentBarDark) else { return }
     sentTone = tone
+    sentBarDark = glassBarDark
     var payload: [String: Any] = ["name": "tone"]
+    if let glassBarDark { payload["barDark"] = glassBarDark }
     if let top = tone.top { payload["top"] = top.hex }
     if let bottom = tone.bottom { payload["bottom"] = bottom.hex }
     onPageEvent(payload)
@@ -272,6 +295,7 @@ final class PageView: ExpoView {
 
   @MainActor
   private func scrollMoved() {
+    if lastFrameView != nil, hostedWebView?.scrollView.isTracking == true { removeLastFrame() }
     keepOffsetWithinContent()
     lastScroll = CACurrentMediaTime()
     scheduleScrollRest()
@@ -328,6 +352,14 @@ final class PageView: ExpoView {
           self.page?.id == id else { return }
     sampled = tone
     sendTone(theme: page.themeColor, underPage: page.underPageBackgroundColor)
+  }
+
+  override func willMove(toWindow newWindow: UIWindow?) {
+    super.willMove(toWindow: newWindow)
+    guard newWindow == nil else { return }
+    MainActor.assumeIsolated {
+      if let hostedWebView, hostedWebView.superview === self, let page { PageLastFrame.keep(hostedWebView, document: page.navigationGeneration) }
+    }
   }
 
   override func didMoveToWindow() {

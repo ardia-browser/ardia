@@ -58,6 +58,7 @@ class CompletingFieldPropsTest {
         "maxLength" to 2048.0,
         "autoFocus" to true,
         "fieldLabel" to "Search",
+        "revealFocus" to 0.0,
     )
 
     @Test

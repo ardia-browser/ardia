@@ -158,7 +158,7 @@ test("a verification code found in a profile that sets them up is offered, accep
 
   pm.verificationCodeFound(tabId, { token: "t2", main: true, app: "Passwords" });
   await settle();
-  leftPage(tabId, "https://b.example/", "https://a.example/", "chromium", false);
+  leftPage(tabId, "https://b.example/", "https://a.example/", "chromium");
   assert.equal(pageOf(tabId).verificationCode, null, "navigation closes it");
 
   patchPage(tabId, { verificationCode: { token: "t3", app: "Passwords", host: "a.example", generation: 1 } });

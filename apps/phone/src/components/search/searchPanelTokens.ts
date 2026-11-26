@@ -13,7 +13,7 @@ export const searchPanel = {
   rowPitch: 51,
   rowsShown: 4,
   bottom: space.s,
-  rowInset: 6,
+  rowInset: space.l,
   rowLeading: 10,
   rowTrailing: 10,
   iconSlot: glyphSlot.field,
@@ -58,9 +58,9 @@ export type SearchPanelCorners = "top" | "all";
 
 export type SearchPanelPlace = { corners: SearchPanelCorners; cardInset: number; cardGap: number; fieldInset: number; fieldTop: number; gapAbove: number; gapAboveKeyboard: number; underKeyboard: number };
 
-export function searchPanelPlace(placement: SearchPanelPlacement, resting: number, hinged: boolean): SearchPanelPlace {
+export function searchPanelPlace(placement: SearchPanelPlacement, resting: number): SearchPanelPlace {
   const field = { fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset };
-  if (placement === "underKeyboard") return { ...field, corners: "top", cardInset: hinged ? floatingPanelLayout.inset : 0, cardGap: 0, gapAbove: searchPanel.gapAboveNewTab, gapAboveKeyboard: 0, underKeyboard: resting };
+  if (placement === "underKeyboard") return { ...field, corners: "top", cardInset: floatingPanelLayout.inset, cardGap: 0, gapAbove: searchPanel.gapAboveNewTab, gapAboveKeyboard: 0, underKeyboard: resting };
   return { ...field, corners: "all", cardInset: floatingPanelLayout.inset, cardGap: floatingPanelLayout.aboveKeyboard, gapAbove: 0, gapAboveKeyboard: space.s + floatingPanelLayout.aboveKeyboard, underKeyboard: 0 };
 }
 

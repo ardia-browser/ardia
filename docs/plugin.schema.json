@@ -185,9 +185,121 @@
           "control": {
             "type": "boolean",
             "description": "Let programs you run fully control Ardia, including your signed-in sites"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "const": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "events": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": {
+                      "enum": [
+                        "tabs",
+                        "workspace",
+                        "navigation",
+                        "downloads"
+                      ]
+                    },
+                    "description": "State changes main or the sidecar hears after Ardia commits them, redacted: tabs, workspace and navigation need tabs"
+                  },
+                  "intents": {
+                    "type": "array",
+                    "maxItems": 18,
+                    "items": {
+                      "enum": [
+                        "tabs.group",
+                        "tabs.ungroup",
+                        "tabs.move",
+                        "tabs.pin",
+                        "tabs.unpin",
+                        "tabs.mute",
+                        "tabs.unmute",
+                        "tabs.activate",
+                        "groups.update"
+                      ]
+                    },
+                    "description": "Tab and group changes it may ask Ardia to make (needs tabs: write)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            ],
+            "description": "Redacted state events it hears and tab and group intents it may ask for"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "properties": {
+              "state": {
+                "anyOf": [
+                  {
+                    "const": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "events": {
+                        "type": "array",
+                        "items": {
+                          "enum": [
+                            "downloads"
+                          ]
+                        }
+                      },
+                      "intents": {
+                        "maxItems": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "required": [
+              "tabs"
+            ],
+            "properties": {
+              "tabs": {
+                "enum": [
+                  "read",
+                  "write"
+                ]
+              },
+              "state": {
+                "anyOf": [
+                  {
+                    "const": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "intents": {
+                        "maxItems": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "required": [
+              "tabs"
+            ],
+            "properties": {
+              "tabs": {
+                "const": "write"
+              }
+            }
+          }
+        ]
       },
       "contributes": {
         "type": "object",

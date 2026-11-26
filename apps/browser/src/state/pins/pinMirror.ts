@@ -3,7 +3,7 @@ import { changedIds } from "../browser/changes";
 import { ancestorIds, depthsIn, orderSections, placeBlock, syncGroupOrder, withParent } from "../groups/groups";
 import { isIncognitoProfile, isPinnedRow, makeTab, newId, pinHomeOf, pinKeyOf, pinSection, TILE_PIN, without } from "../browser/model";
 import { ASLEEP, hasPage, holderOfPage } from "../tabs/pageSession";
-import { mapSlotIds, removeFromSplits, splitTabIds, stackAt } from "../splits/splits";
+import { mapSlotIds, normalized, removeFromSplits, splitTabIds, stackAt } from "../splits/splits";
 import { sharedListTab, sharesTabs } from "../tabs/tabShare";
 import { removeTabs } from "../tabs/tabs";
 import type { BrowserWindow, SplitView, Tab, TabGroup } from "../browser/types";
@@ -75,8 +75,8 @@ export function chainOf(x: Pick<Section, "groups">, key: string | null): string[
 }
 
 export const tileSig = (t: Tab) =>
-  `${pinKeyOf(t)}\u0001${t.pinnedUrl ?? ""}\u0001${t.customTitle ?? ""}\u0001${t.customIcon ?? ""}\u0001${isPinnedRow(t) ? "r" : ""}\u0001${tileFolderOf(t)?.id ?? ""}\u0001${tileFolderOf(t)?.name ?? ""}\u0001${tileFolderOf(t)?.renamedAt ?? ""}`;
-const memberSig = (t: Tab) => `${pinKeyOf(t)}\u0001${t.pinnedUrl ?? ""}\u0001${t.customTitle ?? ""}\u0001${t.customIcon ?? ""}`;
+  `${pinKeyOf(t)}\u0001${t.pinnedUrl ?? ""}\u0001${t.customTitle ?? ""}\u0001${t.customIcon ?? ""}\u0001${t.tileLetters ?? ""}\u0001${isPinnedRow(t) ? "r" : ""}\u0001${tileFolderOf(t)?.id ?? ""}\u0001${tileFolderOf(t)?.name ?? ""}\u0001${tileFolderOf(t)?.renamedAt ?? ""}`;
+const memberSig = (t: Tab) => `${pinKeyOf(t)}\u0001${t.pinnedUrl ?? ""}\u0001${t.customTitle ?? ""}\u0001${t.customIcon ?? ""}\u0001${t.tileLetters ?? ""}`;
 export function signature(x: Section): string {
   const shown = new Set<string>();
   const lines: string[] = [];
@@ -109,7 +109,7 @@ export function hasDuplicates(x: Section): boolean {
   return !!x.duplicate || new Set(tabs).size < tabs.length;
 }
 
-const PIN_FIELDS = ["pin", "pinnedUrl", "customTitle", "customIcon", "profileId", "windowId", "pinKey"] as const;
+const PIN_FIELDS = ["pin", "pinnedUrl", "customTitle", "customIcon", "tileLetters", "profileId", "windowId", "pinKey"] as const;
 function pinnedSplitsChanged(s: BrowserState, prev: BrowserState): boolean {
   if (s.splits === prev.splits) return false;
   const members = new Set(pinnedGroupsOf(s).flatMap((g) => g.tabIds));
@@ -207,6 +207,7 @@ export function copyOf(src: Tab, windowId: string, tile: boolean, profileId = sr
       pinnedUrl: src.pinnedUrl || (tile ? src.url : null) || null,
       customTitle: src.customTitle,
       customIcon: src.customIcon,
+      ...(src.tileLetters ? { tileLetters: src.tileLetters } : {}),
       muted: src.muted,
       zoom: src.zoom,
     }),
@@ -242,6 +243,7 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
       pin: tile ? (src.pin ?? TILE_PIN) : null,
       customTitle: src.customTitle,
       customIcon: src.customIcon,
+      tileLetters: src.tileLetters,
     };
     patch.pinnedUrl = src.pinnedUrl || (tile ? src.url : null) || null;
     if (tile && !hasPage(t) && !samePage(t.url, pinHomeOf(src))) Object.assign(patch, { url: pinHomeOf(src), title: src.title, favicon: src.favicon });
@@ -290,14 +292,14 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
   if (spec.splits) {
     const paneOf = new Map([...tiles, ...members].filter(([i]) => !isTile(i.tab)).map(([i, id]) => [pinKeyOf(i.tab), id]));
     const panes = new Set(paneOf.values());
-    const wanted = spec.splits.map((v): PinnedSplit => ({ orientation: v.orientation, slots: mapSlotIds(v.slots, (k) => paneOf.get(k) ?? "") })).filter((v) => splitTabIds(v).every(Boolean));
+    const wanted = spec.splits.map((v): PinnedSplit => normalized({ orientation: v.orientation, slots: mapSlotIds(v.slots, (k) => paneOf.get(k) ?? "") })).filter((v) => splitTabIds(v).every(Boolean));
     const same = (v: SplitView, x: PinnedSplit) => splitTabIds(v).join() === splitTabIds(x).join() && v.orientation === x.orientation && stackAt(v) === stackAt(x);
     const stale = Object.values(splits).filter((v) => v.windowId === windowId && splitTabIds(v).every((id) => panes.has(id)) && !wanted.some((x) => same(v, x)));
     if (stale.length) splits = without(splits, stale.map((v) => v.id));
     for (const x of wanted) {
       if (!Object.values(splits).some((v) => same(v, x))) {
         const id = newId("split");
-        splits = { ...removeFromSplits(splits, new Set(splitTabIds(x))), [id]: { id, windowId, orientation: x.orientation, slots: x.slots } };
+        splits = { ...removeFromSplits(splits, new Set(splitTabIds(x))), [id]: normalized({ id, windowId, orientation: x.orientation, slots: x.slots }) };
       }
       ids = placeBlock(ids, ids.filter((id) => splitTabIds(x).includes(id)));
     }

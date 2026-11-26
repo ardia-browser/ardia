@@ -29,6 +29,7 @@ export * from "./system";
 export * from "./systemSignals";
 export * from "./translation";
 export * from "./updater";
+export * from "./windowsUpdateCounts";
 export * from "./userScripts";
 export { ClipView } from "./clipView";
 export { PageCoverGate, type PageCoverGateProps } from "./pageCoverGate";

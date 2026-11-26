@@ -1,9 +1,11 @@
 import { showMenu, type MenuItem } from "../../platform/menus";
-import { tabLayoutOf, tabsShownIn } from "../browser/model";
+import { activeTabId, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { menuShortcut } from "../commands/commandShortcuts";
 import { bookmarksBarShownIn, bookmarksShown } from "../bookmarks/visibility";
 import { toggleNewTabBar } from "../omnibox/newTabBar";
+import { openNewTabInSplit } from "../splits/actions";
+import { splitViewAvailable } from "../splits/splits";
 import { newGroupWithSelection } from "./actions";
 import { closeAllTabs } from "./clearTabs";
 import { lastClosedEntry } from "../windows/reopenClosed";
@@ -79,6 +81,9 @@ export function sidebarMenuItems(s: BrowserState, windowId: string): MenuItem[] 
   return sections(
     [
       { id: "newTab", title: "New Tab", symbol: "plus.app", ...menuShortcut("newTab", s) },
+      ...(splitViewAvailable
+        ? [{ id: "newTabInSplit", title: "New Tab in Split View", symbol: "rectangle.split.2x1", enabled: !!activeTabId(s, windowId), ...menuShortcut("openSplitPane", s) }]
+        : []),
       { id: "reopen", title: "Reopen Closed Tab", symbol: "clock.arrow.circlepath", enabled: !!lastClosedEntry(s, windowId), ...menuShortcut("reopenClosedTab", s) },
     ],
     [
@@ -98,7 +103,8 @@ export async function openSidebarMenu(windowId: string) {
   const s = store();
   if (choice === "newTab") {
     if (!toggleNewTabBar(windowId)) s.newTab(windowId, { newTabCommand: true });
-  } else if (choice === "reopen") s.reopenClosed(windowId);
+  } else if (choice === "newTabInSplit") openNewTabInSplit(windowId);
+  else if (choice === "reopen") s.reopenClosed(windowId);
   else if (choice === "newGroup") {
     const id = s.newTab(windowId);
     if (id) newGroupWithSelection(windowId, [id]);

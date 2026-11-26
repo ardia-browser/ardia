@@ -128,7 +128,7 @@ test("only the window holding the tab-policy lock unloads idle profiles, and mai
   startLinuxTabPolicies(privateWindow.value);
   assert.equal(privateWindow.counts.unloads, 0);
 
-  const main = readFileSync(new URL("./main.tsx", import.meta.url), "utf8");
+  const main = readFileSync(new URL("./shellEntry.tsx", import.meta.url), "utf8");
   assert.match(main, /startProfileUnloading: capabilities\.unloadIdleProfiles \? startProfileUnloading : undefined/);
   assert.match(main, /import \{ startProfileUnloading \} from "\.\.\/\.\.\/browser\/src\/state\/profiles\/profileUnloading";/);
 });

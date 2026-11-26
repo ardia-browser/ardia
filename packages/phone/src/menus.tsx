@@ -28,6 +28,7 @@ export type ContextMenuProps = ViewProps & {
   onOpen?: () => void;
   onClose?: () => void;
   appearance?: MenuAppearance;
+  previewRadius?: number;
   children?: ReactNode;
 };
 

@@ -812,6 +812,240 @@ describe("createHostRuntime", () => {
     assert.deepEqual(seen, [["tab.closed", "t3"]]);
   });
 
+  test("state topics subscribe through state.subscribe, apart from hooks, and reach only their own listeners", async () => {
+    const seen = [];
+    const { host, runtime, errors } = await started({});
+    runtime.ardia.hooks.on("*", (_data, event) => seen.push(["any", event.name]));
+    const offTabs = runtime.ardia.tabs.onChange((change) => seen.push(["tabs", change.tabs.map((t) => t.id)]));
+    runtime.ardia.navigation.onCommit((commit) => seen.push(["nav", commit.tabId, commit.url]));
+    runtime.ardia.workspace.onChange(() => {
+      throw new Error("a broken listener");
+    });
+    runtime.ardia.downloads.onChange((change) => seen.push(["downloads", change.downloads.length]));
+    await settle();
+    assert.deepEqual(host.calls("state.subscribe").at(-1).params, { topics: ["downloads", "navigation", "tabs", "workspace"] });
+    assert.deepEqual(host.calls("subscribe").at(-1).params, { events: ["*"] });
+    host.push({ event: "state.tabs", time: 2, data: { initial: true, tabs: [{ id: "t1" }], removed: [] } });
+    host.push({ event: "state.workspace", data: { windows: [], groups: [], removedWindows: [], removedGroups: [] } });
+    host.push({ event: "state.navigation", data: { commits: [{ tabId: "t1", windowId: "w1", url: "https://a.example/", title: "A" }, { tabId: "t2", windowId: "w1", url: "https://b.example/", title: null }] } });
+    host.push({ event: "state.downloads", data: { downloads: [{ id: "d1" }], removed: [] } });
+    await settle();
+    assert.deepEqual(seen, [["tabs", ["t1"]], ["nav", "t1", "https://a.example/"], ["nav", "t2", "https://b.example/"], ["downloads", 1]]);
+    assert.equal(errors.length, 1, "a throwing listener is reported, and the rest still run");
+    offTabs.dispose();
+    await settle();
+    assert.deepEqual(host.calls("state.subscribe").at(-1).params, { topics: ["downloads", "navigation", "workspace"] });
+  });
+
+  test("an event marked dropped resubscribes every state topic with resync, once at a time", async () => {
+    const seen = [];
+    const { host, runtime } = await started({});
+    runtime.ardia.tabs.onChange((change) => seen.push(change.initial === true));
+    runtime.ardia.downloads.onChange(() => {});
+    await settle();
+    const before = host.calls("state.subscribe").length;
+    host.push({ event: "tab.activated", dropped: 3, data: {} });
+    host.push({ event: "state.tabs", dropped: 1, data: { tabs: [], removed: [] } });
+    await settle();
+    const resyncs = host.calls("state.subscribe").slice(before);
+    assert.deepEqual(resyncs.map((m) => m.params), [{ topics: ["downloads", "tabs"], resync: true }]);
+    host.push({ event: "state.tabs", data: { initial: true, tabs: [], removed: [] } });
+    host.push({ event: "state.tabs", dropped: 0, data: { tabs: [], removed: [] } });
+    await settle();
+    assert.equal(host.calls("state.subscribe").length, before + 1, "no resync without a drop");
+    assert.deepEqual(seen, [false, true, false]);
+  });
+
+  test("a navigation listener that throws on one commit still hears the rest", async () => {
+    const seen = [];
+    const { host, runtime, errors } = await started({});
+    runtime.ardia.navigation.onCommit((commit) => {
+      if (commit.tabId === "t1") throw new Error("only t1 breaks");
+      seen.push(commit.tabId);
+    });
+    await settle();
+    host.push({ event: "state.navigation", data: { commits: [{ tabId: "t1" }, { tabId: "t2" }, { tabId: "t3" }] } });
+    await settle();
+    assert.deepEqual(seen, ["t2", "t3"]);
+    assert.equal(errors.length, 1);
+  });
+
+  test("a failed hook subscription doesn't keep state topics from subscribing", async () => {
+    const { host, runtime, errors } = await started({}, {
+      subscribe: () => {
+        throw Object.assign(new Error("hooks refused"), { code: "refused" });
+      },
+    });
+    runtime.ardia.hooks.on("tab.activated", () => {});
+    runtime.ardia.tabs.onChange(() => {});
+    await settle();
+    assert.equal(host.calls("subscribe").length, 1);
+    assert.deepEqual(host.calls("state.subscribe").map((m) => m.params), [{ topics: ["tabs"] }]);
+    assert.equal(errors.length, 1);
+    await settle();
+    assert.equal(host.calls("subscribe").length, 1, "an unchanged failed request isn't retried on its own");
+  });
+
+  test("drops that keep coming right after each resync back off, then stop with a state_desync error", async () => {
+    let clock = 1_000_000;
+    const host = fakeHost({ hello });
+    const errors = [];
+    const runtime = createHostRuntime(host.transport, { onError: (e) => errors.push(e), resyncBackoffMs: 1, now: () => clock });
+    await runtime.definePlugin({});
+    runtime.ardia.tabs.onChange(() => {});
+    await settle();
+    const resyncs = () => host.calls("state.subscribe").filter((m) => m.params.resync === true).length;
+    const drop = async (expected) => {
+      host.push({ event: "state.tabs", dropped: 2, data: { tabs: [], removed: [] } });
+      const deadline = Date.now() + 2000;
+      while (expected !== undefined && resyncs() < expected && Date.now() < deadline) await settle();
+      await settle();
+    };
+    for (let i = 1; i <= 5; i++) {
+      await drop(i);
+      assert.equal(resyncs(), i, `resync ${i}`);
+      clock += 100;
+    }
+    await drop();
+    assert.equal(resyncs(), 5, "the sixth drop in a row asks for nothing");
+    assert.equal(errors.at(-1)?.code, "state_desync");
+    clock += 120_000;
+    await drop();
+    assert.equal(resyncs(), 5, "it stays stopped until the plugin subscribes again");
+    runtime.ardia.tabs.onChange(() => {});
+    await settle();
+    assert.equal(resyncs(), 6, "a listener subscribing again, even to the same topic, starts over with a whole snapshot");
+    assert.equal(host.calls("state.subscribe").at(-1).params.resync, true);
+    clock += 120_000;
+    await drop(7);
+    assert.equal(resyncs(), 7, "and drops resync again");
+  });
+
+  test("a drop long after the last resync starts a fresh streak with no wait", async () => {
+    let clock = 5_000_000;
+    const host = fakeHost({ hello });
+    const runtime = createHostRuntime(host.transport, { onError: () => {}, resyncBackoffMs: 60_000, now: () => clock });
+    await runtime.definePlugin({});
+    runtime.ardia.tabs.onChange(() => {});
+    await settle();
+    const resyncs = () => host.calls("state.subscribe").filter((m) => m.params.resync === true).length;
+    host.push({ event: "state.tabs", dropped: 1, data: { tabs: [], removed: [] } });
+    await settle();
+    assert.equal(resyncs(), 1);
+    clock += 31_000;
+    host.push({ event: "state.tabs", dropped: 1, data: { tabs: [], removed: [] } });
+    await settle();
+    assert.equal(resyncs(), 2, "outside the window, no backoff");
+  });
+
+  test("a second listener on a subscribed topic gets a fresh snapshot through a topic-only resync", async () => {
+    const { host, runtime } = await started({});
+    runtime.ardia.tabs.onChange(() => {});
+    runtime.ardia.downloads.onChange(() => {});
+    await settle();
+    const before = host.calls("state.subscribe").length;
+    runtime.ardia.tabs.onChange(() => {});
+    runtime.ardia.navigation.onCommit(() => {});
+    await settle();
+    const after = host.calls("state.subscribe").slice(before).map((m) => m.params);
+    assert.deepEqual(after.filter((p) => p.resync), [{ topics: ["downloads", "navigation", "tabs"], resync: ["tabs"] }]);
+  });
+
+  test("paged workspace groups can be put back together through the public API", async () => {
+    const { joinGroupPages } = await import("./index.ts");
+    const { host, runtime } = await started({});
+    const groups = new Map();
+    let waiting = new Map();
+    let rounds = 0;
+    runtime.ardia.workspace.onChange((change) => {
+      if (change.initial) groups.clear();
+      const joined = joinGroupPages(change.groups, waiting);
+      waiting = joined.waiting;
+      for (const g of joined.complete) groups.set(g.id, g);
+      for (const id of change.removedGroups) groups.delete(id);
+      if (!change.more) rounds++;
+    });
+    await settle();
+    const base = { windowId: "w1", name: "Big", color: "blue", icon: null, collapsed: false, pinned: false, parentId: null };
+    const page = (index, tabIds) => ({ id: "g1", ...base, tabIds, tabIdsPage: { index, count: 3 } });
+    const empty = { windows: [], groups: [], removedWindows: [], removedGroups: [] };
+    host.push({ event: "state.workspace", data: { ...empty, initial: true, groups: [page(0, ["a", "b"]), { id: "g2", ...base, tabIds: ["z"] }] } });
+    host.push({ event: "state.workspace", data: { ...empty, more: true, groups: [page(1, ["c"])] } });
+    await settle();
+    assert.equal(groups.has("g1"), false, "an incomplete group isn't shown");
+    assert.deepEqual(groups.get("g2").tabIds, ["z"]);
+    host.push({ event: "state.workspace", data: { ...empty, groups: [page(2, ["d", "e"])] } });
+    await settle();
+    assert.deepEqual(groups.get("g1").tabIds, ["a", "b", "c", "d", "e"]);
+    assert.equal(groups.get("g1").tabIdsPage, undefined);
+    assert.equal(rounds, 2);
+    const broken = joinGroupPages([page(1, ["x"])]);
+    assert.deepEqual(broken.complete, [], "a page out of order is never joined");
+  });
+
+  test("a navigation round that says more still hands every commit to onCommit and the raw change to state.subscribe", async () => {
+    const { host, runtime } = await started({});
+    const commits = [];
+    const rounds = [];
+    runtime.ardia.navigation.onCommit((commit) => commits.push(commit.tabId));
+    runtime.ardia.state.subscribe("navigation", (change) => rounds.push(change.more === true));
+    await settle();
+    host.push({ event: "state.navigation", data: { more: true, commits: [{ tabId: "t1", windowId: "w", url: "https://a.example/", title: null, sameDocument: false }] } });
+    host.push({ event: "state.navigation", data: { commits: [{ tabId: "t2", windowId: "w", url: "https://b.example/", title: null, sameDocument: false }] } });
+    await settle();
+    assert.deepEqual(commits, ["t1", "t2"]);
+    assert.deepEqual(rounds, [true, false]);
+  });
+
+  test("a sole listener replaced before the next sync still gets a fresh snapshot", async () => {
+    const { host, runtime } = await started({});
+    const first = runtime.ardia.tabs.onChange(() => {});
+    await settle();
+    const before = host.calls("state.subscribe").length;
+    first.dispose();
+    runtime.ardia.tabs.onChange(() => {});
+    await settle();
+    const after = host.calls("state.subscribe").slice(before).map((m) => m.params);
+    assert.deepEqual(after, [{ topics: ["tabs"], resync: ["tabs"] }]);
+  });
+
+  test("the very first listener on a topic asks for no resync: its subscription brings the snapshot", async () => {
+    const { host, runtime } = await started({});
+    runtime.ardia.tabs.onChange(() => {});
+    await settle();
+    assert.deepEqual(host.calls("state.subscribe").map((m) => m.params), [{ topics: ["tabs"] }]);
+  });
+
+  test("a drop with no state listeners asks for nothing", async () => {
+    const { host } = await started({ events: { "tab.activated": () => {} } });
+    await settle();
+    host.push({ event: "tab.activated", dropped: 5, data: {} });
+    await settle();
+    assert.equal(host.calls("state.subscribe").length, 0);
+  });
+
+  test("tab and group intents are typed state.intent requests, never raw apply ops", async () => {
+    const { host, runtime } = await started({}, { "state.intent": () => ({ ok: true, group: "g1" }) });
+    assert.deepEqual(await runtime.ardia.tabs.group(["t1", "t2"], { name: "Read", color: "blue" }), { ok: true, group: "g1" });
+    await runtime.ardia.tabs.move(["t1"], { before: "t3" });
+    await runtime.ardia.tabs.pin(["t1"], { as: "row" });
+    await runtime.ardia.tabs.ungroup("g1");
+    await runtime.ardia.workspace.updateGroup("g1", { collapsed: true });
+    await runtime.ardia.state.intent("tabs.mute", { tabs: ["t2"] });
+    assert.deepEqual(
+      host.calls("state.intent").map((m) => m.params),
+      [
+        { intent: "tabs.group", args: { name: "Read", color: "blue", tabs: ["t1", "t2"] } },
+        { intent: "tabs.move", args: { before: "t3", tabs: ["t1"] } },
+        { intent: "tabs.pin", args: { as: "row", tabs: ["t1"] } },
+        { intent: "tabs.ungroup", args: { group: "g1" } },
+        { intent: "groups.update", args: { collapsed: true, group: "g1" } },
+        { intent: "tabs.mute", args: { tabs: ["t2"] } },
+      ],
+    );
+    assert.equal(host.calls("apply").length, 0);
+  });
+
   test("a call cancelled before activation finishes never runs and sends no result", async () => {
     let releaseHello;
     const host = fakeHost({ hello });

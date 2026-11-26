@@ -9,6 +9,7 @@
 #include <variant>
 #include <vector>
 
+#include "ardia/desktop/ac_desktop_paths.h"
 #include "ardia/linux/ac_linux_navigation_hold.h"
 #include "ardia/linux/ac_linux_private_services.h"
 #include "ardia/linux/ac_linux_profile_service.h"
@@ -385,7 +386,7 @@ class LinuxContentBlocker : public ProfileObserver, public content::WebContentsO
       if (id != controls::kExtensionId || !enabled || enabled->path() != root_) {
         if (loader && !id.empty()) loader->Remove(id);
         load_ = Load::kFailed;
-        LOG(ERROR) << "Ardia's content blocker did not load from " << root_.value();
+        LOG(ERROR) << "Ardia's content blocker did not load from " << ardia::desktop_paths::Text(root_);
         ReleaseHold("the content blocker didn't load");
         return FailAll("the content blocker didn't load");
       }
@@ -675,7 +676,7 @@ void RunSiteControlsCall(const std::string& name, base::DictValue input, bool pa
   if (off_the_record) service.args.Set(ardiacore::linux_private_services::kOffTheRecordKey, base::Value(true));
   const std::optional<std::string> json = base::WriteJson(service.args);
   if (!json) return Fail(std::move(done), "ERR_ENGINE", "Engine arguments are not JSON");
-  const std::string path = (off_the_record ? profile->GetOriginalProfile() : profile)->GetPath().value();
+  const std::string path = ardia::desktop_paths::Text((off_the_record ? profile->GetOriginalProfile() : profile)->GetPath());
   ac_engine_call(service.service.c_str(), path.c_str(), json->c_str(), ServiceReplied,
                  new ServiceReply{name, std::move(done)});
 }

@@ -2,8 +2,18 @@ import {
   HOST_METHODS as M,
   type ActivePageSnapshot,
   type ConfirmOptions,
+  type DownloadsChange,
   type FetchRequest,
   type FetchResponseData,
+  type GroupLook,
+  type NavigationCommit,
+  type StateEventMap,
+  type StateIntent,
+  type StateIntentArgs,
+  type StateIntentResult,
+  type StateTopic,
+  type TabsChange,
+  type WorkspaceChange,
   type InputBoxOptions,
   type PanelResult,
   type PluginTabInfo,
@@ -29,6 +39,7 @@ import {
   type PageMessageListener,
   type Registry,
   type SettingsListener,
+  type StateListener,
   type ToolHandler,
   type ViewComponent,
 } from "./types";
@@ -41,6 +52,8 @@ export type ApiState = {
   values: Record<string, unknown>;
   info: PluginInfo;
   subscriptionsChanged(): void;
+  listenerAdded(topic: string): void;
+  report(error: unknown): void;
 };
 
 function unwrap(result: unknown, key: string): unknown {
@@ -118,6 +131,26 @@ export function createArdia(rpc: Rpc, registry: Registry, state: ApiState) {
     },
   };
 
+  const stateApi = {
+    subscribe<T extends StateTopic>(topic: T, listener: StateListener<StateEventMap[T]>): Disposable {
+      let listeners = registry.state.get(topic);
+      if (!listeners) registry.state.set(topic, (listeners = new Set()));
+      const added = addTo(listeners, listener);
+      state.subscriptionsChanged();
+      state.listenerAdded(topic);
+      return {
+        dispose() {
+          added.dispose();
+          if (listeners.size === 0 && registry.state.get(topic) === listeners) registry.state.delete(topic);
+          state.subscriptionsChanged();
+        },
+      };
+    },
+    intent: <I extends StateIntent>(intent: I, args: StateIntentArgs[I]) => rpc.request<StateIntentResult>(M.stateIntent, { intent, args }),
+  };
+
+  const intent = stateApi.intent;
+
   const apply = (ops: readonly WorkspaceOp[]) => rpc.request<WorkspaceApplyResult>(M.workspaceApply, { ops });
 
   const windows = async (): Promise<PluginWindowInfo[]> => {
@@ -166,11 +199,37 @@ export function createArdia(rpc: Rpc, registry: Registry, state: ApiState) {
         rpc.request<{ ok: boolean; tabs: string[] }>(M.open, { urls: typeof urls === "string" ? [urls] : urls, ...options }),
       close: (tabId: string) => apply([{ op: "tab.close", tabs: [tabId] }]),
       activate: (tabId: string) => apply([{ op: "tab.activate", tab: tabId }]),
+      onChange: (listener: StateListener<TabsChange>): Disposable => stateApi.subscribe("tabs", listener),
+      group: (tabIds: readonly string[], look: GroupLook = {}) => intent("tabs.group", { ...look, tabs: [...tabIds] }),
+      ungroup: (groupId: string) => intent("tabs.ungroup", { group: groupId }),
+      move: (tabIds: readonly string[], to: Omit<StateIntentArgs["tabs.move"], "tabs">) => intent("tabs.move", { ...to, tabs: [...tabIds] }),
+      pin: (tabIds: readonly string[], options: { as?: "tile" | "row" } = {}) => intent("tabs.pin", { ...options, tabs: [...tabIds] }),
+      unpin: (tabIds: readonly string[]) => intent("tabs.unpin", { tabs: [...tabIds] }),
+      mute: (tabIds: readonly string[]) => intent("tabs.mute", { tabs: [...tabIds] }),
+      unmute: (tabIds: readonly string[]) => intent("tabs.unmute", { tabs: [...tabIds] }),
     },
     workspace: {
       snapshot: <T = Record<string, unknown>>(options: WorkspaceSnapshotOptions = {}) => rpc.request<T>(M.workspace, { ...options }),
       apply,
+      onChange: (listener: StateListener<WorkspaceChange>): Disposable => stateApi.subscribe("workspace", listener),
+      updateGroup: (groupId: string, look: GroupLook) => intent("groups.update", { ...look, group: groupId }),
     },
+    navigation: {
+      onCommit: (listener: (commit: NavigationCommit, event: { name: string; time: number | undefined }) => void): Disposable =>
+        stateApi.subscribe("navigation", (change, event) => {
+          for (const commit of change.commits ?? []) {
+            try {
+              listener(commit, event);
+            } catch (error) {
+              state.report(error);
+            }
+          }
+        }),
+    },
+    downloads: {
+      onChange: (listener: StateListener<DownloadsChange>): Disposable => stateApi.subscribe("downloads", listener),
+    },
+    state: stateApi,
     ui: {
       quickPick: quickPick(rpc),
       async inputBox(options: InputBoxOptions): Promise<string | undefined> {

@@ -1,4 +1,4 @@
-import { diagnosticsSample, hardwareInfo, type HardwareInfo } from "../../platform/app";
+import { diagnosticsSample, hardwareInfo, onAppEvent, type HardwareInfo } from "../../platform/app";
 import { onHoverLost, onWindowUnpainted, systemState, type HoverLostEpisode, type WindowUnpaintedRecord } from "../../platform/performance";
 import { controlStatus } from "../../platform/control";
 import { call } from "../../platform/engine";
@@ -6,9 +6,10 @@ import { withDeadline } from "../../lib/deadline";
 import { hermesHeapMegabytes } from "../../lib/hermesHeap";
 import { activeTab } from "../browser/model";
 import { useBrowser } from "../browser/store";
-import { capture, consentNow, consentToken, counted, isSharing, saveContext, stillValid, onConsentPeriodChange } from "./client";
+import { capture, consentNow, consentToken, counted, isSharing, saveContext, stillValid, onConsentPeriodChange, type ConsentToken } from "./client";
 import { nativeConsent } from "./nativeConsent";
 import { hoverLostProperties, oneOf } from "./hoverLost";
+import { dropHeldQuitEpisode, dropQuitEpisodes, holdQuitEpisode, retireHeldQuitEpisode, sendCommittedQuitEpisode } from "./hoverLostAtQuit";
 import { formatRecentPages, readRecentPages, type RecentPage, type SavedContext } from "./savedContext";
 import { noteDragsEnded } from "./stuckDrags";
 import { noteEngineCliTotals } from "./cliCounts";
@@ -134,6 +135,18 @@ export const takeContentDriftCounts = (): Promise<Record<string, number>> =>
     if (!drift) return {};
     return { content_layer_layouts: drift.layouts, content_layer_refits: drift.fits, content_layer_drift_max_pt: drift.maxPoints };
   });
+
+const PAGE_METRIC_KEY = /^(media_errors_(other|aborted|network|decode|unsupported)|scroll_bursts|(video_frames|video_frames_dropped|scroll_frames|scroll_ms)_(60|120)hz(_low_power)?)$/;
+
+export function pageMetricsFields(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [key, value] of Object.entries(raw)) if (PAGE_METRIC_KEY.test(key) && typeof value === "number" && Number.isFinite(value) && value > 0) out[key] = Math.min(Math.round(value), 100_000_000);
+  return out;
+}
+
+export const takePageMetrics = (): Promise<Record<string, number>> =>
+  inTurn(async () => pageMetricsFields(await call("webView.takePageMetrics", {}).catch(() => null)));
 
 export { takeStopBreathing } from "./stopBreathing";
 
@@ -285,14 +298,21 @@ export function trackPageProcessGone(info: { reason: string; code: number }, vis
 
 export function trackHoverLost(e: HoverLostEpisode) {
   const consent = nativeConsent(e);
+  if (e.endedBy === "quit") return holdHoverLostAtQuit(e, consent);
+  retireHeldQuitEpisode(e.serial);
   if (hoverLostEvents >= MAX_HOVER_LOST_EVENTS) return;
   const valid = stillValid(consent);
   if (valid) hoverLostEvents++;
   capture("page_hover_lost", { ...hoverLostProperties(e, sessionMinutes()), episode: valid ? hoverLostEvents : null }, consent);
 }
 
+function holdHoverLostAtQuit(e: HoverLostEpisode, consent: ConsentToken | null) {
+  if (!stillValid(consent) || hoverLostEvents >= MAX_HOVER_LOST_EVENTS) return;
+  holdQuitEpisode(e.serial, { ...hoverLostProperties(e, sessionMinutes()), episode: hoverLostEvents + 1 }, consent);
+}
+
 const UNPAINTED_WINDOWS = new Set(["regular", "private"]);
-const UNPAINTED_TRIGGERS = new Set(["seen", "key"]);
+const UNPAINTED_TRIGGERS = new Set(["seen", "key", "profileSwitch"]);
 const UNPAINTED_OCCLUSIONS = new Set(["visible", "occluded"]);
 
 const cappedCount = (value: unknown) => (Number.isFinite(value) ? Math.min(Math.max(0, Math.round(value as number)), MAX_WINDOW_VIEWS) : null);
@@ -330,7 +350,12 @@ export function trackWindowUnpainted(r: WindowUnpaintedRecord) {
 }
 
 export function watchEngineReports() {
+  void sendCommittedQuitEpisode();
   onHoverLost(trackHoverLost);
+  onAppEvent((e) => {
+    if (e.type === "quitCancelled") dropHeldQuitEpisode();
+  });
+  onConsentPeriodChange(dropQuitEpisodes);
   onWindowUnpainted(trackWindowUnpainted);
 }
 

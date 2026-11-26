@@ -283,7 +283,10 @@ test("telemetry settles after the drain, ends the session only when the close do
   await assert.rejects(closing);
   const utility = harness({ utility: true, settleTelemetry });
   await utility.coordinator.accept(main);
-  assert.equal(steps(utility.log).includes("telemetry"), false);
+  assert.deepEqual(utility.log.filter(([step]) => step === "telemetry"), [["telemetry", false]], "a utility window hands over its counts on close and never ends the session");
+  const utilityQuitting = harness({ utility: true, settleTelemetry });
+  await utilityQuitting.coordinator.accept(main, { quitting: true });
+  assert.deepEqual(utilityQuitting.log.filter(([step]) => step === "telemetry"), [["telemetry", false]]);
 });
 
 test("a close cancelled while telemetry is still settling reopens the session it ended", async () => {

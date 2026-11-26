@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BAR_SHOWN, barShown, bottomBarCollapses, followScroll, obscuredBottom, pageInsets } from "./barCollapse.ts";
 
-test("bottom bar collapse defaults on for Android's Material design, off elsewhere, and keeps any explicit choice", () => {
+test("bottom bar collapse defaults on for both phone designs, off for the original, and keeps any explicit choice", () => {
   assert.equal(bottomBarCollapses("material", null), true);
-  assert.equal(bottomBarCollapses("redesigned", null), false);
+  assert.equal(bottomBarCollapses("redesigned", null), true);
   assert.equal(bottomBarCollapses("original", null), false);
   assert.equal(bottomBarCollapses("material", false), false);
   assert.equal(bottomBarCollapses("redesigned", true), true);

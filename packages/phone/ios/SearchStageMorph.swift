@@ -66,6 +66,7 @@ extension SearchStageView {
     guard let field = Self.find(nativeId: id, in: self) as? CompletingFieldView, field.window != nil else { return }
     field.focus()
     focusPending = false
+    if PhoneTestBuild.isOn { NSLog("PAGELAB time stage focused %.0f", Date().timeIntervalSince1970 * 1000) }
   }
 
   func holdReveals() {
@@ -79,7 +80,13 @@ extension SearchStageView {
   }
 
   func fadeInReveals(from base: CFTimeInterval) {
-    let fades: [(String?, CFTimeInterval)] = [(revealNativeId, Motion.stageRevealFieldDelay), (rowsRevealNativeId, Motion.stageRevealRowsDelay)]
+    if let id = revealNativeId, let field = Self.find(nativeId: id, in: self) {
+      UIView.performWithoutAnimation {
+        field.layer.removeAllAnimations()
+        field.layer.opacity = 1
+      }
+    }
+    let fades: [(String?, CFTimeInterval)] = [(rowsRevealNativeId, Motion.stageRevealRowsDelay)]
     for (id, delay) in fades {
       guard let id, let view = Self.find(nativeId: id, in: self) else { continue }
       view.restartStageOpacityFade(to: 1, after: reduceMotionNow ? 0 : delay, from: base, curve: Motion.stageRevealCurve)
@@ -479,7 +486,11 @@ final class StageMorphView: UIView {
     self.cardSize = cardSize
     self.fieldCenter = fieldCenter
     if look.usesGlass {
-      surface = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+      let glass = LiquidGlassSurface()
+      glass.capsule = false
+      glass.followsPresentation = true
+      glass.label = "searchMorph"
+      surface = glass
       classicFill = nil
     } else if look.frosted {
       let frost = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
@@ -509,6 +520,9 @@ final class StageMorphView: UIView {
     tint.overrideUserInterfaceStyle = look.panelStyle
     tint.layer.cornerCurve = .continuous
     tint.clipsToBounds = true
+    if let glass = surface as? LiquidGlassSurface {
+      glass.presentedRadius = { [weak tint] in tint.map { $0.layer.presentation()?.cornerRadius ?? $0.layer.cornerRadius } }
+    }
     let layers = look.usesGlass ? [tint, surface, contents, faceSlot] : [surface, tint, contents, faceSlot]
     layers.forEach(addSubview)
     if let snapshot {
@@ -534,8 +548,8 @@ final class StageMorphView: UIView {
     for piece in [surface, tint, contents] {
       piece.frame = bounds
     }
-    if let glass = surface as? UIVisualEffectView {
-      glass.cornerConfiguration = .uniformCorners(radius: .fixed(radius))
+    if let glass = surface as? LiquidGlassSurface {
+      glass.cornerRadius = radius
     } else {
       surface.layer.cornerRadius = radius
     }

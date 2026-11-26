@@ -7,6 +7,7 @@ import { channelOf, compareVersions, isAppVersion, linuxReleases, newestRelease,
 import {
   UPDATE_INSTALL_FAILURES,
   UPDATE_DOWNLOAD_FAILURES,
+  noteManagedUpdateOffer,
   noteUpdateCheck,
   noteUpdateDownloadFailed,
   noteUpdateDownloadFinished,
@@ -32,11 +33,13 @@ const FOLLOW_RUN_FOR_MS = 75 * 60 * 1000;
 export const UPDATE_CHECK_LOCK = "ardia.linux.update-checks";
 const UPDATE_PREFERENCES_LOCK = "ardia.linux.update-preferences";
 export const AUR_UPDATE_COMMAND = "yay -Syu ardia-bin";
+const FLATPAK_ID = "dev.ardia.Ardia";
 
 type InstallKind = UpdateInstallKind | "managed" | "unsupported";
+type PackageManager = "flatpak" | "package";
 type Phase = "idle" | "downloading" | "installing" | "ready" | "failed";
 type EngineStatus = { phase: Phase; version: string | null; reason: string | null; kind: InstallKind; run: number };
-type Preferences = { automaticChecks: boolean; automaticDownloads: boolean; lastCheck: number | null; channel: UpdateChannel | null; notified: string | null; failed: string | null };
+type Preferences = { automaticChecks: boolean; automaticDownloads: boolean; lastCheck: number | null; channel: UpdateChannel | null; notified: string | null; failed: string | null; readyNotified: string | null };
 type Fetched = { status: number; body: string };
 type SwitchCheck = NonNullable<Extract<UpdaterState, { available: true }>["switchCheck"]>;
 type StartedFrom = "asked" | "automatic" | "accepted";
@@ -55,15 +58,15 @@ type UpdateDeps = {
   offer: (release: Release, failed: boolean) => void;
   offerInstall: (release: Release, install: () => void) => void;
   ready: (version: string, restart: () => void) => void;
-  managed: (release: Release, current: string, asked: boolean) => Promise<void>;
-  open: (url: string) => void;
+  managed: (release: Release, current: string, asked: boolean, manager: PackageManager) => Promise<void>;
+  open: (url: string) => boolean;
   showsToasts?: boolean;
   locks?: UpdateLocks;
   wait?: (ms: number) => Promise<void>;
   now?: () => number;
 };
 
-const DEFAULTS: Preferences = { automaticChecks: true, automaticDownloads: true, lastCheck: null, channel: null, notified: null, failed: null };
+const DEFAULTS: Preferences = { automaticChecks: true, automaticDownloads: true, lastCheck: null, channel: null, notified: null, failed: null, readyNotified: null };
 const INSTALLABLE: ReadonlySet<string> = new Set<UpdateInstallKind>(["deb", "tarball", "appimage"]);
 const PHASES: ReadonlySet<string> = new Set<Phase>(["idle", "downloading", "installing", "ready", "failed"]);
 const ONLY_INSTALL_FAILURES: ReadonlySet<string> = new Set(UPDATE_INSTALL_FAILURES.filter((reason) => !(UPDATE_DOWNLOAD_FAILURES as readonly string[]).includes(reason)));
@@ -86,6 +89,7 @@ function readEngineStatus(answer: unknown): EngineStatus | null {
 const knownKinds = new WeakMap<ArdiaHost, InstallKind>();
 export const installsUpdates = (host: ArdiaHost | undefined) => !!host && installs(knownKinds.get(host));
 const selfUpdateAvailable = (host: ArdiaHost) => SELF_UPDATE_METHODS.every((method) => hostSupports(method, host));
+export const packageManager = (host: ArdiaHost): PackageManager => (hostLaunchConfig(host).configDirectory.includes(`/.var/app/${FLATPAK_ID}/`) ? "flatpak" : "package");
 const releasePage = (version: string): Release => ({ version, url: `${RELEASES_PAGE}/tag/v${version}`, prerelease: channelOf(version) === "nightly" });
 
 function readPreferences(read: UpdateDeps["read"]): Preferences {
@@ -99,6 +103,7 @@ function readPreferences(read: UpdateDeps["read"]): Preferences {
       channel: saved.channel === "stable" || saved.channel === "nightly" ? saved.channel : null,
       notified: typeof saved.notified === "string" ? saved.notified : null,
       failed: isAppVersion(saved.failed) ? saved.failed : null,
+      readyNotified: isAppVersion(saved.readyNotified) ? saved.readyNotified : null,
     };
   } catch {
     return { ...DEFAULTS };
@@ -156,6 +161,13 @@ export function linuxUpdater(deps: UpdateDeps) {
     await invokeHost(RESTART_METHOD, { args: [] }, deps.host).catch((error: unknown) => console.info(`[ardia linux] Ardia couldn't restart: ${String(error)}`));
   }
   const restartToUpdate = () => void restart(consentToken());
+  const noticeReady = async (status: EngineStatus, version: string, consent: ConsentToken | null) => {
+    if (deps.showsToasts !== false) {
+      if (status.run > settledRun && (await claim(status.run))) countOutcome(status, consent);
+      await remember({ readyNotified: version }).catch(() => {});
+    }
+    deps.ready(version, restartToUpdate);
+  };
 
   async function newest(wanted: UpdateChannel): Promise<Release | null> {
     const fetched = await invokeHost<Fetched>(RELEASES_METHOD, { args: [] }, deps.host);
@@ -189,8 +201,7 @@ export function linuxUpdater(deps: UpdateDeps) {
     switchCheck = { phase: "found", channel: switchCheck?.channel ?? channelOf(release.version), version: release.version };
     if (from === "asked" && current) {
       if (await deps.ask(release, current, true)) {
-        noteUpdatePageOpened(consent);
-        deps.open(release.url);
+        if (deps.open(release.url)) noteUpdatePageOpened(consent);
       }
       return;
     }
@@ -206,7 +217,7 @@ export function linuxUpdater(deps: UpdateDeps) {
     countOutcome(status, consent);
     const target = status.version ?? own?.release.version;
     if (!target) return;
-    if (status.phase === "ready") return deps.ready(target, restartToUpdate);
+    if (status.phase === "ready") return (await preferences()).readyNotified === target ? undefined : deps.ready(target, restartToUpdate);
     console.info(`[ardia linux] the update to ${target} failed: ${status.reason ?? "unknown"}`);
     await fallBack(own?.release.version === target ? own.release : releasePage(target), own?.from ?? "automatic", consent);
   }
@@ -235,13 +246,14 @@ export function linuxUpdater(deps: UpdateDeps) {
   async function deliver(release: Release, current: string, asked: boolean, saved: Preferences, consent: ConsentToken | null) {
     const status = await engineStatus();
     if (status?.kind === "managed") {
-      if (asked) return deps.managed(release, current, true);
-      if (await offeredOnce(release)) await deps.managed(release, current, false);
-      return;
+      const manager = packageManager(deps.host);
+      if (!asked && !(await offeredOnce(release))) return;
+      noteManagedUpdateOffer(manager, consent);
+      return deps.managed(release, current, asked, manager);
     }
     if (status && installs(status.kind)) {
       if (status.phase === "ready") {
-        if (asked && status.version) deps.ready(status.version, restartToUpdate);
+        if (asked && status.version) await noticeReady(status, status.version, consent);
         return;
       }
       if (!asked && saved.failed === release.version) return;
@@ -251,8 +263,7 @@ export function linuxUpdater(deps: UpdateDeps) {
     }
     if (asked) {
       if (await deps.ask(release, current, false)) {
-        noteUpdatePageOpened(consent);
-        deps.open(release.url);
+        if (deps.open(release.url)) noteUpdatePageOpened(consent);
       }
       return;
     }
@@ -270,7 +281,7 @@ export function linuxUpdater(deps: UpdateDeps) {
       if (!asked && !saved.automaticChecks) return;
       wanted = channel(saved, current);
       const engine = asked ? await engineStatus() : null;
-      if (engine?.phase === "ready" && engine.version && installs(engine.kind)) return deps.ready(engine.version, restartToUpdate);
+      if (engine?.phase === "ready" && engine.version && installs(engine.kind)) return await noticeReady(engine, engine.version, consent);
       switchCheck = { phase: "checking", channel: wanted };
       let release: Release | null;
       try {

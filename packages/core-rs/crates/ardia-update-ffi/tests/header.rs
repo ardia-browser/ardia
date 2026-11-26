@@ -35,11 +35,14 @@ fn the_committed_header_is_current_and_has_no_comments() {
     );
     for name in [
         "ardia_update_verify_linux",
+        "ardia_update_verify_windows",
         "ardia_update_compare_versions",
         "ardia_update_check_offer",
         "ARDIA_UPDATE_STATUS_NOT_NEWER",
         "ARDIA_UPDATE_KIND_APPIMAGE",
+        "ARDIA_UPDATE_WINDOWS_CPU_ARM64",
         "ardia_update_package",
+        "ardia_update_windows_package",
     ] {
         assert!(generated.contains(name), "{name}");
     }

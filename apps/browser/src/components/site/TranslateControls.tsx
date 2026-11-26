@@ -48,7 +48,7 @@ async function chooseLanguage(tabId: string) {
   const languages = await otherLanguages();
   const current = translationTarget(tabId);
   const choice = await showMenu(languages.map((l) => ({ id: l.id, title: l.name, checked: l.id === current })));
-  if (choice) void translatePage(tabId, choice);
+  if (choice) void translatePage(tabId, choice, "site_controls");
 }
 
 async function showTranslateMenu(tabId: string) {
@@ -65,8 +65,8 @@ async function showTranslateMenu(tabId: string) {
     }),
   );
   if (choice === "original") void revertPage(tabId);
-  else if (choice === "translate") void translatePage(tabId);
-  else if (choice && typeof choice === "object") void translatePage(tabId, choice.language);
+  else if (choice === "translate") void translatePage(tabId, defaultTarget(), "button_menu");
+  else if (choice && typeof choice === "object") void translatePage(tabId, choice.language, "button_menu");
   else if (choice === "never") setNeverTranslate(tabId, !isNeverTranslated(tab.profileId, tab.url));
 }
 
@@ -85,7 +85,7 @@ export function TranslateRows({ tabId, onClose }: { tabId: string; onClose: () =
           title={translated ? `Show Original (${languageName(state.source ?? "")})` : `Translate to ${languageName(defaultTarget())}`}
           onPress={() => {
             onClose();
-            toggleTranslation(tabId);
+            toggleTranslation(tabId, "site_controls");
           }}
         />
       )}

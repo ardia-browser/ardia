@@ -18,7 +18,7 @@ import {
 } from "../../state/page/pagePrompts";
 import { copy } from "../../lib/platformCopy";
 import { dismissWords, ELLIPSIS } from "../../lib/sharedWords";
-import { ChromeSurface, EmptyState, font, LoadingState, motionAliases, readerInk, readerLayout, smoothCorners, space, tabsMotion, TextSizeGlyph, useDesign, useModalOverlay, usePressStyle, useReduceMotion, type MenuItem } from "../ui";
+import { ChromeSurface, EmptyState, FrostSource, GlassSource, font, LoadingState, motionAliases, readerInk, readerLayout, smoothCorners, space, tabsMotion, TextSizeGlyph, useDesign, useModalOverlay, usePressStyle, useReduceMotion, type MenuItem } from "../ui";
 import { MaterialIconAction, MaterialTopBar } from "../ui/MaterialTopBar";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { pageMenuOpener } from "./pageMenuOpener";
@@ -84,6 +84,10 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
   ];
   return (
     <Animated.View testID="readerView" entering={reduceMotion ? riseReduced : rise} exiting={reduceMotion ? fallReduced : fall} style={[StyleSheet.absoluteFill, { backgroundColor: ink.background }]}>
+      <FrostSource name={READER_FROST} style={StyleSheet.absoluteFill} pointerEvents="none" collapsable={false}>
+        <View testID="readerBackdrop" style={[StyleSheet.absoluteFill, { backgroundColor: ink.background }]} />
+      </FrostSource>
+      <GlassSource name={READER_FROST}>
       <View testID="readerOverlay" ref={overlayRef} collapsable={false} style={[styles.fill, { paddingTop: insets.top }]} {...overlay}>
       {material ? (
         <MaterialTopBar
@@ -101,7 +105,7 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
       ) : (
       <View style={styles.top}>
         {load.kind === "loaded" ? (
-          <MenuTrigger items={items} trigger="tap" fixedOrder frost={null} dark={shown === "dark"} place={{ top: insets.top + readerLayout.chromeBand, left: readerLayout.chromeSide }}>
+          <MenuTrigger items={items} trigger="tap" fixedOrder frost={null} dark={shown === "dark"} previewRadius={readerLayout.chromeButton / 2} place={{ top: insets.top + readerLayout.chromeBand, left: readerLayout.chromeSide }}>
             {({ onPress }) => (
               <Pressable accessibilityRole="button" accessibilityLabel="Text Appearance" onPress={onPress} style={appearancePress}>
                 <ChromeSurface shape="circle" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} style={styles.circle}>
@@ -140,6 +144,7 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
       )}
       <View style={[styles.navigationBand, { height: insets.bottom, backgroundColor: ink.background }]} pointerEvents="none" />
       </View>
+      </GlassSource>
     </Animated.View>
   );
 }
@@ -176,6 +181,7 @@ function Paragraph({ text, family, size, color }: { text: string; family: string
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<string>);
 
 const WEB_IMAGE = /^https?:\/\//i;
+const READER_FROST = "reader";
 const NO_ARTICLE = "No Article Found";
 
 const LOADING_ARTICLE = `Loading Article${ELLIPSIS}`;

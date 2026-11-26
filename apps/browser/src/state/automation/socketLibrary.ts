@@ -92,11 +92,27 @@ function matchesIn(rootIds: readonly string[], q: string) {
   return hits;
 }
 
+function folderPath(node: BookmarkNode): string[] {
+  const b = now().bookmarks;
+  const path: string[] = [];
+  const seen = new Set<string>();
+  for (let at = node.parentId; at && !seen.has(at) && path.length < MAX_DEPTH; at = b.nodes[at]?.parentId ?? null) {
+    seen.add(at);
+    const folder = b.nodes[at];
+    if (!folder) break;
+    path.unshift(folder.title);
+  }
+  return path;
+}
+
 function search(params: Record<string, unknown>) {
-  const roots = rootsOf(profileArg(params.profile));
+  const profile = params.profile !== undefined || params.folder === undefined ? profileArg(params.profile) : null;
+  const folder = params.folder !== undefined ? folderOf(params.folder) : null;
+  if (folder && profile !== null) rootsHolding(profile, folder.id);
+  const roots = profile !== null ? rootsOf(profile) : null;
   const q = ((params.query as string | undefined) ?? "").toLowerCase();
-  const hits = matchesIn([roots.bar, roots.other], q).sort((x, y) => y.addedAt - x.addedAt);
-  return page(hits, params, (n) => bookmarkRow(n, 0));
+  const hits = matchesIn(folder ? [folder.id] : [roots!.bar, roots!.other], q).sort((x, y) => y.addedAt - x.addedAt);
+  return page(hits, params, (n) => ({ ...bookmarkRow(n, 0), folderPath: folderPath(n) }));
 }
 
 function placeOf(params: Record<string, unknown>) {
@@ -172,7 +188,7 @@ const BOOKMARK_PLACE = { profile: PROFILE, parent: id("A folder id; the profile'
 
 export const LIBRARY_METHODS: MethodSpec[] = [
   { name: "bookmarks.tree", mutates: false, description: "A profile's Bookmarks Bar and Other Bookmarks, or one folder, as a tree", params: obj({ profile: PROFILE, folder: id("Only this folder"), depth: int("How many folder levels to open (all when left out)", 0, MAX_DEPTH) }), result: "{bar, other, truncated} | {…folder, truncated}", run: tree },
-  { name: "bookmarks.search", mutates: false, description: "Bookmarks and folders whose title or URL contains the query, newest first", params: obj({ profile: PROFILE, query: text("Text to look for; every bookmark when left out"), ...PAGE }), result: "{items, total, nextOffset}", run: search },
+  { name: "bookmarks.search", mutates: false, description: "Bookmarks and folders whose title or URL contains the query, newest first, each with the titles of the folders it sits in", params: obj({ profile: PROFILE, folder: id("Only bookmarks inside this folder, at any depth"), query: text("Text to look for; every bookmark when left out"), ...PAGE }), result: "{items: [{id, kind, parent, title, url?, addedAt, folderPath}], total, nextOffset}", run: search },
   { name: "bookmarks.get", mutates: false, description: "One bookmark or folder", params: obj({ id: id("A bookmark id") }, ["id"]), result: "bookmark", run: (p) => bookmarkRow(nodeOf(p.id), 1) },
   { name: "bookmarks.add", mutates: true, description: "Bookmark a page", params: obj({ url: text("The page"), title: text("Its title; the URL when left out"), ...BOOKMARK_PLACE }, ["url"]), result: "bookmark", run: add },
   { name: "bookmarks.addFolder", mutates: true, description: "Make a bookmarks folder", params: obj({ title: text("Its name"), ...BOOKMARK_PLACE }, ["title"]), result: "folder", run: addFolder },

@@ -26,6 +26,7 @@ import {
   type PasswordManagerChoice,
 } from "./passwordManagerChoice";
 import { chromeListProfiles, pushChromeLists } from "./chromeLists";
+import { followPasswordManagerChoice } from "./iCloudPasswordsExtension";
 import { closeVerificationCodePrompts, offerVerificationCode } from "./verificationCodes";
 import { followMode, forgetHeldOffOutside, forgetPendingOfferToSave, offerToSaveHeldOffSomewhere, passwordAutofill, pendingOfferToSave, startOfferToSave, watchPendingOfferToSave, writeOfferToSave } from "./offerToSave";
 
@@ -86,8 +87,10 @@ let engage = () => {};
 
 export function choosePasswordManager(profileId: string, manager: PasswordManagerChoice, consent?: ConsentToken | null) {
   const s = browser();
+  const before = storedPasswordManager(s, profileId);
   notePasswordManagerChosen(choiceKind(manager), consent);
   engage();
+  followPasswordManagerChoice(profileId, before, manager, consent ?? consentToken());
   for (const id of profilesSharingData(s, profileId)) s.updateProfile(id, { passwordManager: manager });
 }
 

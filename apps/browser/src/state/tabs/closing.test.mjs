@@ -9,7 +9,7 @@ const { closeWindowDialog } = await import("../windows/windowClose.ts");
 const { noteDiscarded } = await import("./tabLifecycle.ts");
 const { isSleeping, useLifecycle } = await import("./sleepingTabs.ts");
 const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
-const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
+const { consentToken, setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
 const { successorWhenLeaving } = await import("../windows/card.ts");
 const { sleepsNow } = await import("./openers.ts");
 await import("../../test-native/index.ts");
@@ -354,6 +354,38 @@ test("holding ⌘W with Top Apps kept running reaches a New Tab without cycling 
   assert.ok(r1);
   await closeTab(shownTab(w).id);
   assert.equal(S().windows[w], undefined, "⌘W on that New Tab closes the window");
+  S().updateSettings({ keepTopAppsRunning: false });
+});
+
+test("closing a tab opened from a Top App goes back to that Top App, with Top Apps kept running or not", async (t) => {
+  setConsentPeriod(true, "closing-test");
+  t.after(() => setConsentPeriod(false, null));
+  for (const keep of [false, true]) {
+    const { w, ids: [app, other] } = windowWith("app", "other");
+    S().pinTabs([app], true);
+    S().updateSettings({ keepTopAppsRunning: keep, afterClosingTab: "previouslyActive" });
+    S().activate(other);
+    S().activate(app);
+    S().updateTab(app, { lastActiveAt: Date.now() + 60_000 });
+    takeTabSleepCounts();
+    const link = S().newTab(w, { url: "https://link.com/", openerId: app });
+    await closeTab(link, { user: { consent: consentToken() } });
+    assert.equal(activeTabId(S(), w), app, `the Top App comes back (keep ${keep})`);
+    assert.equal(takeTabSleepCounts().closes_back_to_top_app_opener, keep ? 1 : 0);
+  }
+  S().updateSettings({ keepTopAppsRunning: false });
+});
+
+test("with Top Apps kept running, a tab opened from a Top App and visited again after another tab no longer goes back to it", async () => {
+  const { w, ids: [app, other] } = windowWith("app", "other");
+  S().pinTabs([app], true);
+  S().updateSettings({ keepTopAppsRunning: true, afterClosingTab: "previouslyActive" });
+  S().activate(app);
+  const link = S().newTab(w, { url: "https://link.com/", openerId: app });
+  S().activate(other);
+  S().activate(link);
+  await closeTab(link);
+  assert.equal(activeTabId(S(), w), other);
   S().updateSettings({ keepTopAppsRunning: false });
 });
 

@@ -92,12 +92,12 @@ TEST(prompts_keep_value_and_placeholder_and_trim_answers) {
 
 TEST(confirm_answers_never_suppress_without_a_checkbox_or_when_forced) {
   auto spec = *policy::Parse(Confirm(), "main");
-  CHECK(policy::Resolve(spec, {.accepted = true, .suppressed = true, .text = {}}).suppressed);
-  CHECK(policy::Resolve(spec, {.accepted = true, .text = {}}).confirmed);
-  const auto forced = policy::Resolve(spec, {.accepted = true, .suppressed = true, .text = {}, .forced = true});
+  CHECK(policy::Resolve(spec, {.accepted = true, .suppressed = true}).suppressed);
+  CHECK(policy::Resolve(spec, {.accepted = true}).confirmed);
+  const auto forced = policy::Resolve(spec, {.accepted = true, .suppressed = true, .forced = true});
   CHECK(!forced.confirmed && !forced.suppressed);
   spec.has_suppression = false;
-  CHECK(!policy::Resolve(spec, {.accepted = true, .suppressed = true, .text = {}}).suppressed);
+  CHECK(!policy::Resolve(spec, {.accepted = true, .suppressed = true}).suppressed);
 }
 
 TEST(shown_text_drops_control_characters) {

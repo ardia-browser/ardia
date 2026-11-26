@@ -7,6 +7,9 @@
 //   E2  a helper killed at launch makes Pairing say "Apple Passwords isn't available"
 //   E3  with no helper manifest, Pairing says how to get the helper back
 //   E4  a Release build ignores the fake-helper override: the fake never starts (needs --release)
+//   E32 with a stand-in for the iCloud Passwords extension (its id, from icloud-extension.mjs), picking Apple Passwords
+//       turns it off and says so, "Turn it back on" turns it on, and switching to Ardia turns it on only if Ardia turned
+//       it off; it is never uninstalled
 //
 // Each check launches its own instance (scripts/lib/instance.mjs) with ARDIA_TEST applePasswordsManifest at the fake's
 // manifest and Chromium resolving the fixture sites (sites.mjs: https example.test, accounts.example.test and other.test,
@@ -18,6 +21,7 @@ import path from "node:path";
 import { launch, reporter, sleep } from "../../../../scripts/lib/instance.mjs";
 import { fakeHelper } from "./fake.mjs";
 import { fixtureSites } from "./sites.mjs";
+import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -87,6 +91,21 @@ const assert = (ok, message, detail) => {
   if (!ok) throw new Error(`${message}: ${JSON.stringify(detail)}`);
 };
 
+const extensionView = `
+  const s = ac.store.getState();
+  const profileId = s.settings.defaultProfileId;
+  return ac.engine.call("extensions.list", { profile: "" }).then(({ extensions }) => {
+    const ext = extensions.find((e) => e.id === ${JSON.stringify(ICLOUD_PASSWORDS_EXTENSION_ID)});
+    const note = ac.iCloudPasswordsExtension?.iCloudExtensionNote(profileId) ?? null;
+    return { installed: !!ext, enabled: ext?.enabled ?? null, note, choice: s.profiles[profileId].passwordManager ?? null };
+  });`;
+
+const choose = (manager) =>
+  app.eval(`ac.passwordManager.choosePasswordManager(ac.store.getState().settings.defaultProfileId, ${JSON.stringify(manager)}); return true;`);
+
+const setExtension = (enabled) =>
+  app.eval(`return ac.engine.call("extensions.setEnabled", { profile: "", id: ${JSON.stringify(ICLOUD_PASSWORDS_EXTENSION_ID)}, enabled: ${enabled} }).then(() => true);`);
+
 const CHECKS = {
   async E1() {
     const fake = fakeHelper(path.join(SCRATCH, "E1", "fake"));
@@ -128,6 +147,41 @@ const CHECKS = {
     assert(fake.launches() === 0, "the fake helper never starts in a Release build", fake.launches());
     assert(shown.state === "notEntitled" && shown.choice !== "apple", "an unentitled Release build doesn't offer Apple Passwords", shown);
     return { state: shown.state, launches: fake.launches() };
+  },
+  async E32() {
+    const fake = fakeHelper(path.join(SCRATCH, "E32", "fake"));
+    const standIn = iCloudExtensionStandIn(path.join(SCRATCH, "E32", "icloud-passwords"));
+    await start("E32", { manifest: fake.manifest });
+    const installed = await app.eval(`return ac.engine.call("extensions.install", { profile: "", path: ${JSON.stringify(standIn)} });`, { timeout: 30_000 });
+    assert(installed.id === ICLOUD_PASSWORDS_EXTENSION_ID, "the stand-in has the iCloud Passwords extension's id", installed);
+    await until(extensionView, (v) => v.installed && v.enabled === true);
+    const steps = {};
+    await pickApplePasswords();
+    await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${JSON.stringify(fake.fixtures.code)}).then(() => true);`, { timeout: 60_000 });
+    steps.picked = await until(extensionView, (v) => v.choice === "apple" && v.enabled === false && !!v.note);
+    assert(steps.picked.note.text === "Ardia now fills from Apple Passwords itself. You can remove the iCloud Passwords extension." && steps.picked.note.action === "Turn it back on", "Settings says so with Turn it back on", steps.picked);
+    await app.eval(`return ac.iCloudPasswordsExtension.turnICloudExtensionBackOn(ac.store.getState().settings.defaultProfileId).then(() => true);`, { timeout: 30_000 });
+    steps.backOn = await until(extensionView, (v) => v.enabled === true && v.note === null);
+    await choose("ardia");
+    await sleep(1500);
+    steps.ardiaAfterBackOn = await until(extensionView, (v) => v.choice === "ardia");
+    assert(steps.ardiaAfterBackOn.enabled === true, "turned back on by the user, it stays on", steps.ardiaAfterBackOn);
+    await choose("apple");
+    steps.pickedAgain = await until(extensionView, (v) => v.choice === "apple" && v.enabled === false && !!v.note);
+    await choose("ardia");
+    steps.switchedAway = await until(extensionView, (v) => v.choice === "ardia" && v.enabled === true && v.note === null);
+    await setExtension(false);
+    await until(extensionView, (v) => v.enabled === false);
+    await choose("apple");
+    await sleep(1500);
+    steps.offByUser = await until(extensionView, (v) => v.choice === "apple");
+    assert(steps.offByUser.enabled === false && steps.offByUser.note === null, "an extension the user turned off gets no note", steps.offByUser);
+    await choose("ardia");
+    await sleep(1500);
+    steps.leftOff = await until(extensionView, (v) => v.choice === "ardia");
+    assert(steps.leftOff.enabled === false, "switching away leaves an extension the user turned off alone", steps.leftOff);
+    assert(Object.values(steps).every((v) => v.installed), "never uninstalled", steps);
+    return Object.fromEntries(Object.entries(steps).map(([k, v]) => [k, v.enabled]));
   },
 };
 

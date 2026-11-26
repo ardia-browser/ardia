@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { cancelPairing, PAIRING_CODE_DIGITS, pairingCodeInput, pairingPrompt, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords, type ApplePasswordsState } from "../../../state/site/applePasswords";
+import { turnICloudExtensionBackOn, useICloudExtensionNote } from "../../../state/site/iCloudPasswordsExtension";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { Box, Button, DialogActions, DialogTitle, Sheet, space, Text, TextField } from "../../ui";
 import { Row } from "../Form";
@@ -27,6 +28,16 @@ export function ApplePasswordsStatusRow() {
   return (
     <Row title="Apple Passwords" description={STATUS_TEXT[state]}>
       {state === "notConnected" ? <Button title="Connect" onPress={() => connectApplePasswords(null)} /> : null}
+    </Row>
+  );
+}
+
+export function ICloudExtensionNoteRow({ profileId }: { profileId: string }) {
+  const note = useICloudExtensionNote(profileId);
+  if (!note) return null;
+  return (
+    <Row title="iCloud Passwords extension" description={note.text}>
+      <Button title={note.action} onPress={() => void turnICloudExtensionBackOn(profileId)} />
     </Row>
   );
 }

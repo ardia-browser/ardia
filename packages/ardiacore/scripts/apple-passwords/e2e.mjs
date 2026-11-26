@@ -7,17 +7,20 @@
 //   E2  a helper killed at launch makes Pairing say "Apple Passwords isn't available"
 //   E3  with no helper manifest, Pairing says how to get the helper back
 //   E4  a Release build ignores the fake-helper override: the fake never starts (needs --release)
+//   E5… the Login list in a WebKit tab (login-list.mjs), in one paired instance shared by those checks
 //
 // Each check launches its own instance (scripts/lib/instance.mjs) with ARDIA_TEST applePasswordsManifest at the fake's
-// manifest and Chromium resolving the fixture sites (sites.mjs: https example.test, accounts.example.test and other.test,
-// http plain.test), drives the same Settings state the Password manager menu and Pairing sheet use (ac.applePasswords), and
+// manifest and the fixture sites (sites.mjs: https example.localhost, accounts.example.localhost, other.localhost and
+// empty.localhost, http plain.localhost, all on loopback with their ports), drives the same Settings state the Password manager menu and Pairing sheet use (ac.applePasswords), and
 // prints one PASS or FAIL line; details go to <scratch dir>/e2e.log. METRO_PORT picks the Metro serving this tree.
 // Exit code 1 if any check failed.
 import fs from "node:fs";
 import path from "node:path";
 import { launch, reporter, sleep } from "../../../../scripts/lib/instance.mjs";
 import { fakeHelper } from "./fake.mjs";
+import { loginListChecks } from "./login-list.mjs";
 import { fixtureSites } from "./sites.mjs";
+import { webkitTabs } from "./webkit.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -47,6 +50,7 @@ const note = report.log;
 const sites = await fixtureSites(path.join(SCRATCH, "tls"));
 const READY = { timeout: 90_000, test: "return ac.store.getState().windowOrder.length > 0" };
 let app = null;
+let shared = null;
 
 async function start(name, { manifest, binary = APP, files = {} }) {
   const data = path.join(SCRATCH, name, "data");
@@ -56,9 +60,25 @@ async function start(name, { manifest, binary = APP, files = {} }) {
 }
 
 async function stop() {
-  if (!app) return;
+  if (!app || app === shared?.app) return;
   if (!keep) note("quit:", (await app.quit()).how);
   app = null;
+}
+
+async function paired() {
+  if (shared && !shared.app.exited) {
+    app = shared.app;
+    return shared;
+  }
+  const fake = fakeHelper(path.join(SCRATCH, "paired", "fake"));
+  await start("paired", { manifest: fake.manifest });
+  const shown = await pickApplePasswords();
+  assert(shown.step === "code", "the code step opens", shown);
+  await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${JSON.stringify(fake.fixtures.code)}).then(() => true);`, { timeout: 60_000 });
+  const done = await until(pairingView, (v) => v.state === "connected" && v.choice === "apple");
+  note("paired", JSON.stringify(done));
+  shared = { app, fake, tabs: webkitTabs(app, { log: note }) };
+  return shared;
 }
 
 async function until(body, test, timeout = 30_000) {
@@ -129,6 +149,7 @@ const CHECKS = {
     assert(shown.state === "notEntitled" && shown.choice !== "apple", "an unentitled Release build doesn't offer Apple Passwords", shown);
     return { state: shown.state, launches: fake.launches() };
   },
+  ...loginListChecks({ paired, sites }),
 };
 
 const names = wanted.length ? wanted : Object.keys(CHECKS);
@@ -140,5 +161,6 @@ for (const name of names) {
   await report.check(name, CHECKS[name], { onFail: async () => app && note("app log tail:", app.output().slice(-3000)) });
   await stop();
 }
+if (shared && !keep) note("quit shared:", (await shared.app.quit()).how);
 await sites.close();
 process.exit(report.summary() ? 0 : 1);

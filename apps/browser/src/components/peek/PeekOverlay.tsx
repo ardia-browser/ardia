@@ -3,7 +3,7 @@ import { Button, WindowBackdrop, ink, PageCoverGate, Panel, PeekStage, reduceMot
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { useCardFrame } from "../window/cardFrame";
+import { useCardFrame, usePeekRestRadius } from "../window/cardFrame";
 import { usePeekSplitFull, useWindowPeeks } from "../../state/peek/hooks";
 import { usePeekDonors } from "../../state/peek/donors";
 import { useSettings, useTab } from "../../state/browser/hooks";
@@ -111,6 +111,8 @@ function PeekCard({
 }) {
   const theme = useTheme();
   const card = useCardFrame();
+  const restRadius = usePeekRestRadius();
+  const cardRadius = smallWindowRadius();
   const buttons = useSettings((s) => s.peekButtons);
   const [reduce, setReduce] = useState<boolean | null>(() => reduceMotion());
   const [generation] = useState(() => ++generations);
@@ -136,7 +138,8 @@ function PeekCard({
         pageTop,
         bar: SMALL_BAR_HEIGHT,
         inset: card.inset,
-        restRadius: card.radius,
+        restRadius,
+        cardRadius,
         paneRadius: card.radius,
         from: fromX === null || fromY === null ? null : { x: fromX, y: fromY },
         fullscreen,
@@ -144,7 +147,7 @@ function PeekCard({
         atTabSize: toTab || donor,
         sideRoom,
       }),
-    [width, height, pageTop, card.inset, card.radius, fromX, fromY, fullscreen, sideRoom.left, sideRoom.right, toTab, donor],
+    [width, height, pageTop, card.inset, card.radius, restRadius, cardRadius, fromX, fromY, fullscreen, sideRoom.left, sideRoom.right, toTab, donor],
   );
 
   useEffect(() => {

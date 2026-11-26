@@ -14,6 +14,7 @@ export type PeekStageGeometry = {
   card: PeekRect;
   source: PeekRect;
   restRadius: number;
+  restBottomRadius?: number;
   tabTopRadius: number;
   tabBottomRadius: number;
   fullscreen: boolean;

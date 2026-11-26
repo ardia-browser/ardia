@@ -282,6 +282,7 @@ function PageFrameSection() {
             }}
           />
         </Row>
+        <SettingToggle anchor="appearance.pageCornersRounded" />
         <Row anchor="appearance.fullScreenFrame">
           <PopUp value={fullScreenFrameOf(zeroInFullScreen, zeroWhenTabsHidden)} options={FULL_SCREEN_FRAME} onChange={(v) => updateSettings(FULL_SCREEN_PATCH[v])} minWidth={220} />
         </Row>

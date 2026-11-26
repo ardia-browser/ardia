@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { peekGeometry } = await import("./peekGeometry.ts");
 
-const input = (o = {}) => ({ width: 1200, height: 800, pageTop: 44, bar: 38, inset: 6, restRadius: 10, paneRadius: 10, from: { x: 300, y: 200 }, fullscreen: false, ...o });
+const input = (o = {}) => ({ width: 1200, height: 800, pageTop: 44, bar: 38, inset: 6, restRadius: 10, cardRadius: 18, paneRadius: 10, from: { x: 300, y: 200 }, fullscreen: false, ...o });
 
 test("off the Mac the card is main's frame, 5.5 % inset each side, and the page fills it under the bar", () => {
   const g = peekGeometry(input({ fitToTab: false }));
@@ -39,4 +39,25 @@ test("on the Mac a Peek opening as a tab lays its page out at the tab's size", (
 
 test("full screen shows the page over the whole stage on every platform", () => {
   for (const fitToTab of [true, false]) assert.deepEqual(peekGeometry(input({ fullscreen: true, fitToTab })).page, { x: 0, y: 0, width: 1200, height: 800 });
+});
+
+test("a frameless Peek rounds the page's bottom corners to the card's, and keeps its top edge under the bar square", () => {
+  const g = peekGeometry(input({ inset: 0, restRadius: 0, paneRadius: 0 }));
+  assert.equal(g.rest.y + g.rest.height, g.card.y + g.card.height);
+  assert.equal(g.restRadius, 0);
+  assert.equal(g.restBottomRadius, 18);
+  assert.equal(g.tabBottomRadius, 0);
+});
+
+test("a frameless Peek over rounded pages still lands on the tab's rounded corners when it opens as a tab", () => {
+  const g = peekGeometry(input({ inset: 0, restRadius: 0, paneRadius: 12, pageTop: 0 }));
+  assert.equal(g.restBottomRadius, 18);
+  assert.equal(g.tabTopRadius, 12);
+  assert.equal(g.tabBottomRadius, 12);
+});
+
+test("an inset Peek keeps the page frame's radius on all four page corners", () => {
+  const g = peekGeometry(input());
+  assert.equal(g.restRadius, 10);
+  assert.equal(g.restBottomRadius, 10);
 });

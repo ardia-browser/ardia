@@ -434,3 +434,19 @@ test("searching for hiding or showing the control pill surfaces advanced.showCli
     assert.ok(ids(query).includes("advanced.showCliPill"), query);
   }
 });
+
+test("Rounded page corners shows only at a zero frame and stays searchable when hidden (#2709)", async () => {
+  const { unshownSettings } = await import("./settingsIndex.ts");
+  const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
+  const { settingsResults } = await import("./SettingsSearch.tsx");
+  const unshown = (patch) => new Set(unshownSettings({ ...DEFAULT_SETTINGS, ...patch }, { top: false }).split("\n").filter(Boolean));
+  assert.ok(unshown({}).has("appearance.pageCornersRounded"));
+  assert.ok(!unshown({ borderlessMode: true }).has("appearance.pageCornersRounded"));
+  assert.ok(!unshown({ pageFrame: 0 }).has("appearance.pageCornersRounded"));
+  for (const query of ["rounded page corners", "page corners"]) {
+    const hit = settingsResults(query, unshown({})).find((h) => h.entry.id === "appearance.pageCornersRounded");
+    assert.ok(hit, query);
+    assert.equal(hit.entry.needs, "Set Frame around the page to None");
+  }
+  assert.ok(ids("square").some((id) => id === "appearance.pageCornersRounded" || id === "appearance.tabCornerRadius"));
+});

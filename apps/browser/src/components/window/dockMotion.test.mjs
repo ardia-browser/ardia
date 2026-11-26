@@ -123,6 +123,9 @@ test("on a window drawn at 16 pt, a thin frame's corner nests in the window's an
   assert.ok(Math.abs(pageFrameOf(1, 19, 16).radius - 46 / 3) < 1e-9, "1 pt in from a 16 pt corner: 15 pt concentric, plus a ninth of the 3 pt the default frame adds");
   for (const inset of [9, 12]) assert.equal(pageFrameOf(inset, 19, 16).radius, pageFrameOf(inset, 19).radius);
   assert.equal(pageFrameOf(0, 19, 16).radius, 0);
+  assert.equal(dm.cardFrameOf(0, 1, false).radius, 0);
+  assert.equal(dm.cardFrameOf(0, 1, true).radius, 19);
+  assert.equal(dm.cardFrameOf(9, 1, true).radius, 10);
 });
 
 test("the motion flag is per window, and ending it twice is harmless", () => {

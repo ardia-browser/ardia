@@ -6,7 +6,7 @@ globalThis.__DEV__ = false;
 const { useBrowser } = await import("./store.ts");
 const { tabsShownIn } = await import("./model.ts");
 const { watchSettings, watchTabRecord, watchWindowSettings } = await import("./keyedWatch.ts");
-const { addressBarInSidebar, minimalismIn, pageFrameIn } = await import("../windows/layout.ts");
+const { addressBarInSidebar, minimalismIn, pageFrameIn, roundedPageCornersIn } = await import("../windows/layout.ts");
 const { splitOf } = await import("../splits/splits.ts");
 await import("../../test-native/index.ts");
 
@@ -21,7 +21,7 @@ function session() {
   return { w, other, ids };
 }
 
-const layoutOf = (w) => `${tabsShownIn(S(), w)}:${addressBarInSidebar(S(), w)}:${minimalismIn(S(), w)}:${pageFrameIn(S(), w)}`;
+const layoutOf = (w) => `${tabsShownIn(S(), w)}:${addressBarInSidebar(S(), w)}:${minimalismIn(S(), w)}:${pageFrameIn(S(), w)}:${roundedPageCornersIn(S(), w)}`;
 
 test("a window's layout reads wake its window key whenever they change", () => {
   const { w, other, ids } = session();
@@ -40,6 +40,7 @@ test("a window's layout reads wake its window key whenever they change", () => {
   run("minimalism", () => S().updateSettings({ minimalismMode: true }));
   run("auto-hide", () => S().updateSettings({ autoHideTabs: true }));
   run("page frame", () => S().updateSettings({ pageFrame: 0 }));
+  run("rounded page corners", () => S().updateSettings({ pageCornersRounded: true }));
   run("full screen", () => S().setWindowFullScreen(w, true));
   run("leave full screen", () => S().setWindowFullScreen(w, false));
   offs.forEach((off) => off());
@@ -74,7 +75,7 @@ test("per-row hooks subscribe by key, not to the whole store", () => {
   assert.match(src("../windows/card.ts"), /export const useInSplit = \(tabId: string\) => useKeyed\(watchSplits,/);
   assert.match(src("../../components/sidebar/TabPressArea.tsx"), /const inSplit = useInSplit\(props\.tab\.id\);/);
   const layout = src("../windows/layout.ts");
-  for (const hook of ["useMinimalism", "useAddressBarInSidebar", "usePageFrameInset"]) {
+  for (const hook of ["useMinimalism", "useAddressBarInSidebar", "usePageFrameInset", "useRoundedPageCorners"]) {
     const body = layout.slice(layout.indexOf(hook), layout.indexOf("\n}", layout.indexOf(hook)));
     assert.match(body, /useWindowSettings\(windowId,/, `${hook} reads through useWindowSettings`);
   }

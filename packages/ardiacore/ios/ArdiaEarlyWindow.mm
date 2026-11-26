@@ -280,7 +280,8 @@ ArdiaEarlyShown *ShownForWindow(NSWindow *window) {
     const CGFloat design = ArdiaChromeWindowHost.windowCornerRadius;
     const CGFloat drawn = ArdiaChromeWindowHost.drawnWindowCornerRadius;
     const CGFloat settled = MIN(1, inset / [ArdiaInterfaceScale windowLengthFromRoot:9]);
-    gLittleLayout[@"radius"] = @(inset == 0 ? 0 : MAX(drawn + (design - drawn) * settled - inset, [ArdiaInterfaceScale windowLengthFromRoot:2]));
+    const BOOL roundedAtZero = [layout[@"roundedAtZero"] isEqual:@YES];
+    gLittleLayout[@"radius"] = @(inset == 0 ? (roundedAtZero ? drawn : 0) : MAX(drawn + (design - drawn) * settled - inset, [ArdiaInterfaceScale windowLengthFromRoot:2]));
   }
   controller.appWindowId = windowId;
   NSScreen *savedDisplay = [ArdiaDisplayIdentity screenWithIdentifier:display];
@@ -388,13 +389,15 @@ ArdiaEarlyShown *ShownForWindow(NSWindow *window) {
   LoadLayouts();
   NSDictionary *main = windowId.length && [gLayouts[windowId] isKindOfClass:NSDictionary.class] ? gLayouts[windowId] : @{};
   const double pageFrame = PageFrameOf(settings);
+  const BOOL roundedAtZero = [settings[@"pageCornersRounded"] isEqual:@YES];
   NSNumber *cardInset = @([ArdiaInterfaceScale windowLengthFromRoot:pageFrame]);
   NSNumber *top = @([ArdiaInterfaceScale windowLengthFromRoot:38]);
   NSMutableDictionary *layout = [@{
     @"page" : @[ cardInset, top, cardInset, cardInset ],
     @"card" : @[ cardInset, top, cardInset, cardInset ],
-    @"curve" : [main[@"curve"] isKindOfClass:NSString.class] ? main[@"curve"] : kCACornerCurveCircular,
+    @"curve" : pageFrame == 0 && roundedAtZero ? kCACornerCurveContinuous : [main[@"curve"] isKindOfClass:NSString.class] ? main[@"curve"] : kCACornerCurveCircular,
     @"lights" : @[ @20, @19 ],
+    @"roundedAtZero" : @(roundedAtZero),
   } mutableCopy];
   if ([main[@"appearance"] isKindOfClass:NSString.class]) layout[@"appearance"] = main[@"appearance"];
   gLittleLayout = layout;

@@ -11,8 +11,8 @@ test("every default passes its own check", () => {
   for (const key of SETTING_KEYS) assert.ok(SETTING_SPECS[key].valid(DEFAULT_SETTINGS[key]), key);
 });
 
-test("page frame zero options and borderless mode are off by default and synced", () => {
-  for (const key of ["borderlessMode", "pageFrameZeroInFullScreen", "pageFrameZeroWhenTabsHidden"]) {
+test("page frame zero options, rounded page corners and borderless mode are off by default and synced", () => {
+  for (const key of ["borderlessMode", "pageCornersRounded", "pageFrameZeroInFullScreen", "pageFrameZeroWhenTabsHidden"]) {
     assert.equal(DEFAULT_SETTINGS[key], false, key);
     assert.ok(SETTING_SPECS[key].synced, key);
     assert.ok(SYNCED_SETTINGS.includes(key), key);

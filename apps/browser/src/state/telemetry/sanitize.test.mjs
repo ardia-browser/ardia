@@ -304,9 +304,11 @@ test("every measured key survives the telemetry property cleaner unchanged", () 
 });
 
 test("the settings snapshot reports borderless mode and its default without changing the saved frame", () => {
-  const snap = settingsSnapshot({ ...DEFAULT_SETTINGS, borderlessMode: true, pageFrame: 6 });
+  const snap = settingsSnapshot({ ...DEFAULT_SETTINGS, borderlessMode: true, pageCornersRounded: true, pageFrame: 6 });
   assert.equal(snap.setting_borderlessMode, "true");
   assert.equal(snap.default_borderlessMode, "false");
+  assert.equal(snap.setting_pageCornersRounded, "true");
+  assert.equal(snap.default_pageCornersRounded, "false");
   assert.equal(snap.setting_pageFrame, "6");
   assert.equal(snap.default_pageFrame, "9");
   assert.equal(snap.window_corner_radius, "19");

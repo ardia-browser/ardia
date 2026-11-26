@@ -182,6 +182,13 @@ export const appearanceRows = {
           description: "0 is borderless.",
           keywords: ["border", "borderless", "edge to edge", "margin", "inset", "padding", "rounded corners", "corner radius", "frame", "gap", "full bleed", "arc", "compact", "no borders", "frameless", "borderless mode"],
         },
+        pageCornersRounded: {
+          title: "Rounded page corners",
+          description: "Rounds the page when there's no frame.",
+          keywords: ["rounded", "square", "corners", "radius", "page corners", "edge to edge", "borderless", "round", "rounded corners", "frameless", "split view"],
+          shown: (s) => s.borderlessMode || s.pageFrame === 0,
+          needs: "Set Frame around the page to None",
+        },
         fullScreenFrame: {
           title: "In full screen",
           description: "Keep the frame, or remove it.",

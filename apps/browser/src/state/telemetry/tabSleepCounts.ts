@@ -5,7 +5,7 @@ import { consentOrNow, countFor } from "./countFor";
 import type { KeptAwakeReason } from "../tabs/sleepRefusals";
 import type { MemoryPressure, SleepVeto } from "../tabs/sleepPolicy";
 
-const none = () => ({ captureIndicatorsCleared: 0, mediaCardsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppWindowsClosedFromNewTab: 0, topAppsUnloadedFromMenu: 0, tabsSleptFromMenu: 0, groupsSleptFromMenu: 0, menuSleepsKeptAwake: 0, menuSleepsPastAutomatic: 0, menuSleepKeptReason: null as KeptAwakeReason | null, closesWokeSleepingTab: 0, sleepVetoes: {} as Partial<Record<SleepVeto, number>>, cliTabsHeld: 0, cliTabsHeldLive: 0, cliTabsHeldUntilDisconnect: 0, cliHoldsReleasedOnDisconnect: 0, profilesKeptForCli: 0, chromeDiscardsKeptForCli: 0, tabsSleptUnderWarning: 0, tabsSleptUnderCritical: 0, memoryWarnings: 0, memoryCriticals: 0 });
+const none = () => ({ captureIndicatorsCleared: 0, mediaCardsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppWindowsClosedFromNewTab: 0, closesBackToTopAppOpener: 0, topAppsUnloadedFromMenu: 0, tabsSleptFromMenu: 0, groupsSleptFromMenu: 0, menuSleepsKeptAwake: 0, menuSleepsPastAutomatic: 0, menuSleepKeptReason: null as KeptAwakeReason | null, closesWokeSleepingTab: 0, sleepVetoes: {} as Partial<Record<SleepVeto, number>>, cliTabsHeld: 0, cliTabsHeldLive: 0, cliTabsHeldUntilDisconnect: 0, cliHoldsReleasedOnDisconnect: 0, profilesKeptForCli: 0, chromeDiscardsKeptForCli: 0, tabsSleptUnderWarning: 0, tabsSleptUnderCritical: 0, memoryWarnings: 0, memoryCriticals: 0 });
 
 let pending = none();
 
@@ -120,6 +120,10 @@ export function noteTopAppWindowClosedFromNewTab(consent?: ConsentToken | null) 
   countFor(consentOrNow(consent), () => void pending.topAppWindowsClosedFromNewTab++);
 }
 
+export function noteCloseBackToTopAppOpener(consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => void pending.closesBackToTopAppOpener++);
+}
+
 export function noteTopAppUnloadedFromMenu() {
   pending.topAppsUnloadedFromMenu++;
 }
@@ -146,6 +150,7 @@ export function takeTabSleepCounts() {
     pinned_tabs_slept_by_memory_saver: taken.pinnedTabsSleptByMemorySaver,
     top_app_closes_kept_running: taken.topAppsKeptRunning,
     top_app_windows_closed_from_new_tab: taken.topAppWindowsClosedFromNewTab,
+    closes_back_to_top_app_opener: taken.closesBackToTopAppOpener,
     top_apps_unloaded_from_menu: taken.topAppsUnloadedFromMenu,
     tabs_slept_from_menu: taken.tabsSleptFromMenu,
     groups_slept_from_menu: taken.groupsSleptFromMenu,

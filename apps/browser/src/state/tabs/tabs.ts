@@ -19,7 +19,8 @@ import { orderSections } from "../groups/groups";
 import { samePage } from "../../lib/url";
 import { historyOf } from "../history/history";
 import { pinHome } from "../pins/pinHomes";
-import { noteTopAppsKeptRunning } from "../telemetry/tabSleepCounts";
+import { noteCloseBackToTopAppOpener, noteTopAppsKeptRunning } from "../telemetry/tabSleepCounts";
+import type { ConsentToken } from "../telemetry/consentPeriod";
 
 export type NewTabOptions = {
   url?: string;
@@ -42,6 +43,7 @@ export type Successor = { id: string | null; side: "above" | "below"; beside: bo
 export type UserClose = {
   successors: ReadonlyMap<string, Successor>;
   noted: (pick: Successor) => void;
+  consent: ConsentToken | null;
   shows: (s: BrowserState, windowId: string, profileId: string, id: string) => boolean;
   fallback: (s: BrowserState, windowId: string, profileId: string, activeId: string, removing: ReadonlySet<string>, side: Successor["side"]) => string | undefined;
 };
@@ -109,9 +111,9 @@ const isTopApp = (t: Tab | undefined) => t?.pin?.as === "tile";
 export const keptWithTopApp = (s: BrowserState, id: string) => inPinnedContainer(s, id) && withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]));
 const runningKept = (s: BrowserState, id: string) => keptWithTopApp(s, id) && hasOwnOrSharedPage(s.tabs[id]!);
 
-function withoutTopApps(s: BrowserState, ids: string[]): string[] {
+function withoutTopApps(s: BrowserState, ids: string[], openerId: string | null | undefined): string[] {
   if (!s.settings.keepTopAppsRunning) return ids;
-  const others = ids.filter((id) => !keptWithTopApp(s, id));
+  const others = ids.filter((id) => id === openerId || !keptWithTopApp(s, id));
   return others.length ? others : ids;
 }
 
@@ -207,8 +209,9 @@ export function removeTabs(
     for (const [profileId, activeId] of Object.entries(w.activeTabIds)) {
       if (!gone.has(activeId)) continue;
       const before = w.tabIds.filter((id) => s.tabs[id]?.profileId === profileId);
-      const left = withoutTopApps(s, before.filter((id) => !gone.has(id)));
+      const left = withoutTopApps(s, before.filter((id) => !gone.has(id)), s.tabs[activeId]?.openerId);
       const next = chosenSuccessor(s, close, w, profileId, activeId, gone) ?? groupFallback?.(w.id, profileId) ?? otherPane(s, activeId, gone) ?? closeSuccessor(s, activeId, before, left);
+      if (close && next && s.settings.keepTopAppsRunning && next === s.tabs[activeId]?.openerId && keptWithTopApp(s, next)) noteCloseBackToTopAppOpener(close.consent);
       if (next) activeTabIds[profileId] = next;
       else delete activeTabIds[profileId];
     }

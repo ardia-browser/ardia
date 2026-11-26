@@ -4,7 +4,7 @@ import { choicePlugin, type ManagerPlugin, type PasswordManagerChoice } from "..
 import { choosePasswordManager, useManagerPlugins, useProfilePasswordManager, useProfilesSharingChoice, useStoredPasswordManager } from "../../../state/site/passwordManager";
 import { useEffect } from "react";
 import { applePasswordsConnected, loadApplePasswords, useApplePasswordsOffered } from "../../../state/site/applePasswords";
-import { ApplePasswordsStatusRow, connectApplePasswords } from "./ApplePasswordsPairing";
+import { ApplePasswordsStatusRow, connectApplePasswords, ICloudExtensionNoteRow } from "./ApplePasswordsPairing";
 import { type Option, PopUp } from "../../ui";
 import { Row } from "../Form";
 
@@ -69,6 +69,7 @@ function PasswordManagerChoiceRow({ profileId }: { profileId: string }) {
         <PopUp value={popUp.value} options={popUp.options} onChange={(manager) => pickPasswordManager(profileId, manager)} minWidth={210} />
       </Row>
       {effective === "apple" ? <ApplePasswordsStatusRow /> : null}
+      {effective === "apple" ? <ICloudExtensionNoteRow profileId={profileId} /> : null}
     </>
   );
 }

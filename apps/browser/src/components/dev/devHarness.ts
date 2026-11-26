@@ -82,6 +82,9 @@ export function startDevHarness() {
     get applePasswords(): typeof import("../../state/site/applePasswords") {
       return require("../../state/site/applePasswords");
     },
+    get iCloudPasswordsExtension(): typeof import("../../state/site/iCloudPasswordsExtension") {
+      return require("../../state/site/iCloudPasswordsExtension");
+    },
     get profileLoading(): typeof import("../../state/profiles/profileLoading") {
       return require("../../state/profiles/profileLoading");
     },

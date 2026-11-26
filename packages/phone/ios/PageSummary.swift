@@ -1,9 +1,7 @@
 import ArdiaBrowser
-import ArdiaDesign
 import Foundation
 import FoundationModels
 import Observation
-import SwiftUI
 import UIKit
 import WebKit
 
@@ -90,7 +88,7 @@ final class PageSummarySession: Identifiable {
     phase = .writing
     await write(content)
     guard !Task.isCancelled, isCurrent(for: tab) else { return }
-    if text.isEmpty { return settle(failure: String(localized: "Couldn’t summarize this page."), tab: tab) }
+    if PageSummaryOutline(text).isEmpty { return settle(failure: String(localized: "Couldn’t summarize this page."), tab: tab) }
     phase = .done
     onSettled?(self)
   }
@@ -111,11 +109,22 @@ final class PageSummarySession: Identifiable {
     for share in [budget, budget / 2] {
       do {
         try await stream(model: model, prompt: PageSummaryDigest.prompt(content, characterBudget: share))
+        if PageSummaryOutline(text).isEmpty {
+          text = ""
+          continue
+        }
         writer = .onDevice
         note = String(localized: "Written on this iPhone by Apple Intelligence. Nothing left the phone.")
         return
       } catch {
         if Task.isCancelled { return }
+        let shown = PageSummaryOutline.wholeLines(text)
+        if !PageSummaryOutline(shown).isEmpty {
+          text = shown
+          writer = .onDevice
+          note = String(localized: "Written on this iPhone by Apple Intelligence. Nothing left the phone.")
+          return
+        }
         text = ""
       }
     }
@@ -154,185 +163,25 @@ extension PageSummarySwitch {
 }
 
 @MainActor
-@Observable
-final class PageSummaryPresenter {
-  var session: PageSummarySession?
-  var bottomInset: CGFloat = 0
-  @ObservationIgnored var cardFrame: CGRect = .zero
-  @ObservationIgnored var onDismiss: (() -> Void)?
-
-  func dismiss() { onDismiss?() }
-}
-
-final class PageSummaryLayer: UIView {
-  static let coordinateSpace = "ardiaPageSummary"
-
-  let presenter: PageSummaryPresenter
-  private let hosting: UIHostingController<PageSummaryOverlay>
-
-  init(presenter: PageSummaryPresenter) {
-    self.presenter = presenter
-    hosting = UIHostingController(rootView: PageSummaryOverlay(presenter: presenter))
-    super.init(frame: .zero)
-    backgroundColor = .clear
-    hosting.view.backgroundColor = .clear
-    hosting.safeAreaRegions = []
-    hosting.view.frame = bounds
-    hosting.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    addSubview(hosting.view)
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError() }
-
-  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-    presenter.session != nil && presenter.cardFrame.contains(point)
-  }
-}
-
-struct PageSummaryOverlay: View {
-  let presenter: PageSummaryPresenter
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  var body: some View {
-    GeometryReader { proxy in
-      VStack(spacing: 0) {
-        Spacer(minLength: 0)
-        if let session = presenter.session {
-          PageSummaryCard(session: session, maxHeight: max(proxy.size.height * 0.45, 160)) { presenter.dismiss() }
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(PageSummaryLayer.coordinateSpace)) } action: { presenter.cardFrame = $0 }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 12)
-            .padding(.bottom, presenter.bottomInset + 12)
-            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-            .id(session.id)
-        }
-      }
-      .frame(width: proxy.size.width, height: proxy.size.height)
-    }
-    .coordinateSpace(.named(PageSummaryLayer.coordinateSpace))
-    .ignoresSafeArea()
-    .environment(\.usesGlass, NativeChromeLook.shared.usesGlass)
-  }
-}
-
-struct PageSummaryCard: View {
-  let session: PageSummarySession
-  let maxHeight: CGFloat
-  let onClose: @MainActor () -> Void
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      header
-      ViewThatFits(in: .vertical) {
-        content
-        ScrollView { content }.scrollBounceBehavior(.basedOnSize)
-      }
-    }
-    .padding(16)
-    .frame(maxWidth: 560, maxHeight: maxHeight, alignment: .topLeading)
-    .chromeSurface(in: .rect(cornerRadius: 24))
-    .accessibilityElement(children: .contain)
-    .accessibilityLabel(Text("Summary"))
-    .accessibilityAction(.escape) { onClose() }
-    .onChange(of: session.phase) { _, phase in
-      if phase == .done { UIAccessibility.post(notification: .announcement, argument: String(localized: "Summary ready")) }
-    }
-  }
-
-  private var header: some View {
-    HStack(alignment: .firstTextBaseline, spacing: 8) {
-      VStack(alignment: .leading, spacing: 2) {
-        Text("Summary")
-          .font(.headline)
-        if !session.title.isEmpty {
-          Text(session.title)
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-        }
-      }
-      .accessibilityElement(children: .combine)
-      .accessibilityAddTraits(.isHeader)
-      Spacer(minLength: 0)
-      Button {
-        onClose()
-      } label: {
-        Image(systemName: "xmark")
-          .font(.footnote.weight(.semibold))
-          .foregroundStyle(.secondary)
-          .frame(width: 44, height: 44)
-          .contentShape(.rect)
-      }
-      .buttonStyle(.plain)
-      .padding(.trailing, -12)
-      .padding(.vertical, -12)
-      .accessibilityLabel(Text("Close Summary"))
-    }
-    .contentShape(.rect)
-    .gesture(DragGesture(minimumDistance: 12).onEnded { drag in
-      if drag.translation.height > 48 { onClose() }
-    })
-  }
-
-  @ViewBuilder
-  private var content: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      switch session.phase {
-      case .failed(let message):
-        Text(message)
-          .font(.body)
-          .foregroundStyle(.secondary)
-      default:
-        if session.text.isEmpty {
-          HStack(spacing: 8) {
-            ProgressView()
-            Text("Summarizing…")
-              .font(.body)
-              .foregroundStyle(.secondary)
-          }
-          .accessibilityElement(children: .combine)
-        } else {
-          ForEach(Array(ResearchAnswer.blocks(session.text).enumerated()), id: \.offset) { _, block in
-            line(block)
-          }
-        }
-      }
-      if let note = session.note, session.phase == .done {
-        Text(note)
-          .font(.footnote)
-          .foregroundStyle(.secondary)
-          .padding(.top, 2)
-      }
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-
-  @ViewBuilder
-  private func line(_ block: ResearchAnswer.Block) -> some View {
-    switch block {
-    case .heading(let text):
-      Text(text).font(.subheadline.weight(.semibold))
-    case .bullet(let text):
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Text("•").foregroundStyle(.secondary).accessibilityHidden(true)
-        Text(ResearchAnswer.withoutCitations(text)).font(.body)
-      }
-    case .paragraph(let text):
-      Text(ResearchAnswer.withoutCitations(text)).font(.body)
-    }
-  }
-}
-
-@MainActor
 final class PagePinchWatcher: NSObject, UIGestureRecognizerDelegate {
+  struct Hold {
+    var scale: Double
+    var shift: CGPoint
+  }
+
   var moment: (() -> PagePinch.Moment?)?
-  var onPinchedIn: (() -> Void)?
-  var ignoresTouch: ((UITouch) -> Bool)?
+  var mayBegin: (() -> Bool)?
+  var onTaken: (() -> Void)?
+  var onHeld: ((Hold) -> Void)?
+  var onLetGo: ((_ fired: Bool) -> Void)?
+  weak var zoomer: UIScrollView?
 
   private lazy var recognizer = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
   private var pinch: PagePinch?
-  private lazy var feedback = UIImpactFeedbackGenerator(style: .light, view: recognizer.view ?? UIView())
+  private var start = CGPoint.zero
+  private var taken = false
+  private var engaged = false
+  private lazy var feedback = UIImpactFeedbackGenerator(style: .soft, view: recognizer.view ?? UIView())
 
   init(container: UIView) {
     super.init()
@@ -343,37 +192,77 @@ final class PagePinchWatcher: NSObject, UIGestureRecognizerDelegate {
     container.addGestureRecognizer(recognizer)
   }
 
-  func reset() {
+  var isHolding: Bool { taken }
+
+  func reset(notifying: Bool = true) {
+    let wasTaken = taken && notifying
     pinch = nil
+    taken = false
+    engaged = false
+    if recognizer.state == .began || recognizer.state == .changed {
+      recognizer.isEnabled = false
+      recognizer.isEnabled = true
+    }
+    if wasTaken { onLetGo?(false) }
   }
 
   func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
     true
   }
 
-  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-    ignoresTouch?(touch) != true
-  }
-
   func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-    guard gestureRecognizer === recognizer, let moment = moment?() else { return false }
+    guard gestureRecognizer === recognizer, mayBegin?() != false, let moment = moment?() else { return false }
     pinch = PagePinch(at: moment, scale: Double(recognizer.scale))
-    if pinch != nil { feedback.prepare() }
+    taken = false
+    engaged = false
+    if pinch != nil {
+      start = recognizer.location(in: recognizer.view)
+      feedback.prepare()
+    }
     return pinch != nil
   }
 
+  private func take() {
+    taken = true
+    if let zoom = zoomer?.pinchGestureRecognizer, zoom.isEnabled {
+      zoom.isEnabled = false
+      zoom.isEnabled = true
+    }
+    if let zoomer, zoomer.zoomScale < zoomer.minimumZoomScale { zoomer.setZoomScale(zoomer.minimumZoomScale, animated: false) }
+    onTaken?()
+  }
+
   @objc private func pinched(_ recognizer: UIPinchGestureRecognizer) {
+    let scale = Double(recognizer.scale)
     switch recognizer.state {
     case .changed:
-      pinch?.moved(to: Double(recognizer.scale))
+      guard var pinch, recognizer.numberOfTouches >= 2 else { return }
+      pinch.moved(to: scale)
+      self.pinch = pinch
+      if pinch.wentOutward {
+        if taken { reset() }
+        return
+      }
+      if !taken, scale < 1 { take() }
+      guard taken else { return }
+      let nowEngaged = PagePinch.isEngaged(at: scale)
+      if nowEngaged != engaged {
+        engaged = nowEngaged
+        feedback.impactOccurred(intensity: nowEngaged ? 0.6 : 0.3)
+      }
+      let at = recognizer.location(in: recognizer.view)
+      onHeld?(Hold(scale: scale, shift: CGPoint(x: at.x - start.x, y: at.y - start.y)))
     case .ended, .cancelled, .failed:
       guard var pinch else { return }
+      let wasTaken = taken
       self.pinch = nil
-      pinch.moved(to: Double(recognizer.scale))
+      taken = false
+      engaged = false
+      pinch.moved(to: scale)
       let ending: PagePinch.Ending = recognizer.state == .ended ? .ended : recognizer.state == .cancelled ? .cancelled : .failed
-      guard let moment = moment?(), pinch.fires(ending, at: moment) else { return }
-      feedback.impactOccurred(intensity: 0.7)
-      onPinchedIn?()
+      let fired = wasTaken && (moment?()).map { pinch.fires(ending, velocity: Double(recognizer.velocity), at: $0) } == true
+      if fired { feedback.impactOccurred(intensity: 0.5) }
+      if wasTaken { onLetGo?(fired) }
     default:
       break
     }

@@ -1933,25 +1933,75 @@ and appears over it. The phone reads the text from the live tab and processes it
   stays dead. The writer choice on Android is stored separately and survives the switch.
 
 - **Where it starts.** Pinch in on a web page at its minimum zoom or choose Summarize Page under Find on Page.
-  Both wait for the page to finish loading. WebKit handles ordinary page zoom alongside the summary's
-  `PagePinchWatcher` in `packages/phone/ios/PageSummary.swift`. The decision is `PagePinch` in ArdiaKit's `ArdiaBrowser/Web`
-  (`PagePinchTests`): it starts only when the scroll view's `zoomScale` sits at its `minimumZoomScale`, on a visible,
-  loaded http(s) page, and fires only on a successful end, with the fingers at 0.7 of their start or closer, no outward
-  move first, no reversal of more than 0.12 from the smallest scale, the zoom still at its minimum, and the same page
-  and the same `WebTab.navigationGeneration` as at the start (a navigation, a same-document navigation, a reload or a
-  discard in between cancels it). A cancelled or failed touch does nothing.
+  Both wait for the page to finish loading. `PagePinchWatcher` in `packages/phone/ios/PageSummary.swift` watches beside
+  WebKit's own pinch. The decision is `PagePinch` in ArdiaKit's `ArdiaBrowser/Web` (`PagePinchTests`): it starts only
+  when the scroll view's `zoomScale` sits at its `minimumZoomScale`, on a visible, loaded http(s) page. Once the fingers
+  close (scale under 1) the watcher takes the pinch: WebKit's zoom recognizer is cancelled for that touch and a zoom
+  that dipped under the minimum is put back, so the page doesn't shrink twice. A pinch that opens past 1.04 never
+  summarizes: one that opened from the start stays WebKit's own zoom, and one that closed first and then opened
+  springs the page back and does nothing more for that touch. No pinch starts while a summary is up or still
+  closing (`PagePinchWatcher.mayBegin`).
+- **The pinch, the fold and the numbers.** The page follows the fingers, folds like a sheet of paper and rests as a
+  card, in the spirit of Arc Search's gesture; the code, the drawing and the colours are Ardia's own. The numbers live
+  in `PagePinch` and `PageSummaryMotion` (`PageSummaryStage.swift`).
+  - While held, the page is drawn at `rubberBand(scale, 0.95...1, reach 0.1, coefficient 0.55)` of its height and half
+    that shrink of its width, moved by the fingers' travel, with corners growing to 24 points
+    (`PagePinch.shownScale`, `shownWidthScale`). Under 0.9 the page becomes a sheet of paper creased across its
+    middle (`PageFoldCard`, two halves of one picture of the page taken when the pinch was taken, with the status
+    strip the app paints over the page drawn in): the upper half turns back by `f × 89°` and the lower by `f × 91°`
+    about the crease, `f = clamp((0.9 − scale) × 1.5)`, with perspective 1/6 of the longer side, and the backdrop
+    shows at `(0.9 − scale) × 10`. Crossing 0.9 gives a soft impact at 0.6 going in and 0.3 coming back.
+  - Letting go summarizes under 0.5, or under 0.9 while the fingers still close faster than 1 scale per second
+    (`PagePinch.fires`), on the same page and `WebTab.navigationGeneration` as at the start, with the zoom still at
+    its minimum. Anything else springs the page flat (0.3 s for the fold, 0.6 s for the page).
+  - On a summary the card springs to rest in 0.5 s (no bounce, soft impact at 0.5): the lower half lies flat behind
+    (180°, 30% darker), the upper half leans forward 20°, so the lower half's edge shows above it, at 0.65 of the page
+    and 0.8 of that while it waits. Waiting, it sways (5 points at 1.9π, 3° about (0, 1, 1) at 0.9π, 2° about x at
+    1.2π) with "Summarizing…" under it.
+  - The summary is written in as it comes, a line at a time: a lead or a row is shown only once it is whole, out of
+    a blur on a 0.7 s spring, and nothing already shown changes or moves (the layout is never animated, only the
+    arriving line). `PageSummaryOutline(_:finished:)` leaves out the line the writer is in the middle of, and its
+    rules only ever append: the first line is the lead unless it is a row with a symbol or a label (then there is no
+    lead), a later `= ` line or a line with no mark is a row of its own, and rows run together on a line that isn't
+    a row are split once, the same way whether or not the summary is finished
+    (`PageSummaryOutlineTests.whatIsShownWhileWritingNeverChanges` checks every prefix of several shapes). If the
+    writer stops after lines have been shown, they stay as the summary; only while nothing is shown does it start
+    over with half the text and then fall back to key lines. Text with no line in it counts as nothing written.
+  - **Colours.** The stage is drawn in the open space's look (`PageSummaryLook`, from `LaunchLook.recalled()`, the look
+    the app last drew; Incognito's on a private page): its `ProfileBackdrop` with its theme, the look's deck blobs and
+    swatch as two blurred blooms turning once every 5 and 8 seconds while it waits and fading over 2 s once the
+    summary is there, the swatch as the rows' discs, and light or dark text by the look's own contrast
+    (`ProfileLook.inkIsLight`, or the custom theme's appearance).
+  - While the page is held or the summary covers it, `PageView` doesn't sample its tone (`showsPageAtRest`): the page
+    is then shrunk or hidden and would read as black.
+  - Reduce Motion skips the fold, the sway, the turning colour and every move across the screen: the card
+    cross-fades in at its resting place, the summary cross-fades in under it, lines fade in, closing fades the
+    stage out over the page already back in place, and a shallow pinch let go puts the page back without a spring.
+  - **Leaving.** Every way out restores the page at once if it can't be animated: `PageView.endPinchNow` (unbind,
+    the view leaving its window, a new web view, a navigation under a held pinch) lets go of the pinch, removes the
+    stage and a stage still closing (`leaving`), stops the card's display link, drops a pending picture of the page
+    and puts the web view back to full size and opacity. A pinch let go before its picture was ready is put back
+    the same way when the summary is dismissed meanwhile, and a navigation under a held pinch ends it whether or
+    not the stage is up (`pinchNavigation`). The web view's frame is never set while it is transformed, and the
+    closing card leaves the scroll view first, so a pull or a scroll still settling doesn't carry it off. A picture
+    that arrives while the fingers rest is applied to the hold at once, and when the page has changed size since
+    the summary opened (a rotation), closing cross-fades to the page instead of unfolding onto it.
 - **What it reads.** `WebTab.readableContent()`, the Reader's extraction, run on the live page. The prompt and the
   fallback are `PageSummaryDigest` in `ArdiaBrowser/Research` (`PageSummaryDigestTests`), which reuses Browse for Me's
   excerpt and sentence logic.
 - **Who writes it.** Apple Intelligence on the phone (`SystemLanguageModel.default`) summarizes the extracted text
-  and can retry with half the text budget. If it is unavailable or fails, the card explains why and shows up to
-  four key lines from the page description and the opening sentences of its paragraphs. Android never shows key
-  lines (below).
-- **The card.** A compact glass card at the bottom of the page (`PageSummaryLayer`, hosted inside `PageView` above the
-  WKWebView), clear of the bottom bar. The page around the card still accepts touch input.
-  It closes with its × button, a swipe down on its header, VoiceOver's escape, a navigation, a tab switch, the deck, the
-  page's discard or the view leaving its window, and a result that comes back after any of those is dropped
-  (`PageSummarySession.isCurrent`).
+  and can retry with half the text budget. It is asked for one lead line (`= …`) and three to five
+  `- symbol | Label | detail` lines; `PageSummaryOutline` in `ArdiaBrowser/Research` (`PageSummaryOutlineTests`) reads
+  them, and anything looser, into a lead and rows. A symbol that isn't an SF Symbol draws as `sparkle`. If the model
+  is unavailable or fails, the page explains why and shows up to four key lines from the page description and the
+  opening sentences of its paragraphs, the first as the lead. Android never shows key lines (below).
+- **The summary.** A full-screen stage over the app (`PageSummaryStage`, added to the page's window above the bars):
+  the page's title, the folded page, then the lead and the rows (a disc in the space's colour with the symbol in black or white by the colour's
+  lightness, a label, the detail) and the note saying who wrote it, scrolling under a footer with the close button. The page under it is hidden and takes no touches until the summary closes.
+  VoiceOver treats the stage as modal while it is up and returns to the page once it is back.
+  It closes with its × button, a pull down past 100 points, a pinch outward, VoiceOver's escape, a navigation, a tab
+  switch, the deck, the page's discard or the view leaving its window, and a result that comes back after any of those
+  is dropped (`PageSummarySession.isCurrent`). Closing opens the card back onto the page.
 - **Counting.** `page.summaryOpened` and `page.summarySettled` reach `state/page/actions.ts`. It counts them in
   `usage_counts` for regular tabs when anonymous usage sharing is on.
 

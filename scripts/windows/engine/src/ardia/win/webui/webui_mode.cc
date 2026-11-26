@@ -16,6 +16,7 @@
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
+#include "chrome/install_static/user_data_dir.h"
 
 namespace ardia_win {
 
@@ -99,7 +100,12 @@ MigratorLookup VerifyMigratorBinary(const base::FilePath& exe_dir,
 }
 
 bool WebUIShellRequested(const base::CommandLine& command_line) {
-  return command_line.GetSwitchValueASCII(kShellSwitch) == kWebUIShell;
+  const std::wstring shell = command_line.GetSwitchValueNative(kShellSwitch);
+  const bool headless = command_line.HasSwitch(kHeadlessSwitch);
+  return WebUIShellSelected(
+      command_line.GetSwitchValueNative(kProcessTypeSwitch), shell, headless,
+      shell != kWebUIShell && shell != kReactNativeShell && !headless &&
+          install_static::ReactNativeAppLibraryBesideExe());
 }
 
 std::wstring WebUIAppDataDirectory(const std::wstring& ardia_data_dir,

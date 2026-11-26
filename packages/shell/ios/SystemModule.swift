@@ -53,13 +53,15 @@ public class SystemModule: Module, SystemNative {
 
   static func fileExists(_ path: String) -> Bool { FileManager.default.fileExists(atPath: path) }
 
-  static func openFile(_ path: String) -> Bool {
-    guard FileManager.default.fileExists(atPath: path) else { return false }
+  static func openFile(_ path: String, _ promise: Promise) {
+    guard FileManager.default.fileExists(atPath: path) else { return promise.resolve(false) }
     if LaunchConfig.shared.background {
       NSLog("ArdiaSystem: background instance, not opening %@", path)
-      return true
+      return promise.resolve(true)
     }
-    return NSWorkspace.shared.open(URL(fileURLWithPath: path))
+    NSWorkspace.shared.open(URL(fileURLWithPath: path), configuration: NSWorkspace.OpenConfiguration()) { _, error in
+      promise.resolve(error == nil)
+    }
   }
 
   static func revealFile(_ path: String) -> Bool {

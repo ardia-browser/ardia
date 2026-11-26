@@ -217,6 +217,17 @@
    ]
   },
   {
+   "id": "chromium-page-message:pageMetrics",
+   "source": "page",
+   "guard": "Main frame only; the batch's generation must equal the native generation for the current consent period (the page never sees the consent epoch); counts read as finite numbers, floored, clamped to a million per message, dropped frames capped at frames, media errors at five fixed slots; summed into fixed counter names",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaPageMetricsMath.h",
+    "packages/ardiacore/tests/page-metrics.test.cc",
+    "packages/ardiacore/tests/page-metrics.test.mjs",
+    "apps/browser/src/state/telemetry/telemetryGaps.test.mjs"
+   ]
+  },
+  {
    "id": "chromium-page-message:scroll",
    "source": "page",
    "guard": "Main frame only; enum state for toolbar hiding",
@@ -662,6 +673,15 @@
    ]
   },
   {
+   "id": "evaluate-result:state/engines/openedPages.ts",
+   "source": "main-world",
+   "guard": "Opener check: the script calls nothing the page can replace (our own post and string literals picked by window.opener's truthiness); only the boolean false lets a page-made tab move engines, true keeps it, anything else retries and then drops the move",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/engines/openedPages.ts#openerAnswer"
+   ]
+  },
+  {
    "id": "evaluate-result:state/extensions/webStore.ts",
    "source": "main-world",
    "guard": "Web Store page only; the id must pass webStoreExtensionId and be installed; removal asks the user (B3)",
@@ -993,6 +1013,14 @@
    "guard": "Folder ids and names as strings",
    "checks": [
     "apps/browser/src/state/sync/tileFoldersAdapter.ts#tileFoldersAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:pinnedLettersAdapter.ts#pinnedLettersAdapter",
+   "source": "sync",
+   "guard": "cleanTileLetters keeps at most two visible characters of a string, no control or line-break characters, and drops anything else",
+   "checks": [
+    "apps/browser/src/lib/tileLetter.ts#cleanTileLetters"
    ]
   },
   {
@@ -1762,14 +1790,48 @@
   {
    "id": "update:windows-manifest",
    "source": "update",
-   "guard": "UpdateModule fetches windows-update.json (at most 64 KiB) and windows-update.json.sig (64 bytes) only from GitHub releases (or a test instance's updateFeed) and runs ardia-update-verify.exe (ardia-update-core) against the pinned windows-update.pem without following symlinks or reparse points; anything unsigned, tampered, malformed, oversized, non-newer or outside the allowed HTTPS prefix is refused before download, and packages/expo-windows/src/updater/manifest.ts validates the verified reply again; the shared hostile list runs through both the verifier binary and the TypeScript parser",
+   "guard": "windows-update.json and its 64-byte windows-update.json.sig are checked only by ardia-update-verify (ardia-update-core) against the pinned windows-update.pem: anything unsigned, tampered, malformed, oversized or outside the allowed HTTPS prefix is refused; the shared hostile list runs through the verifier binary",
    "checks": [
-    "apps/browser/windows/Ardia/UpdateModule.h#VerifyUpdate",
     "packages/core-rs/crates/ardia-update-verify/src/main.rs#fn verify_windows(",
     "packages/core-rs/crates/ardia-update-core/src/windows.rs#pub fn verify_windows_update",
-    "packages/expo-windows/src/updater/manifest.ts#parseVerifiedUpdate",
-    "apps/browser/src/hostileInputs.test.mjs#windows update manifest",
     "packages/core-rs/tests/windows-update/test_windows_update.py#test_no_hostile_string_passes_the_windows_verifier"
+   ],
+   "detected": false
+  },
+  {
+   "id": "update:windows-webui-manifest",
+   "source": "update",
+   "guard": "Windows WebUI host (--ardia-shell=webui): webui_updates.cc fetches windows-update.json (at most 64 KiB) and windows-update.json.sig (exactly 64 bytes) through Chromium's system URLLoaderFactory with credentials omitted and the cache off, only from the GitHub windows-alpha release (or, in a test instance only, an ARDIA_INSTANCE updateFeed that ValidFeedUrl accepts: https, or http to 127.0.0.1, localhost or 10.0.2.2), and follows a redirect only to https on port 443 at github.com, objects.githubusercontent.com or release-assets.githubusercontent.com for the release feed and never for a test feed (AllowedRedirect); while holding the Updates folder and a fresh scratch folder inside it open without delete sharing, it creates each file with CREATE_NEW, no sharing and FILE_FLAG_OPEN_REPARSE_POINT, checks its final path (GetFinalPathNameByHandleW) is a direct child and it has one link before writing, then reopens it read-only with only FILE_SHARE_READ, checks it is the same file (volume and file index) with the bytes it wrote, and holds that handle while it runs the bundled ardia-update-verify.exe windows-manifest against the pinned windows-update.pem beside Ardia.exe (a test key only in a test instance) with a 15 s deadline and only its own pipe and NUL inherited; ReadVerifierAnswer takes only its last line, an ok line of exactly five words whose version, build above Ardia.build.json's, URL under the published prefix (ValidInstallerUrl), lowercase SHA-256 and size up to 1 GiB all pass, and keeps the verified offer and its signed bytes in the browser process: the renderer never sends a URL, hash or path. The installer streams (SimpleURLLoader DownloadAsStream) into a staging file with an unpredictable name (StagingFileName, Ardia-Setup-<sha16>-<random 64 bits>.part) created the same way and held with no sharing, capped at the signed size and hashed as it is written; it is renamed through that handle (FileRenameInfo), reopened with only FILE_READ_DATA, FILE_READ_ATTRIBUTES and SYNCHRONIZE (never DELETE, so CreateProcessW can open the image) and only FILE_SHARE_READ (kHeldInstallerAccess, kHeldInstallerShare, HeldInstallerLetsItRun), checked to be the same file (volume and file index) with the signed size and SHA-256, and that handle is held through ardia-update-verify.exe windows-package and until CreateProcessW on Restart to Update (InstallerSink), so no other writer can change it in between; one install at a time is reserved on the UI sequence (BeginInstall), a second Restart from any window gets busy, and a background instance never runs it. A file that fails a check is deleted only through the handle Ardia created or verified (FileDispositionInfo), never by path, and one whose identity can't be confirmed is left alone; a failed launch releases the held installer. Automatic checks run only when the app-data folder is the production one (ScratchDataDirectory), so a scratch ARDIA_DATA_DIR instance never checks unless a test instance names updateFeed. scripts/windows/engine/tests/webui_update_policy_test.cc unit-tests the pure policy, and apps/browser/src/hostileInputs.test.mjs compiles it and pipes the whole shared hostile list through every verifier answer field and line, asserting that only valid offers ever pass BeginDownload and BeginInstall, with a valid control",
+   "checks": [
+    "scripts/windows/engine/src/ardia/win/webui/webui_updates.cc#VerifyManifest",
+    "scripts/windows/engine/src/ardia/win/webui/webui_update_policy.h#ReadVerifierAnswer",
+    "scripts/windows/engine/src/ardia/win/webui/webui_update_policy.h#AllowedRedirect",
+    "scripts/windows/engine/tests/webui_update_policy_test.cc#TestVerifierAnswers",
+    "scripts/windows/engine/tests/webui_update_policy_test.cc#TestFeedsAndUrls",
+    "packages/core-rs/crates/ardia-update-verify/src/main.rs#fn verify_windows(",
+    "scripts/windows/engine/src/ardia/win/webui/webui_updates.cc#class InstallerSink",
+    "scripts/windows/engine/src/ardia/win/webui/webui_update_policy.h#BeginInstall",
+    "scripts/windows/engine/tests/webui_update_policy_test.cc#TestStateMachine",
+    "scripts/windows/engine/src/ardia/win/webui/webui_update_policy.h#ScratchDataDirectory",
+    "scripts/windows/engine/tests/webui_update_policy_test.cc#RunHostileCorpus",
+    "apps/browser/src/hostileInputs.test.mjs#windows webui native update policy keeps every hostile input and call argument away",
+    "scripts/windows/engine/src/ardia/win/webui/webui_update_policy.h#HeldInstallerLetsItRun"
+   ],
+   "detected": false
+  },
+  {
+   "id": "windows-webui-updates:calls",
+   "source": "frame",
+   "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaUpdates.installKind, status, check, update, claimOutcome and restart run only for the live trusted chrome://ardia/ shell document; every call goes through the pure CheckUpdateCall in webui_update_policy.h before it reaches the service: an args value that is present but not a list is refused, installKind, status, check and restart take no arguments, update takes one whole build number from 1 to 2^53-1 (BuildArgument), starts only when it is the build the last verified check offered and the copy is installed (BeginDownload), and says whether this call started the run, so only the window that started it records the consent period, claimOutcome takes one whole run number (RunArgument) and answers with the outcome it consumed, so a window counts and shows only that, anything else is refused with an error; the renderer reads every reply through readEngineStatus and readCheckAnswer in apps/desktop/src/platform/win/hostUpdates.ts, which keep only known phases and kinds, map any reason outside the engine's own set to other, drop an offer unless it is newer than the running build, versions matching ^[0-9][0-9A-Za-z.+-]{0,63}$, safe integer builds above the running build and sizes up to 1 GiB, and messages of at most 200 characters without control characters; apps/browser/src/hostileInputs.test.mjs compiles webui_update_policy_test and sends every shared hostile value, after the same JSON round trip the bridge makes, as each call's only argument, beside a second argument and as the whole args value, asserting that only whole numbers in range ever pass and that none but the valid controls reach BeginDownload or ClaimOutcome; apps/desktop/src/platform/win/hostUpdates.test.mjs runs the shared hostile list through both readers and the saved preferences",
+   "checks": [
+    "scripts/windows/engine/src/ardia/win/webui/webui_update_policy.h#BeginDownload",
+    "apps/desktop/src/platform/win/hostUpdates.ts#readEngineStatus",
+    "apps/desktop/src/platform/win/hostUpdates.ts#readCheckAnswer",
+    "apps/desktop/src/platform/win/hostUpdates.test.mjs#windows webui update replies refuse every hostile input",
+    "scripts/windows/engine/src/ardia/win/webui/webui_update_policy.h#CheckUpdateCall",
+    "scripts/windows/engine/src/ardia/win/webui/webui_updates.cc#policy::CheckUpdateCall",
+    "scripts/windows/engine/tests/webui_update_policy_test.cc#CheckHostileCall",
+    "apps/browser/src/hostileInputs.test.mjs#windows webui native update policy keeps every hostile input and call argument away"
    ],
    "detected": false
   },
@@ -1858,7 +1920,7 @@
   {
    "id": "windows-webui-documents:documentStore",
    "source": "frame",
-   "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaShell.readDocument, writeDocument, saveDocument and removeDocument run only for the live trusted chrome://ardia/ shell document; document names must pass ValidWindowsDocumentName (1-200 [A-Za-z0-9._-], matching ardia-shell-migration's DOCUMENT_NAME_LIMIT, no path separators, colons/ADS, control chars, .., leading/trailing dots or spaces, or Windows reserved device names CON/PRN/AUX/NUL/COM0-9/LPT0-9) and must not be reserved (session.json, live.json, live.canonical.json, rnw-migration.json, rnw-migration.lock, launch-starts.txt, launch-starts.txt.tmp, window-placement.txt, case-insensitive), and writes and removes also refuse the engine-owned launch-guard.json in any case (WritableWindowsDocumentName) while reads and bootstrap.documents keep it for launch telemetry; writes are capped at WindowsDocumentLimit (8 MiB, 48 MiB for sync-state.nns in any letter case) and reads at kWindowsDocumentReadLimit (64 MiB, the migrator's DOCUMENT_LIMIT); reads, writes and deletes open the destination directory and target handles with FILE_FLAG_OPEN_REPARSE_POINT, refuse directories/devices/reparse points and multiply-linked files (nNumberOfLinks != 1), verify final-path direct-child containment inside the app-data directory's canonical final path (the root is opened following reparse points, so the root itself may be a junction; every document file is opened with FILE_FLAG_OPEN_REPARSE_POINT) via GetFinalPathNameByHandleW and IsDirectChildOfWinDirectory, validate UTF-8 on reads (base::IsStringUTF8), stage writes through a CREATE_NEW handle committed handle-relatively via NtSetInformationFile (FileRenameInformationEx fallback FileRenameInformation with held RootDirectory handle and leaf name only) and delete via FileDispositionInformationEx/FileDispositionInfo on the open handle; bootstrap.documents enumerates only eligible non-reparse single-link valid-UTF-8 regular files bounded by count and total bytes (BootstrapDocumentFits, checked against the listed size before a file is opened and again after the read) and reaches the page through JSON.parse (BootstrapAssignmentScript), so a document named __proto__ stays an own property; ReadAsset verifies regular single-link non-reparse disk files and strict final-path containment inside AssetDirectory() via IsStrictlyWithinWinDirectory; scripts/windows/webui-pilot/bridge.ps1 runs the shared hostile corpus against the document sinks, requiring the exact native ERR_DOCUMENT_REQUEST/ERR_DOCUMENT_NAME code for refused values (a synchronous throw, transport error or timeout fails) and a confined write/read/remove round trip for names the policy accepts (prototype keys, \"1\", \"true\") with Object.prototype unchanged, plus reparse-point escape checks (ERR_DOCUMENT_READ/WRITE/REMOVE) and a reload proving a __proto__ document survives in bootstrap.documents, scripts/windows/webui-pilot/junction.ps1 proves junction escapes out of ardia-ui are refused with a CSP-allowed image control and sends the shared hostile corpus raw and URL-encoded through chrome://ardia/ checking each request against ArdiaShell.testAssetSink (counted only in a test instance): a same-origin request moves exactly one of served/refused/outsideRoot/unreadable and never served or outsideRoot, a cross-origin one moves none, and values the URL parser resolves to the shell page are counted and not sent, final paths are compared case-sensitively after the drive letter or UNC share (WinFinalPathStartsWith), and scripts/windows/engine/tests/webui_policy_test.cc unit-tests the pure validators The engine's own live.canonical.json and window-placement.txt go through ReadDocumentFile and WriteDocumentFile, the same handle-checked I/O without the reserved-name refusal, and are never named by a page request.",
+   "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaShell.readDocument, writeDocument, saveDocument and removeDocument run only for the live trusted chrome://ardia/ shell document; document names must pass ValidWindowsDocumentName (1-200 [A-Za-z0-9._-], matching ardia-shell-migration's DOCUMENT_NAME_LIMIT, no path separators, colons/ADS, control chars, .., leading/trailing dots or spaces, or Windows reserved device names CON/PRN/AUX/NUL/COM0-9/LPT0-9) and must not be reserved (session.json, live.json, live.canonical.json, rnw-migration.json, rnw-migration.lock, launch-starts.txt, launch-starts.txt.tmp, window-placement.txt, case-insensitive), and writes and removes also refuse the engine-owned launch-guard.json, shell-recovery.json and shell-recovery-previous.json in any case (WritableWindowsDocumentName) while reads and bootstrap.documents keep them for launch telemetry; writes are capped at WindowsDocumentLimit (8 MiB, 48 MiB for sync-state.nns in any letter case) and reads at kWindowsDocumentReadLimit (64 MiB, the migrator's DOCUMENT_LIMIT); reads, writes and deletes open the destination directory and target handles with FILE_FLAG_OPEN_REPARSE_POINT, refuse directories/devices/reparse points and multiply-linked files (nNumberOfLinks != 1), verify final-path direct-child containment inside the app-data directory's canonical final path (the root is opened following reparse points, so the root itself may be a junction; every document file is opened with FILE_FLAG_OPEN_REPARSE_POINT) via GetFinalPathNameByHandleW and IsDirectChildOfWinDirectory, validate UTF-8 on reads (base::IsStringUTF8), stage writes through a CREATE_NEW handle committed handle-relatively via NtSetInformationFile (FileRenameInformationEx fallback FileRenameInformation with held RootDirectory handle and leaf name only) and delete via FileDispositionInformationEx/FileDispositionInfo on the open handle; bootstrap.documents enumerates only eligible non-reparse single-link valid-UTF-8 regular files bounded by count and total bytes (BootstrapDocumentFits, checked against the listed size before a file is opened and again after the read) and reaches the page through JSON.parse (BootstrapAssignmentScript), so a document named __proto__ stays an own property; ReadAsset verifies regular single-link non-reparse disk files and strict final-path containment inside AssetDirectory() via IsStrictlyWithinWinDirectory; scripts/windows/webui-pilot/bridge.ps1 runs the shared hostile corpus against the document sinks, requiring the exact native ERR_DOCUMENT_REQUEST/ERR_DOCUMENT_NAME code for refused values (a synchronous throw, transport error or timeout fails) and a confined write/read/remove round trip for names the policy accepts (prototype keys, \"1\", \"true\") with Object.prototype unchanged, plus reparse-point escape checks (ERR_DOCUMENT_READ/WRITE/REMOVE) and a reload proving a __proto__ document survives in bootstrap.documents, scripts/windows/webui-pilot/junction.ps1 proves junction escapes out of ardia-ui are refused with a CSP-allowed image control and sends the shared hostile corpus raw and URL-encoded through chrome://ardia/ checking each request against ArdiaShell.testAssetSink (counted only in a test instance): a same-origin request moves exactly one of served/refused/outsideRoot/unreadable and never served or outsideRoot, a cross-origin one moves none, and values the URL parser resolves to the shell page are counted and not sent, final paths are compared case-sensitively after the drive letter or UNC share (WinFinalPathStartsWith), and scripts/windows/engine/tests/webui_policy_test.cc unit-tests the pure validators The engine's own live.canonical.json and window-placement.txt go through ReadDocumentFile and WriteDocumentFile, the same handle-checked I/O without the reserved-name refusal, and are never named by a page request.",
    "checks": [
     "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#ValidWindowsDocumentName",
     "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#ReservedWindowsDocumentName",
@@ -1939,7 +2001,6 @@
    "source": "native",
    "guard": "Background renderer efficiency counts kept by the Windows engine layer itself, asked for and kept per consent epoch; only whole positive numbers under the seven known keys are added, anything else counts as 0",
    "checks": [
-    "packages/expo-windows/src/engine/rendererEfficiency.ts",
     "scripts/windows/engine/src/ardia/win/renderer_efficiency.cc"
    ],
    "detected": false
@@ -2133,6 +2194,557 @@
     "scripts/windows/engine/src/ardia/win/webui/webui_windows.cc#DeliverOpenUrls",
     "scripts/windows/engine/src/ardia/win/webui/webui_host_calls.cc#OpenUrlsListening",
     "scripts/windows/engine/tests/webui_window_policy_test.cc#TestHostileSinks"
+   ],
+   "detected": false
+  },
+  {
+   "id": "socket-native:tabs.input",
+   "source": "socket",
+   "guard": "tabs.input params pass the method's closed schema, then checkedInput (tabInput.ts): one of eight actions with only that action's fields (clickCount on down and up only), finite coordinates within 0-100000, left or middle buttons (a right click or control-click would open Ardia's own menu), known modifiers (no control or meta on the wheel, which zooms), wheel deltas within ±10000, a key that is one printable character or a key name other than ContextMenu (or Shift+F10) and a code that is a key code, and well-formed NUL-free text of at most 4096 units; private and ineligible tabs are refused by tabOf. socketTabTools.test.mjs sends the shared hostile corpus over the socket in every field and checks what reaches the engine call (the sink): only checked shapes, or nothing; tabInput.test.mjs and hostileInputs.test.mjs run it through checkedInput directly. The engine checks again on its own (Build): the same per-action field list (Takes), private and crashed tabs, pages that aren't web pages (TakesInput), points outside the viewport (PointOf), keys it can't map or that open the context menu, NUL in key, code or text (KeyOf, Text), held-button transitions (a second down, an unmatched up, a click on a held button, and a down, up, click or dblclick while another is unanswered, which consumes its prime token and answers busy), present optional fields of the wrong type or value (button, clickCount, deltaX, deltaY, code, prime, token), more than four modifiers, coordinates above 100000, a token on a prime, and a send's prime token, which it spends before any other check so a refused send never holds one of its 16 slots, and a token binding the send to the documents prime saw (Dispatch); keys go with skip_if_unhandled (KeyEvent). packages/ardiacore/scripts/tab-tools-check.mjs exercises live, through the socket and one call at a time: the NUL refusals, out-of-viewport points, right clicks, the sequential held-button transitions (an unmatched up, a second down, a click on a held button), trusted delivery on a hidden background tab and the absence of any activation. No test sends overlapping presses, so the busy answer is unexercised. The engine's own copies of the field, NUL and context-menu checks sit behind the socket guard, so the corpus and the live run reach them only where the guard lets a value through",
+   "checks": [
+    "apps/browser/src/state/automation/tabInput.ts#checkedInput",
+    "apps/browser/src/state/automation/tabInput.ts#isKeyName",
+    "engine/ardiacore/src/ardia/core/ac_tab_input.cc#Dispatch",
+    "engine/ardiacore/src/ardia/core/ac_tab_input_events.cc#KeyEvent",
+    "engine/ardiacore/src/ardia/core/ac_tab_input_events.cc#KeyOf",
+    "engine/ardiacore/src/ardia/core/ac_tab_input_events.cc#PointOf",
+    "engine/ardiacore/src/ardia/core/ac_tab_input_events.cc#Takes",
+    "engine/ardiacore/src/ardia/core/ac_tab_input_events.cc#TakesInput",
+    "engine/ardiacore/src/ardia/core/ac_tab_input_events.cc#Text"
+   ],
+   "detected": false
+  },
+  {
+   "id": "page-diagnostics:tabs.diagnostics",
+   "source": "page",
+   "guard": "The engine records console messages and network requests only from the primary page of tabs that aren't private and that DevTools may inspect (Recordable), into fixed rings of 200 console and 250 network entries per tab freed with the tab, messages clipped to 1000 UTF-16 units and addresses cut to origin and path with no user, password, query or fragment (DiagnosticsUrl); no headers or bodies are kept. Before the socket, redactText and redactUrl replace tokens, keys, passwords, JWTs, private keys and secret-looking path segments with [redacted]",
+   "checks": [
+    "engine/ardiacore/src/ardia/core/ac_tab_diagnostics.cc#Recordable",
+    "engine/ardiacore/src/ardia/core/ac_tab_diagnostics.cc#DiagnosticsUrl",
+    "apps/browser/src/state/automation/tabDiagnostics.ts#redactText",
+    "apps/browser/src/state/automation/tabDiagnostics.ts#redactUrl"
+   ],
+   "detected": false
+  },
+  {
+   "id": "desktop-pager-frames:onPagerFrame",
+   "source": "native",
+   "guard": "Desktop WebUI: ArdiaShell onPagerFrame events from the engine's pager spring reach a pager only through readPagerFrame. It refuses a frame unless key is a 1-256 [A-Za-z0-9_.:-] token, phase is idle, tracking, holding or settling, count is a safe integer of at least 1, selected a safe integer below count, sequence and selectionSequence (or selection_sequence) safe integers of at least 0, frame a safe integer of at least 1, and position finite within 2^20; velocity may be omitted (read as 0) but otherwise must be finite within 2^10; profileId (or profile_id) may be omitted or null, otherwise it must be a 1-256 token; flags count only when exactly true. Pager.applyNativeFrame then drops, without moving its frame watermark, a frame whose number does not exceed the last accepted one, any frame while a local drag is tracking, a frame whose count differs from the pager's, and a frame naming an unknown profileId; a frame whose profileId sits in a different slot than selected is dropped too, and if native owned the motion the JS spring takes it over; after any JS takeover (a JS command, Reduce Motion, a reorder, a diverged profileId or the 250 ms watchdog) every frame is dropped until a fully valid frame marks a new gesture began. apps/desktop/src/pagerMotion.test.mjs sends the shared hostile list as each of the ten fields and as the whole payload, checks at the pager's snapshot that nothing moves, and then sends a valid control that does.",
+   "checks": [
+    "apps/desktop/src/shims/web/motion/pagerFrames.ts#readPagerFrame",
+    "apps/desktop/src/shims/web/motion/pager.ts#applyNativeFrame",
+    "apps/desktop/src/pagerMotion.test.mjs#native pager frames refuse every hostile input and still pass a valid control"
+   ],
+   "detected": false
+  },
+  {
+   "id": "desktop-shell:extensions.configure#sites",
+   "source": "frame",
+   "guard": "Site access changes from the Linux and Windows shell (extensions.configure grantSite and revokeSite): Linux's Configuration takes them only as non-empty strings of at most 2,048 bytes beside known option keys (Windows forwards the shell's JSON as is); the engine refuses a site key that isn't text and checks the site before changing anything (SiteProblem: the extension must be one the user may change, the site must parse as an http(s) or file URLPattern whose path is /*, must not cover every site, and must overlap a host the extension requires or an optional host the user already approved), so a refused request leaves site access as it was; a grant keeps the pattern's own HTTP(S) scheme mask (RuntimeSitePattern) and a remove goes through Chromium's ScriptingPermissionsModifier::RemoveHostPermissions. The shell's own Add Site sheet sends only what extensionSitePattern returns: an http(s) host pattern or nothing",
+   "checks": [
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_extensions.cc#Configuration",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_extensions.cc#kMaxSitePatternLength",
+    "engine/chromium/src/chrome/browser/ardia/ac_extensions.cc#ac_extensions_configure",
+    "engine/chromium/src/chrome/browser/ardia/ac_extension_sites.cc#SiteProblem",
+    "engine/chromium/src/chrome/browser/ardia/ac_extension_sites.cc#RuntimeSitePattern",
+    "engine/chromium/src/chrome/browser/ardia/ac_extension_sites.cc#ChangeSite",
+    "apps/browser/src/state/extensions/sitePatterns.ts#extensionSitePattern",
+    "engine/ardiacore-linux/tests/test_extension_contract.py#ARDIA_HOSTILE",
+    "apps/browser/src/hostileInputs.test.mjs#extensionSitePattern"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-bridge:ardiaRequest",
+   "source": "frame",
+   "guard": "Mac WebUI host (dev builds only, --ardia-shell=webui; official builds compile only ac_mac_webui_release.mm): ardiaRequest is taken only from the shell WebContents' live primary main frame whose committed origin is chrome://ardia/, by the handler bound to that document's generation (Trusted, OwnsHandler); requests of the wrong shape or with an id over 256 bytes are dropped; tab URLs pass AllowedPageUrl. Tabs Chromium opens on its own (target=_blank, window.open) are offered to this window's shell as ArdiaTabs unclaimed and listed by ArdiaTabs.unclaimedTabs only after it asks; tab.create checks adoptId before anything else: a present adoptId that is not a string of exactly tab:<1..INT_MAX> is refused (ClassifyAdoptField, ParseAdoptId), a reclaim of a key already bound in the same profile succeeds only without adoptId or with that binding's own id, and an adoption needs a tab this host offered, in the requested profile, still in one of this window's tab strips and not bound (CheckAdoption, PlanCreate); a move to another profile opens the replacement first, then unbinds the old tab and deletes it at once (DetachAndDeleteWebContentsAt, as on Linux), so nothing is left unbound; an offer remembers whether its tab was active and is dropped when its tab leaves the tab strip (OfferBook). ArdiaShell.openWindow opens a window only for an id of 1-256 [A-Za-z0-9_:.-], a settings or import window only under its own id and no browser window under those ids, a page profile only of 1-128 [A-Za-z0-9_-] starting with a letter (or default), and refuses private windows (incognito or a privateWindow seed) outright until the Mac WebUI shell has off-the-record pages, all before a window opens or an open one is reused (CheckWindowRequest); session.write takes only bounded base and session objects (ValidLinuxSession) and three-way merges them into what is on disk (MergeLinuxSession, shared with Linux) before any window hears the result; a session file on disk over 8 MiB, unparseable, or past the merge's node and depth budget is moved, on the same file sequence that serves bootstrap, session.read and session.write, to a session-backup-oversized-<ms>-<n>.json name that is not taken yet, so it never becomes a base; a file that cannot be moved aside refuses every save instead of being overwritten (SessionFileFor, SessionLoadFor). While a shortcut is recorded, only this window's command and control key presses go to its own shell renderer (RecordingRouteFor). A popover surface's chrome://ardia/?popover=<id> page gets only PopoverBridge, which re-checks its own primary main frame and origin and accepts only shell.popover.close (its own id), shell.popover.props (its own props, read-only) and shell.popover.message, whose message is refused above 64 KiB (MessageFits); the host pushes props updates back only through that same re-checked bridge as ArdiaPopover props (PopoverBridge::Deliver); nothing else reaches the host. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_bridge.cc#ShellBridge::Request",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_bridge.cc#PopoverBridge::Trusted",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_bridge.cc#PopoverBridge::Request",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#ShellHostView::Trusted",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#AllowedPageUrl",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#bridge_documents",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#ParseAdoptId",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#CheckAdoption",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#ListUnclaimedTabs",
+    "scripts/mac/webui-engine/tests/shell_policy_test.cc#only_an_offered_unbound_tab_of_the_same_profile_is_adopted",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#ClassifyAdoptField",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#PlanCreate",
+    "scripts/mac/webui-engine/tests/shell_policy_test.cc#create_plans_check_the_adopt_id_before_reclaim_or_create",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#OfferBook",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#CheckWindowRequest",
+    "scripts/mac/webui-engine/tests/shell_policy_test.cc#window_requests_keep_utility_ids_to_their_kind",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#window_requests",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#SessionFileFor",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#RecordingRouteFor",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#SessionLoadFor"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-dialogs:calls",
+   "source": "frame",
+   "guard": "Mac WebUI host (dev builds only): ArdiaShell.beginDialog and ArdiaShell.cancelDialog come only through the trusted shell bridge for the live renderer generation; each takes exactly one argument. beginDialog parses its request with the pure Parse in ac_mac_dialog_policy.h: a dialogId of 16-96 [A-Za-z0-9:_-], a kind of confirm or prompt, an options object whose title is text of at most 4,096 bytes, message and value at most 16,384, button titles at most 1,024, placeholder and suppression at most 4,096, destructive only a boolean, and a windowId, when present, equal to this window's; anything else is refused with ERR_DIALOG. At most 16 dialogs wait per window, one sheet shows at a time in arrival order, a duplicate id is refused, and while a window close drains new dialogs are refused and open ones are cancelled (Queue). Shown text has control characters replaced (Displayable, ButtonTitle); a prompt's answer is trimmed and capped (Resolve). The sheet is a non-modal NSAlert attached to the host window; a background instance or a window without a native window never shows it, logs it and resolves it as cancelled. shell.dialogResolved carries the dialog id, window id and the renderer generation that asked, so a reloaded shell drops it. The shared corpus runs through Parse, Resolve and the queue in tests/hostile_corpus_test.cc dialog_guards, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_dialog_policy.h#Parse",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_dialog_policy.h#ValidDialogId",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_dialog_policy.h#Resolve",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_dialog_policy.h#Queue",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_dialog.mm#DialogSheets::Begin",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_dialog.mm#DialogSheets::Present",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_lifecycle.mm#ShellHostView::DialogCall",
+    "scripts/mac/webui-engine/tests/dialog_policy_test.cc#malformed_requests_are_refused",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#dialog_guards"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-window:lifecycle",
+   "source": "frame",
+   "guard": "Mac WebUI host (dev builds only): window close, quit and window-control calls come only through the trusted shell bridge. requestWindowClose, beginWindowCloseDrain, acknowledgeWindowClose and rejectWindowClose follow the CloseBook state machine in ac_mac_window_policy.h: a close identity is exactly windowId, rendererGeneration and closeGeneration (decimal, no leading zero, at most 20 digits) for this window and its live renderer; a drain needs the current request, an acknowledgment adds only a whole non-negative watermark and an optional departure of exactly base and session (ValidDeparture, ValidAcknowledgeShape), and a stale or replayed identity is refused with ERR_WINDOW_CLOSE_STALE; a departure's session goes through the same size-checked atomic session write as session.write. Quit waits for every live window to acknowledge, aborts if one rejects and exits after 10 seconds; each quit has its own generation, so an acknowledgment for a quit that already ended or expired never exits again and cancels its close instead (QuitBarrier). A newer quit cancels and reissues a window's in-flight close rather than retagging it, so an acknowledgment for the old identity stays stale (PlanCloseRequest). Only a quit the shell confirmed cancels downloads before it exits: only the downloads ArdiaShell.downloadsInProgress reported to that same window and renderer, counted with Chromium's shutdown filter (BlocksShutdown: in progress, not transient, dangerous or insecure, so the count is exactly the authorized set), bound to the first confirm that renderer opens afterwards (the download prompt) and dropped only when that dialog is declined, taken once by its quit and handed to the exit by value (DownloadPermission), and only when no tab in any browser window still needs its beforeunload handler (UnloadController::TabsNeedBeforeUnloadFired, as Chromium checks), so a download that started during the drain is left for Chromium to ask about (DownloadsToCancel). Window ids are 1-128 of [A-Za-z0-9_-]; setWindowTitle takes text of at most 1,024 bytes with control characters replaced (WindowTitle); setWindowFrame takes four finite numbers within +/-1e5, a positive size raised to the 720 x 460 minimum, on some screen, or answers refused (FrameFrom, OnAnyScreen); setAppearance takes only auto, light or dark; watchSidebarEdge takes a valid window id, a flag and optional finite hold, side and press flags (EdgeWatch). A background instance never toggles full screen, restores it or minimizes. The shared corpus runs through these guards in tests/hostile_corpus_test.cc window_lifecycle_guards, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_policy.h#CloseBook",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_policy.h#ValidDeparture",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_policy.h#QuitBarrier",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_policy.h#PlanCloseRequest",
+    "scripts/mac/webui-engine/tests/window_policy_test.cc#a_retried_quit_reissues_the_close_so_the_expired_acknowledgment_stays_stale",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_policy.h#DownloadsToCancel",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_policy.h#DownloadPermission",
+    "scripts/mac/webui-engine/tests/window_policy_test.cc#declining_the_download_prompt_leaves_nothing_for_a_later_quit_to_cancel",
+    "scripts/mac/webui-engine/tests/window_policy_test.cc#a_download_started_during_the_drain_is_left_for_chromium_to_ask_about",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_policy.h#FrameFrom",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_policy.h#WindowTitle",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_policy.h#EdgeWatch",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_lifecycle.mm#ShellHostView::AcknowledgeWindowClose",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_lifecycle.mm#ShellHostView::WindowCall",
+    "scripts/mac/webui-engine/tests/window_policy_test.cc#a_close_runs_request_drain_acknowledge_and_closing",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#window_lifecycle_guards"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-glass:regions",
+   "source": "frame",
+   "guard": "Mac WebUI host: shell.glassRegions and shell.backdropRegions come only through the trusted shell bridge; at most 64 regions; ids are 1-128 of [A-Za-z0-9._:-] and unique; rects must be finite, non-negative and within +/-1e6, radii finite (scaled down like CSS), opacity finite and clamped to 0-1, blur 0-200, layer, material and appearance from fixed lists, a tint only as #rgb, #rrggbb, #rrggbbaa, rgb() or rgba() with channels 0-255 and alpha 0-1, and a group id like a region id, else the region is refused (Lay, ValidRect, SanitizedRadii, ColorFrom, ValidGroup, AppearanceNamed, RegionOf); a region over a page that a page does not wholly cover also gets behind-window slices for exactly the uncovered rectangles, each masked by the whole region's rounded outline in its own coordinates so the corners stay exact across the seam (MaskFor), and its id is accepted only when every planned slice mounted (Lay, KeepAttached, MountedGlass); a group only joins an NSGlassEffectContainerView on macOS 26 when the container takes a content view, else its regions mount alone (GlassGroupsAvailable, Grouped); a generation is echoed as ArdiaGlass presented only when it is a whole number in 0..INT_MAX (PresentableGeneration); a backdrop region may carry a native theme only as at most 8 layers of fill, gradient or grain, colours as five finite numbers clamped to 0-1 (the last picks sRGB or Display P3), gradient points within +/-64 units with at most 40 stops, a grain texture from a fixed list and a tile of at most 1024 pt and 4096 px, and corner radii 0-512, else the theme is dropped (ThemeOf, ColorFrom, GradientPoint, ThemeRadius, GrainPoints, LayerCountFits, StopCountFits, KnownTexture, GrainImagePixels); themes are laid out only at the frames of backdrop placements Lay accepted, matched to their theme by an id that counts accepted backdrops only, never at the raw rectangles (GlassRegions::LayOutThemes, BackdropId, BackdropIndex); tests/hostile_corpus_test.cc native_backdrop_theme runs the shared corpus through every one of these; tests/glass_layout_test.cc hostile_sinks runs NaN, infinities, 1e20, 1e308 and hostile ids through the layout and checks every placement is finite and bounded. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass_layout.h#Lay",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass_layout.h#ValidRect",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass_layout.h#SanitizedRadii",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass_layout.h#PresentableGeneration",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass.mm#RegionOf",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass.mm#ApplyBackdrops",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass.mm#ThemeOf",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass.mm#GlassRegions::LayOutThemes",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_backdrop_theme.h#KnownTexture",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_backdrop_theme.h#GrainImagePixels",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_backdrop_theme.h#ColorFrom",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_backdrop_theme.h#GradientPoint",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_backdrop_theme.h#BackdropIndex",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#native_backdrop_theme",
+    "scripts/mac/webui-engine/tests/backdrop_theme_test.cc#textures_and_cells_are_bounded",
+    "scripts/mac/webui-engine/tests/glass_layout_test.cc#hostile_sinks",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#glass_names_and_ids",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#glass_geometry",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass_layout.h#ColorFrom",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass_layout.h#ValidGroup",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#glass_tints_groups_and_appearance",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass_layout.h#KeepAttached",
+    "scripts/mac/webui-engine/tests/glass_layout_test.cc#a_region_straddling_the_sidebar_and_a_page_is_glass_on_both_sides"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-popover:calls",
+   "source": "frame",
+   "guard": "Mac WebUI host: shell.popover.* is advertised and shell.popover.open is served because apps/desktop ships the popover renderer (kPopoverRendererShipped; apps/desktop/src/popoverSurface.ts popoverBoot boots PopoverRoot only for a popover surface with a valid id and route, exactly one ?popover= naming that id and props that are a plain object or absent, and a popover page that fails this stops with an error instead of loading the shell (entryKind); and its routes come from a fixed table); shell.popover.open, shell.popover.update and shell.popover.close come only through the trusted shell bridge for this window's windowId; ids are 1-128 of [A-Za-z0-9_-], at most 8 popovers are open, a content route is 1-128 of [A-Za-z0-9/_.-] with no .. or //, close reasons come from a fixed list; props must be an object of at most 256 KiB at open and on update, and props or a message that fails to serialize is refused (PropsFit, MessageFits, PropsAccepted); a message from the Downloads panel is acted on only when it names a row the shell sent and an action that row offers (apps/desktop/src/nativeDownloads.ts downloadsMessage); rects must be finite within +/-1e5 and are mapped with a sane zoom and clamped to the anchor screen's visible frame, or to the window unless beyondWindow, which an update keeps from open (ValidId, ValidRoute, WindowToScreen, ClampToScreen, ResolveBeyondWindow); a panel never activates the app and is never shown in background mode; tests/popover_policy_test.cc hostile_sinks runs non-finite and huge geometry and hostile ids and routes through each guard. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_popover_policy.h#ValidRoute",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_popover_policy.h#ClampToScreen",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_popover_policy.h#ResolveBeyondWindow",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_popover.mm#PopoverHost::Open",
+    "scripts/mac/webui-engine/tests/popover_policy_test.cc#hostile_sinks",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#popover_guards",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_popover_policy.h#kPopoverRendererShipped",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_popover_policy.h#MessageFits",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_popover_policy.h#PropsFit",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_bridge.cc#PopoverBridge::Deliver",
+    "apps/desktop/src/popoverSurface.ts#popoverBoot",
+    "apps/desktop/src/nativeDownloads.ts#downloadsMessage"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-menus:menus",
+   "source": "frame",
+   "guard": "Mac WebUI host: ArdiaShell.setMainMenu, ArdiaShell.setMenuState, ArdiaShell.setMenuBookmarks, ArdiaShell.setShortcutRecording and shell.showContextMenu come only through the trusted shell bridge; each window's menu, state and bookmarks are kept apart by its window id and only the key window's are shown: a window that becomes key owns the bar even before it sends a menu and shows a command-free system bar until it does (MinimalMainMenu), menu commands go to the window that resolves from the key window or its popover's parent (KeyMenuWindowId), and a window that isn't key may claim an unowned bar only while no Ardia window is key, so a background window never rewrites it (MenuOwner, ClaimsBar, SetWindowMainMenu); roles come from a fixed list that includes AppKit's performClose:; setShortcutRecording takes exactly one boolean and only stops main-menu key equivalents while that window is key, and is cleared on reload, resign key and close (KeySuppression, MenuKeysSuppressed); a menu is at most 400 items, not counting the bar itself, and 4 deep, titles at most 200 bytes without control characters, commands at most 96 of [A-Za-z0-9._:-], arguments at most 2 KiB, keys from a fixed set, modifiers from four bits, roles from a fixed list, state ids at most 2145 bytes without control characters, and any problem refuses the whole menu (ParseMenu, Validate); setMenuState keeps at most 4096 disabled, checked and title entries each, dropping ids with control characters or titles that fail the title rule (ParseMenuState, AddStateEntry, AddStateTitle); setMenuBookmarks reads at most 20000 nodes 9 deep, cleans titles of control characters and cuts them to 200 bytes on a UTF-8 boundary, skips bookmarks whose id is empty, has control characters or passes 2 KiB, and builds at most 2000 items 8 folders deep into the one Bookmarks menu setMainMenu marked (ParseMenuBookmarks, CleanTitle, BookmarkMenuItems); a bookmark becomes only an openBookmark, addFolderToSidebar or restoreArcFolders command; only setMainMenu may install the Services, Window and Help menus (InstallsAppMenu); a context menu point must be finite and is clamped to +/-1e6 before it becomes an integer (ClampToInt); in background mode the menu is logged, never shown; tests/menu_window_test.cc hostile_sinks checks each guard. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_menu_model.h#Validate",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_menu_model.h#InstallsAppMenu",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_menu.mm#ParseMenu",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#ShowShellContextMenu",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_glass_layout.h#ClampToInt",
+    "scripts/mac/webui-engine/tests/menu_window_test.cc#hostile_sinks",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#menu_construction",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_menu.mm#ParseMenuState",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_menu.mm#ParseMenuBookmarks",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_menu_state.h#CleanTitle",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_menu_state.h#BookmarkMenuItems",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#menu_state_and_bookmarks",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_menu_state.h#MenuOwner",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_menu_state.h#KeySuppression",
+    "scripts/mac/webui-engine/tests/menu_window_test.cc#shortcut_recording_suppresses_menu_keys_only_in_its_key_window"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-window:trafficLights",
+   "source": "frame",
+   "guard": "Mac WebUI host: shell.trafficLights and ArdiaShell.captionDoubleClick come only through the trusted shell bridge; captionDoubleClick takes no arguments and only zooms or minimizes this window as the AppleActionOnDoubleClick default says, doing nothing in background mode (CaptionActionFor); a centre must be finite and is clamped so the whole three-button group, zoom button included, stays inside the window (LightsFrom), otherwise the call is refused; tests/menu_window_test.cc hostile_sinks runs NaN, infinities and 1e20. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_layout.h#LightsFrom",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#SetTrafficLights",
+    "scripts/mac/webui-engine/tests/menu_window_test.cc#hostile_sinks",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#window_guards",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_window_layout.h#CaptionActionFor",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#CaptionDoubleClick"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-launch:environment",
+   "source": "other-app",
+   "guard": "Mac WebUI host: the launch environment (ARDIA_SHELL, ARDIA_BACKGROUND, ARDIA_DATA_DIR) the React Native app or open --env hands over is read only for exact values: the shell starts only for exactly webui and never in an official build (Decide), background mode only for exactly 1 or true (Background, ArdiaBackgroundValue), and a data directory longer than 4 KiB is ignored (ArdiaBuildLaunchArgs); tests/webui_policy_test.cc and tests/launch_args_test.cc hostile_sinks run NUL bytes, control characters, near misses and huge values. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_webui_policy.h#Decide",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_webui_policy.h#Background",
+    "scripts/mac/webui-engine/launcher/launch_args.h#ArdiaBuildLaunchArgs",
+    "scripts/mac/webui-engine/tests/webui_policy_test.cc#hostile_sinks",
+    "scripts/mac/webui-engine/tests/launch_args_test.cc#hostile_sinks",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#launch_environment"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-documents:documentStore",
+   "source": "frame",
+   "guard": "Mac WebUI host: session.read, session.write, ArdiaShell.readDocument, ArdiaShell.writeDocument, ArdiaShell.saveDocument and ArdiaShell.removeDocument come only through the trusted shell bridge; a document name is 1-200 of [A-Za-z0-9._-], never starts with a dot and is never session.json in any ASCII case, so a document call can't overwrite or delete the session on a case-insensitive volume (ValidDocumentName); document text is at most 8 MiB; a session is serialized and refused before any write when it is over 64 MiB, leaving the existing file untouched (SessionFits), and is read with the same limit; tests/shell_policy_test.cc covers both. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) also runs through ValidDocumentName in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#ValidDocumentName",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_policy.h#SessionFits",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_calls.mm#WriteSessionFile",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_calls.mm#ReadSessionFile",
+    "scripts/mac/webui-engine/tests/shell_policy_test.cc#session_json_is_reserved_in_every_ascii_case",
+    "scripts/mac/webui-engine/tests/shell_policy_test.cc#oversized_sessions_are_refused_before_writing",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#bridge_documents"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-share:picker",
+   "source": "frame",
+   "guard": "Mac WebUI host: ArdiaApp.share, ArdiaApp.shareText, ArdiaApp.shareVia, ArdiaApp.shareServices and ArdiaApp.openSharingSettings come only through the trusted shell bridge; a link is shared only when it is http(s) or file:/// with no control characters and at most 64 KiB (ClassifyUrl), and a file is shared only when it is an image this instance wrote and issued to the same window, still in this instance's own pid-and-nonce shared-images directory (one level, no . or .. segments, InsideDirectory, InstanceDirectoryName), taken from the issued registry once (IssuedFiles.Take) and a regular file by lstat, never a symlink; anything else under the shared-images root is refused; otherwise only an existing directory that is not a symlink is shared (ShareableFile, the Share Folder… directory); titles are at most 4 KiB (ValidTitle), text at most 1 MiB (ShareableText), a service name is 1-200 bytes without control characters and must match a macOS sharing service by title (ValidServiceName, ShareVia), shareVia takes only http(s) links, and an anchor is four finite coordinates within +/-1e6 with a non-negative size, scaled by a sanitized zoom (AnchorFrom, Scaled); in background mode the picker, the service and the sharing settings are logged to activation.log and never shown. Page context menus on pages this host binds get Share… items (SharesFor, the same rules as ArdiaCore's ContextMenuSharesFor) through a dev-only RenderViewContextMenuObserver hook; the observer keeps the frame's id and a copy of the menu params, never the menu, and its share goes to the shell as a page command event so cleanUrl still runs before ArdiaApp.share; a page's image is written to a temporary file of at most 64 MiB that is written only if the page's window, binding, claim and shell generation are still the ones that asked, and issued only if they still are once it is written (StillBound); the issued file carries that whole origin and is taken once, only by a share whose caller and target are that window and only while the origin is still current (StillCurrent); its slot in the 64-file cap is reserved before the image bytes are copied or written, and when every slot is in use the image is shared by link only (Reserve); a write whose window retired, whose tab binding was released, closed or rebound, or whose instance folder was never claimed is skipped, and the write's own reply is the only thing that deletes it and frees its slot (cancelled, InstanceClaimed, RetireBinding); it stops being shareable as soon as it is removed, evicted or its window retires (Revoke, RevokeUnheld), keeps its slot until the background unlink confirms it is gone, trying the unlink at most five times (the first try and four retries, 500 ms doubling) before giving the slot back and leaving the file for a later sweep (NextUnlinkStep); services with the same title are listed once natively and in the shell; a share whose service the user already chose keeps its file and delegate through a window retirement until the service reports it is done (KeepsServiceAfterRetire); and is deleted when its share ends or is cancelled or when that window's shell reloads or closes; each instance takes its flock(LOCK_EX | LOCK_NB) on .lock inside a hidden staging folder and only then renames it to <pid>-<nonce>, so its folder never appears unlocked, keeps that lock for the life of the process, and removes the staging folder if the claim fails (ClaimInstance); a leftover staging folder is deleted only when its process is gone and its lock is free (SweepsStaging); a later instance deletes only recognized <pid>-<nonce> directories whose .lock it can take, holding that lock until the delete finishes, or that have no lock and whose process is gone, and never other entries (SweepsInstance, ClaimAndSweep); the Share… items use browser-owned command ids 54100-54109, outside Chromium's custom and extension ranges (kShareCommandFirst); each share has its own delegate, source window, file and completion, and every picker and service callback (delegate lookup, choice, source window, completion) is matched by sender, and the picker and chosen service are kept whichever order AppKit calls them in (SameChoice); a reload or close closes that window's pickers; each context menu owns its observer until the menu itself is destroyed. tests/share_policy_test.cc hostile_sinks runs NaN, infinities, 1e20, 1e308 and hostile schemes and paths through each guard. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#ClassifyUrl",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#InsideDirectory",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#AnchorFrom",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#ValidServiceName",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#SharesFor",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share.mm#ShareableFile",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share.mm#ShareVia",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share.mm#PageMenuObserver",
+    "scripts/mac/webui-engine/tests/share_policy_test.cc#hostile_sinks",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#share_guards",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#IssuedFiles",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#InstanceDirectoryName",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#KeyedOwner",
+    "scripts/mac/webui-engine/tests/share_policy_test.cc#only_issued_images_are_taken_and_only_by_their_window",
+    "scripts/mac/webui-engine/tests/share_policy_test.cc#each_context_menu_owns_its_observer_until_it_is_destroyed",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#SweepsInstance",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share.mm#ClaimAndSweep",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share.mm#StillBound",
+    "scripts/mac/webui-engine/tests/share_policy_test.cc#taken_images_hold_their_slot_until_the_file_is_deleted",
+    "scripts/mac/webui-engine/tests/share_policy_test.cc#only_exited_instances_are_swept",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share.mm#ClaimInstance",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share.mm#StillCurrent",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#SameChoice",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#kShareCommandFirst",
+    "scripts/mac/webui-engine/tests/share_policy_test.cc#a_chosen_service_survives_either_callback_order",
+    "scripts/mac/webui-engine/tests/share_policy_test.cc#share_commands_sit_outside_chromiums_custom_ranges",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#NextUnlinkStep",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share_policy.h#SweepsStaging",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_share.mm#ScheduleUnlink",
+    "scripts/mac/webui-engine/tests/share_policy_test.cc#unlinks_retry_with_backoff_and_then_give_up",
+    "scripts/mac/webui-engine/tests/share_policy_test.cc#a_retired_window_cancels_its_reserved_and_issued_images_but_not_one_a_service_holds",
+    "scripts/mac/webui-engine/tests/share_policy_test.cc#leftover_staging_folders_are_reaped_only_for_dead_unlocked_processes"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-page:commands",
+   "source": "frame",
+   "guard": "Mac WebUI host (dev builds only): tab.command reaches a page only through the trusted shell bridge and only for a binding whose claim matches (ClaimedBinding); page commands answer ERR_PAGE_STALE_TARGET once the tab left this window (PageCommands::Live). Names are the shared WebViewHandle set (page_policy::Handles) and every argument is checked before a sink: find text is a string of at most 64 KiB with boolean forward and findNext; zoomStep is -1, 0 or 1 and goToOffset a whole number whose target index is checked in 64 bits against the history before Chromium sees it (ZoomStep, WholeNumber, HistoryTarget); runPageCommand is savePage, systemPrint or viewSource and showDevTools toggle, inspect or console (PageActionFor, DevToolsPanelFor); edit is one of the shared desktop edit actions (ParseEditAction); sleepIfHidden is 0 to 7 days (SleepSeconds); discard takes only an optional {unload} and, like setFrozen, refuses a visible, audible, playing, capturing or picture-in-picture page, one with a pending dialog or permission request, or one with a beforeunload handler, form interaction or user edits, and any page whose state is unknown (DecideDiscard, ProtectionReason, UnsavedInput); playback counts a playing media session or video even if it started before the tab was bound, and a discard's outcome is read through the binding that survives Chromium's contents replacement (SessionPlaying, DiscardSucceeded); downloadImage needs an http(s) or data URL and 1-512 pixels (ImageScheme, ImagePixels); downloadFavicon uses the shared favicon URL policy and drops the reply if the document changed; openBlockedPopup takes a decimal id the page's popup blocker still holds for the same document (PopupId, OpenBlockedPopup). evaluate runs only Ardia's own page operations, matched by length and SHA-256 against the Linux allowlist copied from engine/ardiacore-linux (MatchOperation); their arguments are parsed as JSON and re-encoded from bounded strings, booleans, finite numbers and fixed fonts (JavaScriptString, ReplaceArguments, LookArgument, PickerPoint, PickerSelectors), run in an isolated world on http(s) and file pages only, and a result over 4 MiB or from a replaced document is dropped; an operation whose promise posts its result (AwaitsResult) is awaited by a host-chosen integer token, polled by a host-written script every 20 ms, in a per-world map of at most 64 slots; each slot is registered before the operation starts, a result is written only into its own still-registered slot, and the slot is removed after 6 s or when the host forgets it, so a late promise can never recreate a cancelled slot (WrapAwaitedEvaluation, TakeEvaluation, ForgetEvaluation). Polls and replies are accepted only while the tab is still in this window's tab strips (EvaluationFrame, Live). Every evaluation belongs to the binding that asked: it settles exactly once, on its result, on a 5 s wall-clock timer, or when that binding is released, reclaimed, rebound or dropped, and late renderer replies are ignored (PendingEvaluation, NextEvaluationStep, CancelEvaluations). Print, save and DevTools are refused in background runs. sites.setZoom takes exactly {host, zoom} with a canonical host of at most 253 bytes without a port, controls or URL delimiters and a zoom of 0.25-5 (ZoomHostShape, ZoomFactorAllowed); sites.zoomLevels takes no fields. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through these guards in tests/hostile_corpus_test.cc page_guards, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#PageCommands::Handles(command)",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#ERR_PAGE_STALE_TARGET",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_commands.mm#PageCommands::Live",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#Handles",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#ZoomStep",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#WholeNumber",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#PageActionFor",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#DevToolsPanelFor",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#SleepSeconds",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#DecideDiscard",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#ProtectionReason",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#ImageScheme",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#ImagePixels",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#PopupId",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#MatchOperation",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#JavaScriptString",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#ReplaceArguments",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#LookArgument",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#PickerPoint",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#PickerSelectors",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#ZoomHostShape",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#ZoomFactorAllowed",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_commands.mm#EvaluationScript",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_commands.mm#ExecuteJavaScriptInIsolatedWorld",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_commands.mm#SiteZoomCall",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#evaluation_runs_only_known_operations",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#evaluation_arguments_are_rebuilt_not_forwarded",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#sleep_image_and_popup_arguments",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#site_zoom_hosts_and_factors",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#page_guards",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#HistoryTarget",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#UnsavedInput",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#AwaitsResult",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#WrapAwaitedEvaluation",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#TakeEvaluation",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#history_offsets_never_overflow",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#unsaved_input_and_pending_prompts_keep_a_tab_awake",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#promise_operations_are_awaited_by_token",
+    "scripts/mac/webui-engine/tests/awaited-evaluation.mjs#awaited evaluation ok",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#NextEvaluationStep",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#ForgetEvaluation",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#DiscardSucceeded",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#SessionPlaying",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_commands.mm#PageCommands::CancelEvaluations",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#evaluations_settle_once_and_follow_the_document",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#discard_succeeds_through_the_surviving_binding",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#media_sessions_that_play_protect_the_tab"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-shared-folders:directory",
+   "source": "frame",
+   "guard": "Mac WebUI host: ArdiaSharedFolders.read, ArdiaSharedFolders.apply, ArdiaSharedFolders.resolve, ArdiaSharedFolders.discard, ArdiaSharedFolders.create, ArdiaSharedFolders.watch and ArdiaSharedFolders.revealFolder come only through the trusted shell bridge and run off the UI thread; every root path is absolute, at most 4 KiB and without NUL (ValidAbsolutePath), and an identity is a whole device and inode in 0..2^53-1 (IdentityFrom), so a folder that was replaced by a symlink or another directory is refused (OpenRoot opens with O_NOFOLLOW and compares fstat's device and inode); folder changes are at most 16 MiB of JSON and 20000 ops, each op's path is relative, at most 32 parts of 1-255 bytes with no ., .. or NUL (RelativeParts), every directory on the way is opened with openat(O_NOFOLLOW) and a symlink at the end is refused (ParentOf), only .webloc links and .ardia-folder.json are written (WritableName), only links and folders are renamed and only links are deleted, a coordinated rename announces the new location to file presenters only when it actually happened (MovedTo), a new link lands with renameatx_np(RENAME_EXCL) from a same-volume staging directory, a changed or deleted link is replaced only while its URL is the one Ardia last saw, a directory is removed only when it holds nothing but housekeeping files, and every read and write goes through NSFileCoordinator with SyncCoordination's 20-second deadline: a coordinator whose accessor hasn't started is cancelled, and an accessor that arrives after that never runs (CoordinationGate), so one stalled file presenter can't hold the shared-folder queue, as SharedFolderDirectory.swift does; a shell reload or close drops its FSEvents watch, and the stream is torn down on its own queue; a scan stops at 20000 entries or 32 MiB of links and 8 levels; resolve refuses system and home folders (RefusedFolder) and create cleans the name like the Mac app (FolderName); at most 256 folders are watched (WatchedPathsValid) and FSEvents changes are matched to them by path (WatchHit); Finder is never shown in background mode, and Add Shared Folder… picks its folder through the host's ArdiaShell.pickFolder. tests/shared_folders_policy_test.cc hostile_sinks runs traversal, NUL bytes, huge paths and non-finite identities through each guard. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders_policy.h#RelativeParts",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders_policy.h#IdentityFrom",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders_policy.h#ValidAbsolutePath",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders_policy.h#WritableName",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders_policy.h#RefusedFolder",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders_policy.h#FolderName",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders_policy.h#WatchedPathsValid",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders.mm#OpenRoot",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders.mm#ParentOf",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders.mm#ApplyOne",
+    "scripts/mac/webui-engine/tests/shared_folders_policy_test.cc#hostile_sinks",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#shared_folder_guards",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shared_folders_policy.h#CoordinationGate",
+    "scripts/mac/webui-engine/tests/shared_folders_policy_test.cc#a_stalled_coordinator_times_out_and_never_starts_late",
+    "scripts/mac/webui-engine/tests/shared_folders_policy_test.cc#a_failed_rename_announces_no_move"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-page:events",
+   "source": "page",
+   "guard": "Mac WebUI host (dev builds only): what a page sends back reaches only the shell document of the window that holds its binding, wrapped in that binding's claim and renderer generation (PageBinding::Report, Envelope), and nothing is sent once the claim is released. The page's own data is passed through fixed shapes: theme color is formatted from the engine's SkColor as #rrggbb (ThemeColorText); favicon candidates are capped at 32 URLs; the status text is the engine's canonical hover URL; blocked pop-ups are remembered per document, at most 100, and forgotten on every cross-document commit (RememberBlocked, ClearsBlockedPopups); a creation snapshot holds at most 128 events; hung widgets at most 64; find results are clamped non-negative counts; crash, load error, security, zoom, media and fullscreen events carry engine values only. In background runs (ARDIA_BACKGROUND=1) JavaScript dialogs, leave-page dialogs, file choosers, page context menus and permission prompts of bound tabs are logged by kind and count, never by page text, and answered without UI (BackgroundDialogs, PageDelegate, CreatePermissionPrompt); a permission request gets a nonvisual prompt that dismisses itself through its own weak pointer only while it is still the current prompt (BackgroundPermissionPrompt), and the hooks are re-asserted after ArdiaCore's startup task and on every tab.create (AssertPageHooks). A tab whose contents are replaced keeps its binding, re-keyed to the new id and announced as a pageLifecycle rebind with the next binding generation (ReplaceBinding, RebindAllowed); a tab that leaves this window's tab strips alive loses its binding without a windowClose (DropDetachedBinding, StripExitFor).",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#PageBinding::Report",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#ThemeColorText",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#kFaviconCandidatesMax",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#kBlockedPopupsMax",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#kHungWidgetsMax",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_events.mm#RememberBlocked",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_events.mm#PageEvents::TargetURL",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_delegate.mm#BackgroundDialogs",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_delegate.mm#PageDelegate",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_delegate.mm#CreatePermissionPrompt",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#crashes_load_errors_and_theme_colors",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#ClearsBlockedPopups",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_delegate.mm#BackgroundPermissionPrompt",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_delegate.mm#AssertPageHooks",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#ShellHostView::ReplaceBinding",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_shell_host.mm#ShellHostView::DropDetachedBinding",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_page_policy.h#RebindAllowed",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#background_permission_prompts_are_dismissed_only_for_bound_tabs",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#bindings_follow_replaced_and_detached_tabs",
+    "scripts/mac/webui-engine/tests/page_policy_test.cc#blocked_popups_clear_on_cross_document_commits"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-system:downloadsAndFiles",
+   "source": "frame",
+   "guard": "Mac WebUI host (dev builds only): downloads.list, downloads.remove and downloads.clear arrive only as engine.call from the trusted shell bridge, as one JSON object of at most 1 MiB; list takes no arguments, remove exactly a GUID-shaped id (ValidDownloadId) of a listed download that is no longer running (Removable), clear exactly keep (at most 100 valid ids) and a finite, non-negative before cutoff, and removes only finished downloads that are not kept and started by the cutoff (ClearsDownload); private profiles are never watched or listed. ArdiaSystem.openFile and moveToTrash reach only a normalized absolute path (ValidLocalPath) that is the target of a finished, listed download of a profile this window watches (PathListed), revealFile any listed download; fileStatus takes at most 64 paths and reports a path as present only when it is listed and exists; fileIcon takes a bare file name or a listed path (IconPathAllowed) and a size clamped to 16-512 points (IconPoints); runningAppIcon takes a whole process id in 1..INT_MAX (ProcessId); pickFiles takes no arguments and pickFolder at most a current folder and a 1-200 byte prompt without control characters (PickerPromptUsable), one panel per window (AdmitPicker), and a background instance answers [] or null without showing a panel; setLaunchAtLogin, setAsDefaultBrowser and hapticTick do nothing in a background instance. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#ValidDownloadId",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#ValidLocalPath",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#PathListed",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#IconPathAllowed",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#IconPoints",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#ProcessId",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#ClearsDownload",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#PickerPromptUsable",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#AdmitPicker",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system.mm#ValidateDownloads",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system.mm#SystemServices::FileCall",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system.mm#SystemServices::PickFolder",
+    "scripts/mac/webui-engine/tests/system_policy_test.cc#file_actions_reach_only_listed_downloads",
+    "scripts/mac/webui-engine/tests/system_policy_test.cc#clearing_keeps_running_kept_and_newer_downloads",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#system_files_and_links"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-system:openExternalURL",
+   "source": "frame",
+   "guard": "Mac WebUI host: ArdiaApp.openExternalURL takes exactly one string of at most 32 KB with no whitespace, control characters, quotes or backslashes (ExternalTextAllowed); GURL must parse it, its scheme must be 1-64 characters of [A-Za-z0-9+.-] starting with a letter and not one of the local, script or browser-internal schemes (file, javascript, data, chrome, chrome-extension, about, blob, view-source, devtools, filesystem, x-apple.systempreferences and the rest of kDeniedSchemes, compared case-insensitively) (ExternalSchemeAllowed), and http(s) needs a host and no credentials; only then does NSWorkspace openURL: see the canonical spec, and a background instance opens nothing and answers false. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#ExternalSchemeAllowed",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#ExternalTextAllowed",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#kDeniedSchemes",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system.mm#ArdiaApp.openExternalURL",
+    "scripts/mac/webui-engine/tests/system_policy_test.cc#external_urls_refuse_local_and_script_schemes",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#system_files_and_links"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-system:openURLs",
+   "source": "other-app",
+   "guard": "Mac WebUI host: links other apps open in Ardia arrive through AppController's application:openURLs:, which the host replaces when the WebUI shell starts, so links from a cold launch are held before the first window exists and handed to Chrome only once every WebUI window has closed (CapturesOpenUrls); only http, https and file URLs written scheme:// with no whitespace or control characters and at most 32 KB (SchemeGoesToShell) go to the shell, every other URL goes to Chrome's own handler unchanged; the inbox holds at most 256 URLs (OpenUrlInbox) and delivers at most 64 at a time as ArdiaShell onOpenURLs to the key window whose current renderer generation called ArdiaShell.listenForOpenURLs (ListeningForOpenUrls), and a reload forgets the listener. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#SchemeGoesToShell",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system_policy.h#OpenUrlInbox",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system.mm#ArdiaOpenUrls",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system.mm#SystemServices::DeliverOpenUrls",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_system.mm#SystemServices::ListeningForOpenUrls",
+    "scripts/mac/webui-engine/tests/system_policy_test.cc#links_from_other_apps_reach_the_shell_only_as_web_or_file_urls",
+    "scripts/mac/webui-engine/tests/system_policy_test.cc#open_url_inbox_is_bounded_and_drains_in_batches",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#system_files_and_links"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-links:gestures",
+   "source": "page",
+   "guard": "Mac WebUI host: a page's link clicks reach the shell only through Chromium's own browser-side hooks (OpenURLFromTab, AddNewContents, RenderFrameHostImpl::DownloadURL and WebContentsImpl::CreateNewWindow through the CONTENT_EXPORT setters apply.sh adds (SetArdiaMacDownloadUrlHook, SetArdiaMacNewWindowInPlaceHook), and a NavigationThrottle that apply.sh's g_ardia_mac_add_navigation_throttles adds), never through a page message. Each is matched against the last real left mouse-up the page's RenderWidgetHost saw (GestureGate): the release must be on that page, unused, not followed by another press, at most 10 s old and carry exactly the configured keys, the request must carry a user gesture and go to the URL the pointer was over at that release (TargetMatches), and the page must be shown, so a page cannot open a peek, split, window or background tab by itself (RouteForOpening). An Option-click download is taken only from the requesting frame's own tab, for a request with no suggested file name that follows redirects (apply.sh's dev-only HTMLAnchorElement hook gives an Option-clicked <a download> its attribute as the suggested name, so it always downloads) to the released-over link within 1 s, with a user gesture (OptionClickDownload); attachment responses never reach that hook. An unmatched renderer kNewWindow becomes a tab through Chromium's own path, so its popup blocker decides (WindowOpensAsTab). An other-site peek needs WasInitiatedByLinkClick, an initiator that is the primary main frame (an iframe's _top anchor follows), a user gesture, no POST, a NavigationInputStart equal to the release's timestamp (a synthetic click carries its own) and the released-over URL (SitePeekCandidate, SameInput); it is cancelled in WillStartRequest before any request and announced only when that navigation finishes uncommitted while its tab is not being destroyed (AnnouncesSitePeek). Little Ardia opens in place only an opener-less link to the released-over URL that is not a form submission, decided in OpenURLFromTab or, for an opener-suppressed request, at the start of CreateNewWindow before any WebContents is created or announced, where Chromium still has is_form_submission and the POST body (OpensInPlace); window.open with an opener never reaches it. Only http(s) URLs of at most 32 KB go to the shell. The shell's webView.setPeekModifier and setSplitLinkModifier take a string of at most 16 bytes that collapses to alt, shift or off and alt or altShift, setPeekOtherSiteTabs takes at most 4096 non-empty string ids of at most 256 bytes (SiteTabKeys), and the boolean options take only a boolean enabled. The shared corpus runs through these guards in tests/hostile_corpus_test.cc.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_policy.h#GestureGate",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_policy.h#RouteForOpening",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_policy.h#TargetMatches",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_policy.h#OptionClickDownload",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_policy.h#SitePeekCandidate",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_policy.h#OpensInPlace",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_policy.h#SiteTabKeys",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_gesture.mm#OptionClickDownloadIntercepted",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_gesture.mm#NoOpenerWindowOpensInPlace",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_policy.h#AnnouncesSitePeek",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_gesture.mm#InterceptLinkOpen",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_gesture.mm#SitePeekThrottle",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_link_gesture.mm#LinkRouteCall",
+    "scripts/mac/webui-engine/tests/link_policy_test.cc#stale_pressed_foreign_or_hidden_releases_never_peek",
+    "scripts/mac/webui-engine/tests/link_policy_test.cc#chrome_dispositions_map_to_link_keys_only_for_renderer_clicks",
+    "scripts/mac/webui-engine/tests/link_policy_test.cc#other_site_peeks_tell_a_real_anchor_click_from_scripted_navigations",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#link_option_guards",
+    "scripts/mac/webui-engine/tests/link_policy_test.cc#an_option_click_in_one_tab_never_claims_another_tabs_download",
+    "scripts/mac/webui-engine/tests/link_policy_test.cc#a_same_process_iframe_anchor_targeting_top_never_peeks",
+    "scripts/mac/webui-engine/tests/link_policy_test.cc#a_synthetic_anchor_click_carries_its_own_time_and_never_peeks",
+    "scripts/mac/webui-engine/tests/link_policy_test.cc#a_cancelled_peek_is_announced_only_while_the_source_tab_lives"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-extensions:surfaces",
+   "source": "frame",
+   "guard": "Mac WebUI host: extensionView.create takes exactly kind (popup or sidePanel), url and profile; the URL must be chrome-extension://<32 letters a-p>[/...] of at most 2 KB with no control characters (ExtensionUrlHost), the extension must be enabled in that profile (and allowed in private profiles), and a window holds at most 4 surfaces (SurfaceBook); viewport, place, command and release act only on a surface this window's current renderer generation opened (SurfaceBook::Owns), rectangles and placements must be finite and within +/-1e6 and are clipped to the window (ViewportBox, PopupLimitsFor, PopupBoxFor), radii are capped at 64 and fades at 1000 ms, and evaluate is refused; a reload retires older surfaces (CloseOlderThan). extensions.actionStates (a tab key and at most 64 valid ids), sidePanelUrl (a tab key and an id), chooseFolder (no arguments; a background instance answers null), inspectUnpacked (a normalized absolute folder other than /, read off the UI thread, icons only from inside the folder via ResourcePath) and extensions.resolveInstallPrompt (a request id of 1-64 bytes and a boolean, resolved only by the window and profile it was shown to, at most 8 pending with Chrome keeping its own prompt when the ledger is full or the shell has no live document, and aborted when the shell reloads, PromptLedger) take one JSON object of at most 1 MiB with exactly those keys, and a tab must be this window's tab in the same profile; tab.command executeExtensionAction takes exactly one valid extension id of an enabled extension. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view_policy.h#ValidExtensionId",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view_policy.h#ExtensionUrlHost",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view_policy.h#SurfaceBook",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view_policy.h#ViewportBox",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view_policy.h#PopupBoxFor",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view_policy.h#ResourcePath",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view_policy.h#PromptLedger",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view.mm#ValidateCall",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view.mm#ExtensionViews::Create",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view.mm#ExtensionViews::Owned",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view.mm#ExtensionViews::ExecuteAction",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_extension_view.mm#ExtensionViews::ResolvePrompt",
+    "scripts/mac/webui-engine/tests/extension_view_policy_test.cc#surfaces_load_only_their_own_extension_pages",
+    "scripts/mac/webui-engine/tests/extension_view_policy_test.cc#install_prompts_resolve_only_in_their_window_and_profile",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#extension_surfaces"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-pip:player",
+   "source": "frame",
+   "guard": "Mac WebUI host: pip.attach takes nothing and binds the in-window player to this window's current renderer generation; pip.viewport and pip.command act only when player is the whole number of the presented player (PlayerMatches) and the player's source tab is bound in this window (Presents); a viewport must be finite, non-negative and within +/-1e6 and is clipped to the window (PlayerBox); pip.command accepts only togglePlayPause, seekTo, seekBy, backToTab, close and popOut (ParseAction), seeks must be finite and at most 1e7 s and are clamped to the media (ValidSeekSeconds, ClampSeek), popOut's at and grab points must be finite; automatic picture in picture plays in the window only when the site's auto picture in picture setting is Allow and a window presents its tab, goes to Chrome's own window (which shows the permission prompt) when it is Ask and not embargoed, and is otherwise declined (PermissionFor), explicit picture in picture opens Chrome's own window, kept ordered out in a background instance (PresentationFor); webView.setAutoPictureInPicture takes exactly one boolean enabled. The shared corpus (scripts/security/hostile-inputs.mjs, exported byte-exact by tests/hostile-corpus.mjs) runs through the same guards in tests/hostile_corpus_test.cc, which asserts that whatever a guard lets through meets the sink's invariants, with a positive control.",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_pip_policy.h#ParseAction",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_pip_policy.h#PlayerMatches",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_pip_policy.h#PlayerBox",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_pip_policy.h#ValidSeekSeconds",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_pip_policy.h#PresentationFor",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_pip.mm#PipPresenter::Invoke",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_pip.mm#PipPresenter::Command",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_pip.mm#PipPresenter::EngineCall",
+    "scripts/mac/webui-engine/tests/pip_policy_test.cc#commands_reach_only_the_presented_player",
+    "scripts/mac/webui-engine/tests/pip_policy_test.cc#player_viewports_stay_inside_the_window",
+    "scripts/mac/webui-engine/tests/hostile_corpus_test.cc#pip_commands"
+   ],
+   "detected": false
+  },
+  {
+   "id": "mac-webui-swipe:scrollGestures",
+   "source": "page",
+   "guard": "Mac WebUI host (dev builds only): one local NSEvent scroll-wheel monitor per shell window acts only on events whose window is that window and is removed, with its resign-key and resign-active observers, before the host goes away (ScrollGestures). Phases come from AppKit (event.phase, momentumPhase, hasPreciseScrollingDeltas), never from timing (PhaseOf, Classify); deltas, points and times must be finite and bounded (Delta, FinitePoint, FiniteTime). Each gesture keeps the surface it began on; a gesture that moves to another surface, or whose window or app resigns, cancels the route it left (RouteLatch). Over the shell the host only reports onScrollGesture and swallows nothing. Over a hosted page each gesture gets a new number and is bound to its binding id, binding generation, key, main-frame document and widget, and is cancelled the moment any of them changes or the tab stops being presented and visible (PageLive, checked on every event, ack, claim and presentation change). A back or forward swipe needs the system's swipe-between-pages setting, a wheel phaseBegan, a touchpad scroll begin and a first non-momentum update the page's own widget leaves unconsumed, then horizontal intent. Vertical intent latches on the first deltas, before any ack, and gives the page its gesture; so does a consumed update from the page or any of its frame widgets before horizontal intent, or before the shell claims the swipe, which cancels it. Acks are matched to the gesture by the wheel timestamp Chromium carries from the NSEvent: the gesture's Began is converted with EventTimeStampFromSeconds and any ack strictly older, to the microsecond, is dropped (AckEvent, PageSwipe). Every frame widget of the tab is watched as frames are created or swapped, and a primary page change or the contents going away cancels the gesture (PageWatch). The host swallows only a tracked swipe's horizontal motion, and only after shell.pageSwipeClaim names that gesture number and tab with claimed true (GestureId, Claim); a release or the end drops the claim, and the end always reaches the page. Chrome's own history swiper is off for the shell and hosted pages (HistorySwipingControl). In JS onScrollGesture and onPageSwipe accept only known phases with finite deltas and points within bounds, a tab id of at most 256 characters and a whole positive gesture number, and a page swipe reaches only the swipe area whose pageTabId is that tab (scrollGesture, pageSwipe, samePageGesture in apps/desktop/src/shims/web/motion/swipe.ts).",
+   "checks": [
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_swipe_policy.h#PhaseOf",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_swipe_policy.h#Classify",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_swipe_policy.h#Delta",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_swipe_policy.h#RouteLatch",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_swipe_policy.h#PageSwipe",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_swipe_policy.h#GestureId",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_swipe.mm#AcksFor",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_swipe.mm#PageLive",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_swipe.mm#bool Claim(",
+    "scripts/mac/webui-engine/src/ardia/mac/ac_mac_swipe.mm#KeepChromeHistorySwiperOff",
+    "scripts/mac/webui-engine/tests/swipe_policy_test.cc#a_page_that_scrolls_or_prevents_the_wheel_keeps_its_gesture",
+    "scripts/mac/webui-engine/tests/swipe_policy_test.cc#stale_acks_from_an_earlier_gesture_never_start_or_end_a_swipe",
+    "scripts/mac/webui-engine/tests/swipe_policy_test.cc#only_a_swipe_the_shell_claimed_swallows_and_only_its_horizontal_motion",
+    "scripts/mac/webui-engine/tests/swipe_policy_test.cc#claimed_gesture_ids_are_whole_positive_and_bounded",
+    "scripts/mac/webui-engine/tests/swipe_policy_test.cc#deltas_points_and_times_are_finite_and_bounded",
+    "scripts/mac/webui-engine/tests/swipe_policy_test.cc#late_acks_from_an_earlier_gesture_never_authorize_the_next_one",
+    "scripts/mac/webui-engine/tests/swipe_policy_test.cc#vertical_motion_latches_before_any_ack_arrives",
+    "apps/desktop/src/scrollGestures.test.mjs#malformed",
+    "apps/desktop/src/scrollGestures.test.mjs#another tab"
+   ],
+   "detected": false
+  },
+  {
+   "id": "pasteboard:addressFieldPaste",
+   "source": "other-app",
+   "guard": "The address and command bar field editor pastes only text: the pasteboard's plain string or URL, else the first item's file: URL (any other scheme under public.file-url is ignored) or the plain text of its RTFD, RTF or HTML with attachment characters removed; RCTUISingleLinePastedText folds every line terminator (CR, LF, VT, FF, NEL, U+2028, U+2029) into one line before the text reaches the field, an image alone beeps, and nothing is opened until the user presses Return through the omnibox's own resolve",
+   "checks": [
+    "patches/react-native-macos@0.81.9.patch#RCTUIPlainTextOfRichPasteboard",
+    "patches/react-native-macos@0.81.9.patch#RCTUISingleLinePastedText",
+    "apps/browser/src/hostileInputs.test.mjs#a clipboard another app filled reaches the address field"
    ],
    "detected": false
   }

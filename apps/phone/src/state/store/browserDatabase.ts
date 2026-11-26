@@ -1,5 +1,6 @@
 import { TAB_ORIGINS, type BrowserTab, type TabOrigin } from "../tabs/tabModels.ts";
 import type { SqlDatabase, SqlValue } from "../../lib/sqlDatabase.ts";
+import { PENDING_CRASH_KEY } from "../../lib/crashReports.ts";
 
 export type VisitTransition = "typed" | "link" | "backForward" | "formSubmit" | "restored" | "other";
 
@@ -259,9 +260,12 @@ export const countTabStates = (db: SqlDatabase, ids: readonly string[]) => {
 
 export const countVisits = (db: SqlDatabase) => db.first<{ n: number }>("SELECT count(*) AS n FROM visits")?.n ?? 0;
 
+export const readPreference = (db: SqlDatabase, key: string) =>
+  db.first<{ value: string }>("SELECT value FROM preferences WHERE key = ?", [key])?.value ?? null;
+
 export function readPreferences(db: SqlDatabase): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const row of db.all<{ key: string; value: string }>("SELECT key, value FROM preferences")) out[row.key] = row.value;
+  for (const row of db.all<{ key: string; value: string }>("SELECT key, value FROM preferences WHERE key <> ?", [PENDING_CRASH_KEY])) out[row.key] = row.value;
   return out;
 }
 

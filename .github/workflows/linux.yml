@@ -13,7 +13,6 @@ on:
       - "apps/browser/official-plugins.json"
       - "apps/browser/official-plugins.d.json.ts"
       - "apps/browser/macos/Ardia.xcodeproj/project.pbxproj"
-      - "apps/browser/windows/Ardia/IntroMusic.wav"
       - "apps/site/src/scripts/meadow/**"
       - "apps/cli/install.sh"
       - "packages/core/src/**"
@@ -170,6 +169,10 @@ jobs:
     timeout-minutes: 45
     env:
       ENGINE_MODE: ${{ inputs.engine || 'nearest' }}
+    outputs:
+      full: ${{ steps.which.outputs.full }}
+      package_name: ${{ steps.which-name.outputs.package_name }}
+      version: ${{ steps.which-name.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -178,6 +181,7 @@ jobs:
       - id: engine-key
         run: echo "key=$(engine/engine-key.sh --platform linux)" >> "$GITHUB_OUTPUT"
       - name: Which packages
+        id: which
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           FULL_CI: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
@@ -189,10 +193,11 @@ jobs:
               .github/workflows/linux.yml .github/actions/linux-setup .github/actions/linux-update-verify; then full=false; fi
           fi
           echo "FULL=$full" >> "$GITHUB_ENV"
+          echo "full=$full" >> "$GITHUB_OUTPUT"
           if [ "$full" = true ]; then
-            echo "Full run: the tarball, the .deb and the AppImage, each smoke-tested, and the .deb installed."
+            echo "Full run: the tarball, the .deb, the .rpm and the AppImage, each smoke-tested, the .deb installed, then the .rpm installed and the Flatpak built and installed."
           else
-            echo "::notice::Fast run: the tarball alone, smoke-tested. The .deb and the AppImage are built on main, with the full-ci label, or when the PR changes the Linux packaging."
+            echo "::notice::Fast run: the tarball alone, smoke-tested. The .deb, the .rpm, the AppImage and the Flatpak are built on main, with the full-ci label, or when the PR changes the Linux packaging."
           fi
       - name: Version
         run: |
@@ -242,6 +247,13 @@ jobs:
             echo "### Linux engine ${selected:0:12} (older than this commit's ${ENGINE_KEY:0:12})" >> "$GITHUB_STEP_SUMMARY"
           fi
           { echo "ENGINE=$engine"; echo "PACKAGE_NAME=Ardia-linux-x64-$label"; } >> "$GITHUB_ENV"
+      - id: which-name
+        run: |
+          echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Packaging tools
+        if: env.FULL == 'true'
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rpm cpio
       - run: pnpm --filter @ardia/desktop build
       - name: ardia command (pinned)
         run: |
@@ -262,8 +274,8 @@ jobs:
           formats=(tar.xz)
           extra=()
           if [ "$FULL" = true ]; then
-            formats+=(deb AppImage)
-            extra+=(--deb "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --appimage "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage")
+            formats+=(deb rpm AppImage)
+            extra+=(--deb "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --rpm "$RUNNER_TEMP/dist/$PACKAGE_NAME.rpm" --appimage "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage")
           fi
           python3 scripts/linux/package.py --out "$ENGINE" --ui apps/desktop/dist/linux --content-blocker "$blocker" \
             --version "$VERSION" $CLI_ARGS --update-verify "$update_verify" --destination "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" "${extra[@]}"
@@ -280,6 +292,7 @@ jobs:
           node scripts/linux/smoke.mjs --package "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" --results "$RUNNER_TEMP/smoke" --timeout-ms 600000 "${extra[@]}"
           [ "$FULL" = true ] || exit 0
           node scripts/linux/smoke.mjs --package "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --results "$RUNNER_TEMP/smoke/deb" --timeout-ms 600000 "${extra[@]}"
+          node scripts/linux/smoke.mjs --package "$RUNNER_TEMP/dist/$PACKAGE_NAME.rpm" --results "$RUNNER_TEMP/smoke/rpm" --timeout-ms 600000 "${extra[@]}"
           node scripts/linux/smoke.mjs --package "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage" --results "$RUNNER_TEMP/smoke/appimage" --timeout-ms 600000 "${extra[@]}"
       - name: Debian package installs
         if: env.FULL == 'true'
@@ -295,10 +308,13 @@ jobs:
             ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.tar.xz.sha256
             ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.deb
             ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.deb.sha256
+            ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.rpm
+            ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.rpm.sha256
             ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.AppImage
             ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.AppImage.sha256
             ${{ runner.temp }}/smoke/results.json
             ${{ runner.temp }}/smoke/deb/results.json
+            ${{ runner.temp }}/smoke/rpm/results.json
             ${{ runner.temp }}/smoke/appimage/results.json
           if-no-files-found: error
           compression-level: 0
@@ -310,3 +326,49 @@ jobs:
           path: ${{ runner.temp }}/smoke
           if-no-files-found: ignore
           retention-days: 14
+
+  distro-packages:
+    name: distro packages (${{ matrix.format }})
+    needs: package
+    if: ${{ !cancelled() && needs.package.result == 'success' && needs.package.outputs.full == 'true' }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        format: [rpm, flatpak]
+    env:
+      PACKAGE_NAME: ${{ needs.package.outputs.package_name }}
+      VERSION: ${{ needs.package.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/linux
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: ${{ needs.package.outputs.package_name }}
+          path: ${{ runner.temp }}/package
+      - name: RPM package installs
+        if: matrix.format == 'rpm'
+        run: scripts/linux/rpm-install-test.sh "$RUNNER_TEMP/package/dist/$PACKAGE_NAME.rpm"
+      - name: Flatpak
+        if: matrix.format == 'flatpak'
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq flatpak flatpak-builder
+          python3 -I scripts/linux/linux_formats.py from-tarball --tarball "$RUNNER_TEMP/package/dist/$PACKAGE_NAME.tar.xz" --version "$VERSION" \
+            --flatpak "$RUNNER_TEMP/$PACKAGE_NAME.flatpak"
+          (cd "$RUNNER_TEMP" && sha256sum "$PACKAGE_NAME.flatpak" > "$PACKAGE_NAME.flatpak.sha256")
+          scripts/linux/flatpak-install-test.sh "$RUNNER_TEMP/$PACKAGE_NAME.flatpak"
+      - if: matrix.format == 'flatpak'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: ${{ needs.package.outputs.package_name }}-flatpak
+          path: |
+            ${{ runner.temp }}/${{ needs.package.outputs.package_name }}.flatpak
+            ${{ runner.temp }}/${{ needs.package.outputs.package_name }}.flatpak.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

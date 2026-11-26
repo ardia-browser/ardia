@@ -4,9 +4,11 @@ import { appInfo, docs } from "../../browser/src/test-native/index.ts";
 import { useBrowser } from "../../browser/src/state/browser/store.ts";
 import { useOnboarding, onboardingCompletedAt } from "../../browser/src/state/onboarding/onboarding.ts";
 import { useToasts } from "../../browser/src/state/app/toasts.ts";
+import { PLATFORM_TERMS } from "../../browser/src/lib/platformTerms.ts";
 import { useReportSheet } from "../../browser/src/state/report/store.ts";
 import { APP_COMMAND_HANDLERS } from "../../browser/src/state/commands/appCommands.ts";
 import { LINUX_REPORT_TEMPLATE, openReport } from "./reportProblem.ts";
+import { appMenuChoice, appMenuCommandEvent, appMenuItems } from "./appMenu.ts";
 import { APP_LAUNCH_LOCK, APP_LAUNCH_MARK, FRESH_PROFILE_DOCUMENT, LAUNCH_STEPS, LINUX_APP_COMMANDS, UTILITY_APP_COMMANDS, claimAppLaunch, hostLaunchRecord, onboardingAction, recordFreshProfile, runAppCommand, runLaunchServices, serveUtilityCommands, startAppCommands } from "./appServices.ts";
 
 const capabilities = { defaultBrowser: false, launchAtLogin: false, thinScrollBars: false, webkit: false, cliControl: false, cliInstall: false, externalLinks: false, performanceRecording: false, taskManager: false };
@@ -238,12 +240,31 @@ test("app commands run only in the window that issued them", () => {
   assert.equal(useOnboarding.getState().windowId, first);
 });
 
+test("Help › Show Onboarding replays setup in the window that chose it, as a redo the person can cancel, and never restarts one already open", () => {
+  const { first, second } = twoWindows();
+  const menu = { checked: [], disabled: [], titles: {}, profiles: [], windows: [], bookmarkFolders: [], recentBookmarks: [], bookmarksBar: [], otherBookmarks: [], recentlyClosed: [], recentlyClosedGroups: [], warnBeforeQuitting: false, extensions: [] };
+  const help = appMenuItems(menu).find((item) => item.title === "Help");
+  const item = help.children.find((child) => child.title === "Show Onboarding");
+  assert.equal(item.id, "showOnboarding");
+  const listeners = [];
+  startAppCommands(first, capabilities, (listener) => (listeners.push(listener), { remove() {} }));
+  listeners[0](appMenuCommandEvent(appMenuChoice(item.id), first, "e"));
+  const opened = useOnboarding.getState();
+  assert.equal(opened.windowId, first);
+  assert.equal(opened.step, "intro");
+  assert.equal(opened.redo, true);
+  const session = opened.session;
+  listeners[0](appMenuCommandEvent(appMenuChoice(item.id), first, "e"));
+  assert.equal(useOnboarding.getState().session, session);
+  assert.notEqual(useOnboarding.getState().windowId, second);
+});
+
 test("unavailable help and developer commands say so instead of failing silently", () => {
   const { first } = twoWindows();
   for (const command of ["taskManager", "releaseNotes", "videoTour"]) {
     useToasts.setState({ toasts: {} });
     assert.equal(runAppCommand(first, command, capabilities), true, command);
-    assert.equal(toast(first)?.title, "Not available on Linux yet", command);
+    assert.equal(toast(first)?.title, `Not available on ${PLATFORM_TERMS.os} yet`, command);
   }
   assert.equal(runAppCommand(first, "newTab", capabilities), false);
 });
@@ -298,7 +319,7 @@ test("utility windows run only the app commands that need no browser window", ()
   assert.deepEqual([...UTILITY_APP_COMMANDS].sort(), ["copyDiagnostics", "quit", "taskManager"]);
   useToasts.setState({ toasts: {} });
   listeners[0]({ command: "taskManager", windowId: "settings" });
-  assert.equal(toast("settings")?.title, "Not available on Linux yet");
+  assert.equal(toast("settings")?.title, `Not available on ${PLATFORM_TERMS.os} yet`);
   assert.equal(toast(first), undefined);
 });
 
@@ -422,5 +443,5 @@ test("the quit command is handled here and says so when this build cannot quit",
   useToasts.setState({ toasts: {} });
   assert.equal(runAppCommand(first, "quit", capabilities), true);
   for (let i = 0; i < 20 && !toast(first); i++) await new Promise((resolve) => setTimeout(resolve, 5));
-  assert.equal(toast(first)?.title, "Not available on Linux yet");
+  assert.equal(toast(first)?.title, `Not available on ${PLATFORM_TERMS.os} yet`);
 });

@@ -4,7 +4,7 @@ import { useBrowser } from "../browser/store.ts";
 import { newTabLingeringOver } from "./card.ts";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures.ts";
 import { PLATFORM_FEATURES as linux } from "../../lib/platformFeatures.linux.ts";
-import { PLATFORM_FEATURES as windows } from "../../lib/platformFeatures.windows.ts";
+import { PLATFORM_FEATURES as windows } from "../../lib/platformFeatures.win.ts";
 
 const original = PLATFORM_FEATURES.newTabWaitsForFirstFrame;
 const holdsColdPages = PLATFORM_FEATURES.holdsColdPagesUntilPainted;
@@ -29,8 +29,8 @@ for (const waits of [false, true]) {
   });
 }
 
-test("Linux does not keep a New Tab over its page, while existing native hosts retain their policy", () => {
+test("the desktop hosts do not keep a New Tab over its page, while the Mac retains its policy", () => {
   assert.equal(linux.newTabWaitsForFirstFrame, false);
-  assert.equal(windows.newTabWaitsForFirstFrame, true);
+  assert.equal(windows.newTabWaitsForFirstFrame, false);
   assert.equal(original, true);
 });

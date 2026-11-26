@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Animated, Image, StyleSheet, View, type ViewStyle } from "react-native";
-import { stopProgramControl, useControlIndicator } from "../../state/app/programControl";
+import { dismissControlPill, stopProgramControl, useControlIndicator } from "../../state/app/programControl";
 import { useSettings } from "../../state/browser/hooks";
 import { controlLine, controlLineText } from "../../state/app/controlCaller";
 import { fileIcon } from "../../state/app/system";
@@ -33,14 +33,16 @@ export function ControlPill({ style, enter = false }: { style?: Animated.WithAni
           }}
         >
           <Hud shape="capsule" height={PILL_HEIGHT} accessibilityRole="alert" accessibilityLabel={controlLineText(line)}>
-            <View style={compact ? COMPACT_ROW : PILL_ROW} tooltip={compact ? controlLineText(line) : undefined}>
-              {icon ? (
-                <Image source={{ uri: icon }} style={APP_ICON} />
-              ) : (
-                <Dot size={TERMINAL_DOT} color={theme.textPrimary}>
-                  <Symbol name="terminal.fill" size={9} weight="bold" color={theme.onPrimary} style={TERMINAL_GLYPH} />
-                </Dot>
-              )}
+            <View style={compact ? COMPACT_ROW : PILL_ROW}>
+              <View tooltip={compact ? controlLineText(line) : undefined}>
+                {icon ? (
+                  <Image source={{ uri: icon }} style={APP_ICON} />
+                ) : (
+                  <Dot size={TERMINAL_DOT} color={theme.textPrimary}>
+                    <Symbol name="terminal.fill" size={9} weight="bold" color={theme.onPrimary} style={TERMINAL_GLYPH} />
+                  </Dot>
+                )}
+              </View>
               {compact ? null : (
                 <Text numberOfLines={1} size="small" tone="textSecondary" style={SHRINK}>
                   {line.lead}
@@ -50,7 +52,10 @@ export function ControlPill({ style, enter = false }: { style?: Animated.WithAni
                   {line.rest}
                 </Text>
               )}
-              <Button variant="pill" tone="chip" title="Stop" onPress={stopProgramControl} />
+              <View style={ACTIONS}>
+                <Button variant="pill" tone="chip" title="Stop" onPress={stopProgramControl} />
+                <Button variant="icon" icon="xmark" size="m" capsule color={theme.textSecondary} tooltip="Hide control pill" onPress={dismissControlPill} />
+              </View>
             </View>
           </Hud>
         </Animated.View>
@@ -63,6 +68,7 @@ const TERMINAL_DOT = 20;
 const APP_ICON = { width: TERMINAL_DOT, height: TERMINAL_DOT } as const;
 const TERMINAL_GLYPH = { width: 14, height: 14 } as const;
 const SHRINK = { flexShrink: 1 } as const;
+const ACTIONS = { flexDirection: "row", alignItems: "center", gap: space.s, flexShrink: 0 } as const;
 const PILL_ROW = { height: PILL_HEIGHT, flexDirection: "row", alignItems: "center", gap: space.m, paddingLeft: space.s, paddingRight: space.xs } as const;
 const COMPACT_ROW = { ...PILL_ROW, gap: space.s } as const;
 

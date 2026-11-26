@@ -1,5 +1,14 @@
 import { LiveError, type LiveErrorKind, type LiveSourceId } from "../../browser/src/state/live/types";
 import { ardiaHost, hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
+import { noteKeyringFailure } from "../../browser/src/state/telemetry/keyringCounts";
+import { consentToken, type ConsentToken } from "../../browser/src/state/telemetry/choice";
+
+const KEYRING_FAILURES: Record<string, "locked" | "unavailable"> = { ERR_LIVE_KEYRING_LOCKED: "locked", ERR_LIVE_KEYRING_UNAVAILABLE: "unavailable" };
+
+function noteKeyringError(error: unknown, consent: ConsentToken | null) {
+  const code = (error as { code?: unknown })?.code;
+  if (typeof code === "string" && Object.hasOwn(KEYRING_FAILURES, code)) noteKeyringFailure("live", KEYRING_FAILURES[code]!, consent);
+}
 
 export const LIVE_CAPABILITIES = ["ArdiaLive.request", "ArdiaLive.connect", "ArdiaLive.cancel", "ArdiaLive.disconnect"] as const;
 
@@ -47,6 +56,7 @@ export function hostLiveClient(host: ArdiaHost | undefined = ardiaHost, connecte
   const call = <T>(method: string, args: unknown[], source: LiveSourceId, signal?: AbortSignal, id?: string): Promise<T> => {
     if (!available()) return Promise.reject(new LiveError("other", UNAVAILABLE_MESSAGE));
     if (signal?.aborted) return Promise.reject(cancelled());
+    const consent = consentToken();
     return new Promise<T>((resolve, reject) => {
       let settled = false;
       const abort = () => {
@@ -68,6 +78,7 @@ export function hostLiveClient(host: ArdiaHost | undefined = ardiaHost, connecte
           if (settled) return;
           settled = true;
           if (id && typeof (error as { code?: unknown })?.code !== "string") void invokeHost("ArdiaLive.cancel", { args: [id] }, host).catch(() => {});
+          noteKeyringError(error, consent);
           reject(liveError(error, connected(source)));
         },
       );

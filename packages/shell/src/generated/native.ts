@@ -315,8 +315,9 @@ export type MagnifyAreaNative = {
 };
 
 export type WheelAreaNative = {
-  devWheel(windowId: string, x: number, y: number, steps: { phase?: string; dy: number; momentum?: boolean; precise?: boolean }[]): Promise<{ claimed?: boolean[]; error?: string }>;
+  devWheel(windowId: string, x: number, y: number, steps: { phase?: string; dy: number; momentum?: boolean; precise?: boolean; afterMs?: number }[]): Promise<{ claimed?: boolean[]; inputs?: { t: number; dy: number }[]; frames?: { t: number; model: number; shown: number }[]; error?: string }>;
   glideScroll(tag: number, y: number, durationMs: number): Promise<void>;
+  steerScroll(tag: number, lo: number, hi: number, glideMs: number, canForward: boolean, canBack: boolean): Promise<void>;
 };
 
 export type PeekStageNative = {
@@ -488,6 +489,7 @@ export type TelemetryLocalNative = {
 export type FieldGlowNative = {
   show(id: string, timings: number[]): void;
   progress(id: string, progress: number, still: boolean): void;
+  pulse(id: string, period: number, low: number): void;
   finish(id: string, still: boolean): void;
   reset(id: string): void;
 };

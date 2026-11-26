@@ -1,21 +1,11 @@
-#ifndef Shell
-  #define Shell "rnw"
-#endif
-#if Shell == "webui"
-  #define LaunchSwitch "--ardia-shell=webui"
-  #define OpenSuffix " --ardia-shell=webui"
-  #define ShellMarker "ardia-ui\index.html"
-  #define RetiredShell "rnw"
-  #define RetiredMarker "ArdiaApp.dll"
-  #define RetiredMarkerAlt "ArdiaApp.dll"
-#else
-  #define LaunchSwitch ""
-  #define OpenSuffix ""
-  #define ShellMarker "ArdiaApp.dll"
-  #define RetiredShell "webui"
-  #define RetiredMarker "ardia-ui\index.html"
-  #define RetiredMarkerAlt "ardia-webui-migrate.exe"
-#endif
+#define Shell "webui"
+#define LaunchSwitch "--ardia-shell=webui"
+#define OpenSuffix " --ardia-shell=webui"
+#define ShellMarker "ardia-ui\index.html"
+#define RetiredShell "rnw"
+#define RetiredMarker "ArdiaApp.dll"
+#define LoginItemName "Ardia WebUI"
+#define RetiredLoginItemName "Ardia"
 
 [Setup]
 AppId={{47A92F18-32B0-4548-A1EF-72C217FE1836}
@@ -57,9 +47,9 @@ Source: "{#ShellManifest}"; DestDir: "{app}"; DestName: "ardia-{#Shell}-files.tx
 #ifdef RetiredList
 Source: "{#RetiredList}"; DestName: "retired-shell.txt"; Flags: dontcopy
 #endif
-
-[Dirs]
-Name: "{localappdata}\Ardia\User Data"
+#ifdef KeptList
+Source: "{#KeptList}"; DestName: "kept-files.txt"; Flags: dontcopy
+#endif
 
 [UninstallDelete]
 Type: files; Name: "{app}\debug.log"
@@ -149,6 +139,103 @@ begin
     Sleep(250);
     Waited := Waited + 250;
   end;
+end;
+
+const
+  LoginItemsKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
+  LoginApprovalsKey = 'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run';
+
+function LaunchesThisArdia(Command: String): Boolean;
+var
+  Exe, Rest, Next: String;
+begin
+  Result := False;
+  Exe := ExpandConstant('{app}\Ardia.exe');
+  Command := Trim(Command);
+  if CompareText(Copy(Command, 1, Length(Exe) + 2), '"' + Exe + '"') = 0 then
+    Rest := Copy(Command, Length(Exe) + 3, Length(Command))
+  else if CompareText(Copy(Command, 1, Length(Exe)), Exe) = 0 then
+    Rest := Copy(Command, Length(Exe) + 1, Length(Command))
+  else
+    Exit;
+  Next := Copy(Rest, 1, 1);
+  if (Next <> '') and (Next <> ' ') and (Next <> #9) then Exit;
+  Rest := Trim(Rest);
+  Result := (Rest = '') or (CompareText(Rest, '--ardia-shell=webui') = 0) or (CompareText(Rest, '--ardia-shell=rnw') = 0);
+end;
+
+function LoginItemLaunchesThisArdia(Name: String): Boolean;
+var
+  Command: String;
+begin
+  Result := RegQueryStringValue(HKCU, LoginItemsKey, Name, Command) and LaunchesThisArdia(Command);
+end;
+
+function WriteLoginItem(Name: String): Boolean;
+var
+  Command, Wanted: String;
+begin
+  Wanted := '"' + ExpandConstant('{app}\Ardia.exe') + '"{#OpenSuffix}';
+  Result := RegQueryStringValue(HKCU, LoginItemsKey, Name, Command) and (Command = Wanted);
+  if Result then Exit;
+  Result := RegWriteStringValue(HKCU, LoginItemsKey, Name, Wanted);
+  if Result then
+    Log('Login item ' + Name + ': now ' + Wanted)
+  else
+    Log('Login item ' + Name + ': could not be written');
+end;
+
+function CarryLoginItemApproval(DestExisted: Boolean): Boolean;
+var
+  Approval: AnsiString;
+begin
+  Result := True;
+  if DestExisted then Exit;
+  if RegValueExists(HKCU, LoginApprovalsKey, '{#RetiredLoginItemName}') then
+  begin
+    Result := RegQueryBinaryValue(HKCU, LoginApprovalsKey, '{#RetiredLoginItemName}', Approval);
+    if Result then
+      Result := RegWriteBinaryValue(HKCU, LoginApprovalsKey, '{#LoginItemName}', Approval);
+  end
+  else if RegValueExists(HKCU, LoginApprovalsKey, '{#LoginItemName}') then
+    Result := RegDeleteValue(HKCU, LoginApprovalsKey, '{#LoginItemName}');
+  if not Result then
+    Log('Login item {#LoginItemName}: its approval could not be carried over, so {#RetiredLoginItemName} stays');
+end;
+
+procedure MoveLoginItem(DestExisted: Boolean);
+begin
+  if not CarryLoginItemApproval(DestExisted) then
+  begin
+    WriteLoginItem('{#RetiredLoginItemName}');
+    Exit;
+  end;
+  if not WriteLoginItem('{#LoginItemName}') then
+  begin
+    WriteLoginItem('{#RetiredLoginItemName}');
+    Exit;
+  end;
+  if RegDeleteValue(HKCU, LoginItemsKey, '{#RetiredLoginItemName}') then
+  begin
+    RegDeleteValue(HKCU, LoginApprovalsKey, '{#RetiredLoginItemName}');
+    Log('Login item {#RetiredLoginItemName}: moved to {#LoginItemName}');
+  end;
+end;
+
+procedure UpdateLoginItems;
+var
+  DestExisted: Boolean;
+begin
+  DestExisted := RegValueExists(HKCU, LoginItemsKey, '{#LoginItemName}');
+  if LoginItemLaunchesThisArdia('{#RetiredLoginItemName}') then
+  begin
+    if DestExisted and not LoginItemLaunchesThisArdia('{#LoginItemName}') then
+      WriteLoginItem('{#RetiredLoginItemName}')
+    else
+      MoveLoginItem(DestExisted);
+  end
+  else if LoginItemLaunchesThisArdia('{#LoginItemName}') then
+    WriteLoginItem('{#LoginItemName}');
 end;
 
 #ifdef RetiredList
@@ -292,11 +379,30 @@ begin
       Log('Owned files: could not keep ' + Failed[I] + ' in ' + Path);
 end;
 
+procedure ReadKeptFiles(Kept: TStringList);
+var
+  Entries: TArrayOfString;
+  I: Integer;
+begin
+#ifdef KeptList
+  if not FileExists(ExpandConstant('{tmp}\kept-files.txt')) then
+    ExtractTemporaryFile('kept-files.txt');
+  if not LoadStringsFromFile(ExpandConstant('{tmp}\kept-files.txt'), Entries) then
+  begin
+    Log('Retired shell: the list of files both shells keep could not be read');
+    Exit;
+  end;
+  for I := 0 to GetArrayLength(Entries) - 1 do
+    if Trim(Entries[I]) <> '' then
+      Kept.Add(Trim(Entries[I]));
+#endif
+end;
+
 procedure RemoveRetiredShell(Folder: String);
 var
   Manifest, Entry: String;
   Entries: TArrayOfString;
-  Removed, Failed: TStringList;
+  Removed, Failed, Kept: TStringList;
   FromManifest: Boolean;
   I: Integer;
 begin
@@ -322,11 +428,15 @@ begin
   end;
   Removed := TStringList.Create;
   Failed := TStringList.Create;
+  Kept := TStringList.Create;
   try
+    ReadKeptFiles(Kept);
     for I := 0 to GetArrayLength(Entries) - 1 do
     begin
       Entry := Trim(Entries[I]);
-      if ExactEntryValid(Entry) then
+      if InList(Kept, Entry) then
+        Log('Retired shell: ' + Entry + ' is kept by both shells, so it stays')
+      else if ExactEntryValid(Entry) then
         RemoveOwnedFile(Folder, Entry, Removed, Failed)
       else if not FromManifest and OwnedEntryValid(Entry) and (Copy(Entry, 1, 2) = '*\') then
         RemoveInEachFolder(Folder, Copy(Entry, 3, Length(Entry) - 2), Removed, Failed)
@@ -349,6 +459,7 @@ begin
   finally
     Removed.Free;
     Failed.Free;
+    Kept.Free;
   end;
 end;
 
@@ -372,6 +483,7 @@ begin
   try
     for I := 0 to GetArrayLength(Current) - 1 do
       Kept.Add(Trim(Current[I]));
+    ReadKeptFiles(Kept);
     for I := 0 to GetArrayLength(PreviousOwn) - 1 do
     begin
       Entry := Trim(PreviousOwn[I]);
@@ -392,7 +504,7 @@ var
   Folder: String;
 begin
   Folder := ExpandConstant('{app}');
-  RetiredShellFound := FileExists(Folder + '\{#RetiredMarker}') or FileExists(Folder + '\{#RetiredMarkerAlt}') or FileExists(Folder + '\ardia-{#RetiredShell}-files.txt');
+  RetiredShellFound := FileExists(Folder + '\{#RetiredMarker}') or FileExists(Folder + '\ardia-{#RetiredShell}-files.txt');
   PreviousOwnFound := ReadManifest(Folder, 'ardia-{#Shell}-files.txt', PreviousOwn);
 end;
 
@@ -415,11 +527,16 @@ begin
   RemoveRetiredShell(Folder);
 end;
 
+#endif
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+#ifdef RetiredList
   if CurStep = ssInstall then
     NoteInstalledShells
   else if CurStep = ssPostInstall then
     RemoveFilesNoLongerShipped;
-end;
 #endif
+  if CurStep = ssPostInstall then
+    UpdateLoginItems;
+end;

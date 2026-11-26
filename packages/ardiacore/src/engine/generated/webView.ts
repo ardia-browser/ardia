@@ -13,6 +13,7 @@ export type WebViewCalls = {
   "webView.setVideoUpscalingTestConditions": [{ lowPower?: boolean; thermalPressure?: boolean; capturing?: boolean }, null];
   "webView.videoUpscalingState": [{}, { enabled: boolean; lowPower: boolean; thermalPressure: boolean; appActive: boolean; tabs: { tabId: number; allowed: boolean; capturing: boolean }[] } | null];
   "webView.takeContentDrift": [{}, { layouts: number; fits: number; maxPoints: number }];
+  "webView.takePageMetrics": [{}, Record<string, number>];
   "webView.takeFirstPaintHolds": [{}, { held: number; painted: number; loaded: number; pressed: number; timedOut: number; heldMs: number }];
 };
 

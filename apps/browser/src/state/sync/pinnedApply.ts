@@ -2,7 +2,7 @@ import type { ApplyRecords } from "../../platform/sync";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { depthsIn, leaveGroups, orderSections, syncGroupOrder, withParent } from "../groups/groups";
 import { makeTab, newId, pinKeyOf, ROW_PIN } from "../browser/model";
-import { noteRemotePinDeletion } from "../pins/tabCleanup";
+import { noteRemotePinDeletion } from "../pins/clearedTabs";
 import { type PinSyncEntry } from "../pins/pinChoices";
 import { adoptParkedPins, parkWindowPins } from "../pins/parkedPins";
 import { arrangePinnedArea } from "../pins/pinnedArea";

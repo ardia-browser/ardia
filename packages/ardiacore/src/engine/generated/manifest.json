@@ -247,6 +247,11 @@
           "windows": "custom",
           "routeField": "tasks"
         },
+        "nativeMessagingHosts": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
         "childProcessCpu": {
           "mac": "custom",
           "desktop": "custom",
@@ -943,11 +948,6 @@
           "desktop": "custom",
           "windows": "absent"
         },
-        "ctrlTabMru": {
-          "mac": "custom",
-          "desktop": "absent",
-          "windows": "absent"
-        },
         "release": {
           "mac": "custom",
           "desktop": "custom",
@@ -1105,6 +1105,16 @@
           "mac": "service",
           "desktop": "route",
           "windows": "service"
+        },
+        "diagnostics": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "input": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
         },
         "reportCommits": {
           "mac": "custom",
@@ -1397,6 +1407,11 @@
           "desktop": "absent",
           "windows": "absent"
         },
+        "takePageMetrics": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
         "takeFirstPaintHolds": {
           "mac": "custom",
           "desktop": "absent",
@@ -1495,8 +1510,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "9d07e607c3521a6eb746371c018d63140c3412eb578869dcb84205c5aab3c088",
-        "swift": "d49600f2662c2179c47ef172af2959b23eca51e846f94f24fb4368c644b115aa"
+        "types": "824356c4ceb0f526b84811590c1aab1a8ad59aa6b3f949f06ad68fb723cef12f",
+        "swift": "41a93592952890260b4a8e0f8fba27b9931a42b5ee4a4b1b2bb25ca358f7c010"
       },
       "modules": {
         "ArdiaShell": {
@@ -3430,6 +3445,20 @@
               "mac": "custom",
               "desktop": "absent",
               "windows": "absent"
+            },
+            "steerScroll": {
+              "args": [
+                "tag",
+                "lo",
+                "hi",
+                "glideMs",
+                "canForward",
+                "canBack"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
             }
           },
           "events": {}
@@ -4400,6 +4429,17 @@
                 "id",
                 "progress",
                 "still"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "pulse": {
+              "args": [
+                "id",
+                "period",
+                "low"
               ],
               "async": false,
               "mac": "custom",

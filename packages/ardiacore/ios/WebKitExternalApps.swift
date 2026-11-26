@@ -62,7 +62,7 @@ final class WebKitExternalApps {
   func resolve(_ id: String, open: Bool, remember: Bool) {
     guard let request = pending.removeValue(forKey: id), open else { return }
     if remember, let rememberable = request.rememberable {
-      stores.update(rememberable.store) { $0.externalAllowances[rememberable.key] = rememberable.grant }
+      stores.update(rememberable.store) { $0.allowExternal(rememberable.key, rememberable.grant) }
     }
     self.open(request.url)
   }
@@ -81,7 +81,7 @@ final class WebKitExternalApps {
   }
 
   func removeAllowance(profile: String, origin: String, scheme: String) {
-    stores.update(stores.id(of: profile)) { $0.externalAllowances.removeValue(forKey: SiteKey(site: origin, kind: scheme)) }
+    stores.update(stores.id(of: profile)) { $0.removeExternal(SiteKey(site: origin, kind: scheme)) }
   }
 
   private func open(_ url: URL) {

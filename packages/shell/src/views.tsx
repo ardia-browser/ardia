@@ -72,15 +72,14 @@ export type FolderIconProps = ViewProps & {
 
 export const FolderIcon = requireNativeViewManager<FolderIconProps>("ArdiaFolderIcon");
 
-export type WheelPhase = "began" | "changed" | "ended" | "cancelled" | "mayBegin" | "none";
-export type WheelInfo = { dy: number; phase: WheelPhase; momentum: boolean; precise: boolean };
-export type WheelAreaProps = ViewProps & { onWheel?: (e: WheelInfo) => void };
-export type NativeWheelAreaProps = Omit<WheelAreaProps, "onWheel"> & { onWheel?: (e: { nativeEvent: WheelInfo }) => void };
+export type WheelStep = 1 | -1;
+export type WheelAreaProps = ViewProps & { onStep?: (direction: WheelStep) => void };
+export type NativeWheelAreaProps = Omit<WheelAreaProps, "onStep"> & { onStep?: (e: { nativeEvent: { direction: WheelStep } }) => void };
 
 const NativeWheelArea = requireNativeViewManager<NativeWheelAreaProps>("ArdiaWheelArea");
 
-export function WheelArea({ onWheel, ...props }: WheelAreaProps) {
-  return <NativeWheelArea onWheel={onWheel && ((e) => onWheel(e.nativeEvent))} {...props} />;
+export function WheelArea({ onStep, ...props }: WheelAreaProps) {
+  return <NativeWheelArea onStep={onStep && ((e) => onStep(e.nativeEvent.direction))} {...props} />;
 }
 
 export type ContextMenuAreaProps = ViewProps & {

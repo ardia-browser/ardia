@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { StyleSheet, View, type NativeSyntheticEvent } from "react-native";
+import { StyleSheet, View, type NativeSyntheticEvent, type ViewStyle } from "react-native";
 import { WheelArea, WindowDragRegion } from "../ui";
 import { space } from "../ui/tokens";
+import { trafficLightsDrawn } from "../../lib/windowChrome";
+import { useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
+import { useTrafficLightsCenterY } from "../../state/windows/nativeWindow";
 import { QUESTIONS, useOnboarding, type QuestionId } from "../../state/onboarding/onboarding";
 import { isWebDemo } from "../../state/onboarding/demoSteps";
 import { sectionIndexOf, useSections, type OnboardingSection } from "../../state/onboarding/sections";
@@ -79,7 +82,7 @@ export function OnboardingFlow() {
   return (
     <FlowSlotsContext.Provider value={slots}>
       <MockFocusContext.Provider value={focus}>
-        <WheelArea style={{ flex: 1 }} onWheel={(info) => scroller.current?.wheel(info)}>
+        <WheelArea style={{ flex: 1 }} onStep={(direction) => scroller.current?.move(direction, "wheel")}>
           <View
             ref={keys}
             focusable
@@ -95,10 +98,7 @@ export function OnboardingFlow() {
           >
             <ThemeGradient />
             <View style={{ width: Math.min(onboardingFlow.column, width || onboardingFlow.column) }}>
-              <View style={{ height: onboardingFlow.titleBar, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: onboardingFlow.columnPad }}>
-                <WindowDragRegion style={StyleSheet.absoluteFill} />
-                <RedoCancel />
-              </View>
+              <FlowHeader />
               <FlowPreviewShownContext.Provider value={showPreview}>
                 <SectionScroller ref={scroller} sections={sections} active={active} render={renderSection} />
               </FlowPreviewShownContext.Provider>
@@ -109,6 +109,24 @@ export function OnboardingFlow() {
         </WheelArea>
       </MockFocusContext.Provider>
     </FlowSlotsContext.Provider>
+  );
+}
+
+function centeredOnLights(lightsY: number | null): ViewStyle | null {
+  if (lightsY === null) return null;
+  const shift = Math.max(-onboardingFlow.titleBar / 2, Math.min(onboardingFlow.titleBar / 2, 2 * lightsY - onboardingFlow.titleBar));
+  return shift > 0 ? { paddingTop: shift } : { paddingBottom: -shift };
+}
+
+function FlowHeader() {
+  const windowId = useWindowId();
+  const fullScreen = useWindowFullScreen(windowId);
+  const lightsY = useTrafficLightsCenterY(trafficLightsDrawn() && !fullScreen ? windowId : null);
+  return (
+    <View style={[{ height: onboardingFlow.titleBar, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: onboardingFlow.columnPad }, centeredOnLights(lightsY)]}>
+      <WindowDragRegion style={StyleSheet.absoluteFill} />
+      <RedoCancel />
+    </View>
   );
 }
 

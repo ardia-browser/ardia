@@ -70,6 +70,8 @@ internal class WebViewPageClient(private val page: WebViewPage) : WebViewClient(
 
     override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) = page.historyUpdated(view, url, isReload)
 
+    override fun onScaleChanged(view: WebView, oldScale: Float, newScale: Float) = page.scaleChanged(view)
+
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
         if (!request.isForMainFrame) return
         if (error.errorCode == ERROR_UNSUPPORTED_SCHEME || error.description?.contains("ERR_ABORTED") == true) return

@@ -8,10 +8,10 @@ const APP = fileURLToPath(new URL("../../../", import.meta.url));
 const ON_WINDOWS = `import { registerHooks } from "node:module";
 registerHooks({ resolve(specifier, context, next) {
   const resolved = next(specifier, context);
-  return resolved.url.endsWith("/lib/platformFeatures.ts") ? { ...resolved, url: resolved.url.replace(/platformFeatures\\.ts$/, "platformFeatures.windows.ts") } : resolved;
+  return resolved.url.endsWith("/lib/platformFeatures.ts") ? { ...resolved, url: resolved.url.replace(/platformFeatures\\.ts$/, "platformFeatures.win.ts") } : resolved;
 } });`;
 
-const WINDOWS_FEATURES = new URL("../../lib/platformFeatures.windows.ts", import.meta.url).href;
+const WINDOWS_FEATURES = new URL("../../lib/platformFeatures.win.ts", import.meta.url).href;
 
 const WITHOUT_EXPORTS = `import { registerHooks } from "node:module";
 const features = "import { PLATFORM_FEATURES as windows } from '${WINDOWS_FEATURES}'; export const PLATFORM_FEATURES = { ...windows, exportsBookmarksAndPasswords: false };";

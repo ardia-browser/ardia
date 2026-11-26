@@ -16,3 +16,20 @@ test("forward runs only the handler the current question published", () => {
   assert.equal(publishedForward(slots, null), null);
   assert.deepEqual(ran, []);
 });
+
+test("a question that enables or disables its forward move tells whoever listens, once per change", () => {
+  const slots = createFlowSlots();
+  let told = 0;
+  const stop = slots.subscribeForward(() => told++);
+  slots.publish({ key: "source.source", actions: null, preview: null });
+  assert.equal(publishedForward(slots, "source.source"), null);
+  slots.forward.run = () => {};
+  slots.forward.run = () => {};
+  assert.equal(told, 1, "swapping one handler for another changes nothing a listener cares about");
+  assert.notEqual(publishedForward(slots, "source.source"), null);
+  slots.forward.run = null;
+  assert.equal(told, 2);
+  stop();
+  slots.forward.run = () => {};
+  assert.equal(told, 2);
+});

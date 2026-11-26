@@ -97,6 +97,7 @@ struct ArdiaPageReports {
   BOOL autoPictureInPictureActive{};
   BOOL keptByWindowServer{};
   BOOL playedForAutoPictureInPicture{};
+  NSUInteger autoPictureInPictureWatch{};
 };
 
 struct ArdiaCommits {
@@ -182,6 +183,8 @@ struct ArdiaPageFocusState {
   id _interfaceScaleObserver;
 }
 - (ArdiaWindowController *)controller;
+- (void)notePageMetrics:(NSDictionary *)metrics main:(BOOL)main;
+- (void)sendMetricsGenerationTo:(NSString *)frameId;
 - (void)emit:(NSString *)name payload:(NSDictionary *)payload;
 @end
 

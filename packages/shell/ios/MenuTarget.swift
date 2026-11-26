@@ -11,13 +11,14 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
     let body: [String: Any] = [
       "command": command, "arg": arg as Any, "windowId": windowId as Any, "focusGeneration": FocusHandoff.shared.takeBegun() as Any,
     ]
-    ShellEvents.send(.command, mouseButton.map { ArdiaConsentStamp.begin().onto(body.merging(["mouseButton": $0]) { $1 }) } ?? body)
+    ShellEvents.send(.command, ArdiaConsentStamp.begin().onto(mouseButton.map { body.merging(["mouseButton": $0]) { $1 } } ?? body))
   }
 
   private static let focusMovingCommands: Set<String> = ["newTab", "focusCommandBar", "findInPage", "showHistory"]
 
   @objc(commandDispatch:) func performCommand(_ sender: NSMenuItem) {
     guard let item = sender as? CommandItem else { return }
+    guard KeyRepeatGate.dispatches(item.command, fallback: NSApp.currentEvent) else { return }
     perform(item, in: NSApp.keyWindow, windowId: WindowManager.shared.keyWindowId)
   }
 
@@ -54,8 +55,9 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
   @objc(undo:) func undoOrReopenClosedTab(_ sender: Any?) {
     if Self.undoReopensClosedTab {
       dispatch("reopenClosedTab", nil, windowId: WindowManager.shared.keyWindowId)
-    } else if let edits = Self.focusedTextEdits {
+    } else if let text = Self.focusedText, let edits = text.undoManager {
       FocusHandoff.shared.countTextFieldEdit(redo: false)
+      InlineKeep.settle(text)
       edits.undo()
     } else {
       NSApp.sendAction(Self.undoAction, to: nil, from: sender)
@@ -63,18 +65,21 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
   }
 
   @objc(redo:) func redoEdit(_ sender: Any?) {
-    if let edits = Self.focusedTextEdits {
+    if let text = Self.focusedText, let edits = text.undoManager {
       FocusHandoff.shared.countTextFieldEdit(redo: true)
+      InlineKeep.settle(text)
       edits.redo()
     } else {
       NSApp.sendAction(Self.redoAction, to: nil, from: sender)
     }
   }
 
-  private static var focusedTextEdits: UndoManager? {
+  private static var focusedText: NSTextView? {
     guard let text = NSApp.keyWindow?.firstResponder as? NSTextView, text.allowsUndo else { return nil }
-    return text.undoManager
+    return text
   }
+
+  private static var focusedTextEdits: UndoManager? { focusedText?.undoManager }
 
   private static var undoReopensClosedTab: Bool {
     let state = MenuState.current
@@ -88,10 +93,7 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
 
   private func forwardEdit(_ action: Selector, from sender: Any?) {
     if Self.pageIsCovered { return }
-    if FocusHandoff.shared.defers(action) {
-      PasteRefusal.reportMenuPaste(action, .deferred)
-      return
-    }
+    if FocusHandoff.shared.defers(action) { return }
     FocusHandoff.shared.noteForwarded(action)
     if !NSApp.sendAction(action, to: nil, from: sender) { PasteRefusal.reportMenuPaste(action, .refused) }
   }
@@ -153,10 +155,7 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
     let web = Selector(("pasteAndMatchStyle:"))
     FocusHandoff.shared.countPasteAndMatchStyleKey(NSApp.currentEvent)
     if Self.pageIsCovered { return }
-    if FocusHandoff.shared.defers(web) {
-      PasteRefusal.reportMenuPaste(web, .deferred)
-      return
-    }
+    if FocusHandoff.shared.defers(web) { return }
     let handled =
       NSApp.target(forAction: web) != nil
       ? NSApp.sendAction(web, to: nil, from: sender)

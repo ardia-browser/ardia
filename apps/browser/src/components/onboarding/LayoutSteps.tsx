@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, type PeekModifier, type Settings } from "../../state/
 import { ChoiceList, type ChoiceOption, type MockFocus } from "./ChoiceList";
 import { useScreen } from "./Screen";
 import { useSection, useSharedMockFocus } from "./sectionContext";
-import { confirmAnswer, previewLive, PRESET_NAMES, PRESETS, setOnboardingDraft, skipStep, useOnboarding, type Preset, type QuestionId } from "../../state/onboarding/onboarding";
+import { confirmAnswer, previewLive, PRESET_NAMES, PRESETS, setOnboardingDraft, skipStep, touchedOrPresetPatch, useOnboarding, type Preset, type QuestionId } from "../../state/onboarding/onboarding";
 import { keysOf, questionKeys, useQuestions } from "../../state/onboarding/questions";
 import { placementCard, placementFromCard } from "../../state/omnibox/barPlacement";
 import { StepActions, StepLayout } from "./StepLayout";
@@ -14,9 +14,8 @@ import { OptionCard } from "./OptionCard";
 import { OptionRow } from "./Parts";
 import { keyText } from "../../state/commands/keyText";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
-import type { CtrlTabPreset } from "../../state/commands/ctrlTabKeys";
-import { ctrlTabAnswerPatch, noteCtrlTabAnswer, pickOnboardingCtrlTab, useOnboardingCtrlTab } from "../../state/onboarding/ctrlTabAnswer";
-import { CTRL_TAB_CHOICES } from "../settings/ctrlTabChoices";
+import { noteSettingsPick } from "../../state/telemetry/settingsPickerCounts";
+import { CTRL_TAB_ANSWERS, ctrlTabAnswerOf, ctrlTabAnswerPatch, type CtrlTabAnswer } from "../settings/ctrlTabChoices";
 
 export function Page({
   id,
@@ -164,8 +163,9 @@ const WINDOW_CHOICES: ChoiceOption<boolean>[] = [
   { value: true, preview: "windows-shared", title: "Shared", subtitle: "Every window shows the same tabs, as in Arc" },
 ];
 const CTRL_TAB_KEY = PLATFORM_TERMS.switchTabsKey;
-const CTRL_TAB_OPTIONS: ChoiceOption<CtrlTabPreset | null>[] = CTRL_TAB_CHOICES.map((c) => ({ value: c.value, preview: `ctrltab-${c.value}`, title: c.title, subtitle: c.caption }));
-const CTRL_TAB_PICKED: Record<CtrlTabPreset, string> = {
+const CTRL_TAB_OPTIONS: ChoiceOption<CtrlTabAnswer | null>[] = CTRL_TAB_ANSWERS.map((c) => ({ value: c.value, preview: `ctrltab-${c.value}` as const, title: c.title, subtitle: c.caption }));
+const CTRL_TAB_KEYS = ["tabSwitcherOrder", "tabSwitcherView"] as const;
+const CTRL_TAB_PICKED: Record<CtrlTabAnswer, string> = {
   step: `${CTRL_TAB_KEY} steps through your tabs`,
   switcher: `${CTRL_TAB_KEY} opens the recent tabs switcher`,
 };
@@ -267,7 +267,7 @@ export function TabsStep() {
         id={id}
         title="A few more tab habits"
         subtitle="Small things Arc and Dia do differently."
-        patch={Object.fromEntries(TABS_MORE.map((k) => [k, values[k]]))}
+        patch={touchedOrPresetPatch(TABS_MORE, values)}
         picked={[]}
       >
         <View style={{ gap: space.m }}>
@@ -298,17 +298,18 @@ export function TabsStep() {
 }
 
 function CtrlTabQuestion({ focus }: { focus: MockFocus }) {
-  const choice = useOnboardingCtrlTab();
+  const { values } = useScreen(CTRL_TAB_KEYS);
+  const answer = ctrlTabAnswerOf(values);
   return (
     <Page
       id="ctrlTab"
       title={`What does ${CTRL_TAB_KEY} do?`}
       subtitle="How you switch tabs from the keyboard."
-      patch={ctrlTabAnswerPatch(choice)}
-      picked={choice === "custom" ? [] : [CTRL_TAB_PICKED[choice]]}
-      onConfirm={() => noteCtrlTabAnswer(choice)}
+      patch={{ tabSwitcherOrder: values.tabSwitcherOrder, tabSwitcherView: values.tabSwitcherView }}
+      picked={answer ? [CTRL_TAB_PICKED[answer]] : []}
+      onConfirm={() => noteSettingsPick("tabSwitcherOrder", values.tabSwitcherOrder === "recent" ? "recent" : "in_order")}
     >
-      <ChoiceList options={CTRL_TAB_OPTIONS} value={choice === "custom" ? null : choice} onChange={(preset) => preset && pickOnboardingCtrlTab(preset)} mock={focus} />
+      <ChoiceList options={CTRL_TAB_OPTIONS} value={answer} onChange={(picked) => picked && change(ctrlTabAnswerPatch(picked, values.tabSwitcherView), true)} mock={focus} />
     </Page>
   );
 }

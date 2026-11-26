@@ -21,6 +21,7 @@ import { pressButton, renderSurface, someTabs, textOf, unmount, withTabs } from 
 import { launchTabs } from "../state/tabs/tabsState";
 
 const realWindow = Dimensions.get("window");
+const FRAME_MS = 20;
 
 const page = (url: string, isLoading = false) =>
   usePages.setState((state) => ({ ...state, navigation: { t0: { url, title: "Site 0", canGoBack: false, canGoForward: false, isLoading, pageZoom: 1, isDesktopSite: false, blockedRequests: 0 } as never } }));
@@ -33,6 +34,7 @@ beforeEach(() => {
   withTabs(1);
   page("https://site0.example/");
   useBrowse.setState({ surface: "browsing", sheet: null });
+  useLibrary.setState({ open: false });
   useSettingsNav.setState({ open: false, stack: [{ page: "root" }], popping: false });
   useDefaultBrowser.setState({ status: { isDefault: false, canAsk: true } });
   useSync.setState((state) => ({ ...state, status: OFF_STATUS, view: { devices: [], profiles: [], search: null, syncedAt: null, selectedProfileId: null, receivers: [] } as never }));
@@ -340,15 +342,32 @@ test("a print asked for and then given up by reopening the menu doesn't run late
   unmount(root);
 });
 
-test("the redesign's Site Settings closes the menu at once and opens Settings at Site Settings once the menu has gone, as main", async () => {
+test("the drawn redesign's Site Settings closes the menu at once and opens Settings at Site Settings on the next frame, while the menu slides away, without waiting for it to go", async () => {
   const root = await openMenu("redesigned");
   await pressButton(root, "Site Settings");
   expect(usePageUi.getState().menuOpen).toBe(false);
   expect(usePageUi.getState().menuPage).toBe("main");
   expect(useSettingsNav.getState().open).toBe(false);
-  act(() => pageMenuHidden());
+  act(() => jest.advanceTimersByTime(FRAME_MS));
   expect(useSettingsNav.getState().open).toBe(true);
-  expect(useSettingsNav.getState().stack.at(-1)).toEqual({ page: "siteSettings" });
+  expect(useSettingsNav.getState().stack).toEqual([{ page: "siteSettings" }]);
+  act(() => pageMenuHidden());
+  expect(useSettingsNav.getState().stack).toEqual([{ page: "siteSettings" }]);
+  unmount(root);
+});
+
+test("the drawn redesign's Site Settings opens nothing when the menu reopens or the tab leaves before its frame", async () => {
+  const root = await openMenu("redesigned");
+  await pressButton(root, "Site Settings");
+  await act(async () => {
+    await openPageMenu();
+  });
+  act(() => jest.advanceTimersByTime(FRAME_MS));
+  expect(useSettingsNav.getState().open).toBe(false);
+  await pressButton(root, "Site Settings");
+  act(() => useTabs.setState({ selectedId: "elsewhere" }));
+  act(() => jest.advanceTimersByTime(FRAME_MS));
+  expect(useSettingsNav.getState().open).toBe(false);
   unmount(root);
 });
 

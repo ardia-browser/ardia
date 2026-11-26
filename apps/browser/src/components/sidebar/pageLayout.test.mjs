@@ -75,7 +75,7 @@ test("a free-space reading that arrives before the sidebar has a height is kept 
 });
 
 test("no sidebar page mounts past its warm first screen while it isn't the shown one, during a hold included", () => {
-  const sidebar = readFileSync(new URL("./Sidebar.tsx", import.meta.url), "utf8");
+  const sidebar = readFileSync(new URL("./SidebarPages.tsx", import.meta.url), "utf8");
   assert.match(sidebar, /rows=\{page\.id === shown \? undefined : capRows\}/);
   assert.doesNotMatch(sidebar, /entriesThrough|throughActive|pageRowsCap/, "nothing pre-mounts down to a selected tab");
 });

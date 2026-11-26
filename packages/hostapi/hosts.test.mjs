@@ -138,7 +138,6 @@ export function linuxServed(read) {
 }
 
 const linuxEvents = linuxEventNames(linuxContract);
-const windows = JSON.parse(read("packages/expo-windows/src/engine/domains/forwarded.json"));
 const { topics: macTopics, renamed: macRenamed } = macForwarding(read("packages/ardiacore/ios/ArdiaEngineBridge.mm"));
 const generatedEvent = (name) => domains.some(([domain]) => name.startsWith(`${domain}.`));
 const eventsOf = (host, binding) => domains.flatMap(([domain, entry]) => Object.entries(entry.events).filter(([, event]) => event[host] === binding).map(([event, row]) => ({ name: `${domain}.${event}`, topic: row.topic })));
@@ -147,7 +146,6 @@ test("the scans find the hosts' tables", () => {
   assert.ok(domains.length > 0);
   assert.ok(linuxRoutes.length > 30);
   assert.ok(linuxEvents.size > 3);
-  assert.ok(Object.keys(windows.forwarded).length > 5);
   assert.ok(macTopics.length > 3);
   assert.ok(macRenamed.size > 0);
 });
@@ -283,7 +281,7 @@ test("the Linux host forwards exactly the desktop-forwarded events and its own L
 });
 
 test("each host forwards an engine topic as one event only", () => {
-  for (const host of ["mac", "desktop", "windows"]) {
+  for (const host of ["mac", "desktop"]) {
     const topics = eventsOf(host, "forward").map(({ topic }) => topic);
     assert.deepEqual(topics.filter((topic, index) => topics.indexOf(topic) !== index), [], `${host} forwards a topic twice`);
   }
@@ -294,29 +292,6 @@ test("the Mac forwards exactly each generated domain's Mac-forwarded engine topi
   const generatedTopics = macTopics.filter((topic) => generatedEvent(macRenamed.get(topic) ?? topic));
   assert.deepEqual([...generatedTopics].sort(), forwarded.map(({ topic }) => topic).sort());
   for (const { name, topic } of forwarded) assert.equal(macRenamed.get(topic) ?? topic, name, `the Mac emits topic ${topic} as ${name}`);
-});
-
-test("a domain Windows has no module for is absent there call by call and event by event, and forwarded.json never names it", () => {
-  for (const domain of NO_WINDOWS_MODULE) {
-    const entry = manifest.domains[domain];
-    assert.ok(entry, `${domain} is a generated domain`);
-    assert.deepEqual(Object.entries(entry.calls).filter(([, call]) => call.windows !== "absent").map(([verb]) => verb), [], `${domain}'s calls Windows serves`);
-    assert.deepEqual(Object.entries(entry.events).filter(([, event]) => event.windows !== "absent").map(([event]) => event), [], `${domain}'s events Windows sends`);
-    assert.equal(Object.hasOwn(windows.forwarded, domain), false, `forwarded.json forwards ${domain}`);
-    assert.equal(Object.hasOwn(windows.missing, domain), false, `forwarded.json lists ${domain} as missing, which gives it a module`);
-  }
-});
-
-test("Windows forwards exactly each generated domain's service-backed calls to the same engine call, and its forwarded events from their engine topics", () => {
-  for (const [domain, entry] of domains.filter(([domain]) => !NO_WINDOWS_MODULE.includes(domain))) {
-    const forwarded = Object.fromEntries(Object.entries(entry.calls).filter(([, call]) => call.windows === "service").map(([verb, call]) => [verb, call.service]));
-    assert.deepEqual(windows.forwarded[domain] ?? {}, forwarded, `forwarded.json's ${domain} rows`);
-    const absent = Object.entries(entry.calls).filter(([, call]) => call.windows === "absent").map(([verb]) => verb).sort();
-    assert.deepEqual([...(windows.missing[domain] ?? [])].sort(), absent, `forwarded.json's missing ${domain} verbs`);
-  }
-  const forwarded = Object.fromEntries(eventsOf("windows", "forward").map(({ name, topic }) => [topic, name]));
-  const generatedTopics = Object.fromEntries(Object.entries(windows.topics).filter(([, name]) => generatedEvent(name)));
-  assert.deepEqual(generatedTopics, forwarded, "forwarded.json's topics for generated domains");
 });
 
 test("the Mac's call table for each domain is the generated one: each service-backed call passes to its service and each custom one to its module's handler", () => {
@@ -542,20 +517,6 @@ export function linuxModuleDispatch(sources) {
   return { methods, events };
 }
 
-export function windowsNativeModules(sources) {
-  const methods = new Map();
-  const events = new Set();
-  for (const written of sources) {
-    const source = stripCppComments(written);
-    for (const match of source.matchAll(/\bEmitEvent\([^,]+,\s*L"(Ardia[A-Za-z]+)"\s*,\s*L"([a-zA-Z]+)"/g)) events.add(`${match[1]}.${match[2]}`);
-    const modules = [...source.matchAll(/REACT_MODULE\(\s*\w+\s*,\s*L"([^"]+)"\s*\)/g)].map((match) => match[1]);
-    if (modules.length > 1) throw new Error(`one header registers ${modules.join(" and ")}; the scan reads one module per header`);
-    if (!modules.length) continue;
-    methods.set(modules[0], new Set([...source.matchAll(/REACT_(?:SYNC_)?METHOD\(\s*(\w+)\s*(?:,\s*L"([^"]+)"\s*)?\)/g)].map((match) => match[2] ?? match[1])));
-  }
-  return { methods, events };
-}
-
 export function swiftBlock(text, open) {
   const end = closing(text, open);
   return { start: open, end: end + 1, body: text.slice(open + 1, end) };
@@ -635,8 +596,6 @@ const keyOf = (property) => {
   const named = ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property) || ts.isMethodDeclaration(property) || ts.isGetAccessorDeclaration(property);
   return named && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) ? property.name.text : undefined;
 };
-const objectMembers = (object) => object.properties.map(keyOf).filter(Boolean);
-
 function walk(node, visit, { intoFunctions = true } = {}) {
   ts.forEachChild(node, (child) => {
     if (visit(child) === false) return;
@@ -662,92 +621,6 @@ export function ownReturnedExpressions(fn) {
   };
   collect(fn.body);
   return expressions;
-}
-
-export function ownReturnedObjects(fn) {
-  return ownReturnedExpressions(fn).map(unwrap).filter((value) => value && ts.isObjectLiteralExpression(value));
-}
-
-function resolveImport(from, path, exists) {
-  const base = `${from.slice(0, from.lastIndexOf("/") + 1)}${path}`.split("/").reduce((parts, part) => (part === ".." ? parts.slice(0, -1) : part === "." ? parts : [...parts, part]), []).join("/");
-  const found = [`${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`].find(exists);
-  if (!found) throw new Error(`${from} imports ${path}, which the scan can't find`);
-  return found;
-}
-
-export function windowsJsMembers(name, path, read, exists, seen = new Set()) {
-  if (seen.has(`${path}:${name}`)) throw new Error(`${name} in ${path} refers back to itself`);
-  seen.add(`${path}:${name}`);
-  const file = parseTs(path, read(path));
-  const fromFunction = (fn) => {
-    const members = ownReturnedObjects(fn).flatMap(objectMembers);
-    if (!members.length) throw new Error(`${name} in ${path} returns no object the scan can read`);
-    return new Set(members);
-  };
-  const fromValue = (value) => {
-    const inner = unwrap(value);
-    if (ts.isObjectLiteralExpression(inner)) return new Set(objectMembers(inner));
-    if (ts.isArrowFunction(inner) || ts.isFunctionExpression(inner)) return fromFunction(inner);
-    if (ts.isIdentifier(inner)) return windowsJsMembers(inner.text, path, read, exists, seen);
-    if (ts.isCallExpression(inner) && ts.isIdentifier(inner.expression)) return windowsJsMembers(inner.expression.text, path, read, exists, seen);
-    throw new Error(`the scan can't read Windows' JS module ${name} in ${path}`);
-  };
-  for (const statement of file.statements) {
-    if (ts.isImportDeclaration(statement) && statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) {
-      const element = statement.importClause.namedBindings.elements.find((entry) => entry.name.text === name);
-      if (element) return windowsJsMembers(element.propertyName?.text ?? name, resolveImport(path, statement.moduleSpecifier.text, exists), read, exists, seen);
-    }
-    if (ts.isVariableStatement(statement)) {
-      const declaration = statement.declarationList.declarations.find((entry) => ts.isIdentifier(entry.name) && entry.name.text === name);
-      if (declaration?.initializer) return fromValue(declaration.initializer);
-    }
-    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return fromFunction(statement);
-  }
-  throw new Error(`the scan can't read Windows' JS module ${name} in ${path}`);
-}
-
-const WINDOWS_JS = "packages/expo-windows/src/";
-
-function topLevelObject(file, name) {
-  for (const statement of file.statements) {
-    if (!ts.isVariableStatement(statement)) continue;
-    const declaration = statement.declarationList.declarations.find((entry) => ts.isIdentifier(entry.name) && entry.name.text === name);
-    const value = declaration?.initializer && unwrap(declaration.initializer);
-    if (value && ts.isObjectLiteralExpression(value)) return value;
-  }
-  throw new Error(`${file.fileName} declares no object ${name}`);
-}
-
-export function windowsJsModules(read, exists) {
-  const modulesPath = `${WINDOWS_JS}modules.ts`;
-  const members = new Map();
-  walk(topLevelObject(parseTs(modulesPath, read(modulesPath)), "writtenInJs"), (node) => {
-    if (ts.isPropertyAssignment(node) && keyOf(node)?.startsWith("Ardia")) {
-      const value = node.initializer;
-      members.set(keyOf(node), () => {
-        const inner = unwrap(value);
-        const target = ts.isCallExpression(inner) && ts.isIdentifier(inner.expression) ? inner.expression.text : ts.isIdentifier(inner) ? inner.text : null;
-        if (target === null) throw new Error(`the scan can't read Windows' JS module ${keyOf(node)}`);
-        return windowsJsMembers(target, modulesPath, read, exists);
-      });
-      return false;
-    }
-  }, { intoFunctions: false });
-  const defaultsPath = `${WINDOWS_JS}defaults.ts`;
-  const defaults = new Map();
-  for (const property of topLevelObject(parseTs(defaultsPath, read(defaultsPath)), "moduleDefaults").properties) {
-    const value = ts.isPropertyAssignment(property) ? unwrap(property.initializer) : null;
-    if (keyOf(property)?.startsWith("Ardia") && value && ts.isObjectLiteralExpression(value)) defaults.set(keyOf(property), new Set(objectMembers(value)));
-  }
-  const events = new Set();
-  for (const path of filesUnder(WINDOWS_JS, /\.tsx?$/).filter((file) => !/\.test\./.test(file))) {
-    walk(parseTs(path, read(path)), (node) => {
-      if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression) || !["emitNativeEvent", "emitWhenListened"].includes(node.expression.text)) return;
-      const [module, event] = node.arguments;
-      if (module && event && ts.isStringLiteralLike(module) && ts.isStringLiteralLike(event)) events.add(`${module.text}.${event.text}`);
-    });
-  }
-  return { members, defaults, events };
 }
 
 const NATIVE_MODULE_CALLS = new Set(["requireNativeModule", "requireOptionalNativeModule"]);
@@ -843,12 +716,6 @@ test("the module-domain scans find the shaders pilot and read the hosts' real ta
   const linux = linuxModuleDispatch(linuxSources());
   for (const name of ["ArdiaCalendar.status", "ArdiaConfig.watch", "ArdiaConfig.readFile", "ArdiaAutomation.start"]) assert.ok(linux.methods.has(name), name);
   assert.ok(linux.events.has("ArdiaShell.shell"));
-  const windowsNative = windowsNativeModules(filesUnder("apps/browser/windows/Ardia/", /\.h$/).map(read));
-  assert.ok(windowsNative.methods.get("ArdiaKeychain")?.has("delete") && windowsNative.methods.get("ArdiaFocus")?.has("keyHoldCounts"));
-  const js = windowsJsModules(read, exists);
-  for (const module of ["ArdiaUpdater", "ArdiaSwipe", "ArdiaImport", "ArdiaSync", "ArdiaInlineCompletion"]) assert.ok(js.members.get(module)?.().size > 0, module);
-  assert.ok(js.defaults.get("ArdiaCli")?.has("canInstallUnattended") && js.defaults.get("ArdiaTranslate")?.has("languageName"));
-  assert.ok(js.events.has("ArdiaShell.onOpenURLs") && js.events.has("ArdiaImport.onImportEvent"));
 });
 
 export function macModuleProblems(domain, entry, read, swiftFiles) {
@@ -945,19 +812,6 @@ test("the Linux host dispatches a module function or constant exactly when its d
   for (const { module, event, binding } of moduleEvents) assert.equal(linux.events.has(`${module}.${event}`), binding.desktop === "host", `event ${module}.${event} is ${binding.desktop} on the desktop host`);
 });
 
-test("Windows serves a module function as a native method, a JS member or a default, and sends a module event, exactly when its windows binding is custom", () => {
-  const native = windowsNativeModules(filesUnder("apps/browser/windows/Ardia/", /\.h$/).map(read));
-  const js = windowsJsModules(read, exists);
-  for (const { module, fn, binding } of [...moduleFunctions, ...moduleConstants.map(({ module, constant, binding }) => ({ module, fn: constant, binding }))]) {
-    const served = native.methods.get(module)?.has(fn) || js.members.get(module)?.().has(fn) || js.defaults.get(module)?.has(fn) || false;
-    assert.equal(served, binding.windows === "custom", `${module}.${fn} is ${binding.windows} on Windows`);
-  }
-  for (const { module, event, binding } of moduleEvents) {
-    const sent = native.events.has(`${module}.${event}`) || js.events.has(`${module}.${event}`);
-    assert.equal(sent, binding.windows === "custom", `event ${module}.${event} is ${binding.windows} on Windows`);
-  }
-});
-
 test("the Linux scan counts an if that dispatches inside a function that isn't a boolean helper, skips literals, and reads raw strings and digit separators", () => {
   const helpers = [
     'bool HandlesHold(std::string_view method) { return method == "ArdiaDemo.hold"; }',
@@ -1008,44 +862,6 @@ test("the Linux scan resolves a method or event named by a string constant, thro
 test("the Linux event scan reads a module event sent by name through SendEvent or a host's Event, never one inside a literal", () => {
   const source = 'void Host::Run() {\n  host->Event("ArdiaImport", "onImportEvent", base::Value());\n  Event("ArdiaShell", "onOpenURLs", base::Value());\n  SendEvent("ArdiaShell", "shell", base::Value());\n  Log("Event(\\"ArdiaFake\\", \\"onGhost\\")");\n  sink_.Run(caller, "onChange", base::Value());\n}\n';
   assert.deepEqual([...linuxModuleDispatch([source]).events].sort(), ["ArdiaImport.onImportEvent", "ArdiaShell.onOpenURLs", "ArdiaShell.shell"]);
-});
-
-test("the Windows native scan counts only REACT_METHOD entries of the header's own module and EmitEvent calls", () => {
-  const native = windowsNativeModules(['REACT_MODULE(Demo, L"ArdiaDemo")\n  REACT_METHOD(hold)\n  REACT_METHOD(remove, L"delete")\n  REACT_SYNC_METHOD(peek)\n  EmitEvent(context, L"ArdiaDemo", L"tone", payload);', 'std::wstring note = L"ArdiaDemo.missing";\n// REACT_MODULE(Gone, L"ArdiaGone")']);
-  assert.deepEqual([...native.methods.get("ArdiaDemo")], ["hold", "delete", "peek"]);
-  assert.equal(native.methods.has("ArdiaGone"), false);
-  assert.deepEqual([...native.events], ["ArdiaDemo.tone"]);
-  assert.throws(() => windowsNativeModules(['REACT_MODULE(A, L"ArdiaA") REACT_MODULE(B, L"ArdiaB")']), /one module per header/);
-});
-
-test("the Windows JS scan reads a module's members from the TypeScript syntax tree: a factory's own returned objects, never a nested helper's, a regex or a string", () => {
-  const files = {
-    "w/modules.ts": 'import { demoOnWindows as demo } from "./demo";\nimport { demoMaker } from "./maker";\nconst made = demoMaker();\n',
-    "w/demo/index.ts": 'export const demoOnWindows = { hold: () => noteMissing("probe"), async peek() { return probe(); }, ...spread } satisfies object;',
-    "w/maker.ts": [
-      "export function demoMaker(host = null) {",
-      "  const helper = () => {",
-      "    return { hold: () => 1 };",
-      "  };",
-      "  function inner() {",
-      "    return { peek: 2 };",
-      "  }",
-      "  if (/return { hidden: 1 }/.test(String(host))) helper();",
-      '  const text = "return { quoted: 1 }";',
-      "  if (!host) return { open: () => inner() };",
-      "  return ({ open() {}, close: () => helper() }) as const;",
-      "}",
-    ].join("\n"),
-  };
-  const read = (path) => files[path];
-  const has = (path) => Object.hasOwn(files, path);
-  assert.deepEqual([...windowsJsMembers("demo", "w/modules.ts", read, has)], ["hold", "peek"]);
-  assert.deepEqual([...windowsJsMembers("made", "w/modules.ts", read, has)], ["open", "close"]);
-  assert.throws(() => windowsJsMembers("nowhere", "w/modules.ts", read, has), /can't read/);
-  const regexOnly = { "w/modules.ts": "export function demoMaker(value) {\n  /return { hold: 1 }/.test(value);\n  if (/return { peek: 1 }/.test(value)) value = 1;\n  if (value) {\n    /[}]/.test(value);\n    const late = { lost: 1 };\n  }\n  return { open() {} };\n}" };
-  assert.deepEqual([...windowsJsMembers("demoMaker", "w/modules.ts", (path) => regexOnly[path], (path) => Object.hasOwn(regexOnly, path))], ["open"]);
-  const automaticSemicolon = { "w/modules.ts": "export function demoMaker() {\n  if (Math.random()) return\n  { hold: () => 1 }\n  return { open() {} };\n}" };
-  assert.deepEqual([...windowsJsMembers("demoMaker", "w/modules.ts", (path) => automaticSemicolon[path], (path) => Object.hasOwn(automaticSemicolon, path))], ["open"], "a return followed by a line break returns nothing, so the block after it isn't the module");
 });
 
 test("the Mac registration scan counts only a generated definition that stands as its own statement, across lines, and sees a hand-written registration however it's spaced", () => {
@@ -1128,38 +944,6 @@ test("the Linux scan judges a branch by its innermost function, and a nested lam
   assert.deepEqual([...linuxModuleDispatch([noOwnReturns]).methods], ["ArdiaDemo.quiet"], "a void dispatcher with no returns of its own isn't judged by its lambda's");
   const outerBool = cppFunctions(maskCppLiterals("bool Outer() {\n  auto run = []() { Go(); return Done(); };\n  return true;\n}"));
   assert.deepEqual(outerBool.map(({ header, boolean }) => [header.split("(")[0].trim(), boolean]), [["auto run = []", false], ["bool Outer", true]]);
-});
-
-test("a try whose finally returns or throws overrides what its try and catch return, so only the finally's object is the module", () => {
-  const files = {
-    "w/modules.ts": [
-      "export function demoMaker(host) {",
-      "  try {",
-      "    return { hold() {} };",
-      "  } catch {",
-      "    return { caught() {} };",
-      "  } finally {",
-      "    return { other() {} };",
-      "  }",
-      "}",
-      "export function thrower(host) {",
-      "  try {",
-      "    if (host) return { kept() {} };",
-      "  } finally {",
-      "    cleanup();",
-      "  }",
-      "  return { after() {} };",
-      "}",
-      "export function nestedFinally() {",
-      "  try { return { lost() {} }; } finally { if (x) return { maybe() {} }; }",
-      "}",
-    ].join("\n"),
-  };
-  const readFile = (path) => files[path];
-  const has = (path) => Object.hasOwn(files, path);
-  assert.deepEqual([...windowsJsMembers("demoMaker", "w/modules.ts", readFile, has)], ["other"]);
-  assert.deepEqual([...windowsJsMembers("thrower", "w/modules.ts", readFile, has)], ["kept", "after"]);
-  assert.deepEqual([...windowsJsMembers("nestedFinally", "w/modules.ts", readFile, has)], ["lost", "maybe"], "a finally that only sometimes returns doesn't override the try");
 });
 
 test("the typing scan follows a block-bodied wrapper, a function declaration or expression, and a wrapper of a wrapper, to every cast", () => {

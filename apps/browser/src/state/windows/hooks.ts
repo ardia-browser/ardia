@@ -1,3 +1,4 @@
+import { pagerFor, type PagerPage } from "./profilePager";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile, showsEmptyWindow, tabsShownIn } from "../browser/model";
@@ -8,16 +9,19 @@ export const useWindowUiOf = <T>(windowId: string, select: (ui: BrowserState["wi
   useBrowser((s) => select(s.windowUi[windowId]));
 
 
-export const useNativeWindowProfile = (windowId: string) =>
-  useBrowser(
-    useShallow((s): [profile: string, neighbours: string, selection: string] => {
-      const w = s.windows[windowId];
-      if (!w) return ["", "[]", ""];
-      const at = w.kind === "private" ? -1 : s.profileOrder.indexOf(w.profileId);
-      const next = at < 0 ? [] : [s.profileOrder[at - 1], s.profileOrder[at + 1]].filter((p): p is string => !!p).map((id) => engineProfile(s, id));
-      return [engineProfile(s, w.profileId), JSON.stringify(next), w.profileId];
-    }),
-  );
+export function nativeWindowProfile(s: BrowserState, windowId: string, warm: readonly PagerPage[] | null): [profile: string, neighbours: string, selection: string] {
+  const w = s.windows[windowId];
+  if (!w) return ["", "[]", ""];
+  const at = w.kind === "private" ? -1 : s.profileOrder.indexOf(w.profileId);
+  const around = warm ? warm.map((p) => p.id) : [s.profileOrder[at - 1], s.profileOrder[at + 1]];
+  const ids = at < 0 ? [] : around.filter((id): id is string => !!id && id !== w.profileId && !!s.profiles[id]);
+  return [engineProfile(s, w.profileId), JSON.stringify(ids.map((id) => engineProfile(s, id))), w.profileId];
+}
+
+export function useNativeWindowProfile(windowId: string) {
+  const warm = pagerFor(windowId).state((st) => st.pages);
+  return useBrowser(useShallow((s) => nativeWindowProfile(s, windowId, warm)));
+}
 
 export const useSidebarDockState = (windowId: string) =>
   useBrowser(

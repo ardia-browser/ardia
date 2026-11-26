@@ -41,7 +41,7 @@ import { loadavg } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { appEnv, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, isAlive, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
 import { median } from "./median.mjs";
 import { kindOf, processRows } from "./processes.mjs";
 
@@ -397,12 +397,7 @@ class Instance {
     this.cdp = new Cdp();
   }
   alive() {
-    try {
-      process.kill(this.pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
+    return isAlive(this.pid);
   }
   watched() {
     if (this.pid && !this.alive()) throw new Error(`${this.name} (pid ${this.pid}) died`);

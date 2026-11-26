@@ -12,8 +12,17 @@ class SystemModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("ArdiaPhoneSystem")
 
+        OnCreate {
+            val context = appContext.reactContext ?: return@OnCreate
+            LabTouches.register(context) { appContext.currentActivity }
+        }
+
         Function("labLog") { line: String ->
             if (PhoneLab.isOn) android.util.Log.i("PAGELAB", line)
+        }
+
+        Function("labFrameMark") { label: String ->
+            if (PhoneLab.isOn) FrameMarks.markNextFrame(label) { appContext.currentActivity?.window?.decorView }
         }
 
         Function("setUsageConsent") { sharing: Boolean ->
@@ -22,6 +31,18 @@ class SystemModule : Module() {
         }
 
         Function("syncOffered") { SyncOffer.isOffered }
+
+        Function("hardwareKeyboardShown") {
+            val configuration = appContext.reactContext?.resources?.configuration ?: return@Function false
+            configuration.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY && configuration.hardKeyboardHidden == android.content.res.Configuration.HARDKEYBOARDHIDDEN_NO
+        }
+
+        Function("labSlice") { label: String ->
+            if (PhoneLab.isOn) {
+                android.os.Trace.beginSection("ardia:$label")
+                android.os.Trace.endSection()
+            }
+        }
 
         AsyncFunction("setSystemBarIcons") { lightStatus: Boolean, lightNavigation: Boolean ->
             SystemBars.want(SystemBars.Icons(lightStatus, lightNavigation), appContext.currentActivity)
@@ -36,6 +57,11 @@ class SystemModule : Module() {
             val context = appContext.reactContext ?: return@Function null
             val (sharing, generation) = UsageConsent.state(context)
             mapOf("sharing" to sharing, "generation" to generation.toDouble())
+        }
+
+        Function("takeExits") {
+            val context = appContext.reactContext ?: return@Function emptyList<Map<String, Any>>()
+            PhoneExits.take(context)
         }
 
         Function("takePendingCounts") {

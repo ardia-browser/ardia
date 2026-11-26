@@ -24,6 +24,7 @@ export type PageText = {
   key: string;
   document?: string;
   shown: string;
+  shownClipped?: boolean;
   shownLower: string;
   titleLower: string;
   titleWords: string;
@@ -44,15 +45,27 @@ const PLAIN_WORDS = /^[a-z0-9]+(?: [a-z0-9]+)*$/;
 const wordsOf = (lower: string) => (PLAIN_WORDS.test(lower) ? ` ${lower}` : ` ${lower}`.replace(NOT_WORD, " "));
 export const shownWordsOf = (t: PageText) => (t.shownWords ??= wordsOf(t.shownLower));
 
+const MAX_INDEXED_SHOWN = 2048;
+const MAX_INDEXED_TITLE = 512;
+
+function clipIndexed(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const last = text.charCodeAt(max - 1);
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
+}
+
 export function pageText(row: { url: string; title: string }): PageText {
   let text = pageTexts.get(row);
   if (!text) {
-    const shown = displayUrl(row.url);
+    const rawShown = displayUrl(row.url);
+    const shownClipped = rawShown.length > MAX_INDEXED_SHOWN;
+    const shown = shownClipped ? clipIndexed(rawShown, MAX_INDEXED_SHOWN) : rawShown;
     const shownLower = shown.toLowerCase();
-    const titleLower = row.title.toLowerCase();
+    const titleLower = clipIndexed(row.title, MAX_INDEXED_TITLE).toLowerCase();
     const document = documentKey(row.url);
     const route = routeOf(row.url);
     text = { url: row.url, key: document + route, shown, shownLower, titleLower, titleWords: wordsOf(titleLower) };
+    if (shownClipped) text.shownClipped = true;
     if (route) text.document = document;
     pageTexts.set(row, text);
   }

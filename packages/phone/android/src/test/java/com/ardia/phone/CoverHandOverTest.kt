@@ -16,91 +16,64 @@ import org.robolectric.annotation.Config
 class CoverHandOverTest {
     private val activity: Activity = Robolectric.buildActivity(Activity::class.java).setup().get()
     private val card = View(activity)
-    private val timers = ArrayList<Pair<Long, () -> Unit>>()
-    private var cancelled = 0
-    private val hidden = ArrayList<Pair<String, Boolean>>()
+    private val hidden = ArrayList<Triple<Boolean, String, Long>>()
 
     private val surface = object : CoverSurface {
         override fun find(nativeId: String): View? = if (nativeId == "openingCard") card else null
-
-        override fun schedule(millis: Long, run: () -> Unit): () -> Unit {
-            timers += millis to run
-            return { cancelled += 1 }
-        }
     }
 
-    private val handOver = CoverHandOver(surface) { reason, found -> hidden += reason to found }
+    private val handOver = CoverHandOver(surface) { found, cover, document -> hidden += Triple(found, cover, document) }
 
     @Test
-    fun theCardIsHiddenInTheFrameThePageReportsDrawn() {
+    fun theCardIsHiddenInTheFrameThePageReportsDrawnNamingItsCoverAndDocument() {
         handOver.cover("openingCard")
-        handOver.pageVisible()
-        assertEquals("the cap starts when the page shows", listOf(CoverHandOver.CAP_MILLIS), timers.map { it.first })
-        handOver.pageDrawn()
+        handOver.pageDrawn(4)
         assertEquals(View.INVISIBLE, card.visibility)
-        assertEquals(listOf(CoverHandOver.REASON_DRAWN to true), hidden)
-        assertEquals("the cap is cancelled", 1, cancelled)
-        handOver.pageDrawn()
+        assertEquals(listOf(Triple(true, "openingCard", 4L)), hidden)
+        handOver.pageDrawn(5)
         assertEquals("once", 1, hidden.size)
     }
 
     @Test
-    fun aSlowPageCantHoldTheCardPastTheCap() {
+    fun nothingButADrawnPageHidesTheCoverHoweverLongItTakes() {
         handOver.cover("openingCard")
-        handOver.pageVisible()
         assertEquals(View.VISIBLE, card.visibility)
-        timers.single().second()
-        assertEquals(View.INVISIBLE, card.visibility)
-        assertEquals(listOf(CoverHandOver.REASON_CAP to true), hidden)
-        handOver.pageDrawn()
-        assertEquals("the late drawn frame hides nothing more", 1, hidden.size)
+        assertTrue(hidden.isEmpty())
+        assertFalse(handOver.handedOver)
     }
 
     @Test
     fun anOpenCancelledFirstHidesNothing() {
         handOver.cover("openingCard")
-        handOver.pageVisible()
         handOver.cover(null)
-        assertEquals("the cap is cancelled", 1, cancelled)
-        handOver.pageDrawn()
+        handOver.pageDrawn(1)
         assertEquals(View.VISIBLE, card.visibility)
         assertTrue(hidden.isEmpty())
     }
 
     @Test
-    fun aPageClosedFirstHidesNothing() {
-        handOver.cover("openingCard")
-        handOver.pageVisible()
-        handOver.cancel()
-        assertFalse(handOver.waiting)
-        assertEquals(View.VISIBLE, card.visibility)
+    fun withoutACoverNothingHides() {
+        handOver.pageDrawn(1)
         assertTrue(hidden.isEmpty())
     }
 
     @Test
-    fun withoutACoverNothingWaitsOrHides() {
-        handOver.pageVisible()
-        handOver.pageDrawn()
-        assertTrue(timers.isEmpty())
-        assertTrue(hidden.isEmpty())
-    }
-
-    @Test
-    fun aCoverThatIsntThereIsReportedNotFound() {
+    fun aCoverThatIsntMountedYetIsReportedNotFoundAndStillWaitsForItsView() {
         handOver.cover("gone")
-        handOver.pageVisible()
-        handOver.pageDrawn()
-        assertEquals(listOf(CoverHandOver.REASON_DRAWN to false), hidden)
+        handOver.pageDrawn(2)
+        assertEquals(listOf(Triple(false, "gone", 2L)), hidden)
+        assertFalse(handOver.handedOver)
+        handOver.cover("openingCard")
+        handOver.pageDrawn(3)
+        assertEquals(Triple(true, "openingCard", 3L), hidden.last())
+        assertTrue(handOver.handedOver)
     }
 
     @Test
     fun aNewCoverWaitsForItsOwnPageAgain() {
         handOver.cover("openingCard")
-        handOver.pageVisible()
-        handOver.pageDrawn()
+        handOver.pageDrawn(1)
         handOver.cover("next")
         assertFalse(handOver.handedOver)
-        handOver.pageVisible()
-        assertTrue(handOver.waiting)
     }
 }

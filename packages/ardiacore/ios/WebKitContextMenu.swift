@@ -325,6 +325,18 @@ final class WebKitContextMenu {
     add(WebKitMenuAction.item("Save As…", enabled: target.page != nil) { tab.runPageFileCommand("savePage") })
     addPrintItem()
     addShare(.page)
+    addPageMenuItems()
+  }
+
+  private func addPageMenuItems() {
+    let tab = tab
+    let items = tab.pageMenuItems.compactMap { item -> (id: String, title: String)? in
+      guard let id = item["id"], let title = item["title"], !id.isEmpty, !title.isEmpty, id != "search" else { return nil }
+      return (id, title)
+    }
+    guard !items.isEmpty else { return }
+    separate()
+    for item in items { add(WebKitMenuAction.item(item.title) { tab.emit("command", ["command": item.id, "text": ""]) }) }
   }
 
   func build() -> NSMenu {

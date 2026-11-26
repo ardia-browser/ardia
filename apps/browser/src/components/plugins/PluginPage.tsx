@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import type { PanelSpec } from "../../lib/pluginManifest";
 import { Box, Button, Text } from "../ui";
-import { useTheme } from "../ui/theme";
 import { useTab, useWindowId } from "../../state/browser/hooks";
 import { usePluginActive, usePluginManifest, usePluginPageContext, usePluginPageSpec, usePluginPageUrl, usePluginProcess, usePluginWindowEligible } from "../../state/plugins/hooks";
 import { pluginPagePath } from "../../state/plugins/actions";
@@ -33,7 +32,6 @@ function viewPanelOf(panels: readonly PanelSpec[], path: string): PanelSpec | nu
 }
 
 export function PluginPage({ tabId, name }: { tabId: string; name: string }) {
-  const theme = useTheme();
   const windowId = useWindowId();
   const eligible = usePluginWindowEligible(windowId);
   const path = useTab(tabId, (t) => pluginPagePath(t?.url ?? ""));
@@ -52,7 +50,7 @@ export function PluginPage({ tabId, name }: { tabId: string; name: string }) {
   if (!active || (!spec && !viewPanel)) return <Notice name={name} title={`${title} is off`} detail="Turn the plugin on in Settings › Plugins to use its page." />;
   if (viewPanel?.view && !url) {
     return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]}>
+      <View style={StyleSheet.absoluteFill}>
         <Box pad="m" style={FILL}>
           <PluginSurface plugin={name} surfaceId={`${viewPanel.view}@${tabId}`} viewId={viewPanel.view} kind="panel" windowId={windowId} context={{ tabId, panelId: viewPanel.id }} />
         </Box>
@@ -64,7 +62,7 @@ export function PluginPage({ tabId, name }: { tabId: string; name: string }) {
     return <Notice name={name} title={failed ? `${title} stopped` : `${title} is starting…`} detail={failed ? "Its program isn't running. Restart it from Settings › Plugins." : "Its program is getting the page ready."} />;
   }
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]}>
+    <View style={StyleSheet.absoluteFill}>
       <PluginFileView plugin={name} url={url} context={context} />
     </View>
   );

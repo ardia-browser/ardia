@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.SystemClock
+import android.os.Trace
 import android.text.Editable
 import android.text.InputFilter
 import android.text.InputType
@@ -63,6 +64,10 @@ class CompletingFieldView(context: Context, appContext: AppContext) : ExpoView(c
             })
             selectionChanged = { if (!applying) edited() }
             setOnFocusChangeListener { _, focused ->
+                if (focused && PhoneLab.isOn) {
+                    Trace.beginSection("ardia-frame:search-focus")
+                    Trace.endSection()
+                }
                 val suffixChanged = input.focus(focused)
                 onFocusChange(mapOf("focused" to focused))
                 if (suffixChanged) suffixChanged()
@@ -134,13 +139,16 @@ class CompletingFieldView(context: Context, appContext: AppContext) : ExpoView(c
     var autoCorrect: Boolean? = null
     var autoCapitalize: String? = null
     var autoFocus: Boolean = false
+    var revealFocusProp: Int = 0
     private var focusedOnce = false
+    private var revealedFor = 0
 
     fun propsUpdated() {
         pendingText = textProp
         pendingTextCount = textCountProp
         applyPendingText()
         setKeyboard(keyboardType, autoCorrect, autoCapitalize)
+        applyRevealFocus()
         if (autoFocus && !focusedOnce) {
             focusedOnce = true
             post { focusField() }
@@ -153,6 +161,23 @@ class CompletingFieldView(context: Context, appContext: AppContext) : ExpoView(c
         pendingText = null
         if (text == input.typed) return
         replace(text, selectsAll = false)
+    }
+
+    private fun applyRevealFocus() {
+        val step = RevealFocus.step(revealedFor, revealFocusProp)
+        revealedFor = revealFocusProp
+        when (step) {
+            RevealFocus.Step.FOCUS -> focusField()
+            RevealFocus.Step.WITHDRAW -> withdrawReveal()
+            RevealFocus.Step.NONE -> Unit
+        }
+    }
+
+    private fun withdrawReveal() {
+        if (editor.isFocused) blurField()
+        if (input.typed.isEmpty() && (editor.text?.isEmpty() ?: true)) return
+        replace("", selectsAll = false)
+        typedChanged()
     }
 
     fun replace(text: String, selectsAll: Boolean) {
@@ -325,6 +350,16 @@ class SuffixEditText(context: Context, private val suffix: () -> String, private
         textPaint.color = currentTextColor
         canvas.drawText(shown, left, baseline, textPaint)
         canvas.restore()
+    }
+}
+
+internal object RevealFocus {
+    enum class Step { FOCUS, WITHDRAW, NONE }
+
+    fun step(revealed: Int, wanted: Int): Step = when {
+        wanted != 0 && wanted != revealed -> Step.FOCUS
+        wanted == 0 && revealed != 0 -> Step.WITHDRAW
+        else -> Step.NONE
     }
 }
 

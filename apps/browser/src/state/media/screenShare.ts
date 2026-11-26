@@ -13,6 +13,7 @@ export { getDisplayMediaSources, screenRecordingAllowed, type DisplayMediaAudio,
 export { getDisplayMediaThumbnails } from "../../platform/media";
 export { noteScreenRecordingMissing } from "../telemetry/usage";
 export { startSharePreviews } from "../telemetry/sharePreviewCounts";
+export { splitSharePreviews } from "./sharePreviewFlatness";
 
 export type ShareFound = [string, TabShare];
 

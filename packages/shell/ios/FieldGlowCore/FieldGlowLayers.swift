@@ -4,11 +4,19 @@ import QuartzCore
 final class GlowPlateLayer: CALayer {
   let fill = CAGradientLayer()
   let fadeMask = CAGradientLayer()
+  let rim = CALayer()
+  private let stroke = CALayer()
+  private let taper = CAGradientLayer()
 
   override init() {
     super.init()
     masksToBounds = true
     addSublayer(fill)
+    rim.anchorPoint = .zero
+    rim.masksToBounds = true
+    stroke.cornerCurve = .continuous
+    rim.addSublayer(stroke)
+    addSublayer(rim)
     mask = fadeMask
   }
 
@@ -16,13 +24,29 @@ final class GlowPlateLayer: CALayer {
 
   required init?(coder: NSCoder) { nil }
 
-  func paint(_ plate: FieldGlowPlateStops, flipped: Bool) {
+  func paint(_ plate: FieldGlowPlateStops, flipped: Bool, field: CGSize, radius: CGFloat, line: CGFloat = 0) {
+    let colors = plate.colors.map { CGColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: $0.alpha) }
+    let softCount = line > 0 ? max(0, colors.count - 2) : colors.count
     fill.frame = bounds
-    fill.colors = plate.colors.map { CGColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: $0.alpha) }
-    fill.locations = plate.stops.count == plate.colors.count ? plate.stops.map { NSNumber(value: $0) } : nil
+    fill.colors = Array(colors.prefix(softCount))
+    fill.locations = plate.stops.count == colors.count ? plate.stops.prefix(softCount).map { NSNumber(value: $0) } : nil
     fill.startPoint = CGPoint(x: 0.5, y: flipped ? 0 : 1)
     fill.endPoint = CGPoint(x: 0.5, y: flipped ? 1 : 0)
-    fill.isHidden = plate.colors.count < 2
+    fill.isHidden = softCount < 2
+    let corner = min(max(radius, 0), min(field.width, field.height) / 2)
+    let depth = min(field.height, max(corner, line))
+    rim.bounds = CGRect(x: 0, y: 0, width: field.width, height: depth)
+    rim.position.y = flipped ? field.height - depth : 0
+    stroke.frame = CGRect(x: 0, y: flipped ? depth - field.height : 0, width: field.width, height: field.height)
+    stroke.cornerRadius = corner
+    stroke.borderWidth = line
+    stroke.borderColor = colors.last
+    taper.frame = rim.bounds
+    taper.colors = [CGColor(gray: 0, alpha: 0), CGColor(gray: 0, alpha: 1)]
+    taper.startPoint = CGPoint(x: 0.5, y: flipped ? 0 : 1)
+    taper.endPoint = CGPoint(x: 0.5, y: flipped ? 1 - min(line / max(depth, 1), 1) : min(line / max(depth, 1), 1))
+    rim.mask = corner > line ? taper : nil
+    rim.isHidden = line <= 0 || depth <= 0
     fadeMask.frame = bounds
     fadeMask.colors = plate.fade.map { CGColor(gray: 0, alpha: $0) }
     fadeMask.locations = plate.fadeStops.count == plate.fade.count ? plate.fadeStops.map { NSNumber(value: $0) } : nil
@@ -75,6 +99,7 @@ public final class FieldGlowLayers: NSObject, FieldGlowTarget {
       CATransaction.setDisableActions(true)
       clip.cornerRadius = radius
       CATransaction.commit()
+      if radius != oldValue { repaint() }
     }
   }
   public var animates: () -> Bool = { true }
@@ -95,7 +120,7 @@ public final class FieldGlowLayers: NSObject, FieldGlowTarget {
     super.init()
     for layer in [clip, slide, steady, comet] { layer.anchorPoint = .zero }
     clip.masksToBounds = true
-    clip.cornerCurve = .circular
+    clip.cornerCurve = .continuous
     steady.addSublayer(tailPlate)
     steady.addSublayer(capPlate)
     comet.addSublayer(cometPlate)
@@ -131,9 +156,9 @@ public final class FieldGlowLayers: NSObject, FieldGlowTarget {
     tailPlate.frame = CGRect(x: 0, y: 0, width: width + plates.tail.extra, height: height)
     capPlate.frame = CGRect(x: 0, y: 0, width: width + plates.cap.extra, height: height)
     cometPlate.frame = CGRect(x: 0, y: 0, width: width + plates.comet.extra, height: height)
-    tailPlate.paint(plates.tail, flipped: flipped)
-    capPlate.paint(plates.cap, flipped: flipped)
-    cometPlate.paint(plates.comet, flipped: flipped)
+    tailPlate.paint(plates.tail, flipped: flipped, field: size, radius: radius)
+    capPlate.paint(plates.cap, flipped: flipped, field: size, radius: radius, line: look.line)
+    cometPlate.paint(plates.comet, flipped: flipped, field: size, radius: radius, line: look.line)
     let time = now()
     if let run = filledRun, run.active(at: time), slide.animation(forKey: "filled") != nil {
       let target = rawProgress.map { FieldGlowGeometry.filled(progress: $0, look: look, width: width) } ?? run.to
@@ -149,27 +174,34 @@ public final class FieldGlowLayers: NSObject, FieldGlowTarget {
         let share = base < 1 ? (eased - base) / (1 - base) : 1
         return current + (target - current) * share
       }
-      slide.removeAnimation(forKey: "filled")
-      slide.position = CGPoint(x: offset(target), y: 0)
-      let animation = CAKeyframeAnimation(keyPath: "position.x")
-      animation.values = samples.map { NSNumber(value: Double(offset($0))) }
-      animation.calculationMode = .linear
-      animation.duration = remaining
-      slide.add(animation, forKey: "filled")
+      moveSlide(to: target, samples: samples, duration: remaining)
       filledRun = resumed
     } else {
       if let rawProgress { filled = FieldGlowGeometry.filled(progress: rawProgress, look: look, width: width) }
-      slide.position = CGPoint(x: offset(filled), y: 0)
+      moveSlide(to: filled)
     }
     CATransaction.commit()
   }
 
   private func offset(_ filled: Double) -> CGFloat { -size.width * CGFloat(1 - filled) }
 
+  private func moveSlide(to target: Double, samples: [Double] = [], duration: Double = 0) {
+    for (layer, direction) in [(slide, 1.0), (capPlate.rim, -1.0), (cometPlate.rim, -1.0)] {
+      layer.removeAnimation(forKey: "filled")
+      layer.position.x = offset(target) * direction
+      guard !samples.isEmpty else { continue }
+      let animation = CAKeyframeAnimation(keyPath: "position.x")
+      animation.values = samples.map { NSNumber(value: Double(offset($0) * direction)) }
+      animation.calculationMode = .linear
+      animation.duration = duration
+      layer.add(animation, forKey: "filled")
+    }
+  }
+
   public func cancel() {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
-    for layer in [slide, steady, comet] { layer.removeAllAnimations() }
+    clearAnimations()
     finishing = nil
     filledRun = nil
     opacityRun = nil
@@ -181,19 +213,20 @@ public final class FieldGlowLayers: NSObject, FieldGlowTarget {
   public func settle(at model: FieldGlowModel) {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
-    for layer in [slide, steady, comet] { layer.removeAllAnimations() }
+    clearAnimations()
     finishing = nil
     filledRun = nil
     opacityRun = nil
     let shown = model.phase == .loading
     rawProgress = shown ? model.progress : nil
     filled = rawProgress.map { FieldGlowGeometry.filled(progress: $0, look: look, width: Double(size.width)) } ?? (model.targets[.filled] ?? 0)
-    slide.position = CGPoint(x: offset(filled), y: 0)
+    moveSlide(to: filled)
     slide.opacity = shown ? Float(model.targets[.opacity] ?? 0) : 0
     let cometValue = Float(model.targets[.comet] ?? 0)
     comet.opacity = cometValue
     steady.opacity = 1 - cometValue
     slide.isHidden = !shown
+    syncPulse(model.pulse)
     CATransaction.commit()
     if model.phase == .finishing { onFinished(model.generation) }
   }
@@ -203,6 +236,7 @@ public final class FieldGlowLayers: NSObject, FieldGlowTarget {
     CATransaction.setDisableActions(true)
     if model.phase != .idle { slide.isHidden = false }
     if model.phase != .loading { rawProgress = nil }
+    syncPulse(model.pulse)
     for move in moves { apply(move) }
     if model.phase == .finishing {
       finishing = model.generation
@@ -210,7 +244,7 @@ public final class FieldGlowLayers: NSObject, FieldGlowTarget {
     } else {
       finishing = nil
       if model.phase == .idle {
-        for layer in [slide, steady, comet] { layer.removeAllAnimations() }
+        clearAnimations()
         filledRun = nil
         opacityRun = nil
         slide.isHidden = true
@@ -227,7 +261,7 @@ public final class FieldGlowLayers: NSObject, FieldGlowTarget {
   private func completeFinish(_ generation: Int) {
     guard finishing == generation else { return }
     finishing = nil
-    for layer in [slide, steady, comet] { layer.removeAllAnimations() }
+    clearAnimations()
     filledRun = nil
     opacityRun = nil
     slide.isHidden = true
@@ -239,6 +273,29 @@ public final class FieldGlowLayers: NSObject, FieldGlowTarget {
     return run.value(at: now())
   }
 
+  private func clearAnimations() {
+    clip.removeAnimation(forKey: "pulse")
+    for layer in [slide, steady, comet, capPlate.rim, cometPlate.rim] { layer.removeAllAnimations() }
+  }
+
+  public func syncPulse(_ pulse: FieldGlowPulse?) {
+    guard let pulse, animates() else {
+      clip.removeAnimation(forKey: "pulse")
+      return
+    }
+    let duration = pulse.period / 2
+    if let current = clip.animation(forKey: "pulse") as? CABasicAnimation,
+       current.duration == duration, current.toValue as? Double == pulse.low { return }
+    let animation = CABasicAnimation(keyPath: "opacity")
+    animation.fromValue = 1
+    animation.toValue = pulse.low
+    animation.duration = duration
+    animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+    animation.autoreverses = true
+    animation.repeatCount = .infinity
+    clip.add(animation, forKey: "pulse")
+  }
+
   private func apply(_ move: FieldGlowMove) {
     let time = now()
     switch move.property {
@@ -246,16 +303,11 @@ public final class FieldGlowLayers: NSObject, FieldGlowTarget {
       rawProgress = move.clamped ? move.to : nil
       let from = current(filledRun, key: "filled", on: slide, model: filled)
       filled = move.clamped ? FieldGlowGeometry.filled(progress: move.to, look: look, width: Double(size.width)) : move.to
-      slide.removeAnimation(forKey: "filled")
-      slide.position = CGPoint(x: offset(filled), y: 0)
+      moveSlide(to: filled)
       filledRun = nil
       guard move.duration > 0, animates() else { return }
       let run = GlowRun(from: from, to: filled, start: time, duration: move.duration, curve: move.curve)
-      let animation = CAKeyframeAnimation(keyPath: "position.x")
-      animation.values = fieldGlowSamples(from: from, to: filled, duration: move.duration, curve: move.curve).map { NSNumber(value: Double(offset($0))) }
-      animation.calculationMode = .linear
-      animation.duration = move.duration
-      slide.add(animation, forKey: "filled")
+      moveSlide(to: filled, samples: fieldGlowSamples(from: from, to: filled, duration: move.duration, curve: move.curve), duration: move.duration)
       filledRun = run
     case .opacity:
       let from = current(opacityRun, key: "opacity", on: slide, model: Double(slide.opacity))

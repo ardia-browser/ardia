@@ -3,14 +3,11 @@ import { Animated, Pressable, View } from "react-native";
 import { errorText, manualRefresh, statusText } from "../../state/live/engine";
 import { folderRows, type FolderRow } from "../../state/live/rows";
 import { updateFolder, useLive } from "../../state/live/store";
-import type { FolderStatus, LiveItem } from "../../state/live/types";
-import { blockedLink } from "../../state/live/github";
-import { newTab } from "../../state/tabs/actions";
+import type { LiveItem } from "../../state/live/types";
 import { usePageProfileId, useTab } from "../../state/browser/hooks";
 import { useLiveActiveTab, useLiveStrays } from "../../state/sidebar/hooks";
 import { liveFolderKeep } from "../../state/sidebar/liveRows";
-import { openSettings } from "../../state/settings/settingsWindows";
-import { Badge, Button, ContextMenuArea, Dot, ink, space, Symbol, useHover } from "../ui";
+import { Badge, Button, ContextMenuArea, clippedContinuousCorners, Dot, ink, space, Symbol, useHover } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { useLiveColors } from "../live/tokens";
 import { TabRow } from "./TabRow";
@@ -24,7 +21,7 @@ import { Squish, useSquish } from "../ui/Squish";
 import { iconButton } from "../ui/tokens";
 import { REFRESH_ARROW_RING_OFFSET } from "../../lib/platformChrome";
 import { iconName } from "../../lib/activeLook";
-import { openLiveFolderMenu } from "../../state/sidebar/liveMenus";
+import { fixLiveFolderError, openLiveFolderMenu } from "../../state/sidebar/liveMenus";
 import { registerRow } from "../../state/sidebar/sidebarUi";
 import { LiveFolderIcon } from "./LiveFolderIcon";
 import { groupBoxAtRest, groupSurface, TAB_ROW, useSidebarTokens } from "./tokens";
@@ -43,6 +40,7 @@ const HEADER_ROOM = { marginHorizontal: LIVE_FOLDER_HEADER_MARGIN } as const;
 const BOX_ROOM = { paddingVertical: GROUP_BORDER, paddingHorizontal: LIVE_FOLDER_BOX_PAD } as const;
 const REFRESH_SLOT = { minWidth: iconButton.s.box, alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "flex-end" } as const;
 const REFRESH_OVER = { position: "absolute", top: 0, bottom: 0, right: 0, flexDirection: "row", alignItems: "center" } as const;
+const WARNING_GLYPH = { width: 18, height: 18 } as const;
 const SPINNER_BOX = { width: TAB_ROW.closeSlot, height: TAB_ROW.closeSlot, alignItems: "center", justifyContent: "center" } as const;
 const SPINNER_PIVOT = { transform: [{ translateX: REFRESH_ARROW_RING_OFFSET.x }, { translateY: REFRESH_ARROW_RING_OFFSET.y }] };
 const SPINNER_GLYPH = { width: 14, height: 14, transform: [{ translateX: -REFRESH_ARROW_RING_OFFSET.x }, { translateY: -REFRESH_ARROW_RING_OFFSET.y }] };
@@ -85,7 +83,7 @@ export const LiveFolderBlock = memo(function LiveFolderBlock({ folderId, windowI
       <View {...box.hoverProps} style={BOX_ROOM}>
         <Animated.View
           pointerEvents="none"
-          style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: GROUP_RADIUS, backgroundColor: fill, borderWidth: GROUP_BORDER, borderColor: stroke, opacity: boxOpacity }}
+          style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, ...clippedContinuousCorners(GROUP_RADIUS), backgroundColor: fill, borderWidth: GROUP_BORDER, borderColor: stroke, opacity: boxOpacity }}
         />
         <View ref={headerRef} {...handle} style={HEADER_ROOM}>
           <FolderHeader folderId={folderId} windowId={windowId} collapsed={collapsed} />
@@ -109,18 +107,12 @@ function FolderRowView({ row, folderId, windowId }: { row: FolderRow; folderId: 
   }
 }
 
-function fixError(windowId: string, error: FolderStatus["error"]) {
-  const link = error ? blockedLink(error.message) : null;
-  if (link) newTab(windowId, { url: link });
-  else openSettings("automations");
-}
-
 function FolderNote({ folderId, windowId }: { folderId: string; windowId: string }) {
   const status = useLive((s) => s.status[folderId]);
   const kind = useLive((s) => s.folders[folderId]?.kind);
   const hidden = useLive((s) => s.hidden[folderId]?.length ?? 0);
   if (!status || status.state === "initializing" || (status.state === "updating" && !status.lastFetch)) return <NoteRow text="Loading…" spinner />;
-  if (status.error) return <NoteRow text={errorText(status.error.kind, status.error.source)} onPress={() => fixError(windowId, status.error)} icon="exclamationmark.triangle.fill" />;
+  if (status.error) return <NoteRow text={errorText(status.error.kind, status.error.source)} onPress={() => fixLiveFolderError(windowId, status.error)} icon="exclamationmark.triangle.fill" />;
   if (hidden) return <NoteRow text={`${hidden} hidden until you refresh`} onPress={() => void manualRefresh(folderId)} />;
   return <NoteRow text={kind === "pullRequests" ? "No open pull requests" : "No recent documents"} />;
 }
@@ -162,18 +154,18 @@ function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; win
             <SidebarRowSurface fill={ink.clear} cornerRadius={GROUP_INNER_RADIUS}>
               <LiveFolderIcon folder={folder} open={!collapsed} />
               <FolderHeaderTitle label={folder.name} color={tokens.groupTitle} />
-              {status?.error ? (
-                <Pressable onPress={() => fixError(windowId, status.error)} tooltip={errorText(status.error.kind, status.error.source)} style={{ marginRight: space.xxs }}>
-                  <Symbol name="exclamationmark.triangle.fill" size={10} color={colors.pending} style={{ width: 18, height: 18 }} />
-                </Pressable>
-              ) : null}
               <View style={REFRESH_SLOT}>
                 {updating ? (
                   <RefreshButton spinning tooltip={statusText(folderId)} onPress={() => void manualRefresh(folderId)} />
-                ) : collapsed ? (
+                ) : collapsed || status?.error ? (
                   <Animated.View style={{ flexDirection: "row", alignItems: "center", marginRight: space.xxs, gap: space.xs, opacity: restOpacity }}>
-                    {unread ? <Dot size={7} color={theme.accent} /> : null}
-                    <Badge text={count} size="m" />
+                    {collapsed && unread ? <Dot size={7} color={theme.accent} /> : null}
+                    {collapsed ? <Badge text={count} size="m" /> : null}
+                    {status?.error ? (
+                      <Pressable accessibilityRole="button" accessibilityLabel={errorText(status.error.kind, status.error.source)} accessibilityHint="Resolves the warning" onAccessibilityTap={() => fixLiveFolderError(windowId, status.error)} onPress={() => fixLiveFolderError(windowId, status.error)}>
+                        <Symbol name="exclamationmark.triangle.fill" size={10} color={colors.pending} style={WARNING_GLYPH} />
+                      </Pressable>
+                    ) : null}
                   </Animated.View>
                 ) : null}
                 {updating ? null : (

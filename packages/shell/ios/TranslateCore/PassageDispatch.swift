@@ -48,12 +48,14 @@ enum PassageDispatch {
     var out = ""
     for piece in SentenceRuns.split(text, limit: limit) {
       if Task.isCancelled { return nil }
-      guard !piece.text.isEmpty else {
-        out += piece.gap
+      let lead = piece.text.prefix(while: \.isWhitespace)
+      let body = piece.text.dropFirst(lead.count)
+      guard !body.isEmpty else {
+        out += piece.text + piece.gap
         continue
       }
-      guard let translated = await plain(piece.text) else { return nil }
-      out += translated + piece.gap
+      guard let translated = await plain(String(body)) else { return nil }
+      out += lead + translated + piece.gap
     }
     return out
   }

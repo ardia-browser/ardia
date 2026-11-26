@@ -9,6 +9,7 @@ export type CompletingFieldHandle = {
   focus(): void;
   blur(): void;
   setText(text: string, selectsAll?: boolean): void;
+  getAnimatableRef(): unknown;
 };
 
 type SharedInputProps = Pick<
@@ -35,6 +36,7 @@ export type CompletingFieldProps = ViewProps &
     highlightColor?: string;
     selectsAllOnFocus?: boolean;
     holdsScroll?: boolean;
+    revealFocus?: number;
     color?: string;
     fontSize?: number;
     fontWeight?: "regular" | "medium" | "semibold" | "bold";
@@ -47,13 +49,15 @@ export type CompletingFieldProps = ViewProps &
 
 export type NativeColor = ColorValue | number;
 
+type NativeHandle = Omit<CompletingFieldHandle, "getAnimatableRef"> & { getNativeRef?(): unknown };
+
 type NativeProps = Omit<
   CompletingFieldProps,
   "onTypedChange" | "onSubmit" | "onFocusChange" | "onSuffixChange" | "onFieldScroll" | "accessibilityLabel" | "highlightColor" | "color" | "placeholderTextColor" | "cursorColor" | "selectionColor"
 > & {
   cursorColor?: NativeColor;
   selectionColor?: NativeColor;
-  ref?: Ref<CompletingFieldHandle>;
+  ref?: Ref<NativeHandle>;
   highlightColor?: NativeColor;
   color?: NativeColor;
   placeholderTextColor?: NativeColor;
@@ -82,8 +86,8 @@ export function nativeFieldColor(value: ColorValue | undefined): NativeColor | u
 const fallbackWeights = { regular: "400", medium: "500", semibold: "600", bold: "700" } as const;
 
 export const CompletingField = forwardRef<CompletingFieldHandle, CompletingFieldProps>(function CompletingField(props, ref) {
-  const { onTypedChange, onSubmit, onFocusChange, onSuffixChange, onFieldScroll, text, offer, highlightColor, selectsAllOnFocus, holdsScroll, color, fontSize, fontWeight, style, accessibilityLabel, ...rest } = props;
-  const native = useRef<CompletingFieldHandle>(null);
+  const { onTypedChange, onSubmit, onFocusChange, onSuffixChange, onFieldScroll, text, offer, highlightColor, selectsAllOnFocus, holdsScroll, revealFocus, color, fontSize, fontWeight, style, accessibilityLabel, ...rest } = props;
+  const native = useRef<NativeHandle>(null);
   const eventCount = useRef(0);
   const input = useRef<TextInputInstance>(null);
   useImperativeHandle(
@@ -98,6 +102,7 @@ export const CompletingField = forwardRef<CompletingFieldHandle, CompletingField
           if (selectsAll) input.current?.setSelection(0, next.length);
         }
       },
+      getAnimatableRef: () => (hasNative ? (native.current?.getNativeRef?.() ?? native.current) : input.current),
     }),
     [onTypedChange],
   );
@@ -116,6 +121,7 @@ export const CompletingField = forwardRef<CompletingFieldHandle, CompletingField
       highlightColor: nativeFieldColor(highlightColor),
       selectsAllOnFocus,
       holdsScroll: Platform.OS === "ios" ? holdsScroll : undefined,
+      revealFocus: Platform.OS === "android" ? revealFocus : undefined,
       color: nativeFieldColor(color),
       fontSize,
       fontWeight,

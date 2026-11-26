@@ -1,6 +1,6 @@
 ---
 import { base } from "../data/site";
-import { DONATE_AMOUNTS, DONATE_FREQUENCIES, DONATE_LINKS, MONTHLY_CUSTOM, donateLabel } from "../data/donate";
+import { DONATE_AMOUNTS, DONATE_FREQUENCIES, DONATE_LINKS, MONTHLY_CUSTOM, donateFloorOf, donateLabel } from "../data/donate";
 
 interface Props {
   id?: string;
@@ -36,9 +36,9 @@ const titleId = `${id}-title`;
         {DONATE_AMOUNTS.map((amount) => {
           const href = DONATE_LINKS[frequency.key][amount];
           return href ? (
-            <li>
+            <li data-floor={donateFloorOf(amount)}>
               <a
-                class:list={["amount", { custom: amount === "custom" }]}
+                class:list={["amount", { custom: amount === "custom", sixseven: amount === "67" }]}
                 href={href}
                 rel="noopener"
                 data-track="donate_clicked"
@@ -87,7 +87,52 @@ const titleId = `${id}-title`;
   <p class="fine">Secure checkout by Stripe. It asks for your email to send the receipt. Cancel a monthly gift any time from that email.</p>
 </div>
 
+<script>
+  import { DONATE_FLOOR, isDonateFloorVariant } from "../data/donate";
+  import { getFeatureFlag } from "../scripts/telemetry";
+
+  const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/;
+
+  function showFloor(variant: unknown) {
+    if (!isDonateFloorVariant(variant)) return;
+    document.documentElement.dataset.donateFloor = variant;
+    for (const link of document.querySelectorAll<HTMLAnchorElement>(".donate a.amount[href*='.stripe.com/']")) {
+      const url = new URL(link.href);
+      url.searchParams.set("client_reference_id", `${DONATE_FLOOR.flag}_${variant}`);
+      link.href = url.href;
+    }
+  }
+
+  let decided = false;
+  const nearby = new IntersectionObserver((entries) => entries.some((entry) => entry.isIntersecting) && decideFloor(), {
+    rootMargin: "800px 0px",
+  });
+
+  function decideFloor() {
+    if (decided) return;
+    decided = true;
+    nearby.disconnect();
+    const forced = LOCAL_HOST.test(location.hostname) ? new URLSearchParams(location.search).get("nnflag") : null;
+    if (isDonateFloorVariant(forced)) showFloor(forced);
+    else void getFeatureFlag(DONATE_FLOOR.flag).then(showFloor);
+  }
+
+  for (const donate of document.querySelectorAll<HTMLElement>(".donate:not(.compact)")) nearby.observe(donate);
+  for (const opener of document.querySelectorAll<HTMLElement>("[popovertarget='donate-pop']")) {
+    opener.addEventListener("pointerenter", decideFloor, { once: true });
+    opener.addEventListener("focus", decideFloor, { once: true });
+    opener.addEventListener("click", decideFloor, { once: true });
+  }
+</script>
+
 <style>
+  li[data-floor="five"],
+  :global(:root[data-donate-floor="five"]) li[data-floor="ten"] {
+    display: none;
+  }
+  :global(:root[data-donate-floor="five"]) li[data-floor="five"] {
+    display: list-item;
+  }
   .donate {
     margin-top: clamp(64px, 7vw, 112px);
     padding-top: clamp(32px, 3.5vw, 48px);
@@ -196,6 +241,50 @@ const titleId = `${id}-title`;
     font-family: var(--sans);
     font-size: var(--t-small);
     font-weight: 600;
+  }
+  .amount.sixseven {
+    --sixseven-ink: #16130f;
+    background-color: var(--sun);
+    background-image: var(--impasto);
+    background-size: 120px;
+    background-blend-mode: soft-light;
+    box-shadow: 0 6px 18px rgb(5 8 18 / 0.28);
+    color: var(--sixseven-ink);
+    transform: rotate(-3deg);
+  }
+  .amount.sixseven .per {
+    color: rgb(22 19 15 / 0.7);
+  }
+  .amount.sixseven:hover,
+  .amount.sixseven:focus-visible {
+    background-color: var(--sun-pale);
+    box-shadow:
+      0 6px 18px rgb(5 8 18 / 0.28),
+      inset 0 0 0 2px var(--sixseven-ink);
+    color: var(--sixseven-ink);
+  }
+  a.amount.sixseven:active {
+    transform: rotate(-3deg) scale(0.96);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .amount.sixseven:hover {
+      animation: sixseven-weigh 0.9s ease-in-out infinite;
+    }
+  }
+  @keyframes sixseven-weigh {
+    0%,
+    100% {
+      transform: rotate(-3deg);
+    }
+    25% {
+      transform: rotate(4deg) translateY(-2px);
+    }
+    50% {
+      transform: rotate(-6deg) translateY(1px);
+    }
+    75% {
+      transform: rotate(3deg) translateY(-1px);
+    }
   }
   .donate .amount.amount-form {
     --go: 40px;

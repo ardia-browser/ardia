@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer as createHttpsServer } from "node:https";
 import { basename, join, resolve } from "node:path";
-import { freePort, launch as launchInstance, reporter, sleep } from "../../../scripts/lib/instance.mjs";
+import { freePort, isAlive, launch as launchInstance, reporter, sleep } from "../../../scripts/lib/instance.mjs";
 
 const [appArg, scratchArg, ...only] = process.argv.slice(2);
 if (!appArg || !scratchArg) {
@@ -50,6 +50,7 @@ const conference = `
   window.join = () => navigator.mediaDevices.getUserMedia({ video: true }).then((s) => {
     window.__stream = s; const v = document.querySelector("video"); v.srcObject = s; v.play(); return "ok";
   }, (e) => e.name);
+  window.leave = () => { window.__stream?.getTracks().forEach((t) => t.stop()); window.__stream = null; document.querySelector("video").srcObject = null; return true; };
   window.state = () => ({ pip: __pip, open: !!documentPictureInPicture.window, closed: __pipClosed, error: __pipError,
     camera: window.__stream?.getVideoTracks()[0]?.readyState ?? null, visibility: document.visibilityState, asked: __asked });`;
 const asks = `
@@ -73,23 +74,16 @@ const origin = () => `https://s${++site}.localhost:${port}`;
 const devtoolsPort = await freePort();
 let pid = null;
 let instance = null;
-async function launch(logName = "app.out.log") {
+async function launch(logName = "app.out.log", extra = {}) {
   instance = await launchInstance(app, {
     data, port: devtoolsPort, log: join(scratch, logName), ready: false,
-    switches: "--ignore-certificate-errors", test: { systemMediaPermission: "ask" },
+    switches: "--ignore-certificate-errors", test: { systemMediaPermission: "ask" }, ...extra,
   });
   pid = instance.pid;
   writeFileSync(join(scratch, "app.pid"), String(pid));
 }
 await launch();
-const alive = () => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
+const alive = () => isAlive(pid);
 
 async function evalApp(body, timeoutMs = 20000) {
   try {
@@ -994,6 +988,99 @@ try {
     if (Object.keys(out).length !== 2) throw new Error(`restored windows: ${JSON.stringify(final.windows)}`);
     mainWindow = await until("a window", async () => (await appState()).focused ?? Object.keys((await appState()).windows)[0], 30000);
     return out;
+  });
+
+  await check("call-window-covered-page-hidden", async () => {
+    if (alive()) {
+      await instance.quit();
+      await until("the app to exit", async () => !alive(), 30000);
+    }
+    await launch("app-occlusion.out.log", { instance: { allowOcclusion: "1" } });
+    await booted();
+    mainWindow = await until("a window", async () => (await appState()).focused ?? Object.keys((await appState()).windows)[0], 30000);
+    const call = await joinedCall(mainWindow, "?only-when-hidden");
+    const n = await engine("tabs.devWindowNumber", { tabId: call.tab });
+    const win = (action) => engine("windows.dev", { window: n, action });
+    const rounds = [];
+    try {
+      await win("fakeOcclusion:visible");
+      await sleep(1500);
+      for (let round = 0; round < 3; round++) {
+        const base = await pipState(call.t);
+        if (base.visibility !== "visible") throw new Error(`round ${round}: the call page starts ${base.visibility}`);
+        const covered = Date.now();
+        await win("fakeOcclusion:occluded");
+        const popped = await until(`the call popped out (round ${round})`, async () => {
+          const p = await pipState(call.t);
+          return p.open ? p : null;
+        }, 6000).catch(async () => {
+          const p = await pipState(call.t);
+          throw new Error(`covering the window didn't pop the call out; the page was asked while: ${JSON.stringify(p.asked.slice(base.asked.length))}, now ${p.visibility}`);
+        });
+        rounds.push({ ms: Date.now() - covered, asked: popped.asked.slice(base.asked.length) });
+        await win("fakeOcclusion:visible");
+        await until(`closed with the window back (round ${round})`, async () => {
+          const p = await pipState(call.t);
+          return !p.open && p.visibility === "visible" ? p : null;
+        }, 8000);
+        await sleep(1500);
+      }
+      const asked = rounds.flatMap((r) => r.asked);
+      if (asked.includes("visible")) throw new Error(`the page was asked to enter PiP while still visible: ${JSON.stringify(rounds)}`);
+      const before = await pipState(call.t);
+      await win("fakeOcclusion:occluded");
+      await sleep(500);
+      await win("fakeOcclusion:visible");
+      await sleep(3000);
+      const back = await pipState(call.t);
+      const returned = { asked: back.asked.slice(before.asked.length), opened: back.pip - before.pip, open: back.open, visibility: back.visibility };
+      if (returned.asked.length || returned.opened || returned.open) throw new Error(`coming back 500 ms after covering still asked the page or popped it out: ${JSON.stringify(returned)}`);
+      const coverAndWatch = async (what, during) => {
+        const base = await pipState(call.t);
+        const coveredAt = Date.now();
+        await win("fakeOcclusion:occluded");
+        const extra = await during(coveredAt);
+        const popped = await until(`${what}: the call popped out`, async () => {
+          const p = await pipState(call.t);
+          return p.open ? p : null;
+        }, 6000).catch(async () => {
+          const p = await pipState(call.t);
+          throw new Error(`${what}: the call didn't pop out; the page was asked while: ${JSON.stringify(p.asked.slice(base.asked.length))}, now ${p.visibility}`);
+        });
+        const asked = popped.asked.slice(base.asked.length);
+        if (asked.includes("visible")) throw new Error(`${what}: the page was asked while still visible: ${JSON.stringify(asked)}`);
+        await win("fakeOcclusion:visible");
+        await until(`${what}: closed with the window back`, async () => !(await pipState(call.t)).open, 8000);
+        await sleep(1500);
+        return { asked, ...extra };
+      };
+      const unrelated = await openTab(`${origin()}/unrelated?t=Unrelated`, "Unrelated");
+      await show(call.tab);
+      await sleep(1500);
+      const stripChange = await coverAndWatch("an unrelated tab closed 600 ms after covering", async () => {
+        await sleep(600);
+        const atClose = await pipState(call.t);
+        if (atClose.visibility !== "visible" || atClose.open) throw new Error(`the unrelated tab has to close while the call page is still visible and not popped out: ${JSON.stringify(atClose)}`);
+        await closeTab(unrelated);
+        return { closedAfterMs: 600, visibilityAtClose: atClose.visibility };
+      });
+      await js(call.t, "leave()");
+      await sleep(2500);
+      const lateCall = await coverAndWatch("a call that starts after the cover", async (coveredAt) => {
+        const before = (await pipState(call.t)).camera;
+        if (before === "live") throw new Error("the camera was still live when the window was covered");
+        await sleep(100);
+        const rejoined = await js(call.t, "join()");
+        if (rejoined !== "ok") throw new Error(`rejoining while covered: ${rejoined}`);
+        const liveAtMs = Date.now() - coveredAt;
+        if (liveAtMs >= 400) throw new Error(`the camera went live ${liveAtMs} ms after the cover, past the 400 ms this phase tests`);
+        return { cameraBeforeJoin: before, liveAtMs };
+      });
+      return { rounds, returned, stripChange, lateCall };
+    } finally {
+      await win("fakeOcclusion:off").catch(() => null);
+      await closeTab(call.tab);
+    }
   });
 } finally {
   await instance.quit();

@@ -10,7 +10,7 @@ import type { ProfileColor, ProfileTheme, ThemeMode, ThemeTexture } from "../../
 import { Box, Button, curve, duration, Group, PopUp, Segmented, space, Swatch, swatch, Text, ThemeSwatch } from "../ui";
 import { importArcTheme } from "../../state/profiles/arcThemes";
 import { noteThemePreset } from "../../state/telemetry/themePresetCounts";
-import { themeGesture, type ThemeEdit } from "../../lib/themeGesture";
+import { sameData, themeGesture, type ThemeEdit } from "../../lib/themeGesture";
 import { Row, SectionHeader } from "./Form";
 import type { SettingId } from "./settingsIndex";
 import { ColorPad, DirectionDial, LABEL, Labelled, LightnessBar, Preview, Slider } from "./ThemeControls";
@@ -38,6 +38,7 @@ function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined,
     apply: (next, final) => applyLatest.current(next, final),
     showing: () => showingLatest.current(),
     current: () => showingTheme(profileLatest.current),
+    same: sameData,
     draft: setDraft,
     requestFrame: requestAnimationFrame,
     cancelFrame: cancelAnimationFrame,

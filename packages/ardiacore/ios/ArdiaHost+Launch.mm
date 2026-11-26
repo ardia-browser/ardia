@@ -7,6 +7,7 @@
 #import "ArdiaServices.h"
 #import "ArdiaNavigationDownloads.h"
 #import "ArdiaStartup.h"
+#import "ArdiaNativeMessaging.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
 
@@ -346,6 +347,15 @@ void StartEarlyWindow() {
 
 + (void)markMainStarted {
   ArdiaLaunchSequence.shared.mainStartedAt = LaunchNowMs();
+  ArdiaLaunchSequence.shared.mainUsage = ArdiaLaunchSequence.processUsageNow;
+}
+
++ (NSDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *> *)launchUsage {
+  ArdiaLaunchSequence *launch = ArdiaLaunchSequence.shared;
+  NSMutableDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *> *usage = [NSMutableDictionary dictionary];
+  if (launch.mainUsage.count) usage[@"main"] = launch.mainUsage;
+  if (launch.engineStartUsage.count) usage[@"engineStarted"] = launch.engineStartUsage;
+  return usage;
 }
 
 + (nullable NSNumber *)launchedHidden {
@@ -358,6 +368,10 @@ void StartEarlyWindow() {
   if (![launch reached:ArdiaLaunchAppKitDidFinish]) return nil;
   if (launch.launchedHidden) return @"login_item";
   return launch.launchedForDocuments ? @"documents" : @"user";
+}
+
++ (NSDictionary<NSString *, NSNumber *> *)nativeMessagingHosts {
+  return gDataDirectory.length ? ardia_native_messaging::ProbeHosts(gDataDirectory) : @{};
 }
 
 + (NSDictionary<NSString *, NSNumber *> *)launchMarks {

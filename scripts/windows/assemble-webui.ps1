@@ -3,6 +3,7 @@ param(
   [string]$Ui = "apps/desktop/dist/win",
   [Parameter(Mandatory = $true)][string]$Out,
   [string]$MigrateBin,
+  [string]$UpdateVerify,
   [switch]$TestBuild,
   [switch]$Shippable,
   [string]$LauncherName = "",
@@ -19,6 +20,9 @@ $engineLauncher = $ShellLayout.EngineLauncher
 $engineNotes = "RUN.txt"
 $uiFolder = $ShellLayout.UiFolder
 $migratorName = $ShellLayout.Migrator
+$verifierName = $ShellLayout.UpdateVerifier
+$keyName = $ShellLayout.UpdateKey
+$pinnedKey = Join-Path $PSScriptRoot $keyName
 $testMarker = $ShellLayout.TestMarker
 $repository = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
@@ -43,6 +47,7 @@ if ($Shippable -and $TestBuild) { throw "a shippable WebUI build never carries $
 if ($Shippable -and $Build -le 0) { throw "a shippable WebUI build needs -Build above 0, so it carries Ardia.build.json for updates and the installer" }
 if ($Shippable -and (Find-TestMarkers $engineRoot).Count) { throw "the engine '$Engine' carries $testMarker; a shippable WebUI build is assembled from an engine without one" }
 if ($Shippable -and -not $MigrateBin) { throw "a shippable WebUI build needs -MigrateBin: without $migratorName an upgrade from the React Native shell would open empty" }
+if ($Shippable -and -not $UpdateVerify) { throw "a shippable WebUI build needs -UpdateVerify: without $verifierName and $keyName beside $($ShellLayout.Launcher) it never updates itself" }
 if ($branded -and -not (Test-Path -LiteralPath $AppIcon -PathType Leaf)) { throw "the app icon '$AppIcon' is not a file" }
 $migrateSource = $null
 if ($PSBoundParameters.ContainsKey('MigrateBin') -or $MigrateBin) {
@@ -50,6 +55,14 @@ if ($PSBoundParameters.ContainsKey('MigrateBin') -or $MigrateBin) {
     throw "The migration binary '$MigrateBin' was not found"
   }
   $migrateSource = (Resolve-Path -LiteralPath $MigrateBin).Path
+}
+$verifierSource = $null
+if ($PSBoundParameters.ContainsKey('UpdateVerify') -or $UpdateVerify) {
+  if ([string]::IsNullOrWhiteSpace($UpdateVerify) -or -not (Test-Path -LiteralPath $UpdateVerify -PathType Leaf)) {
+    throw "The update verifier '$UpdateVerify' was not found"
+  }
+  if (-not (Test-Path -LiteralPath $pinnedKey -PathType Leaf)) { throw "the pinned update key $pinnedKey is missing" }
+  $verifierSource = (Resolve-Path -LiteralPath $UpdateVerify).Path
 }
 if (Test-Path -LiteralPath $Out) {
   if (Get-ChildItem -LiteralPath $Out -Force | Select-Object -First 1) { throw "'$Out' is not empty" }
@@ -68,6 +81,10 @@ Copy-Item -LiteralPath $uiRoot -Destination (Join-Path $outRoot $uiFolder) -Recu
 if ($migrateSource) {
   Copy-Item -LiteralPath $migrateSource -Destination (Join-Path $outRoot $migratorName) -Force
 }
+if ($verifierSource) {
+  Copy-Item -LiteralPath $verifierSource -Destination (Join-Path $outRoot $verifierName) -Force
+  Copy-Item -LiteralPath $pinnedKey -Destination (Join-Path $outRoot $keyName) -Force
+}
 
 $launcherPath = Join-Path $outRoot $LauncherName
 if ($renamed) {
@@ -85,11 +102,15 @@ if ($Shippable -or $VcRedist) {
     $migratorImage = Read-PeImage ([System.IO.File]::ReadAllBytes((Join-Path $outRoot $migratorName)))
     if (-not $migratorImage -or $migratorImage.Cpu -ne $launcherImage.Cpu) { throw "$migratorName is not a $($launcherImage.Cpu) program like $LauncherName" }
   }
+  if ($verifierSource) {
+    $verifierImage = Read-PeImage ([System.IO.File]::ReadAllBytes((Join-Path $outRoot $verifierName)))
+    if (-not $verifierImage -or $verifierImage.Cpu -ne $launcherImage.Cpu) { throw "$verifierName is not a $($launcherImage.Cpu) program like $LauncherName" }
+  }
   Add-VcRuntime $outRoot $launcherImage.Cpu $VcRedist
 }
 if ($Build -gt 0) {
   if (-not $Version) { $Version = & (Join-Path $PSScriptRoot "project-version.ps1") }
-  $identity = [ordered]@{ version = $Version; build = $Build } | ConvertTo-Json -Compress
+  $identity = [ordered]@{ version = $Version; build = $Build; shell = "webui" } | ConvertTo-Json -Compress
   [System.IO.File]::WriteAllText((Join-Path $outRoot "Ardia.build.json"), $identity, (New-Object System.Text.UTF8Encoding $false))
   Write-Output "assemble-webui: this is Ardia $Version, build $Build"
 }
@@ -104,5 +125,6 @@ if ($Shippable) {
 
 $uiFiles = @(Get-ChildItem -LiteralPath (Join-Path $outRoot $uiFolder) -Recurse -File).Count
 $migratorNote = if ($migrateSource) { ", bundled $migratorName" } else { "" }
+if ($verifierSource) { $migratorNote += ", bundled $verifierName and $keyName" }
 $kind = if ($Shippable) { "shippable " } else { "" }
 Write-Output "WebUI shell assembled ${kind}in $outRoot ($uiFiles UI files in $uiFolder$migratorNote); start it with: $LauncherName $($ShellLayout.WebUISwitch)"

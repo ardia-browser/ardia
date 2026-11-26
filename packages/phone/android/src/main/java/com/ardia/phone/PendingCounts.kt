@@ -7,14 +7,18 @@ object UsageConsent {
     private const val PREFERENCES = "ardia-usage-consent"
     private const val SHARING = "sharing"
     private const val GENERATION = "generation"
+    private const val SINCE = "since"
 
     private fun preferences(context: Context) = (context.applicationContext ?: context).getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
     fun set(context: Context, sharing: Boolean) = synchronized(PendingCounts) {
         synchronized(this) {
             val stored = preferences(context)
+            if (sharing && !stored.contains(SINCE)) stored.edit().putLong(SINCE, System.currentTimeMillis()).commit()
             if (stored.getBoolean(SHARING, false) == sharing && stored.contains(GENERATION)) return@synchronized
-            stored.edit().putBoolean(SHARING, sharing).putLong(GENERATION, stored.getLong(GENERATION, 0L) + 1).commit()
+            val edit = stored.edit().putBoolean(SHARING, sharing).putLong(GENERATION, stored.getLong(GENERATION, 0L) + 1)
+            if (sharing) edit.putLong(SINCE, System.currentTimeMillis())
+            edit.commit()
             if (!sharing) PendingCounts.clear(context)
         }
     }
@@ -22,6 +26,11 @@ object UsageConsent {
     fun state(context: Context): Pair<Boolean, Long> = synchronized(this) {
         val stored = preferences(context)
         stored.getBoolean(SHARING, false) to stored.getLong(GENERATION, 0L)
+    }
+
+    fun sharingSince(context: Context): Long? = synchronized(this) {
+        val stored = preferences(context)
+        if (stored.getBoolean(SHARING, false) && stored.contains(SINCE)) stored.getLong(SINCE, 0L).takeIf { it > 0L } else null
     }
 
     fun window(context: Context): Long? = synchronized(this) {

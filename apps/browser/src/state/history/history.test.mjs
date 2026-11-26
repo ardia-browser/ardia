@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 globalThis.__DEV__ = false;
 
-const { applyHistoryChanges } = await import("./engineSync.ts");
+const { applyHistoryChanges } = await import("./historyChanges.ts");
 const { FREQUENT_VISITS, MAX_HISTORY, MAX_VISIT_TIMES, SUGGESTION_FREQUENT, SUGGESTION_HISTORY, suggestionHistory } = await import("./history.ts");
 
 const applyHistoryChange = (list, change, note) => applyHistoryChanges(list, [change], note);

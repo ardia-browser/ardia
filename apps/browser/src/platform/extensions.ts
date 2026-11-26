@@ -43,6 +43,8 @@ export const configureExtension = async (
     fileAccess?: boolean;
     userScripts?: boolean;
     siteAccess?: "allSites" | "specificSites" | "onClick";
+    grantSite?: string;
+    revokeSite?: string;
   },
 ) => {
   await call("extensions.configure", { profile, id, options });

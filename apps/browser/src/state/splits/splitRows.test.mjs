@@ -89,7 +89,7 @@ test("a split moved into a pinned group stays a split there", () => {
 test("a tab dropped before a split's second pane in window order lands before the whole split", () => {
   reset();
   const { w, a, b, c, d, splitId } = splitWindow();
-  S().movePane(b, 1);
+  S().movePane(b, "right");
   assert.deepEqual(splitTabIdsOf(S().splits[splitId]), [c, b]);
   S().placeTabs([d], { pinned: false, beforeId: c });
   const order = S().windows[w].tabIds;
@@ -351,7 +351,8 @@ test("adding a pane beside a stack left alone in its split keeps both stacked ta
   const below = S().openSplitPane(w, { anchorTabId: c, side: "bottom" });
   assert.equal(below.ok, true);
   S().closeTab(b);
-  assert.deepEqual(S().splits[splitId].slots.map((slot) => ("stack" in slot ? slot.stack : slot.tabId)), [[c, below.tabId]]);
+  assert.deepEqual(S().splits[splitId].slots.map((slot) => ("stack" in slot ? slot.stack : slot.tabId)), [c, below.tabId]);
+  assert.equal(S().splits[splitId].orientation, "vertical", "the stack left alone becomes a stacked split of its two panes");
   const added = S().openSplitPane(w, { tabId: d, anchorTabId: c, side: "bottom" });
   assert.equal(added.ok, true);
   assert.deepEqual(splitTabIdsOf(S().splits[splitId]), [c, d, below.tabId]);

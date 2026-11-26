@@ -24,6 +24,7 @@
 #include "ardia/win/webui/webui_host_view.h"
 #include "ardia/win/webui/webui_policy.h"
 #include "ardia/win/webui/webui_storage.h"
+#include "ardia/win/webui/webui_updates.h"
 #include "ardia/win/webui/webui_windows.h"
 #include "base/functional/bind.h"
 #include "base/json/json_reader.h"
@@ -123,6 +124,15 @@ bool ValidDocumentRequest(const base::ListValue* values,
     return false;
   }
   return true;
+}
+
+void QuitEverything() {
+  WindowRegistry::Get().ResetAllCompanionConfirmations();
+  for (ShellHostView* host : WindowRegistry::Get().Hosts()) {
+    host->RememberPlacement();
+  }
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&QuitApp));
 }
 
 }
@@ -365,13 +375,12 @@ void ShellHostView::Invoke(const std::string& method,
   }
   if (method == "ArdiaShell.quit") {
     std::move(done).Run(true, base::Value());
-    WindowRegistry::Get().ResetAllCompanionConfirmations();
-    for (ShellHostView* host : WindowRegistry::Get().Hosts()) {
-      host->RememberPlacement();
-    }
-    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
-        FROM_HERE, base::BindOnce(&QuitApp));
+    QuitEverything();
     return;
+  }
+  if (HandlesUpdateCall(method)) {
+    return InvokeUpdates(method, args.Find("args"), std::move(done),
+                         base::BindOnce(&QuitEverything));
   }
   if (method == "ArdiaShell.focusWindow") {
     const std::string target = values && !values->empty() &&

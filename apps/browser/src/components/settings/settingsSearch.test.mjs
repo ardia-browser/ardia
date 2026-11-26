@@ -36,6 +36,7 @@ const TOP = [
   ["sidebar", ["tabs.sidebarSide"]],
   ["right sidebar", ["tabs.sidebarSide"]],
   ["vertical tabs", ["tabs.layout"]],
+  ["tab menu button", ["tabs.showTabMenuButton"]],
   ["pinned", ["profiles.shareTopApps", "tabs.balancedTopApps", "tabs.sleepingTabs"]],
   ["strikethrough", ["tabs.sleepingTabs"]],
   ["sleeping tabs", ["tabs.sleepingTabs"]],
@@ -56,9 +57,11 @@ const TOP = [
   ["alt tab", ["appearance.ctrlTab"]],
   ["ctrl tab", ["appearance.ctrlTab"]],
   ["control tab", ["appearance.ctrlTab"]],
-  ["tab switcher", ["appearance.ctrlTab"]],
+  ["tab switcher", ["appearance.ctrlTab", "appearance.tabSwitcherView"]],
   ["switch tabs", ["appearance.ctrlTab"]],
   ["recent tabs", ["appearance.ctrlTab"]],
+  ["compact list", ["appearance.tabSwitcherView"]],
+  ["thumbnails", ["appearance.tabSwitcherView"]],
   ["after closing a tab", ["appearance.afterClosingTab"]],
   ["closing a tab", ["appearance.afterClosingTab"]],
   ["tab above", ["appearance.afterClosingTab"]],
@@ -410,4 +413,24 @@ test("search leaves out the official plugins when Settings › Plugins doesn't d
   const bundled = unshown({ top: false, officialPlugins: ["cli"] });
   assert.ok(!bundled.has("plugins.cli"));
   assert.ok(!bundled.has("plugins.official"));
+});
+
+test("with Minimalism mode off, searching favicons or site logos still finds Minimalism tiles and says what it needs (#3609)", async () => {
+  const { unshownSettings } = await import("./settingsIndex.ts");
+  const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
+  const { settingsResults } = await import("./SettingsSearch.tsx");
+  const unshown = new Set(unshownSettings({ ...DEFAULT_SETTINGS, minimalismMode: false }, { top: false }).split("\n").filter(Boolean));
+  assert.ok(unshown.has("appearance.minimalismPinnedIcons"), "the pane hides the row while Minimalism mode is off");
+  for (const query of ["favicons", "site logos", "letters"]) {
+    const hit = settingsResults(query, unshown).find((h) => h.entry.id === "appearance.minimalismPinnedIcons");
+    assert.ok(hit, query);
+    assert.equal(hit.entry.needs, "Turn on Minimalism mode to use this");
+  }
+  assert.equal(findSetting("appearance.minimalismPinnedIcons").description.includes("With Letters"), true);
+});
+
+test("searching for hiding or showing the control pill surfaces advanced.showCliPill", () => {
+  for (const query of ["show control pill", "hide control pill", "dismiss control pill"]) {
+    assert.ok(ids(query).includes("advanced.showCliPill"), query);
+  }
 });

@@ -5,8 +5,9 @@ function Check([string]$name, [bool]$ok, [string]$detail) {
   $results[$name] = @{ ok = $ok; detail = $detail }
   Log ("{0} {1}: {2}" -f ($(if ($ok) { 'PASS' } else { 'FAIL' }), $name, $detail))
 }
-function PagesCreated { (Shell-Lines-Matching 'page \d+ created').Count }
 function PageTargets { @(Cdp-List | Where-Object { $_.type -eq 'page' -and $_.url -notlike 'chrome://ardia/*' } | ForEach-Object { $_.url }) }
+function PagesCreated { (PageTargets).Count }
+function Made-Tab([object]$answer, [string]$claim) { [bool]($answer.ok -and ($answer.r.browserId -is [int] -or $answer.r.browserId -is [long]) -and ($answer.r.browserId -gt 0) -and ($answer.r.lease.claim -ceq $claim) -and ($answer.r.lease.rendererGeneration -match '^[1-9]\d*$')) }
 function Js([string]$value) { $value | ConvertTo-Json -Compress }
 function Invoke-Host([string]$method, [string]$argsJson) {
   Cdp-Eval "__ardiaHost.invoke($(Js $method), $argsJson).then(r => JSON.stringify({ ok: true, r }), e => JSON.stringify({ ok: false, e: String(e && e.message || e) }))"
@@ -33,7 +34,7 @@ $made = Invoke-Host 'tab.create' '{ "key": "bridge-ok", "claim": "bridge-claim",
 $control = $made.r.browserId
 Wait-Until { ((PageTargets) -contains 'file:///C:/pilot/form.html?bridge') -and (PagesCreated) -ge 1 } 15 'the control page' -NoThrow | Out-Null
 $targets = PageTargets
-Check 'valid-create-reaches-the-sink' ($made.ok -and $control -and ($targets -contains 'file:///C:/pilot/form.html?bridge')) "tab.create answered $($made | ConvertTo-Json -Compress -Depth 6); pages: $($targets -join ' | ')"
+Check 'valid-create-reaches-the-sink' ((Made-Tab $made 'bridge-claim') -and ($targets -contains 'file:///C:/pilot/form.html?bridge')) "tab.create answered $($made | ConvertTo-Json -Compress -Depth 6); pages: $($targets -join ' | ')"
 $baseCreated = PagesCreated
 $baseProfiles = (Profiles) -join '|'
 
@@ -59,13 +60,13 @@ foreach ($case in $malformed.GetEnumerator()) {
   $sent = Cdp-Eval "(() => { try { $($case.Value); return 'sent'; } catch (e) { return 'threw ' + e.message; } })()"
   Log "malformed $($case.Key): $sent"
 }
-$identity = Cdp-Eval '__ardiaHost.invoke("ArdiaShell.windowIdentity", {})'
+$identity = Window-Identity
 $quiet = Never { (@(PageTargets | Where-Object { $_ -like '*malformed*' }).Count -gt 0) -or ((PagesCreated) -ne $baseCreated) } 2
 $targets = PageTargets
 $created = PagesCreated
 $leaked = @($targets | Where-Object { $_ -like '*malformed*' })
 Check 'malformed-requests-make-no-page' ($quiet -and ($created -eq $baseCreated) -and ($leaked.Count -eq 0) -and ($targets.Count -eq 1)) "$($malformed.Count) malformed requests, then a later request answered; pages created $baseCreated -> $created; pages: $($targets -join ' | ')"
-Check 'bridge-answers-after-malformed-requests' ($identity -eq 'main') "ArdiaShell.windowIdentity answered '$identity'"
+Check 'bridge-answers-after-malformed-requests' (Is-Window $identity) "ArdiaShell.windowIdentity answered $(Identity-Text $identity)"
 $refusals = [ordered]@{
   'key-missing'   = '{ "claim": "C", "profile": "default", "url": "file:///C:/pilot/form.html?refused-key" }'
   'key-oversized' = "{ `"key`": $(Js ('k' * 300)), `"claim`": `"C`", `"profile`": `"default`", `"url`": `"file:///C:/pilot/form.html?refused-bigkey`" }"
@@ -126,7 +127,7 @@ Check 'valid-navigation-reaches-the-sink' ($load.ok -and ($targets -contains 'fi
 $second = Invoke-Host 'tab.create' '{ "key": "bridge-second", "claim": "bridge-claim-2", "profile": "default", "url": "file:///C:/pilot/form.html?second" }' | ConvertFrom-Json
 Wait-Until { ((PageTargets) -contains 'file:///C:/pilot/form.html?second') -and (PagesCreated) -eq $baseCreated + 1 } 15 'the second page' -NoThrow | Out-Null
 $targets = PageTargets
-Check 'valid-create-after-hostile-input' ($second.ok -and ($targets -contains 'file:///C:/pilot/form.html?second') -and ((PagesCreated) -eq $baseCreated + 1)) "pages: $($targets -join ' | ')"
+Check 'valid-create-after-hostile-input' ((Made-Tab $second 'bridge-claim-2') -and ($second.r.browserId -ne $control) -and ($targets -contains 'file:///C:/pilot/form.html?second') -and ((PagesCreated) -eq $baseCreated + 1)) "tab.create answered $($second | ConvertTo-Json -Compress -Depth 6); pages $baseCreated -> $(PagesCreated): $($targets -join ' | ')"
 
 function Invoke-HostExpr([string]$method, [string]$argsExpression) {
   $answer = Cdp-Eval "(() => { let pending; try { pending = __ardiaHost.invoke($(Js $method), { args: $argsExpression }); } catch (e) { return JSON.stringify({ ok: false, kind: 'sync', message: String(e && e.message || e) }); } return pending.then(value => JSON.stringify({ ok: true, value: value === undefined ? null : value }), e => { const message = String(e && e.message || e); if (e && typeof e === 'object' && Object.hasOwn(e, 'code')) return JSON.stringify({ ok: false, kind: 'native', code: String(e.code), message }); return JSON.stringify({ ok: false, kind: /^Native request timed out/.test(message) ? 'timeout' : 'transport', message }); }); })()"

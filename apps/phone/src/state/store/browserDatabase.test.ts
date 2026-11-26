@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { nodeDatabase } from "../../../test/nodeDatabase.ts";
+import { PENDING_CRASH_KEY } from "../../lib/crashReports.ts";
 import { createHistoryLog } from "../history/historyLog.ts";
 import { parsePreferences } from "../settings/preferences.ts";
 import type { BrowserTab } from "../tabs/tabModels.ts";
@@ -12,6 +13,7 @@ import {
   knownReceivedKeys,
   readArchivedTabs,
   readOpenTabs,
+  readPreference,
   readPreferences,
   readTabState,
   writeTabState,
@@ -145,6 +147,22 @@ test("preferences keep Android's keys and fall back on bad values", () => {
   assert.equal(prefs.searchEngineId, "google");
   writePreference(db, "tabs.autoArchiveInterval", null);
   assert.equal(parsePreferences(readPreferences(db)).autoArchiveInterval, "day");
+});
+
+test("a stored crash is read only by its own key, never by a full preference read or another key", () => {
+  const db = fresh();
+  writePreference(db, "telemetry.sharing", "off");
+  writePreference(db, PENDING_CRASH_KEY, '{"kind":"js"}');
+  const asked: unknown[] = [];
+  const watched = { ...db, first: <T,>(sql: string, params?: readonly (string | number | null)[]) => (asked.push(params?.[0]), db.first<T>(sql, params)) };
+  assert.equal(readPreference(watched, "telemetry.sharing"), "off");
+  assert.equal(readPreference(watched, "telemetry.installId"), null);
+  assert.deepEqual(asked, ["telemetry.sharing", "telemetry.installId"]);
+  assert.equal(readPreferences(db)[PENDING_CRASH_KEY], undefined);
+  assert.equal(readPreferences(db)["telemetry.sharing"], "off");
+  assert.equal(readPreference(db, PENDING_CRASH_KEY), '{"kind":"js"}');
+  const telemetry = readFileSync(new URL("../telemetry/telemetry.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(telemetry, /\breadPreferences\b/);
 });
 
 test("received keys already in the store are known, and the Mac's history removals cut only their profile's visits", () => {

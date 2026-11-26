@@ -22,7 +22,7 @@ test("the names match the engine's, and the window listens after the shared list
   const core = readFileSync(new URL("../../../engine/ardiacore-linux/src/ardia/linux/ac_linux_open_urls.h", import.meta.url), "utf8");
   assert.ok(core.includes(`kEventCapability[] = "${LINKS_FROM_OTHER_APPS}"`));
   assert.ok(core.includes(`kListenCall[] = "${OPEN_URLS_LISTEN}"`));
-  const main = readFileSync(new URL("./main.tsx", import.meta.url), "utf8");
+  const main = readFileSync(new URL("./shellEntry.tsx", import.meta.url), "utf8");
   assert.ok(main.indexOf("startNativeSync();") < main.indexOf("listenForOpenUrls(ardiaHost);"));
   assert.ok(main.indexOf("startNativeSync();") > 0);
 });

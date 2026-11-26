@@ -1,0 +1,42 @@
+SPDX-License-Identifier: GPL-3.0-only
+Changes code from Helium's settings behavior page (GPL-3.0, The Helium Authors).
+
+Settings › Appearance's behavior section drops four Helium switches Ardia doesn't honour, because Ardia handles each
+of these itself: "Cycle through tabs in most recently used order with Ctrl+Tab" (helium.browser.mru_tab_cycling;
+Ardia's own Switching tabs settings decide what ⌃Tab does), the ⌘S vertical tabs shortcut, pinning new tab groups to
+the bookmarks bar, and split view drag and drop at the window edge. The prefs stay registered; only the rows go.
+
+--- a/chrome/browser/resources/settings/appearance_page/appearance_behavior_page.html
++++ b/chrome/browser/resources/settings/appearance_page/appearance_behavior_page.html
+@@ -6,11 +6,6 @@
+       label="$i18n{openNewTabNextToActive}">
+   </settings-toggle-button>
+ 
+-  <settings-toggle-button class="hr" id="tabCyclingMRU"
+-      pref-key="helium.browser.mru_tab_cycling"
+-      label="$i18n{cycleTabsInMRUOrder}">
+-  </settings-toggle-button>
+-
+   <settings-toggle-button class="hr" id="shiftRightClickContextMenu"
+       pref-key="helium.browser.shift_right_click_context_menu"
+       label="$i18n{shiftRightClickContextMenu}">
+@@ -21,19 +16,4 @@
+       label="$i18n{copyPageUrlShortcut}">
+   </settings-toggle-button>
+ 
+-  <settings-toggle-button class="hr" id="verticalCollapseShortcut"
+-      pref-key="helium.settings.behavior.vertical_collapse_shortcut"
+-      label="$i18n{verticalCollapseShortcut}">
+-  </settings-toggle-button>
+-
+-  <settings-toggle-button class="hr" id="autoPinNewTabGroups"
+-      pref-key="auto_pin_new_tab_groups"
+-      label="$i18n{autoPinNewTabGroups}">
+-  </settings-toggle-button>
+-
+-  <settings-toggle-button class="hr" id="splitViewDragAndDrop"
+-      pref-key="browser.split_view_drag_and_drop_enabled"
+-      label="$i18n{allowSplitViewDragAndDrop}">
+-  </settings-toggle-button>
+-
+ </settings-section>

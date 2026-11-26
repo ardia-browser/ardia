@@ -35,7 +35,7 @@ function listSection(s: BrowserState, windowId: string, profileId: string, membe
   return sectionOf(s, s.windows[windowId]!, profileId, groups, member);
 }
 
-const LIST_FIELDS = ["pin", "profileId", "windowId", "pinKey", "customTitle", "customIcon", "liveItem"] as const;
+const LIST_FIELDS = ["pin", "profileId", "windowId", "pinKey", "customTitle", "customIcon", "tileLetters", "liveItem"] as const;
 function listMayDiffer(s: BrowserState, prev: BrowserState): boolean {
   if (s.windows !== prev.windows || s.groups !== prev.groups || s.splits !== prev.splits || s.peeks !== prev.peeks) return true;
   if (s.tabs === prev.tabs) return false;
@@ -139,7 +139,7 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
       return copy.id;
     }
     used.add(t.id);
-    const patch: Partial<Tab> = { ...keyField(t.id, key), customTitle: src.customTitle, customIcon: src.customIcon };
+    const patch: Partial<Tab> = { ...keyField(t.id, key), customTitle: src.customTitle, customIcon: src.customIcon, tileLetters: src.tileLetters };
     if (!hasOwnOrSharedPage(t)) Object.assign(patch, { url: src.url, title: src.title, favicon: src.favicon });
     if ((Object.keys(patch) as (keyof Tab)[]).some((k) => t[k] !== patch[k])) tabs[t.id] = { ...t, ...patch };
     return t.id;

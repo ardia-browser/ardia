@@ -82,6 +82,7 @@ function SearchPanel({ windowId, windowWidth }: { windowId: string; windowWidth:
         <View style={FIELD_ROW} onLayout={focusOnce}>
           <SearchField
             look="bare"
+            surface="panel"
             inputRef={field}
             value={query}
             onChangeText={(text) => {

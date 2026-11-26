@@ -1,30 +1,18 @@
 import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, findNodeHandle, unstable_batchedUpdates, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView } from "react-native";
 import { reduceMotion } from "../ui";
-import type { WheelInfo } from "../ui/native";
 import { previousStep } from "../../state/onboarding/onboarding";
-import { glideNativeScroll, wheelSteersSections } from "../../state/onboarding/scrollGlide";
+import { glideNativeScroll, steerNativeScroll, wheelSteersSections } from "../../state/onboarding/scrollGlide";
 import { currentPlace, currentSectionIndex, goToSection, type OnboardingSection, type SectionMove } from "../../state/onboarding/sections";
 import { noteOnboarding } from "../../state/telemetry/usage";
-import { publishedForward, SectionContext, useFlowSlots } from "./sectionContext";
+import { publishedForward, SectionContext, useCanGoForward, useFlowSlots } from "./sectionContext";
 import { useSectionFades } from "./sectionFades";
-import { clampTo, newWheelGesture, readWheel, type SectionRange } from "./sectionGesture";
+import { clampTo, rangeOf, sectionFrames, type SectionRange } from "./sectionRange";
 import { onboardingFlow, onboardingMotion, sectionEase } from "./tokens";
 
-type Frame = { y: number; h: number };
-
-export type SectionScrollerHandle = { move(direction: 1 | -1, via: SectionMove): void; wheel(info: WheelInfo): void };
+export type SectionScrollerHandle = { move(direction: 1 | -1, via: SectionMove): void };
 
 export const sectionKey = (s: OnboardingSection) => `${s.step}.${s.id}`;
-
-function rangeOf(frame: Frame | undefined, viewport: number): SectionRange | null {
-  if (!frame || viewport <= 0) return null;
-  if (frame.h + onboardingFlow.edge * 2 <= viewport) {
-    const centre = frame.y + frame.h / 2 - viewport / 2;
-    return { lo: centre, hi: centre };
-  }
-  return { lo: frame.y - onboardingFlow.edge, hi: frame.y + frame.h + onboardingFlow.edge - viewport };
-}
 
 const SectionBody = memo(function SectionBody({
   step,
@@ -53,24 +41,36 @@ export const SectionScroller = forwardRef<SectionScrollerHandle, { sections: Onb
     const slots = useFlowSlots();
     const scroll = useRef<ScrollView | null>(null);
     const [viewport, setViewport] = useState(0);
-    const [frames, setFrames] = useState<Record<string, Frame>>({});
+    const [heights, setHeights] = useState<Record<string, number>>({});
     const fades = useSectionFades(onboardingFlow.peekOpacity, sectionEase);
     const motion = useRef({ at: 0, placedKey: null as string | null, glidingUntil: 0, lastY: 0, afterGlide: null as ReturnType<typeof setTimeout> | null }).current;
-    const gesture = useRef(newWheelGesture()).current;
     const keys = sections.map(sectionKey);
-    const ranges = keys.map((k) => rangeOf(frames[k], viewport));
+    const frames = sectionFrames(keys, heights, viewport, onboardingFlow.gap);
+    const ranges = keys.map((k) => rangeOf(frames[k], viewport, onboardingFlow.edge));
     const activeKey = keys[active] ?? null;
-    const live = useRef({ keys, ranges, active });
-    live.current = { keys, ranges, active };
+    const canForward = useCanGoForward(slots, activeKey);
+    const canBack = active > 0;
+    const live = useRef({ keys, ranges, active, canForward, canBack });
+    live.current = { keys, ranges, active, canForward, canBack };
+
+    const scrollTag = () => findNodeHandle(scroll.current as never);
 
     const moveTo = (y: number, ms: number) => {
       motion.at = y;
       motion.glidingUntil = Date.now() + ms + GLIDE_SLACK_MS;
       if (motion.afterGlide !== null) clearTimeout(motion.afterGlide);
       motion.afterGlide = null;
-      const tag = findNodeHandle(scroll.current as never);
+      const tag = scrollTag();
       if (tag !== null && glideNativeScroll(tag, y, ms)) return;
       scroll.current?.scrollTo({ y, animated: ms > 0 });
+    };
+
+    const keepIn = (r: SectionRange) => {
+      const tag = scrollTag();
+      const { canForward: forward, canBack: back } = live.current;
+      if (tag !== null && steerNativeScroll(tag, r.lo, r.hi, glideMs(), forward, back)) return;
+      const kept = clampTo(motion.at, r);
+      if (Math.abs(kept - motion.at) > 0.5) moveTo(kept, glideMs());
     };
 
     const activeRange = ranges[active];
@@ -81,15 +81,14 @@ export const SectionScroller = forwardRef<SectionScrollerHandle, { sections: Onb
       const backward = moved && !first && keys.indexOf(motion.placedKey!) > active;
       motion.placedKey = activeKey;
       fades.light(keys, activeKey, first ? 0 : glideMs());
-      const target = moved ? (backward ? activeRange.hi : activeRange.lo) : clampTo(motion.at, activeRange);
-      if (first) return moveTo(target, 0);
-      if (Math.abs(target - motion.at) > 0.5) moveTo(target, glideMs());
-    }, [activeKey, activeRange?.lo, activeRange?.hi]);
+      if (moved) moveTo(backward ? activeRange.hi : activeRange.lo, first ? 0 : glideMs());
+      keepIn(activeRange);
+    }, [activeKey, activeRange?.lo, activeRange?.hi, canForward, canBack]);
 
     const settle = () => {
       const { ranges: now, active: at } = live.current;
       const r = now[at];
-      if (r && Math.abs(clampTo(motion.at, r) - motion.at) > 0.5) moveTo(clampTo(motion.at, r), glideMs());
+      if (r) keepIn(r);
     };
 
     const move = (direction: 1 | -1, via: SectionMove) => {
@@ -114,17 +113,7 @@ export const SectionScroller = forwardRef<SectionScrollerHandle, { sections: Onb
       settle();
     };
 
-    const wheel = (info: WheelInfo) => {
-      const { ranges: now, active: at } = live.current;
-      const r = now[at];
-      if (!r) return;
-      const action = readWheel(gesture, info, motion.at, r, Date.now(), onboardingFlow);
-      if (action.kind === "place") moveTo(action.y, 0);
-      else if (action.kind === "settle") settle();
-      else if (action.kind === "move") move(action.direction, "wheel");
-    };
-
-    useImperativeHandle(ref, () => ({ move, wheel }));
+    useImperativeHandle(ref, () => ({ move }));
 
     const clampScroll = (y: number) => {
       const { ranges: now, active: at } = live.current;
@@ -150,8 +139,8 @@ export const SectionScroller = forwardRef<SectionScrollerHandle, { sections: Onb
     useEffect(() => () => void (motion.afterGlide !== null && clearTimeout(motion.afterGlide)), []);
 
     const measure = (key: string, e: LayoutChangeEvent) => {
-      const { y, height } = e.nativeEvent.layout;
-      setFrames((prev) => (prev[key]?.y === y && prev[key]?.h === height ? prev : { ...prev, [key]: { y, h: height } }));
+      const { height } = e.nativeEvent.layout;
+      setHeights((prev) => (prev[key] === height ? prev : { ...prev, [key]: height }));
     };
 
     const pick = (i: number) => {

@@ -1,4 +1,5 @@
 import type { BrowserTab } from "./tabModels";
+import { noteShownPictureGeneration } from "./warmPictures";
 
 const durableWhileShowing = new Map<string, string | null>();
 const shownGeneration = new Map<string, number>();
@@ -10,6 +11,7 @@ export function pictureCaptured(tab: BrowserTab, uri: string, durable: boolean, 
   if (generation !== undefined) {
     if (generation < (shownGeneration.get(tab.id) ?? 0)) return null;
     shownGeneration.set(tab.id, generation);
+    noteShownPictureGeneration(tab.id, generation);
   }
   if (durable) {
     durableWhileShowing.delete(tab.id);
@@ -25,12 +27,14 @@ export function pictureLanded(tab: BrowserTab, uri: string, generation: number):
   landedGeneration.set(tab.id, generation);
   if (generation >= (shownGeneration.get(tab.id) ?? 0)) {
     shownGeneration.set(tab.id, generation);
+    noteShownPictureGeneration(tab.id, generation);
     durableWhileShowing.delete(tab.id);
     return "shown";
   }
   durableWhileShowing.set(tab.id, uri);
   return "durable";
 }
+
 
 export const persistedPicture = (tab: BrowserTab): string | null => (durableWhileShowing.has(tab.id) ? durableWhileShowing.get(tab.id)! : tab.snapshotFileName);
 

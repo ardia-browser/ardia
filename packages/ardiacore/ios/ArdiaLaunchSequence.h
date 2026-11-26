@@ -22,6 +22,8 @@ typedef NS_OPTIONS(NSUInteger, ArdiaLaunchMilestone) {
 @property(nonatomic) double engineStartedAt;
 @property(nonatomic) double reactNativeStartedAt;
 @property(nonatomic) double earlyWindowShownAt;
+@property(nonatomic, copy, nullable) NSDictionary<NSString *, NSNumber *> *mainUsage;
+@property(nonatomic, copy, nullable) NSDictionary<NSString *, NSNumber *> *engineStartUsage;
 @property(nonatomic, readonly) BOOL launchedHidden;
 @property(nonatomic, readonly) BOOL launchedForDocuments;
 @property(nonatomic, readonly) BOOL shutDown;
@@ -31,6 +33,8 @@ typedef NS_OPTIONS(NSUInteger, ArdiaLaunchMilestone) {
 - (void)appKitFinishedHidden:(BOOL)hidden forDocuments:(BOOL)documents;
 - (void)after:(ArdiaLaunchMilestone)milestones do:(dispatch_block_t)block;
 - (void)engineShutDown;
+
++ (NSDictionary<NSString *, NSNumber *> *)processUsageNow;
 
 @end
 

@@ -1,11 +1,13 @@
 import ExpoModulesCore
 
-func tabsCallTable(routeLinkTabs routeLinkTabsHandler: @escaping CallHandler, stripCommand stripCommandHandler: @escaping CallHandler, strips stripsHandler: @escaping CallHandler, reportCommits reportCommitsHandler: @escaping CallHandler, devBrowserId devBrowserIdHandler: @escaping CallHandler, devEvents devEventsHandler: @escaping CallHandler, devWindowNumber devWindowNumberHandler: @escaping CallHandler, devFocusPage devFocusPageHandler: @escaping CallHandler, devPagePhase devPagePhaseHandler: @escaping CallHandler, devClosePage devClosePageHandler: @escaping CallHandler, devPictureInPicture devPictureInPictureHandler: @escaping CallHandler, devPictureInPictureAction devPictureInPictureActionHandler: @escaping CallHandler, devPostPeekMouseUp devPostPeekMouseUpHandler: @escaping CallHandler, devScrollZoom devScrollZoomHandler: @escaping CallHandler) -> CallTable {
+func tabsCallTable(routeLinkTabs routeLinkTabsHandler: @escaping CallHandler, stripCommand stripCommandHandler: @escaping CallHandler, strips stripsHandler: @escaping CallHandler, diagnostics diagnosticsHandler: @escaping CallHandler, input inputHandler: @escaping CallHandler, reportCommits reportCommitsHandler: @escaping CallHandler, devBrowserId devBrowserIdHandler: @escaping CallHandler, devEvents devEventsHandler: @escaping CallHandler, devWindowNumber devWindowNumberHandler: @escaping CallHandler, devFocusPage devFocusPageHandler: @escaping CallHandler, devPagePhase devPagePhaseHandler: @escaping CallHandler, devClosePage devClosePageHandler: @escaping CallHandler, devPictureInPicture devPictureInPictureHandler: @escaping CallHandler, devPictureInPictureAction devPictureInPictureActionHandler: @escaping CallHandler, devPostPeekMouseUp devPostPeekMouseUpHandler: @escaping CallHandler, devScrollZoom devScrollZoomHandler: @escaping CallHandler) -> CallTable {
   CallTable(domain: "tabs", handlers: [
     "routeLinkTabs": routeLinkTabsHandler,
     "stripCommand": stripCommandHandler,
     "strips": stripsHandler,
     "lastTabPolicy": EngineCall.passing("ac_tabs_last_tab_policy"),
+    "diagnostics": diagnosticsHandler,
+    "input": inputHandler,
     "reportCommits": reportCommitsHandler,
     "devBrowserId": devBrowserIdHandler,
     "devEvents": devEventsHandler,

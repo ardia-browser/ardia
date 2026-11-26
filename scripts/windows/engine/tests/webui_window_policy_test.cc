@@ -443,6 +443,22 @@ void TestHostileSinks() {
   assert(!DocumentEngineRequestAllowed("", 10));
 }
 
+
+void TestStartFocus() {
+  assert(NextStartStep(false, false, false, false) == StartStep::kOpenMain);
+  assert(NextStartStep(false, true, false, false) == StartStep::kOpenMain);
+  assert(NextStartStep(false, false, true, false) == StartStep::kOpenMain);
+  assert(NextStartStep(false, false, true, true) == StartStep::kOpenMain);
+
+  assert(NextStartStep(true, true, false, true) == StartStep::kFocusFront);
+  assert(NextStartStep(true, true, false, false) == StartStep::kFocusFront);
+  assert(NextStartStep(true, true, true, false) == StartStep::kFocusFront);
+  assert(NextStartStep(true, true, true, true) == StartStep::kFocusFront);
+
+  assert(NextStartStep(true, false, true, true) == StartStep::kLeaveToLinks);
+  assert(NextStartStep(true, false, true, false) == StartStep::kFocusFront);
+  assert(NextStartStep(true, false, false, true) == StartStep::kFocusFront);
+}
 }
 
 int main() {
@@ -461,6 +477,7 @@ int main() {
   TestMultiMonitorPlacement();
   TestRequestedMaximized();
   TestHostileSinks();
+  TestStartFocus();
   std::cout << "webui_window_policy_test: all assertions passed\n";
   return 0;
 }

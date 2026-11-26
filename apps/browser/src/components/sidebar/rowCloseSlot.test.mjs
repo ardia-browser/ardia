@@ -43,15 +43,24 @@ function closeButtonAt(tree) {
   return found;
 }
 
+test("the close button stays concentric with the tab radius", (t) => {
+  const { tabId, cell } = hoveredRow();
+  const slot = mount((props) => RowCloseSlot.type(props), { props: { cell, tabId, renaming: false, children: null, radius: 10 } });
+  t.after(() => slot.unmount());
+
+  assert.equal(closeButtonAt(slot.value).button.props.radius, 4);
+  assert.equal(closeButtonAt(slot.rerender({ cell, tabId, renaming: false, children: null, radius: 14 })).button.props.radius, 8);
+});
+
 test("a spinner or unread count coming or going under the pointer keeps the same close button mounted, and its press still closes the tab", (t) => {
   const { tabId, cell } = hoveredRow();
-  const slot = mount((props) => RowCloseSlot.type(props), { props: { cell, tabId, renaming: false, children: null } });
+  const slot = mount((props) => RowCloseSlot.type(props), { props: { cell, tabId, renaming: false, children: null, radius: 10 } });
   t.after(() => slot.unmount());
 
   const plain = closeButtonAt(slot.value);
   const pressedBefore = plain.button.props.onPress;
-  const withStatus = closeButtonAt(slot.rerender({ cell, tabId, renaming: false, children: SPINNER }));
-  const plainAgain = closeButtonAt(slot.rerender({ cell, tabId, renaming: false, children: null }));
+  const withStatus = closeButtonAt(slot.rerender({ cell, tabId, renaming: false, children: SPINNER, radius: 10 }));
+  const plainAgain = closeButtonAt(slot.rerender({ cell, tabId, renaming: false, children: null, radius: 10 }));
 
   for (const now of [withStatus, plainAgain]) assert.equal(now.path, plain.path, "the close button keeps its type, key and place under the same parents, so React keeps the same instance");
 
@@ -61,7 +70,7 @@ test("a spinner or unread count coming or going under the pointer keeps the same
 
 test("over a status the slot keeps the status's width, hides it under the button, and gives it back when the pointer leaves", (t) => {
   const { tabId, cell } = hoveredRow();
-  const slot = mount((props) => RowCloseSlot.type(props), { props: { cell, tabId, renaming: false, children: SPINNER } });
+  const slot = mount((props) => RowCloseSlot.type(props), { props: { cell, tabId, renaming: false, children: SPINNER, radius: 10 } });
   t.after(() => slot.unmount());
   const [frame, button] = slot.value.props.children;
   assert.deepEqual(button.props.style, { marginLeft: -iconButton.s.box }, "over a status the button covers the slot's trailing box");

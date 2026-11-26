@@ -29,6 +29,7 @@ const SIGNAL_CODES: Record<string, Record<number, string>> = {
 const PROCESS_KINDS: Record<string, CrashProcess> = { browser: "browser", renderer: "renderer", extension: "renderer", "gpu-process": "gpu", ppapi: "plugin" };
 
 const WINDOWS_PLATFORM = 2;
+const LINUX_PLATFORM = 0x8201;
 const WINDOWS_SIMULATED = 0x517a7ed;
 const WINDOWS_ACCESS_CODES = new Set([0xc0000005, 0xc0000006]);
 const WINDOWS_ACCESS: Record<string, string> = { "0": "ACCESS_READ", "1": "ACCESS_WRITE", "8": "ACCESS_EXECUTE" };
@@ -145,7 +146,8 @@ export function windowsCrashReport(dump: Minidump, entry: CrashDumpEntry): Crash
 
 export function hostCrashReport(dump: Minidump, entry: CrashDumpEntry, platform: number = CRASH_DUMP_PLATFORM_ID): CrashReport | null {
   if (dump.platform !== platform) return null;
-  return platform === WINDOWS_PLATFORM ? windowsCrashReport(dump, entry) : linuxCrashReport(dump, entry);
+  if (platform === WINDOWS_PLATFORM) return windowsCrashReport(dump, entry);
+  return platform === LINUX_PLATFORM ? linuxCrashReport(dump, entry) : null;
 }
 
 function decodeBase64(text: string): Uint8Array {

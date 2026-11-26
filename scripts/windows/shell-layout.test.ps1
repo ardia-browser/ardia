@@ -36,7 +36,7 @@ try {
   $rnw = New-Folder "rnw"
   Touch $rnw "Ardia.exe", "ArdiaApp.dll", "chrome.dll"
   $webui = New-Folder "webui"
-  Touch $webui "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-ui\index.html", "ardia-ui\assets\app.js", "ardia-webui-migrate.exe", "locales\en-US.pak"
+  Touch $webui "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-ui\assets\app.js", "ardia-webui-migrate.exe", "locales\en-US.pak"
   $mixed = New-Folder "mixed"
   Touch $mixed "Ardia.exe", "chrome.dll", "ArdiaApp.dll", "ardia-ui\index.html"
   $bare = New-Folder "bare"
@@ -58,26 +58,32 @@ try {
   Check "the WebUI open command carries the switch" '"C:\A\Ardia.exe" --ardia-shell=webui' (Get-ShellOpenCommand "C:\A\Ardia.exe" "webui")
   Check "the React Native document command is unchanged" '"C:\A\Ardia.exe" --single-argument %1' (Get-ShellDocumentCommand "C:\A\Ardia.exe" "rnw")
   Check "the WebUI document command puts the switch before --single-argument" '"C:\A\Ardia.exe" --ardia-shell=webui --single-argument %1' (Get-ShellDocumentCommand "C:\A\Ardia.exe" "webui")
-  Check "the React Native install ships ArdiaApp.dll" "Ardia.exe,ArdiaApp.dll,chrome.dll,Ardia.ico,Ardia.build.json,unins000.exe,ardia-rnw-files.txt" ((Get-ShellInstalledFiles "rnw") -join ",")
-  Check "the WebUI install ships the UI and the migrator" "Ardia.exe,chrome.dll,Ardia.ico,Ardia.build.json,unins000.exe,ardia-ui\index.html,ardia-webui-migrate.exe,ardia-webui-files.txt" ((Get-ShellInstalledFiles "webui") -join ",")
+  Check "the React Native install ships ArdiaApp.dll and the update verifier" "Ardia.exe,ArdiaApp.dll,chrome.dll,Ardia.ico,Ardia.build.json,ardia-update-verify.exe,windows-update.pem,unins000.exe,ardia-rnw-files.txt" ((Get-ShellInstalledFiles "rnw") -join ",")
+  Check "the WebUI install ships the UI, the migrator and the update verifier" "Ardia.exe,chrome.dll,Ardia.ico,Ardia.build.json,ardia-update-verify.exe,windows-update.pem,unins000.exe,ardia-ui\index.html,ardia-webui-migrate.exe,ardia-webui-files.txt" ((Get-ShellInstalledFiles "webui") -join ",")
 
   Check "a complete WebUI folder has no problems" 0 (Get-ShellLayoutProblems $webui "webui").Count
   Check "a complete React Native folder has no problems" 0 (Get-ShellLayoutProblems $rnw "rnw").Count
   $noMigrator = New-Folder "no-migrator"
-  Touch $noMigrator "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-ui\index.html"
+  Touch $noMigrator "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html"
   Check "a WebUI folder without the migrator is a problem" "it has no ardia-webui-migrate.exe, so an upgrade from the React Native shell would start empty" ((Get-ShellLayoutProblems $noMigrator "webui") -join "|")
   $noIdentity = New-Folder "no-identity"
-  Touch $noIdentity "Ardia.exe", "chrome.dll", "ardia-ui\index.html", "ardia-webui-migrate.exe"
+  Touch $noIdentity "Ardia.exe", "chrome.dll", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-webui-migrate.exe"
   Check "a WebUI folder without Ardia.build.json is a problem" "it has no Ardia.build.json, so updates can't tell its version and build" ((Get-ShellLayoutProblems $noIdentity "webui") -join "|")
+  $noVerifier = New-Folder "no-verifier"
+  Touch $noVerifier "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-ui\index.html", "ardia-webui-migrate.exe"
+  Check "a WebUI folder without the update verifier and key names both" "it has no ardia-update-verify.exe, so it can't verify the updates it downloads|it has no windows-update.pem, so it can't verify the updates it downloads" ((Get-ShellLayoutProblems $noVerifier "webui") -join "|")
+  $noKey = New-Folder "no-key"
+  Touch $noKey "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "ardia-ui\index.html", "ardia-webui-migrate.exe"
+  Check "a WebUI folder without the pinned key is a problem" "it has no windows-update.pem, so it can't verify the updates it downloads" ((Get-ShellLayoutProblems $noKey "webui") -join "|")
   $leftover = New-Folder "leftover"
-  Touch $leftover "Ardia.exe", "chrome.exe", "chrome.dll", "Ardia.build.json", "Microsoft.ReactNative.dll", "Bundle\index.windows.bundle", "de-DE\Microsoft.ui.xaml.dll.mui", "ardia-ui\index.html", "ardia-webui-migrate.exe"
+  Touch $leftover "Ardia.exe", "chrome.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "Microsoft.ReactNative.dll", "Bundle\index.windows.bundle", "de-DE\Microsoft.ui.xaml.dll.mui", "ardia-ui\index.html", "ardia-webui-migrate.exe"
   Check "a WebUI folder with chrome.exe and React Native files has two problems" 2 (Get-ShellLayoutProblems $leftover "webui").Count
   Check "the React Native files left in a WebUI folder are named" "it still holds 3 of the rnw shell's files: Microsoft.ReactNative.dll, de-DE\Microsoft.ui.xaml.dll.mui, Bundle\" ((Get-ShellLayoutProblems $leftover "webui") | Where-Object { $_ -match "rnw shell" })
   $rolledBack = New-Folder "rolled-back"
   Touch $rolledBack "Ardia.exe", "chrome.dll", "ArdiaApp.dll", "ardia-ui\index.html", "ardia-webui-migrate.exe"
   Check "a React Native folder that kept the WebUI files names both" "it still holds 2 of the webui shell's files: ardia-webui-migrate.exe, ardia-ui\" ((Get-ShellLayoutProblems $rolledBack "rnw") -join "|")
   $marked = New-Folder "marked"
-  Touch $marked "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-ui\index.html", "ardia-webui-migrate.exe", "sub\Ardia.test-build"
+  Touch $marked "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-webui-migrate.exe", "sub\Ardia.test-build"
   Check "a test-build marker anywhere is a problem" 1 (Get-ShellLayoutProblems $marked "webui").Count
   Check "a test-build marker is allowed when asked" 0 (Get-ShellLayoutProblems $marked "webui" -AllowTestBuild).Count
   Check "an unknown shell is a problem" "'other' is not a shell: rnw or webui" ((Get-ShellLayoutProblems $webui "other") -join "|")
@@ -89,7 +95,8 @@ try {
   Check "every fallback entry names a file, never a whole folder" "" ((@($rnwOwned) + @($webuiOwned) | Where-Object { $_.EndsWith("\") }) -join ",")
   Check "each shell's own folders" "Bundle,Microsoft.UI.Xaml,NpuDetect|ardia-ui" (($ShellOwnedFolders.rnw -join ",") + "|" + ($ShellOwnedFolders.webui -join ","))
   Check "no file is owned by both shells" "" (($rnwOwned | Where-Object { $webuiOwned -contains $_ }) -join ",")
-  Check "neither shell owns the launcher, the engine, the identity, the locales or the uninstaller" "" ((@($rnwOwned) + @($webuiOwned) | Where-Object { $ShellKept -contains $_ }) -join ",")
+  Check "both shells keep the update verifier and its pinned key" $true (($ShellKept -contains "ardia-update-verify.exe") -and ($ShellKept -contains "windows-update.pem"))
+  Check "neither shell owns the launcher, the engine, the identity, the update verifier, the locales or the uninstaller" "" ((@($rnwOwned) + @($webuiOwned) | Where-Object { $ShellKept -contains $_ }) -join ",")
   Check "the React Native shell owns nothing the WebUI install ships" "" (($rnwOwned | Where-Object { (Get-ShellInstalledFiles "webui") -contains $_ }) -join ",")
   Check "the WebUI shell owns nothing the React Native install ships" "" (($webuiOwned | Where-Object { (Get-ShellInstalledFiles "rnw") -contains $_ }) -join ",")
   Check "no owned entry climbs out of the install folder" "" ((@($rnwOwned) + @($webuiOwned) | Where-Object { $_ -match '\.\.|:|^\\' }) -join ",")
@@ -105,6 +112,10 @@ try {
   Check "the WebUI installer is handed the React Native list, one entry a line" ($rnwOwned -join "|") (((Get-Content -LiteralPath $retired) | Where-Object { $_ }) -join "|")
   Write-RetiredShellList "rnw" $retired
   Check "the React Native installer is handed the WebUI list" "ardia-ui\index.html|ardia-webui-migrate.exe" (((Get-Content -LiteralPath $retired) | Where-Object { $_ }) -join "|")
+  Check "neither retired list names the update verifier or its key" "" ((@($rnwOwned) + @($webuiOwned) | Where-Object { $_ -in @("ardia-update-verify.exe", "windows-update.pem") }) -join ",")
+  $keptList = Join-Path $scratch "kept-files.txt"
+  Write-KeptFileList $keptList
+  Check "the installer is handed every kept file, never a folder" (($ShellKept | Where-Object { -not $_.EndsWith("\") }) -join "|") (((Get-Content -LiteralPath $keptList) | Where-Object { $_ }) -join "|")
 
   Check "each shell names its manifest" "ardia-rnw-files.txt|ardia-webui-files.txt" ((Get-ShellManifestName "rnw") + "|" + (Get-ShellManifestName "webui"))
   $rnwPayload = New-Folder "rnw-payload"
@@ -128,6 +139,8 @@ try {
   Touch $ui "index.html", "assets\app.js"
   $migrator = Join-Path (New-Folder "migrator") "ardia-webui-migrate.exe"
   Touch (Split-Path -Parent $migrator) "ardia-webui-migrate.exe"
+  $verifier = Join-Path (New-Folder "verifier") "ardia-update-verify.exe"
+  Touch (Split-Path -Parent $verifier) "ardia-update-verify.exe"
 
   $cleanEngine = New-Folder "clean-engine"
   Touch $cleanEngine "chrome.exe", "chrome.dll"
@@ -145,14 +158,22 @@ try {
   & $assemble -Engine $engine -Ui $ui -Out $tested -MigrateBin $migrator -TestBuild | Out-Null
   Check "-TestBuild writes the marker" $true (Test-Path -LiteralPath (Join-Path $tested "Ardia.test-build"))
   Check "-MigrateBin bundles the migrator" $true (Test-Path -LiteralPath (Join-Path $tested "ardia-webui-migrate.exe"))
+  Check "an assembly bundles no update verifier unless asked" $false (Test-Path -LiteralPath (Join-Path $tested "ardia-update-verify.exe"))
+
+  $verified = Join-Path $scratch "out-verified"
+  & $assemble -Engine $engine -Ui $ui -Out $verified -UpdateVerify $verifier | Out-Null
+  Check "-UpdateVerify bundles the verifier" $true (Test-Path -LiteralPath (Join-Path $verified "ardia-update-verify.exe"))
+  Check "-UpdateVerify bundles the pinned key from scripts/windows" ([System.IO.File]::ReadAllText((Join-Path $PSScriptRoot "windows-update.pem"))) ([System.IO.File]::ReadAllText((Join-Path $verified "windows-update.pem")))
 
   Check-Throws "an assembly into a folder that is not empty is refused" "is not empty" { & $assemble -Engine $engine -Ui $ui -Out $pilot }
   Check-Throws "a shippable assembly without the migrator is refused" "needs -MigrateBin" { & $assemble -Engine $cleanEngine -Ui $ui -Out (Join-Path $scratch "out-a") -Shippable -Build 1 }
+  Check-Throws "a shippable assembly without the update verifier is refused" "needs -UpdateVerify" { & $assemble -Engine $cleanEngine -Ui $ui -Out (Join-Path $scratch "out-j") -Shippable -MigrateBin $migrator -Build 1 }
+  Check-Throws "a missing update verifier is refused" "was not found" { & $assemble -Engine $engine -Ui $ui -Out (Join-Path $scratch "out-k") -UpdateVerify (Join-Path $scratch "nothing.exe") }
   Check-Throws "a shippable assembly that keeps chrome.exe is refused" "starts from Ardia.exe" { & $assemble -Engine $cleanEngine -Ui $ui -Out (Join-Path $scratch "out-b") -Shippable -LauncherName chrome.exe -MigrateBin $migrator -Build 1 }
   Check-Throws "a shippable assembly without a build number is refused" "needs -Build above 0" { & $assemble -Engine $cleanEngine -Ui $ui -Out (Join-Path $scratch "out-g") -Shippable -MigrateBin $migrator }
   Check-Throws "a shippable assembly marked as a test build is refused" "never carries Ardia.test-build" { & $assemble -Engine $cleanEngine -Ui $ui -Out (Join-Path $scratch "out-h") -Shippable -TestBuild -MigrateBin $migrator -Build 1 }
   Check-Throws "a shippable assembly from an engine with a test marker is refused" "carries Ardia.test-build" { & $assemble -Engine $engine -Ui $ui -Out (Join-Path $scratch "out-i") -Shippable -MigrateBin $migrator -Build 1 }
-  Check "a refused shippable assembly writes nothing" $false ((Test-Path -LiteralPath (Join-Path $scratch "out-g")) -or (Test-Path -LiteralPath (Join-Path $scratch "out-h")) -or (Test-Path -LiteralPath (Join-Path $scratch "out-i")))
+  Check "a refused shippable assembly writes nothing" $false ((Test-Path -LiteralPath (Join-Path $scratch "out-g")) -or (Test-Path -LiteralPath (Join-Path $scratch "out-h")) -or (Test-Path -LiteralPath (Join-Path $scratch "out-i")) -or (Test-Path -LiteralPath (Join-Path $scratch "out-j")) -or (Test-Path -LiteralPath (Join-Path $scratch "out-k")))
   Check-Throws "a launcher name with a path is refused" "is not a plain .exe name" { & $assemble -Engine $engine -Ui $ui -Out (Join-Path $scratch "out-c") -LauncherName "..\Ardia.exe" }
   Check-Throws "a missing migrator is refused" "was not found" { & $assemble -Engine $engine -Ui $ui -Out (Join-Path $scratch "out-d") -MigrateBin (Join-Path $scratch "nothing.exe") }
   Check-Throws "a missing app icon is refused" "is not a file" { & $assemble -Engine $engine -Ui $ui -Out (Join-Path $scratch "out-e") -AppIcon (Join-Path $scratch "nothing.ico") }
@@ -164,14 +185,14 @@ try {
   $installer = Join-Path $PSScriptRoot "make-installer.ps1"
   Check-Throws "the installer refuses a WebUI build without the migrator" "is not a shippable WebUI build" { & $installer -Source $noMigrator -Out (Join-Path $scratch "setup") -Cpu x64 -Version 1.0.0 }
   Check-Throws "the installer refuses a WebUI build without Ardia.build.json" "has no Ardia.build.json" { & $installer -Source $noIdentity -Out (Join-Path $scratch "setup") -Cpu x64 -Version 1.0.0 }
-  Check-Throws "the installer refuses a WebUI build that still holds React Native files" "still holds 3 of the rnw shell's files" { & $installer -Source $leftover -Out (Join-Path $scratch "setup") -Cpu x64 -Version 1.0.0 -Shell webui }
+  Check-Throws "the installer refuses a WebUI build that still holds React Native files" "still holds 3 of the rnw shell's files" { & $installer -Source $leftover -Out (Join-Path $scratch "setup") -Cpu x64 -Version 1.0.0 }
   Check-Throws "the installer refuses a folder that is both shells" "neither the React Native shell nor the WebUI shell" { & $installer -Source $mixed -Out (Join-Path $scratch "setup") -Cpu x64 -Version 1.0.0 }
-  Check-Throws "the installer refuses a WebUI build asked for as React Native" "is the webui shell, not the rnw shell" { & $installer -Source $webui -Out (Join-Path $scratch "setup") -Cpu x64 -Version 1.0.0 -Shell rnw }
+  Check-Throws "the installer refuses a React Native build" "is the rnw shell, not the webui shell" { & $installer -Source $rnw -Out (Join-Path $scratch "setup") -Cpu x64 -Version 1.0.0 }
   Check-Throws "the installer refuses a WebUI build with a test marker" "Ardia.test-build marker" { & $installer -Source $marked -Out (Join-Path $scratch "setup") -Cpu x64 -Version 1.0.0 }
 
   $script = Get-Content -LiteralPath (Join-Path $PSScriptRoot "installer\Ardia.iss") -Raw
-  Check "the installer script defaults to the React Native shell" $true ($script -match '#ifndef Shell\s+#define Shell "rnw"\s+#endif')
-  Check "the React Native shell's launch switch is empty" $true ($script -match '#else\s+#define LaunchSwitch ""\s+#define OpenSuffix ""\s+#define ShellMarker "ArdiaApp.dll"')
+  Check "the installer script is the WebUI shell's only" $true ($script -match '^#define Shell "webui"\s+#define LaunchSwitch "--ardia-shell=webui"\s+#define OpenSuffix " --ardia-shell=webui"\s+#define ShellMarker "ardia-ui\\index.html"\s+#define RetiredShell "rnw"\s+#define RetiredMarker "ArdiaApp.dll"')
+  Check "the installer script takes no shell from its caller" $false ($script -match '#ifndef Shell|#if Shell|#else')
   Check "the other shell's files go only after this shell's files are installed" $true ($script -match "else if CurStep = ssPostInstall then\s+RemoveFilesNoLongerShipped;")
   Check "the install step only notes what is there before the copy" $true ($script -match "if CurStep = ssInstall then\s+NoteInstalledShells")
   Check "before the copy it notes the other shell and reads this shell's last manifest" $true ($script -match "(?s)procedure NoteInstalledShells;.*RetiredShellFound := FileExists\(Folder \+ '\\\{#RetiredMarker\}'\).*PreviousOwnFound := ReadManifest\(Folder, 'ardia-\{#Shell\}-files.txt', PreviousOwn\);")
@@ -188,7 +209,7 @@ try {
   Check "a file that can't be removed stays in the manifest" $true (($script -match "(?s)procedure KeepOwnership.*SaveStringToFile\(Path, Failed\[I\] \+ #13#10, True\)") -and ($script -match "KeepOwnership\(Folder \+ '\\' \+ Manifest, Failed\);"))
   Check "the cleanup refuses an install folder that is a link" $true ($script -match "if IsReparsePoint\(Folder\) then\s+begin\s+Log\('Owned files: ' \+ Folder \+ ' is a link, so no file is removed'\);")
   $listedInstall = New-Folder "listed-install"
-  Touch $listedInstall "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-ui\index.html", "ardia-ui\assets\index-NEW.js", "ardia-ui\assets\index-OLD.js", "ardia-webui-migrate.exe"
+  Touch $listedInstall "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-ui\assets\index-NEW.js", "ardia-ui\assets\index-OLD.js", "ardia-webui-migrate.exe"
   [System.IO.File]::WriteAllText((Join-Path $listedInstall "ardia-webui-files.txt"), "ardia-ui\index.html`r`nARDIA-UI\assets\index-NEW.js`r`nardia-webui-migrate.exe`r`n")
   Check "files in a shell's folders that its manifest doesn't list are found, ignoring case" "ardia-ui\assets\index-OLD.js" ((Find-UnlistedOwnedFiles $listedInstall "webui") -join ",")
   Check "an install holding a file its manifest doesn't list fails the layout check" "it holds 1 files in its own folders that ardia-webui-files.txt doesn't list: ardia-ui\assets\index-OLD.js" ((Get-ShellLayoutProblems $listedInstall "webui") -join "|")
@@ -196,6 +217,7 @@ try {
   Check "nothing is deleted before the new files are copied" $false ($script -match "\[InstallDelete\]")
   Check "the cleanup runs only when the other shell was there before the install" $true ($script -match "if not RetiredShellFound then Exit;")
   Check "no folder is deleted with what's inside it" $false ($script -match "DelTree")
+  Check "both cleanups keep the files both shells keep" $true (($script -match "(?s)procedure RemoveRetiredShell.*ReadKeptFiles\(Kept\);.*if InList\(Kept, Entry\) then") -and ($script -match "(?s)procedure RemoveStaleOwnFiles.*ReadKeptFiles\(Kept\);"))
   Check "each install carries its own manifest" $true ($script -match 'Source: "\{#ShellManifest\}"; DestDir: "\{app\}"; DestName: "ardia-\{#Shell\}-files.txt"')
   Check "the cleanup stops when this shell's marker is missing" $true ($script -match "if not FileExists\(Folder \+ '\\\{#ShellMarker\}'\) then")
   Check "the cleanup removes only the listed entries" $true ($script -match "LoadStringsFromFile\(ExpandConstant\('\{tmp\}\\retired-shell.txt'\), Entries\)")

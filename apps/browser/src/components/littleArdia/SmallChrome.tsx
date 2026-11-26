@@ -10,6 +10,7 @@ import { font, radius, space } from "../ui/tokens";
 import { SMALL_BAR_BUTTON, SMALL_BAR_GAP, SMALL_FIELD_GAP, SMALL_FIELD_HEIGHT as FIELD_HEIGHT, smallBarRow } from "./tokens";
 import { Favicon } from "../favicon/Favicon";
 import { FieldLoadFill } from "../toolbar/FieldLoadFill";
+import { fieldLoadColor } from "../toolbar/fieldLoadColor";
 import { insecureLevel } from "../toolbar/Toolbar";
 import { SMALL_BAR_HEIGHT } from "../../state/windows/small";
 
@@ -76,7 +77,7 @@ export function PageLabel({ tab, hovered = false, label }: { tab: Tab; hovered?:
         backgroundColor: hovered ? theme.toolbarHover : undefined,
       }}
     >
-      <FieldLoadFill tabId={tab.id} color={theme.accent} height={FIELD_HEIGHT} radius={radius.tile} />
+      <FieldLoadFill tabId={tab.id} color={fieldLoadColor(theme)} height={FIELD_HEIGHT} radius={radius.tile} />
       {insecure ? (
         <Symbol name="lock.open.trianglebadge.exclamationmark.fill" size={12} color={theme.textSecondary} style={{ width: 16, height: 16 }} />
       ) : tab.url ? (

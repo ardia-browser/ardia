@@ -32,8 +32,6 @@ on:
       - "apps/desktop/src/platform/linux/updateReleases.ts"
       - "apps/browser/src/lib/versions.ts"
       - "packages/import/ios/Core/**"
-      - "packages/expo-windows/src/import/**"
-      - "packages/expo-windows/src/updater/**"
       - "scripts/windows/windows-update.pem"
       - "scripts/windows/sign-update.mjs"
       - "scripts/windows/sign-update.test.mjs"
@@ -181,29 +179,29 @@ jobs:
         env:
           ARDIA_REQUIRE_LINUX_CROSSCHECK: "1"
         run: python3 -I tests/linux-update/test_linux_update.py -v
-      - name: Windows updater verifier, signing script and TypeScript against the shared update vectors and hostile inputs
+      - name: Windows updater verifier and signing script against the shared update vectors and hostile inputs
         if: runner.os == 'Linux'
         env:
           ARDIA_REQUIRE_WINDOWS_CROSSCHECK: "1"
         run: python3 -I tests/windows-update/test_windows_update.py -v && node --test ../../scripts/windows/sign-update.test.mjs tests/windows-update/publish-alpha.test.mjs
-      - name: Rust through the C ABI, the Linux C++ and the TypeScript Netscape HTML parsers against the shared vectors and hostile inputs
+      - name: Rust through the C ABI and the Linux C++ Netscape HTML parsers against the shared vectors and hostile inputs
         if: runner.os == 'Linux'
         env:
-          ARDIA_REQUIRE_IMPORT_CROSSCHECK: "rust,windows,linux"
+          ARDIA_REQUIRE_IMPORT_CROSSCHECK: "rust,linux"
         run: python3 -I tests/import-netscape/test_import_netscape.py -v
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         if: runner.os == 'macOS'
         with:
           node-version: 24
-      - name: Rust through the C ABI, Swift and TypeScript Chromium bookmark parsers against the shared import vectors and hostile inputs
+      - name: Rust through the C ABI and Swift Chromium bookmark parsers against the shared import vectors and hostile inputs
         if: runner.os == 'macOS'
         env:
-          ARDIA_REQUIRE_IMPORT_CROSSCHECK: "rust,swift,windows"
+          ARDIA_REQUIRE_IMPORT_CROSSCHECK: "rust,swift"
         run: python3 -I tests/import-bookmarks/test_import_bookmarks.py -v
-      - name: Rust through the C ABI, Swift, TypeScript and Linux C++ Netscape HTML parsers against the shared vectors and hostile inputs
+      - name: Rust through the C ABI, Swift and Linux C++ Netscape HTML parsers against the shared vectors and hostile inputs
         if: runner.os == 'macOS'
         env:
-          ARDIA_REQUIRE_IMPORT_CROSSCHECK: "rust,swift,windows,linux"
+          ARDIA_REQUIRE_IMPORT_CROSSCHECK: "rust,swift,linux"
         run: python3 -I tests/import-netscape/test_import_netscape.py -v
 
   linux-update-helper:

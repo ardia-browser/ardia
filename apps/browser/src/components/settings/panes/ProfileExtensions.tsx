@@ -11,12 +11,14 @@ import {
   setPinned,
 } from "../../../state/extensions/actions";
 import { useExtensionList, type InstalledExtension } from "../../../state/extensions/store";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Image, View } from "react-native";
 import { currentEngineProfile } from "../../../state/browser/current";
 import { InstallDialogHost } from "../../extensions/ExtensionOverlays";
-import { Box, Button, PopUp, proseLineHeight, space, Text, Toggle } from "../../ui";
-import { Group, Row, SectionHeader } from "../Form";
+import { Box, Button, DialogActions, DialogTitle, PopUp, proseLineHeight, Sheet, space, Text, TextField, Toggle } from "../../ui";
+import { FormField, Group, Row, SectionHeader } from "../Form";
+import { addExtensionSite, extensionSiteLabel, noteExtensionSitePickerCancelled, removeExtensionSite } from "../../../state/extensions/siteAccess";
+import { PasswordAppPairingRow } from "./PasswordAppPairingRow";
 import { extensionList } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
@@ -143,12 +145,9 @@ function ExtensionDetails({ ext, profile }: { ext: InstalledExtension; profile: 
         ) : (
           <Row title="This extension requires no special permissions." />
         )}
-        {ext.siteAccess ? (
-          <Row title="Site access" description="Which sites the extension can read and change.">
-            <PopUp value={siteAccessOf(ext)} options={SITE_ACCESS} onChange={(siteAccess) => void configure(profile, ext.id, { siteAccess })} />
-          </Row>
-        ) : null}
+        {ext.siteAccess ? <SiteAccessDetails ext={ext} profile={profile} /> : null}
       </Group>
+      <PasswordAppPairingRow extensionId={ext.id} />
 
       <SectionHeader title="Settings" />
       <Group>
@@ -197,6 +196,74 @@ function ExtensionDetails({ ext, profile }: { ext: InstalledExtension; profile: 
   );
 }
 
+function SiteAccessDetails({ ext, profile }: { ext: InstalledExtension; profile: string }) {
+  const access = siteAccessOf(ext);
+  const [problem, setProblem] = useState<{ site: string; message: string } | null>(null);
+  const addSite = () => showSettingsSheet(<AddSiteSheet ext={ext} profile={profile} />);
+  const choose = (siteAccess: SiteAccess) => (siteAccess === "specificSites" ? addSite() : void configure(profile, ext.id, { siteAccess }));
+  const remove = async (site: string) => {
+    setProblem(null);
+    const message = await removeExtensionSite(profile, ext.id, site);
+    if (message) setProblem({ site, message });
+  };
+  return (
+    <>
+      <Row title="Site access" description="Which sites the extension can read and change.">
+        <PopUp value={access} options={SITE_ACCESS} onChange={choose} />
+      </Row>
+      {access === "specificSites"
+        ? ext.sites.map((site) => (
+            <Row key={site} title={extensionSiteLabel(site)} description={problem?.site === site ? problem.message : undefined}>
+              <Button title="Remove" onPress={() => void remove(site)} />
+            </Row>
+          ))
+        : null}
+      {access === "specificSites" ? (
+        <Row>
+          <Button title="Add Site…" onPress={addSite} />
+        </Row>
+      ) : null}
+    </>
+  );
+}
+
+function AddSiteSheet({ ext, profile }: { ext: InstalledExtension; profile: string }) {
+  const [site, setSite] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const cancel = () => {
+    if (saving) return;
+    noteExtensionSitePickerCancelled();
+    closeSettingsSheet();
+  };
+  const add = async () => {
+    if (saving || !site.trim()) return;
+    setSaving(true);
+    const problem = await addExtensionSite(profile, ext.id, site);
+    setSaving(false);
+    if (problem) return setError(problem);
+    closeSettingsSheet();
+  };
+  return (
+    <Sheet onClose={cancel}>
+      <DialogTitle subtitle={`${ext.name} reads and changes only the sites you add.`}>Add Site</DialogTitle>
+      <FormField label="Site">
+        <TextField value={site} onChangeText={(text) => (setSite(text), setError(null))} placeholder="example.com" onSubmit={() => void add()} onEscape={cancel} autoFocus />
+      </FormField>
+      {error ? (
+        <Text size="caption" tone="destructive" style={SHEET_ERROR}>
+          {error}
+        </Text>
+      ) : null}
+      <DialogActions>
+        <Button title="Cancel" disabled={saving} onPress={cancel} />
+        <Button title="Add" kind="primary" disabled={saving || !site.trim()} onPress={() => void add()} />
+      </DialogActions>
+    </Sheet>
+  );
+}
+
+const SHEET_ERROR = { marginTop: space.ml } as const;
 const DETAILS_TOP = { marginTop: space.xl } as const;
 const DETAILS_ICON = { width: 48, height: 48 } as const;
 const DETAILS_DESCRIPTION = perLook(() => ({ marginTop: space.l, lineHeight: proseLineHeight.body }) as const);

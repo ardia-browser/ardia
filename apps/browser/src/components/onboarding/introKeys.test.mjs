@@ -3,9 +3,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { introHoldsKeyboard, nextIntroStop } from "./introKeys.ts";
 import { PLATFORM_FEATURES as MAC_FEATURES } from "../../lib/platformFeatures.ts";
-import { PLATFORM_FEATURES as WINDOWS_FEATURES } from "../../lib/platformFeatures.windows.ts";
 import { PLATFORM_TERMS as MAC_TERMS } from "../../lib/platformTerms.ts";
-import { PLATFORM_TERMS as WINDOWS_TERMS } from "../../lib/platformTerms.windows.ts";
+import { PLATFORM_TERMS as WINDOWS_TERMS } from "../../lib/platformTerms.win.ts";
 
 const MUTE = 0;
 const SKIP = 1;
@@ -20,8 +19,7 @@ test("Tab and Shift+Tab move between the intro's Mute and Skip and wrap, as on t
   assert.equal(nextIntroStop(7, false, 2), MUTE, "a stop that no longer exists counts as nothing focused");
 });
 
-test("on Windows the intro holds the keyboard while its own buttons show, so Tab never reaches the browser behind it", () => {
-  assert.equal(WINDOWS_FEATURES.tabReachesUnderOverlays, true);
+test("a platform whose Tab reaches under overlays has the intro hold the keyboard while its own buttons show", () => {
   assert.equal(MAC_FEATURES.tabReachesUnderOverlays, false, "the Mac's key view loop already stays in the intro");
   const windows = { tabReachesUnderOverlays: true };
   assert.equal(introHoldsKeyboard({ ...windows, live: false, leaving: false }), true, "the poster and its buttons: the intro holds the keys");

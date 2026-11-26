@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig, type Plugin } from "vite";
+import { scaledAssets } from "../../apps/desktop/scaledAssets";
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 const repo = here("../../");
@@ -86,6 +87,7 @@ const analyze = !!process.env.ARDIA_DEMO_ANALYZE;
 export default defineConfig({
   plugins: [
     commonJsRequires(),
+    scaledAssets("ardia-demo:scaled-assets"),
     lazyComponents(),
     react(),
     analyze && visualizer({ filename: "dist/stats.html", gzipSize: true, template: "treemap" }),

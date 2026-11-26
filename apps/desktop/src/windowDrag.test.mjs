@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { watchWindowDrag } from "./windowDrag.ts";
+import { markWindowDrag, watchWindowDrag, WINDOW_DRAG_ATTRIBUTE } from "./windowDrag.ts";
 
 function harness(options = {}, withHost = true) {
   const previous = globalThis.window;
@@ -117,4 +118,22 @@ test("without the window-move routes (no host, or an older engine) region clicks
   await settle();
   assert.deepEqual(plain.calls, ["regionDoubleClick"]);
   plain.stop();
+});
+
+test("a drag region says whether a double-click on it runs the title bar action, so a tour can aim at a real caption", () => {
+  const attributes = new Map();
+  const element = { setAttribute: (name, value) => attributes.set(name, value) };
+  markWindowDrag(element, true, false);
+  assert.equal(attributes.get(WINDOW_DRAG_ATTRIBUTE), "caption");
+  markWindowDrag(element, false, false);
+  assert.equal(attributes.get(WINDOW_DRAG_ATTRIBUTE), "action");
+  markWindowDrag(element, true, true);
+  assert.equal(attributes.get(WINDOW_DRAG_ATTRIBUTE), "action", "a clickable region never runs the title bar action, so it is no caption");
+  assert.equal(WINDOW_DRAG_ATTRIBUTE, "data-ardia-drag");
+});
+
+test("every drag region in the desktop shim carries the marker for its own double-click", () => {
+  const chrome = readFileSync(new URL("./shims/web/chrome.tsx", import.meta.url), "utf8");
+  assert.ok(chrome.includes("markWindowDrag(node.current, titleBarDoubleClick, clickable)"));
+  assert.ok(chrome.includes("}, [titleBarDoubleClick, clickable]);"), "the marker follows both props");
 });

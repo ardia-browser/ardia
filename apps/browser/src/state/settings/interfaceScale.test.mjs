@@ -62,16 +62,6 @@ test("a window frame stays physical and converts to root points by dividing by t
   assert.deepEqual(rootSizeOfFrame([0, 0, 800, 600], 1), { width: 800, height: 600 });
 });
 
-test("a host without the interface size calls answers 100% and a range that hides the row, never a promise", async () => {
-  const { moduleDefaults } = await import("../../../../../packages/expo-windows/src/defaults.ts");
-  const app = moduleDefaults.ArdiaApp;
-  assert.equal(app.interfaceScale(), 1);
-  assert.deepEqual(app.interfaceScaleRange(), [1, 1]);
-  assert.equal(await app.setInterfaceScale(1.25), 1);
-  const { PLATFORM_FEATURES: onWindows } = await import("../../lib/platformFeatures.windows.ts");
-  assert.equal(onWindows.interfaceSize, false);
-});
-
 test("the first choice after a launch at native's size reaches native even when it is the default the setting already held", async () => {
   interfaceScaleNative.scale = 1.25;
   interfaceScaleNative.applied.length = 0;

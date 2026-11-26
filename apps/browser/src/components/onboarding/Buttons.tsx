@@ -51,7 +51,7 @@ export function PrimaryButton({ title, onPress, disabled, icon }: { title: strin
           }}
         >
           {glass ? <GlassFill radius={onboardingButton.height / 2} panelFill={hovered && !disabled ? colors.primaryHover : colors.primary} /> : null}
-          <Text weight="semibold" color={colors.primaryText}>
+          <Text weight="semibold" color={colors.primaryText} ardiaCentersCapitals>
             {title}
           </Text>
           {icon ? <Symbol name={icon} size={11} weight="semibold" color={colors.primaryText} style={{ width: 12, height: 12 }} /> : null}
@@ -80,7 +80,7 @@ export function SecondaryButton({ title, onPress, filled, pressRef }: { title: s
           }}
         >
           {glass ? <GlassFill radius={onboardingButton.height / 2} state={hovered ? "lit" : "rest"} /> : null}
-          <Text weight="medium" color={filled ? colors.buttonText : colors.noThanksText}>
+          <Text weight="medium" color={filled ? colors.buttonText : colors.noThanksText} ardiaCentersCapitals>
             {title}
           </Text>
         </View>

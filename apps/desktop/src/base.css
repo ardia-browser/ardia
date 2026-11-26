@@ -22,6 +22,12 @@ textarea:focus,
   outline: none;
 }
 
+input[data-ardia-selection]::selection,
+textarea[data-ardia-selection]::selection {
+  background-color: var(--ardia-selection-bg);
+  color: var(--ardia-selection-fg);
+}
+
 .ardia-desktop {
   position: fixed;
   inset: 0;
@@ -178,11 +184,41 @@ textarea:focus,
   font-size: 11px;
 }
 
+.ardia-menu-swatch-cell {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .ardia-menu-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 5px;
-  margin-right: 7px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.ardia-menu-swatch.empty {
+  box-shadow: inset 0 0 0 1px currentColor;
+  opacity: 0.35;
+}
+
+@media (forced-colors: active) {
+  .ardia-menu-swatch {
+    forced-color-adjust: none;
+    box-sizing: border-box;
+    border: 1px solid CanvasText;
+    box-shadow: none;
+  }
+
+  .ardia-menu-swatch.empty {
+    background: transparent;
+    opacity: 1;
+    box-shadow: none;
+  }
 }
 
 .ardia-menu-title {
@@ -284,7 +320,9 @@ html.embed body {
 }
 
 .ardia-shell-above,
-.ardia-shell-above body {
+.ardia-shell-above body,
+.ardia-utility-glass,
+.ardia-utility-glass body {
   background: transparent;
 }
 
@@ -486,4 +524,18 @@ div:has(> div > div > [data-testid="ardia-sidebar-peek"]) > div,
 
 [data-testid="ardia-downloads-popover"][data-open="true"] > * > :not(:first-child) {
   pointer-events: auto !important;
+}
+
+[data-ardia-glass-effect][data-ardia-glass="on"] > [data-ardia-glass-layers] {
+  visibility: hidden;
+}
+
+[data-ardia-visual-effect][data-ardia-glass="on"] {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-ardia-bubble-body][data-ardia-glass="on"] + .ardia-bubble-fill {
+  clip-path: var(--ardia-bubble-arrow-band);
 }

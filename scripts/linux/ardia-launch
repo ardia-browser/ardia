@@ -75,6 +75,10 @@ for argument in "$@"; do
   fi
 done
 
+if [[ -f /.flatpak-info && "${FLATPAK_ID:-}" == dev.ardia.Ardia ]]; then
+  exec cobalt "$@"
+fi
+
 if userns_ready || setuid_ready; then
   exec "$chrome" "$@"
 fi

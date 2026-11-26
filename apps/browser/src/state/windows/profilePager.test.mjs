@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { pagerFor } = await import("./profilePager.ts");
+const { engineProfile } = await import("../browser/model.ts");
+const { nativeWindowProfile } = await import("./hooks.ts");
 
 const S = () => useBrowser.getState();
 
@@ -175,4 +177,80 @@ test("a profile switch from elsewhere during a hold lets the sidebar follow at o
   S().switchProfile(w, order[2]);
   assert.equal(held(), null);
   assert.equal(takePagerCounts().profile_pager_switches_after_rest, 0, "a switch from elsewhere is not one the sidebar waited on");
+});
+
+test("settle frames count under the consent their motion began with, once, even when the settled event comes late or after the snapshot moved on", () => {
+  const { w, order, pager } = threeProfiles();
+  const event = (phase, motion, selected, extra = {}) => pager.onNativeState({ phase, sequence: ++sequence, position: selected, selected, velocity: 0, profileId: order[selected], motion, ...extra });
+  const frames = { frames: 30, longFrames: 2, worstGapMs: 25 };
+  telemetry.setSharing(false, "settings");
+  event("began", 1, 0);
+  event("selected", 1, 1);
+  telemetry.setSharing(true, "onboarding");
+  event("began", 2, 1);
+  event("settled", 1, 1, frames);
+  let counts = takePagerCounts();
+  assert.equal(counts.profile_pager_settle_frames, 0, "motion 1 began while sharing was off");
+  event("selected", 2, 2);
+  pagerSnapshots.set(w, { sequence: ++sequence, selectionSequence: sequence, position: 2, selected: 2, phase: "idle", velocity: 0, count: order.length, profileId: order[2] });
+  event("selected", 2, 2);
+  event("settled", 2, 2, frames);
+  event("settled", 2, 2, frames);
+  counts = takePagerCounts();
+  assert.equal(counts.profile_pager_settle_frames, 30, "a selected that read the settle snapshot first doesn't swallow the sample, and a repeat counts once");
+  assert.equal(counts.profile_pager_settles_with_long_frames, 1);
+  assert.equal(counts.profile_pager_settles_sampled, 1, "the long-frame share has a denominator from the same settle, even when the store commit saw it first");
+  assert.equal(counts.profile_pager_settle_worst_gap_ms, 25);
+  event("settled", 3, 2, frames);
+  assert.equal(takePagerCounts().profile_pager_settle_frames, 0, "a motion whose start was never seen isn't counted");
+});
+
+test("the window's native neighbour profiles follow the pager's warm pages, so the next neighbour is prepared at rest and not while the pages move", () => {
+  const { w, order, native, pager } = threeProfiles();
+  const neighbours = () => JSON.parse(nativeWindowProfile(S(), w, pager.state.getState().pages)[1]);
+  const engine = (id) => engineProfile(S(), id);
+  assert.deepEqual(neighbours(), [engine(order[1])]);
+  native("tracking", 0, "began");
+  native("settling", 1, "selected", 0.6);
+  assert.equal(S().windows[w].profileId, order[1]);
+  assert.deepEqual(neighbours(), [engine(order[0])], "the profile beyond isn't prepared mid-slide");
+  native("idle", 1, "settled");
+  assert.deepEqual(neighbours(), [engine(order[0]), engine(order[2])]);
+});
+
+test("only the motion just before a new one keeps its consent for a late settle; older and cancelled ones are dropped", () => {
+  const { order, pager } = threeProfiles();
+  const event = (phase, motion, selected, extra = {}) => pager.onNativeState({ phase, sequence: ++sequence, position: selected, selected, velocity: 0, profileId: order[selected], motion, ...extra });
+  const frames = { frames: 30, longFrames: 1, worstGapMs: 20 };
+  telemetry.setSharing(true, "onboarding");
+  event("began", 101, 0);
+  event("began", 205, 0);
+  event("began", 309, 0);
+  event("settled", 101, 0, frames);
+  assert.equal(takePagerCounts().profile_pager_settle_frames, 0, "a motion two back was superseded");
+  event("settled", 205, 0, frames);
+  assert.equal(takePagerCounts().profile_pager_settle_frames, 30, "the one just before still counts once it settles late");
+  event("selected", undefined, 0);
+  event("began", 150, 0);
+  event("settled", 309, 0, frames);
+  assert.equal(takePagerCounts().profile_pager_settle_frames, 30);
+});
+
+test("a replayed began of a motion that already settled doesn't bring its consent back", () => {
+  const { order, pager } = threeProfiles();
+  const event = (phase, motion, selected, extra = {}) => pager.onNativeState({ phase, sequence: ++sequence, position: selected, selected, velocity: 0, profileId: order[selected], motion, ...extra });
+  const frames = { frames: 20, longFrames: 1, worstGapMs: 20 };
+  telemetry.setSharing(false, "settings");
+  event("began", 410, 0);
+  event("settled", 410, 0, frames);
+  telemetry.setSharing(true, "onboarding");
+  event("began", 410, 0);
+  event("settled", 410, 0, frames);
+  assert.equal(takePagerCounts().profile_pager_settle_frames, 0);
+  event("began", 420, 0);
+  event("began", 415, 0);
+  event("settled", 415, 0, frames);
+  assert.equal(takePagerCounts().profile_pager_settle_frames, 0, "a motion older than one already started is never started late");
+  event("settled", 420, 0, frames);
+  assert.equal(takePagerCounts().profile_pager_settle_frames, 20);
 });

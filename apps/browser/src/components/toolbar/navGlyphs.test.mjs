@@ -5,6 +5,7 @@ import { Symbol as NativeSymbol } from "@ardia/shell";
 import { mount } from "../../test-hooks.mjs";
 import { reduceMotionKnown } from "../ui/reduceMotion.ts";
 import * as tokens from "./tokens.ts";
+import { NAVIGATION_GLYPH_WEIGHT as desktopWeight } from "../../lib/platformChrome.desktop.ts";
 
 globalThis.require ??= (id) => ({ asset: id });
 const { HistoryButton, ReloadButton } = await import("./NavButtons.tsx");
@@ -69,7 +70,7 @@ function findPressHandler(node) {
 function assertNavGlyph(symbol, expectedName, expectedColor) {
   assert.equal(symbol.name, expectedName);
   assert.equal(symbol.size, tokens.GLYPH);
-  assert.equal(symbol.weight, "medium");
+  assert.equal(symbol.weight, expectedName === "xmark" ? "medium" : "semibold");
   assert.equal(symbol.color, expectedColor);
   assert.deepEqual(symbol.style, { width: tokens.SYMBOL_BOX, height: tokens.SYMBOL_BOX });
 }
@@ -89,8 +90,9 @@ const palette = {
 const noop = () => {};
 const plainClick = { shiftKey: false, metaKey: false, altKey: false, ctrlKey: false };
 
-test("reload and stop share NAV_GLYPH size, weight, color and frame with back and forward across states", () => {
-  assert.deepEqual(tokens.NAV_GLYPH, { size: tokens.GLYPH, weight: "medium" });
+test("Mac navigation is semibold, desktop navigation and stop stay medium", () => {
+  assert.deepEqual(tokens.NAV_GLYPH, { size: tokens.GLYPH, weight: "semibold" });
+  assert.equal(desktopWeight, "medium");
   const cases = [
     { loading: false, url: "https://example.com", color: palette.icon },
     { loading: true, url: "https://example.com", color: palette.icon },

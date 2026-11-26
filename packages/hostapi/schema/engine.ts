@@ -32,6 +32,13 @@ export const engine = defineDomain({
       mac: "custom",
       windows: "custom",
     },
+    nativeMessagingHosts: {
+      args: "{}",
+      result: "{ found: number; registered: number; keptTheirs: number; missing: number; unusable: number }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
     childProcessCpu: {
       args: "{}",
       result: "ChildProcessCpu[]",

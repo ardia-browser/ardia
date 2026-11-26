@@ -336,6 +336,138 @@ class ScreenReaderFocusTest {
     }
 
     @Test
+    fun aHandOverOnlyTakesItsBaselineWhenRequestedAndAsksNothingUntilTheFrameHasDrawnThenFocusesTheExposedTarget() {
+        val asked = mutableListOf<Int>()
+        val target = recording(asked)
+        activity.setContentView(FrameLayout(activity).apply { addView(target, 200, 100) })
+        layOut()
+        val drawn = mutableListOf<Runnable>()
+        val requests = FocusRequests(Handler(Looper.getMainLooper()), SystemClock::uptimeMillis, afterDraw = { drawn += it })
+        var looked = 0
+        requests.start(handover = true) {
+            looked += 1
+            target
+        }
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+        assertEquals("only the baseline lookup happens before the draw", 1, looked)
+        assertTrue(asked.isEmpty())
+        assertEquals(1, requests.waiting)
+        drawn.single().run()
+        assertEquals(listOf(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS), asked)
+        assertEquals(0, requests.waiting)
+    }
+
+    @Test
+    fun aHandOverCancelledBeforeItsDrawNeverLooksAgain() {
+        val drawn = mutableListOf<Runnable>()
+        val requests = FocusRequests(Handler(Looper.getMainLooper()), SystemClock::uptimeMillis, afterDraw = { drawn += it })
+        var looked = 0
+        val id = requests.start(handover = true) {
+            looked += 1
+            null
+        }
+        requests.cancel(id)
+        drawn.single().run()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+        assertEquals("only the baseline lookup at the request", 1, looked)
+        assertEquals(0, requests.waiting)
+    }
+
+    @Test
+    fun aHandOverStillWaitingYieldsToFocusTheUserOrAnOverlayMovedElsewhere() {
+        val asked = mutableListOf<Int>()
+        val target = recording(asked).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        var otherHeld = false
+        val other = holding(mutableListOf()) { otherHeld }
+        activity.setContentView(LinearLayout(activity).apply {
+            addView(target, 200, 100)
+            addView(other, 200, 100)
+        })
+        layOut()
+        val drawn = mutableListOf<Runnable>()
+        val requests = FocusRequests(Handler(Looper.getMainLooper()), SystemClock::uptimeMillis, afterDraw = { drawn += it })
+        requests.start(handover = true) { target }
+        drawn.single().run()
+        assertEquals("the target is not reachable yet, so it retries", 1, requests.waiting)
+        otherHeld = true
+        target.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+        assertTrue("focus moved elsewhere after the hand-over began, so it gives up", asked.isEmpty())
+        assertEquals(0, requests.waiting)
+    }
+
+    @Test
+    fun aHandOverGivesUpWhenTheUserMovedToAPageLinkBeforeTheFrameDrewEvenThoughNoHostViewHoldsFocus() {
+        val asked = mutableListOf<Int>()
+        val target = recording(asked)
+        var linkFocused = false
+        val web = page { linkFocused }
+        activity.setContentView(LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(web, 400, 400)
+            addView(target, 200, 100)
+        })
+        layOut()
+        FocusMoves.watch(activity.window.decorView)
+        val drawn = mutableListOf<Runnable>()
+        val requests = FocusRequests(Handler(Looper.getMainLooper()), SystemClock::uptimeMillis, afterDraw = { drawn += it })
+        requests.start(handover = true) { target }
+        linkFocused = true
+        web.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED)
+        drawn.single().run()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+        assertTrue("the link the user moved to keeps focus", asked.isEmpty())
+        assertEquals(0, requests.waiting)
+    }
+
+    @Test
+    fun aHandOverTakesItsBaselineWhenItIsRequestedSoAMoveBeforeTheFrameCallbackStillCounts() {
+        val asked = mutableListOf<Int>()
+        val target = recording(asked)
+        var otherHeld = false
+        val other = holding(mutableListOf()) { otherHeld }
+        activity.setContentView(LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(target, 200, 100)
+            addView(other, 200, 100)
+        })
+        layOut()
+        val drawn = mutableListOf<Runnable>()
+        val requests = FocusRequests(Handler(Looper.getMainLooper()), SystemClock::uptimeMillis, afterDraw = { drawn += it }, moves = { 0L })
+        requests.start(handover = true) { target }
+        otherHeld = true
+        drawn.single().run()
+        assertTrue(asked.isEmpty())
+        assertEquals(0, requests.waiting)
+    }
+
+    @Test
+    fun theFocusEventAHandOverSendsItselfIsNotCountedAsTheUserMoving() {
+        val asked = mutableListOf<Int>()
+        val target = recording(asked)
+        activity.setContentView(FrameLayout(activity).apply { addView(target, 200, 100) })
+        layOut()
+        FocusMoves.watch(activity.window.decorView)
+        val before = FocusMoves.count
+        assertTrue(FocusMoves.quietly { target.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED); true })
+        assertEquals(before, FocusMoves.count)
+        target.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED)
+        assertEquals(before + 1, FocusMoves.count)
+    }
+
+    @Test
+    fun movedSinceCountsOnlyAHolderThatIsNeitherTheOneBeforeNorTheTarget() {
+        val before = View(activity)
+        val target = View(activity)
+        val elsewhere = View(activity)
+        assertFalse(ScreenReaderFocus.movedSince(before, null, target))
+        assertFalse(ScreenReaderFocus.movedSince(before, before, target))
+        assertFalse(ScreenReaderFocus.movedSince(before, target, target))
+        assertTrue(ScreenReaderFocus.movedSince(before, elsewhere, target))
+        assertTrue(ScreenReaderFocus.movedSince(null, elsewhere, target))
+    }
+
+    @Test
     fun aCancelledRequestNeverLooksAgain() {
         val requests = FocusRequests(Handler(Looper.getMainLooper()), SystemClock::uptimeMillis)
         var looked = 0

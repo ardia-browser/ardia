@@ -1,5 +1,5 @@
 import { actionSheet, ContextMenuView, nativeMenusAvailable, settingsUI, type MenuItem as NativeMenuItem } from "@ardia/phone-native";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { findNodeHandle, Platform, View, type GestureResponderEvent, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import type { MenuAlign, Point } from "../../lib/menuPlace";
 import { menuSfName } from "./sfSymbolNames";
@@ -12,7 +12,10 @@ import { dismissWords } from "../../lib/sharedWords";
 
 export type MenuHandlers = { onPress?: (event?: GestureResponderEvent) => void; onLongPress?: (event?: GestureResponderEvent) => void; openFor?: (opener: unknown) => void };
 
+export type MenuOpener = MutableRefObject<(() => void) | null>;
+
 type Props = {
+  opener?: MenuOpener;
   items: MenuItem[];
   trigger?: "tap" | "longPress";
   fixedOrder?: boolean;
@@ -103,7 +106,7 @@ const pressPoint = (event?: GestureResponderEvent): Point | null => {
   return touch && typeof touch.pageX === "number" && typeof touch.pageY === "number" ? { x: touch.pageX, y: touch.pageY } : null;
 };
 
-function DrawnTrigger({ items, trigger = "longPress", onOpen, onClose, haptic, disabled = false, place, privately, align, frost: frostHere, restoresAfterChoice = false, style, testID, children }: Props) {
+function DrawnTrigger({ opener: openerHandle, items, trigger = "longPress", onOpen, onClose, haptic, disabled = false, place, privately, align, frost: frostHere, restoresAfterChoice = false, style, testID, children }: Props) {
   const anchor = useRef<ViewInstance>(null);
   const opener = useRef<unknown>(null);
   const cancelRestore = useRef<() => void>(() => undefined);
@@ -149,6 +152,25 @@ function DrawnTrigger({ items, trigger = "longPress", onOpen, onClose, haptic, d
     },
     [onClose, restoresAfterChoice, returnFocus],
   );
+  const pendingOpen = useRef(false);
+  useLayoutEffect(() => {
+    if (!openerHandle) return;
+    openerHandle.current = () => {
+      if (disabled) {
+        pendingOpen.current = true;
+        return;
+      }
+      open(undefined, anchor.current);
+    };
+    return () => {
+      openerHandle.current = null;
+    };
+  }, [openerHandle, disabled, open]);
+  useEffect(() => {
+    if (disabled || !pendingOpen.current) return;
+    pendingOpen.current = false;
+    open(undefined, anchor.current);
+  }, [disabled, open]);
   const held = trigger === "longPress";
   return (
     <View ref={anchor} testID={testID} style={style} collapsable={false}>

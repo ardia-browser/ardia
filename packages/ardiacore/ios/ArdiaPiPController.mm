@@ -194,6 +194,10 @@ NSString *CornerName(int corner) {
                                               object:window
                                                queue:nil
                                           usingBlock:^(NSNotification *) { [weakSelf detach]; }]];
+    _spaceObserver = [NSWorkspace.sharedWorkspace.notificationCenter addObserverForName:NSWorkspaceActiveSpaceDidChangeNotification
+                                                                                 object:nil
+                                                                                  queue:nil
+                                                                             usingBlock:^(NSNotification *) { [weakSelf activeSpaceChanged]; }];
     self.keepOnTop = KeepOnTop();
   }
   return self;
@@ -204,6 +208,8 @@ NSString *CornerName(int corner) {
   [ArdiaPiPController abandonSwipeOn:_window];
   for (id observer in _observers) [NSNotificationCenter.defaultCenter removeObserver:observer];
   [_observers removeAllObjects];
+  if (_spaceObserver) [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:_spaceObserver];
+  _spaceObserver = nil;
   [self endMomentumWait];
   [NSObject cancelPreviousPerformRequestsWithTarget:self];
   [_slide invalidate];

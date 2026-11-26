@@ -1,4 +1,6 @@
-import { call, on, type CliControlStatus, type CliDevToolsEvent } from "@ardia/ardiacore";
+import { call, on, type CliControlStatus, type CliDevToolsEvent, type TabInputArgs } from "@ardia/ardiacore";
+
+export type { TabConsoleEntry, TabDiagnosticsRead, TabEngineRefusal, TabInputAction, TabInputArgs, TabInputDone, TabInputModifier, TabInputPrimed, TabNetworkEntry } from "@ardia/ardiacore";
 
 export type ControlStatus = CliControlStatus;
 
@@ -34,4 +36,6 @@ export const controlClick = (
 ) => call("engine.cliClick", defined({ tabId, ...at }));
 export const controlScreenshot = (tabId: string, shot: { owner?: string; format?: "png" | "jpeg"; quality?: number; clip?: { x: number; y: number; width: number; height: number }; scale?: number }) =>
   call("engine.cliScreenshot", defined({ tabId, ...shot }));
+export const controlTabDiagnostics = (tabId: string, since: number, clearBefore?: number) => call("tabs.diagnostics", { tabId, since, ...(clearBefore === undefined ? {} : { clearBefore }) });
+export const controlTabInput = (input: TabInputArgs) => call("tabs.input", input);
 export const onControlChanged = (listener: (status: ControlStatus) => void) => on("engine.cliControl", listener);

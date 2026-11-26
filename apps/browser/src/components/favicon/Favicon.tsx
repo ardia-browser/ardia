@@ -5,6 +5,9 @@ import { faviconFailed, useAppearanceDark } from "../../state/favicons/favicons"
 import { useFavicon, useFaviconTheme, usePrivateViewer } from "../../state/favicons/faviconHooks";
 import { drawnSymbol, radius, tintedImage, useTheme, weight } from "../ui";
 import { CapCenteredLetter } from "../glyph/CapCenteredLetter";
+import { useDevicePixelsPerRootPoint } from "../../state/settings/interfaceScale";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { initialGlyph } from "./initialGlyph";
 import { bundledSiteIcon } from "./siteIcons";
 
 export const Favicon = memo(function Favicon({
@@ -58,11 +61,13 @@ export const SiteFavicon = memo(function SiteFavicon({ host, profileId, size }: 
 export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, opacity = 1, color }: { url: string; size?: number; opacity?: number; color?: string }) {
   const theme = useTheme();
   const glyph = color ?? theme.textSecondary;
+  const pixelsPerPoint = useDevicePixelsPerRootPoint();
   const bundled = bundledSiteIcon(url, theme.dark);
   if (bundled !== undefined) return <Image source={bundled} style={{ width: size, height: size, borderRadius: size > 18 ? radius.control : radius.hair, opacity }} />;
   const initial = hostInitial(url);
   if (!initial) return drawnSymbol({ name: "globe", size: size - 2, color: glyph, style: { width: size, height: size, opacity } });
   const tile = Math.round((size * 14) / 16);
+  const glyphSize = initialGlyph(tile, pixelsPerPoint, PLATFORM_FEATURES.snapsTextBaselines);
   return (
     <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center", opacity }}>
       <View
@@ -76,7 +81,7 @@ export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, o
           justifyContent: "center",
         }}
       >
-        <CapCenteredLetter box={tile} fontSize={Math.round(tile * 0.64)} fontWeight={weight.semibold} color={glyph}>
+        <CapCenteredLetter box={tile} fontSize={glyphSize.fontSize} lineShiftX={glyphSize.lineShiftX} pixelsPerPoint={glyphSize.onPixelGrid ? pixelsPerPoint : undefined} fontWeight={weight.semibold} color={glyph}>
           {initial}
         </CapCenteredLetter>
       </View>

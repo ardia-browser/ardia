@@ -36,7 +36,7 @@ registerHooks({
 const requests = [], listeners = new Set();
 globalThis.window = {
   __ardiaHost: {
-    bootstrap: { windowId: "a", profileId: "default" },
+    bootstrap: { windowId: "a", profileId: "default", capabilities: ["ArdiaShell.windowIdentity", "ArdiaShell.beginDialog", "ArdiaShell.cancelDialog"] },
     onEvent(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     async invoke(method, payload) {
       requests.push({ method, ...payload });

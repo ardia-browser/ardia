@@ -227,6 +227,7 @@ function ProgramsRows() {
 
 function CommandLineSection() {
   const on = useSettings((settings) => programControlOn({ settings }));
+  const showCliPill = useSettings((s) => s.showCliPill);
   const install = useCommandInstall();
   const server = useControlServer((s) => s.server);
   const ruleRows = useAutomationRuleRows();
@@ -272,7 +273,8 @@ function CommandLineSection() {
           <Toggle value={on} accessibilityLabel="ardia command" onChange={setOn} />
         </Row>
         )}
-        <SettingToggle anchor="advanced.compactCliPill" />
+        <SettingToggle anchor="advanced.showCliPill" />
+        <SettingToggle anchor="advanced.compactCliPill" disabled={!showCliPill} />
         {ruleRows}
       </Group>
     </>

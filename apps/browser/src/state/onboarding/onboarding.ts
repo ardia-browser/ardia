@@ -57,6 +57,12 @@ export const activeSteps = () => STEPS.filter((step) => step === "intro" || ques
 
 export const draftPreset = (s: { prefill: Prefill; preset: Preset }): Preset | null => (s.prefill === "preset" ? s.preset : null);
 
+export function touchedOrPresetPatch<K extends keyof Settings>(keys: readonly K[], values: Pick<Settings, K>): Partial<Settings> {
+  const { draft } = useOnboarding.getState();
+  const { settings } = useBrowser.getState();
+  return Object.fromEntries(keys.filter((k) => k in draft || JSON.stringify(values[k]) !== JSON.stringify(settings[k])).map((k) => [k, values[k]]));
+}
+
 export const presetPatch = (source: BrowserSourceId | null): Partial<Settings> => (setsUpLikeBrowser(source) ? PRESETS[source] : {});
 
 type Extras = {

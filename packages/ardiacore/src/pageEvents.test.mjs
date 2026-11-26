@@ -16,6 +16,7 @@ const chromiumView = files(/^ArdiaWebView.*\.mm$/).map(native);
 const chromiumEmitters = files(/\.mm$/).map(native);
 const webKitTab = files(/^WebKitTab.*\.swift$/).map(native);
 const pageScript = native("page_script.js");
+const pageMetrics = native("page_metrics.js");
 const messageReceivers = ["ArdiaWebView+PageMessages.mm", "ArdiaWebView+Peek.mm"].map(native);
 
 const WEBKIT_ONLY_EVENTS = new Set(["mediaFault", "focusRestore"]);
@@ -34,7 +35,7 @@ test("the WebKit tab emits only page events in PAGE_EVENTS, and every WebKit-onl
 });
 
 test("every kind the page script sends has a native receiver, and every receiver has a sender", () => {
-  const sent = collect([pageScript], /\bsend\("([A-Za-z]+)"/g);
+  const sent = [...collect([pageScript], /\bsend\("([A-Za-z]+)"/g), ...collect([pageMetrics], /\bpost\("([A-Za-z]+)"/g)];
   const received = collect(messageReceivers, /kind isEqualToString:@"([A-Za-z]+)"/g);
   assert.deepEqual(sorted(received), sorted(sent));
 });
@@ -81,7 +82,7 @@ test("the popup's streaming-site list is PROTECTED_VIDEO_SITES, https only, subd
 
 test("every kind native sends into a frame has a page-script handler, and every handler has a sender", () => {
   const called = collect(chromiumView, /kind:@"([A-Za-z]+)"/g);
-  const handled = collect([pageScript], /\bhandlers\.([A-Za-z]+) =/g);
+  const handled = collect([pageScript, pageMetrics], /\bhandlers\.([A-Za-z]+) =/g);
   assert.deepEqual(sorted(handled), sorted(called));
 });
 

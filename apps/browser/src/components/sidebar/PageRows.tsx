@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState, type RefObject } from "react";
 import { Animated, View } from "react-native";
-import { radius, space, Symbol, Text } from "../ui";
+import { continuousCorners, radius, space, Symbol, Text } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { useSettings } from "../../state/browser/hooks";
 import { isIncognitoProfile } from "../../state/browser/model";
@@ -163,7 +163,7 @@ function IncognitoBadge() {
   const theme = useTheme();
   if (!useAddressBarInSidebar()) return null;
   return (
-    <View style={{ height: 30, marginBottom: space.xs, paddingHorizontal: TAB_ROW.contentLeft, flexDirection: "row", alignItems: "center", gap: space.m, borderRadius: radius.tile, backgroundColor: sidebarTokens(theme).incognitoBadge }}>
+    <View style={{ height: 30, marginBottom: space.xs, paddingHorizontal: TAB_ROW.contentLeft, flexDirection: "row", alignItems: "center", gap: space.m, ...continuousCorners(radius.tile), backgroundColor: sidebarTokens(theme).incognitoBadge }}>
       <Symbol name={INCOGNITO_ICON} size={13} weight="semibold" color={theme.textPrimary} style={{ width: 18, height: 16 }} />
       <Text size="small" weight="semibold">
         Incognito

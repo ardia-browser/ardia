@@ -220,8 +220,10 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
   ardia_host::WithProfile(profile ?: @"", ^(ArdiaCoreProfile *p) {
     ArdiaWindowController *shown = weakController;
     if (!p || !coreWindow || !shown) return;
+    ArdiaCoreProfile *before = coreWindow.activeProfile;
     coreWindow.activeProfile = p;
     ardia_host::NoteProfileSwitch(p, coreWindow.window);
+    if (before && before != p) ardia_host::CheckPaintingAfterProfileSwitch(coreWindow.window);
     const double activeMs = (CACurrentMediaTime() - started) * 1000;
     ArdiaCoreTab *tab = [ArdiaTabStrip activeTabInWindow:shown profile:p];
     ArdiaWebView *view = tab ? [ArdiaTabRegistry viewForTab:tab] : nil;

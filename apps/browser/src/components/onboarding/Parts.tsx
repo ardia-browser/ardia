@@ -16,7 +16,7 @@ export function RedoCancel() {
   if (!redo) return null;
   return (
     <View mouseDownCanMoveWindow={false}>
-      <Button variant="text" look="link" tone="textSecondary" title="Cancel" label="Cancel setup and keep your settings" onPress={cancelOnboarding} />
+      <Button variant="text" look="link" tone="textSecondary" title="Cancel" label="Cancel setup and keep your settings" centersCapitals onPress={cancelOnboarding} />
     </View>
   );
 }

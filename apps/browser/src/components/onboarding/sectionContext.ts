@@ -1,4 +1,4 @@
-import { createContext, useContext, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useSyncExternalStore, type ReactNode } from "react";
 import type { OnboardingSection } from "../../state/onboarding/sections";
 import type { PreviewId } from "./previews";
 
@@ -64,11 +64,14 @@ export type FlowSlots = {
   shown(): FlowShown | null;
   subscribe(listener: () => void): () => void;
   forward: { run: (() => void) | null };
+  subscribeForward(listener: () => void): () => void;
 };
 
 export function createFlowSlots(): FlowSlots {
   let shown: FlowShown | null = null;
+  let run: (() => void) | null = null;
   const listeners = new Set<() => void>();
+  const forwardListeners = new Set<() => void>();
   return {
     publish(next) {
       shown = next;
@@ -79,7 +82,20 @@ export function createFlowSlots(): FlowSlots {
       listeners.add(listener);
       return () => void listeners.delete(listener);
     },
-    forward: { run: null },
+    forward: {
+      get run() {
+        return run;
+      },
+      set run(next) {
+        const changed = !run !== !next;
+        run = next;
+        if (changed) for (const listener of forwardListeners) listener();
+      },
+    },
+    subscribeForward(listener) {
+      forwardListeners.add(listener);
+      return () => void forwardListeners.delete(listener);
+    },
   };
 }
 
@@ -97,6 +113,21 @@ export function useFlowShown() {
 }
 
 export const useFlowSlots = () => useContext(FlowSlotsContext);
+
+export function useCanGoForward(slots: FlowSlots, currentKey: string | null) {
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const unpublished = slots.subscribe(listener);
+      const unforwarded = slots.subscribeForward(listener);
+      return () => {
+        unpublished();
+        unforwarded();
+      };
+    },
+    [slots],
+  );
+  return useSyncExternalStore(subscribe, () => !!publishedForward(slots, currentKey));
+}
 
 export const FlowPreviewShownContext = createContext(true);
 

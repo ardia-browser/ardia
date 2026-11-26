@@ -101,13 +101,19 @@ source_set("win") {
     "webui/webui_storage.h",
     "webui/webui_telemetry.cc",
     "webui/webui_telemetry.h",
+    "webui/webui_update_policy.h",
+    "webui/webui_updates.cc",
+    "webui/webui_updates.h",
     "webui/webui_window_policy.h",
     "webui/webui_windows.cc",
     "webui/webui_windows.h",
   ]
   sources += get_target_outputs(":webui_bootstrap")
 
-  libs = [ "dwmapi.lib" ]
+  libs = [
+    "bcrypt.lib",
+    "dwmapi.lib",
+  ]
 
   deps = [
     ":launch_switches",
@@ -128,6 +134,7 @@ source_set("win") {
     "//chrome/browser/ui:recently_audible_helper",
     "//chrome/browser/profiles:profile",
     "//chrome/common",
+    "//chrome/chrome_elf:chrome_elf_main_include",
     "//chrome/install_static:install_static_util",
     "//components/blocked_content",
     "//components/content_settings/core/browser",

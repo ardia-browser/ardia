@@ -4,16 +4,16 @@ import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import { historyExpired } from "./historyAdapter";
-import { settingsToReapply } from "./settingsAdapter";
+import { settleRetiredDefaultsWithoutSync, settleSettingsFromSavedSync } from "./settingsAdapter";
 import { watchExtensionIntents } from "./extensions";
 import { appAdapters, extensionsOf, forgetScopeAdapters, profileAdapters, typeSynced } from "./scopeAdapters";
-import { APP_SCOPE, emptyDoc, emptyUi, type DataType, type SendTarget, type SyncDoc, type SyncUi } from "./syncDoc";
+import { APP_SCOPE, emptyDoc, emptyUi, typeSyncedFor, type DataType, type SendTarget, type SyncDoc, type SyncUi } from "./syncDoc";
 import { syncFiles } from "./syncFiles";
 import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addLinkedProfile, appScopeOf, linkedProfileId, linkProfiles, readyToPair, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { noteSnapshot, timedCycle } from "./cycleWork";
+import { noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
 import { freezeRemovals, markDeviceRemoved, markRemoved, settleRemovals } from "./profileRemoval";
@@ -44,7 +44,7 @@ let cycle: Promise<void> | null = null;
 let again = false;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
-const { read, loadState, persistJournal, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
+const { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
 
 function load() {
   const loaded = read();
@@ -52,6 +52,7 @@ function load() {
 }
 
 function publishUi(patch: Partial<SyncUi> = {}) {
+  if (!doc.enabled || !typeSyncedFor(doc.types, "settings", true)) settleRetiredDefaultsWithoutSync();
   useSync.setState({
     enabled: doc.enabled,
     joining: doc.enabled && doc.joining,
@@ -129,14 +130,14 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     if (freezeRemovals(doc)) save();
     const appSettled = watchScope(APP_SCOPE, app, clock);
     try {
-      noteSnapshot(await syncScope({
+      noteCycle(consent, await syncScope({
         scope: APP_SCOPE,
         state: app,
         transport,
         adapters: appAdapters(doc, retiring),
         clock,
         device,
-        options: { persist: persistJournal(APP_SCOPE), holdApply: isQuitting },
+        options: { persist: persistJournal(APP_SCOPE), persistApplying: persistApplying(APP_SCOPE), holdApply: isQuitting },
       }));
     } finally {
       await appSettled();
@@ -154,14 +155,14 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       const state = (doc.scopes[scope] ??= emptyScope());
       const settled = watchScope(scope, state, clock);
       try {
-        noteSnapshot(await syncScope({
+        noteCycle(consent, await syncScope({
           scope,
           state,
           transport,
           adapters: profileAdapters(doc, profileId, retire, forcePasswords),
           clock,
           device,
-          options: { expired: historyExpired, persist: persistJournal(scope), holdApply: isQuitting },
+          options: { expired: historyExpired, persist: persistJournal(scope), persistApplying: persistApplying(scope), holdApply: isQuitting },
         }));
       } finally {
         await settled();
@@ -204,11 +205,11 @@ export function adoptProfileTheme(profileId: string) {
 }
 
 async function loadSavedState() {
-  await loadState();
+  const loading = doc;
+  const installed = await loadState(loading);
   startEditClock(doc.deviceId ?? "", doc.clock);
-  const app = doc.scopes[APP_SCOPE];
-  if (app) app.unapplied = [...new Set([...app.unapplied, ...settingsToReapply(app.records)])];
-  settleThemeAdoption(doc.profiles, app, false);
+  settleSettingsFromSavedSync(doc.scopes[APP_SCOPE], installed && doc === loading && doc.enabled && !stopping && typeSyncedFor(doc.types, "settings", true));
+  settleThemeAdoption(doc.profiles, doc.scopes[APP_SCOPE], false);
 }
 
 async function resetFromElsewhere() {

@@ -279,16 +279,6 @@ test("a completion that was cleared is taken as cleared wherever the caret is, a
   assert.equal(settlesInline(false, "", true), false);
 });
 
-test("Windows: the whole completion arriving as typed text is typing, not the echo of a completion computed for an older text", async () => {
-  const older = [{ typed: "e", completion: "xample.com", orphaned: true }];
-  assert.deepEqual(fieldChange("example.co", "", "example.com", older), { echo: true, settled: 1, inline: { typed: "e", completion: "xample.com" }, stale: true });
-  assert.deepEqual(fieldChange("example.co", "", "example.com", []), { echo: false, typed: "example.com", suppress: false });
-  const { PLATFORM_FEATURES: windows } = await import("../../lib/platformFeatures.windows.ts");
-  const { PLATFORM_FEATURES: mac } = await import("../../lib/platformFeatures.ts");
-  assert.equal(windows.inlineWritesEcho, false);
-  assert.equal(mac.inlineWritesEcho, true);
-});
-
 test("a letter that matches the completion keeps it in place: the field's own report becomes the typed text and completion", () => {
   const field = (typed, completion) => (start, end) => (start === typed.length && end === typed.length + completion.length ? { typed, completion } : null);
   const kept = keptTyping("g", { start: 2, end: 9 }, field("gm", "ail.com"));

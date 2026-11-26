@@ -26,6 +26,17 @@ export const VOICES: Voice[] = [
     featured: true,
   },
   {
+    id: "theo",
+    quote: "Enjoying Ardia a lot.",
+    name: "Theo",
+    handle: "@theo",
+    source: "x",
+    sourceLabel: "X",
+    href: "https://x.com/theo/status/2125707693369483351",
+    avatar: "theo",
+    featured: true,
+  },
+  {
     id: "charlielamb",
     quote: "how is it already better than Arc",
     name: "Charlie Lamb",
@@ -34,7 +45,6 @@ export const VOICES: Voice[] = [
     sourceLabel: "X",
     href: "https://x.com/charlielamb/status/2113639195608826321",
     avatar: "charlielamb",
-    featured: true,
   },
   {
     id: "jsmasterypro",

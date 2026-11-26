@@ -58,7 +58,9 @@ function Overlay({ session }: { session: number }) {
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, { opacity: presence }]}>
-      <VisualEffect material="fullScreenUI" blendingMode={onboardingShowsDesktop ? "behindWindow" : "withinWindow"} style={StyleSheet.absoluteFill} />
+      {onboardingShowsDesktop || step === "intro" ? (
+        <VisualEffect material="fullScreenUI" blendingMode={onboardingShowsDesktop ? "behindWindow" : "withinWindow"} style={StyleSheet.absoluteFill} />
+      ) : null}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: onboardingShowsDesktop ? colors.overlayOverDesktop : colors.overlay }]} />
       <WindowDragRegion style={StyleSheet.absoluteFill} />
       {step !== "intro" && (

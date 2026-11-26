@@ -66,10 +66,29 @@ const wchar_t* SizeCursor(WPARAM hit) {
   }
 }
 
-bool ResetsMaximizeState(UINT message, WPARAM w_param) {
-  return message == WM_NCMOUSELEAVE || message == WM_CAPTURECHANGED ||
-         message == WM_CANCELMODE ||
-         (message == WM_ACTIVATE && LOWORD(w_param) == WA_INACTIVE);
+constexpr UINT_PTR kPointerWatchTimer = 0x41524d58;
+constexpr UINT kPointerWatchMs = 100;
+
+bool IsMouseButtonMessage(UINT message) {
+  return (message >= WM_LBUTTONDOWN && message <= WM_MBUTTONDBLCLK) ||
+         (message >= WM_XBUTTONDOWN && message <= WM_XBUTTONDBLCLK) ||
+         (message >= WM_NCLBUTTONDOWN && message <= WM_NCMBUTTONDBLCLK) ||
+         (message >= WM_NCXBUTTONDOWN && message <= WM_NCXBUTTONDBLCLK);
+}
+
+bool PrimaryButtonDownOrQueued() {
+  const int primary =
+      ::GetSystemMetrics(SM_SWAPBUTTON) ? VK_RBUTTON : VK_LBUTTON;
+  if ((::GetAsyncKeyState(primary) & 0x8000) != 0) {
+    return true;
+  }
+  return (HIWORD(::GetQueueStatus(QS_MOUSEBUTTON)) & QS_MOUSEBUTTON) != 0;
+}
+
+bool IsMaximizeButtonInput(UINT message, WPARAM hit) {
+  return hit == HTMAXBUTTON &&
+         (message == WM_NCMOUSEMOVE || message == WM_NCLBUTTONDOWN ||
+          message == WM_NCLBUTTONDBLCLK || message == WM_NCLBUTTONUP);
 }
 
 }
@@ -172,17 +191,14 @@ void CaptionInput::Attach(HWND root) {
 }
 
 void CaptionInput::Detach() {
+  StopWatchingPointer();
   ui::HWNDSubclass::RemoveFilterFromAllTargets(this);
   root_ = nullptr;
-  nc_leave_tracked_hwnd_ = nullptr;
   state_.Reset();
 }
 
 void CaptionInput::Reset() {
-  nc_leave_tracked_hwnd_ = nullptr;
-  if (state_.Reset()) {
-    Emit();
-  }
+  Publish(state_.Reset());
 }
 
 void CaptionInput::Emit() {
@@ -191,17 +207,87 @@ void CaptionInput::Emit() {
   }
 }
 
-void CaptionInput::ArmNonClientLeave(HWND target) {
-  if (!target || nc_leave_tracked_hwnd_ == target) {
+void CaptionInput::Publish(bool changed) {
+  if (state_.state() == MaximizeButtonVisualState{}) {
+    StopWatchingPointer();
+  } else {
+    WatchPointer();
+  }
+  if (changed) {
+    Emit();
+  }
+}
+
+void CaptionInput::WatchPointer() {
+  if (watching_pointer_ || !root_) {
     return;
   }
-  TRACKMOUSEEVENT track{};
-  track.cbSize = sizeof(track);
-  track.dwFlags = TME_NONCLIENT | TME_LEAVE;
-  track.hwndTrack = target;
-  if (::TrackMouseEvent(&track)) {
-    nc_leave_tracked_hwnd_ = target;
+  watching_pointer_ =
+      ::SetTimer(root_, kPointerWatchTimer, kPointerWatchMs, nullptr) != 0;
+}
+
+void CaptionInput::StopWatchingPointer() {
+  if (!watching_pointer_) {
+    return;
   }
+  watching_pointer_ = false;
+  if (root_) {
+    ::KillTimer(root_, kPointerWatchTimer);
+  }
+}
+
+bool CaptionInput::PointerOnMaximizeButton() const {
+  if (!root_) {
+    return false;
+  }
+  POINT point{};
+  if (!::GetCursorPos(&point)) {
+    const DWORD position = ::GetMessagePos();
+    point.x = static_cast<short>(LOWORD(position));
+    point.y = static_cast<short>(HIWORD(position));
+  }
+  const HWND under = ::WindowFromPoint(point);
+  if (!under || ::GetAncestor(under, GA_ROOT) != root_) {
+    return false;
+  }
+  return ::SendMessageW(root_, WM_NCHITTEST, 0,
+                        MAKELPARAM(point.x, point.y)) == HTMAXBUTTON;
+}
+
+void CaptionInput::Track(bool on_max_button) {
+  Publish(
+      state_.OnPointerChecked(on_max_button, PrimaryButtonDownOrQueued()));
+}
+
+void CaptionInput::Press() {
+  maximize_pressed_at_ = static_cast<DWORD>(::GetMessageTime());
+  Publish(state_.OnNcLeftButtonDown(true));
+}
+
+void CaptionInput::Release() {
+  const bool was_pressed = state_.state().pressed;
+  const DWORD held =
+      static_cast<DWORD>(::GetMessageTime()) - maximize_pressed_at_;
+  Publish(state_.OnNcLeftButtonUp(true));
+  if (MaximizeClickCompletes(was_pressed, true, held) && toggle_maximize_) {
+    toggle_maximize_.Run();
+  }
+}
+
+void CaptionInput::LeaveReported() {
+  if (state_.state() == MaximizeButtonVisualState{}) {
+    StopWatchingPointer();
+    return;
+  }
+  Publish(state_.OnPointerChecked(PointerOnMaximizeButton(),
+                                  PrimaryButtonDownOrQueued()));
+}
+
+void CaptionInput::CancelPress() {
+  if (state_.state() == MaximizeButtonVisualState{}) {
+    return;
+  }
+  Publish(state_.OnPressCancelled(PointerOnMaximizeButton()));
 }
 
 bool CaptionInput::FilterMessage(HWND hwnd,
@@ -212,104 +298,113 @@ bool CaptionInput::FilterMessage(HWND hwnd,
   if (hwnd != root_) {
     return false;
   }
-  if (ResetsMaximizeState(message, w_param)) {
-    Reset();
+  switch (message) {
+    case WM_NCMOUSEMOVE:
+      Track(w_param == HTMAXBUTTON);
+      return false;
+    case WM_NCLBUTTONDOWN:
+    case WM_NCLBUTTONDBLCLK:
+      if (w_param != HTMAXBUTTON) {
+        CancelPress();
+        return false;
+      }
+      Press();
+      *l_result = 0;
+      return true;
+    case WM_NCLBUTTONUP:
+      if (w_param != HTMAXBUTTON) {
+        Publish(state_.OnNcLeftButtonUp(false));
+        return false;
+      }
+      Release();
+      *l_result = 0;
+      return true;
+    case WM_NCMOUSELEAVE:
+    case WM_MOUSEMOVE:
+    case WM_MOUSELEAVE:
+      LeaveReported();
+      return false;
+    case WM_CAPTURECHANGED:
+    case WM_CANCELMODE:
+      CancelPress();
+      return false;
+    case WM_ACTIVATE:
+      if (LOWORD(w_param) == WA_INACTIVE) {
+        Reset();
+      }
+      return false;
+    case WM_TIMER:
+      if (w_param != kPointerWatchTimer) {
+        return false;
+      }
+      LeaveReported();
+      *l_result = 0;
+      return true;
+    case WM_CLOSE:
+      if (intercept_close_ && intercept_close_.Run()) {
+        *l_result = 0;
+        return true;
+      }
+      return false;
+    default:
+      if (IsMouseButtonMessage(message)) {
+        CancelPress();
+      }
+      return false;
   }
-  if (message == WM_CLOSE && intercept_close_ && intercept_close_.Run()) {
-    *l_result = 0;
-    return true;
-  }
-  return false;
 }
 
 bool CaptionInput::PreTranslate(const MSG& msg) {
-  HWND root = root_;
-  const bool ours = root && msg.hwnd && ::GetAncestor(msg.hwnd, GA_ROOT) == root;
-  if (msg.message == WM_NCMOUSELEAVE &&
-      (ours || msg.hwnd == nc_leave_tracked_hwnd_)) {
-    nc_leave_tracked_hwnd_ = nullptr;
-    if (state_.OnNcMouseLeave()) {
-      Emit();
-    }
+  const HWND root = root_;
+  if (!root || !msg.hwnd || msg.hwnd == root) {
     return false;
   }
-  if (msg.message == WM_CAPTURECHANGED || msg.message == WM_CANCELMODE ||
-      (msg.message == WM_ACTIVATE && LOWORD(msg.wParam) == WA_INACTIVE)) {
-    if (ours) {
+  if (::GetAncestor(msg.hwnd, GA_ROOT) != root) {
+    if (IsMouseButtonMessage(msg.message)) {
       Reset();
     }
     return false;
   }
-  const bool button =
-      msg.message == WM_LBUTTONDOWN || msg.message == WM_LBUTTONUP ||
-      msg.message == WM_RBUTTONDOWN || msg.message == WM_RBUTTONUP ||
-      msg.message == WM_MBUTTONDOWN || msg.message == WM_MBUTTONUP ||
-      msg.message == WM_XBUTTONDOWN || msg.message == WM_XBUTTONUP ||
-      msg.message == WM_NCLBUTTONDOWN || msg.message == WM_NCLBUTTONUP ||
-      msg.message == WM_NCRBUTTONDOWN || msg.message == WM_NCRBUTTONUP ||
-      msg.message == WM_NCMBUTTONDOWN || msg.message == WM_NCMBUTTONUP ||
-      msg.message == WM_NCXBUTTONDOWN || msg.message == WM_NCXBUTTONUP;
-  if (button && !(ours && msg.wParam == HTMAXBUTTON &&
-                  (msg.message == WM_NCLBUTTONDOWN ||
-                   msg.message == WM_NCLBUTTONUP))) {
-    Reset();
-  }
-  if (!ours) {
-    return false;
-  }
-  if (msg.message == WM_MOUSEMOVE || msg.message == WM_MOUSELEAVE) {
-    Reset();
-    return false;
-  }
-  const bool child = msg.hwnd != root;
-  if (msg.message == WM_NCLBUTTONDOWN || msg.message == WM_NCLBUTTONDBLCLK) {
-    if (msg.wParam == HTMAXBUTTON) {
-      ArmNonClientLeave(msg.hwnd);
-      maximize_pressed_at_ = msg.time;
-      if (state_.OnNcLeftButtonDown(true)) {
-        Emit();
-      }
-      return true;
-    }
-    if (child && IsSizingHit(msg.wParam)) {
-      ::ReleaseCapture();
-      ::SendMessageW(root, WM_SYSCOMMAND, SizeCommand(msg.wParam), msg.lParam);
-      return true;
-    }
-    if (child && msg.wParam == HTCAPTION) {
-      ::ReleaseCapture();
-      ::SendMessageW(root,
-                     msg.message == WM_NCLBUTTONDBLCLK ? WM_NCLBUTTONDBLCLK
-                                                       : WM_SYSCOMMAND,
-                     msg.message == WM_NCLBUTTONDBLCLK ? HTCAPTION
-                                                       : (SC_MOVE | HTCAPTION),
-                     msg.lParam);
-      return true;
-    }
-    return false;
-  }
-  if (msg.message == WM_NCLBUTTONUP && msg.wParam == HTMAXBUTTON) {
-    const bool was_pressed = state_.state().pressed;
-    if (state_.OnNcLeftButtonUp(true)) {
-      Emit();
-    }
-    if (was_pressed && msg.time - maximize_pressed_at_ <= kMaximizeClickLimitMs &&
-        toggle_maximize_) {
-      toggle_maximize_.Run();
-    }
+  if (IsMaximizeButtonInput(msg.message, msg.wParam)) {
+    ::SendMessageW(root, msg.message, msg.wParam, msg.lParam);
     return true;
   }
-  if (msg.message == WM_NCMOUSEMOVE) {
-    const bool on_max = msg.wParam == HTMAXBUTTON;
-    if (on_max) {
-      ArmNonClientLeave(msg.hwnd);
-    }
-    if (state_.OnNcMouseMove(on_max)) {
-      Emit();
-    }
-    if (child && IsSizingHit(msg.wParam)) {
-      ::SetCursor(::LoadCursorW(nullptr, SizeCursor(msg.wParam)));
-    }
+  switch (msg.message) {
+    case WM_MOUSEMOVE:
+    case WM_MOUSELEAVE:
+    case WM_NCMOUSELEAVE:
+      LeaveReported();
+      return false;
+    case WM_NCMOUSEMOVE:
+      Track(false);
+      if (IsSizingHit(msg.wParam)) {
+        ::SetCursor(::LoadCursorW(nullptr, SizeCursor(msg.wParam)));
+      }
+      return false;
+    default:
+      break;
+  }
+  if (!IsMouseButtonMessage(msg.message)) {
+    return false;
+  }
+  CancelPress();
+  if (msg.message != WM_NCLBUTTONDOWN && msg.message != WM_NCLBUTTONDBLCLK) {
+    return false;
+  }
+  if (IsSizingHit(msg.wParam)) {
+    ::ReleaseCapture();
+    ::SendMessageW(root, WM_SYSCOMMAND, SizeCommand(msg.wParam), msg.lParam);
+    return true;
+  }
+  if (msg.wParam == HTCAPTION) {
+    ::ReleaseCapture();
+    ::SendMessageW(root,
+                   msg.message == WM_NCLBUTTONDBLCLK ? WM_NCLBUTTONDBLCLK
+                                                     : WM_SYSCOMMAND,
+                   msg.message == WM_NCLBUTTONDBLCLK ? HTCAPTION
+                                                     : (SC_MOVE | HTCAPTION),
+                   msg.lParam);
+    return true;
   }
   return false;
 }

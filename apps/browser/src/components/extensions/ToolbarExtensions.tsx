@@ -37,7 +37,6 @@ const GLYPH = 14;
 const GLYPH_BOX = 18;
 const IMAGE = TOOLBAR_TRAILING.extensionIcon;
 const GAP = TOOLBAR_TRAILING.itemGap;
-const PITCH = BUTTON + GAP;
 
 function useToolbarExtensions(windowId: string, limit: number) {
   const shown = useWindowExtensions(windowId);
@@ -52,7 +51,7 @@ function useToolbarExtensions(windowId: string, limit: number) {
   }, [shown, routes, casting, limit]);
 }
 
-export const extensionsFitting = (room: number) => Math.max(1, Math.floor((room + GAP) / PITCH));
+export const extensionsFitting = (room: number, button = BUTTON) => Math.max(1, Math.floor((room + GAP) / (button + GAP)));
 
 export function useToolbarExtensionsWidth(windowId: string, limit = Infinity): number {
   const { pinned, overflow, casting } = useToolbarExtensions(windowId, limit);

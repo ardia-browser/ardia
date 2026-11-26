@@ -98,3 +98,77 @@ test("each profile asks its own engine profile, and a private window asks nothin
     delete globalThis.acTestSuggest;
   }
 });
+
+test("a 429 response triggers cooldown across queries and remounts and counts throttled skips", async () => {
+  const client = await import("../../state/telemetry/client.ts");
+  const track = await import("../../state/telemetry/track.ts");
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://start.example/" });
+  let hits = 0;
+  globalThis.acTestSuggest = () => {
+    hits++;
+    return { status: 429 };
+  };
+  client.setSharing(true, "settings");
+  track.takeSearchSuggests();
+  try {
+    const h = mount(({ text }) => useSuggestions({ text, active: true, windowId: w, profileId: "default", scope: null }), { props: { text: "alpha" } });
+    await settle();
+    assert.equal(hits, 1);
+    h.rerender({ text: "alpha beta" });
+    await settle(40);
+    h.unmount();
+
+    const h2 = mount(({ text }) => useSuggestions({ text, active: true, windowId: w, profileId: "default", scope: null }), { props: { text: "gamma" } });
+    await settle(40);
+    h2.unmount();
+    assert.equal(hits, 1, "no further requests leave during cooldown");
+    const counts = track.takeSearchSuggests();
+    assert.equal(counts.search_suggest_blocked, 1);
+    assert.ok(counts.search_suggest_throttled >= 2, `expected >= 2 throttled skips, got ${counts.search_suggest_throttled}`);
+  } finally {
+    client.setSharing(false, "settings");
+    delete globalThis.acTestSuggest;
+  }
+});
+
+test("oversized queries and non-search schemes skip remote suggest while search operators still fetch", async () => {
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://start.example/" });
+  const asked = [];
+  globalThis.acTestSuggest = ({ url }) => {
+    asked.push(url);
+    return { status: 200, body: JSON.stringify(["ok", ["ok result"]]) };
+  };
+  try {
+    const h = mount(({ text }) => useSuggestions({ text, active: true, windowId: w, profileId: "default", scope: null }), { props: { text: "a".repeat(250) } });
+    await settle();
+    h.rerender({ text: "data:text/html,<h1>hi</h1>" });
+    await settle();
+    h.rerender({ text: "javascript:alert(1)" });
+    await settle();
+    h.rerender({ text: "view-source:https://example.com" });
+    await settle();
+    h.rerender({ text: "chrome-extension://abcdef/popup.html" });
+    await settle();
+    h.rerender({ text: "sms:+15551234567" });
+    await settle();
+    assert.equal(asked.length, 0);
+
+    h.rerender({ text: "site:github.com react" });
+    await settle();
+    assert.equal(asked.length, 1);
+    h.unmount();
+  } finally {
+    delete globalThis.acTestSuggest;
+  }
+});
+
+test("suggestionLabels clips giant titles and URLs without splitting surrogate pairs", async () => {
+  const { suggestionLabels } = await import("./suggestionLabels.ts");
+  const giantUrl = `https://www.google.com/search?q=${"a".repeat(50_000)}`;
+  const [title, accessory] = suggestionLabels({ kind: "page", url: giantUrl, title: `${"b".repeat(299)}😀tail`, favicon: null, visited: true });
+  assert.ok(title.length <= 301 && title.endsWith("…"));
+  assert.ok(!/[\uD800-\uDBFF]…$/.test(title), "surrogate pair is not split");
+  assert.ok(accessory !== null && accessory.length <= 301 && accessory.endsWith("…"));
+});

@@ -2,7 +2,7 @@ import Svg, { Path } from "react-native-svg";
 import artwork from "../../../assets/material-symbols.json";
 import type { SymbolName } from "./symbolPaths";
 
-type DrawnByArdia = "eyes" | "eyesClosed" | "sparkleMagnifyingglass" | "sidebarLeft";
+type DrawnByArdia = "eyes" | "eyesClosed" | "sparkleMagnifyingglass" | "sidebarLeft" | "gearshapeFill" | "circleLefthalfFill" | "squareOnSquareFill";
 
 export type MaterialSymbolName = Exclude<SymbolName, DrawnByArdia>;
 

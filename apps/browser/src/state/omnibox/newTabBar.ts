@@ -8,8 +8,11 @@ import { hasPage } from "../tabs/pageSession";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
 import { notePageOverlay } from "../telemetry/usage";
+import type { ConsentToken } from "../telemetry/client";
+import { noteCommandBarKeyDismissal } from "../telemetry/inlineCompletionCounts";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { navigateTyped, noteTypedOpen } from "../plugins/typedAddresses";
+import { focusHeroBar } from "./barState";
 
 export { isEmptyCardTab };
 
@@ -32,6 +35,25 @@ export function showNewTabBar(windowId: string, target: NewTabTarget = IN_LIST):
   if (!barOpensHere(s, windowId)) return false;
   s.openPanel(windowId, "", barTarget(s, windowId, target));
   return true;
+}
+
+const openedByCommandKey = new WeakSet<object>();
+
+export function showNewTabBarForCommandKey(windowId: string): boolean {
+  if (!showNewTabBar(windowId)) return false;
+  const panel = store().windowUi[windowId]?.panel;
+  if (panel) openedByCommandKey.add(panel);
+  return true;
+}
+
+export const commandKeyOpenedNewTabBar = (panel: object | undefined) => !!panel && openedByCommandKey.has(panel);
+
+export function dismissNewTabBarByCommandKey(windowId: string, consent: ConsentToken | null) {
+  closeNewTabBar(windowId);
+  const now = store();
+  const active = activeTabId(now, windowId);
+  if (active && !now.tabs[active]?.url) focusHeroBar(windowId, active);
+  noteCommandBarKeyDismissal(consent);
 }
 
 export function toggleNewTabBar(windowId: string, target: NewTabTarget = IN_LIST): boolean {

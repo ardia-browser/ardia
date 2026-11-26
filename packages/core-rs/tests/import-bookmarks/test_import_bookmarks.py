@@ -16,8 +16,8 @@ VECTORS = CORE / 'tests/import-bookmarks-vectors.json'
 HOSTILE = REPO / 'scripts/security/hostile-inputs.mjs'
 WEBKIT_EPOCH_OFFSET_MICROS = 11644473600000000
 SWIFT_CORE = REPO / 'packages/import/ios/Core'
-WINDOWS_IMPORT = REPO / 'packages/expo-windows/src/import'
 REQUIRED = set(filter(None, os.environ.get('ARDIA_REQUIRE_IMPORT_CROSSCHECK', '').split(',')))
+CROSSCHECKS = {'rust', 'swift'}
 
 sys.path.insert(0, str(HERE))
 from materialize import materialize, shape, same
@@ -237,21 +237,9 @@ class SwiftChromiumBookmarks(CrossCheck, unittest.TestCase):
         return [str(self.binary), str(profile)]
 
 
-class WindowsChromiumBookmarks(CrossCheck, unittest.TestCase):
-    platform = 'windows'
-
-    @classmethod
-    def setUpClass(cls):
-        node = shutil.which('node')
-        if node is None:
-            unavailable('windows', 'node is unavailable')
-        version = subprocess.run([node, '-p', 'process.versions.node'], capture_output=True, text=True).stdout.strip()
-        if tuple(map(int, version.split('.')[:2])) < (22, 18):
-            unavailable('windows', f'node {version} cannot strip TypeScript types and register module hooks')
-        cls.node = node
-
-    def command(self, profile):
-        return [self.node, '--no-warnings', str(HERE / 'chromium.mjs'), str(WINDOWS_IMPORT), str(profile)]
+class CrossCheckRequests(unittest.TestCase):
+    def test_every_required_cross_check_is_one_this_suite_runs(self):
+        self.assertLessEqual(REQUIRED, CROSSCHECKS, f'ARDIA_REQUIRE_IMPORT_CROSSCHECK names {sorted(REQUIRED - CROSSCHECKS)}, which no test here runs')
 
 
 class VectorsAreWellFormed(unittest.TestCase):
@@ -261,7 +249,7 @@ class VectorsAreWellFormed(unittest.TestCase):
             self.assertNotIn(case['name'], names)
             names.add(case['name'])
             self.assertLessEqual(set(case['files']), {'Bookmarks', 'AccountBookmarks'})
-            self.assertLessEqual(set(case.get('platforms', {})), {'swift', 'windows', 'linux'})
+            self.assertLessEqual(set(case.get('platforms', {})), {'swift', 'linux'})
             for outcome in [case['expect'], *case.get('platforms', {}).values()]:
                 self.assertEqual(len(outcome), 1)
                 self.assertIn(next(iter(outcome)), {'ok', 'error', 'shape'})

@@ -10,9 +10,10 @@ import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { browseLayout, ChromeSurface, deckChromeLayout, font, iconRoles, menuLook, Tappable, tabsLayout, useTheme, type MenuItem } from "../ui";
 import { deckLook } from "./deckLook";
-import { MenuTrigger, nativeMenus, spaceSystemImage } from "../ui/MenuTrigger";
+import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuOpener } from "../ui/MenuTrigger";
 import { SpaceTitle, spaceMenuSymbol } from "../search/StartSpaces";
 import { FadingGlyphs, GlassCircleButton, type ChromeFade } from "./ChromeButtons";
+import { DeckHitTarget } from "./DeckHitTarget";
 
 type Props = {
   safeTop: number;
@@ -22,6 +23,10 @@ type Props = {
   onCloseAll: () => void;
   menusShown?: boolean;
   onMenu?: (open: boolean) => void;
+  moreOpener?: MenuOpener;
+  spacesOpener?: MenuOpener;
+  underlay?: boolean;
+  hits?: boolean;
 } & ChromeFade;
 
 export const deckHeaderBottom = () => deckChromeLayout.headerCenter + deckChromeLayout.headerCircle / 2;
@@ -60,7 +65,7 @@ export function useDeckSpaces() {
   return { syncEnabled: status.isEnabled, spaces, current, spaceItems };
 }
 
-export function DeckHeader({ safeTop, safeSide, sideInset, hasTabs, onCloseAll, menusShown = true, onMenu, glassShown, glassShownMs, glyphFade }: Props) {
+export function DeckHeader({ safeTop, safeSide, sideInset, hasTabs, onCloseAll, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
   const theme = useTheme();
   const incognito = useIncognito();
   const canReopen = useCanReopen();
@@ -71,12 +76,14 @@ export function DeckHeader({ safeTop, safeSide, sideInset, hasTabs, onCloseAll, 
   const closed = () => onMenu?.(false);
   const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, onOpen: opened, onClose: closed };
   const moreItems = deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll, archive: false });
+  const rowTop = safeTop + deckChromeLayout.headerCenter - browseLayout.hitTarget / 2;
   return (
-    <View testID="deckHeader" pointerEvents="box-none" style={[styles.row, { top: safeTop + deckChromeLayout.headerCenter - browseLayout.hitTarget / 2, paddingHorizontal: side }]}>
+    <View testID="deckHeader" pointerEvents="box-none" style={[styles.row, { top: rowTop, paddingHorizontal: side }]}>
       {current && spaces.length > 1 ? (
-        <MenuTrigger items={spaceItems} {...menu} previewRadius={deckLook.switcherCorner} place={{ top: below, left: side, width: tabsLayout.menuWidth }} style={styles.switcher}>
+        <DeckHitTarget control="spaces" live={hits} originY={rowTop} style={styles.switcher}>
+        <MenuTrigger opener={spacesOpener} items={spaceItems} {...menu} previewRadius={deckLook.switcherCorner} place={{ top: below, left: side, width: tabsLayout.menuWidth }}>
           {({ onPress }) => (
-            <ChromeSurface testID="deckSwitcherGlass" shape="capsule" cornerRadius={deckLook.switcherCorner} incognito={incognito} dark={theme.dark} shown={glassShown} shownMs={glassShownMs}>
+            <ChromeSurface testID="deckSwitcherGlass" shape="capsule" cornerRadius={deckLook.switcherCorner} incognito={incognito} dark={theme.dark} shown={glassShown} shownMs={glassShownMs} underlay={underlay}>
               <Tappable kind="text" label={`Space, ${current.name}`} hint="Shows your Mac’s spaces." onPress={onPress ?? noop} style={styles.switcherPress}>
                 <FadingGlyphs testID="deckSwitcher" fade={glyphFade}>
                   <SpaceTitle space={current} dark={theme.dark} showsChevron />
@@ -85,6 +92,7 @@ export function DeckHeader({ safeTop, safeSide, sideInset, hasTabs, onCloseAll, 
             </ChromeSurface>
           )}
         </MenuTrigger>
+        </DeckHitTarget>
       ) : (
         <FadingGlyphs testID="deckSwitcher" fade={glyphFade} style={styles.switcher}>
           {current ? (
@@ -99,9 +107,11 @@ export function DeckHeader({ safeTop, safeSide, sideInset, hasTabs, onCloseAll, 
         </FadingGlyphs>
       )}
       <View style={styles.spacer} />
-      <MenuTrigger items={moreItems} {...menu} previewRadius={deckChromeLayout.headerCircle / 2} place={{ top: below, right: side, width: tabsLayout.menuWidth }}>
-        {({ onPress }) => <GlassCircleButton icon={iconRoles.more} label={actionWords.more} testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} incognito={incognito} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} onPress={onPress ?? noop} />}
-      </MenuTrigger>
+      <DeckHitTarget control="more" live={hits} originY={rowTop}>
+        <MenuTrigger opener={moreOpener} items={moreItems} {...menu} previewRadius={deckChromeLayout.headerCircle / 2} place={{ top: below, right: side, width: tabsLayout.menuWidth }}>
+          {({ onPress }) => <GlassCircleButton icon={iconRoles.more} label={actionWords.more} testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} incognito={incognito} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} underlay={underlay} onPress={onPress ?? noop} />}
+        </MenuTrigger>
+      </DeckHitTarget>
     </View>
   );
 }

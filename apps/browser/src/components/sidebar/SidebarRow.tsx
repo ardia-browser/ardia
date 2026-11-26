@@ -1,6 +1,6 @@
 import { memo, useContext, useMemo, type ReactNode } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import { drawnFadeLabel, perLook, radius, sidebarLineHeight, Surface, TextScopeContext, type SurfaceProps } from "../ui";
+import { continuousCorners, drawnFadeLabel, perLook, radius, sidebarLineHeight, Surface, TextScopeContext, type SurfaceProps } from "../ui";
 import { hex, layout, useTheme } from "../ui/theme";
 import { useSelectedTabGlow } from "./rowLook";
 import { SELECTED_ROW_SHADOW_OFFSET, SIDEBAR_TYPE, SLEEPING_TITLE_OPACITY, TAB_ROW } from "./tokens";
@@ -95,7 +95,7 @@ export function SidebarListRow({ height, fill, padRight = 0, style, children }: 
   return (
     <View
       style={[
-        { height, borderRadius: radius.tile, flexDirection: "row", alignItems: "center", paddingLeft: TAB_ROW.contentLeft, paddingRight: padRight, backgroundColor: fill },
+        { height, ...continuousCorners(radius.tile), flexDirection: "row", alignItems: "center", paddingLeft: TAB_ROW.contentLeft, paddingRight: padRight, backgroundColor: fill },
         style,
       ]}
     >

@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -23,7 +24,8 @@ class ExtensionContractTests(unittest.TestCase):
         extension = 'a' * 32
         self.assertEqual(payload, {'id': extension, 'options': {'pinned': True, 'fileAccess': True, 'siteAccess': 'onClick', 'userScripts': True}})
         helper = (ROOT / 'engine/ardiacore-linux/src/ardia/linux/ac_linux_extensions.cc').read_text()
-        transform = ('#include <algorithm>\n#include <string_view>\n' + method(helper, 'bool ValidExtensionId(') + '\n' +
+        limit = re.search(r'^constexpr size_t kMaxSitePatternLength = \d+;$', helper, re.M).group(0)
+        transform = ('#include <algorithm>\n#include <string_view>\n' + limit + '\n' + method(helper, 'bool ValidExtensionId(') + '\n' +
                      method(helper, 'std::optional<base::DictValue> Configuration(') +
                      '\nstd::optional<base::DictValue> ExtensionConfiguration(const base::DictValue& input) { return Configuration(input); }')
         backend_source = (ROOT / 'engine/chromium/src/chrome/browser/ardia/ac_extensions.cc').read_text()
@@ -81,6 +83,7 @@ struct DictValue {
   auto end() const { return values.end(); }
   size_t size() const { return values.size(); }
   bool empty() const { return values.empty(); }
+  bool contains(const char* key) const { return values.count(key) > 0; }
 };
 Value::Value(DictValue value) : kind(kDict), dict(std::make_shared<DictValue>(std::move(value))) {}
 }
@@ -97,7 +100,7 @@ bool scripts = false;
 bool ok = false;
 std::string error;
 struct Reply {
-  void Error(const char* text) { error = text; }
+  void Error(std::string_view text) { error = std::string(text); }
   void Ok() { ok = true; }
 };
 struct Call {
@@ -147,6 +150,13 @@ struct ToolbarActionsModel {
     order.insert(order.begin() + static_cast<std::ptrdiff_t>(index), id);
   }
 };
+int site_changes = 0;
+std::string site_problem;
+std::string last_site;
+namespace ardia::extension_sites_internal {
+std::string SiteProblem(Profile*, const extensions::Extension&, const std::string&, bool) { return site_problem; }
+void ChangeSite(Profile*, const extensions::Extension&, const std::string& site, bool, Reply reply) { ++site_changes; last_site = site; reply.Ok(); }
+}
 ARDIA_BACKEND
 int main() {
   base::DictValue input = ARDIA_INPUT;
@@ -183,16 +193,73 @@ int main() {
   assert(!ExtensionConfiguration(invalid));
   invalid.Set("id", "extension").Set("options", base::DictValue().Set("pinned", true));
   assert(!ExtensionConfiguration(invalid));
+  base::DictValue grant;
+  grant.Set("id", std::string(32, 'a')).Set("options", base::DictValue().Set("siteAccess", "specificSites").Set("grantSite", "https://example.com/*"));
+  const auto granted = ExtensionConfiguration(grant);
+  assert(granted);
+  args = *granted;
+  ok = false;
+  withheld = false;
+  site_problem = "That covers every site. Choose On all sites instead";
+  Backend();
+  assert(!ok && error == site_problem && !withheld && site_changes == 0);
+  site_problem.clear();
+  error.clear();
+  Backend();
+  assert(ok && error.empty() && withheld && site_changes == 1);
+  args = base::DictValue().Set("id", std::string(32, 'a')).Set("options", base::DictValue().Set("revokeSite", "https://example.com/*"));
+  ok = false;
+  Backend();
+  assert(ok && site_changes == 2);
+  args = base::DictValue().Set("id", std::string(32, 'a')).Set("options", base::DictValue().Set("grantSite", "https://a.example/*").Set("revokeSite", "https://b.example/*"));
+  ok = false;
+  Backend();
+  assert(!ok && !error.empty() && site_changes == 2);
+  args = base::DictValue().Set("id", std::string(32, 'a')).Set("options", base::DictValue().Set("siteAccess", "specificSites").Set("grantSite", true));
+  ok = false;
+  withheld = false;
+  error.clear();
+  Backend();
+  assert(!ok && !error.empty() && !withheld && site_changes == 2);
+  for (const std::string& hostile : ARDIA_HOSTILE) {
+    for (const char* key : {"grantSite", "revokeSite"}) {
+      base::DictValue request;
+      request.Set("id", std::string(32, 'a')).Set("options", base::DictValue().Set("siteAccess", "specificSites").Set(key, hostile));
+      const auto accepted = ExtensionConfiguration(request);
+      assert(static_cast<bool>(accepted) == (!hostile.empty() && hostile.size() <= kMaxSitePatternLength));
+      if (!accepted) continue;
+      args = *accepted;
+      const int before = site_changes;
+      site_problem = "That isn't a site an extension can be given";
+      ok = false;
+      withheld = false;
+      error.clear();
+      Backend();
+      assert(!ok && error == site_problem && !withheld && site_changes == before);
+      site_problem.clear();
+      Backend();
+      assert(ok && site_changes == before + 1 && last_site == hostile);
+    }
+  }
+  invalid.Set("id", std::string(32, 'a')).Set("options", base::DictValue().Set("grantSite", ""));
+  assert(!ExtensionConfiguration(invalid));
 }
 '''
         def value(item):
             if isinstance(item, dict):
                 return 'base::DictValue()' + ''.join('.Set(' + json.dumps(key) + ', ' + value(val) + ')' for key, val in item.items())
             return json.dumps(item)
+        hostile_source = ("const { HOSTILE_STRINGS } = await import(process.argv[1]); "
+                          "console.log(JSON.stringify(HOSTILE_STRINGS.map((h) => h.value)))")
+        hostile_list = json.loads(subprocess.run(['node', '--input-type=module', '-e', hostile_source,
+                                                  str(ROOT / 'scripts/security/hostile-inputs.mjs')],
+                                                 capture_output=True, text=True, check=True).stdout)
+        literal = lambda text: 'std::string("' + ''.join('\\%03o' % byte for byte in text.encode('utf-8', 'surrogatepass')) + '", ' + str(len(text.encode('utf-8', 'surrogatepass'))) + ')'
+        hostile = 'std::vector<std::string>{' + ', '.join(literal(text) for text in hostile_list) + ', std::string(4096, \'a\')}'
         with tempfile.TemporaryDirectory(prefix='ardia-extension-contract-') as scratch:
             cpp = Path(scratch) / 'extension.cc'
             binary = Path(scratch) / 'extension'
-            cpp.write_text(code.replace('ARDIA_TRANSFORM', transform).replace('ARDIA_BACKEND', backend).replace('ARDIA_INPUT', value(payload)))
+            cpp.write_text(code.replace('ARDIA_TRANSFORM', transform).replace('ARDIA_BACKEND', backend).replace('ARDIA_INPUT', value(payload)).replace('ARDIA_HOSTILE', hostile))
             result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', str(cpp), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True)

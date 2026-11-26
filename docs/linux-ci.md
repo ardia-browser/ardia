@@ -8,7 +8,7 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
 
 | Piece | What it does |
 | --- | --- |
-| [`.github/workflows/linux.yml`](../.github/workflows/linux.yml) | Runs on pull requests and pushes to `main` that touch what the Linux build and its fixture suites read (not the Mac, iPhone, Android or Windows native code beyond the few files the parity fixtures compare against, which `scripts/ci/workflow-paths.test.mjs` checks), and by hand: a vouch `gate` job for pull requests from forks, then two `checks` jobs (the UI checks and the engine fixtures) and a `package` job on Blacksmith's `blacksmith-8vcpu-ubuntu-2404`. A pull request packages and smoke-tests the tarball alone unless it changes `scripts/linux`, the workflow or its setup action, or carries the `full-ci` label; pushes and manual runs also build, smoke-test and install the `.deb` and the AppImage |
+| [`.github/workflows/linux.yml`](../.github/workflows/linux.yml) | Runs on pull requests and pushes to `main` that touch what the Linux build and its fixture suites read (not the Mac, iPhone, Android or Windows native code beyond the few files the parity fixtures compare against, which `scripts/ci/workflow-paths.test.mjs` checks), and by hand: a vouch `gate` job for pull requests from forks, then two `checks` jobs (the UI checks and the engine fixtures) and a `package` job on Blacksmith's `blacksmith-8vcpu-ubuntu-2404`. A pull request packages and smoke-tests the tarball alone unless it changes `scripts/linux`, the workflow or its setup action, or carries the `full-ci` label; pushes and manual runs also build, smoke-test and install the `.deb` and the AppImage and build and smoke-test the `.rpm`, then a `distro-packages` job installs the `.rpm` and builds and installs the Flatpak, one Blacksmith runner each |
 | [`.github/actions/linux-setup`](../.github/actions/linux-setup/action.yml) | Ubuntu packages for the fixtures (clang, dbus, NSS tools, gnome-keyring, PyGObject), Node 24, pnpm and `pnpm install --frozen-lockfile` |
 | [`scripts/linux/ci-checks.sh`](../scripts/linux/ci-checks.sh) | The engine-free checks. `--part ui` runs the `apps/desktop` and `scripts/linux` checks side by side; `--part engine --shard I/N` runs every Nth Python suite and `engine/ardiacore-linux/tests` module, those in parallel, because the suite takes well over five minutes serially. With no options it runs everything |
 | [`scripts/linux/publish-engine.sh`](../scripts/linux/publish-engine.sh) | Builder side: stages, strips and archives an engine from a Chromium out dir; `--upload` publishes it and adds its table row |
@@ -17,8 +17,10 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
 | [`scripts/linux/runtime_files.py`](../scripts/linux/runtime_files.py) | The one runtime allowlist used by publishing, fetching and packaging, and the safe archive unpacker |
 | [`scripts/linux/smoke.mjs`](../scripts/linux/smoke.mjs) | Strict smoke gate for a packaged tarball |
 | [`scripts/linux/release.sh`](../scripts/linux/release.sh) | Builds a versioned Linux release with the CLI, smoke-tests it and prints the upload command; the Release workflow's `linux` job runs it |
-| [`scripts/linux/linux_formats.py`](../scripts/linux/linux_formats.py) | Builds the `.deb` (its `Depends` read from the binaries) and the AppImage from package.py's staged tree |
+| [`scripts/linux/linux_formats.py`](../scripts/linux/linux_formats.py) | Builds the `.deb` (its `Depends` read from the binaries), the `.rpm` (rpm's own dependency generator) and the AppImage from package.py's staged tree, and the Flatpak bundle and its Flathub manifest from the tarball |
 | [`scripts/linux/deb-install-test.sh`](../scripts/linux/deb-install-test.sh) | Installs and purges a `.deb` in Debian 13 and Ubuntu 24.04 containers |
+| [`scripts/linux/rpm-install-test.sh`](../scripts/linux/rpm-install-test.sh) | Installs, upgrades and removes an `.rpm` in Fedora 43 and AlmaLinux 9 (dnf) and openSUSE Tumbleweed (zypper) containers |
+| [`scripts/linux/flatpak-install-test.sh`](../scripts/linux/flatpak-install-test.sh) | Installs, runs and uninstalls the Flatpak bundle in Ubuntu 24.04 and Fedora 43 containers |
 | [`scripts/linux/arch/`](../scripts/linux/arch) | The Arch package `ardia-bin`: PKGBUILD and `.SRCINFO`, `update-pkgbuild.sh` to point them at a release, `publish-aur.sh` to push them to the AUR |
 
 ## Engine archives
@@ -127,15 +129,20 @@ package job red after almost every merge.
      (`scripts/release/official-plugins.py linux-cli`); until the pin is published it packages without the CLI, with a
      warning, and the smoke skips the `cli-*` assertions;
   5. prepares uBlock Origin with `scripts/linux/fetch-ubo.sh` (cached);
-  6. runs `scripts/linux/package.py --out <engine> --version <version> --cli <CLI tarball> --deb <path> --appimage
-     <path>`, which seeds the packaged uBlock Origin by running the staged `chrome` once (`scripts/linux/ubo-seed.mjs`);
-  7. runs the smoke gate on the tarball, the `.deb` and the AppImage, with `--allow-old-engine` when the engine is a
-     nearest one;
+  6. runs `scripts/linux/package.py --out <engine> --version <version> --cli <CLI tarball> --deb <path> --rpm <path>
+     --appimage <path>`, which seeds the packaged uBlock Origin by running the staged `chrome` once
+     (`scripts/linux/ubo-seed.mjs`);
+  7. runs the smoke gate on the tarball, the `.deb`, the `.rpm` and the AppImage, with `--allow-old-engine` when the
+     engine is a nearest one;
   8. installs the `.deb` with `scripts/linux/deb-install-test.sh` in Debian 13 and Ubuntu 24.04 containers
      (dependencies resolve, every library is found, `chrome-sandbox` is setuid root, the AppArmor profile only where
      the 4.0 ABI is, `apt purge` leaves nothing), about a minute; a failure fails the job;
-  9. uploads the tarball, the `.deb`, the AppImage, their SHA-256 files and `results.json` for seven
+  9. uploads the tarball, the `.deb`, the `.rpm`, the AppImage, their SHA-256 files and `results.json` for seven
      days.
+- **`distro-packages`.** On a full run, after `package`, two runners download its artifact: one runs
+  `scripts/linux/rpm-install-test.sh` on the `.rpm`, the other installs `flatpak` and `flatpak-builder`, builds the
+  Flatpak from the tarball (`linux_formats.py from-tarball --flatpak`), runs `scripts/linux/flatpak-install-test.sh`
+  on it and uploads the bundle for seven days. A failure fails the run.
 
   Its apt list covers the libraries `chrome` links (`readelf -d`) plus GTK and libsecret, which it loads at runtime.
 
@@ -144,8 +151,8 @@ The Ubuntu compatibility risk is small. The engine builds against Chromium's own
 
 ## Smoke gate
 
-`node scripts/linux/smoke.mjs --package <tar.xz|.deb|.AppImage> --results <dir>` unpacks the package (`tar`,
-`dpkg-deb -x` or `--appimage-extract`) and launches its launcher:
+`node scripts/linux/smoke.mjs --package <tar.xz|.deb|.rpm|.AppImage> --results <dir>` unpacks the package (`tar`,
+`dpkg-deb -x`, `rpm2cpio | cpio` or `--appimage-extract`) and launches its launcher:
 
 - with headless Ozone and SwiftShader;
 - with `ARDIA_BACKGROUND=1`;
@@ -164,6 +171,8 @@ It refuses any sandbox-disabling switch. Every check must run and pass:
 8. `install.sh --destdir` stages the launcher, desktop entry, chrome, UI and polkit policy with the right modes, plus
    `lib/ardia/VERSION` and `lib/ardia/cli/` when the package has them. For a `.deb` it checks the control file, the
    maintainer scripts, root ownership, the setuid `chrome-sandbox`, the policy and the AppArmor profile; for an
+   `.rpm` its name, architecture and version, root ownership, the setuid `chrome-sandbox`, the launcher link, the
+   licence, the scriptlet that installs the AppArmor profile and a policy without the self-update action; for an
    AppImage the type 2 header, `AppRun` and that no setuid helper is inside.
 9. `app-version`: `systemInfo.appVersion` is `lib/ardia/VERSION`.
 10. `cli-install`: the bundled installer installs the bundled CLI the way the browser does
@@ -210,24 +219,32 @@ it:
 2. fetches the exact engine (`--engine nearest`, an engine dir or a Chromium out dir make test builds);
 3. builds `apps/desktop/dist/linux`, the CLI and uBlock Origin;
 4. packages `Ardia-<version>-linux-x64.tar.xz` with `--version` and `--cli`, and the same tree as
-   `Ardia-<version>-linux-x64.deb` (which needs `dpkg-deb` and `readelf`) and `Ardia-<version>-linux-x64.AppImage`;
+   `Ardia-<version>-linux-x64.deb` (which needs `dpkg-deb` and `readelf`) and `Ardia-<version>-linux-x64.AppImage`,
+   then from the tarball `Ardia-<version>-linux-x64.rpm` (`rpmbuild`, `rpm`, `rpm2cpio` and `cpio`) and
+   `Ardia-<version>-linux-x64.flatpak` (`flatpak` and `flatpak-builder`). Both are optional: one that can't be built
+   gets a warning and an `rpm dropped` or `flatpak dropped` line in `provenance.txt`, and the rest goes on;
 5. writes `ardia-bin-<version>.src.tar.gz`, the PKGBUILD and `.SRCINFO` pinned to that tarball by
    `scripts/linux/arch/update-pkgbuild.sh`;
 6. writes the `.sha256` files and `provenance.txt` (version, channel, commit, engine key, Chromium version and the
    digests);
-7. runs the smoke gate on the tarball, the `.deb` and the AppImage.
+7. runs the smoke gate on the tarball, the `.deb`, the `.rpm` and the AppImage. A failure stops the build, except
+   for the `.rpm`: it is deleted with its `.sha256`, `provenance.txt` says `rpm dropped`, and the tarball, the
+   `.deb`, the AppImage and the update manifest still ship.
 
 Everything goes to `dist/<version>/linux/`, or to `--out`. It never uploads. It prints the `gh release upload` command
-for the tarball, the `.deb`, the AppImage, the Arch source package, the CLI tarball (the pinned command, renamed for
+for the tarball, the `.deb`, the `.rpm`, the AppImage, the Flatpak, the Arch source package, the CLI tarball (the pinned command, renamed for
 this version) and their `.sha256` files, and for
 a stable the AUR update. `--allow-dirty` builds from a dirty tree for testing.
 The key's paths must still be clean for a fetched engine, so pass an engine dir then.
 
 The Release workflow (`release.yml`) runs it in its `linux` job, beside the Mac build, with `--engine exact`, runs
-`deb-install-test.sh` on the `.deb`, and uploads the assets, their `.sha256` files and `provenance.txt` as the `linux`
-artifact. When the install test fails (after apt's and the image pulls' retries), the job deletes the `.deb` and its
-`.sha256`, adds a `deb dropped` line to `provenance.txt` and warns, and still succeeds: the tarball, AppImage, Arch
-source package and CLI ship without it. Only a `deb dropped` line lets `publish.sh` go on without the `.deb`.
+`deb-install-test.sh` on the `.deb`, `rpm-install-test.sh` on the `.rpm` and `flatpak-install-test.sh` on the
+Flatpak, and uploads the assets, their `.sha256` files and `provenance.txt` as the `linux` artifact. When an install
+test fails (after the package managers' and the image pulls' retries), the job deletes that package and its
+`.sha256`, adds a `deb dropped`, `rpm dropped` or `flatpak dropped` line to `provenance.txt` and warns, and still
+succeeds: the other assets ship without it. An `.rpm` or Flatpak that `release.sh` already left out skips its install
+test with a warning. Only such a line lets `publish.sh` go on without the `.deb`, the `.rpm`
+or the Flatpak.
 The `linux-sign` job, the only one that sees the `LINUX_UPDATE_ED_PRIVATE_KEY` secret, downloads that artifact and
 signs `Ardia-<version>-linux-update.txt` with `scripts/linux/sign-update.mjs`, which refuses a key that doesn't match
 `scripts/linux/linux-update.pem`; it uploads the manifest and its `.sig` as the `linux-update` artifact. When signing

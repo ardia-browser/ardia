@@ -1,17 +1,21 @@
 import { openWindow, type OpenWindowOptions } from "../../browser/src/platform/windows";
 import { goToSettingsPane, type SettingsPane, type SettingsPlace } from "../../browser/src/state/settings/settingsWindows";
+import { consentToken, type ConsentToken } from "../../browser/src/state/telemetry/choice";
 import { ardiaHost, reportHostError } from "./host";
 import { flushLinuxSession } from "./session";
 
 export * from "../../browser/src/state/settings/settingsWindows";
 
-export function openSettings(pane?: SettingsPane, profileId?: string | null) {
-  let settings: SettingsPlace | undefined;
+type UtilitySettingsPlace = SettingsPlace & { reveal?: string; revealId?: string; revealConsent?: ConsentToken | null };
+
+export function openSettings(pane?: SettingsPane, profileId?: string | null, detail?: string | null, reveal?: string | null) {
+  let settings: UtilitySettingsPlace | undefined;
   if (pane) {
-    goToSettingsPane(pane, profileId ?? null);
-    settings = { pane, profileId: profileId ?? null, detail: null };
+    const revealConsent = consentToken();
+    goToSettingsPane(pane, profileId ?? null, detail ?? null);
+    settings = { pane, profileId: profileId ?? null, detail: detail ?? null, ...(reveal ? { reveal, revealId: crypto.randomUUID(), revealConsent } : {}) };
   }
-  const options: OpenWindowOptions & { settings?: SettingsPlace } = { kind: "settings", title: "Settings", ...(settings ? { settings } : {}) };
+  const options: OpenWindowOptions & { settings?: UtilitySettingsPlace } = { kind: "settings", title: "Settings", ...(settings ? { settings } : {}) };
   void flushLinuxSession().then(() => openWindow("settings", options)).catch(reportHostError);
 }
 

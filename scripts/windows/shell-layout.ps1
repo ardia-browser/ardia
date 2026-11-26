@@ -7,6 +7,8 @@ $ShellLayout = @{
   UiEntry = "ardia-ui\index.html"
   Migrator = "ardia-webui-migrate.exe"
   BuildIdentity = "Ardia.build.json"
+  UpdateVerifier = "ardia-update-verify.exe"
+  UpdateKey = "windows-update.pem"
   TestMarker = "Ardia.test-build"
   WebUISwitch = "--ardia-shell=webui"
   AppUserModelId = "Ardia.Browser"
@@ -14,7 +16,7 @@ $ShellLayout = @{
 
 $ShellOwned = @{
   rnw = @(
-    "ArdiaApp.dll", "ArdiaApp.winrt.manifest", "Ardia.pri", "ardia-update-verify.exe", "windows-update.pem", "RestartAgent.exe",
+    "ArdiaApp.dll", "ArdiaApp.winrt.manifest", "Ardia.pri", "RestartAgent.exe",
     "concrt140_app.dll", "msvcp140_app.dll", "msvcp140_1_app.dll", "msvcp140_2_app.dll", "vcamp140_app.dll", "vccorlib140_app.dll",
     "vcomp140_app.dll", "vcruntime140_app.dll", "vcruntime140_1_app.dll",
     "CoreMessagingXP.dll", "dcompi.dll", "DirectML.dll", "dwmcorei.dll", "DwmSceneI.dll", "DWriteCore.dll", "hermes.dll",
@@ -44,7 +46,7 @@ $ShellOwnedFolders = @{
   webui = @("ardia-ui")
 }
 
-$ShellKept = @("Ardia.exe", "Ardia.ico", "Ardia.build.json", "chrome.dll", "chrome_elf.dll", "locales\", "unins000.exe", "unins000.dat")
+$ShellKept = @("Ardia.exe", "Ardia.ico", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "chrome.dll", "chrome_elf.dll", "locales\", "unins000.exe", "unins000.dat")
 
 function Get-OtherShell([string]$shell) {
   if ($shell -eq "webui") { return "rnw" }
@@ -124,6 +126,10 @@ function Write-RetiredShellList([string]$shell, [string]$path) {
   Write-Lines $path (Get-ShellOwnedEntries (Get-OtherShell $shell))
 }
 
+function Write-KeptFileList([string]$path) {
+  Write-Lines $path @($ShellKept | Where-Object { -not $_.EndsWith("\") })
+}
+
 function Get-ShellLayout([string]$root) {
   $rnw = Test-Path -LiteralPath (Join-Path $root $ShellLayout.RnwLibrary) -PathType Leaf
   $webui = Test-Path -LiteralPath (Join-Path $root $ShellLayout.UiEntry) -PathType Leaf
@@ -166,8 +172,8 @@ function Get-ShellDocumentCommand([string]$exe, [string]$shell) {
 }
 
 function Get-ShellInstalledFiles([string]$shell) {
-  if ($shell -eq "webui") { return @($ShellLayout.Launcher, $ShellLayout.Engine, "Ardia.ico", "Ardia.build.json", "unins000.exe", $ShellLayout.UiEntry, $ShellLayout.Migrator, (Get-ShellManifestName "webui")) }
-  return @($ShellLayout.Launcher, $ShellLayout.RnwLibrary, $ShellLayout.Engine, "Ardia.ico", "Ardia.build.json", "unins000.exe", (Get-ShellManifestName "rnw"))
+  if ($shell -eq "webui") { return @($ShellLayout.Launcher, $ShellLayout.Engine, "Ardia.ico", "Ardia.build.json", $ShellLayout.UpdateVerifier, $ShellLayout.UpdateKey, "unins000.exe", $ShellLayout.UiEntry, $ShellLayout.Migrator, (Get-ShellManifestName "webui")) }
+  return @($ShellLayout.Launcher, $ShellLayout.RnwLibrary, $ShellLayout.Engine, "Ardia.ico", "Ardia.build.json", $ShellLayout.UpdateVerifier, $ShellLayout.UpdateKey, "unins000.exe", (Get-ShellManifestName "rnw"))
 }
 
 function Find-TestMarkers([string]$root) {
@@ -185,6 +191,9 @@ function Get-ShellLayoutProblems([string]$root, [string]$shell, [switch]$AllowTe
     if (-not (Test-Path -LiteralPath (Join-Path $root $ShellLayout.UiEntry) -PathType Leaf)) { $problems += "it has no $($ShellLayout.UiEntry)" }
     if (-not (Test-Path -LiteralPath (Join-Path $root $ShellLayout.Migrator) -PathType Leaf)) { $problems += "it has no $($ShellLayout.Migrator), so an upgrade from the React Native shell would start empty" }
     if (-not (Test-Path -LiteralPath (Join-Path $root $ShellLayout.BuildIdentity) -PathType Leaf)) { $problems += "it has no $($ShellLayout.BuildIdentity), so updates can't tell its version and build" }
+    foreach ($name in $ShellLayout.UpdateVerifier, $ShellLayout.UpdateKey) {
+      if (-not (Test-Path -LiteralPath (Join-Path $root $name) -PathType Leaf)) { $problems += "it has no $name, so it can't verify the updates it downloads" }
+    }
     if (Test-Path -LiteralPath (Join-Path $root $ShellLayout.EngineLauncher)) { $problems += "it still holds $($ShellLayout.EngineLauncher) beside $($ShellLayout.Launcher)" }
   } elseif (-not (Test-Path -LiteralPath (Join-Path $root $ShellLayout.RnwLibrary) -PathType Leaf)) {
     $problems += "it has no $($ShellLayout.RnwLibrary)"

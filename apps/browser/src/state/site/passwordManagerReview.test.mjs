@@ -61,7 +61,7 @@ test("1: the prompt names the app the event's token is bound to, with no lookup 
   await settle();
   assert.equal(pageOf(tabId).verificationCode?.app, "Authenticator");
   assert.deepEqual(native.calls.filter((c) => c[0] === "otpauthHandler"), [], "no dummy otpauth lookup");
-  leftPage(tabId, "https://a.example/login", "https://a.example/login", "chromium", false);
+  leftPage(tabId, "https://a.example/login", "https://a.example/login", "chromium");
   pm.verificationCodeFound(tabId, { token: "t2", main: true });
   await settle();
   assert.equal(pageOf(tabId).verificationCode, null, "no app, no offer");
@@ -74,7 +74,7 @@ test("2: an offer belongs to the page and generation it arrived in; a reload nev
   native.handlerGate = held.promise;
   pm.verificationCodeFound(tabId, { token: "old", main: true, app: "Passwords" });
   await settle();
-  leftPage(tabId, "https://a.example/login", "https://a.example/login", "chromium", false);
+  leftPage(tabId, "https://a.example/login", "https://a.example/login", "chromium");
   pm.choosePasswordManager(work, "none");
   await settle();
   held.open();
@@ -83,7 +83,7 @@ test("2: an offer belongs to the page and generation it arrived in; a reload nev
   assert.equal(pageOf(tabId).verificationCode, null, "the reload closed it and nothing wrote the old token back");
   pm.verificationCodeFound(tabId, { token: "fresh", main: true, app: "Passwords" });
   assert.equal(pageOf(tabId).verificationCode?.generation, pm.providerGeneration(), "stamped with the generation it arrived in");
-  leftPage(tabId, "https://a.example/login", "https://a.example/login", "chromium", false);
+  leftPage(tabId, "https://a.example/login", "https://a.example/login", "chromium");
 });
 
 test("3a: switching between two plugins with the same fields pushes a new generation", async () => {

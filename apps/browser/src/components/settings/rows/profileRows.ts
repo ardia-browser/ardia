@@ -20,32 +20,6 @@ export const profileRows = {
       },
     },
     {
-      section: "For all profiles",
-      rows: {
-        defaultProfile: {
-          title: "Default profile",
-          description: "Used for new windows.",
-          keywords: ["new window"],
-        },
-        showProfileDots: {
-          title: "Show the profile switcher in the sidebar",
-          explained: true,
-          description: "A dot for each profile, or its icon if you gave it one.",
-          keywords: ["dots", "pager", "profile switcher", "page dots", "sidebar footer", "hide", "show profile dots", "spaces", "space icons", "profile dots", "switcher", "emoji", "symbol", "arc", "show profile icons instead of dots", "profile icons", "switcher in the sidebar shows", "nothing"],
-        },
-        shareTopApps: {
-          title: "Share Top Apps",
-          keywords: ["pinned tabs", "favorites", "essentials", "spaces", "shared"],
-        },
-        spacesFollowAppearance: {
-          title: "Profile colors follow the theme",
-          explained: true,
-          description: "Every profile follows this, whatever its theme says.",
-          keywords: ["space", "profile theme", "arc theme", "follow system", "profile themes follow this appearance"],
-        },
-      },
-    },
-    {
       section: "This profile",
       rows: {
         themeColor: {
@@ -174,6 +148,32 @@ export const profileRows = {
         clearBrowsingData: {
           title: "Clear browsing data",
           keywords: ["clear history", "cookies", "cache", "delete data"],
+        },
+      },
+    },
+    {
+      section: "For all profiles",
+      rows: {
+        defaultProfile: {
+          title: "Default profile",
+          description: "Used for new windows.",
+          keywords: ["new window"],
+        },
+        showProfileDots: {
+          title: "Show the profile switcher in the sidebar",
+          explained: true,
+          description: "A dot for each profile, or its icon if you gave it one.",
+          keywords: ["dots", "pager", "profile switcher", "page dots", "sidebar footer", "hide", "show profile dots", "spaces", "space icons", "profile dots", "switcher", "emoji", "symbol", "arc", "show profile icons instead of dots", "profile icons", "switcher in the sidebar shows", "nothing"],
+        },
+        shareTopApps: {
+          title: "Share Top Apps",
+          keywords: ["pinned tabs", "favorites", "essentials", "spaces", "shared"],
+        },
+        spacesFollowAppearance: {
+          title: "Profile colors follow the theme",
+          explained: true,
+          description: "Every profile follows this, whatever its theme says.",
+          keywords: ["space", "profile theme", "arc theme", "follow system", "profile themes follow this appearance"],
         },
       },
     },

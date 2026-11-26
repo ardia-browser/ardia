@@ -109,6 +109,8 @@ test("other windows forward their events to the leader, and a utility window nev
 test("messages that aren't relayed telemetry are ignored", () => {
   assert.equal(isRelayed({ kind: "capture", event: "x", props: {}, options: {}, consent: null }), true);
   assert.equal(isRelayed({ kind: "log", level: "error", message: "m", attributes: {}, consent: "period" }), true);
+  assert.equal(isRelayed({ kind: "downloadFollowUp", until: 25_000, consent: "period" }), true);
+  assert.equal(isRelayed({ kind: "downloadFollowUp", until: Number.NaN, consent: "period" }), false);
   assert.equal(isRelayed({ kind: "capture", event: "x", props: {}, options: {}, consent: 3 }), false);
   assert.equal(isRelayed({ kind: "capture", event: 1, props: {}, options: {} }), false);
   assert.equal(isRelayed({ kind: "log", level: "info", message: "m", attributes: {} }), false);
@@ -423,4 +425,37 @@ test("the after-lead hook runs once the relay is gone and what was held is deliv
   ]);
   assert.deepEqual(me.delivered.map((m) => m.event), ["during-lead", "shell_migration"]);
   assert.equal(me.delivered.at(-1).local, true, "the report is recorded by the leader itself, not relayed");
+});
+
+test("a follower's multiple-download follow-up relays to the leader with its deadline and consent", async () => {
+  const locks = fakeLocks();
+  const bus = fakeBus();
+  const delivered = [];
+  startTelemetryLeadership({
+    candidate: true,
+    locks,
+    channel: bus(),
+    relay: () => {},
+    deliver: (message) => delivered.push(message),
+    handle: async (op) => op,
+    lead: async () => {},
+    report: (error) => assert.fail(String(error)),
+    newId: () => `fu-${++ids}`,
+  });
+  await turn();
+  let relay = null;
+  startTelemetryLeadership({
+    candidate: false,
+    channel: bus(),
+    relay: (next) => (relay = next),
+    deliver: () => assert.fail("a follower never delivers"),
+    handle: async (op) => op,
+    lead: async () => {},
+    report: (error) => assert.fail(String(error)),
+    newId: () => `fu-${++ids}`,
+  });
+  relay({ kind: "downloadFollowUp", until: 25_000, consent: "period-1" });
+  await turn();
+  await turn();
+  assert.deepEqual(delivered, [{ kind: "downloadFollowUp", until: 25_000, consent: "period-1" }]);
 });

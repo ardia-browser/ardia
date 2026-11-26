@@ -918,7 +918,7 @@ protocol SystemNative {
   static func launchAtLoginStatus() -> String
   static func setLaunchAtLogin(_ enabled: Bool) throws
   static func fileExists(_ path: String) -> Bool
-  static func openFile(_ path: String) -> Bool
+  static func openFile(_ path: String, _ promise: Promise)
   static func revealFile(_ path: String) -> Bool
   static func moveToTrash(_ path: String) -> Bool
   static func fileIcon(_ path: String, _ size: Double) -> String?
@@ -943,7 +943,7 @@ extension SystemNative {
   }
 
   static var launchAtLoginStatusFunction: AnyDefinition {
-    AsyncFunction("launchAtLoginStatus") { () -> String in Self.launchAtLoginStatus() }.runOnQueue(.main)
+    AsyncFunction("launchAtLoginStatus") { () -> String in Self.launchAtLoginStatus() }.runOnQueue(DispatchQueue.global(qos: .utility))
   }
 
   static var setLaunchAtLoginFunction: AnyDefinition {
@@ -955,7 +955,7 @@ extension SystemNative {
   }
 
   static var openFileFunction: AnyDefinition {
-    AsyncFunction("openFile") { (path: String) -> Bool in Self.openFile(path) }.runOnQueue(.main)
+    AsyncFunction("openFile") { (path: String, promise: Promise) in Self.openFile(path, promise) }.runOnQueue(.main)
   }
 
   static var revealFileFunction: AnyDefinition {
@@ -1178,21 +1178,26 @@ extension MagnifyAreaNative {
 }
 
 protocol WheelAreaNative {
-  static func devWheel(_ windowId: String, _ x: Double, _ y: Double, _ steps: [[String: Any]]) -> [String: Any]
+  static func devWheel(_ windowId: String, _ x: Double, _ y: Double, _ steps: [[String: Any]], _ promise: Promise)
   func glideScroll(_ tag: Int, _ y: Double, _ durationMs: Double)
+  func steerScroll(_ tag: Int, _ lo: Double, _ hi: Double, _ glideMs: Double, _ canForward: Bool, _ canBack: Bool)
 }
 
 extension WheelAreaNative {
   static var moduleName: String { "ArdiaWheelArea" }
 
   static var devWheelFunction: AnyDefinition {
-    AsyncFunction("devWheel") { (windowId: String, x: Double, y: Double, steps: [[String: Any]]) -> [String: Any] in Self.devWheel(windowId, x, y, steps) }.runOnQueue(.main)
+    AsyncFunction("devWheel") { (windowId: String, x: Double, y: Double, steps: [[String: Any]], promise: Promise) in Self.devWheel(windowId, x, y, steps, promise) }.runOnQueue(.main)
   }
 }
 
 extension WheelAreaNative where Self: Module {
   var glideScrollFunction: AnyDefinition {
     AsyncFunction("glideScroll") { (tag: Int, y: Double, durationMs: Double) in self.glideScroll(tag, y, durationMs) }.runOnQueue(.main)
+  }
+
+  var steerScrollFunction: AnyDefinition {
+    AsyncFunction("steerScroll") { (tag: Int, lo: Double, hi: Double, glideMs: Double, canForward: Bool, canBack: Bool) in self.steerScroll(tag, lo, hi, glideMs, canForward, canBack) }.runOnQueue(.main)
   }
 }
 
@@ -1748,6 +1753,7 @@ extension TelemetryLocalNative {
 protocol FieldGlowNative {
   static func show(_ id: String, _ timings: [Double])
   static func progress(_ id: String, _ progress: Double, _ still: Bool)
+  static func pulse(_ id: String, _ period: Double, _ low: Double)
   static func finish(_ id: String, _ still: Bool)
   static func reset(_ id: String)
 }
@@ -1761,6 +1767,10 @@ extension FieldGlowNative {
 
   static var progressFunction: AnyDefinition {
     Function("progress") { (id: String, progress: Double, still: Bool) in Self.progress(id, progress, still) }
+  }
+
+  static var pulseFunction: AnyDefinition {
+    Function("pulse") { (id: String, period: Double, low: Double) in Self.pulse(id, period, low) }
   }
 
   static var finishFunction: AnyDefinition {

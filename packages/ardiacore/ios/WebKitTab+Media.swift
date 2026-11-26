@@ -30,6 +30,7 @@ struct WebKitPageMedia {
   var soundRuleGeneration = 0
   var webAudioCounted = false
   var fullscreen = false
+  var fullscreenFrameKept = false
   var keptByWindowServer = false
   var playedForAutoPictureInPicture = false
 }

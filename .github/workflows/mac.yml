@@ -31,6 +31,7 @@ on:
       - "pnpm-lock.yaml"
       - "packages/shell/plugin-*/**"
       - "packages/shell/Package.swift"
+      - "packages/shell/tests/CrashThreadTests.swift"
       - "packages/import/tests/**"
       - "packages/import/fixtures/**"
       - "packages/import/Package.swift"
@@ -38,6 +39,11 @@ on:
       - "apps/browser/official-plugins.json"
       - "apps/browser/official-plugins-history.json"
       - ".github/workflows/mac.yml"
+      - "scripts/mac/webui-engine/**"
+      - "apps/desktop/src/glassRegions.ts"
+      - "apps/desktop/src/shellGlass.ts"
+      - "apps/browser/src/boundaries.json"
+      - "engine/patches/series"
   push:
     branches: [main]
     paths: *native
@@ -87,6 +93,7 @@ jobs:
     outputs:
       app: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.app == 'true' }}
       swift: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.swift == 'true' }}
+      webui: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.webui == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         if: github.event_name == 'push'
@@ -134,6 +141,8 @@ jobs:
               - "packages/shell/ios/PluginProcess.swift"
               - "packages/shell/plugin-*/**"
               - "packages/shell/Package.swift"
+              - "packages/shell/ios/UpdaterCore/CrashThread.swift"
+              - "packages/shell/tests/CrashThreadTests.swift"
               - "packages/import/ios/Core/**"
               - "packages/import/tests/**"
               - "packages/import/fixtures/**"
@@ -142,6 +151,28 @@ jobs:
               - "apps/browser/official-plugins.json"
               - "apps/browser/official-plugins-history.json"
               - ".github/workflows/mac.yml"
+            webui:
+              - "scripts/mac/webui-engine/**"
+              - "apps/desktop/src/glassRegions.ts"
+              - "apps/desktop/src/shellGlass.ts"
+              - "apps/browser/src/boundaries.json"
+              - "engine/engine-key.sh"
+              - "engine/engine-key.py"
+              - "engine/patches/series"
+              - ".github/workflows/mac.yml"
+
+  webui-engine:
+    name: WebUI host layer (Clang, ASan/UBSan)
+    needs: [gate, changes]
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) && (needs.changes.result != 'success' || needs.changes.outputs.webui == 'true') }}
+    runs-on: blacksmith-6vcpu-macos-27
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Pure headers, launcher, apply.sh, engine keys and boundaries
+        run: python3 scripts/mac/webui-engine/tests/test_mac_layer.py -v
 
   app:
     name: compile (Debug)
@@ -292,8 +323,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Plugin core, its sandbox and the official archive reader
-        run: swift test --package-path packages/shell --scratch-path "$RUNNER_TEMP/shell" --filter ArdiaPluginCoreTests
+      - name: Plugin core, its sandbox and the official archive reader, and which crash report thread crashed
+        run: swift test --package-path packages/shell --scratch-path "$RUNNER_TEMP/shell" --filter 'ArdiaPluginCoreTests|ArdiaUpdaterCoreTests.CrashThreadTests'
       - uses: ./.github/actions/core-rs-xcframework
         if: ${{ !cancelled() }}
       - name: The import package, its zip reader and the Rust Chromium bookmarks reader included

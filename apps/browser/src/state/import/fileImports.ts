@@ -61,9 +61,12 @@ export async function importBookmarksHtml() {
   if (!path || signal.aborted) return;
   try {
     const root = await api.importBookmarksHTML(path);
-    const bookmarks = importBookmarks(importNow().target, root, "HTML File");
+    const failed: ImportKind[] = [];
+    const bookmarks = await importBookmarks(importNow().target, root, "HTML File", consent, (kind) => failed.push(kind));
+    if (signal.aborted) return;
     noteUntitledBookmarks(untitledLinks(root), consent);
-    patchImport({ source: null, step: { name: "done", counts: { ...emptyCounts(), bookmarks }, failures: [], notes: [], extensions: NO_EXTENSIONS } });
+    const failures = failed.map((kind) => ({ kind, profiles: [] }));
+    patchImport({ source: null, step: { name: "done", counts: { ...emptyCounts(), bookmarks }, failures, notes: [], extensions: NO_EXTENSIONS } });
   } catch {
     if (!signal.aborted) patchImport({ step: { name: "choose", error: "The selected file is invalid. Please try again." } });
   }

@@ -400,7 +400,6 @@ test("Settings and Import close through the same request as browser windows, fro
   assert.match(source("./controls.ts"), /export const closeFromWindowControls = \(windowId: string\) => requestWindowClose\(windowId\);/);
   assert.match(source("../commands/commands.ts"), /if \(command === "closeTab"\) return requestWindowClose\(target\.windowId\);/);
   assert.match(source("../import/flow.ts"), /export const closeImport = \(\) => requestWindowClose\(IMPORT_WINDOW_ID\);/);
-  assert.match(source("../../../windows/Ardia/WindowManager.h"), /if \(!found \|\| !m_context \|\| m_quitting\) return;\n\s+try \{\n\s+args\.Cancel\(true\);/);
   assert.match(source("../../platform/nativeApi.ts"), /windows\.addListener\?\.\("onWindowEvent", \(event\) => \{\n\s+if \(event\.type === "closeRequest"\) void windows\.closeWindow\(event\.id\);/);
   assert.match(source("../../platform/nativeApi.ts"), /^import type \{ WindowsNative \} from "@ardia\/shell";\n[\s\S]*type Windows = Pick<WindowsNative, "openWindow" \| "closeWindow"> & Partial<Pick<WindowsNative, "addListener">>;/, "the skew window reuses the shell's window types, and only as a type");
 });
@@ -415,18 +414,4 @@ test("Settings and Import closes are decided one at a time, so two at once can't
   assert.equal(windows.open.has("import"), false);
   const close = readFileSync(new URL("./windowClose.ts", import.meta.url), "utf8");
   assert.match(close, /const closing = windowsWithoutTabsClosing\.then\(async \(\) => \{\n\s+if \(\(await askBeforeQuitting\(windowId\)\) === "cancelled"\) return;\n\s+onceAgreed\?\.\(\);\n\s+startClosingWindow\(windowId\);/);
-});
-
-test("the Windows self-check closes Settings, Import and a pop-up the ways users and pages do, and ends by closing its last window", () => {
-  const selfCheck = (name) => readFileSync(new URL(`../../../../../packages/expo-windows/src/${name}`, import.meta.url), "utf8");
-  assert.match(selfCheck("selfCheck/windows.ts"), /\["self-check-close-settings", "settings"\], \["self-check-close-import", "import"\]/);
-  assert.match(selfCheck("selfCheck/windows.ts"), /await windows\(\)\.requestClose\(id\);\n\s+const took = await goneWithin\(id, CLOSED_BY_REQUEST_MS\);/);
-  assert.match(selfCheck("selfCheck/enginePopups.ts"), /expectTrue\(await popupWindowsGone\(popupsBefore, POPUP_WINDOW_GONE_MS\),/);
-  assert.doesNotMatch(selfCheck("selfCheck/enginePopups.ts"), /^import \{[^}]*\} from "@ardia\/shell";/m, "a runtime import of @ardia/shell from the self-checks loads its view managers before viewNamed is ready");
-  assert.match(selfCheck("selfCheck/enginePopups.ts"), /import \{ isPopupWindowId \} from "@ardia\/shell\/src\/windows\.ts";/);
-  assert.match(selfCheck("index.ts"), /void runSelfCheck\(\)\.finally\(\(\) => void endByClosingTheLastWindow\(\)\);/);
-  const last = selfCheck("selfCheck/lastWindow.ts");
-  assert.match(last, /for \(const id of await windows\(\)\.windowIds\(\)\) if \(id !== LAST_WINDOW_ID\) await windows\(\)\.closeWindow\(id\);/);
-  assert.match(last, /await windows\(\)\.requestClose\(LAST_WINDOW_ID\);/);
-  assert.match(last, /console\.error\(`\[ardia windows\] self-check: the app was still running/);
 });

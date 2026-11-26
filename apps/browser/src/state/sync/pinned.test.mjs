@@ -83,10 +83,10 @@ function seed(device) {
   });
 }
 
-test("the pinned area syncs tile folders, then rows, the row order, pinned groups' None colour and pinned group tabs' homes, then the pins themselves", () => {
+test("the pinned area syncs tile folders, then rows, the row order, pinned groups' None colour and pinned group tabs' homes, then the pins themselves, then the tiles' letters", () => {
   assert.deepEqual(
     pinnedArea.pinnedAreaAdapters("default").map((a) => a.prefix),
-    ["tilefold:", "pinrow:", "pord:g:", "pgc:", "pgh:", "pin"],
+    ["tilefold:", "pinrow:", "pord:g:", "pgc:", "pgh:", "pin", "plet:"],
   );
 });
 
@@ -280,4 +280,144 @@ test("a None group's copy in a second window stays None through a rename from an
   await syncAll([b, a]);
   assert.deepEqual(copies().map((x) => [x.name, x.color]), [["Read later", "none"], ["Read later", "none"]], "both copies keep None");
   assert.equal(pinnedGroupOf(a, "Read later")?.color, "none", "and None isn't deleted for everyone");
+});
+
+test("a tile's custom letters reach the other Mac with the pin, change there, clear there, and an older Mac keeps them unapplied", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  const old = new Device("devOld", folder, previousVersion);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  old.with(() => S().createWindow({ url: "https://old-home.example/" }));
+  const letters = (device, h) => device.with(() => S().tabs[tabOf(h)]?.tileLetters);
+  a.with(() => S().updateTab(tabOf("mail"), { tileLetters: "MA" }));
+  await syncAll([a, b, old]);
+  assert.equal(letters(b, "mail"), "MA", "the letters come with the new pin");
+  assert.equal(letters(b, "cal"), undefined);
+  const key = a.with(() => `plet:${S().tabs[tabOf("mail")].pinKey ?? tabOf("mail")}`);
+  assert.ok(old.scope.unapplied.includes(key), "the previous version keeps the record unapplied");
+  b.with(() => S().updateTab(tabOf("mail"), { tileLetters: "GM" }));
+  await syncAll([b, a]);
+  assert.equal(letters(a, "mail"), "GM");
+  a.with(() => S().updateTab(tabOf("mail"), { tileLetters: undefined }));
+  await syncAll([a, b]);
+  assert.equal(letters(b, "mail"), undefined, "clearing them clears them everywhere");
+});
+
+test("a tile's letters stay synced while it is a pinned row, so moving it back to Top Apps on another Mac brings them back", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  a.with(() => S().updateTab(tabOf("mail"), { tileLetters: "MA" }));
+  await syncAll([a, b]);
+  a.with(() => S().pinTabs([tabOf("mail")], true, true));
+  await syncAll([a, b]);
+  assert.equal(b.with(() => S().tabs[tabOf("mail")]?.pin?.as), "row", "the move reached B");
+  assert.equal(b.with(() => S().tabs[tabOf("mail")]?.tileLetters), "MA", "B keeps the letters on the row");
+  const key = a.with(() => `plet:${S().tabs[tabOf("mail")].pinKey ?? tabOf("mail")}`);
+  assert.equal(a.scope.records[key]?.v, "MA", "the record is still there");
+  b.with(() => S().pinTabs([tabOf("mail")], true, false));
+  await syncAll([b, a]);
+  assert.equal(a.with(() => S().tabs[tabOf("mail")]?.pin?.as), "tile");
+  assert.equal(a.with(() => S().tabs[tabOf("mail")]?.tileLetters), "MA", "back in Top Apps with its letters");
+});
+
+class HoldingFolder extends Folder {
+  held = new Set();
+  transport() {
+    const inner = super.transport();
+    return {
+      ...inner,
+      read: async (scope, known) => {
+        const result = await inner.read(scope, known);
+        return { ...result, files: result.files.filter((f) => !this.held.has(f.id)), present: result.present.filter((id) => !this.held.has(id)) };
+      },
+    };
+  }
+}
+
+test("letters that arrive before their pin wait for it, and never come back empty on either Mac", async () => {
+  const folder = new HoldingFolder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await a.sync();
+  const pinsFile = [...folder.files.keys()].at(-1);
+  a.with(() => S().updateTab(tabOf("mail"), { tileLetters: "MA" }));
+  await a.sync();
+  folder.held.add(pinsFile);
+  await b.sync();
+  await b.sync();
+  assert.equal(b.with(() => tabOf("mail")), undefined, "B has the letters' record but not the pin yet");
+  folder.held.clear();
+  await syncAll([b, a, b, a]);
+  assert.equal(b.with(() => S().tabs[tabOf("mail")]?.tileLetters), "MA", "the waiting letters land on the pin");
+  assert.equal(a.with(() => S().tabs[tabOf("mail")]?.tileLetters), "MA", "and A keeps them");
+});
+
+test("unpinning a tile with letters removes its letters' record on both Macs", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  a.with(() => S().updateTab(tabOf("mail"), { tileLetters: "MA" }));
+  await syncAll([a, b]);
+  const key = a.with(() => `plet:${S().tabs[tabOf("mail")].pinKey ?? tabOf("mail")}`);
+  assert.equal(b.scope.records[key]?.v, "MA");
+  a.with(() => S().togglePin(tabOf("mail")));
+  await syncAll([a, b, a]);
+  assert.equal(a.scope.records[key]?.v, null, "A tombstones the letters with the pin");
+  assert.equal(b.scope.records[key]?.v, null, "and so does B");
+});
+
+test("a Mac that syncs before it has a window keeps the letters waiting for their pins, and opening a window clears them nowhere", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  seed(a);
+  a.with(() => S().updateTab(tabOf("mail"), { tileLetters: "MA" }));
+  await a.sync();
+  await b.sync();
+  await b.sync();
+  assert.equal(b.with(() => tabOf("mail")), undefined, "no window, so no pin yet on B");
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([b, a, b, a]);
+  assert.equal(b.with(() => S().tabs[tabOf("mail")]?.tileLetters), "MA", "the letters land with the pin");
+  assert.equal(a.with(() => S().tabs[tabOf("mail")]?.tileLetters), "MA", "and A keeps them");
+  const key = a.with(() => `plet:${S().tabs[tabOf("mail")].pinKey ?? tabOf("mail")}`);
+  assert.equal(a.scope.records[key]?.v, "MA");
+});
+
+test("a tile's letters survive a stay in a pinned group, even for a Mac that joins meanwhile, and come back with it to Top Apps", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  a.with(() => S().updateTab(tabOf("mail"), { tileLetters: "MA" }));
+  await syncAll([a, b]);
+  const key = a.with(() => S().tabs[tabOf("mail")].pinKey ?? tabOf("mail"));
+  a.with(() => {
+    const groupId = S().groupTabs([tabOf("row")], { pinned: true, name: "Reading" });
+    S().placeTabs([tabOf("mail")], { pinned: false, groupId });
+  });
+  await syncAll([a, b]);
+  assert.ok(memberOf(a, key), "mail is in A's pinned group");
+  assert.equal(a.scope.records[`plet:${key}`]?.v, "MA", "the record stays while it's grouped");
+  const c = new Device("devC", folder);
+  c.with(() => S().createWindow({ url: "https://c-home.example/" }));
+  await syncAll([c, a, b, c]);
+  assert.equal(memberOf(c, key)?.tileLetters, "MA", "the Mac that joined gets the letters on the grouped tab");
+  const grouped = a.with(() => memberOf(a, key).id);
+  a.with(() => S().pinTabs([grouped], true, false));
+  await syncAll([a, b, c, a, b, c]);
+  for (const [name, device] of [["A", a], ["B", b], ["C", c]]) {
+    const tab = device.with(() => Object.values(S().tabs).find((t) => (t.pinKey ?? t.id) === key && t.pin?.as === "tile"));
+    assert.equal(tab?.tileLetters, "MA", `${name} has the tile back with its letters`);
+  }
 });

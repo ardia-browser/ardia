@@ -251,6 +251,8 @@ object PhonePages {
         )
     }
 
+    private var snapshotCookies = 0
+
     suspend fun snapshot(pageId: String, maxWidth: Int, quality: Int, covered: Pair<Double, Double>?, windowCopy: Boolean = true): Map<String, Any?>? {
         val page = require(pageId)
         val (generation, shown, frameAtStart) = kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
@@ -258,7 +260,20 @@ object PhonePages {
             Triple(visuals.generation(pageId), view, view?.takeIf { it.isAttachedToWindow }?.let(::frameInWindow))
         }
         val started = android.os.SystemClock.uptimeMillis()
-        val drawn = page.snapshot(maxWidth, windowCopy) ?: return null
+        val (viewAtStart, viewIdentity) = kotlinx.coroutines.withContext(Dispatchers.Main.immediate) { (page as? WebViewPage).let { it?.viewVersion to (it?.viewIdentity ?: 0) } }
+        val cookie = snapshotCookies++
+        android.os.Trace.beginAsyncSection("ardia:snapshot", cookie)
+        val drawn = try {
+            page.snapshot(maxWidth, windowCopy)
+        } finally {
+            android.os.Trace.endAsyncSection("ardia:snapshot", cookie)
+        } ?: return null
+        val viewSettled = kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
+            val web = page as? WebViewPage
+            val still = web != null && web.viewVersion == viewAtStart && web.viewIdentity == viewIdentity
+            if (still) web?.whenViewMoves { moved -> scope.launch { send(pageId, "page.viewMoved", "view" to moved.toDouble(), "viewId" to viewIdentity.toDouble()) } }
+            still
+        }
         val captured = android.os.SystemClock.uptimeMillis()
         val route = (page as? WebViewPage)?.lastCaptureRoute
         val web = page.view.value
@@ -280,7 +295,7 @@ object PhonePages {
             val done = android.os.SystemClock.uptimeMillis()
             android.util.Log.i("PAGELAB", "PAGELAB snapshot $pageId ${picture.width}x${picture.height} by ${if (route == CaptureRoute.WindowCopy) "window copy" else "view draw"}, captured in ${captured - started} ms, ${if (held) "decoded picture pinned in the image cache, resolved before its JPEG lands" else if (written["kept"] == true) "blank, the previous picture kept" else "not pinned, resolved once its JPEG landed"} ${done - captured} ms after capture, page view in window ${frame ?: "unknown"} (dp), top inset cropped ${insets?.first ?: 0.0} dp")
         }
-        return written + ("route" to if (route == CaptureRoute.WindowCopy) "windowCopy" else "draw") + ("frame" to frame)
+        return written + ("route" to if (route == CaptureRoute.WindowCopy) "windowCopy" else "draw") + ("frame" to frame) + ("view" to (viewAtStart ?: 0L).toDouble()) + ("viewId" to viewIdentity.toDouble()) + ("viewSettled" to (viewSettled && frame == frameAtStart))
     }
 
     private fun frameInWindow(view: android.view.View): Map<String, Double> {

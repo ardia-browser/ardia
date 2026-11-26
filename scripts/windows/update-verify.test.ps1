@@ -25,7 +25,7 @@ try {
 
   Push-Location $caller
   try {
-    $relativeOut = "apps\browser\windows\x64\Release"
+    $relativeOut = "ArdiaWebUI\update-verify"
     $copied = & (Join-Path $PSScriptRoot "update-verify.ps1") -Cpu x64 -Out $relativeOut -CoreDir $fakeCore
     $expected = Join-Path $caller "$relativeOut\ardia-update-verify.exe"
     $wrong = Join-Path $fakeCore "$relativeOut\ardia-update-verify.exe"
@@ -36,19 +36,6 @@ try {
     Pop-Location
   }
 
-  $fakeApp = Join-Path $scratch "fake-app"
-  $fakeEngine = Join-Path $scratch "fake-engine"
-  $fakeOut = Join-Path $scratch "fake-out"
-  New-Item -ItemType Directory -Force -Path $fakeApp, $fakeEngine | Out-Null
-  [System.IO.File]::WriteAllBytes((Join-Path $fakeApp "ArdiaApp.dll"), [byte[]](0x4d, 0x5a))
-  [System.IO.File]::WriteAllBytes((Join-Path $fakeEngine "chrome.exe"), [byte[]](0x4d, 0x5a))
-  $missingVerifierError = ""
-  try {
-    & (Join-Path $PSScriptRoot "assemble.ps1") -App $fakeApp -Engine $fakeEngine -Out $fakeOut
-  } catch {
-    $missingVerifierError = $_.Exception.Message
-  }
-  Check "assemble.ps1 fails loudly when ardia-update-verify.exe is missing" $true ($missingVerifierError -like "*ardia-update-verify.exe*")
 } finally {
   $env:PATH = $savedPath
   if ($null -eq $savedTargetDir) { Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue } else { $env:CARGO_TARGET_DIR = $savedTargetDir }
@@ -59,4 +46,4 @@ if ($failures.Count) {
   $failures | ForEach-Object { Write-Host "::error::$_" }
   exit 1
 }
-Write-Host "update-verify.ps1 and assemble.ps1 path and requirement checks passed."
+Write-Host "update-verify.ps1 path checks passed."

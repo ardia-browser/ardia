@@ -75,7 +75,7 @@ test("the import from the old app cannot switch sharing on", () => {
 test("with sharing off nothing is captured, counted, written or sent", async () => {
   const { gate, posts, writes, timers, runTimers } = harness();
   writes.length = 0;
-  gate.capture("app_launched", { legacy_import: "none", legacy_import_failures: 0, look_mode: "full", interface_style: "match_mac", color_scheme: "match_mac", material_colors: "wallpaper", color_choice: "match_mac", glass_render: "lens" });
+  gate.capture("app_launched", { legacy_import: "none", legacy_import_failures: 0, look_mode: "full", interface_style: "match_mac", color_scheme: "match_mac", material_colors: "wallpaper", color_choice: "match_mac", glass_render: "lens", previous_session: "clean" });
   gate.count("tabs_opened");
   gate.count("searches");
   gate.rollDaily();
@@ -96,7 +96,7 @@ test("turning sharing off drops what is waiting, the day's counts and anything i
   const { gate, stored, posts, runTimers } = harness();
   gate.setSharing(true, "settings");
   gate.count("tabs_opened");
-  gate.capture("app_launched", { legacy_import: "none", legacy_import_failures: 0, look_mode: "full", interface_style: "match_mac", color_scheme: "match_mac", material_colors: "wallpaper", color_choice: "match_mac", glass_render: "lens" });
+  gate.capture("app_launched", { legacy_import: "none", legacy_import_failures: 0, look_mode: "full", interface_style: "match_mac", color_scheme: "match_mac", material_colors: "wallpaper", color_choice: "match_mac", glass_render: "lens", previous_session: "clean" });
   assert.equal(gate.pending(), 2);
   assert.ok(stored.get(DAILY_KEY));
   gate.setSharing(false, "settings");
@@ -124,7 +124,7 @@ test("an answer that arrives after sharing was turned off is ignored, and nothin
     clearTimer: () => {},
   });
   gate.load();
-  gate.capture("app_launched", { legacy_import: "imported", legacy_import_failures: 0, look_mode: "full", interface_style: "match_mac", color_scheme: "match_mac", material_colors: "wallpaper", color_choice: "match_mac", glass_render: "lens" });
+  gate.capture("app_launched", { legacy_import: "imported", legacy_import_failures: 0, look_mode: "full", interface_style: "match_mac", color_scheme: "match_mac", material_colors: "wallpaper", color_choice: "match_mac", glass_render: "lens", previous_session: "clean" });
   gate.flushNow();
   gate.setSharing(false, "settings");
   release(500);
@@ -137,7 +137,7 @@ test("an answer that arrives after sharing was turned off is ignored, and nothin
 test("every payload the phone can send validates against the schema, with no free text", async () => {
   const { gate, runTimers, sent } = harness();
   gate.setSharing(true, "settings");
-  gate.capture("app_launched", { legacy_import: "started_fresh", legacy_import_failures: 0, look_mode: "full", interface_style: "match_mac", color_scheme: "match_mac", material_colors: "wallpaper", color_choice: "match_mac", glass_render: "lens" });
+  gate.capture("app_launched", { legacy_import: "started_fresh", legacy_import_failures: 0, look_mode: "full", interface_style: "match_mac", color_scheme: "match_mac", material_colors: "wallpaper", color_choice: "match_mac", glass_render: "lens", previous_session: "clean" });
   gate.capture("perf_launch", { launch_ms: 812, js_ms: 240 });
   for (const field of ["tabs_opened", "searches", "pins_to_mac", "tabs_sent", "page_processes_gone", "links_given_up", "pages_reloaded_online", "find_opened_system", "find_opened_bar", "find_closed_bar", "spaces_swiped", "tray_hidden_rows_opened", "deck_pictures_late", "tray_back_swiped", "search_tabs_opened", "spaces_picked", "tabs_moved_to_space", "pages_printed", "pages_translated", "pinned_tabs_refound", "site_permissions_revoked", "card_opens_waited", "native_menus_opened", "drawn_menus_opened", "library_opened", "deck_grid_shown", "landscape_shown", "duo_layout_shown", "list_sheets_late", "list_pages_added", "search_reveals_late", "address_field_scrolled", "deck_bar_swipes", "tabs_swiped_closed", "tabs_swiped_reopened", "page_menu_tapped_away", "new_tab_search_opened", "deck_incognito_switches", "deck_bar_swipes_returned", "tabs_bar_swiped", "tab_swipe_hints_shown", "deck_pulls_hitched", "bottom_bar_collapses", "browse_for_me_opened", "browse_answers_chatgpt", "browse_answers_on_device", "browse_answers_excerpts", "browse_answers_failed", "browse_chatgpt_fallbacks", "page_summaries_pinched", "page_summaries_from_menu", "page_summaries_on_device", "page_summaries_excerpts", "page_summaries_failed", "page_summaries_chatgpt", "page_summaries_chatgpt_fallbacks", "gemini_nano_downloading", "gemini_nano_not_offered", "gemini_nano_needs_update", "gemini_nano_errors", "gemini_nano_download_failed", "gemini_nano_write_failed", "gemini_nano_download_rewrites", "paste_and_go_links", "paste_and_go_texts", "paste_and_go_unread", "search_tile_taps", "voice_tile_taps", "incognito_tile_taps", "start_logo_taps", "card_close_tapped", "material_back_swiped", "archive_bar_opened", "site_settings_sheet_opened", "search_sheet_expanded", "site_settings_sheet_expanded", "material_you_turned_on", "material_you_turned_off", "talk_to_me_answers_read", "talk_to_me_ear_listens", "talk_to_me_voice_downloads", "talk_to_me_download_failed", "talk_to_me_failed", "start_no_tabs_button_taps", "night_shade_verdicts_reused", "night_shade_verdicts_learned", "night_shade_verdicts_corrected", "page_pictures_blank", "page_pictures_hidden", "page_pictures_webkit", "page_pictures_scrolled", "tray_incognito_switches", "incognito_unavailable", "deck_pictures_at_press", "deck_opens_while_landing", "tab_writes_stalled", "page_covers_capped", "search_opens_cold", "archive_card_reoffers"] as const) gate.count(field);
   await runTimers();
@@ -173,6 +173,7 @@ test("the schema refuses free text, unknown fields and identifiers it doesn't kn
       material_colors: "fallback",
       color_choice: "custom",
       glass_render: "frost",
+      previous_session: "unclean",
     },
   };
   assert.deepEqual(recordProblems(base), []);

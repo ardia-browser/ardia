@@ -48,12 +48,15 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-onAndroid("where sync isn't offered, Android's Settings has no Sync card and no Spaces shortcut, the Spaces sheet and the sync pages never open, and Appearance offers no Match My Mac", () => {
+onAndroid("where sync isn't offered, Android's Settings has no Sync card in either design, the Spaces sheet and the sync pages never open, and Appearance offers no Match My Mac", () => {
   act(() => openSettings());
-  const root = inDesign("original", <SettingsView />);
-  const texts = root.root.findAll((node) => typeof node.type === "string" && typeof node.props.children === "string").map((node) => node.props.children as string);
-  expect(texts).toContain("Archive");
-  expect(texts).not.toContain("Spaces");
+  const panes = (rendered: Root) => rendered.root.findAll((node) => typeof node.type === "string" && typeof node.props.children === "string").map((node) => node.props.children as string).filter((text) => !["Settings", "Done"].includes(text));
+  const iPhone = inDesign("redesigned", <SettingsView />);
+  expect(panes(iPhone)).toEqual(["General", "Tabs", "Appearance", "Search", "Site settings"]);
+  expect(textOf(iPhone)).not.toContain("Sync With");
+  unmount(iPhone);
+  const root = inDesign("material", <SettingsView />);
+  expect(panes(root)).toEqual(["General", "Tabs", "Appearance", "Search", "Site settings"]);
   expect(textOf(root)).not.toContain("Sync With");
   act(() => openSpaces());
   expect(useBrowse.getState().sheet).toBeNull();
@@ -61,8 +64,8 @@ onAndroid("where sync isn't offered, Android's Settings has no Sync card and no 
   expect(useSettingsNav.getState().stack.map((route) => route.page)).toEqual(["root"]);
   act(() => openSettings({ page: "appearance" }));
   expect(textOf(root)).not.toContain("Match My Mac");
-  expect(labelled(root, "Glass")[0]!.props.accessibilityState).toEqual({ selected: true });
-  expect(labelled(root, "System")[0]!.props.accessibilityState).toEqual({ selected: true });
+  expect(labelled(root, "Glass")[0]!.props.accessibilityState).toMatchObject({ selected: true });
+  expect(labelled(root, "System")[0]!.props.accessibilityState).toMatchObject({ selected: true });
   unmount(root);
 });
 

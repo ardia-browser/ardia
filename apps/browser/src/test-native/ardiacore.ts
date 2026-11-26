@@ -46,6 +46,8 @@ const testGlobals = globalThis as {
   acTestCliTargets?: (tabId: string) => CliTabTarget | undefined;
   acTestCliHeld?: (tabs: { tabId: string; until: number; live?: boolean }[]) => { kept: number; marked?: string[] } | Promise<{ kept: number; marked?: string[] }> | undefined;
   acTestCliOwns?: (tabId: string) => { owned: boolean; shown: boolean };
+  acTestTabDiagnostics?: (args: { tabId: string; since?: number; clearBefore?: number }) => CallResult<"tabs.diagnostics">;
+  acTestTabInput?: (args: CallArgs<"tabs.input">) => CallResult<"tabs.input">;
   acTestCliMoveOffscreen?: (tabId: string) => { ok: boolean; reason?: string };
   acTestCliCloseOffscreen?: () => void;
   acTestCliConsole?: (args: { tabId: string; after?: number; generation?: number; limit?: number }) => CliConsoleDelta;
@@ -257,7 +259,7 @@ function importHistoryRows(profile: string, { rows }: { rows: { u: string; t: st
   return heldHistoryImports.reply ? heldHistoryImports.reply.then(() => ({})) : {};
 }
 
-export const bookmarkModel = { loading: new Set<string>(), treeFails: false, treeHangs: false };
+export const bookmarkModel = { loading: new Set<string>(), treeFails: false, treeHangs: false, applyHeld: null as Promise<void> | null };
 export const historyDeletes = { failNext: false };
 
 function deleteHistoryUrls(profile: string, { urls }: { urls: string[] }) {
@@ -500,6 +502,14 @@ const fakeModules = {
       stripCommand: async ({ id, command }) => (await tabStripHost().command(command, id), null),
       strips: () => tabStripHost().snapshot(),
       lastTabPolicy: () => ({ closesWindow: true }),
+      diagnostics: (args) => {
+        if (!testGlobals.acTestTabDiagnostics) throw Object.assign(new Error("tabs.diagnostics has no test fake yet"), { code: "ERR_UNKNOWN_CALL" });
+        return testGlobals.acTestTabDiagnostics(args);
+      },
+      input: (args) => {
+        if (!testGlobals.acTestTabInput) throw Object.assign(new Error("tabs.input has no test fake yet"), { code: "ERR_UNKNOWN_CALL" });
+        return testGlobals.acTestTabInput(args);
+      },
       reportCommits: ({ on }) => {
         commitReports.push(on);
         if (commitReportFailures.next > 0) {
@@ -715,6 +725,7 @@ const fakeModules = {
     },
     apply: ({ profile, ...args }) => {
       if (bookmarkModel.loading.has(profile)) throw new Error("bookmarks.apply ran inside Chrome's bookmark model load");
+      if (bookmarkModel.applyHeld) return bookmarkModel.applyHeld.then(() => applyBookmarkOps(profile, args));
       return applyBookmarkOps(profile, args);
     },
     watch: () => null,
@@ -739,6 +750,7 @@ const fakeModules = {
     setVideoUpscalingTestConditions: () => null,
     videoUpscalingState: () => null,
     takeContentDrift: () => ({ layouts: 0, fits: 0, maxPoints: 0 }),
+    takePageMetrics: () => ({}),
     takeFirstPaintHolds: () => ({ held: 0, painted: 0, loaded: 0, pressed: 0, timedOut: 0, heldMs: 0 }),
   }),
   ArdiaWebKit: domain("webKit", {

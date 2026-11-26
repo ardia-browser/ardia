@@ -11,17 +11,24 @@ import { Box, Button, DialogActions, DialogTitle, Divider, Dot, Group, PROFILE_C
 import { profileColors, SHARE_ROW_HEIGHT } from "./tokens";
 import { ThemeSwatches } from "../settings/ThemeEditor";
 import { closeSettingsSheet, showSettingsSheet } from "../../state/settings/sheet";
+import { noteSettingsProfiles } from "../../state/telemetry/usage";
 
-useCreateProfileRequest.subscribe((s, prev) => {
-  if (!s.sheet || s.sheet === prev.sheet) return;
-  const request = takeCreateProfileSheet();
-  if (!request) return;
-  const done = (id: string | null) => {
-    closeSettingsSheet();
-    request.resolve(id);
+export function showCreateProfileSheets() {
+  const show = () => {
+    const request = takeCreateProfileSheet();
+    if (!request) return;
+    const done = (id: string | null) => {
+      closeSettingsSheet();
+      request.resolve(id);
+    };
+    showSettingsSheet(<CreateProfileSheet windowId={null} preset={request.preset} onDone={done} />);
+    noteSettingsProfiles("createShown", request.consent);
   };
-  showSettingsSheet(<CreateProfileSheet windowId={null} preset={request.preset} onDone={done} />);
-});
+  show();
+  return useCreateProfileRequest.subscribe((s, prev) => {
+    if (s.sheet && s.sheet !== prev.sheet) show();
+  });
+}
 
 export function CreateProfileHost() {
   const windowId = useWindowId();

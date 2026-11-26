@@ -4,6 +4,8 @@ export type CaptureOptions = {
   raw?: Record<string, unknown>;
   urgent?: boolean;
   persist?: boolean;
+  uuid?: string;
+  at?: number;
 };
 
 export type SharingSource = "settings" | "onboarding" | "ask" | "watch" | "watch_ended";
@@ -24,6 +26,7 @@ type TelemetryRelay = {
   resetId(): Promise<string>;
   change(change: ChoiceChange): Promise<boolean>;
   installId(): string;
+  downloadFollowUp?(until: number, consent: ConsentToken | null): void;
 };
 
 let relay: TelemetryRelay | null = null;

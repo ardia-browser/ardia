@@ -1,6 +1,6 @@
 import { memo, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Animated, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView, StyleSheet, View } from "react-native";
-import { PageProfileContext, useWindowId } from "../../state/browser/hooks";
+import { PageProfileContext, useSettings, useWindowId } from "../../state/browser/hooks";
 import { tabDragging, useTabDrag } from "../../state/drag/tabDrag";
 import { useShownTabIdFor, useStripEntries, useStripTitleNeeds } from "../../state/tabs/topStrip";
 import { setMeasuredWidth, useMeasuredWidths } from "../../state/windows/measuredWidths";
@@ -27,19 +27,19 @@ import { shownHolds, StripScrollContext, type StripScroll } from "./stripScroll"
 import { StripMotionContext, useStripMotion } from "./stripMotion";
 import { StripGhosts } from "./StripGhosts";
 import { commandScroll, endSettling, userTookOver, FIRST_REVEAL, firstOverflowReveal, observeScroll, revealStillWanted, scrollIntentAt, selectionReveal } from "./stripRevealGate";
-import { COMPACT_CHIP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, EDGE_FADE, EDGE_FADE_FLOOR, EDGE_FADE_ONSET, FLARE, GAP, NEW_TAB_ROOM, STRIP_SCROLL_ID } from "./tokens";
+import { COMPACT_CHIP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, EDGE_FADE, EDGE_FADE_FLOOR, EDGE_FADE_ONSET, FLARE, GAP, ITEM_HEIGHT, NEW_TAB_ROOM, STRIP_SCROLL_ID } from "./tokens";
 
 type Wide = { tabId: string; slot: number };
 type Hold = { widths: TabWidths; end: number; tailEdge?: number; wide: Wide; needsTitle: (tabId: string) => boolean; fit: StripFit };
-
 const USER_SCROLL_QUIET_MS = 200;
 const OWN_SCROLL_MS = 250;
 const OWN_ANIMATED_SCROLL_MS = 600;
-
 const stripEnd = ({ slots, lefts }: DragGeometry) => (slots.length ? lefts.at(-1)! + slots.at(-1)!.width : 0);
 
 export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, current, resting }: { profileId: string; slot: number; pageWidth: number; current: boolean; resting: boolean }) {
   const windowId = useWindowId();
+  const showTabMenuButton = useSettings((s) => s.showTabMenuButton);
+  const newTabRoom = showTabMenuButton ? NEW_TAB_ROOM : ITEM_HEIGHT;
   const flare = useContext(FloatingStrip) ? 0 : FLARE;
   const pageStyle = usePageStyle(windowId, slot, pageWidth + flare * 2);
   const entries = useStripEntries(windowId, profileId);
@@ -80,7 +80,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const holding = held.current ? heldWideTab(entries, held.current.wide) : null;
   const wideId = holding?.tabId ?? activeId;
   const tightNames = useRef(false);
-  const measuresAt = (tight: boolean) => ({ groupChip: chipsAt(tight), folderChip, needsTitle });
+  const measuresAt = (tight: boolean) => ({ groupChip: chipsAt(tight), folderChip, needsTitle, newTabRoom });
   let measures = measuresAt(tightNames.current);
   let fit = held.current?.fit ?? stripFit(entries, activeId, pageWidth, measures, dock, wideId);
   if (!held.current) {
@@ -101,8 +101,8 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const animateWidths = !held.current && !!last.current && last.current.count === count && last.current.pageWidth === pageWidth;
   last.current = { count, pageWidth, widths, fit, end: stripEnd(top), lastSlot: top.slots.at(-1)?.tabIds[0], wide: { tabId: wideId, slot: Math.max(0, top.slots.findIndex((s) => s.tabIds.includes(wideId))) } };
   const spare = held.current ? Math.max(0, held.current.end - stripEnd(top)) : 0;
-  const pinned = newTabPinned(chip, tabsEnd + spare, pageWidth, tabsShrink);
-  const newTab = <NewTabButton windowId={windowId} geometry={top} pinned={pinned} />;
+  const pinned = newTabPinned(chip, tabsEnd + spare, pageWidth, tabsShrink, newTabRoom);
+  const newTab = <NewTabButton windowId={windowId} geometry={top} pinned={pinned} showTabMenuButton={showTabMenuButton} />;
   const leave = () => {
     pointerIn.current = false;
     if (!held.current) return;
@@ -326,7 +326,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
               <StripScrollContext.Provider value={scroller}>
               <StripMotionContext.Provider value={motion}>
               <Offstage.Provider value={!current}>
-                <Animated.View pointerEvents="box-none" style={{ flex: 1, marginLeft: clipLeft, marginRight: pinned ? flare + NEW_TAB_ROOM : 0, overflow: "hidden" }}>
+                <Animated.View pointerEvents="box-none" style={{ flex: 1, marginLeft: clipLeft, marginRight: pinned ? flare + newTabRoom : 0, overflow: "hidden" }}>
                   <EdgeFadeMask pointerEvents="box-none" fadeWidth={EDGE_FADE} floor={EDGE_FADE_FLOOR} onset={EDGE_FADE_ONSET} style={StyleSheet.absoluteFill}>
                   <Animated.View pointerEvents="box-none" style={{ position: "absolute", top: 0, bottom: 0, left: clipBack, right: 0 }}>
                     <Animated.ScrollView

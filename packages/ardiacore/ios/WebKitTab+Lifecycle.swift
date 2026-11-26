@@ -305,6 +305,7 @@ extension WebKitTab {
     let on = state == .enteringFullscreen || state == .inFullscreen
     guard on != pageMedia.fullscreen else { return }
     pageMedia.fullscreen = on
+    pageMedia.fullscreenFrameKept = false
     if on { ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "fullscreen"])) }
     emit("fullscreen", ["fullscreen": on])
   }

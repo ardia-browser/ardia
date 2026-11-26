@@ -2,8 +2,7 @@ param(
   [Parameter(Mandatory = $true)][string]$Source,
   [Parameter(Mandatory = $true)][string]$Out,
   [Parameter(Mandatory = $true)][ValidateSet("x64", "arm64")][string]$Cpu,
-  [string]$Version = "",
-  [ValidateSet("auto", "rnw", "webui")][string]$Shell = "auto"
+  [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,11 +44,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $Source "Ardia.exe") -PathType Leaf)
 if (-not (Test-Path -LiteralPath (Join-Path $Source "chrome.dll") -PathType Leaf)) { throw "'$Source' has no chrome.dll: the installer ships the app assembled with the engine" }
 $sourceRoot = (Resolve-Path -LiteralPath $Source).Path
 if (Get-ChildItem -LiteralPath $sourceRoot -Recurse -File -Force -Filter "Ardia.test-build" | Select-Object -First 1) { throw "'$Source' holds an Ardia.test-build marker: an installer never ships it, so a build people install ignores test keys" }
-$shellKind = Resolve-ShellLayout $sourceRoot $Shell
-if ($shellKind -eq "webui") {
-  $problems = Get-ShellLayoutProblems $sourceRoot "webui"
-  if ($problems.Count) { throw "'$Source' is not a shippable WebUI build: $($problems -join '; ')" }
-}
+$shellKind = Resolve-ShellLayout $sourceRoot "webui"
+$problems = Get-ShellLayoutProblems $sourceRoot "webui"
+if ($problems.Count) { throw "'$Source' is not a shippable WebUI build: $($problems -join '; ')" }
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $outRoot = (Resolve-Path -LiteralPath $Out).Path
 if (-not $Version) { $Version = & (Join-Path $PSScriptRoot "project-version.ps1") }
@@ -69,10 +66,12 @@ try {
   Write-Host "make-installer: using $iscc"
   $retired = Join-Path $scratch "retired-shell.txt"
   Write-RetiredShellList $shellKind $retired
+  $kept = Join-Path $scratch "kept-files.txt"
+  Write-KeptFileList $kept
   $manifest = Join-Path $scratch (Get-ShellManifestName $shellKind)
   Write-ShellManifest $sourceRoot $shellKind $manifest
   Write-Host "make-installer: the $shellKind shell ships $(@(Get-Content -LiteralPath $manifest | Where-Object { $_ }).Count) files of its own, listed in $(Get-ShellManifestName $shellKind)"
-  & $iscc "/Q" "/DSource=$sourceRoot" "/DOut=$outRoot" "/DCpu=$Cpu" "/DAllowed=$($allowed[$Cpu])" "/DVersion=$Version" "/DIcon=$icon" "/DShell=$shellKind" "/DRetiredList=$retired" "/DShellManifest=$manifest" $script
+  & $iscc "/Q" "/DSource=$sourceRoot" "/DOut=$outRoot" "/DCpu=$Cpu" "/DAllowed=$($allowed[$Cpu])" "/DVersion=$Version" "/DIcon=$icon" "/DRetiredList=$retired" "/DKeptList=$kept" "/DShellManifest=$manifest" $script
   if ($LASTEXITCODE -ne 0) { throw "ISCC exited with $LASTEXITCODE" }
   $setup = Join-Path $outRoot "Ardia-Setup-$Cpu.exe"
   if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw "ISCC wrote no $setup" }

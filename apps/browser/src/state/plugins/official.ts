@@ -4,7 +4,7 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { experimentOn } from "../../platform/killSwitches";
 import { cancelOfficialPluginFetch, fetchOfficialPlugin, onOfficialFetchProgress, type OfficialFetchResult } from "../../platform/plugins";
-import { notePlugin, type PluginCount } from "../telemetry/pluginCounts";
+import { notePlugin, officialFetchCause, type PluginCount } from "../telemetry/pluginCounts";
 import { updateWithin, type UpdatePromptReason, type UpdateVerdict } from "./officialUpdate";
 import { MAX_UPDATE_LINES } from "./savedState";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
@@ -160,6 +160,7 @@ function fetchOfficialCandidate(name: string, consent: ConsentToken | null, quie
     .then(async (result): Promise<InstallResult & { code?: string }> => {
       if (!result.ok) {
         notePlugin(result.code === "offline" ? "official_fetch_offline" : result.code === "verify" ? "official_verify_failures" : "official_fetch_failures", consent);
+        if (result.code !== "cancelled") notePlugin(officialFetchCause(result.cause), consent);
         warnFor(consent, `[plugins] ${name} wasn't downloaded (${result.code}): ${result.reason}`);
         const reason = FETCH_REASONS[result.code];
         if (!quiet) setOfficialFetch(name, result.code === "cancelled" ? null : { state: "failed", code: result.code, reason });

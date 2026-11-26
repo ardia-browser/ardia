@@ -14,3 +14,5 @@ export function launchArguments(): LaunchArguments {
 }
 
 export const isDemoSession = (): boolean => (demoSession ??= launchArguments().isDemo || launchedForSyncDemo());
+
+export const probes = (part: string): boolean => (launchArguments().scrollProbe ?? "").split(",").includes(part);

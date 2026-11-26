@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("./persist.ts");
+const { RETIRED_DEFAULTS } = await import("../settings/retiredDefaults.ts");
 const stub = await import("../../test-native/index.ts");
+const { TAB_SWITCHER_MODES_APPLIED } = await import("../settings/tabSwitcherUpgrade.ts");
+const MARKERS = [...RETIRED_DEFAULTS.map((d) => d.applied), TAB_SWITCHER_MODES_APPLIED];
 
 const S = () => useBrowser.getState();
 const PROFILE = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };
@@ -17,12 +20,12 @@ const CASES = {
   linkKeys: { peekModifier: "alt", splitLinkModifier: "alt", chosen: ["peekModifier", "splitLinkModifier"], inferred: [] },
   empty: {},
 };
-const BEFORE = {"legacyTrue":{"chosen":["newTabPosition","newTabButtonPosition"],"inferred":["newTabPosition","newTabButtonPosition"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"top","newTabPosition":"top","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":130},"legacyFalse":{"chosen":["newTabPosition","batterySaverWhen","newTabButtonPosition"],"inferred":["newTabPosition","batterySaverWhen","newTabButtonPosition"],"batterySaverWhen":"never","newTabButtonPosition":"top","newTabPosition":"top","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":130},"legacyTrueChosen":{"chosen":["tabLayout","batterySaverWhen"],"inferred":[],"batterySaverWhen":"unplugged","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":130},"legacyTrueInferred":{"chosen":[],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":130},"missingMeta":{"chosen":["tabLayout","sidebarWidth"],"inferred":["tabLayout","sidebarWidth"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":130},"chosen":{"chosen":["tabLayout"],"inferred":["appearance"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":130},"migrated":{"chosen":["tabLayout","newTabPosition","newTabButtonPosition"],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"top","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":130},"linkKeys":{"chosen":["peekModifier","splitLinkModifier"],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"alt","splitLinkModifier":"altShift","keys":130},"empty":{"chosen":[],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":130}};
+const BEFORE = {"legacyTrue":{"chosen":["newTabPosition","newTabButtonPosition"],"inferred":["newTabPosition","newTabButtonPosition"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"top","newTabPosition":"top","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":135},"legacyFalse":{"chosen":["newTabPosition","batterySaverWhen","newTabButtonPosition"],"inferred":["newTabPosition","batterySaverWhen","newTabButtonPosition"],"batterySaverWhen":"never","newTabButtonPosition":"top","newTabPosition":"top","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":135},"legacyTrueChosen":{"chosen":["tabLayout","batterySaverWhen"],"inferred":[],"batterySaverWhen":"unplugged","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":135},"legacyTrueInferred":{"chosen":[],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":135},"missingMeta":{"chosen":["tabLayout","sidebarWidth"],"inferred":["tabLayout","sidebarWidth"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":135},"chosen":{"chosen":["tabLayout"],"inferred":["appearance"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":135},"migrated":{"chosen":["tabLayout","newTabPosition","newTabButtonPosition"],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"top","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":135},"linkKeys":{"chosen":["peekModifier","splitLinkModifier"],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"alt","splitLinkModifier":"altShift","keys":135},"empty":{"chosen":[],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":135}};
 
 const doc = (version, settings) => ({ version, profiles: { default: PROFILE }, profileOrder: ["default"], settings, windows: [], windowOrder: [], tabs: [], groups: [], splits: [], closedTabs: [], closedWindows: [] });
 const loaded = () => {
   const { settings: st, settingsMeta } = S();
-  return { chosen: settingsMeta.chosen, inferred: settingsMeta.inferred.filter((k) => k !== "hideToolbarWhileScrolling:offByDefault"), batterySaverWhen: st.batterySaverWhen, newTabButtonPosition: st.newTabButtonPosition, newTabPosition: st.newTabPosition, tabLayout: st.tabLayout, peekModifier: st.peekModifier, splitLinkModifier: st.splitLinkModifier, keys: Object.keys(st).length + 2 };
+  return { chosen: settingsMeta.chosen, inferred: settingsMeta.inferred.filter((k) => !MARKERS.includes(k)), batterySaverWhen: st.batterySaverWhen, newTabButtonPosition: st.newTabButtonPosition, newTabPosition: st.newTabPosition, tabLayout: st.tabLayout, peekModifier: st.peekModifier, splitLinkModifier: st.splitLinkModifier, keys: Object.keys(st).length + 2 };
 };
 
 for (const version of [3, 4, 7]) {
@@ -56,8 +59,27 @@ test("settings and their bookkeeping save apart, read back the same, and a chang
   const saved = JSON.parse(stub.docs.get("session.json"));
   assert.ok(saved.version >= 8);
   assert.equal("chosen" in saved.settings || "inferred" in saved.settings, false);
-  assert.deepEqual(saved.settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: ["hideToolbarWhileScrolling:offByDefault"] });
+  assert.deepEqual(saved.settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: MARKERS });
   S().hydrate(loadSession());
-  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: ["hideToolbarWhileScrolling:offByDefault"] });
+  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: MARKERS });
   assert.equal(S().settings.appearance, "light");
+});
+
+test("the tab menu button defaults to shown for older sessions and keeps a saved choice to hide it", async () => {
+  stub.docs.clear();
+  stub.docs.set("session.json", JSON.stringify(doc(7, {})));
+  const stop = startPersistence();
+  try {
+    assert.equal(S().settings.showTabMenuButton, true);
+    S().updateSettings({ showTabMenuButton: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    flushPersistence();
+    const saved = JSON.parse(stub.docs.get("session.json"));
+    assert.equal(saved.settings.showTabMenuButton, false);
+    assert.ok(saved.settingsMeta.chosen.includes("showTabMenuButton"));
+    S().hydrate(loadSession());
+    assert.equal(S().settings.showTabMenuButton, false);
+  } finally {
+    stop();
+  }
 });

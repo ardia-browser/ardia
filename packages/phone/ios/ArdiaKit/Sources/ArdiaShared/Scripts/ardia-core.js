@@ -1091,9 +1091,11 @@ __define("packages/core/src/engines.ts", function (exports, __require) {
   __export(exports, "controllingExtensionEngine", () => controllingExtensionEngine);
   __export(exports, "engineById", () => engineById);
   __export(exports, "searchUrl", () => searchUrl);
+  __export(exports, "MAX_SUGGEST_QUERY", () => MAX_SUGGEST_QUERY);
   __export(exports, "suggestRequestUrl", () => suggestRequestUrl);
   __export(exports, "engineHost", () => engineHost);
   __export(exports, "suggestReplyJson", () => suggestReplyJson);
+  __export(exports, "isSuggestReplyShape", () => isSuggestReplyShape);
   __export(exports, "parseRemoteSuggestions", () => parseRemoteSuggestions);
   __export(exports, "parseSuggestions", () => parseSuggestions);
   __export(exports, "validateEngine", () => validateEngine);
@@ -1228,8 +1230,15 @@ function engineById(engines                         , id                    )   
 
 const searchUrl = (engine                           , query        ) => searchUrlFor(engine.url, query);
 
-const suggestRequestUrl = (engine              , query        ) =>
-  engine.suggestUrl && !engine.custom && query.trim() ? searchUrlFor(engine.suggestUrl, query) : null;
+const MAX_SUGGEST_QUERY = 200;
+const MAX_SUGGEST_URL = 2048;
+
+const suggestRequestUrl = (engine              , query        ) => {
+  const trimmed = query.trim();
+  if (!engine.suggestUrl || engine.custom || !trimmed || trimmed.length > MAX_SUGGEST_QUERY) return null;
+  const url = searchUrlFor(engine.suggestUrl, trimmed);
+  return url.length <= MAX_SUGGEST_URL ? url : null;
+};
 
 const engineHost = (engine                           ) => hostOf(engine.url.replace(/%s/g, "q"));
 
@@ -1241,8 +1250,11 @@ const SITES = new Set(["NAVIGATION", "PERSONALIZED_NAVIGATION"]);
 
 const suggestReplyJson = (text        )          => JSON.parse(text.replace(/^\)\]\}'\s*/, ""));
 
+const isSuggestReplyShape = (body         )                                             =>
+  Array.isArray(body) && Array.isArray(body[1]);
+
 function parseRemoteSuggestions(body         )                    {
-  if (!Array.isArray(body) || !Array.isArray(body[1])) return { queries: [], sites: [] };
+  if (!isSuggestReplyShape(body)) return { queries: [], sites: [] };
   const extras = body[4]                                                  ;
   const types = Array.isArray(extras?.["google:suggesttype"]) ? (extras["google:suggesttype"]             ) : [];
   const titles = Array.isArray(body[2]) ? (body[2]             ) : [];
@@ -1282,6 +1294,7 @@ function makeCustomEngine(input             , id        )                     {
 });
 __define("packages/core/src/omnibox.ts", function (exports, __require) {
   __export(exports, "hostOf", () => hostOf);
+  __export(exports, "hasKnownScheme", () => hasKnownScheme);
   __export(exports, "isJavaScriptUrl", () => isJavaScriptUrl);
   __export(exports, "withoutJavaScriptScheme", () => withoutJavaScriptScheme);
   __export(exports, "fixupUrl", () => fixupUrl);
@@ -1317,6 +1330,16 @@ const KNOWN_SCHEMES = new Set([
   "ardia", "chrome", "chrome-extension", "devtools", "x-apple.systempreferences", "itms-apps", "slack", "zoommtg", "vscode",
   "cursor", "notion", "figma", "spotify", "linear", "obsidian", "raycast",
 ]);
+
+const NON_SEARCH_EXTRA_SCHEMES = new Set(["javascript", "vbscript", "edge"]);
+const SCHEME_HEAD = /^([a-z][a-z0-9+.-]*):/i;
+
+function hasKnownScheme(input        )          {
+  const m = SCHEME_HEAD.exec(input);
+  if (!m) return false;
+  const scheme = m[1] .toLowerCase();
+  return input.startsWith("://", scheme.length) || KNOWN_SCHEMES.has(scheme) || NON_SEARCH_EXTRA_SCHEMES.has(scheme);
+}
 
 const LOCAL_TLDS = new Set(["meta", "local", "localhost", "test", "internal", "lan"]);
 let registries                         ;
@@ -2480,6 +2503,7 @@ const withRootSlash = (url        ) => url.replace(/^(https?:\/\/[^/?#]*)(?=[?#]
               
                     
                 
+                         
                      
                      
                      
@@ -2500,15 +2524,27 @@ const PLAIN_WORDS = /^[a-z0-9]+(?: [a-z0-9]+)*$/;
 const wordsOf = (lower        ) => (PLAIN_WORDS.test(lower) ? ` ${lower}` : ` ${lower}`.replace(NOT_WORD, " "));
 const shownWordsOf = (t          ) => (t.shownWords ??= wordsOf(t.shownLower));
 
+const MAX_INDEXED_SHOWN = 2048;
+const MAX_INDEXED_TITLE = 512;
+
+function clipIndexed(text        , max        )         {
+  if (text.length <= max) return text;
+  const last = text.charCodeAt(max - 1);
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
+}
+
 function pageText(row                                )           {
   let text = pageTexts.get(row);
   if (!text) {
-    const shown = displayUrl(row.url);
+    const rawShown = displayUrl(row.url);
+    const shownClipped = rawShown.length > MAX_INDEXED_SHOWN;
+    const shown = shownClipped ? clipIndexed(rawShown, MAX_INDEXED_SHOWN) : rawShown;
     const shownLower = shown.toLowerCase();
-    const titleLower = row.title.toLowerCase();
+    const titleLower = clipIndexed(row.title, MAX_INDEXED_TITLE).toLowerCase();
     const document = documentKey(row.url);
     const route = routeOf(row.url);
     text = { url: row.url, key: document + route, shown, shownLower, titleLower, titleWords: wordsOf(titleLower) };
+    if (shownClipped) text.shownClipped = true;
     if (route) text.document = document;
     pageTexts.set(row, text);
   }
@@ -3263,12 +3299,12 @@ function viaOf(items                       , via                                
 }
 
 function typedIsPage(t          , q        )          {
-  return q === t.shownLower || q === hostLowerOfPage(t);
+  return (!t.shownClipped && q === t.shownLower) || q === hostLowerOfPage(t);
 }
 
 function inlineMatch(t          , q        )          {
   if (hostLowerOfPage(t).startsWith(q) && originOfPage(t)) return true;
-  return q.includes("/") && !/[?#]/.test(t.shown) && t.shownLower.startsWith(q);
+  return !t.shownClipped && q.includes("/") && !/[?#]/.test(t.shown) && t.shownLower.startsWith(q);
 }
 
 function inlineTarget(q        , c           )                                                        {
@@ -3799,28 +3835,65 @@ function leadingRows(ranked                   , tabs                   )        
 
 });
 __define("packages/core/src/suggestFetcher.ts", function (exports, __require) {
+  __export(exports, "createSuggestStore", () => createSuggestStore);
   __export(exports, "createSuggestFetcher", () => createSuggestFetcher);
-const { parseRemoteSuggestions, suggestReplyJson, suggestRequestUrl } = __require("packages/core/src/engines.ts");
+const { isSuggestReplyShape, parseRemoteSuggestions, suggestReplyJson, suggestRequestUrl } = __require("packages/core/src/engines.ts");
 
-                                                              
+                                                                                                        
                                                                                                                       
+
+                              
+                
+                   
+                   
+  
+
+                            
+                                        
+                                       
+                     
+                          
+  
+
+const createSuggestStore = ()               => ({
+  cache: new Map(),
+  backoff: new Map(),
+  lastSentAt: 0,
+  backoffRevision: 0,
+});
 
                               
                                                                                                                                             
                  
   
 
+const DEFAULT_DELAY_MS = 150;
+const DEFAULT_MIN_INTERVAL_MS = 250;
+const DEFAULT_BACKOFF_BASE_MS = 30_000;
+const DEFAULT_BACKOFF_MAX_MS = 300_000;
+
 function createSuggestFetcher({
   fetch,
-  delay = 120,
+  delay = DEFAULT_DELAY_MS,
+  minInterval = delay >= DEFAULT_DELAY_MS ? DEFAULT_MIN_INTERVAL_MS : 0,
   cacheSize = 64,
+  backoffBaseMs = DEFAULT_BACKOFF_BASE_MS,
+  backoffMaxMs = DEFAULT_BACKOFF_MAX_MS,
+  now = Date.now,
+  store = createSuggestStore(),
+  onThrottled,
 }   
                    
                  
+                       
                      
+                         
+                        
+                     
+                       
+                           
  )                 {
-  const cache = new Map                           ();
-  const none                    = { queries: [], sites: [] };
+  const { cache, backoff } = store;
   let timer                                           ;
   let inFlight                             ;
   let generation = 0;
@@ -3839,6 +3912,32 @@ function createSuggestFetcher({
     if (cache.size > cacheSize) cache.delete(cache.keys().next().value );
   };
 
+  const isBackedOff = (engineId        ) => {
+    const state = backoff.get(engineId);
+    if (!state) return false;
+    const remaining = state.until - now();
+    if (remaining > backoffMaxMs) {
+      backoff.delete(engineId);
+      return false;
+    }
+    return remaining > 0;
+  };
+
+  const noteBlocked = (engineId        , retryAfterMs         ) => {
+    const t = now();
+    const failures = (backoff.get(engineId)?.failures ?? 0) + 1;
+    const base = backoffBaseMs * 2 ** Math.min(failures - 1, 4);
+    const wait = Math.min(backoffMaxMs, Math.max(retryAfterMs ?? 0, base));
+    const revision = ++store.backoffRevision;
+    backoff.set(engineId, { failures, until: t + wait, revision });
+  };
+
+  const paceRemaining = () => {
+    if (minInterval <= 0 || store.lastSentAt <= 0) return 0;
+    const rawElapsed = now() - store.lastSentAt;
+    return rawElapsed >= 0 ? Math.max(0, minInterval - rawElapsed) : 0;
+  };
+
   return {
     cancel,
     request(engine, query, onResult, onFailed) {
@@ -3848,29 +3947,63 @@ function createSuggestFetcher({
       const current = generation;
       const cached = cache.get(url);
       if (cached) {
+        remember(url, cached);
         void Promise.resolve().then(() => current === generation && onResult(cached.queries, cached.sites));
         return;
       }
-      timer = setTimeout(() => {
+      if (isBackedOff(engine.id)) {
+        onThrottled?.();
+        void Promise.resolve().then(() => current === generation && onFailed?.());
+        return;
+      }
+      const dispatch = () => {
         timer = undefined;
+        if (current !== generation) return;
+        if (isBackedOff(engine.id)) {
+          onThrottled?.();
+          onFailed?.();
+          return;
+        }
+        const remaining = paceRemaining();
+        if (remaining > 0) {
+          timer = setTimeout(dispatch, remaining);
+          return;
+        }
+        store.lastSentAt = now();
+        const dispatchRevision = store.backoffRevision;
         const controller = new AbortController();
         inFlight = controller;
         fetch(url, { signal: controller.signal, engine })
           .then(async (res) => {
-            if (!res.ok) return none;
+            if (controller.signal.aborted) return null;
+            if (!res.ok) {
+              if (res.blocked) noteBlocked(engine.id, res.retryAfterMs);
+              return { ok: false          };
+            }
             try {
-              return parseRemoteSuggestions(suggestReplyJson(await res.text()));
+              const parsed = suggestReplyJson(await res.text());
+              if (!isSuggestReplyShape(parsed)) return { ok: false          };
+              const state = backoff.get(engine.id);
+              if (state && state.revision <= dispatchRevision) backoff.delete(engine.id);
+              return { ok: true         , suggestions: parseRemoteSuggestions(parsed) };
             } catch {
-              return none;
+              return { ok: false          };
             }
           })
           .then(
-            (suggestions) => {
-              if (controller.signal.aborted) return;
-              remember(url, suggestions);
+            (outcome) => {
+              if (!outcome || controller.signal.aborted) return;
+              if (!outcome.ok) {
+                if (current === generation) {
+                  inFlight = undefined;
+                  onFailed?.();
+                }
+                return;
+              }
+              remember(url, outcome.suggestions);
               if (current === generation) {
                 inFlight = undefined;
-                onResult(suggestions.queries, suggestions.sites);
+                onResult(outcome.suggestions.queries, outcome.suggestions.sites);
               }
             },
             () => {
@@ -3879,7 +4012,8 @@ function createSuggestFetcher({
               onFailed?.();
             },
           );
-      }, delay);
+      };
+      timer = setTimeout(dispatch, Math.max(delay, paceRemaining()));
     },
   };
 }

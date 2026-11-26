@@ -17,12 +17,12 @@ VECTORS = CORE / 'tests/import-netscape-vectors.json'
 HOSTILE = REPO / 'scripts/security/hostile-inputs.mjs'
 SWIFT_CORE = REPO / 'packages/import/ios/Core'
 SWIFT_SOURCES = ['NetscapeBookmarks', 'Model', 'SecretBytes', 'ArcExtras', 'ArcSidebar', 'ChromiumFavicons', 'SQLiteSnapshot']
-WINDOWS_IMPORT = REPO / 'packages/expo-windows/src/import'
 LINUX_SOURCE = REPO / 'engine/ardiacore-linux/src'
 LINUX_SHIM = REPO / 'engine/ardiacore-linux/tests/fixtures/import_base.h'
 REQUIRED = set(filter(None, os.environ.get('ARDIA_REQUIRE_IMPORT_CROSSCHECK', '').split(',')))
 WHITE_SPACE = set('\t\n\v\f\r \x85\xa0     　') | {chr(c) for c in range(0x2000, 0x200b)}
-PLATFORMS = {'swift', 'windows', 'linux'}
+PLATFORMS = {'swift', 'linux'}
+CROSSCHECKS = {'rust', 'swift', 'linux'}
 
 sys.path.insert(0, str(HERE))
 from materialize import materialize, shape, same
@@ -135,23 +135,6 @@ class SwiftNetscapeBookmarks(CrossCheck, unittest.TestCase):
 
     def command(self, path):
         return [str(self.binary), str(path)]
-
-
-class WindowsNetscapeBookmarks(CrossCheck, unittest.TestCase):
-    platform = 'windows'
-
-    @classmethod
-    def setUpClass(cls):
-        node = shutil.which('node')
-        if node is None:
-            unavailable('windows', 'node is unavailable')
-        version = subprocess.run([node, '-p', 'process.versions.node'], capture_output=True, text=True).stdout.strip()
-        if tuple(map(int, version.split('.')[:2])) < (22, 18):
-            unavailable('windows', f'node {version} cannot strip TypeScript types and register module hooks')
-        cls.node = node
-
-    def command(self, path):
-        return [self.node, '--no-warnings', '--stack-size=984', str(HERE / 'netscape.mjs'), str(WINDOWS_IMPORT), str(path)]
 
 
 class LinuxNetscapeBookmarks(CrossCheck, unittest.TestCase):
@@ -271,6 +254,11 @@ class HostileInputsThroughTheCAbi(unittest.TestCase):
                 got = from_c_abi(json.loads(done.stdout))
                 want = hostile_tree(entry['text'])
                 self.assertTrue(same(got, want), f'got {json.dumps(got)[:600]}, want {json.dumps(want)[:600]}')
+
+
+class CrossCheckRequests(unittest.TestCase):
+    def test_every_required_cross_check_is_one_this_suite_runs(self):
+        self.assertLessEqual(REQUIRED, CROSSCHECKS, f'ARDIA_REQUIRE_IMPORT_CROSSCHECK names {sorted(REQUIRED - CROSSCHECKS)}, which no test here runs')
 
 
 class VectorsAreWellFormed(unittest.TestCase):

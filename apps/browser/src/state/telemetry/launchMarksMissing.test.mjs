@@ -28,7 +28,7 @@ after(() => client.setSharing(false, "settings"));
 test("perf_launch leaves out a mark, a load average, a hidden flag or a launch source the app did not report instead of sending 0, false or free text", async () => {
   client.loadChoice();
   journeys.startJourneys(null);
-  journeys.launchCommitted();
+  journeys.launchCommitted(client.consentNow());
   const deadline = Date.now() + 10_000;
   while (journeys.devJourneys().pending[0]?.usable === undefined && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
   track.markFirstWindow();

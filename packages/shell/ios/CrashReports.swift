@@ -140,7 +140,8 @@ enum CrashReports {
     let usedImages = body["usedImages"] as? [[String: Any]] ?? []
     let images = usedImages.map(imageName)
     let threads = body["threads"] as? [[String: Any]] ?? []
-    let faulting = body["faultingThread"] as? Int ?? threads.firstIndex { $0["triggered"] as? Bool == true } ?? 0
+    let faulting = CrashThread.stack(in: body)
+    let crashedThread = CrashThread.names(in: body)
     let frames = threads.indices.contains(faulting) ? threads[faulting]["frames"] as? [[String: Any]] ?? [] : []
     func simplified(_ frames: [[String: Any]]) -> [[String: Any]] {
       frames.prefix(64).map { frame -> [String: Any] in
@@ -171,10 +172,13 @@ enum CrashReports {
     let termination = body["termination"] as? [String: Any] ?? [:]
     for (key, value) in versions + [
       ("incidentId", header["incident_id"]), ("exceptionType", exception["type"]), ("signal", exception["signal"]),
-      ("terminationNamespace", termination["namespace"]),
+      ("terminationNamespace", termination["namespace"]), ("terminationIndicator", termination["indicator"]),
+      ("exceptionCodes", exception["codes"]),
+      ("crashedThread", crashedThread.thread), ("crashedQueue", crashedThread.queue),
     ] {
       if let value = value as? String { report[key] = value }
     }
+    if let code = termination["code"] as? NSNumber, code.int64Value >= 0 { report["terminationCode"] = code.int64Value }
     if let launched = reportTime(body["procLaunch"]), let captured = reportTime(body["captureTime"]), captured >= launched {
       report["uptimeSeconds"] = Int(captured.timeIntervalSince(launched).rounded())
     }

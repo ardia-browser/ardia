@@ -75,7 +75,7 @@ export type PageViewProps = ViewProps & {
   onPageError?: (error: PageError) => void;
   onPageDrawn?: (document?: number) => void;
   coverNativeId?: string;
-  onPageCoverHidden?: (reason: "drawn" | "cap", found: boolean, cover?: string) => void;
+  onPageCoverHidden?: (reason: "drawn" | "cap", found: boolean, cover?: string, document?: number) => void;
 };
 
 export type PageViewHandle = {
@@ -160,6 +160,9 @@ export type PageSnapshot = {
   durable?: boolean;
   generation?: number;
   frame?: { x: number; y: number; width: number; height: number } | null;
+  view?: number;
+  viewId?: number;
+  viewSettled?: boolean;
 };
 
 export type RefusedSnapshot = { refused: "hidden" | "blank" };
@@ -207,6 +210,7 @@ export type PageEngineEvent =
   | { name: "page.summarySettled"; pageId: string; trigger: PageSummaryTrigger; outcome: PageSummaryOutcome; chatGPTFellBack?: boolean; geminiNanoMissing?: string | null; isPrivate: boolean }
   | { name: "page.snapshotLanded"; pageId: string; uri: string; generation: number }
   | { name: "page.scrollSettled"; pageId: string; y: number }
+  | { name: "page.viewMoved"; pageId: string; view: number; viewId: number }
   | { name: "page.externalAppMissing"; pageId: string; url: string }
   | { name: "page.desktop"; pageId: string; line: string }
   | { name: "pages.privateSessionEnded" }
@@ -217,7 +221,7 @@ export type PageEventPayload =
       Omit<PageNavigationState, "url"> & { url?: string })
   | { name: "tone"; top?: string; bottom?: string; barDark?: boolean }
   | { name: "drawn"; document?: number }
-  | { name: "coverHidden"; reason: "drawn" | "cap"; found: boolean; cover?: string }
+  | { name: "coverHidden"; reason: "drawn" | "cap"; found: boolean; cover?: string; document?: number }
   | { name: "swipedPastHistory"; direction: PageSwipeDirection }
   | ({ name: "error" } & PageError);
 

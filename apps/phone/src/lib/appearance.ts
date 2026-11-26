@@ -25,7 +25,7 @@ export function chromeStyle(design: Design, choice: InterfaceStyleChoice, mac: M
 }
 
 export function preferredScheme(design: Design, choice: SchemeChoice, mac: MacLook | null): PreferredScheme {
-  if (design !== "redesigned" || choice === "system") return null;
+  if (design === "original" || choice === "system") return null;
   if (choice === "light" || choice === "dark") return choice;
   return mac?.appearance === "light" || mac?.appearance === "dark" ? mac.appearance : null;
 }

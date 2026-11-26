@@ -1,6 +1,6 @@
 import { linkPluginPrograms, setAfterUpdateQuitConsent, sweepPluginPrograms, takeAfterUpdateQuitStops, unlinkPluginPrograms, type PluginProgramsResult } from "../../platform/plugins";
 import { errorText } from "../../lib/errors";
-import { notePlugin, notePluginTimes } from "../telemetry/pluginCounts";
+import { notePlugin, notePluginTimes, programLinkCause } from "../telemetry/pluginCounts";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 import { onConsentPeriodChange } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
@@ -46,10 +46,12 @@ async function link(name: string, consent?: ConsentToken | null) {
   if (now?.state !== "linking" || now.request !== request || (!result.ok && result.stale)) return;
   if (!result.ok) {
     notePlugin("program_link_failures", consent);
+    notePlugin(programLinkCause(null), consent);
     setPrograms(name, { state: "failed", hash, reason: result.reason ?? "its commands couldn't go on PATH" });
     return;
   }
   notePlugin(Object.keys(result.refused).length ? "program_link_failures" : "program_links", consent);
+  for (const program of Object.keys(result.refused)) notePlugin(programLinkCause(result.causes?.[program]), consent);
   if (result.kept && Object.keys(result.refused).length) notePlugin("program_links_kept", consent);
   const adoption = adoptionOf(result);
   if (adoption === "adopted") notePlugin("program_adoptions", consent);

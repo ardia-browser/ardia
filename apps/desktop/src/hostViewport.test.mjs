@@ -202,7 +202,7 @@ test("a page that stops drawing because shell UI covers it is reported once, and
   try {
     let wanted = true;
     let covered = 0;
-    const regions = { setPage() {}, refresh() {}, dropPage() {}, ...cover() };
+    const regions = { setPage() {}, refresh() {}, dropPage() {}, pageViewport() {}, ...cover() };
     const stop = watchPageBelowShell(page, regions, () => wanted, () => null, undefined, () => covered++);
     hit = toolbar;
     s.mutate();
@@ -240,7 +240,7 @@ test("a page that only just overlaps the window's bottom edge is hidden but not 
   try {
     let covered = 0;
     const hidden = [];
-    const regions = { setPage: (_slot, visible) => hidden.push(!visible), refresh() {}, dropPage() {}, ...cover() };
+    const regions = { setPage: (_slot, visible) => hidden.push(!visible), refresh() {}, dropPage() {}, pageViewport() {}, ...cover() };
     const stop = watchPageBelowShell(page, regions, () => true, () => null, undefined, () => covered++);
     rect = box(200, 795, 800, 600);
     s.mutate();
@@ -261,7 +261,7 @@ test("a tab page sends its card radii with each viewport and gives the same gett
     const cardRadii = () => card;
     const sent = [];
     const pages = [];
-    const regions = { setPage: (...args) => pages.push(args), refresh() {}, dropPage() {}, ...cover() };
+    const regions = { setPage: (...args) => pages.push(args), refresh() {}, dropPage() {}, pageViewport() {}, ...cover() };
     const tab = { identity: {}, disposed: false, viewport: (viewport) => (sent.push(viewport), Promise.resolve()) };
     const stop = watchPageBelowShell(page, regions, () => true, () => tab, undefined, undefined, cardRadii);
     s.mutate();
@@ -386,7 +386,7 @@ test("the page watcher leaves counting a refused viewport to the tab that sent i
   client.setSharing(true, "onboarding");
   placement.takeWindowPlacementCounts();
   try {
-    const regions = { setPage() {}, refresh() {}, dropPage() {}, ...cover() };
+    const regions = { setPage() {}, refresh() {}, dropPage() {}, pageViewport() {}, ...cover() };
     const tab = { identity: {}, disposed: false, viewport: () => Promise.reject(new Error("Viewport radii must be four finite, nonnegative corners")) };
     const stop = watchPageBelowShell(page, regions, () => true, () => tab, undefined, undefined, () => ({ upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 }));
     s.mutate();
@@ -395,6 +395,123 @@ test("the page watcher leaves counting a refused viewport to the tab that sent i
     stop();
   } finally {
     client.setSharing(false, "settings");
+    s.restore();
+  }
+});
+
+test("a page inside a moving Peek stage stays attached where it was, is not re-sent every frame, and is published once at its settled rect", async () => {
+  let x = 200;
+  let moving = false;
+  const page = { isConnected: true, parentElement: null, getBoundingClientRect: () => box(x, 47, 763, 900), contains: (node) => node === page, closest: (selector) => (moving && selector.includes("data-ardia-peek-moving") ? {} : null) };
+  let running = false;
+  const s = stage({ width: 1280, height: 1000, elementFromPoint: () => page, getAnimations: () => (running ? [{ playState: "running", effect: { target: page } }] : []) });
+  try {
+    const updates = [];
+    const stop = watchTabViewport(page, () => true, (update) => updates.push(update), cover());
+    assert.equal(updates.length, 1);
+    assert.equal(updates[0].visible, true);
+    moving = true;
+    running = true;
+    document.dispatchEvent(new Event("animationstart"));
+    for (const next of [180, 160, 140, 120]) {
+      x = next;
+      s.frames.shift()?.();
+      document.dispatchEvent(new Event("animationstart"));
+    }
+    assert.equal(updates.length, 1, "no hide and no per-frame bounds while the stage moves");
+    s.frames.shift()?.();
+    assert.equal(s.frames.length, 0, "a held page stops sampling every frame");
+    assert.equal(updates.length, 1);
+    moving = false;
+    running = false;
+    x = 100;
+    s.mutate();
+    assert.equal(updates.length, 2);
+    assert.deepEqual(updates[1], { rect: { x: 100, y: 47, width: 763, height: 900 }, visible: true });
+    stop();
+  } finally {
+    s.restore();
+  }
+});
+
+test("an older viewport the host acknowledges after a newer one was queued or refused still records the rect the native page holds", async () => {
+  const { watchPageBelowShell } = await import("./shims/web/HostWebView.tsx");
+  let x = 300;
+  const page = { isConnected: true, parentElement: null, getBoundingClientRect: () => box(x, 50, 600, 500), contains: (node) => node === page };
+  const s = stage({ elementFromPoint: () => page });
+  try {
+    const replies = [];
+    const recorded = [];
+    const shown = [];
+    const regions = { setPage: (_slot, visible) => shown.push(visible), refresh() {}, dropPage() {}, pageViewport: (_slot, rect) => recorded.push(rect), ...cover() };
+    const tab = { identity: {}, disposed: false, viewport: (viewport) => new Promise((resolve, reject) => replies.push({ viewport, resolve, reject })) };
+    const stop = watchPageBelowShell(page, regions, () => true, () => tab);
+    assert.equal(replies.length, 1);
+    x = 320;
+    s.mutate();
+    assert.equal(replies.length, 2);
+    replies[1].reject(new Error("refused"));
+    replies[0].resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(recorded, [{ x: 300, y: 50, width: 600, height: 500 }]);
+    assert.deepEqual(shown, [true]);
+    stop();
+    const late = { identity: {}, disposed: false, viewport: () => new Promise((resolve) => replies.push({ resolve })) };
+    const stopLate = watchPageBelowShell(page, regions, () => true, () => late);
+    stopLate();
+    replies.at(-1).resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(recorded.length, 1, "an ack after unmount records nothing");
+  } finally {
+    s.restore();
+  }
+});
+
+test("a show coalesced away by a hide never opens the cutout when the hide is acknowledged, even with a later show refused", async () => {
+  const { watchPageBelowShell } = await import("./shims/web/HostWebView.tsx");
+  const { HostTab } = await import("./hostTab.ts");
+  const viewportCalls = [];
+  const host = {
+    bootstrap: { windowId: "main", profileId: "default" },
+    call: async () => "null",
+    invoke: (method, args) => {
+      if (method === "tab.create") return Promise.resolve({ browserId: 41, chromeTabId: 41 });
+      if (method === "tab.viewport") return new Promise((resolve, reject) => viewportCalls.push({ args, resolve, reject }));
+      return Promise.resolve(null);
+    },
+    onEvent: () => () => {},
+  };
+  const tab = new HostTab(host, { key: "coalesced", url: "https://example.test/" }, () => {});
+  await tab.ready;
+  let x = 310;
+  let wanted = true;
+  const page = { isConnected: true, parentElement: null, getBoundingClientRect: () => box(x, 50, 600, 500), contains: (node) => node === page };
+  const s = stage({ elementFromPoint: () => page });
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  try {
+    const recorded = [];
+    const shown = [];
+    const regions = { setPage: (_slot, visible) => shown.push(visible), refresh() {}, dropPage() {}, pageViewport: (_slot, rect) => recorded.push(rect), ...cover() };
+    const stop = watchPageBelowShell(page, regions, () => wanted, () => tab);
+    wanted = false;
+    s.mutate();
+    await flush();
+    assert.equal(viewportCalls.length, 1);
+    assert.equal(viewportCalls[0].args.visible, false, "the queued show was coalesced into the hide");
+    wanted = true;
+    x = 320;
+    s.mutate();
+    viewportCalls[0].resolve();
+    await flush();
+    assert.equal(viewportCalls.length, 2);
+    assert.equal(viewportCalls[1].args.visible, true);
+    viewportCalls[1].reject(new Error("refused"));
+    await flush();
+    await flush();
+    assert.deepEqual(recorded, [], "no rect is recorded for a viewport the host never applied");
+    assert.equal(shown.includes(true), false, "the cutout stays closed over the hidden page");
+    stop();
+  } finally {
     s.restore();
   }
 });

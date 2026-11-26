@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, type GestureResponderEvent, type ViewStyle } from "react-native";
-import { drawnSymbol, iconButton, radius as radii, useOffstage, useTooltip } from "../ui";
+import { continuousCorners, drawnSymbol, iconButton, radius as radii, useOffstage, useTooltip } from "../ui";
 import { useTheme } from "../ui/theme";
 import { useTabCloseControlWhile } from "../../state/sidebar/closeControl";
 
@@ -36,9 +36,9 @@ export function RowCloseButton({
       onHoverOut={() => setPointed(false)}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [style, { width: box, height: box, borderRadius: radius, alignItems: "center", justifyContent: "center" }, pressed || hovered ? { backgroundColor: pressed ? theme.toolbarPressed : theme.toolbarHover } : null]}
+      style={({ pressed }) => [style, { width: box, height: box, ...continuousCorners(radius), alignItems: "center", justifyContent: "center" }, pressed || hovered ? { backgroundColor: pressed ? theme.toolbarPressed : theme.toolbarHover } : null]}
     >
-      {drawnSymbol({ name: control?.icon ?? icon ?? "xmark", size: iconButton.s.glyph, weight: "semibold", color: theme.icon, style: { width: box, height: box } })}
+      {drawnSymbol({ name: control?.icon ?? icon ?? "xmark", size: iconButton.s.glyph, weight: "semibold", color: theme.icon, centresInk: true, style: { width: box, height: box } })}
     </Pressable>
   );
 }

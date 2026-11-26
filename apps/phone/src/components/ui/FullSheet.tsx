@@ -44,9 +44,9 @@ const SheetFrameContext = createContext<SheetFrame | null>(null);
 
 export const useSheetFrame = (): SheetFrame | null => useContext(SheetFrameContext);
 
-type Props<T extends string> = { sheet: T | null; progress: SharedValue<number>; onDismiss: () => void; fullScreenSheet?: T | null; children: (shown: T) => ReactNode };
+type Props<T extends string> = { sheet: T | null; progress: SharedValue<number>; onDismiss: () => void; fullScreenSheet?: T | null; dragEnabled?: boolean; children: (shown: T) => ReactNode };
 
-export function FullSheet<T extends string>({ sheet, progress, onDismiss, fullScreenSheet = null, children }: Props<T>) {
+export function FullSheet<T extends string>({ sheet, progress, onDismiss, fullScreenSheet = null, dragEnabled = true, children }: Props<T>) {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const reduceMotion = useReduceMotion();
@@ -126,7 +126,7 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, fullSc
     () =>
       Gesture.Pan()
         .withTestId("fullSheetDrag")
-        .enabled(!fullScreen)
+        .enabled(dragEnabled && !fullScreen)
         .manualActivation(true)
         .onTouchesDown((event) => {
           const first = event.allTouches[0];
@@ -154,7 +154,7 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, fullSc
           if (sheetDismisses(offset.value, height.value, event.velocityY)) runOnJS(onDismiss)();
           else offset.value = material ? materialMove(0, "standard", materialDuration.short4) : withSpring(0, tabsMotion.sheetRise);
         }),
-    [onDismiss, top, material, fullScreen],
+    [onDismiss, top, material, fullScreen, dragEnabled],
   );
 
   const frame = useMemo<SheetFrame>(

@@ -28,7 +28,6 @@ export const SITE_EVENTS = [
   "demo_customize",
   "demo_setup_code_shown",
   "demo_setup_code_copied",
-  "game_solved",
   "release_notes_viewed",
   "send_to_mac_clicked",
   "testflight_clicked",
@@ -109,6 +108,16 @@ export const FLAGS = {
     variants: [
       { key: "control", rollout: 50 },
       { key: "band", rollout: 50 },
+    ],
+    experiment: true,
+  },
+  "donate-floor": {
+    id: 1,
+    version: 1,
+    rollout: 100,
+    variants: [
+      { key: "ten", rollout: 50 },
+      { key: "five", rollout: 50 },
     ],
     experiment: true,
   },

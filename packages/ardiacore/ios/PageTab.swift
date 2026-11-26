@@ -18,6 +18,7 @@ protocol PageTab: NSView {
   var contentsBackgroundColor: NSColor? { get set }
   var shownURL: String? { get set }
   var autoPictureInPicture: Bool { get set }
+  var pageMenuItems: [[String: String]] { get set }
   var frozen: Bool { get set }
   var mediaCaptureSourceId: String? { get }
 

@@ -50,6 +50,12 @@ public final class FieldGlowHub {
     store(id, model, moves)
   }
 
+  public func pulse(_ id: String, _ pulse: FieldGlowPulse?) {
+    guard var model = models[id], model.setPulse(pulse) else { return }
+    models[id] = model
+    target(id)?.run([], model: model)
+  }
+
   public func finished(_ id: String, generation: Int) {
     guard var model = models[id], model.finished(generation: generation) else { return }
     models[id] = model

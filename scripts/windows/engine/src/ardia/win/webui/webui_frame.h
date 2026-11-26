@@ -23,7 +23,6 @@ class Widget;
 namespace ardia_win::webui {
 
 inline constexpr int kResizeCornerWidth = 16;
-inline constexpr DWORD kMaximizeClickLimitMs = 5000;
 
 class ShellBrowserFrameView : public BrowserFrameView {
   METADATA_HEADER(ShellBrowserFrameView, BrowserFrameView)
@@ -80,11 +79,19 @@ class CaptionInput : public ui::HWNDMessageFilter {
                      LRESULT* l_result) override;
 
  private:
+  void Track(bool on_max_button);
+  void Press();
+  void Release();
+  void LeaveReported();
+  void CancelPress();
+  void Publish(bool changed);
+  void WatchPointer();
+  void StopWatchingPointer();
+  bool PointerOnMaximizeButton() const;
   void Emit();
-  void ArmNonClientLeave(HWND target);
 
   HWND root_ = nullptr;
-  HWND nc_leave_tracked_hwnd_ = nullptr;
+  bool watching_pointer_ = false;
   DWORD maximize_pressed_at_ = 0;
   MaximizeButtonStateMachine state_;
   StateChanged changed_;

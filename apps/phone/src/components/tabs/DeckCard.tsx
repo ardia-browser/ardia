@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
 import { countRender } from "../../state/app/interactionPerf";
 import { PixelRatio, Platform, StyleSheet, Text, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue, type SharedValue } from "react-native-reanimated";
@@ -15,6 +15,8 @@ import { accentGlowCss, barHeight, elevation, FadeView, Favicon, font, iPhoneOr,
 import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuHandlers } from "../ui/MenuTrigger";
 import { hideArchiveCard } from "../../state/browse/archiveCard";
 import { OPENING_COVER_ID, useBrowse } from "../../state/browse/store";
+import { holdDestinationFace } from "../../state/browse/destination";
+import { tabSwitchCuts } from "../../state/browse/tabSwitch";
 import { canShareTab, copyTabLink, shareTab } from "../../state/browse/tabMenus";
 import { actionWords } from "../../lib/sharedWords";
 import { CARD_MENU_ACTION, CLOSE_TAB, tabCardAccess, tabCardTitle, tabCardTitleText, useIsActiveTab } from "./tabCard";
@@ -160,6 +162,7 @@ type Props = {
   onOpen: (index: number) => void;
   onClose: (index: number) => void;
   onCloseNow: (index: number) => void;
+  indexOf?: (id: string) => number;
   onMenu?: (index: number, card: RefObject<ViewInstance | null>) => void;
 };
 
@@ -249,11 +252,13 @@ export function useCardPlacement(id: string, g: DeckGeometry, motion: DeckMotion
 
 export type DeckCardProps = Props;
 
-export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow, onMenu }: Props) {
+export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow, onMenu, indexOf }: Props) {
+  const placeNow = () => (indexOf ? indexOf(tab.id) : index);
   const reach = useRef<ViewInstance>(null);
   countRender("DeckCard");
   const theme = useTheme();
   const design = useDesign();
+  useLayoutEffect(() => (design === "redesigned" && tabSwitchCuts() ? holdDestinationFace(tab.id, index) : undefined), [tab.id, design, index]);
   const tone = shownTone(useHeldPageTone(tab.id), tab.themeColorHex);
   const { orderIds, scaleProgress, covering } = motion;
   const id = tab.id;
@@ -345,9 +350,22 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
         tab={tab}
         title={title}
         host={host}
-        open={() => onOpen(index)}
-        close={() => onCloseNow(index)}
-        menu={onMenu ? () => onMenu(index, reach) : undefined}
+        open={() => {
+          const at = placeNow();
+          if (at >= 0) onOpen(at);
+        }}
+        close={() => {
+          const at = placeNow();
+          if (at >= 0) onCloseNow(at);
+        }}
+        menu={
+          onMenu
+            ? () => {
+                const at = placeNow();
+                if (at >= 0) onMenu(at, reach);
+              }
+            : undefined
+        }
         style={[styles.reach, { width: g.cardWidth, height: g.cardHeight }, overCardLayer, reachStyle]}
       />
       <Animated.View style={[styles.header, { width: g.cardWidth }, overCardLayer, headerStyle]} pointerEvents="none">

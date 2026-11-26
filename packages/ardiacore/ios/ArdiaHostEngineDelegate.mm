@@ -34,6 +34,7 @@ static void EndFailedPageDragsAtMouseUp() {
 
 - (void)engineDidStart {
   ArdiaLaunchSequence.shared.engineStartedAt = NSDate.date.timeIntervalSince1970 * 1000;
+  ArdiaLaunchSequence.shared.engineStartUsage = ArdiaLaunchSequence.processUsageNow;
   NSLog(@"[ardiacore] engine started (Chromium %@)", ArdiaCoreEngine.sharedEngine.chromiumVersion);
   ArdiaLaunchSequence.shared.engineRunning = YES;
   WatchReservedShortcuts();
@@ -52,6 +53,9 @@ static void EndFailedPageDragsAtMouseUp() {
   NSBundle *bundle = [NSBundle bundleForClass:ArdiaHostEngineDelegate.class];
   NSString *path = [bundle pathForResource:@"page_script" ofType:@"js"];
   NSString *script = path ? [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] : nil;
+  NSString *metricsPath = [bundle pathForResource:@"page_metrics" ofType:@"js"];
+  NSString *metrics = metricsPath ? [NSString stringWithContentsOfFile:metricsPath encoding:NSUTF8StringEncoding error:nil] : nil;
+  if (script && metrics) script = ardia_host::WithPageMetrics(script, metrics);
   if (script) engine.pageScript = script;
   [ArdiaLaunchSequence.shared reach:ArdiaLaunchEngineStarted];
 

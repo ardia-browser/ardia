@@ -26,10 +26,10 @@ function makeKeypair(dir) {
   return { privPem, pubPem, privateKey };
 }
 
-function makeFixture(dir, version, build, { x64Body, arm64Body, keypair } = {}) {
+function makeFixture(dir, version, build, { x64Body, arm64Body, keypair, shell = "webui" } = {}) {
   const installers = join(dir, `installers-${build}`);
   mkdirSync(installers, { recursive: true });
-  writeFileSync(join(installers, "Ardia.build.json"), JSON.stringify({ version, build }) + "\n");
+  writeFileSync(join(installers, "Ardia.build.json"), JSON.stringify(shell ? { version, build, shell } : { version, build }) + "\n");
   const files = [
     [`Ardia-${version}-windows-x64-setup.exe`, x64Body ?? Buffer.from(`x64-payload-${build}`)],
     [`Ardia-${version}-windows-arm64-setup.exe`, arm64Body ?? Buffer.from(`arm64-payload-${build}`)],
@@ -773,6 +773,36 @@ test("live publish fails closed without a signing key while --dry-run works loca
     assert.equal(dryRes.status, 0, dryRes.stderr + dryRes.stdout);
     assert.equal(readFileSync(join(dryOut, "windows-update.json.sig")).length, 64);
     assert.ok(execFileSync("bash", ["-n", publishScript], { encoding: "utf8" }) === "");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("only the WebUI shell's installers publish: a retired React Native build or an unknown shell is refused", () => {
+  ensureVerifier();
+  const dir = mkdtempSync(join(tmpdir(), "ardia-win-pub-shell-"));
+  try {
+    const { bin, lockFile } = makeFakeBin(dir);
+    const dryRun = (installers, out, extra = []) =>
+      runPublish(["--dry-run", ...extra, "--installers", installers, "--out", join(dir, out), "--verify-bin", verifierPath], { binDir: bin, lockFile, githubActions: false });
+
+    const unstamped = makeFixture(join(dir, "unstamped"), "0.2.99", 500, { shell: null });
+    const refused = dryRun(unstamped.installers, "out-unstamped");
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /is the rnw shell's build: only the WebUI shell's installers are published/);
+
+    const webui = makeFixture(join(dir, "webui"), "0.2.99", 500);
+    const shipped = dryRun(webui.installers, "out-webui");
+    assert.equal(shipped.status, 0, shipped.stderr + shipped.stdout);
+
+    const unknown = makeFixture(join(dir, "unknown"), "0.2.99", 500, { shell: "electron" });
+    const unknownRes = dryRun(unknown.installers, "out-unknown");
+    assert.notEqual(unknownRes.status, 0);
+    assert.match(unknownRes.stderr, /names no known shell/);
+
+    const gone = dryRun(webui.installers, "out-gone", ["--shell", "rnw"]);
+    assert.notEqual(gone.status, 0);
+    assert.match(gone.stderr, /unknown option --shell/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

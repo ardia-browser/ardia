@@ -1,6 +1,7 @@
 import { useContext } from "react";
 import { Animated, View } from "react-native";
 import { useIsActiveTab, usePageProfileId, useTab, useWindowId } from "../../state/browser/hooks";
+import { useSplitOrientation } from "../../state/splits/hooks";
 import { useShownTabIdFor } from "../../state/tabs/topStrip";
 import { TabIcon } from "../sidebar/TabIcon";
 import { Divider, FadeLabel, Symbol } from "../ui";
@@ -84,6 +85,7 @@ function SplitPart({ tabId, first, last, ink, width }: { tabId: string; first: b
   const theme = useTheme();
   const windowId = useWindowId();
   const tab = useTab(tabId);
+  const splitOrientation = useSplitOrientation(first ? tabId : undefined);
   const focused = useIsActiveTab(tabId);
   const drag = useStripDrag({ tabId, ids: () => [tabId], pinned: false, groupId: null, geometry: NO_SLOTS, from: -1, width: 0, gap: 0, axis: "y" });
   const hover = useChipHover();
@@ -101,7 +103,7 @@ function SplitPart({ tabId, first, last, ink, width }: { tabId: string; first: b
         pressStyle={{ flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: first ? CHIP_PAD.left : 0, paddingRight: last ? CHIP_PAD.right : 0 }}
       >
         {first ? (
-          <Symbol name="rectangle.split.2x1" size={11} color={ink?.secondary ?? theme.textSecondary} style={SPLIT_GLYPH} />
+          <Symbol name={splitOrientation === "vertical" ? "rectangle.split.1x2" : "rectangle.split.2x1"} size={11} color={ink?.secondary ?? theme.textSecondary} style={SPLIT_GLYPH} />
         ) : (
           <Divider vertical length={SPLIT_DIVIDER_LENGTH} color={ink?.divider ?? theme.textTertiary} style={SPLIT_DIVIDER_GAP} />
         )}

@@ -15,7 +15,7 @@ import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import { join, resolve } from "node:path";
-import { session } from "../../../scripts/lib/instance.mjs";
+import { isAlive, session } from "../../../scripts/lib/instance.mjs";
 import { HOSTILE_STRINGS, HOSTILE_VALUES } from "../../../scripts/security/hostile-inputs.mjs";
 
 const [appArg, metroArg, scratchArg] = process.argv.slice(2);
@@ -122,7 +122,7 @@ function cleanup(code) {
   if (appPid) {
     try { process.kill(appPid, "SIGTERM"); } catch {}
     for (let i = 0; i < 50; i++) {
-      try { process.kill(appPid, 0); } catch { break; }
+      if (!isAlive(appPid)) break;
       execFileSync("sleep", ["0.1"]);
     }
     try { process.kill(appPid, "SIGKILL"); } catch {}

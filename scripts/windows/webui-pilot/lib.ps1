@@ -140,6 +140,11 @@ public static class Pilot {
     EnumWindows((h, l) => { if (IsShell(h)) n++; return true; }, IntPtr.Zero);
     return n;
   }
+  public static List<IntPtr> Shells() {
+    var found = new List<IntPtr>();
+    EnumWindows((h, l) => { if (IsShell(h)) found.Add(h); return true; }, IntPtr.Zero);
+    return found;
+  }
   public static RECT Frame(IntPtr hwnd) { RECT r; DwmGetWindowAttribute(hwnd, 9, out r, Marshal.SizeOf(typeof(RECT))); return r; }
   public static RECT Outer(IntPtr hwnd) { RECT r; GetWindowRect(hwnd, out r); return r; }
   public static string Hit(int x, int y) {
@@ -179,7 +184,7 @@ function Shell-Lines-Matching([string]$pattern, [int]$after = 0) { @(Shell-Lines
 function Wait-ShellReady([int]$Seconds = 60, [int]$After = 0) {
   $h = Wait-Shell $Seconds
   Wait-Until { DevTools-Port } $Seconds "this run's own DevTools port" | Out-Null
-  Wait-Until { (Shell-Lines-Matching 'shell painted; the start is settled' $After).Count -ge 1 } $Seconds 'the shell to report it painted' | Out-Null
+  Wait-Until { (Shell-Lines-Matching 'shell painted( in window \S+|; the start is settled)' $After).Count -ge 1 } $Seconds 'the shell to report it painted' | Out-Null
   Wait-Until { (Cdp-Eval 'typeof window.__ardiaHost === "object" && !!document.querySelector(".ardia-window-controls") && document.getElementById("root").innerText.trim().length > 0') -eq $true } $Seconds 'the shell UI to render' | Out-Null
   $h
 }
@@ -295,6 +300,22 @@ function Use-App([string]$folder) {
 }
 
 Use-App $App
+
+function Window-Identity([string]$match = 'chrome://ardia/') {
+  $answer = Cdp-Eval '__ardiaHost.invoke("ArdiaShell.windowIdentity", {}).then(r => JSON.stringify(r === undefined ? null : r), e => JSON.stringify({ error: String(e && e.message || e) }))' $match
+  if ($answer) { $answer | ConvertFrom-Json } else { $null }
+}
+
+function Is-Window([object]$identity, [string]$windowId = 'main') {
+  [bool]($identity -and ($identity.windowId -is [string]) -and ($identity.windowId -ceq $windowId) -and ("$($identity.rendererGeneration)" -match '^[1-9]\d{0,19}$'))
+}
+
+function Identity-Text([object]$identity) { if ($null -eq $identity) { 'no answer' } else { $identity | ConvertTo-Json -Compress } }
+
+function App-Processes {
+  $folder = $App.TrimEnd('\') + '\'
+  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($folder, [StringComparison]::OrdinalIgnoreCase) })
+}
 
 function Engine-Processes { @(Get-Process chrome, Ardia -ErrorAction SilentlyContinue | Where-Object { [Pilot]::IsTracked($_.Id) }) }
 

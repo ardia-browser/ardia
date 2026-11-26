@@ -6,6 +6,7 @@ final class WebKitSiteData: NSObject, WKHTTPCookieStoreObserver {
   static let gateDeadline: TimeInterval = 0.6
   private static let changeDebounce: TimeInterval = 0.3
   private static let maxCookies = 4000
+  private static let fingerprintQueue = DispatchQueue(label: "ardia.webkit-cookie-fingerprints", qos: .utility)
 
   private var watchingGate = false
   private var gates: [String: () -> Void] = [:]
@@ -13,6 +14,7 @@ final class WebKitSiteData: NSObject, WKHTTPCookieStoreObserver {
   private let observed = NSMapTable<WKHTTPCookieStore, NSString>.weakToStrongObjects()
   private var snapshots: [String: [String: Int]] = [:]
   private var refreshing: Set<String> = []
+  private var generations: [String: Int] = [:]
   let storage = WebKitSiteStorage()
 
   func setWatching(_ on: Bool) { watchingGate = on }
@@ -46,8 +48,14 @@ final class WebKitSiteData: NSObject, WKHTTPCookieStoreObserver {
     return !bare.isEmpty && domains.contains { bare == $0 || bare.hasSuffix("." + $0) }
   }
 
+  private static let plainCookieKeys: Set<String> = [
+    HTTPCookiePropertyKey.name, .value, .domain, .path, .expires, .secure, .version, .port, .discard, .comment, .commentURL, .originURL, .maximumAge,
+    .sameSitePolicy, HTTPCookiePropertyKey("HttpOnly"), HTTPCookiePropertyKey("Created"),
+  ].reduce(into: []) { $0.insert($1.rawValue) }
+
   static func partitioned(_ cookie: HTTPCookie) -> Bool {
-    cookie.properties?.keys.contains { $0.rawValue.localizedCaseInsensitiveContains("partition") } == true
+    guard let keys = cookie.properties?.keys else { return false }
+    return keys.contains { !plainCookieKeys.contains($0.rawValue) && $0.rawValue.range(of: "partition", options: [.caseInsensitive, .literal]) != nil }
   }
 
   static func engineEntry(_ cookie: HTTPCookie) -> [String: Any] {
@@ -73,7 +81,7 @@ final class WebKitSiteData: NSObject, WKHTTPCookieStoreObserver {
     watch(profile: profile)
     let wanted = domains.map { $0.lowercased() }.filter { !$0.isEmpty }
     store.httpCookieStore.getAllCookies { [storage] all in
-      let cookies = all.lazy.filter { !Self.partitioned($0) && Self.covered($0.domain, by: wanted) }.prefix(Self.maxCookies).map(Self.engineEntry)
+      let cookies = all.lazy.filter { Self.covered($0.domain, by: wanted) && !Self.partitioned($0) }.prefix(Self.maxCookies).map(Self.engineEntry)
       storage.read(profile: profile, store: store, origins: origins) { items in
         completion(["cookies": Array(cookies), "storage": items])
       }
@@ -139,6 +147,7 @@ final class WebKitSiteData: NSObject, WKHTTPCookieStoreObserver {
       cookieStore.remove(self)
     }
     snapshots.removeValue(forKey: profile)
+    generations[profile, default: 0] += 1
     storage.close(profile: profile)
   }
 
@@ -167,14 +176,21 @@ final class WebKitSiteData: NSObject, WKHTTPCookieStoreObserver {
 
   private func refresh(_ profile: String, announce: Bool) {
     guard let store = store(profile) else { return }
+    let generation = generations[profile, default: 0]
     store.httpCookieStore.getAllCookies { [weak self] all in
-      guard let self else { return }
-      let now = Self.fingerprints(all)
-      let was = self.snapshots[profile]
-      self.snapshots[profile] = now
-      guard announce, let was else { return }
-      let changed = Set(now.keys).union(was.keys).filter { now[$0] != was[$0] }
-      if !changed.isEmpty { ArdiaEvents.emit("webKit.siteCookiesChanged", data: ArdiaConsentStamp.begin().onto(["profile": profile, "domains": Array(changed.prefix(200))])) }
+      Self.fingerprintQueue.async {
+        let now = Self.fingerprints(all)
+        DispatchQueue.main.async { self?.settle(profile, now, generation: generation, announce: announce) }
+      }
     }
+  }
+
+  private func settle(_ profile: String, _ now: [String: Int], generation: Int, announce: Bool) {
+    guard generations[profile, default: 0] == generation else { return }
+    let was = snapshots[profile]
+    snapshots[profile] = now
+    guard announce, let was else { return }
+    let changed = Set(now.keys).union(was.keys).filter { now[$0] != was[$0] }
+    if !changed.isEmpty { ArdiaEvents.emit("webKit.siteCookiesChanged", data: ArdiaConsentStamp.begin().onto(["profile": profile, "domains": Array(changed.prefix(200))])) }
   }
 }

@@ -101,7 +101,8 @@ test("progress alone wakes no workspace subscriber and leaves downloads.json alo
     }
     assert.equal(notified(), afterStart, "progress alone must not notify the workspace store");
     assert.equal(useBrowser.getState().downloads, records);
-    assert.deepEqual(takeDownloadWork(), { download_progress_updates: 4, download_history_writes: 1, download_history_kb_written: Math.round(started.length / 1024) });
+    const { download_progress_updates, download_history_writes, download_history_kb_written } = takeDownloadWork();
+    assert.deepEqual({ download_progress_updates, download_history_writes, download_history_kb_written }, { download_progress_updates: 4, download_history_writes: 1, download_history_kb_written: Math.round(started.length / 1024) });
   });
 });
 

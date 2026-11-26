@@ -54,7 +54,6 @@
     "apps/browser/src/components/toolbar/fieldLoadFill.test.mjs": 4,
     "apps/browser/src/components/ui/switchAsksFirst.test.mjs": 2,
     "apps/browser/src/hostileInputs.test.mjs": 2,
-    "apps/browser/src/platform/windowsGradientFailure.test.mjs": 1,
     "apps/browser/src/secretContainment.test.mjs": 4,
     "apps/browser/src/state/airTraffic/airTraffic.test.mjs": 3,
     "apps/browser/src/state/app/quit.test.mjs": 1,
@@ -154,10 +153,7 @@
     "scripts/agent/train": 1,
     "scripts/lib/worktree-deps.test.mjs": 2,
     "scripts/release/cli-bootstrap-smoke.sh": 5,
-    "scripts/release/launch-check.sh": 1,
-    "scripts/windows/launch-smoke.ps1": 62,
-    "scripts/windows/relaunch-check.ps1": 2,
-    "scripts/windows/tour.ps1": 93
+    "scripts/release/launch-check.sh": 1
   },
   "expiring-skip": {
     "apps/browser/scripts/sim/known.json": 3,

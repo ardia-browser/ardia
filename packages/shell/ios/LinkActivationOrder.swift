@@ -135,19 +135,27 @@ final class LinkActivationOrder: NSObject {
     return true
   }
 
-  private static func leftToWindowManager(_ onScreen: [[String: Any]]) -> Bool {
-    let list = onScreen.compactMap { entry -> LinkActivationHold.Listed? in
+  private static func listed(_ onScreen: [[String: Any]]) -> [LinkActivationHold.Listed] {
+    onScreen.compactMap { entry -> LinkActivationHold.Listed? in
       guard let number = (entry[kCGWindowNumber as String] as? NSNumber)?.intValue,
             let owner = (entry[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
-            let layer = (entry[kCGWindowLayer as String] as? NSNumber)?.intValue,
-            let bounds = (entry[kCGWindowBounds as String] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0) })
+            let layer = (entry[kCGWindowLayer as String] as? NSNumber)?.intValue
       else { return nil }
       let windowServer = entry[kCGWindowOwnerName as String] as? String == "Window Server"
-      return LinkActivationHold.Listed(number: number, owner: owner, layer: layer, bounds: bounds, windowServer: windowServer)
+      return LinkActivationHold.Listed(number: number, owner: owner, layer: layer, windowServer: windowServer)
     }
+  }
+
+  private static func leftToWindowManager(_ onScreen: [[String: Any]]) -> Bool {
+    let list = listed(onScreen)
     let managers = Set(windowManagerBundles.flatMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0) }.map(\.processIdentifier))
+    let pointer = NSEvent.mouseLocation
     return LinkActivationHold.leftToWindowManager(
-      pointer: CGEvent(source: nil)?.location, own: ProcessInfo.processInfo.processIdentifier, windowManagers: managers, frontToBack: list)
+      own: ProcessInfo.processInfo.processIdentifier, windowManagers: managers, frontToBack: list,
+      refresh: { Self.listed(Self.onScreenWindows()) }
+    ) {
+      NSWindow.windowNumber(at: pointer, belowWindowWithWindowNumber: $0)
+    }
   }
 
   private var littleLinkExpected: Bool {

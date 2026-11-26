@@ -55,11 +55,11 @@ function PressedFadingGlyphs({ fade, style, children, ...rest }: ViewProps & { f
   );
 }
 
-export function GlassCircleButton({ icon, label, testID, diameter = controlSize.bar, dark, incognito = false, glassShown, glassShownMs, glyphFade, onPress }: Look & ChromeFade & { icon: SymbolName; label: string; testID: string; diameter?: number; onPress: () => void }) {
+export function GlassCircleButton({ icon, label, testID, diameter = controlSize.bar, dark, incognito = false, glassShown, glassShownMs, glyphFade, underlay = false, onPress }: Look & ChromeFade & { icon: SymbolName; label: string; testID: string; diameter?: number; underlay?: boolean; onPress: () => void }) {
   const size = { width: diameter, height: diameter };
   return (
     <PressInPlace label={label} onPress={onPress} onPressIn={haptics.barPress} dims="glyph" style={[styles.centered, size]}>
-      <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(diameter)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
+      <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(diameter)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} underlay={underlay} style={[styles.centered, size]}>
         <PressedFadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
           {CIRCLE_SYSTEM_NAMES[icon] ? (
             <SystemGlyph systemName={CIRCLE_SYSTEM_NAMES[icon]} pointSize={CIRCLE_SYSTEM_GLYPH} weight="medium" name={icon} size={startLayout.circleGlyph} color={rolesFor(dark).label} />

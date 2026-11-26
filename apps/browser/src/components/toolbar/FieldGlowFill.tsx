@@ -17,6 +17,7 @@ let glows = 0;
 export const nativeSink = (id: string): LoadSink => ({
   show: () => fieldGlow?.show(id, FIELD_GLOW_TIMINGS),
   progress: (progress, still) => fieldGlow?.progress(id, progress, still),
+  pulse: (on) => fieldGlow?.pulse?.(id, on ? FIELD_LOAD.pulse.period : 0, FIELD_LOAD.pulse.low),
   finish: (still) => fieldGlow?.finish(id, still),
   reset: () => fieldGlow?.reset(id),
 });

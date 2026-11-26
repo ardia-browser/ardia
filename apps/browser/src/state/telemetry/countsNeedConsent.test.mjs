@@ -228,3 +228,34 @@ test("the omnibox's every-fifth sampling starts over at a consent change", () =>
   track.sampleOmniboxLatency(heard());
   assert.deepEqual(track.takeOmniboxLatency(), []);
 });
+
+test("a split pane drag that began with sharing off counts no swap when it ends after sharing is turned on", async () => {
+  const { useBrowser } = await import("../browser/store.ts");
+  const tabDrag = await import("../drag/tabDrag.ts");
+  const S = () => useBrowser.getState();
+  const swaps = () => countLines().reduce((sum, r) => sum + (r.properties?.split_pane_drag_swaps ?? 0), 0);
+  const begin = (tabId) => tabDrag.beginTabDrag(tabId, undefined, { staysOnPage: true });
+  const dropOnCentreOf = (tabId) => {
+    tabDrag.updateTabDrag(300, 400, true);
+    tabDrag.setOnPage(true);
+    tabDrag.setDropTarget({ tabId, side: "center" });
+    return tabDrag.endTabDrag();
+  };
+  const w = S().createWindow({ url: "https://one.example/", frame: [0, 0, 1200, 800] });
+  const a = S().windows[w].tabIds[0];
+  const b = S().newTab(w, { url: "https://two.example/", background: true });
+  assert.equal(S().openSplitPane(w, { anchorTabId: a, tabId: b, side: "right" }).ok, true);
+  sharing(true);
+  usage.emitWindowUsage(client.consentNow());
+  clearLocal();
+  sharing(false);
+  begin(b);
+  sharing(true);
+  assert.equal(dropOnCentreOf(a), true);
+  usage.emitWindowUsage(client.consentNow());
+  assert.equal(swaps(), 0);
+  begin(b);
+  assert.equal(dropOnCentreOf(a), true);
+  usage.emitWindowUsage(client.consentNow());
+  assert.equal(swaps(), 1);
+});

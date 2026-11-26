@@ -83,7 +83,7 @@ internal fun ResearchScreen(session: ResearchSession, host: BrowseForMeHost) {
         Column(Modifier.fillMaxSize()) {
             TopBar(session, host) { copies += 1 }
             Column(
-                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.medium).padding(top = Spacing.tight, bottom = Spacing.section),
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState(), overscrollEffect = null).padding(horizontal = Spacing.medium).padding(top = Spacing.tight, bottom = Spacing.section),
                 verticalArrangement = Arrangement.spacedBy(Spacing.large),
             ) {
                 Text(session.query, style = ArdiaType.title.bold, color = SystemPalette.label.current, modifier = Modifier.semantics { heading() })

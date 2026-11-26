@@ -12,7 +12,7 @@ const entry = new URL("./linuxUpdates.ts", import.meta.url).href;
 const fakes = new Map([
   ["../../shims/shellBase", "export const refreshDocument = async () => {};"],
   ["../../../../browser/src/platform/app", "export const systemInfo = () => ({ appVersion: '0.2.45' });"],
-  ["../../../../browser/src/platform/clipboard", "export const copyText = (text) => globalThis.__linuxUpdateTest.copied.push(text);"],
+  ["../../../../browser/src/platform/clipboard", "export const copyText = (text) => globalThis.__linuxUpdateTest.copied.push(text); export const copyAddress = (url) => globalThis.__linuxUpdateTest.copied.push(url);"],
   ["../../../../browser/src/platform/dialogs", "export const confirm = async (options) => (globalThis.__linuxUpdateTest.dialogs.push(options), { confirmed: false });"],
   ["../../../../browser/src/platform/documents", "export const readDocument = (name) => globalThis.__linuxUpdateTest.docs.get(name) ?? null; export const saveDocument = async (name, contents) => void globalThis.__linuxUpdateTest.docs.set(name, contents);"],
   ["../../../../browser/src/state/browser/actions", "export const openUrls = (urls) => globalThis.__linuxUpdateTest.opened.push(...urls);"],

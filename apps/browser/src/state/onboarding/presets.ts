@@ -1,5 +1,5 @@
 import type { Settings } from "../settings/settings";
-import type { CtrlTabPreset } from "../commands/ctrlTabKeys";
+import { PLATFORM_FEATURES, type PlatformFeatures } from "../../lib/platformFeatures";
 
 export type BrowserSourceId = "arc" | "dia" | "chrome" | "safari" | "firefox" | "zen" | "brave" | "edge" | "helium" | "chromium" | "vivaldi" | "opera" | "fresh";
 
@@ -21,8 +21,8 @@ export const PRESET_NAMES: Record<Preset, string> = {
   fresh: "Ardia",
 };
 
-const CLASSIC_TABS: Partial<Settings> = {
-  tabLayout: "top",
+export const classicTabs = ({ classicPresetsPutTabsOnTop }: Pick<PlatformFeatures, "classicPresetsPutTabsOnTop">): Partial<Settings> => ({
+  ...(classicPresetsPutTabsOnTop ? { tabLayout: "top" as const } : {}),
   addressBar: "toolbar",
   commandBarPlacement: "field",
   newTabOpens: "page",
@@ -43,7 +43,13 @@ const CLASSIC_TABS: Partial<Settings> = {
   openLinksInLittleArdia: false,
   peekLinksToOtherSites: false,
   newTabLinksOpenIn: "tab",
-};
+  tabSwitcherOrder: "inOrder",
+  tabSwitcherView: "none",
+});
+
+const RECENT_TABS: Partial<Settings> = { tabSwitcherOrder: "recent", tabSwitcherView: "thumbnails" };
+
+const CLASSIC_TABS = classicTabs(PLATFORM_FEATURES);
 
 export const PRESETS: Record<Preset, Partial<Settings>> = {
   dia: {
@@ -59,7 +65,6 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     balancedTopApps: false,
     peekModifier: "shift",
     undoReopensClosedTab: false,
-    cmdClickCreatesTabGroup: true,
     appearance: "auto",
     extendWebsiteColor: true,
     hideToolbarWhileScrolling: true,
@@ -68,6 +73,7 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     openLinksInLittleArdia: true,
     peekLinksToOtherSites: true,
     newTabLinksOpenIn: "peek",
+    ...RECENT_TABS,
   },
   arc: {
     tabLayout: "sidebar",
@@ -91,6 +97,7 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     openLinksInLittleArdia: true,
     peekLinksToOtherSites: true,
     newTabLinksOpenIn: "peek",
+    ...RECENT_TABS,
   },
   zen: {
     tabLayout: "sidebar",
@@ -114,6 +121,8 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     openLinksInLittleArdia: false,
     peekLinksToOtherSites: true,
     newTabLinksOpenIn: "peek",
+    tabSwitcherOrder: "inOrder",
+    tabSwitcherView: "none",
   },
   chrome: CLASSIC_TABS,
   firefox: CLASSIC_TABS,
@@ -122,24 +131,9 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
   edge: { ...CLASSIC_TABS, searchEngine: "bing" },
   helium: CLASSIC_TABS,
   chromium: CLASSIC_TABS,
-  vivaldi: CLASSIC_TABS,
-  opera: CLASSIC_TABS,
+  vivaldi: { ...CLASSIC_TABS, ...RECENT_TABS },
+  opera: { ...CLASSIC_TABS, ...RECENT_TABS },
   fresh: { addressBar: "sidebar", commandBarPlacement: "centred", newTabPosition: "nextToCurrent", newTabButtonPosition: "bottom" },
-};
-
-export const CTRL_TAB_LIKE: Partial<Record<Preset, CtrlTabPreset>> = {
-  arc: "switcher",
-  dia: "switcher",
-  vivaldi: "switcher",
-  opera: "switcher",
-  chrome: "step",
-  safari: "step",
-  firefox: "step",
-  zen: "step",
-  brave: "step",
-  edge: "step",
-  helium: "step",
-  chromium: "step",
 };
 
 export const setsUpLikeBrowser = (source: BrowserSourceId | null): source is Exclude<BrowserSourceId, "fresh"> => !!source && source !== "fresh";

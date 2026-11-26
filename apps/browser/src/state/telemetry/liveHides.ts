@@ -23,14 +23,20 @@ export function noteLiveRepoMenuPick(choice: string, showNewRepos: boolean) {
 }
 
 let folderColorPicks = 0;
+let warningResolves = 0;
 
 export function noteLiveFolderColorPick(consent?: ConsentToken | null) {
   countFor(consentOrNow(consent), () => void folderColorPicks++);
 }
 
+export function noteLiveFolderWarningResolve(consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => void warningResolves++);
+}
+
 export function takeLiveHideCounts() {
   const taken = {
     live_folder_color_picks: folderColorPicks,
+    live_folder_warning_resolves: warningResolves,
     live_row_hides: rowHides,
     live_stack_hides: stackHides,
     live_repo_menu_picks: repoMenuPicks,
@@ -44,5 +50,6 @@ export function takeLiveHideCounts() {
   repoHideAlls = 0;
   newReposHiddenTurnedOn = 0;
   folderColorPicks = 0;
+  warningResolves = 0;
   return taken;
 }

@@ -80,12 +80,7 @@ struct CallReply {
     return value
   }
 
-  static func engineError(_ json: String) -> String? {
-    guard json.contains("\"error\"") else { return nil }
-    guard let reply = try? JSONSerialization.jsonObject(with: Data(json.utf8), options: [.fragmentsAllowed]) else { return "the engine's reply isn't JSON" }
-    guard let dict = reply as? [String: Any], let error = dict["error"] else { return nil }
-    return error as? String ?? "\(error)"
-  }
+  static func engineError(_ json: String) -> String? { EngineReplyError.message(json) }
 }
 
 typealias CallHandler = (CallArgs, CallReply) throws -> Void

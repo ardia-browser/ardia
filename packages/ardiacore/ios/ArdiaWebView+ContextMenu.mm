@@ -362,12 +362,29 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
   } ];
 }
 
+- (NSArray<NSDictionary<NSString *, NSString *> *> *)tab:(ArdiaCoreTab *)tab contextMenuItemsForPage:(NSString *)url {
+  NSMutableArray *items = [NSMutableArray array];
+  for (NSDictionary *item in self.pageMenuItems) {
+    NSString *itemId = Field<NSString>(item, @"id");
+    NSString *title = Field<NSString>(item, @"title");
+    if (itemId.length && title.length && ![itemId isEqualToString:@"search"]) [items addObject:@{@"id" : itemId, @"title" : title}];
+  }
+  return items;
+}
+
 - (void)tab:(ArdiaCoreTab *)tab
     contextMenuCommand:(NSString *)itemId
                   text:(NSString *)selection
              modifiers:(NSDictionary<NSString *, NSNumber *> *)modifiers {
-  if ([itemId isEqualToString:@"search"])
+  if ([itemId isEqualToString:@"search"]) {
     [self emit:@"command" payload:@{@"command" : @"search", @"text" : selection ?: @"", @"modifiers" : modifiers ?: @{}}];
+    return;
+  }
+  for (NSDictionary *item in self.pageMenuItems)
+    if ([Field<NSString>(item, @"id") isEqualToString:itemId]) {
+      [self emit:@"command" payload:@{@"command" : itemId, @"text" : @""}];
+      return;
+    }
 }
 
 - (void)tab:(ArdiaCoreTab *)tab shareFromContextMenu:(NSDictionary<NSString *, id> *)share {

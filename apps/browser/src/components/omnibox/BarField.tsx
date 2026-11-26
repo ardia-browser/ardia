@@ -1,9 +1,10 @@
 import type { SearchScope } from "@ardia/core";
 import { useLayoutEffect, useRef, type ComponentProps, type RefObject } from "react";
 import { findNodeHandle, TextInput } from "react-native";
-import { useTheme } from "../ui";
+import { caretColor, useTheme } from "../ui";
 import { barFieldMarks } from "../../state/omnibox/barMarks";
 import { PASTED_TYPES } from "./omniboxKeys";
+import { useHeldEscape } from "../ui/fieldKeys";
 import { useClaimFollowsFocus, type FocusClaim } from "./claimFollowsFocus";
 import { useRevertRepair } from "./useRevertRepair";
 import { BAR, BAR_TYPE } from "./tokens";
@@ -29,8 +30,9 @@ export function BarField({
   scope: SearchScope | null;
   incognito: boolean;
   claim?: FocusClaim;
-} & Pick<InputProps, "value" | "onLayout" | "onChangeText" | "onSubmitEditing" | "onFocus" | "onBlur" | "keyDownEvents" | "onKeyDown">) {
+} & Pick<InputProps, "value" | "onLayout" | "onChangeText" | "onSubmitEditing" | "onFocus" | "onBlur" | "keyDownEvents" | "onKeyDown" | "keyUpEvents" | "onKeyUp">) {
   const theme = useTheme();
+  const heldEscape = useHeldEscape();
   const nativeText = useRef<string | null>(null);
   useLayoutEffect(() => {
     const native = nativeText.current;
@@ -49,6 +51,8 @@ export function BarField({
     <TextInput
       ref={inputRef}
       {...events}
+      {...heldEscape.upProps}
+      onKeyDown={(e) => heldEscape.down(e) || events.onKeyDown?.(e)}
       onChangeText={repair.changed}
       onFocus={(e) => (barFieldMarks.field("focus", variant, tag()), claimOnFocus(), events.onFocus?.(e))}
       onBlur={(e) => (barFieldMarks.field("blur", variant, tag()), events.onBlur?.(e))}
@@ -75,6 +79,7 @@ export function BarField({
       placeholderTextColor={theme.placeholder}
       pastedTypes={PASTED_TYPES}
       selectionColor={theme.selection}
+      cursorColor={caretColor(theme)}
       enableFocusRing={false}
       ardiaCentersCapitals
       style={{

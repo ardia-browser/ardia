@@ -56,9 +56,18 @@ NSString *PageMoveAt(NSWindow *window, NSPoint point);
 NSString *HoverProbeDev(NSWindow *window, NSString *_Nullable argument);
 NSString *HoverProbeLine();
 void WatchHover();
+inline void KeepHitsWhileClear(NSView *view, bool keep) {
+  if ([view respondsToSelector:NSSelectorFromString(@"setArdiaKeepsHitsWhileClear:")]) [view setValue:@(keep) forKey:@"ardiaKeepsHitsWhileClear"];
+}
+void ReportHoverEpisodeAtQuit();
+bool HoverEpisodeReportedAtQuitOpen();
+NSInteger HoverEpisodeReportedAtQuitSeconds();
+void MarkHoverEpisodeCommittedAtQuit();
+void CancelHoverEpisodeAtQuit();
 void WatchPageCursor();
 NSString *PageCursorDev(NSWindow *window, NSString *_Nullable argument);
 NSString *PaintProbeLine();
+void CheckPaintingAfterProfileSwitch(NSWindow *_Nullable window);
 void WatchPainting();
 NSString *DescribeFocusWindow(NSWindow *_Nullable window);
 void NoteFocusChange(NSString *what, NSWindow *_Nullable window);

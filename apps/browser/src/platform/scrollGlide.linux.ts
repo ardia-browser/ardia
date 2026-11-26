@@ -1,5 +1,3 @@
-export const wheelSteersSections = false;
+export { glideWebScroll as glideNativeScroll, steerWebScroll as steerNativeScroll } from "./webWheelSteer";
 
-export function glideNativeScroll(_tag: number, _y: number, _durationMs: number): boolean {
-  return false;
-}
+export const wheelSteersSections = true;

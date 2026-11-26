@@ -134,6 +134,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     [self noteScriptFrame:frameId main:main sameSite:[self sameSiteFrame:main origin:sender]];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
     AnswerHello(tab, _profile, frameId, main, verifiedOrigin);
+    if (main) [self sendMetricsGenerationTo:frameId];
     if (main) _firstPaint.scripted = YES;
     if (main && _firstPaint.held) [self callFrame:frameId kind:@"firstPaint" json:@"{}"];
   } else if ([kind isEqualToString:@"displayMediaHello"]) {
@@ -184,6 +185,8 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
       NSNumber *at = [dict[what] isKindOfClass:NSNumber.class] ? dict[what] : nil;
       if (at && fabs(at.doubleValue - ArdiaFieldNow()) < 600000) ArdiaFieldMark(_transferKey, what, at.doubleValue);
     }
+  } else if ([kind isEqualToString:@"pageMetrics"] && dict) {
+    [self notePageMetrics:dict main:main];
   } else if ([kind isEqualToString:@"scroll"] && main) {
     NSString *state = Text(dict, @"state", 8);
     if ([@[ @"down", @"up", @"top" ] containsObject:state ?: @""])

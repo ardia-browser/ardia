@@ -25,6 +25,7 @@ enum PageViewDefinition {
       Prop("contentsBackgroundColor") { (view: V, color: NSColor?) in view.page.contentsBackgroundColor = color }
       Prop("shownUrl") { (view: V, url: String?) in view.page.shownURL = url }
       Prop("autoPictureInPicture") { (view: V, enabled: Bool?) in view.page.autoPictureInPicture = enabled ?? false }
+      Prop("pageMenuItems") { (view: V, items: [[String: String]]?) in view.page.pageMenuItems = items ?? [] }
 
       AsyncFunction("loadUrl") { (view: V, url: String, userInitiated: Bool?) in
         view.page.loadURL(url, userInitiated: userInitiated ?? false)

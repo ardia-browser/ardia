@@ -1,17 +1,13 @@
 import { ordered } from "./modifiers";
-import { comboKey, sameShortcut, storedShortcut, type ResolvedShortcuts, type Shortcut, type ShortcutOverrides } from "./shortcuts";
+import { comboKey, resolveShortcuts, sameShortcut, storedShortcut, type ResolvedShortcuts, type Shortcut, type ShortcutOverrides, type ShortcutSource } from "./shortcuts";
 
-export type CtrlTabPreset = "step" | "switcher";
-export type CtrlTabChoice = CtrlTabPreset | "custom";
+export type CtrlTabKeys = "switcher" | "custom";
 type CtrlTabCombos = { forward: Shortcut; backward: Shortcut };
-
-const CTRL_TAB_PRESETS: readonly CtrlTabPreset[] = ["step", "switcher"];
+type Pair = { forward: string; backward: string };
 
 const TAB = "\t";
-const PRESET_COMMANDS: Readonly<Record<CtrlTabPreset, { forward: string; backward: string }>> = {
-  step: { forward: "nextTab", backward: "previousTab" },
-  switcher: { forward: "tabSwitcher:forward", backward: "tabSwitcher:backward" },
-};
+const SWITCHER: Pair = { forward: "tabSwitcher:forward", backward: "tabSwitcher:backward" };
+const STEP: Pair = { forward: "nextTab", backward: "previousTab" };
 
 type Defaults = Pick<ResolvedShortcuts, "defaultsOf">;
 type Held = Pick<ResolvedShortcuts, "bindings" | "defaultsOf" | "holdersOf">;
@@ -19,25 +15,19 @@ type Held = Pick<ResolvedShortcuts, "bindings" | "defaultsOf" | "holdersOf">;
 const tabWithOneModifier = (k: Shortcut) => k.key === TAB && k.modifiers.length === 1 && k.modifiers[0] !== "shift";
 
 export function ctrlTabCombos(resolved: Defaults): CtrlTabCombos | null {
-  for (const preset of CTRL_TAB_PRESETS) {
-    const forward = resolved.defaultsOf(PRESET_COMMANDS[preset].forward).find(tabWithOneModifier);
-    if (forward) return { forward, backward: { key: TAB, modifiers: ordered([...forward.modifiers, "shift"]) } };
-  }
-  return null;
+  const forward = resolved.defaultsOf(SWITCHER.forward).find(tabWithOneModifier);
+  return forward ? { forward, backward: { key: TAB, modifiers: ordered([...forward.modifiers, "shift"]) } } : null;
 }
 
 const holds = (resolved: Pick<ResolvedShortcuts, "bindings">, id: string, combo: Shortcut) => (resolved.bindings.get(id) ?? []).some((k) => sameShortcut(k, combo));
 
 const heldOnlyBy = (resolved: Held, combo: Shortcut, id: string) => holds(resolved, id, combo) && resolved.holdersOf(combo).every((holder) => holder === id);
 
-export function ctrlTabChoiceOf(resolved: Held): CtrlTabChoice {
+const pairHolds = (resolved: Held, combos: CtrlTabCombos, pair: Pair) => heldOnlyBy(resolved, combos.forward, pair.forward) && heldOnlyBy(resolved, combos.backward, pair.backward);
+
+export function ctrlTabKeysOf(resolved: Held): CtrlTabKeys {
   const combos = ctrlTabCombos(resolved);
-  if (!combos) return "custom";
-  for (const preset of CTRL_TAB_PRESETS) {
-    const { forward, backward } = PRESET_COMMANDS[preset];
-    if (heldOnlyBy(resolved, combos.forward, forward) && heldOnlyBy(resolved, combos.backward, backward)) return preset;
-  }
-  return "custom";
+  return combos && pairHolds(resolved, combos, SWITCHER) ? "switcher" : "custom";
 }
 
 type CtrlTabCustomTarget = { combo: Shortcut } | { command: string };
@@ -45,27 +35,71 @@ type CtrlTabCustomTarget = { combo: Shortcut } | { command: string };
 export function ctrlTabCustomTarget(resolved: Held): CtrlTabCustomTarget | null {
   const combos = ctrlTabCombos(resolved);
   if (!combos) return null;
-  const looksPicked = (combo: Shortcut, direction: "forward" | "backward") => CTRL_TAB_PRESETS.some((preset) => heldOnlyBy(resolved, combo, PRESET_COMMANDS[preset][direction]));
-  const direction = looksPicked(combos.forward, "forward") ? "backward" : "forward";
+  const direction = heldOnlyBy(resolved, combos.forward, SWITCHER.forward) ? "backward" : "forward";
   const combo = combos[direction];
-  if (resolved.holdersOf(combo).length) return { combo };
-  const owner = CTRL_TAB_PRESETS.map((preset) => PRESET_COMMANDS[preset][direction]).find((id) => resolved.defaultsOf(id).some((k) => sameShortcut(k, combo)));
-  return owner ? { command: owner } : { combo };
+  return resolved.holdersOf(combo).length ? { combo } : { command: SWITCHER[direction] };
 }
 
 const stored = ({ key, modifiers }: Shortcut) => [key, ...modifiers];
 
-export function ctrlTabOverrides(overrides: ShortcutOverrides, combos: CtrlTabCombos, preset: CtrlTabPreset, defaultsOf: Defaults["defaultsOf"]): ShortcutOverrides {
-  const target = PRESET_COMMANDS[preset];
+const isOverride = (keys: readonly string[] | undefined, combo: Shortcut) => !!keys?.[0] && sameShortcut(storedShortcut(keys), combo);
+
+export function ctrlTabOverrides(overrides: ShortcutOverrides, combos: CtrlTabCombos, defaultsOf: Defaults["defaultsOf"]): ShortcutOverrides {
   const taken = new Set([comboKey(combos.forward), comboKey(combos.backward)]);
   const next: ShortcutOverrides = {};
   for (const [id, keys] of Object.entries(overrides)) {
     if (keys[0] && taken.has(comboKey(storedShortcut(keys)))) continue;
-    if (id === target.forward || id === target.backward) continue;
+    if (id === SWITCHER.forward || id === SWITCHER.backward) continue;
     next[id] = keys;
   }
   const owns = (id: string, combo: Shortcut) => defaultsOf(id).some((k) => sameShortcut(k, combo));
-  if (!owns(target.forward, combos.forward)) next[target.forward] = stored(combos.forward);
-  if (!owns(target.backward, combos.backward)) next[target.backward] = stored(combos.backward);
+  if (!owns(SWITCHER.forward, combos.forward)) next[SWITCHER.forward] = stored(combos.forward);
+  if (!owns(SWITCHER.backward, combos.backward)) next[SWITCHER.backward] = stored(combos.backward);
   return next;
+}
+
+export type CtrlTabUpgrade = { shortcuts: ShortcutOverrides; stepped: boolean };
+
+function sourcesBeforeSwitcherDefault(sources: readonly ShortcutSource[], combos: CtrlTabCombos): ShortcutSource[] {
+  const ctrlTab = (id: string) => (id === SWITCHER.forward ? combos.forward : id === SWITCHER.backward ? combos.backward : null);
+  const stepTo = (id: string) => (id === STEP.forward ? combos.forward : id === STEP.backward ? combos.backward : null);
+  return sources.map((source) => {
+    const moved = ctrlTab(source.id);
+    if (moved) return { ...source, keys: source.keys.filter((k) => !sameShortcut(k, moved)) };
+    const added = stepTo(source.id);
+    return added ? { ...source, keys: [...source.keys, added] } : source;
+  });
+}
+
+function without(overrides: ShortcutOverrides, pair: Pair, combos: CtrlTabCombos): ShortcutOverrides {
+  const dropped = [pair.forward, pair.backward].filter((id) => isOverride(overrides[id], id === pair.forward ? combos.forward : combos.backward));
+  return dropped.length ? Object.fromEntries(Object.entries(overrides).filter(([id]) => !dropped.includes(id))) : overrides;
+}
+
+const boundToStep = (overrides: ShortcutOverrides, combos: CtrlTabCombos) => isOverride(overrides[STEP.forward], combos.forward) && isOverride(overrides[STEP.backward], combos.backward);
+
+const DIRECTIONS = ["forward", "backward"] as const;
+
+export function ctrlTabUpgrade(overrides: ShortcutOverrides, sources: readonly ShortcutSource[], { usedToStep }: { usedToStep: boolean }): CtrlTabUpgrade {
+  const unchanged = { shortcuts: overrides, stepped: false };
+  const combos = ctrlTabCombos(resolveShortcuts(sources, {}));
+  if (!combos) return unchanged;
+  const before = resolveShortcuts(usedToStep ? sourcesBeforeSwitcherDefault(sources, combos) : sources, overrides);
+  const after = (candidate: ShortcutOverrides) => resolveShortcuts(sources, candidate);
+  if (pairHolds(before, combos, SWITCHER)) {
+    const shortcuts = without(overrides, SWITCHER, combos);
+    return pairHolds(after(shortcuts), combos, SWITCHER) ? { shortcuts, stepped: false } : unchanged;
+  }
+  const stepping = DIRECTIONS.filter((d) => heldOnlyBy(before, combos[d], STEP[d]));
+  if (!stepping.length) return unchanged;
+  const switcherElsewhere = !!overrides[SWITCHER.forward]?.[0] || !!overrides[SWITCHER.backward]?.[0];
+  if (stepping.length === 2 && !switcherElsewhere && boundToStep(overrides, combos)) {
+    const shortcuts = without(overrides, STEP, combos);
+    return pairHolds(after(shortcuts), combos, SWITCHER) ? { shortcuts, stepped: true } : unchanged;
+  }
+  const kept = (candidate: ShortcutOverrides, d: (typeof DIRECTIONS)[number]) =>
+    switcherElsewhere ? heldOnlyBy(after(candidate), combos[d], STEP[d]) : after(candidate).holdersOf(combos[d]).length > 0;
+  let shortcuts = overrides;
+  for (const d of stepping) if (!kept(shortcuts, d)) shortcuts = { ...shortcuts, [STEP[d]]: stored(combos[d]) };
+  return stepping.every((d) => kept(shortcuts, d)) ? { shortcuts, stepped: false } : unchanged;
 }

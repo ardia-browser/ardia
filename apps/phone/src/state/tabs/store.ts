@@ -19,6 +19,7 @@ import {
 import { tabDatabase } from "../store/database";
 import type { SqlDatabase } from "../../lib/sqlDatabase";
 import { forgetPictures, forTheDatabase } from "./pictures";
+import { forgetWarmPictures } from "./warmPictures";
 import { privatePagesRefused, refuseIncognito } from "./privatePages";
 import { receiveTabs, type IncomingTab } from "./received";
 import type { AutoArchiveInterval, BrowserTab, TabPatch } from "./tabModels";
@@ -249,6 +250,7 @@ function apply(change: TabsChange, timing: WriteTiming = "now") {
   noteTabLives(data(), change);
   useTabs.setState((s) => ({ ...change.data, listing: listed ? s.listing + 1 : s.listing }));
   forgetPictures(change.remove);
+  forgetWarmPictures(change.remove);
   stageWrites(db, change);
   if (timing === "afterFrame" && change.remove.length === 0 && !change.clearArchived) flushAfterFrame();
   else flushTabWrites();

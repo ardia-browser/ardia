@@ -97,6 +97,164 @@ struct DynamicTransportSecurity {
     #expect(policy.requiresHTTPS(host: "shop.example", now: now))
   }
 
+  @Test func `a ranged clear forgets only the hosts seen inside the range`() {
+    var policy = WebKitCertificatePolicy()
+    let lastWeek = now.addingTimeInterval(-7 * 86_400)
+    let oldPin = policy.noteHeader("max-age=31536000", host: "bank.example", now: lastWeek)
+    #expect(oldPin)
+    let newPin = policy.noteHeader("max-age=31536000", host: "shop.example", now: now)
+    #expect(newPin)
+    policy.forget(since: now.addingTimeInterval(-3_600))
+    #expect(policy.requiresHTTPS(host: "bank.example", now: now))
+    #expect(!policy.requiresHTTPS(host: "shop.example", now: now))
+  }
+
+  @Test func `a ranged clear keeps hosts saved before observation times were recorded`() throws {
+    let saved = try JSONDecoder().decode([String: WebKitTransportSecurity].self, from: Data(#"{"bank.example":{"expires":1900000000,"subdomains":true}}"#.utf8))
+    var policy = WebKitCertificatePolicy(transportSecurity: saved)
+    policy.forget(since: now.addingTimeInterval(-3_600))
+    #expect(policy.requiresHTTPS(host: "login.bank.example", now: now))
+  }
+
+  @Test func `seeing a header again moves the host into a recent range`() {
+    var policy = WebKitCertificatePolicy()
+    let lastWeek = now.addingTimeInterval(-7 * 86_400)
+    _ = policy.noteHeader("max-age=31536000", host: "bank.example", now: lastWeek)
+    _ = policy.noteHeader("max-age=31536000", host: "bank.example", now: now)
+    policy.forget(since: now.addingTimeInterval(-3_600))
+    #expect(!policy.requiresHTTPS(host: "bank.example", now: now))
+  }
+
+  @Test func `a ranged clear forgets only certificate proceeds granted inside the range`() {
+    var policy = WebKitCertificatePolicy()
+    let lastWeekish = now.addingTimeInterval(-5 * 86_400)
+    policy.allow(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: lastWeekish)
+    policy.allow(host: "new.example", fingerprint: "BB", errors: ["authorityInvalid"], now: now)
+    _ = policy.admits(host: "new.example", fingerprint: "BB", errors: ["authorityInvalid"], now: now)
+    policy.forget(since: now.addingTimeInterval(-3_600))
+    let keptOld = policy.admits(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: now)
+    #expect(keptOld)
+    let keptNew = policy.admits(host: "new.example", fingerprint: "BB", errors: ["authorityInvalid"], now: now)
+    #expect(!keptNew)
+    #expect(policy.bypassedErrors(host: "new.example", fingerprint: "BB") == nil)
+  }
+
+  @Test func `a ranged clear forgets a used proceed even after its exception expired and was pruned`() {
+    var policy = WebKitCertificatePolicy()
+    let granted = now.addingTimeInterval(-8 * 86_400)
+    policy.allow(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: granted)
+    let used = policy.admits(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: granted)
+    #expect(used)
+    let retried = policy.admits(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: now)
+    #expect(!retried)
+    #expect(policy.exceptions["old.example"] == nil)
+    #expect(policy.hasException(host: "old.example", now: now))
+    policy.forget(since: now.addingTimeInterval(-28 * 86_400))
+    #expect(policy.bypassedErrors(host: "old.example", fingerprint: "AA") == nil)
+    #expect(!policy.hasException(host: "old.example", now: now))
+    let header = policy.noteHeader("max-age=600", host: "old.example", fingerprint: "AA", now: now)
+    #expect(header)
+  }
+
+  @Test func `a ranged clear keeps a used proceed granted before the range`() {
+    var policy = WebKitCertificatePolicy()
+    let granted = now.addingTimeInterval(-8 * 86_400)
+    policy.allow(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: granted)
+    _ = policy.admits(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: granted)
+    _ = policy.admits(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: now)
+    policy.forget(since: now.addingTimeInterval(-3_600))
+    #expect(policy.bypassedErrors(host: "old.example", fingerprint: "AA") == ["authorityInvalid"])
+    #expect(policy.hasException(host: "old.example", now: now))
+  }
+
+  @Test func `clearing a recent grant keeps what an older grant for the same certificate let through`() {
+    var policy = WebKitCertificatePolicy()
+    let older = now.addingTimeInterval(-8 * 86_400)
+    policy.allow(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: older)
+    _ = policy.admits(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: older)
+    _ = policy.admits(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: now)
+    policy.allow(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid", "dateInvalid"], now: now)
+    let regranted = policy.admits(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid", "dateInvalid"], now: now)
+    #expect(regranted)
+    #expect(policy.bypassedErrors(host: "old.example", fingerprint: "AA") == ["authorityInvalid", "dateInvalid"])
+    policy.forget(since: now.addingTimeInterval(-3_600))
+    #expect(policy.bypassedErrors(host: "old.example", fingerprint: "AA") == ["authorityInvalid"])
+    #expect(policy.hasException(host: "old.example", now: now))
+    let current = policy.admits(host: "old.example", fingerprint: "AA", errors: ["authorityInvalid"], now: now)
+    #expect(!current)
+  }
+
+  @Test func `a max-age 0 seen before the saved list could be read keeps that host out when the list is read`() {
+    var policy = WebKitCertificatePolicy(awaitingSavedList: true)
+    let revoked = policy.noteHeader("max-age=0", host: "bank.example", now: now)
+    #expect(!revoked)
+    _ = policy.noteHeader("max-age=0", host: "shop.example", now: now)
+    _ = policy.noteHeader("max-age=600", host: "shop.example", now: now)
+    let saved = [
+      "bank.example": WebKitTransportSecurity(expires: now.timeIntervalSince1970 + 86_400, subdomains: true, observed: now.timeIntervalSince1970 - 86_400),
+      "mail.example": WebKitTransportSecurity(expires: now.timeIntervalSince1970 + 86_400, subdomains: false, observed: now.timeIntervalSince1970 - 86_400),
+    ]
+    policy.adoptSaved(saved, now: now)
+    #expect(!policy.requiresHTTPS(host: "bank.example", now: now))
+    #expect(policy.requiresHTTPS(host: "mail.example", now: now))
+    #expect(policy.requiresHTTPS(host: "shop.example", now: now))
+    #expect(!policy.awaitingSavedList)
+    #expect(policy.supersededBeforeSavedList.isEmpty)
+  }
+
+  @Test func `a host revoked before the saved list was read stays revoked after it was seen again and cleared`() {
+    var policy = WebKitCertificatePolicy(awaitingSavedList: true)
+    _ = policy.noteHeader("max-age=0", host: "bank.example", now: now)
+    _ = policy.noteHeader("max-age=600", host: "bank.example", now: now)
+    #expect(policy.supersededBeforeSavedList == ["bank.example"])
+    policy.forget(since: now.addingTimeInterval(-3_600))
+    let saved = ["bank.example": WebKitTransportSecurity(expires: now.timeIntervalSince1970 + 86_400, subdomains: true, observed: now.timeIntervalSince1970 - 7 * 86_400)]
+    policy.adoptSaved(saved, now: now, clearingSince: now.addingTimeInterval(-3_600))
+    #expect(!policy.requiresHTTPS(host: "bank.example", now: now))
+  }
+
+  @Test func `a host seen again after its revocation keeps the newer entry when the saved list is read`() {
+    var policy = WebKitCertificatePolicy(awaitingSavedList: true)
+    _ = policy.noteHeader("max-age=0", host: "bank.example", now: now)
+    _ = policy.noteHeader("max-age=600", host: "bank.example", now: now)
+    let saved = ["bank.example": WebKitTransportSecurity(expires: now.timeIntervalSince1970 + 86_400, subdomains: true, observed: now.timeIntervalSince1970 - 7 * 86_400)]
+    policy.adoptSaved(saved, now: now)
+    #expect(policy.transportSecurity["bank.example"]?.expires == now.timeIntervalSince1970 + 600)
+    #expect(!policy.requiresHTTPS(host: "login.bank.example", now: now))
+  }
+
+  @Test func `a ranged clear while reading a full saved list never evicts an older host for a cleared one`() {
+    var policy = WebKitCertificatePolicy(awaitingSavedList: true)
+    _ = policy.noteHeader("max-age=31536000", host: "recent.example", now: now)
+    let older = now.timeIntervalSince1970 - 7 * 86_400
+    let saved = Dictionary(uniqueKeysWithValues: (0..<WebKitCertificatePolicy.dynamicHostLimit).map {
+      ("h\($0).example", WebKitTransportSecurity(expires: now.timeIntervalSince1970 + 86_400, subdomains: false, observed: older))
+    })
+    policy.adoptSaved(saved, now: now, clearingSince: now.addingTimeInterval(-3_600))
+    #expect(policy.transportSecurity.count == WebKitCertificatePolicy.dynamicHostLimit)
+    #expect(Set(policy.transportSecurity.keys) == Set(saved.keys))
+  }
+
+  @Test func `a host updated before the saved list was read keeps its older saved entry out after the update is cleared`() {
+    var policy = WebKitCertificatePolicy(awaitingSavedList: true)
+    _ = policy.noteHeader("max-age=600", host: "bank.example", now: now)
+    #expect(policy.supersededBeforeSavedList == ["bank.example"])
+    policy.forget(since: now.addingTimeInterval(-3_600))
+    let saved = [
+      "bank.example": WebKitTransportSecurity(expires: now.timeIntervalSince1970 + 86_400, subdomains: true, observed: now.timeIntervalSince1970 - 7 * 86_400),
+      "mail.example": WebKitTransportSecurity(expires: now.timeIntervalSince1970 + 86_400, subdomains: false, observed: now.timeIntervalSince1970 - 7 * 86_400),
+    ]
+    policy.adoptSaved(saved, now: now, clearingSince: now.addingTimeInterval(-3_600))
+    #expect(!policy.requiresHTTPS(host: "bank.example", now: now))
+    #expect(policy.requiresHTTPS(host: "mail.example", now: now))
+  }
+
+  @Test func `a policy loaded from its saved list records no revocations`() {
+    var policy = WebKitCertificatePolicy()
+    _ = policy.noteHeader("max-age=0", host: "bank.example", now: now)
+    #expect(policy.supersededBeforeSavedList.isEmpty)
+  }
+
   @Test func `max-age 0 removes the host and entries expire`() {
     var policy = WebKitCertificatePolicy()
     _ = policy.noteHeader("max-age=600", host: "a.example", now: now)

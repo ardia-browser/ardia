@@ -86,7 +86,7 @@ Pages, links and patterns: Ardia opens these only as pages you navigate to, or m
 
 - Search engines' result pages (searches open as pages): `www.google.com`, `www.bing.com`, `duckduckgo.com`,
   `www.ecosia.org`, `search.brave.com`, `www.startpage.com`, `search.yahoo.com`, `www.baidu.com`, `yandex.com`,
-  `kagi.com`, `www.perplexity.ai`, `chatgpt.com`.
+  `kagi.com`, `www.perplexity.ai`, `chatgpt.com`, `claude.ai`.
 - Site search and quick-create shortcuts: `developer.mozilla.org`, `en.wikipedia.org`, `hn.algolia.com`, `mail.google.com`,
   `drive.google.com`, `open.spotify.com`, `stackoverflow.com`, `translate.google.com`, `www.amazon.com`, `www.ebay.com`,
   `www.figma.com`, `www.imdb.com`, `www.linkedin.com`, `www.notion.so`, `www.npmjs.com`, `www.pinterest.com`,

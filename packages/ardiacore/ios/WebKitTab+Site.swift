@@ -26,8 +26,8 @@ extension WebKitTab {
   }
 
   func fillLogin(username: String, password: String, origin: String) {
-    let code = "window.__ardiaLogins ? window.__ardiaLogins.fill(\(Self.jsString(username)), \(Self.jsString(password)), \(Self.jsString(origin))) : false"
-    webView?.evaluateJavaScript(code, in: nil, in: WebKitHub.world) { _ in }
+    guard let webView else { return }
+    WebKitLoginFill.run(in: webView, world: WebKitHub.world, username: username, password: password, origin: origin)
   }
 
   func noteLinkStatus(_ data: Any?, main: Bool) {

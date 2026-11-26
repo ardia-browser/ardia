@@ -101,6 +101,34 @@ class FormatTests(ImportFixture):
             'children': [{'type': 'url', 'title': 'Headingless link', 'url': 'https://example.org/one'}],
         })
 
+    def test_headingless_list_inside_a_leading_headed_list_keeps_list_role_and_nesting(self):
+        html = self.root / 'bookmarks.html'
+        html.write_text('''<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DT><H3>Named</H3>
+<DL><p>
+    <DT><A HREF="https://example.org/before">Before</A>
+    <DT><DL><p>
+        <DT><A HREF="https://example.org/inner">Inner</A>
+    </DL><p>
+    <DT><A HREF="https://example.org/after">After</A>
+</DL><p>
+<DT><A HREF="https://example.org/sibling">Sibling</A>
+''')
+        parsed = self.json('html', html)
+        self.assertEqual(parsed['error'], '')
+        self.assertEqual(parsed['links'], 4)
+        self.assertEqual(parsed['counted'], 4)
+        self.assertEqual(parsed['root']['children'], [
+            {'type': 'folder', 'title': 'Named', 'children': [
+                {'type': 'url', 'title': 'Before', 'url': 'https://example.org/before'},
+                {'type': 'folder', 'title': '', 'role': 'list', 'children': [
+                    {'type': 'url', 'title': 'Inner', 'url': 'https://example.org/inner'},
+                ]},
+                {'type': 'url', 'title': 'After', 'url': 'https://example.org/after'},
+            ]},
+            {'type': 'url', 'title': 'Sibling', 'url': 'https://example.org/sibling'},
+        ])
+
     def test_password_csv_variants_counts_and_deduplication(self):
         chrome = self.root / 'chrome.csv'
         chrome.write_bytes('﻿name,url,username,password,note\r\n'

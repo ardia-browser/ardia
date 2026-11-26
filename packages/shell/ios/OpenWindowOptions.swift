@@ -16,4 +16,5 @@ struct OpenWindowOptions: Record {
   @Field var returnTo: String?
   @Field var cover: String?
   @Field var animated: Bool = false
+  @Field var placement: String?
 }

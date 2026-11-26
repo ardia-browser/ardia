@@ -78,10 +78,11 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
         ? { kind: "small" as const, size: s.settings.littleArdiaSize, ...(claim?.startsWith("link:") ? { claim } : {}), ...(w.linkPointer ? { pointer: w.linkPointer } : {}), ...(w.linkApp ? { returnTo: w.linkApp } : {}) }
         : {};
       const made = w.kind !== "small" && w.chromeWindow ? { chromeWindow: w.chromeWindow } : {};
+      const placement = w.kind !== "small" && !w.restoredFrame && !w.frame && s.settings.newWindowPlacement !== "cascade" ? { placement: s.settings.newWindowPlacement } : {};
       const under = behind ?? (w.kind === "main" ? w.opensBehind : undefined);
       port.open(
         id,
-        { frame: w.restoredFrame ?? w.frame, ...(w.maximized && w.kind !== "small" ? { maximized: true } : {}), incognito: w.kind === "private", title: titles.get(id), focus, profile, ...(w.display ? { display: w.display } : {}), ...(under ? { behind: under } : {}), ...(prev && w.kind !== "small" && !w.chromeWindow ? { animated: true } : {}), ...small, ...made },
+        { frame: w.restoredFrame ?? w.frame, ...(w.maximized && w.kind !== "small" ? { maximized: true } : {}), incognito: w.kind === "private", title: titles.get(id), focus, profile, ...(w.display ? { display: w.display } : {}), ...(under ? { behind: under } : {}), ...(prev && w.kind !== "small" && !w.chromeWindow ? { animated: true } : {}), ...placement, ...small, ...made },
         lightsCenter(s, id),
       );
     }

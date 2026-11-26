@@ -48,9 +48,9 @@ const oneOf = <const V extends readonly string[]>(values: V, d: V[number], synce
 const shaped = <T,>(d: T, valid: (v: unknown) => boolean, schema: JsonSchema, synced = false): SettingSpec<T> => ({ default: d, valid, synced, schema });
 
 export const SETTING_SPECS = {
-  warnBeforeQuitting: flag(false, SYNCED),
-  warnBeforeClosingWindow: flag(true, SYNCED),
+  warnBeforeQuitting: flag(false, SYNCED), warnBeforeClosingWindow: flag(true, SYNCED),
   restoreSession: flag(true),
+  newWindowPlacement: oneOf(["cascade", "beside", "equal"], "cascade", SYNCED),
   separateDownloadFolders: flag(false),
   searchEngine: text("google", SYNCED),
   customSearchUrl: text("", SYNCED),

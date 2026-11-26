@@ -83,6 +83,7 @@ function DefaultBrowserSection() {
 
 function StartupSection() {
   const restoreSession = useSettings((s) => s.restoreSession);
+  const newWindowPlacement = useSettings((s) => s.newWindowPlacement);
   const warnBeforeQuitting = useSettings((s) => s.warnBeforeQuitting);
   const warnBeforeClosingWindow = useSettings((s) => s.warnBeforeClosingWindow);
   const warnBeforeClosingLastTab = useSettings((s) => s.warnBeforeClosingLastTab);
@@ -109,6 +110,18 @@ function StartupSection() {
             ]}
             onChange={(v) => updateSettings({ restoreSession: v === "keep" })}
             minWidth={190}
+          />
+        </Row>
+        <Row anchor="general.newWindowPlacement">
+          <PopUp
+            value={newWindowPlacement}
+            options={[
+              { value: "cascade", title: "Cascaded over current" },
+              { value: "beside", title: "Beside current window" },
+              { value: "equal", title: "Side by side (equal width)" },
+            ]}
+            onChange={(placement) => updateSettings({ newWindowPlacement: placement })}
+            minWidth={210}
           />
         </Row>
         <Checklist

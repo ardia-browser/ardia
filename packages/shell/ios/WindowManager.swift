@@ -120,7 +120,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       observeDelegateNotifications(chromeWindow)
       if small { configureSmall(chromeWindow) }
       if small { LittleArdiaHandoff.shared.opened(id, linkFrom: options.returnTo) }
-      return show(entry, frame: frame, title: title, focus: focus, small: small, smallSize: options.size, smallPointer: options.pointer, behind: behind, display: options.display)
+      return show(entry, frame: frame, title: title, focus: focus, small: small, smallSize: options.size, smallPointer: options.pointer, behind: behind, display: options.display, placement: options.placement)
     }
     let window = makeWindow()
     let controller = NSViewController()
@@ -134,11 +134,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
       configureSmall(window)
       LittleArdiaHandoff.shared.opened(id, linkFrom: options.returnTo)
     }
-    show(ManagedWindow(id: id, kind: kind, window: window, incognito: options.incognito), frame: frame, title: title, focus: focus, small: small, smallSize: options.size, smallPointer: options.pointer, display: options.display)
+    show(ManagedWindow(id: id, kind: kind, window: window, incognito: options.incognito), frame: frame, title: title, focus: focus, small: small, smallSize: options.size, smallPointer: options.pointer, display: options.display, placement: options.placement)
   }
   private func show(
     _ entry: ManagedWindow, frame: CGRect?, title: String, focus: Bool, small: Bool, smallSize: CGSize?, smallPointer: NSPoint?,
-    behind: String? = nil, display: String? = nil
+    behind: String? = nil, display: String? = nil, placement newWindowPlacement: String? = nil
   ) {
     let window = entry.window, id = entry.id
     entry.display = display
@@ -146,7 +146,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     window.title = title
     Self.identify(window, id: id, kind: entry.kind)
     let wanted = small && frame == nil ? smallSize ?? Self.smallDefaultSize : nil
-    if let wanted { placeSmall(window, id: id, size: wanted, pointer: smallPointer) } else if frame != nil || !window.isVisible { place(window, frame: frame, display: display) }
+    if let wanted { placeSmall(window, id: id, size: wanted, pointer: smallPointer) } else if frame != nil || !window.isVisible { place(window, frame: frame, display: display, placement: newWindowPlacement) }
     let placement = wanted.map { (wanted: $0, placed: window.frame) }
     relayoutRoot(window)
     managed[id] = entry
@@ -308,7 +308,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     else { return }
     entry.window.setFrame(ArdiaDisplayIdentity.frame(entry.window.frame, on: screen), display: false)
   }
-  private func place(_ window: NSWindow, frame: CGRect?, display: String? = nil) {
+  private func place(_ window: NSWindow, frame: CGRect?, display: String? = nil, placement: String? = nil) {
     if let frame {
       let saved = ArdiaDisplayIdentity.screen(withIdentifier: display)
       window.setFrame(saved.map { ArdiaDisplayIdentity.frame(frame, on: $0) } ?? frame, display: false)
@@ -317,9 +317,10 @@ final class WindowManager: NSObject, NSWindowDelegate {
       }
     } else if let source = [NSApp.keyWindow, NSApp.mainWindow, lastPlaced].compactMap({ $0 }).first(where: { isMainWindow($0) })
                 ?? managed.values.map(\.window).first(where: { $0.isVisible && isMainWindow($0) }) {
-      window.setFrame(NSRect(origin: .zero, size: source.frame.size), display: false)
-      let topLeft = NSPoint(x: source.frame.minX, y: source.frame.maxY)
-      window.setFrameTopLeftPoint(window.cascadeTopLeft(from: topLeft))
+      if !placeRelative(window, source: source, placement: placement) {
+        window.setFrame(NSRect(origin: .zero, size: source.frame.size), display: false)
+        window.setFrameTopLeftPoint(window.cascadeTopLeft(from: NSPoint(x: source.frame.minX, y: source.frame.maxY)))
+      }
     } else if let lastFrame {
       window.setFrame(from: lastFrame)
     } else {
@@ -535,7 +536,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     reportFrame(window)
   }
 
-  private func reportFrame(_ window: NSWindow) {
+  func reportFrame(_ window: NSWindow) {
     unreportedFrames.remove(ObjectIdentifier(window))
     guard let id = id(of: window), !window.styleMask.contains(.fullScreen), window.parent == nil else { return }
     if isMainWindow(window) {

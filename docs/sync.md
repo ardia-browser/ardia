@@ -408,6 +408,49 @@ A tab sent to another device (the tab menu's "Send to <device>" on a Mac; the iP
   they are. A Mac before this build has no adapter for `send:`, so it keeps the records in its replica and snapshots
   untouched, and opens its own once it updates (tested).
 
+### Sign-in approvals
+
+A program on the Mac asking for a sign-in (`vault.taskStart`, #3429) can be approved on the owner's iPhone as well as on
+the Mac; the first answer wins and the other side closes.
+- **Records,** all in the app scope (shapes and checks: `packages/sync/src/vaultApproval.ts`):
+  - `vault:q:<id>` from the Mac: `{id, n: nonce, p: profile, pn: its name, g: program, s: https origins, w: reason,
+    x: expiry, m: the Mac's device id, ao: Always Allow offered, at}`.
+  - `vault:a:<id>` from the phone: `{id, n, p, s, x, m, a: allow, al: always, by: the phone's device id, sig, at}`.
+  - `vault:k:<phone>` from the phone: its public key (`k`, P-256, X9.63, base64) and the key's code (`f`).
+  - `vault:t:<phone>:<mac>` from a Mac that trusts that key: `{f}`, only so the phone knows to offer Allow.
+- **Signed answers.** The sync key is shared by every device in the chain, so it can't tell who wrote a record. Each
+  iPhone therefore keeps its own P-256 key in the Secure Enclave (`.privateKeyUsage` and `.userPresence`, this
+  device only), made the first time a request needs it (`VaultPhoneKey` in ArdiaKit). An answer's `sig` signs
+  `vaultChallenge`: the length-prefixed id, nonce, profile, sites in order, expiry, Always Allow offered, Mac, phone,
+  allow and always. Signing an Allow is what asks for Face ID or the passcode, once. Don't Allow goes out unsigned,
+  with no prompt, from a trusted phone or not: a denial can't grant anything (below). The iOS
+  Simulator can't use Secure Enclave keys with an access control, so a simulator build signs with a software key
+  behind the same prompt; a real iPhone is the only proof of the Secure Enclave path.
+- **Trusting a phone.** The Mac takes answers only from keys the owner trusted on it: Settings › Sync › the iPhone's
+  row › Approve Sign-Ins… shows the key's code, and the iPhone's sheet shows the same code until the Mac trusts it
+  (`SyncPhoneApprovals.tsx`). Trusted keys live in the Keychain (`Ardia Sign-In Approval Phones`, or
+  `sign-in-approval-phones.json` in an `ARDIA_DATA_DIR` test instance); verifying and keeping them is native
+  (`packages/sync/ios/Core/VaultPhoneKeys.swift`, CryptoKit), and Stop Sign-In Approvals… forgets one.
+- **Mac** (`apps/browser/src/state/sync/vaultApprovals.ts`): `askPhoneForVaultApproval({id, nonce, profile, program,
+  sites, why, alwaysOffered, expiresAt}, consent?)` resolves only a verified Allow, `{allow: true, always, nonce,
+  phone, signature}`, or `null`. It is
+  `null` at once when sync isn't running, no phone has written in 14 days, or the ask is malformed (sites must be bare
+  `https://` origins), and `null` at the expiry (at most 10 minutes). While an ask is open the engine cycles every 2 s.
+  An answer counts only if every bound field matches the open ask, its `by` is a phone, the record's author device is
+  that phone, and its signature verifies against that phone's trusted key over the Mac's own challenge; `always` is
+  never true unless the ask offered it. Unsigned, wrongly signed and untrusted Allows are ignored and counted. A Don't
+  Allow, signed or not, only ends the phone's side of that one request: the ask resolves `null`, so the Mac's own
+  sheet keeps waiting for the owner, and later requests are asked as usual. Once
+  settled, or on `cancelPhoneVaultApproval(id)` when the Mac's own sheet answers first, the Mac deletes the request and
+  answer, which closes the phone's sheet.
+- **iPhone** (`packages/sync/src/companion/vault.ts`): the view lists open requests (never the nonce) with whether the
+  asking Mac trusts this phone, and the key's code. `companionVaultChallenge` gives the bytes to sign and
+  `companionAnswerVault` keeps the signed answer. The sheet is `apps/phone/src/components/vault/VaultApprovalSheet.tsx`.
+- **Speed.** Delivery is the folder's: the Mac publishes at once, then iCloud Drive carries the file and the phone reads
+  it on its next cycle (every 15 s in the foreground). No push: a phone in the background sees a request only when iOS
+  runs its background refresh, which is far too rare for a 10-minute ask, so there is no notification.
+- Android reads the records (the same `ardia-sync.js`) but has no sheet yet.
+
 ### Extensions
 
 What Chrome Sync does for extensions, through our folder (`packages/sync/src/extensions.ts`, the app's host in

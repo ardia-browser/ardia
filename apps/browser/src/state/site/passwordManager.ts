@@ -10,6 +10,7 @@ import { useShallow } from "zustand/react/shallow";
 import { beforePluginsCommit, beforePluginsWithdraw, onPluginWithdrawAbandoned, usePlugins, recordOf, activeManifest, type PluginsCommit } from "../plugins/store";
 import { notePasswordManagerChosen, notePasswordPanel, noteProfilesMovedBack } from "../telemetry/passwordManagerCounts";
 import { isBundledRetiredRecord, RETIRED_OFFICIAL_PLUGINS, retiredRecordOf } from "../plugins/retiredOfficial";
+import { useVaultPrefs, vaultPrefs } from "../vault/prefs";
 import {
   choiceKind,
   fieldProviderSet,
@@ -191,7 +192,7 @@ function want(key: string) {
 }
 
 function pushProviders(plugins: readonly ManagerPlugin[], consent: ConsentToken | null, again = false): Promise<void> {
-  const { providers, key } = fieldProviderSet(browser(), plugins);
+  const { providers, key } = fieldProviderSet(browser(), plugins, ardiaKeepsCodes());
   if (!again && key === pushed && inFlight === null) return Promise.resolve();
   const target = want(key);
   if (!again && inFlight === key) return target.confirmed;
@@ -347,11 +348,16 @@ export function startPasswordManager() {
     if (changed) syncModes();
   });
   begin();
+  useVaultPrefs.subscribe((s, prev) => s.keepsCodes !== prev.keepsCodes && syncModes());
 }
+
+const ardiaKeepsCodes = () => PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins && vaultPrefs().keepsCodes;
 
 function codeSetupOn(tabId: string): boolean {
   const tab = browser().tabs[tabId];
-  return !!tab && currentManagerPlugin(tab.profileId)?.spec.verificationCodeSetup === "system";
+  if (!tab) return false;
+  const plugin = currentManagerPlugin(tab.profileId);
+  return plugin ? plugin.spec.verificationCodeSetup === "system" : currentPasswordManager(tab.profileId) === "ardia" && ardiaKeepsCodes();
 }
 
 export const verificationCodeFound = (tabId: string, found: VerificationCodeFound) => offerVerificationCode(tabId, found, codeSetupOn, generation);

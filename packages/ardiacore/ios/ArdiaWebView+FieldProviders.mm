@@ -16,6 +16,7 @@ namespace {
 NSDictionary<NSString *, NSDictionary *> *gFieldProviders = @{};
 double gFieldProviderGeneration = -1;
 NSString *gFieldProviderSession = @"";
+void (^gVerificationCodeKeeper)(NSString *, NSString *, NSString *, void (^)(BOOL)) = nil;
 const NSTimeInterval kFocusQuerySeconds = 0.2;
 NSString *const kInsertFromPasswordsAction = @"_handleInsertFromPasswordsCommand:";
 NSString *const kShowOrHideAutoFill = @"_showOrHideAutoFillForCurrentTextInputContextIfAppropriate";
@@ -315,7 +316,7 @@ void OpenSystemPanel(NSView *page, void (^done)(NSDictionary *result)) {
     const BOOL login = [fields containsObject:@"login"], oneTimeCode = [fields containsObject:@"oneTimeCode"], codeSetup = Flag(entry, @"codeSetup");
     if (!profile || !(login || oneTimeCode || codeSetup)) continue;
     providers[ardia_host::OriginalProfileName(profile)] =
-        @{@"login" : @(login), @"oneTimeCode" : @(oneTimeCode), @"codeSetup" : @(codeSetup), @"generation" : @(generation)};
+        @{@"login" : @(login), @"oneTimeCode" : @(oneTimeCode), @"codeSetup" : @(codeSetup), @"keepCodes" : @(codeSetup && Flag(entry, @"keepCodes")), @"generation" : @(generation)};
   }
   const BOOL changed = newSession || generation != gFieldProviderGeneration || ![providers isEqualToDictionary:gFieldProviders];
   gFieldProviderSession = [session copy];
@@ -342,6 +343,10 @@ void OpenSystemPanel(NSView *page, void (^done)(NSDictionary *result)) {
     @"chromium" : @(action && [heuristic respondsToSelector:NSSelectorFromString(@"_inputContextForChromiumSecureTextFieldFromResponder:")]),
     @"webkit" : @(action),
   };
+}
+
++ (void)setVerificationCodeKeeper:(void (^)(NSString *, NSString *, NSString *, void (^)(BOOL)))keeper {
+  gVerificationCodeKeeper = [keeper copy];
 }
 
 + (NSString *)otpauthHandlerName {
@@ -456,8 +461,9 @@ void OpenSystemPanel(NSView *page, void (^done)(NSDictionary *result)) {
 + (NSDictionary *)offerVerificationCode:(NSString *)text owner:(id)owner frame:(NSString *)frame profile:(NSString *)profile generation:(double)generation {
   NSDictionary *provider = FieldProviderFor(profile);
   NSURL *url = VerificationSetupURL(text);
-  NSURL *handler = VerificationCodeHandler(url);
-  NSString *app = AppName(handler);
+  const BOOL keeps = Flag(provider, @"keepCodes") && [url.scheme.lowercaseString isEqualToString:@"otpauth"] && [url.host.lowercaseString isEqualToString:@"totp"];
+  NSURL *handler = keeps ? NSBundle.mainBundle.bundleURL : VerificationCodeHandler(url);
+  NSString *app = keeps ? @"Ardia" : AppName(handler);
   if (!Flag(provider, @"codeSetup") || generation != gFieldProviderGeneration || !url || !handler || !app.length || !frame) return nil;
   NSMutableDictionary *page = FieldProviderPage(owner);
   NSMutableDictionary<NSString *, NSDictionary *> *tokens = page[@"tokens"];
@@ -494,6 +500,10 @@ void OpenSystemPanel(NSView *page, void (^done)(NSDictionary *result)) {
     return completion(refuse(@"noProvider"));
   if (!frameAlive(offer[@"frame"])) return completion(refuse(@"frameGone"));
   NSURL *url = offer[@"url"];
+  if ([offer[@"handler"] isEqualToString:NSBundle.mainBundle.bundleURL.path]) {
+    if (!Flag(FieldProviderFor(profile), @"keepCodes") || !gVerificationCodeKeeper) return completion(refuse(@"noProvider"));
+    return gVerificationCodeKeeper(token, url.absoluteString, offer[@"profile"], ^(BOOL kept) { completion(kept ? @{@"opened" : @YES, @"kept" : @YES} : refuse(@"failed")); });
+  }
   NSURL *handler = VerificationCodeHandler(url);
   if (!handler || ![handler.path isEqualToString:offer[@"handler"]]) return completion(refuse(@"handlerChanged"));
   if (ArdiaLaunchConfig.shared.background) {

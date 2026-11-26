@@ -36,7 +36,13 @@
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/os_crypt/common/os_crypt_switches.h"
+#include "content/public/browser/authenticator_request_client_delegate.h"
+#include "net/base/auth.h"
+#include "content/public/browser/render_process_host.h"
+#include "net/base/net_errors.h"
+#include "services/network/public/mojom/web_transport.mojom.h"
 #include "content/public/browser/browser_context.h"
+#include "services/network/public/cpp/url_loader_factory_builder.h"
 #include "content/public/browser/browser_main_parts.h"
 #include "content/public/common/content_switches.h"
 #include "extensions/common/switches.h"
@@ -56,9 +62,12 @@
 #include "ardia/core/ac_page_script.h"
 #include "ardia/core/ac_safe_storage.h"
 #include "ardia/core/ac_seams.h"
+#include "ardia/core/ac_vault_frames.h"
+#include "ardia/core/ac_vault_request_guard.h"
 #include "ardia/core/ac_strings.h"
 #include "content/public/browser/web_contents_view_delegate.h"
 #include "ardia/core/renderer/ac_content_renderer_client.h"
+#include "ardia/core/renderer/ac_vault_filler.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 
 namespace ardiacore {
@@ -220,6 +229,16 @@ class ACBrowserMainParts : public content::BrowserMainParts {
 
 class ACContentBrowserClient : public ChromeContentBrowserClient {
  public:
+  void AppendExtraCommandLineSwitches(base::CommandLine* command_line,
+                                      int child_process_id) override {
+    ChromeContentBrowserClient::AppendExtraCommandLineSwitches(command_line,
+                                                              child_process_id);
+    content::RenderProcessHost* process =
+        content::RenderProcessHost::FromID(child_process_id);
+    if (process && IsVaultBrowserContext(process->GetBrowserContext())) {
+      command_line->AppendSwitch(kVaultRendererSwitch);
+    }
+  }
   void RenderProcessWillLaunch(content::RenderProcessHost* host) override {
     ChromeContentBrowserClient::RenderProcessWillLaunch(host);
     SendPageScript(host);
@@ -235,6 +254,158 @@ class ACContentBrowserClient : public ChromeContentBrowserClient {
   std::unique_ptr<content::WebContentsViewDelegate> GetWebContentsViewDelegate(
       content::WebContents* web_contents) override {
     return CreateViewDelegate(web_contents);
+  }
+  void WillCreateURLLoaderFactory(
+      content::BrowserContext* browser_context,
+      content::RenderFrameHost* frame,
+      int render_process_id,
+      URLLoaderFactoryType type,
+      const url::Origin& request_initiator,
+      const net::IsolationInfo& isolation_info,
+      std::optional<int64_t> navigation_id,
+      ukm::SourceIdObj ukm_source_id,
+      network::URLLoaderFactoryBuilder& factory_builder,
+      mojo::PendingRemote<network::mojom::TrustedURLLoaderHeaderClient>*
+          header_client,
+      bool* bypass_redirect_checks,
+      bool* disable_secure_dns,
+      network::mojom::URLLoaderFactoryOverridePtr* factory_override,
+      scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner,
+      bool is_for_network_service) override {
+    ChromeContentBrowserClient::WillCreateURLLoaderFactory(
+        browser_context, frame, render_process_id, type, request_initiator,
+        isolation_info, navigation_id, ukm_source_id, factory_builder,
+        header_client, bypass_redirect_checks, disable_secure_dns,
+        factory_override, navigation_response_task_runner,
+        is_for_network_service);
+    GuardVaultRequests(browser_context, frame,
+                       type == URLLoaderFactoryType::kNavigation,
+                       factory_builder);
+  }
+  bool CanCreateWindow(content::RenderFrameHost* opener,
+                       const GURL& opener_url,
+                       const GURL& opener_top_level_frame_url,
+                       const url::Origin& source_origin,
+                       content::mojom::WindowContainerType container_type,
+                       const GURL& target_url,
+                       const content::Referrer& referrer,
+                       const std::string& frame_name,
+                       WindowOpenDisposition disposition,
+                       const blink::mojom::WindowFeatures& features,
+                       bool user_gesture,
+                       bool opener_suppressed,
+                       bool* no_javascript_access) override {
+    if (IsVaultSignInFrame(opener)) return false;
+    return ChromeContentBrowserClient::CanCreateWindow(
+        opener, opener_url, opener_top_level_frame_url, source_origin,
+        container_type, target_url, referrer, frame_name, disposition, features,
+        user_gesture, opener_suppressed, no_javascript_access);
+  }
+  content::AllowServiceWorkerResult AllowServiceWorker(
+      const GURL& scope,
+      const net::SiteForCookies& site_for_cookies,
+      const std::optional<url::Origin>& top_frame_origin,
+      const blink::StorageKey& storage_key,
+      const GURL& script_url,
+      content::BrowserContext* context) override {
+    if (IsVaultBrowserContext(context)) {
+      return content::AllowServiceWorkerResult::No();
+    }
+    return ChromeContentBrowserClient::AllowServiceWorker(
+        scope, site_for_cookies, top_frame_origin, storage_key, script_url,
+        context);
+  }
+  bool AllowSharedWorker(
+      const GURL& worker_url,
+      const net::SiteForCookies& site_for_cookies,
+      const std::optional<url::Origin>& top_frame_origin,
+      const std::string& name,
+      const blink::StorageKey& storage_key,
+      const blink::mojom::SharedWorkerSameSiteCookies same_site_cookies,
+      content::BrowserContext* context,
+      int render_process_id,
+      int render_frame_id) override {
+    return !IsVaultBrowserContext(context) &&
+           ChromeContentBrowserClient::AllowSharedWorker(
+               worker_url, site_for_cookies, top_frame_origin, name,
+               storage_key, same_site_cookies, context, render_process_id,
+               render_frame_id);
+  }
+  bool WillInterceptWebSocket(content::RenderFrameHost* frame) override {
+    return IsVaultSignInFrame(frame) ||
+           ChromeContentBrowserClient::WillInterceptWebSocket(frame);
+  }
+  void CreateWebSocket(
+      content::RenderFrameHost* frame,
+      WebSocketFactory factory,
+      const GURL& url,
+      const net::SiteForCookies& site_for_cookies,
+      const std::optional<std::string>& user_agent,
+      mojo::PendingRemote<network::mojom::WebSocketHandshakeClient>
+          handshake_client,
+      WebSocketOptions options) override {
+    if (IsVaultSignInFrame(frame)) return;
+    ChromeContentBrowserClient::CreateWebSocket(
+        frame, std::move(factory), url, site_for_cookies, user_agent,
+        std::move(handshake_client), std::move(options));
+  }
+  void WillCreateWebTransport(
+      int process_id,
+      int frame_routing_id,
+      const GURL& url,
+      const url::Origin& initiator_origin,
+      mojo::PendingRemote<network::mojom::WebTransportHandshakeClient>
+          handshake_client,
+      WillCreateWebTransportCallback callback) override {
+    content::RenderProcessHost* process =
+        content::RenderProcessHost::FromID(process_id);
+    if (process && IsVaultBrowserContext(process->GetBrowserContext())) {
+      std::move(callback).Run(
+          std::move(handshake_client),
+          network::mojom::WebTransportError::New(net::ERR_BLOCKED_BY_CLIENT, 0,
+                                                 "", false));
+      return;
+    }
+    ChromeContentBrowserClient::WillCreateWebTransport(
+        process_id, frame_routing_id, url, initiator_origin,
+        std::move(handshake_client), std::move(callback));
+  }
+  std::unique_ptr<content::AuthenticatorRequestClientDelegate>
+  GetWebAuthenticationRequestDelegate(
+      content::RenderFrameHost* render_frame_host) override {
+    if (IsVaultSignInFrame(render_frame_host)) {
+      NoteVaultPasskeyRequest(render_frame_host);
+      return nullptr;
+    }
+    return ChromeContentBrowserClient::GetWebAuthenticationRequestDelegate(
+        render_frame_host);
+  }
+  std::unique_ptr<content::LoginDelegate> CreateLoginDelegate(
+      const net::AuthChallengeInfo& auth_info,
+      content::WebContents* web_contents,
+      content::BrowserContext* browser_context,
+      const content::GlobalRequestID& request_id,
+      bool is_request_for_primary_main_frame_navigation,
+      bool is_request_for_navigation,
+      const GURL& url,
+      scoped_refptr<net::HttpResponseHeaders> response_headers,
+      bool first_auth_attempt,
+      bool do_not_prompt_for_login,
+      content::GuestPageHolder* guest_page_holder,
+      content::LoginDelegate::LoginAuthRequiredCallback auth_required_callback)
+      override {
+    if (IsVaultBrowserContext(browser_context)) {
+      NoteVaultAuthChallenge(is_request_for_navigation ? web_contents : nullptr,
+                             auth_info.is_proxy,
+                             is_request_for_primary_main_frame_navigation, url);
+      return nullptr;
+    }
+    return ChromeContentBrowserClient::CreateLoginDelegate(
+        auth_info, web_contents, browser_context, request_id,
+        is_request_for_primary_main_frame_navigation, is_request_for_navigation,
+        url, std::move(response_headers), first_auth_attempt,
+        do_not_prompt_for_login, guest_page_holder,
+        std::move(auth_required_callback));
   }
   void CreateThrottlesForNavigation(
       content::NavigationThrottleRegistry& registry) override {

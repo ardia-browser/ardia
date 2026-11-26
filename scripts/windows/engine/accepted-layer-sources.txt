@@ -42,6 +42,7 @@ ac_history.cc
 ac_memory.cc
 ac_memory_saver.cc
 ac_passwords.cc
+ac_passwords_add_many.cc
 ac_passwords_entries.cc
 ac_passwords_internal.h
 ac_passwords_logins.cc

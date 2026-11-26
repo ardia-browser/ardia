@@ -968,6 +968,14 @@
    ]
   },
   {
+   "id": "sync-adapter:vaultApprovals.ts#vaultApprovalsAdapter",
+   "source": "sync",
+   "guard": "vaultRequestsAdapter decoder; a phone's answer settles only an open ask from this Mac, written by a phone this Mac trusts, once its signature over the request checks out natively (vaultVerifyPhone)",
+   "checks": [
+    "apps/browser/src/state/sync/vaultApprovals.ts#vaultApprovalsAdapter"
+   ]
+  },
+  {
    "id": "sync-adapter:scopeAdapters.ts#extensionsOf",
    "source": "sync",
    "guard": "See extensions.ts#extensionsAdapterFor",

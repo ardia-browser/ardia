@@ -1,0 +1,63 @@
+--- a/content/browser/devtools/render_frame_devtools_agent_host.cc
++++ b/content/browser/devtools/render_frame_devtools_agent_host.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "content/browser/devtools/render_frame_devtools_agent_host.h"
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
+ 
+ #include <algorithm>
+ #include <set>
+@@ -102,6 +103,9 @@
+ #include "content/browser/devtools/protocol/visual_debugger_handler.h"
+ #endif
+ 
++bool (*g_ardia_devtools_hidden)(content::BrowserContext* context) =
++    nullptr;
++
+ namespace content {
+ 
+ namespace {
+@@ -120,6 +124,10 @@
+ }
+ 
+ bool ShouldCreateDevToolsForNode(FrameTreeNode* ftn) {
++  if (g_ardia_devtools_hidden && ftn->current_frame_host() &&
++      g_ardia_devtools_hidden(ftn->current_frame_host()->GetBrowserContext())) {
++    return false;
++  }
+   return !ftn->parent() ||
+          (ftn->current_frame_host() &&
+           RenderFrameDevToolsAgentHost::ShouldCreateDevToolsForHost(
+@@ -311,6 +319,10 @@
+ // static
+ void RenderFrameDevToolsAgentHost::AttachToWebContents(
+     WebContents* web_contents) {
++  if (g_ardia_devtools_hidden &&
++      g_ardia_devtools_hidden(web_contents->GetBrowserContext())) {
++    return;
++  }
+   if (ShouldForceCreation()) {
+     // Force agent hosts.
+     DevToolsAgentHost::GetOrCreateForTab(web_contents);
+--- a/content/browser/devtools/web_contents_devtools_agent_host.cc
++++ b/content/browser/devtools/web_contents_devtools_agent_host.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "content/browser/devtools/web_contents_devtools_agent_host.h"
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
+ 
+ #include "base/memory/raw_ptr.h"
+ #include "base/no_destructor.h"
+@@ -162,6 +163,10 @@
+     DevToolsAgentHost::List* result) {
+   auto* delegate = DevToolsManager::GetInstance()->delegate();
+   for (WebContentsImpl* wc : WebContentsImpl::GetAllWebContents()) {
++    if (g_ardia_devtools_hidden &&
++        g_ardia_devtools_hidden(wc->GetBrowserContext())) {
++      continue;
++    }
+     if (delegate && !delegate->ShouldReportAsTabTarget(wc).value_or(true)) {
+       // Skip the target if delegate explicitly indicates that it should not be
+       // reported as Tab.

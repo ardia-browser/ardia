@@ -25,9 +25,11 @@
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
+#include "ardia/core/ac_content_hooks.h"
 #include "ardia/core/ac_page_limits.h"
 #include "ardia/core/ac_prerender_posts.h"
 #include "ardia/core/mojom/ardiacore.mojom.h"
+#include "ardia/core/renderer/ac_vault_filler.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
@@ -122,7 +124,8 @@ class ACPageObserver : public content::RenderFrameObserver,
   }
 
   void RunAtDocumentStart() {
-    if (installed_for_web_ || !IsWebDocument()) {
+    if (installed_for_web_ || !IsWebDocument() ||
+        IsVaultFrame(render_frame())) {
       return;
     }
     blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
@@ -481,6 +484,9 @@ ACContentRendererClient::~ACContentRendererClient() = default;
 
 void ACContentRendererClient::RenderThreadStarted() {
   ChromeContentRendererClient::RenderThreadStarted();
+  g_ardia_frame_blocks_extension_scripts = &IsVaultFrame;
+  g_ardia_forms_seen_at_once = &IsVaultFrame;
+  g_ardia_form_get_blocked = &BlockVaultGetSubmission;
   observer_ = std::make_unique<ACRenderThreadObserver>();
   content::RenderThread::Get()->AddObserver(observer_.get());
 }
@@ -489,6 +495,7 @@ void ACContentRendererClient::RenderFrameCreated(
     content::RenderFrame* render_frame) {
   ChromeContentRendererClient::RenderFrameCreated(render_frame);
   new ACPageObserver(render_frame);
+  AttachVaultFiller(render_frame);
 }
 
 void ACContentRendererClient::RunScriptsAtDocumentStart(

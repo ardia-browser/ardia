@@ -497,6 +497,7 @@ const WRAP_SITES = {
   "apps/browser/src/platform/passwords.ts": ["password"],
   "apps/browser/src/state/site/savedPasswords.ts": ["password"],
   "apps/browser/src/state/import/apply.ts": ["password"],
+  "apps/browser/src/state/import/credentialExchange.ts": ["password"],
   "apps/browser/src/components/settings/panes/ProfilePasswords.tsx": ["password"],
   "apps/browser/src/state/live/net.ts": ["oauthToken", "oauthClientSecret"],
   "apps/browser/src/state/live/sources.ts": ["oauthToken", "apiToken", "oauthClientSecret"],

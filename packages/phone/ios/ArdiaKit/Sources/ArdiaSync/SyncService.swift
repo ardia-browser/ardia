@@ -494,6 +494,112 @@ public final class SyncService {
     return true
   }
 
+  public enum VaultAnswerOutcome: String, Sendable {
+    case sent
+    case gone
+    case failed
+    case cancelled
+    case untrusted
+    case unavailable
+  }
+
+  public func prepareVaultKey() async -> String? {
+    let key: VaultPhoneKey
+    do {
+      key = try VaultPhoneKey.loadOrCreate()
+    } catch {
+      NSLog("[vault] this iPhone's sign-in approval key isn't available: \(error)")
+      return nil
+    }
+    if isDemo {
+      snapshot.vaultKey = key.fingerprint
+      return key.fingerprint
+    }
+    guard let engine else { return nil }
+    guard (try? await engine.setVaultKey(key.publicKey, fingerprint: key.fingerprint)) != nil else { return nil }
+    Task { await runCycle() }
+    return key.fingerprint
+  }
+
+  private func declineVault(_ id: String) async -> VaultAnswerOutcome {
+    if isDemo {
+      snapshot.vaultRequests?.removeAll { $0.id == id }
+      return .sent
+    }
+    guard let engine else { return .failed }
+    do {
+      try await engine.answerVault(id: id, allow: false, always: false, signature: nil)
+    } catch SyncError.refused {
+      return .gone
+    } catch {
+      return .failed
+    }
+    Task { await runCycle() }
+    return .sent
+  }
+
+  private func signVault(_ message: String, for request: VaultApprovalRequest) async -> Result<String, VaultPhoneKeyError> {
+    let sites = request.sites.compactMap { URL(string: $0)?.host() }.joined(separator: ", ")
+    let reason = "Let \(request.program) sign in to \(sites)"
+    do {
+      return .success(try await VaultPhoneKey.loadOrCreate().sign(message, reason: reason))
+    } catch let error as VaultPhoneKeyError {
+      return .failure(error)
+    } catch {
+      return .failure(.unavailable)
+    }
+  }
+
+  public func demoAskToSignIn() {
+    guard isDemo else { return }
+    let now = now()
+    let request = VaultApprovalRequest(id: UUID().uuidString.lowercased(), program: "node, unsigned", sites: ["https://github.com", "https://accounts.google.com"], why: "Deploy the docs site", profileName: "Personal", alwaysOffered: false, trusted: !UserDefaults.standard.bool(forKey: "ArdiaVaultDemoUntrusted"), askedAt: now, expiresAt: now.addingTimeInterval(120), fromDeviceId: "demo-mac", fromDevice: "MacBook Pro")
+    snapshot.vaultRequests = (snapshot.vaultRequests ?? []) + [request]
+  }
+
+  public var vaultRequests: [VaultApprovalRequest] {
+    let now = now()
+    return (snapshot.vaultRequests ?? []).filter { $0.expiresAt > now }
+  }
+
+  public func answerVault(id: String, allow: Bool, always: Bool) async -> VaultAnswerOutcome {
+    guard let request = vaultRequests.first(where: { $0.id == id }) else { return .gone }
+    guard allow else { return await declineVault(id) }
+    guard request.trusted == true else { return .untrusted }
+    let always = always && request.alwaysOffered == true
+    if isDemo {
+      switch await signVault("demo \(id)", for: request) {
+      case .failure(let error): return error == .cancelled ? .cancelled : .unavailable
+      case .success: break
+      }
+      snapshot.vaultRequests?.removeAll { $0.id == id }
+      return .sent
+    }
+    guard let engine else { return .failed }
+    let message: String
+    do {
+      message = try await engine.vaultChallenge(id: id, allow: allow, always: always)
+    } catch SyncError.refused {
+      return .gone
+    } catch {
+      return .failed
+    }
+    let signature: String
+    switch await signVault(message, for: request) {
+    case .failure(let error): return error == .cancelled ? .cancelled : .unavailable
+    case .success(let made): signature = made
+    }
+    do {
+      try await engine.answerVault(id: id, allow: allow, always: always, signature: signature)
+    } catch SyncError.refused {
+      return .gone
+    } catch {
+      return .failed
+    }
+    Task { await runCycle() }
+    return .sent
+  }
+
   @discardableResult
   public func addBookmark(url: URL, title: String, profileSyncId: String? = nil) async -> PinOutcome {
     let page = url.absoluteString

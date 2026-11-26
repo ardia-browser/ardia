@@ -19,6 +19,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_agent_host_client.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -34,6 +35,7 @@ constexpr bool kIsActivity = false;
 
 struct VisibleHold {
   uint64_t id = 0;
+  bool token = false;
   base::WeakPtr<content::WebContents> contents;
   base::ScopedClosureRunner capture;
 };
@@ -95,7 +97,8 @@ void SessionAttached(content::DevToolsAgentHostClient* root_client,
   }
   const uint64_t id = NextHoldId();
   Holds().insert_or_assign(
-      session, VisibleHold{id, contents->GetWeakPtr(), {}});
+      session,
+      VisibleHold{id, IsTokenClient(root_client), contents->GetWeakPtr(), {}});
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE, base::BindOnce(&StartHold, session, id));
 }
@@ -110,11 +113,30 @@ void SessionDetached(const void* session) {
       base::DoNothingWithBoundArgs(std::move(node.mapped().capture)));
 }
 
+bool PasswordFillBlocked(content::RenderFrameHost* frame) {
+  content::WebContents* contents =
+      frame ? content::WebContents::FromRenderFrameHost(frame) : nullptr;
+  if (!contents) {
+    return false;
+  }
+  if (g_ardia_vault_browser_context &&
+      g_ardia_vault_browser_context(contents->GetBrowserContext())) {
+    return true;
+  }
+  for (const auto& [session, hold] : Holds()) {
+    if (hold.token && hold.contents.get() == contents) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }
 
 void InstallCliVisibleTabs() {
   g_ardia_devtools_session_attached = &SessionAttached;
   g_ardia_devtools_session_detached = &SessionDetached;
+  g_ardia_password_fill_blocked = &PasswordFillBlocked;
 }
 
 }

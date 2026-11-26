@@ -26,6 +26,7 @@ import { DockedLayout } from "./components/window/SidebarDock";
 import { LittleArdiaWindow } from "./components/littleArdia/LittleArdiaWindow";
 import { SidebarOverlays } from "./components/sidebar/Overlays";
 import { ReportSheetHost } from "./components/report/ReportSheet";
+import { VaultApprovalHost } from "./components/vault/VaultApprovalSheet";
 import { profileAccent, profileTheme, useTheme } from "./components/ui/theme";
 import { ThemeScope } from "./components/window/ThemeScope";
 import { PageBarContext, usePageBarScopeValue } from "./components/plugins/PageBarScope";
@@ -126,6 +127,7 @@ function BrowserWindow() {
       )}
       <OnboardingOverlay />
       {windowOverlays(<ReportSheetHost />)}
+      {windowOverlays(<VaultApprovalHost />)}
       {browserWindowControls()}
     </CrxDropArea>
   );

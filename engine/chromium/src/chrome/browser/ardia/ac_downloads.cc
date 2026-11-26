@@ -28,6 +28,7 @@
 #include "chrome/browser/download/download_prefs.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
+#include "ardia/core/ac_content_hooks.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/download/content/public/all_download_item_notifier.h"
@@ -268,6 +269,10 @@ class DownloadsState : public ProfileState {
   };
 
   void OnOffTheRecordProfileCreated(Profile* off_the_record) override {
+    if (g_ardia_vault_browser_context &&
+        g_ardia_vault_browser_context(off_the_record)) {
+      return;
+    }
     for (const auto& watch : watches_) {
       if (watch->profile() == off_the_record) {
         return;

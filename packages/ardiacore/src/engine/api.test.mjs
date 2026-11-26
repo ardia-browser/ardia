@@ -11,7 +11,7 @@ const api = readApi().replace(/\r\n/g, "\n");
 const manifest = readManifest();
 const capitalized = (name) => name[0].toUpperCase() + name.slice(1);
 const sorted = (set) => [...set].sort();
-const GENERATED_EVENTS = "AutofillEvents & BookmarksEvents & ContentBlockerEvents & DownloadsEvents & EngineDomainEvents & ExtensionsEvents & FaviconsEvents & HistoryEvents & MediaEvents & PasswordsEvents & PermissionsEvents & ProfilesEvents & SearchEvents & SitesEvents & TabsEvents & WebKitEvents & WebViewEvents & WindowsEvents";
+const GENERATED_EVENTS = "AutofillEvents & BookmarksEvents & ContentBlockerEvents & DownloadsEvents & EngineDomainEvents & ExtensionsEvents & FaviconsEvents & HistoryEvents & MediaEvents & PasswordsEvents & PermissionsEvents & ProfilesEvents & SearchEvents & SitesEvents & TabsEvents & VaultEvents & WebKitEvents & WebViewEvents & WindowsEvents";
 const EVENTS_TYPE = `export type EngineEvents = ${GENERATED_EVENTS}`;
 const withRows = api.replace(`${EVENTS_TYPE};`, `${EVENTS_TYPE} & {\n  "history.handWritten": unknown;\n};`);
 

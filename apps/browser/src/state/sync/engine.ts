@@ -73,7 +73,7 @@ function watchExtensions() {
   if (profiles.length) watchExtensionIntents(profiles);
 }
 
-function scheduleSync(delay = AFTER_EDIT_MS) {
+export function scheduleSync(delay = AFTER_EDIT_MS) {
   if (!doc.enabled) return;
   clearTimeout(timer);
   timer = setTimeout(() => void runCycle(), delay);

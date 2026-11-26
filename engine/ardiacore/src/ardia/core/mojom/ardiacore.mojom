@@ -1,5 +1,8 @@
 module ardiacore.mojom;
 
+import "mojo/public/mojom/base/string16.mojom";
+import "url/mojom/origin.mojom";
+
 interface ACRendererConfig {
   SetPageScript(string script);
 };
@@ -15,4 +18,50 @@ interface ACPage {
   PictureInPictureDocument() => (string? document);
   EnterPictureInPictureForUser(string document) => (bool opened);
   SetPageColor(string color);
+};
+
+struct ACVaultFillStep {
+  uint64 form;
+  uint64 username_field;
+  uint64 password_field;
+  uint64 code_field;
+  mojo_base.mojom.String16 username;
+  mojo_base.mojom.String16 password;
+  mojo_base.mojom.String16 code;
+  bool submit;
+};
+
+enum ACVaultFillOutcome {
+  kSubmitted,
+  kFilled,
+  kOriginChanged,
+  kFieldMissing,
+  kFieldChanged,
+  kDestinationRefused,
+  kSubmitterRefused,
+  kNoSubmitControl,
+  kInterrupted,
+  kInterruptedBeforeActivation,
+  kNotLogin,
+  kGetForm,
+};
+
+struct ACVaultPageState {
+  bool complete;
+  bool password_field;
+  bool text_field;
+  bool code_field;
+  bool challenge;
+  bool error_shown;
+  bool get_form_blocked;
+};
+
+interface ACVaultFiller {
+  Fill(url.mojom.Origin expected_origin, ACVaultFillStep step)
+      => (ACVaultFillOutcome outcome);
+  MarkVaultFrame();
+  ProbeDocument() => (ACVaultPageState state);
+  WatchForChange() => ();
+  StopWatching();
+  ClearFilledPasswords();
 };

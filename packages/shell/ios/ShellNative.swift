@@ -1332,6 +1332,7 @@ protocol AutomationNative {
   static func claimArmedDownload(_ arm: String, _ download: String, _ path: String) -> [String: Any]
   static func placeArmedDownload(_ arm: String, _ download: String, _ path: String, _ promise: Promise)
   static func releaseArmedDownload(_ arm: String, _ download: String, _ state: String) -> Bool
+  static func peer(_ connection: Int, _ promise: Promise)
 }
 
 extension AutomationNative {
@@ -1399,6 +1400,10 @@ extension AutomationNative {
 
   static var releaseArmedDownloadFunction: AnyDefinition {
     Function("releaseArmedDownload") { (arm: String, download: String, state: String) -> Bool in Self.releaseArmedDownload(arm, download, state) }
+  }
+
+  static var peerFunction: AnyDefinition {
+    AsyncFunction("peer") { (connection: Int, promise: Promise) in Self.peer(connection, promise) }
   }
 }
 

@@ -58,6 +58,11 @@ chromium-pref-hash-safe-storage-key-change.patch
 chromium-password-bubble-hook.patch
 chromium-password-generation-local.patch
 chromium-password-string-erase.patch
+chromium-password-fill-token-gate.patch
+chromium-vault-extensions-gate.patch
+chromium-vault-devtools-hidden.patch
+chromium-vault-forms-seen-at-once.patch
+chromium-vault-get-form-gate.patch
 chromium-os-crypt-decrypt-erase.patch
 chromium-window-docked-devtools.patch
 chromium-window-hosted.patch

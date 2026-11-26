@@ -40,6 +40,11 @@ export const sync = defineModuleDomain({
         readPasswords: { args: [["engineProfile", "string"]], result: "SealedLogin[] | null", async: true, promise: true, instance: "strong", mac: "custom", desktop: "adapted", windows: "custom" },
         savePassword: { args: [["engineProfile", "string"], ["origin", "string"], ["username", "string"], ["sealed", "string"], ["replacing", "boolean"]], result: "boolean", async: true, promise: true, queue: "module", instance: "strong", mac: "custom", desktop: "adapted", windows: "custom" },
         takeFileCounts: { args: [], result: "{ placeholders: number; busy: number; hydrated: number }", async: false, optional: true, mac: "absent", desktop: "absent", windows: "custom" },
+        vaultPhoneFingerprint: { args: [["key", "string"]], result: "string | null", swiftResult: "String?", async: false, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
+        vaultTrustedPhones: { args: [], result: "{ phone: string; fingerprint: string }[]", swiftResult: "[[String: String]]", async: false, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
+        vaultTrustPhone: { args: [["phone", "string"], ["key", "string"]], result: "boolean", async: false, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
+        vaultForgetPhone: { args: [["phone", "string"]], result: "boolean", async: false, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
+        vaultVerifyPhone: { args: [["phone", "string"], ["message", "string"], ["signature", "string"]], result: '"ok" | "unenrolled" | "bad_signature"', swiftResult: "String", async: false, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
       },
       constants: {
         core: { type: "SyncCore | (() => Promise<string>)", swift: "String", optional: true, mac: "custom", desktop: "adapted", windows: "absent" },

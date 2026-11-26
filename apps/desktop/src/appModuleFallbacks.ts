@@ -114,6 +114,7 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
     approvals: answer({ approvals: [], doorbell: false }),
     revokeApproval: answer(false),
     devtoolsEndpoint: answer({ problem: "unreadable" }),
+    peer: answer(null),
     cutOff: now(true),
     armFiles: answer({ ok: false, reason: "unsupported" }),
     disarmFiles: now(0),

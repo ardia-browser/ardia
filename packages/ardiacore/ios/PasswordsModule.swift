@@ -12,6 +12,10 @@ public class PasswordsModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("saveMany") { (profile: String, json: String, promise: Promise) in
+      ArdiaServices.savePasswords(profile: profile, json: json) { CallReply(promise: promise).service($0, $1) }
+    }.runOnQueue(.main)
+
     AsyncFunction("update") {
       (profile: String, origin: String, username: String, newUsername: String?, newPassword: String?, promise: Promise) in
       ArdiaServices.updatePassword(profile: profile, origin: origin, username: username, newUsername: newUsername,

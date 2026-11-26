@@ -14,13 +14,14 @@ import type { ProfilesCalls, ProfilesEvents } from "./generated/profiles";
 import type { SearchCalls, SearchEvents } from "./generated/search";
 import type { SitesCalls, SitesEvents } from "./generated/sites";
 import type { TabsCalls, TabsEvents } from "./generated/tabs";
+import type { VaultCalls, VaultEvents } from "./generated/vault";
 import type { WebKitCalls, WebKitEvents } from "./generated/webKit";
 import type { WebViewCalls, WebViewEvents } from "./generated/webView";
 import type { WindowsCalls, WindowsEvents } from "./generated/windows";
 
-export type EngineCalls = AutofillCalls & BookmarksCalls & ContentBlockerCalls & DownloadsCalls & EngineDomainCalls & ExtensionsCalls & FaviconsCalls & HistoryCalls & MediaCalls & PasswordsCalls & PermissionsCalls & ProfilesCalls & SearchCalls & SitesCalls & TabsCalls & WebKitCalls & WebViewCalls & WindowsCalls;
+export type EngineCalls = AutofillCalls & BookmarksCalls & ContentBlockerCalls & DownloadsCalls & EngineDomainCalls & ExtensionsCalls & FaviconsCalls & HistoryCalls & MediaCalls & PasswordsCalls & PermissionsCalls & ProfilesCalls & SearchCalls & SitesCalls & TabsCalls & VaultCalls & WebKitCalls & WebViewCalls & WindowsCalls;
 
-export type EngineEvents = AutofillEvents & BookmarksEvents & ContentBlockerEvents & DownloadsEvents & EngineDomainEvents & ExtensionsEvents & FaviconsEvents & HistoryEvents & MediaEvents & PasswordsEvents & PermissionsEvents & ProfilesEvents & SearchEvents & SitesEvents & TabsEvents & WebKitEvents & WebViewEvents & WindowsEvents;
+export type EngineEvents = AutofillEvents & BookmarksEvents & ContentBlockerEvents & DownloadsEvents & EngineDomainEvents & ExtensionsEvents & FaviconsEvents & HistoryEvents & MediaEvents & PasswordsEvents & PermissionsEvents & ProfilesEvents & SearchEvents & SitesEvents & TabsEvents & VaultEvents & WebKitEvents & WebViewEvents & WindowsEvents;
 
 export type WindowsHostEvents = {
   "tabs.windowRequest": WindowRequest;

@@ -139,6 +139,14 @@ public final class SyncModule: Module {
       }
     }
 
+    AsyncFunction("answerVaultRequest") { (id: String, allow: Bool, always: Bool, promise: Promise) in
+      PageViewModule.main(promise) { await PhoneSyncHost.shared.ready().answerVault(id: id, allow: allow, always: always).rawValue }
+    }
+
+    AsyncFunction("prepareVaultKey") { (promise: Promise) in
+      PageViewModule.main(promise) { await PhoneSyncHost.shared.ready().prepareVaultKey() }
+    }
+
     AsyncFunction("clearIncoming") {
       MainActor.assumeIsolated { PhoneSyncHost.shared.clearIncoming() }
     }.runOnQueue(.main)

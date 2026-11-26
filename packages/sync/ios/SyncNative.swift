@@ -30,6 +30,11 @@ protocol SyncNative {
   static func revealFolder(_ path: String)
   func readPasswords(_ engineProfile: String, _ promise: Promise)
   func savePassword(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replacing: Bool, _ promise: Promise)
+  static func vaultPhoneFingerprint(_ key: String) -> String?
+  static func vaultTrustedPhones() -> [[String: String]]
+  static func vaultTrustPhone(_ phone: String, _ key: String) -> Bool
+  static func vaultForgetPhone(_ phone: String) -> Bool
+  static func vaultVerifyPhone(_ phone: String, _ message: String, _ signature: String) -> String
 }
 
 extension SyncNative {
@@ -61,6 +66,26 @@ extension SyncNative {
 
   static var revealFolderFunction: AnyDefinition {
     AsyncFunction("revealFolder") { (path: String) in Self.revealFolder(path) }.runOnQueue(.main)
+  }
+
+  static var vaultPhoneFingerprintFunction: AnyDefinition {
+    Function("vaultPhoneFingerprint") { (key: String) -> String? in Self.vaultPhoneFingerprint(key) }
+  }
+
+  static var vaultTrustedPhonesFunction: AnyDefinition {
+    Function("vaultTrustedPhones") { () -> [[String: String]] in Self.vaultTrustedPhones() }
+  }
+
+  static var vaultTrustPhoneFunction: AnyDefinition {
+    Function("vaultTrustPhone") { (phone: String, key: String) -> Bool in Self.vaultTrustPhone(phone, key) }
+  }
+
+  static var vaultForgetPhoneFunction: AnyDefinition {
+    Function("vaultForgetPhone") { (phone: String) -> Bool in Self.vaultForgetPhone(phone) }
+  }
+
+  static var vaultVerifyPhoneFunction: AnyDefinition {
+    Function("vaultVerifyPhone") { (phone: String, message: String, signature: String) -> String in Self.vaultVerifyPhone(phone, message, signature) }
   }
 }
 

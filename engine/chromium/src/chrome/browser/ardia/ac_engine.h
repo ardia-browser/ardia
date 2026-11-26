@@ -84,6 +84,9 @@ inline constexpr size_t kNoArgsLimit = std::numeric_limits<size_t>::max();
 inline constexpr int kSettleChecks = 20;
 inline constexpr base::TimeDelta kSettleStep = base::Milliseconds(50);
 
+std::optional<Secret> SecretIn(const base::DictValue& dict,
+                               std::string_view key);
+
 class ArgsCall {
  public:
   ArgsCall(const char* args_json,

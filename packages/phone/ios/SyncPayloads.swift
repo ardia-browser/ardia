@@ -129,6 +129,24 @@ enum SyncPayloads {
       "selectedProfileId": sync.selectedProfileId,
       "shownProfileId": sync.selectedProfile?.syncId,
       "receivers": sync.devicesThatReceiveTabs.map(device),
+      "vaultRequests": sync.vaultRequests.map(vaultRequest),
+      "vaultKey": sync.snapshot.vaultKey,
+    ]
+  }
+
+  static func vaultRequest(_ request: VaultApprovalRequest) -> [String: Any?] {
+    [
+      "id": request.id,
+      "program": request.program,
+      "sites": request.sites,
+      "why": request.why,
+      "profileName": request.profileName,
+      "alwaysOffered": request.alwaysOffered == true,
+      "trusted": request.trusted == true,
+      "askedAt": milliseconds(request.askedAt),
+      "expiresAt": milliseconds(request.expiresAt),
+      "fromDeviceId": request.fromDeviceId,
+      "fromDevice": request.fromDevice,
     ]
   }
 

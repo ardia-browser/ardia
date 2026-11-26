@@ -244,6 +244,15 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     the log, now with the action in front (`browser import`, `csv import`, `settings edit`, `settings delete`,
     `sync delete`). Added to tell which of the two engine refusals the daily password-save warnings are, and from
     which import.
+  - `credential_exchange_import` (once per import a password manager handed over through macOS's credential exchange,
+    issue #3429): `kind` (`apple`, `onePassword`, `bitwarden` or `other`, from the exporter's name), `passwords`
+    (saved), `existing` (already saved), `failed`, `codes` (verification codes saved), `codes_failed`, `passkeys_left`
+    (passkeys in the export, which Ardia can't store), `no_site` (items with no http(s) website), `unsupported` (items
+    with no password, code or passkey: notes, cards and so on), `batched` (the passwords went through the engine's
+    batch save rather than one save each), `receive_ms` (from asking macOS for the data to having it), `parse_ms` and
+    `save_ms`. `credential_exchange_import_failed`: `stage` (`receive` or `save`). Counts and timings only: never a
+    site, a username, a password or a code. Watch `save_ms` against `passwords` (1,000 rows per import should stay a
+    few seconds) and `codes_failed` near zero.
   - `search_engine_import` (once per import from a Chrome-family browser or Arc, issue #1760): `source` (the browser's
     import id, such as `arc`, `chrome` or `braveBeta`), `outcome` (`built_in`: the source's engine is one Ardia has
     built in; `custom`: it came over as a custom engine; `source_default`: the source was on its own default, so

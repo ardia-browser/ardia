@@ -63,6 +63,17 @@ std::optional<base::DictValue> ParseObject(const std::string& message) {
   return std::move(parsed->GetDict());
 }
 
+bool NamesVaultTarget(const std::string& message) {
+  std::optional<base::DictValue> event = ParseObject(message);
+  if (!event) {
+    return false;
+  }
+  const base::DictValue* params = event->FindDict("params");
+  const base::DictValue* info =
+      params ? params->FindDict("targetInfo") : nullptr;
+  return info && IsVaultTarget(info->FindString("targetId"));
+}
+
 }
 
 bool TokenClient::FilterEvent(std::string& message) {
@@ -75,6 +86,10 @@ bool TokenClient::FilterEvent(std::string& message) {
     }
     const std::string_view method =
         view.substr(kEvent.size(), end - kEvent.size());
+    if (method == "Target.targetCreated" ||
+        method == "Target.targetInfoChanged") {
+      return !NamesVaultTarget(message);
+    }
     if (method == "Target.attachedToTarget" ||
         method == "Target.detachedFromTarget" ||
         method == "Target.targetDestroyed") {
@@ -192,6 +207,12 @@ bool TokenClient::FilterResponse(int id,
   bool annotated = false;
   if (method == "Target.getTargets") {
     if (base::ListValue* infos = result->FindList("targetInfos")) {
+      const size_t listed = infos->size();
+      infos->EraseIf([](const base::Value& info) {
+        return info.is_dict() &&
+               IsVaultTarget(info.GetDict().FindString("targetId"));
+      });
+      annotated = infos->size() != listed;
       for (base::Value& info : *infos) {
         if (info.is_dict() &&
             IsOffscreenTarget(info.GetDict().FindString("targetId"))) {
@@ -202,6 +223,13 @@ bool TokenClient::FilterResponse(int id,
     }
   } else if (method == "Target.getTargetInfo") {
     base::DictValue* info = result->FindDict("targetInfo");
+    if (info && IsVaultTarget(info->FindString("targetId"))) {
+      const std::string* session = response->FindString("sessionId");
+      message = ErrorReply(id, session ? *session : std::string(), kRefused,
+                           "ardia: Target.getTargetInfo on that target "
+                           "isn't allowed for the ardia command");
+      return true;
+    }
     if (info && IsOffscreenTarget(info->FindString("targetId"))) {
       info->Set("ardiaOffscreen", true);
       annotated = true;

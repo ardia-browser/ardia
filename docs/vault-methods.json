@@ -1,0 +1,132 @@
+[
+  {
+    "name": "vault.taskStart",
+    "params": {
+      "type": "object",
+      "properties": {
+        "sites": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 20,
+          "description": "https sites (example.com or https://example.com)"
+        },
+        "why": {
+          "type": "string",
+          "description": "Why the agent signs in, shown to the person in Ardia's approval sheet and activity log"
+        },
+        "ttlSeconds": {
+          "type": "integer",
+          "description": "How long the task may last, in seconds (default 900, at most 7200)",
+          "minimum": 60,
+          "maximum": 7200
+        },
+        "profile": {
+          "type": "string",
+          "description": "A profile id from profiles.list; the default profile when left out"
+        },
+        "tabs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "description": "Tabs the task drives: a sign-in form showing in one of them for a granted site is filled at once"
+        }
+      },
+      "required": [
+        "sites"
+      ],
+      "additionalProperties": false
+    },
+    "result": "{task, sites, expiresAt, via, sheetMs, program}"
+  },
+  {
+    "name": "vault.taskEnd",
+    "params": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "type": "string",
+          "description": "The token vault.taskStart gave"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "additionalProperties": false
+    },
+    "result": "{ok}"
+  },
+  {
+    "name": "vault.login",
+    "params": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "type": "string",
+          "description": "The token vault.taskStart gave"
+        },
+        "site": {
+          "type": "string",
+          "description": "A site the task was granted"
+        },
+        "tab": {
+          "type": "string",
+          "description": "A tab to reload once signed in; it joins the tabs the task drives"
+        },
+        "account": {
+          "type": "string",
+          "description": "The username, when the site has several saved logins"
+        },
+        "why": {
+          "type": "string",
+          "description": "Why the agent signs in, shown to the person in Ardia's approval sheet and activity log"
+        }
+      },
+      "required": [
+        "task",
+        "site"
+      ],
+      "additionalProperties": false
+    },
+    "result": "{status, transfer, evidence, signals, reason, reloaded, cancelRequested, conflicts, refills, ms, readyMs, fillMs, decideMs, totalMs, profileMs, seedMs, loadMs, scanMs, transferMs, usedCode, appMs}"
+  },
+  {
+    "name": "vault.log",
+    "params": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "description": "At most this many entries (default 100)",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "since": {
+          "type": "number",
+          "description": "Only entries after this time (ms since 1970)"
+        },
+        "profile": {
+          "type": "string",
+          "description": "A profile id from profiles.list; the default profile when left out"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "result": "[{time, kind, profile, site, account, program, signer, task, outcome, via, ms?}]"
+  },
+  {
+    "name": "vault.status",
+    "params": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "result": "{program, tasks, alwaysAllowed}"
+  }
+]

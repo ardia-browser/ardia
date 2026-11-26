@@ -10,6 +10,7 @@ export * from "./media";
 export * from "./contentBlocker";
 export * from "./siteSettings";
 export * from "./passwords";
+export * from "./vault";
 export * from "./autofill";
 export * from "./extensions";
 export * from "./favicons";

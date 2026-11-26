@@ -147,6 +147,22 @@ ARDIACORE_EXPORT
        completion:(void (^)(NSData* _Nullable body))completion;
 @end
 
+ARDIACORE_EXPORT
+@interface ArdiaCoreVaultSignIn : NSObject
+- (void)cancel;
+@end
+
+typedef void (^ArdiaCoreVaultCodeReply)(NSString* _Nullable code);
+
+@interface ArdiaCoreProfile (Vault)
+- (ArdiaCoreVaultSignIn*)vaultSignInAtURL:(NSURL*)url
+                                   origin:(NSString*)origin
+                                 username:(NSString*)username
+                             codeProvider:(nullable void (^)(ArdiaCoreVaultCodeReply reply))codeProvider
+                               completion:(void (^)(NSDictionary<NSString*, id>* result))completion;
++ (void)setVaultTransferHoldForTesting:(NSTimeInterval)seconds;
+@end
+
 typedef NS_ENUM(NSInteger, ArdiaCoreAdoption) {
   ArdiaCoreAdoptionRefused,
   ArdiaCoreAdoptionAdopted,
@@ -260,6 +276,7 @@ ARDIACORE_EXPORT
 - (void)tab:(ArdiaCoreTab*)tab requestsActivation:(NSString*)reason;
 - (void)tab:(ArdiaCoreTab*)tab didChangePictureInPicture:(NSDictionary<NSString*, id>*)state;
 - (void)tab:(ArdiaCoreTab*)tab didShowAutofillSuggestions:(NSArray<NSDictionary<NSString*, NSString*>*>*)items;
+- (void)tab:(ArdiaCoreTab*)tab loginFormSeen:(NSDictionary<NSString*, id>*)form;
 - (void)tab:(ArdiaCoreTab*)tab didBlockRequests:(int)count lastURL:(NSString*)url;
 - (NSArray<NSDictionary<NSString*, NSString*>*>*)tab:(ArdiaCoreTab*)tab
                          contextMenuItemsForSelection:(NSString*)text;

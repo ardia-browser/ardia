@@ -162,9 +162,14 @@ double ArgsCall::Double(std::string_view key, double fallback) const {
 }
 
 std::optional<Secret> ArgsCall::SecretAt(std::string_view key) const {
-  const std::string* hex = args_.FindString(base::StrCat({key, "Hex"}));
+  return SecretIn(args_, key);
+}
+
+std::optional<Secret> SecretIn(const base::DictValue& dict,
+                               std::string_view key) {
+  const std::string* hex = dict.FindString(base::StrCat({key, "Hex"}));
   if (!hex) {
-    return Secret(args_.FindString(key));
+    return Secret(dict.FindString(key));
   }
   if (hex->size() % 2) {
     return std::nullopt;

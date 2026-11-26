@@ -1,5 +1,5 @@
 import type { AppIcon, CleanedTitle, CleanedUrl, CrashReport, DiagnosticsSample, HardwareInfo, IntroMusicCues, LaunchConfig, ShareAnchor, SystemInfo } from "../app";
-import type { ControlApprovals, ControlPeerAnswer, ControlPeerAsk, ControlPeerOutcome, ControlRequest, ControlSocketStatus, FileArmClaim, FileArmResult, FileArmRow, FileArmSpec, NativeDevtoolsEndpoint, PlacedDownload } from "../automation";
+import type { ControlApprovals, ControlPeer, ControlPeerAnswer, ControlPeerAsk, ControlPeerOutcome, ControlRequest, ControlSocketStatus, FileArmClaim, FileArmResult, FileArmRow, FileArmSpec, NativeDevtoolsEndpoint, PlacedDownload } from "../automation";
 import type { CliInstallResult } from "../cli";
 import type { CommandEvent } from "../commands";
 import type { ConfigFileRead } from "../config";
@@ -383,6 +383,7 @@ export type AutomationNative = {
   claimArmedDownload?(arm: string, download: string, path: string): FileArmClaim;
   placeArmedDownload?(arm: string, download: string, path: string): Promise<PlacedDownload>;
   releaseArmedDownload?(arm: string, download: string, state: string): boolean;
+  peer(connection: number): Promise<ControlPeer | null>;
   addListener(name: "onRequest", listener: (event: AutomationNativeEvents["onRequest"]) => void): { remove(): void };
   addListener(name: "onClose", listener: (event: AutomationNativeEvents["onClose"]) => void): { remove(): void };
   addListener(name: "onWritten", listener: (event: AutomationNativeEvents["onWritten"]) => void): { remove(): void };

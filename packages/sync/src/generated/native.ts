@@ -32,6 +32,11 @@ export type SyncNative = {
   readPasswords(engineProfile: string): Promise<SealedLogin[] | null>;
   savePassword(engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean): Promise<boolean>;
   takeFileCounts?(): { placeholders: number; busy: number; hydrated: number };
+  vaultPhoneFingerprint?(key: string): string | null;
+  vaultTrustedPhones?(): { phone: string; fingerprint: string }[];
+  vaultTrustPhone?(phone: string, key: string): boolean;
+  vaultForgetPhone?(phone: string): boolean;
+  vaultVerifyPhone?(phone: string, message: string, signature: string): "ok" | "unenrolled" | "bad_signature";
 };
 
 export type SharedFoldersNative = {

@@ -21,6 +21,9 @@ std::unique_ptr<ArdiaDevToolsTokenClient> CreateTokenClient(
 
 bool IsTokenClient(content::DevToolsAgentHostClient* root_client);
 
+bool TokenClientMayAttach(content::DevToolsAgentHostClient* root_client,
+                          content::DevToolsAgentHost* host);
+
 base::DictValue TokenCommandTotals();
 
 }

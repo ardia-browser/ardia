@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Linking, View } from "react-native";
 import { showMenu } from "../../../state/app/system";
-import { Button, Dot, lineHeight, space, Symbol, Text } from "../../ui";
+import { Box, Button, Dot, lineHeight, space, Symbol, Text } from "../../ui";
 import { perLook } from "../../ui/tokens";
 import { useTheme } from "../../ui/theme";
 import { copyRecoveryPhrase, revealSyncFolder, type FolderInfo } from "../../../state/sync/recoveryKit";
@@ -18,6 +18,7 @@ import { ago } from "../../../lib/time";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { Checklist } from "./Checklist";
+import { PhoneApprovalButton } from "./SyncPhoneApprovals";
 
 function statusLine(status: SyncStatus, lastSyncedAt: number | null, pending: number): string {
   const since = lastSyncedAt ? ago(lastSyncedAt) : null;
@@ -251,7 +252,12 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
         <Row anchor="general.syncDevices" description={devices.length ? undefined : `Just this ${PLATFORM_TERMS.computer} so far. Other devices show here once they sync.`} />
         {devices.map((d) => (
           <Row key={d.id} title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computerTitle})` : d.name} description={d.current ? statusLine(status, lastSyncedAt, 0) : deviceDetail(d, ago)}>
-            {d.current ? null : <Button title="Remove…" onPress={() => void confirmRemoveDevice(d)} />}
+            {d.current ? null : (
+              <Box row gap="s">
+                <PhoneApprovalButton device={d} />
+                <Button title="Remove…" onPress={() => void confirmRemoveDevice(d)} />
+              </Box>
+            )}
           </Row>
         ))}
       </Group>

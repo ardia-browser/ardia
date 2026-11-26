@@ -109,6 +109,8 @@ Pages, links and patterns: Ardia opens these only as pages you navigate to, or m
   `mycanal.fr`, `tv.youtube.com`, `osnplus.com`, `anghami.com`.
 - Hosts a check refuses: `metadata.goog` (plugins' `net.fetch` never reaches cloud metadata), `google.com` (matched in
   the Web Store patch's checks).
+- Sign-in challenges the agent vault spots by their frame's address, so it stops and leaves the page to you
+  (`engine/ardiacore/src/ardia/core/renderer/ac_vault_page_state.cc`): `hcaptcha.com`, `challenges.cloudflare.com`.
 - XML and schema namespaces, never fetched: `www.w3.org`, `www.apple.com`, `schemas.microsoft.com`, `json-schema.org`.
 - Licence text: `www.apache.org`, `www.gnu.org`, `fsf.org`.
 - Placeholders: `example.com`, `other.org`, `xn--bcher-kva.de` (the plugin broker's URL parser cases), and Helium's

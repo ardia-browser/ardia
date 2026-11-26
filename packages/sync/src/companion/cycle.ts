@@ -20,6 +20,8 @@ import {
 import { fromLegacyUrl } from "./legacy.ts";
 import { buildView, dataOwner, defaultProfileId, liveProfiles, type View } from "./view.ts";
 import { host, loaded, save, viewIsNew, type CompanionState } from "./state.ts";
+import { answerVaultRequest, vaultAnswersAdapter, vaultChallengeFor } from "./vault.ts";
+import { vaultKeyOf, VAULT_KEY } from "../vaultApproval.ts";
 
 type ChainStatus = "ok" | "missing" | "unavailable";
 
@@ -115,7 +117,15 @@ export async function runCompanionCycle(input: CycleInput): Promise<CycleOutput>
 
   c.ghosts = (c.ghosts ?? []).filter((g) => now() - g.since < GHOST_MS);
   const ghosts = c.ghosts.map((g) => g.id);
-  const app = await run(APP, [deviceAdapter(device, input.name, retiring, ghosts)], false);
+  const vault = vaultAnswersAdapter({
+    me: device,
+    key: () => c.vaultKey ?? null,
+    answers: () => (c.vaultAnswers ??= []),
+    drop: (ids) => {
+      c.vaultAnswers = (c.vaultAnswers ?? []).filter((a) => !ids.has(a.id));
+    },
+  });
+  const app = await run(APP, [deviceAdapter(device, input.name, retiring, ghosts), ...(retiring ? [] : [vault])], false);
   if (retiring) {
     for (const scope of Object.keys(c.scopes).filter((s) => s.startsWith("p:"))) await run(scope, [deviceTabsAdapter(device, input.name, [], true, ghosts)], true);
   } else {
@@ -242,7 +252,7 @@ export async function runCompanionCycle(input: CycleInput): Promise<CycleOutput>
     saved: save(published > 0 || changed > 0),
   };
   if (!retiring) {
-    const view = buildView(c.scopes, device);
+    const view = buildView(c.scopes, device, answeredIds(c), now(), c.vaultKey ?? null);
     if (viewIsNew(JSON.stringify(view))) out.view = view;
   }
   return out;
@@ -250,9 +260,32 @@ export async function runCompanionCycle(input: CycleInput): Promise<CycleOutput>
 
 export function companionView(): View {
   const c = loaded();
-  const view = buildView(c.scopes, c.device);
+  const view = buildView(c.scopes, c.device, answeredIds(c), Date.now(), c.vaultKey ?? null);
   viewIsNew(JSON.stringify(view));
   return view;
+}
+
+const answeredIds = (c: CompanionState) => (c.vaultAnswers ?? []).map((a) => a.id);
+
+export function companionVaultKey(input: { k: string; f: string; at: number }) {
+  const c = loaded();
+  const key = vaultKeyOf(`${VAULT_KEY}${c.device}`, { k: input.k, f: input.f, by: c.device, at: input.at });
+  if (!key) return refused;
+  if (c.vaultKey?.k !== key.k) c.vaultKey = key;
+  return { saved: save(true) };
+}
+
+export function companionVaultChallenge(input: { id: string; allow: boolean; always: boolean; at: number }) {
+  const c = loaded();
+  const message = vaultChallengeFor(c.scopes[APP], c.vaultAnswers ?? [], input, c.device);
+  return message === null ? refused : { saved: true, message };
+}
+
+export function companionAnswerVault(input: { id: string; allow: boolean; always: boolean; at: number; sig?: string | null }) {
+  const c = loaded();
+  const answer = answerVaultRequest(c.scopes[APP], (c.vaultAnswers ??= []), input, c.device);
+  if (!answer) return refused;
+  return { saved: save(true) };
 }
 
 const scopeFor = (profile: string) => profileScope(dataOwner(loaded().scopes[APP], profile));

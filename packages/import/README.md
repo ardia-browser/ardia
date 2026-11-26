@@ -35,6 +35,7 @@ the file and its WAL before opening it.
 | Safari direct (needs Full Disk Access) | `SafariDirect.swift`, `SafariCookies.swift` | `~/Library/Safari/{Bookmarks.plist, History.db, LastSession.plist}`, `~/Library/Containers/com.apple.Safari/Data/Library/Cookies/Cookies.binarycookies` |
 | Safari export (.zip or folder) | `SafariExport.swift`, `ZipArchive.swift`, `NetscapeBookmarks.swift`, `PasswordsCSV.swift` | `*.html` bookmarks, `*.csv` passwords, `*.json` history and extensions (names only, by `metadata.data_type`), `payment_cards` JSON. No cookies |
 | A bookmarks HTML file or passwords CSV | `NetscapeBookmarks.swift`, `PasswordsCSV.swift` | Any Netscape bookmarks file; any password CSV with url and password columns (Chrome, Firefox, Bitwarden…) |
+| A password manager, through macOS 26 credential exchange | `CredentialExchange.swift` (Core), `CredentialExchangeInbox.swift`, `CredentialExchangeModule.swift` (Expo module `ArdiaCredentialExchange`) | Apple's `ASExportedCredentialData`: http(s) logins, TOTP secrets as `otpauth://` URIs, passkeys counted only (`docs/credential-exchange.md`) |
 
 Shared code: `Model.swift` (`ImportKind`, `ImportResult` and the other result types, `ImportError`), `ChromiumCrypto.swift`
 (v10 AES-CBC, `SafeStorageKeychain`), `SecretBytes.swift` (wipeable buffers), `Wire.swift` (JSON for the engine).

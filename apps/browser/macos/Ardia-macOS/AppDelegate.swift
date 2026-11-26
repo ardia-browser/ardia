@@ -1,5 +1,6 @@
 import AppKit
 import ArdiaCore
+import ArdiaImport
 import Expo
 import React
 import ArdiaShell
@@ -60,7 +61,8 @@ final class AppDelegate: ExpoAppDelegate {
   }
 
   override func application(_ application: NSApplication, willContinueUserActivityWithType userActivityType: String) -> Bool {
-    userActivityType == NSUserActivityTypeBrowsingWeb || super.application(application, willContinueUserActivityWithType: userActivityType)
+    userActivityType == NSUserActivityTypeBrowsingWeb || CredentialExchangeInbox.handles(activityType: userActivityType)
+      || super.application(application, willContinueUserActivityWithType: userActivityType)
   }
 
   override func application(
@@ -68,7 +70,7 @@ final class AppDelegate: ExpoAppDelegate {
     continue userActivity: NSUserActivity,
     restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void
   ) -> Bool {
-    Handoff.continue(userActivity) || super.application(application, continue: userActivity, restorationHandler: restorationHandler)
+    CredentialExchangeInbox.receive(userActivity) || Handoff.continue(userActivity) || super.application(application, continue: userActivity, restorationHandler: restorationHandler)
   }
 
   func application(_ sender: NSApplication, delegateHandlesKey key: String) -> Bool {

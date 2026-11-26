@@ -131,6 +131,9 @@ a place to see each name with its raw offset. The summary line says how many pla
 `sandbox.ardia_frame_symbols`, which the hourly frame-naming job fills (`docs/symbolication.md`). Errors names the native
 frames of the crashes it shows the same way, and each crash row says how many native frames were named. Hermes frames
 stay raw.
+A freeze whose `samples_waiting` equals `samples` spent every sample waiting on the Mac (paging or blocking I/O), not
+running Ardia's code: read its frames as where the thread happened to stop, and check `memory_pressure` before
+blaming that function.
 
 Android's Material You switch (Settings › General, off by default) is counted as `usage_counts.material_you_turned_on` and `material_you_turned_off`; `app_launched.material_colors` is `not_material` for launches with it off. The counts below are taken only with it on, except `find_closed_bar`.
 

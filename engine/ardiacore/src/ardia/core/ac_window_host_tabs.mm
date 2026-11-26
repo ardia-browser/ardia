@@ -16,6 +16,7 @@
 #include "ardia/core/ac_browser_internal.h"
 #include "ardia/core/ac_browser_window.h"
 #include "ardia/core/ac_installed_bubble.h"
+#include "ardia/core/ac_login_forms.h"
 #include "ardia/core/ac_password_prompt.h"
 #include "ardia/core/ac_video_upscaling.h"
 #import "ardia/core/ardiacore_internal.h"
@@ -49,6 +50,7 @@ void WindowHost::OnTabStripModelChanged(
     for (const auto& inserted : change.GetInsert()->contents) {
       TabBridge* bridge = TabBridge::GetOrCreate(inserted.contents);
       TrackAutofillFocus(inserted.contents);
+      WatchLoginForms(inserted.contents);
       bridge->EnsureFaviconObserved();
       bridge->EnsurePopupsObserved();
       bridge->EnsureZoomObserved();

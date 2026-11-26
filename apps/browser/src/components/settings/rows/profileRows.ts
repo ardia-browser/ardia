@@ -119,6 +119,18 @@ export const profileRows = {
           title: "Saved cards",
           keywords: ["edit card", "add card", "payment", "credit card", "debit card"],
         },
+        keepVerificationCodes: {
+          title: "Offer to keep verification codes",
+          description: `When a site shows a two-factor setup code, Ardia offers to keep it with the saved login on this ${PLATFORM_TERMS.computer}, so an agent's sign-in fills the code too.`,
+          keywords: ["2fa", "two factor", "one time code", "totp", "authenticator", "agent", "ardia command", "vault"],
+          shown: () => PLATFORM_FEATURES.ardiaCommand,
+        },
+        agentReasonsInLog: {
+          title: "Show agents' reasons in ardia vault log",
+          description: "Ardia always shows them here. The log a program reads leaves them out unless this is on.",
+          keywords: ["agent", "vault", "sign in", "log", "reason", "ardia command"],
+          shown: () => PLATFORM_FEATURES.ardiaCommand,
+        },
       },
     },
     {

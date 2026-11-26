@@ -1,6 +1,6 @@
 {
   "platforms": ["apple"],
   "apple": {
-    "modules": ["ImportModule"]
+    "modules": ["ImportModule", "CredentialExchangeModule"]
   }
 }

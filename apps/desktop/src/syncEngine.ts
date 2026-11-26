@@ -294,6 +294,10 @@ export const syncWritesOpen = () => {
   return s.enabled && !WRITES_CLOSED.includes(s.status);
 };
 
+export const scheduleSync = (delay?: number) => {
+  if (leading()) engine.scheduleSync(delay);
+};
+
 export async function syncNow(stillWanted: () => void = () => {}): Promise<boolean> {
   if (leading()) return engine.syncNow(stillWanted);
   return syncNowThrough(

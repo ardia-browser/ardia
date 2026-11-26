@@ -14,6 +14,7 @@ import { startNotificationResponses } from "./notificationResponses";
 import { startHandoff } from "./handoff";
 import { startScripting } from "./scripting";
 import { startSiteData } from "../engines/siteData";
+import { startCredentialExchange } from "../import/credentialExchange";
 import { noteReleaseNotesHeldForFirstRun } from "../telemetry/firstRunCounts";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
@@ -32,6 +33,7 @@ export function startAppIntegration() {
   const firstRun = maybeStartOnboarding();
   if (updated && firstRun) noteReleaseNotesHeldForFirstRun();
   if (updated && !firstRun) openReleaseNotesAfterUpdate();
+  afterFirstWindow(startCredentialExchange);
   afterFirstWindow(() => {
     if (!PLATFORM_FEATURES.setsDefaultBrowser) return;
     const consent = consentToken();

@@ -147,6 +147,18 @@ test("app_freeze names the macOS shared cache its system frames are offsets into
   assert.equal(malformed.freeze_system_cache, null);
 });
 
+test("app_freeze counts the samples that found the thread waiting on the Mac, so paging stalls read apart from busy code", async () => {
+  client.setSharing(true, "settings");
+  const stuck = frames(["Ardia", 0x4400], ["hermes", 0x1ae2a0]);
+  await reportFreeze(record({ samples: [{ state: 4, frames: stuck }, { state: 3, frames: stuck }, { state: 4, frames: stuck }] }));
+  await reportFreeze(record({ samples: [{ state: 1, frames: frames(["Ardia", 0x9900]) }, { state: 4, frames: frames(["Ardia", 0x9900]) }, { state: 0, frames: [] }] }));
+  await reportFreeze(record({ samples: [{ state: 1, frames: frames(["Ardia", 0x7700]) }, { state: "4", frames: [] }, { state: 9, frames: [] }] }));
+  const [paging, mixed, busy] = await sentFreezes();
+  assert.deepEqual([paging.samples, paging.samples_waiting], [3, 3]);
+  assert.deepEqual([mixed.samples, mixed.samples_waiting], [3, 1]);
+  assert.deepEqual([busy.samples, busy.samples_waiting], [3, 0]);
+});
+
 test("a signature whose hash is all digits survives the property scrub, stays distinct and keeps its one send a day", async () => {
   const { cleanProperties } = await import("./sanitize.ts");
   client.setSharing(true, "settings");

@@ -1,0 +1,73 @@
+--- a/extensions/renderer/script_injection_manager.cc
++++ b/extensions/renderer/script_injection_manager.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "extensions/renderer/script_injection_manager.h"
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
+ 
+ #include <algorithm>
+ #include <memory>
+@@ -39,6 +40,9 @@
+ #include "third_party/blink/public/web/web_local_frame.h"
+ #include "third_party/blink/public/web/web_view.h"
+ #include "url/gurl.h"
++
++bool (*g_ardia_frame_blocks_extension_scripts)(
++    content::RenderFrame* frame) = nullptr;
+ 
+ namespace extensions {
+ 
+@@ -415,6 +419,10 @@
+     std::unique_ptr<ScriptInjection> injection,
+     mojom::RunLocation run_location,
+     ScriptsRunInfo* scripts_run_info) {
++  if (g_ardia_frame_blocks_extension_scripts &&
++      g_ardia_frame_blocks_extension_scripts(injection->render_frame())) {
++    return;
++  }
+   // Try to inject the script. If the injection is waiting (i.e., for
+   // permission), add it to the list of pending injections. If the injection
+   // has blocked, add it to the list of running injections.
+--- a/extensions/browser/api/web_request/web_request_api.cc
++++ b/extensions/browser/api/web_request/web_request_api.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "extensions/browser/api/web_request/web_request_api.h"
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
+ 
+ #include <stddef.h>
+ 
+@@ -790,6 +791,10 @@
+         header_client,
+     scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner,
+     const url::Origin& request_initiator) {
++  if (g_ardia_vault_browser_context &&
++      g_ardia_vault_browser_context(browser_context)) {
++    return false;
++  }
+   const ProxyDecision decision = MaybeProxyURLLoaderFactoryInternal(
+       browser_context, frame, render_process_id, type, navigation_id,
+       ukm_source_id, factory_builder, header_client,
+--- a/chrome/browser/extensions/api/debugger/debugger_api.cc
++++ b/chrome/browser/extensions/api/debugger/debugger_api.cc
+@@ -5,6 +5,7 @@
+ // Implements the Chrome Extensions Debugger API.
+ 
+ #include "chrome/browser/extensions/api/debugger/debugger_api.h"
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
+ 
+ #include <algorithm>
+ #include <map>
+@@ -184,6 +185,10 @@
+ bool ExtensionMayAttachToTargetProfile(Profile* extension_profile,
+                                        bool allow_incognito_access,
+                                        DevToolsAgentHost& agent_host) {
++  if (g_ardia_vault_browser_context &&
++      g_ardia_vault_browser_context(agent_host.GetBrowserContext())) {
++    return false;
++  }
+   Profile* profile =
+       Profile::FromBrowserContext(agent_host.GetBrowserContext());
+   if (!profile) {

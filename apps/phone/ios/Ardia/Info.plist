@@ -73,6 +73,8 @@
 	<string>Ardia uses the camera to scan the sync code your Mac shows, and for websites that ask to use it.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Websites you visit may ask for your location.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Ardia asks for Face ID before it lets a program on your Mac sign in to sites for you.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Ardia uses the microphone when you search with your voice and for websites that ask to use it. Listening to a Browse for Me answer at your ear uses the earpiece’s call audio, which iOS also asks about; nothing is recorded.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

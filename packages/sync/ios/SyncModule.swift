@@ -294,6 +294,16 @@ public class SyncModule: Module, SyncNative {
 
     Self.revealFolderFunction
 
+    Self.vaultPhoneFingerprintFunction
+
+    Self.vaultTrustedPhonesFunction
+
+    Self.vaultTrustPhoneFunction
+
+    Self.vaultForgetPhoneFunction
+
+    Self.vaultVerifyPhoneFunction
+
     readPasswordsFunction
 
     savePasswordFunction
@@ -375,7 +385,7 @@ public class SyncModule: Module, SyncNative {
     return "data:image/png;base64," + png.base64EncodedString()
   }
 
-  private static let dataDirectory = LaunchConfig.shared.dataDirectory.map { URL(fileURLWithPath: $0, isDirectory: true) }
+  static let dataDirectory = LaunchConfig.shared.dataDirectory.map { URL(fileURLWithPath: $0, isDirectory: true) }
   private static let testFolder = LaunchConfig.shared.instance("syncFolder").map { URL(fileURLWithPath: $0, isDirectory: true) }
 
   static var defaultFolder: URL {

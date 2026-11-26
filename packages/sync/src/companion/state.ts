@@ -2,6 +2,7 @@ import { Clock } from "../hlc.ts";
 import { restoreJournal } from "../scope.ts";
 import { emptyScope, type LogFile, type ScopeState } from "../scopeState.ts";
 import type { Ack, BookmarkOp, PendingSend } from "./adapters.ts";
+import type { VaultAnswerRecord, VaultKeyRecord } from "../vaultApproval.ts";
 
 export type Host = {
   chainStatus(): string;
@@ -27,6 +28,8 @@ export type CompanionState = {
   removals?: Record<string, string[]>;
   ghosts?: { id: string; since: number }[];
   sent?: Record<string, number>;
+  vaultAnswers?: VaultAnswerRecord[];
+  vaultKey?: VaultKeyRecord | null;
 };
 
 let companion: CompanionState | null = null;
@@ -64,6 +67,7 @@ export function companionLoad(input: { device: string; state?: CompanionState | 
   state.removals ??= {};
   state.ghosts ??= [];
   state.sent ??= {};
+  state.vaultAnswers ??= [];
   for (const id of input.ghosts ?? []) if (id !== input.device && !state.ghosts.some((g) => g.id === id)) state.ghosts.push({ id, since: Date.now() });
   const clock = new Clock(input.device, state.clock);
   let restored = false;
@@ -102,7 +106,7 @@ function fingerprint(c: CompanionState): string {
       const s = c.scopes[name]!;
       return [name, s.seq, s.journal?.length ?? 0, s.outbox.length, Object.keys(s.files).length, s.pending, Object.keys(s.damaged).length, s.unapplied.length, s.joined, JSON.stringify(s.vv), JSON.stringify(s.extra), JSON.stringify(s.seen)].join("|");
     });
-  return JSON.stringify([c.clock, scopes, c.sends, c.acks, c.bookmarks, c.floors, c.pulled, c.visited, c.due, c.removals, c.ghosts, c.sent]);
+  return JSON.stringify([c.clock, scopes, c.sends, c.acks, c.bookmarks, c.floors, c.pulled, c.visited, c.due, c.removals, c.ghosts, c.sent, c.vaultAnswers, c.vaultKey]);
 }
 
 export function save(force = false): boolean {

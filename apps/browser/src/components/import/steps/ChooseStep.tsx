@@ -7,6 +7,7 @@ import { BrowserRow } from "../Rows";
 import { importType } from "../tokens";
 import { chooseSource, closeImport, importsBySpaces, setImportTarget, toggleImportKind, type ImportFlow } from "../../../state/import/flow";
 import { importBookmarksHtml } from "../../../state/import/fileImports";
+import { openPasswordManagerImport, passwordManagerImportShown } from "../../../state/import/credentialExchange";
 import { continueImport } from "../../../state/import/runImport";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 
@@ -63,6 +64,7 @@ export function ChooseFooter({ flow }: { flow: ImportFlow }) {
   return (
     <>
       <Button title="Bookmarks HTML File…" onPress={() => void importBookmarksHtml()} />
+      {passwordManagerImportShown() && <Button title="Password Manager…" onPress={openPasswordManagerImport} />}
       <Spacer />
       <TargetPicker target={flow.target} onChange={setImportTarget} />
       <Button title="Cancel" onPress={closeImport} />

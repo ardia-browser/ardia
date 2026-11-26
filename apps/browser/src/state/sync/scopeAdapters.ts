@@ -14,6 +14,7 @@ import { openTabsAdapters, openTabsPinPageWrites, type OpenTabCloses, type OpenT
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { removedRecordKeys } from "./profileRemoval";
 import { alsoDeleting, removedDeviceKeys } from "./deviceRemoval";
+import { vaultApprovalsAdapter } from "./vaultApprovals";
 
 export const deviceName = () => SyncNative?.deviceName() ?? `This ${PLATFORM_TERMS.computerTitle}`;
 
@@ -60,6 +61,7 @@ export function appAdapters(doc: SyncDoc, retiring: boolean): Adapter[] {
     profileTopAppsAdapter(enabledLinks, removed),
     profileOpenTabsAdapter(enabledLinks, removed),
     alsoDeleting(deviceAdapter(id, deviceName, false, () => syncedProfileOrder(enabledLinks())), () => removedDeviceKeys(doc)),
+    vaultApprovalsAdapter(id, () => doc.scopes[APP_SCOPE]),
   ];
 }
 

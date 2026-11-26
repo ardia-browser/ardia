@@ -1,0 +1,32 @@
+--- a/third_party/blink/renderer/core/loader/form_submission.cc
++++ b/third_party/blink/renderer/core/loader/form_submission.cc
+@@ -29,6 +29,8 @@
+  */
+ 
+ #include "third_party/blink/renderer/core/loader/form_submission.h"
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "third_party/blink/public/web/web_form_element.h"
+ 
+ #include "services/network/public/cpp/is_potentially_trustworthy.h"
+ #include "third_party/blink/public/common/security_context/insecure_request_policy.h"
+@@ -68,6 +70,8 @@
+ #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+ #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
+ 
++bool (*g_ardia_form_get_blocked)(const blink::WebFormElement& form) = nullptr;
++
+ namespace blink {
+ 
+ static int64_t GenerateFormDataIdentifier() {
+@@ -269,6 +273,11 @@
+                       : g_empty_string);
+   }
+ 
++  if (copied_attributes.Method() == kGetMethod && g_ardia_form_get_blocked &&
++      g_ardia_form_get_blocked(WebFormElement(form))) {
++    return nullptr;
++  }
++
+   Document& document = form->GetDocument();
+   KURL action_url = document.CompleteURL(copied_attributes.Action().empty()
+                                              ? document.Url().GetString()

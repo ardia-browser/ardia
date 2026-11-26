@@ -221,7 +221,7 @@ export function findLast<T>(list: readonly T[], test: (item: T) => boolean): T |
 }
 
 export function plural(n: number, word: string) {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
+  return `${n.toLocaleString("en-US")} ${word}${n === 1 ? "" : "s"}`;
 }
 
 export function windowTitle(s: BrowserState, windowId: string): string {

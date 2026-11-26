@@ -77,7 +77,7 @@ function SettingsSteps({ steps, openTitle, onOpen, onRecheck }: { steps: string[
   );
 }
 
-function StepBadge({ children }: { children: ReactNode }) {
+export function StepBadge({ children }: { children: ReactNode }) {
   const theme = useTheme();
   return (
     <Dot size={importLayout.stepBadge} color={theme.rowHover}>

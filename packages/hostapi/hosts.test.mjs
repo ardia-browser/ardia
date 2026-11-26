@@ -97,7 +97,7 @@ export function parseRoutes(header) {
 const linuxRoutes = parseRoutes(stripComments(read(DESKTOP_ROUTES)));
 
 const LINUX = "engine/ardiacore-linux/src/ardia/linux/";
-const CUSTOM_ONLY_DOMAINS = ["autofill", "contentBlocker", "media", "passwords", "profiles", "webKit", "webView", "windows"];
+const CUSTOM_ONLY_DOMAINS = ["autofill", "contentBlocker", "media", "passwords", "profiles", "vault", "webKit", "webView", "windows"];
 
 export function namesIn(source, list) {
   const opening = new RegExp(`\\b${list}\\[\\]\\s*=\\s*\\{`, "g");
@@ -308,7 +308,7 @@ test("the Mac's call table for each domain is the generated one: each service-ba
 
 test("a domain the Mac serves partly or wholly by hand builds its module's table from the generated one", () => {
   const mixed = domains.filter(([, entry]) => entry.swift.endsWith("Calls.swift"));
-  assert.deepEqual(mixed.map(([domain]) => domain).sort(), ["autofill", "bookmarks", "contentBlocker", "downloads", "engine", "extensions", "favicons", "media", "passwords", "permissions", "profiles", "search", "sites", "tabs", "webKit", "webView", "windows"]);
+  assert.deepEqual(mixed.map(([domain]) => domain).sort(), ["autofill", "bookmarks", "contentBlocker", "downloads", "engine", "extensions", "favicons", "media", "passwords", "permissions", "profiles", "search", "sites", "tabs", "vault", "webKit", "webView", "windows"]);
   for (const [domain, entry] of mixed) {
     const module = read(entry.swift.replace(/Calls\.swift$/, "Module.swift"));
     assert.match(module, new RegExp(`static let calls = ${domain}CallTable\\(`), `${domain}'s module`);

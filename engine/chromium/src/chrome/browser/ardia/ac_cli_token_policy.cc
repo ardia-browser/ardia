@@ -30,8 +30,22 @@
 #include "content/public/browser/web_contents.h"
 #include "url/gurl.h"
 
+bool (*g_ardia_vault_browser_context)(content::BrowserContext* context) =
+    nullptr;
+void (*g_ardia_clear_filled_passwords)(content::WebContents* contents) = nullptr;
+
 namespace ardia {
 namespace cli_token_policy_internal {
+
+bool IsVaultProtected(content::DevToolsAgentHost* host) {
+  return host && g_ardia_vault_browser_context &&
+         g_ardia_vault_browser_context(host->GetBrowserContext());
+}
+
+bool IsVaultTarget(const std::string* target_id) {
+  return target_id &&
+         IsVaultProtected(content::ArdiaDevToolsAgentHostForId(*target_id));
+}
 
 namespace {
 
@@ -265,6 +279,21 @@ std::unique_ptr<ArdiaDevToolsTokenClient> CreateTokenClient(
     content::DevToolsAgentHostClient* client,
     content::DevToolsAgentHost* host) {
   return std::make_unique<cli_token_policy_internal::TokenClient>(client, host);
+}
+
+bool TokenClientMayAttach(content::DevToolsAgentHostClient* root_client,
+                          content::DevToolsAgentHost* host) {
+  if (cli_token_policy_internal::IsVaultProtected(host)) {
+    return false;
+  }
+  if (!cli_token_policy_internal::Registry().contains(root_client)) {
+    return true;
+  }
+  if (content::WebContents* contents = host->GetWebContents();
+      contents && g_ardia_clear_filled_passwords) {
+    g_ardia_clear_filled_passwords(contents);
+  }
+  return true;
 }
 
 bool IsTokenClient(content::DevToolsAgentHostClient* root_client) {

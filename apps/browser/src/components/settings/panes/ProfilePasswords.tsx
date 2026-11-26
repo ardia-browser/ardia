@@ -19,6 +19,7 @@ import { monoFace } from "../../ui/tokens";
 import { currentEngineProfile } from "../../../state/browser/current";
 import { plural } from "../../../state/browser/model";
 import { importPasswordsCsv, revealPassword, unlockPasswordsFor, usePasswordsUnlocked } from "../../../state/site/savedPasswords";
+import { exchangeSummary, openPasswordManagerImport, passwordManagerImportShown, useLastExchange } from "../../../state/import/credentialExchange";
 import { hostLabel, matchesQuery } from "../../pages/PageLayout";
 import { Favicon } from "../../favicon/Favicon";
 import { Group, Row, SectionHeader } from "../Form";
@@ -35,6 +36,7 @@ import { useGrowingRows } from "../../../state/settings/growingRows";
 import { notePasswordListShown } from "../../../state/telemetry/exportCounts";
 import { useManagerPlugins, useProfilePasswordManager } from "../../../state/site/passwordManager";
 import { offerToSaveHandedOver, PasswordManagerRow } from "./PasswordManagerRow";
+import { AgentActivity } from "./AgentActivity";
 
 function passwordManagerAppsNote() {
   const apps = `1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their ${PLATFORM_TERMS.computer} apps.`;
@@ -84,6 +86,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   const [exportStatus, setExportStatus] = useState("");
   const profile = currentEngineProfile(profileId);
   const unlocked = usePasswordsUnlocked(profile);
+  const lastExchange = useLastExchange((s) => s.result);
   const arrived = useRef(0);
 
   const load = () => {
@@ -97,7 +100,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   };
   useEffect(() => {
     if (unlocked) load();
-  }, [unlocked, profileId]);
+  }, [unlocked, profileId, lastExchange]);
   useEffect(() => {
     if (!list || !arrived.current) return;
     notePasswordListShown(list.length, performance.now() - arrived.current);
@@ -138,6 +141,11 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
         <Row title="Import passwords" description={importStatus || "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…"}>
           <Button title="Import CSV…" onPress={() => void importCsv()} />
         </Row>
+        {passwordManagerImportShown() ? (
+          <Row title="Import from a password manager" description={lastExchange ? exchangeSummary(lastExchange) : "Passwords and their verification codes, straight from Passwords or another app that exports to Ardia."}>
+            <Button title="Import…" onPress={openPasswordManagerImport} />
+          </Row>
+        ) : null}
         {PLATFORM_FEATURES.exportsBookmarksAndPasswords ? (
           <Row title="Export passwords" description={exportStatus || "To a CSV file. Anyone who can open the file can read your passwords."}>
             <Button title="Export CSV…" onPress={() => void exportCsv()} />
@@ -194,6 +202,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
               </Group>
             </>
           )}
+          {PLATFORM_FEATURES.ardiaCommand ? <AgentActivity profileId={profileId} /> : null}
         </>
       )}
     </ProfileSubPage>

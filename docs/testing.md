@@ -192,6 +192,11 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   in the dev harness has the current scale, `pixelRatio` and `hairline`. For a real 1× backing scale (pixel checks),
   add `--arg=-AppleMagnifiedMode --arg=YES` (low resolution mode, `devicePixelRatio` 1). Dev clicks and `windows.dev`
   points are root points.
+- **`credentialExchangeFixture=<path>`** (Settings › Passwords › Import from a password manager, issue #3429): a CXF
+  JSON file (`packages/import/fixtures/cxf/exchange.json`) that Open Passwords hands to the import as if a password
+  manager had exported it through macOS's credential exchange. It decodes into Apple's `ASExportedCredentialData` and
+  runs the same reading and saving as a real export, so it proves the format and the saving, not that any provider
+  can export to Ardia. It also shows the import entries without the credential provider extension.
 - **`applePasswordsPanel`** (password manager plugins, `docs/plugins.md` › passwordManager): background mode only logs
   `[ardiacore] system passwords panel (background mode, not shown)` for the key and Edit › AutoFill › Passwords…; with
   this key it sends AppKit's `_handleInsertFromPasswordsCommand:` for real and logs the first responder, the target and

@@ -52,6 +52,7 @@ import { programControlOn } from "../app/programControlSetting";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { startPeerDoorbell } from "./peerDoorbell";
 import { CONTROL_OFF, DEVTOOLS_ENDPOINT, devtoolsEndpointLine, devtoolsEndpointMethod, isDevtoolsEndpoint, refuseDevtoolsEndpoint } from "./socketDevtools";
+import { vaultConnectionClosed, vaultControlStopped } from "./socketVault";
 
 const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
 
@@ -299,6 +300,7 @@ function handleClose({ connection }: { connection: number }) {
   void closeInspectionsFor(connection);
   if (PLATFORM_FEATURES.drivesTabsFromEngine) closeEngineCliFor(connection);
   void dropLogpoints(connection);
+  vaultConnectionClosed(connection);
   if (subscriptions.delete(connection)) refreshFeed();
 }
 
@@ -329,11 +331,12 @@ async function start(consent: ConsentToken | null) {
   if (status.state !== "on") warnFor(consent, `[automation] the control socket is off: ${status.reason ?? "unknown"}`);
 }
 
-async function stop() {
+function dropServing() {
   clearFileArms();
   openConnections.clear();
   generation = null;
   dismissSocketAsks();
+  vaultControlStopped();
   dropAllHistoryHandles();
   forgetTabCalls();
   releaseAllCliHolds();
@@ -342,6 +345,10 @@ async function stop() {
   void dropAllLogpoints();
   noteSocketServing(false);
   void capturePageMenus(false).catch(() => undefined);
+}
+
+async function stop() {
+  dropServing();
   subscriptions.clear();
   launchSent.clear();
   callers.clear();
@@ -358,18 +365,7 @@ function sync() {
   const consent = consentToken();
   if (!on) {
     cutOffControlSocket();
-    clearFileArms();
-    openConnections.clear();
-    generation = null;
-    dismissSocketAsks();
-    dropAllHistoryHandles();
-    forgetTabCalls();
-    releaseAllCliHolds();
-    void closeAllInspections();
-    closeAllEngineCli();
-    void dropAllLogpoints();
-    noteSocketServing(false);
-    void capturePageMenus(false).catch(() => undefined);
+    dropServing();
     stopResponders();
     runWritten([...unwrittenRuns]);
   }

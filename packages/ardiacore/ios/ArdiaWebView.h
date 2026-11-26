@@ -184,6 +184,8 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)showFieldProviderHint:(NSString *)label side:(NSString *)side tab:(NSString *)tabId NS_SWIFT_NAME(showFieldProviderHint(_:side:tab:));
 + (nullable NSString *)fieldProviderHintJSON:(NSString *)label side:(NSString *)side NS_SWIFT_NAME(fieldProviderHintJSON(_:side:));
 + (void)whenSystemPanelCloses:(void (^)(void))closed NS_SWIFT_NAME(whenSystemPanelCloses(_:));
++ (void)setVerificationCodeKeeper:(nullable void (^)(NSString *token, NSString *uri, NSString *profile, void (^done)(BOOL kept)))keeper
+    NS_SWIFT_NAME(setVerificationCodeKeeper(_:));
 + (BOOL)setUpVerificationCode:(NSString *)token
                           tab:(NSString *)tabId
                    generation:(double)generation

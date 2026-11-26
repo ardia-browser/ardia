@@ -16,6 +16,7 @@ packages/ardiacore/ios/ProfilesCalls.swift text eol=lf
 packages/ardiacore/ios/SearchCalls.swift text eol=lf
 packages/ardiacore/ios/SitesCalls.swift text eol=lf
 packages/ardiacore/ios/TabsCalls.swift text eol=lf
+packages/ardiacore/ios/VaultCalls.swift text eol=lf
 packages/ardiacore/ios/WebKitCalls.swift text eol=lf
 packages/ardiacore/ios/WebViewCalls.swift text eol=lf
 packages/ardiacore/ios/WindowsCalls.swift text eol=lf

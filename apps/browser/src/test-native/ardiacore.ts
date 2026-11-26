@@ -118,6 +118,27 @@ const laterEvent = <E extends EventName>(name: E, data: EventData<E>) => queueMi
 export const emitDownload = (download: EngineEvents["downloads.changed"]) => emitEvent("downloads.changed", download);
 export const emitPermission = (request: EngineEvents["permissions.requested"]) => emitEvent("permissions.requested", request);
 
+export const vaultFake = {
+  signIns: [] as { profile: string; url: string; origin: string; username: string; code: boolean }[],
+  signInResult: { status: "signed_in", readyMs: 4, fillMs: 3, totalMs: 9 } as Partial<CallResult<"vault.signIn">>,
+  codes: new Map<string, string>(),
+  always: [] as CallResult<"vault.always">,
+  authenticate: { granted: true, how: "granted", ms: 1 } as CallResult<"vault.authenticate">,
+  authenticated: [] as string[],
+  log: [] as string[],
+  kept: [] as { tab: string; token: string; origin: string; usernames: string[] }[],
+  locked: false,
+  listGate: null as Promise<void> | null,
+  holdSignIns: false,
+  heldSignIns: new Map<string, (status?: string, transfer?: string) => void>(),
+  cancelledSignIns: [] as string[],
+  transferStarted: false,
+  holdAuth: false,
+  heldAuth: new Map<string, (granted: boolean) => void>(),
+  cancelledAuth: [] as string[],
+};
+const vaultCodeKey = (a: { profile: string; origin: string; username: string }) => `${a.profile}\n${a.origin}\n${a.username}`;
+
 export const passwordProviders = {
   calls: [] as unknown[][],
   generation: 0,
@@ -581,9 +602,10 @@ const fakeModules = {
   ArdiaPasswords: domain(
     "passwords",
     {
-      list: () => ({
-        passwords: [...(passwordStores.get(current.device)?.values() ?? [])].map((l) => ({ origin: l.url, username: l.username, created: l.created, modified: l.created })),
-      }),
+      list: () => {
+        const answer = () => ({ passwords: [...(passwordStores.get(current.device)?.values() ?? [])].map((l) => ({ origin: l.url, username: l.username, created: l.created, modified: l.created })) });
+        return vaultFake.listGate ? vaultFake.listGate.then(answer) : answer();
+      },
       unlock: () => ({ unlocked: true }),
       reveal: (args) => ({ password: passwordStores.get(current.device)?.get(loginKey(args))?.password ?? null }),
       remove: (args) => (logins().delete(loginKey(args)), { ok: true }),
@@ -752,6 +774,40 @@ const fakeModules = {
     takeContentDrift: () => ({ layouts: 0, fits: 0, maxPoints: 0 }),
     takePageMetrics: () => ({}),
     takeFirstPaintHolds: () => ({ held: 0, painted: 0, loaded: 0, pressed: 0, timedOut: 0, heldMs: 0 }),
+  }),
+  ArdiaVault: domain("vault", {
+    state: () => ({ ready: true, problem: null, unlockMs: 0.5, secureEnclave: false, kind: "software" }),
+    screenLocked: () => vaultFake.locked,
+    signIn: ({ profile, url, origin, username, attempt }) => {
+      const code = vaultFake.codes.has(vaultCodeKey({ profile, origin, username }));
+      vaultFake.signIns.push({ profile, url, origin, username, code });
+      const answer = (status?: string, transfer?: string) => ({ readyMs: 4, fillMs: 3, totalMs: 9, transfer: "complete", ...vaultFake.signInResult, ...(status ? { status } : {}), ...(transfer ? { transfer } : {}), usedCode: code, codeMs: 0.01, prepareMs: 0.2, appMs: 9.5 }) as CallResult<"vault.signIn">;
+      if (!vaultFake.holdSignIns) return answer();
+      return new Promise<CallResult<"vault.signIn">>((resolve) => vaultFake.heldSignIns.set(attempt, (status, transfer) => (vaultFake.heldSignIns.delete(attempt), resolve(answer(status, transfer)))));
+    },
+    cancelSignIn: ({ attempt }) => (vaultFake.cancelledSignIns.push(attempt), vaultFake.transferStarted || vaultFake.heldSignIns.get(attempt)?.("cancelled", "none"), true),
+    warm: () => true,
+    saveSecret: (args) => (args.uri.startsWith("otpauth://totp/") ? (vaultFake.codes.set(vaultCodeKey(args), args.uri), { saved: true }) : { saved: false, reason: "unreadable" }),
+    keepOfferedCode: ({ tab, token, origin, usernames }) => (vaultFake.kept.push({ tab, token, origin, usernames }), { opened: true, kept: true }),
+    hasSecret: (args) => vaultFake.codes.has(vaultCodeKey(args)),
+    secrets: ({ profile }) => [...vaultFake.codes.keys()].map((k) => k.split("\n")).filter(([p]) => p === profile).map(([, origin, username]) => ({ origin: origin!, username: username! })),
+    removeSecret: (args) => (vaultFake.codes.delete(vaultCodeKey(args)), true),
+    always: () => vaultFake.always,
+    setAlways: ({ profile, origin, teamId, identifier, program, on }) => {
+      vaultFake.always = vaultFake.always.filter((g) => !(g.profile === profile && g.origin === origin && g.teamId === teamId && g.identifier === identifier));
+      if (on) vaultFake.always.push({ profile, origin, teamId, identifier, program, added: Date.now() });
+      return true;
+    },
+    authenticate: ({ id, reason }) => {
+      vaultFake.authenticated.push(reason);
+      if (!vaultFake.holdAuth) return vaultFake.authenticate;
+      return new Promise<CallResult<"vault.authenticate">>((resolve) =>
+        vaultFake.heldAuth.set(id, (granted) => (vaultFake.heldAuth.delete(id), resolve({ granted, how: granted ? "granted" : "cancelled", ms: 1 }))),
+      );
+    },
+    cancelAuthenticate: ({ id }) => (vaultFake.cancelledAuth.push(id), vaultFake.heldAuth.get(id)?.(false), true),
+    appendLog: ({ lines }) => (vaultFake.log.push(...lines), true),
+    readLog: ({ limit }) => vaultFake.log.slice(-limit),
   }),
   ArdiaWebKit: domain("webKit", {
     endPrivateSession: ({ session }) => (endedWebKitSessions.push(session), null),

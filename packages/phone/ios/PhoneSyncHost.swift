@@ -114,6 +114,12 @@ public final class PhoneSyncHost {
       self.track()
       self.listener?(.status)
       self.listener?(.view)
+      if PhoneTestBuild.flag("ArdiaVaultDemo") {
+        Task { @MainActor in
+          try? await Task.sleep(for: .seconds(3))
+          demo.demoAskToSignIn()
+        }
+      }
     }
     replacing = task
     await task.value

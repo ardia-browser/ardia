@@ -4,6 +4,7 @@ import { space, useTheme, VisualEffect, WindowDragRegion } from "../ui";
 import { PageToolbar } from "../pages/PageLayout";
 import { ChooseBody, ChooseFooter } from "./steps/ChooseStep";
 import { DoneBody, DoneFooter } from "./steps/DoneStep";
+import { ExchangeBody, ExchangeFooter } from "./steps/ExchangeStep";
 import { ProfilesBody, ProfilesFooter } from "./steps/ProfilesStep";
 import { ProgressBody, ProgressFooter } from "./steps/ProgressStep";
 import { AccessBody, AccessFooter, SafariBody, SafariFooter } from "./steps/SafariStep";
@@ -34,6 +35,7 @@ const STEPS: Record<ImportStepName, { Body: StepView; Footer: StepView | null }>
   safari: { Body: SafariBody, Footer: SafariFooter },
   access: { Body: AccessBody, Footer: AccessFooter },
   progress: { Body: ProgressBody, Footer: ProgressFooter },
+  exchange: { Body: ExchangeBody, Footer: ExchangeFooter },
   done: { Body: DoneBody, Footer: DoneFooter },
 };
 

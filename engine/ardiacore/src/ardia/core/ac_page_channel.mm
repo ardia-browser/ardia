@@ -37,6 +37,7 @@
 #include "services/network/public/mojom/permissions_policy/permissions_policy_feature.mojom.h"
 #include "url/gurl.h"
 #include "url/origin.h"
+#include "ardia/core/ac_vault_frames.h"
 
 namespace ardiacore {
 
@@ -209,6 +210,9 @@ void PageChannel::Bind(content::RenderFrameHost* frame,
 
 void PageChannel::Post(const std::string& kind, const std::string& json) {
   content::RenderFrameHost& frame = receivers_.CurrentTargetFrame();
+  if (IsVaultSignInFrame(&frame)) {
+    return;
+  }
   if (frame.IsInLifecycleState(
           content::RenderFrameHost::LifecycleState::kPrerendering)) {
     return;

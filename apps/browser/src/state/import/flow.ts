@@ -14,7 +14,7 @@ type FoundExtensions = { profileId: string; list: ImportedExtension[]; opened: b
 export type EngineNotice = { name: string; offered: boolean; engine: ImportedSearchEngine };
 type ImportResults = { counts: ImportCounts; failures: ImportFailure[]; notes: string[]; extensions: FoundExtensions; searchEngine?: EngineNotice };
 
-type ImportStep =
+export type ImportStep =
   | { name: "loading" }
   | { name: "choose"; error: string | null }
   | { name: "profiles" }
@@ -22,6 +22,7 @@ type ImportStep =
   | { name: "safari"; error: string | null }
   | { name: "unlock"; unlocking: boolean; error: string | null }
   | { name: "progress"; status: ImportStatus; preparing: number }
+  | { name: "exchange"; phase: "waiting" | "importing"; exporter: string | null; error: string | null }
   | ({ name: "done" } & ImportResults);
 export type ImportStepName = ImportStep["name"];
 
@@ -63,6 +64,23 @@ export const patchImport = (patch: Partial<ImportFlow>) => useImportFlow.setStat
 
 let session = new AbortController();
 let doneDelay = 0;
+let enterAt: ImportStep | null = null;
+let windowOpen = false;
+
+let openWaiters: (() => void)[] = [];
+
+export const importWindowOpen = () => windowOpen;
+export function whenImportWindowOpen(deadlineMs: number): Promise<void> {
+  if (windowOpen) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, deadlineMs);
+    openWaiters.push(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+export const enterImportAt = (step: ImportStep) => void (enterAt = step);
 
 export const importSignal = () => session.signal;
 
@@ -77,19 +95,22 @@ export function startImport(delayBeforeDone: number): () => void {
   session.abort();
   const own = (session = new AbortController());
   doneDelay = delayBeforeDone;
-  useImportFlow.setState(freshFlow(defaultTarget()), true);
+  const entry = enterAt;
+  enterAt = null;
+  windowOpen = true;
+  useImportFlow.setState({ ...freshFlow(defaultTarget()), ...(entry ? { step: entry } : {}) }, true);
+  const waiters = openWaiters;
+  openWaiters = [];
+  for (const wake of waiters) wake();
   const api = importModule();
   void api.listBrowsers().then(
     (list) => {
       if (own.signal.aborted) return;
       patchImport({ browsers: list });
-      const preferred = takePreferredImportSource();
-      const first = list.find((b) => b.id === preferred) ?? list.find((b) => !b.needsFullDiskAccess && !b.requiresExport) ?? list[0];
-      if (first) chooseSource(first);
-      else patchImport({ step: { name: "choose", error: null } });
+      if (importNow().step.name === "loading") chooseFirstSource(list);
     },
     () => {
-      if (!own.signal.aborted) patchImport({ step: { name: "choose", error: null } });
+      if (!own.signal.aborted && importNow().step.name === "loading") patchImport({ step: { name: "choose", error: null } });
     },
   );
   const appState = AppState.addEventListener("change", (state) => {
@@ -97,6 +118,7 @@ export function startImport(delayBeforeDone: number): () => void {
   });
   return () => {
     own.abort();
+    if (session === own) windowOpen = false;
     appState.remove();
     api.forgetUnlockedKeys();
   };
@@ -130,6 +152,19 @@ export const toggleSourceProfile = (id: string, on: boolean) => patchImport({ so
 export const toggleImportSpace = (id: string, on: boolean) => patchImport({ spaces: toggled(importNow().spaces, id, on) });
 export const setImportTarget = (target: string) => patchImport({ target });
 export const setSafariCookies = (safariCookies: boolean) => patchImport({ safariCookies });
+function chooseFirstSource(list: BrowserSource[]) {
+  const preferred = takePreferredImportSource();
+  const first = list.find((b) => b.id === preferred) ?? list.find((b) => !b.needsFullDiskAccess && !b.requiresExport) ?? list[0];
+  if (first) chooseSource(first);
+  else patchImport({ step: { name: "choose", error: null } });
+}
+
+export function backToSources() {
+  const { source, browsers } = importNow();
+  if (source || !browsers.length) patchImport({ step: { name: "choose", error: null } });
+  else chooseFirstSource(browsers);
+}
+
 export const backTo = (name: "choose" | "profiles") => patchImport({ step: name === "choose" ? { name, error: null } : { name } });
 export const closeImport = () => requestWindowClose(IMPORT_WINDOW_ID);
 export const cancelImport = () => requestWindowClose(IMPORT_WINDOW_ID, () => session.abort());

@@ -687,9 +687,91 @@ attacker could log in with. Revealing a password in Ardia's own UI asks macOS fo
 which program asked, and anything that can reach the socket (every process of the user) could ask. Cookie values are
 the user's live sessions on every site. Both are a different consent than "control Ardia".
 
-**Next, if the owner wants it:** `passwords.reveal {origin, username}` behind its own switch in Settings › Advanced
-(off by default) and the macOS re-auth on every call, with Ardia's own sheet naming the program first. It follows the
-same rule: a profile whose passwords a plugin keeps answers `password_manager_plugin`, naming the plugin.
+**Signing in without seeing a password (#3429): the agent vault.** A program never gets a password, a verification
+code or a field value; it asks Ardia to sign in for it, and Ardia does it in the browser.
+
+| Method | What it does |
+| --- | --- |
+| `vault.taskStart {sites, why?, ttlSeconds?, profile?, tabs?}` | Asks the person: Ardia's own sheet in the last focused window names the program, who signed it, the sites, the profile and the reason, then Touch ID (or the Mac's password) confirms. The iPhone can approve the same request (`askPhoneForVaultApproval`, Face ID there); the first answer wins. Returns `{task, sites, expiresAt, via, program}`: a 32-hex token that lives until `vault.taskEnd`, the timeout (`ttlSeconds`, 15 min by default, 2 h at most), or this connection closing. Only `https` sites (a test instance also takes `http://localhost`), each checked and made canonical (`URL.origin`) before the sheet shows; one that isn't valid is `bad_request` and nothing is granted |
+| `vault.login {task, site, tab?, account?, why?}` | Signs in to a granted site with its saved login, and its verification code when Ardia keeps one: the engine signs in inside an isolated in-memory partition the token DevTools connection can't reach (`-[ArdiaCoreProfile vaultSignInAtURL:origin:username:codeProvider:completion:]`), then moves the session (the cookies of the hosts its main frame went through, the origin's localStorage) into the profile, and Ardia reloads `tab` only after the move is `complete` with `signed_in`, or with `submitted` and `evidence: "weak"` so the agent can check its page. Returns `{status, transfer, evidence, reason, conflicts, refills, ms, readyMs, fillMs, decideMs, totalMs, profileMs, seedMs, loadMs, scanMs, transferMs, usedCode, appMs}` (`decideMs`: from the submit to the engine's decision, made at the committed page's DOMContentLoaded; `refills`: how many times the engine filled again because the page replaced the form; `reloaded`: whether `tab` reloaded after the move, `false` when Ardia couldn't reach the page, `null` without a tab or a move to reload for; `evidence`: how sure the engine is that the sign-in went through, `strong`, `weak` or `none`, and `null` when it doesn't say; `signals`: what it saw, as booleans `navigated`, `httpOnlyCookie`, `formGone` and `pathChanged` (`null` when it doesn't say); `cancelRequested`: Ardia asked the engine to stop this sign-in after its session had started moving, so the engine finished the move instead (a caller rarely sees it, since Ardia stops only sign-ins nobody waits for); `reason`: why it wasn't sure, as `interrupted`) (`signed_in` only when the engine is sure, which it is conservative about; `submitted` otherwise, and many single-page sites that sign in without leaving the page answer `submitted` with `weak`: the session moved, the tab reloads, and the agent should check its page to see whether it's signed in; with `none` nothing moved). At most 4 sign-ins run at once in a profile and 1 per site; Ardia's own sign-ins in a profile take turns per site instead (see below). The page must be on the saved login's own site, or the engine answers at once with `not_granted`; for single sign-on, grant the identity provider's site (it needs its own saved login), sign in there, then reload the agent's tab so it finishes the round trip |
+| `vault.taskEnd {task}` | Ends a task early |
+| `vault.status` | The program Ardia sees on this connection, its live tasks and the sites always allowed for it |
+| `vault.log {limit?, since?, profile?}` | Grants, sign-ins, refusals and skipped auto-fills: time, profile, site, account, program, signer, task (its first 8 hex digits), outcome, how it was allowed. The agent's `why` is left out unless the person turns on **Show agents' reasons in ardia vault log** |
+
+- **Who's asking.** The socket takes the peer's audit token at accept (`LOCAL_PEERTOKEN`, `ControlPeer.swift`) and checks
+  its code signature through it (`SecCodeCopyGuestWithAttributes` with the audit token, never a pid, so pid reuse or an
+  exec after connecting can't borrow another program's name). The sheet says what it found: a signed app by its signer,
+  "node runs scripts, so the script itself isn't known", "the ardia command", "not signed by a known developer".
+  **Always allow <program> on <site>** is offered only for a signed program with a team ID that isn't the `ardia`
+  command or an interpreter or shell (`state/vault/programs.ts`); everything else asks every time. Always-allow choices
+  are per profile and kept in Ardia's own vault store; Settings › Profiles › Passwords › Agent activity lists and removes them.
+- **Bound grants.** An approval belongs to a one-use request id, the connection, the profile and the exact origins, and
+  runs out after 60 s. A task is checked in memory (a map) before every sign-in: its connection, that it hasn't run out,
+  that the site was granted. Another connection presenting the token gets `denied`.
+- **Revocation is immediate.** Each sign-in is an attempt bound to its task, connection, profile, tab and origin, checked
+  again after the login lookup, before the engine starts, when it answers and before the tab reloads. Ending the task,
+  closing the connection, the task running out, the screen locking or the Mac sleeping (which also end every task and
+  take down a waiting sheet with `locked`), or a driven tab moving to another profile cancels the attempt in the engine
+  at once (`vault.cancelSignIn`) and answers `task_expired`, `locked` or `denied`. The sheet's request stays until Touch
+  ID answers; the client leaving or the request running out dismisses the Touch ID prompt (`LAContext.invalidate`), and
+  each request settles once.
+- **Auto-fill.** While a task covers a site, a sign-in form Chrome finds in a tab the task drives (`tabs`, or a tab a
+  `vault.login` named) signs in at once on Chrome's own form-parsed event (`vault.loginFormSeen`, main frame only): no
+  timer, no polling, one attempt per tab at a time, never twice for a document that signed in (the event's document id;
+  without one, not within 30 s of a success), no more after a final refusal (no login, a passkey or a person needed, not
+  granted), and at most three transient failures per tab and site. It stays out of the program's own way: no auto-fill
+  for a site while the task's `vault.login` for it runs or for 30 s after it ends, and then it uses that login's account;
+  a `vault.login` arriving during an auto-fill joins it when both resolve to the same account, and otherwise stops it
+  (or waits its turn, when another `vault.login` already shares it).
+  When the site has several saved logins and the task never named one, it doesn't sign in on its own and logs a `skip`
+  (`several_logins`) once per document instead of an error. A tab the task stops driving forgets its auto-fill state.
+- **One sign-in per site at a time.** Sign-ins in a profile take turns per site as the engine counts it (scheme and
+  registrable domain, so `a.example.com` waits for `b.example.com` instead of meeting the engine's `busy`). A task fixes
+  each site's key the first time the engine names it; while it hasn't, that sign-in takes turns with every other one in
+  the profile. A second `vault.login` from the same task for the same origin whose account resolves to the same saved
+  login as the running one gets its answer; any other waits its turn. Each caller is checked again when the answer
+  arrives (task live, site still granted, its tab still in the task's profile), so a joined call never inherits a success
+  it no longer may use. Every call answers within 28 s of arriving (the engine's 25 s and a margin), measured on a
+  monotonic clock and checked again when it starts or joins a sign-in and when it takes the answer: the saved-login
+  lookup, the wait for its turn and the sign-in itself all count. An auto-fill's 28 s start with the form event.
+- **Stopping a sign-in.** Ending the task, closing the connection or locking the Mac answers every waiting call at once,
+  and Ardia asks the engine to stop a sign-in nobody waits for any more. The site's turn stays taken until the engine
+  replies (at most 30 s), so the next sign-in for that site, from any task, never starts while the session may still be
+  moving into the profile. Once the engine has started moving the session it doesn't stop: it finishes the move and replies with the real `transfer` and `cancelRequested: true`. The reply is kept as it is, and a sign-in that moved some
+  of its session is recorded even when nobody waited for it; one that moved nothing is not.
+- **Never stuck.** Each failure answers at once with a code: `not_granted`, `no_login`, `no_form`, `needs_passkey`,
+  `needs_human` (the site still shows its sign-in page after the fill: a text-message code, a CAPTCHA; or nobody can see
+  the sheet, in a background instance without its test answer), `password_manager_plugin` (a plugin keeps the profile's
+  passwords; plugins stay write-only toward agents), `task_expired`, `denied`, `locked` (the screen is locked, so nobody
+  can approve), `conflict` (the sign-in finished, but the person changed some of the site's session in the profile
+  meanwhile, so Ardia kept their values for those and still reloaded the tab), `busy` (a sign-in Ardia didn't start is
+  running for that site, the profile has 4 running, or the call's turn didn't come within its 28 s; try again shortly), `failed`
+  (the message names the engine's reason: `unreachable`, `field_missing`, `field_changed`, `steps`, `no_submit_control`
+  when the page had no button or key that sends the form, `get_form` when the form would send the password in the page's
+  address so Ardia didn't submit it, `error_page` when the site or the browser showed an error page, or `interrupted`; also when only part of the session moved into
+  the profile (the message then also names any values the person changed meanwhile, as `conflicts: n`), the move was sent but not confirmed, or it timed out). `needs_human` names `basic_auth` or `proxy_auth`
+  when the site or a proxy asks in the browser's own password dialog. `interrupted` can come with any status but
+  `signed_in`, `submitted` included, where it's the answer's `reason`. Any other reason, or one Ardia doesn't know yet,
+  is passed on as `(reason: …)` in the message. A site with several saved logins needs `account`; the error says how many, never which.
+- **Verification codes.** Ardia keeps TOTP secrets in its own vault store (`Ardia Vault/vault.sealed` in the data folder,
+  AES-GCM with a key derived from a Secure Enclave key that needs no user presence, unwrapped once per launch off the main
+  thread), from the password-manager import, `saveVerificationSecret` and, with **Offer to keep verification codes**
+  on, the "Set Up Verification Code in Ardia?" offer a setup code on a page raises. The code is computed natively (RFC 6238,
+  about 2 µs) and handed only to the engine's sign-in, asked for at the code step. The Secure Enclave key is made with
+  explicit access control (after first unlock, this device only, private key use) and opened through Security, which
+  returns an error where CryptoKit would trap, so a vault copied to another Mac, a damaged one or one from before an
+  enclave reset is set aside (never overwritten) and Settings says to set the codes up again. A file that can't be read
+  right now (permissions, I/O) is retried, never set aside, and writes wait for it. A change is kept in memory only once
+  it's on disk, and the opened vault is dropped after 5 idle minutes (`vault.taskStart` opens it ahead of the sign-in).
+  Chrome's own password store is untouched.
+- **The activity log** is appended in batches (each second, or every 32 entries) on the vault's own queue to
+  `Ardia Vault/activity.jsonl` (cut back to 2 MB past 4 MB).
+- **Test seams** (background instances, `docs/agent-brief.md` › Launch variables): `ARDIA_TEST=vaultApproval=allow|always|deny|ignore`
+  answers the sheet once it is on screen, `reauth=granted` answers Touch ID (`vaultAuthDelayMs=<ms>` after that long),
+  `vaultKey=software` keeps the vault key in a file instead of the Secure Enclave, and `vaultFakeSignInMs=<ms>` answers
+  every sign-in `signed_in` after that long without calling the engine, to test revocation of a fill in flight.
+  `vaultTransferHoldMs=<ms>` makes the engine send the first write of a session move and hold the rest that long
+  (`+[ArdiaCoreProfile setVaultTransferHoldForTesting:]`), to test a stop that arrives after the move began.
 
 ## Native UI: prompts and menus
 

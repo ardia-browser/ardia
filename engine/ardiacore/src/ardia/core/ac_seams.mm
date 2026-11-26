@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "base/functional/callback.h"
+#include "chrome/browser/ardia/ac_cli_token_policy.h"
 #include "chrome/browser/ardia/ac_cli_visible_tabs.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/ui/browser.h"
@@ -32,6 +33,7 @@
 #include "ardia/core/ac_installed_bubble.h"
 #include "ardia/core/ac_launch_switches.h"
 #include "ardia/core/ac_windowless_page.h"
+#include "ardia/core/ac_vault_frames.h"
 #include "ui/base/cocoa/drag_permission.h"
 #import "ardia/core/ardiacore_api_internal.h"
 #import "ardia/core/ardiacore_internal.h"
@@ -179,6 +181,10 @@ void InstallChromeHooks() {
   g_ardia_cast_dialog = &HandleCastDialog;
   g_ardia_extension_side_panel = &HandleExtensionSidePanel;
   g_ardia_hidden_from_extensions = &IsHiddenFromExtensions;
+  g_ardia_vault_browser_context = &IsVaultBrowserContext;
+  g_ardia_devtools_hidden = &IsVaultBrowserContext;
+  g_ardia_clear_filled_passwords = &ClearFilledPasswords;
+  g_ardia_devtools_may_attach = &ardia::TokenClientMayAttach;
   g_ardia_keeps_window_without_tabs = &KeepsWindowWithoutTabs;
   g_ardia_devtools_dock_changed = &DevToolsDockChanged;
   g_ardia_create_web_contents_delegate = &CreateWebContentsDelegate;

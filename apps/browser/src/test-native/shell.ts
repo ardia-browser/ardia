@@ -1,4 +1,5 @@
 import type {
+  ControlPeer,
   AppEvent,
   BangListReply,
   CommandEvent,
@@ -511,6 +512,7 @@ export const controlSocket = {
   devtoolsEndpoint: ((_connection: number): NativeDevtoolsEndpoint | Promise<NativeDevtoolsEndpoint> => ({ problem: "off" })) as ((connection: number) => NativeDevtoolsEndpoint | Promise<NativeDevtoolsEndpoint>) | null,
   devtoolsEndpointAsks: [] as number[],
   calls: [] as string[],
+  peers: {} as Record<number, ControlPeer>,
 };
 const controlEvents = nativeEvents();
 export const emitControlRequest = (request: { connection: number; generation: number; line: string }) => controlEvents.emit("onRequest", request);
@@ -573,6 +575,7 @@ const automation: Modules["ArdiaAutomation"] = {
     controlPeers.approvals = controlPeers.approvals.filter((a) => a.key !== key);
     return Promise.resolve(controlPeers.approvals.length !== before);
   },
+  peer: async (connection) => controlSocket.peers[connection] ?? null,
   addListener: controlEvents.addListener,
 };
 const inStaging = (row: Record<string, unknown>, path: string) => ((row.staging as string[] | undefined) ?? []).includes(path.slice(0, path.lastIndexOf("/")));

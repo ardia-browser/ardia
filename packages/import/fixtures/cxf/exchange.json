@@ -1,0 +1,63 @@
+{
+  "version": { "major": 1, "minor": 0 },
+  "exporterRpId": "apple.com",
+  "exporterDisplayName": "Passwords",
+  "timestamp": 1763800000,
+  "accounts": [
+    {
+      "id": "YWNjb3VudC0x",
+      "username": "",
+      "email": "fixture@example.test",
+      "collections": [],
+      "items": [
+        {
+          "id": "aXRlbS1sb2dpbg",
+          "creationAt": 1763700000,
+          "modifiedAt": 1763700000,
+          "title": "Example",
+          "scope": { "urls": ["https://login.example.test/signin"], "androidApps": [] },
+          "credentials": [
+            { "type": "basic-auth", "username": { "fieldType": "string", "value": "alice" }, "password": { "fieldType": "concealed-string", "value": "fixture-pass-1" } },
+            { "type": "totp", "secret": "JBSWY3DPEHPK3PXP", "period": 30, "digits": 6, "username": "alice", "algorithm": "sha1", "issuer": "Example Co" }
+          ]
+        },
+        {
+          "id": "aXRlbS10d28tc2l0ZXM",
+          "title": "Two sites",
+          "scope": { "urls": ["https://a.example.test", "https://b.example.test/", "android://com.example"], "androidApps": [] },
+          "credentials": [
+            { "type": "basic-auth", "username": { "fieldType": "email", "value": "bob@example.test" }, "password": { "fieldType": "concealed-string", "value": "fixture-pass-2" } }
+          ]
+        },
+        {
+          "id": "aXRlbS1wYXNza2V5",
+          "title": "Passkey only",
+          "scope": { "urls": ["https://passkey.example.test"], "androidApps": [] },
+          "credentials": [
+            { "type": "passkey", "credentialId": "Y3JlZC1pZA", "rpId": "passkey.example.test", "username": "carol", "userDisplayName": "Carol", "userHandle": "dXNlci1oYW5kbGU", "key": "a2V5LWJ5dGVz" }
+          ]
+        },
+        {
+          "id": "aXRlbS1ub3Rl",
+          "title": "A note",
+          "credentials": [ { "type": "note", "content": { "fieldType": "string", "value": "fixture note" } } ]
+        },
+        {
+          "id": "aXRlbS1uby1zaXRl",
+          "title": "No website",
+          "credentials": [
+            { "type": "basic-auth", "username": { "fieldType": "string", "value": "dave" }, "password": { "fieldType": "concealed-string", "value": "fixture-pass-3" } }
+          ]
+        },
+        {
+          "id": "aXRlbS1jb2RlLW9ubHk",
+          "title": "Code only",
+          "scope": { "urls": ["https://codes.example.test/"], "androidApps": [] },
+          "credentials": [
+            { "type": "totp", "secret": "GEZDGNBVGY3TQOJQ", "period": 60, "digits": 8, "username": "erin", "algorithm": "sha256" }
+          ]
+        }
+      ]
+    }
+  ]
+}

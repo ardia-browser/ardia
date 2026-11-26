@@ -21,6 +21,11 @@ export const introStartDelayMs = (): number => {
 
 export const devTestValue = (key: string): string | null => (typeof __DEV__ !== "undefined" && __DEV__ ? testValue(key) : null);
 
+export const vaultApprovalAnswer = (): "allow" | "always" | "deny" | "ignore" | null => {
+  const answer = testValue("vaultApproval");
+  return answer === "allow" || answer === "always" || answer === "deny" || answer === "ignore" ? answer : null;
+};
+
 export const reloadLaunchConfigForTests = () => void (config = null);
 
 export const httpPagesPort = (): string | null => {

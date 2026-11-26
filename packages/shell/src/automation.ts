@@ -3,6 +3,7 @@ import type { AutomationNative } from "./generated/native";
 
 export type ControlSocketStatus = { state: "on" | "off"; generation: number; path: string; reason?: string };
 export type ControlRequest = { connection: number; generation: number; line: string };
+export type ControlPeer = { pid: number; path?: string; name?: string; identifier?: string; teamId?: string; signer?: string; signed: boolean; valid: boolean; adhoc: boolean; platform: boolean; lookupMs: number };
 export type ControlPeerAsk = { ask: number; name: string; signedBy: string; path: string; identifier: string; remember: boolean; deadline: number };
 export type ControlPeerOutcome = "once" | "halfHour" | "always" | "deny" | "unshown" | "timeout" | "left" | "stopped" | "full" | "quiet" | "unsaved";
 export type ControlPeerAnswer = Extract<ControlPeerOutcome, "once" | "halfHour" | "always" | "deny" | "unshown">;

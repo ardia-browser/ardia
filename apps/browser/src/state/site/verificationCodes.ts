@@ -5,6 +5,9 @@ import { currentTab } from "../browser/current";
 import { showToast } from "../app/toasts";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { noteVerificationCodeSetup } from "../telemetry/passwordManagerCounts";
+import { engineProfile } from "../browser/model";
+import { useBrowser } from "../browser/store";
+import { KEEPER_APP, keepVerificationCode } from "./vaultCodes";
 
 export { hoverStatus } from "../tabs/hoverStatus";
 
@@ -15,7 +18,7 @@ export function verificationCodeCopy(app: string, host: string): { title: string
   const name = clipped(app, MAX_APP);
   return {
     title: `Set Up Verification Code in ${name}?`,
-    message: `${host ? `${clipped(host, 64)} shows a two-factor setup code. ` : ""}${name} fills its codes from now on.`,
+    message: `${host ? `${clipped(host, 64)} shows a two-factor setup code. ` : ""}${app === KEEPER_APP ? "Ardia keeps it with the saved login on this Mac and fills its codes when an agent signs in for you." : `${name} fills its codes from now on.`}`,
   };
 }
 
@@ -81,13 +84,15 @@ export function acceptVerificationCode(tabId: string) {
   showNext(tabId);
   const consent = consentToken();
   noteVerificationCodeSetup("accepted", consent);
-  void setUpVerificationCode(tabId, offer.token, offer.generation)
+  const tab = currentTab(tabId);
+  const setUp = offer.app === KEEPER_APP && tab ? keepVerificationCode(engineProfile(useBrowser.getState(), tab.profileId), tabId, offer.token, offer.generation, tab.url ?? "", consent) : setUpVerificationCode(tabId, offer.token, offer.generation);
+  void setUp
     .then((r) => !!r?.opened, () => false)
     .then((opened) => {
       if (opened) return;
       noteVerificationCodeSetup("failed", consent);
       const windowId = currentTab(tabId)?.windowId;
-      if (windowId) showToast(windowId, `Couldn't open ${clipped(offer.app, MAX_APP)}.`, undefined, { icon: "key.fill" });
+      if (windowId) showToast(windowId, offer.app === KEEPER_APP ? "Ardia couldn't keep that verification code." : `Couldn't open ${clipped(offer.app, MAX_APP)}.`, undefined, { icon: "key.fill" });
     });
 }
 

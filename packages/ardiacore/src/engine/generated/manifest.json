@@ -1181,6 +1181,107 @@
         }
       }
     },
+    "vault": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/vault.ts",
+      "swift": "packages/ardiacore/ios/VaultCalls.swift",
+      "calls": {
+        "state": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "screenLocked": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "signIn": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "cancelSignIn": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "warm": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "saveSecret": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "keepOfferedCode": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "hasSecret": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "secrets": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "removeSecret": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "always": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setAlways": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "authenticate": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "cancelAuthenticate": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "appendLog": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "readLog": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {
+        "loginFormSeen": {
+          "topic": "vault.loginFormSeen",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "codeKept": {
+          "topic": "vault.codeKept",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      }
+    },
     "webKit": {
       "kind": "engine",
       "types": "packages/ardiacore/src/engine/generated/webKit.ts",
@@ -1510,8 +1611,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "824356c4ceb0f526b84811590c1aab1a8ad59aa6b3f949f06ad68fb723cef12f",
-        "swift": "41a93592952890260b4a8e0f8fba27b9931a42b5ee4a4b1b2bb25ca358f7c010"
+        "types": "28a718005f029965f9536c0617b4e9519c511b1016e2d2898929fad8cddd1a2f",
+        "swift": "395c2a43f9847d24f49233df8c27a45b4a1d6f852b230a16dfff14a3980db0e8"
       },
       "modules": {
         "ArdiaShell": {
@@ -3805,6 +3906,15 @@
               "mac": "custom",
               "desktop": "custom",
               "windows": "absent"
+            },
+            "peer": {
+              "args": [
+                "connection"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
             }
           },
           "events": {
@@ -4476,8 +4586,8 @@
       "types": "packages/sync/src/generated/native.ts",
       "swift": "packages/sync/ios/SyncNative.swift",
       "sha256": {
-        "types": "a1e5a4064125ab8f762e1336845b26cc5db346c2a09344004857928ae1066fd1",
-        "swift": "b5196cc68e00ac623efc491d02f3f6ab2c9aa8efeb98935be0e3afce1d240d43"
+        "types": "f5e22413b46c919bb55fbae7c26a9497d6580ed656bf2322bde491bd3c6cb30d",
+        "swift": "9e8f2f8d4fb64f91fa80126e8620ea3f7b3a9386ec8035f0f8feb30c0ae5c6a3"
       },
       "modules": {
         "ArdiaSync": {
@@ -4740,6 +4850,52 @@
               "mac": "absent",
               "desktop": "absent",
               "windows": "custom"
+            },
+            "vaultPhoneFingerprint": {
+              "args": [
+                "key"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "vaultTrustedPhones": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "vaultTrustPhone": {
+              "args": [
+                "phone",
+                "key"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "vaultForgetPhone": {
+              "args": [
+                "phone"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "vaultVerifyPhone": {
+              "args": [
+                "phone",
+                "message",
+                "signature"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
             }
           },
           "constants": {

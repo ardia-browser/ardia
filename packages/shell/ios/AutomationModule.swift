@@ -35,6 +35,8 @@ public class AutomationModule: Module, AutomationNative {
     ArdiaHost.placeArmedDownload(arm, download: download, path: path) { promise.resolve($0) }
   }
 
+  static func peer(_ connection: Int, _ promise: Promise) { ControlSocket.shared.peer(connection) { promise.resolve($0) } }
+
   public func definition() -> ModuleDefinition {
     Name(Self.moduleName)
 
@@ -73,6 +75,8 @@ public class AutomationModule: Module, AutomationNative {
     Self.placeArmedDownloadFunction
 
     Self.releaseArmedDownloadFunction
+
+    Self.peerFunction
 
     OnDestroy {
       ControlSocket.shared.detach(self)

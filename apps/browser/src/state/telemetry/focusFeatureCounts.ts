@@ -16,7 +16,8 @@ import { takeDeveloperModeCounts } from "./developerModeCounts";
 import { takePasswordManagerCounts } from "./passwordManagerCounts";
 import { takeSettingsPickerCounts } from "./settingsPickerCounts";
 import { takePageBarCounts } from "./pageBarCounts";
+import { takeVaultCounts } from "./vaultCounts";
 
 export function takeFocusFeatureCounts() {
-  return { ...takeMinimalismCounts(), ...takeReaderCounts(), ...takeSettingsWriteCounts(), ...takeHiddenElementCounts(), ...takeChromeSettingsOpens(), ...takePreloadPagesCounts(), ...takeWindowOcclusionCounts(), ...takePageFocusReturns(), ...takeBarLoadFocusCounts(), ...takePageCursorCounts(), ...takeFocusHandoffCounts(), ...takeHoverCounts(), ...takeWebNotificationCounts(), ...takePictureInPictureCloseCounts(), ...takeDeveloperModeCounts(), ...takePasswordManagerCounts(), ...takeSettingsPickerCounts(), ...takePageBarCounts() };
+  return { ...takeMinimalismCounts(), ...takeReaderCounts(), ...takeSettingsWriteCounts(), ...takeHiddenElementCounts(), ...takeChromeSettingsOpens(), ...takePreloadPagesCounts(), ...takeWindowOcclusionCounts(), ...takePageFocusReturns(), ...takeBarLoadFocusCounts(), ...takePageCursorCounts(), ...takeFocusHandoffCounts(), ...takeHoverCounts(), ...takeWebNotificationCounts(), ...takePictureInPictureCloseCounts(), ...takeDeveloperModeCounts(), ...takePasswordManagerCounts(), ...takeSettingsPickerCounts(), ...takePageBarCounts(), ...takeVaultCounts() };
 }

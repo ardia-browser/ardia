@@ -17,6 +17,7 @@ import { ExpoSettingsSheet } from "./components/settings/ExpoSettingsStack";
 import { ExpoArchiveSheet } from "./components/tabs/ExpoArchive";
 import { ExpoSpacesSheet } from "./components/sync/ExpoSpaces";
 import { ExpoLibrarySheet } from "./components/library/ExpoLibrary";
+import { VaultApprovalSheet } from "./components/vault/VaultApprovalSheet";
 import { MaterialLibrary } from "./components/library/MaterialLibrary";
 import { LibraryView } from "./components/library/LibraryView";
 import { closeLibrary, useLibrary } from "./state/library/store";
@@ -220,6 +221,7 @@ export function Surfaces() {
       {SYSTEM_SHEETS ? <ExpoArchiveSheet /> : null}
       {SYSTEM_SHEETS ? <ExpoSpacesSheet /> : null}
       {SYSTEM_SHEETS ? <ExpoLibrarySheet /> : null}
+      {SYSTEM_SHEETS ? <VaultApprovalSheet /> : null}
       {material ? <MaterialLibrary /> : null}
       <Layer covered={onboarding}>{voiceSeen ? <VoiceSearchView /> : null}</Layer>
       {onboardingSeen ? <OnboardingView /> : null}

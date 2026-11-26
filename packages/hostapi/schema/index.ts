@@ -17,11 +17,12 @@ import { shell } from "./shell.ts";
 import { sites } from "./sites.ts";
 import { sync } from "./sync.ts";
 import { tabs } from "./tabs.ts";
+import { vault } from "./vault.ts";
 import { webKit } from "./webKit.ts";
 import { webView } from "./webView.ts";
 import { windows } from "./windows.ts";
 
-export const domains = { autofill, bookmarks, contentBlocker, downloads, engine, extensions, favicons, history, media, passwords, permissions, profiles, search, sites, tabs, webKit, webView, windows };
+export const domains = { autofill, bookmarks, contentBlocker, downloads, engine, extensions, favicons, history, media, passwords, permissions, profiles, search, sites, tabs, vault, webKit, webView, windows };
 
 export const moduleDomains = { shaders, shell, sync, import: importModules };
 

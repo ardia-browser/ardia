@@ -615,7 +615,7 @@ export function nightShadeDefaultChanged() {
 
 const pageZoomOf = (id: string) => usePages.getState().navigation[id]?.pageZoom ?? 1;
 
-const zoomQueues = new Map<string, Promise<void>>();
+const zoomQueues = new Map<string, Promise<number | null>>();
 const zoomsReadBack = new WeakMap<object, number>();
 
 const pageState = (id: string): object | undefined => usePages.getState().navigation[id];
@@ -629,14 +629,15 @@ function zoomed(run: (id: string) => Promise<number>) {
   const id = selectedId();
   if (!id) return;
   const counted = siteChangeCounter("site_settings_zoom_changed");
-  const step = (zoomQueues.get(id) ?? Promise.resolve()).then(async () => {
+  const step = (zoomQueues.get(id) ?? Promise.resolve(null)).then(async (previous) => {
     const state = pageState(id);
-    const before = knownZoom(id);
+    const before = previous ?? knownZoom(id);
     const after = await run(id);
     if (state && pageState(id) === state) zoomsReadBack.set(state, after);
     if (Math.abs(after - before) > 0.001) counted();
+    return after;
   });
-  const settledStep = step.catch(() => undefined);
+  const settledStep = step.catch(() => null);
   zoomQueues.set(id, settledStep);
   void settledStep.then(() => {
     if (zoomQueues.get(id) === settledStep) zoomQueues.delete(id);

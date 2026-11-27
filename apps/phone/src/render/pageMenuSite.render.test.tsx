@@ -190,6 +190,27 @@ test("a second Reset Zoom that lands before the page reports its new zoom counts
   unmount(root);
 });
 
+test("two queued Reset Zooms count once even when the page reports something else between them", async () => {
+  const lands: ((zoom: number) => void)[] = [];
+  const reset = jest.spyOn(pages, "setPageZoom").mockImplementation(() => new Promise((resolve) => lands.push(resolve)));
+  usePages.setState((state) => ({ ...state, navigation: { t0: navigation("https://site0.example/", 1.25) } }));
+  const root = await siteSettings();
+  (telemetry.countUsage as jest.Mock).mockClear();
+  tap(control(root, "button", "Reset Zoom"));
+  tap(control(root, "button", "Reset Zoom"));
+  await flush();
+  act(() => {
+    lands.shift()!(1);
+    usePages.setState((state) => ({ ...state, navigation: { t0: { ...state.navigation.t0!, title: "Scrolled" } } }));
+  });
+  await flush();
+  lands.shift()!(1);
+  await flush();
+  expect(reset).toHaveBeenCalledTimes(2);
+  expect(siteCounts()).toEqual(["site_settings_zoom_changed"]);
+  unmount(root);
+});
+
 test("Night Shade in the site group stays disabled until the site's own setting is read, and the header follows the page's current address", async () => {
   let answer: (mode: { mode: string }) => void = () => undefined;
   jest.spyOn(pages, "nightShade").mockImplementation((host) => (host === "moved-on.example" ? new Promise((resolve) => (answer = resolve as never)) : Promise.resolve({ mode: "disabled" })) as never);

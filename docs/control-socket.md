@@ -450,9 +450,12 @@ Sync All Open Tabs toggle does. `sync.addRemoteProfile` and `sync.removeRemotePr
 `sync.status`'s `remoteProfiles`, the profiles on your other devices that this one doesn't have, and do what Add and
 Remove… beside each do in Settings › General: adding joins the synced profile (with the profiles it shares data with)
 instead of creating an empty one with the same name, and answers its new `profile` id; it refuses a profile still
-`waiting` for the one it shares data with. Removing takes it off the list on every device, and refuses one that other
-profiles share data with (`sharedByOthers`), as Settings disables that button. A `syncId` not on the list answers
-`no_window`. `sync.sendTab` takes an `http(s)` tab and a device from `sync.devices`, the list the
+`waiting` for the one it shares data with. Removing asks the user first with Settings' own question, where it can be
+seen, as `profiles.delete` does (`{removed: false}` on Cancel, `refused` when nobody can see it). Confirmed, it takes the
+profile off the list on every device; a device that still has the profile keeps it and lists it again, and when none
+does, its synced data is gone for good. It refuses one that other profiles share data with (`sharedByOthers`), as
+Settings disables that button. A `syncId` not on the list answers `no_window`. Both answer once the change shows in
+`sync.status`, so on Linux and Windows a window that forwards the write to the one running sync waits for it too. `sync.sendTab` takes an `http(s)` tab and a device from `sync.devices`, the list the
 tab menu's Send to Device shows. Turning sync on or off and the recovery phrase stay in Settings: they choose a
 folder and show or ask for the phrase, which is the user's to see.
 

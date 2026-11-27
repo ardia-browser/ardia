@@ -1,5 +1,7 @@
-import { addRemoteProfile, removeRemoteProfile, sendTab, sendTargets, setOpenTabsSynced, setProfileSynced, setTypeSynced, syncNow, syncWritesOpen, useSync } from "../sync/engine";
-import { DATA_TYPES, type DataType } from "../sync/syncDoc";
+import { addRemoteProfile, sendTab, sendTargets, setOpenTabsSynced, setProfileSynced, setTypeSynced, syncNow, syncWritesOpen, useSync } from "../sync/engine";
+import { confirmRemoveRemoteProfile } from "../sync/remoteProfileRemoval";
+import { DATA_TYPES, type DataType, type RemoteProfile } from "../sync/syncDoc";
+import { askWhereSeen, shownWindowId } from "./socketAsk";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { bool, id, obj, oneOf, PROFILE, TAB } from "./socketSchema";
 import { expect, now, profileArg, tabOf } from "./socketTargets";
@@ -80,26 +82,51 @@ async function setOpenTabs(params: Record<string, unknown>) {
   return summary();
 }
 
+const remoteRow = (syncId: string) => useSync.getState().remoteProfiles.find((p) => p.syncId === syncId);
+const linkedTo = (syncId: string) => Object.keys(useSync.getState().profiles).find((id) => useSync.getState().profiles[id]!.syncId === syncId && now().profiles[id]);
+
 function remoteProfileOf(params: Record<string, unknown>, what: string) {
-  const s = writable(what);
-  const profile = s.remoteProfiles.find((p) => p.syncId === params.syncId);
+  writable(what);
+  const profile = remoteRow(params.syncId as string);
   if (!profile) throw new OpError("no_window", `There's no profile ${String(params.syncId)} on your other devices that isn't on this one (sync.status lists remoteProfiles).`);
   return profile;
 }
 
-function addRemote(params: Record<string, unknown>) {
-  const profile = remoteProfileOf(params, "adding a profile from your other devices");
+function refuseUnaddable(profile: RemoteProfile) {
   if (profile.waiting) throw new OpError("refused", `${profile.name} shares data with a profile that hasn't synced yet; try again after the next sync.`);
-  const added = addRemoteProfile(profile.syncId);
-  expect(!!added, `${profile.name} wasn't added.`);
-  return { profile: added, ...summary() };
 }
 
-function removeRemote(params: Record<string, unknown>) {
-  const profile = remoteProfileOf(params, "removing a profile from sync");
+function refuseUnremovable(profile: RemoteProfile) {
   if (profile.sharedByOthers) throw new OpError("refused", `Other profiles share ${profile.name}'s data; remove them first.`);
-  expect(removeRemoteProfile(profile.syncId), `${profile.name} wasn't removed.`);
-  return { ok: true, remoteProfiles: useSync.getState().remoteProfiles };
+}
+
+async function addRemote(params: Record<string, unknown>) {
+  const profile = remoteProfileOf(params, "adding a profile from your other devices");
+  refuseUnaddable(profile);
+  addRemoteProfile(profile.syncId);
+  if (!(await settles(() => !!linkedTo(profile.syncId)))) {
+    const row = remoteRow(profile.syncId);
+    if (row) refuseUnaddable(row);
+    expect(false, `${profile.name} wasn't added.`);
+  }
+  return { profile: linkedTo(profile.syncId)!, ...summary() };
+}
+
+async function removeRemote(params: Record<string, unknown>, call: SocketCall) {
+  const profile = remoteProfileOf(params, "removing a profile from sync");
+  refuseUnremovable(profile);
+  const outcome = `${profile.name} wasn't removed from sync`;
+  const stillRemovable = () => call.serving() && syncWritesOpen() && !!remoteRow(profile.syncId) && !remoteRow(profile.syncId)!.sharedByOthers;
+  const { confirmed, removed } = await confirmRemoveRemoteProfile(profile, { windowId: shownWindowId(), ask: askWhereSeen(outcome, call), mayRemove: stillRemovable });
+  if (!confirmed) return { removed: false, remoteProfiles: useSync.getState().remoteProfiles };
+  if (!removed) {
+    call.stillServing();
+    writable("removing a profile from sync");
+    const row = remoteRow(profile.syncId);
+    if (row) refuseUnremovable(row);
+  }
+  expect(removed && (await settles(() => !remoteRow(profile.syncId))), `${profile.name} is still listed.`);
+  return { removed: true, remoteProfiles: useSync.getState().remoteProfiles };
 }
 
 function devicesFor(params: Record<string, unknown>) {
@@ -126,7 +153,7 @@ export const SYNC_METHODS: MethodSpec[] = [
   { name: "sync.setProfile", mutates: true, description: "Choose whether a profile syncs, as Settings › Profiles › Sync This Profile does", params: obj({ profile: PROFILE, on: ON }, ["profile", "on"]), result: "{status, types, profiles, …}", run: setProfile },
   { name: "sync.setOpenTabs", mutates: true, description: "Sync every open tab of a profile, not just pinned ones", params: obj({ profile: PROFILE, on: ON }, ["profile", "on"]), result: "{status, types, profiles, …}", run: setOpenTabs },
   { name: "sync.addRemoteProfile", mutates: true, description: "Add a profile from your other devices to this one, as Add beside it under Settings › General › Profiles on your other devices does", params: obj({ syncId: SYNC_ID }, ["syncId"]), result: "{profile, status, types, profiles, …}", run: addRemote },
-  { name: "sync.removeRemoteProfile", mutates: true, description: "Remove a profile that's only on your other devices from sync, as Remove… beside it under Settings › General › Profiles on your other devices does", params: obj({ syncId: SYNC_ID }, ["syncId"]), result: "{ok, remoteProfiles}", run: removeRemote },
+  { name: "sync.removeRemoteProfile", mutates: true, description: "Remove a profile that's only on your other devices from sync, as Remove… beside it under Settings › General › Profiles on your other devices does; Ardia asks the user to confirm first", params: obj({ syncId: SYNC_ID }, ["syncId"]), result: "{removed, remoteProfiles}", run: removeRemote },
   { name: "sync.devices", mutates: false, description: "The devices a profile's tabs can be sent to", params: obj({ profile: PROFILE }), result: "[{id, name, kind}]", run: devicesFor },
   { name: "sync.sendTab", mutates: true, description: "Send a tab to another device, as the tab menu's Send to Device does", params: obj({ tab: TAB, device: id("A device id from sync.devices") }, ["tab", "device"]), result: "{ok, device}", run: send },
 ];

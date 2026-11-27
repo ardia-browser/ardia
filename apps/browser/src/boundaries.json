@@ -1383,9 +1383,10 @@
   {
    "id": "socket-family:sync",
    "source": "socket",
-   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner); a syncId only ever matches a row of sync.status remoteProfiles, and sync.removeRemoteProfile asks the user first (socketAsk.askWhereSeen)",
    "checks": [
-    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem",
+    "apps/browser/src/state/automation/socketAsk.ts#askWhereSeen"
    ],
    "findings": [
     "D3"

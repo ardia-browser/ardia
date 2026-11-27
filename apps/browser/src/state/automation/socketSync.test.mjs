@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
+import { embedded, HOSTILE_VALUES } from "../../../../../scripts/security/hostile-inputs.mjs";
 
 const folder = new Map();
 let ids = 0;
@@ -100,36 +101,99 @@ test("sync writes: refused while sync is off, then the same switches Settings ha
   assert.equal(await code("sync.sendTab", { tab: blank, device: "dev-elsewhere" }), "refused", "only web pages are sent");
 });
 
+const dialogs = stub.shellNativeModules.ArdiaDialogs;
+const plainConfirm = dialogs.confirm;
+function answerConfirm(confirmed) {
+  const asked = [];
+  dialogs.confirm = async (options) => (asked.push(options), { confirmed, suppressed: false });
+  return asked;
+}
+const publishedLast = (key) =>
+  [...folder.values()]
+    .map((f) => JSON.parse(f.payload))
+    .flatMap((f) => f.ops ?? Object.entries(f.records ?? {}).map(([k, r]) => ({ k, v: r.v })))
+    .filter((op) => op.k === key)
+    .at(-1);
+
+async function offeredAfterDeleting(...names) {
+  for (const name of names) S().deleteProfile(S().profileOrder.find((id) => S().profiles[id].name === name));
+  await sync.syncNow();
+  await sync.syncNow();
+  return names.map((name) => sync.useSync.getState().remoteProfiles.find((p) => p.name === name));
+}
+
 test("sync.addRemoteProfile and sync.removeRemoteProfile do what Add and Remove… do in Settings (#4577)", async () => {
-  const offered = () => sync.useSync.getState().remoteProfiles.find((p) => p.name === "Work");
-  const work = S().createProfile({ name: "Work" });
-  await sync.syncNow();
-  await sync.syncNow();
-  S().deleteProfile(work);
-  await sync.syncNow();
-  await sync.syncNow();
-  const { syncId } = offered();
-  assert.ok((await ok("sync.status")).remoteProfiles.some((p) => p.syncId === syncId), "sync.status lists it with its syncId");
+  try {
+    S().createProfile({ name: "Work" });
+    await sync.syncNow();
+    await sync.syncNow();
+    const [{ syncId }] = await offeredAfterDeleting("Work");
+    const offered = () => sync.useSync.getState().remoteProfiles.find((p) => p.syncId === syncId);
+    assert.ok((await ok("sync.status")).remoteProfiles.some((p) => p.syncId === syncId), "sync.status lists it with its syncId");
 
-  assert.equal(await code("sync.addRemoteProfile", {}), "bad_request");
-  assert.equal(await code("sync.addRemoteProfile", { syncId: "not-a-profile" }), "no_window");
-  const added = await ok("sync.addRemoteProfile", { syncId });
-  assert.equal(S().profiles[added.profile]?.name, "Work", "it joins the synced profile, not an empty one with the same name");
-  assert.equal(added.profiles[added.profile].syncId, syncId);
-  assert.equal(offered(), undefined, "it leaves the list");
-  assert.equal(await code("sync.addRemoteProfile", { syncId }), "no_window", "it's on this Mac now");
-  assert.equal(await code("sync.removeRemoteProfile", { syncId }), "no_window", "a profile on this Mac isn't removed from sync");
+    assert.equal(await code("sync.addRemoteProfile", {}), "bad_request");
+    assert.equal(await code("sync.addRemoteProfile", { syncId: "not-a-profile" }), "no_window");
+    const untouched = { order: S().profileOrder, remote: sync.useSync.getState().remoteProfiles };
+    const hostileAsked = answerConfirm(true);
+    for (const { id, value } of HOSTILE_VALUES) {
+      for (const shape of typeof value === "string" ? embedded(value, syncId, syncId).filter((v) => v !== syncId) : [value]) {
+        for (const method of ["sync.addRemoteProfile", "sync.removeRemoteProfile"]) {
+          const got = await code(method, { syncId: shape });
+          assert.ok(["no_window", "bad_request"].includes(got), `${method} with ${id}: ${got}`);
+        }
+      }
+    }
+    assert.equal(S().profileOrder, untouched.order, "no hostile syncId added a profile");
+    assert.deepEqual(sync.useSync.getState().remoteProfiles, untouched.remote, "or removed one");
+    assert.equal(hostileAsked.length, 0, "or got as far as the question");
+    const added = await ok("sync.addRemoteProfile", { syncId });
+    assert.equal(S().profiles[added.profile]?.name, "Work", "it joins the synced profile, not an empty one with the same name");
+    assert.equal(added.profiles[added.profile].syncId, syncId);
+    assert.equal(offered(), undefined, "it leaves the list");
+    assert.equal(await code("sync.addRemoteProfile", { syncId }), "no_window", "it's on this Mac now");
+    assert.equal(await code("sync.removeRemoteProfile", { syncId }), "no_window", "a profile on this Mac isn't removed from sync");
 
-  S().deleteProfile(added.profile);
-  await sync.syncNow();
-  await sync.syncNow();
-  assert.ok(offered(), "offered again once deleted here");
-  const removed = await ok("sync.removeRemoteProfile", { syncId });
-  assert.equal(removed.ok, true);
-  assert.equal(removed.remoteProfiles.find((p) => p.syncId === syncId), undefined);
-  await sync.syncNow();
-  assert.equal(offered(), undefined, "and stays gone after syncing");
-  assert.equal(await code("sync.removeRemoteProfile", { syncId }), "no_window");
+    await offeredAfterDeleting("Work");
+    const asked = answerConfirm(false);
+    const kept = await ok("sync.removeRemoteProfile", { syncId });
+    assert.equal(kept.removed, false, "Cancel removes nothing");
+    assert.equal(asked[0].onlyIfShown, true, "it asks only where the question can be seen");
+    assert.equal(asked[0].title, "Remove “Work” from Sync?", "the same question Settings asks");
+    assert.ok(offered(), "still listed after Cancel");
+
+    answerConfirm(true);
+    const removed = await ok("sync.removeRemoteProfile", { syncId });
+    assert.equal(removed.removed, true);
+    assert.equal(removed.remoteProfiles.find((p) => p.syncId === syncId), undefined);
+    await sync.syncNow();
+    assert.equal(publishedLast(`prof:${syncId}`)?.v, null, "the removal reached the sync folder");
+    assert.equal(offered(), undefined, "and stays gone after syncing");
+    assert.equal(await code("sync.removeRemoteProfile", { syncId }), "no_window");
+  } finally {
+    dialogs.confirm = plainConfirm;
+  }
+});
+
+test("a profile another one shares data with can't be removed, and adding the sharer answers the sharer's id (#4577)", async () => {
+  try {
+    const owner = S().createProfile({ name: "Owner" });
+    S().createProfile({ name: "Child", shareWith: owner });
+    await sync.syncNow();
+    await sync.syncNow();
+    const [child, ownerRow] = await offeredAfterDeleting("Child", "Owner");
+    assert.equal(ownerRow.sharedByOthers, true);
+    const asked = answerConfirm(true);
+    assert.equal(await code("sync.removeRemoteProfile", { syncId: ownerRow.syncId }), "refused", "as Settings disables its Remove…");
+    assert.equal(asked.length, 0, "refused before asking");
+
+    const added = await ok("sync.addRemoteProfile", { syncId: child.syncId });
+    assert.equal(S().profiles[added.profile]?.name, "Child", "the profile asked for, not the one it shares data with");
+    const ownerHere = S().profiles[added.profile].dataId;
+    assert.equal(S().profiles[ownerHere]?.name, "Owner", "Owner comes along, as Settings' Add brings it");
+    assert.equal(sync.useSync.getState().remoteProfiles.find((p) => p.name === "Owner"), undefined);
+  } finally {
+    dialogs.confirm = plainConfirm;
+  }
 });
 
 test("sync.now answers after a pass that started after the call, not the one already running", async () => {

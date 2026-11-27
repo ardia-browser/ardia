@@ -7,11 +7,13 @@ import { lineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { HoverFill } from "./HoverFill";
 import { useNativeForm } from "./nativeForm";
+import { ControlLabelContext } from "./controlLabel";
 
 export function Row({ title, description, children, icon, onPress }: { title?: ReactNode; description?: ReactNode; children?: ReactNode; icon?: ReactNode; onPress?: () => void }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const native = useNativeForm();
+  const label = typeof title === "string" ? title : undefined;
   const body = (
     <View
       style={{
@@ -35,14 +37,16 @@ export function Row({ title, description, children, icon, onPress }: { title?: R
           )
         ) : null}
       </View>
-      {children}
+      {children !== undefined && children !== null ? <ControlLabelContext.Provider value={label}>{children}</ControlLabelContext.Provider> : null}
       {onPress && <Symbol name="chevron.right" size={11} weight="semibold" color={theme.textTertiary} style={{ width: 12, height: 14 }} />}
     </View>
   );
   if (!onPress) return body;
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress}>{body}</Pressable>
+      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
+        {body}
+      </Pressable>
     </View>
   );
 }

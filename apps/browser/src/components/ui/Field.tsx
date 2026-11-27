@@ -10,6 +10,7 @@ import { caretColor, useTheme, type FieldSurface } from "./theme";
 import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
+import { useControlLabel } from "./controlLabel";
 import { useHeldEscape, useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
 
 const SEARCH_KEYS = [{ key: "Escape" }];
@@ -79,6 +80,7 @@ export function SearchField({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
+        accessibilityLabel={placeholder}
         placeholderTextColor={bare ? theme.placeholder : theme.textTertiary}
         selectionColor={theme.selection}
         cursorColor={caretColor(theme, bare ? surface : "field")}
@@ -130,9 +132,11 @@ export function TextField({
   style,
   extraKeys,
   onExtraKey,
+  accessibilityLabel,
 }: ExtraKeyProps & {
   value: string;
   onChangeText: (text: string) => void;
+  accessibilityLabel?: string;
   placeholder?: string;
   autoFocus?: boolean;
   secure?: boolean;
@@ -149,6 +153,7 @@ export function TextField({
 }) {
   const theme = useTheme();
   const keyDownEvents = useKeyDownEvents(onEscape ? ESCAPE_KEY : undefined, extraKeys);
+  const label = useControlLabel(accessibilityLabel ?? placeholder);
   return (
     <OutsidePressArea style={[{ width, opacity: disabled ? opacity.disabled : 1 }, style]}>
       <View
@@ -168,6 +173,7 @@ export function TextField({
           onChangeText={disabled ? undefined : onChangeText}
           editable={!disabled}
           placeholder={placeholder}
+          accessibilityLabel={label}
           placeholderTextColor={theme.textTertiary}
           selectionColor={theme.selection}
           cursorColor={caretColor(theme, "field")}
@@ -219,7 +225,8 @@ export function PopUp<T extends string>({
   const pressMotion = usePressScaleMotion(!disabled && !native, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const current = options.find((o) => o.value === value);
-  const labelled = accessibilityLabel ? { accessibilityLabel, accessibilityValue: { text: current?.title ?? "" } } : {};
+  const label = useControlLabel(accessibilityLabel);
+  const labelled = label ? { accessibilityLabel: label, accessibilityValue: { text: current?.title ?? "" } } : {};
   const open = async () => {
     const items: MenuItem[] = options.flatMap((o) => [
       ...(o.separatorBefore ? [{ separator: true as const }] : []),
@@ -305,6 +312,7 @@ export function Checkbox({
 }) {
   const theme = useTheme();
   const on = value || mixed;
+  const accessibilityLabel = useControlLabel(label);
   const pressMotion = usePressScaleMotion(!!onChange && !disabled, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   if (look === "ring" && !onChange) return <RingCheck on={!!on} size={size} />;
@@ -316,6 +324,7 @@ export function Checkbox({
         onPressIn={pressMotion.onPressIn}
         onPressOut={pressMotion.onPressOut}
         accessibilityRole="checkbox"
+        accessibilityLabel={accessibilityLabel}
         accessibilityState={{ checked: value, disabled }}
         style={{ opacity: disabled ? opacity.disabled : 1 }}
       >
@@ -327,6 +336,9 @@ export function Checkbox({
   return (
     <Pressable
       disabled={disabled || !onChange}
+      accessibilityRole="checkbox"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ checked: value, disabled: disabled || !onChange }}
       onPress={(e) => onChange?.(!value, modifiersOf(e))}
       onPressIn={pressMotion.onPressIn}
       onPressOut={pressMotion.onPressOut}

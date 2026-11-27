@@ -4,6 +4,7 @@ import { curve, duration } from "./motion";
 import { useTheme } from "./theme";
 import { ink, opacity } from "./tokens";
 import { useNativeForm } from "./nativeForm";
+import { useControlLabel } from "./controlLabel";
 
 type SwitchLook = {
   width: number;
@@ -116,13 +117,14 @@ export function Toggle({
 }) {
   const theme = useTheme();
   const native = useNativeForm();
+  const label = useControlLabel(accessibilityLabel);
   if (look === "panel")
     return (
       <Switch
         value={value}
         onChange={onChange}
         disabled={disabled}
-        accessibilityLabel={accessibilityLabel}
+        accessibilityLabel={label}
         asksFirst={asksFirst}
         look={{ width: 30, height: 17, knob: 14, inset: 1.5, offColor: theme.toggleOff, onColor: theme.accent, duration: duration.base, easing: curve.enter }}
       />
@@ -132,7 +134,7 @@ export function Toggle({
       value={value}
       onChange={onChange}
       disabled={disabled}
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={label}
       asksFirst={asksFirst}
       animateExternalChanges={false}
       look={{ ...(native ? NATIVE_FORM_SWITCH : FORM_SWITCH), offColor: theme.switchOff, onColor: theme.formAccent, knobBorder: theme.knobBorder, duration: duration.base, easing: curve.enter }}

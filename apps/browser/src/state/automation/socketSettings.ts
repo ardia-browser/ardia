@@ -5,8 +5,10 @@ import { chooseTabLayout } from "../settings/actions";
 import { tabLayoutOf } from "../browser/model";
 import type { MethodSpec } from "./socketCatalog";
 import { checkedByRules, hasSocketRule, searchProblem } from "./socketSettingRules";
-import { id, ids, obj, text } from "./socketSchema";
-import { expect, now } from "./socketTargets";
+import { id, ids, obj, oneOf, PROFILE, text } from "./socketSchema";
+import { expect, now, profileArg } from "./socketTargets";
+import { closeWindow, windowIds } from "../../platform/windows";
+import { openSettings, SETTINGS_PANES, SETTINGS_WINDOW_ID, useSettingsNav, type SettingsPane } from "../settings/settingsWindows";
 import { OpError } from "./workspaceTargets";
 
 const OWN_METHOD: Partial<Record<SettingKey, string>> = {
@@ -141,6 +143,43 @@ function removeEngine(params: Record<string, unknown>) {
   return { ok: true };
 }
 
+const SETTINGS_WINDOW_WAIT_MS = 3000;
+const SETTINGS_WINDOW_POLL_MS = 50;
+
+const settingsWindowOpen = async () => (await windowIds().catch(() => [] as string[])).includes(SETTINGS_WINDOW_ID);
+
+async function settingsWindowRow() {
+  const { pane, profileId, detail } = useSettingsNav.getState();
+  return { open: await settingsWindowOpen(), pane, profile: profileId, detail, panes: SETTINGS_PANES };
+}
+
+async function untilSettingsWindow(open: boolean) {
+  const deadline = Date.now() + SETTINGS_WINDOW_WAIT_MS;
+  while ((await settingsWindowOpen()) !== open && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, SETTINGS_WINDOW_POLL_MS));
+}
+
+async function openSettingsWindow(params: Record<string, unknown>) {
+  const pane = (params.pane as SettingsPane | undefined) ?? useSettingsNav.getState().pane;
+  if (params.profile !== undefined && pane !== "profiles") throw new OpError("bad_request", "Only the profiles pane takes a profile.");
+  const profile = pane === "profiles" ? profileArg(params.profile) : null;
+  openSettings(pane, profile);
+  await untilSettingsWindow(true);
+  const row = await settingsWindowRow();
+  expect(row.open, "the Settings window didn't open.");
+  expect(row.pane === pane && row.profile === profile, `Settings isn't showing ${pane}.`);
+  return row;
+}
+
+async function closeSettingsWindow() {
+  if (await settingsWindowOpen()) await closeWindow(SETTINGS_WINDOW_ID);
+  await untilSettingsWindow(false);
+  const row = await settingsWindowRow();
+  expect(!row.open, "the Settings window is still open.");
+  return row;
+}
+
+const SETTINGS_WINDOW_RESULT = "{open, pane, profile, detail, panes}";
+
 const ENGINE_FIELDS = { name: text("Its name"), keyword: text("The keyword that searches it from the address bar"), url: text("Its search URL, with %s for the query") };
 
 export const SETTINGS_METHODS: MethodSpec[] = [
@@ -155,6 +194,16 @@ export const SETTINGS_METHODS: MethodSpec[] = [
     run: (p) => apply(p.values as Record<string, unknown>, "settings.set"),
   },
   { name: "settings.reset", mutates: true, description: "Put settings back to their defaults", params: obj({ keys: ids("Setting keys", 200) }, ["keys"]), result: "{changed, values}", run: reset },
+  { name: "settings.window", mutates: false, description: "Whether the Settings window is open, and the pane, profile and page it shows", params: obj({}), result: SETTINGS_WINDOW_RESULT, run: settingsWindowRow },
+  {
+    name: "settings.open",
+    mutates: true,
+    description: "Open the Settings window, or bring it forward, at a pane; the profiles pane at a profile",
+    params: obj({ pane: oneOf(SETTINGS_PANES, "The pane to show; the one it showed last when left out"), profile: PROFILE }),
+    result: SETTINGS_WINDOW_RESULT,
+    run: openSettingsWindow,
+  },
+  { name: "settings.close", mutates: true, description: "Close the Settings window", params: obj({}), result: SETTINGS_WINDOW_RESULT, run: closeSettingsWindow },
   { name: "search.engines", mutates: false, description: "Search engines: built in, added in Settings and from extensions; default marks the one searches use, and controlledBy names the extension that set it", params: obj({}), result: "[{id, name, keyword, url, custom, default, controlledBy?}]", run: engineRows },
   {
     name: "search.setDefault",

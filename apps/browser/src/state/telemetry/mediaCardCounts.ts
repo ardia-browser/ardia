@@ -9,6 +9,7 @@ type PositionReport = Pick<NowPlaying, "playbackState" | "position" | "duration"
 let sidebarPlayerExpands = 0;
 let sidebarPlayerReopens = 0;
 let sidebarPlayerFromOtherProfile = 0;
+let sidebarPlayerHeldAcrossPages = 0;
 let loopRestarts = 0;
 let rewinds = 0;
 let pastEnd = 0;
@@ -33,6 +34,8 @@ export function sidebarPlayerOpenCounter() {
 
 export const noteSidebarPlayerFromOtherProfile = () => void sidebarPlayerFromOtherProfile++;
 
+export const noteSidebarPlayerHeldAcrossPages = () => void sidebarPlayerHeldAcrossPages++;
+
 export const noteNowPlayingLoopRestart = () => void loopRestarts++;
 
 export function noteMediaPositionReport(before: PositionReport | undefined, report: PositionReport) {
@@ -43,10 +46,11 @@ export function noteMediaPositionReport(before: PositionReport | undefined, repo
 }
 
 export function takeMediaCardCounts() {
-  const taken = { sidebar_player_expands: sidebarPlayerExpands, sidebar_player_reopens: sidebarPlayerReopens, sidebar_player_from_other_profile: sidebarPlayerFromOtherProfile, now_playing_loop_restarts: loopRestarts, media_position_rewinds: rewinds, media_reports_past_end: pastEnd, ...takeSharePreviewCounts() };
+  const taken = { sidebar_player_expands: sidebarPlayerExpands, sidebar_player_reopens: sidebarPlayerReopens, sidebar_player_from_other_profile: sidebarPlayerFromOtherProfile, sidebar_player_held_across_pages: sidebarPlayerHeldAcrossPages, now_playing_loop_restarts: loopRestarts, media_position_rewinds: rewinds, media_reports_past_end: pastEnd, ...takeSharePreviewCounts() };
   sidebarPlayerExpands = 0;
   sidebarPlayerReopens = 0;
   sidebarPlayerFromOtherProfile = 0;
+  sidebarPlayerHeldAcrossPages = 0;
   loopRestarts = 0;
   rewinds = 0;
   pastEnd = 0;

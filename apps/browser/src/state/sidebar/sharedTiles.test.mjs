@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Animated } from "react-native";
-const { sharedTileSides, sharedTilesMotion } = await import("./sharedTiles.ts");
+const { sharedTileSides, sharedTilesMotion, stationaryPlayerMotion } = await import("./sharedTiles.ts");
 
 const at = ({ config }, pos) => {
   const { inputRange: x, outputRange: y } = config;
@@ -43,4 +43,27 @@ test("shared Top Apps stay where they are for the whole switch and cross-fade, u
   assert.equal(at(work.opacity, 2.5), 1);
   assert.equal(at(home.opacity, 0.5), 1, "home's grid slides with its page toward lone");
   assert.equal(at(home.transform[0].translateX, 0.5), 0);
+});
+
+test("a Playing now card shown on every profile's page stays put through a swipe and hands over at the midpoint, never fading both", () => {
+  const width = 260;
+  const pos = new Animated.Value(0);
+  const page = (slot, p) => (p - slot) * -width;
+  const first = stationaryPlayerMotion(pos, 0, width, { before: false, after: true });
+  const middle = stationaryPlayerMotion(pos, 1, width, { before: true, after: true });
+  const last = stationaryPlayerMotion(pos, 2, width, { before: true, after: false });
+  for (const p of [0, 0.2, 0.49, 0.51, 0.9, 1]) {
+    assert.ok(Math.abs(page(0, p) + at(first.transform[0].translateX, p)) < 1e-9, `the first page's card at ${p}`);
+    assert.ok(Math.abs(page(1, p) + at(middle.transform[0].translateX, p)) < 1e-9, `the second page's card at ${p}`);
+    assert.equal(Math.max(at(first.opacity, p), at(middle.opacity, p)), 1, `one card is fully shown at ${p}`);
+    assert.ok(at(first.opacity, p) === 0 || at(middle.opacity, p) === 0 || p === 0.5, `never two half-faded cards at ${p}`);
+  }
+  assert.equal(at(first.opacity, 0.4), 1);
+  assert.equal(at(middle.opacity, 0.4), 0);
+  assert.equal(at(first.opacity, 0.6), 0);
+  assert.equal(at(middle.opacity, 0.6), 1);
+  for (const p of [1.2, 1.7, 2]) assert.ok(Math.abs(page(2, p) + at(last.transform[0].translateX, p)) < 1e-9, `the last page's card at ${p}`);
+  const lone = stationaryPlayerMotion(pos, 0, width, { before: false, after: false });
+  assert.equal(at(lone.transform[0].translateX, 0.5), 0, "with no neighbour the card rides its page");
+  assert.equal(at(lone.opacity, 0.5), 1);
 });

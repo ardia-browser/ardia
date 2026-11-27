@@ -75,8 +75,8 @@ export function chainOf(x: Pick<Section, "groups">, key: string | null): string[
 }
 
 export const tileSig = (t: Tab) =>
-  `${pinKeyOf(t)}\u0001${t.pinnedUrl ?? ""}\u0001${t.customTitle ?? ""}\u0001${t.customIcon ?? ""}\u0001${t.tileLetters ?? ""}\u0001${isPinnedRow(t) ? "r" : ""}\u0001${tileFolderOf(t)?.id ?? ""}\u0001${tileFolderOf(t)?.name ?? ""}\u0001${tileFolderOf(t)?.renamedAt ?? ""}`;
-const memberSig = (t: Tab) => `${pinKeyOf(t)}\u0001${t.pinnedUrl ?? ""}\u0001${t.customTitle ?? ""}\u0001${t.customIcon ?? ""}\u0001${t.tileLetters ?? ""}`;
+  `${pinKeyOf(t)}\u0001${t.pinnedUrl ?? ""}\u0001${t.customTitle ?? ""}\u0001${t.customIcon ?? ""}\u0001${t.tileLetters ?? ""}\u0001${t.reopenAtPinnedUrl ?? ""}\u0001${isPinnedRow(t) ? "r" : ""}\u0001${tileFolderOf(t)?.id ?? ""}\u0001${tileFolderOf(t)?.name ?? ""}\u0001${tileFolderOf(t)?.renamedAt ?? ""}`;
+const memberSig = (t: Tab) => `${pinKeyOf(t)}\u0001${t.pinnedUrl ?? ""}\u0001${t.customTitle ?? ""}\u0001${t.customIcon ?? ""}\u0001${t.tileLetters ?? ""}\u0001${t.reopenAtPinnedUrl ?? ""}`;
 export function signature(x: Section): string {
   const shown = new Set<string>();
   const lines: string[] = [];
@@ -109,7 +109,7 @@ export function hasDuplicates(x: Section): boolean {
   return !!x.duplicate || new Set(tabs).size < tabs.length;
 }
 
-const PIN_FIELDS = ["pin", "pinnedUrl", "customTitle", "customIcon", "tileLetters", "profileId", "windowId", "pinKey"] as const;
+const PIN_FIELDS = ["pin", "pinnedUrl", "customTitle", "customIcon", "tileLetters", "reopenAtPinnedUrl", "profileId", "windowId", "pinKey"] as const;
 function pinnedSplitsChanged(s: BrowserState, prev: BrowserState): boolean {
   if (s.splits === prev.splits) return false;
   const members = new Set(pinnedGroupsOf(s).flatMap((g) => g.tabIds));
@@ -208,6 +208,7 @@ export function copyOf(src: Tab, windowId: string, tile: boolean, profileId = sr
       customTitle: src.customTitle,
       customIcon: src.customIcon,
       ...(src.tileLetters ? { tileLetters: src.tileLetters } : {}),
+      ...(src.reopenAtPinnedUrl !== undefined ? { reopenAtPinnedUrl: src.reopenAtPinnedUrl } : {}),
       muted: src.muted,
       zoom: src.zoom,
     }),
@@ -244,6 +245,7 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
       customTitle: src.customTitle,
       customIcon: src.customIcon,
       tileLetters: src.tileLetters,
+      reopenAtPinnedUrl: src.reopenAtPinnedUrl,
     };
     patch.pinnedUrl = src.pinnedUrl || (tile ? src.url : null) || null;
     if (tile && !hasPage(t) && !samePage(t.url, pinHomeOf(src))) Object.assign(patch, { url: pinHomeOf(src), title: src.title, favicon: src.favicon });

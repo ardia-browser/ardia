@@ -11,7 +11,7 @@ import { sidebarListLengthNow, useSidebarCells } from "../../state/sidebar/hooks
 import { useNewTabAtTop, useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_PLAYER_GROWTH, SIDEBAR_PLAYER_HEIGHT, SidebarPlayer, usePlayerMotion, useSidebarPlayerTab } from "../media/SidebarPlayer";
 import { usePageStyle } from "../../state/windows/profilePager";
-import { useSharedTilesStyle } from "../../state/sidebar/sharedTiles";
+import { useSharedTilesStyle, useStationaryPlayerStyle } from "../../state/sidebar/sharedTiles";
 import { DragScope, useDragPage, useDragController, useDragging, usePinnedCount } from "./DragProvider";
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { forgetRowsScrolled, noteRowsScrolled } from "../../state/sidebar/hover";
@@ -25,6 +25,7 @@ import { startsOffScreen } from "../../state/sidebar/geometry";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
 import { clearlyOverflows, DOCK_SHARE, DOCKED_ROW_PAD, dockedAfter, GLOW_ROOM, pageLayout, tilesFitDock, type PageSpot, type SidebarGeometry } from "./pageLayout";
 import { noteNewTabDocked } from "../../state/telemetry/sidebarScrollCounts";
+import { noteSidebarPlayerHeldAcrossPages } from "../../state/telemetry/mediaCardCounts";
 import { PageRows } from "./PageRows";
 import { NewTabRow } from "./NewTabRow";
 import { SelectedRowPill, useSelectedRowAway } from "./SelectedRowPill";
@@ -69,6 +70,13 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   const playerTab = useSidebarPlayerTab(windowId, profileId, current);
   const playerHeight = playerTab ? SIDEBAR_PLAYER_HEIGHT : 0;
   const playerMotion = usePlayerMotion();
+  const playerAcrossProfiles = useSettings((st) => st.playingNowAcrossProfiles);
+  const stationaryPlayer = useStationaryPlayerStyle(windowId, slot, width, paging && playerAcrossProfiles && !!playerTab);
+  const wasCurrent = useRef(current);
+  useEffect(() => {
+    if (current && !wasCurrent.current && stationaryPlayer) noteSidebarPlayerHeldAcrossPages();
+    wasCurrent.current = current;
+  }, [current, stationaryPlayer]);
   const cells = useSidebarCells(windowId, profileId, offScreen);
   const tiles = pinnedShown ? cells : NONE;
   const innerWidth = width - layout.sidebarInset * 2;
@@ -244,9 +252,9 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                 </Animated.View>
                 <ScrollEdgeLine edge={scrollEdgeBelow} opacity={scrollEdgeBelow.opacity} style={{ marginTop: -SCROLL_EDGE.line, zIndex: 1, transform: [{ translateY: playerMotion.listClip }] }} />
                 {playerTab ? (
-                  <View style={{ paddingHorizontal: layout.sidebarInset, paddingTop: docked ? space.m : 0, paddingBottom: docked ? 0 : space.m }}>
+                  <Animated.View style={[{ paddingHorizontal: layout.sidebarInset, paddingTop: docked ? space.m : 0, paddingBottom: docked ? 0 : space.m }, stationaryPlayer]}>
                     <SidebarPlayer tabId={playerTab} motion={playerMotion} docked={docked} />
-                  </View>
+                  </Animated.View>
                 ) : null}
                 {docked && newTabShown ? (
                   <View style={{ paddingHorizontal: layout.sidebarInset, paddingVertical: DOCKED_ROW_PAD }}>

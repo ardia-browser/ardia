@@ -6,7 +6,7 @@ export const CONFIG_SETTING_KEYS: readonly SettingKey[] = [
   "warnBeforeClosingLastTab", "afterClosingTab", "tabSwitcherOrder", "tabSwitcherView", "keepTopAppsRunning", "undoReopensClosedTab", "warnBeforeMovingTabsToProfile", "shareTabsAcrossWindows", "tabReorderHaptics", "swipeBetweenTabs",
   "extendWebsiteColor", "cmdClickCreatesTabGroup", "optShiftClickOpensInGroup", "peekModifier", "peekLinksToOtherSites", "newTabLinksOpenIn", "popupsOpenAsTabs", "peekButtons",
   "splitLinkModifier", "autoGroupMeetingTabs", "cleanUpInactiveTabsAfterMinutes", "suggestCleanUp", "mutedSites", "showUnreadCounts", "showTopAppBadges", "showTabHoverMenu", "showFullUrlInTabHoverMenu", "closedTopAppTiles", "topAppFolders", "unreadHiddenSites", "neverTranslateSites", "developerModeSites",
-  "autoPictureInPicture", "playingNowAcrossProfiles", "sidebarMediaControls", "commandScrollZoom", "blockAutoplayEverywhere", "videoUpscaling", "sidebarWidth", "showSidebarButton",
+  "pinnedTabsReopenAtPinnedUrl", "autoPictureInPicture", "playingNowAcrossProfiles", "sidebarMediaControls", "commandScrollZoom", "blockAutoplayEverywhere", "videoUpscaling", "sidebarWidth", "showSidebarButton",
   "showClearButton", "tidyTabs", "balancedTopApps", "selectedTabGlow", "interfaceScale", "sidebarTextSize", "sidebarTextContrast", "selectedTopApp", "elementOutlines", "interfaceStyle", "windowButtons", "glassTintWithTheme",
   "glassTintAmount", "fadeUnloadedTabs", "strikeSleepingTabs", "warnBeforeClosingTabGroup", "batterySaverWhen", "memorySaver",
   "memorySaverMode", "busyTabWarnings", "loadProfilesWhenOpened", "unloadProfilesAfter", "keepActiveSites", "extensionSidePanelWidth", "showFullUrl", "showBookmarks", "bookmarksBar",

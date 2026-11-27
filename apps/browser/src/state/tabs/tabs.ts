@@ -4,7 +4,7 @@ import { leaveGroups } from "../groups/groups";
 import { withShownTab } from "../groups/shownTabs";
 import { byRecentUse, inPinnedContainer, makeTab, navigationTo, newId, TILE_PIN, viewTabIds, without } from "../browser/model";
 import { closeSuccessor, forgetOpeners, insertionIndex, sleepsNow } from "./openers";
-import { onUrlChange, pruneSelection } from "../pins/organize";
+import { onUrlChange, pruneSelection, reopensAtPinnedUrl } from "../pins/organize";
 import { isClosedPin } from "../pins/tabCleanup";
 import { adoptedPage, ASLEEP, frozenOn, hasOwnOrSharedPage, hasPage, isAsleep, isLazy, loadedPage, needsPage, withWake, wokenPage } from "./pageSession";
 import { isPeekTab, peekSourceOf, withoutPeek } from "../peek/peek";
@@ -16,10 +16,10 @@ import { closedTabEntry, MAX_CLOSED_TABS } from "../pins/closedTabs";
 import { pendingRestore, restoreId } from "./adoptIds";
 import type { AdoptId, BrowserWindow, ClosedTab, Tab, TabSnapshot } from "../browser/types";
 import { orderSections } from "../groups/groups";
-import { samePage } from "../../lib/url";
+import { sameAddress, samePage } from "../../lib/url";
 import { historyOf } from "../history/history";
 import { pinHome } from "../pins/pinHomes";
-import { noteTopAppsKeptRunning } from "../telemetry/tabSleepCounts";
+import { notePinnedTabReopenChoice, noteTopAppsKeptRunning } from "../telemetry/tabSleepCounts";
 
 export type NewTabOptions = {
   url?: string;
@@ -277,7 +277,9 @@ function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = fa
     if (loaded && t.url) {
       closed.push({ ...closedTabEntry(s, t, { windowId: t.windowId, index: w?.tabIds.indexOf(id) ?? 0 }, now, null), pinnedTile: true, ...(t.pinKey ? { pinKey: t.pinKey } : {}) });
     }
-    const back = backToPin(s, t);
+    const reset = reopensAtPinnedUrl(s, t);
+    const back = reset ? backToPin(s, t) : {};
+    if (loaded && awayFromHome(t)) notePinnedTabReopenChoice(reset);
     const pending = !back.url && pendingRestore(t) ? restoreId(pendingRestore(t)!) : undefined;
     tabs[id] = { ...t, ...back, page: withWake(ASLEEP, pending) };
   }
@@ -308,9 +310,11 @@ function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = fa
   return next;
 }
 
+const awayFromHome = (t: Tab) => !!t.pinnedUrl && !!t.url && !sameAddress(t.url, t.pinnedUrl);
+
 function backToPin(s: BrowserState, t: Tab): Partial<Tab> {
   const home = t.pinnedUrl;
-  if (!home || !t.url || samePage(t.url, home)) return {};
+  if (!home || !awayFromHome(t)) return {};
   const entry = historyOf(s, t.profileId).find((h) => samePage(h.url, home));
   return { ...onUrlChange(s, t, home), url: home, ...(entry ? { title: entry.title, favicon: entry.favicon ?? t.favicon } : {}) };
 }

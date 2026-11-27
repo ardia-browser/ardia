@@ -32,6 +32,9 @@ final class SidebarEdgeWatcher {
   private var dockApp: NSRunningApplication?
   private var lastHitWindow = 0
   private var lastHitIsDock = false
+  private var lastHitMenuProbe = 0
+  private var lastHitIsMenu = false
+  private var heldByMenu: Set<String> = []
   #if DEBUG
   private(set) var wakes: [String: Int] = ["global": 0, "local": 0]
   var stats: [String: Any] { ["wakes": wakes, "global": globalMonitor != nil, "local": localMonitor != nil, "watched": watched.count] }
@@ -45,7 +48,7 @@ final class SidebarEdgeWatcher {
 
   func watch(id: String, on: Bool, hold: CGFloat, right: Bool, whilePressed: Bool) {
     watched[id] = on ? Watch(rootHold: max(0, hold), right: right, whilePressed: whilePressed) : nil
-    if on { unreported.insert(id) } else { over.remove(id) }
+    if on { unreported.insert(id) } else { over.remove(id); heldByMenu.remove(id) }
     if !on, crossings[id]?.awaitingReturn(at: ProcessInfo.processInfo.systemUptime) != true { crossings[id] = nil }
     if watched.isEmpty { return stop() }
     start()
@@ -89,25 +92,31 @@ final class SidebarEdgeWatcher {
       guard let window = WindowManager.shared.window(id) else {
         watched[id] = nil
         over.remove(id)
+        heldByMenu.remove(id)
         unreported.remove(id)
         crossings[id] = nil
         continue
       }
       if !pressed { pressedInside.remove(id) }
       let inColumn = Self.inColumn(point, window.frame, watch) && window.screen?.frame.contains(point) == true
-      let now = (pressed && pressedInside.contains(id)) || (watch.whilePressed || !pressed) && (isOver(point, of: window, watch, live: live, holding: over.contains(id))
+      let menu = live && over.contains(id) && window.isVisible ? menuOwner(Self.windowNumber(at: point)) : nil
+      let viaMenu = menu != nil
+      let menuStarted = viaMenu && heldByMenu.insert(id).inserted
+      if !viaMenu { heldByMenu.remove(id) }
+      let now = viaMenu || (pressed && pressedInside.contains(id)) || (watch.whilePressed || !pressed) && (isOver(point, of: window, watch, live: live, holding: over.contains(id))
         || (inColumn && over.contains(id) && onDock)
         || (inColumn && isOver(point, of: window, watch, live: false) && onDock && isTopBeneathDock(point, of: window, right: watch.right))
         || returnedTo == id)
       let throughOverlay = now && (overlaid.contains(id) || (returnedTo == id && returnedThroughOverlay))
       let fresh = unreported.remove(id) != nil
       let edgeNote = screenEdge[id]
-      guard fresh || now != over.contains(id) || edgeNote != nil else { continue }
+      guard fresh || now != over.contains(id) || edgeNote != nil || menuStarted else { continue }
       if now { over.insert(id) } else { over.remove(id) }
       let inRoot = InterfaceScale.rootPoint(fromScreen: point, in: window)
       var event: [String: Any] = ["type": "sidebarEdge", "id": id, "over": now, "point": [inRoot.x, inRoot.y]]
       if let edgeNote { event["screenEdge"] = edgeNote }
       if throughOverlay { event["overlay"] = true }
+      if menuStarted, let menu { event["heldByMenu"] = menu }
       ShellEvents.send(.window, event)
     }
     if watched.isEmpty { return stop() }
@@ -276,6 +285,23 @@ final class SidebarEdgeWatcher {
     return ScreenOverlay(bounds: bounds, layer: layer, fromSlack: owner == ScreenOverlay.slackBundle, capturable: capturable)
   }
 
+  private func menuOwner(_ number: Int) -> String? {
+    guard number > 0 else { return nil }
+    if let ours = NSApp.window(withWindowNumber: number) { return ours.level == .popUpMenu ? "app" : nil }
+    if number != lastHitMenuProbe {
+      lastHitMenuProbe = number
+      lastHitIsMenu = Self.onMenuLayer(number)
+    }
+    return lastHitIsMenu ? "system" : nil
+  }
+
+  private static func onMenuLayer(_ number: Int) -> Bool {
+    guard let info = CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(number)) as? [[String: Any]],
+      let layer = info.first?[kCGWindowLayer as String] as? Int
+    else { return false }
+    return layer == Int(CGWindowLevelForKey(.popUpMenuWindow))
+  }
+
   private func isOnDock(_ point: NSPoint) -> Bool {
     isDock(Self.windowNumber(at: point))
   }
@@ -391,6 +417,7 @@ final class SidebarEdgeWatcher {
   func reset() {
     watched = [:]
     over = []
+    heldByMenu = []
     pressedInside = []
     unreported = []
     crossings = [:]

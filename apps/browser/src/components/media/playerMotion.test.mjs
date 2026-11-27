@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { GROWTH, ROW_HEIGHT, EXPANDED_HEIGHT, holdPlayerCard, makePlayerMotion, settlePlayerMotion, visibleCardHeight, windowPlayerMotion } = await import("./playerMotion.ts");
+const { GROWTH, ROW_HEIGHT, EXPANDED_HEIGHT, holdPlayerCard, makePlayerMotion, revealOf, settlePlayerMotion, visibleCardHeight, windowPlayerMotion } = await import("./playerMotion.ts");
+const { Animated } = await import("react-native");
+const { readFileSync } = await import("node:fs");
 
 const listClip = (motion) => -GROWTH * motion.progress.__getValue() * motion.overhang.__getValue();
 const visibleTop = (bottom, motion) => bottom - visibleCardHeight(motion.state.get().slot, motion.progress.__getValue());
@@ -86,4 +88,32 @@ test("a page's own card settles its motion when it goes, as before", () => {
   assert.equal(motion.overhang.__getValue(), 1);
   assert.equal(motion.expandedSlot.current, false);
   assert.equal(listClip(motion) + 0, 0);
+});
+
+const sourcesOf = (reveal) =>
+  Object.entries(reveal)
+    .filter(([key]) => !["pin", "unpinned", "trailing"].includes(key))
+    .map(([key, node]) => [key, node.source]);
+
+test("turning Keep Playing now across profiles on or off swaps the card's motion, and its reveal follows the new one", () => {
+  const pin = new Animated.Value(0);
+  const local = makePlayerMotion();
+  const shared = windowPlayerMotion("w-toggle");
+  const sizes = { titleDrop: 7, controlsLift: 8 };
+  const before = revealOf(local.progress, pin, sizes);
+  const after = revealOf(shared.progress, pin, sizes);
+  for (const [key, source] of sourcesOf(before)) assert.equal(source, local.progress, `${key} follows the page's own motion`);
+  for (const [key, source] of sourcesOf(after)) assert.equal(source, shared.progress, `${key} follows the window's motion once the setting is on`);
+  assert.equal(after.mask.config.outputRange[0], GROWTH);
+  assert.deepEqual(after.titleDrop.config.outputRange, [7, 0]);
+  assert.deepEqual(after.controlsLift.config.outputRange, [-GROWTH + 8, 0]);
+  assert.equal(after.pin, pin, "the trailing pin is the card's own and stays");
+});
+
+test("the card rebuilds its reveal when its motion's progress changes, and its expansion effects rerun on a new motion", () => {
+  const source = readFileSync(new URL("./SidebarPlayer.tsx", import.meta.url), "utf8");
+  assert.match(source, /useMemo\(\(\) => revealOf\(progress, pin, [^\n]*\), \[progress, pin\]\)/, "the reveal is built from the current progress, not once");
+  assert.doesNotMatch(source, /useState\(\(\) => \(\{\s*pin,/, "no reveal frozen in state");
+  assert.match(source, /\}, \[want, expanded, leads, motion\]\);/);
+  assert.match(source, /\}, \[expanded, slot, leads, motion\]\);/);
 });

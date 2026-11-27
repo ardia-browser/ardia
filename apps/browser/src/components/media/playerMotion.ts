@@ -102,3 +102,19 @@ export function usePlayerMotion(sharedBy: string | null): PlayerMotion {
 }
 
 export const visibleCardHeight = (slot: PlayerSlot, progress: number): number => (slot === "expanded" ? EXPANDED_HEIGHT : ROW_HEIGHT + GROWTH * progress);
+
+export function revealOf(progress: Animated.Value, pin: Animated.Value, { titleDrop, controlsLift }: { titleDrop: number; controlsLift: number }) {
+  return {
+    pin,
+    unpinned: pin.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+    trailing: Animated.add(progress.interpolate({ inputRange: [0, 0.5], outputRange: [1, 0], extrapolate: "clamp" }), pin).interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }),
+    mask: progress.interpolate({ inputRange: [0, 1], outputRange: [GROWTH, 0] }),
+    unmask: progress.interpolate({ inputRange: [0, 1], outputRange: [-GROWTH, 0] }),
+    titleDrop: progress.interpolate({ inputRange: [0, 1], outputRange: [titleDrop, 0] }),
+    artist: progress.interpolate({ inputRange: [0.3, 1], outputRange: [0, 1], extrapolate: "clamp" }),
+    seek: progress.interpolate({ inputRange: [0.7, 1], outputRange: [0, 1], extrapolate: "clamp" }),
+    controls: progress.interpolate({ inputRange: [0.45, 1], outputRange: [0, 1], extrapolate: "clamp" }),
+    controlsLift: progress.interpolate({ inputRange: [0, 1], outputRange: [-GROWTH + controlsLift, 0] }),
+    closing: progress.interpolate({ inputRange: [0.5, 1], outputRange: [0, 1], extrapolate: "clamp" }),
+  };
+}

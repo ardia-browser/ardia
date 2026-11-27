@@ -450,3 +450,26 @@ test("with Reopen closed pinned tabs at their pinned URL off, another Mac's edit
   await syncAll([a, b]);
   b.with(() => assert.equal(S().tabs[tabOf("mail")].url, "https://mail.example/", "on again, the next edit sends it home"));
 });
+
+test("a hash-only pinned URL edit synced from another Mac moves a sleeping pin to the new route and drops the history it would have restored", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([a, b]);
+  const route = "https://mail.example/#/inbox";
+  b.with(() => {
+    const mail = tabOf("mail");
+    S().updateTab(mail, { page: { kind: "asleep", wake: `restore:${mail}` } });
+  });
+  a.with(() => S().setPinnedUrl(tabOf("mail"), route));
+  await syncAll([a, b]);
+  b.with(() => {
+    const mail = S().tabs[tabOf("mail")];
+    assert.equal(mail.pinnedUrl, route);
+    assert.equal(mail.url, route);
+    assert.equal(mail.page.kind, "asleep");
+    assert.equal(mail.page.wake, undefined, "the old entry isn't restored over the new route");
+  });
+});

@@ -1,6 +1,6 @@
 import { continuousCorners, Dot, Panel, Symbol, Button, tabularNums, Text, useHover, reduceMotion } from "../ui";
 import { useShallow } from "zustand/react/shallow";
-import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Animated, Image, Pressable, View } from "react-native";
 import { switchToTab, toggleMute } from "../../state/browser/actions";
 import { useTheme } from "../ui/theme";
@@ -35,7 +35,7 @@ import { hostOf } from "@ardia/core";
 import { Marquee, useMarqueeGroup } from "./Marquee";
 import { TimeBar } from "./MiniPlayer";
 import { useMediaTokens } from "./tokens";
-import { CONTROLS_ROW, EXPANDED_HEIGHT, GROWTH, holdPlayerCard, ROW_HEIGHT, SEEK_ROW, type PlayerMotion } from "./playerMotion";
+import { CONTROLS_ROW, EXPANDED_HEIGHT, GROWTH, holdPlayerCard, revealOf, ROW_HEIGHT, SEEK_ROW, type PlayerMotion } from "./playerMotion";
 
 const ROW_INSET = space.s;
 const TRAILING_INSET = space.xs;
@@ -83,7 +83,7 @@ function useExpansion(want: boolean, motion: PlayerMotion, leads: boolean) {
     if (want) return motion.state.set({ expanded: true });
     const timer = setTimeout(() => motion.state.set({ expanded: false }), COLLAPSE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [want, expanded, leads]);
+  }, [want, expanded, leads, motion]);
   useLayoutEffect(() => {
     if (!leads) return;
     motion.expandedSlot.current = slot === "expanded";
@@ -107,7 +107,7 @@ function useExpansion(want: boolean, motion: PlayerMotion, leads: boolean) {
       else opens.closeFinished();
     });
     return () => run.stop();
-  }, [expanded, slot, leads]);
+  }, [expanded, slot, leads, motion]);
   return { expanded, slot };
 }
 
@@ -244,20 +244,7 @@ const PlayerRow = memo(function PlayerRow({ tabId, hovered, reveal }: { tabId: s
 
 function useReveal(progress: Animated.Value) {
   const [pin] = useState(() => new Animated.Value(0));
-  const [reveal] = useState(() => ({
-    pin,
-    unpinned: pin.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-    trailing: Animated.add(progress.interpolate({ inputRange: [0, 0.5], outputRange: [1, 0], extrapolate: "clamp" }), pin).interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }),
-    mask: progress.interpolate({ inputRange: [0, 1], outputRange: [GROWTH, 0] }),
-    unmask: progress.interpolate({ inputRange: [0, 1], outputRange: [-GROWTH, 0] }),
-    titleDrop: progress.interpolate({ inputRange: [0, 1], outputRange: [TITLE_DROP, 0] }),
-    artist: progress.interpolate({ inputRange: [0.3, 1], outputRange: [0, 1], extrapolate: "clamp" }),
-    seek: progress.interpolate({ inputRange: [0.7, 1], outputRange: [0, 1], extrapolate: "clamp" }),
-    controls: progress.interpolate({ inputRange: [0.45, 1], outputRange: [0, 1], extrapolate: "clamp" }),
-    controlsLift: progress.interpolate({ inputRange: [0, 1], outputRange: [-GROWTH + CONTROLS_LIFT, 0] }),
-    closing: progress.interpolate({ inputRange: [0.5, 1], outputRange: [0, 1], extrapolate: "clamp" }),
-  }));
-  return reveal;
+  return useMemo(() => revealOf(progress, pin, { titleDrop: TITLE_DROP, controlsLift: CONTROLS_LIFT }), [progress, pin]);
 }
 
 export function SidebarPlayer({ tabId, motion, docked, leads }: { tabId: string; motion: PlayerMotion; docked: boolean; leads: boolean }) {

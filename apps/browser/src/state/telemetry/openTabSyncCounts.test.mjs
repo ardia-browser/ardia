@@ -56,7 +56,7 @@ test("sharing sends the open-tab sync counters once with the mass-close alarm an
   assert.deepEqual(await sentCounts(), expected);
 });
 
-const SAFETY_FIELDS = new Set(["sync_session_rebases", "sync_profiles_missing_here", "sync_join_waits"]);
+const SAFETY_FIELDS = new Set(["sync_session_rebases", "sync_profiles_missing_here", "sync_join_waits", "sync_password_replaces", "sync_password_replace_failures"]);
 
 test("sync's data-safety counts go out in the same hourly event, then start again from zero", async () => {
   client.setSharing(true, "settings");
@@ -70,11 +70,21 @@ test("sync's data-safety counts go out in the same hourly event, then start agai
   safety.noteJoinWait(token);
   safety.noteJoinWait(token);
   safety.noteJoinWait(null);
+  safety.notePasswordReplace(token, true);
+  safety.notePasswordReplace(token, false);
+  safety.notePasswordReplace(null, false);
   counts.noteOpenTabsPublished(1);
   usage.sessionEnding();
   const sent = await sentCounts((key) => SAFETY_FIELDS.has(key));
-  assert.deepEqual(sent.at(-1), { sync_session_rebases: 1, sync_profiles_missing_here: 2, sync_join_waits: 2 });
-  assert.deepEqual(safety.takeSyncDataCounts(), { ...counts.takeOpenTabSyncCounts(), sync_session_rebases: 0, sync_profiles_missing_here: 0, sync_join_waits: 0 });
+  assert.deepEqual(sent.at(-1), { sync_session_rebases: 1, sync_profiles_missing_here: 2, sync_join_waits: 2, sync_password_replaces: 2, sync_password_replace_failures: 1 });
+  assert.deepEqual(safety.takeSyncDataCounts(), {
+    ...counts.takeOpenTabSyncCounts(),
+    sync_session_rebases: 0,
+    sync_profiles_missing_here: 0,
+    sync_join_waits: 0,
+    sync_password_replaces: 0,
+    sync_password_replace_failures: 0,
+  });
 });
 
 test("a mass-close send counts only under the consent of the cycle that made it, never after sharing turned on later", async () => {

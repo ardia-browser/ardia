@@ -14,6 +14,8 @@ import { isWebPageUrl } from "../../lib/url";
 import { BOOKMARK, DEVICE, DEVICE_TABS, RECEIVES_TABS, SHARE, bookmarkValue, passwordValue, recordId, type BookmarkValue, type DeviceRecord, type DeviceTabs, type PasswordValue, type ShareRecord } from "./records";
 import { isAsleep } from "../tabs/pageSession";
 import { withSyncWorkCounts } from "../telemetry/workCounts";
+import { consentToken } from "../telemetry/consentPeriod";
+import { notePasswordReplace } from "../telemetry/syncSafetyCounts";
 
 const store = () => useBrowser.getState();
 
@@ -247,6 +249,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
       return (value && created.get(keyOf(value.o, value.u))) || undefined;
     },
     apply: async (visible, changed, base, records) => {
+      const consent = consentToken();
       const local = await read();
       if (!local) return false;
       let ok = true;
@@ -264,6 +267,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
         if (v) {
           if (have?.s === v.s) continue;
           const saved = await logins.save(profile(), v.o, v.u, v.s, have?.s ?? "").catch(orWarn(false));
+          if (have) notePasswordReplace(consent, saved);
           if (saved) records.landed(key);
           ok = saved && ok;
         } else if (have) {

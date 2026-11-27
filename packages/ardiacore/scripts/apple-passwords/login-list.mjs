@@ -1,5 +1,6 @@
 import { FIXTURES } from "./fake.mjs";
 import { PAGE_EVENTS } from "./sites.mjs";
+import { sleep } from "../../../../scripts/lib/instance.mjs";
 import { waitFor } from "./webkit.mjs";
 
 const q = JSON.stringify;
@@ -153,6 +154,42 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         } finally {
           await tab.close();
         }
+      }
+      return { engine: engineName, ...seen };
+    },
+    async E12() {
+      const { fake } = await paired();
+      const away = sites.url("other.localhost");
+      const untouched = async (tab) => {
+        const page = await tab.value(`({ href: location.href, u: document.getElementById("u").value, p: document.getElementById("p").value, events: ${PAGE_EVENTS}.filter((e) => e[0] !== "focusin") })`);
+        assert(page.href === away && !page.u && !page.p && !page.events.length, "the other site's page receives nothing", { href: page.href, u: page.u, filled: !!page.p, events: page.events });
+      };
+      await (await open("other.localhost")).close();
+      const seen = {};
+      const opened = await open("example.localhost");
+      try {
+        await opened.click("#u");
+        await opened.waitRows();
+        await opened.navigate(away);
+        assert(!(await opened.noList(1000)), "the list closes when the page goes to another site", null);
+        await untouched(opened);
+        seen.listOpen = "nothing";
+      } finally {
+        await opened.close();
+      }
+      const picked = await open("example.localhost");
+      fake.setMode({ delay: { 5: 2500 } });
+      try {
+        await picked.click("#u");
+        await picked.waitRows();
+        await picked.pick(usersFor("example.localhost")[0]);
+        await picked.navigate(away);
+        await sleep(3500);
+        await untouched(picked);
+        seen.picked = "nothing";
+      } finally {
+        fake.setMode({ delay: {} });
+        await picked.close();
       }
       return { engine: engineName, ...seen };
     },

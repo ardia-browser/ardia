@@ -7,7 +7,7 @@
 //   fake-helper.mjs <state dir> <origin>
 //
 //   <state dir>/fixtures.json  { code, logins: [{ user, password, sites: [host or http://host] }], codes: [{ domain, username, code }] }
-//   <state dir>/mode.json      re-read on every message: { killedAtLaunch, wrongCode, status: { "<cmd>": n }, endPairing: n }
+//   <state dir>/mode.json      re-read on every message: { killedAtLaunch, wrongCode, status: { "<cmd>": n }, delay: { "<cmd>": ms }, endPairing: n }
 //                              (endPairing: bump the number and the helper ends the Pairing with a cmd 9 push)
 //   <state dir>/started        one line per launch (pid and time): the marker that the helper ran
 //   <state dir>/requests.jsonl one line per message: { cmd, qid?, url?, host? }, never a code or password
@@ -166,7 +166,10 @@ function sealed(message) {
   const body = open(payload?.SMSG);
   logRequest({ cmd: message.cmd, qid: payload?.QID, url: message.url, host: body?.URL ?? body?.NURL });
   if (!body) return send({ cmd: message.cmd, payload: {} });
-  send({ cmd: message.cmd, payload: { SMSG: seal(answer(message.cmd, body)) } });
+  const reply = { cmd: message.cmd, payload: { SMSG: seal(answer(message.cmd, body)) } };
+  const delay = Number(mode().delay?.[String(message.cmd)] ?? 0);
+  if (delay > 0) setTimeout(() => send(reply), delay);
+  else send(reply);
 }
 
 function handle(message) {

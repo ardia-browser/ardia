@@ -313,7 +313,7 @@ const CHECKS = {
     return Object.fromEntries(Object.entries(steps).map(([k, v]) => [k, v.enabled]));
   },
   ...loginListChecks({ paired, sites }),
-  ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E13"]),
+  ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E12", "E13"]),
   ...savingChecks({ paired, sites }),
 };
 

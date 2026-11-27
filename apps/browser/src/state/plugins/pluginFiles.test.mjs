@@ -583,7 +583,7 @@ test("#4b: a watch whose root went away is delivered once as gone and stops coun
   const gone = changeEvents("notes").filter((e) => e.data.watch === ids[0]);
   assert.deepEqual(gone.map((e) => e.data), [{ watch: ids[0], root: "data", paths: [], gone: true }]);
   const goneLine = host.events.find((e) => e.name === "notes" && e.line.includes('"gone":true'));
-  assert.equal(goneLine.kept, true, "codex S6: the terminal gone goes on the kept path, which never drops a line");
+  assert.equal(goneLine.notice, true, "codex S6: the terminal gone goes in the channel's notice reserve, never dropped and never retiring it");
   assert.equal(fileWatchCount("notes"), 7);
   assert.ok((await ask("notes", "files.watch", {}, run)).result.watch, "a 9th watch fits once one is gone");
   stubEmitGone(ids[0]);

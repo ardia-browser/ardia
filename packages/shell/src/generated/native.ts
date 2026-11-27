@@ -411,6 +411,7 @@ export type PluginsNative = {
   reply(name: string, run: number, line: string): void;
   event(name: string, run: number, line: string): void;
   call(name: string, run: number, line: string): void;
+  notice?(name: string, run: number, line: string): void;
   linkPrograms(spec: PluginProgramsSpec): Promise<PluginProgramsResult>;
   takeAfterUpdateQuitStops(): Promise<PluginAfterUpdateQuitStops>;
   setAfterUpdateQuitConsent(consent: string): void;

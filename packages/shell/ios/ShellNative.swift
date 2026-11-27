@@ -1444,6 +1444,7 @@ protocol PluginsNative {
   static func reply(_ name: String, _ run: Int, _ line: String)
   static func event(_ name: String, _ run: Int, _ line: String)
   static func call(_ name: String, _ run: Int, _ line: String)
+  static func notice(_ name: String, _ run: Int, _ line: String)
   static func linkPrograms(_ spec: [String: Any], _ promise: Promise)
   static func takeAfterUpdateQuitStops(_ promise: Promise)
   static func setAfterUpdateQuitConsent(_ consent: String)
@@ -1507,6 +1508,10 @@ extension PluginsNative {
 
   static var callFunction: AnyDefinition {
     Function("call") { (name: String, run: Int, line: String) in Self.call(name, run, line) }
+  }
+
+  static var noticeFunction: AnyDefinition {
+    Function("notice") { (name: String, run: Int, line: String) in Self.notice(name, run, line) }
   }
 
   static var linkProgramsFunction: AnyDefinition {

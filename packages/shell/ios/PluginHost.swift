@@ -165,6 +165,14 @@ final class PluginHost {
     }
   }
 
+  func notice(_ name: String, run: Int, _ line: String) {
+    let data = Self.framed(line)
+    queue.async { [self] in
+      guard let process = runs.current[name], process.run == run else { return }
+      process.connection?.notice(data)
+    }
+  }
+
   func event(_ name: String, run: Int, _ line: String) {
     let data = Self.framed(line)
     queue.async { [self] in

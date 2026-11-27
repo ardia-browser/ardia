@@ -456,7 +456,8 @@ A watch reports changes under its root, coalesced, as `{root, paths}`; it ends w
 (the plugin stops, restarts or turns off) and when its grant is forgotten. When its root goes away (the folder moved
 or deleted) the listener hears `{root, paths: [], gone: true}` once and the watch is over: it no longer counts against
 the 8, and disposing it does nothing. Change events may be dropped when the plugin falls behind; the `gone` never is:
-it goes on the channel's kept path, which closes the channel rather than lose a line.
+it goes in the channel's notice reserve (256 KB, 4 KB a notice, in order with the lines queued before it), which
+takes it even when the output is full, so it neither drops nor closes the channel.
 
 How Ardia writes them: every call runs off the main thread on a queue of the plugin's own, so one plugin's calls land
 in order. Ardia opens the root by its real path and walks the path one part at a time with `openat` and `O_NOFOLLOW`; a

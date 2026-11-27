@@ -446,6 +446,7 @@ export const shell = defineModuleDomain({
         reply: { args: [["name", "string"], ["run", "number", "Int"], ["line", "string"]], result: "void", async: false, mac: "custom", desktop: "custom", windows: "absent" },
         event: { args: [["name", "string"], ["run", "number", "Int"], ["line", "string"]], result: "void", async: false, mac: "custom", desktop: "custom", windows: "absent" },
         call: { args: [["name", "string"], ["run", "number", "Int"], ["line", "string"]], result: "void", async: false, mac: "custom", desktop: "custom", windows: "absent" },
+        notice: { args: [["name", "string"], ["run", "number", "Int"], ["line", "string"]], result: "void", async: false, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
         linkPrograms: { args: [["spec", "PluginProgramsSpec", "[String: Any]"]], result: "PluginProgramsResult", async: true, promise: true, mac: "custom", desktop: "custom", windows: "absent" },
         takeAfterUpdateQuitStops: { args: [], result: "PluginAfterUpdateQuitStops", async: true, promise: true, mac: "custom", desktop: "custom", windows: "absent" },
         setAfterUpdateQuitConsent: { args: [["consent", "string"]], result: "void", async: false, mac: "custom", desktop: "custom", windows: "absent" },

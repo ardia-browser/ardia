@@ -15,6 +15,8 @@ public class PluginsModule: Module, PluginsNative {
 
   static func call(_ name: String, _ run: Int, _ line: String) { PluginHost.shared.call(name, run: run, line) }
 
+  static func notice(_ name: String, _ run: Int, _ line: String) { PluginHost.shared.notice(name, run: run, line) }
+
   static func linkPrograms(_ spec: [String: Any], _ promise: Promise) { PluginProgramLinks.link(spec) { promise.resolve($0) } }
 
   static func takeAfterUpdateQuitStops(_ promise: Promise) { PluginProgramLinks.takeQuitStops { promise.resolve($0) } }

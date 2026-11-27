@@ -59,6 +59,11 @@ export const stopPluginProcess = (name: string, run: number, graceMs: number) =>
 export const replyToPlugin = (name: string, run: number, line: string) => Plugins().reply(name, run, line);
 export const sendToPlugin = (name: string, run: number, line: string) => Plugins().event(name, run, line);
 export const callPlugin = (name: string, run: number, line: string) => Plugins().call(name, run, line);
+export const noticeToPlugin = (name: string, run: number, line: string) => {
+  const plugins = Plugins();
+  if (plugins.notice) plugins.notice(name, run, line);
+  else plugins.call(name, run, line);
+};
 export const removePluginFiles = (name: string, official: boolean, folderId: string | null) => Plugins().remove(name, official, folderId);
 export const linkPluginPrograms = (spec: PluginProgramsSpec) => Plugins().linkPrograms(spec);
 export const unlinkPluginPrograms = (name: string, programs: string[], remove: boolean) => Plugins().unlinkPrograms(name, programs, remove);

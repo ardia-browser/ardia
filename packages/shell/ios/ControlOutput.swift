@@ -9,9 +9,11 @@ struct ControlOutput {
   static let maxWaitingEvents = 1000
   static let maxIdBytes = 256
   static let releaseWrittenBytes = 65_536
+  static let noticeReserve = 256 << 10
+  static let maxNotice = 4096
 
   enum WriteResult { case drained, lineDone, blocked, failed }
-  enum Kind { case reply, kept, event }
+  enum Kind { case reply, kept, event, notice }
 
   private struct Chunk {
     var data: Data
@@ -31,6 +33,7 @@ struct ControlOutput {
   private(set) var eventBytes = 0
   private(set) var waitingEvents = 0
   private(set) var dropped = 0
+  private(set) var noticeBytes = 0
   private var finished: [Int] = []
 
   init(lineLimit: Int = ControlOutput.maxLine, ceiling: Int = ControlOutput.maxBytes) {
@@ -55,6 +58,15 @@ struct ControlOutput {
   mutating func addKept(_ data: Data) -> Bool {
     guard data.count <= lineLimit else { return true }
     return addKept(Chunk(data: data, kind: .kept))
+  }
+
+  mutating func addNotice(_ data: Data) -> Bool {
+    guard data.count <= Self.maxNotice else { return false }
+    guard hasRoom(data.count) || noticeBytes + data.count <= Self.noticeReserve else { return false }
+    bytes += data.count
+    noticeBytes += data.count
+    chunks.append(Chunk(data: data, kind: .notice))
+    return true
   }
 
   mutating func addEvent(_ data: Data) -> Bool {
@@ -83,6 +95,7 @@ struct ControlOutput {
         continue
       }
       bytes -= chunk.data.count
+      if chunk.kind == .notice { noticeBytes -= chunk.data.count }
       if chunk.kind == .event {
         eventBytes -= chunk.data.count
         waitingEvents -= 1
@@ -102,6 +115,7 @@ struct ControlOutput {
     let unwritten = rest.map(\.ticket).filter { $0 > 0 }
     for chunk in rest {
       bytes -= chunk.data.count
+      if chunk.kind == .notice { noticeBytes -= chunk.data.count }
       if chunk.kind == .event {
         eventBytes -= chunk.data.count
         waitingEvents -= 1
@@ -128,6 +142,7 @@ struct ControlOutput {
       headWritten += written
       bytes -= written
       if chunks[0].kind == .event { eventBytes -= written }
+      if chunks[0].kind == .notice { noticeBytes -= written }
       if offset == data.count {
         if chunks[0].ticket > 0 { finished.append(chunks[0].ticket) }
         chunks.removeFirst()

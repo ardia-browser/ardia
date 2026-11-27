@@ -150,6 +150,12 @@ final class ControlConnection {
     if !writeArmed { flush() }
   }
 
+  func notice(_ data: Data) {
+    guard !closed, !finishingLine, !draining else { return }
+    guard output.addNotice(data) else { return retire(.sendBacklog) }
+    if !writeArmed { flush() }
+  }
+
   func event(_ data: Data) {
     guard !closed, !finishingLine, !draining else { return }
     enqueue(output.addEvent(data))

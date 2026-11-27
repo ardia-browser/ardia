@@ -216,4 +216,53 @@ final class PluginChannelTrafficTests: XCTestCase {
     close(pair[0])
     close(pair[1])
   }
+
+  func testATerminalNoticeFitsInItsReserveWhenTheOutputIsFullAndKeepsItsPlace() {
+    var output = ControlOutput(lineLimit: ControlOutput.maxLine, ceiling: ControlOutput.maxBytes)
+    let line = Data(repeating: UInt8(ascii: "k"), count: ControlOutput.maxLine - 1) + Data([10])
+    var kept = 0
+    while output.addKept(line) { kept += 1 }
+    for size in [65_536, 4096, 256, 16, 2] {
+      let filler = Data(repeating: UInt8(ascii: "k"), count: size - 1) + Data([10])
+      while output.addKept(filler) { kept += 1 }
+    }
+    let small = Data("k\n".utf8)
+    XCTAssertGreaterThan(kept, 0)
+    XCTAssertFalse(output.addKept(small), "a kept line no longer fits: it would retire the channel")
+    let notice = Data("{\"event\":\"files.changed\",\"data\":{\"gone\":true}}\n".utf8)
+    XCTAssertTrue(output.addNotice(notice), "a terminal notice still fits, in its own reserve")
+    XCTAssertEqual(output.noticeBytes, notice.count)
+    var reserve = ControlOutput.noticeReserve - notice.count
+    while reserve >= notice.count {
+      XCTAssertTrue(output.addNotice(notice))
+      reserve -= notice.count
+    }
+    XCTAssertFalse(output.addNotice(notice), "the reserve is bounded")
+    XCTAssertFalse(output.addNotice(Data(repeating: 1, count: ControlOutput.maxNotice + 1)), "and so is each notice")
+    var pair: [Int32] = [0, 0]
+    precondition(socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0)
+    _ = fcntl(pair[0], F_SETFL, fcntl(pair[0], F_GETFL) | O_NONBLOCK)
+    _ = fcntl(pair[1], F_SETFL, fcntl(pair[1], F_GETFL) | O_NONBLOCK)
+    var received = Data()
+    var buffer = [UInt8](repeating: 0, count: 1 << 16)
+    for _ in 0..<100_000 {
+      if output.write(to: pair[0]) == .drained { break }
+      while true {
+        let got = read(pair[1], &buffer, buffer.count)
+        if got <= 0 { break }
+        received.append(contentsOf: buffer[0..<got])
+      }
+    }
+    while true {
+      let got = read(pair[1], &buffer, buffer.count)
+      if got <= 0 { break }
+      received.append(contentsOf: buffer[0..<got])
+    }
+    XCTAssertEqual(output.noticeBytes, 0, "the reserve drains as notices are written")
+    let lines = received.split(separator: 10)
+    XCTAssertEqual(lines.count, kept + ControlOutput.noticeReserve / notice.count)
+    XCTAssertTrue(lines.prefix(kept).allSatisfy { $0.first == UInt8(ascii: "k") }, "notices keep FIFO order after the lines queued before them")
+    close(pair[0])
+    close(pair[1])
+  }
 }

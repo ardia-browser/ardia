@@ -1510,8 +1510,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "095db61b4416c21daf6ec215144232937e3294e68d23c306c4620c9d5b9ca530",
-        "swift": "c517b6e408278274db01c701575f6de95904ac4874d45b10af0afccf3325dab9"
+        "types": "6a0e7c67725f0ec81e7393fb76a2cdf96ac3e1a96cf62429d4c2967199db72ff",
+        "swift": "cf96a8ab3346313fee6c1af5748192a668ec1e2f9a4679fb2ee3211a1da4c589"
       },
       "modules": {
         "ArdiaShell": {
@@ -3947,6 +3947,17 @@
               "async": false,
               "mac": "custom",
               "desktop": "custom",
+              "windows": "absent"
+            },
+            "notice": {
+              "args": [
+                "name",
+                "run",
+                "line"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
               "windows": "absent"
             },
             "linkPrograms": {

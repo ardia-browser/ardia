@@ -1,7 +1,7 @@
 import { hexColor, lookAngle, padPosition, resolveTheme, type PresetLookFields, type PresetThemes, type ProfileColor, type ProfileTheme, type ThemeLook } from "./profileLook";
 
 export const PRESET_LOOK = { intensity: 0.15, grain: 0.15, translucency: 1 } as const;
-export const PRESET_DARK_KEEP = 0.75;
+export const PRESET_DARK_KEEP = 0.8;
 
 export function presetStartingTheme(swatch: string): ProfileTheme {
   const color = hexColor(swatch);

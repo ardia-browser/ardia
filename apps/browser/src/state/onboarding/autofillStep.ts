@@ -61,15 +61,19 @@ export async function continueAutofillStep() {
   useAutofillStep.setState({ phase: "working", consent: consentToken() });
   if (picked.includes("meCard")) await setMeCardFor(currentEngineProfile(id), true);
   if (!inStep()) return;
-  if (!picked.includes("applePasswords")) return finish(offered, picked);
+  if (!picked.includes("applePasswords")) return finishPicked(false);
   useAutofillStep.setState({ phase: "pairing" });
   await startApplePasswordsPairing(id);
   if (now().phase === "pairing" && inStep() && !useApplePasswords.getState().pairing) finishPicked(applePasswordsConnected());
 }
 
+const meCardOn = (id: string | null) => !!id && !!useMeCard.getState().entries[currentEngineProfile(id)];
+
 function answered(paired: boolean) {
-  const offered = autofillStepOffers(profile());
-  const unanswered = (offer: AutofillOffer) => offer === "applePasswords" && !paired && !!now().picks.applePasswords;
+  const id = profile();
+  const offered = autofillStepOffers(id);
+  const picked = (offer: AutofillOffer) => !!now().picks[offer];
+  const unanswered = (offer: AutofillOffer) => picked(offer) && (offer === "applePasswords" ? !paired : !meCardOn(id));
   const kept = offered.filter((offer) => !unanswered(offer));
   return { offered: kept, accepted: offerPicks(now().picks, kept) };
 }

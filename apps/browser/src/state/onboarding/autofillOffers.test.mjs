@@ -195,3 +195,18 @@ test("S11: the Me card accepted in onboarding on the default profile is the one 
   native.contacts.card = null;
   useOnboarding.setState({ windowId: null });
 });
+
+test("S11: a Me card pick whose Contacts access is refused isn't an answer, and the Me card is offered again next time", async () => {
+  await onboardingOn({ apple: "notEntitled" });
+  native.contacts.answer = "denied";
+  step.toggleAutofillOffer("meCard");
+  await step.continueAutofillStep();
+  await flush();
+  assert.equal(native.contacts.requests, 1, "Contacts was asked");
+  assert.equal(useOnboarding.getState().step, "home");
+  assert.deepEqual(useOnboarding.getState().picked.autofill ?? [], [], "nothing that didn't take effect is listed as picked");
+  native.contacts.status = "notDetermined";
+  const again = await onboardingOn({ fresh: false, apple: "notEntitled" });
+  assert.deepEqual(offers.openAutofillOffers(again), ["meCard"]);
+  useOnboarding.setState({ windowId: null });
+});

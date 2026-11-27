@@ -15,7 +15,7 @@ export type AppEvent =
   | { type: "screenLocked" }
   | { type: "lockedOrAsleep" }
   | { type: "switcherReleased"; afterMenu?: boolean }
-  | { type: "switcherKey"; key: "escape" | "next" | "previous" | "close" }
+  | { type: "switcherKey"; key: "escape" | "next" | "previous" | "close" | "sleep" }
   | { type: "switcherMouseUp" }
   | { type: "dragEscape" }
   | { type: "unclaimedEscape"; windowId: string }

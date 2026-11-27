@@ -40,6 +40,15 @@ class SwitcherKeysTests(unittest.TestCase):
                       (REPO / 'apps/browser/src/state/sidebar/effects.ts').read_text())
         self.assertIn('"ac_desktop_switcher_keys.h",', (DESKTOP / 'BUILD.gn').read_text())
 
+    def test_the_sleep_key_is_the_one_the_shared_switcher_handles(self):
+        header = (DESKTOP / 'ac_desktop_switcher_keys.h').read_text()
+        self.assertIn('kSKeyCode = 0x53', header)
+        self.assertIn('press.key_code == kSKeyCode && !press.repeat && (press.control || press.command) && !press.alt) return "sleep"',
+                      header)
+        self.assertIn('key: "escape" | "next" | "previous" | "close" | "sleep"', (REPO / 'packages/shell/src/lifecycle.ts').read_text())
+        self.assertIn('if (e.type === "switcherKey" && e.key === "sleep") void sleepSwitcherRow();',
+                      (REPO / 'apps/browser/src/state/sidebar/effects.ts').read_text())
+
 
 if __name__ == '__main__':
     unittest.main()

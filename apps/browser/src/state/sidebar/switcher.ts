@@ -3,13 +3,14 @@ import { useBrowser } from "../browser/store";
 import { activeTabId, viewTabIds } from "../browser/model";
 import { sessionTabIds } from "../pins/tabCleanup";
 import { tabEngine } from "../engines/engines";
+import { canSleep, sleepAsked } from "../tabs/manualSleep";
 import { isAsleep } from "../tabs/pageSession";
 import { useLifecycle } from "../tabs/sleepingTabs";
 import { inOrderTabIds, isSwitchableTab, stepFrom, steppedTabId } from "../tabs/switchOrder";
 import { rememberPicture } from "../tabs/tabPictures";
 import { noteTabSwitcherOpened } from "../telemetry/usage";
 import { closeTab } from "../browser/actions";
-import { noteTabSwitcherMode, noteTabSwitcherOpenedInWebKit, noteTabSwitcherQuickSwitch, noteTabSwitcherRowClosed, noteTabSwitcherShown } from "../telemetry/tabSwitcherOpens";
+import { noteTabSwitcherMode, noteTabSwitcherOpenedInWebKit, noteTabSwitcherQuickSwitch, noteTabSwitcherRowClosed, noteTabSwitcherRowSlept, noteTabSwitcherShown } from "../telemetry/tabSwitcherOpens";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { isWindowClosing } from "../windows/closingWindows";
 import { setSidebarUi, sidebarUi } from "./sidebarUi";
@@ -167,6 +168,17 @@ export async function closeSwitcherRow() {
   await closeTab(id, { user: { consent } });
   syncSwitcherTabs(s.windowId);
   if (!sidebarUi().switcher?.ids.includes(id) || isWindowClosing(s.windowId)) noteTabSwitcherRowClosed(consent);
+}
+
+export async function sleepSwitcherRow() {
+  const s = sidebarUi().switcher;
+  if (!s || !s.visible) return;
+  const id = s.ids[pointedRow(s) ?? s.index];
+  if (!id || !canSleep(useBrowser.getState(), id)) return;
+  const consent = consentToken();
+  const { outcome } = await sleepAsked(id);
+  syncSwitcherTabs(s.windowId);
+  if (outcome === "asleep") noteTabSwitcherRowSlept(consent);
 }
 
 export function commitSwitcher(index?: number) {

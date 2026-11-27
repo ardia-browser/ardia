@@ -4,8 +4,10 @@ await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
 const { sidebarUi } = await import("./sidebarUi.ts");
-const { cancelSwitcher, closeSwitcherRow, commitSwitcher, switcherStep, SHOW_AFTER_MS } = await import("./switcher.ts");
-const { useLifecycle } = await import("../tabs/sleepingTabs.ts");
+const { cancelSwitcher, closeSwitcherRow, commitSwitcher, moveSwitcher, sleepSwitcherRow, switcherStep, SHOW_AFTER_MS } = await import("./switcher.ts");
+const { isSleeping, markSleeping, useLifecycle } = await import("../tabs/sleepingTabs.ts");
+const { webviews } = await import("../../platform/webviews.ts");
+const { useMedia } = await import("../media/media.ts");
 const { inOrderTabIds } = await import("../tabs/switchOrder.ts");
 
 let clock = Date.now();
@@ -29,6 +31,8 @@ mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
 afterEach(() => {
   cancelSwitcher();
   useLifecycle.setState({ discarded: {} });
+  webviews.clear();
+  useMedia.setState({ tabShares: {} });
 });
 
 test("recent with no switcher shown: hold ⌃ and tap Tab twice to land on the third most recent tab when ⌃ comes up", () => {
@@ -84,6 +88,61 @@ test("holding shows the picked switcher, in order lists the tabs as the sidebar 
   assert.equal(switcher.ids[switcher.index], c);
   cancelSwitcher();
   assert.equal(shown(w), "b");
+});
+
+test("⌃S sleeps the selected row only once the switcher shows, and never when none is shown", async () => {
+  const asked = [];
+  const viewFor = (ids) => {
+    webviews.clear();
+    asked.length = 0;
+    for (const id of ids) webviews.set(id, { sleepIfHidden: async () => (asked.push(id), markSleeping(id), []) });
+  };
+  const [w, a, b, c] = setup("recent", "thumbnails", "a", "b", "c");
+  S().activate(a);
+  S().activate(b);
+  S().activate(c);
+  switcherStep(w, false);
+  await sleepSwitcherRow();
+  assert.equal(isSleeping(b), false, "nothing sleeps in the 140 ms before the switcher shows");
+  pastShow();
+  viewFor([a, b, c]);
+  await sleepSwitcherRow();
+  assert.equal(isSleeping(b), true, "the highlighted loaded tab sleeps once it shows");
+  assert.ok(S().tabs[b], "it stays in the sidebar");
+  assert.equal(isSleeping(c), false, "the shown tab stays awake");
+  assert.ok(sidebarUi().switcher?.visible, "the switcher stays up");
+  assert.equal(sidebarUi().switcher.ids.includes(b), false, "a slept row leaves the switcher");
+  assert.equal(sidebarUi().switcher.ids[sidebarUi().switcher.index], a, "the next highlighted row is the other hidden tab");
+  S().updateLive(a, { playingAudio: true });
+  await sleepSwitcherRow();
+  assert.equal(isSleeping(a), false, "a playing tab stays awake");
+  assert.equal(asked.includes(a), false);
+  S().updateLive(a, { playingAudio: false });
+  useMedia.setState({ tabShares: { [a]: { capturedTabId: a, origin: "https://a.com", dismissed: {} } } });
+  await sleepSwitcherRow();
+  assert.equal(isSleeping(a), false, "a sharing tab stays awake");
+  assert.equal(asked.includes(a), false);
+  useMedia.setState({ tabShares: {} });
+  markSleeping(a);
+  const before = asked.length;
+  await sleepSwitcherRow();
+  assert.equal(asked.length, before, "an already sleeping tab is left alone");
+  assert.ok(S().tabs[a]);
+  moveSwitcher(-1);
+  assert.equal(sidebarUi().switcher.ids[sidebarUi().switcher.index], c);
+  await sleepSwitcherRow();
+  assert.equal(isSleeping(c), false, "the shown tab is never slept");
+  cancelSwitcher();
+
+  const [w2, x, y] = setup("recent", "none", "x", "y");
+  S().activate(x);
+  S().activate(y);
+  viewFor([x, y]);
+  switcherStep(w2, false);
+  pastShow();
+  await sleepSwitcherRow();
+  assert.equal(isSleeping(x), false, "an unseen row is never slept");
+  assert.equal(asked.length, 0);
 });
 
 test("⌃W closes the selected row only once the switcher shows, and never when none is shown", async () => {

@@ -116,6 +116,7 @@ export const LINUX_WORDING: readonly Wording[] = [
       ["How many times ⌥↩ in the command bar", "How many times Alt+Enter in the command bar"],
       ["how often the ⌃Tab switcher opens", "how often the Ctrl+Tab switcher opens"],
       ["how many tabs were closed from it with ⌃W", "how many tabs were closed from it with Ctrl+W"],
+      ["how many tabs were put to sleep from it with ⌃S", "how many tabs were put to sleep from it with Ctrl+S"],
       ["because the Touch ID or password request before it was declined", "because the system password request before it was declined"],
       ["How many times ⌘W closed several", "How many times Ctrl+W closed several"],
       ["closing the Top App in front (⌘W, or a middle click on it)", "closing the Top App in front (Ctrl+W, or a middle click on it)"],

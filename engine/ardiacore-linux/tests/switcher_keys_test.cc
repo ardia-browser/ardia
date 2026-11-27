@@ -26,6 +26,11 @@ int main() {
   Expect(SwitcherKey({.key_code = 0x57, .control = true, .repeat = true}), nullptr, "a held ctrl-w closes one row");
   Expect(SwitcherKey({.key_code = 0x57, .control = true, .alt = true}), nullptr, "ctrl-alt-w is not close");
   Expect(SwitcherKey({.key_code = 0x57}), nullptr, "a bare w does nothing");
+  Expect(SwitcherKey({.key_code = 0x53, .control = true}), "sleep", "ctrl-s sleeps the selected row");
+  Expect(SwitcherKey({.key_code = 0x53, .command = true}), "sleep", "super-s sleeps the selected row");
+  Expect(SwitcherKey({.key_code = 0x53, .control = true, .repeat = true}), nullptr, "a held ctrl-s sleeps one row");
+  Expect(SwitcherKey({.key_code = 0x53, .control = true, .alt = true}), nullptr, "ctrl-alt-s is not sleep");
+  Expect(SwitcherKey({.key_code = 0x53}), nullptr, "a bare s does nothing");
   Expect(SwitcherKey({.key_code = 0x09, .control = true}), nullptr, "the switcher's own key is left to its binding");
   std::puts("ok");
   return 0;

@@ -23,7 +23,6 @@ import { errorText } from "../../lib/errors";
 import { isQuitting, saveBeforeQuit } from "../app/quit";
 import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
 import { onProfileDeleted } from "../profiles/profiles";
-import { recordSettingEdits, watchSettingEdits } from "./settingEdits";
 export { takeSyncDataCounts } from "../telemetry/syncSafetyCounts";
 import { markOpenTabsSynced, openTabsClosed, recordOpenTabCloses } from "./openTabCloses";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
@@ -205,8 +204,6 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
 
 export const adoptProfileTheme = (profileId: string): void => void (themeChosenHere(doc, profileId) && (save(), doc.enabled && scheduleSync(AFTER_EDIT_MS)));
 
-export const noteSettingsChosen = (names: string[]): void => void (recordSettingEdits(doc, names) && (cycle || save()));
-
 export const retireProfile = (profileId: string): void => void (doc.enabled && retireDeletedProfile(doc, profileId) && (cycle || save(), scheduleSync()));
 
 async function loadSavedState(consent: ConsentToken | null = null) {
@@ -381,7 +378,6 @@ export function startSync() {
   }
   saveBeforeQuit(checkpoint);
   onProfileDeleted(retireProfile);
-  watchSettingEdits(() => doc, () => void (cycle || save()));
   onProfilesOpened(() => {
     if (!doc.enabled || !doc.deviceId) return;
     watchExtensions();

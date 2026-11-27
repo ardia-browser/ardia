@@ -91,7 +91,7 @@ function replayChanges(scopes: SyncDoc["scopes"], changes: Record<string, ScopeC
   }
 }
 
-export type SessionMarkHooks = { moved: (scopes: ScopeState[]) => boolean; saved: (scopes: string[]) => void };
+export type SessionMarkHooks = { moved: (scopes: ScopeState[]) => boolean; saved: (rebaseIds: Record<string, string | undefined>) => void };
 
 const NO_MARKS: SessionMarkHooks = { moved: () => false, saved: () => {} };
 
@@ -236,7 +236,7 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
           await markBeforeDurable([scoped]);
           await writePart(part);
           writtenRest.set(scope, rest);
-          marks.saved([scope]);
+          marks.saved({ [scope]: change.rest.rebaseId });
         } catch (error) {
           warnFor(consent, "[sync] couldn't journal this cycle's changes", error);
           state.wanted = true;
@@ -318,6 +318,7 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
     const covers = journal.lastId;
     const seqs = Object.fromEntries(Object.entries(doc.scopes).map(([k, s]) => [k, s.seq]));
     const json = JSON.stringify(doc.scopes);
+    const rebaseIds = Object.fromEntries(Object.entries(doc.scopes).map(([name, scoped]) => [name, scoped.rebaseId]));
     const seen = new Clock("", doc.clock);
     if (state.clock) seen.observe(state.clock.last);
     if (json !== state.json) {
@@ -331,7 +332,7 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
         return;
       }
       Object.assign(state, { json, onDisk: true });
-      marks.saved(Object.keys(doc.scopes));
+      marks.saved(rebaseIds);
     }
     state.savedAt = Date.now();
     dropCoveredBatches(seqs);

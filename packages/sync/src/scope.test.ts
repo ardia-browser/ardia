@@ -948,7 +948,7 @@ test("while a download holds a rebase back, a pulled change doesn't overwrite a 
   assert.equal(b.store.get("x:2"), "two");
 });
 
-test("a rebase publishes a value the adapter keeps and republishes even when it equals the base, instead of applying the older record", async () => {
+test("a rebase publishes a value the adapter keeps even when it equals the base, instead of applying the older record", async () => {
   const folder = new Folder();
   const a = new Device("a", folder);
   a.store.set("x:1", "one");
@@ -959,10 +959,27 @@ test("a rebase publishes a value the adapter keeps and republishes even when it 
   await a.sync();
   const own = b.adapters();
   const kept = (key: string) => key === "x:1";
-  b.adapters = () => own.map((adapter) => (adapter.prefix === "x:" ? { ...adapter, extract: async (...args) => ({ ...(await adapter.extract(...args))!, keepLocal: kept, republish: kept }) } : adapter));
+  b.adapters = () => own.map((adapter) => (adapter.prefix === "x:" ? { ...adapter, extract: async (...args) => ({ ...(await adapter.extract(...args))!, keepLocal: kept }) } : adapter));
   startRebase(b.state);
   await b.sync();
   assert.equal(b.store.get("x:1"), "one", "the value chosen here, the same as the base, stays");
   await a.sync();
   assert.equal(a.store.get("x:1"), "one", "and goes out over the older record");
+});
+
+test("outside a rebase a value the adapter would keep isn't republished just for matching the base, so a skewed clock can't make it win", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  await a.sync();
+  const b = new SessionDevice("b", folder);
+  await b.sync();
+  a.store.set("x:1", "two");
+  await a.sync();
+  const own = b.adapters();
+  b.adapters = () => own.map((adapter) => (adapter.prefix === "x:" ? { ...adapter, extract: async (...args) => ({ ...(await adapter.extract(...args))!, keepLocal: (key: string) => key === "x:1" }) } : adapter));
+  await b.sync();
+  assert.equal(b.store.get("x:1"), "two", "the newer record applies as usual");
+  await a.sync();
+  assert.equal(a.store.get("x:1"), "two");
 });

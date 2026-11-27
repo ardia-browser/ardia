@@ -329,7 +329,7 @@ async function changesOf(state            , adapter         , now        , optio
     const json = knownJson?.(key, value) ?? canonical(value);
     if (unsettled?.get(key)?.has(json)) return;
     if (adopting && key in state.records && !keepLocal?.(key)) return;
-    if (state.base[key] === json && (!republish?.(key) || awaitsRecovery(state, key))) return;
+    if (state.base[key] === json && (!(republish?.(key) || (adopting && keepLocal?.(key))) || awaitsRecovery(state, key))) return;
     changes.push({ key, value, json });
   });
   const keys = adopting ? [] : baseKeysWith(state, adapter.prefix);

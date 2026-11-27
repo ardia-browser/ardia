@@ -20,14 +20,3 @@ export function settledPatch<S extends FrameSettings>(settings: S, raw: Partial<
   const zeroWhenTabsHidden = next.pageFrameZeroInFullScreen && !next.pageFrameZeroWhenTabsHidden && !("pageFrameZeroWhenTabsHidden" in patch);
   return zeroWhenTabsHidden ? { ...patch, pageFrameZeroWhenTabsHidden: true } : patch;
 }
-
-const choiceListeners = new Set<(names: string[]) => void>();
-
-export function onSettingsChosen(listener: (names: string[]) => void): () => void {
-  choiceListeners.add(listener);
-  return () => void choiceListeners.delete(listener);
-}
-
-export function settingsChosen(names: string[]) {
-  if (names.length) for (const listener of [...choiceListeners]) listener(names);
-}

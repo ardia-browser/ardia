@@ -18,7 +18,7 @@ import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } fro
 import { PRESS_MOTIONS } from "../../lib/pressMotion";
 import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteSettingChoices } from "../telemetry/settingChoices";
-import { checkedSettingsPatch, settledPatch, settingsChosen } from "./settingsPatch";
+import { checkedSettingsPatch, settledPatch } from "./settingsPatch";
 
 export const DEFAULT_PROFILE_ID = "default";
 
@@ -189,7 +189,7 @@ export type SettingKey = keyof Specs;
 export const SETTING_KEYS = Object.keys(SETTING_SPECS) as SettingKey[];
 
 export type Settings = { -readonly [K in SettingKey]: Specs[K]["default"] };
-export type SettingsMeta = { chosen: string[]; inferred: string[] };
+export type SettingsMeta = { chosen: string[]; inferred: string[]; chosenAt?: Record<string, number> };
 const NO_SETTINGS_META: SettingsMeta = { chosen: [], inferred: [] };
 
 export type BatterySaverWhen = Settings["batterySaverWhen"];
@@ -220,7 +220,8 @@ export function parseSettings(raw: unknown): Settings {
 
 export function parseSettingsMeta(raw: unknown): SettingsMeta {
   const meta = isFields(raw) ? raw : {};
-  return { chosen: isStringList(meta.chosen) ? meta.chosen : [], inferred: isStringList(meta.inferred) ? meta.inferred : [] };
+  const chosenAt = isFields(meta.chosenAt) ? Object.fromEntries(Object.entries(meta.chosenAt).filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]))) : {};
+  return { chosen: isStringList(meta.chosen) ? meta.chosen : [], inferred: isStringList(meta.inferred) ? meta.inferred : [], ...(Object.keys(chosenAt).length ? { chosenAt } : {}) };
 }
 
 export const validSettingValue = (key: SettingKey, value: unknown) => SETTING_SPECS[key].valid(value);
@@ -279,11 +280,11 @@ export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch
   const { chosen, inferred } = s.settingsMeta;
   patch = settledPatch(s.settings, patch, SETTING_SPECS);
   noteSettingChoices(s.settings, patch, inferring);
-  if (!inferring) settingsChosen(Object.keys(patch));
   const next = { ...s.settings, ...patch };
   const added = Object.keys(patch).filter((k) => !chosen.includes(k));
   const left = inferring ? [...new Set([...inferred, ...Object.keys(patch)])] : inferred.filter((k) => !(k in patch));
-  const settingsMeta = added.length || left.length !== inferred.length ? { chosen: added.length ? [...chosen, ...added] : chosen, inferred: left } : s.settingsMeta;
+  const chosenAt = inferring ? s.settingsMeta.chosenAt : { ...s.settingsMeta.chosenAt, ...Object.fromEntries(Object.keys(patch).map((key) => [key, Date.now()])) };
+  const settingsMeta = { chosen: added.length ? [...chosen, ...added] : chosen, inferred: left, ...(chosenAt ? { chosenAt } : {}) };
   return { settings: next, settingsMeta };
 }
 

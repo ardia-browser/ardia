@@ -63,7 +63,6 @@ export type SyncDoc = {
   removingDevices?: string[] | Record<string, HLC>;
   sessionMark?: string;
   themesChosenWhileJoining?: string[];
-  settingEdits?: Record<string, HLC>;
   rebaseScopes?: Record<string, string>;
 };
 

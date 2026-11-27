@@ -67,7 +67,7 @@ export function appAdapters(doc: SyncDoc, retiring: boolean): Adapter[] {
   const enabledLinks = () => Object.fromEntries(Object.entries(doc.profiles).filter(([, l]) => l.enabled));
   const removed = () => removedRecordKeys(doc);
   return [
-    ...(doc.types.settings ? [fromSession(withSettingEdits(inTodaysNames(settingsAdapter), doc))] : []),
+    ...(doc.types.settings ? [fromSession(withSettingEdits(inTodaysNames(settingsAdapter)))] : []),
     sharedDataAdapter(() => doc.profiles, removed),
     fromSession(profilesAdapter(withSharedOwners(doc, enabledLinks), removed, () => doc.scopes[APP_SCOPE]?.records, enabledLinks)),
     fromSession(profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed)),

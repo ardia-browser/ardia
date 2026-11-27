@@ -121,13 +121,12 @@ test("#1577: a setting changed here and not sent before a crash survives the reb
     await engineA1.syncNow();
     S().updateSettings({ [name]: editedHere });
   });
-  assert.ok(JSON.parse(a.docs.get("sync.json")).settingEdits?.[name], "the edit is in sync.json before any cycle sends it");
+  assert.ok(a.browser.settingsMeta.chosenAt?.[name], "the session keeps when the choice was made, with the value");
   const crashed = { ...a.browser, syncMark: "a mark sync.json never saw" };
   const engineA2 = await relaunch(a, "settingA2", crashed);
   await a.with(async () => {
     await engineA2.syncNow();
     assert.equal(S().settings[name], editedHere, "the edit made here before the crash is kept through the rebase");
-    assert.equal(JSON.parse(shell.docs.get("sync.json")).settingEdits, undefined, "and leaves the ledger once its batch is on disk");
   });
   const engineB = await import("./engine.ts?settingB");
   await join(b, engineB);
@@ -168,34 +167,27 @@ test("#1577: a rebase still takes a setting changed on another Mac when nothing 
   });
 });
 
-test("a published batch drops only the setting edit it carried, not one made while it was being written", async () => {
+test("a setting chosen after the synced record was written is kept by a rebase, one chosen before it isn't", async () => {
   const { withSettingEdits } = await import("./settingEdits.ts");
-  const doc = { enabled: true, settingEdits: { pageFrame: "0a.0000.dev", sidebarSide: "0b.0000.dev" } };
-  const inner = { prefix: "set:", extract: async () => ({ values: new Map([["set:pageFrame", { v: 6 }], ["set:sidebarSide", { v: "left" }]]) }), apply: () => true };
-  const extraction = await withSettingEdits(inner, doc).extract(() => undefined, () => false, 0, () => false, () => undefined, () => undefined, () => undefined);
-  doc.settingEdits = { ...doc.settingEdits, pageFrame: "0c.0000.dev" };
-  extraction.published(new Set(["set:pageFrame", "set:sidebarSide"]));
-  assert.deepEqual(doc.settingEdits, { pageFrame: "0c.0000.dev" }, "the newer pageFrame choice stays; the sent sidebarSide one goes");
-});
-
-test("a protected setting choice that equals the base is republished while a different synced value waits, and only then", async () => {
-  const { withSettingEdits } = await import("./settingEdits.ts");
-  const doc = { enabled: true, settingEdits: { pageFrame: "0c.0000.dev" } };
-  const inner = { prefix: "set:", extract: async () => ({ values: new Map([["set:pageFrame", { v: 10 }]]) }), apply: () => true };
-  const records = { "set:pageFrame": { v: { v: 11 }, h: "0b.0000.other" } };
-  const extract = (overrides = {}) =>
-    withSettingEdits(inner, { ...doc, ...overrides }).extract(
-      () => ({ v: 10 }),
+  const { Clock } = await import("@ardia/sync");
+  S().hydrate({});
+  const records = {};
+  const extract = () =>
+    withSettingEdits({ prefix: "set:", extract: async () => ({ values: new Map([["set:pageFrame", { v: 10 }]]) }), apply: () => true }).extract(
+      () => undefined,
       () => false,
       0,
       (key) => key in records,
       (key) => records[key]?.v,
       (key) => records[key]?.h,
-      () => '{"v":10}',
+      () => undefined,
     );
-  assert.equal((await extract()).republish("set:pageFrame"), true, "the newer choice goes out though it matches the base");
-  records["set:pageFrame"] = { v: { v: 10 }, h: "0b.0000.other" };
-  assert.equal((await extract()).republish("set:pageFrame"), false, "nothing to send when the record already holds it");
-  records["set:pageFrame"] = { v: { v: 11 }, h: "0d.0000.other" };
-  assert.equal((await extract()).republish("set:pageFrame"), false, "or when the synced value is the newer one");
+  const writtenAt = (ms) => new Clock("other", null, () => ms).tick();
+  useBrowser.setState({ settingsMeta: { chosen: ["pageFrame"], inferred: [], chosenAt: { pageFrame: 2_000_000 } } });
+  records["set:pageFrame"] = { v: { v: 11 }, h: writtenAt(1_000_000) };
+  assert.equal((await extract()).keepLocal("set:pageFrame"), true, "the choice here is newer than the record");
+  records["set:pageFrame"] = { v: { v: 11 }, h: writtenAt(3_000_000) };
+  assert.equal((await extract()).keepLocal("set:pageFrame"), false, "the record is newer than the choice");
+  useBrowser.setState({ settingsMeta: { chosen: [], inferred: [] } });
+  assert.equal((await extract()).keepLocal("set:pageFrame"), false, "nothing chosen here, nothing kept");
 });

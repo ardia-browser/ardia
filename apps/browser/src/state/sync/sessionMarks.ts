@@ -47,9 +47,9 @@ function sessionMovedBeforeDurable(doc: SyncDoc, scopes: ScopeState[]): boolean 
   return true;
 }
 
-function rebaseRecorded(doc: SyncDoc, names: string[]) {
+function rebaseRecorded(doc: SyncDoc, saved: Record<string, string | undefined>) {
   if (!doc.rebaseScopes) return;
-  const recorded = (name: string, recovery: string) => !doc.scopes[name] || (names.includes(name) && doc.scopes[name]!.rebaseId === recovery);
+  const recorded = (name: string, recovery: string) => !doc.scopes[name] || saved[name] === recovery;
   const left = Object.entries(doc.rebaseScopes).filter(([name, recovery]) => !recorded(name, recovery));
   if (left.length) doc.rebaseScopes = Object.fromEntries(left);
   else delete doc.rebaseScopes;
@@ -60,5 +60,5 @@ export const sessionMarkHooks = (current: () => SyncDoc): SessionMarkHooks => ({
     const owed = takeUnsavedObligations(current());
     return sessionMovedBeforeDurable(current(), scopes) || owed;
   },
-  saved: (names) => rebaseRecorded(current(), names),
+  saved: (rebaseIds) => rebaseRecorded(current(), rebaseIds),
 });

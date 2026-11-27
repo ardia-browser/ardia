@@ -220,13 +220,13 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   session (`sessionBacked`: the pinned area, settings and the profile, theme, Top Apps and All Open Tabs
   records) rebases, it publishes only keys no device has a record of, and no deletions; the cycle applies
   every record it has, tombstones included, so the store takes the synced state back. The exception is a value
-  the adapter can show is newer than the record: a setting changed here (each local choice is stamped from the
-  sync clock into `settingEdits` in `sync.json` at once, and dropped when its batch is on disk) or a pin placement
+  the adapter can show is newer than the record: a setting chosen here after the record was written (each explicit choice
+  keeps its time in `settingsMeta.chosenAt`, saved with the session, so the value and its time are always saved together
+  and every desktop window shares them) or a pin placement
   still in `pinChoices`, including a tile turned into a row or back and a pinned group moved among the rows; those go
-  out instead (`keepLocal`), also when the value is the one in the base while a different synced value waits. On Linux and
-  Windows a setting chosen in a window that isn't the sync authority is forwarded to it (`noteSettingsChosen`) and
-  stamped there; a forward that fails, as during a handoff between windows, is tried again, and a window that has
-  become the authority meanwhile stamps it itself. A rebasing adapter publishes after the cycle's pull,
+  out instead (`keepLocal`), also when the value is the one in the base while a different synced value waits (only
+  while rebasing, so a skewed clock can't make an old choice win in a normal sync). On Linux and Windows the chosen
+  times reach the sync authority with the session the windows share, before its first cycle. A rebasing adapter publishes after the cycle's pull,
   and while anything in the scope is still downloading or damaged it neither publishes nor applies anything (its keys wait for the next cycle), so a
   record on its way can't be outrun by an older session value. An adapter told it's rebasing takes the synced
   value even where it would otherwise keep a local one that differs from its base (a pinned group tab's home). The rebase ends for an adapter once it applied

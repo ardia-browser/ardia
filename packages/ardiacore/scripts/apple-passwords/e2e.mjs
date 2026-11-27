@@ -20,10 +20,19 @@
 //       fills both new-password fields with one password Ardia makes (12 characters where maxlength is 12, on
 //       /signup-short), and signing up asks "Save to Apple Passwords?", whose Save keeps that password in the fake;
 //       E24chromium the same in a Chromium tab, where Chrome shows no generation popup of its own beside it;
-//       E24control proves that check sees one: on Ardia's own password manager, Chrome's popup shows there
+//       E24control proves that check sees one: on Ardia's own password manager, Chrome's popup shows there;
+//       E24change (and E24changechromium) on save.localhost's /change-password types the current password, picks
+//       "Suggest strong password" in the new-password field and submits: the prompt asks "Update in Apple Passwords?",
+//       whose Update keeps the suggested password in the fake for that account
 //   E25-E27 Verification codes on a code field (codes.mjs), in that instance, in a WebKit tab and (E25chromium…) a
 //       Chromium one: "Code for example.localhost" fills the fixture code, the account typed on the site's sign-in
 //       page comes first, and an http code field or one holding text gets nothing
+//   cardWebKit a saved card whose name holds quotes, a backslash and </script> fills a WebKit tab's card form on https
+//       byte for byte, with input and change events, through the card dropdown's Down and Enter (OS check granted)
+//   E31 last: quits the instances, then reads every log the run left (each instance's app.out.log, dev console,
+//       Chromium LOG files, telemetry, crash reports; the fake helper's requests.jsonl and started; the system log of
+//       each instance's process) and fails naming the file and which fixture password, Pairing code or Verification code
+//       it found there (never the value); saved logins are read from each fake's fixtures.json, so strong passwords count
 //   E32 with a stand-in for the iCloud Passwords extension (its id, from icloud-extension.mjs), picking Apple Passwords
 //       turns it off and says so, "Turn it back on" turns it on, and switching to Ardia turns it on only if Ardia turned
 //       it off; it is never uninstalled
@@ -36,14 +45,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { launch, reporter, sleep } from "../../../../scripts/lib/instance.mjs";
+import { scanLogs, systemLog } from "../../../../scripts/lib/log-secrets.mjs";
 import { codeChecks } from "./codes.mjs";
-import { fakeHelper } from "./fake.mjs";
+import { FIXTURES, fakeHelper } from "./fake.mjs";
 import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
 import { loginListChecks } from "./login-list.mjs";
 import { savingChecks } from "./saving.mjs";
-import { fixtureSites } from "./sites.mjs";
+import { fixtureSites, PAGE_EVENTS } from "./sites.mjs";
 import { strongPasswordChecks } from "./strong-password.mjs";
-import { chromiumTabs, webkitTabs } from "./webkit.mjs";
+import { chromiumTabs, waitFor, webkitTabs } from "./webkit.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -74,11 +84,14 @@ const sites = await fixtureSites(path.join(SCRATCH, "tls"));
 const READY = { timeout: 90_000, test: "return ac.store.getState().windowOrder.length > 0" };
 let app = null;
 let shared = null;
+const RUN_STARTED = Date.now();
+const launched = [];
 
-async function start(name, { manifest, binary = APP, files = {} }) {
+async function start(name, { manifest, binary = APP, files = {}, test = {} }) {
   const data = path.join(SCRATCH, name, "data");
-  app = await launch(binary, { data, fresh: true, onboarded: true, test: { applePasswordsManifest: manifest }, switches: sites.switches, files, ready: READY });
+  app = await launch(binary, { data, fresh: true, onboarded: true, test: { applePasswordsManifest: manifest, ...test }, switches: sites.switches, files, ready: READY });
   note("launched", name, "pid", app.pid, "log", app.log);
+  launched.push({ name, pid: app.pid, log: app.log });
   return app;
 }
 
@@ -135,6 +148,8 @@ async function pairApplePasswords(fake) {
   await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${JSON.stringify(fake.fixtures.code)}).then(() => true);`, { timeout: 60_000 });
   return until(pairingView, (v) => v.state === "connected" && v.choice === "apple");
 }
+
+const FIXTURE_CARD = { name: `O'Brien "Q" \\ </script><script>x()</script>`, number: "4111111111111111", expMonth: 7, expYear: 2031 };
 
 const CHROME_ONLY_LOGIN = { username: "chrome-only@example.test", password: "fixture-pw-chrome-only-9" };
 
@@ -228,6 +243,37 @@ async function freshChromiumTab(url) {
   return chromiumTabs(app, { log: note }).open(url);
 }
 
+function loggedSecrets() {
+  const fakeLogins = fs
+    .readdirSync(SCRATCH, { recursive: true })
+    .filter((file) => path.basename(file) === "fixtures.json")
+    .flatMap((file) => JSON.parse(fs.readFileSync(path.join(SCRATCH, file), "utf8")).logins ?? []);
+  const passwords = new Map([...FIXTURES.logins, ...fakeLogins].map((l) => [l.password, l.user]));
+  passwords.set(CHROME_ONLY_LOGIN.password, CHROME_ONLY_LOGIN.username);
+  return [
+    { label: "a fixture-pw- password", value: "fixture-pw-" },
+    ...[...passwords].map(([value, user]) => ({ label: `the password of ${user}`, value })),
+    { label: "the Pairing code", value: FIXTURES.code, whole: true },
+    { label: "the fixture card's number", value: FIXTURE_CARD.number, whole: true },
+    ...FIXTURES.codes.map((c) => ({ label: `the Verification code of ${c.username} on ${c.domain}`, value: c.code, whole: true })),
+  ];
+}
+
+async function noSecretsInLogs() {
+  assert(launched.length > 0, "E31 reads the logs of the checks run before it; run it last", launched);
+  if (shared && !shared.app.exited) note("quit shared:", (await shared.app.quit()).how);
+  shared = null;
+  const secrets = loggedSecrets();
+  const system = systemLog({ since: RUN_STARTED, pids: launched.map((l) => l.pid) });
+  const { files, hits } = scanLogs({ dirs: [SCRATCH], secrets, extra: { "the system log of the run's instances": system.join("\n") } });
+  const unread = launched.filter((l) => !files.includes(l.log)).map((l) => l.name);
+  assert(!unread.length, "every instance's app log is read", unread);
+  assert(system.some((line) => line.includes("helper started")), "the system log holds the Apple Passwords client's own lines, so it was read", system.length);
+  const found = hits.map((h) => `${h.label} in ${path.relative(SCRATCH, h.file) || h.file} (${h.encoding} at byte ${h.at})`);
+  assert(!found.length, "no fixture password or code in any log", found);
+  return { instances: launched.length, files: files.length, systemLines: system.length, secrets: secrets.length };
+}
+
 const inChromium = (checks, names) => Object.fromEntries(names.map((name) => [`${name}chromium`, checks[name]]));
 
 const CHECKS = {
@@ -306,6 +352,32 @@ const CHECKS = {
     assert(prompt.username === login.username, "Chrome holds the submitted login for the save prompt on an Apple Passwords profile", prompt);
     return { state: prompt.state };
   },
+  async cardWebKit() {
+    const fake = fakeHelper(path.join(SCRATCH, "cardWebKit", "fake"));
+    await start("cardWebKit", { manifest: fake.manifest, test: { reauth: "granted" } });
+    const { name, number, expMonth, expYear } = FIXTURE_CARD;
+    await app.eval(`return globalThis.expo.modules.ArdiaAutofill.saveCard("", ${JSON.stringify({ name, expMonth, expYear })}, ${JSON.stringify(number)}).then(() => true)`, { timeout: 20_000 });
+    const cards = await app.eval(`return ac.engine.call("autofill.cards", { profile: "" })`);
+    assert(cards.cards?.length === 1 && cards.cards[0].last4 === "1111", "the fixture card is saved", cards.cards?.map((c) => c.last4));
+    const tab = await webkitTabs(app, { log: note }).open(sites.url("example.localhost", "/card"));
+    const form = () => tab.value(`({ n: document.getElementById("n").value, num: document.getElementById("num").value, m: document.getElementById("m").value, y: document.getElementById("y").value, events: ${PAGE_EVENTS}.filter((e) => e[0] !== "focusin").map((e) => e.join(":")) })`);
+    try {
+      await tab.click("#n");
+      const rows = await tab.waitRows("the card dropdown");
+      assert(rows.some((r) => r.label.includes("1111")), "the dropdown lists the saved card", rows.map((r) => r.title));
+      await tab.key("down");
+      await sleep(300);
+      await tab.key("enter");
+      const filled = await waitFor("the filled card", async () => ((await form())?.num ? form() : null), 10_000);
+      assert(filled.n === name, "the card's name fills byte for byte", { length: filled.n.length, same: filled.n === name });
+      assert(filled.num === number, "the card's number fills", { length: filled.num.length });
+      assert(/^0?7$/.test(filled.m) && /^(20)?31$/.test(filled.y), "the expiry fills", { m: filled.m, y: filled.y });
+      for (const id of ["n", "num", "m", "y"]) assert(filled.events.includes(`input:${id}`) && filled.events.includes(`change:${id}`), `#${id} hears input and change`, filled.events);
+      return { rows: rows.length, events: filled.events.length };
+    } finally {
+      await tab.close();
+    }
+  },
   async E32() {
     const fake = fakeHelper(path.join(SCRATCH, "E32", "fake"));
     const standIn = iCloudExtensionStandIn(path.join(SCRATCH, "E32", "icloud-passwords"));
@@ -346,9 +418,10 @@ const CHECKS = {
   ...savingChecks({ paired, sites }),
   ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E19", "E20", "E21", "E22", "E23"]),
   ...strongPasswordChecks({ paired, sites, fresh: freshChromiumTab }),
-  ...inChromium(strongPasswordChecks({ paired, sites, engine: "chromium" }), ["E24"]),
+  ...inChromium(strongPasswordChecks({ paired, sites, engine: "chromium" }), ["E24", "E24change"]),
   ...codeChecks({ paired, sites }),
   ...inChromium(codeChecks({ paired, sites, engine: "chromium" }), ["E25", "E26", "E27"]),
+  E31: noSecretsInLogs,
 };
 
 const names = wanted.length ? wanted : Object.keys(CHECKS);

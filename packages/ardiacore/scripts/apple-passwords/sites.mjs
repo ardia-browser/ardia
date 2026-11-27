@@ -35,6 +35,20 @@ const signUpForm = ({ maxlength } = {}) => {
 <button id="go" disabled style="top:220px">Create account</button></form>`;
 };
 
+const changePasswordForm = () => `<form method="post" action="/signed-in">
+<input id="u" name="username" autocomplete="username" value="rotate@save.test" style="top:40px">
+<input id="o" name="current-password" type="password" autocomplete="current-password" style="top:100px">
+<input id="p" name="new-password" type="password" autocomplete="new-password" style="top:160px">
+<input id="c" name="confirm-password" type="password" autocomplete="new-password" style="top:220px">
+<button id="go" disabled style="top:280px">Change password</button></form>`;
+
+const cardForm = () => `<form method="post" action="/signed-in">
+<input id="n" name="cc-name" autocomplete="cc-name" style="top:40px">
+<input id="num" name="cc-number" autocomplete="cc-number" style="top:100px">
+<input id="m" name="cc-exp-month" autocomplete="cc-exp-month" style="top:160px">
+<input id="y" name="cc-exp-year" autocomplete="cc-exp-year" style="top:220px">
+<button id="go" style="top:280px">Pay</button></form>`;
+
 const holdSubmit = `
 document.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -52,6 +66,8 @@ export const PAGES = {
   "/login-fails": (host) => page(`Sign in to ${host}`, loginForm("/login-fails"), enableWhenFilled),
   "/signup": (host) => page(`Sign up on ${host}`, signUpForm(), enableWhenFilled),
   "/signup-short": (host) => page(`Sign up on ${host}`, signUpForm({ maxlength: 12 }), enableWhenFilled),
+  "/change-password": (host) => page(`Change password on ${host}`, changePasswordForm(), enableWhenFilled),
+  "/card": (host) => page(`Pay on ${host}`, cardForm()),
   "/signed-in": (host) => page(`Signed in to ${host}`, "<p>Welcome</p>"),
   "/search": (host) => page(`Search ${host}`, `<form role="search" action="/signed-in"><input id="q" type="search" name="q" placeholder="Search" style="top:40px"></form>`),
   "/newsletter": (host) =>

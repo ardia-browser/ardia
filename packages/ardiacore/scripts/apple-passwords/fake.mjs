@@ -15,6 +15,7 @@ export const FIXTURES = {
     { user: "secure@plain.test", password: "fixture-pw-secure-5", sites: ["plain.localhost"] },
     { user: "changed@save.test", password: "fixture-pw-changed-7", sites: ["save.localhost"] },
     { user: "same@save.test", password: "fixture-pw-same-8", sites: ["save.localhost"] },
+    { user: "rotate@save.test", password: "fixture-pw-rotate-15", sites: ["save.localhost"] },
     { user: "anna@example.test", password: "fixture-pw-anna-10", sites: ["filter.localhost"] },
     { user: "joanna.k@mail.test", password: "fixture-pw-joanna-11", sites: ["filter.localhost"] },
     { user: "Ännabel", password: "fixture-pw-annabel-12", sites: ["filter.localhost"] },

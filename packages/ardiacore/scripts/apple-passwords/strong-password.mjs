@@ -1,6 +1,6 @@
 import { FIXTURES } from "./fake.mjs";
 import { FOOTER } from "./login-list.mjs";
-import { SAVE_TITLE } from "./saving.mjs";
+import { SAVE_TITLE, UPDATE_TITLE } from "./saving.mjs";
 import { PAGE_EVENTS } from "./sites.mjs";
 import { sleep } from "../../../../scripts/lib/instance.mjs";
 import { waitFor } from "./webkit.mjs";
@@ -8,6 +8,7 @@ import { waitFor } from "./webkit.mjs";
 const q = JSON.stringify;
 export const SUGGEST = "Suggest strong password";
 const SITE = "save.localhost";
+export const ROTATED_USER = "rotate@save.test";
 const ALPHABET = /^[A-Za-z0-9-]+$/;
 const LOOK_ALIKES = /[0O1lI]/;
 const CHROME_POPUP_MS = 2500;
@@ -96,6 +97,34 @@ export function strongPasswordChecks({ paired, sites, engine: engineName = "webk
         const saved = await waitFor("the new login in Apple Passwords", async () => fake.savedLogins().find((l) => l.user === user) ?? null, 20_000);
         assert(saved.password === password && saved.sites.includes(SITE), "Apple Passwords keeps the suggested password", { sites: saved.sites, same: saved.password === password });
         return { engine: engineName, rows: rows.map((r) => r.title), short: shortShape.length, length: made.length, title: prompt.copy.title };
+      } finally {
+        await tab.close();
+      }
+    },
+    async E24change() {
+      const { fake, tabs } = await session();
+      const current = fake.savedLogins().find((l) => l.user === ROTATED_USER);
+      assert(current, `the fake keeps ${ROTATED_USER}`, null);
+      const tab = await tabs.open(sites.url(SITE, "/change-password"));
+      try {
+        await tab.click("#o");
+        await tab.type(current.password);
+        await waitFor("the current password typed", async () => ((await tab.value(`document.getElementById("o").value.length`)) === current.password.length ? true : null), 5000);
+        await tab.key("escape");
+        await suggested(tab);
+        const password = await pickSuggestion(tab, ["p", "c"]);
+        assert(password !== current.password, "the suggested password is a new one", null);
+        await waitFor("the Change password button enabled", () => tab.value(`!document.getElementById("go").disabled || null`), 5000);
+        await tab.value(`(document.documentElement.dataset.signingIn = "yes")`);
+        await tab.click("#go");
+        await waitFor("the page after changing the password", () => tab.value(`!document.documentElement.dataset.signingIn && location.pathname === "/signed-in" && document.readyState === "complete" || null`), 20_000);
+        const prompt = await waitFor("the update prompt", () => tab.prompt(), 20_000);
+        assert(prompt.state === "update" && prompt.username === ROTATED_USER && prompt.copy.title === UPDATE_TITLE, `the prompt asks ${UPDATE_TITLE} for the account`, { state: prompt.state, username: prompt.username, title: prompt.copy.title });
+        assert(await tab.answer("update"), "Update is pressed", null);
+        await waitFor("the suggested password in Apple Passwords", async () => (fake.savedLogins().find((l) => l.user === ROTATED_USER)?.password === password ? true : null), 20_000);
+        const copies = fake.savedLogins().filter((l) => l.user === ROTATED_USER);
+        assert(copies.length === 1, "the login is changed, not added again", copies.length);
+        return { engine: engineName, title: prompt.copy.title, length: password.length };
       } finally {
         await tab.close();
       }

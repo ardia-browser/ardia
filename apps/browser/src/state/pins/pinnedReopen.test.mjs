@@ -232,3 +232,66 @@ test("a hash-only pinned URL edit moves a sleeping copy to the new route, and it
   assert.equal(shownUrl(copy), AWAY, "and opens the new route");
   assert.ok(first);
 });
+
+test("with it off, closing the pin again back at its pinned URL brings the sleeping copy home too", () => {
+  pinnedAt(HOME, AWAY);
+  S().updateSettings({ pinnedTabsReopenAtPinnedUrl: false });
+  try {
+    const first = S().windowOrder[0];
+    const p = copyIn(first, HOME);
+    const second = S().createWindow();
+    const copy = copyIn(second, HOME);
+    S().closeTab(p);
+    assert.equal(S().tabs[copy].url, AWAY);
+    S().activate(p);
+    S().updateTab(p, { url: HOME, title: "Home" });
+    S().closeTab(p);
+    assert.equal(S().tabs[p].url, HOME);
+    assert.equal(S().tabs[copy].url, HOME, "the copy follows the page it was last closed on, home included");
+  } finally {
+    S().updateSettings({ pinnedTabsReopenAtPinnedUrl: true });
+  }
+});
+
+test("with it off, a window opened after the close starts its copy on the kept page", () => {
+  const { p } = pinnedAt(HOME, AWAY);
+  S().updateSettings({ pinnedTabsReopenAtPinnedUrl: false });
+  try {
+    S().closeTab(p);
+    const later = S().createWindow();
+    const copy = copyIn(later, HOME);
+    assert.ok(copy, "the new window has the pin");
+    assert.equal(S().tabs[copy].url, AWAY);
+    assert.equal(S().tabs[copy].page.kind, "asleep");
+  } finally {
+    S().updateSettings({ pinnedTabsReopenAtPinnedUrl: true });
+  }
+});
+
+test("with it on, a window opened after the close starts its copy at the pinned URL", () => {
+  const { p } = pinnedAt(HOME, AWAY);
+  S().closeTab(p);
+  const later = S().createWindow();
+  assert.equal(S().tabs[copyIn(later, HOME)].url, HOME);
+});
+
+test("a hash-only pinned URL edit on a pinned group's tab moves its sleeping copy in another window to the new route", () => {
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://a.com" });
+  const member = S().newTab(w, { url: HOME });
+  const neighbour = S().newTab(w, { url: "https://wiki.example.com/" });
+  const group = S().groupTabs([member, neighbour], { pinned: true });
+  S().updateGroup(group, { name: "Work" });
+  assert.equal(S().tabs[member].pinnedUrl, HOME);
+  const second = S().createWindow();
+  const copy = copyIn(second, HOME);
+  assert.ok(copy, "the pinned group is mirrored");
+  assert.notEqual(copy, member);
+  assert.equal(S().tabs[copy].page.kind, "asleep");
+  S().setPinnedUrl(member, AWAY);
+  S().updateTab(member, { url: AWAY });
+  assert.equal(S().tabs[copy].pinnedUrl, AWAY);
+  assert.equal(S().tabs[copy].url, AWAY, "the sleeping copy moved with the edit");
+  S().activate(copy);
+  assert.equal(shownUrl(copy), AWAY, "and opens the new route");
+});

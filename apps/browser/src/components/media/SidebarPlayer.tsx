@@ -35,7 +35,7 @@ import { hostOf } from "@ardia/core";
 import { Marquee, useMarqueeGroup } from "./Marquee";
 import { TimeBar } from "./MiniPlayer";
 import { useMediaTokens } from "./tokens";
-import { CONTROLS_ROW, EXPANDED_HEIGHT, GROWTH, ROW_HEIGHT, SEEK_ROW, settlePlayerMotion, type PlayerMotion } from "./playerMotion";
+import { CONTROLS_ROW, EXPANDED_HEIGHT, GROWTH, holdPlayerCard, ROW_HEIGHT, SEEK_ROW, type PlayerMotion } from "./playerMotion";
 
 const ROW_INSET = space.s;
 const TRAILING_INSET = space.xs;
@@ -108,7 +108,6 @@ function useExpansion(want: boolean, motion: PlayerMotion, leads: boolean) {
     });
     return () => run.stop();
   }, [expanded, slot, leads]);
-  useLayoutEffect(() => () => void (motion.shared || settlePlayerMotion(motion)), [motion]);
   return { expanded, slot };
 }
 
@@ -274,7 +273,9 @@ export function SidebarPlayer({ tabId, motion, docked, leads }: { tabId: string;
   const settled = expanded && slot === "expanded";
   const { pinned, trailingHoverProps } = usePinnedTrailing(slot, reveal.pin);
   const glass = useGlass();
-  if (!session || !shown) return null;
+  const visible = !!session && shown;
+  useLayoutEffect(() => (visible ? holdPlayerCard(motion) : undefined), [motion, visible]);
+  if (!visible) return null;
   const below = docked ? 0 : HOVER_SLOP;
 
   return (

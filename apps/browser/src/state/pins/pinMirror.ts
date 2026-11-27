@@ -197,8 +197,8 @@ export function treeOrder(x: Pick<Section, "items" | "groups">): Item[] {
 
 export const keyField = (id: string, key: string) => (id === key ? { pinKey: undefined } : { pinKey: key });
 
-export function copyOf(src: Tab, windowId: string, tile: boolean, profileId = src.profileId): Tab {
-  const url = tile ? pinHomeOf(src) : src.url;
+export function copyOf(src: Tab, windowId: string, tile: boolean, profileId = src.profileId, keepPage = false): Tab {
+  const url = tile && !keepPage ? pinHomeOf(src) : src.url;
   const atSource = samePage(src.url, url);
   return {
     ...makeTab(windowId, profileId, url, {
@@ -234,7 +234,7 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
     let t = same.find(hasPage) ?? same[0];
     if (!t && tile) t = mine.find((m) => m.pin && !used.has(m.id) && !wantedKeys.has(pinKeyOf(m)) && samePage(pinHomeOf(m), pinHomeOf(src)));
     if (!t) {
-      const copy = copyOf(src, windowId, tile, profileId);
+      const copy = copyOf(src, windowId, tile, profileId, keepsLastPage(s.settings, src));
       tabs[copy.id] = copy;
       used.add(copy.id);
       return copy.id;
@@ -249,8 +249,8 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
       reopenAtPinnedUrl: src.reopenAtPinnedUrl,
     };
     patch.pinnedUrl = src.pinnedUrl || (tile ? src.url : null) || null;
-    const keptPage = keepsLastPage(s.settings, { url: t.url, pinnedUrl: t.pinnedUrl, reopenAtPinnedUrl: src.reopenAtPinnedUrl });
-    if (tile && !hasPage(t) && !keptPage && !sameAddress(t.url, pinHomeOf(src))) Object.assign(patch, { url: pinHomeOf(src), title: src.title, favicon: src.favicon });
+    const target = tile ? pinHomeOf(src) : src.pinnedUrl && t.pinnedUrl && !sameAddress(t.pinnedUrl, src.pinnedUrl) ? src.pinnedUrl : null;
+    if (target && !hasPage(t) && !sameAddress(t.url, target) && !keepsLastPage(s.settings, { ...t, reopenAtPinnedUrl: src.reopenAtPinnedUrl })) Object.assign(patch, { url: target, title: src.title, favicon: src.favicon });
     tabs[t.id] = { ...t, ...patch };
     return t.id;
   };

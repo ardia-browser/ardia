@@ -28,6 +28,7 @@ export type PlayerMotion = {
   listUnclip: Animated.AnimatedMultiplication<number>;
   expandedSlot: { current: boolean };
   target: { current: number | null };
+  cards: { current: number };
   state: ExpansionState;
   shared: boolean;
 };
@@ -55,7 +56,7 @@ export function makePlayerMotion(shared = false): PlayerMotion {
   const progress = new Animated.Value(0);
   const overhang = new Animated.Value(1);
   const listClip = Animated.multiply(progress.interpolate({ inputRange: [0, 1], outputRange: [0, -GROWTH] }), overhang);
-  return { progress, overhang, listClip, listUnclip: Animated.multiply(listClip, -1), expandedSlot: { current: false }, target: { current: null }, state: expansionState(), shared };
+  return { progress, overhang, listClip, listUnclip: Animated.multiply(listClip, -1), expandedSlot: { current: false }, target: { current: null }, cards: { current: 0 }, state: expansionState(), shared };
 }
 
 export function settlePlayerMotion(motion: PlayerMotion) {
@@ -64,6 +65,14 @@ export function settlePlayerMotion(motion: PlayerMotion) {
   motion.expandedSlot.current = false;
   motion.target.current = null;
   motion.state.reset();
+}
+
+export function holdPlayerCard(motion: PlayerMotion): () => void {
+  motion.cards.current++;
+  return () => {
+    motion.cards.current--;
+    if (motion.cards.current === 0) settlePlayerMotion(motion);
+  };
 }
 
 const windowMotions = new Map<string, { motion: PlayerMotion; users: number }>();

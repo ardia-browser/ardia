@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { GROWTH, ROW_HEIGHT, EXPANDED_HEIGHT, makePlayerMotion, settlePlayerMotion, visibleCardHeight, windowPlayerMotion } = await import("./playerMotion.ts");
+const { GROWTH, ROW_HEIGHT, EXPANDED_HEIGHT, holdPlayerCard, makePlayerMotion, settlePlayerMotion, visibleCardHeight, windowPlayerMotion } = await import("./playerMotion.ts");
 
+const listClip = (motion) => -GROWTH * motion.progress.__getValue() * motion.overhang.__getValue();
 const visibleTop = (bottom, motion) => bottom - visibleCardHeight(motion.state.get().slot, motion.progress.__getValue());
 
 test("the card grows upward from a fixed bottom: a row, then the expanded card once it settles", () => {
@@ -54,4 +55,35 @@ test("the expansion store tells its listeners only about real changes", () => {
   stop();
   motion.state.set({ slot: "row" });
   assert.equal(told, 2);
+});
+
+test("media ending halfway through a hover expansion leaves no clip on the list once the last card goes, but a handoff keeps the expansion", () => {
+  const motion = windowPlayerMotion("w-media-ends");
+  const releaseOutgoing = holdPlayerCard(motion);
+  const releaseIncoming = holdPlayerCard(motion);
+  motion.state.set({ expanded: true });
+  motion.progress.setValue(0.5);
+  assert.equal(listClip(motion), -GROWTH / 2, "the list is clipped by the half-grown card");
+  releaseOutgoing();
+  assert.equal(motion.progress.__getValue(), 0.5, "another page still shows the card: the expansion carries on");
+  assert.deepEqual(motion.state.get(), { expanded: true, slot: "row" });
+  releaseIncoming();
+  assert.equal(motion.progress.__getValue(), 0);
+  assert.equal(listClip(motion) + 0, 0, "no card left, no clip");
+  assert.deepEqual(motion.state.get(), { expanded: false, slot: "row" });
+  assert.equal(motion.cards.current, 0);
+});
+
+test("a page's own card settles its motion when it goes, as before", () => {
+  const motion = makePlayerMotion();
+  const release = holdPlayerCard(motion);
+  motion.state.set({ expanded: true, slot: "expanded" });
+  motion.progress.setValue(1);
+  motion.overhang.setValue(0);
+  motion.expandedSlot.current = true;
+  release();
+  assert.equal(motion.progress.__getValue(), 0);
+  assert.equal(motion.overhang.__getValue(), 1);
+  assert.equal(motion.expandedSlot.current, false);
+  assert.equal(listClip(motion) + 0, 0);
 });

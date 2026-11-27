@@ -18,7 +18,7 @@ import type { AdoptId, BrowserWindow, ClosedTab, Tab, TabSnapshot } from "../bro
 import { orderSections } from "../groups/groups";
 import { samePage } from "../../lib/url";
 import { historyOf } from "../history/history";
-import { awayFromHome, keepsLastPage, pinHome, reopensAtPinnedUrl } from "../pins/pinHomes";
+import { awayFromHome, pinHome, reopensAtPinnedUrl } from "../pins/pinHomes";
 import { notePinnedTabReopenChoice, noteTopAppsKeptRunning } from "../telemetry/tabSleepCounts";
 import type { ConsentToken } from "../telemetry/consentPeriod";
 
@@ -285,7 +285,7 @@ function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = fa
     const pending = !back.url && pendingRestore(t) ? restoreId(pendingRestore(t)!) : undefined;
     tabs[id] = { ...t, ...back, page: withWake(ASLEEP, pending) };
   }
-  const copies = withKeptPageCopied(tabs, unloading.filter((id) => keepsLastPage(s.settings, tabs[id]!)), unloaded);
+  const copies = withKeptPageCopied(tabs, unloading.filter((id) => !reopensAtPinnedUrl(s.settings, tabs[id]!)), unloaded);
   let next: BrowserState = {
     ...s,
     tabs: linkEdits(tabs, s.tabs, [...unloading, ...copies]),

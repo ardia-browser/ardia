@@ -387,6 +387,12 @@ test("an omnibox provider may answer with its own ardia:// page addresses, never
   const home = S().newTab(w, { url: "ardia://reader" });
   assert.equal(pluginRowTab("plugin:reader:notes", "ardia://reader/", w, "current"), home, "codex S9: ardia://reader/ is the page ardia://reader shows");
   assert.equal(pluginRowTab("plugin:reader:notes", "ARDIA://Reader", w, "current"), home, "codex S9: the scheme and name match without case");
+  const going = S().newTab(w, { url: "https://b.example/" });
+  S().navigate(going, "ardia://reader/Going-0123456789ab", { userInitiated: true });
+  const { tabDestination } = await import("../pages/urls.ts");
+  assert.notEqual(S().tabs[going].url, "ardia://reader/Going-0123456789ab", "the tab's own address hasn't moved yet");
+  assert.equal(tabDestination(S().tabs[going]), "ardia://reader/Going-0123456789ab");
+  assert.equal(pluginRowTab("plugin:reader:notes", "ardia://reader/Going-0123456789ab", w, "current"), going, "codex round 2 S9: a tab already on its way to the page counts, by its destination");
   lifecycle.disablePlugin("reader", consentToken());
   await settle();
   assert.equal(ownPageUrl("reader", "ardia://reader/a"), null, "a plugin that's off has no page addresses");

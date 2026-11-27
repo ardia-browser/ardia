@@ -17,6 +17,12 @@ const assert = (ok, message, detail) => {
 
 export const helperAsked = (fake, user, { since = 0, timeout = 20_000 } = {}) =>
   waitFor(`Apple Passwords' own save window asking about ${user}`, async () => fake.asked().slice(since).find((a) => a.user === user) ?? null, timeout);
+export async function saveCounts(app) {
+  const since = await app.eval(
+    `if (!globalThis.__savesCounted) { globalThis.__savesCounted = []; ac.engine.on("passwords.applePasswordsSaveCounted", (e) => globalThis.__savesCounted.push({ name: e.name, engine: e.engine ?? null, kind: e.kind ?? null })); } return globalThis.__savesCounted.length;`,
+  );
+  return async () => (await app.eval("return globalThis.__savesCounted")).slice(since);
+}
 
 export const savesSent = (fake) => fake.requests().filter((r) => r.cmd === SAVE_CMD).length;
 

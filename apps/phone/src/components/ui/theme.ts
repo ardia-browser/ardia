@@ -44,14 +44,19 @@ export const IncognitoLook = IncognitoLookContext.Provider;
 
 export const useIncognitoLook = () => useContext(IncognitoLookContext);
 
+const ForcedDarkContext = createContext<boolean | null>(null);
+
+export const ForcedDark = ForcedDarkContext.Provider;
+
 export function useTheme(): Theme {
   const look = useProfileLook();
   const schemeDark = useDarkScheme();
   const incognitoLook = useIncognitoLook();
+  const forcedDark = useContext(ForcedDarkContext);
   const material = useDesign() === "material";
   const { scheme } = useMaterialTheme();
   return useMemo(() => {
-    const dark = schemeDark || (incognitoLook && !material);
+    const dark = forcedDark ?? (schemeDark || (incognitoLook && !material));
     if (material) {
       const canvas = scheme.surface;
       return { ...rolesFromScheme(scheme, dark), spaceAccent: scheme.primary, spaceAccentInk: scheme.primary, spaceAccentGlyph: scheme.primary, onSpaceAccent: scheme.onPrimary, spaceAccentWash: withAlpha(scheme.primary, 0.12), backdrop: [canvas, canvas], canvas, start: { colors: [canvas, scheme.surfaceContainerLow], diagonal: false } };
@@ -60,5 +65,5 @@ export function useTheme(): Theme {
     const start = { colors: backdropStops(look, dark, true), diagonal: showsTheme(look, dark, true) };
     const space = incognitoLook ? PRIVATE_ACCENT : spaceAccentFor(look, dark);
     return { ...rolesFor(dark), ...space, accent: space.spaceAccent, formAccent: space.spaceAccentInk, backdrop, canvas: backdrop[0], start };
-  }, [look, schemeDark, incognitoLook, material, scheme]);
+  }, [look, schemeDark, incognitoLook, forcedDark, material, scheme]);
 }

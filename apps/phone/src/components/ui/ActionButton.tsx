@@ -9,11 +9,12 @@ import { actionLayout, actionRoleOf, capsule as capsuleRadius, ink, overlayInk, 
 
 export type ActionVariant = "filled" | "outlined" | "plain" | "glass";
 
-export type ActionTone = "accent" | "neutral" | "overlay";
+export type ActionTone = "accent" | "neutral" | "overlay" | "ink";
 
 export type ActionInk = { fill: string; label: string; edge: string };
 
-export function actionInk(theme: Pick<Theme, "spaceAccent" | "spaceAccentInk" | "onSpaceAccent" | "secondaryFill" | "label" | "separator">, variant: ActionVariant, tone: ActionTone): ActionInk {
+export function actionInk(theme: Pick<Theme, "spaceAccent" | "spaceAccentInk" | "onSpaceAccent" | "secondaryFill" | "label" | "separator" | "pageSurface">, variant: ActionVariant, tone: ActionTone): ActionInk {
+  if (tone === "ink") return variant === "filled" ? { fill: theme.label, label: theme.pageSurface, edge: ink.clear } : { fill: ink.clear, label: theme.label, edge: variant === "outlined" ? theme.label : ink.clear };
   if (variant === "glass") return { fill: overlayInk.glass, label: overlayInk.label, edge: ink.clear };
   if (tone === "overlay") {
     if (variant === "filled") return { fill: overlayInk.fill, label: overlayInk.onFill, edge: ink.clear };
@@ -38,12 +39,13 @@ export type ActionButtonProps = {
   capsule?: boolean;
   frostSource?: string;
   buttonRef?: RefObject<ViewInstance | null>;
+  ink?: ActionInk;
   testID?: string;
 };
 
-export function ActionButton({ title, onPress, variant = "filled", tone = "accent", size = "regular", icon, busy = false, disabled = false, hint, stretch = false, capsule = false, frostSource, buttonRef, testID }: ActionButtonProps) {
+export function ActionButton({ title, onPress, variant = "filled", tone = "accent", size = "regular", icon, busy = false, disabled = false, hint, stretch = false, capsule = false, frostSource, buttonRef, ink: chosenInk, testID }: ActionButtonProps) {
   const theme = useTheme();
-  const colors = actionInk(theme, variant, tone);
+  const colors = chosenInk ?? actionInk(theme, variant, tone);
   const role = primaryActionRoles[actionRoleOf[size]];
   const cornerRadius = capsule ? capsuleRadius(role.height) : role.radius;
   const frosted = variant === "glass" && frostSource !== undefined;

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 const HELP = `Builds the onboarding intro's meadow from ardia.dev's hero scene.
 
-  node scripts/meadow.mjs           write ios/Meadow (index.html, posters.json and the posters) and windows/meadow/page.ts
-  node scripts/meadow.mjs --check   fail if either differs from what the site's sources build
+  node scripts/meadow.mjs           write ios/Meadow (index.html, posters.json and the posters), windows/meadow/page.ts
+                                    and packages/phone/ios/Meadow/index.html
+  node scripts/meadow.mjs --check   fail if any of them differs from what the site's sources build
 
 The page runs apps/site/src/scripts/meadowApp.ts, which starts the site's own createMeadow and
 startSunrise (apps/site/src/scripts/meadow), bundled inline so the pod ships one HTML file. The
@@ -14,7 +15,10 @@ page itself has no text and no scripts: the app opens it as a small data: URL (i
 base64 of whole 3-byte groups, joined around the config and first-paint style the app writes into its
 head), then adds MEADOW_PAGE_SCRIPT, which is src/meadowPage/shim.ts (it draws the app's icon,
 wordmark, tagline, Skip and Mute from that config, and carries the app icon) followed by the scene.
-Images load only from data: URLs; the dawn posters come as data: URLs too.`;
+Images load only from data: URLs; the dawn posters come as data: URLs too.
+
+packages/phone/ios/Meadow/index.html is the same index.html for the iPhone onboarding, which opens it
+with #calm in a WKWebView from the ArdiaPhoneMeadow resource bundle.`;
 
 import { build } from "esbuild";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -33,6 +37,7 @@ const repo = fileURLToPath(new URL("../../../", import.meta.url));
 const site = join(repo, "apps/site/src");
 const out = fileURLToPath(new URL("../ios/Meadow/", import.meta.url));
 const windowsPage = fileURLToPath(new URL("../windows/meadow/page.ts", import.meta.url));
+const phonePage = fileURLToPath(new URL("../../phone/ios/Meadow/index.html", import.meta.url));
 const shim = fileURLToPath(new URL("../src/meadowPage/shim.ts", import.meta.url));
 const appIcon = join(repo, "apps/browser/assets/app-icon.png");
 const posterDir = join(site, "assets/hero");
@@ -170,16 +175,18 @@ if (check) {
   };
   const stale = [...files].filter(([name, bytes]) => differs(join(out, name), bytes)).map(([name]) => name);
   if (differs(windowsPage, windows)) stale.push("windows/meadow/page.ts");
+  if (differs(phonePage, files.get("index.html"))) stale.push("packages/phone/ios/Meadow/index.html");
   const extra = present.filter((name) => !files.has(name));
   if (stale.length || extra.length) {
-    console.error(`packages/shaders/ios/Meadow or windows/meadow/page.ts is out of date (${[...stale, ...extra].join(", ")}): run node packages/shaders/scripts/meadow.mjs`);
+    console.error(`packages/shaders/ios/Meadow, windows/meadow/page.ts or packages/phone/ios/Meadow is out of date (${[...stale, ...extra].join(", ")}): run node packages/shaders/scripts/meadow.mjs`);
     process.exit(1);
   }
-  console.log(`✓ ios/Meadow and windows/meadow/page.ts match the site's meadow (${files.size + 1} files)`);
+  console.log(`✓ ios/Meadow, windows/meadow/page.ts and the phone's page match the site's meadow (${files.size + 2} files)`);
 } else {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   for (const [name, bytes] of files) writeFileSync(join(out, name), bytes);
   writeFileSync(windowsPage, windows);
-  console.log(`wrote ${files.size} files to packages/shaders/ios/Meadow and windows/meadow/page.ts`);
+  writeFileSync(phonePage, files.get("index.html"));
+  console.log(`wrote ${files.size} files to packages/shaders/ios/Meadow, windows/meadow/page.ts and packages/phone/ios/Meadow/index.html`);
 }

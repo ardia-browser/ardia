@@ -113,7 +113,7 @@ export function StartSpaces({ geometry, dark, incognito, interactive = true }: {
   );
 }
 
-function StartBackdrop({ look, width, height, dark, incognito }: { look: ProfileLook; width: number; height: number; dark: boolean; incognito: boolean }) {
+export function StartBackdrop({ look, width, height, dark, incognito }: { look: ProfileLook; width: number; height: number; dark: boolean; incognito: boolean }) {
   if (look.custom && !incognito) return <CustomLookBackdrop testID="startTheme" look={look} dark={dark} style={{ width, height }} />;
   return <StartGradient look={look} width={width} height={height} dark={dark} incognito={incognito} />;
 }

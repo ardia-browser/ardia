@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { luminance } from "../../lib/color.ts";
 import { lookOf, presetLook, windowTintStops, type PresetSpec, type ProfileLook } from "../../lib/profileLook.ts";
-import { spaceAccentFor } from "./accentRoles.ts";
+import { emphasisInkFor, spaceAccentFor } from "./accentRoles.ts";
+import { rgbToHsl, parseColor } from "../../lib/color.ts";
 import { contrastMinimum, neutralFills, PROFILE_COLORS, type ProfileColor } from "./paletteTokens.ts";
 
 const ratio = (a: string, b: string) => {
@@ -39,6 +40,10 @@ for (const [name, look] of looks) {
         const measured = ratio(accent.spaceAccentInk, fill);
         assert.ok(measured >= contrastMinimum.text, `${accent.spaceAccentInk} on ${fill} is ${measured.toFixed(2)}:1`);
       });
+      test(`${name} in ${scheme}: an emphasized word reads at ${contrastMinimum.text}:1 on the ${backdrop}`, () => {
+        const measured = ratio(emphasisInkFor(look, dark), fill);
+        assert.ok(measured >= contrastMinimum.text, `${emphasisInkFor(look, dark)} on ${fill} is ${measured.toFixed(2)}:1`);
+      });
       test(`${name} in ${scheme}: accent glyphs and edges show at ${contrastMinimum.glyph}:1 on the ${backdrop}`, () => {
         const measured = ratio(accent.spaceAccentGlyph, fill);
         assert.ok(measured >= contrastMinimum.glyph, `${accent.spaceAccentGlyph} on ${fill} is ${measured.toFixed(2)}:1`);
@@ -57,4 +62,16 @@ test("an accent that already reads keeps its hue: plum's fill stays plum", () =>
   const plum = spaceAccentFor(presetLook(presets.find((preset) => preset.key === "plum")!), false);
   const [r, g, b] = [1, 3, 5].map((at) => parseInt(plum.spaceAccent.slice(at, at + 2), 16)) as [number, number, number];
   assert.ok(r > g && r > b, `${plum.spaceAccent} is no longer red-led`);
+});
+
+const saturationOf = (color: string) => {
+  const [r, g, b] = parseColor(color);
+  return rgbToHsl(r / 255, g / 255, b / 255)[1];
+};
+
+test("an emphasized word in dark keeps the colour's saturation where the accent ink washes it toward white", () => {
+  for (const key of ["plum", "blue", "purple", "red"] as const) {
+    const look = presetLook(presets.find((preset) => preset.key === key)!);
+    assert.ok(saturationOf(emphasisInkFor(look, true)) > saturationOf(spaceAccentFor(look, true).spaceAccentInk), `${key}: ${emphasisInkFor(look, true)} is no more vivid than ${spaceAccentFor(look, true).spaceAccentInk}`);
+  }
 });

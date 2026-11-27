@@ -25,4 +25,5 @@ Pod::Spec.new do |s|
   }
 
   s.source_files = '*.swift'
+  s.resource_bundles = { 'ArdiaPhoneMeadow' => ['Meadow/index.html'] }
 end

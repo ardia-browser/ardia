@@ -29,6 +29,7 @@ export interface Framing {
   sunCeiling: number;
   sunSweep: number;
   sunRadius: number;
+  sunRail: [number, number] | null;
   hillScale: number;
   moonRise: number;
   moonSet: number;
@@ -45,7 +46,10 @@ const STACKED_HILL_SCALE = 0.7;
 const STACKED_FOV = degrees(72);
 const STACKED_RISE = 1.9;
 
-export function framingFor(aspect: number, clear = 0, horizon = 0): Framing {
+const CALM_SUN_RAIL: [number, number] = [degrees(-13), degrees(-10)];
+const CALM_SUN_SCALE = 0.72;
+
+export function framingFor(aspect: number, clear = 0, horizon = 0, calm = false): Framing {
   const wide = smooth(0.55, 1.45, aspect);
   if (aspect >= 0.9 || clear < 0.3 || clear > 0.85) {
     const verticalFov = degrees(62 + (40 - 62) * wide);
@@ -60,7 +64,8 @@ export function framingFor(aspect: number, clear = 0, horizon = 0): Framing {
       sunPeak,
       sunCeiling: sunPeak,
       sunSweep: 1,
-      sunRadius: SUN_RADIUS,
+      sunRadius: calm && aspect < 0.9 ? SUN_RADIUS * CALM_SUN_SCALE : SUN_RADIUS,
+      sunRail: calm && aspect < 0.9 ? CALM_SUN_RAIL : null,
       hillScale: 1,
       moonRise: Math.atan(0.86 * across),
       moonSet: Math.atan(0.36 * across),
@@ -81,6 +86,7 @@ export function framingFor(aspect: number, clear = 0, horizon = 0): Framing {
     sunPeak: (ceiling + SUN_SET_DEPTH) * STACKED_RISE,
     sunCeiling: ceiling,
     sunRadius,
+    sunRail: null,
     hillScale: STACKED_HILL_SCALE,
     sunSweep: Math.min(1, Math.max(0.3, Math.atan(0.38 * tanHalf * aspect) / degrees(15))),
     moonRise: Math.atan(0.78 * tanHalf * aspect),
@@ -89,10 +95,10 @@ export function framingFor(aspect: number, clear = 0, horizon = 0): Framing {
   };
 }
 
-export function sunPath(p: number, peak: number, ceiling = peak, sweep = 1) {
+export function sunPath(p: number, peak: number, ceiling = peak, sweep = 1, rail: [number, number] | null = null) {
   const arc = Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, p))));
   return {
-    azimuth: (degrees(24.5) + (degrees(-9.5) - degrees(24.5)) * p) * sweep,
+    azimuth: rail ? rail[0] + (rail[1] - rail[0]) * p : (degrees(24.5) + (degrees(-9.5) - degrees(24.5)) * p) * sweep,
     elevation: Math.min(ceiling, -SUN_SET_DEPTH + peak * arc ** 0.8),
   };
 }

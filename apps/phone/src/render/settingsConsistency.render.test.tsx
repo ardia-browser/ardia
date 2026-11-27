@@ -73,7 +73,7 @@ onIos("Appearance and Search Engine draw their choices with the one shared choic
   unmount(appearance);
 });
 
-onIos("Settings' primary actions share one role: Default Browser and Sync's connect are full-width prominent buttons with actionLayout's corner, the setup steps the compact variant", async () => {
+onIos("Settings' primary actions share one role: Default Browser's, Sync's and the connect sheet's one action are full-width prominent buttons with actionLayout's corner", async () => {
   jest.spyOn(defaultBrowser, "refreshDefaultBrowser").mockResolvedValue(null);
   defaultBrowser.useDefaultBrowser.setState({ status: { isDefault: false, canAsk: false, isOffered: true } as never });
   const browser = await open({ page: "defaultBrowser" });
@@ -91,13 +91,11 @@ onIos("Settings' primary actions share one role: Default Browser and Sync's conn
   unmount(sync);
   const connect = await open({ page: "syncConnect" });
   const steps = connect.root.findAll((node) => node.type === ExpoSettingsAction);
-  expect(steps.length).toBeGreaterThan(0);
-  for (const step of steps) {
-    expect(step.props.size).toBe("compact");
-    const button = within(step, (props) => Array.isArray(props.modifiers))[0]!;
-    expect(modifier(button, "buttonBorderShape")).toMatchObject({ cornerRadius: actionLayout.radius.compact });
-    expect(modifier(button, "font")).toMatchObject({ weight: "semibold" });
-  }
+  expect(steps).toHaveLength(1);
+  expect(steps[0]!.props.size).toBe("full");
+  const connectButton = within(steps[0]!, (props) => Array.isArray(props.modifiers))[0]!;
+  expect(modifier(connectButton, "buttonBorderShape")).toMatchObject({ cornerRadius: actionLayout.radius.regular });
+  expect(modifier(connectButton, "font")).toMatchObject({ weight: "semibold" });
   unmount(connect);
 });
 
@@ -167,7 +165,7 @@ test("the theme editor's Add and Remove Color keep their 32-point plates inside 
   unmount(root);
 });
 
-onIos("the native primary actions take the named roles the drawn ones use: the accent fill, the role's corner and size, and compact labels wrap instead of running out of room", async () => {
+onIos("the connect sheet's one primary action takes the full role the drawn ones use: the accent fill, the role's corner and size, and its label wraps instead of running out of room", async () => {
   let theme: Theme | null = null;
   function ThemeProbe() {
     theme = useTheme();
@@ -176,17 +174,13 @@ onIos("the native primary actions take the named roles the drawn ones use: the a
   const probe = renderSurface(<ThemeProbe />);
   const connect = await open({ page: "syncConnect" });
   const steps = connect.root.findAll((node) => node.type === ExpoSettingsAction);
-  expect(steps.length).toBeGreaterThan(1);
-  for (const step of steps) {
-    const button = within(step, (props) => Array.isArray(props.modifiers))[0]!;
-    expect(modifier(button, "lineLimit")).toBeUndefined();
-    expect(modifier(button, "fixedSize")).toMatchObject({ horizontal: false, vertical: true });
-    expect(modifier(button, "buttonBorderShape")).toMatchObject({ cornerRadius: primaryActionRoles.compact.radius });
-    expect(modifier(button, "controlSize")).toMatchObject({ size: primaryActionRoles.compact.nativeControlSize });
-  }
-  const primary = steps.find((step) => (step.props.emphasis ?? "primary") === "primary")!;
-  const primaryButton = within(primary, (props) => Array.isArray(props.modifiers))[0]!;
-  expect(modifier(primaryButton, "tint")).toEqual(tint(theme![primaryActionRoles.compact.fill]));
+  expect(steps).toHaveLength(1);
+  const primaryButton = within(steps[0]!, (props) => Array.isArray(props.modifiers))[0]!;
+  expect(modifier(primaryButton, "lineLimit")).toBeUndefined();
+  expect(modifier(primaryButton, "fixedSize")).toMatchObject({ horizontal: false, vertical: true });
+  expect(modifier(primaryButton, "buttonBorderShape")).toMatchObject({ cornerRadius: primaryActionRoles.full.radius });
+  expect(modifier(primaryButton, "controlSize")).toMatchObject({ size: primaryActionRoles.full.nativeControlSize });
+  expect(modifier(primaryButton, "tint")).toEqual(tint(theme![primaryActionRoles.full.fill]));
   expect(primaryActionRoles.full.fill).toBe(primaryActionRoles.hero.fill);
   expect(primaryActionRoles.full.radius).toBe(actionLayout.radius.regular);
   expect(primaryActionRoles.hero.height).toBe(actionLayout.height.hero);

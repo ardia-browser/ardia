@@ -2,6 +2,7 @@ import { Platform, StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
 import { OnboardingView, SYNC_SUBTITLE } from "../components/onboarding/OnboardingView";
 import { SyncScanIllustration } from "../components/onboarding/SyncScanIllustration";
+import { SyncFlight } from "../components/onboarding/StepPhones";
 import { Symbol } from "../components/ui";
 import { SKETCH_QR_ROWS, sketchQrPath } from "../lib/sketchQr";
 import { useOnboarding } from "../state/onboarding/store";
@@ -32,7 +33,17 @@ type Root = ReturnType<typeof renderSurface>;
 
 const host = (root: Root, testID: string) => root.root.findAll((node) => node.props.testID === testID && typeof node.type === "string");
 
-test("the sync step draws the native apps' Mac window with its QR code and the phone scanning it, not a symbol", () => {
+onIos("on iPhone the sync step draws the flight of tabs from the Mac to the phone instead of the scanning sketch, not a symbol", () => {
+  const root = renderSurface(<OnboardingView />);
+  expect(root.root.findAll((node) => node.type === SyncFlight)).toHaveLength(1);
+  expect(root.root.findAll((node) => node.type === SyncScanIllustration)).toHaveLength(0);
+  expect(host(root, "syncFlight")).toHaveLength(1);
+  expect(host(root, "syncFlightCheck")).toHaveLength(0);
+  expect(root.root.findAll((node) => node.type === Symbol && (node.props.name === "macAndPhone" || node.props.name === "checkmarkCircle"))).toHaveLength(0);
+  unmount(root);
+});
+
+onAndroid("on Android the sync step draws the native apps' Mac window with its QR code and the phone scanning it, not a symbol", () => {
   const root = renderSurface(<OnboardingView />);
   expect(root.root.findAll((node) => node.type === SyncScanIllustration)).toHaveLength(1);
   expect(root.root.findAll((node) => node.type === Symbol && (node.props.name === "macAndPhone" || node.props.name === "checkmarkCircle"))).toHaveLength(0);
@@ -62,7 +73,7 @@ test("the sketch's QR code is a real 25-module code with its three finder square
   expect(sketchQrPath(["10", "01"])).toBe("M0 0h1v1h-1zM1 1h1v1h-1z");
 });
 
-test("once connected, the subtitle crossfades to say the Mac's tabs are here and the phone's viewfinder scales out as the checkmark scales in on a plum screen", () => {
+test("once connected, the subtitle crossfades to say the Mac's tabs are here, and the art shows its checkmark: the flight's badge on iPhone, the viewfinder scaling out as the checkmark scales in on a plum screen on Android", () => {
   const root = renderSurface(<OnboardingView />);
   const before = root.root.findAll((node) => node.props.testID === "onboardingSubtitle" && typeof node.type === "string");
   expect(before).toHaveLength(1);
@@ -71,6 +82,12 @@ test("once connected, the subtitle crossfades to say the Mac's tabs are here and
   expect(subtitle).toHaveLength(1);
   const fading = root.root.findAll((node) => node.props.testID === "onboardingSubtitle" && node.props.entering !== undefined)[0]!;
   expect(fading.props.exiting).toBeDefined();
+  if (Platform.OS === "ios") {
+    expect(host(root, "syncFlightCheck")).toHaveLength(1);
+    expect(host(root, "syncSketchCheck")).toHaveLength(0);
+    unmount(root);
+    return;
+  }
   const check = root.root.findAll((node) => node.props.testID === "syncSketchCheck" && node.props.entering !== undefined)[0]!;
   expect(typeof check.props.entering).toBe("function");
   expect(typeof check.props.exiting).toBe("function");

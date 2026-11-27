@@ -70,7 +70,6 @@ test("every SwiftUI Settings, Library and Archive page turns bounce off, except 
     "settings/ExpoSettingsPanes.tsx",
     "settings/ExpoSettingsRoot.tsx",
     "settings/ExpoSiteSettingsPage.tsx",
-    "settings/ExpoSyncConnectPage.tsx",
     "tabs/ExpoArchive.tsx",
   ]);
 });

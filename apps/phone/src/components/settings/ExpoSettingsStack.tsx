@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { BottomSheet, Host, NavigationDestination, NavigationStack, RNHostView, VStack } from "@expo/ui/swift-ui";
-import { accessibilityHidden, ignoreSafeArea, navigationBarTitleDisplayMode, navigationTitle } from "@expo/ui/swift-ui/modifiers";
+import { accessibilityHidden, ignoreSafeArea, navigationBarTitleDisplayMode, navigationTitle, presentationBackground, presentationDetents } from "@expo/ui/swift-ui/modifiers";
 import { refreshSettings } from "../../state/settings/actions";
 import { settingsInMenu } from "../../state/page/actions";
 import { usePageUi } from "../../state/page/store";
@@ -133,13 +133,14 @@ export function SettingsNavigation() {
   const shown = open ? stack : kept.current.stack;
   const shownGeneration = open ? generation : kept.current.generation;
   const path = settingsPath(shown);
+  const detents = connectDetents(shown, useWindowDimensions().fontScale);
   const seen = useRef<{ open: boolean; keys: Set<string> }>({ open, keys: new Set() });
   if (open && !seen.current.open) seen.current = { open, keys: new Set() };
   else seen.current.open = open;
   for (const key of path) seen.current.keys.add(key);
   const destinations = [...new Set([...settingsDestinationKeys(shown), ...seen.current.keys])];
   return (
-    <NavigationStack key={shownGeneration} path={path} onPathChange={(path) => followSettingsPath(path, shownGeneration)} modifiers={modifierList(profileLook({ ...nativeLookColors(look, dark), usesGlass: glass }))}>
+    <NavigationStack key={shownGeneration} path={path} onPathChange={(path) => followSettingsPath(path, shownGeneration)} modifiers={modifierList(profileLook({ ...nativeLookColors(look, dark), usesGlass: glass }), detents, connectBackground(shown))}>
       <StackRoot route={shown[0]} />
       {destinations.map((key) => (
         <NavigationDestination key={key} value={key}>
@@ -149,6 +150,16 @@ export function SettingsNavigation() {
     </NavigationStack>
   );
 }
+
+const CONNECT_SHEET = { height: 360, largeAboveFontScale: 1.2, background: "rgba(22, 30, 25, 0.94)" } as const;
+
+export function connectDetents(stack: readonly SettingsRoute[], fontScale: number) {
+  if (stack[0]?.page !== "syncConnect" || fontScale > CONNECT_SHEET.largeAboveFontScale) return null;
+  const fitted = { height: CONNECT_SHEET.height };
+  return presentationDetents([fitted, "large"], { selection: stack.length > 1 ? "large" : fitted });
+}
+
+export const connectBackground = (stack: readonly SettingsRoute[]) => (stack[0]?.page === "syncConnect" ? presentationBackground(CONNECT_SHEET.background) : null);
 
 const BRINGS_OWN_DISMISS = new Set<SettingsRoute["page"]>(["syncConnect"]);
 

@@ -23,12 +23,12 @@ public struct SettingsRowLabel: View {
 
 public struct SettingsHero<Accessory: View>: View {
   var title: LocalizedStringKey
-  var subtitle: Text
+  var subtitle: Text?
   var systemImage: String
   var tint: Color
   var accessory: Accessory
 
-  public init(_ title: LocalizedStringKey, subtitle: Text, systemImage: String, tint: Color, @ViewBuilder accessory: () -> Accessory) {
+  public init(_ title: LocalizedStringKey, subtitle: Text?, systemImage: String, tint: Color, @ViewBuilder accessory: () -> Accessory) {
     self.title = title
     self.subtitle = subtitle
     self.systemImage = systemImage
@@ -47,12 +47,12 @@ public struct SettingsHero<Accessory: View>: View {
 
 public struct SettingsHeroContent<Accessory: View>: View {
   var title: LocalizedStringKey
-  var subtitle: Text
+  var subtitle: Text?
   var systemImage: String
   var tint: Color
   var accessory: Accessory
 
-  public init(_ title: LocalizedStringKey, subtitle: Text, systemImage: String, tint: Color, @ViewBuilder accessory: () -> Accessory) {
+  public init(_ title: LocalizedStringKey, subtitle: Text?, systemImage: String, tint: Color, @ViewBuilder accessory: () -> Accessory) {
     self.title = title
     self.subtitle = subtitle
     self.systemImage = systemImage
@@ -68,11 +68,13 @@ public struct SettingsHeroContent<Accessory: View>: View {
           .font(.title2.bold())
           .multilineTextAlignment(.center)
           .accessibilityAddTraits(.isHeader)
-        subtitle
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.center)
-          .contentTransition(.opacity)
+        if let subtitle {
+          subtitle
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .contentTransition(.opacity)
+        }
       }
       accessory
     }
@@ -187,13 +189,13 @@ public struct SetupStepRow<Content: View>: View {
 
   var number: Int
   var title: Text
-  var detail: Text
+  var detail: Text?
   var progress: Progress
   var content: Content
 
   @ScaledMetric(relativeTo: .body) private var badge: CGFloat = 26
 
-  public init(_ number: Int, title: Text, detail: Text, progress: Progress, @ViewBuilder content: () -> Content) {
+  public init(_ number: Int, title: Text, detail: Text?, progress: Progress, @ViewBuilder content: () -> Content) {
     self.number = number
     self.title = title
     self.detail = detail
@@ -225,10 +227,12 @@ public struct SetupStepRow<Content: View>: View {
         title
           .font(.body.weight(.semibold))
           .foregroundStyle(progress == .upcoming ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
-        detail
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
+        if let detail {
+          detail
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
         content
           .padding(.top, Spacing.hairline)
       }

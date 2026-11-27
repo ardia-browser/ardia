@@ -2,9 +2,16 @@ import { Platform, StyleSheet } from "react-native";
 import * as Reanimated from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { archiveTip, OnboardingView, stepIn, stepOut } from "../components/onboarding/OnboardingView";
-import { onboardingCurves, onboardingLayout, onboardingMotion } from "../components/onboarding/onboardingTokens";
+import { onboardingCurves, onboardingMotion, phoneFrame, tipsReel } from "../components/onboarding/onboardingTokens";
+import { reelScale } from "../components/onboarding/StepPhones";
+import { REEL_TIPS } from "../components/onboarding/TipsScenes";
+import { presetLook } from "../lib/profileLook";
 import { ToggleRow } from "../components/settings/SettingsKit";
-import { ActionButton, PrimaryButton, shadowCss, Symbol, ToggleRow as SwitchRow } from "../components/ui";
+import { ActionButton, DEFAULT_PROFILE_COLOR, PrimaryButton, PROFILE_PRESETS, rolesFor, Symbol, ToggleRow as SwitchRow } from "../components/ui";
+import { StartBackdrop } from "../components/search/StartSpaces";
+import { PHONE_SHARING_COPY } from "../lib/telemetryCopy";
+import { defaultBrowser } from "../platform/defaultBrowser";
+import { useDefaultBrowser } from "../state/settings/defaultBrowser";
 import { setPreference } from "../state/settings/store";
 import { selectCopy } from "../lib/platformCopy";
 import { advanceOnboarding, useOnboarding } from "../state/onboarding/store";
@@ -44,9 +51,9 @@ const styleOf = (root: Root, testID: string) => StyleSheet.flatten(hosts(root, t
 
 const header = (root: Root) => root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "header")[0]!;
 
-const showStep = (step: OnboardingStep) => {
+const showStep = (step: OnboardingStep, flushTimers = true) => {
   useOnboarding.setState({ showing: true, step, forward: true });
-  return renderSurface(<OnboardingView />);
+  return renderSurface(<OnboardingView />, { flushTimers });
 };
 
 const buttonStyle = (root: Root, title: string) => StyleSheet.flatten(root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "button" && textIn(node) === title)[0]!.props.style);
@@ -60,33 +67,44 @@ test.each(["welcome", "blocking", "sync", "allSet"] as const)("the %s step's tit
   unmount(root);
 });
 
-test.each([
+const PRIMARIES = [
   ["welcome", "Get Started"],
   ["blocking", "Continue"],
   ["sync", "Connect to Your Mac"],
   ["allSet", "Start Browsing"],
-] as const)("the %s step's %s is a 16-point smooth rounded rectangle in the space's accent on iPhone, not a capsule, and Compose's 16-point rounded rectangle on Android", (step, title) => {
+] as const;
+
+const labelInk = (root: Root, title: string) => {
+  const button = root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "button" && textIn(node) === title)[0]!;
+  return StyleSheet.flatten(button.findAll((node) => node.type === "Text")[0]!.props.style).color;
+};
+
+(iPhone ? test.each(PRIMARIES) : test.skip.each(PRIMARIES))("on iPhone the %s step's %s is a capsule at SwiftUI's 63⅓-point height, filled in the label colour with the page-surface label, not the accent rounded rectangle", (step, title) => {
+  const root = showStep(step);
+  const style = buttonStyle(root, title);
+  const light = rolesFor(false);
+  expect(style.minHeight).toBeCloseTo(190 / 3);
+  expect(style.borderRadius).toBeCloseTo(style.minHeight / 2);
+  expect(style.backgroundColor).toBe(light.label);
+  expect(labelInk(root, title)).toBe(light.pageSurface);
+  unmount(root);
+});
+
+(iPhone ? test.skip.each(PRIMARIES) : test.each(PRIMARIES))("on Android the %s step's %s keeps Compose's 50-point, 16-point rounded rectangle in the space's accent", (step, title) => {
   const root = showStep(step);
   const style = buttonStyle(root, title);
   expect(style.borderRadius).toBe(16);
   expect(style.backgroundColor).toBe("#B25B6B");
-  expect(style.minHeight).toBeCloseTo(iPhone ? 190 / 3 : 50);
+  expect(style.minHeight).toBeCloseTo(50);
   unmount(root);
 });
 
-onIos("a taller button at a large text size keeps its 16-point corners instead of growing into a capsule", () => {
-  const root = showStep("welcome");
-  expect(buttonStyle(root, "Get Started").borderRadius).toBe(16);
-  unmount(root);
-});
-
-onIos("the welcome step: the icon 24 points above the words, a 17-point subtitle 12 under the title, the words 32 in, and the button 24 under the space in 24-point margins with 12 below", () => {
+onIos("the welcome step: the icon 24 points above the words, no subtitle under the title, the words 32 in, and the button 24 under the space in 24-point margins with 12 below", () => {
   const root = showStep("welcome");
   expect(styleOf(root, "welcomeIcon").marginBottom).toBe(24);
   const words = styleOf(root, "welcomeWords");
   expect(words).toMatchObject({ paddingHorizontal: 32, gap: 12 });
-  const subtitle = hosts(root, "welcomeWords")[0]!.findAll((node) => typeof node.type === "string" && textIn(node) === "Get what you want twice as fast.")[0]!;
-  expect(StyleSheet.flatten(subtitle.props.style).fontSize).toBe(17);
+  expect(textIn(hosts(root, "welcomeWords")[0]!)).toBe("Meet your new favorite browser");
   expect(styleOf(root, "onboardingActions")).toMatchObject({ paddingTop: 24, paddingHorizontal: 24, paddingBottom: 12, gap: 8 });
   unmount(root);
 });
@@ -119,18 +137,14 @@ test("every step's art sits centred in its space, so the blocking and all-set ca
   }
 });
 
-onIos("the blocking step's rows are the shared switch rows, knob-only on iPhone as the page menu's are: three titles, no icon tiles, dividers 16 in, on a 16-point white card with the shared card shadow, under an accent hero tile", () => {
+onIos("on iPhone the blocking step shows the phone demo of blocking instead of a card of switch rows, a hero tile or a subtitle", () => {
   selectCopy(Platform.OS);
   const root = showStep("blocking");
-  const card = hosts(root, "onboardingCard")[0]!;
-  const switches = card.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "switch");
-  expect(switches.map((node) => node.props.accessibilityLabel)).toEqual(["Block Ads", "Block Trackers", "Block Cookie Banners"]);
-  expect(card.findAll((node) => node.type === SwitchRow).map((row) => row.props.press)).toEqual(["knob", "knob", "knob"]);
-  expect(card.findAll((node) => node.type === Symbol)).toHaveLength(0);
-  expect(card.findAll((node) => node.type === ToggleRow)).toHaveLength(0);
-  expect(StyleSheet.flatten(card.props.style)).toMatchObject({ borderRadius: 16, paddingVertical: 4, backgroundColor: "#FFFFFF", boxShadow: shadowCss("card", false) });
-  expect(hosts(root, "onboardingHero")[0]!.findAll((node) => node.type === Symbol)[0]!.props.name).toBe("handRaised");
-  expect(onboardingLayout.rowIcons).toBe(false);
+  expect(hosts(root, "blockingDemo")).toHaveLength(1);
+  expect(hosts(root, "onboardingCard")).toHaveLength(0);
+  expect(hosts(root, "onboardingHero")).toHaveLength(0);
+  expect(hosts(root, "onboardingSubtitle")).toHaveLength(0);
+  expect(root.root.findAll((node) => node.type === SwitchRow || node.type === ToggleRow)).toHaveLength(0);
   unmount(root);
 });
 
@@ -141,13 +155,87 @@ onAndroid("the blocking step keeps Compose's rows with their icon tiles", () => 
   unmount(root);
 });
 
-onIos("the all-set step's tips are plain rows: body text, 56 points tall, 16 in, no icons, on the same card", () => {
+onIos("the all-set step shows three tips as a looping reel instead of a list: one caption at a time, each held for a scene, all three read to screen readers", () => {
+  const root = showStep("allSet", false);
+  const reel = hosts(root, "tipsReel")[0]!;
+  expect(reel.props.accessibilityLabel).toBe(REEL_TIPS.join(" "));
+  expect(REEL_TIPS).toHaveLength(3);
+  expect(hosts(root, "onboardingCard")).toHaveLength(0);
+  expect(textOf(root)).not.toContain("archive");
+  const caption = () => textIn(hosts(root, "tipsReelCaption").at(-1)!);
+  expect(caption()).toBe("Tap + to search.");
+  act(() => jest.advanceTimersByTime(tipsReel.sceneMs));
+  expect(caption()).toBe("Swipe a tab up to close it.");
+  act(() => jest.advanceTimersByTime(tipsReel.sceneMs));
+  expect(caption()).toBe("Swipe a page to go back.");
+  act(() => jest.advanceTimersByTime(tipsReel.sceneMs));
+  expect(caption()).toBe("Tap + to search.");
+  expect(hosts(root, "sceneFinger")).toHaveLength(1);
+  unmount(root);
+});
+
+onIos("a reel dot jumps to its tip, and tapping the phone moves to the next", () => {
+  const root = showStep("allSet", false);
+  const caption = () => textIn(hosts(root, "tipsReelCaption").at(-1)!);
+  const pressable = (testID: string) => root.root.findAll((node) => node.props.testID === testID && typeof node.props.onPress === "function");
+  act(() => pressable("tipsReelDot")[2]!.props.onPress());
+  expect(caption()).toBe("Swipe a page to go back.");
+  act(() => pressable("tipsReelStage")[0]!.props.onPress());
+  expect(caption()).toBe("Tap + to search.");
+  unmount(root);
+});
+
+onIos("with Reduce Motion the reel draws no finger and still steps through the tips", () => {
+  mockMotion.reduced = true;
+  const root = showStep("allSet", false);
+  expect(hosts(root, "sceneFinger")).toHaveLength(0);
+  act(() => jest.advanceTimersByTime(tipsReel.reducedSceneMs));
+  expect(textIn(hosts(root, "tipsReelCaption").at(-1)!)).toBe("Swipe a tab up to close it.");
+  unmount(root);
+});
+
+onIos("the reel's phone shrinks to fit a short screen and never grows past its drawn size", () => {
+  expect(reelScale(2000)).toBe(tipsReel.maxScale);
+  expect(reelScale(0)).toBe(tipsReel.minScale);
+  const mid = reelScale(phoneFrame.height * 0.6 + 100);
+  expect(mid).toBeGreaterThan(tipsReel.minScale);
+  expect(mid).toBeLessThan(tipsReel.maxScale);
+});
+
+onIos("on iPhone the all-set step has no subtitle, and its sharing row is the plain shared switch row with no icon tile and no footnote", () => {
   const root = showStep("allSet");
-  const card = hosts(root, "onboardingCard")[0]!;
-  for (const tip of ["Tap + to search.", "Flick a tab up to close it.", "Swipe a page to go back.", "Old tabs archive after 1 day."]) expect(textIn(card)).toContain(tip);
-  expect(card.findAll((node) => node.type === Symbol)).toHaveLength(0);
-  const tip = card.findAll((node) => typeof node.type === "string" && textIn(node) === "Tap + to search." && StyleSheet.flatten(node.props.style)?.minHeight !== undefined)[0]!;
-  expect(StyleSheet.flatten(tip.props.style)).toMatchObject({ minHeight: 56, paddingHorizontal: 16 });
+  expect(hosts(root, "onboardingSubtitle")).toHaveLength(0);
+  expect(textOf(root)).not.toContain("Happy browsing.");
+  expect(textOf(root)).not.toContain(PHONE_SHARING_COPY.onboardingNote);
+  expect(root.root.findAll((node) => node.type === ToggleRow)).toHaveLength(0);
+  const row = root.root.findAll((node) => node.type === SwitchRow && node.props.label === PHONE_SHARING_COPY.toggle);
+  expect(row).toHaveLength(1);
+  expect(row[0]!.findAll((node) => node.type === Symbol)).toHaveLength(0);
+  unmount(root);
+});
+
+test("the default-browser step sits on the start screen's gradient with ink actions on iPhone, and keeps its floating sheet with the shared actions on Android", async () => {
+  jest.spyOn(defaultBrowser, "status").mockImplementation(async () => ({ isDefault: false, canAsk: false }));
+  useDefaultBrowser.setState({ status: { isDefault: false, canAsk: false } });
+  const root = showStep("defaultBrowser");
+  await act(async () => undefined);
+  const sheet = styleOf(root, "defaultBrowserSheet");
+  const actions = root.root.findAll((node) => node.type === ActionButton).map((node) => ({ title: node.props.title, variant: node.props.variant, tone: node.props.tone, size: node.props.size, capsule: node.props.capsule }));
+  const action = root.root.findAll((node) => node.type === ActionButton && node.props.variant === "filled").map((node) => node.props.title)[0] ?? root.root.findAll((node) => node.type === PrimaryButton)[0]!.props.title;
+  if (iPhone) {
+    expect(sheet.backgroundColor).toBeUndefined();
+    expect(sheet.boxShadow).toBeUndefined();
+    expect(root.root.findAll((node) => node.type === PrimaryButton)).toHaveLength(0);
+    expect(actions).toEqual([
+      { title: action, variant: "filled", tone: "ink", size: "hero", capsule: true },
+      { title: "Maybe Later", variant: "plain", tone: "ink", size: "regular", capsule: undefined },
+    ]);
+  } else {
+    expect(sheet.backgroundColor).toBeDefined();
+    expect(sheet.boxShadow).toBeDefined();
+    expect(root.root.findAll((node) => node.type === PrimaryButton).map((node) => node.props.title)).toEqual([action]);
+    expect(actions.find((entry) => entry.title === "Maybe Later")).toMatchObject({ variant: "plain", tone: "neutral" });
+  }
   unmount(root);
 });
 
@@ -233,7 +321,23 @@ test("with Reduce Motion a step only fades, on main's Motion.fade (150 ms ease-o
   unmount(root);
 });
 
-test("the backdrop cross-fades on the step's motion on both phones, as main animates both in one transaction", () => {
+onIos("on iPhone every step sits on one start-screen gradient that stays put from step to step, with no fill cross-fading behind it", () => {
+  useOnboarding.setState({ showing: true, step: "welcome", forward: true });
+  const root = renderSurface(<OnboardingView />);
+  const backdrop = hosts(root, "onboardingStartBackdrop");
+  expect(backdrop).toHaveLength(1);
+  const look = presetLook(PROFILE_PRESETS.find((preset) => preset.key === DEFAULT_PROFILE_COLOR)!);
+  expect(backdrop[0]!.findAll((node) => node.type === StartBackdrop)[0]!.props).toMatchObject({ look, dark: false, incognito: false });
+  expect(root.root.findAll((node) => node.props.entering !== undefined && node.props.testID === undefined && node.props.exiting !== undefined)).toHaveLength(0);
+  const first = backdrop[0]!;
+  act(() => useOnboarding.setState({ step: "blocking", forward: true }));
+  const after = hosts(root, "onboardingStartBackdrop");
+  expect(after).toHaveLength(1);
+  expect(after[0]).toBe(first);
+  unmount(root);
+});
+
+onAndroid("the backdrop cross-fades on the step's motion, as main animates both in one transaction", () => {
   useOnboarding.setState({ showing: true, step: "welcome", forward: true });
   const root = renderSurface(<OnboardingView />);
   const backdrop = root.root.findAll((node) => node.props.entering !== undefined && node.props.testID === undefined && node.props.exiting !== undefined)[0]!;
@@ -254,13 +358,13 @@ test("the welcome step rises on main's Motion.rise on both phones: 360 ms of (0.
   unmount(root);
 });
 
-test("with Reduce Motion the welcome step fades in at once without the tilt, scale or lift, on SwiftUI's 300 ms ease-out on both phones", () => {
+test("with Reduce Motion the welcome step fades in at once without a scale or lift, on SwiftUI's 300 ms ease-out on both phones, the icon upright on iPhone and at Compose's resting tilt on Android", () => {
   mockMotion.reduced = true;
   const delay = jest.spyOn(Reanimated, "withDelay");
   const root = showStep("welcome");
   expect(delay).not.toHaveBeenCalled();
   expect(onboardingMotion.riseReduced).toEqual({ timing: { duration: 300, easing: expect.anything() } });
-  expect(styleOf(root, "welcomeIcon").transform).toEqual([{ rotate: "-6deg" }, { scale: 1 }]);
+  expect(styleOf(root, "welcomeIcon").transform).toEqual([{ rotate: iPhone ? "0deg" : "-6deg" }, { scale: 1 }]);
   expect(styleOf(root, "welcomeWords").transform).toEqual([{ translateY: 0 }]);
   unmount(root);
 });
@@ -270,6 +374,9 @@ test("the archive tip reads the same Archive Tabs preference Settings shows, and
   expect(archiveTip("week")).toBe("Old tabs archive after 7 days.");
   expect(archiveTip("twelveHours")).toBe("Old tabs archive after 12 hours.");
   expect(archiveTip("never")).not.toMatch(/\d|day|hour/);
+});
+
+onAndroid("Android's all-set tips name the Archive Tabs interval", () => {
   setPreference("autoArchiveInterval", "week");
   const root = showStep("allSet");
   expect(textOf(root)).toContain("Old tabs archive after 7 days.");
@@ -303,14 +410,12 @@ test("finishing makes the whole onboarding dead to touch and hidden from screen 
   unmount(root);
 });
 
-test("every step's primary is the shared PrimaryButton and Not Now is the shared plain action, not a rebuilt button", () => {
+onIos("on iPhone every step's primary is the shared action filled in ink at hero size as a capsule, and Not Now is the shared plain action in ink, not a rebuilt button", () => {
   const root = showStep("sync");
-  const primaries = root.root.findAll((node) => node.type === PrimaryButton).map((node) => node.props.title);
-  const plain = root.root.findAll((node) => node.type === ActionButton && node.props.variant === "plain").map((node) => node.props.title);
-  if (iPhone) {
-    expect(primaries).toEqual(["Connect to Your Mac"]);
-    expect(plain).toEqual(["Not Now"]);
-  }
+  const buttons = root.root.findAll((node) => node.type === ActionButton);
+  expect(root.root.findAll((node) => node.type === PrimaryButton)).toHaveLength(0);
+  expect(buttons.filter((node) => node.props.variant === "filled").map((node) => node.props)).toEqual([expect.objectContaining({ title: "Connect to Your Mac", testID: "onboardingPrimary", tone: "ink", size: "hero", capsule: true })]);
+  expect(buttons.filter((node) => node.props.variant === "plain").map((node) => node.props)).toEqual([expect.objectContaining({ title: "Not Now", tone: "ink" })]);
   unmount(root);
 });
 

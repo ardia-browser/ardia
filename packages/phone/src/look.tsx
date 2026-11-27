@@ -130,6 +130,14 @@ export function nativeGlassRender(): NativeGlassRender | null {
 
 export const DeckBackdrop = look<DeckBackdropProps>("DeckBackdrop");
 
+export type MeadowHour = "dawn" | "morning" | "midday" | "afternoon" | "golden" | "dusk" | "night";
+
+export type PhoneMeadowProps = ViewProps & { hour: MeadowHour | "sunrise"; travelMs?: number; onMeadow?: (event: { nativeEvent: { state: "ready" | "failed" } }) => void };
+
+export const PhoneMeadow = look<PhoneMeadowProps>("PhoneMeadow");
+
+export const meadowIsNative = () => hasNativeLook;
+
 export const ProfileBackdrop = look<ProfileBackdropProps>("ProfileBackdrop");
 
 export const FilmGrain = look<FilmGrainProps>("FilmGrain");

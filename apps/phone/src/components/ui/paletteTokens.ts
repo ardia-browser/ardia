@@ -26,6 +26,8 @@ export const neutralAccent = {
 
 export const accentInkBase = { onFill: "#FFFFFF", onLightFill: "#000000", darken: "#000000", lighten: "#FFFFFF" } as const;
 
+export const emphasisTone = { darkSaturation: 0.62, lightSaturation: 0.48, darkLightness: 0.72, lightLightness: 0.44 } as const;
+
 export const accentWashAlpha = { neutral: 0.08, light: 0.12, dark: 0.22 } as const;
 
 export const contrastMinimum = { text: 4.5, largeText: 3, glyph: 3, whiteOnDeepenedFill: 3.3 } as const;

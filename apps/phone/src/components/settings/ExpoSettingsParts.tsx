@@ -54,16 +54,18 @@ export type SettingsActionSize = Exclude<PrimaryActionRole, "hero">;
 
 export type SettingsActionEmphasis = "primary" | "secondary";
 
-export function useSettingsActionModifiers(size: SettingsActionSize, emphasis: SettingsActionEmphasis = "primary") {
+export type SettingsActionLook = { fill: string; ink: string; capsule: boolean };
+
+export function useSettingsActionModifiers(size: SettingsActionSize, emphasis: SettingsActionEmphasis = "primary", look?: SettingsActionLook) {
   const theme = useTheme();
   const role = primaryActionRoles[size];
-  const shape = buttonBorderShape("roundedRectangle", role.radius);
-  const fill = emphasis === "primary" ? [buttonStyle("borderedProminent"), tint(theme[role.fill]), foregroundStyle(theme[role.ink])] : [buttonStyle("bordered")];
+  const shape = look?.capsule ? buttonBorderShape("capsule") : buttonBorderShape("roundedRectangle", role.radius);
+  const fill = look ? [buttonStyle("borderedProminent"), tint(look.fill), foregroundStyle(look.ink)] : emphasis === "primary" ? [buttonStyle("borderedProminent"), tint(theme[role.fill]), foregroundStyle(theme[role.ink])] : [buttonStyle("bordered")];
   const sizing = [controlSize(role.nativeControlSize), ...(size === "compact" ? [labelStyle("titleAndIcon")] : []), fixedSize({ horizontal: false, vertical: role.wraps })];
   return [...fill, shape, ...sizing, font({ weight: actionLayout.nativeLabelWeight })];
 }
 
-type ActionProps = { title: string; onPress: () => void; size: SettingsActionSize; emphasis?: SettingsActionEmphasis; systemImage?: string; isDisabled?: boolean; busy?: boolean; busyValue?: string; focusRequest?: number };
+type ActionProps = { title: string; onPress: () => void; size: SettingsActionSize; emphasis?: SettingsActionEmphasis; look?: SettingsActionLook; systemImage?: string; isDisabled?: boolean; busy?: boolean; busyValue?: string; focusRequest?: number };
 
 export const titleWhileBusy = (idleTitle: string, title: string, busy: boolean) => (busy ? idleTitle : title);
 
@@ -73,9 +75,9 @@ function useTitleWhileBusy(title: string, busy: boolean) {
   return titleWhileBusy(idleTitle.current, title, busy);
 }
 
-export function ExpoSettingsAction({ title, onPress, size, emphasis = "primary", systemImage, isDisabled = false, busy = false, busyValue = listWords.loading, focusRequest = 0 }: ActionProps) {
+export function ExpoSettingsAction({ title, onPress, size, emphasis = "primary", look, systemImage, isDisabled = false, busy = false, busyValue = listWords.loading, focusRequest = 0 }: ActionProps) {
   const shownTitle = useTitleWhileBusy(title, busy);
-  const modifiers = [...useSettingsActionModifiers(size, emphasis), disabled(isDisabled || busy), ...(busy ? [accessibilityValue(busyValue)] : []), ...settingsUI.modifierList(settingsUI.accessibilityFocusRequest(focusRequest))];
+  const modifiers = [...useSettingsActionModifiers(size, emphasis, look), disabled(isDisabled || busy), ...(busy ? [accessibilityValue(busyValue)] : []), ...settingsUI.modifierList(settingsUI.accessibilityFocusRequest(focusRequest))];
   return (
     <HStack spacing={space.s}>
       {size === "full" ? (

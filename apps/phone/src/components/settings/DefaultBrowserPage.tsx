@@ -6,10 +6,8 @@ import { defaultBrowserCopy } from "../../state/settings/settingsRules";
 import { ActionButton, AppIcon, font, ink, PrimaryButton, radius, settingsLayout, settingsTint, space, spacesLayout, Symbol, useTheme, smoothCorners } from "../ui";
 import { SettingsPage } from "./SettingsKit";
 
-export function DefaultBrowserSteps({ onLater, onDone, headingRef }: { onLater?: () => void; onDone?: () => void; headingRef?: (node: ViewInstance | null) => void }) {
-  const theme = useTheme();
+export function useDefaultBrowserFlow({ onLater, onDone }: { onLater?: () => void; onDone?: () => void }) {
   const status = useDefaultBrowser((s) => s.status);
-  const { fontScale } = useWindowDimensions();
   useEffect(() => {
     void refreshDefaultBrowser();
     const returns = AppState.addEventListener("change", (next) => {
@@ -17,28 +15,38 @@ export function DefaultBrowserSteps({ onLater, onDone, headingRef }: { onLater?:
     });
     return () => returns.remove();
   }, []);
-  if (!status) return null;
-  const copy = defaultBrowserCopy(status);
-  const listsSteps = fontScale >= settingsLayout.accessibilityFontScale;
+  const copy = status ? defaultBrowserCopy(status) : null;
   const ask = async () => {
+    if (!copy) return;
     if (copy.inSettings) onDone?.();
     const after = await askForDefaultBrowser(copy.does);
     if (copy.inSettings) return;
     if (after.unavailable) onLater?.();
     else if (after.status?.isDefault) onDone?.();
   };
+  return { copy, ask };
+}
+
+export function DefaultBrowserSteps({ onLater, onDone, headingRef, inkActions = false }: { onLater?: () => void; onDone?: () => void; headingRef?: (node: ViewInstance | null) => void; inkActions?: boolean }) {
+  const theme = useTheme();
+  const titleInk = theme.label;
+  const bodyInk = theme.secondaryLabel;
+  const { fontScale } = useWindowDimensions();
+  const { copy, ask } = useDefaultBrowserFlow({ onLater, onDone });
+  if (!copy) return null;
+  const listsSteps = fontScale >= settingsLayout.accessibilityFontScale;
   return (
     <View style={styles.column}>
       <View style={styles.words}>
-        <Text ref={headingRef} accessibilityRole="header" style={[font.title, styles.heavy, { color: theme.label }]}>
+        <Text ref={headingRef} accessibilityRole="header" style={[font.title, styles.heavy, { color: titleInk }]}>
           {copy.title}
         </Text>
-        <Text style={[font.body, styles.centered, { color: theme.secondaryLabel }]}>{copy.subtitle}</Text>
+        <Text style={[font.body, styles.centered, { color: bodyInk }]}>{copy.subtitle}</Text>
       </View>
       {copy.steps.length && listsSteps ? (
         <View testID="defaultBrowserList" style={styles.list}>
           {copy.steps.map((step, index) => (
-            <Text key={step} style={[font.body, { color: theme.label }]}>{`${index + 1}. ${step}`}</Text>
+            <Text key={step} style={[font.body, { color: titleInk }]}>{`${index + 1}. ${step}`}</Text>
           ))}
         </View>
       ) : copy.steps.length ? (
@@ -47,7 +55,7 @@ export function DefaultBrowserSteps({ onLater, onDone, headingRef }: { onLater?:
             <View key={step}>
               <View accessible style={styles.step}>
                 <StepIcon index={index} count={copy.steps.length} inSettings={copy.inSettings} />
-                <Text style={[font.body, styles.fill, { color: theme.label }]}>{`${index + 1}. ${step}`}</Text>
+                <Text style={[font.body, styles.fill, { color: titleInk }]}>{`${index + 1}. ${step}`}</Text>
               </View>
               {index < copy.steps.length - 1 ? <View style={[styles.divider, { backgroundColor: theme.separator }]} /> : null}
             </View>
@@ -56,12 +64,12 @@ export function DefaultBrowserSteps({ onLater, onDone, headingRef }: { onLater?:
       ) : null}
       <View style={styles.actions}>
         {copy.action ? (
-          <PrimaryButton title={copy.action} onPress={() => void ask()} />
+          inkActions ? <ActionButton title={copy.action} onPress={() => void ask()} variant="filled" tone="ink" size="hero" capsule /> : <PrimaryButton title={copy.action} onPress={() => void ask()} />
         ) : onLater ? (
-          <PrimaryButton title="Continue" onPress={onLater} />
+          inkActions ? <ActionButton title="Continue" onPress={onLater} variant="filled" tone="ink" size="hero" capsule /> : <PrimaryButton title="Continue" onPress={onLater} />
         ) : null}
         {copy.action && onLater ? (
-          <ActionButton title="Maybe Later" onPress={onLater} variant="plain" tone="neutral" size="regular" />
+          <ActionButton title="Maybe Later" onPress={onLater} variant="plain" tone={inkActions ? "ink" : "neutral"} size="regular" />
         ) : null}
       </View>
     </View>

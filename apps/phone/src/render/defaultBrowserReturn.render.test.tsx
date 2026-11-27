@@ -2,7 +2,7 @@ import { AppState, Dimensions, Linking, Platform, StyleSheet } from "react-nativ
 import { act } from "react-test-renderer";
 import "../platform/copy";
 import { DefaultBrowserPage, DefaultBrowserSteps } from "../components/settings/DefaultBrowserPage";
-import { AppIcon } from "../components/ui";
+import { ActionButton, AppIcon, PrimaryButton } from "../components/ui";
 import { defaultBrowser } from "../platform/defaultBrowser";
 import { useDefaultBrowser } from "../state/settings/defaultBrowser";
 import { pressButton, renderSurface, textOf, unmount } from "../../test/render/harness";
@@ -115,5 +115,13 @@ onAndroid("on Android, when nothing on the phone can take the request, onboardin
   await settle();
   expect(later).toHaveBeenCalledTimes(1);
   expect(done).not.toHaveBeenCalled();
+  unmount(root);
+});
+
+test("Settings' own default browser page keeps the shared primary button, not onboarding's ink capsule", async () => {
+  const root = renderSurface(<DefaultBrowserPage />);
+  await settle();
+  expect(root.root.findAll((node) => node.type === PrimaryButton)).toHaveLength(1);
+  expect(root.root.findAll((node) => node.type === ActionButton && node.props.tone === "ink")).toHaveLength(0);
   unmount(root);
 });

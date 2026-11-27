@@ -11,6 +11,8 @@ extension WebKitTab: LoginListTarget {
     WebKitLoginFill.run(in: webView, world: WebKitHub.world, username: username, password: password, origin: frameOrigin, done: done)
   }
 
+  func loginListConnect() { emit("applePasswordsConnect") }
+
   func loginListSync(open: Bool, picking: Bool) {
     webView?.evaluateJavaScript("window.__ardiaLogins && window.__ardiaLogins.dropdown(\(open), \(picking))", in: nil, in: WebKitHub.world) { _ in }
   }

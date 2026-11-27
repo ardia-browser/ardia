@@ -12,6 +12,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
   static let pairingSeconds: TimeInterval = 15
   static let exitGraceSeconds: TimeInterval = 1
   static let endedPushes: Set<Int> = [9, 10]
+  static let changed = Notification.Name("ArdiaApplePasswordsChanged")
   private static let log = Logger(subsystem: "com.ardia.browser", category: "ApplePasswords")
 
   enum Outcome: String {
@@ -104,6 +105,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
     let now = state
     guard now != lastState else { return }
     lastState = now
+    NotificationCenter.default.post(name: Self.changed, object: nil, userInfo: ["state": now])
     ArdiaEvents.emit("passwords.applePasswordsChanged", data: ArdiaConsentStamp.begin().onto(["state": now]))
   }
 

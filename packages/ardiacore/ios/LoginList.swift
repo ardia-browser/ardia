@@ -6,6 +6,7 @@ protocol LoginListTarget: AnyObject {
   var loginListWindow: NSWindow? { get }
   func loginListFill(username: String, password: String, frameOrigin: String, done: @escaping (Bool) -> Void)
   func loginListSync(open: Bool, picking: Bool)
+  func loginListConnect()
 }
 
 struct LoginListField {
@@ -26,17 +27,32 @@ final class LoginList: NSObject {
   static let noLogins = "No saved logins"
   static let insecure = "Not secure"
   static let fillFailed = "Apple Passwords didn't fill this login. Unlock the Passwords app and try again."
+  static let connectId = "connectApplePasswords"
+  static let connectTitle = "Connect Apple Passwords"
+  static let notNowId = "notNow"
+  static let notNowTitle = "Not now"
 
   private struct Shown {
     weak var target: LoginListTarget?
     let field: LoginListField
     let page: String
     let host: String
-    let logins: [ApplePasswordsMatch.Login]
+    let site: String
+    var logins: [ApplePasswordsMatch.Login]
+    var connect = false
   }
 
   private var shown: Shown?
   private var ticket = 0
+  private var declined: Set<String> = []
+  private var resume: Shown?
+
+  override init() {
+    super.init()
+    NotificationCenter.default.addObserver(forName: ApplePasswordsClient.changed, object: nil, queue: .main) { [weak self] note in
+      self?.applePasswordsChanged(note.userInfo?["state"] as? String ?? "")
+    }
+  }
   private lazy var dropdown: WebKitAutofillDropdown = {
     let dropdown = WebKitAutofillDropdown()
     dropdown.onPick = { [weak self] row in self?.picked(row.id) }
@@ -59,17 +75,21 @@ final class LoginList: NSObject {
       let host = frame.host?.lowercased(), !host.isEmpty, let page = Self.origin(of: target.loginListPage), let pageHost = target.loginListPage?.host?.lowercased()
     else { return close(target) }
     let profile = target.loginListProfile
+    resume = nil
     ApplePasswordsClient.shared.logins(host: host) { [weak self, weak target] result in
       let entries = (try? result.get()) ?? []
       Self.domains(ApplePasswordsMatch.probes([host, pageHost] + ApplePasswordsMatch.siteHosts(entries)), profile: profile) { domains in
         guard let self, let target, asked == self.ticket, Self.origin(of: target.loginListPage) == page else { return }
         guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return self.close(target) }
+        let site = domains[pageHost] ?? pageHost
         switch result {
         case .success:
           let logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains)
-          self.present(Shown(target: target, field: field, page: page, host: host, logins: logins), notice: nil)
+          self.present(Shown(target: target, field: field, page: page, host: host, site: site, logins: logins), notice: nil)
+        case .failure(.notConnected):
+          self.offerConnect(Shown(target: target, field: field, page: page, host: host, site: site, logins: []))
         case .failure(let problem):
-          self.present(Shown(target: target, field: field, page: page, host: host, logins: []), notice: Self.notice(problem))
+          self.present(Shown(target: target, field: field, page: page, host: host, site: site, logins: []), notice: Self.notice(problem))
         }
       }
     }
@@ -85,9 +105,27 @@ final class LoginList: NSObject {
     }
   }
 
+  private func offerConnect(_ next: Shown) {
+    guard let target = next.target else { return }
+    guard !declined.contains(next.site) else { return close(target) }
+    var offer = next
+    offer.connect = true
+    present(offer, notice: nil)
+  }
+
+  private func applePasswordsChanged(_ state: String) {
+    guard state == "connected" else { return declined.removeAll() }
+    guard let waiting = resume else { return }
+    resume = nil
+    guard let target = waiting.target, Self.origin(of: target.loginListPage) == waiting.page else { return }
+    show(target, field: waiting.field)
+  }
+
+  func pairingCancelled() { resume = nil }
+
   static func notice(_ problem: ApplePasswordsClient.Problem) -> String {
     switch problem {
-    case .notConnected: "Apple Passwords isn't connected. Connect it in Settings › Profiles › Passwords."
+    case .notConnected: "Apple Passwords isn't connected."
     case .refused: "Apple Passwords didn't share this site's logins. Unlock the Passwords app and try again."
     case .failed: "Apple Passwords didn't answer. Try again."
     case .unavailable(.helperMissing): "Apple Passwords' browser helper is missing from this Mac."
@@ -99,7 +137,13 @@ final class LoginList: NSObject {
 
   private static func rowId(_ login: ApplePasswordsMatch.Login) -> String { "login\n\(login.user)" }
 
-  static func rows(_ logins: [ApplePasswordsMatch.Login], notice: String?) -> [WebKitAutofillDropdown.Row] {
+  static let connectRows: [WebKitAutofillDropdown.Row] = [
+    .init(id: connectId, title: connectTitle, detail: "", symbol: "key.fill", appIcon: passwordsApp, iconLabel: iconLabel),
+    .init(id: notNowId, title: notNowTitle, detail: "", symbol: "xmark"),
+  ]
+
+  static func rows(_ logins: [ApplePasswordsMatch.Login], notice: String?, connect: Bool = false) -> [WebKitAutofillDropdown.Row] {
+    if connect { return connectRows }
     var rows: [WebKitAutofillDropdown.Row] = []
     if let notice { rows.append(.init(id: "", title: notice, detail: "", symbol: "exclamationmark.circle", enabled: false)) }
     if logins.isEmpty, notice == nil { rows.append(.init(id: "", title: noLogins, detail: "", symbol: "key", enabled: false, appIcon: passwordsApp, iconLabel: iconLabel)) }
@@ -115,14 +159,16 @@ final class LoginList: NSObject {
     guard let target = next.target else { return }
     let typed = next.field.typed.lowercased()
     let logins = typed.isEmpty ? next.logins : next.logins.filter { $0.user.lowercased().hasPrefix(typed) }
-    let quiet = next.field.trigger == .typing && notice == nil && logins.isEmpty
+    let quiet = next.field.trigger == .typing && notice == nil && logins.isEmpty && !next.connect
     guard !quiet, let window = target.loginListWindow else { return close(target) }
-    shown = Shown(target: target, field: next.field, page: next.page, host: next.host, logins: logins)
-    let rows = Self.rows(logins, notice: notice)
+    var current = next
+    current.logins = logins
+    shown = current
+    let rows = Self.rows(logins, notice: notice, connect: next.connect)
     if LaunchConfig.shared.background { NSLog("[logins] Login list: %ld logins, %ld rows", logins.count, rows.count) }
     dropdown.show(rows, under: next.field.screenRect, in: window)
     sync()
-    Self.count("shown")
+    Self.count(next.connect ? "connectShown" : "shown")
   }
 
   func key(_ target: LoginListTarget, _ key: String) {
@@ -155,6 +201,17 @@ final class LoginList: NSObject {
       close(target)
       return Self.openPasswordsApp()
     }
+    if id == Self.connectId {
+      close(target)
+      resume = current
+      Self.count("connectPicked")
+      return target.loginListConnect()
+    }
+    if id == Self.notNowId {
+      close(target)
+      declined.insert(current.site)
+      return Self.count("notNow")
+    }
     guard let login = current.logins.first(where: { Self.rowId($0) == id }) else { return }
     close(target)
     let asked = ticket
@@ -170,8 +227,8 @@ final class LoginList: NSObject {
         case .failure(let problem):
           Self.count("fillFailed")
           guard asked == self.ticket else { return }
-          let notice = problem == .notConnected ? Self.notice(problem) : Self.fillFailed
-          self.present(current, notice: notice)
+          if problem == .notConnected { return self.offerConnect(current) }
+          self.present(current, notice: Self.fillFailed)
         }
       }
     }

@@ -83,6 +83,9 @@ const LOGIN_LIST_FIELDS: Record<LoginListCount, string> = {
   shown: "apple_passwords_login_list_shown",
   filled: "apple_passwords_login_list_filled",
   fillFailed: "apple_passwords_fills_failed",
+  connectShown: "apple_passwords_login_list_connect_shown",
+  connectPicked: "apple_passwords_login_list_connect_picked",
+  notNow: "apple_passwords_login_list_not_now",
 };
 
 const SAVE_FIELDS: Record<ApplePasswordsSaveCount, string> = {

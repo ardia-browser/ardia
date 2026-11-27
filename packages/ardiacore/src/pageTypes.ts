@@ -259,6 +259,7 @@ export type WebViewProps = ViewProps & {
   onFieldProviderOpened?: (opened: FieldProviderOpened) => void;
   onFieldProviderHint?: (hint: FieldProviderHint) => void;
   onVerificationCodeFound?: (found: VerificationCodeFound) => void;
+  onApplePasswordsConnect?: () => void;
 };
 
 export type WebViewHandle = {

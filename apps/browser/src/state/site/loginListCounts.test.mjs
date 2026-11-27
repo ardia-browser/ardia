@@ -21,10 +21,32 @@ test("the Login list counts each time it is shown, each fill and each fill that 
     apple_passwords_login_list_shown: 2,
     apple_passwords_login_list_filled: 1,
     apple_passwords_fills_failed: 1,
+    apple_passwords_login_list_connect_shown: 0,
+    apple_passwords_login_list_connect_picked: 0,
+    apple_passwords_login_list_not_now: 0,
   });
   client.setSharing(false, "settings");
   counted("shown");
-  assert.deepEqual(listCounts(takePasswordManagerCounts()), { apple_passwords_login_list_shown: 0, apple_passwords_login_list_filled: 0, apple_passwords_fills_failed: 0 });
+  assert.deepEqual(listCounts(takePasswordManagerCounts()), {
+    apple_passwords_login_list_shown: 0,
+    apple_passwords_login_list_filled: 0,
+    apple_passwords_fills_failed: 0,
+    apple_passwords_login_list_connect_shown: 0,
+    apple_passwords_login_list_connect_picked: 0,
+    apple_passwords_login_list_not_now: 0,
+  });
+});
+
+test("the Login list counts each Connect Apple Passwords row shown, each Connect picked and each Not now", () => {
+  startLoginListCounts();
+  client.setSharing(true, "settings");
+  takePasswordManagerCounts();
+  for (const name of ["connectShown", "connectShown", "connectShown", "connectPicked", "notNow"]) counted(name);
+  const counts = takePasswordManagerCounts();
+  assert.equal(counts.apple_passwords_login_list_connect_shown, 3);
+  assert.equal(counts.apple_passwords_login_list_connect_picked, 1);
+  assert.equal(counts.apple_passwords_login_list_not_now, 1);
+  client.setSharing(false, "settings");
 });
 
 test("each login saved to Apple Passwords and each save it refused are counted, only while sharing is on", () => {

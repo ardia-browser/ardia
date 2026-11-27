@@ -8,15 +8,19 @@ final class PageView: NSView {
   var gated = true
   var presses = WebKitPagePresses()
   var received: [String] = []
+  var navigated: [WebKitPagePresses.Navigation] = []
   var refused = 0
 
   private func take(_ name: String, _ event: NSEvent) {
     if gated {
       switch presses.verdict(for: event, on: self) {
       case .pass: break
-      case .drop: return
+      case .drop, .swallow: return
       case .refuse:
         refused += 1
+        return
+      case .navigate(let direction):
+        navigated.append(direction)
         return
       }
     }
@@ -28,6 +32,9 @@ final class PageView: NSView {
   override func mouseUp(with event: NSEvent) { take("up", event) }
   override func rightMouseDown(with event: NSEvent) { take("rightDown", event) }
   override func rightMouseUp(with event: NSEvent) { take("rightUp", event) }
+  override func otherMouseDown(with event: NSEvent) { take("otherDown(\(event.buttonNumber))", event) }
+  override func otherMouseDragged(with event: NSEvent) { take("otherDragged(\(event.buttonNumber))", event) }
+  override func otherMouseUp(with event: NSEvent) { take("otherUp(\(event.buttonNumber))", event) }
 }
 
 struct Scene {
@@ -52,7 +59,17 @@ struct Scene {
     NSEvent.mouseEvent(
       with: type, location: at, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
       windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
-      pressure: [.leftMouseUp, .rightMouseUp].contains(type) ? 0 : 1)!
+      pressure: [.leftMouseUp, .rightMouseUp, .otherMouseUp].contains(type) ? 0 : 1)!
+  }
+
+  func otherEvent(_ type: NSEvent.EventType, _ at: NSPoint, button: Int, modifiers: NSEvent.ModifierFlags = []) -> NSEvent {
+    let base = NSEvent.mouseEvent(
+      with: type, location: at, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
+      windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+      pressure: type == .otherMouseUp ? 0 : 1)!
+    let cg = base.cgEvent!.copy()!
+    cg.setIntegerValueField(.mouseEventButtonNumber, value: Int64(button))
+    return NSEvent(cgEvent: cg)!
   }
 
   func hit(_ at: NSPoint) -> NSView? { window.contentView?.superview?.hitTest(at) }
@@ -164,6 +181,75 @@ struct WebKitPagePressesTests {
     s.page.rightMouseDown(with: s.event(.rightMouseDown, onPage))
     s.page.rightMouseUp(with: s.event(.rightMouseUp, onPage))
     expect(s.page.received, ["rightDown", "rightUp"], "a right click over the overlay is refused, one on the page goes through")
+
+    s = Scene()
+    s.page.otherMouseDown(with: s.otherEvent(.otherMouseDown, onPage, button: 3))
+    s.page.otherMouseDragged(with: s.otherEvent(.otherMouseDragged, onPage, button: 3))
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, onPage, button: 3))
+    s.page.otherMouseDown(with: s.otherEvent(.otherMouseDown, onPage, button: 4))
+    s.page.otherMouseDragged(with: s.otherEvent(.otherMouseDragged, onPage, button: 4))
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, onPage, button: 4))
+    expect(s.page.received, [], "back and forward mouse buttons never reach the page view")
+    check(s.page.navigated == [.back, .forward], "back and forward mouse buttons navigate on release", "\(s.page.navigated)")
+
+    s = Scene()
+    s.page.otherMouseDown(with: s.otherEvent(.otherMouseDown, onPage, button: 2))
+    s.page.otherMouseDragged(with: s.otherEvent(.otherMouseDragged, onPage, button: 2))
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, onPage, button: 2))
+    expect(s.page.received, ["otherDown(2)", "otherDragged(2)", "otherUp(2)"], "middle click still passes through to the page")
+    check(s.page.navigated.isEmpty, "middle click does not trigger history navigation", "\(s.page.navigated)")
+
+    s = Scene()
+    s.overlay.otherMouseDown(with: s.otherEvent(.otherMouseDown, underOverlay, button: 3))
+    s.overlay.otherMouseUp(with: s.otherEvent(.otherMouseUp, underOverlay, button: 3))
+    s.overlay.otherMouseDown(with: s.otherEvent(.otherMouseDown, underOverlay, button: 4))
+    s.overlay.otherMouseUp(with: s.otherEvent(.otherMouseUp, underOverlay, button: 4))
+    expect(s.page.received, [], "back and forward mouse presses over an overlay stay off the page")
+    check(s.page.navigated.isEmpty, "back and forward mouse presses over an overlay do not navigate", "\(s.page.navigated)")
+    check(s.page.refused == 2, "overlay back/forward presses count as refused", "\(s.page.refused)")
+
+    s = Scene()
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, onPage, button: 3))
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, onPage, button: 4))
+    expect(s.page.received, [], "orphan back/forward releases stay off the page")
+    check(s.page.navigated.isEmpty, "orphan back/forward releases do not navigate", "\(s.page.navigated)")
+
+    s = Scene()
+    s.page.otherMouseDown(with: s.otherEvent(.otherMouseDown, onPage, button: 3))
+    s.page.isHidden = true
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, onPage, button: 3))
+    expect(s.page.received, [], "back release after the page hides stays off the page")
+    check(s.page.navigated.isEmpty, "back release after the page hides does not navigate", "\(s.page.navigated)")
+
+    s = Scene()
+    s.page.otherMouseDown(with: s.otherEvent(.otherMouseDown, onPage, button: 3))
+    s.page.removeFromSuperview()
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, onPage, button: 3))
+    expect(s.page.received, [], "back release after the page detaches from its window stays off the page")
+    check(s.page.navigated.isEmpty, "back release after detachment does not navigate", "\(s.page.navigated)")
+
+    s = Scene()
+    s.page.otherMouseDown(with: s.otherEvent(.otherMouseDown, onPage, button: 3, modifiers: [.shift]))
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, onPage, button: 3, modifiers: [.shift]))
+    s.page.otherMouseDown(with: s.otherEvent(.otherMouseDown, onPage, button: 4, modifiers: [.command]))
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, onPage, button: 4, modifiers: [.command]))
+    expect(s.page.received, [], "modifier-held back and forward buttons still stay off the page")
+    check(s.page.navigated == [.back, .forward], "modifier-held back and forward buttons still navigate when unbound", "\(s.page.navigated)")
+
+    s = Scene()
+    s.page.otherMouseDown(with: s.otherEvent(.otherMouseDown, onPage, button: 3))
+    s.page.otherMouseDragged(with: s.otherEvent(.otherMouseDragged, underOverlay, button: 3))
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, underOverlay, button: 3))
+    expect(s.page.received, [], "a back press that drifts onto an overlay before release stays off the page")
+    check(s.page.navigated == [.back], "a back press that began on the page still navigates when released over an overlay", "\(s.page.navigated)")
+
+    s = Scene()
+    s.page.mouseDown(with: s.event(.leftMouseDown, onPage))
+    s.page.otherMouseDown(with: s.otherEvent(.otherMouseDown, onPage, button: 3))
+    s.page.otherMouseUp(with: s.otherEvent(.otherMouseUp, onPage, button: 3))
+    s.page.mouseUp(with: s.event(.leftMouseUp, onPage))
+    expect(s.page.received, ["down", "up"], "back button press does not disturb an independent left-button press")
+    check(s.page.navigated == [.back], "back button navigates while left button is held", "\(s.page.navigated)")
 
     if failures > 0 { exit(1) }
     print("ok")

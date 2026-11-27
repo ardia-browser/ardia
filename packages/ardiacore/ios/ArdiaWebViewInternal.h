@@ -2,6 +2,7 @@
 #import "ArdiaWebView.h"
 #import "ArdiaNowPlaying.h"
 #import "ArdiaTabLifecycle.h"
+#include "ArdiaAutoPictureInPictureHold.h"
 
 enum class ArdiaPageFocus { Unknown, Page, DevTools, Elsewhere };
 
@@ -50,6 +51,8 @@ struct ArdiaStandIn {
   float opacity{};
   NSUInteger generation{};
   __weak ArdiaWebView *lentTo;
+  CFTimeInterval heldSince{};
+  CFTimeInterval lentSince{};
 };
 
 enum class ArdiaHeldPageEnd { Painted, Loaded, Pressed, TimedOut, Detached };
@@ -97,6 +100,7 @@ struct ArdiaPageReports {
   BOOL autoPictureInPictureActive{};
   BOOL keptByWindowServer{};
   BOOL playedForAutoPictureInPicture{};
+  ardia_auto_pip::Hold autoPictureInPictureHold;
   NSUInteger autoPictureInPictureWatch{};
 };
 
@@ -247,6 +251,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)applyPainting;
 - (void)markTemporary;
 - (BOOL)seenByUser;
+- (BOOL)userBackOnTab;
 - (void)userSightChanged;
 - (void)schedulePainting;
 - (void)leaveScreen;
@@ -348,6 +353,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)notePictureInPictureSight:(NSString *)what;
 - (void)awaitPictureInPicture:(int)tries completion:(void (^)(BOOL))completion;
 - (void)updateAutoPictureInPicture;
+- (void)holdAutoPictureInPictureAfterEnd:(BOOL)appAsked;
 - (BOOL)leftAppInPictureInPicture;
 - (BOOL)playsForAutoPictureInPicture;
 - (void)autoPictureInPictureInputsChanged;

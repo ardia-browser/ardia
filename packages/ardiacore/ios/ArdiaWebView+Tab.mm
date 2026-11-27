@@ -153,6 +153,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   [self finishStandIn];
   [self stopHolding];
   _standIn.lentTo = nil;
+  _standIn.lentSince = 0;
   _tab = nil;
   _life.detached();
   _focus.onActivate = NO;

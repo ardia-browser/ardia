@@ -149,6 +149,7 @@
     "apps/browser/src/state/history/engineSync.ts": 1,
     "apps/browser/src/state/live/engine.ts": 1,
     "apps/browser/src/state/live/githubClient.ts": 1,
+    "apps/browser/src/state/omnibox/barKeyLoss.ts": 1,
     "apps/browser/src/state/pins/tabCleanup.ts": 1,
     "apps/browser/src/state/plugins/official.ts": 1,
     "apps/browser/src/state/plugins/programs.ts": 1,

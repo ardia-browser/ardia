@@ -13,10 +13,10 @@ test("a WebKit tab's backdrop shows only while the tab does", (t) => {
 test("a WebKit tab repaints its backdrop whenever it is shown or hidden, so a hidden one never covers earlier tabs", () => {
   const tab = read("../ios/WebKitTab.swift");
   const errorPage = read("../ios/WebKitTab+ErrorPage.swift");
-  const updateHidden = tab.match(/private func updateHidden\(\) \{([^}]*)\}/);
+  const updateHidden = tab.match(/func updateHidden\(\) \{([\s\S]*?)\n  \}/);
   assert.ok(updateHidden, "WebKitTab.updateHidden exists");
   assert.match(updateHidden[1], /^\s*isHidden = !visible$/m);
-  assert.match(updateHidden[1], /webView\?\.isHidden = !visible/);
+  assert.match(updateHidden[1], /view\.isHidden = WebKitFullscreenPage\.hidesPage\(view, in: self, visible: visible\)/);
   assert.match(updateHidden[1], /paintBackdrop\(\)/);
   assert.match(tab, /var visible = true \{ didSet \{ updateHidden\(\)/);
   assert.match(errorPage, /layer\?\.backgroundColor = safety\.backdrop\.layerColor\(visible: visible\)/);

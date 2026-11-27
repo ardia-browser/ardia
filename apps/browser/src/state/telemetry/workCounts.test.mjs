@@ -23,6 +23,38 @@ const adapter = (applied) => ({
   apply: () => applied,
 });
 
+test("shared-folder ungroup counts one action across its mirrors and respects consent periods", async () => {
+  const { useBrowser } = await import("../browser/store.ts");
+  const { pinKeyOf } = await import("../browser/model.ts");
+  const { noteSharedGroupUngroup } = await import("./sharedGroupCounts.ts");
+  client.setSharing(true, "settings");
+  const s = () => useBrowser.getState();
+  s().hydrate({});
+  const a = s().createWindow({ url: "https://one.example/" });
+  const first = s().windows[a].tabIds[0];
+  const b = s().createWindow({ url: "https://two.example/" });
+  s().createWindow({ url: "https://three.example/" });
+  s().updateSettings({ shareTabsAcrossWindows: true });
+  const group = s().groupTabs([first], { pinned: true });
+  const key = pinKeyOf(s().groups[group]);
+  const mirror = Object.values(s().groups).find((g) => g.windowId === b && pinKeyOf(g) === key);
+  work.takeWorkCounts();
+  s().ungroup(mirror.id);
+  assert.equal(work.takeWorkCounts().shared_groups_ungrouped, 1);
+  assert.equal(work.takeWorkCounts().shared_groups_ungrouped, 0);
+  s().hydrate({});
+  const only = s().createWindow({ url: "https://solo.example/" });
+  s().updateSettings({ shareTabsAcrossWindows: true });
+  s().ungroup(s().groupTabs([s().windows[only].tabIds[0]], { pinned: true }));
+  assert.equal(work.takeWorkCounts().shared_groups_ungrouped, 0, "a folder in one window is not counted");
+  noteSharedGroupUngroup();
+  client.setSharing(false, "settings");
+  assert.equal(work.takeWorkCounts().shared_groups_ungrouped, 0, "stopping sharing drops pending counts");
+  noteSharedGroupUngroup();
+  client.setSharing(true, "settings");
+  assert.equal(work.takeWorkCounts().shared_groups_ungrouped, 0, "actions with sharing off cannot carry into a later period");
+});
+
 test("nothing is counted while sharing is off", async () => {
   client.setSharing(false, "settings");
   const wrapped = withSyncWorkCounts("bookmark", adapter(true));

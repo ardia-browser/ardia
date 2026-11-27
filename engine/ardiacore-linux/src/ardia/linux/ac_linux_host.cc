@@ -1837,6 +1837,7 @@ class ShellHostView : public views::View,
   base::ListValue UnclaimedTabsForShell() const;
   bool HandsTabsToShell() const;
   TabBinding* Binding(int id);
+  bool TabIsGone(int id);
   TabBinding* ClaimedBinding(const base::DictValue& args);
   std::optional<std::string> MoveTabOffscreen(TabBinding* binding);
   struct PageCommandAuthority {
@@ -5408,6 +5409,16 @@ TabBinding* ShellHostView::Binding(int id) {
   return found == bindings_.end() ? nullptr : found->second.get();
 }
 
+bool ShellHostView::TabIsGone(int id) {
+  if (id <= 0) return false;
+  auto* binding = Binding(id);
+  for (auto& [current, candidate] : bindings_) {
+    if (binding) break;
+    if (std::ranges::find(candidate->replaced_ids, id) != candidate->replaced_ids.end()) binding = candidate.get();
+  }
+  return ardiacore::linux_contract::ReleasedTabIsGone(binding != nullptr, binding && binding->contents());
+}
+
 TabBinding* ShellHostView::ClaimedBinding(const base::DictValue& args) {
   const int id = args.FindInt("id").value_or(0);
   auto* binding = Binding(id);
@@ -7704,6 +7715,7 @@ void ShellHostView::Invoke(
     if (!binding && offscreen_released_.erase(args.FindInt("id").value_or(0))) {
       return std::move(done).Run(true, base::Value());
     }
+    if (!binding && TabIsGone(args.FindInt("id").value_or(0))) return std::move(done).Run(true, base::Value());
     if (!binding) return std::move(done).Run(false, base::Value("No owned live tab"));
     binding->ResetPageCommands();
     if (binding->temporary) {

@@ -116,6 +116,11 @@ export type WindowUnpaintedRecord = {
   views: number;
   unpainted: number;
   reasons: number;
+  heldMs?: number;
+  webkitViews?: number;
+  webkitOnTop?: boolean;
+  stillUnpainted?: number;
+  stillReasons?: number;
   epoch: string;
 };
 

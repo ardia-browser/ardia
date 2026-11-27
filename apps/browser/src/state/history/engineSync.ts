@@ -4,7 +4,7 @@ import { readDocument } from "../../platform/documents";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { afterFirstWindow } from "../../lib/afterFirstWindow";
 import { MAX_HISTORY, MAX_VISIT_TIMES } from "./history";
-import { applyHistoryChanges, historyListIndexed, indexHistoryList, isListChange, type HistoryGap, type ListChange, type NoteGap } from "./historyChanges";
+import { applyHistoryChanges, historyBatchUsesIndex, historyListIndexed, indexHistoryList, isListChange, type HistoryGap, type ListChange, type NoteGap } from "./historyChanges";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import type { HistoryEntry } from "../browser/types";
 import { isWebPageUrl } from "../../lib/url";
@@ -17,7 +17,7 @@ import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 
 const LEGACY_FILE = "history.json";
-export const INDEX_WHEN_QUIET_MS = 2000;
+export const INDEX_DEADLINE_MS = 2000;
 const LEGACY_TOLERANCE_MS = 60_000;
 const CHUNK = 500;
 const LEGACY_KEPT_MS = 15_000;
@@ -91,16 +91,12 @@ function setView(engine: string, list: HistoryEntry[], floor?: number) {
 
 const byLastVisit = (a: HistoryEntry, b: HistoryEntry) => b.lastVisit - a.lastVisit;
 
-const indexTimers = new Map<string, { timer: ReturnType<typeof setTimeout>; list: readonly HistoryEntry[] }>();
+const indexTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function forgetIndexTimer(engine: string) {
-  const pending = indexTimers.get(engine);
-  if (pending) clearTimeout(pending.timer);
+  const timer = indexTimers.get(engine);
+  if (timer) clearTimeout(timer);
   indexTimers.delete(engine);
-}
-
-function forgetReplacedIndexTimers() {
-  for (const [engine, { list }] of [...indexTimers]) if (viewOf(engine) !== list) forgetIndexTimer(engine);
 }
 
 export const historyIndexesPending = () => indexTimers.size;
@@ -109,15 +105,24 @@ function forgetIndexTimers() {
   for (const engine of [...indexTimers.keys()]) forgetIndexTimer(engine);
 }
 
-function indexWhenQuiet(engine: string) {
-  forgetIndexTimer(engine);
-  const list = viewOf(engine);
-  if (isQuitting() || !list.length || historyListIndexed(list)) return;
+const indexable = (engine: string, list: readonly HistoryEntry[]) =>
+  !isQuitting() && list.length > 0 && loaded.has(engine) && inApp(engine) && !historyListIndexed(list);
+
+function indexByDeadline(engine: string) {
+  if (indexTimers.has(engine) || !indexable(engine, viewOf(engine))) return;
   const timer = setTimeout(() => {
     indexTimers.delete(engine);
-    if (!isQuitting() && loaded.has(engine) && inApp(engine) && viewOf(engine) === list) indexHistoryList(list);
-  }, INDEX_WHEN_QUIET_MS);
-  indexTimers.set(engine, { timer, list });
+    const list = viewOf(engine);
+    if (indexable(engine, list)) indexHistoryList(list);
+  }, INDEX_DEADLINE_MS);
+  indexTimers.set(engine, timer);
+}
+
+function indexBeforeAnotherScan(engine: string) {
+  const list = viewOf(engine);
+  if (!indexTimers.has(engine) || !indexable(engine, list)) return;
+  forgetIndexTimer(engine);
+  indexHistoryList(list);
 }
 
 type Load = { running: Promise<void>; again: boolean; queued: HistoryChange[]; epoch: string };
@@ -159,7 +164,7 @@ function load(engine: string): Promise<void> {
         if (state.queued.some((c) => c.kind === "deleted" && c.all)) state.again = true;
         setView(engine, list, floor);
         if (inApp(engine)) loaded.add(engine);
-        if (replayed.length && loaded.has(engine)) indexWhenQuiet(engine);
+        if (replayed.length && historyBatchUsesIndex(replayed)) indexByDeadline(engine);
       } while (state.again && inApp(engine) && readEpoch(engine) === epoch);
     } catch (error) {
       const failure = ardiaError(error);
@@ -185,8 +190,10 @@ function applyPending() {
   const show = () => {
     during("historyApply", () => {
       for (const [engine, batch] of batches) {
+        const usesIndex = historyBatchUsesIndex(batch);
+        if (usesIndex) indexBeforeAnotherScan(engine);
         setView(engine, applyHistoryChanges(viewOf(engine), batch, gapNoter(engine)));
-        indexWhenQuiet(engine);
+        if (usesIndex) indexByDeadline(engine);
       }
     });
     batches.clear();
@@ -287,7 +294,6 @@ export function startHistory() {
     }
   });
   const quitting = onQuittingChanged((on) => on && forgetIndexTimers());
-  const replaced = useBrowser.subscribeTo(["history"], (s, prev) => s.history !== prev.history && indexTimers.size > 0 && forgetReplacedIndexTimers());
   return () => {
     stopped = true;
     syncSession++;
@@ -296,7 +302,6 @@ export function startHistory() {
     opened();
     unloaded();
     quitting();
-    replaced();
     forgetIndexTimers();
     pending = [];
     loaded.clear();

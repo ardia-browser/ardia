@@ -16,10 +16,7 @@ public final class SyncVault {
   public var chainURL: URL { folder.appendingPathComponent(keys.chainTag, isDirectory: true) }
   func scopeURL(_ scope: String) throws -> URL { chainURL.appendingPathComponent(try keys.scopeTag(scope), isDirectory: true) }
 
-  public func chainExists() -> Bool {
-    var isDirectory: ObjCBool = false
-    return fileManager.fileExists(atPath: chainURL.path, isDirectory: &isDirectory) && isDirectory.boolValue
-  }
+  public func chainExists() -> Bool { isDirectory(chainURL) }
 
   public func createChain() throws {
     try fileManager.createDirectory(at: chainURL, withIntermediateDirectories: true)
@@ -32,10 +29,32 @@ public final class SyncVault {
     return id
   }
 
+  public struct ChainMissing: Error {
+    public init() {}
+  }
+
   func write(scope: String, payload: Data, fileId id: String) throws {
     let sealed = try keys.seal(payload, scopeTag: try keys.scopeTag(scope), fileId: id)
     let directory = try scopeURL(scope)
-    try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+    guard chainExists() else { throw ChainMissing() }
+    do {
+      try place(sealed, in: directory, id: id)
+    } catch where !(error is SyncCoordination.TimedOut) && !chainExists() {
+      throw ChainMissing()
+    }
+  }
+
+  private func isDirectory(_ url: URL) -> Bool {
+    var isDirectory: ObjCBool = false
+    return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+  }
+
+  private func place(_ sealed: Data, in directory: URL, id: String) throws {
+    if !isDirectory(directory) {
+      do {
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: false)
+      } catch where isDirectory(directory) {}
+    }
     let destination = directory.appendingPathComponent("\(id).\(Self.fileExtension)")
     let staging = try fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: directory, create: true)
     defer { try? fileManager.removeItem(at: staging) }

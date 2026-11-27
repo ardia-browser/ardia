@@ -26,6 +26,8 @@ export const historyApplyStats = { indexed: 0, scanned: 0, indexBuilds: 0 };
 
 export const historyListIndexed = (list: readonly Entry[]) => !!urlIndexes.get(list);
 
+export const historyBatchUsesIndex = (changes: readonly ListChange[]) => new Set(changes.flatMap(urlsOf)).size <= MAX_INDEXED_TOUCHES;
+
 export function indexHistoryList(list: readonly Entry[]): boolean {
   let index = urlIndexes.get(list);
   if (index !== undefined) return index !== null;

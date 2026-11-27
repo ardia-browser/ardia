@@ -227,6 +227,22 @@ final class SyncVaultTests: XCTestCase {
     XCTAssertEqual(try other.read(scope: "app", skipping: []).files.count, 1)
   }
 
+  func testWriteNeverRecreatesADeletedChain() throws {
+    XCTAssertThrowsError(try vault.write(scope: "app", payload: Data("early".utf8))) { XCTAssertTrue($0 is SyncVault.ChainMissing) }
+    XCTAssertFalse(vault.chainExists())
+    try vault.createChain()
+    try vault.write(scope: "app", payload: Data("mine".utf8))
+    try vault.write(scope: "p:work", payload: Data("first".utf8))
+    try vault.deleteChain()
+    for scope in ["app", "p:work", "p:new"] {
+      XCTAssertThrowsError(try vault.write(scope: scope, payload: Data("queued".utf8))) { XCTAssertTrue($0 is SyncVault.ChainMissing) }
+    }
+    XCTAssertFalse(vault.chainExists())
+    try vault.createChain()
+    try vault.write(scope: "p:new", payload: Data("again".utf8))
+    XCTAssertEqual(try vault.read(scope: "p:new", skipping: []).files.map { String(decoding: $0.payload, as: UTF8.self) }, ["again"])
+  }
+
   func testMissingScopeReadsEmptyButUnreadableScopeThrows() throws {
     try vault.createChain()
     XCTAssertTrue(try vault.read(scope: "app", skipping: []).present.isEmpty)

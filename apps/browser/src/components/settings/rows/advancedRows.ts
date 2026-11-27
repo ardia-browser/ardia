@@ -190,6 +190,13 @@ export const advancedRows = {
           keywords: ["cli", "control pill", "is controlling", "agent", "claude code", "codex", "hide", "smaller", "compact", "minimize", "indicator", "stop"],
           shown: () => PLATFORM_FEATURES.ardiaCommand,
         },
+        cliPillPosition: {
+          title: "Control pill position",
+          explained: true,
+          description: "Where the pill sits while a program drives Ardia. Top keeps it off message fields at the bottom of the page.",
+          keywords: ["cli", "control pill", "is controlling", "agent", "position", "move", "top", "bottom", "covers", "in the way", "overlay", "stop"],
+          shown: () => PLATFORM_FEATURES.ardiaCommand,
+        },
         automationRules: {
           title: "Automation rules",
           explained: true,

@@ -140,6 +140,7 @@ export const SETTING_SPECS = {
   allowJavaScriptFromAppleEvents: flag(false),
   cliControl: flag(false),
   showCliPill: flag(true, SYNCED), compactCliPill: flag(false, SYNCED),
+  cliPillPosition: oneOf(["bottom", "top"], "bottom", SYNCED),
   showBookmarks: flag(true, SYNCED),
   bookmarksBar: oneOf(["always", "newTab", "never"], "never", SYNCED),
   bookmarksImportDismissed: flag(false),

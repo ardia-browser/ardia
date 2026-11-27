@@ -12,7 +12,7 @@ import { noteDragsEnded } from "../telemetry/stuckDrags";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import type { ControlCaller } from "./controlCaller";
 import { noteCliConnections } from "../automation/offscreen";
-import { compactControlPill, programControlOn, setControlByApp, setControlByUser, showControlPill, takeControlRestore } from "./programControlSetting";
+import { compactControlPill, controlPillPosition, programControlOn, setControlByApp, setControlByUser, showControlPill, takeControlRestore } from "./programControlSetting";
 import { startCommandInstall } from "./linuxCommandInstall";
 
 const INDICATOR_HOLD_MS = 3000;
@@ -35,7 +35,10 @@ const pillAllowed = () => !indicatorDismissed && showControlPill(useBrowser.getS
 
 function setIndicatorShown(shown: boolean) {
   if (useControlIndicator.getState().shown === shown) return;
-  if (shown) noteCliPillShown(compactControlPill(useBrowser.getState()));
+  if (shown) {
+    const state = useBrowser.getState();
+    noteCliPillShown(compactControlPill(state), controlPillPosition(state) === "top");
+  }
   const caller = shown && callerStep < hiddenStep ? null : useControlIndicator.getState().caller;
   useControlIndicator.setState({ shown, caller });
 }

@@ -7,10 +7,11 @@ import { fileIcon } from "../../state/app/system";
 import { useTheme } from "../ui/theme";
 import { Button, Dot, space, Symbol, Text, usePresence } from "../ui";
 import { Hud } from "./Hud";
-import { CONTROL_PILL_MOTION } from "./tokens";
+import { CONTROL_PILL_MOTION, LOADING_PILL } from "./tokens";
 
 const PILL_HEIGHT = 32;
 const PILL_BOTTOM = 12;
+const PILL_TOP = LOADING_PILL.top + LOADING_PILL.height + space.s;
 
 export function ControlPill({ style, enter = false }: { style?: Animated.WithAnimatedValue<ViewStyle>; enter?: boolean }) {
   const theme = useTheme();
@@ -19,17 +20,18 @@ export function ControlPill({ style, enter = false }: { style?: Animated.WithAni
   const icon = useAppIcon(caller?.app ?? null);
   const line = controlLine(caller);
   const compact = useSettings((s) => s.compactCliPill);
+  const atTop = useSettings((s) => s.cliPillPosition) === "top";
   const { shown: mounted, appear } = usePresence(shown || null, CONTROL_PILL_MOTION, enter);
   if (!mounted) return null;
   return (
-    <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style]}>
-      <View pointerEvents="box-none" style={{ position: "absolute", left: space.l, right: space.l, bottom: PILL_BOTTOM, alignItems: "center" }}>
+    <Animated.View pointerEvents="box-none" style={atTop ? StyleSheet.absoluteFill : [StyleSheet.absoluteFill, style]}>
+      <View pointerEvents="box-none" style={{ position: "absolute", left: space.l, right: space.l, ...(atTop ? { top: PILL_TOP } : { bottom: PILL_BOTTOM }), alignItems: "center" }}>
         <Animated.View
           pointerEvents={shown ? "auto" : "none"}
           style={{
             maxWidth: "100%",
             opacity: appear,
-            transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }, { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }],
+            transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [atTop ? -8 : 8, 0] }) }, { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }],
           }}
         >
           <Hud shape="capsule" height={PILL_HEIGHT} accessibilityRole="alert" accessibilityLabel={controlLineText(line)}>

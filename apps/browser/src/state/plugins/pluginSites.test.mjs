@@ -674,7 +674,7 @@ test("codex S1: turning the sites switch off and on while the publish waits stil
   assert.equal(files.root("notes", null).files.has("flip.zip"), false);
 });
 
-test("codex S7: a first part that fails still discards the stage", async () => {
+test("codex S7: a first part that fails leaves cleanup to native, which removes only the stage it made; later cleanups name the stage they own", async () => {
   await enable(NOTES);
   const run = await activated("notes");
   const part = Buffer.alloc(500, 3).toString("base64");
@@ -686,7 +686,19 @@ test("codex S7: a first part that fails still discards the stage", async () => {
   assert.equal(last.state, "failed");
   await settle(20);
   const ops = files.calls.filter((c) => c.path === "first.zip").map((c) => c.op);
-  assert.deepEqual(ops, ["stage", "discard"], "the failed first part is followed by a discard");
+  assert.deepEqual(ops, ["stage"], "no discard of a stage this download never got to own");
+  page.chunks = [{ data: part, size: 500, end: false }, { data: part, size: 500, end: false }];
+  page.start = () => ({ status: 200, total: 5000 });
+  const second = await ask("notes", "sites.download", { url: "https://file.notion.com/f/y.zip", to: "second.zip" }, run);
+  await settle(30);
+  await ask("notes", "sites.cancel", { download: second.result.download }, run);
+  await untilDone("notes", second.result.download);
+  await settle(20);
+  const calls = files.calls.filter((c) => c.path === "second.zip");
+  const discard = calls.find((c) => c.op === "discard");
+  assert.ok(discard?.stageIdentity, "the discard names the stage identity the first part answered");
+  assert.ok(calls.filter((c) => c.op === "stage" && !c.first).every((c) => c.stageIdentity), "later parts name it too");
+  assert.equal(files.staged.size, 0);
 });
 
 test("owner B1: the sites transport is off by default, and off it never makes a hidden page", async () => {

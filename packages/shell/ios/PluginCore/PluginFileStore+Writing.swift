@@ -59,56 +59,45 @@ extension PluginFileStore {
       let temporary = Self.temporaryName(for: name)
       let fd = openat(directory.fd, temporary, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, fileMode)
       guard fd >= 0 else { return .failure(PluginFileFailure(.unavailable, "the file couldn't be written (\(Self.errnoText(errno)))")) }
+      let made = PluginFileIdentity(fd: fd)
       let complete = Self.writeAll(fd, data) && fsync(fd) == 0
       Darwin.close(fd)
-      guard complete else {
-        unlinkat(directory.fd, temporary, 0)
+      let dropTemporary = { self.unlinkOwn(directory, temporary, made) }
+      guard complete, made != nil else {
+        dropTemporary()
         return .failure(PluginFileFailure(.unavailable, "the file couldn't be written"))
       }
       if let failure = committed(directory, in: opened, "write") {
-        unlinkat(directory.fd, temporary, 0)
+        dropTemporary()
         return .failure(failure)
       }
-      let replaced: Result<Void, PluginFileFailure> = gated {
-        replace(directory, temporary: temporary, name: name, exclusive: exclusive, in: opened).map { .failure($0) } ?? .success(())
+      let placed: Result<Void, PluginFileFailure> = gated {
+        mutating("write")
+        guard intact(directory, in: opened) else { return .failure(Self.movedOut) }
+        let moved = exclusive ? renameatx_np(directory.fd, temporary, directory.fd, name, UInt32(RENAME_EXCL)) : renameat(directory.fd, temporary, directory.fd, name)
+        guard moved == 0 else {
+          let code = errno
+          if code == EEXIST { return .failure(PluginFileFailure(.exists, "the file already exists")) }
+          if code == EISDIR || code == ENOTDIR || code == ENOTEMPTY { return .failure(PluginFileFailure(.refused, "that's a folder, not a file")) }
+          return .failure(PluginFileFailure(.unavailable, "the file couldn't be saved (\(Self.errnoText(code)))"))
+        }
+        return .success(())
       }
-      if case .failure(let failure) = replaced {
-        if failure == Self.accessEnded { unlinkat(directory.fd, temporary, 0) }
+      if case .failure(let failure) = placed {
+        dropTemporary()
         return .failure(failure)
       }
+      mutating("placed")
+      guard intact(directory, in: opened) else { return .failure(Self.movedOut) }
       let answer = result(directory, name)
       if isData, case .success(let values) = answer, let size = values["size"] as? Int64 { quota?.adjust(root, by: size - oldSize) }
       return answer
     }
   }
 
-  func replace(_ directory: Directory, temporary: String, name: String, exclusive: Bool, in opened: OpenedRoot) -> PluginFileFailure? {
-    let written = entryIdentity(directory, temporary)
-    mutating("write")
-    var swapped = false
-    if renameatx_np(directory.fd, temporary, directory.fd, name, UInt32(RENAME_EXCL)) != 0 {
-      let code = errno
-      if code == EEXIST, !exclusive, renameatx_np(directory.fd, temporary, directory.fd, name, UInt32(RENAME_SWAP)) == 0 {
-        swapped = true
-      } else {
-        let code = code == EEXIST && !exclusive ? errno : code
-        unlinkat(directory.fd, temporary, 0)
-        if code == EEXIST { return PluginFileFailure(.exists, "the file already exists") }
-        if code == EISDIR || code == ENOTDIR || code == ENOTEMPTY { return PluginFileFailure(.refused, "that's a folder, not a file") }
-        return PluginFileFailure(.unavailable, "the file couldn't be saved (\(Self.errnoText(code)))")
-      }
-    }
-    guard intact(directory, in: opened) else {
-      if swapped {
-        renameatx_np(directory.fd, temporary, directory.fd, name, UInt32(RENAME_SWAP))
-        unlinkat(directory.fd, temporary, 0)
-      } else if let written, entryIdentity(directory, name) == written {
-        unlinkat(directory.fd, name, 0)
-      }
-      return Self.movedOut
-    }
-    if swapped { unlinkat(directory.fd, temporary, 0) }
-    return nil
+  func unlinkOwn(_ directory: Directory, _ name: String, _ made: PluginFileIdentity?) {
+    guard let made, entryIdentity(directory, name) == made else { return }
+    unlinkat(directory.fd, name, 0)
   }
 
   func append(_ path: String, data: Data) -> Result<[String: Any], PluginFileFailure> {
@@ -140,11 +129,24 @@ extension PluginFileStore {
           return .failure(PluginFileFailure(.unavailable, "the file isn't downloaded yet"))
         }
       }
+      var existing = stat()
+      let existed = fstatat(directory.fd, name, &existing, AT_SYMLINK_NOFOLLOW) == 0
+      if existed, (existing.st_mode & S_IFMT) == S_IFREG, isDataless(existing, path) {
+        requestDownload(path)
+        return .failure(PluginFileFailure(.unavailable, "the file isn't downloaded yet"))
+      }
       if let failure = committed(directory, in: opened, "append") { return .failure(failure) }
-      return gated {
-        let existed = entryIdentity(directory, name) != nil
+      let appended: Result<(Int32, off_t), PluginFileFailure> = gated {
         mutating("append")
-        let fd = openat(directory.fd, name, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, fileMode)
+        guard intact(directory, in: opened) else { return .failure(Self.movedOut) }
+        let flags = O_WRONLY | O_APPEND | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC
+        var createdHere = false
+        var fd: Int32 = -1
+        if !existed {
+          fd = openat(directory.fd, name, flags | O_CREAT | O_EXCL, fileMode)
+          createdHere = fd >= 0
+        }
+        if fd < 0, existed || errno == EEXIST { fd = openat(directory.fd, name, flags) }
         guard fd >= 0 else {
           let code = errno
           if code == ELOOP { return .failure(PluginFileFailure(.refused, "the file is a link")) }
@@ -152,34 +154,37 @@ extension PluginFileStore {
           if code == ENXIO { return .failure(PluginFileFailure(.refused, "that isn't a plain file")) }
           return .failure(PluginFileFailure(.unavailable, "the file couldn't be opened (\(Self.errnoText(code)))"))
         }
-        defer { Darwin.close(fd) }
-        let dropMade = {
-          if !existed, let made = PluginFileIdentity(fd: fd), self.entryIdentity(directory, name) == made { unlinkat(directory.fd, name, 0) }
-        }
+        let made = createdHere ? PluginFileIdentity(fd: fd) : nil
         var info = stat()
-        guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { return .failure(PluginFileFailure(.refused, "that isn't a plain file")) }
-        guard info.st_nlink <= 1 else { return .failure(Self.hardLinkRefusal) }
-        guard intact(directory, in: opened), confinedFile(fd, in: opened) else {
-          dropMade()
-          return .failure(PluginFileFailure(.refused, "the file moved out of the root"))
+        let refuse = { (failure: PluginFileFailure) -> Result<(Int32, off_t), PluginFileFailure> in
+          self.unlinkOwn(directory, name, made)
+          Darwin.close(fd)
+          return .failure(failure)
         }
-        if isDataless(info, path) {
-          requestDownload(path)
-          return .failure(PluginFileFailure(.unavailable, "the file isn't downloaded yet"))
-        }
+        guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { return refuse(PluginFileFailure(.refused, "that isn't a plain file")) }
+        guard info.st_nlink <= 1 else { return refuse(Self.hardLinkRefusal) }
+        guard intact(directory, in: opened), confinedFile(fd, in: opened) else { return refuse(PluginFileFailure(.refused, "the file moved out of the root")) }
         _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) & ~O_NONBLOCK)
         let before = info.st_size
-        let complete = Self.writeAll(fd, data) && fsync(fd) == 0
-        guard intact(directory, in: opened), confinedFile(fd, in: opened) else {
-          ftruncate(fd, before)
-          dropMade()
-          return .failure(Self.movedOut)
+        guard Self.writeAll(fd, data) else {
+          var after = stat()
+          if isData, fstat(fd, &after) == 0 { quota?.adjust(root, by: Int64(after.st_size - before)) }
+          Darwin.close(fd)
+          return .failure(PluginFileFailure(.unavailable, "the file couldn't be written"))
         }
-        guard fstat(fd, &info) == 0 else { return .failure(PluginFileFailure(.unavailable, "the file couldn't be read back")) }
-        if isData { quota?.adjust(root, by: Int64(info.st_size - before)) }
-        guard complete else { return .failure(PluginFileFailure(.unavailable, "the file couldn't be written")) }
-        return .success(["size": Int64(info.st_size), "mtimeMs": Self.mtimeMs(info)])
+        return .success((fd, before))
       }
+      guard case .success(let (fd, before)) = appended else {
+        if case .failure(let failure) = appended { return .failure(failure) }
+        return .failure(PluginFileFailure(.unavailable, "the file couldn't be written"))
+      }
+      defer { Darwin.close(fd) }
+      let synced = fsync(fd) == 0
+      var info = stat()
+      guard fstat(fd, &info) == 0 else { return .failure(PluginFileFailure(.unavailable, "the file couldn't be read back")) }
+      if isData { quota?.adjust(root, by: Int64(info.st_size - before)) }
+      guard synced else { return .failure(PluginFileFailure(.unavailable, "the file couldn't be saved")) }
+      return .success(["size": Int64(info.st_size), "mtimeMs": Self.mtimeMs(info)])
     }
   }
 }

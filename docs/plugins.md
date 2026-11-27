@@ -461,9 +461,27 @@ it goes on the channel's kept path, which closes the channel rather than lose a 
 How Ardia writes them: every call runs off the main thread on a queue of the plugin's own, so one plugin's calls land
 in order. Ardia opens the root by its real path and walks the path one part at a time with `openat` and `O_NOFOLLOW`; a
 link anywhere (the root itself, a folder on the way, the file) is `refused`, and a grant whose folder is gone is
-`unavailable`, as is one whose folder is no longer the same folder (device and inode, checked on every call). The
-folder each call ends in is checked again just before the change lands, so a folder moved out of the root in between is
-`refused`; so is a file with other hard links, a path over 32 folders deep or a raw `.<name>.icloud` name, and a
+`unavailable`, as is one whose folder is no longer the same folder (device and inode, checked on every call). Each
+folder Ardia walks through is held open from the root down, and before every change it checks the whole chain: each
+entry still names the folder it holds (device and inode, no link), up to the root, whose path and identity are still the
+grant's. That check runs right before the one system call that changes anything, under the commit gate, and again
+after it; a folder moved out of the root in between is `refused`. What Ardia enforces, change by change:
+
+- **New folder** (`mkdirat`): one Ardia just made is removed again (only if empty and still the one it made) when its
+  parent moved out.
+- **Write**: the bytes go to a new temporary file (`O_EXCL`) in the held folder, then one `renameat` puts it in place
+  (`RENAME_EXCL` for `exclusive`). A folder that appeared at the name in the meantime makes it `refused` and is left
+  whole. Nothing is swapped back: if the folder moves right after the rename, the call is `refused` and the moved
+  folder keeps what landed.
+- **Append**: checked right before the single write; nothing is ever truncated, since another program may be
+  writing the same file. A file the call itself created (`O_EXCL`) is unlinked if the check fails before the write.
+- **Remove**: the entry is renamed to an Ardia temporary name, checked, and unlinked only if it is still the entry
+  Ardia saw (device and inode); otherwise it is renamed back without replacing anything.
+- **Rollback only ever unlinks what Ardia created**, matched by the device and inode it recorded: its temporary
+  files, a stage file a download's first part made, an empty folder it just made.
+
+An iCloud Drive change waits for the file coordinator and refuses when it hands back a different item than the
+one asked for. Also `refused`: a file with other hard links, a path over 32 folders deep or a raw `.<name>.icloud` name, and a
 grant whose real path is, holds or sits in Ardia's own data, config or Programs, `/`, the home folder or `~/Library`
 (iCloud Drive and `~/Library/CloudStorage` aside), compared by folder identity so a `/System/Volumes/Data` alias
 counts too. `filesRevoke` ends a plugin's (or one grant's) access: every call carries a `filesTicket()` taken before any async

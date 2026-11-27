@@ -786,7 +786,7 @@ export function officialPinnedFromPin(): { name: string; version: string; folder
 }
 const pinnedNow = () => (pluginHost.pinned === undefined ? officialPinnedFromPin() : pluginHost.pinned);
 const pluginEvents = nativeEvents();
-type PluginFilesSpecFake = { op: string; plugin: string; root: string | null; path: string; data?: string; offset?: number; length?: number; exclusive?: boolean; recursive?: boolean; rootIdentity?: { device: number; inode: number }; fileIdentity?: { device: number; inode: number }; ticket?: number; stage?: string; first?: boolean; operation?: string };
+type PluginFilesSpecFake = { op: string; plugin: string; root: string | null; path: string; data?: string; offset?: number; length?: number; exclusive?: boolean; recursive?: boolean; rootIdentity?: { device: number; inode: number }; fileIdentity?: { device: number; inode: number }; ticket?: number; stage?: string; first?: boolean; operation?: string; stageIdentity?: { device: number; inode: number } };
 type PluginFilesFailureFake = { ok: false; code: "not_found" | "exists" | "too_large" | "bad_path" | "refused" | "unavailable"; message: string };
 type PluginFileFake = { data: Uint8Array; mtimeMs: number; placeholder?: boolean };
 const FILES_MAX_DATA = 4 << 20;
@@ -870,25 +870,35 @@ function filesStageFake(spec: PluginFilesSpecFake) {
   if (!Array.isArray(parts)) return parts;
   if (typeof spec.stage !== "string" || !STAGE_ID.test(spec.stage)) return filesFail("bad_path", "the staging id isn't one Ardia made");
   const key = `${pluginFiles.rootKey(spec.plugin, spec.root)}\u0000${parts.join("/")}\u0000${spec.stage}`;
-  if (spec.op === "discard") return { ok: true as const, removed: pluginFiles.staged.delete(key) };
+  const own = () => !!spec.stageIdentity && spec.stageIdentity.device === 1 && spec.stageIdentity.inode === stageInodes.get(key);
+  if (spec.op === "discard") {
+    if (!own()) return { ok: true as const, removed: false };
+    stageInodes.delete(key);
+    return { ok: true as const, removed: pluginFiles.staged.delete(key) };
+  }
   if (spec.op === "stage") {
     if (spec.first ? pluginFiles.staged.has(key) : !pluginFiles.staged.has(key)) return filesFail("unavailable", "the download couldn't be written");
+    if (!spec.first && !own()) return filesFail("refused", "the download's file isn't Ardia's own");
     const bytes = filesFromBase64(spec.data ?? "");
     const before = pluginFiles.staged.get(key) ?? new Uint8Array(0);
     if (before.length + bytes.length > pluginFiles.quotaBytes) return { ok: false, code: "quota", message: "the plugin's files would pass the quota" } as unknown as PluginFilesFailureFake;
+    if (spec.first) stageInodes.set(key, ++nextFakeInode);
     pluginFiles.staged.set(key, new Uint8Array([...before, ...bytes]));
-    return { ok: true as const, size: before.length + bytes.length };
+    return { ok: true as const, size: before.length + bytes.length, device: 1, inode: stageInodes.get(key)! };
   }
   const data = pluginFiles.staged.get(key);
   if (!data) return filesFail("unavailable", "the download's file is gone");
+  if (!own()) return filesFail("refused", "the download's file isn't the one Ardia wrote");
   const at = pluginFiles.root(spec.plugin, spec.root);
   const path = parts.join("/");
   if (at.files.has(path)) return filesFail("exists", "a file is already at that path");
   pluginFiles.staged.delete(key);
+  stageInodes.delete(key);
   for (let i = 1; i < parts.length; i++) at.dirs.add(parts.slice(0, i).join("/"));
   at.files.set(path, { data, mtimeMs: ++pluginFiles.clock });
   return { ok: true as const, size: data.length, mtimeMs: pluginFiles.clock };
 }
+const stageInodes = new Map<string, number>();
 const fakeInodes = new WeakMap<object, number>();
 let nextFakeInode = 1000;
 const fakeInodeOf = (file: object) => {

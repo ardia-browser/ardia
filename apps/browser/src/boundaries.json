@@ -1331,11 +1331,12 @@
   {
    "id": "native:folder-identity",
    "source": "native",
-   "guard": "A folder's or a picked file's device and inode from pluginFolderInfo, pluginFolderCreate or a probe read mint a grant or a pick only through folderIdentityOf: two safe whole numbers 0 or more, else nothing is granted. Native then compares them with fstat of every root and picked file it opens (PluginFileStore.openRoot, read's expecting) and checks the held directory chain around every mutation (intact)",
+   "guard": "A folder's or a picked file's device and inode from pluginFolderInfo, pluginFolderCreate, the file panel or a probe read mint a grant or a pick only through folderIdentityOf: two safe whole numbers 0 or more, else nothing is granted. Native compares them with fstat of every root and picked file it opens (PluginFileStore.openRoot, read's expecting). Every mutation runs against the held parent fd after intact() re-checks the dev/ino chain to the root, under the commit gate, right before its one syscall (mkdirat, renameat of an O_EXCL temporary file, a single append write, a rename-then-unlink remove, a RENAME_EXCL publish) and again after it. Rollback only unlinks what Ardia created, matched by the dev/ino it recorded (temporary files, a download's own stage file, an empty folder it just made); nothing is truncated or swapped back, and a folder that moved after the syscall keeps what landed",
    "checks": [
     "apps/browser/src/state/plugins/folderGrants.ts#folderIdentityOf",
     "packages/shell/ios/PluginCore/PluginFileStore.swift#intact",
-    "packages/shell/ios/PluginCore/PluginFileStore.swift#openRoot"
+    "packages/shell/ios/PluginCore/PluginFileStore.swift#openRoot",
+    "packages/shell/ios/PluginCore/PluginFileStore+Writing.swift#unlinkOwn"
    ],
    "detected": false
   },

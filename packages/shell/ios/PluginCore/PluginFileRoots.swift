@@ -54,14 +54,33 @@ final class PluginFileAccess {
 
   func ticket() -> Int { lock.withLock { generation } }
 
-  func revoke(plugin: String, root: String?) {
-    pthread_rwlock_wrlock(&commits)
-    defer { pthread_rwlock_unlock(&commits) }
-    lock.withLock {
+  static let operationRetireDelay: TimeInterval = 60
+  private let drains = DispatchQueue(label: "ardia.plugins.files.revoke", qos: .utility)
+
+  func revoke(plugin: String, root: String?, drained: (() -> Void)? = nil) {
+    let key = Self.key(plugin, root)
+    let revokedGeneration = lock.withLock { () -> Int in
       generation += 1
-      revokedAt[Self.key(plugin, root)] = generation
+      revokedAt[key] = generation
+      return generation
+    }
+    let isOperation = root?.hasPrefix(Self.operationPrefix) == true
+    drains.async { [self] in
+      pthread_rwlock_wrlock(&commits)
+      pthread_rwlock_unlock(&commits)
+      drained?()
+      guard isOperation else { return }
+      drains.asyncAfter(deadline: .now() + Self.operationRetireDelay) { [self] in
+        lock.withLock { if revokedAt[key] == revokedGeneration { revokedAt[key] = nil } }
+      }
     }
   }
+
+  func retireDrainedOperationsNow() {
+    lock.withLock { revokedAt = revokedAt.filter { !$0.key.contains("\u{0}\(Self.operationPrefix)") } }
+  }
+
+  var revokedCount: Int { lock.withLock { revokedAt.count } }
 
   func allows(_ ticket: Int?, plugin: String, root: String?, operation: String? = nil) -> Bool {
     guard let ticket, ticket >= 0 else { return false }

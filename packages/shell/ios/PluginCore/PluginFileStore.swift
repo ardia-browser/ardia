@@ -307,13 +307,17 @@ struct PluginFileStore {
     DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: timer)
     var result: Result<T, PluginFileFailure> = .failure(PluginFileFailure(.unavailable, "iCloud Drive didn't answer in time"))
     var problem: NSError?
-    coordinator.coordinate(writingItemAt: url, options: options, error: &problem) { _ in
+    coordinator.coordinate(writingItemAt: url, options: options, error: &problem) { coordinated in
       let begin = attempt.lock.withLock { () -> Bool in
         guard !attempt.expired else { return false }
         attempt.started = true
         return true
       }
       guard begin else { return }
+      guard Self.sameItem(coordinated, url) else {
+        result = .failure(PluginFileFailure(.unavailable, "iCloud Drive moved it while Ardia waited, so nothing was changed; try again"))
+        return
+      }
       result = body()
     }
     timer.cancel()
@@ -322,6 +326,15 @@ struct PluginFileStore {
       return .failure(PluginFileFailure(.unavailable, "iCloud Drive refused the change (\(problem.localizedDescription))"))
     }
     return result
+  }
+
+  static func sameItem(_ coordinated: URL, _ expected: URL) -> Bool {
+    let given = coordinated.standardizedFileURL.path
+    let wanted = expected.standardizedFileURL.path
+    if given == wanted { return true }
+    let parent = { (path: String) in realPath((path as NSString).deletingLastPathComponent) }
+    guard let givenParent = parent(given), let wantedParent = parent(wanted) else { return false }
+    return givenParent == wantedParent && (given as NSString).lastPathComponent == (wanted as NSString).lastPathComponent
   }
 
   func requestDownload(_ relative: String) {
@@ -489,10 +502,11 @@ struct PluginFileStore {
       outcome = inspect(path)
     case "stage":
       guard let stage = spec["stage"] as? String, let text = spec["data"] as? String, let data = Data(base64Encoded: text) else { return PluginFileFailure(.refused, "a staged part needs a stage and base64 data").reply }
-      outcome = stageAppend(path, stage: stage, data: data, first: spec["first"] as? Bool ?? false)
+      outcome = stageAppend(path, stage: stage, data: data, first: spec["first"] as? Bool ?? false, expecting: PluginFileIdentity(spec: spec["stageIdentity"]))
     case "publish", "discard":
       guard let stage = spec["stage"] as? String else { return PluginFileFailure(.refused, "that needs a stage").reply }
-      outcome = spec["op"] as? String == "publish" ? publishStage(path, stage: stage) : discardStage(path, stage: stage)
+      let expecting = PluginFileIdentity(spec: spec["stageIdentity"])
+      outcome = spec["op"] as? String == "publish" ? publishStage(path, stage: stage, expecting: expecting) : discardStage(path, stage: stage, expecting: expecting)
     default:
       return PluginFileFailure(.refused, "that isn't a files call Ardia knows").reply
     }

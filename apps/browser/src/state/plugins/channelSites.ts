@@ -1,6 +1,6 @@
 import { isFields } from "../../lib/decode";
 import type { PluginManifest } from "../../lib/pluginManifest";
-import { filesCall, filesRevoke, filesTicket, sendToPlugin } from "../../platform/plugins";
+import { filesCall, filesRevoke, filesTicket, sendToPlugin, type PluginFolderIdentity } from "../../platform/plugins";
 import { secureRandomHex } from "../../platform/secureRandom";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
@@ -16,6 +16,7 @@ import { DOWNLOAD_CANCEL, DOWNLOAD_NEXT, DOWNLOAD_START, FETCH_SCRIPT, KEPT_RESP
 import { cleanHeaders, decodedBytes, fileFailure, siteHeadersOf, siteTarget, stageId, utf8Bytes, type SitePlace, type SiteTarget, type SiteTransport } from "./siteRules";
 import { activeManifest, currentPlugins, NO_RECORD, recordOf } from "./store";
 import { isOfficialFolder } from "./appChecks";
+import { folderIdentityOf } from "./folderGrants";
 import { hiddenPageTransport } from "./siteContexts";
 import { admit, SITES_LIMITS, takeToken } from "./siteBudget";
 import { SITES_TRANSPORT_OFF_REASON, sitesTransportOn } from "./siteSwitch";
@@ -176,23 +177,31 @@ function send(d: Download) {
 
 const DOWNLOAD_OPERATION = "operation:";
 
-const filesOp = (name: string, op: "stage" | "publish" | "discard", path: string, stage: string, data?: string, first = false) =>
-  filesCall({ op, plugin: name, root: null, ticket: filesTicket(), path, stage, ...(op === "discard" ? {} : { operation: stage }), ...(data !== undefined ? { data } : {}), ...(first ? { first: true } : {}) }).catch((error: unknown) => ({
-    ok: false as const,
-    code: "unavailable" as const,
-    message: String(error),
-  }));
+const filesOp = (name: string, op: "stage" | "publish" | "discard", path: string, stage: string, owned: PluginFolderIdentity | null, data?: string, first = false) =>
+  filesCall({
+    op,
+    plugin: name,
+    root: null,
+    ticket: filesTicket(),
+    path,
+    stage,
+    ...(op === "discard" ? {} : { operation: stage }),
+    ...(owned ? { stageIdentity: owned } : {}),
+    ...(data !== undefined ? { data } : {}),
+    ...(first ? { first: true } : {}),
+  }).catch((error: unknown) => ({ ok: false as const, code: "unavailable" as const, message: String(error) }));
 
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
 async function runDownload(t: SiteTransport, d: Download, target: SiteTarget, headers: Record<string, string>, maxBytes: number, where: SitePlace, consent: ConsentToken | null) {
   let received = 0;
   let staged = false;
+  let owned: PluginFolderIdentity | null = null;
   let total = 0;
   const finish = async (state: "done" | "failed" | "cancelled", extra: { code?: string; error?: string; size?: number } = {}) => {
     settleState(d, { download: d.id, state, received, ...(total ? { total } : {}), ...extra });
     if (state !== "done" && d.key && t.alive(d.key)) await t.run(d.key, DOWNLOAD_CANCEL(d.id), SITES_LIMITS.cancelWaitMs);
-    if (state !== "done" && staged) await filesOp(d.caller.name, "discard", d.to, d.stage);
+    if (state !== "done" && owned) await filesOp(d.caller.name, "discard", d.to, d.stage, owned);
     if (state === "failed") notePlugin("plugin_site_download_failures", consent);
     if (state === "cancelled") notePlugin("plugin_site_download_cancels", consent);
     downloads.delete(d.id);
@@ -231,7 +240,8 @@ async function runDownload(t: SiteTransport, d: Download, target: SiteTarget, he
     if (bytes || !staged) {
       const first = !staged;
       staged = true;
-      const outcome = await filesOp(d.caller.name, "stage", d.to, d.stage, step.data, first);
+      const outcome = await filesOp(d.caller.name, "stage", d.to, d.stage, owned, step.data, first);
+      if (first && isFields(outcome) && outcome.ok === true) owned = folderIdentityOf(outcome);
       if (!live()) return finish("cancelled");
       if (!isFields(outcome) || outcome.ok !== true) {
         const error = fileFailure(outcome);
@@ -240,13 +250,13 @@ async function runDownload(t: SiteTransport, d: Download, target: SiteTarget, he
     }
     if (step.end === true) {
       if (!live() || !t.alive(opened.key)) return finish("cancelled");
-      const published = await filesOp(d.caller.name, "publish", d.to, d.stage);
+      const published = await filesOp(d.caller.name, "publish", d.to, d.stage, owned);
       if (!isFields(published) || published.ok !== true) {
         if (!live()) return finish("cancelled");
         const error = fileFailure(published);
         return fail(error.code, error.message);
       }
-      staged = false;
+      owned = null;
       return finish("done", { size: received });
     }
     const now = Date.now();

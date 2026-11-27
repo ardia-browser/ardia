@@ -100,9 +100,11 @@ extension PluginFileStore {
       let kind = info.st_mode & S_IFMT
       if kind == S_IFLNK { return .failure(PluginFileFailure(.refused, "that's a link")) }
       guard kind == S_IFREG || kind == S_IFDIR else { return .failure(PluginFileFailure(.refused, "that isn't a plain file")) }
+      let expected = PluginFileIdentity(info)
       return gated {
         let doomed = Self.temporaryName(for: name)
         mutating("remove")
+        guard intact(directory, in: opened) else { return .failure(Self.movedOut) }
         guard renameatx_np(directory.fd, target, directory.fd, doomed, UInt32(RENAME_EXCL)) == 0 else {
           if errno == ENOENT { return .success(["removed": false]) }
           return .failure(PluginFileFailure(.unavailable, "it couldn't be removed (\(Self.errnoText(errno)))"))
@@ -111,6 +113,10 @@ extension PluginFileStore {
         guard intact(directory, in: opened) else {
           putBack()
           return .failure(Self.movedOut)
+        }
+        guard entryIdentity(directory, doomed) == expected else {
+          putBack()
+          return .failure(PluginFileFailure(.refused, "it changed while Ardia removed it, so it was left alone"))
         }
         if kind == S_IFDIR {
           guard unlinkat(directory.fd, doomed, AT_REMOVEDIR) == 0 else {

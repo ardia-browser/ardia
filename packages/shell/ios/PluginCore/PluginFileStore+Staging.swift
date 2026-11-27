@@ -30,8 +30,9 @@ extension PluginFileStore {
     }
   }
 
-  func stageAppend(_ path: String, stage: String, data: Data, first: Bool) -> Result<[String: Any], PluginFileFailure> {
+  func stageAppend(_ path: String, stage: String, data: Data, first: Bool, expecting: PluginFileIdentity?) -> Result<[String: Any], PluginFileFailure> {
     guard data.count <= Self.maxData else { return .failure(PluginFileFailure(.tooLarge, "a part carries at most 4 MiB")) }
+    if !first, expecting == nil { return .failure(PluginFileFailure(.refused, "a later part needs the identity the first part answered")) }
     let place: (OpenedRoot, Directory, String, String)
     switch stagingPlace(path, stage: stage, create: true) {
     case .failure(let failure): return .failure(failure)
@@ -43,40 +44,35 @@ extension PluginFileStore {
     }
     if let failure = committed(directory, in: opened, "stage") { return .failure(failure) }
     return gated {
-      let flags = O_WRONLY | O_APPEND | O_NOFOLLOW | O_CLOEXEC | (first ? O_CREAT | O_EXCL : 0)
       mutating("stage")
+      guard intact(directory, in: opened) else { return .failure(Self.movedOut) }
+      let flags = O_WRONLY | O_APPEND | O_NOFOLLOW | O_CLOEXEC | (first ? O_CREAT | O_EXCL : 0)
       let fd = openat(directory.fd, staging, flags, fileMode)
       guard fd >= 0 else { return .failure(PluginFileFailure(.unavailable, "the download couldn't be written (\(Self.errnoText(errno)))")) }
       defer { Darwin.close(fd) }
+      let made = first ? PluginFileIdentity(fd: fd) : nil
       var info = stat()
-      let dropMade = {
-        if first, let made = PluginFileIdentity(fd: fd), self.entryIdentity(directory, staging) == made { unlinkat(directory.fd, staging, 0) }
-      }
-      guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_nlink == 1 else {
-        dropMade()
+      guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_nlink == 1, first || PluginFileIdentity(info) == expecting else {
+        unlinkOwn(directory, staging, made)
         return .failure(PluginFileFailure(.refused, "the download's file isn't Ardia's own"))
       }
       let before = info.st_size
       let complete = Self.writeAll(fd, data)
       let after = fstat(fd, &info) == 0 ? info.st_size : before
-      let undo = {
-        ftruncate(fd, before)
-        dropMade()
-      }
-      guard intact(directory, in: opened) else {
-        undo()
-        return .failure(Self.movedOut)
-      }
+      if isData { quota?.adjust(root, by: Int64(after - before)) }
       guard complete else {
-        undo()
+        if first, before == 0 {
+          unlinkOwn(directory, staging, made)
+          if isData { quota?.adjust(root, by: -Int64(after)) }
+        }
         return .failure(PluginFileFailure(.unavailable, "the download couldn't be written"))
       }
-      if isData { quota?.adjust(root, by: Int64(after - before)) }
-      return .success(["size": Int64(after)])
+      return .success(["size": Int64(after)].merging(PluginFileIdentity(info).reply) { $1 })
     }
   }
 
-  func publishStage(_ path: String, stage: String) -> Result<[String: Any], PluginFileFailure> {
+  func publishStage(_ path: String, stage: String, expecting: PluginFileIdentity?) -> Result<[String: Any], PluginFileFailure> {
+    guard let expecting else { return .failure(PluginFileFailure(.refused, "publishing needs the identity the first part answered")) }
     let place: (OpenedRoot, Directory, String, String)
     switch stagingPlace(path, stage: stage, create: false) {
     case .failure(let failure): return .failure(failure)
@@ -90,23 +86,25 @@ extension PluginFileStore {
       Darwin.close(fd)
       guard synced else { return .failure(PluginFileFailure(.unavailable, "the download couldn't be saved")) }
       if let failure = committed(directory, in: opened, "write") { return .failure(failure) }
-      return gated {
+      let placed: Result<Void, PluginFileFailure> = gated {
         mutating("publish")
+        guard intact(directory, in: opened) else { return .failure(Self.movedOut) }
+        guard entryIdentity(directory, staging) == expecting else { return .failure(PluginFileFailure(.refused, "the download's file isn't the one Ardia wrote")) }
         guard renameatx_np(directory.fd, staging, directory.fd, name, UInt32(RENAME_EXCL)) == 0 else {
           let code = errno
           if code == EEXIST { return .failure(PluginFileFailure(.exists, "a file is already at that path")) }
           return .failure(PluginFileFailure(.unavailable, "the download couldn't be saved (\(Self.errnoText(code)))"))
         }
-        guard intact(directory, in: opened) else {
-          renameatx_np(directory.fd, name, directory.fd, staging, UInt32(RENAME_EXCL))
-          return .failure(Self.movedOut)
-        }
-        return result(directory, name)
+        return .success(())
       }
+      if case .failure(let failure) = placed { return .failure(failure) }
+      guard intact(directory, in: opened) else { return .failure(Self.movedOut) }
+      return result(directory, name)
     }
   }
 
-  func discardStage(_ path: String, stage: String) -> Result<[String: Any], PluginFileFailure> {
+  func discardStage(_ path: String, stage: String, expecting: PluginFileIdentity?) -> Result<[String: Any], PluginFileFailure> {
+    guard let expecting else { return .success(["removed": false]) }
     let place: (OpenedRoot, Directory, String, String)
     switch stagingPlace(path, stage: stage, create: false) {
     case .failure(let failure) where failure.code == .notFound: return .success(["removed": false])
@@ -115,7 +113,7 @@ extension PluginFileStore {
     }
     let (_, directory, _, staging) = place
     var info = stat()
-    guard fstatat(directory.fd, staging, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return .success(["removed": false]) }
+    guard fstatat(directory.fd, staging, &info, AT_SYMLINK_NOFOLLOW) == 0, PluginFileIdentity(info) == expecting else { return .success(["removed": false]) }
     guard unlinkat(directory.fd, staging, 0) == 0 else { return .failure(PluginFileFailure(.unavailable, "the download couldn't be removed (\(Self.errnoText(errno)))")) }
     if isData { quota?.adjust(root, by: -Int64(info.st_size)) }
     return .success(["removed": true])

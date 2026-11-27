@@ -129,7 +129,7 @@ final class PluginFileHardeningTests: XCTestCase {
     XCTAssertEqual(try outside("a"), ["keep.md"])
   }
 
-  func testAnOverwriteAfterTheFolderMovedOutPutsTheOldFileBack() throws {
+  func testAnOverwriteRefusedWhenTheFolderMovedLeavesTheOldFile() throws {
     XCTAssertEqual(write("a/keep.md", "k")["ok"] as? Bool, true)
     PluginFileStore.mutationPoint = moveOutAt("write", "a")
     XCTAssertEqual(code(write("a/keep.md", "changed")), "refused")
@@ -170,9 +170,10 @@ final class PluginFileHardeningTests: XCTestCase {
     PluginFileStore.mutationPoint = nil
     XCTAssertEqual(try outside("a"), ["keep.md"])
     try FileManager.default.moveItem(atPath: "\(base)/outside-a", toPath: "\(root)/a")
-    XCTAssertEqual(store.perform(["op": "stage", "path": "a/x.zip", "stage": stage, "data": b64("part"), "first": true])["ok"] as? Bool, true)
+    let staged = store.perform(["op": "stage", "path": "a/x.zip", "stage": stage, "data": b64("part"), "first": true])
+    XCTAssertEqual(staged["ok"] as? Bool, true)
     PluginFileStore.mutationPoint = moveOutAt("publish", "a")
-    XCTAssertEqual(code(store.perform(["op": "publish", "path": "a/x.zip", "stage": stage])), "refused")
+    XCTAssertEqual(code(store.perform(["op": "publish", "path": "a/x.zip", "stage": stage, "stageIdentity": ["device": staged["device"] as Any, "inode": staged["inode"] as Any]])), "refused")
     PluginFileStore.mutationPoint = nil
     XCTAssertFalse(try outside("a").contains("x.zip"))
   }
@@ -193,37 +194,48 @@ final class PluginFileHardeningTests: XCTestCase {
     XCTAssertEqual(write("fresh.md", "x", on: gatedStore(access))["ok"] as? Bool, true, "positive control: a ticket taken after the revoke works")
   }
 
-  func testARevokeWaitsForACommitAlreadyUnderWay() throws {
+  func testARevokeReturnsAtOnceAndDrainsOnceACommitUnderWayLands() throws {
     let access = PluginFileAccess()
     let gated = gatedStore(access)
     let order = NSLock()
     var events: [String] = []
-    let revoked = expectation(description: "revoked")
+    let drained = expectation(description: "drained")
     PluginFileStore.mutationPoint = { label in
       guard label == "write" else { return }
-      DispatchQueue.global().async {
-        access.revoke(plugin: "p", root: nil)
+      let started = Date()
+      access.revoke(plugin: "p", root: nil) {
         let landed = FileManager.default.fileExists(atPath: "\(self.root)/racing.md")
-        order.withLock { events.append(landed ? "revoked after the commit" : "revoked mid-commit") }
-        revoked.fulfill()
+        order.withLock { events.append(landed ? "drained after the commit" : "drained mid-commit") }
+        drained.fulfill()
       }
+      order.withLock { events.append(Date().timeIntervalSince(started) < 0.05 ? "revoke returned at once" : "revoke blocked") }
       Thread.sleep(forTimeInterval: 0.2)
-      order.withLock { events.append("committing") }
     }
-    XCTAssertEqual(write("racing.md", "x", on: gated)["ok"] as? Bool, true)
+    XCTAssertEqual(write("racing.md", "x", on: gated)["ok"] as? Bool, true, "a commit already past its check lands")
     PluginFileStore.mutationPoint = nil
-    wait(for: [revoked], timeout: 5)
-    XCTAssertEqual(order.withLock { events }, ["committing", "revoked after the commit"])
+    wait(for: [drained], timeout: 5)
+    XCTAssertEqual(order.withLock { events }, ["revoke returned at once", "drained after the commit"])
     XCTAssertEqual(code(write("after.md", "x", on: gated)), "refused")
+  }
+
+  func testOperationRevocationsRetireOnceDrained() throws {
+    let access = PluginFileAccess()
+    let drained = expectation(description: "drained")
+    access.revoke(plugin: "p", root: PluginFileAccess.operationPrefix + UUID().uuidString) { drained.fulfill() }
+    wait(for: [drained], timeout: 5)
+    XCTAssertEqual(access.revokedCount, 1)
+    access.retireDrainedOperationsNow()
+    XCTAssertEqual(access.revokedCount, 0)
   }
 
   func testAnOperationRevokedEndsOnlyThatOperationsCommits() throws {
     let access = PluginFileAccess()
     let stage = UUID().uuidString
     let gated = gatedStore(access, operation: stage)
-    XCTAssertEqual(gated.perform(["op": "stage", "path": "x.zip", "stage": stage, "data": b64("part"), "first": true])["ok"] as? Bool, true)
+    let staged = gated.perform(["op": "stage", "path": "x.zip", "stage": stage, "data": b64("part"), "first": true])
+    XCTAssertEqual(staged["ok"] as? Bool, true)
     access.revoke(plugin: "p", root: PluginFileAccess.operationPrefix + stage)
-    XCTAssertEqual(code(gated.perform(["op": "publish", "path": "x.zip", "stage": stage])), "refused")
+    XCTAssertEqual(code(gated.perform(["op": "publish", "path": "x.zip", "stage": stage, "stageIdentity": ["device": staged["device"] as Any, "inode": staged["inode"] as Any]])), "refused")
     XCTAssertFalse(FileManager.default.fileExists(atPath: "\(root)/x.zip"))
     XCTAssertEqual(write("other.md", "x", on: gated)["ok"] as? Bool, false, "the same gate carries the operation")
     XCTAssertEqual(write("other.md", "x", on: gatedStore(access))["ok"] as? Bool, true, "other calls of the plugin go on")
@@ -236,6 +248,41 @@ final class PluginFileHardeningTests: XCTestCase {
     XCTAssertEqual(store.perform(["op": "read", "path": "picked.zip", "fileIdentity": bound])["found"] as? Bool, true, "positive control")
     XCTAssertEqual(write("picked.zip", "two")["ok"] as? Bool, true)
     XCTAssertEqual(code(store.perform(["op": "read", "path": "picked.zip", "fileIdentity": bound])), "refused")
+  }
+
+  func testAFolderPutAtTheNameJustBeforeTheRenameIsLeftWholeAndOnlyArdiasTemporaryGoes() throws {
+    XCTAssertEqual(write("doc.md", "old")["ok"] as? Bool, true)
+    PluginFileStore.mutationPoint = { label in
+      guard label == "write" else { return }
+      try? FileManager.default.removeItem(atPath: "\(self.root)/doc.md")
+      try? FileManager.default.createDirectory(atPath: "\(self.root)/doc.md", withIntermediateDirectories: false)
+      try? "user data".write(toFile: "\(self.root)/doc.md/inside.txt", atomically: false, encoding: .utf8)
+    }
+    XCTAssertEqual(code(write("doc.md", "new")), "refused")
+    PluginFileStore.mutationPoint = nil
+    XCTAssertEqual(try String(contentsOfFile: "\(root)/doc.md/inside.txt", encoding: .utf8), "user data")
+    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root).filter { $0.contains(".ardia-") }, [], "Ardia's temporary file is gone")
+  }
+
+  func testAFolderThatMovesRightAfterTheRenameKeepsWhatLandedAndNothingIsSwappedBack() throws {
+    XCTAssertEqual(write("a/keep.md", "old")["ok"] as? Bool, true)
+    PluginFileStore.mutationPoint = moveOutAt("placed", "a")
+    XCTAssertEqual(code(write("a/keep.md", "new")), "refused")
+    PluginFileStore.mutationPoint = nil
+    XCTAssertEqual(try outside("a"), ["keep.md"], "no temporary or backup left beside it")
+    XCTAssertEqual(try String(contentsOfFile: "\(base)/outside-a/keep.md", encoding: .utf8), "new", "the moved folder's contents are left as they landed")
+  }
+
+  func testAnAppendNeverTruncatesAndOnlyUnlinksAFileItCreated() throws {
+    XCTAssertEqual(write("a/log", "theirs")["ok"] as? Bool, true)
+    PluginFileStore.mutationPoint = moveOutAt("append", "a")
+    XCTAssertEqual(code(store.perform(["op": "append", "path": "a/log", "data": b64("mine")])), "refused")
+    PluginFileStore.mutationPoint = nil
+    XCTAssertEqual(try String(contentsOfFile: "\(base)/outside-a/log", encoding: .utf8), "theirs")
+    let source = try String(contentsOfFile: #filePath.replacingOccurrences(of: "plugin-tests/PluginFileHardeningTests.swift", with: "ios/PluginCore/PluginFileStore+Writing.swift"), encoding: .utf8)
+      + (try String(contentsOfFile: #filePath.replacingOccurrences(of: "plugin-tests/PluginFileHardeningTests.swift", with: "ios/PluginCore/PluginFileStore+Staging.swift"), encoding: .utf8))
+    XCTAssertFalse(source.contains("ftruncate"), "no rollback truncates a file")
+    XCTAssertFalse(source.contains("RENAME_SWAP"), "no rollback swaps an entry back")
   }
 
   func testRecursiveListSkipsAFolderMovedOutMidway() throws {

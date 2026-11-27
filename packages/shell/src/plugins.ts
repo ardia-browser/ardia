@@ -72,6 +72,7 @@ export type PluginFilesSpec = {
   operation?: string;
   rootIdentity?: PluginFolderIdentity;
   fileIdentity?: PluginFolderIdentity;
+  stageIdentity?: PluginFolderIdentity;
   ticket: number;
 };
 export type PluginFolderIdentity = { device: number; inode: number };
@@ -81,7 +82,7 @@ export type PluginFolderCreateResult =
 export type PluginFilesEntry = { path: string; kind: "file" | "dir"; size: number; mtimeMs: number; placeholder: boolean };
 export type PluginFilesCode = "not_found" | "exists" | "too_large" | "bad_path" | "refused" | "unavailable";
 export type PluginFilesResult =
-  | { ok: true; found?: boolean; data?: string; size?: number; mtimeMs?: number; removed?: boolean; entries?: PluginFilesEntry[]; kind?: "file" | "dir" }
+  | { ok: true; found?: boolean; data?: string; size?: number; mtimeMs?: number; removed?: boolean; entries?: PluginFilesEntry[]; kind?: "file" | "dir"; device?: number; inode?: number }
   | { ok: false; code: PluginFilesCode; message: string };
 export type PluginFolderInfo = { exists: boolean; realPath: string; location: "icloud" | "other"; protected: boolean; device?: number; inode?: number };
 

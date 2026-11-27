@@ -25,3 +25,6 @@ export function paneBar(chrome: CardChrome, pane: { visible: boolean; fullscreen
 
 export const developerBarShown = (chrome: CardChrome, pane: { developerMode: boolean; small: boolean; fullscreen: boolean }): boolean =>
   pane.developerMode && chrome.kind === "none" && !pane.small && !pane.fullscreen;
+
+export const paneHandleShown = (chrome: CardChrome, pane: { inSplit: boolean; visible: boolean; fullscreen: boolean; covered: boolean; lingering: boolean }): boolean =>
+  chrome.kind === "none" && pane.inSplit && pane.visible && !pane.fullscreen && !pane.covered && !pane.lingering;

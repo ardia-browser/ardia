@@ -33,7 +33,10 @@ export const FOCUS_RING = { width: 2, gap: 1 } as const;
 
 export const SPLIT_MOTION = {
   dropPreview: { show: { duration: duration.fast, easing: curve.enter }, hide: { duration: duration.fast, easing: curve.exit } },
+  paneHandle: { show: { duration: duration.fast, easing: curve.enter }, hide: { duration: duration.fast, easing: curve.exit } },
 } as const;
+
+export const PANE_HANDLE = { top: 8, height: 30, button: 26 } as const;
 
 export const TOAST_MS = 2600;
 export const TOAST_ACTION_MS = 4000;

@@ -10,7 +10,9 @@ import { dragGesture } from "../sidebar/dragGesture";
 
 const CLICK_AFTER_DRAG_MS = 300;
 
-export function usePaneDrag(tabId: string) {
+export function usePaneDrag(tabId: string, onUse?: () => void) {
+  const used = useRef(onUse);
+  used.current = onUse;
   const view = useRef<View>(null);
   const latest = useRef(tabId);
   latest.current = tabId;
@@ -41,6 +43,7 @@ export function usePaneDrag(tabId: string) {
         dragGesture(true, {
           begin: (x, y) => {
             if (tabDragging()) return;
+            used.current?.();
             clicksIgnoredUntil.current = Infinity;
             const seq = (drag.current = beginTabDrag(latest.current, undefined, { staysOnPage: true }));
             captureEscape("paneDrag", true);
@@ -71,12 +74,15 @@ export function usePaneDrag(tabId: string) {
   return { ref: view, panHandlers: responder.panHandlers, pressed, clicked };
 }
 
-export function PaneSplitButton({ tabId, palette }: { tabId: string; palette: ToolbarPalette }) {
-  const drag = usePaneDrag(tabId);
+export function PaneSplitButton({ tabId, palette, box, radius, onUse }: { tabId: string; palette: ToolbarPalette; box?: number; radius?: number; onUse?: () => void }) {
+  const drag = usePaneDrag(tabId, onUse);
   const orientation = useSplitOrientation(tabId);
   return (
     <View ref={drag.ref} {...drag.panHandlers} collapsable={false} mouseDownCanMoveWindow={false}>
-      <Button variant="icon" toolbar palette={palette} icon={orientation === "vertical" ? "rectangle.split.1x2" : "rectangle.split.2x1"} look="row" onPressIn={drag.pressed} onPress={() => drag.clicked(() => void showSplitMenu(tabId))} tooltip="Split View" />
+      <Button variant="icon" toolbar palette={palette} icon={orientation === "vertical" ? "rectangle.split.1x2" : "rectangle.split.2x1"} look="row" box={box} radius={radius} onPressIn={drag.pressed} onPress={() => drag.clicked(() => {
+          onUse?.();
+          void showSplitMenu(tabId);
+        })} tooltip="Split View" />
     </View>
   );
 }

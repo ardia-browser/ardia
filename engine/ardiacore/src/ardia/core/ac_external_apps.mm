@@ -37,6 +37,7 @@ struct Pending {
   base::WeakPtr<content::WebContents> contents;
   std::optional<url::Origin> origin;
   content::WeakDocumentPtr initiator;
+  content::WeakDocumentPtr browser_redirect_document;
   bool can_remember = false;
 };
 
@@ -57,6 +58,7 @@ bool AskHost(const GURL& url,
              content::WebContents* contents,
              const std::optional<url::Origin>& initiating_origin,
              content::WeakDocumentPtr initiator_document,
+             content::WeakDocumentPtr browser_redirect_document,
              const std::u16string& program_name) {
   if (!WindowHost::ForContents(contents)) {
     return false;
@@ -90,8 +92,9 @@ bool AskHost(const GURL& url,
   static int last_id = 0;
   const std::string request_id = "x" + std::to_string(++last_id);
   if (app) {
-    PendingRequests()[request_id] = {url, contents->GetWeakPtr(), initiating_origin,
-                             initiator_document, can_remember};
+    PendingRequests()[request_id] = {
+        url, contents->GetWeakPtr(), initiating_origin, initiator_document,
+        browser_redirect_document, can_remember};
   }
   NSString* title = app ? [NSString stringWithFormat:@"Open “%@”?", name]
                         : @"No application is set to open this link";
@@ -158,11 +161,19 @@ void ResolveExternalApp(const std::string& request_id, bool open, bool remember)
   Pending pending = std::move(it->second);
   PendingRequests().erase(it);
   content::WebContents* contents = pending.contents.get();
+  if (!open || !contents) {
+    return;
+  }
+  content::RenderFrameHost* browser_document =
+      pending.browser_redirect_document.AsRenderFrameHostIfValid();
+  const bool same_browser_document =
+      browser_document && browser_document == contents->GetPrimaryMainFrame() &&
+      browser_document->IsActive();
   const bool asked_by_browser_or_extension =
       !pending.origin || pending.origin->scheme() == extensions::kExtensionScheme;
   const bool asking_page_gone =
       !asked_by_browser_or_extension && !pending.initiator.AsRenderFrameHostIfValid();
-  if (!open || !contents || asking_page_gone) {
+  if (asking_page_gone && !same_browser_document) {
     return;
   }
   Profile* profile = Profile::FromBrowserContext(contents->GetBrowserContext());

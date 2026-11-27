@@ -33,6 +33,7 @@ test("cliPillPosition defaults to bottom, syncs, and config.json can set it", ()
 
 test("a shown pill with cliPillPosition top counts one cli_pill_top_shows", (t) => {
   resetPillState();
+  telemetryClient.setSharing(true, "settings");
   t.mock.timers.enable({ apis: ["setTimeout"] });
   S().updateSettings({ cliControl: true, showCliPill: true, cliPillPosition: "top" });
   programControl.noteSocketServing(true);
@@ -53,6 +54,7 @@ test("showCliPill defaults to true, syncs, and stays excluded from config.json",
 });
 
 test("every pill shown is counted, and the compact ones again on their own", () => {
+  telemetryClient.setSharing(true, "settings");
   cliCounts.takeCliCounts();
   cliCounts.noteCliPillShown(false);
   cliCounts.noteCliPillShown(true);
@@ -60,6 +62,15 @@ test("every pill shown is counted, and the compact ones again on their own", () 
   const counts = cliCounts.takeCliCounts();
   assert.deepEqual([counts.cli_pill_shows, counts.cli_pill_compact_shows], [3, 2]);
   assert.deepEqual([cliCounts.takeCliCounts().cli_pill_shows, cliCounts.takeCliCounts().cli_pill_compact_shows], [0, 0]);
+});
+
+test("a pill shown while sharing is off is never counted, even if sharing turns on before the next take", () => {
+  cliCounts.takeCliCounts();
+  telemetryClient.setSharing(false, "settings");
+  cliCounts.noteCliPillShown(true, true);
+  telemetryClient.setSharing(true, "settings");
+  const counts = cliCounts.takeCliCounts();
+  assert.deepEqual([counts.cli_pill_shows, counts.cli_pill_compact_shows, counts.cli_pill_top_shows], [0, 0, 0]);
 });
 
 test("noteCliPillDismissed respects telemetry consent and resets on takeCliCounts", () => {

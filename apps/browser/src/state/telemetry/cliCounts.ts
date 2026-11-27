@@ -128,10 +128,12 @@ let windowlessSeen = { given: 0, missed: 0 };
 let tokenCommandsSeen: Record<TokenCommandDomain, number> = Object.fromEntries(TOKEN_COMMAND_DOMAINS.map((domain) => [domain, 0])) as Record<TokenCommandDomain, number>;
 
 export const noteCliInstall = (reason: CliInstallReason, ok: boolean, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts[FIELDS[reason][ok ? 0 : 1]]++);
-export function noteCliPillShown(compact: boolean, top: boolean) {
-  counts.cli_pill_shows++;
-  if (compact) counts.cli_pill_compact_shows++;
-  if (top) counts.cli_pill_top_shows++;
+export function noteCliPillShown(compact: boolean, top: boolean, consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => {
+    counts.cli_pill_shows++;
+    if (compact) counts.cli_pill_compact_shows++;
+    if (top) counts.cli_pill_top_shows++;
+  });
 }
 export const noteCliPillDismissed = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts.cli_pill_dismissals++);
 export function noteSocketCall(family: SocketFamily, failed: boolean, consent?: ConsentToken | null) {

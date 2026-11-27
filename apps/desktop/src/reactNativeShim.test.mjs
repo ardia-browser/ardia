@@ -14,21 +14,23 @@ const sharedSources = () => SHARED_ROOTS.flatMap((root) =>
     .map((file) => `${root}${String(file).replaceAll("\\", "/")}`)
     .filter((path) => /\.tsx?$/.test(path) && !path.endsWith(".d.ts") && !NOT_ON_THE_DESKTOP.test(path)));
 
-const memberName = (node) => ts.isIdentifier(node) || ts.isPrivateIdentifier(node) ? node.text : ts.isStringLiteralLike(node) ? node.text : null;
+const literalKey = (node) => ts.isStringLiteralLike(node) || ts.isNumericLiteral(node) ? node.text : null;
 
 function accessOf(node) {
-  if (ts.isPropertyAccessExpression(node)) return { target: node.expression, member: memberName(node.name), optional: !!node.questionDotToken };
-  if (ts.isElementAccessExpression(node)) return { target: node.expression, member: memberName(node.argumentExpression), optional: !!node.questionDotToken };
+  if (ts.isPropertyAccessExpression(node)) return { target: node.expression, member: ts.isIdentifier(node.name) ? node.name.text : null, optional: !!node.questionDotToken };
+  if (ts.isElementAccessExpression(node)) return { target: node.expression, member: literalKey(node.argumentExpression), optional: !!node.questionDotToken };
   return null;
 }
 
+const WRAPPERS = [ts.isParenthesizedExpression, ts.isNonNullExpression, ts.isAsExpression, ts.isSatisfiesExpression, ts.isTypeAssertionExpression];
+
 function useOf(node) {
-  const parent = node.parent;
-  if (parent && ts.isCallExpression(parent) && parent.expression === node) return { kind: "call", optional: !!parent.questionDotToken };
   let outer = node;
-  while (outer.parent && (ts.isParenthesizedExpression(outer.parent) || ts.isNonNullExpression(outer.parent))) outer = outer.parent;
-  const read = outer.parent && (accessOf(outer.parent)?.target === outer);
-  return { kind: "read", optional: !!read && accessOf(outer.parent).optional };
+  while (outer.parent && WRAPPERS.some((is) => is(outer.parent)) && outer.parent.expression === outer) outer = outer.parent;
+  const parent = outer.parent;
+  if (parent && ts.isCallExpression(parent) && parent.expression === outer) return { kind: "call", optional: !!parent.questionDotToken };
+  const access = parent && accessOf(parent);
+  return { kind: "read", optional: !!access && access.target === outer && access.optional };
 }
 
 export function reactNativeMembers(path, text) {
@@ -49,28 +51,40 @@ export function reactNativeMembers(path, text) {
     }
   }
   const used = [];
+  const destructured = new Map();
   const at = (node) => `${path}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+  const isNamespace = (node) => ts.isIdentifier(node) && namespaces.has(node.text);
   const apiOf = (expression) => {
     if (ts.isIdentifier(expression) && locals.has(expression.text)) return locals.get(expression.text);
     const access = accessOf(expression);
-    if (access && ts.isIdentifier(access.target) && namespaces.has(access.target.text)) return access.member;
-    return null;
+    return access && isNamespace(access.target) ? access.member : null;
   };
   const visit = (node) => {
     const access = accessOf(node);
     if (access?.member) {
-      const api = apiOf(access.target);
-      if (api) used.push({ api, member: access.member, ...useOf(node), at: at(node) });
-      else if (ts.isIdentifier(access.target) && namespaces.has(access.target.text)) used.push({ api: access.member, member: null, kind: "read", optional: access.optional, at: at(node) });
+      if (isNamespace(access.target)) used.push({ api: access.member, member: null, ...useOf(node), at: at(node) });
+      else {
+        const api = apiOf(access.target);
+        if (api) used.push({ api, member: access.member, ...useOf(node), at: at(node) });
+      }
     }
     if (ts.isVariableDeclaration(node) && node.initializer && ts.isObjectBindingPattern(node.name)) {
       const api = apiOf(node.initializer);
       if (api) {
         for (const element of node.name.elements) {
-          const member = memberName(element.propertyName ?? element.name);
-          if (member && !element.dotDotDotToken) used.push({ api, member, kind: "read", optional: !!element.initializer, at: at(element) });
+          if (element.dotDotDotToken) continue;
+          const key = element.propertyName ?? element.name;
+          const member = ts.isIdentifier(key) ? key.text : literalKey(key);
+          if (!member) continue;
+          const optional = !!element.initializer;
+          used.push({ api, member, kind: "read", optional, at: at(element) });
+          if (ts.isIdentifier(element.name)) destructured.set(element.name.text, { api, member, optional });
         }
       }
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && destructured.has(node.expression.text)) {
+      const { api, member, optional } = destructured.get(node.expression.text);
+      used.push({ api, member, kind: "call", optional: optional || !!node.questionDotToken, at: at(node) });
     }
     ts.forEachChild(node, visit);
   };
@@ -78,23 +92,29 @@ export function reactNativeMembers(path, text) {
   return used;
 }
 
+const absent = (value) => value === undefined || value === null;
+
 export function missingFromShim(shim, used, lookupMaps = LOOKUP_MAPS) {
   const missing = [];
   for (const { api, member, kind, optional, at } of used) {
     if (lookupMaps.has(api)) continue;
-    const value = shim[api];
-    if (value === undefined || value === null) {
+    const exported = shim[api];
+    const value = member === null ? exported : absent(exported) ? undefined : exported[member];
+    const name = `${member === null ? api : `${api}.${member}`}${kind === "call" ? "()" : ""} (${at})`;
+    if (member !== null && absent(exported)) {
       missing.push(`${api} (${at})`);
       continue;
     }
-    if (member === null || optional) continue;
-    const memberValue = value[member];
-    if (kind === "call" ? typeof memberValue !== "function" : memberValue === undefined) missing.push(`${api}.${member}${kind === "call" ? "()" : ""} (${at})`);
+    if (kind === "call") {
+      if (optional ? !absent(value) && typeof value !== "function" : typeof value !== "function") missing.push(name);
+    } else if (!optional && value === undefined) {
+      missing.push(name);
+    }
   }
   return [...new Set(missing)];
 }
 
-test("the scan reads value uses of a react-native import and skips type positions, type-only imports and other modules", () => {
+test("the scan reads value uses of a react-native import and skips type positions, type-only imports, dynamic keys and other modules", () => {
   const text = [
     'import { AccessibilityInfo as A11y, Animated, type ViewStyle } from "react-native";',
     'import type { Image } from "react-native";',
@@ -105,33 +125,45 @@ test("the scan reads value uses of a react-native import and skips type position
     "Animated.timing(node, {});",
     "Image.resolveAssetSource(1); Platform.OS;",
     'A11y["announceForAccessibility"]("hi");',
+    "const key = 'fetch'; A11y[key]();",
     "const { isScreenReaderEnabled, fetch: lookUp = () => null, ...rest } = A11y;",
-    "RN.Keyboard.dismiss(); RN.Linking.openURL?.(''); RN.Dimensions;",
-    "A11y.setAccessibilityFocus?.(1); (A11y.isReduceMotionEnabled)(); A11y.optional?.deep;",
+    "isScreenReaderEnabled(); lookUp(); rest.anything();",
+    "RN.Keyboard.dismiss(); RN.Linking.openURL?.(''); RN.Dimensions; RN.Vibration();",
+    "A11y.setAccessibilityFocus?.(1); (A11y.isReduceMotionEnabled)(); (A11y.addEventListener as never)(); A11y.optional?.deep;",
   ].join("\n");
-  const shape = ({ api, member, kind, optional }) => `${api}.${member ?? ""}:${kind}${optional ? "?" : ""}`;
+  const shape = ({ api, member, kind, optional }) => `${api}${member === null ? "" : `.${member}`}:${kind}${optional ? "?" : ""}`;
   assert.deepEqual(reactNativeMembers("demo.ts", text).map(shape), [
     "AccessibilityInfo.isHighContrastEnabled:call",
     "Animated.timing:call",
     "AccessibilityInfo.announceForAccessibility:call",
     "AccessibilityInfo.isScreenReaderEnabled:read",
     "AccessibilityInfo.fetch:read?",
+    "AccessibilityInfo.isScreenReaderEnabled:call",
+    "AccessibilityInfo.fetch:call?",
     "Keyboard.dismiss:call",
-    "Keyboard.:read",
+    "Keyboard:read",
     "Linking.openURL:call?",
-    "Linking.:read",
-    "Dimensions.:read",
+    "Linking:read",
+    "Dimensions:read",
+    "Vibration:call",
     "AccessibilityInfo.setAccessibilityFocus:call?",
-    "AccessibilityInfo.isReduceMotionEnabled:read",
+    "AccessibilityInfo.isReduceMotionEnabled:call",
+    "AccessibilityInfo.addEventListener:call",
     "AccessibilityInfo.optional:read?",
   ]);
 });
 
-test("a member is missing when a call site finds no function, a read finds undefined, or the API isn't exported, and optional uses may find nothing", () => {
-  const shim = { A: { call: () => {}, value: 0, flag: false, nothing: undefined }, B: null };
+test("a member is missing when a call finds no function (an optional call only when the member is there), a read finds undefined, or the API isn't exported", () => {
+  const shim = { A: { call: () => {}, value: 0, flag: false, truthy: true, nothing: undefined }, B: null, F: () => {}, O: {} };
   const use = (api, member, kind = "call", optional = false) => ({ api, member, kind, optional, at: "x.ts:1" });
-  assert.deepEqual(missingFromShim(shim, [use("A", "call"), use("A", "value", "read"), use("A", "flag", "read"), use("A", "missing", "call", true), use("A", "nothing", "read", true)], new Set()), []);
-  assert.deepEqual(missingFromShim(shim, [use("A", "value"), use("A", "nothing", "read"), use("A", "gone"), use("B", "any"), use("C", null, "read")], new Set()), ["A.value() (x.ts:1)", "A.nothing (x.ts:1)", "A.gone() (x.ts:1)", "B (x.ts:1)", "C (x.ts:1)"]);
+  assert.deepEqual(missingFromShim(shim, [
+    use("A", "call"), use("A", "call", "call", true), use("A", "value", "read"), use("A", "flag", "read"), use("A", "missing", "call", true),
+    use("A", "nothing", "read", true), use("A", "nothing", "call", true), use("F", null), use("O", null, "read"), use("Q", null, "read", true),
+  ], new Set()), []);
+  assert.deepEqual(missingFromShim(shim, [
+    use("A", "value"), use("A", "truthy"), use("A", "truthy", "call", true), use("A", "nothing", "read"), use("A", "gone"),
+    use("B", "any"), use("C", null, "read"), use("O", null), use("A", "flag", "call", true),
+  ], new Set()), ["A.value() (x.ts:1)", "A.truthy() (x.ts:1)", "A.nothing (x.ts:1)", "A.gone() (x.ts:1)", "B (x.ts:1)", "C (x.ts:1)", "O() (x.ts:1)", "A.flag() (x.ts:1)"]);
 });
 
 test("every react-native API member the shared UI uses at run time exists in the desktop react-native shim with a value of the kind it is used as", async () => {

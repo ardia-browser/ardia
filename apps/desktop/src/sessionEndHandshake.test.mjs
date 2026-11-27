@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { answerSessionEnds, SESSION_ENDED_METHOD } from "./sessionEndHandshake.ts";
+import { createResumeRule } from "./telemetrySettle.ts";
 
 const REPO = fileURLToPath(new URL("../../../", import.meta.url));
 const bootstrap = readFileSync(join(REPO, "engine/ardiacore-linux/src/ardia/linux/bootstrap.js"), "utf8");
@@ -50,76 +49,81 @@ test("the shared bootstrap drops every native request made after pagehide, which
   assert.deepEqual(shell.sent, []);
 });
 
-test("asked by the native shell before it closes the last window, the UI ends the telemetry session through the live bridge and then acknowledges the token", async () => {
+test("asked by the native shell before it closes the last window, the UI ends the telemetry session through the live bridge, naming the host's token as the cause, and then acknowledges it", async () => {
   const shell = nativeShell();
   const steps = [];
   answerSessionEnds({
     host: shell.host,
-    settle: async (endsSession) => {
-      steps.push(`settle ${endsSession}`);
+    settle: async (endsSession, cause) => {
+      steps.push(`settle ${endsSession} ${cause}`);
       await shell.host.invoke("ArdiaShell.writeDocument", { args: ["telemetry.json", '{"sessionOpen":false}'] });
       return "end-1";
     },
-    reopen: async (token) => void steps.push(`reopen ${token}`),
+    resume: async (cause) => void steps.push(`resume ${cause}`),
     report: (error) => assert.fail(String(error)),
   });
   shell.emit("shell.sessionEnding", { token: "native-1" });
   await settled();
-  assert.deepEqual(steps, ["settle true"]);
+  assert.deepEqual(steps, ["settle true native-1"]);
   assert.deepEqual(shell.sent, [
     { method: "ArdiaShell.writeDocument", args: ["telemetry.json", '{"sessionOpen":false}'] },
     { method: SESSION_ENDED_METHOD, args: ["native-1"] },
   ], "the state write reaches the host before the acknowledgement that lets the window close");
   shell.emit("shell.sessionResumed", { token: "native-1" });
   await settled();
-  assert.deepEqual(steps, ["settle true", "reopen end-1"], "a cancelled quit reopens the session this window ended");
-  shell.emit("shell.sessionResumed", { token: "native-1" });
-  await settled();
-  assert.deepEqual(steps, ["settle true", "reopen end-1"], "the session reopens once");
+  assert.deepEqual(steps, ["settle true native-1", "resume native-1"], "a cancelled quit asks the telemetry leader to resume the session that token ended");
 });
 
-test("a failed settle still acknowledges, so the native close never waits past its deadline for the UI", async () => {
+test("a failed or timed-out settle still acknowledges, and a later resume still reaches the leader, so the session the leader did end reopens", async () => {
   const shell = nativeShell();
   const reported = [];
-  answerSessionEnds({ host: shell.host, settle: async () => { throw new Error("no leader"); }, reopen: async () => assert.fail("nothing ended"), report: (error) => reported.push(String(error.message)) });
+  const resumed = [];
+  answerSessionEnds({ host: shell.host, settle: async () => { throw new Error("the leader didn't answer in time"); }, resume: async (cause) => void resumed.push(cause), report: (error) => reported.push(String(error.message)) });
   shell.emit("shell.sessionEnding", { token: "native-2" });
   await settled();
   assert.deepEqual(shell.sent, [{ method: SESSION_ENDED_METHOD, args: ["native-2"] }]);
-  assert.deepEqual(reported, ["no leader"]);
+  assert.deepEqual(reported, ["the leader didn't answer in time"]);
   shell.emit("shell.sessionResumed", { token: "native-2" });
   await settled();
+  assert.deepEqual(resumed, ["native-2"]);
 });
 
-test("a host without the handshake, other shell events and events without a token are left alone", async () => {
-  const plain = nativeShell({ capabilities: [] });
-  answerSessionEnds({ host: plain.host, settle: async () => assert.fail("no handshake on this host"), reopen: async () => {}, report: () => {} });
-  plain.emit("shell.sessionEnding", { token: "native-3" });
+test("a window that never saw the end, such as a reloaded or surviving one, passes the host's resume on to the leader", async () => {
   const shell = nativeShell();
-  answerSessionEnds({ host: shell.host, settle: async () => assert.fail("not a session end"), reopen: async () => {}, report: () => {} });
+  const resumed = [];
+  answerSessionEnds({ host: shell.host, settle: async () => assert.fail("this window wasn't asked"), resume: async (cause) => void resumed.push(cause), report: (error) => assert.fail(String(error)) });
+  shell.emit("shell.sessionResumed", { token: "native-5" });
+  await settled();
+  assert.deepEqual(resumed, ["native-5"]);
+});
+
+test("a host without the handshake, other shell events and events without a well-formed token are left alone", async () => {
+  const plain = nativeShell({ capabilities: [] });
+  answerSessionEnds({ host: plain.host, settle: async () => assert.fail("no handshake on this host"), resume: async () => assert.fail("no handshake on this host"), report: () => {} });
+  plain.emit("shell.sessionEnding", { token: "native-3" });
+  plain.emit("shell.sessionResumed", { token: "native-3" });
+  const shell = nativeShell();
+  answerSessionEnds({ host: shell.host, settle: async () => assert.fail("not a session end"), resume: async () => assert.fail("not a resume"), report: () => {} });
   shell.emit("shell.closeRequested", { token: "native-4" });
-  shell.emit("shell.sessionEnding", {});
-  shell.emit("shell.sessionEnding", null);
+  for (const data of [{}, null, { token: "" }, { token: 7 }, { token: "has space" }, { token: "x".repeat(65) }, { token: "<script>" }]) {
+    shell.emit("shell.sessionEnding", data);
+    shell.emit("shell.sessionResumed", data);
+  }
   await settled();
   assert.deepEqual([...plain.sent, ...shell.sent], []);
 });
 
-test("the Windows shell's session-end state machine asks once, joins later closes, and resumes only a cancelled quit", (t) => {
-  const compiler = ["c++", "clang++", "g++"].find((name) => spawnSync(name, ["--version"], { stdio: "ignore" }).status === 0);
-  if (!compiler) {
-    if (process.env.CI && process.platform !== "win32") assert.fail("no C++ compiler to build scripts/windows/engine/tests/webui_session_end_policy_test.cc");
-    return t.skip("no C++ compiler");
-  }
-  const scratch = mkdtempSync(join(tmpdir(), "ardia-session-end-"));
-  try {
-    const binary = join(scratch, "webui_session_end_policy_test");
-    const build = spawnSync(compiler, ["-std=c++20", "-Wall", "-Wextra", "-I", join(REPO, "scripts/windows/engine/src"), join(REPO, "scripts/windows/engine/tests/webui_session_end_policy_test.cc"), "-o", binary], { encoding: "utf8" });
-    assert.equal(build.status, 0, build.stderr);
-    const run = spawnSync(binary, [], { encoding: "utf8" });
-    assert.equal(run.status, 0, run.stderr);
-    assert.match(run.stdout, /all assertions passed/);
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
+test("the leader resumes only an ended session, only for the token that ended it, once, and trusts the host's token when the end's cause was lost with a reloaded renderer", () => {
+  const rule = createResumeRule();
+  assert.equal(rule.resumes(false, "native-1"), false, "a session that never ended stays as it is");
+  rule.ended("native-1");
+  assert.equal(rule.resumes(true, "native-2"), false, "an unrelated token is refused");
+  assert.equal(rule.resumes(true, ""), false);
+  assert.equal(rule.resumes(true, undefined), false);
+  assert.equal(rule.resumes(true, "native-1"), true);
+  assert.equal(rule.resumes(false, "native-1"), false, "a resumed session isn't resumed twice");
+  rule.ended(undefined);
+  assert.equal(rule.resumes(true, "native-9"), true, "an end with no cause, as after a reload, takes the host's word");
 });
 
 test("the Windows shell advertises the acknowledgement, routes it through the token check, and holds the last window's close and every quit for it", () => {

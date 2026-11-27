@@ -1,37 +1,40 @@
 import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
+import type { resumeTelemetry, settleTelemetry } from "./telemetrySettle.ts";
 
 export const SESSION_ENDED_METHOD = "ArdiaShell.sessionEnded";
 export const SESSION_ENDING_EVENT = "shell.sessionEnding";
 export const SESSION_RESUMED_EVENT = "shell.sessionResumed";
 
+const SESSION_TOKEN = /^[A-Za-z0-9-]{1,64}$/;
+
 type ShellEnvelope = { name?: unknown; data?: { token?: unknown } | null };
 type SessionEndHooks = {
   host: ArdiaHost;
-  settle(endsSession: boolean): Promise<string | null>;
-  reopen(token: string): Promise<void>;
+  settle: typeof settleTelemetry;
+  resume: typeof resumeTelemetry;
   report(error: unknown): void;
 };
 
-export function answerSessionEnds({ host, settle, reopen, report }: SessionEndHooks): () => void {
+export const sessionTokenOf = (payload: unknown): string | null => {
+  const token = ((payload ?? {}) as ShellEnvelope).data?.token;
+  return typeof token === "string" && SESSION_TOKEN.test(token) ? token : null;
+};
+
+export function answerSessionEnds({ host, settle, resume, report }: SessionEndHooks): () => void {
   if (!hostSupports(SESSION_ENDED_METHOD, host)) return () => {};
-  let ended: string | null = null;
   return host.onEvent((module, event, payload) => {
     if (module !== "ArdiaShell" || event !== "shell") return;
-    const { name, data } = (payload ?? {}) as ShellEnvelope;
-    const token = data?.token;
-    if (typeof token !== "string" || !token) return;
+    const name = ((payload ?? {}) as ShellEnvelope).name;
+    if (name !== SESSION_ENDING_EVENT && name !== SESSION_RESUMED_EVENT) return;
+    const token = sessionTokenOf(payload);
+    if (!token) return;
     if (name === SESSION_ENDING_EVENT) {
-      void settle(true)
+      void settle(true, token)
         .catch((error) => { report(error); return null; })
-        .then((settled) => {
-          if (settled) ended = settled;
-          return invokeHost(SESSION_ENDED_METHOD, { args: [token] }, host);
-        })
+        .then(() => invokeHost(SESSION_ENDED_METHOD, { args: [token] }, host))
         .catch(report);
-    } else if (name === SESSION_RESUMED_EVENT && ended) {
-      const reopening = ended;
-      ended = null;
-      void reopen(reopening).catch(report);
+    } else {
+      void resume(token).catch(report);
     }
   });
 }

@@ -127,6 +127,7 @@ class WindowRegistry : public BrowserCollectionObserver {
   void NotifyWindowClosed(ShellHostView* closed);
   ShellHostView* SessionEndListener(ShellHostView* asker) const;
   void SessionEndSettled(std::string token);
+  void SessionEndReleased();
   void WatchForCancelledQuit();
   int NextPrivateOrdinal() const;
   ShellHostView* FindOpenUrlsRecipient() const;

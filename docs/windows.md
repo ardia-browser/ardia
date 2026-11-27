@@ -949,12 +949,15 @@ in `webui_frame.cc`: top-edge resize, `HTMAXBUTTON` over the shell's maximize bu
   `ArdiaShell` `shell` `shell.sessionEnding` with a token to a live window. That window ends the session through
   `settleTelemetry` and answers `ArdiaShell.sessionEnded(token)`, and only then does the host close (3 s at most). A
   quit that Chromium's `beforeunload` or download prompt cancels afterwards is caught by a 1 s watch: no longer quitting
-  and a browser window still open means `shell.sessionResumed` goes out, and the window that ended the session reopens
-  it. A window counts as leaving only while its close is in flight (`LeavingSession`: the handshake is pending or
-  Chromium's `UnloadController` is still attempting the close), so a close its own tabs cancel afterwards makes it an
-  open window again: it can be closed again, and the watch reopens the session. `WM_CLOSE` on the last browser window
-  is taken even without companion tabs, so the system's close goes through the same path. Logging off still closes
-  without the handshake.
+  and a browser window still open means `shell.sessionResumed` goes out to every browser window, and the telemetry
+  leader reopens the session (the `resume` op) only if it is ended and, when it still knows, only for the token that
+  ended it; a renderer that reloaded meanwhile takes the host's token. A window counts as leaving only while its close is
+  in flight (`LeavingSession`, `CloseStillInFlight`): the handshake is pending, Chromium's `UnloadController` is still
+  attempting the close, or a modal dialog the window owns is open, since Chromium 158 asks about downloads in progress
+  before the controller leaves idle. A close its own tabs or that dialog cancel makes it an open window again: it can be
+  closed again, and the watch reopens the session. `WM_CLOSE` on the last browser window is taken even without companion
+  tabs, so the system's close goes through the same path, and a repeated `WM_CLOSE` while the session is ending is
+  swallowed (`SwallowsSystemClose`). Logging off still closes without the handshake.
 - A `session.write` broadcasts `ArdiaHost` `session` (`base`, `session`, `sourceWindowId`) to every non-private
   window, the writer getting its own base back, so Settings changes reach open windows at once. Entering and leaving
   full screen sends `ArdiaShell` `onWindowEvent` `{type: "fullScreen", id, on}`, and `minimizeWindow` takes a target

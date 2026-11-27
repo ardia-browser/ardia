@@ -35,6 +35,24 @@ constexpr bool ClosingEndsSession(size_t other_open_browser_windows) {
   return other_open_browser_windows == 0;
 }
 
+constexpr bool CloseStillInFlight(bool closing,
+                                  bool close_committed,
+                                  bool close_started,
+                                  bool unload_running,
+                                  bool modal_dialog_open) {
+  if (closing) {
+    return true;
+  }
+  if (!close_committed) {
+    return false;
+  }
+  return !close_started || unload_running || modal_dialog_open;
+}
+
+constexpr bool SwallowsSystemClose(bool close_committed, bool close_started) {
+  return close_committed && !close_started;
+}
+
 class SessionEnd {
  public:
   SessionEndStep Begin(std::string token) {
@@ -64,6 +82,10 @@ class SessionEnd {
     }
     state_ = State::kOpen;
     return std::exchange(token_, std::string());
+  }
+
+  bool Acknowledge(std::string_view token) {
+    return ValidSessionToken(token) && Settle(token);
   }
 
   bool ended() const { return state_ == State::kEnded; }

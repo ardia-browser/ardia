@@ -63,6 +63,7 @@
 #include "ui/aura/window_targeter.h"
 #include "ui/base/base_window.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/mojom/window_show_state.mojom.h"
 #include "ui/compositor/layer.h"
@@ -74,6 +75,7 @@
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/view_targeter.h"
 #include "ui/views/widget/widget.h"
+#include "ui/views/widget/widget_delegate.h"
 #include "ui/views/win/hwnd_util.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -1334,17 +1336,31 @@ void ShellHostView::CommitClose() {
 }
 
 bool ShellHostView::LeavingSession() const {
-  if (closing_ || !browser_) {
+  if (!browser_) {
     return true;
   }
-  if (!close_committed_) {
+  const UnloadController* unload = UnloadController::From(browser_.get());
+  const bool started = close_committed_ && close_started_;
+  return webui_window::CloseStillInFlight(
+      closing_, close_committed_, close_started_,
+      started && unload && unload->is_attempting_to_close_browser(),
+      started && HoldsModalDialog());
+}
+
+bool ShellHostView::HoldsModalDialog() const {
+  views::Widget* frame = widget();
+  if (!frame) {
     return false;
   }
-  if (!close_started_) {
-    return true;
+  for (const auto& owned :
+       views::Widget::GetAllOwnedWidgets(frame->GetNativeView())) {
+    if (owned && owned->IsVisible() && owned->widget_delegate() &&
+        owned->widget_delegate()->GetModalType() !=
+            ui::mojom::ModalType::kNone) {
+      return true;
+    }
   }
-  UnloadController* unload = UnloadController::From(browser_.get());
-  return unload && unload->is_attempting_to_close_browser();
+  return false;
 }
 
 bool ShellHostView::ListensForSessionEnd() const {
@@ -1361,7 +1377,13 @@ void ShellHostView::EmitShellEvent(std::string_view name,
 }
 
 bool ShellHostView::InterceptSystemClose() {
-  if (!browser_ || closing_ || (close_committed_ && LeavingSession()) ||
+  if (!browser_ || closing_) {
+    return false;
+  }
+  if (webui_window::SwallowsSystemClose(close_committed_, close_started_)) {
+    return true;
+  }
+  if ((close_committed_ && LeavingSession()) ||
       browser_shutdown::IsTryingToQuit()) {
     return false;
   }

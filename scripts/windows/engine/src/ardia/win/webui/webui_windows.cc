@@ -893,15 +893,18 @@ void WindowRegistry::EndSessionThen(ShellHostView* asker,
 }
 
 void WindowRegistry::SessionEndAcknowledged(const std::string& token) {
-  if (webui_window::ValidSessionToken(token)) {
-    SessionEndSettled(token);
+  if (session_end_.Acknowledge(token)) {
+    SessionEndReleased();
   }
 }
 
 void WindowRegistry::SessionEndSettled(std::string token) {
-  if (!session_end_.Settle(token)) {
-    return;
+  if (session_end_.Settle(token)) {
+    SessionEndReleased();
   }
+}
+
+void WindowRegistry::SessionEndReleased() {
   session_end_deadline_.Stop();
   std::vector<base::OnceClosure> after = std::exchange(after_session_end_, {});
   quit_watch_.Start(

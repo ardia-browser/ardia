@@ -164,6 +164,7 @@ class ShellHostView : public views::View,
   void set_private_ordinal(int ordinal) { private_ordinal_ = ordinal; }
   bool closing() const { return closing_; }
   bool LeavingSession() const;
+  bool HoldsModalDialog() const;
   bool ListensForSessionEnd() const;
   void EmitShellEvent(std::string_view name, base::DictValue data);
   BrowserWindowInterface* browser() const { return browser_; }

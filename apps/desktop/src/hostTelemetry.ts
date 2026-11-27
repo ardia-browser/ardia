@@ -20,7 +20,7 @@ import { refreshDocument } from "./shims/shellBase";
 import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
 import { startTelemetryLeadership, TELEMETRY_CHANNEL, type LeaderChannel, type LeaderLocks, type TelemetryLeadership, type TelemetryOp } from "./telemetryLeader.ts";
 import { TELEMETRY_DOCUMENTS, TELEMETRY_STATE_DOC as STATE_DOC } from "./telemetryDocuments.ts";
-import { createEndLedger, setTelemetrySettle } from "./telemetrySettle.ts";
+import { createEndLedger, createResumeRule, setTelemetrySettle } from "./telemetrySettle.ts";
 import { parseChoiceChange, shownAfter } from "./telemetryChoice.ts";
 import { answerSessionEnds } from "./sessionEndHandshake.ts";
 import { applyChoiceDurably, followerChoiceSaved } from "./telemetryChoiceApply.ts";
@@ -68,6 +68,7 @@ export const reportRecoverableRender = (error: unknown) => captureException(reco
 
 let sessionEnded = false;
 const ends = createEndLedger();
+const resumes = createResumeRule();
 
 async function saveState() {
   await saveQueueNow(END_TIMEOUT_MS);
@@ -88,8 +89,8 @@ async function handleTelemetryOp(op: TelemetryOp, arg?: string): Promise<unknown
     leadership?.announce();
     return installId;
   }
-  if (op === "reopen") {
-    if (!ends.reopens(arg)) return false;
+  if (op === "reopen" || op === "resume") {
+    if (op === "reopen" ? !ends.reopens(arg) : !resumes.resumes(sessionEnded, arg)) return false;
     reopenSession();
     sessionEnded = false;
     await documentSaved(STATE_DOC).catch(report);
@@ -98,6 +99,7 @@ async function handleTelemetryOp(op: TelemetryOp, arg?: string): Promise<unknown
   if (sessionEnded) endSession();
   else sessionEnding();
   sessionEnded = true;
+  resumes.ended(arg);
   const token = ends.end();
   await saveState();
   return token;
@@ -128,7 +130,7 @@ const relayedConsent = (consent: unknown) => (typeof consent === "string" && con
 
 export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolean; locks?: LeaderLocks; channel?: LeaderChannel | null }) {
   const { host, candidate } = options;
-  setTelemetrySettle({ settle: settleHostTelemetry, reopen: reopenHostTelemetry });
+  setTelemetrySettle({ settle: settleHostTelemetry, reopen: reopenHostTelemetry, resume: resumeHostTelemetry });
   setTelemetryHost({ os: PLATFORM_TERMS.os, osType: PLATFORM_IDS.otel, send: hostSupports(TELEMETRY_POST, host) ? hostTelemetrySend(host) : null });
   loadChoice();
   installErrorReporting();
@@ -202,18 +204,18 @@ export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolea
   setInterval(() => {
     if (!current.leading()) emitWindowUsage(consentNow());
   }, WINDOW_USAGE_MS);
-  if (!isLinuxUtility(host.bootstrap.windowId)) answerSessionEnds({ host, settle: settleHostTelemetry, reopen: reopenHostTelemetry, report });
+  if (!isLinuxUtility(host.bootstrap.windowId)) answerSessionEnds({ host, settle: settleHostTelemetry, resume: resumeHostTelemetry, report });
   if (isLinuxUtility(options.host.bootstrap.windowId)) setCountsRelayNow((consent) => {
     if (!current.leading()) emitWindowUsage(consent);
   });
   return current;
 }
 
-async function settleHostTelemetry(endsSession: boolean): Promise<string | null> {
+async function settleHostTelemetry(endsSession: boolean, cause?: string): Promise<string | null> {
   if (!leadership) return null;
   if (!endsSession || !leadership.leading()) emitWindowUsage(consentNow());
   if (endsSession) {
-    const token = await leadership.request("end", END_TIMEOUT_MS).catch(report);
+    const token = await leadership.request("end", END_TIMEOUT_MS, cause).catch(report);
     return typeof token === "string" ? token : null;
   }
   if (leadership.leading()) await withDeadline(saveState(), END_TIMEOUT_MS, undefined);
@@ -222,6 +224,10 @@ async function settleHostTelemetry(endsSession: boolean): Promise<string | null>
 
 async function reopenHostTelemetry(token: string) {
   await leadership?.request("reopen", END_TIMEOUT_MS, token).catch(report);
+}
+
+async function resumeHostTelemetry(cause: string) {
+  await leadership?.request("resume", END_TIMEOUT_MS, cause).catch(report);
 }
 
 export const linuxTelemetryHooks = {

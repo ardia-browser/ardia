@@ -1,10 +1,18 @@
-import { hexColor, lookAngle, padPosition, type PresetLookFields, type PresetThemes, type ProfileColor, type ProfileTheme, type ThemeLook } from "./profileLook";
+import { hexColor, lookAngle, padPosition, resolveTheme, type PresetLookFields, type PresetThemes, type ProfileColor, type ProfileTheme, type ThemeLook } from "./profileLook";
 
 export const PRESET_LOOK = { intensity: 0.15, grain: 0.15, translucency: 1 } as const;
+export const PRESET_DARK_KEEP = 0.75;
 
 export function presetStartingTheme(swatch: string): ProfileTheme {
   const color = hexColor(swatch);
-  return { stops: [{ ...padPosition(color), color }], ...PRESET_LOOK, mode: "auto", texture: "grain" };
+  const darkColor = { ...color, r: color.r * PRESET_DARK_KEEP, g: color.g * PRESET_DARK_KEEP, b: color.b * PRESET_DARK_KEEP };
+  return {
+    stops: [{ ...padPosition(color), color }],
+    ...PRESET_LOOK,
+    mode: "auto",
+    texture: "grain",
+    dark: { stops: [{ ...padPosition(darkColor), color: darkColor }], ...PRESET_LOOK, texture: "grain" },
+  };
 }
 
 const ownLooksOf = (profile: PresetLookFields): PresetThemes => profile.presetThemes ?? {};
@@ -39,7 +47,9 @@ export function snapPointToStart(point: { x: number; y: number }, start: { x: nu
 }
 
 export function isUntouched(theme: ProfileTheme, start: ProfileTheme): boolean {
-  return !theme.dark && sameTheme(theme, start);
+  if (sameTheme(theme, start)) return true;
+  if (theme.dark || !start.dark) return false;
+  return sameTheme(theme, resolveTheme(start, false)) || sameTheme(theme, resolveTheme(start, true));
 }
 
 export function sameTheme(a: ProfileTheme | null | undefined, b: ProfileTheme | null | undefined): boolean {

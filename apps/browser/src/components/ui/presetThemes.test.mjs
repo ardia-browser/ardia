@@ -226,3 +226,18 @@ test("a profile made on this version records the look it starts with, so a 0.2.4
   const editedOn0247 = { ...made, theme: EDIT_A };
   assert.deepEqual(withOwnLooksSeeded(editedOn0247).presetThemes, { green: EDIT_A });
 });
+
+test("a preset's dark look scales its swatch to 75% RGB and resetting back to either light or dark start counts as untouched", () => {
+  const { isUntouched, PRESET_DARK_KEEP, resolveTheme, withStopAt } = look_;
+  for (const color of PROFILE_COLOR_NAMES) {
+    const start = presetStartingTheme(PROFILE_COLORS[color].swatch);
+    const darkStart = resolveTheme(start, true);
+    const lightStart = resolveTheme(start, false);
+    assert.ok(Math.abs(darkStart.stops[0].color.r - lightStart.stops[0].color.r * PRESET_DARK_KEEP) < 1e-9);
+    assert.ok(Math.abs(darkStart.stops[0].color.g - lightStart.stops[0].color.g * PRESET_DARK_KEEP) < 1e-9);
+    assert.ok(Math.abs(darkStart.stops[0].color.b - lightStart.stops[0].color.b * PRESET_DARK_KEEP) < 1e-9);
+    assert.ok(isUntouched(darkStart, start), `${color}: dark start is untouched`);
+    assert.ok(isUntouched(lightStart, start), `${color}: light start is untouched`);
+    assert.ok(isUntouched(withStopAt(darkStart, 0, darkStart.stops[0].x, darkStart.stops[0].y), darkStart), `${color}: pad round-trip in dark mode`);
+  }
+});

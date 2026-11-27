@@ -268,21 +268,21 @@ export type ProfileColorSpec = {
 };
 
 export const PROFILE_COLORS: Record<ProfileColor, ProfileColorSpec> = {
-  green: { name: "Green", swatch: "#76B597", palette: "green" },
-  blue: { name: "Blue", swatch: "#3D7BDB", palette: "blue" },
-  purple: { name: "Purple", swatch: "#7B5CC8", palette: "purple" },
+  green: { name: "Green", swatch: "#4EC28E", palette: "green" },
+  blue: { name: "Blue", swatch: "#62A2FF", palette: "blue" },
+  purple: { name: "Purple", swatch: "#AC8AFF", palette: "purple" },
   plum: {
     name: "Plum",
-    swatch: "#A84F78",
+    swatch: "#D175BD",
     powerUp: "#B5556B",
     tint: "#B25B6B",
     action: "#DD899B",
     palette: "pink",
   },
-  pink: { name: "Pink", swatch: "#E0789C", palette: "pink" },
-  red: { name: "Red", swatch: "#D95C5C", palette: "red" },
-  orange: { name: "Orange", swatch: "#E0905E", palette: "orange" },
-  yellow: { name: "Yellow", swatch: "#E6A83C", palette: "yellow" },
+  pink: { name: "Pink", swatch: "#FF70A6", palette: "pink" },
+  red: { name: "Red", swatch: "#FF6E6E", palette: "red" },
+  orange: { name: "Orange", swatch: "#FF8433", palette: "orange" },
+  yellow: { name: "Yellow", swatch: "#F2B83B", palette: "yellow" },
   neutral: { name: "Neutral", swatch: "#8E8E93", palette: null },
 };
 

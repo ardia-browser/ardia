@@ -59,15 +59,16 @@ export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme | n
   const original = useMemo(() => presetStartingTheme((PROFILE_COLORS[color] ?? PROFILE_COLORS.green).swatch), [color]);
   const stored = live.theme;
   const look = stored ?? original;
-  const editsDark = !!stored && requestedDarkFor(stored, appDark, source);
-  const editing = stored?.dark ? resolveTheme(stored, editsDark) : look;
+  const editsDark = requestedDarkFor(look, appDark, source);
+  const editing = look.dark ? resolveTheme(look, editsDark) : look;
+  const start = original.dark ? resolveTheme(original, editsDark) : original;
   const shown = shownLook(look, appDark, source);
   const change = (next: ProfileTheme | null, settle = false) => {
-    const kept = next && isUntouched(next, original) ? null : next;
+    const kept = next && isUntouched(next, start) ? null : next;
     if (kept && !stored) noteThemePreset("edited");
     live.change(kept, settle);
   };
-  return { profile, stored, editing, editsDark, shown, followsApp: source === "app", change, cancel: live.cancel, begin: live.begin, original, dragging: live.dragging };
+  return { profile, stored, editing, editsDark, shown, followsApp: source === "app", change, cancel: live.cancel, begin: live.begin, original: start, dragging: live.dragging };
 }
 
 export function ThemeSection({ profileId, anchor }: { profileId: string; anchor: SettingId }) {

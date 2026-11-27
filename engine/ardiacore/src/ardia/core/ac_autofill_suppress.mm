@@ -21,6 +21,8 @@ char kSuppressedAutofillLogins;
 
 NSString* AutofillKindOf(autofill::SuggestionType type) {
   if (type == autofill::SuggestionType::kSeparator ||
+      type == autofill::SuggestionType::kTitle ||
+      type == autofill::SuggestionType::kLoadingThrobber ||
       type == autofill::SuggestionType::kUndo) {
     return nil;
   }

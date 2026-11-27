@@ -147,6 +147,13 @@ export function engineTabs(app, { log = () => {}, engine: engineName = "webkit" 
         const children = JSON.parse((await act(await windowNumber(), "children")) || "[]");
         return children.filter((c) => c.visible && c.class === "NativeWidgetMacNSWindow");
       },
+      async listPanel() {
+        return (await panel())?.number ?? null;
+      },
+      async panelShown(number) {
+        const children = JSON.parse((await act(await windowNumber(), "children")) || "[]");
+        return children.some((c) => c.number === number && c.visible);
+      },
       async waitRows(what = "the Login list", ms = 10_000) {
         return waitFor(what, async () => {
           const rows = await tab.rows();

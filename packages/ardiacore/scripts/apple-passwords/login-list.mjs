@@ -174,7 +174,7 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       }
     },
     async E41() {
-      const shared = await paired();
+      const { app, ...shared } = await paired();
       const tabs = engineName === "chromium" ? shared.chromium : shared.tabs;
       const tab = await open("example.localhost");
       let other = null;
@@ -184,11 +184,16 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         other = await tabs.open(sites.url("other.localhost"));
         await other.front();
         assert(!(await tab.noList(1500)), "switching to another tab closes the Login list", await tab.lists());
+        assert(await app.eval(`return !!ac.store.getState().createSplit([${q(tab.id)}, ${q(other.id)}])`), "the tab and the other one side by side", null);
         await tab.front();
         await tab.click("#u");
-        await tab.waitRows("the Login list again");
+        await tab.waitRows("the Login list again, beside the other tab");
+        const shown = await tab.listPanel();
         await tab.close();
-        assert(!(await other.noList(1500)), "closing the tab closes its Login list", await other.lists());
+        const gone = await waitFor("the closed tab's Login list gone", async () => ((await other.panelShown(shown)) ? null : true), 3000).catch(() => false);
+        assert(gone, "closing the tab closes its own Login list", await other.lists());
+        assert(await app.eval(`return Object.values(ac.store.getState().windows[ac.store.getState().windowOrder[0]]?.activeTabIds ?? {}).includes(${q(other.id)})`), "the other tab was in view all along", null);
+        assert(!(await other.noList(1500)), "and no Login list comes back over the tab beside it", await other.lists());
         return { engine: engineName };
       } finally {
         await tab.close();

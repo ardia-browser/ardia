@@ -136,7 +136,7 @@ extension WebKitLogins {
     post("loginField", { event: "key", key, origin: location.origin });
   }, true);
   addEventListener("focusout", (e) => {
-    if (active && e.target === active.el) hide();
+    if (active && e.target === active.el) post("loginField", { event: "hide" });
   }, true);
   addEventListener("scroll", hide, true);
   addEventListener("resize", hide);

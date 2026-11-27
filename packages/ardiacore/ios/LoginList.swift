@@ -57,8 +57,15 @@ final class LoginList: NSObject {
     weak var target: LoginListTarget?
     let page: String
     let host: String
-    let entries: [ApplePasswordsEntry]
+    let scheme: String
+    let logins: [ApplePasswordsMatch.Login]
     let domains: [String: String]
+    var hidden = false
+  }
+
+  private struct Synced: Equatable {
+    let open: Bool
+    let picking: Bool
   }
 
   static let accountSeconds: TimeInterval = 300
@@ -70,6 +77,8 @@ final class LoginList: NSObject {
   private var declined: Set<String> = []
   private var resume: Shown?
   private var fetched: Fetched?
+  private weak var syncedTarget: LoginListTarget?
+  private var synced: Synced?
 
   override init() {
     super.init()
@@ -83,6 +92,7 @@ final class LoginList: NSObject {
     dropdown.onSelect = { [weak self] in self?.sync() }
     dropdown.onDismiss = { [weak self] in
       self?.sync()
+      self?.forgetSync()
       self?.shown = nil
       self?.fetched = nil
     }
@@ -102,20 +112,24 @@ final class LoginList: NSObject {
     else { return close(target) }
     let profile = target.loginListProfile
     resume = nil
+    if field.trigger != .typing { forgetSync() }
     if field.kind == .code {
       guard scheme == "https" else { return close(target) }
       return showCodes(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked)
     }
     if field.kind == .newPassword { return showStrong(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked) }
-    if field.trigger == .typing, isShown(for: target), let cache = fetched, cache.target === target, cache.page == page, cache.host == host {
-      return listed(.success(cache.entries), domains: cache.domains, target: target, field: field, page: page, host: host, scheme: scheme, pageHost: pageHost)
+    if field.trigger == .typing, let cache = fetched, cache.target === target, cache.page == page, cache.host == host, cache.scheme == scheme,
+      cache.hidden || isShown(for: target)
+    {
+      return listed(.success(cache.logins), domains: cache.domains, target: target, field: field, page: page, host: host, pageHost: pageHost)
     }
     ApplePasswordsClient.shared.logins(host: host) { [weak self, weak target] result in
       let entries = (try? result.get()) ?? []
       Self.domains(ApplePasswordsMatch.probes([host, pageHost] + ApplePasswordsMatch.siteHosts(entries)), profile: profile) { domains in
         guard let self, let target, asked == self.ticket, Self.origin(of: target.loginListPage) == page else { return }
-        self.fetched = (try? result.get()).map { _ in Fetched(target: target, page: page, host: host, entries: entries, domains: domains) }
-        self.listed(result, domains: domains, target: target, field: field, page: page, host: host, scheme: scheme, pageHost: pageHost)
+        let logins = result.map { ApplePasswordsMatch.logins($0, scheme: scheme, host: host, domains: domains) }
+        self.fetched = (try? logins.get()).map { Fetched(target: target, page: page, host: host, scheme: scheme, logins: $0, domains: domains) }
+        self.listed(logins, domains: domains, target: target, field: field, page: page, host: host, pageHost: pageHost)
       }
     }
   }
@@ -136,8 +150,8 @@ final class LoginList: NSObject {
   }
 
   private func listed(
-    _ result: Result<[ApplePasswordsEntry], ApplePasswordsClient.Problem>, domains: [String: String], target: LoginListTarget, field: LoginListField, page: String,
-    host: String, scheme: String, pageHost: String
+    _ result: Result<[ApplePasswordsMatch.Login], ApplePasswordsClient.Problem>, domains: [String: String], target: LoginListTarget, field: LoginListField, page: String,
+    host: String, pageHost: String
   ) {
     guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return close(target) }
     let site = domains[pageHost] ?? pageHost
@@ -145,8 +159,8 @@ final class LoginList: NSObject {
     var next = Shown(target: target, field: field, page: page, host: host, site: site, logins: [])
     next.domains = domains
     switch result {
-    case .success(let entries):
-      next.logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains)
+    case .success(let logins):
+      next.logins = logins
       present(next, notice: nil)
     case .failure(let problem):
       Self.count("listFailed", in: target, kind: problem.kind)
@@ -283,7 +297,9 @@ final class LoginList: NSObject {
     let hits = LoginListFilter.hits(next.logins.map(\.user), typed: next.field.typed)
     let logins = hits.map { next.logins[$0.index] }
     let quiet = next.field.trigger == .typing && notice == nil && logins.isEmpty && !next.connect
-    guard !quiet, let window = target.loginListWindow else { return close(target) }
+    guard let window = target.loginListWindow else { return close(target) }
+    if quiet { return hide(target) }
+    if fetched?.target === target { fetched?.hidden = false }
     let opening = !isShown(for: target) || shown?.connect != next.connect
     var current = next
     current.logins = logins
@@ -312,12 +328,31 @@ final class LoginList: NSObject {
     ticket += 1
     dropdown.close()
     sync()
+    forgetSync()
     shown = nil
     fetched = nil
   }
 
+  private func hide(_ target: LoginListTarget) {
+    var kept = fetched
+    close(target)
+    guard kept?.target === target else { return }
+    kept?.hidden = true
+    fetched = kept
+  }
+
   private func sync() {
-    shown?.target?.loginListSync(open: dropdown.isShown, picking: dropdown.selectedRow != nil)
+    guard let target = shown?.target else { return }
+    let now = Synced(open: dropdown.isShown, picking: dropdown.selectedRow != nil)
+    guard syncedTarget !== target || synced != now else { return }
+    syncedTarget = target
+    synced = now
+    target.loginListSync(open: now.open, picking: now.picking)
+  }
+
+  private func forgetSync() {
+    syncedTarget = nil
+    synced = nil
   }
 
   private func picked(_ id: String) {

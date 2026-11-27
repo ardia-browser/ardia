@@ -507,11 +507,13 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       }
     },
     async E35() {
-      const { app } = await paired();
+      const { app, fake } = await paired();
       const shownCounts = () => app.output().split(COUNTED_SHOWN).length - 1;
+      const fetches = () => fake.requests().filter((r) => r.cmd === 4).length;
       const tab = await open("filter.localhost", "/login-ready");
       try {
         const before = shownCounts();
+        const fetchedBefore = fetches();
         await tab.click("#u");
         await tab.waitRows();
         await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
@@ -523,7 +525,8 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await typedRows(tab, "", [...FILTERED, FOOTER], "the list back on an");
         await sleep(300);
         assert(shownCounts() - before === 2, "closing on no match and reopening on Backspace counts two showings", shownCounts() - before);
-        return { engine: engineName, back: FILTERED, shownCounted: shownCounts() - before };
+        assert(fetches() - fetchedBefore === 1, "the click, typing zzz and Backspacing back fetch the site's logins once", fetches() - fetchedBefore);
+        return { engine: engineName, back: FILTERED, shownCounted: shownCounts() - before, fetches: fetches() - fetchedBefore };
       } finally {
         await tab.close();
       }

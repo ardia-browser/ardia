@@ -59,8 +59,14 @@ public final class SyncService {
   public private(set) var lastSynced: Date?
   public private(set) var isEnabled = false
   private var started = false
-  private var knowsSpaces = false
-  public var hasReadCache: Bool { isDemo || knowsSpaces || (started && !isEnabled) }
+  private var hasEngine = false
+  private var engineGeneration = 0
+  private var spacesKnownGeneration: Int?
+  public var hasReadCache: Bool {
+    if isDemo { return true }
+    if hasEngine { return spacesKnownGeneration == engineGeneration }
+    return started && !isEnabled
+  }
   public var isCycleRunning: Bool { running }
   public private(set) var folderName: String?
   public let isDemo: Bool
@@ -127,7 +133,13 @@ public final class SyncService {
   @ObservationIgnored private let files: SyncFiles
   @ObservationIgnored private let keyStore: any SyncKeyStore
   @ObservationIgnored private var meta: SyncMeta
-  @ObservationIgnored private var engine: SyncEngine?
+  @ObservationIgnored private var engine: SyncEngine? {
+    didSet {
+      guard engine !== oldValue else { return }
+      engineGeneration += 1
+      hasEngine = engine != nil
+    }
+  }
   @ObservationIgnored private var running = false
   @ObservationIgnored private var again = false
   @ObservationIgnored private var idle: [CheckedContinuation<Void, Never>] = []
@@ -190,20 +202,24 @@ public final class SyncService {
   public static var demo: SyncService { SyncService(demo: .demo) }
 
   public func start() {
-    guard !isDemo, engine == nil else { return }
+    guard !isDemo, !stopping, engine == nil else { return }
     Self.active = self
     started = true
     guard let engine = openEngine() else { return }
     set(\.phase, .starting)
+    adopt(engine)
+  }
+
+  private func adopt(_ engine: SyncEngine) {
     Task {
       let cached = await engine.cachedSnapshot()
       guard self.engine === engine else { return }
       switch cached {
       case .read(let saved):
         if snapshot == .empty { snapshot = saved }
-        knowsSpaces = true
+        spacesKnownGeneration = engineGeneration
       case .missing:
-        knowsSpaces = true
+        spacesKnownGeneration = engineGeneration
       case .unreadable:
         break
       }
@@ -310,7 +326,6 @@ public final class SyncService {
       meta.chainSeen = false
       lastSynced = nil
       snapshot = .empty
-      knowsSpaces = false
     }
     meta.deviceId = deviceId
     meta.folder = prepared.location
@@ -320,12 +335,16 @@ public final class SyncService {
     Self.active = self
     folderName = prepared.location.name
     missingSince = nil
-    guard makeEngine(deviceId: deviceId, entropy: entropy, grant: prepared.grant) != nil else { return .connected }
+    guard let engine = makeEngine(deviceId: deviceId, entropy: entropy, grant: prepared.grant) else { return .connected }
     set(\.isEnabled, true)
     set(\.phase, .starting)
     visitsDue = true
     startForegroundLoop()
-    Task { await runCycle() }
+    if reuse != nil {
+      adopt(engine)
+    } else {
+      Task { await runCycle() }
+    }
     return .connected
   }
 
@@ -351,11 +370,13 @@ public final class SyncService {
       } catch {
         return .folderUnavailable
       }
-    } else if makeEngine(deviceId: deviceId, entropy: entropy, grant: prepared.grant) == nil {
+      set(\.phase, .starting)
+      Task { await runCycle() }
       return .connected
     }
+    guard let engine = makeEngine(deviceId: deviceId, entropy: entropy, grant: prepared.grant) else { return .connected }
     set(\.phase, .starting)
-    Task { await runCycle() }
+    adopt(engine)
     return .connected
   }
 
@@ -394,7 +415,7 @@ public final class SyncService {
   }
 
   public func appBecameActive() {
-    guard !isDemo else { return }
+    guard !isDemo, !stopping else { return }
     foreground = true
     if meta.retiringDeviceId != nil, retiring == nil { retiring = Task { await retirePending() } }
     if phase == .locked || (meta.enabled && !meta.outOfSync && engine == nil && phase != .needsFolderAccess) { start() }
@@ -496,6 +517,7 @@ public final class SyncService {
     lastSynced = nil
     missingSince = nil
     set(\.pendingDownloads, 0)
+    set(\.isEnabled, false)
     set(\.phase, .off)
   }
 
@@ -699,7 +721,7 @@ public final class SyncService {
     case .ok:
       missingSince = nil
       if let fresh = outcome.snapshot, !Self.same(fresh, snapshot) { snapshot = fresh }
-      knowsSpaces = true
+      spacesKnownGeneration = engineGeneration
       set(\.pendingDownloads, outcome.pending)
       set(\.phase, .updated)
       lastSynced = now()

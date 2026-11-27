@@ -160,8 +160,7 @@ export function shownProfile(view: SyncedView, status: Pick<SyncStatus, "isEnabl
 
 export function launchSpace(view: SyncedView, status: Pick<SyncStatus, "isEnabled" | "selectedProfileId">, picked: string | null): SyncedProfile | null {
   if (!status.isEnabled) return null;
-  const ahead = picked ?? (status.selectedProfileId !== view.selectedProfileId ? status.selectedProfileId : null);
-  return view.profiles.find((p) => p.syncId === ahead) ?? shownProfile(view, status);
+  return (picked !== null ? view.profiles.find((p) => p.syncId === picked) : undefined) ?? shownProfile(view, status);
 }
 
 export const pickAfterView = (picked: string | null, view: SyncedView) => (picked !== null && view.selectedProfileId === picked ? null : picked);

@@ -106,7 +106,7 @@ export default function App() {
   }, [drawnSomething]);
   const dark = useDarkScheme();
   const look = useLook(PROFILE_PRESETS, DEFAULT_PROFILE_COLOR);
-  useLaunchLook(look, ready, PROFILE_PRESETS, DEFAULT_PROFILE_COLOR);
+  useLaunchLook(PROFILE_PRESETS, DEFAULT_PROFILE_COLOR);
   useBaseSystemBars(dark);
   useEffect(() => {
     const back = BackHandler.addEventListener("hardwareBackPress", () => useBoot.getState().ready && handleSystemBack());

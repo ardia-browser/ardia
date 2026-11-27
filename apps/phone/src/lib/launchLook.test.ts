@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { startingTheme } from "@ardia/core/src/theme.ts";
-import { launchLookFor, launchLookSourcesLoaded, launchLookWriter, type SavedLaunchLook } from "./launchLook.ts";
+import { launchLookFor, launchLookOf, launchLookSourcesLoaded, launchLookWriter, type LaunchLookState, type SavedLaunchLook } from "./launchLook.ts";
 import { customLook, lookOf, nativeLookColors, presetLook, themeLookFor } from "./profileLook.ts";
 
 const presets = [
@@ -77,4 +77,16 @@ test("the launch look waits for sync's first snapshot only where sync is offered
   assert.equal(launchLookSourcesLoaded({ ready: true, syncOffered: true, syncLoaded: true }), true);
   assert.equal(launchLookSourcesLoaded({ ready: true, syncOffered: false, syncLoaded: false }), true);
   assert.equal(launchLookSourcesLoaded({ ready: false, syncOffered: false, syncLoaded: true }), false);
+});
+
+test("the launch look takes the space's colours and its appearance from the same space", () => {
+  const stops = [[0.05, 0.05, 0.1], [0.05, 0.08, 0.1]].map(([r, g, b], i) => ({ color: { r: r!, g: g!, b: b!, a: 1 }, x: 0.2 + i * 0.3, y: 0.5 }));
+  const night = { ...startingTheme("#4691C3"), stops, translucency: 0, angle: 0 };
+  const work = { color: "blue", theme: { colors: ["#0D0D1A"], darkColors: null, mode: "auto" as const, look: night } };
+  const personal = { color: "plum", theme: null };
+  const state = (space: LaunchLookState["space"]): LaunchLookState => ({ design: "redesigned", schemeChoice: "system", colorChoice: null, customTheme: null, syncEnabled: true, macLook: null, space });
+  const saved = launchLookOf(state(work), presets, "plum");
+  assert.deepEqual([saved.themeLooks.light.dark, saved.themeLooks.dark.dark], [true, true]);
+  assert.deepEqual(launchLookOf(state(personal), presets, "plum").themeLooks, { light: { dark: false }, dark: { dark: true } });
+  assert.deepEqual(saved, launchLookFor(lookOf(work, presets, "plum"), "dark"));
 });

@@ -51,7 +51,6 @@ function currentPreferredScheme(theme = currentCustomTheme()): PreferredScheme {
   return schemeFor(useAppearanceDesign.getState().design, currentChosenScheme(), currentActiveCustomLook(theme));
 }
 
-export const savedPreferredScheme = (): PreferredScheme => currentPreferredScheme(currentPreferences().customTheme);
 
 export const themeFixesScheme = (): boolean => currentPreferredScheme() !== currentChosenScheme();
 

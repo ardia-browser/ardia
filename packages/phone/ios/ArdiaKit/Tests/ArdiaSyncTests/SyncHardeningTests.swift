@@ -124,6 +124,42 @@ import Testing
     #expect(relaunched.snapshot.profiles.isEmpty)
   }
 
+  @Test func aFolderGrantedAgainReadsTheLocalCacheEvenWhenItsFirstCycleFails() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let spaces = j.service.snapshot.profiles.map(\.syncId)
+    try #require(!spaces.isEmpty)
+
+    let relaunched = makeService(j.sandbox, source: j.source, clock: j.clock)
+    relaunched.start()
+    #expect(relaunched.isEnabled)
+    #expect(!relaunched.hasReadCache)
+    await j.service.close()
+
+    #expect(await relaunched.changeFolder(j.sandbox.root) == .connected)
+    try FileManager.default.moveItem(at: j.sandbox.folder, to: j.sandbox.root.appendingPathComponent("Away", isDirectory: true))
+    let deadline = ContinuousClock.now + .seconds(10)
+    while !relaunched.hasReadCache, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(relaunched.hasReadCache)
+    #expect(relaunched.snapshot.profiles.map(\.syncId) == spaces)
+    await relaunched.close()
+  }
+
+  @Test func comingBackToTheForegroundWhileStoppingLeavesSyncOff() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let stop = Task { await j.service.stopSyncing() }
+    for _ in 0..<1000 where j.service.isEnabled { await Task.yield() }
+    try #require(!j.service.isEnabled)
+    j.service.appBecameActive()
+    await stop.value
+    #expect(j.service.phase == .off)
+    #expect(!j.service.isEnabled)
+    #expect(j.service.hasReadCache)
+  }
+
   @Test func aServiceWithNoCacheToReadHasReadItAtOnce() throws {
     let sandbox = try Sandbox()
     defer { sandbox.remove() }

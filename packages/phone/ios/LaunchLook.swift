@@ -6,6 +6,13 @@ struct LaunchSlot: Equatable {
   var dark: Bool
 }
 
+struct DrawnPalette: Equatable {
+  var color: String?
+  var themeColors: [String]
+  var themeLook: ThemeLook?
+  var dark: Bool
+}
+
 enum LaunchLook {
   static let key = "ardia.phone.launchLook"
   static let themeLooksKey = "themeLooks"
@@ -26,11 +33,21 @@ enum LaunchLook {
       return (colors, slot.dark)
     }
 
-    func drawsTheSameSpace(as other: Recalled, appDark: Bool) -> Bool {
-      let mine = LaunchLook.normalized(self).drawn(appDark: appDark)
-      let theirs = LaunchLook.normalized(other).drawn(appDark: appDark)
-      return mine.colors == theirs.colors && (mine.dark ?? appDark) == (theirs.dark ?? appDark)
+    func drawnPalette(appDark: Bool) -> DrawnPalette {
+      let drawn = LaunchLook.normalized(self).drawn(appDark: appDark)
+      let dark = drawn.dark ?? appDark
+      let light = drawn.colors.themeColors ?? []
+      let darkColors = drawn.colors.darkThemeColors.flatMap { $0.isEmpty ? nil : $0 }
+      return DrawnPalette(color: drawn.colors.color, themeColors: dark ? (darkColors ?? light) : light, themeLook: drawn.colors.themeLook, dark: dark)
     }
+
+    func drawsTheSameSpace(as other: Recalled, appDark: Bool) -> Bool {
+      drawnPalette(appDark: appDark) == other.drawnPalette(appDark: appDark)
+    }
+  }
+
+  static func countsAsStale(shown: Recalled, appDark: Bool, shownWindow: Int?, next: Recalled, currentWindow: Int?) -> Bool {
+    LiquidGlassRules.countsIn(sampledWindow: shownWindow, currentWindow: currentWindow) && !next.colors.isIncognito && !shown.drawsTheSameSpace(as: next, appDark: appDark)
   }
 
   @discardableResult

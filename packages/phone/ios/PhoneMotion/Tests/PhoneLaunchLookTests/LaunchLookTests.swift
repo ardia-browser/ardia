@@ -131,4 +131,22 @@ import Testing
     other["themeLooks"] = ["light": ["look": Self.sunset.dictionary, "dark": false], "dark": ["look": denim.dictionary, "dark": true]]
     #expect(!LaunchLook.recalled(saved: Self.themed).drawsTheSameSpace(as: LaunchLook.recalled(saved: other), appDark: true))
   }
+
+  @Test func aLightLaunchIsNotStaleWhenOnlyTheDarkPaletteChanged() {
+    func saved(dark: String) -> LaunchLook.Recalled {
+      LaunchLook.recalled(saved: ["color": "blue", "themeColors": ["#112233"], "darkThemeColors": [dark], "themeLooks": ["light": ["dark": false], "dark": ["dark": true]]])
+    }
+    #expect(saved(dark: "#445566").drawsTheSameSpace(as: saved(dark: "#778899"), appDark: false))
+    #expect(!saved(dark: "#445566").drawsTheSameSpace(as: saved(dark: "#778899"), appDark: true))
+  }
+
+  @Test func aBackdropIsCountedStaleOnlyWhenSharingWasOnWhenItWasShown() {
+    let blue = LaunchLook.recalled(saved: Self.plain("blue"))
+    let green = LaunchLook.recalled(saved: Self.plain("green"))
+    #expect(LaunchLook.countsAsStale(shown: blue, appDark: false, shownWindow: 3, next: green, currentWindow: 3))
+    #expect(!LaunchLook.countsAsStale(shown: blue, appDark: false, shownWindow: nil, next: green, currentWindow: 3))
+    #expect(!LaunchLook.countsAsStale(shown: blue, appDark: false, shownWindow: 2, next: green, currentWindow: 3))
+    #expect(!LaunchLook.countsAsStale(shown: blue, appDark: false, shownWindow: 3, next: green, currentWindow: nil))
+    #expect(!LaunchLook.countsAsStale(shown: blue, appDark: false, shownWindow: 3, next: blue, currentWindow: 3))
+  }
 }

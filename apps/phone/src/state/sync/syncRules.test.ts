@@ -248,10 +248,15 @@ test("the switcher marks the profile the view shows, even before the user has pi
 test("the launch look follows the space just picked while sync's view still shows the one before", () => {
   const before = view({ selectedProfileId: "work", shownProfileId: "work" });
   assert.equal(launchSpace(before, status({ selectedProfileId: "work" }), "personal")?.syncId, "personal");
-  assert.equal(launchSpace(before, status({ selectedProfileId: "personal" }), null)?.syncId, "personal");
+  assert.equal(launchSpace(before, status({ selectedProfileId: "personal" }), "personal")?.syncId, "personal");
   assert.equal(launchSpace(before, status({ selectedProfileId: "work" }), null)?.syncId, "work");
   assert.equal(launchSpace(before, status({ selectedProfileId: "work" }), "gone")?.syncId, "work");
   assert.equal(launchSpace(before, status({ isEnabled: false }), "personal"), null);
+});
+
+test("once sync's view confirms the picked space, a status that hasn't caught up never takes the launch look back", () => {
+  const confirmed = view({ selectedProfileId: "personal", shownProfileId: "personal" });
+  assert.equal(launchSpace(confirmed, status({ selectedProfileId: "work" }), pickAfterView("personal", confirmed))?.syncId, "personal");
 });
 
 test("a picked space is let go once sync's view shows it", () => {

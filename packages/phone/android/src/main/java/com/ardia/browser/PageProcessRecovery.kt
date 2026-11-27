@@ -38,6 +38,8 @@ internal class PageProcessRecovery {
         isReloading = true
     }
 
+    fun revivesWhenShown(queuedLoad: Boolean): Boolean = awaitsReload || queuedLoad
+
     fun loadsWhenMadeLive(shown: Boolean): Boolean = !showsFailure && (!awaitsReload || shown)
 
     fun personReloaded() {

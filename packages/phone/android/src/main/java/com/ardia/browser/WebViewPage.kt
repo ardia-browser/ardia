@@ -167,7 +167,10 @@ internal class WebViewPage(
                 transport?.webView = web
                 popup.transport.sendToTarget()
             }
-            pending != null -> navigate(web, pending, VisitKind.Typed)
+            pending != null -> {
+                if (saved != null) restore(web, saved, url)
+                navigate(web, pending, VisitKind.Typed)
+            }
             saved != null && restore(web, saved, url) -> {
                 restoringScroll = scrollAtDiscard
                 Log.i(LOG_TAG, "recreate $id from saved state, scroll at discard ${scrollAtDiscard ?: "unknown"}")
@@ -202,6 +205,7 @@ internal class WebViewPage(
         if (web == null) {
             pendingUrl = url
             update { it.copy(url = url) }
+            if (isShownNow()) makeLive()
             return
         }
         navigate(web, url, VisitKind.Typed)
@@ -236,6 +240,8 @@ internal class WebViewPage(
     override fun goForward(): Boolean = goBy(1)
 
     internal val awaitsProcessReload: Boolean get() = processRecovery.awaitsReload
+
+    internal val revivesWhenShown: Boolean get() = processRecovery.revivesWhenShown(pendingUrl != null)
 
     private fun isShownNow(): Boolean = engine.isShown(id)
 

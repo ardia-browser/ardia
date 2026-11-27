@@ -8,6 +8,11 @@ public enum PageSession {
     return live
   }
 
+  public static func restore(_ session: Data, into webView: WKWebView, then navigation: (WKWebView) -> Void) {
+    webView.interactionState = session
+    navigation(webView)
+  }
+
   public static func restore(_ session: Data, into webView: WKWebView, goingBy step: Int) -> Bool {
     webView.interactionState = session
     let list = webView.backForwardList

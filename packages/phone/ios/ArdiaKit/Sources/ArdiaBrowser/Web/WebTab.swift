@@ -116,15 +116,26 @@ public final class WebTab: DiscardablePage, Identifiable {
 
   public func load(_ url: URL) {
     failure = nil
-    historyAwaitsRestore = false
     processRecovery.personOpened()
-    guard let webView else {
+    guard webView != nil else {
       pendingURL = url
       self.url = url
       return
     }
     processRecovery.reloadStarted()
-    webView.load(URLRequest(url: url))
+    navigate { $0.load(URLRequest(url: url)) }
+  }
+
+  @discardableResult
+  public func navigate(_ navigation: (WKWebView) -> Void) -> Bool {
+    guard let webView else { return false }
+    if webView.backForwardList.currentItem == nil, let session = engine?.tabs.tab(id)?.interactionState {
+      historyAwaitsRestore = false
+      PageSession.restore(session, into: webView, then: navigation)
+    } else {
+      navigation(webView)
+    }
+    return true
   }
 
   public func snapshotForSwipe(_ direction: SwipeNavigationDirection) -> UIImage? {
@@ -342,7 +353,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     processRecovery.reloadStarted()
     if let pendingURL {
       self.pendingURL = nil
-      webView.load(URLRequest(url: pendingURL))
+      navigate { $0.load(URLRequest(url: pendingURL)) }
     } else if let state = engine?.tabs.tab(id)?.interactionState {
       restoringState = true
       webView.interactionState = state

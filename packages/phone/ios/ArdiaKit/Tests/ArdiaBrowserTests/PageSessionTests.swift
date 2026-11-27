@@ -16,7 +16,7 @@ import WebKit
   let pages: URL = {
     let folder = FileManager.default.temporaryDirectory.appending(path: "page-session-\(UUID().uuidString)")
     try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-    for name in ["a", "b"] {
+    for name in ["a", "b", "c", "translated"] {
       try? "<title>\(name)</title>\(name)".write(to: folder.appending(path: "\(name).html"), atomically: true, encoding: .utf8)
     }
     return folder
@@ -101,5 +101,39 @@ import WebKit
     await load(loaded, "b", delegate: delegate)
     let saved = try #require(loaded.interactionState as? Data)
     #expect(!PageSession.restore(saved, into: WKWebView(), goingBy: 1))
+  }
+
+  func navigateFromBlank(_ navigation: @escaping (WKWebView) -> Void) async throws -> (WKWebView, Commits) {
+    let delegate = Finished()
+    let loaded = WKWebView()
+    loaded.navigationDelegate = delegate
+    await load(loaded, "a", delegate: delegate)
+    await load(loaded, "b", delegate: delegate)
+    let saved = try #require(loaded.interactionState as? Data)
+    let commits = Commits()
+    let remounted = WKWebView()
+    remounted.navigationDelegate = commits
+    await withCheckedContinuation { continuation in
+      commits.waiting = continuation
+      PageSession.restore(saved, into: remounted, then: navigation)
+    }
+    return (remounted, commits)
+  }
+
+  @Test func translateFromABlankWebViewKeepsTheSavedHistory() async throws {
+    let translated = pages.appending(path: "translated.html")
+    let folder = pages
+    let (webView, commits) = try await navigateFromBlank { $0.loadFileURL(translated, allowingReadAccessTo: folder) }
+    #expect(commits.urls == ["translated.html"])
+    #expect(webView.backForwardList.backList.map(\.url.lastPathComponent) == ["a.html", "b.html"])
+  }
+
+  @Test func aTypedAddressFromABlankWebViewKeepsTheSavedHistory() async throws {
+    let typed = pages.appending(path: "c.html")
+    let folder = pages
+    let (webView, commits) = try await navigateFromBlank { $0.loadFileURL(typed, allowingReadAccessTo: folder) }
+    #expect(commits.urls == ["c.html"])
+    #expect(webView.backForwardList.backList.map(\.url.lastPathComponent) == ["a.html", "b.html"])
+    #expect(webView.canGoBack)
   }
 }

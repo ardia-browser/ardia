@@ -140,7 +140,7 @@ class DevelopmentWebViewEngine(
     }
 
     private fun recoverIfWaiting(id: String) {
-        if (roster.page(id)?.awaitsProcessReload == true) roster.activate(id)
+        if (roster.page(id)?.revivesWhenShown == true) roster.activate(id)
     }
 
     init {

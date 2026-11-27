@@ -230,4 +230,13 @@ class PageProcessRecoveryTest {
         recovery.pageCommitted(host = "news.a.com")
         assertEquals(PageProcessRecovery.Step.Reload, recovery.processEnded(shown = true, now = 2_000L))
     }
+
+    @Test
+    fun queuedLoadRevivesTheShownPageEvenWithoutARecovery() {
+        val recovery = PageProcessRecovery()
+        assertFalse(recovery.revivesWhenShown(queuedLoad = false))
+        assertTrue(recovery.revivesWhenShown(queuedLoad = true))
+        recovery.processEnded(shown = false, now = 0L)
+        assertTrue(recovery.revivesWhenShown(queuedLoad = false))
+    }
 }

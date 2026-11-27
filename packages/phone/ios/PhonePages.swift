@@ -113,8 +113,7 @@ final class PhonePages {
     guard let base = URL(string: baseURL), ["http", "https"].contains(base.scheme?.lowercased() ?? "") else {
       throw PagePayloads.badArgs("baseUrl must be an http or https address")
     }
-    guard let page = activate(pageID), let webView = page.webView else { throw PagePayloads.error("ERR_NO_PAGE", "No page is open with id \(pageID)") }
-    webView.loadHTMLString(html, baseURL: base)
+    guard let page = activate(pageID), page.navigate({ $0.loadHTMLString(html, baseURL: base) }) else { throw PagePayloads.error("ERR_NO_PAGE", "No page is open with id \(pageID)") }
   }
 
   func evaluate(_ pageID: String, script: String) async throws -> String? {

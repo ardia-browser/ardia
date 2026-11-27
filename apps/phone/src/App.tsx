@@ -52,6 +52,7 @@ import { useVoicePresented } from "./state/voice/store";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { closeSettings } from "./state/settings/nav";
 import { applyLaunchSettings, runLaunchScenario } from "./state/app/launch";
+import { appStateChanged } from "./state/app/appStateChange";
 import { rememberLaunchLookOnLeaving, useLaunchLook } from "./state/app/launchLook";
 import { frontSheet } from "./state/settings/settingsRules";
 import { inkLayer, lightStatusIcons } from "./lib/statusInk";
@@ -114,12 +115,7 @@ export default function App() {
     const back = BackHandler.addEventListener("hardwareBackPress", () => useBoot.getState().ready && handleSystemBack());
     const state = AppState.addEventListener("change", (next) => {
       if (!useBoot.getState().ready) return;
-      if (next === "active") appBecameActive();
-      else {
-        appWillResignActive();
-        rememberLaunchLookOnLeaving();
-      }
-      reportShownPage();
+      appStateChanged(next, { becameActive: appBecameActive, resignActive: appWillResignActive, reportShownPage, rememberLaunchLook: rememberLaunchLookOnLeaving });
     });
     return () => {
       back.remove();

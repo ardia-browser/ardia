@@ -15,6 +15,7 @@ import {
   type PageViewHandle,
   type RefusedSnapshot,
 } from "../../platform/pages";
+import { callNow } from "../../lib/callNow";
 
 export type { FindResult, PageEngineEvent, PageNavigationState, PageProcessOutcome, PageRequest, PageScrollPosition, PageSnapshot, PageState, PageTone, PageViewHandle, RefusedSnapshot };
 export { isRefusedSnapshot };
@@ -183,7 +184,7 @@ export const openPageInBackground = (id: string, url: string, isPrivate: boolean
 
 export const livePageIds = (): Promise<string[]> => settled(() => pages.ids(), []);
 
-export const setShownPage = (pageId: string | null) => void settled(() => pages.setShownPage(pageId), undefined);
+export const setShownPage = (pageId: string | null) => callNow(() => pages.setShownPage(pageId));
 
 export function listenToPages(listener: (event: PageEngineEvent) => void) {
   try {

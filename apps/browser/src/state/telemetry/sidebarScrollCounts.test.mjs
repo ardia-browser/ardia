@@ -20,7 +20,10 @@ test("a scroll counts once, a steady scroll's update more than 34 ms late counts
   assert.deepEqual(takeSidebarResizeCounts(), { sidebar_resizes: 0, sidebar_scrolls: 0, sidebar_scroll_stalls: 0, sidebar_scroll_held_hovers: 0, sidebar_scroll_held_teardowns: 0, sidebar_new_tab_docks: 0, sidebar_new_tab_undocks: 0, sidebar_scroller_drags: 0, sidebar_folds: 0, sidebar_fold_stutters: 0, sidebar_fold_overruns: 0 });
   setConsentPeriod(false, null);
   noteSidebarTeardownHeld();
-  assert.equal(takeSidebarResizeCounts().sidebar_scroll_held_teardowns, 0);
+  noteSidebarScrollerDragged();
+  const off = takeSidebarResizeCounts();
+  assert.equal(off.sidebar_scroll_held_teardowns, 0);
+  assert.equal(off.sidebar_scroller_drags, 0, "a scroll bar drag while sharing is off is never counted");
 });
 
 test("updates that come apart because of how the scroll was moved, not because a frame was late, are no stutters", () => {

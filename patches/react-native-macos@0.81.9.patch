@@ -4045,10 +4045,10 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..c75665485afa81574f2f0be0829c1f3a
 +@end
 +#endif // macOS]
 diff --git a/React/Views/ScrollView/RCTScrollView.m b/React/Views/ScrollView/RCTScrollView.m
-index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc46555c6e0 100644
+index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da564b946f8 100644
 --- a/React/Views/ScrollView/RCTScrollView.m
 +++ b/React/Views/ScrollView/RCTScrollView.m
-@@ -50,6 +50,7 @@ + (BOOL)isCompatibleWithResponsiveScrolling;
+@@ -50,10 +50,16 @@ + (BOOL)isCompatibleWithResponsiveScrolling;
  @property (nonatomic, assign, getter=isInverted) BOOL inverted;
  @property (nonatomic, assign, getter=isScrollEnabled) BOOL scrollEnabled;
  @property (nonatomic, strong) NSPanGestureRecognizer *panGestureRecognizer;
@@ -4056,7 +4056,17 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc4
  #endif // macOS]
  @end
  
-@@ -302,6 +303,11 @@ - (void)setDocumentView:(__kindof NSView *)documentView
+-@implementation RCTCustomScrollView
++@implementation RCTCustomScrollView {
++#if TARGET_OS_OSX // [macOS
++  NSTrackingArea *_scrollerReach;
++  NSTimeInterval _scrollerFlashedAt;
++#endif // macOS]
++}
+ 
+ - (instancetype)initWithFrame:(CGRect)frame
+ {
+@@ -302,6 +308,48 @@ - (void)setDocumentView:(__kindof NSView *)documentView
    [super setDocumentView:documentView];
    [documentView setAccessibilityLabel:[self accessibilityLabel]];
  }
@@ -4065,10 +4075,47 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc4
 +{
 +  [super setScrollerStyle:_keepsOverlayScrollers ? NSScrollerStyleOverlay : scrollerStyle];
 +}
++
++- (void)setKeepsOverlayScrollers:(BOOL)keepsOverlayScrollers
++{
++  _keepsOverlayScrollers = keepsOverlayScrollers;
++  [self updateTrackingAreas];
++}
++
++- (void)updateTrackingAreas
++{
++  if (_scrollerReach != nil) {
++    [self removeTrackingArea:_scrollerReach];
++    _scrollerReach = nil;
++  }
++  if (_keepsOverlayScrollers) {
++    _scrollerReach = [[NSTrackingArea alloc] initWithRect:NSZeroRect
++                                                  options:NSTrackingActiveAlways | NSTrackingInVisibleRect | NSTrackingMouseMoved
++                                                    owner:self
++                                                 userInfo:nil];
++    [self addTrackingArea:_scrollerReach];
++  }
++  [super updateTrackingAreas];
++}
++
++- (void)mouseMoved:(NSEvent *)event
++{
++  [super mouseMoved:event];
++  if (_scrollerReach == nil) {
++    return;
++  }
++  NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
++  CGFloat reach = [NSScroller scrollerWidthForControlSize:NSControlSizeRegular scrollerStyle:NSScrollerStyleOverlay];
++  if (point.x < NSMaxX(self.bounds) - reach || event.timestamp - _scrollerFlashedAt < 0.25) {
++    return;
++  }
++  _scrollerFlashedAt = event.timestamp;
++  [self flashScrollers];
++}
  #endif // macOS]
  
  - (BOOL)shouldGroupAccessibilityChildren
-@@ -320,6 +326,7 @@ @implementation RCTScrollView {
+@@ -320,6 +368,7 @@ @implementation RCTScrollView {
    CGRect _prevFirstVisibleFrame;
    __weak RCTPlatformView *_firstVisibleView; // [macOS]
    RCTCustomScrollView *_scrollView;
@@ -4076,7 +4123,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc4
  #if !TARGET_OS_OSX // [macOS]
    UIView *_contentView;
  #endif // [macOS]
-@@ -535,11 +542,9 @@ - (void)setInverted:(BOOL)inverted
+@@ -535,11 +584,9 @@ - (void)setInverted:(BOOL)inverted
  
  - (void)setHasOverlayStyleIndicator:(BOOL)hasOverlayStyle
  {
@@ -4091,7 +4138,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc4
  }
  #endif // macOS]
  
-@@ -702,6 +707,10 @@ - (void)layoutSubviews
+@@ -702,6 +749,10 @@ - (void)layoutSubviews
  
  - (void)updateClippedSubviews
  {
@@ -4102,7 +4149,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc4
    // Find a suitable view to use for clipping
    RCTPlatformView *clipView = [self react_findClipView]; // [macOS]
    if (!clipView) {
-@@ -730,6 +739,7 @@ - (void)updateClippedSubviews
+@@ -730,6 +781,7 @@ - (void)updateClippedSubviews
      [self react_updateClippedSubviewsWithClipRect:clipRect relativeToView:clipView];
      _lastClippedToRect = bounds;
    }
@@ -4110,7 +4157,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc4
  }
  
  #if TARGET_OS_OSX // [macOS
-@@ -740,13 +750,29 @@ - (void)viewDidMoveToWindow
+@@ -740,13 +792,29 @@ - (void)viewDidMoveToWindow
    NSNotificationCenter *defaultCenter = [NSNotificationCenter defaultCenter];
    if ([self window] == nil) {
      // Unregister for bounds change notifications
@@ -4141,7 +4188,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc4
      // Register for bounds change notifications so we can track scrolling
      [defaultCenter addObserver:self
                        selector:@selector(scrollViewDocumentViewBoundsDidChange:)
-@@ -756,6 +782,10 @@ - (void)viewDidMoveToWindow
+@@ -756,6 +824,10 @@ - (void)viewDidMoveToWindow
                        selector:@selector(preferredScrollerStyleDidChange:)
                            name:NSPreferredScrollerStyleDidChangeNotification
                          object:nil];
@@ -4152,7 +4199,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc4
    }
  
    _notifyDidScroll = ([self window] != nil);
-@@ -886,8 +916,13 @@ - (void)flashScrollIndicators
+@@ -886,8 +958,13 @@ - (void)flashScrollIndicators
  #pragma mark - ScrollView delegate
  
  #if TARGET_OS_OSX // [macOS
@@ -4167,13 +4214,16 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc4
    if (_disableScrollEvents) {
      return;
    }
-@@ -1427,6 +1462,19 @@ - (void)keyUp:(NSEvent *)event {
+@@ -1427,6 +1504,22 @@ - (void)keyUp:(NSEvent *)event {
    }
  }
  
 +- (void)scrollViewWillStartLiveScroll:(__unused NSNotification *)notification
 +{
 +  NSEvent *press = NSApp.currentEvent;
++  if (!_scrollView.keepsOverlayScrollers) {
++    return;
++  }
 +  if (press.type != NSEventTypeLeftMouseDown && press.type != NSEventTypeLeftMouseDragged) {
 +    return;
 +  }

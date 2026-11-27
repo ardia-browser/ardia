@@ -44,7 +44,7 @@ export function noteSidebarTeardownHeld(consent?: ConsentToken | null) {
 }
 
 export function noteSidebarScrollerDragged() {
-  scrollerDrags++;
+  countFor(consentOrNow(undefined), () => void scrollerDrags++);
 }
 
 export function noteNewTabDocked(docked: boolean) {

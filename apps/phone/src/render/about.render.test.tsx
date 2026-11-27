@@ -41,3 +41,12 @@ test("the licences list this phone's own native code: Ardia's Swift packages on 
   expect(text).toContain("The above copyright notice and this permission notice shall be included");
   unmount(root);
 });
+
+test("the licences credit this app under Apache 2.0 and the Mac browser it syncs with, as shipped, under GPL 3.0, as NOTICE says", () => {
+  const root = renderSurface(<LicensesPage />);
+  const text = textOf(root);
+  expect(text).toMatch(/Ardia\s*This app\.\s*License\s*Apache License 2\.0/);
+  expect(text).toMatch(/Ardia for Mac\s*The Mac browser this app syncs with, as shipped[^]*License\s*GNU General Public License 3\.0/);
+  expect(text).not.toContain("This app, and the Mac browser");
+  unmount(root);
+});

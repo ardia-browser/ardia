@@ -34,10 +34,10 @@ test("where sync isn't offered, Clear Browsing Data, About and the licences drop
   selectCopy("android", false);
   assert.equal(copy().historyClears, "History clears from this phone.");
   assert.equal(copy().privacy, "No accounts. Your data stays on this phone.");
-  assert.equal(copy().ardiaCredit, "This app.");
+  assert.equal(copy().macBrowserCredit, null);
   selectCopy("android", true);
   assert.match(copy().historyClears, /Mac/);
-  assert.match(copy().ardiaCredit, /Mac browser/);
+  assert.match(copy().macBrowserCredit ?? "", /Mac browser.*GPL.*Apache 2\.0/);
 });
 
 test("each phone lists only its own page summary counts: ChatGPT and Gemini Nano on Android, Apple Intelligence on iPhone", () => {

@@ -166,6 +166,9 @@ function answer(cmd, body) {
   return { STATUS: 1 };
 }
 
+const SAVE_CMD = 6;
+const LIST_CMD = 4;
+
 function sealed(message) {
   const payload = jsonOf(message.payload);
   const body = open(payload?.SMSG);
@@ -173,9 +176,10 @@ function sealed(message) {
   const ids = { tabId: message.tabId, frameId: message.frameId };
   if (!body) return send({ cmd: message.cmd, ...ids, payload: {} });
   const key = String(message.cmd);
+  const replyCmd = message.cmd === SAVE_CMD ? LIST_CMD : message.cmd;
   if ((dropped[key] ?? 0) < Number(mode().drop?.[key] ?? 0)) return void (dropped[key] = (dropped[key] ?? 0) + 1);
-  if (mode().garble?.[key]) return send({ cmd: message.cmd, ...ids, payload: { SMSG: { TID: session.tid, SDATA: enc(randomBytes(64)) } } });
-  const reply = { cmd: message.cmd, ...ids, payload: { SMSG: seal(answer(message.cmd, body)) } };
+  if (mode().garble?.[key]) return send({ cmd: replyCmd, ...ids, payload: { SMSG: { TID: session.tid, SDATA: enc(randomBytes(64)) } } });
+  const reply = { cmd: replyCmd, ...ids, payload: { SMSG: seal(answer(message.cmd, body)) } };
   const delay = Number(mode().delay?.[String(message.cmd)] ?? 0);
   if (delay > 0) setTimeout(() => send(reply), delay);
   else send(reply);

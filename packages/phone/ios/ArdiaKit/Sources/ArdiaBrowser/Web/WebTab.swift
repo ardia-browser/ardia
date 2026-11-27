@@ -679,6 +679,7 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
        engine.preferences.appLinks(for: targetHost, isPrivate: tab.isPrivate) == .app, let open = engine.openUniversalLink, await open(target) {
       return (.cancel, preferences)
     }
+    guard current(webView) === tab else { return (.cancel, preferences) }
     return (tab.decidePolicy(for: navigationAction, preferences: preferences), preferences)
   }
 

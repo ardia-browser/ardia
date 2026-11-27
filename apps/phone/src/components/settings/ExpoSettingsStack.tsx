@@ -6,7 +6,7 @@ import { refreshSettings } from "../../state/settings/actions";
 import { settingsInMenu } from "../../state/page/actions";
 import { usePageUi } from "../../state/page/store";
 import { useSettingsNav } from "../../state/settings/hooks";
-import { closeSettings, followSettingsPath, settingsDestinationKeys, settingsPath, settingsRouteFromKey, type SettingsRoute } from "../../state/settings/nav";
+import { closeSettingsFrom, followSettingsPath, settingsDestinationKeys, settingsPath, settingsRouteFromKey, type SettingsRoute } from "../../state/settings/nav";
 import { nativeLookColors } from "../../lib/profileLook";
 import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
 import { destinationWords, syncWords } from "../../lib/sharedWords";
@@ -97,11 +97,14 @@ export function ExpoSettingsSheet() {
   const open = useSettingsNav((s) => s.open);
   const generation = useSettingsNav((s) => s.generation);
   const inPageMenu = usePageUi((ui) => settingsInMenu(ui, generation));
+  const presented = open && !inPageMenu;
+  const presentedGeneration = useRef<number | null>(null);
+  if (presented) presentedGeneration.current = generation;
   useRefreshWhileOpen(open);
   usePublishNativeChromeLook();
   return (
     <Host testID="expoSettingsSheet" style={styles.anchor} pointerEvents="none">
-      <BottomSheet isPresented={open && !inPageMenu} onIsPresentedChange={(presented) => (presented ? undefined : closeSettings())}>
+      <BottomSheet isPresented={presented} onIsPresentedChange={(shows) => (shows || presentedGeneration.current === null ? undefined : closeSettingsFrom(presentedGeneration.current))}>
         <SettingsNavigation />
       </BottomSheet>
     </Host>
@@ -120,9 +123,11 @@ export function SettingsNavigation() {
   const look = useProfileLook();
   const dark = useTheme().dark;
   const glass = useNativeChromeUsesGlass();
-  const kept = useRef(stack);
-  if (open && stack.length) kept.current = stack;
-  const shown = open ? stack : kept.current;
+  const generation = useSettingsNav((s) => s.generation);
+  const kept = useRef({ stack, generation });
+  if (open && stack.length) kept.current = { stack, generation };
+  const shown = open ? stack : kept.current.stack;
+  const shownGeneration = open ? generation : kept.current.generation;
   const path = settingsPath(shown);
   const seen = useRef<{ open: boolean; keys: Set<string> }>({ open, keys: new Set() });
   if (open && !seen.current.open) seen.current = { open, keys: new Set() };
@@ -130,7 +135,7 @@ export function SettingsNavigation() {
   for (const key of path) seen.current.keys.add(key);
   const destinations = [...new Set([...settingsDestinationKeys(shown), ...seen.current.keys])];
   return (
-    <NavigationStack path={path} onPathChange={followSettingsPath} modifiers={modifierList(profileLook({ ...nativeLookColors(look, dark), usesGlass: glass }))}>
+    <NavigationStack path={path} onPathChange={(path) => followSettingsPath(path, shownGeneration)} modifiers={modifierList(profileLook({ ...nativeLookColors(look, dark), usesGlass: glass }))}>
       <StackRoot route={shown[0]} />
       {destinations.map((key) => (
         <NavigationDestination key={key} value={key}>

@@ -28,7 +28,7 @@ import { endMenuTiming, markMenuPhase, markMenuPressed } from "./menuTiming";
 import { markFindPhase, markFindPressed } from "./findTiming";
 import { closeVoiceSearch, useVoice } from "../voice/store";
 import { addOnlineAgainListener } from "../../platform/network";
-import { countUsage } from "../telemetry/telemetry";
+import { countUsage, usageCountingWindow } from "../telemetry/telemetry";
 import { geminiNanoMissingCount, pageSummaryOpenedCount, pageSummarySettledCounts } from "../../lib/telemetrySchema";
 import { pageSummariesEnabled, pageSummariesRevision, refreshPageSummariesEnabled } from "../pageSummary/enabled";
 import { dismissArchiveCard } from "../browse/archiveCard";
@@ -398,7 +398,8 @@ type SiteChange = "site_settings_zoom_changed" | "site_settings_night_shade_chan
 
 function siteChangeCounter(field: SiteChange): () => void {
   if (!siteSettingsInMenu() || selectedTab()?.isPrivate) return () => undefined;
-  return () => countUsage(field);
+  const count = usageCountingWindow();
+  return () => count(field);
 }
 
 export function openSiteSettingsRoute(route: SettingsRoute) {
@@ -595,31 +596,43 @@ export function setNightShadeOn(on: boolean) {
     .then(counted, () => siteWriteFailed(next, revision, url));
 }
 
-export function refreshMenuSite() {
+export function nightShadeDefaultChanged() {
+  knownSites.clear();
+  preparedSite = null;
   const now = opening;
   const tab = selectedTab();
   if (!pageUi().menuOpen || !now || !tab || tab.id !== now.tabId) return;
   const url = tabUrl(tab);
   const host = hostOf(url);
   if (!host || host !== now.host) return;
+  if (pageUi().menuSite) usePageUi.setState({ menuSite: null });
   void readMenuSite(url, host, tab.isPrivate).then(publishSite, () => undefined);
 }
 
 const pageZoomOf = (id: string) => usePages.getState().navigation[id]?.pageZoom ?? 1;
 
-function zoomed(run: (id: string) => Promise<unknown>, changes: (id: string) => boolean = () => true) {
+const zoomQueues = new Map<string, Promise<number>>();
+
+function zoomed(run: (id: string) => Promise<number>) {
   const id = selectedId();
   if (!id) return;
-  const counted = changes(id) ? siteChangeCounter("site_settings_zoom_changed") : () => undefined;
-  quietly(async () => {
-    await run(id);
-    counted();
+  const counted = siteChangeCounter("site_settings_zoom_changed");
+  const previous = zoomQueues.get(id) ?? Promise.resolve(pageZoomOf(id));
+  const next = previous.then(async (before) => {
+    const after = await run(id);
+    if (Math.abs(after - before) > 0.001) counted();
+    return after;
+  });
+  const settledZoom = next.catch(() => pageZoomOf(id));
+  zoomQueues.set(id, settledZoom);
+  void settledZoom.then(() => {
+    if (zoomQueues.get(id) === settledZoom) zoomQueues.delete(id);
   });
 }
 
 export const zoomOut = () => zoomed((id) => pages.zoomOut(id));
 export const zoomIn = () => zoomed((id) => pages.zoomIn(id));
-export const resetZoom = () => zoomed((id) => pages.setPageZoom(id, 1), (id) => Math.abs(pageZoomOf(id) - 1) > 0.001);
+export const resetZoom = () => zoomed((id) => pages.setPageZoom(id, 1));
 
 export function setDesktopSite(on: boolean) {
   const counted = siteChangeCounter("site_settings_desktop_site_changed");

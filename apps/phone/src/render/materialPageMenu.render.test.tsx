@@ -157,6 +157,7 @@ onAndroid("the Material Site Settings starts with the site's group: its host abo
 
 onAndroid("the Material site group's Night Shade, Zoom In and Desktop Site write to the page and count, and opening Site Settings from the menu is counted", async () => {
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
   const shade = jest.spyOn(pages, "setNightShade").mockResolvedValue(undefined);
   const zoomIn = jest.spyOn(pages, "zoomIn").mockResolvedValue(1.5);
   const desktop = jest.spyOn(pages, "setDesktopSite").mockResolvedValue(undefined);

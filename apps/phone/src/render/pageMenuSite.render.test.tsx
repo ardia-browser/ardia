@@ -30,6 +30,7 @@ beforeEach(() => {
   jest.spyOn(pages, "nightShade").mockResolvedValue({ mode: "disabled" } as never);
   jest.spyOn(blocking, "isEnabledForSite").mockResolvedValue(true);
   jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
 });
 
 afterEach(() => {
@@ -126,8 +127,8 @@ test("the menu's Site Settings starts with a group for the site, headed by its h
 });
 
 test("the site group's rows write to the page, each counted only once its write lands, and Desktop Site closes the menu", async () => {
-  const zoomIn = jest.spyOn(pages, "zoomIn").mockResolvedValue(1.25);
-  const zoomOut = jest.spyOn(pages, "zoomOut").mockResolvedValue(1);
+  const zoomIn = jest.spyOn(pages, "zoomIn").mockResolvedValue(1.5);
+  const zoomOut = jest.spyOn(pages, "zoomOut").mockResolvedValue(1.25);
   const reset = jest.spyOn(pages, "setPageZoom").mockResolvedValue(1);
   let shadeLands: () => void = () => undefined;
   const shade = jest.spyOn(pages, "setNightShade").mockImplementation(() => new Promise<void>((resolve) => (shadeLands = resolve)));

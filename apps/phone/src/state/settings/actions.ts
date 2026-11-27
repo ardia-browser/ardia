@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { refreshMenuSite } from "../page/actions";
+import { nightShadeDefaultChanged } from "../page/actions";
 import type { InterfaceStyleChoice, SchemeChoice } from "../../lib/appearance";
 import { appVersion } from "../../platform/appInfo";
 import { haptics } from "../app/haptics";
@@ -92,7 +92,7 @@ export function setDefaultNightShade(mode: NightShadeMode) {
   useEngines.setState({ nightShade: mode });
   quietly(async () => {
     await pages.setNightShade(mode, null, false);
-    refreshMenuSite();
+    nightShadeDefaultChanged();
   });
 }
 

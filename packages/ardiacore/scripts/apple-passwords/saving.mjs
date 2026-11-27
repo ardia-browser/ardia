@@ -68,7 +68,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
     async E19() {
       const { app, fake, tabs } = await session();
       const kept = fixture("changed@save.test");
-      const changed = "fixture-pw-changed-10";
+      const changed = `fixture-pw-changed-${Date.now()}`;
       const before = await ardiaStore(app);
       const tab = await tabs.open(sites.url(SITE));
       try {

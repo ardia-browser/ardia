@@ -1,4 +1,4 @@
-import type { ApplePasswordsPairing, ApplePasswordsSaveCount, ApplePasswordsState, FieldProviderProfile, LoginListCount, PasswordExportStatus, SavedPassword, SystemPanelResult, VerificationCodeSetupResult } from "../../passwords";
+import type { ApplePasswordsPairing, ApplePasswordsSaveCount, ApplePasswordsState, FieldProviderProfile, LoginListCount, LoginListEngine, PasswordExportStatus, SavedPassword, SystemPanelResult, VerificationCodeSetupResult } from "../../passwords";
 import type { Profile } from "../wire";
 
 export type PasswordsCalls = {
@@ -26,6 +26,6 @@ export type PasswordsCalls = {
 
 export type PasswordsEvents = {
   "passwords.applePasswordsChanged": { state: ApplePasswordsState; epoch?: string };
-  "passwords.loginListCounted": { name: LoginListCount; epoch?: string };
+  "passwords.loginListCounted": { name: LoginListCount; engine?: LoginListEngine; epoch?: string };
   "passwords.applePasswordsSaveCounted": { name: ApplePasswordsSaveCount; epoch?: string };
 };

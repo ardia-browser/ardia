@@ -4,6 +4,7 @@ extension ArdiaWebView: LoginListTarget {
   var loginListProfile: String { profile }
   var loginListPage: URL? { loginListPageURL }
   var loginListWindow: NSWindow? { visible && !isHiddenOrHasHiddenAncestor ? window : nil }
+  var loginListEngine: String { "chromium" }
 
   func loginListFill(username: String, password: String, frameOrigin: String, done: @escaping (Bool) -> Void) {
     fillLoginList(["username": username, "password": password], origin: frameOrigin, completion: done)

@@ -5,6 +5,7 @@ extension WebKitTab: LoginListTarget {
   var loginListProfile: String { profile }
   var loginListPage: URL? { webView?.url }
   var loginListWindow: NSWindow? { isHiddenOrHasHiddenAncestor ? nil : window }
+  var loginListEngine: String { "webkit" }
 
   func loginListFill(username: String, password: String, frameOrigin: String, done: @escaping (Bool) -> Void) {
     guard let webView, LoginList.origin(of: webView.url) == frameOrigin else { return done(false) }

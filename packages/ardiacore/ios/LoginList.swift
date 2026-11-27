@@ -4,6 +4,7 @@ protocol LoginListTarget: AnyObject {
   var loginListProfile: String { get }
   var loginListPage: URL? { get }
   var loginListWindow: NSWindow? { get }
+  var loginListEngine: String { get }
   func loginListFill(username: String, password: String, frameOrigin: String, done: @escaping (Bool) -> Void)
   func loginListSync(open: Bool, picking: Bool)
   func loginListConnect()
@@ -172,7 +173,7 @@ final class LoginList: NSObject {
     if LaunchConfig.shared.background { NSLog("[logins] Login list: %ld logins, %ld rows", logins.count, rows.count) }
     dropdown.show(rows, under: next.field.screenRect, in: window)
     sync()
-    if opening { Self.count(next.connect ? "connectShown" : "shown") }
+    if opening { Self.count(next.connect ? "connectShown" : "shown", in: target) }
   }
 
   func key(_ target: LoginListTarget, _ key: String) {
@@ -208,17 +209,18 @@ final class LoginList: NSObject {
     if id == Self.connectId {
       close(target)
       resume = current
-      Self.count("connectPicked")
+      Self.count("connectPicked", in: target)
       return target.loginListConnect()
     }
     if id == Self.notNowId {
       close(target)
       declined.insert(current.site)
-      return Self.count("notNow")
+      return Self.count("notNow", in: target)
     }
     guard let login = current.logins.first(where: { Self.rowId($0) == id }) else { return }
     close(target)
     let asked = ticket
+    let engine = target.loginListEngine
     ApplePasswordsClient.shared.password(host: current.host, user: login.user) { [weak self, weak target] result in
       DispatchQueue.main.async {
         guard let self, let target, Self.origin(of: target.loginListPage) == current.page else { return }
@@ -226,10 +228,10 @@ final class LoginList: NSObject {
         case .success(let password):
           ApplePasswordsSaving.remember(scheme: login.insecure ? "http" : "https", host: current.host, user: login.user, password: password)
           target.loginListFill(username: login.user, password: password, frameOrigin: current.field.frameOrigin) { filled in
-            Self.count(filled ? "filled" : "fillFailed")
+            Self.count(filled ? "filled" : "fillFailed", engine: engine)
           }
         case .failure(let problem):
-          Self.count("fillFailed")
+          Self.count("fillFailed", engine: engine)
           guard asked == self.ticket else { return }
           if problem == .notConnected { return self.offerConnect(current) }
           self.present(current, notice: Self.fillFailed)
@@ -244,10 +246,13 @@ final class LoginList: NSObject {
     NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
   }
 
-  private static func count(_ name: String) {
-    if LaunchConfig.shared.background { NSLog("[logins] Login list counted: %@", name) }
-    ArdiaEvents.emit("passwords.loginListCounted", data: ArdiaConsentStamp.begin().onto(["name": name]))
+  private static func count(_ name: String, in target: LoginListTarget) { count(name, engine: target.loginListEngine) }
+
+  private static func count(_ name: String, engine: String) {
+    if LaunchConfig.shared.background { NSLog("[logins] Login list counted: %@ in %@", name, engine) }
+    ArdiaEvents.emit("passwords.loginListCounted", data: ArdiaConsentStamp.begin().onto(["name": name, "engine": engine]))
   }
+
 
   func forget(_ target: LoginListTarget) { close(target) }
 }

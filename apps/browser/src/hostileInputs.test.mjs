@@ -31,6 +31,7 @@ const { parseIntent, INTENT_SPECS } = await import("./state/plugins/stateIntents
 const { pluginStateUrl, redactedTabs } = await import("./state/plugins/pluginEventRedaction.ts");
 const { copyLinkFromPageMenu } = await import("./state/site/pageLinkCopy.ts");
 const { extensionSitePattern } = await import("./state/extensions/sitePatterns.ts");
+const { extensionNewTabPage } = await import("./state/extensions/newTabPage.ts");
 const { cleanUrl } = await import("@ardia/core");
 const { drainPassages } = await import("./state/site/translateDrain.ts");
 const { translatePack } = await import("./state/site/translate.ts");
@@ -1014,4 +1015,19 @@ test("T3: whatever the page hands over as passages, the model only gets numbered
     assert.equal(untouched.nodeValue, "Nicht angeboten", id);
     for (const node of texts) assert.equal(typeof node.nodeValue, "string", id);
   }
+});
+
+test("N1: whatever an extension's manifest names as its New Tab page, a new tab opens only a page inside that extension", () => {
+  const id = "imfeikbeimbfpmgfkkmjekabdehiiajc";
+  const prefix = `chrome-extension://${id}/`;
+  let opened = 0;
+  for (const { id: name, value } of [...HOSTILE_VALUES, ...HOSTILE_STRINGS.map(({ id: name, value }) => ({ id: `nested.${name}`, value: `app/${value}/page.html` }))]) {
+    const url = extensionNewTabPage({ id, enabled: true, newTabPage: value });
+    if (url === undefined) continue;
+    opened++;
+    assert.ok(url.startsWith(prefix) && new URL(url).host === id && new URL(url).href.startsWith(prefix), name);
+    assert.doesNotMatch(url, /[\s\\\u0000-\u001f\u2028\u2029]/, name);
+  }
+  assert.equal(extensionNewTabPage({ id, enabled: true, newTabPage: "dial.html" }), `${prefix}dial.html`, "the positive control opens");
+  assert.ok(opened > 0, "some hostile names are plain file names inside the extension and do open, so the sink check ran");
 });

@@ -262,7 +262,7 @@ export function customNewTabUrl(settings: Pick<Settings, "newTabOpens" | "minima
   return url && opensAsNewTab(url) ? url : undefined;
 }
 
-const opensAsNewTab = (url: string) => /^https?:\/\/[^/?#]/i.test(url) || url === "about:blank" || appUrlRoute(url)?.kind === "page";
+const opensAsNewTab = (url: string) => /^https?:\/\/[^/?#]/i.test(url) || url === "about:blank" || /^chrome-extension:\/\/[a-p]{32}(?:[/?#]|$)/.test(url) || appUrlRoute(url)?.kind === "page";
 
 function validateCustomEngine(settings: Settings, input: EngineInput, ignoreId?: string): string | null {
   return validateEngine(input, searchEngines(settings), ignoreId);

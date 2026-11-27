@@ -10,6 +10,7 @@
   "native": "the browser's own native layer, relaying OS input",
   "import": "a file or browser profile the user chose to import",
   "update": "a release manifest, its signature and the package the browser downloaded for the self-updater, trusted only once the release key's signature verifies",
+  "extension": "a Chrome extension the user installed, through its manifest read from its install folder",
   "release-list": "GitHub's public API, read unauthenticated by the Android app: the repo's android-v release tags and each release's details, which anyone on the network path or a GitHub outage could make malformed"
  },
  "customEvents": {
@@ -1513,6 +1514,16 @@
    ],
    "findings": [
     "D5"
+   ],
+   "detected": false
+  },
+  {
+   "id": "extension-manifest:newTabPage",
+   "source": "extension",
+   "guard": "chrome_url_overrides.newtab opens only as a path inside its own extension: a 32-letter a-p id, no scheme, whitespace, backslash, control or separator characters, no empty, . or .. segments, at most 1024 characters, only while the extension is enabled, and never in a private window",
+   "checks": [
+    "apps/browser/src/state/extensions/newTabPage.ts#extensionNewTabPage",
+    "packages/ardiacore/ios/ArdiaExtensionPackage.mm#ReadManifest"
    ],
    "detected": false
   },

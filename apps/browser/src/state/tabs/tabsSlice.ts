@@ -9,7 +9,8 @@ import { forgetOpeners, joinedWithCurrent, newTabPlacement, switchKeepsOpeners }
 import { onUrlChange } from "../pins/organize";
 import { groupWithOpener } from "../pins/tabGrouping";
 import { stepDrop } from "../drag/drops";
-import { customNewTabUrl, resolveTyped } from "../settings/settings";
+import { resolveTyped } from "../settings/settings";
+import { newTabPageUrl } from "./newTabHome";
 import { openSettings } from "../settings/settingsWindows";
 import { appUrlAction } from "../pages/appUrls";
 import { handOffPinPage } from "../pins/pinHandoff";
@@ -66,7 +67,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
   closedTabs: [],
 
   newTab(windowId, options) {
-    const home = options?.newTabCommand && !options.url && !options.adoptId && !options.gated ? customNewTabUrl(get().settings) : undefined;
+    const home = options?.newTabCommand && !options.url && !options.adoptId && !options.gated ? newTabPageUrl(get(), windowId, options.profileId) : undefined;
     if (home) return get().newTab(windowId, { ...options, url: home });
     const small = get().windows[windowId];
     if (small?.kind === "small" && small.tabIds.length) {

@@ -174,6 +174,8 @@ NSDictionary *ReadManifest(NSString *folder) {
   out[@"optionsPage"] = [options isKindOfClass:NSString.class] ? options : nil;
   NSString *panel = [m[@"side_panel"] isKindOfClass:NSDictionary.class] ? m[@"side_panel"][@"default_path"] : nil;
   out[@"sidePanel"] = [panel isKindOfClass:NSString.class] ? panel : nil;
+  NSString *newTab = [m[@"chrome_url_overrides"] isKindOfClass:NSDictionary.class] ? m[@"chrome_url_overrides"][@"newtab"] : nil;
+  out[@"newTabPage"] = [newTab isKindOfClass:NSString.class] && newTab.length ? newTab : nil;
   out[@"incognitoSplit"] = @([m[@"incognito"] isEqual:@"split"]);
   out[@"incognitoAllowed"] = @(![m[@"incognito"] isEqual:@"not_allowed"]);
   out[@"homepageUrl"] = [m[@"homepage_url"] isKindOfClass:NSString.class] ? m[@"homepage_url"] : nil;

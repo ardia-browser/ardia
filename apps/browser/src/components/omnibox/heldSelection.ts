@@ -1,9 +1,10 @@
 import { suggestionKey, type SearchScope, type Suggestion } from "@ardia/core";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { Disposition } from "../../state/omnibox/openFromBar";
 import type { BarEvent } from "./barText";
+import { noteHeldRowsKeyMove } from "../../state/telemetry/inlineCompletionCounts";
 
-type Held = { items: Suggestion[]; typed: string; scope: SearchScope | null; key: string | null };
+export type Held = { items: Suggestion[]; typed: string; scope: SearchScope | null; key: string | null };
 
 export function heldIndex(prev: Held | null, items: Suggestion[], typed: string, scope: SearchScope | null, selectedIndex: number): number {
   if (!prev?.key || prev.items === items || prev.typed !== typed || prev.scope !== scope) return selectedIndex;
@@ -18,13 +19,25 @@ export function heldKey(items: Suggestion[], selectedIndex: number): string | nu
   return current ? suggestionKey(current) : null;
 }
 
-export function useHeldSelection(items: Suggestion[], typed: string, scope: SearchScope | null, selectedIndex: number, dispatch: (e: BarEvent) => void) {
+export const followedRow = (prev: Held | null, index: number): Held | null => (prev ? { ...prev, key: heldKey(prev.items, index) } : prev);
+
+export function useHeldSelection(items: Suggestion[], typed: string, scope: SearchScope | null, selectedIndex: number, dispatch: (e: BarEvent) => void, rows: { held: boolean; release: () => void }) {
   const held = useRef<Held | null>(null);
+  const latestRows = useRef(rows);
+  latestRows.current = rows;
   useLayoutEffect(() => {
     const at = heldIndex(held.current, items, typed, scope, selectedIndex);
     if (at !== selectedIndex) return dispatch({ kind: "selected", index: at });
     held.current = { items, typed, scope, key: heldKey(items, selectedIndex) };
   });
+  const [releaseTo] = useState(() => (followIndex?: number) => {
+    if (followIndex !== undefined && latestRows.current.held) {
+      held.current = followedRow(held.current, followIndex);
+      noteHeldRowsKeyMove();
+    }
+    latestRows.current.release();
+  });
+  return releaseTo;
 }
 
 export function useProviderEnter(items: Suggestion[], typed: string, scope: SearchScope | null, choose: (s: Suggestion, disposition: Disposition) => void) {

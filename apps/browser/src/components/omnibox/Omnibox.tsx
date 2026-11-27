@@ -97,7 +97,7 @@ export function Omnibox({
     currentUrl,
   });
 
-  useHeldSelection(items, typed, scope, selectedIndex, dispatch);
+  const releaseRowsTo = useHeldSelection(items, typed, scope, selectedIndex, dispatch, { held: rowsHeld, release: releaseRows });
   const waitForProvider = useProviderEnter(items, typed, scope, (s, disposition) => choose(s, disposition));
 
   const snapshot = useRef<BarSnapshot | null>(null);
@@ -209,7 +209,7 @@ export function Omnibox({
 
   const onKeyDown = (e: BarKeyEvent) => {
     previewSelection.settle();
-    return barKeyDown(e, { bar, hero, shownCompletion, input: previewing ? value : typed, items, selectedIndex, previewing, current, tabScope, onDone, reset, forceSearch, go, choose, cancelBang: () => bangEnter.cancel(), removeRow: (url) => rowActions.remove(url), rowsHeld, releaseRows });
+    return barKeyDown(e, { bar, hero, shownCompletion, input: previewing ? value : typed, items, selectedIndex, previewing, current, tabScope, onDone, reset, forceSearch, go, choose, cancelBang: () => bangEnter.cancel(), removeRow: (url) => rowActions.remove(url), rowsHeld, releaseRows: releaseRowsTo });
   };
 
   const onContextMenu = async () => {

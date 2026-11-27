@@ -4045,7 +4045,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..c75665485afa81574f2f0be0829c1f3a
 +@end
 +#endif // macOS]
 diff --git a/React/Views/ScrollView/RCTScrollView.m b/React/Views/ScrollView/RCTScrollView.m
-index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc3417233905 100644
+index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..84706871cfc883eb44a1d79c4f9cdb25c283bca4 100644
 --- a/React/Views/ScrollView/RCTScrollView.m
 +++ b/React/Views/ScrollView/RCTScrollView.m
 @@ -50,10 +50,16 @@ + (BOOL)isCompatibleWithResponsiveScrolling;
@@ -4066,7 +4066,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc34
  
  - (instancetype)initWithFrame:(CGRect)frame
  {
-@@ -302,6 +308,66 @@ - (void)setDocumentView:(__kindof NSView *)documentView
+@@ -302,6 +308,71 @@ - (void)setDocumentView:(__kindof NSView *)documentView
    [super setDocumentView:documentView];
    [documentView setAccessibilityLabel:[self accessibilityLabel]];
  }
@@ -4123,17 +4123,22 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc34
 +
 +- (BOOL)pointerWithinScrollerReach
 +{
-+  if (self.window == nil || !_keepsOverlayScrollers) {
++  if (!_keepsOverlayScrollers || self.window == nil || !self.window.isVisible || self.isHiddenOrHasHiddenAncestor) {
 +    return NO;
 +  }
++  if (NSHeight(self.documentView.frame) <= NSHeight(self.contentView.bounds)) {
++    return NO;
++  }
++  NSRect visible = self.visibleRect;
 +  NSPoint point = [self convertPoint:self.window.mouseLocationOutsideOfEventStream fromView:nil];
++  CGFloat edge = NSMaxX(self.bounds) - self.scrollerInsets.right;
 +  CGFloat reach = [NSScroller scrollerWidthForControlSize:NSControlSizeRegular scrollerStyle:NSScrollerStyleOverlay];
-+  return NSPointInRect(point, self.bounds) && point.x >= NSMaxX(self.bounds) - reach;
++  return NSPointInRect(point, visible) && point.x >= edge - reach && point.x <= edge;
 +}
  #endif // macOS]
  
  - (BOOL)shouldGroupAccessibilityChildren
-@@ -320,6 +386,7 @@ @implementation RCTScrollView {
+@@ -320,6 +391,7 @@ @implementation RCTScrollView {
    CGRect _prevFirstVisibleFrame;
    __weak RCTPlatformView *_firstVisibleView; // [macOS]
    RCTCustomScrollView *_scrollView;
@@ -4141,7 +4146,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc34
  #if !TARGET_OS_OSX // [macOS]
    UIView *_contentView;
  #endif // [macOS]
-@@ -535,11 +602,9 @@ - (void)setInverted:(BOOL)inverted
+@@ -535,11 +607,9 @@ - (void)setInverted:(BOOL)inverted
  
  - (void)setHasOverlayStyleIndicator:(BOOL)hasOverlayStyle
  {
@@ -4156,7 +4161,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc34
  }
  #endif // macOS]
  
-@@ -702,6 +767,10 @@ - (void)layoutSubviews
+@@ -702,6 +772,10 @@ - (void)layoutSubviews
  
  - (void)updateClippedSubviews
  {
@@ -4167,7 +4172,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc34
    // Find a suitable view to use for clipping
    RCTPlatformView *clipView = [self react_findClipView]; // [macOS]
    if (!clipView) {
-@@ -730,6 +799,7 @@ - (void)updateClippedSubviews
+@@ -730,6 +804,7 @@ - (void)updateClippedSubviews
      [self react_updateClippedSubviewsWithClipRect:clipRect relativeToView:clipView];
      _lastClippedToRect = bounds;
    }
@@ -4175,7 +4180,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc34
  }
  
  #if TARGET_OS_OSX // [macOS
-@@ -740,13 +810,29 @@ - (void)viewDidMoveToWindow
+@@ -740,13 +815,29 @@ - (void)viewDidMoveToWindow
    NSNotificationCenter *defaultCenter = [NSNotificationCenter defaultCenter];
    if ([self window] == nil) {
      // Unregister for bounds change notifications
@@ -4206,7 +4211,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc34
      // Register for bounds change notifications so we can track scrolling
      [defaultCenter addObserver:self
                        selector:@selector(scrollViewDocumentViewBoundsDidChange:)
-@@ -756,6 +842,10 @@ - (void)viewDidMoveToWindow
+@@ -756,6 +847,10 @@ - (void)viewDidMoveToWindow
                        selector:@selector(preferredScrollerStyleDidChange:)
                            name:NSPreferredScrollerStyleDidChangeNotification
                          object:nil];
@@ -4217,7 +4222,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc34
    }
  
    _notifyDidScroll = ([self window] != nil);
-@@ -886,8 +976,13 @@ - (void)flashScrollIndicators
+@@ -886,8 +981,13 @@ - (void)flashScrollIndicators
  #pragma mark - ScrollView delegate
  
  #if TARGET_OS_OSX // [macOS
@@ -4232,7 +4237,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc34
    if (_disableScrollEvents) {
      return;
    }
-@@ -1427,6 +1522,22 @@ - (void)keyUp:(NSEvent *)event {
+@@ -1427,6 +1527,22 @@ - (void)keyUp:(NSEvent *)event {
    }
  }
  
@@ -4255,6 +4260,25 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc34
  - (void)preferredScrollerStyleDidChange:(__unused NSNotification *)notification {
    RCT_SEND_SCROLL_EVENT(onPreferredScrollerStyleDidChange, (@{ @"preferredScrollerStyle": RCTStringForScrollerStyle([NSScroller preferredScrollerStyle])}));
  }
+@@ -1473,6 +1589,18 @@ -(type)getter                                           \
+ RCT_SET_AND_PRESERVE_OFFSET(setShowsVerticalScrollIndicator, showsVerticalScrollIndicator, BOOL)
+ RCT_SET_AND_PRESERVE_OFFSET(setZoomScale, zoomScale, CGFloat);
+ 
++#if TARGET_OS_OSX // [macOS
++- (void)setScrollIndicatorInsets:(UIEdgeInsets)value
++{
++  _scrollView.scrollIndicatorInsets = value;
++}
++
++- (UIEdgeInsets)scrollIndicatorInsets
++{
++  return _scrollView.scrollIndicatorInsets;
++}
++#endif // macOS]
++
+ #if !TARGET_OS_OSX // [macOS]
+ - (void)setScrollIndicatorInsets:(UIEdgeInsets)value
+ {
 diff --git a/React/Views/ScrollView/RCTScrollViewManager.m b/React/Views/ScrollView/RCTScrollViewManager.m
 index fbd215c2b3d86a76d5519382fd9e03fc4ba30540..ab500b1fa9cef5db91fe00779d620557c183b53e 100644
 --- a/React/Views/ScrollView/RCTScrollViewManager.m

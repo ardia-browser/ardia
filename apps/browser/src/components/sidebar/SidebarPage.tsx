@@ -5,7 +5,7 @@ import { ContextMenuArea, space, WindowDragRegion } from "../ui";
 import { layout } from "../ui/theme";
 import { SidebarInk } from "./SidebarTextScope";
 import { ThemeScope } from "../window/ThemeScope";
-import { PageProfileContext, useSettings, useWindowId } from "../../state/browser/hooks";
+import { PageProfileContext, useSettings, useSidebarSide, useWindowId } from "../../state/browser/hooks";
 import { newTab } from "../../state/tabs/actions";
 import { sidebarListLengthNow, useSidebarCells } from "../../state/sidebar/hooks";
 import { useNewTabAtTop, useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
@@ -29,6 +29,7 @@ import { noteNewTabDocked } from "../../state/telemetry/sidebarScrollCounts";
 import { noteSidebarPlayerStayedAcrossPages } from "../../state/telemetry/mediaCardCounts";
 import { PageRows } from "./PageRows";
 import { useSidebarScroller } from "./sidebarScroller";
+import { SIDEBAR_RESIZE_HANDLE } from "./tokens";
 import { NewTabRow } from "./NewTabRow";
 import { SelectedRowPill, useSelectedRowAway } from "./SelectedRowPill";
 import { withOverscan, type ListViewport } from "./listViewport";
@@ -131,7 +132,8 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   useEffect(() => () => forgetRowsScrolled(windowRef.current), []);
   const page = useRef<PageSpot>({ scrollY: 0, viewport: 0, regions: { pinnedGroups: 0, list: 0 }, tilesFixed: true, newTabAtTop: false, edgeLift: 0, shown: false, owns: false, scroller: null }).current;
   const scrollView = useRef<ScrollView | null>(null);
-  const scroller = useSidebarScroller(scrollView);
+  const sidebarSide = useSidebarSide(windowId);
+  const scroller = useSidebarScroller(scrollView, sidebarSide === "left" ? SIDEBAR_RESIZE_HANDLE.width / 2 : 0);
   useLayoutEffect(() => {
     page.scroller = scrollView.current;
     spots.set(profileId, page);

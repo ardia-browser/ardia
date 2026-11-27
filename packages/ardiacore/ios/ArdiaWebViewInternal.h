@@ -380,6 +380,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 @interface ArdiaWebView (PageCommandsInternal)
 - (void)emitMedia;
 - (void)emitZoom;
+- (void)zoomStep:(NSInteger)direction scroll:(NSString *)scroll;
 - (void)runChromeCommand:(int)command;
 - (void)thawHiddenPage;
 - (BOOL)awaitsFirstDocument;

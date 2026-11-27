@@ -31,6 +31,9 @@ public final class WebEngine {
   @ObservationIgnored private let pageScriptControllers = NSHashTable<WKUserContentController>.weakObjects()
   @ObservationIgnored private var sharedPrivateDataStore: WKWebsiteDataStore?
   @ObservationIgnored private var nightShadeBakes: [ObjectIdentifier: BakedNightShade] = [:]
+  @ObservationIgnored private var systemStyleWatches: [ObjectIdentifier: any UITraitChangeRegistration] = [:]
+  @ObservationIgnored private var reportedPageDark: Bool?
+  @ObservationIgnored public var onPageDarkChange: (@MainActor (Bool) -> Void)?
 
   struct BakedNightShade: Equatable {
     var host: String?
@@ -48,6 +51,7 @@ public final class WebEngine {
     self.snapshots = snapshots
     preferences.onNightShadeChange = { [weak self] in self?.broadcastNightShade() }
     preferences.onSwipeNavigationChange = { [weak self] in self?.applySwipeNavigationPreference() }
+    preferences.onPageSchemeChange = { [weak self] in self?.applyPageStyle() }
     tabs.onTabsArchived = { [weak self] ids in
       for id in ids { self?.roster.remove(id) }
     }
@@ -106,6 +110,46 @@ public final class WebEngine {
   public func share(_ url: URL) {
     Task {
       shareRequest = await omnibox?.cleanURL(url) ?? url
+    }
+  }
+
+  public var pageStyle: UIUserInterfaceStyle {
+    switch preferences.pageScheme {
+    case .light: .light
+    case .dark: .dark
+    case nil: Self.systemStyle()
+    }
+  }
+
+  func pageStyleForNewPage() -> UIUserInterfaceStyle {
+    watchSystemStyle()
+    return pageStyle
+  }
+
+  static func systemStyle() -> UIUserInterfaceStyle {
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    return scene?.traitCollection.userInterfaceStyle ?? .unspecified
+  }
+
+  public var pageIsDark: Bool { pageStyle == .dark }
+
+  public func applyPageStyle() {
+    watchSystemStyle()
+    let style = pageStyle
+    for id in roster.liveIDs { roster.page(id)?.applyPageStyle(style) }
+    let dark = style == .dark
+    guard reportedPageDark != dark else { return }
+    reportedPageDark = dark
+    onPageDarkChange?(dark)
+  }
+
+  private func watchSystemStyle() {
+    for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) where systemStyleWatches[ObjectIdentifier(scene)] == nil {
+      systemStyleWatches[ObjectIdentifier(scene)] = scene.registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: UIWindowScene, _: UITraitCollection) in
+        guard let self, self.preferences.pageScheme == nil else { return }
+        self.applyPageStyle()
+      }
     }
   }
 
@@ -214,6 +258,12 @@ public final class WebEngine {
 
   private func observeSystem() {
     let center = NotificationCenter.default
+    notificationTasks.append(Task { [weak self] in
+      for await scene in center.notifications(named: UIScene.didDisconnectNotification).map({ ($0.object as? UIScene).map(ObjectIdentifier.init) }) {
+        guard let scene else { continue }
+        self?.systemStyleWatches[scene] = nil
+      }
+    })
     notificationTasks.append(Task { [weak self] in
       for await _ in center.notifications(named: UIApplication.didReceiveMemoryWarningNotification).map({ _ in () }) {
         self?.discardBackgroundTabs()

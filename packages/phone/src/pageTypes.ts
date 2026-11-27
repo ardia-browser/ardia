@@ -218,6 +218,7 @@ export type PageEngineEvent =
   | { name: "page.externalAppMissing"; pageId: string; url: string }
   | { name: "page.desktop"; pageId: string; line: string }
   | { name: "pages.privateSessionEnded" }
+  | { name: "pages.dark"; dark: boolean }
   | { name: "pages.webVideo"; outcome: "floated" | "keptPlaying"; isPrivate: boolean };
 
 export type PageEventPayload =

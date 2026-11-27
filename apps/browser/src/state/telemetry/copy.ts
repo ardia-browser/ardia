@@ -231,6 +231,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
       "When you import from a Chrome-family browser or Arc: which browser it was, whether its search engine was one Ardia has built in, one of your own, the browser's own default or one Ardia couldn't use, whether that changed Ardia's search engine, and whether Ardia kept the one you chose and offered the browser's instead, once per import, and how many times you took that offer, summed up once an hour. Never which search engine, its name or its address",
       "When you import passwords from another browser or from a CSV file: how many passwords Ardia tried to save, how many it saved, how many the password store refused (invalid, or already saved), how many it didn't store in time, and how many failed for another reason, once per import. Never which sites, usernames or passwords",
       "How many times the pointer was hidden by a page, or still showed a page's own pointer (like a text cursor), over Ardia's sidebar, toolbar or panels and Ardia put the arrow back, and how many of those had hidden it, summed up once an hour. Never which page",
+      "How many times zooming a page with the mouse wheel changed its zoom by a step, and how many of those came from several wheel clicks that reached the page as one event, summed up once an hour. Never which page or site",
     ],
   },
   {

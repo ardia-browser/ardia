@@ -37,9 +37,9 @@ extension WebKitLogins {
     const found = newPasswordsIn(password.form);
     return found.includes(password) ? found : [];
   };
-  const passwordRules = (fields, el) => {
+  const passwordRules = (fields) => {
     const limits = fields.map((f) => f.maxLength).filter((n) => n > 0);
-    return { maxLength: limits.length ? Math.min(...limits) : 0, minLength: Math.max(0, ...fields.map((f) => f.minLength)), pattern: el.getAttribute("pattern") || "" };
+    return { maxLength: limits.length ? Math.min(...limits) : 0, minLength: Math.max(0, ...fields.map((f) => f.minLength)) };
   };
   const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
   const OTHER_AUTOCOMPLETE = /(^|\s)(username|email|current-password|new-password|tel|postal-code|cc-[a-z-]+)(\s|$)/i;
@@ -69,7 +69,7 @@ extension WebKitLogins {
     active = { el, found, code, fresh };
     const r = el.getBoundingClientRect();
     post("loginField", {
-      event, origin: location.origin, password: isPassword, code, newPassword: fresh.length > 0, ...(fresh.length ? passwordRules(fresh, el) : {}),
+      event, origin: location.origin, password: isPassword, code, newPassword: fresh.length > 0, ...(fresh.length ? passwordRules(fresh) : {}),
       value: isPassword || code ? "" : String(el.value || "").slice(0, 200),
       x: r.left, y: r.top, width: r.width, height: r.height,
     });

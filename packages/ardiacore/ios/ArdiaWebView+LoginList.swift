@@ -26,7 +26,7 @@ extension ArdiaWebView: LoginListTarget {
   func showLoginList(from origin: String, screenRect: NSRect, typing: Bool, typed: String, field kind: String, rules: [String: Any]) {
     var field = LoginListField(
       frameOrigin: origin, screenRect: screenRect, trigger: typing ? .typing : .press, typed: typed, kind: kind == "code" ? .code : kind == "newPassword" ? .newPassword : .login)
-    if field.kind == .newPassword { field.rules = LoginListField.rules(maxLength: rules["maxLength"], minLength: rules["minLength"], pattern: rules["pattern"]) }
+    if field.kind == .newPassword { field.rules = LoginListField.rules(maxLength: rules["maxLength"], minLength: rules["minLength"]) }
     LoginList.shared.show(self, field: field)
   }
 

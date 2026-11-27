@@ -110,7 +110,7 @@ private func withinContract(_ report: WebKitLoginsReport) -> Bool {
   if report.event == "key" { return keys.contains(report.key) }
   guard report.event == "show" || report.event == "input" else { return report.typed.isEmpty }
   let rules = report.rules
-  let rulesFit = (0...1024).contains(rules.minLength) && (0...1024).contains(rules.maxLength) && units(rules.pattern) <= 512
+  let rulesFit = (0...1024).contains(rules.minLength) && (0...1024).contains(rules.maxLength)
   let typedFits = units(report.typed) <= 200 && (report.typed.isEmpty || (report.kind == .login && !report.password))
   return finite(report.rect) && rulesFit && typedFits
 }
@@ -143,17 +143,17 @@ private func savable(_ login: (username: String, password: String)) -> Bool {
     #expect(collector.received == sent, "every post the page made reached native")
     let field = { (i: Int) in WebKitLoginsReport.read(collector.posted[i].data) }
     #expect(field(0)?.typed == "ada" && field(0)?.kind == .login && field(0)?.rect == NSRect(x: 10, y: 20, width: 300, height: 30))
-    #expect(field(1)?.kind == .newPassword && field(1)?.rules == StrongPassword.Rules(minLength: 8, maxLength: 20, pattern: "[a-z]+") && field(1)?.typed == "")
+    #expect(field(1)?.kind == .newPassword && field(1)?.rules == StrongPassword.Rules(minLength: 8, maxLength: 20) && field(1)?.typed == "")
     #expect(field(2)?.event == "key" && field(2)?.key == "down")
     #expect(field(4)?.typed == "", "a typed value of one character with 10,000 marks is cut at a character boundary within 200 units")
-    #expect(field(5)?.rules.pattern == "", "a pattern of one character with 10,000 marks is past 512 units, so it is dropped")
+    #expect(field(5)?.rules == StrongPassword.Rules(minLength: 8, maxLength: 20), "a page's pattern, however long, is never kept")
     var kept = 0
     var broken: [String] = []
     for message in collector.posted where message.kind == "loginField" {
       guard WebKitLoginsReport.frameOrigin(message.origin, claimed: message.data["origin"]) != nil, let report = WebKitLoginsReport.read(message.data) else { continue }
       kept += 1
       if !withinContract(report) {
-        broken.append("\(report.event) key=\(report.key.prefix(20)) typed=\(units(report.typed)) rect=\(report.rect) pattern=\(units(report.rules.pattern))")
+        broken.append("\(report.event) key=\(report.key.prefix(20)) typed=\(units(report.typed)) rect=\(report.rect)")
       }
     }
     #expect(kept > 100, "some reports still go through, so the contract check ran on real ones")

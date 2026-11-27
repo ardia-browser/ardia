@@ -33,16 +33,20 @@ private func samples(_ rules: StrongPassword.Rules = .init(), count: Int = 300) 
     #expect(samples(.init(minLength: 22, maxLength: 22), count: 20).allSatisfy { $0.count == 22 && $0.allSatisfy(alphabet.contains) })
   }
 
-  @Test func `a pattern the groups can't meet gets the plain shape that does, and one nothing meets or that doesn't parse is ignored`() {
-    let whole = { (pattern: String) in try! NSRegularExpression(pattern: "^(?:\(pattern))$") }
-    let lettersOnly = "[A-Za-z0-9]{8,20}"
-    for password in samples(.init(pattern: lettersOnly), count: 50) {
-      #expect(whole(lettersOnly).firstMatch(in: password, range: NSRange(password.startIndex..., in: password)) != nil)
-      #expect(password.count == 16)
+  @Test func `a minlength of 200 gets a valid password at once (no page pattern can reach the generator)`() {
+    let rules = LoginListField.rules(maxLength: nil, minLength: NSNumber(value: 200))
+    let done = DispatchSemaphore(value: 0)
+    let made = Made()
+    Thread.detachNewThread {
+      made.value = StrongPassword.make(rules)
+      done.signal()
     }
-    #expect(samples(.init(pattern: "[a-z0-9-]+"), count: 20).allSatisfy { $0.count == 19 })
-    #expect(samples(.init(pattern: "(?=.*[!@#]).{8,}"), count: 20).allSatisfy { $0.count == 19 })
-    #expect(samples(.init(pattern: "[unclosed"), count: 20).allSatisfy { $0.count == 19 })
-    #expect(samples(.init(pattern: "-?[A-Za-z0-9-]{4}"), count: 20).allSatisfy { $0.count == 19 })
+    #expect(done.wait(timeout: .now() + 2) == .success, "make returned within 2 s")
+    guard let password = made.value else { return }
+    #expect(password.count >= 200)
+    #expect(password.filter { $0 != "-" }.allSatisfy(alphabet.contains))
+    #expect(password.contains(where: \.isNumber) && password.contains(where: \.isUppercase) && password.contains(where: \.isLowercase))
   }
 }
+
+private final class Made: @unchecked Sendable { var value: String? }

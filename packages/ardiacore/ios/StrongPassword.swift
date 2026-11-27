@@ -5,7 +5,6 @@ enum StrongPassword {
   struct Rules: Equatable {
     var minLength = 0
     var maxLength = 0
-    var pattern = ""
   }
 
   static let alphabet = Array("abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
@@ -13,7 +12,6 @@ enum StrongPassword {
   private static let groups = 4
   private static let separator: Character = "-"
   private static let plainLength = 16
-  private static let patternTries = 20
 
   private enum Shape: Equatable {
     case grouped(Int)
@@ -21,19 +19,7 @@ enum StrongPassword {
   }
 
   static func make(_ rules: Rules = .init()) -> String? {
-    let shapes = shapes(rules)
-    guard let pattern = whole(rules.pattern) else { return shapes.first.flatMap(build) }
-    for shape in shapes {
-      for _ in 0..<patternTries {
-        guard let made = build(shape) else { return nil }
-        if pattern.firstMatch(in: made, range: NSRange(made.startIndex..., in: made)) != nil { return made }
-      }
-    }
-    return shapes.first.flatMap(build)
-  }
-
-  private static func whole(_ pattern: String) -> NSRegularExpression? {
-    pattern.isEmpty ? nil : try? NSRegularExpression(pattern: "^(?:\(pattern))$")
+    shapes(rules).first.flatMap(build)
   }
 
   private static func shapes(_ rules: Rules) -> [Shape] {

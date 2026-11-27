@@ -89,7 +89,7 @@
   {
    "id": "chromium-page-message:loginField",
    "source": "frame",
-   "guard": "ArdiaLoginListReport keeps only an event, a digit token, a field kind (username, password, newPassword or code), the username field's typed value (200 characters), a new-password field's maxlength and minlength (whole numbers, 0 to 1024) and pattern (512 characters, else none) and a bounded rect; Apple Passwords profiles only; the frame's origin is the engine's verified one, never the page's, and must be the top page's; trusted pointer or key; the Login list fills only after a native pick, into the frame and field token it was opened for; a Verification code only on https, into an empty, visible code field, and only a code of 4 to 10 letters and digits; a strong password only into the new-password fields of the form whose new-password field it was opened for",
+   "guard": "ArdiaLoginListReport keeps only an event, a digit token, a field kind (username, password, newPassword or code), the username field's typed value (200 characters), a new-password field's maxlength and minlength (whole numbers, 0 to 1024; the page's pattern is dropped, so no page regex runs) and a bounded rect; Apple Passwords profiles only; the frame's origin is the engine's verified one, never the page's, and must be the top page's; trusted pointer or key; the Login list fills only after a native pick, into the frame and field token it was opened for; a Verification code only on https, into an empty, visible code field, and only a code of 4 to 10 letters and digits; a strong password only into the new-password fields of the form whose new-password field it was opened for",
    "checks": [
     "packages/ardiacore/ios/ArdiaLoginListReport.mm#ArdiaLoginListReport",
     "packages/ardiacore/ios/ArdiaWebView+LoginList.mm#loginFieldFromPage"
@@ -479,7 +479,7 @@
   {
    "id": "webkit-page-message:loginField",
    "source": "frame",
-   "guard": "Main frame only, trusted pointer or key; the origin is the frame's own (frameInfo), and a page's claimed origin only has to match it; WebKitLoginsReport keeps only a listed event and key, true booleans, a username's typed value (200 UTF-16 units, cut at a character), a rect clamped to finite values within 1e6, and for a new-password field a maxlength and minlength clamped to 0 to 1024 and a pattern of at most 512 UTF-16 units (LoginListField.rules); fills only after a native dropdown pick; a Verification code only on https, into an empty, visible code field, and only a code of 4 to 10 letters and digits; a strong password only into the new-password fields of the field's form",
+   "guard": "Main frame only, trusted pointer or key; the origin is the frame's own (frameInfo), and a page's claimed origin only has to match it; WebKitLoginsReport keeps only a listed event and key, true booleans, a username's typed value (200 UTF-16 units, cut at a character), a rect clamped to finite values within 1e6, and for a new-password field a maxlength and minlength clamped to 0 to 1024 (LoginListField.rules; a page's pattern is never read, so no page regex runs); fills only after a native dropdown pick; a Verification code only on https, into an empty, visible code field, and only a code of 4 to 10 letters and digits; a strong password only into the new-password fields of the field's form",
    "checks": [
     "packages/ardiacore/ios/WebKitLoginsReport.swift#static func read",
     "packages/ardiacore/ios/WebKitLoginsReport.swift#static func frameOrigin",

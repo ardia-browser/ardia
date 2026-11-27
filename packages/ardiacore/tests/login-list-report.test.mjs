@@ -85,7 +85,7 @@ const withinContract = (report) =>
     (!["show", "input"].includes(report.event) ||
       (["username", "password", "code", "newPassword"].includes(report.field) &&
         (report.field === "newPassword"
-          ? [report.maxLength, report.minLength].every((n) => Number.isInteger(n) && n >= 0 && n <= 1024) && typeof report.pattern === "string" && report.pattern.length <= 512
+          ? [report.maxLength, report.minLength].every((n) => Number.isInteger(n) && n >= 0 && n <= 1024) && !("pattern" in report)
           : !("maxLength" in report || "minLength" in report || "pattern" in report)) &&
         typeof report.typed === "string" &&
         report.typed.length <= 200 &&
@@ -113,12 +113,12 @@ test("a Login list field report keeps its event, token, field, typed value and r
   assert.deepEqual(passwordInput, { event: "passwordInput", token: "3" }, "typing a password keeps nothing of it");
 });
 
-test("a new-password field report keeps its maxlength, minlength and pattern, bounded, and nothing typed", { skip: process.platform !== "darwin" }, () => {
+test("a new-password field report keeps its maxlength and minlength, bounded, never its pattern, and nothing typed", { skip: process.platform !== "darwin" }, () => {
   const NEW = { ...SHOW, field: "newPassword", typed: "fixture-pw-new", maxLength: 20, minLength: 8, pattern: "[A-Za-z0-9-]+" };
   const [kept, huge, odd, password] = reports([NEW, { ...NEW, maxLength: 1e9, minLength: -4, pattern: "x".repeat(513) }, { ...NEW, maxLength: true, minLength: "8", pattern: 7 }, { ...SHOW, field: "password", maxLength: 20, pattern: "x" }]);
-  assert.deepEqual(kept, { event: "show", token: "3", field: "newPassword", typed: "", maxLength: 20, minLength: 8, pattern: "[A-Za-z0-9-]+", rect: [10, 20, 300, 30] });
-  assert.deepEqual([huge.maxLength, huge.minLength, huge.pattern], [1024, 0, ""], "lengths are clamped and a pattern past 512 characters is dropped");
-  assert.deepEqual([odd.maxLength, odd.minLength, odd.pattern], [0, 0, ""], "values of the wrong kind count as unset");
+  assert.deepEqual(kept, { event: "show", token: "3", field: "newPassword", typed: "", maxLength: 20, minLength: 8, rect: [10, 20, 300, 30] });
+  assert.deepEqual([huge.maxLength, huge.minLength, "pattern" in huge], [1024, 0, false], "lengths are clamped and a pattern is never kept");
+  assert.deepEqual([odd.maxLength, odd.minLength], [0, 0], "values of the wrong kind count as unset");
   assert.ok(!("maxLength" in password || "pattern" in password), "only a new-password field carries the field's rules");
 });
 

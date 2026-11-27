@@ -303,6 +303,41 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await tab.close();
       }
     },
+    async E36() {
+      const tab = await open("filter.localhost", "/login-ready");
+      const page = () => tab.value(`({ u: document.getElementById("u").value, p: document.getElementById("p").value, submits: ${PAGE_EVENTS}.filter((e) => e[0] === "submit").length })`);
+      try {
+        await tab.click("#u");
+        await tab.waitRows();
+        await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
+        await tab.key("enter");
+        const submitted = await waitFor("the form submitted", async () => {
+          const now = await page();
+          return now?.submits ? now : null;
+        }, 5000);
+        assert(submitted.u === "an" && !submitted.p, "Enter with no row chosen fills nothing", { u: submitted.u, filled: !!submitted.p });
+        assert(!(await tab.noList(800)), "Enter closes the list", null);
+        await typedRows(tab, "n", [...FILTERED, FOOTER], "the list for ann");
+        await tab.key("escape");
+        assert(!(await tab.noList(800)), "Escape closes the list", null);
+        const kept = await page();
+        assert(kept.u === "ann" && !kept.p && kept.submits === 1, "Escape keeps the typed text", { u: kept.u, submits: kept.submits });
+        await tab.key("down");
+        await typedRows(tab, "", [...FILTERED, FOOTER], "the list Down opens on ann");
+        await tab.key("down");
+        await tab.key("enter");
+        const first = FIXTURES.logins.find((l) => l.user === FILTERED[0]);
+        const filled = await waitFor("the keyed fill", async () => {
+          const now = await page();
+          return now?.p ? now : null;
+        });
+        assert(filled.u === first.user && filled.p === first.password, "Down then Enter fills the first row", { u: filled.u });
+        assert(filled.submits === 1, "picking a row doesn't submit", filled.submits);
+        return { engine: engineName, submitted: "an", kept: kept.u, filled: filled.u };
+      } finally {
+        await tab.close();
+      }
+    },
     async E17() {
       const { app } = await paired();
       const ardiaOnly = "ardia-only@example.test";

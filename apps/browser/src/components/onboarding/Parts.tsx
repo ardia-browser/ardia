@@ -76,14 +76,14 @@ export function OptionRow<T extends string | number>({
   const colors = useOnboardingColors();
   return (
     <ChoiceCard mouseDownCanMoveWindow={false} radius={radius.panel} style={{ flexDirection: "row", alignItems: "center", gap: space.ml, minHeight: 36, paddingVertical: space.s, paddingHorizontal: space.l }}>
-      <Text size="small" weight="medium" color={colors.title} style={{ flex: 1 }}>
+      <Text size="small" weight="medium" color={colors.title} style={{ flexGrow: 1, flexShrink: 0 }}>
         {title}
       </Text>
       <ChoiceCard
         radius={radius.tile}
         fill={colors.button}
         border={null}
-        style={{ flexDirection: "row", gap: space.xxs, padding: space.xxs }}
+        style={{ flexDirection: "row", flexWrap: "wrap", flexShrink: 1, justifyContent: "flex-end", gap: space.xxs, padding: space.xxs }}
         accessibilityRole="radiogroup"
         accessibilityLabel={title}
       >

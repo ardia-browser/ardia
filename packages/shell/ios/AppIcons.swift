@@ -25,6 +25,7 @@ enum AppIcons {
     Variant(id: "ocean-flat", name: "Ocean", flat: true),
     Variant(id: "mono-flat", name: "Mono", flat: true),
     Variant(id: "noir-flat", name: "Noir", flat: true),
+    Variant(id: "classic", name: "Classic"),
   ]
 
   static var current: String {

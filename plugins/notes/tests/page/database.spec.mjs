@@ -159,7 +159,9 @@ for (const name of BROWSERS) {
       await page.keyboard.press("Escape");
       await evalModel(page, (d) => {
         const doc = d.client.internals.docs.get(`${d.WS}|${d.pageDocId("da7aba5e0001")}`);
-        doc.getArray("views").forEach((v) => v.get("id") === "default" && v.set("filter", { kind: "group", id: "root", op: "and", rules: [] }));
+        const clear = (v) => v.get("id") === "default" && v.set("filter", { kind: "group", id: "root", op: "and", rules: [] });
+        doc.getMap("viewsById").forEach(clear);
+        doc.getArray("views").forEach(clear);
       });
       await waitFor(async () => (await rows().count()) === 8, { message: "filters cleared" });
 
@@ -476,7 +478,10 @@ for (const name of BROWSERS) {
       const snapshot = async (p) => {
         const schema = await schemaOf(p, IDS.tasks);
         const rows = await rowsOf(p, IDS.tasks);
-        const views = await evalModel(p, (d) => d.client.internals.docs.get(`${d.WS}|${d.pageDocId("da7aba5e0001")}`).getArray("views").toJSON());
+        const views = await evalModel(p, (d) => {
+          const doc = d.client.internals.docs.get(`${d.WS}|${d.pageDocId("da7aba5e0001")}`);
+          return { keyed: doc.getMap("viewsById").toJSON(), legacy: doc.getArray("views").toJSON() };
+        });
         return JSON.stringify({ schema, rows: rows.map((r) => [r.title, r.props]), views });
       };
       await waitFor(async () => (await snapshot(a)) === (await snapshot(b)), { timeout: 8000, message: "converged" });

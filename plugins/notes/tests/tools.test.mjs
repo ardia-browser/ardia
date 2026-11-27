@@ -497,3 +497,16 @@ test("hostile inputs through every tool field stay inert at the Yjs sink", async
   assert.equal(Object.prototype.polluted, undefined);
   assert.equal({}.constructor, Object);
 });
+
+test("a database whose views are stored by id is set up already: the tools never add a second default view", async () => {
+  const d = await device();
+  const inline = await d.call("database", { action: "create", parent: (await d.call("pages", { action: "create", title: "Keyed host" })).page.id, inline: true, title: "Keyed db", view: "board" });
+  const [ws] = d.notes.workspaces();
+  const doc = await d.notes.spaceStore(ws.id).get(`p-${inline.database.id}`);
+  assert.equal(doc.getArray("views").length, 0, "new views go in viewsById");
+  assert.ok(doc.getMap("viewsById").size >= 1);
+  doc.transact(() => doc.getMap("settings").delete("initialized"));
+  const views = (await d.call("views", { action: "list", database: inline.database.id })).views;
+  assert.deepEqual(views.map((v) => v.type), ["board"], "no default table view is added");
+  assert.equal(doc.getMap("viewsById").size, 1);
+});

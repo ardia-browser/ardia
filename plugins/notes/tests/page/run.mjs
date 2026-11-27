@@ -196,7 +196,7 @@ async function seedBoard(page, { rows = [["Alpha", "now"], ["Beta", "now"], ["Ga
   await page.waitForFunction(() => {
     const docs = window.__notesDb?.client.internals.docs;
     if (!docs) return false;
-    for (const [k, doc] of docs) if (k.endsWith("|ws")) for (const [id, e] of doc.getMap("pages")) if (e.get("kind") === "database" && docs.get(`${k.split("|")[0]}|p:${id}`)?.getArray("views")?.length) return true;
+    for (const [k, doc] of docs) if (k.endsWith("|ws")) for (const [id, e] of doc.getMap("pages")) if (e.get("kind") === "database" && (docs.get(`${k.split("|")[0]}|p:${id}`)?.getMap("viewsById")?.size || docs.get(`${k.split("|")[0]}|p:${id}`)?.getArray("views")?.length)) return true;
     return false;
   }, null, { timeout: 10000 });
   return page.evaluate(({ rows, extraRows }) => {

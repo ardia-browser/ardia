@@ -31,6 +31,7 @@ import {
   fvalue,
   initDatabase,
   initLinkedDatabase,
+  isInitialized,
   isEditable,
   isError,
   kindOf,
@@ -103,7 +104,7 @@ export async function model(s: Session, ref: unknown, field = "database"): Promi
 export async function modelOf(s: Session, found: Found): Promise<Model> {
   const ws = found.ws;
   const doc = await s.a.doc(ws, found.meta.id);
-  if (!readSettings(doc).source && !doc.getMap("settings").get("initialized") && doc.getArray("views").length === 0 && doc.getMap("viewsById").size === 0) {
+  if (!readSettings(doc).source && !isInitialized(doc)) {
     const linked = found.meta.props.linkedSource;
     if (typeof linked === "string" && /^[0-9a-f]{12}$/.test(linked)) {
       const src = await s.a.doc(ws, linked);

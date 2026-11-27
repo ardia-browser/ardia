@@ -1,0 +1,37 @@
+<!doctype html>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Renderer crash test</title>
+<style>body{font:20px -apple-system,Roboto,sans-serif;margin:24px}h1{font-size:28px}#s{padding:16px;border-radius:12px;background:#fde68a}</style>
+<h1>Renderer crash test</h1>
+<p id="s">Loading</p>
+<p id="t"></p>
+<p><a href="?when=none">A second page</a></p>
+<script>
+const params = new URLSearchParams(location.search);
+const when = params.get("when") || "hidden";
+const delay = Number(params.get("d") || 3);
+const limit = Number(params.get("n") || 1);
+const key = "crashes:" + when + ":" + limit;
+const saved = JSON.parse(localStorage.getItem(key) || "{\"at\":0,\"count\":0}");
+const count = Date.now() - saved.at < 90000 ? saved.count : 0;
+const status = document.getElementById("s");
+document.getElementById("t").textContent = "Loaded " + new Date().toLocaleTimeString() + ", crashes so far: " + count;
+function exhaust() {
+  localStorage.setItem(key, JSON.stringify({ at: Date.now(), count: count + 1 }));
+  const hoard = [];
+  for (let i = 0; ; i++) hoard.push(new Array(1e6).fill(i));
+}
+if (when === "none") {
+  status.textContent = "Second page";
+} else if (count >= limit) {
+  status.textContent = "Reloaded after " + count + (count === 1 ? " crash" : " crashes");
+  status.style.background = "#86efac";
+} else if (when === "hidden") {
+  status.textContent = "Armed: crashes " + delay + " s after the app leaves the screen (" + count + " of " + limit + ")";
+  if (document.hidden) setTimeout(exhaust, delay * 1000);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) setTimeout(exhaust, delay * 1000); });
+} else {
+  status.textContent = "Armed: crashes in " + delay + " s (" + count + " of " + limit + ")";
+  setTimeout(exhaust, delay * 1000);
+}
+</script>

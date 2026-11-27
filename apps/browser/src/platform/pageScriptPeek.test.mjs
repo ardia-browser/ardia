@@ -169,7 +169,7 @@ function environment({ top = true, page = "https://page.example", selection = nu
       opened.push(args);
       if ("openResult" in window) return window.openResult;
       if (/^_(self|top|parent)$/i.test(args[1] ?? "")) return window;
-      return { opener: window, location: { href: args[0] ? String(args[0]) : "about:blank" }, history: { length: 1 } };
+      return { opener: window, location: { href: args[0] ? String(args[0]) : "about:blank" }, history: { length: 1 }, document: { body: { childElementCount: 0, textContent: "" } } };
     },
     setTimeout: (fn) => timers.push(fn),
   };
@@ -796,7 +796,7 @@ test("a cancelled click is tied only to a new blank window it opened while the c
   env.window.open("");
   env.flush();
   assert.deepEqual(newTabLinks(env), [], "an opening after a stopped click's dispatch, before its cleanup, isn't tied to it");
-  const named = { opener: env.window, location: { href: "about:blank" }, history: { length: 1 } };
+  const named = { opener: env.window, location: { href: "about:blank" }, history: { length: 1 }, document: { body: { childElementCount: 0, textContent: "" } } };
   env.window.openResult = named;
   cancelled("https://other.example/first", () => env.window.open("", "_blank"));
   cancelled("https://other.example/named-again", () => env.window.open("", "_blank"));
@@ -804,6 +804,11 @@ test("a cancelled click is tied only to a new blank window it opened while the c
   cancelled("https://other.example/named-target", () => env.window.open("", "results"));
   env.flush();
   assert.deepEqual(newTabLinks(env), ["https://other.example/first"], "a window window.open already returned, or a named target, is never a new tab");
+  env.window.openResult = { opener: env.window, location: { href: "about:blank" }, history: { length: 1 }, document: { body: { childElementCount: 2, textContent: "Report" } } };
+  cancelled("https://other.example/written", () => env.window.open("", "_blank"));
+  delete env.window.openResult;
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/first"], "a blank window the page wrote content into is the page's own, never a new-tab link");
   cancelled("https://other.example/fresh", () => env.window.open("", "_blank"));
   env.flush();
   assert.deepEqual(newTabLinks(env), ["https://other.example/first", "https://other.example/fresh"]);

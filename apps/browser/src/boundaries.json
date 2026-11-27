@@ -426,7 +426,7 @@
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 67,
+   "count": 68,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]

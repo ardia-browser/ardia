@@ -332,6 +332,7 @@
     const nativeDateNow = Date.now;
     const nativeSetTimeout = window.setTimeout;
     const listenOn = EventTarget.prototype.addEventListener;
+    const listenOff = EventTarget.prototype.removeEventListener;
     const userActivationGet = Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation")?.get;
     const isActiveGet = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive")?.get;
     const now = () => apply(nativeDateNow, Date, []);
@@ -358,17 +359,25 @@
     let inputAt = -Infinity;
     let reportedAt = -Infinity;
     const noteInput = guard((e) => {
-      if (!e.isTrusted) return;
+      if (!e.isTrusted || (e.type === "keydown" && (e.key === "Escape" || e.metaKey))) return;
       inputAt = now();
       if (inputAt - reportedAt < 1000) return;
       reportedAt = inputAt;
       send("trustedInput", {});
     });
-    for (const w of chain)
-      for (const type of ["pointerdown", "mousedown", "touchstart", "keydown"])
-        try {
-          apply(listenOn, w, [type, noteInput, true]);
-        } catch (e) {}
+    const inputTypes = ["pointerdown", "mousedown", "touchstart", "keydown"];
+    const listenChain = (method) => {
+      for (const w of chain)
+        for (const type of inputTypes)
+          try {
+            apply(method, w, [type, noteInput, true]);
+          } catch (e) {}
+    };
+    listenChain(listenOn);
+    if (chain.length > 1) {
+      apply(listenOn, window, ["pagehide", guard(() => listenChain(listenOff)), true]);
+      apply(listenOn, window, ["pageshow", guard((e) => e.persisted && listenChain(listenOn)), true]);
+    }
     noteEmbedInputAge = (value) => {
       const age = embedInputAge(value);
       if (age !== null) inputAt = Math.max(inputAt, now() - age);
@@ -1699,10 +1708,19 @@
       openingsNoted++;
       send("newTabLink", blankWindow ? { url, blankWindow: true } : { url });
     };
+    const leftEmpty = (opened) => {
+      if (!opened) return false;
+      try {
+        const body = opened.document.body;
+        return !body || (body.childElementCount === 0 && !apply(test, /\S/, [body.textContent || ""]));
+      } catch (e) {
+        return false;
+      }
+    };
     const noteNewTabLink = (e, link, click) => {
       if (replacesPage(link)) return;
       const cancelled = defaultPrevented(e);
-      if (cancelled && !(click.openedBlank && openingsNoted === click.notedBefore)) return;
+      if (cancelled && !(leftEmpty(click.openedWindow) && openingsNoted === click.notedBefore)) return;
       const url = linkUrl(link);
       if (url && apply(test, /^https?:/i, [url])) noteOpening(url, cancelled);
     };
@@ -1717,7 +1735,7 @@
         const path = apply(composedPath, e, []);
         const forSite = !!site && timeStamp(e) === site.stamp && apply(includes, path, [site.link]);
         const link = forSite ? site.link : hit.link;
-        const click = { event: e, notedBefore: openingsNoted, openedBlank: false };
+        const click = { event: e, notedBefore: openingsNoted, openedWindow: null };
         clickInFlight = click;
         let decided = false;
         const decide = guard((ev) => {
@@ -1807,7 +1825,7 @@
         const click = clickInFlight;
         if (!click || reused || eventPhaseOf(click.event) === 0) return;
         if (!apply(test, /^(about:blank)?$/i, [addressOf(args)]) || !apply(test, /^(_blank)?$/i, [args.length > 1 && args[1] != null ? `${args[1]}` : ""])) return;
-        if (freshBlankWindow(opened)) click.openedBlank = true;
+        if (freshBlankWindow(opened)) click.openedWindow = opened;
       };
       const open = asNative(openDescriptor.value, (target, self, args) => {
         guard(openedByUser)(args);

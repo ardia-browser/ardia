@@ -36,6 +36,7 @@ enum WebKitAutofillScript {
     for (let i = tokens.length - 1; i >= 0; i--) {
       const type = tokens[i] === "country-name" ? "country" : tokens[i];
       if (ADDRESS.has(type) || CARD.has(type)) return { type, section };
+      if (type === "username" && signUpForm(el.form)) return { type: "email", section };
       if (NOT_AUTOFILL.has(type)) return { type: null, section };
     }
     return null;

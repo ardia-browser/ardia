@@ -417,9 +417,10 @@ const CHECKS = {
   },
   async E42() {
     await meCardInstance("E42");
-    const seen = await listsOn([["/signup-email", "#u"], ["/signup-email", "#p"]]);
+    const seen = await listsOn([["/signup-email", "#u"], ["/signup-email", "#p"], ["/signup", "#u"]]);
     for (const engine of ENGINES) {
       expectLists(seen, engine, "/signup-email #u", { loginList: false, addressList: true });
+      expectLists(seen, engine, "/signup #u", { loginList: false, addressList: true });
       expectLists(seen, engine, "/signup-email #p", { loginList: true, addressList: false });
       assert(seen[`${engine} /signup-email #p`].strong, `${engine}: the new-password field offers Suggest strong password`, seen);
     }

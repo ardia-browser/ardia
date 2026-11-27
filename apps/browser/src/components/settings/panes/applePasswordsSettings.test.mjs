@@ -256,7 +256,7 @@ test("story 9: with Apple Passwords picked, Save and fill passwords is off and c
 
 test("story 9: Ardia's saved-password list says its passwords aren't used while Apple Passwords is picked", async () => {
   const profileId = await settingsOn("connected");
-  const texts = () => find(render(mount(() => PasswordsPage({ profileId })).value), (n) => n.type === form.SectionHeader).map((n) => n.props.description ?? "");
+  const texts = () => find(render(mount(() => PasswordsPage({ profileId })).value), (n) => n.type === form.SectionHeader || n.type === form.Row).map((n) => n.props.description ?? "");
   assert.ok(!texts().some((t) => /Apple Passwords/.test(t)), "no note on Ardia");
   S().updateProfile(profileId, { passwordManager: "apple" });
   await flush();

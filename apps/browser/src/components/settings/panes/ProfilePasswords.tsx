@@ -135,9 +135,10 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
     <ProfileSubPage>
       <SectionHeader
         title="Passwords"
-        description={onApple ? APPLE_PASSWORDS_PICKED : `Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${PLATFORM_TERMS.passwordKey}.`}
+        description={`Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${PLATFORM_TERMS.passwordKey}.`}
       />
       <Group>
+        {onApple ? <Row icon={<Symbol name="key.fill" size={15} color={theme.icon} style={HELP_ICON} />} title="Apple Passwords is this profile's password manager" description={APPLE_PASSWORDS_PICKED} /> : null}
         <Row title="Import passwords" description={importStatus || "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…"}>
           <Button title="Import CSV…" onPress={() => void importCsv()} />
         </Row>

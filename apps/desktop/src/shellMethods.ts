@@ -110,6 +110,8 @@ const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   takeInputSourceKeys: () => 0,
   restoreKeyResponder,
   discardKeyResponder,
+  fieldBlurCause: () => "inWindow" as const,
+  watchFieldBlurs: () => undefined,
   cancelFocusMove: resolved,
   switcherPointerMoved: () => false,
   takeHoverCounts: () => ({}),

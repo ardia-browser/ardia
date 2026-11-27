@@ -2,6 +2,7 @@ import type { BrowserState } from "../../browser/src/state/browser/store";
 import type { Tab } from "../../browser/src/state/browser/types";
 import type { ArdiaHost } from "./host";
 import { reportHostError } from "./host.ts";
+import { noteHostTabClosed } from "./hostTab.ts";
 
 type TabState = Pick<BrowserState, "tabs">;
 type TabStore = { getState(): TabState; subscribe(listener: (s: TabState, prev: TabState) => void): () => void };
@@ -9,7 +10,7 @@ const holdsPage = (tab: Tab) => tab.page.kind !== "frozen" && tab.page.kind !== 
 
 export function startHostTabLifecycle(host: ArdiaHost, store: TabStore) {
   const pending = new Set<string>();
-  const closed = new Set<string>();
+  const closed = new Map<string, () => void>();
   let queued = false;
   let stopped = false;
   const closeHostTab = (key: string) => {
@@ -22,14 +23,23 @@ export function startHostTabLifecycle(host: ArdiaHost, store: TabStore) {
     for (const key of pending) {
       const tab = tabs[key];
       if (closed.has(key) || tab && tab.page.kind !== "asleep") continue;
-      closed.add(key);
-      void closeHostTab(key).catch((error) => { if (!stopped) reportHostError(error); });
+      const reopen = noteHostTabClosed(host, key);
+      closed.set(key, reopen);
+      void closeHostTab(key).catch((error) => {
+        reopen();
+        if (!stopped) reportHostError(error);
+      });
     }
     pending.clear();
   };
   const stopStore = store.subscribe((s, prev) => {
     if (stopped || s.tabs === prev.tabs) return;
-    for (const key of closed) if (!s.tabs[key] || holdsPage(s.tabs[key]!)) closed.delete(key);
+    for (const [key, reopen] of closed) {
+      const tab = s.tabs[key];
+      if (tab && !holdsPage(tab)) continue;
+      closed.delete(key);
+      if (tab) reopen();
+    }
     for (const [key, before] of Object.entries(prev.tabs)) {
       const after = s.tabs[key];
       if (holdsPage(before) && (!after || after.page.kind === "asleep")) pending.add(key);

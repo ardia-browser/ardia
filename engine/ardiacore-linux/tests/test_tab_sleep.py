@@ -78,7 +78,7 @@ class PerformanceManager {
     'chrome/browser/performance_manager/policies/cannot_discard_reason.h': r'''
 #pragma once
 namespace performance_manager::policies {
-enum class CannotDiscardReason { kNotATab = 0, kAlreadyDiscarded = 1, kDiscardAttempted = 2, kVisible = 3, kActiveTab = 9, kFormInteractions = 26 };
+enum class CannotDiscardReason { kNotATab = 0, kAlreadyDiscarded = 1, kDiscardAttempted = 2, kVisible = 3, kActiveTab = 9, kNotificationsEnabled = 13, kPinnedTab = 23, kBackgroundActivity = 25, kFormInteractions = 26 };
 }
 ''',
     'chrome/browser/performance_manager/policies/discard_eligibility_policy.h': r'''
@@ -149,10 +149,20 @@ class TabSleepTests(unittest.TestCase):
         self.assertIn('tab sleep scenarios passed', output)
 
     def test_the_mac_answers_an_asleep_tab_the_same_way(self):
+        view = (ROOT.parents[1] / 'packages/ardiacore/ios/ArdiaWebView+Tab.mm').read_text()
+        for name in ('sleepIfHiddenFor', 'sleepIfUnusedFor'):
+            body = view[view.index(f'- (NSArray<NSNumber *> *){name}:(NSTimeInterval)seconds {{'):]
+            body = body[:body.index('\n}\n')]
+            self.assertIn('_tab.discarded) return @[ @-1 ];', body.splitlines()[1])
+
+    def test_the_mac_checks_and_sleeps_an_unused_tab_in_one_call(self):
         mac = (ROOT.parent / 'ardiacore/src/ardia/core/ardiacore_tab.mm').read_text()
-        body = mac[mac.index('- (NSArray<NSNumber*>*)sleepIfHiddenFor:(NSTimeInterval)seconds {'):]
+        body = mac[mac.index('- (NSArray<NSNumber*>*)sleepIfUnusedFor:(NSTimeInterval)seconds {'):]
         body = body[:body.index('\n}\n')]
-        self.assertLess(body.index('if (_contents->WasDiscarded()) {\n    return @[];'), body.index('GetPrimaryPageNodeForWebContents'))
+        self.assertLess(body.index('[self sleepIfHiddenFor:seconds]'), body.index('OnlySoftDiscardKeeps(kept)'))
+        self.assertLess(body.index('OnlySoftDiscardKeeps(kept)'), body.index('[self discard]'))
+        self.assertNotIn('dispatch', body)
+        self.assertNotIn('PostTask', body)
 
 
 if __name__ == '__main__':

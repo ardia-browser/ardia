@@ -21,6 +21,7 @@ export {
   type PictureInPictureActivation,
   type PictureInPictureUnstash,
   type PictureInPictureRelease,
+  type FullScreenTransition,
 } from "@ardia/ardiacore";
 
 export const getDisplayMediaSources = () => call("media.displayMediaSources");

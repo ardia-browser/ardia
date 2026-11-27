@@ -66,7 +66,7 @@ function cleanStaging(downloads: SavedDownloads) {
 
 function closedForLaunch(session: SavedSession): HydrateData {
   const now = Date.now();
-  const pinSource = { tabs: session.tabs, groups: session.groups ?? {}, splits: session.splits ?? {}, history: {}, profiles: session.profiles ?? {} };
+  const pinSource = { tabs: session.tabs, groups: session.groups ?? {}, splits: session.splits ?? {}, history: {}, profiles: session.profiles ?? {}, settings: session.settings };
   let parkedPins = session.parkedPins ?? {};
   for (const w of Object.values(session.windows)) parkedPins = parkWindowPins(parkedPins, w, pinSource);
   const closedWindows = [

@@ -325,6 +325,7 @@ ARDIACORE_EXPORT
 @property(readonly) NSDictionary<NSString*, id>* securityInfo;
 - (BOOL)discard;
 - (NSArray<NSNumber*>*)sleepIfHiddenFor:(NSTimeInterval)seconds;
+- (NSArray<NSNumber*>*)sleepIfUnusedFor:(NSTimeInterval)seconds;
 @property(readonly) BOOL discarded;
 - (BOOL)unloadKeepingHistory;
 @property(readonly, nullable) NSString* discardReason;

@@ -170,7 +170,7 @@ test("scrolling one window's sidebar lets only that window's rows in", async () 
   const { noteRowsScrolled } = await import("./hover.ts");
   hydrate({ urls: { a: undefined, b: undefined } });
   rows.startLaunchRows();
-  noteRowsScrolled("b");
+  noteRowsScrolled("b", "default", 0);
   assert.equal(rows.launchRowsHolding("a"), true);
   assert.equal(rows.launchRowsHolding("b"), false);
   assert.equal(rows.launchRowsReport().release, "scroll");

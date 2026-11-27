@@ -261,3 +261,190 @@ test("a missing sync key reads as locked and asks for the phrase, and a cycle wh
     native.chainStatus = chainStatus;
   }
 });
+
+test("a sync chain that goes missing stalls the cycle and keeps the key, the setup and the queued edit, which goes out with the next seq once the chain is back", async () => {
+  reset();
+  shell.docs.clear();
+  const native = globalThis.acTestNativeModules.ArdiaSync;
+  const { chainStatus, forget, read, write, remove } = native;
+  const forgotten = [];
+  const folderCalls = [];
+  let missing = false;
+  native.chainStatus = async () => (missing ? "missing" : "ok");
+  native.forget = async (id) => void forgotten.push(id);
+  native.read = (...args) => (folderCalls.push("read"), read(...args));
+  native.write = (...args) => (folderCalls.push("write"), write(...args));
+  native.remove = (...args) => (folderCalls.push("remove"), remove(...args));
+  const logsOf = (title) => [...folder.values()].map((f) => JSON.parse(f.payload)).filter((f) => f.kind === "log" && f.ops.some((op) => op.v?.t === title));
+  try {
+    const engine = await import("./engine.ts?chain-missing");
+    engine.startSync();
+    assert.ok("ok" in (await engine.turnOnSync("/sync")));
+    S().addBookmark({ profileId: "default", url: "https://before.example/", title: "Before" });
+    await engine.syncNow();
+    const [before] = logsOf("Before");
+    const saved = JSON.parse(shell.docs.get("sync.json"));
+    assert.equal(before.device, saved.deviceId);
+
+    missing = true;
+    folderCalls.length = 0;
+    S().addBookmark({ profileId: "default", url: "https://queued.example/", title: "Queued" });
+    await engine.syncNow();
+    await engine.syncNow();
+    const stalled = engine.useSync.getState();
+    assert.deepEqual(forgotten, [], "the sync key stays in the Keychain");
+    assert.equal(stalled.enabled, true);
+    assert.equal(stalled.status, "stalled");
+    assert.match(stalled.error ?? "", /out of sync/);
+    assert.deepEqual(folderCalls, [], "nothing is read from, written to or removed from the missing chain");
+    const kept = JSON.parse(shell.docs.get("sync.json"));
+    assert.equal(kept.enabled, true);
+    assert.equal(kept.deviceId, saved.deviceId);
+    assert.equal(kept.folder, saved.folder);
+    assert.deepEqual(kept.profiles, saved.profiles);
+
+    missing = false;
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().status, "updated");
+    assert.equal(engine.useSync.getState().error, null);
+    const queued = logsOf("Queued");
+    assert.equal(queued.length, 1, "the edit made while the chain was gone goes out once it's back");
+    assert.equal(queued[0].device, saved.deviceId);
+    assert.equal(queued[0].seq, before.seq + 1);
+    assert.deepEqual(forgotten, []);
+  } finally {
+    Object.assign(native, { chainStatus, forget, read, write, remove });
+  }
+});
+
+test("a relaunch while the sync chain is missing keeps the unsent journal and the setup, and the batch goes out once with its own seq when the chain comes back", async () => {
+  reset();
+  shell.docs.clear();
+  const native = globalThis.acTestNativeModules.ArdiaSync;
+  const { chainStatus, forget, write } = native;
+  const forgotten = [];
+  let missing = false;
+  let attempted = null;
+  native.chainStatus = async () => (missing ? "missing" : "ok");
+  native.forget = async (id) => void forgotten.push(id);
+  native.write = async (folderPath, scope, payload) => {
+    const file = JSON.parse(payload);
+    if (!attempted && file.ops?.some((op) => op.v?.t === "Journalled")) {
+      attempted = file;
+      throw new Error("The sync folder went away mid-write");
+    }
+    return write(folderPath, scope, payload);
+  };
+  const logs = () => [...folder.values()].map((f) => JSON.parse(f.payload)).filter((f) => f.kind === "log");
+  try {
+    const first = await import("./engine.ts?chain-missing-setup");
+    first.startSync();
+    assert.ok("ok" in (await first.turnOnSync("/sync")));
+    await first.syncNow();
+    S().addBookmark({ profileId: "default", url: "https://journalled.example/", title: "Journalled" });
+    await first.syncNow();
+    assert.ok(attempted, "the batch was journalled and its write failed");
+    assert.equal(logs().filter((f) => f.ops.some((op) => op.v?.t === "Journalled")).length, 0, "it never reached the chain");
+    const disk = new Map(shell.docs);
+    assert.ok([...disk.keys()].some((name) => /^sync-journal-\d+\.nns$/.test(name)));
+
+    missing = true;
+    const relaunched = await import("./engine.ts?chain-missing-relaunch");
+    relaunched.startSync();
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+    await relaunched.syncNow();
+    assert.equal(relaunched.useSync.getState().status, "stalled");
+    assert.equal(relaunched.useSync.getState().enabled, true);
+    assert.deepEqual(forgotten, []);
+    const withoutClock = (json) => ({ ...JSON.parse(json), clock: null, sessionMark: null });
+    assert.deepEqual(withoutClock(shell.docs.get("sync.json")), withoutClock(disk.get("sync.json")), "the setup is kept; only the clock catches up with its own journal and the launch gets its own session mark");
+    for (const [name, contents] of disk) if (name !== "sync.json") assert.equal(shell.docs.get(name), contents, `${name} is left as it was`);
+
+    missing = false;
+    await relaunched.syncNow();
+    assert.equal(relaunched.useSync.getState().status, "updated");
+    const sent = logs().filter((f) => f.ops.some((op) => op.v?.t === "Journalled"));
+    assert.equal(sent.length, 1, "the journalled batch goes out once the chain is back");
+    assert.equal(sent[0].device, attempted.device);
+    assert.equal(sent[0].seq, attempted.seq, "with the seq it was journalled under");
+    S().addBookmark({ profileId: "default", url: "https://after.example/", title: "After" });
+    await relaunched.syncNow();
+    const after = logs().find((f) => f.ops.some((op) => op.v?.t === "After"));
+    assert.ok(after);
+    assert.equal(after.seq, attempted.seq + 1);
+  } finally {
+    Object.assign(native, { chainStatus, forget, write });
+  }
+});
+
+test("a chain deleted after the cycle checked it stalls the cycle instead of writing a new chain, and keeps the key, the setup and the unsent journal", async () => {
+  reset();
+  shell.docs.clear();
+  const native = globalThis.acTestNativeModules.ArdiaSync;
+  const { chainStatus, forget, write } = native;
+  const forgotten = [];
+  let deleteAfterCheck = false;
+  let deleted = false;
+  const refused = [];
+  native.chainStatus = async () => {
+    if (deleted) return "missing";
+    if (deleteAfterCheck) deleted = true;
+    return "ok";
+  };
+  native.forget = async (id) => void forgotten.push(id);
+  native.write = async (folderPath, scope, payload) => {
+    if (deleted) {
+      refused.push({ scope, ...JSON.parse(payload) });
+      throw Object.assign(new Error("This device's data is gone from the sync folder"), { code: "ERR_SYNC_CHAIN_MISSING" });
+    }
+    return write(folderPath, scope, payload);
+  };
+  const logs = () => [...folder.values()].map((f) => ({ scope: f.scope, ...JSON.parse(f.payload) })).filter((f) => f.kind === "log");
+  const logsOf = (title) => logs().filter((f) => f.ops.some((op) => op.v?.t === title));
+  try {
+    const engine = await import("./engine.ts?chain-deleted-mid-cycle");
+    engine.startSync();
+    assert.ok("ok" in (await engine.turnOnSync("/sync")));
+    S().addBookmark({ profileId: "default", url: "https://before.example/", title: "Before" });
+    await engine.syncNow();
+    const [before] = logsOf("Before");
+    const saved = JSON.parse(shell.docs.get("sync.json"));
+
+    deleteAfterCheck = true;
+    S().addBookmark({ profileId: "default", url: "https://mid.example/", title: "Mid" });
+    await engine.syncNow();
+    const [halted] = refused;
+    assert.ok(halted?.kind === "log", "the cycle passed the chain check and its first write was refused");
+    const sameBatch = (file) => file.scope === halted.scope && file.device === halted.device && file.seq === halted.seq;
+    const stalled = engine.useSync.getState();
+    assert.equal(stalled.status, "stalled");
+    assert.match(stalled.error ?? "", /out of sync/);
+    assert.equal(stalled.enabled, true);
+    assert.deepEqual(forgotten, []);
+    assert.equal(logsOf("Mid").length, 0, "nothing reached a new chain");
+    assert.equal(logs().filter(sameBatch).length, 0);
+    const kept = JSON.parse(shell.docs.get("sync.json"));
+    assert.equal(kept.enabled, true);
+    assert.equal(kept.deviceId, saved.deviceId);
+    assert.equal(kept.folder, saved.folder);
+    assert.deepEqual(kept.profiles, saved.profiles);
+    assert.ok([...shell.docs.keys()].some((name) => /^sync-journal-\d+\.nns$/.test(name)), "the unsent batch stays journalled");
+
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().status, "stalled");
+
+    deleted = false;
+    deleteAfterCheck = false;
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().status, "updated");
+    assert.equal(logs().filter(sameBatch).length, 1, "the journalled batch goes out once, with its own seq, once the chain is back");
+    assert.deepEqual(logs().find(sameBatch).ops.map((op) => op.k), halted.ops.map((op) => op.k));
+    const mid = logsOf("Mid");
+    assert.equal(mid.length, 1, "the edit made as the chain went away goes out once it's back");
+    assert.equal(mid[0].device, saved.deviceId);
+    assert.equal(mid[0].seq, before.seq + 1);
+    assert.deepEqual(forgotten, []);
+  } finally {
+    Object.assign(native, { chainStatus, forget, write });
+  }
+});

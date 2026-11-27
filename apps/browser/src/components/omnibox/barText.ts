@@ -27,6 +27,10 @@ export type BarEvent =
   | { kind: "select"; selection: Selection }
   | { kind: "selectionApplied" };
 
+const DRAFT_EDITS: ReadonlySet<BarEvent["kind"]> = new Set(["typed", "edited", "caretAccepted", "tabAccepted", "calculated", "completionDropped", "enteredScope", "leftScope", "reset"]);
+
+export const editsDraft = (e: BarEvent) => DRAFT_EDITS.has(e.kind);
+
 export function initialBar(restored: BarSnapshot | null, initialText: string): BarText {
   return {
     typed: restored?.typed ?? initialText,

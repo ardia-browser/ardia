@@ -70,4 +70,6 @@ protocol PageTab: NSView {
   func resolveUnresponsive(terminate: Bool)
   func discard(unload: Bool) -> String
   func sleepIfHidden(for seconds: Double) -> [NSNumber]
+  func sleepIfUnused(for seconds: Double) -> [NSNumber]
+  func wakeIfSleeping() -> Bool
 }

@@ -1,30 +1,48 @@
 import { suggestionKey, type SearchScope, type Suggestion } from "@ardia/core";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { Disposition } from "../../state/omnibox/openFromBar";
 import type { BarEvent } from "./barText";
+import { noteHeldRowsKeyMove } from "../../state/telemetry/inlineCompletionCounts";
 
-type Held = { items: Suggestion[]; typed: string; scope: SearchScope | null; key: string | null };
+export type Held = { items: Suggestion[]; typed: string; scope: SearchScope | null; key: string | null };
+
+const rowIdentity = (row: Suggestion) => ("tabId" in row && row.tabId ? `tab:${row.tabId}` : suggestionKey(row));
 
 export function heldIndex(prev: Held | null, items: Suggestion[], typed: string, scope: SearchScope | null, selectedIndex: number): number {
   if (!prev?.key || prev.items === items || prev.typed !== typed || prev.scope !== scope) return selectedIndex;
   const current = items[selectedIndex];
-  if (current && suggestionKey(current) === prev.key) return selectedIndex;
-  const at = items.findIndex((s) => suggestionKey(s) === prev.key);
+  if (current && rowIdentity(current) === prev.key) return selectedIndex;
+  const at = items.findIndex((s) => rowIdentity(s) === prev.key);
   return at >= 0 ? at : selectedIndex;
 }
 
-export function heldKey(items: Suggestion[], selectedIndex: number): string | null {
-  const current = selectedIndex > 0 ? items[selectedIndex] : undefined;
-  return current ? suggestionKey(current) : null;
+export function heldKey(items: Suggestion[], selectedIndex: number, typed: string): string | null {
+  const current = items[selectedIndex];
+  if (!current) return null;
+  return selectedIndex === 0 && typed.trim() ? null : rowIdentity(current);
 }
 
-export function useHeldSelection(items: Suggestion[], typed: string, scope: SearchScope | null, selectedIndex: number, dispatch: (e: BarEvent) => void) {
+export const followedRow = (prev: Held | null, index: number): Held | null => (prev ? { ...prev, key: heldKey(prev.items, index, prev.typed) } : prev);
+
+export function useHeldSelection(items: Suggestion[], typed: string, scope: SearchScope | null, selectedIndex: number, dispatch: (e: BarEvent) => void, rows: { held: boolean; release: () => void }) {
   const held = useRef<Held | null>(null);
+  const latestRows = useRef(rows);
+  useLayoutEffect(() => {
+    latestRows.current = rows;
+  });
   useLayoutEffect(() => {
     const at = heldIndex(held.current, items, typed, scope, selectedIndex);
     if (at !== selectedIndex) return dispatch({ kind: "selected", index: at });
-    held.current = { items, typed, scope, key: heldKey(items, selectedIndex) };
+    held.current = { items, typed, scope, key: heldKey(items, selectedIndex, typed) };
   });
+  const [releaseTo] = useState(() => (followIndex?: number) => {
+    if (followIndex !== undefined && latestRows.current.held) {
+      held.current = followedRow(held.current, followIndex);
+      noteHeldRowsKeyMove();
+    }
+    latestRows.current.release();
+  });
+  return releaseTo;
 }
 
 export function useProviderEnter(items: Suggestion[], typed: string, scope: SearchScope | null, choose: (s: Suggestion, disposition: Disposition) => void) {

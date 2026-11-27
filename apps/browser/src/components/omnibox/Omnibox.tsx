@@ -1,6 +1,7 @@
 import { displayUrl, asksForBackspace, keywordBySpace, resolveInput, searchUrl, scopedSearchUrl, suggestionKey, type Suggestion } from "@ardia/core";
 import { Symbol, useTheme } from "../ui";
 import { copyText, pickFiles } from "../../state/app/system";
+import { barBlurred, barRefocused, useHeldBarCancel } from "../../state/omnibox/barKeyLoss";
 import { chooseFromMenu } from "../../state/app/menuChoice";
 import { dictationAvailable, startDictation } from "../../state/omnibox/textInput";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -16,6 +17,7 @@ import { createBangSubmitter, mayBeBang } from "../../state/omnibox/bangs";
 import { traceOmnibox, useOmniboxDriver } from "./devDriver";
 import { claimFocusTag, commandBarFocus, heroBarFocus } from "../../state/focus/focusClaims";
 import { registerHeroBar, saveNtpQuery, type BarDismissal, type BarSnapshot, type HeroBarFocus } from "../../state/omnibox/barState";
+import { cancelLateNewTabOverride } from "../../state/tabs/newTabHome";
 import { barSplitsFrom, openFromBar, otherOpenTabs, switchFromBar, type Disposition } from "../../state/omnibox/openFromBar";
 import { openFromNewTabBar } from "../../state/omnibox/newTabBar";
 import { isBookmarklet, runBookmarklet } from "../../state/bookmarks/bookmarklets";
@@ -97,7 +99,7 @@ export function Omnibox({
     currentUrl,
   });
 
-  useHeldSelection(items, typed, scope, selectedIndex, dispatch);
+  const releaseRowsTo = useHeldSelection(items, typed, scope, selectedIndex, dispatch, { held: rowsHeld, release: releaseRows });
   const waitForProvider = useProviderEnter(items, typed, scope, (s, disposition) => choose(s, disposition));
 
   const snapshot = useRef<BarSnapshot | null>(null);
@@ -209,11 +211,11 @@ export function Omnibox({
 
   const onKeyDown = (e: BarKeyEvent) => {
     previewSelection.settle();
-    return barKeyDown(e, { bar, hero, shownCompletion, input: previewing ? value : typed, items, selectedIndex, previewing, current, tabScope, onDone, reset, forceSearch, go, choose, cancelBang: () => bangEnter.cancel(), removeRow: (url) => rowActions.remove(url), rowsHeld, releaseRows });
+    return barKeyDown(e, { bar, hero, shownCompletion, input: previewing ? value : typed, items, selectedIndex, previewing, current, tabScope, onDone, reset, forceSearch, go, choose, cancelBang: () => bangEnter.cancel(), removeRow: (url) => rowActions.remove(url), rowsHeld, releaseRows: releaseRowsTo });
   };
 
   const onContextMenu = async () => {
-    const pick = await showFieldMenu(value, selection, shownUrl);
+    const pick = await showFieldMenu(value, selection, shownUrl, () => hero && cancelLateNewTabOverride(tabId));
     if (pick?.kind === "go") return go(pick.url);
     if (pick?.kind === "edit") {
       previewSelection.edited();
@@ -286,7 +288,6 @@ export function Omnibox({
     claimFocusTag(windowId, hero ? heroBarFocus(tabId) : commandBarFocus, () => findNodeHandle(input.current));
     journeyBarFocused(tabId);
   };
-
   const field = (
     <BarField
       inputRef={input}
@@ -296,6 +297,7 @@ export function Omnibox({
       incognito={incognito}
       onLayout={focusOnce}
       claim={{ windowId, destination: hero ? heroBarFocus(tabId) : commandBarFocus }}
+      watchBlurs={!!onCancel}
       value={value}
       focusEcho={focusEcho}
       onSelection={(next) => {
@@ -307,8 +309,8 @@ export function Omnibox({
       }}
       onChangeText={onChangeText}
       onSubmitEditing={() => choose(current, "current", true)}
-      onFocus={() => ((editing.current = true), setListAway(false), hero && markNewTabBar("focused", tabId))}
-      onBlur={() => ((editing.current = false), (focusEcho.current = false), onCancel?.())}
+      onFocus={() => ((editing.current = true), setListAway(false), onCancel && barRefocused(windowId, findNodeHandle(input.current)), hero && markNewTabBar("focused", tabId))}
+      onBlur={() => ((editing.current = false), (focusEcho.current = false), onCancel && barBlurred(windowId, findNodeHandle(input.current), cancelHeld))}
       keyDownEvents={barKeyDownEvents(asksForBackspace(scope), isRemovable(current))}
       onKeyDown={onKeyDown}
     />
@@ -316,6 +318,7 @@ export function Omnibox({
 
   const latest = useRef({ choose, profileId, go, current, onCancel, tabId, windowId, releaseRows });
   latest.current = { choose, profileId, go, current, onCancel, tabId, windowId, releaseRows };
+  const cancelHeld = useHeldBarCancel(() => latest.current);
   const [barActions] = useState(() => ({
     go: (url: string) => latest.current.go(url),
     openTabOrFile: () => void openTabOrFile(latest.current.windowId, latest.current.tabId, (url) => latest.current.go(url)),

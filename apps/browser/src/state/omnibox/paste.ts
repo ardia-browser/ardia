@@ -66,10 +66,11 @@ export function copyFieldSelection(value: string, start: number, end: number, fu
   copyText(value.slice(start, end));
 }
 
-export async function showFieldMenu(value: string, selection: { current: { start: number; end: number } }, fullUrl: string | null = null): Promise<FieldMenuPick> {
+export async function showFieldMenu(value: string, selection: { current: { start: number; end: number } }, fullUrl: string | null = null, onEditPicked?: () => void): Promise<FieldMenuPick> {
   const paste = await clipboardPasteAction();
   const { start, end } = selection.current;
   const choice = await showMenu(fieldMenuItems({ paste, hasSelection: end > start, hasText: !!value }));
+  if (choice === "paste" || choice === "cut" || (choice === "pasteAndGo" && paste)) onEditPicked?.();
   if (choice === "pasteAndGo" && paste) return { kind: "go", url: pasteTarget(paste) };
   if (choice === "copy" || choice === "cut") copyFieldSelection(value, start, end, fullUrl);
   if (choice === "cut" || choice === "paste") {

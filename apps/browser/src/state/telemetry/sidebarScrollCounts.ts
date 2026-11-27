@@ -3,6 +3,8 @@ import { consentOrNow, countFor } from "./countFor";
 
 const NEW_SCROLL_GAP_MS = 250;
 const STALL_GAP_MS = 34;
+const FRAME_PACED_GAP_MS = 24;
+const STEADY_PT_PER_MS = 0.2;
 
 let scrolls = 0;
 let stalls = 0;
@@ -11,13 +13,25 @@ let heldTeardowns = 0;
 let newTabDocks = 0;
 let newTabUndocks = 0;
 let lastScrollAt = -Infinity;
-onConsentPeriodChange(() => (lastScrollAt = -Infinity));
+let lastScrollY = 0;
+let lastScrollList = "";
+let steady = false;
+onConsentPeriodChange(() => {
+  lastScrollAt = -Infinity;
+  steady = false;
+});
 
-export function noteSidebarScrolled(at: number) {
+export function noteSidebarScrolled(at: number, y: number, list: string) {
+  const sameList = list === lastScrollList;
   const gap = at - lastScrollAt;
+  const moved = Math.abs(y - lastScrollY);
+  const wasSteady = sameList && steady;
   lastScrollAt = at;
+  lastScrollY = y;
+  lastScrollList = list;
+  steady = sameList && gap > 0 && gap <= FRAME_PACED_GAP_MS && moved / gap >= STEADY_PT_PER_MS;
   if (gap > NEW_SCROLL_GAP_MS) scrolls++;
-  else if (gap > STALL_GAP_MS) stalls++;
+  else if (gap > STALL_GAP_MS && wasSteady) stalls++;
 }
 
 export function noteSidebarHoverHeld() {

@@ -26,3 +26,13 @@ test("the Apple Passwords client lets go of a dead helper's pipe once its reques
     flags: ["-D", "DEBUG"],
   });
 });
+
+test("the Apple Passwords client sends a save as Apple's extension does and claims nothing from its reply", { skip: process.platform !== "darwin", timeout: 120_000 }, (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "ardia-client-save-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const fake = fakeHelper(join(dir, "fake"));
+  runSwiftTests(t, "apple-passwords-save-test", [...CLIENT, "./apple-passwords-save.test.swift"], {
+    env: { ARDIA_FAKE_MANIFEST: fake.manifest, ARDIA_FAKE_DIR: fake.dir, ARDIA_FAKE_CODE: FIXTURES.code },
+    flags: ["-D", "DEBUG"],
+  });
+});

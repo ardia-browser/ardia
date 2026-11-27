@@ -408,11 +408,9 @@ final class ApplePasswordsClient: @unchecked Sendable {
     }
   }
 
-  static func savedSite(host: String, insecure: Bool) -> String { insecure ? "http://\(host)" : host }
-
-  func save(host: String, insecure: Bool, user: String, password: String, update: Bool, _ done: @escaping (Result<Void, Problem>) -> Void) {
+  func save(host: String, user: String, password: String, update: Bool, _ done: @escaping (Result<Void, Problem>) -> Void) {
     queue.async {
-      let body: [String: Any] = ["ACT": 4, "URL": "", "USR": "", "PWD": "", "NURL": Self.savedSite(host: host, insecure: insecure), "NUSR": user, "NPWD": password]
+      let body: [String: Any] = ["ACT": 4, "URL": "", "USR": "", "PWD": "", "NURL": host, "NUSR": user, "NPWD": password]
       self.sealed(Self.saveCmd, qid: "CmdSetPassword4LoginName_URL", url: nil, body, wait: Self.saveSeconds, also: 4, kept: [Self.alreadyKeptStatus]) { result in
         guard case .failure(Failure.unexpected) = result else { return done(result.map { _ in () }.mapError(Self.problem)) }
         guard !update else {

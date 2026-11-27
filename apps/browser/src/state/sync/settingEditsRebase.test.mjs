@@ -167,3 +167,13 @@ test("#1577: a rebase still takes a setting changed on another Mac when nothing 
     assert.equal(S().settings[name], newer, "the newer setting from the other Mac wins over the restored session's");
   });
 });
+
+test("a published batch drops only the setting edit it carried, not one made while it was being written", async () => {
+  const { withSettingEdits } = await import("./settingEdits.ts");
+  const doc = { enabled: true, settingEdits: { pageFrame: "0a.0000.dev", sidebarSide: "0b.0000.dev" } };
+  const inner = { prefix: "set:", extract: async () => ({ values: new Map([["set:pageFrame", { v: 6 }], ["set:sidebarSide", { v: "left" }]]) }), apply: () => true };
+  const extraction = await withSettingEdits(inner, doc).extract(() => undefined, () => false, 0, () => false, () => undefined, () => undefined, () => undefined);
+  doc.settingEdits = { ...doc.settingEdits, pageFrame: "0c.0000.dev" };
+  extraction.published(new Set(["set:pageFrame", "set:sidebarSide"]));
+  assert.deepEqual(doc.settingEdits, { pageFrame: "0c.0000.dev" }, "the newer pageFrame choice stays; the sent sidebarSide one goes");
+});

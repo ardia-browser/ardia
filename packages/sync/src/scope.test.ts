@@ -921,3 +921,29 @@ test("a rebase publishes nothing and doesn't finish while a file from another de
   await a.sync();
   assert.equal(a.store.get("x:2"), "two, newer");
 });
+
+test("while a download holds a rebase back, a pulled change doesn't overwrite a local value the adapter keeps, which goes out once the hold clears", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  await a.sync();
+  const b = new SessionDevice("b", folder);
+  await b.sync();
+  b.store.set("x:1", "mine, newer");
+  const own = b.adapters();
+  b.adapters = () => own.map((adapter) => (adapter.prefix === "x:" ? { ...adapter, extract: async (...args) => ({ ...(await adapter.extract(...args))!, keepLocal: (key: string) => key === "x:1" }) } : adapter));
+  startRebase(b.state);
+  a.store.set("x:1", "one, edited on a");
+  await a.sync();
+  a.store.set("x:2", "two");
+  await a.sync();
+  const later = [...folder.scope("s").keys()].at(-1)!;
+  folder.scope("s").get(later)!.hiddenFrom.add("b");
+  await b.sync();
+  assert.equal(b.store.get("x:1"), "mine, newer", "the pulled change waits with the rebase");
+  folder.scope("s").get(later)!.hiddenFrom.delete("b");
+  await b.sync();
+  await a.sync();
+  assert.equal(a.store.get("x:1"), "mine, newer", "once nothing is held, the kept value goes out");
+  assert.equal(b.store.get("x:2"), "two");
+});

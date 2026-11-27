@@ -22,6 +22,7 @@ export function withSettingEdits(adapter: Adapter, doc: SyncDoc): Adapter {
     extract: async (base, queued, now, known, remote, stamp, baseJson) => {
       const extraction = await adapter.extract(base, queued, now, known, remote, stamp, baseJson);
       if (!extraction) return extraction;
+      const covered = { ...doc.settingEdits };
       return {
         ...extraction,
         keepLocal: (key) => {
@@ -32,7 +33,7 @@ export function withSettingEdits(adapter: Adapter, doc: SyncDoc): Adapter {
         published: (keys) => {
           extraction.published?.(keys);
           const sent = new Set([...keys].map(settingOf));
-          const left = Object.entries(doc.settingEdits ?? {}).filter(([name]) => !sent.has(name));
+          const left = Object.entries(doc.settingEdits ?? {}).filter(([name, edited]) => !sent.has(name) || covered[name] !== edited);
           if (left.length) doc.settingEdits = Object.fromEntries(left);
           else delete doc.settingEdits;
         },

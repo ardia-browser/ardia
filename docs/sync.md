@@ -217,7 +217,7 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   the adapter can show is newer than the record: a setting changed here (each local choice is stamped from the
   sync clock into `settingEdits` in `sync.json` at once, and dropped when its batch is on disk) or a pin placement
   still in `pinChoices`; those go out instead (`keepLocal`). A rebasing adapter publishes after the cycle's pull,
-  and while anything in the scope is still downloading or damaged it neither publishes nor applies its rebase, so a
+  and while anything in the scope is still downloading or damaged it neither publishes nor applies anything (its keys wait for the next cycle), so a
   record on its way can't be outrun by an older session value. An adapter told it's rebasing takes the synced
   value even where it would otherwise keep a local one that differs from its base (a pinned group tab's home). The rebase ends for an adapter once it applied
   without deferring and with nothing held back. The scope keeps the list of adapters that finished, so one that

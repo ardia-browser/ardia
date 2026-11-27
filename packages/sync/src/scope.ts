@@ -357,12 +357,13 @@ export async function syncScope(args: {
     const late = await publishLate();
     for (const key of state.unapplied) if (key.startsWith(adapter.prefix) && !late.has(key)) keys.add(key);
     heldApply ||= applyHeld();
+    const rebaseWaits = held && rebasing(state, adapter);
     const deferred = new Set<string>();
-    const ahead: WriteAhead | null = heldApply ? null : await writeAhead(state, adapter.prefix, keys, now(), options);
+    const ahead: WriteAhead | null = heldApply || rebaseWaits ? null : await writeAhead(state, adapter.prefix, keys, now(), options);
     const cancelled = !!ahead?.batch && (await cancelIfRaced(state, ahead.batch, await publishLate(), options));
     journalFailed ||= !!ahead?.failed;
     heldApply ||= !!ahead?.failed;
-    const applied = !heldApply && !cancelled && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld, deferred));
+    const applied = !heldApply && !rebaseWaits && !cancelled && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld, deferred));
     finishBatch(ahead?.batch ?? null, applied, options);
     if (applied && !deferred.size && !held) noteRebased(state, adapter);
     heldApply ||= applyHeld();

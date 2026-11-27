@@ -112,6 +112,19 @@
     return Math.ceil(wanted / 3) * 4 + 512;
   };
   var replyCost = (options) => typeof options.replyBytes === "number" && Number.isFinite(options.replyBytes) && options.replyBytes > 0 ? Math.ceil(options.replyBytes) : SMALL_REPLY_BYTES;
+  function utf8Length(text) {
+    let bytes = 0;
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      if (code < 128) bytes += 1;
+      else if (code < 2048) bytes += 2;
+      else if (code >= 55296 && code <= 56319 && i + 1 < text.length && (text.charCodeAt(i + 1) & 64512) === 56320) {
+        bytes += 4;
+        i++;
+      } else bytes += 3;
+    }
+    return bytes;
+  }
   function createRpc(transport) {
     const waiting = new Map();
     let next = 0;
@@ -142,7 +155,7 @@
         lane.inFlight.add(id);
         lane.bytes += cost;
         try {
-          transport.send(line);
+          transport.send(line, lane === protocol);
         } catch (error) {
           settle(id);
           waiter.reject(error);
@@ -166,7 +179,7 @@
         }
         return new Promise((resolve, reject) => {
           const lane = options.protocol ? protocol : bulk;
-          lane.queued.push({ id, line, cost: line.length + replyCost(options), waiter: { resolve, reject }, ...options.dropIf ? { dropIf: options.dropIf } : {} });
+          lane.queued.push({ id, line, cost: utf8Length(line) + replyCost(options), waiter: { resolve, reject }, ...options.dropIf ? { dropIf: options.dropIf } : {} });
           pump();
         });
       },

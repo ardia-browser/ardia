@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createRpc, MAX_IN_FLIGHT, MAX_IN_FLIGHT_BYTES, readReplyBytes } from "./rpc.ts";
+import { createRpc, MAX_IN_FLIGHT, MAX_IN_FLIGHT_BYTES, readReplyBytes, utf8Length } from "./rpc.ts";
 
 test("rpc keeps at most MAX_IN_FLIGHT requests unanswered and sends the rest as replies come back", async () => {
   const sent = [];
@@ -116,4 +116,20 @@ test("codex S4: a queued protocol reply whose call was cancelled is dropped, nev
   assert.ok(!sent.some((m) => m.params.call === "late"));
   rpc.close(new Error("done"));
   await Promise.allSettled(held);
+});
+
+test("codex round 2 S4: a protocol reply asks the native channel to send it ahead of bulk lines, and budgets count UTF-8 bytes", async () => {
+  const sent = [];
+  const rpc = createRpc({ send: (line, urgent) => sent.push({ message: JSON.parse(line), urgent: urgent === true }), onLine: () => {} });
+  rpc.request("files.write", { data: "x" }).catch(() => {});
+  rpc.request("result", { call: "c" }, { protocol: true }).catch(() => {});
+  assert.deepEqual(sent.map((s) => [s.message.method, s.urgent]), [["files.write", false], ["result", true]]);
+  assert.equal(utf8Length("aé€😀"), 1 + 2 + 3 + 4);
+  const wide = "€".repeat(1 << 20);
+  const bulkOnly = createRpc({ send: () => {}, onLine: () => {} });
+  bulkOnly.request("files.write", { data: wide }).catch(() => {});
+  bulkOnly.request("files.write", { data: wide }).catch(() => {});
+  assert.ok(bulkOnly.inFlightBytes() >= 3 << 20, "a megabyte of € counts as 3 MiB, not 1");
+  rpc.close(new Error("done"));
+  bulkOnly.close(new Error("done"));
 });

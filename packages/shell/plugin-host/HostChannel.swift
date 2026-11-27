@@ -5,6 +5,7 @@ final class HostChannel {
   static let maxIncomingLine = 32 << 20
   static let maxOutgoingLine = 8 << 20
   static let maxPendingOutput = 32 << 20
+  static let urgentReserve = 16 << 20
   static let closedStatus: Int32 = 3
 
   private let fd: Int32
@@ -13,7 +14,11 @@ final class HostChannel {
   private var writeSource: DispatchSourceWrite?
   private var writeSuspended = true
   private var incoming: [UInt8] = []
-  private var outgoing = Data()
+  private var head = Data()
+  private var urgent: [Data] = []
+  private var bulk: [Data] = []
+  private var urgentBytes = 0
+  private var bulkBytes = 0
   private let onLine: (String) -> Void
   private let onClose: () -> Void
 
@@ -85,23 +90,47 @@ final class HostChannel {
     }
   }
 
-  func send(_ line: String) -> SendRefusal? {
+  var queuedOrder: [String] { ([head] + urgent + bulk).filter { !$0.isEmpty }.map { String(decoding: $0.dropLast(), as: UTF8.self) } }
+
+  func send(_ line: String, urgent isUrgent: Bool = false) -> SendRefusal? {
     guard readSource != nil else { return .closed }
-    let bytes = Data(line.utf8)
+    var bytes = Data(line.utf8)
     guard bytes.count <= Self.maxOutgoingLine else { return .tooLong }
     guard !bytes.contains(10) && !bytes.contains(13) else { return .hasNewline }
-    guard outgoing.count + bytes.count < Self.maxPendingOutput else { return .backedUp }
-    outgoing.append(bytes)
-    outgoing.append(10)
+    bytes.append(10)
+    if isUrgent {
+      guard urgentBytes + bytes.count < Self.urgentReserve else { return .backedUp }
+      urgent.append(bytes)
+      urgentBytes += bytes.count
+    } else {
+      guard head.count + bulkBytes + bytes.count < Self.maxPendingOutput else { return .backedUp }
+      bulk.append(bytes)
+      bulkBytes += bytes.count
+    }
     flush()
     return nil
   }
 
+  private func nextLine() -> Bool {
+    guard head.isEmpty else { return true }
+    if !urgent.isEmpty {
+      head = urgent.removeFirst()
+      urgentBytes -= head.count
+      return true
+    }
+    if !bulk.isEmpty {
+      head = bulk.removeFirst()
+      bulkBytes -= head.count
+      return true
+    }
+    return false
+  }
+
   private func flush() {
-    while !outgoing.isEmpty {
-      let count = outgoing.withUnsafeBytes { Darwin.write(fd, $0.baseAddress, $0.count) }
+    while nextLine() {
+      let count = head.withUnsafeBytes { Darwin.write(fd, $0.baseAddress, $0.count) }
       if count > 0 {
-        outgoing.removeFirst(count)
+        head.removeFirst(count)
         continue
       }
       if count < 0 && errno == EINTR { continue }

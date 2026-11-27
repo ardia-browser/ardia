@@ -1,6 +1,6 @@
 import type { HostReply } from "./protocol";
 
-export type Transport = { send(line: string): void; onLine(listener: (line: string) => void): void };
+export type Transport = { send(line: string, urgent?: boolean): void; onLine(listener: (line: string) => void): void };
 
 export class PluginError extends Error {
   readonly code: string;
@@ -69,6 +69,20 @@ export const readReplyBytes = (length: number | undefined) => {
 const replyCost = (options: RequestOptions) =>
   typeof options.replyBytes === "number" && Number.isFinite(options.replyBytes) && options.replyBytes > 0 ? Math.ceil(options.replyBytes) : SMALL_REPLY_BYTES;
 
+export function utf8Length(text: string): number {
+  let bytes = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length && (text.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      bytes += 4;
+      i++;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
 export function createRpc(transport: Transport): Rpc {
   const waiting = new Map<number, Waiter>();
   let next = 0;
@@ -101,7 +115,7 @@ export function createRpc(transport: Transport): Rpc {
       lane.inFlight.add(id);
       lane.bytes += cost;
       try {
-        transport.send(line);
+        transport.send(line, lane === protocol);
       } catch (error) {
         settle(id);
         waiter.reject(error);
@@ -126,7 +140,7 @@ export function createRpc(transport: Transport): Rpc {
       }
       return new Promise<T>((resolve, reject) => {
         const lane = options.protocol ? protocol : bulk;
-        lane.queued.push({ id, line, cost: line.length + replyCost(options), waiter: { resolve: resolve as (value: unknown) => void, reject }, ...(options.dropIf ? { dropIf: options.dropIf } : {}) });
+        lane.queued.push({ id, line, cost: utf8Length(line) + replyCost(options), waiter: { resolve: resolve as (value: unknown) => void, reject }, ...(options.dropIf ? { dropIf: options.dropIf } : {}) });
         pump();
       });
     },

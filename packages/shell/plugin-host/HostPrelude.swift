@@ -456,7 +456,7 @@ enum HostPrelude {
     for (const fn of [...listeners]) { try { fn(line); } catch (error) { reportError(error); } }
   });
   define("__ardiaBridge", Object.freeze({
-    send(line) { const problem = native.send(String(line)); if (problem) throw new Error(problem); },
+    send(line, urgent) { const problem = native.send(String(line), urgent === true); if (problem) throw new Error(problem); },
     onLine(fn) {
       if (typeof fn !== "function") throw new TypeError("onLine needs a function");
       listeners.add(fn);

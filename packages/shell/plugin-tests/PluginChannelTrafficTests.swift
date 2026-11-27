@@ -196,4 +196,24 @@ final class PluginChannelTrafficTests: XCTestCase {
     XCTAssertFalse(ControlRetirements.of(socketQueue).holds(theirs))
     fds.forEach { close($0) }
   }
+
+  func testAResultLineGoesOutBetweenCompleteLinesAheadOfQueuedBulkWrites() {
+    var pair: [Int32] = [0, 0]
+    precondition(socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0)
+    let queue = DispatchQueue(label: "host-urgent")
+    let channel = HostChannel(fd: pair[0], queue: queue, onLine: { _ in }, onClose: {})
+    queue.sync { channel.open() }
+    let big = String(repeating: "b", count: 1 << 20)
+    queue.sync {
+      for i in 0..<6 { XCTAssertNil(channel.send("{\"id\":\(i),\"method\":\"files.write\",\"data\":\"\(big)\"}")) }
+      XCTAssertNil(channel.send("{\"id\":99,\"method\":\"result\"}", urgent: true))
+    }
+    let order = queue.sync { channel.queuedOrder }
+    XCTAssertGreaterThan(order.count, 2, "the bulk writes are backed up behind a full socket")
+    XCTAssertEqual(order.dropFirst().first, "{\"id\":99,\"method\":\"result\"}", "the result is next after the line being written, ahead of every queued write")
+    XCTAssertTrue(order.first?.hasSuffix("\"}") == true, "the line in progress finishes before the result")
+    queue.sync { channel.close() }
+    close(pair[0])
+    close(pair[1])
+  }
 }

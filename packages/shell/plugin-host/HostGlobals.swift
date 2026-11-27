@@ -87,9 +87,9 @@ final class HostGlobals {
     let cancel: @convention(block) (Double) -> Void = { [weak self] id in
       self?.timers.cancel(id)
     }
-    let send: @convention(block) (String) -> Any = { [weak self] line in
+    let send: @convention(block) (String, Bool) -> Any = { [weak self] line, urgent in
       guard let channel = self?.channel else { return "the channel to Ardia is closed" }
-      return channel.send(line)?.message ?? NSNull()
+      return channel.send(line, urgent: urgent)?.message ?? NSNull()
     }
     let btoa: @convention(block) (String) -> Any = { text in PluginBase64.encode(text) ?? NSNull() }
     let atob: @convention(block) (String) -> Any = { text in PluginBase64.decode(text) ?? NSNull() }

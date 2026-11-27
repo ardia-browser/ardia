@@ -4,7 +4,7 @@ import { GestureHandlerRootView, LegacyScrollView } from "react-native-gesture-h
 import { lookAngle, MAX_THEME_STOPS, THEME_TEXTURES, withAddedStop, withAngle, withoutStop, withTexture, type ProfileTheme, type ThemeMode, type ThemeTexture } from "@ardia/core/src/theme.ts";
 import { customLook, shownTheme, type ProfileLook } from "../../lib/profileLook";
 import { editedLook, keptReadable, TEXTURE_NAMES, THEME_MODES } from "../../lib/themeEditor";
-import { dropThemeDraft, editCustomTheme, editedChoice, startingCustomTheme } from "../../state/settings/customTheme";
+import { dropThemeDraft, editCustomTheme, editedChoice, startingCustomTheme, stopMatchingToEdit } from "../../state/settings/customTheme";
 import { popSettings } from "../../state/settings/nav";
 import { useCustomTheme } from "../../state/settings/themeDraft";
 import { capsule, CustomLookBackdrop, font, press, settingsLayout, slotAround, space, Symbol, themeEditorLayout as L, useProfileLook, useTheme } from "../ui";
@@ -15,7 +15,6 @@ import { usePreferences } from "../../state/settings/hooks";
 import { SettingsPageOpenedContext } from "./settingsOpened";
 import type { ColorChoice } from "../../state/settings/preferences";
 import { useSyncEnabled } from "../../state/sync/hooks";
-import { matchMyMac } from "../../state/sync/actions";
 
 const FOLLOWING_MAC = "Following your Mac's theme.";
 const STOP_MATCHING = "Stop matching to edit";
@@ -82,7 +81,7 @@ export function ThemePage() {
   const target = matchingMac ? null : editedChoice(colorChoice, look);
   const saved = stored !== null;
   const fallback = useMemo(() => (saved ? null : startingCustomTheme(look)), [target, saved, look]);
-  return <ThemeEditor key={target ?? MATCHING_MAC} stored={stored ?? fallback!} target={target} look={look} onStopMatching={() => matchMyMac(false, look)} />;
+  return <ThemeEditor key={target ?? MATCHING_MAC} stored={stored ?? fallback!} target={target} look={look} onStopMatching={() => stopMatchingToEdit(look)} />;
 }
 
 function ThemeEditor({ stored, target, look, onStopMatching }: { stored: ProfileTheme; target: ColorChoice | null; look: ProfileLook; onStopMatching: () => void }) {

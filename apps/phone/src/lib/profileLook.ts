@@ -150,6 +150,14 @@ export function lookForApp(
   return lookOf(syncEnabled && profile && choice === null ? profile : { color: null, theme: null }, presets, fallback);
 }
 
+export type OwnThemeSource = { colorChoice: string | null; customTheme: ProfileTheme | null; presetThemes: Partial<Record<string, ProfileTheme>>; materialYou: boolean };
+
+export function ownThemeOf({ colorChoice, customTheme, presetThemes, materialYou }: OwnThemeSource): ProfileTheme | null {
+  if (colorChoice === null) return null;
+  if (colorChoice === CUSTOM_CHOICE) return customTheme;
+  return materialYou ? null : (presetThemes[colorChoice] ?? null);
+}
+
 export function activeCustomLook(choice: string | null, customTheme: ProfileTheme | null, syncEnabled: boolean, profile: LookSource | null): CustomLook | null {
   if (choice !== null) return customTheme ? { theme: customTheme, source: "own" } : null;
   if (!syncEnabled) return null;

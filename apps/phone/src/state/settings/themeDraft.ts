@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ProfileTheme } from "@ardia/core/src/theme.ts";
-import type { ProfileLook } from "../../lib/profileLook";
+import { ownThemeOf, type ProfileLook } from "../../lib/profileLook";
 import { PRESET_COLORS, type ColorChoice, type PresetColor, type Preferences } from "./preferences";
 import { currentPreferences, usePreferences } from "./store";
 import { syncData } from "../sync/store";
@@ -8,11 +8,7 @@ import { materialPresetFor } from "../../lib/material/schemePick";
 
 export const useThemeDraft = create<{ draft: ProfileTheme | null }>()(() => ({ draft: null }));
 
-export function chosenOwnTheme({ colorChoice, customTheme, presetThemes, materialYou }: Pick<Preferences, "colorChoice" | "customTheme" | "presetThemes" | "materialYou">): ProfileTheme | null {
-  if (colorChoice === null) return null;
-  if (colorChoice === "custom") return customTheme;
-  return materialYou ? null : (presetThemes[colorChoice] ?? null);
-}
+export const chosenOwnTheme = (preferences: Pick<Preferences, "colorChoice" | "customTheme" | "presetThemes" | "materialYou">): ProfileTheme | null => ownThemeOf(preferences);
 
 export function useCustomTheme(): ProfileTheme | null {
   const draft = useThemeDraft((s) => s.draft);

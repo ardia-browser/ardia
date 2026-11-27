@@ -1,6 +1,7 @@
 import { startingTheme, type ProfileTheme } from "@ardia/core/src/theme.ts";
 import { CUSTOM_CHOICE, type ProfileLook } from "../../lib/profileLook";
 import { countUsage } from "../telemetry/telemetry";
+import { matchMyMac } from "../sync/actions";
 import type { ColorChoice, PresetColor, PresetThemes } from "./preferences";
 import { currentPreferences, setPreference } from "./store";
 import { chosenOwnTheme, isPresetColor, themeLockedNow, useThemeDraft } from "./themeDraft";
@@ -51,3 +52,11 @@ export function resetPresetTheme(color: PresetColor) {
 }
 
 export const dropThemeDraft = () => useThemeDraft.setState({ draft: null });
+
+export function stopMatchingToEdit(look: ProfileLook) {
+  if (look.custom && currentPreferences().customTheme) {
+    setPreference("colorChoice", CUSTOM_CHOICE);
+    return;
+  }
+  matchMyMac(false, look);
+}

@@ -95,9 +95,19 @@ test("the launch look takes the space's colours and its appearance from the same
   const night = { ...startingTheme("#4691C3"), stops, translucency: 0, angle: 0 };
   const work = { color: "blue", theme: { colors: ["#0D0D1A"], darkColors: null, mode: "auto" as const, look: night } };
   const personal = { color: "plum", theme: null };
-  const state = (space: LaunchLookState["space"]): LaunchLookState => ({ design: "redesigned", schemeChoice: "system", colorChoice: null, customTheme: null, syncEnabled: true, macLook: null, space });
+  const state = (space: LaunchLookState["space"]): LaunchLookState => ({ design: "redesigned", schemeChoice: "system", colorChoice: null, customTheme: null, presetThemes: {}, materialYou: false, syncEnabled: true, macLook: null, space });
   const saved = launchLookOf(state(work), presets, "plum");
   assert.deepEqual([saved.themeLooks.light.dark, saved.themeLooks.dark.dark], [true, true]);
   assert.deepEqual(launchLookOf(state(personal), presets, "plum").themeLooks, { light: { dark: false }, dark: { dark: true } });
   assert.deepEqual(saved, launchLookFor(lookOf(work, presets, "plum"), "dark"));
+});
+
+test("a selected preset launches as the app draws it, never as the saved Custom theme, and its own edits launch with it", () => {
+  const darkRed = { ...startingTheme("#8B1A1A"), mode: "dark" as const };
+  const base: LaunchLookState = { design: "redesigned", schemeChoice: "light", colorChoice: "blue", customTheme: darkRed, presetThemes: {}, materialYou: false, syncEnabled: false, macLook: null, space: null };
+  assert.deepEqual(launchLookOf(base, presets, "plum"), launchLookFor(blue, "light"));
+  const editedBlue = { ...startingTheme("#4691C3"), grain: 0.7 };
+  const edited = { ...base, presetThemes: { blue: editedBlue } };
+  assert.deepEqual(launchLookOf(edited, presets, "plum"), launchLookFor({ ...customLook(editedBlue, "own"), preset: "blue" }, "light"));
+  assert.deepEqual(launchLookOf({ ...edited, materialYou: true }, presets, "plum"), launchLookFor(blue, "light"));
 });

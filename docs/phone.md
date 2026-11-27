@@ -4422,8 +4422,11 @@ Custom theme (the Mac's custom profile theme on the phone, 2026-11-22):
   With no colour chosen and sync off, an edit edits the preset Appearance shows (Plum by default). With Match My Mac
   on, the Theme page shows the Mac's current look locked, under "Following your Mac's theme.", drawn with the app's
   own resolver in the app's current light or dark, and nothing on it writes; "Stop matching to edit" turns Match My
-  Mac off the way its switch does and opens the editor on what was showing. Every save and Reset checks the lock when
-  it commits (`themeLockedNow`), so a release still queued when sync turns on saves nothing. A swatch is selected only
+  Mac off and opens the editor: on the phone's own Custom when one is saved (never overwritten), else on what was
+  showing, copying the Mac's full theme into Custom only when there is no saved Custom (`stopMatchingToEdit`). Every save and Reset checks the lock when
+  it commits (`themeLockedNow`), so a release still queued when sync turns on saves nothing; a page that has
+  started leaving (a pop, or Settings closing) takes no more changes either. The launch look resolves the chosen
+  colour's own theme with the app's rule (`ownThemeOf`), so a selected preset never launches as the saved Custom. A swatch is selected only
   when it draws the look in use (`selectedSwatch`, both apps), so a phone-edited Green isn't selected while the Mac
   shows stock Green, and under Material You it is the seed the palette uses (`materialPresetFor`). A drag the system cancels saves nothing. Material You
   ignores preset edits. `theme_edits` counts finished edits to Custom and to presets alike.

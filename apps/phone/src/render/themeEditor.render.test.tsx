@@ -8,7 +8,7 @@ import { ThemePage } from "../components/settings/ThemePage";
 import { DeckLookBackdrop, DesignProvider, LookBackdrop, useTheme } from "../components/ui";
 import type { Design } from "../lib/design";
 import { setAppearanceDesign } from "../state/settings/appearance";
-import { openSettings, popSettings, pushSettings, settingsNav } from "../state/settings/nav";
+import { closeSettings, openSettings, popSettings, pushSettings, settingsNav } from "../state/settings/nav";
 import { editCustomTheme, resetPresetTheme } from "../state/settings/customTheme";
 import { usePreferences } from "../state/settings/store";
 import { useThemeDraft } from "../state/settings/themeDraft";
@@ -346,6 +346,57 @@ onAndroid("with Custom picked and Material You on without Dynamic Colors, the co
   const swatchNames = new Set(["Plum", "Blue", "Purple", "Pink", "Red", "Orange", "Yellow", "Green", "Neutral", "Custom"]);
   const selected = root.root.findAll((node) => node.props.accessibilityRole === "radio" && node.props.accessibilityState?.selected === true && typeof node.props.onPress === "function" && swatchNames.has(node.props.accessibilityLabel)).map((node) => node.props.accessibilityLabel);
   expect(selected).toEqual(["Plum"]);
+  unmount(root);
+});
+
+test("Stop matching to edit never overwrites a saved Custom: with one saved, it opens the editor on the phone's own Custom", async () => {
+  const phoneCustom = { ...blue, grain: 0.91 };
+  act(() => usePreferences.setState({ colorChoice: null, customTheme: phoneCustom }));
+  matchMac({ theme: { colors: ["#FF6A00", "#7A3CFF"], darkColors: null, mode: "auto" as const, look: { ...blue, angle: 200, grain: 0.3 }, dark: null } });
+  const editor = inDesign(<ThemePage />);
+  await pressButton(editor, "Stop matching to edit");
+  expect(usePreferences.getState().colorChoice).toBe("custom");
+  expect(usePreferences.getState().customTheme).toEqual(phoneCustom);
+  expect(pressable(editor, "Add Color")!.props.disabled).toBe(false);
+  expect(sliderValue(editor, "Noise")).toBe(91);
+  unmount(editor);
+});
+
+test("Stop matching to edit with no saved Custom copies the Mac's full theme into Custom, so there is something to edit", async () => {
+  act(() => usePreferences.setState({ colorChoice: null, customTheme: null }));
+  matchMac({ theme: { colors: ["#FF6A00", "#7A3CFF"], darkColors: null, mode: "auto" as const, look: { ...blue, angle: 200, grain: 0.3 }, dark: null } });
+  const editor = inDesign(<ThemePage />);
+  await pressButton(editor, "Stop matching to edit");
+  expect(usePreferences.getState().colorChoice).toBe("custom");
+  expect(stored().grain).toBe(0.3);
+  expect(sliderValue(editor, "Noise")).toBe(30);
+  unmount(editor);
+});
+
+onAndroid("a slider release still queued when Settings closes saves nothing, though the page stays drawn while it leaves", () => {
+  const edited = { ...blue, grain: 0.2 };
+  act(() => usePreferences.setState({ colorChoice: "green", presetThemes: { green: edited } }));
+  openSettings({ page: "theme" });
+  const root = inDesign(<SettingsView />);
+  layOut(root, "Noise", 226);
+  const track = getByGestureTestId("themeTrack:Noise");
+  act(() => {
+    fireGestureHandler(track, [
+      { state: State.BEGAN, x: 13, y: 10 },
+      { state: State.ACTIVE, x: 13, y: 10 },
+      { state: State.ACTIVE, x: 200, y: 10 },
+    ]);
+  });
+  act(() => closeSettings());
+  act(() => {
+    fireGestureHandler(track, [
+      { state: State.ACTIVE, x: 200, y: 10 },
+      { state: State.END, x: 200, y: 10 },
+    ]);
+  });
+  flush();
+  expect(usePreferences.getState().presetThemes).toEqual({ green: edited });
+  expect(useThemeDraft.getState().draft).toBeNull();
   unmount(root);
 });
 

@@ -1,7 +1,7 @@
 import { appliedDark, preferredScheme, type MacLook, type PreferredScheme, type SchemeChoice } from "./appearance.ts";
 import type { Design } from "./design.ts";
 import type { ProfileTheme } from "@ardia/core/src/theme.ts";
-import { activeCustomLook, lookForApp, nativeLookColors, themedScheme, type LookSource, type NativeThemeLook, type PresetSpec, type ProfileLook } from "./profileLook.ts";
+import { activeCustomLook, lookForApp, nativeLookColors, ownThemeOf, themedScheme, type LookSource, type NativeThemeLook, type PresetSpec, type ProfileLook } from "./profileLook.ts";
 
 export type LaunchLookSlot = { look?: NativeThemeLook; dark: boolean };
 
@@ -28,15 +28,18 @@ export type LaunchLookState = {
   schemeChoice: SchemeChoice;
   colorChoice: string | null;
   customTheme: ProfileTheme | null;
+  presetThemes: Partial<Record<string, ProfileTheme>>;
+  materialYou: boolean;
   syncEnabled: boolean;
   macLook: MacLook | null;
   space: LookSource | null;
 };
 
 export function launchLookOf(state: LaunchLookState, presets: readonly PresetSpec[], fallback: string): SavedLaunchLook {
-  const look = lookForApp(state.colorChoice, state.syncEnabled, state.space, presets, fallback, state.customTheme);
+  const own = ownThemeOf(state);
+  const look = lookForApp(state.colorChoice, state.syncEnabled, state.space, presets, fallback, own);
   const chosen = preferredScheme(state.design, state.schemeChoice, state.macLook);
-  const scheme = state.design === "material" ? chosen : themedScheme(activeCustomLook(state.colorChoice, state.customTheme, state.syncEnabled, state.space), chosen);
+  const scheme = state.design === "material" ? chosen : themedScheme(activeCustomLook(state.colorChoice, own, state.syncEnabled, state.space), chosen);
   return launchLookFor(look, scheme);
 }
 

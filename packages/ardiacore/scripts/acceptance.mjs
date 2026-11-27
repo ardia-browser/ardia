@@ -4927,6 +4927,12 @@ try {
         if (cells.slice(0, 8).some((c) => c[2] > c[0] + 30) && cells.some((c) => c[0] > c[1] + 80)) return "windowed";
         return "other";
       };
+      const shape = (f) => (f.page && f.page[3] > 0 ? f.page[2] / f.page[3] : null);
+      const pageShapeChange = (all, list) => {
+        const before = all.slice(0, all.indexOf(list[0])).filter(shape).at(-1);
+        const from = before && shape(before);
+        return from ? Math.round(Math.max(0, ...list.filter(shape).map((f) => Math.abs(shape(f) / from - 1))) * 1000) / 1000 : 0;
+      };
       const run = async (cover) => {
         await act(`pageCover:${cover ? 1 : 0}`);
         await act("fakeFullScreenMs:800");
@@ -4949,6 +4955,8 @@ try {
           const kinds = laid.map(kind);
           return { frames: kinds.length, relayout: r.frames.length - laid.length, bare: kinds.filter((k) => k === "bare").length,
             stale: kinds.filter((k) => k !== want && k !== "bare").length, uncovered: laid.filter((f) => !f.cover).length,
+            stretch: Math.max(0, ...r.frames.map((f) => f.stretch ?? 0)),
+            pageShapeChange: pageShapeChange(frames, r.frames),
             kinds: [...new Set(kinds)], bareAtMs: laid.filter((f, i) => kinds[i] === "bare").map((f) => f.t - r.frames[0].t) };
         };
         const keyAt = frames[0]?.t ?? 0;
@@ -4964,7 +4972,7 @@ try {
       if (off.in.bare < off.in.frames * 0.9 || off.out.bare < off.out.frames * 0.9)
         throw new Error(`without the page's picture the probe didn't see the bare background: ${JSON.stringify(off)}`);
       for (const [dir, r] of Object.entries({ in: on.in, out: on.out }))
-        if (r.bare || r.stale || r.uncovered || r.frames < 10 || r.relayout > 1) throw new Error(`the way ${dir}: ${JSON.stringify(r)}; all ${JSON.stringify(on)}`);
+        if (r.bare || r.stale || r.uncovered || r.frames < 10 || r.relayout > 1 || r.stretch > 0.005) throw new Error(`the way ${dir}: ${JSON.stringify(r)}; all ${JSON.stringify(on)}`);
       const other = await openTab(`${base}/fs-layout?pane`, "FS layout");
       let split;
       try {

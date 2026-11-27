@@ -59,7 +59,7 @@ import { defaultTarget, languageName, releaseTranslation, revertPage, translateC
 import { translatePageMenuItems } from "../../state/site/translateMenu";
 import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
 import { noteWebKitFocusRestore } from "../../state/telemetry/pageFocusReturns";
-import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
+import { noteAutoPictureInPictureKept, notePageFullScreenTransition, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
 import { noteWebKitMediaFault } from "../../state/telemetry/webkitMediaFaults";
 import { isAdoptKind } from "../../state/tabs/adoptIds";
 import { firstPagePending, isBlankAddress, noteFirstPagePending, reportedAddress, reportedTitle } from "../../state/tabs/pendingAddress";
@@ -335,7 +335,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         noteRendererResponsive(tabId, false);
         patchPage(tabId, { unresponsive: false });
       }}
-      onFullscreen={(fullscreen) => patchPage(tabId, { fullscreen })}
+      onFullscreen={(fullscreen) => patchPage(tabId, { fullscreen })} onFullScreenTransition={notePageFullScreenTransition}
       onMediaAccess={(mediaAccess) => patchPage(tabId, { mediaAccess: mediaAccess.camera || mediaAccess.microphone || mediaAccess.screen ? mediaAccess : null })}
       onSecurity={(security) => !prewarmOnly() && patchPage(tabId, { security })}
       onContentBlocked={({ count }) => patchPage(tabId, { blocked: count })}

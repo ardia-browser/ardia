@@ -202,6 +202,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   BOOL _overruleChanged;
   BOOL _watchingWindowServer;
   BOOL _leftApp;
+  CFTimeInterval _pageAskedAt;
 }
 
 + (instancetype)ofWindow:(ArdiaCoreWindow *)coreWindow create:(BOOL)create {
@@ -362,6 +363,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
 
 - (void)tab:(ArdiaCoreTab *)tab fullScreen:(BOOL)fullScreen tell:(void (^)(void))tell {
   const NSUInteger change = [FullScreenChanges() objectForKey:tab].unsignedIntegerValue;
+  _pageAskedAt = CACurrentMediaTime();
   _waitingFor = 0;
   _coverTurn++;
   _picturing = NO;
@@ -430,7 +432,8 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   const NSUInteger turn = ++_coverTurn;
   __weak ArdiaWindowFullScreen *weakSelf = self;
   [ArdiaPageCover coverTabs:[self shownTabs:tab entering:entering]
-                    then:^(NSArray<ArdiaPageCover *> *covers) {
+            keepingShapeOf:tab
+                      then:^(NSArray<ArdiaPageCover *> *covers) {
                       ArdiaWindowFullScreen *me = weakSelf;
                       if (!me || me->_coverTurn != turn) {
                         for (ArdiaPageCover *cover in covers) [cover uncover:NO];
@@ -453,11 +456,14 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
     _covers = nil;
     return [self sync];
   }
+  ArdiaCoreTab *page = entering ? _tab : _leftTab;
   _entered = entering;
   _asked = entering ? 1 : -1;
   if (!entering) _leftTab = nil;
   [CATransaction flush];
   ToggleWindowFullScreen(coreWindow);
+  const double waitedMs = _pageAskedAt > 0 ? round((CACurrentMediaTime() - _pageAskedAt) * 1000) : 0;
+  [[ArdiaTabRegistry viewForTab:page] emit:@"fullScreenTransition" payload:@{@"entering" : @(entering), @"waitedMs" : @(waitedMs)}];
   NSArray *covers = _covers;
   if (!covers.count) return;
   __weak ArdiaWindowFullScreen *weakSelf = self;
@@ -485,6 +491,19 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
 
 - (BOOL)covered {
   return self.covers > 0;
+}
+
+- (double)pageCoverStretch {
+  double most = 0;
+  ArdiaCoreTab *page = self.probedTab;
+  NSMutableArray<NSView *> *views = [NSMutableArray arrayWithObject:_coreWindow.window.contentView ?: [NSView new]];
+  while (views.count) {
+    NSView *view = views.lastObject;
+    [views removeLastObject];
+    if ([view isKindOfClass:ArdiaPageCover.class] && ((ArdiaPageCover *)view).tab == page) most = MAX(most, ((ArdiaPageCover *)view).stretch);
+    [views addObjectsFromArray:view.subviews];
+  }
+  return most;
 }
 
 - (BOOL)transitioning {

@@ -15,20 +15,23 @@ static const NSTimeInterval kPageCoverLimit = 4;
 @implementation ArdiaPageCover {
   CGImageRef _picture;
   NSSize _pictured;
+  BOOL _keepsShape;
 }
 
-+ (void)coverTabs:(NSArray<ArdiaCoreTab *> *)tabs then:(void (^)(NSArray<ArdiaPageCover *> *covers))then {
++ (void)coverTabs:(NSArray<ArdiaCoreTab *> *)tabs
+    keepingShapeOf:(ArdiaCoreTab *)shaped
+              then:(void (^)(NSArray<ArdiaPageCover *> *covers))then {
   NSMutableArray<ArdiaPageCover *> *covers = [NSMutableArray array];
   __block NSUInteger waiting = tabs.count + 1;
   void (^one)(ArdiaPageCover *) = ^(ArdiaPageCover *cover) {
     if (cover) [covers addObject:cover];
     if (--waiting == 0) then(covers);
   };
-  for (ArdiaCoreTab *tab in tabs) [self coverTab:tab then:one];
+  for (ArdiaCoreTab *tab in tabs) [self coverTab:tab keepingShape:tab == shaped then:one];
   one(nil);
 }
 
-+ (void)coverTab:(ArdiaCoreTab *)tab then:(void (^)(ArdiaPageCover *cover))then {
++ (void)coverTab:(ArdiaCoreTab *)tab keepingShape:(BOOL)keepsShape then:(void (^)(ArdiaPageCover *cover))then {
   NSView *page = tab.view;
   if (gPageCoverOff || !page.window || page.isHiddenOrHasHiddenAncestor) return then(nil);
   __weak ArdiaCoreTab *weakTab = tab;
@@ -42,10 +45,11 @@ static const NSTimeInterval kPageCoverLimit = 4;
           if (!picture || !now.window || now.window != weakWindow || now.superview != weakHost) return then(nil);
           ArdiaPageCover *cover = [[ArdiaPageCover alloc] initWithFrame:now.bounds picture:picture];
           cover->_tab = t;
+          cover->_keepsShape = keepsShape;
           cover->_pictured = pictured;
           [now addSubview:cover];
           [cover displayIfNeeded];
-          cover.layer.contents = (__bridge id)cover->_picture;
+          [cover updateLayer];
           then(cover);
         }];
 }
@@ -73,7 +77,16 @@ static const NSTimeInterval kPageCoverLimit = 4;
 
 - (void)updateLayer {
   self.layer.contents = (__bridge id)_picture;
-  self.layer.contentsGravity = kCAGravityResize;
+  self.layer.contentsGravity = _keepsShape ? kCAGravityResizeAspectFill : kCAGravityResize;
+  self.layer.masksToBounds = _keepsShape;
+}
+
+- (double)stretch {
+  const NSSize shown = self.bounds.size;
+  if (!_picture || shown.width < 1 || shown.height < 1) return 0;
+  const double pictureShape = (double)CGImageGetWidth(_picture) / MAX(1, CGImageGetHeight(_picture));
+  const double shownShape = shown.width / shown.height;
+  return [self.layer.contentsGravity isEqualToString:kCAGravityResize] ? fabs(shownShape / pictureShape - 1) : 0;
 }
 
 - (NSView *)hitTest:(NSPoint)point {

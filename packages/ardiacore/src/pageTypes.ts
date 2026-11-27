@@ -215,6 +215,7 @@ export type WebViewProps = ViewProps & {
   onPopupBlocked?: (popup: BlockedPopup) => void;
   onFindResult?: (result: FindResult) => void;
   onFullscreen?: (fullscreen: boolean) => void;
+  onFullScreenTransition?: (transition: { entering: boolean; waitedMs: number }) => void;
   onStatus?: (text: string, fromBottom: number | null) => void;
   onCrashed?: (info: CrashInfo) => void;
   onUnresponsive?: () => void;

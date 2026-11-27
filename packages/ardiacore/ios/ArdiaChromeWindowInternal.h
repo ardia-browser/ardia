@@ -7,7 +7,10 @@
 
 @interface ArdiaPageCover : NSView
 @property(readonly, weak) ArdiaCoreTab *tab;
-+ (void)coverTabs:(NSArray<ArdiaCoreTab *> *)tabs then:(void (^)(NSArray<ArdiaPageCover *> *covers))then;
+@property(readonly) double stretch;
++ (void)coverTabs:(NSArray<ArdiaCoreTab *> *)tabs
+    keepingShapeOf:(ArdiaCoreTab *)shaped
+              then:(void (^)(NSArray<ArdiaPageCover *> *covers))then;
 - (void)repicture;
 - (void)uncover:(BOOL)fade;
 @end
@@ -26,6 +29,7 @@
 - (ArdiaCoreTab *)probedTab;
 - (BOOL)covered;
 - (NSInteger)covers;
+- (double)pageCoverStretch;
 - (BOOL)transitioning;
 - (BOOL)pageFullScreen;
 - (BOOL)enteredForPage;

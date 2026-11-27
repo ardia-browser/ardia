@@ -15,6 +15,9 @@
 //       ends Pairing and pairs again too
 //   E5chromium… the same Login list checks in a Chromium tab of that instance
 //   E18… saving to Apple Passwords from a WebKit tab (saving.mjs), in the same paired instance; E33 saves on an http page
+//   E25-E27 Verification codes on a code field (codes.mjs), in that instance, in a WebKit tab and (E25chromium…) a
+//       Chromium one: "Code for example.localhost" fills the fixture code, the account typed on the site's sign-in
+//       page comes first, and an http code field or one holding text gets nothing
 //   E32 with a stand-in for the iCloud Passwords extension (its id, from icloud-extension.mjs), picking Apple Passwords
 //       turns it off and says so, "Turn it back on" turns it on, and switching to Ardia turns it on only if Ardia turned
 //       it off; it is never uninstalled

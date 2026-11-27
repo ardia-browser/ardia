@@ -18,7 +18,6 @@ NSUInteger gZoomScrolls = 0;
 NSUInteger gZoomCandidates = 0;
 constexpr NSTimeInterval kSwitchPrewarmGapSeconds = 0.1;
 constexpr double kZoomStepDelta = 30;
-constexpr int kMaxZoomStepsPerWheel = 8;
 constexpr CFTimeInterval kCommandWheelCreditSeconds = 0.5;
 constexpr CFTimeInterval kCommandWheelRearmSeconds = 1;
 constexpr NSUInteger kCommandWheelCreditLimit = 64;
@@ -77,6 +76,11 @@ NSMapTable<ArdiaWebView *, NSMutableArray<NSArray<NSNumber *> *> *> *WheelCredit
   return credits;
 }
 
+NSMapTable<ArdiaWebView *, NSNumber *> *LastWheelReplies() {
+  static NSMapTable *replies = [NSMapTable weakToStrongObjectsMapTable];
+  return replies;
+}
+
 void DropStaleCredits(NSMutableArray<NSArray<NSNumber *> *> *credits, CFTimeInterval now) {
   while (credits.count && now - credits.firstObject.firstObject.doubleValue > kCommandWheelCreditSeconds) [credits removeObjectAtIndex:0];
 }
@@ -95,8 +99,8 @@ int TakeZoomSteps(double delta) {
   if (DirectionOf(delta) && DirectionOf(delta) != DirectionOf(gZoomAccumulated)) gZoomAccumulated = 0;
   gZoomAccumulated += delta;
   const int direction = DirectionOf(gZoomAccumulated);
-  const int steps = (int)MIN(floor(fabs(gZoomAccumulated) / kZoomStepDelta), (double)kMaxZoomStepsPerWheel);
-  gZoomAccumulated = steps == kMaxZoomStepsPerWheel ? 0 : gZoomAccumulated - direction * steps * kZoomStepDelta;
+  const int steps = (int)floor(fabs(gZoomAccumulated) / kZoomStepDelta);
+  gZoomAccumulated -= direction * steps * kZoomStepDelta;
   return direction * steps;
 }
 
@@ -225,14 +229,19 @@ NSWindow *AppWindowAt(NSPoint screen) {
   double pageDelta = 0;
   if (!Finite(reply, @"dy", &pageDelta)) return;
   NSMutableArray<NSArray<NSNumber *> *> *credits = [WheelCredits() objectForKey:self];
-  DropStaleCredits(credits, CACurrentMediaTime());
+  const CFTimeInterval now = CACurrentMediaTime();
+  DropStaleCredits(credits, now);
+  const CFTimeInterval previousReply = [LastWheelReplies() objectForKey:self].doubleValue;
+  [LastWheelReplies() setObject:@(now) forKey:self];
   const int direction = DirectionOf(-pageDelta);
   while (credits.count && DirectionOf(credits.firstObject.lastObject.doubleValue) != direction) [credits removeObjectAtIndex:0];
   double delta = 0;
   NSUInteger wheels = 0;
-  while (credits.count && DirectionOf(credits.firstObject.lastObject.doubleValue) == direction) {
-    delta += credits.firstObject.lastObject.doubleValue;
+  while (credits.count && (!wheels || credits.firstObject.firstObject.doubleValue <= previousReply)) {
+    const double credit = credits.firstObject.lastObject.doubleValue;
     [credits removeObjectAtIndex:0];
+    if (DirectionOf(credit) != direction) continue;
+    delta += credit;
     wheels++;
   }
   if (wheels && !Flag(reply, @"handled")) [self zoomByScroll:delta merged:wheels > 1];

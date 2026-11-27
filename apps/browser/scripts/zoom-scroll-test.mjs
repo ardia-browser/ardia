@@ -18,9 +18,18 @@ const MAP = `<!doctype html><title>map</title><body style="font:20px system-ui;h
 window.mapWheels = 0;
 document.addEventListener("wheel", (e) => { if (e.metaKey) { e.preventDefault(); window.mapWheels++; } }, { passive: false });
 </script>`;
+const PARTLY = (mode) => `<!doctype html><title>partly-${mode}</title><body style="font:20px system-ui;height:6000px"><h1>partly</h1><script>
+window.mapWheels = 0;
+window.cancelled = 0;
+document.addEventListener("wheel", (e) => {
+  if (!e.metaKey) return;
+  const first = window.mapWheels++ === 0;
+  if (${JSON.stringify(mode)} === "first" ? first : !first) { e.preventDefault(); window.cancelled++; }
+}, { passive: false });
+</script>`;
 const server = createServer((req, res) => {
   res.writeHead(200, { "content-type": "text/html" });
-  res.end(req.url.startsWith("/map") ? MAP : TALL);
+  res.end(req.url.startsWith("/map") ? MAP : req.url.startsWith("/partly-first") ? PARTLY("first") : req.url.startsWith("/partly-rest") ? PARTLY("rest") : TALL);
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -72,6 +81,7 @@ try {
     await sleep(400);
     level = await zoom();
     await reset();
+    if (n && level === 1) throw new Error(`${n} keyboard zoom steps left the page at 100%`);
     return level;
   };
   const stepCase = (name, steps, count) => rep.check(name, async () => {
@@ -136,6 +146,22 @@ try {
     if (!(wheels > 0) || after !== 1) throw new Error(detail);
     return detail;
   });
+
+  const partly = (mode, name, steps) => rep.check(name, async () => {
+    await ac(`ac.store.getState().navigate("t1", "${base}/partly-${mode}", { userInitiated: true }); return true;`);
+    await titled(`partly-${mode}`);
+    const want = await stepsOf(steps);
+    await page("(window.mapWheels = 0, window.cancelled = 0, true)");
+    await withCommand(notches(5));
+    const after = await zoom();
+    const wheels = await page("window.mapWheels");
+    const cancelled = await page("window.cancelled");
+    const detail = `5 clicks reached the page as ${wheels} wheel events, ${cancelled} cancelled by it; zoom ${after} (${steps} steps is ${want})`;
+    if (after !== want) throw new Error(detail);
+    return detail;
+  });
+  await partly("first", "a page that cancels only the first ⌘-wheel of a quick burst gets that click, and the rest zoom", 4);
+  await partly("rest", "a page that cancels every ⌘-wheel after the first zooms only for the first click", 1);
   await reset();
 } catch (error) {
   rep.record("setup", { error });

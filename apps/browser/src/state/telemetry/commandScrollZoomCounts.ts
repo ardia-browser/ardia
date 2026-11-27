@@ -1,18 +1,12 @@
-import { consentOrNow, countFor } from "./countFor";
+import { consentedCount } from "./consentedCount";
 
-const empty = () => ({ command_scroll_zoom_steps: 0, command_scroll_zoom_merged_steps: 0 });
-let counts = empty();
+const steps = consentedCount();
+const mergedSteps = consentedCount();
 
 export const noteCommandScrollZoom = (scroll: string | undefined) => {
   if (scroll !== "wheel" && scroll !== "merged") return;
-  countFor(consentOrNow(undefined), () => {
-    counts.command_scroll_zoom_steps++;
-    if (scroll === "merged") counts.command_scroll_zoom_merged_steps++;
-  });
+  steps.note();
+  if (scroll === "merged") mergedSteps.note();
 };
 
-export function takeCommandScrollZoomCounts() {
-  const taken = counts;
-  counts = empty();
-  return taken;
-}
+export const takeCommandScrollZoomCounts = () => ({ command_scroll_zoom_steps: steps.take(), command_scroll_zoom_merged_steps: mergedSteps.take() });

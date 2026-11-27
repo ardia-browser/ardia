@@ -4441,7 +4441,7 @@ Site Settings (`SiteSettingsPage.swift`):
   page, so it keeps Settings' inline title, Done button, 12 pt list top and grouped colours, and nothing is dismissed
   first. It used to close the menu and then present the Settings sheet, which showed the page between the two (the
   owner: Site Settings should come up straight from the menu). Done, a swipe down or Desktop Site closes both. From
-  Settings › General it is still a pushed page. `ExpoSettingsDone` is the one Done toolbar both use. Watch
+  Settings › Site Settings it is still a pushed page. `ExpoSettingsDone` is the one Done toolbar both use. Watch
   `site_permissions_revoked`.
 - Opened from the page menu, its first section is the site itself, titled with its host: Night Shade, Page Zoom and
   Desktop Site, which left the page menu (#4529). Night Shade and Page Zoom were already kept per site (the site

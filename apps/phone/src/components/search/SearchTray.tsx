@@ -1,11 +1,11 @@
 import { probes } from "../../state/app/launchFlags";
-import { createContext, memo, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { labTrace, markShownFrame, traceSlice } from "../../platform/lab";
+import { createContext, memo, type ComponentRef, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { labLog, labTrace, markShownFrame, traceSlice } from "../../platform/lab";
 import { hardwareKeyboardShown } from "@ardia/phone-native";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
 import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { countRender } from "../../state/app/interactionPerf";
-import { AppState, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ViewInstance } from "react-native";
+import { AppState, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type ViewInstance } from "react-native";
 import { SheetScrollContext, SheetScrollView, sheetPullTranslation, type SheetScroll } from "../ui/Sheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, FadeIn, FadeOut, runOnJS, runOnUI, useAnimatedProps, useAnimatedReaction, useAnimatedStyle, useDerivedValue, useSharedValue, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
@@ -118,7 +118,35 @@ function useTrayTheme() {
 export function SearchTray() {
   const design = useDesign();
   if (design === "material") return <MaterialSearchTray />;
-  return searchStageIsNative() ? <StagedTray /> : <SheetTray />;
+  if (!searchStageIsNative()) return <SheetTray />;
+  return (
+    <>
+      <StagedTray />
+      <FirstKeyboardWarmUp />
+    </>
+  );
+}
+
+const KEYBOARD_WARM_AFTER_LAUNCH_MS = 2500;
+
+const keyboardWarmUpAllowed = () => !searchState().open && AppState.currentState === "active" && !Keyboard.isVisible() && TextInput.State.currentlyFocusedInput() === null;
+
+function FirstKeyboardWarmUp() {
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    const start = setTimeout(() => {
+      const field = input.current;
+      setDone(true);
+      if (!field || !keyboardWarmUpAllowed()) return labLog("PAGELAB search warm keyboard skipped");
+      field.focus();
+      field.blur();
+      labLog("PAGELAB search warm keyboard");
+    }, KEYBOARD_WARM_AFTER_LAUNCH_MS);
+    return () => clearTimeout(start);
+  }, []);
+  if (done) return null;
+  return <TextInput ref={input} testID="searchKeyboardWarmUp" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" pointerEvents="none" style={styles.warmKeyboard} />;
 }
 
 function SheetTray() {
@@ -1607,6 +1635,7 @@ function ScrubbedRows({ rows, typed, budget, guard, onRefine, onMenu, onContentH
 }
 
 const styles = StyleSheet.create({
+  warmKeyboard: { position: "absolute", left: -1000, top: -1000, width: 1, height: 1, opacity: 0 },
   sheet: {
     position: "absolute",
     elevation: trayShadow.elevation,

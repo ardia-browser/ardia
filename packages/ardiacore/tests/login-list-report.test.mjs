@@ -122,9 +122,9 @@ test("a Login list field report keeps its event, token, field, typed value and r
 test("a new-password field report keeps its maxlength and minlength, bounded, never its pattern, and nothing typed", { skip: process.platform !== "darwin" }, () => {
   const NEW = { ...SHOW, field: "newPassword", typed: "fixture-pw-new", maxLength: 20, minLength: 8, pattern: "[A-Za-z0-9-]+" };
   const [kept, huge, odd, password] = reports([NEW, { ...NEW, maxLength: 1e9, minLength: -4, pattern: "x".repeat(513) }, { ...NEW, maxLength: true, minLength: "8", pattern: 7 }, { ...SHOW, field: "password", maxLength: 20, pattern: "x" }]);
-  assert.deepEqual(kept, { event: "show", token: "3", field: "newPassword", typed: "", maxLength: 20, minLength: 8, rect: [10, 20, 300, 30] });
+  assert.deepEqual(kept, { event: "show", token: "3", field: "newPassword", typed: "", maxLength: 20, minLength: 8, patterned: true, rect: [10, 20, 300, 30] });
   assert.deepEqual([huge.maxLength, huge.minLength, "pattern" in huge], [1024, 0, false], "lengths are clamped and a pattern is never kept");
-  assert.deepEqual([odd.maxLength, odd.minLength], [0, 0], "values of the wrong kind count as unset");
+  assert.deepEqual([odd.maxLength, odd.minLength, odd.patterned], [0, 0, false], "values of the wrong kind count as unset");
   assert.ok(!("maxLength" in password || "pattern" in password), "only a new-password field carries the field's rules");
 });
 

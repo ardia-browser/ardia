@@ -13,11 +13,12 @@ struct LoginListField {
   var kind: Kind = .login
   var rules = StrongPassword.Rules()
 
-  static func rules(maxLength: Any?, minLength: Any?) -> StrongPassword.Rules {
+  static func rules(maxLength: Any?, minLength: Any?, patterned: Any? = nil) -> StrongPassword.Rules {
     let length = { (value: Any?) -> Int in
       guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.isFinite else { return 0 }
       return Int(max(0, min(Double(lengthMax), number.doubleValue.rounded(.down))))
     }
-    return StrongPassword.Rules(minLength: length(minLength), maxLength: length(maxLength))
+    let flag = (patterned as? NSNumber).map { CFGetTypeID($0) == CFBooleanGetTypeID() && $0.boolValue } ?? false
+    return StrongPassword.Rules(minLength: length(minLength), maxLength: length(maxLength), patterned: flag)
   }
 }

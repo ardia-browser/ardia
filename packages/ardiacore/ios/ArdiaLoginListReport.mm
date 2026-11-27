@@ -81,6 +81,7 @@ NSDictionary *ArdiaLoginListReport(id message) {
   if ([field isEqualToString:@"newPassword"]) {
     report[@"maxLength"] = Length(d, @"maxLength");
     report[@"minLength"] = Length(d, @"minLength");
+    report[@"patterned"] = @([d[@"pattern"] isKindOfClass:NSString.class] && [d[@"pattern"] length] > 0);
   }
   return report;
 }

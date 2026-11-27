@@ -49,4 +49,20 @@ private func samples(_ rules: StrongPassword.Rules = .init(), count: Int = 300) 
   }
 }
 
+@Suite struct PatternedStrongPasswords {
+  @Test func `a new-password field with any pattern gets 16 letters and digits with no hyphens, within its lengths`() {
+    for password in samples(.init(patterned: true), count: 50) {
+      #expect(password.count == 16 && password.allSatisfy(alphabet.contains))
+    }
+    #expect(samples(.init(maxLength: 12, patterned: true), count: 20).allSatisfy { $0.count == 12 && $0.allSatisfy(alphabet.contains) })
+    #expect(samples(.init(minLength: 24, patterned: true), count: 20).allSatisfy { $0.count == 24 && $0.allSatisfy(alphabet.contains) })
+  }
+
+  @Test func `a report only says whether the field has a pattern, as a true boolean`() {
+    #expect(LoginListField.rules(maxLength: nil, minLength: nil, patterned: NSNumber(value: true)) == .init(patterned: true))
+    #expect(LoginListField.rules(maxLength: nil, minLength: nil, patterned: "(a+)+$") == .init())
+    #expect(LoginListField.rules(maxLength: nil, minLength: nil, patterned: NSNumber(value: 7)) == .init())
+  }
+}
+
 private final class Made: @unchecked Sendable { var value: String? }

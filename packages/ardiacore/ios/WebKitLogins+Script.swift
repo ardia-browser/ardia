@@ -57,7 +57,7 @@ extension WebKitLogins {
   };
   const passwordRules = (fields) => {
     const limits = fields.map((f) => f.maxLength).filter((n) => n > 0);
-    return { maxLength: limits.length ? Math.min(...limits) : 0, minLength: Math.max(0, ...fields.map((f) => f.minLength)) };
+    return { maxLength: limits.length ? Math.min(...limits) : 0, minLength: Math.max(0, ...fields.map((f) => f.minLength)), patterned: fields.some((f) => !!f.getAttribute("pattern")) };
   };
   const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
   const OTHER_AUTOCOMPLETE = /(^|\s)(username|email|current-password|new-password|tel|postal-code|cc-[a-z-]+)(\s|$)/i;

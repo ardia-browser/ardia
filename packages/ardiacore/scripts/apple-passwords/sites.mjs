@@ -26,8 +26,8 @@ const loginForm = (action = "/signed-in", { ready = false } = {}) => `<form meth
 <input id="p" name="password" type="password" autocomplete="current-password" style="top:100px">
 <button id="go"${ready ? "" : " disabled"} style="top:160px">Sign in</button></form>`;
 
-const signUpForm = ({ maxlength } = {}) => {
-  const limit = maxlength ? ` maxlength="${maxlength}"` : "";
+const signUpForm = ({ maxlength, pattern } = {}) => {
+  const limit = (maxlength ? ` maxlength="${maxlength}"` : "") + (pattern ? ` pattern="${pattern}"` : "");
   return `<form method="post" action="/signed-in">
 <input id="u" name="username" autocomplete="username" style="top:40px">
 <input id="p" name="new-password" type="password" autocomplete="new-password"${limit} style="top:100px">
@@ -98,6 +98,7 @@ Object.defineProperty(window, "frameElement", { get: () => fake, configurable: t
   "/login-fails": (host) => page(`Sign in to ${host}`, loginForm("/login-fails"), enableWhenFilled),
   "/signup": (host) => page(`Sign up on ${host}`, signUpForm(), enableWhenFilled),
   "/signup-short": (host) => page(`Sign up on ${host}`, signUpForm({ maxlength: 12 }), enableWhenFilled),
+  "/signup-pattern": (host) => page(`Sign up on ${host}`, signUpForm({ pattern: "[A-Za-z0-9]{8,}" }), enableWhenFilled),
   "/change-password": (host) => page(`Change password on ${host}`, changePasswordForm(), enableWhenFilled),
   "/card": (host) => page(`Pay on ${host}`, cardForm()),
   "/signed-in": (host) => page(`Signed in to ${host}`, "<p>Welcome</p>"),

@@ -5,6 +5,7 @@ enum StrongPassword {
   struct Rules: Equatable {
     var minLength = 0
     var maxLength = 0
+    var patterned = false
   }
 
   static let alphabet = Array("abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
@@ -28,7 +29,7 @@ enum StrongPassword {
     let plain = max(plainLength, rules.minLength)
     let fits = { (length: Int) in rules.maxLength <= 0 || length <= rules.maxLength }
     var out: [Shape] = []
-    if fits(groupedLength) { out.append(.grouped(groupCount)) }
+    if fits(groupedLength), !rules.patterned { out.append(.grouped(groupCount)) }
     out.append(.plain(fits(plain) ? plain : rules.maxLength))
     return out
   }

@@ -111,6 +111,19 @@ export function strongPasswordChecks({ paired, sites, engine: engineName = "webk
       const popups = await waitFor("Chrome's generation popup", async () => ((await tab.chromePopups()).length ? tab.chromePopups() : null), 10_000);
       return { engine: "chromium", manager: "ardia", chromePopups: popups.length };
     },
+    async E24pattern() {
+      const { tabs } = await session();
+      const tab = await tabs.open(sites.url(SITE, "/signup-pattern"));
+      try {
+        await suggested(tab);
+        const password = await pickSuggestion(tab, ["p", "c"]);
+        const made = shape(password);
+        assert(made.length === 16 && !password.includes("-") && made.alphabet && made.digit && made.upper && made.lower, "a new-password field with a pattern gets 16 letters and digits with no hyphens", made);
+        return { engine: engineName, length: made.length };
+      } finally {
+        await tab.close();
+      }
+    },
     async E24() {
       const { fake, tabs } = await session();
       const short = await tabs.open(sites.url(SITE, "/signup-short"));

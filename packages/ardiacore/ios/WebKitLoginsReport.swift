@@ -42,7 +42,7 @@ struct WebKitLoginsReport {
     report.typed = password || code ? "" : typed(data["value"])
     report.rect = NSRect(
       x: coordinate(data["x"]), y: coordinate(data["y"]), width: max(1, coordinate(data["width"])), height: max(1, coordinate(data["height"])))
-    if fresh { report.rules = LoginListField.rules(maxLength: data["maxLength"], minLength: data["minLength"]) }
+    if fresh { report.rules = LoginListField.rules(maxLength: data["maxLength"], minLength: data["minLength"], patterned: data["patterned"]) }
     return report
   }
 

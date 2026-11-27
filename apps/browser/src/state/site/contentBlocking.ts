@@ -34,7 +34,7 @@ export function filterListAddress(typed: string): string | null {
     const url = new URL(withScheme);
     if (url.protocol !== "https:" && url.protocol !== "http:") return null;
     if (!url.hostname.includes(".") && url.hostname !== "localhost") return null;
-    return url.href;
+    return url.href === `${withScheme}/` ? withScheme : url.href;
   } catch {
     return null;
   }

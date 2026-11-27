@@ -109,7 +109,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
   const translateMenu = useTranslatePageMenu(tabId);
   const pageMenuItems = useMemo(() => (translation ? translatePageMenuItems(translateMenu, languageName(defaultTarget())) : []), [translateMenu]);
   useEffect(() => (visible ? presentTab(tabId) : noteTabHidden(tabId)), [tabId, visible]);
-  const pageColor = useProfilesValue(profileId, (profiles) => (isIncognitoProfile(profileId) ? "incognito" : (profiles[profileId]?.color ?? "plum")));
+  const pageColor = useProfilesValue(profileId, (profiles) => (isIncognitoProfile(profileId) ? "incognito" : (profiles[profileId]?.color ?? "green")));
   const theme = useProfileTheme(profileId);
   const backdrop = useMemo(() => opaqueCard(theme), [theme.card, theme.windowTint[0], theme.windowTint[1]]);
 

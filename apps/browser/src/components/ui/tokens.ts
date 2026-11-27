@@ -224,8 +224,6 @@ export type ColorRole = { [K in keyof ColorRoles]: ColorRoles[K] extends string 
 
 export const closeOnArt = { rest: "rgba(255,255,255,0.1)", hover: "rgba(255,255,255,0.2)", pressed: "rgba(255,255,255,0.3)", glyph: "#FFFFFF8C" } as const;
 
-export const arcSelectedFill = { dark: "rgba(255,255,255,0.24)", light: "rgba(255,255,255,0.8)" } as const;
-
 type SiteToolbarRoles = {
   text: string;
   secondary: string;
@@ -270,21 +268,21 @@ export type ProfileColorSpec = {
 };
 
 export const PROFILE_COLORS: Record<ProfileColor, ProfileColorSpec> = {
+  green: { name: "Green", swatch: "#76B597", palette: "green" },
+  blue: { name: "Blue", swatch: "#3D7BDB", palette: "blue" },
+  purple: { name: "Purple", swatch: "#7B5CC8", palette: "purple" },
   plum: {
     name: "Plum",
-    swatch: "#C07A98",
+    swatch: "#A84F78",
     powerUp: "#B5556B",
     tint: "#B25B6B",
     action: "#DD899B",
     palette: "pink",
   },
-  blue: { name: "Blue", swatch: "#4691C3", palette: "blue" },
-  purple: { name: "Purple", swatch: "#7873AF", palette: "purple" },
-  pink: { name: "Pink", swatch: "#D37B8B", palette: "pink" },
-  red: { name: "Red", swatch: "#C1575C", palette: "red" },
-  orange: { name: "Orange", swatch: "#D87249", palette: "orange" },
-  yellow: { name: "Yellow", swatch: "#E3AC38", palette: "yellow" },
-  green: { name: "Green", swatch: "#3EB489", palette: "green" },
+  pink: { name: "Pink", swatch: "#E0789C", palette: "pink" },
+  red: { name: "Red", swatch: "#D95C5C", palette: "red" },
+  orange: { name: "Orange", swatch: "#E0905E", palette: "orange" },
+  yellow: { name: "Yellow", swatch: "#E6A83C", palette: "yellow" },
   neutral: { name: "Neutral", swatch: "#8E8E93", palette: null },
 };
 

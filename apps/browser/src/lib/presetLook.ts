@@ -1,8 +1,10 @@
 import { hexColor, lookAngle, padPosition, type PresetLookFields, type PresetThemes, type ProfileColor, type ProfileTheme, type ThemeLook } from "./profileLook";
 
+export const PRESET_LOOK = { intensity: 0.15, grain: 0.15, translucency: 1 } as const;
+
 export function presetStartingTheme(swatch: string): ProfileTheme {
   const color = hexColor(swatch);
-  return { stops: [{ ...padPosition(color), color }], intensity: 0.6, mode: "auto", grain: 0, texture: "grain", translucency: 1 };
+  return { stops: [{ ...padPosition(color), color }], ...PRESET_LOOK, mode: "auto", texture: "grain" };
 }
 
 const ownLooksOf = (profile: PresetLookFields): PresetThemes => profile.presetThemes ?? {};

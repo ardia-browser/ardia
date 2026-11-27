@@ -15,7 +15,7 @@ export function setProfileTheme(profileId: string, theme: ProfileTheme | null, a
 
 export const showingTheme = (profileId: string): ProfileTheme | null | undefined => useBrowser.getState().profiles[profileId]?.theme;
 
-export const showingPreset = (profileId: string): ProfileColor => useBrowser.getState().profiles[profileId]?.color ?? "plum";
+export const showingPreset = (profileId: string): ProfileColor => useBrowser.getState().profiles[profileId]?.color ?? "green";
 
 export function choosePresetColor(profileId: string, color: ProfileColor, adopt = adoptProfileTheme) {
   const profile = useBrowser.getState().profiles[profileId];

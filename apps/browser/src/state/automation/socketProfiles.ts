@@ -13,7 +13,7 @@ import { expect, now, profileArg } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
 import { askWhereSeen, shownWindowId } from "./socketAsk";
 
-const COLORS = ["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral"] as const;
+const COLORS = ["green", "blue", "purple", "plum", "pink", "red", "orange", "yellow", "neutral"] as const;
 
 function profileRow(s: BrowserState, id: string) {
   const p = s.profiles[id]!;

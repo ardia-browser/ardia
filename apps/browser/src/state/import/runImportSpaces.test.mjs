@@ -99,7 +99,7 @@ test("a starter profile with no space colour keeps its own colour", async () => 
   begin([space("a", "Work")]);
   await runImport(new Set(["spaces"]));
   assert.deepEqual(named(), ["Work"]);
-  assert.equal(S().profiles.default.color, "plum");
+  assert.equal(S().profiles.default.color, "green");
   assert.equal(S().profiles.default.icon, null);
 });
 
@@ -124,13 +124,13 @@ test("a first space with no name leaves the starter profile's name alone", async
   await runImport(new Set(["spaces"]));
   assert.deepEqual(named(), ["Personal"]);
   assert.equal(S().profiles.default.icon, null);
-  assert.equal(S().profiles.default.color, "plum");
+  assert.equal(S().profiles.default.color, "green");
 });
 
 test("a profile named Personal that is not the starter is not renamed", async () => {
   begin([space("a", "Work", { emoji: "💼" })], "mine");
   useBrowser.setState({
-    profiles: { mine: { id: "mine", name: "Personal", color: "plum", icon: null, createdAt: 1 } },
+    profiles: { mine: { id: "mine", name: "Personal", color: "green", icon: null, createdAt: 1 } },
     profileOrder: ["mine"],
   });
   await runImport(new Set(["spaces"]));
@@ -140,7 +140,7 @@ test("a profile named Personal that is not the starter is not renamed", async ()
 
 test("a starter profile saved without an icon still takes the first space's name", async () => {
   begin([space("a", "Work", { emoji: "💼" })]);
-  useBrowser.setState({ profiles: { default: { id: "default", name: "Personal", color: "plum", createdAt: 0 } } });
+  useBrowser.setState({ profiles: { default: { id: "default", name: "Personal", color: "green", createdAt: 0 } } });
   await runImport(new Set(["spaces"]));
   assert.deepEqual(named(), ["Work"]);
   assert.equal(S().profiles.default.icon, "💼");
@@ -159,5 +159,5 @@ test("a run cancelled while its result is on the way leaves the starter profile 
   await runImport(new Set(["spaces"]));
   assert.deepEqual(named(), ["Personal"]);
   assert.equal(S().profiles.default.icon, null);
-  assert.equal(S().profiles.default.color, "plum");
+  assert.equal(S().profiles.default.color, "green");
 });

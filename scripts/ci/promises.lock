@@ -19,7 +19,7 @@ issue	hash	file	test
 733	8248d7c78ade2c2b	apps/browser/src/state/sidebar/hover.test.mjs	a panel that draws nothing leaves the rows hoverable
 733	38798ddd5d6846bc	apps/browser/src/state/sidebar/hover.test.mjs	an open command panel over the sidebar rows takes their highlight
 733	0ba1b35f7435f22d	apps/browser/src/state/sidebar/hover.test.mjs	the covered flag follows a panel that unmounts or moves to another window
-738	6bed33ee792139a1	apps/browser/src/components/ui/selectedTabContrast.test.mjs	the line under the pinned tabs keeps Dia's colour on built-in presets and reaches the selection floor on every custom colour
+738	591d8d959c51b31c	apps/browser/src/components/ui/selectedTabContrast.test.mjs	the line under the pinned tabs reaches the selection floor on every built-in preset and custom colour
 751	fd8b95ae728b168b	apps/browser/src/state/windows/fullScreenDisplay.test.mjs	a full screen event without a display leaves the window opening exactly as before
 751	101295e2913594e8	apps/browser/src/state/windows/fullScreenDisplay.test.mjs	a full screen window carried to another display keeps its place in line, and leaving full screen frees it
 751	324dbeceee074df0	apps/browser/src/state/windows/fullScreenDisplay.test.mjs	a window full screen on an external display reopens naming that display, not just its old frame
@@ -72,7 +72,7 @@ issue	hash	file	test
 970	f58c2e2c19f10eca	apps/browser/src/state/drag/newTabDrop.test.mjs	a link dropped on a New Tab page navigates it, and text searches
 970	c36829b448574c0f	apps/browser/src/state/drag/newTabDrop.test.mjs	files dropped on a New Tab page: the first opens in that tab, the rest in background tabs
 970	b3660c59b18caab8	apps/browser/src/state/drag/newTabDrop.test.mjs	only absolute local file URLs and non-empty text become inputs
-971	9964b9df48d01f8f	apps/browser/src/components/ui/selectedTabContrast.test.mjs	a fill that already shows is returned as is
+971	352af312b0bb499e	apps/browser/src/components/ui/selectedTabContrast.test.mjs	a fill that already shows is returned as is
 971	8d0e834cdc8377fd	apps/browser/src/components/ui/selectedTabContrast.test.mjs	a near-white profile gets a darker selected tab
 972	df1bbe00b4f06a5e	apps/browser/src/state/pins/awayTitle.test.mjs	a pinned tab at its pinned URL has no away title
 972	39d24fc1d38a0cd0	apps/browser/src/state/pins/awayTitle.test.mjs	a pinned tab that left its URL shows / and the page it is on

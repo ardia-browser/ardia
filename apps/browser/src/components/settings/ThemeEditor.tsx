@@ -52,11 +52,11 @@ function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined,
 
 export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme | null, final: boolean) => void) {
   const profile = useProfile(profileId, (p) => p);
-  const color = profile?.color ?? "plum";
+  const color = profile?.color ?? "green";
   const live = useLiveTheme(profileId, profile?.theme, `${profileId}:${color}`, () => `${profileId}:${showingPreset(profileId)}`, apply);
   const appDark = useAppDark();
   const source = useSettings((s) => spaceLookSource(s));
-  const original = useMemo(() => presetStartingTheme((PROFILE_COLORS[color] ?? PROFILE_COLORS.plum).swatch), [color]);
+  const original = useMemo(() => presetStartingTheme((PROFILE_COLORS[color] ?? PROFILE_COLORS.green).swatch), [color]);
   const stored = live.theme;
   const look = stored ?? original;
   const editsDark = !!stored && requestedDarkFor(stored, appDark, source);
@@ -148,7 +148,7 @@ export function ThemePicker({
 }
 
 function presetLabel(color: ProfileColor, edited: boolean): string {
-  const name = (PROFILE_COLORS[color] ?? PROFILE_COLORS.plum).name;
+  const name = (PROFILE_COLORS[color] ?? PROFILE_COLORS.green).name;
   return edited ? `${name}, edited` : name;
 }
 

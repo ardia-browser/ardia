@@ -294,7 +294,7 @@ function initialSessionWithWakes(host: ArdiaHost, saved: HydrateData | null | un
   const smallSession = withSmallWindow(host, saved ?? {}, undefined, now);
   if (smallSession) return smallSession;
   if (saved && host.bootstrap.startup === true && windowId === LAUNCH_WINDOW_ID) saved = withLaunchWindowAdopted(saved, windowId);
-  const profile = { id: profileId, name: "Personal", color: "plum" as const, icon: null, createdAt: now };
+  const profile = { id: profileId, name: "Personal", color: "green" as const, icon: null, createdAt: now };
   const profiles = { ...saved?.profiles };
   profiles[profileId] ??= profile;
   if (saved && hasSavedTabs(saved, windowId)) {

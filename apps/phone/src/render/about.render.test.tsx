@@ -42,11 +42,21 @@ test("the licences list this phone's own native code: Ardia's Swift packages on 
   unmount(root);
 });
 
+const creditRow = (root: ReturnType<typeof renderSurface>, name: string) =>
+  root.root
+    .findAll((node) => typeof node.type === "string")
+    .map((node) => textOf({ root: node } as never).split("\n"))
+    .filter((lines) => lines.includes(name) && lines.some((line) => /License/.test(line)))
+    .sort((a, b) => a.length - b.length)[0]!;
+
 test("the licences credit this app under Apache 2.0 and the Mac browser it syncs with, as shipped, under GPL 3.0, as NOTICE says", () => {
   const root = renderSurface(<LicensesPage />);
-  const text = textOf(root);
-  expect(text).toMatch(/Ardia\s*This app\.\s*License\s*Apache License 2\.0/);
-  expect(text).toMatch(/Ardia for Mac\s*The Mac browser this app syncs with, as shipped[^]*License\s*GNU General Public License 3\.0/);
-  expect(text).not.toContain("This app, and the Mac browser");
+  const app = creditRow(root, "Ardia");
+  expect(app).toEqual(expect.arrayContaining(["This app.", "Apache License 2.0"]));
+  expect(app).not.toContain("GNU General Public License 3.0");
+  const mac = creditRow(root, "Ardia for Mac");
+  expect(mac.some((line) => line.startsWith("The Mac browser this app syncs with, as shipped"))).toBe(true);
+  expect(mac).toContain("GNU General Public License 3.0");
+  expect(mac).not.toContain("Apache License 2.0");
   unmount(root);
 });

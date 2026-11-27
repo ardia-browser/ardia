@@ -63,6 +63,14 @@ onIos("About Ardia has the version, main's three links with their arrows and Ope
   expect(texts(licenses.page)).toEqual(expect.arrayContaining(["EasyList", "Public Suffix List", "publicsuffix.org"]));
   expect(within(licenses.page, (props) => props.label === "License").length).toBeGreaterThan(3);
   expect(within(licenses.page, (props) => props.title === "Code in This App")).toHaveLength(1);
+  const creditRow = (name: string) =>
+    within(licenses.page, () => true)
+      .map(texts)
+      .filter((lines) => lines.includes(name) && lines.some((line) => /License/.test(line)))
+      .sort((a, b) => a.length - b.length)[0]!;
+  expect(creditRow("Ardia")).toEqual(expect.arrayContaining(["This app.", "Apache License 2.0"]));
+  expect(creditRow("Ardia for Mac")).toContain("GNU General Public License 3.0");
+  expect(creditRow("Ardia for Mac")).not.toContain("Apache License 2.0");
   await done(licenses.root);
 });
 

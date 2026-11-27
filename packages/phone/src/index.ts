@@ -19,7 +19,7 @@ export {
   type LegacyVisit,
   type LegacyVisitPage,
 } from "./legacy";
-export { closePage, pageObscuresInsets, pageReportsDrawn, PageView } from "./PageView";
+export { closePage, pageObscuresInsets, pageReportsDrawn, pageReportsHosted, PageView } from "./PageView";
 export { pages, type AppRelease, type OffscreenCapture, type LaunchArgumentValue, type LaunchOptions, type SitePermissionGrant, type SitePermissionKind } from "./pages";
 export { keyboard, type KeyboardDidChange, type KeyboardWillChange } from "./keyboard";
 export { CompletingField, completingFieldIsNative, type CompletingFieldHandle, type CompletingFieldProps, type CompletionOffer } from "./completingField";

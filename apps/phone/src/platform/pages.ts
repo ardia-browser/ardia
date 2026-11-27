@@ -1,4 +1,4 @@
-export { closePage, isRefusedSnapshot, pages, type SitePermissionGrant, type SitePermissionKind } from "@ardia/phone-native";
+export { closePage, isRefusedSnapshot, pageReportsHosted, pages, type SitePermissionGrant, type SitePermissionKind } from "@ardia/phone-native";
 export type {
   FindResult,
   NightShadeMode,

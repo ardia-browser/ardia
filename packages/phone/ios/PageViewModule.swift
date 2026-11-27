@@ -34,6 +34,8 @@ public final class PageViewModule: Module {
 
     Constant("reportsDrawn") { true }
 
+    Constant("reportsHosted") { true }
+
     Events("onPageEngineEvent")
 
     OnCreate {

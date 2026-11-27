@@ -20,7 +20,7 @@ import {
   type PageState,
   type PageTone,
 } from "../pages/store";
-import type { VisitKind } from "../../platform/pages";
+import { pageReportsHosted, type VisitKind } from "../../platform/pages";
 import { showOnboarding, useOnboarding } from "../onboarding/store";
 import { pageUi } from "../page/store";
 import { settingsNav } from "../settings/nav";
@@ -372,23 +372,47 @@ let openingSeq = 0;
 
 let arrivalSeq = 0;
 
-const laidOutWaiters = new Map<string, (laidOut: boolean) => void>();
+type LaidOutWait = { laidOut: boolean; done: (inPlace: boolean) => void };
 
-export function whenPageLaidOut(id: string, capMs: number, then: (laidOut: boolean) => void) {
-  laidOutWaiters.get(id)?.(false);
+const laidOutWaiters = new Map<string, LaidOutWait>();
+
+const nativelyHostedPages = new Set<string>();
+
+export function whenPageLaidOut(id: string, capMs: number, then: (inPlace: boolean) => void) {
+  laidOutWaiters.get(id)?.done(false);
   let called = false;
-  const done = (laidOut: boolean) => {
-    if (called) return;
-    called = true;
-    clearTimeout(cap);
-    if (laidOutWaiters.get(id) === done) laidOutWaiters.delete(id);
-    then(laidOut);
+  const wait: LaidOutWait = {
+    laidOut: false,
+    done: (inPlace) => {
+      if (called) return;
+      called = true;
+      clearTimeout(cap);
+      if (laidOutWaiters.get(id) === wait) laidOutWaiters.delete(id);
+      then(inPlace);
+    },
   };
-  const cap = setTimeout(() => done(false), capMs);
-  laidOutWaiters.set(id, done);
+  const cap = setTimeout(() => wait.done(false), capMs);
+  laidOutWaiters.set(id, wait);
 }
 
-export const pageLaidOut = (id: string) => laidOutWaiters.get(id)?.(true);
+function releaseIfInPlace(id: string) {
+  const wait = laidOutWaiters.get(id);
+  if (wait?.laidOut && (nativelyHostedPages.has(id) || !pageReportsHosted())) wait.done(true);
+}
+
+export function pageLaidOut(id: string) {
+  const wait = laidOutWaiters.get(id);
+  if (!wait) return;
+  wait.laidOut = true;
+  releaseIfInPlace(id);
+}
+
+export function pageHostedNatively(id: string) {
+  nativelyHostedPages.add(id);
+  releaseIfInPlace(id);
+}
+
+export const forgetNativeHosting = (id: string) => void nativelyHostedPages.delete(id);
 
 export function stopOpeningTab(id: string) {
   if (useBrowse.getState().opening === id) useBrowse.setState({ opening: null, veiled: null, covered: null });

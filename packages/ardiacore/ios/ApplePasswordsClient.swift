@@ -377,7 +377,16 @@ final class ApplePasswordsClient: @unchecked Sendable {
   }
 
   static let saveCmd = 6
-  static let saveSeconds: TimeInterval = 120
+  static let saveSecondsKey = "applePasswordsSaveSeconds"
+  static let saveSeconds: TimeInterval = testSaveSeconds ?? 120
+
+  private static var testSaveSeconds: TimeInterval? {
+    #if DEBUG
+      return LaunchConfig.shared.testValue(saveSecondsKey).flatMap(TimeInterval.init).flatMap { $0 > 0 ? $0 : nil }
+    #else
+      return nil
+    #endif
+  }
   static let alreadyKeptStatus = 7
   static let listSeconds: TimeInterval = 10
   static let passwordSeconds: TimeInterval = 120

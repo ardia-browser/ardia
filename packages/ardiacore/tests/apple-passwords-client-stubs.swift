@@ -3,6 +3,7 @@ import Foundation
 final class LaunchConfig {
   static let shared = LaunchConfig()
   var environmentForChildProcesses: [String: String] { ProcessInfo.processInfo.environment }
+  func testFlag(_ key: String) -> Bool { false }
   func testValue(_ key: String) -> String? { key == "applePasswordsManifest" ? ProcessInfo.processInfo.environment["ARDIA_FAKE_MANIFEST"] : nil }
 }
 

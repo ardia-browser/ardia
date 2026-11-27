@@ -401,6 +401,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `cliInstallScript=<path>` | Another `ardia` installer script (the Linux and Windows hosts' installer; macOS no longer runs one) |
 | | `applePasswordsManifest=<path>` | Debug builds only: the Apple Passwords client reads this native-messaging manifest instead of Apple's, so it launches the fake helper it names (`packages/ardiacore/scripts/apple-passwords`) and offers Apple Passwords without the browser entitlement; a missing file is "no helper". Release builds ignore it |
 | | `applePasswordsTooOld` | Debug builds only: the Apple Passwords client acts as on a macOS before 15.4 (state `tooOld`, "Needs macOS 15.4 or later"), and never starts the helper (`e2e.mjs` E43tooOld) |
+| | `applePasswordsSaveSeconds=<s>` | Debug builds only: the Apple Passwords client's save deadline (120 s otherwise), so a save the helper never answers times out within a check (`e2e.mjs` E22timedOut) |
 | | `applePasswordsPanel` | Background mode really opens macOS's Passwords panel for the key and Edit › AutoFill › Passwords… instead of logging it (`docs/testing.md`); the panel is another process's window and can show on screen |
 | | `systemPanelRace` | Runs AppKit's delayed autofill show-or-hide pass right after the Passwords command, to check the panel survives it (`docs/testing.md`) |
 | | `bundledPlugins=<dir>` | Built-in plugins come from this folder instead of `Ardia.app/Contents/Resources/Plugins` (`docs/plugins.md` › Built-in plugins) |

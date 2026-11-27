@@ -14,7 +14,7 @@ import { codeChecks } from "./codes.mjs";
 import { FIXTURES, fakeHelper } from "./fake.mjs";
 import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
 import { loginListChecks } from "./login-list.mjs";
-import { helperAsked, NOT_SAVED_TITLE, promptShown, savingChecks, signIn } from "./saving.mjs";
+import { helperAsked, noPrompt, NOT_SAVED_TITLE, promptShown, savesSent, savingChecks, signIn } from "./saving.mjs";
 import { fixtureSites, PAGE_EVENTS } from "./sites.mjs";
 import { strongPasswordChecks } from "./strong-password.mjs";
 import { chromiumTabs, waitFor, webkitTabs } from "./webkit.mjs";
@@ -449,6 +449,40 @@ const CHECKS = {
         assert(told.state === "notSaved" && told.copy.title === NOT_SAVED_TITLE, `${engine}: signing in with the helper missing says ${NOT_SAVED_TITLE}`, told);
         assert(await tab.answer("dismiss"), "OK closes it", null);
         seen[engine] = told.copy.title;
+      } finally {
+        await tab.close();
+      }
+    }
+    return seen;
+  },
+  async E22timedOut() {
+    const deadline = 3;
+    const fake = fakeHelper(path.join(SCRATCH, "E22timedOut", "fake"));
+    await start("E22timedOut", { manifest: fake.manifest, test: { applePasswordsSaveSeconds: deadline } });
+    await pairApplePasswords(fake);
+    await app.eval(`globalThis.__savesCounted = []; ac.engine.on("passwords.applePasswordsSaveCounted", (e) => globalThis.__savesCounted.push({ name: e.name, engine: e.engine ?? null, kind: e.kind ?? null })); return true;`);
+    const seen = {};
+    for (const [engine, tabs] of [["webkit", webkitTabs(app, { log: note })], ["chromium", chromiumTabs(app, { log: note })]]) {
+      const tab = await tabs.open(sites.url("save.localhost"));
+      try {
+        const user = `unanswered-${engine}-${Date.now()}@save.test`;
+        const sent = savesSent(fake);
+        fake.dropNext(6);
+        await signIn(tab, user, "fixture-pw-unanswered-25");
+        const until = Date.now() + deadline * 1000 + 20_000;
+        let counted = null;
+        while (!counted) {
+          const early = await tab.prompt();
+          assert(!early, `${engine}: Ardia says nothing while Apple's window may still be open`, early);
+          counted = (await app.eval("return globalThis.__savesCounted")).find((c) => c.engine === engine && c.name === "saveFailed") ?? null;
+          assert(counted || Date.now() < until, `${engine}: the save with no answer times out`, null);
+          if (!counted) await sleep(250);
+        }
+        assert(counted.kind === "timedOut", `${engine}: the save with no answer counts as timed out`, counted);
+        const late = await noPrompt(tab, 3000);
+        assert(!late, `${engine}: Ardia says nothing after the save deadline either`, late);
+        assert(savesSent(fake) === sent + 1, `${engine}: the save was sent once`, savesSent(fake) - sent);
+        seen[engine] = counted.kind;
       } finally {
         await tab.close();
       }

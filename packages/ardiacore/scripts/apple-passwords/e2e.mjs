@@ -151,8 +151,18 @@ async function openSignIn(host, pathname = "/login") {
 const loginItems = (events) =>
   events.filter((e) => e.name === "autofillSuggestions").flatMap((e) => e.payload?.items ?? []).filter((i) => /Password|Webauthn|Passkey/.test(i.type ?? ""));
 
-async function chromeListAfterAsking(tabId, url) {
+async function pageWithField(url, id) {
   const page = await app.page(url);
+  const deadline = Date.now() + 10_000;
+  let ready = false;
+  while (!(ready = await page.eval(`document.readyState === "complete" && !!document.getElementById(${JSON.stringify(id)})`).catch(() => false)) && Date.now() < deadline) await sleep(100);
+  if (!ready) page.close();
+  assert(ready, `the page has its #${id} field`, url);
+  return page;
+}
+
+async function chromeListAfterAsking(tabId, url) {
+  const page = await pageWithField(url, "u");
   try {
     await app.eval(`return ac.webviews.get(${JSON.stringify(tabId)}).focus()`);
     const before = (await app.eval(`return ac.engine.call("tabs.devEvents", { tabId: ${JSON.stringify(tabId)} })`)).length;
@@ -172,7 +182,7 @@ async function chromeListAfterAsking(tabId, url) {
 }
 
 async function signInChromium(tabId, url, username, password) {
-  const page = await app.page(url);
+  const page = await pageWithField(url, "u");
   try {
     const at = async (id) => {
       const { x, y, height } = JSON.parse(await page.eval(`JSON.stringify(document.getElementById(${JSON.stringify(id)}).getBoundingClientRect())`));

@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { runSwiftTests } from "./swift-testing.mjs";
 import { runInNewContext } from "node:vm";
 import { webKitPageScript } from "./webkit-page-source.mjs";
+import { HOSTILE_STRINGS, HOSTILE_VALUES } from "../../../scripts/security/hostile-inputs.mjs";
 
 const path = (name) => fileURLToPath(new URL(name, import.meta.url));
 const sources = [
@@ -96,11 +99,13 @@ test("WebKit tabs report why automatic picture in picture held back, as Chromium
 test("leaving opens picture in picture and returning closes it through the page's own player call", () => {
   assert.match(sight, /case \.open:[\s\S]*?setPictureInPicture\(true, automatic: true, overFullScreen: autoPictureInPictureRule\.opensOverFullScreen\)/);
   assert.match(sight, /case \.close: setPictureInPicture\(false\) \{ _ in \}/);
-  assert.match(sight, /autoPictureInPictureRule\.sight\(seen, inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia\)/);
+  assert.match(sight, /autoPictureInPictureRule\.sight\(seen, userIn: !ArdiaChromeWindowHost\.userInAnotherApp\(\), inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia\)/);
 });
 
 test("the page's picture in picture reports reach the rule", () => {
-  assert.match(tab, /case "pip":\n\s+let active = dict\?\["active"\] as\? Bool \?\? false\n\s+if autoPictureInPictureRule\.reported\(active: active\) \{ setPictureInPicture\(false\) \{ _ in \} \}/);
+  assert.match(tab, /case "pip":\n\s+notePictureInPicture\(dict, frame: frame\)\n/);
+  assert.match(sight, /guard let \(active, reported\) = autoPictureInPictureRule\.report\(data, from: frame\) else \{ return \}\n\s+if reported\.closeAgain \{ setPictureInPicture\(false\) \{ _ in \} \}\n\s+if reported\.heldNow \{/);
+  assert.match(sight, /\} else if wasHeld && !autoPictureInPictureRule\.heldUntilBack \{\n\s+autoPictureInPictureInputsChanged\(\)/);
 });
 
 test("the sight observer is dropped when the window changes or the tab closes or gives its view away", () => {
@@ -241,7 +246,7 @@ test("a video in its own native full screen holds an automatic picture in pictur
 });
 
 test("a pop out the page reports open after full screen cancelled it is closed again", () => {
-  assert.match(tab, /if autoPictureInPictureRule\.reported\(active: active\) \{ setPictureInPicture\(false\) \{ _ in \} \}/);
+  assert.match(sight, /if reported\.closeAgain \{ setPictureInPicture\(false\) \{ _ in \} \}/);
 });
 
 test("leaving a full-screen Space the page was seen in asks the page to pop out over its full screen, and the page does", () => {
@@ -265,5 +270,191 @@ test("WebKit leaving full screen starts the exit hold, as only entering and in f
 });
 
 test("the tab tells the rule whether its sight is the inline tab or WebKit's full-screen window", () => {
-  assert.match(sight, /autoPictureInPictureRule\.sight\(seen, inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia\)/);
+  assert.match(sight, /autoPictureInPictureRule\.sight\(seen, userIn: !ArdiaChromeWindowHost\.userInAnotherApp\(\), inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia\)/);
+});
+
+function pageReportingPictureInPicture() {
+  const listeners = {};
+  const reports = [];
+  const noop = () => {};
+  class HTMLVideoElement {}
+  const document = {
+    readyState: "complete",
+    addEventListener: (type, listener) => (listeners[type] ??= []).push(listener),
+    removeEventListener: noop,
+    querySelectorAll: () => [],
+    dispatchEvent: () => true,
+    pictureInPictureElement: null,
+    body: null,
+    documentElement: {},
+  };
+  const windowListeners = {};
+  const window = {
+    document,
+    HTMLVideoElement,
+    addEventListener: (type, listener) => (windowListeners[type] ??= []).push(listener),
+    location: { protocol: "https:", origin: "https://example.test" },
+    navigator: {},
+    performance: { now: () => 0 },
+    setTimeout: noop,
+    requestAnimationFrame: noop,
+    EventTarget: class { addEventListener() {} },
+    webkit: { messageHandlers: { ardia: { postMessage: (m) => m.kind === "pip" && reports.push(m.data.unloaded ? "unloaded" : m.data.active) } } },
+  };
+  window.window = window;
+  window.parent = window;
+  window.top = window;
+  runInNewContext(webKitPageScript.replace("\\#(WebKitMediaFaults.sitesJSON)", "[]"), window);
+  const videoElement = () => Object.assign(new HTMLVideoElement(), { webkitPresentationMode: "inline" });
+  const fire = (type, target) => (listeners[type] ?? []).forEach((listener) => listener({ type, target }));
+  const present = (target, mode) => ((target.webkitPresentationMode = mode), fire("webkitpresentationmodechanged", target));
+  const leave = (persisted = false) => (windowListeners.pagehide ?? []).forEach((listener) => listener({ persisted }));
+  return { reports, videoElement, fire, present, leave };
+}
+
+test("a second video going full screen while the first stays in picture in picture doesn't report the picture in picture closed", () => {
+  const page = pageReportingPictureInPicture();
+  const popped = page.videoElement();
+  const other = page.videoElement();
+  page.present(popped, "picture-in-picture");
+  page.fire("enterpictureinpicture", popped);
+  page.present(other, "fullscreen");
+  page.present(other, "inline");
+  page.fire("leavepictureinpicture", other);
+  assert.deepEqual(page.reports, [true], "only the video that popped out speaks for the picture in picture");
+  page.present(popped, "inline");
+  page.fire("leavepictureinpicture", popped);
+  assert.deepEqual(page.reports, [true, false], "it closes once, when that video comes back");
+});
+
+test("picture in picture moving from one video to another stays open", () => {
+  const page = pageReportingPictureInPicture();
+  const first = page.videoElement();
+  const second = page.videoElement();
+  page.present(first, "picture-in-picture");
+  page.present(second, "picture-in-picture");
+  page.present(first, "inline");
+  assert.deepEqual(page.reports, [true, true]);
+  page.present(second, "inline");
+  assert.deepEqual(page.reports, [true, true, false]);
+});
+
+test("a frame leaving with its video still popped out reports an unload, not a close the person made, so the tab never keeps a stale frame", () => {
+  for (const persisted of [false, true]) {
+    const page = pageReportingPictureInPicture();
+    const popped = page.videoElement();
+    page.present(popped, "picture-in-picture");
+    page.leave(persisted);
+    assert.deepEqual(page.reports, [true, "unloaded"]);
+    page.leave(persisted);
+    assert.deepEqual(page.reports, [true, "unloaded"], "a frame with nothing popped out says nothing");
+  }
+});
+
+test("the pip report takes only real booleans, rejects anything else whole, and its frame ids stay bounded, whatever a page sends (shared hostile inputs)", (t) => {
+  const encode = (text) => Buffer.from(text, "utf8").toString("base64");
+  const kind = (value) => (value === true ? "true" : value === false ? "false" : value === undefined ? "missing" : "invalid");
+  const values = HOSTILE_VALUES.flatMap(({ value }) => {
+    let json;
+    try {
+      json = JSON.stringify({ v: value }, (_, item) => (typeof item === "string" ? item.toWellFormed() : item));
+    } catch {
+      return [];
+    }
+    return json === undefined ? [] : [`("${encode(json)}", "${kind(value)}")`];
+  });
+  const frames = HOSTILE_STRINGS.map(({ value }) => `"${encode(String(value))}"`);
+  const dir = mkdtempSync(join(tmpdir(), "ardia-pip-hostile-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = join(dir, "pip-hostile.test.swift");
+  writeFileSync(
+    source,
+    `import Foundation
+import Testing
+
+struct PictureInPictureReportHostileInputs {
+  let values: [(String, String)] = [${values.join(", ")}]
+
+  func decoded(_ encoded: String) throws -> Any? {
+    let object = try JSONSerialization.jsonObject(with: Data(base64Encoded: encoded)!, options: [.fragmentsAllowed]) as! [String: Any]
+    return object["v"]
+  }
+
+  func awayWithOnePoppedOut() -> WebKitAutoPictureInPicture {
+    var rule = WebKitAutoPictureInPicture()
+    _ = rule.sight(false, userIn: false, enabled: true, playing: true)
+    _ = rule.pictureInPicture(in: "frame", active: true)
+    rule.reported(active: true)
+    return rule
+  }
+
+  @Test func \`booleans are read only from a real true or false\`() throws {
+    for (encoded, kind) in values {
+      let read = WebKitAutoPictureInPicture.boolean(try decoded(encoded))
+      #expect(read == (kind == "true" ? true : kind == "false" ? false : nil))
+    }
+    #expect(WebKitAutoPictureInPicture.boolean(NSNumber(value: 1)) == nil)
+  }
+
+  @Test func \`a payload whose active isn't a real boolean changes nothing\`() throws {
+    for (encoded, kind) in values where kind != "true" && kind != "false" {
+      var rule = awayWithOnePoppedOut()
+      var data: [String: Any] = [:]
+      if let value = try decoded(encoded) { data["active"] = value }
+      #expect(rule.report(data, from: "frame") == nil)
+      #expect(rule.pictureInPictureFrameCount == 1)
+      #expect(!rule.heldUntilBack)
+      #expect(rule.reportedActive)
+    }
+    var rule = awayWithOnePoppedOut()
+    #expect(rule.report(nil, from: "frame") == nil)
+    #expect(rule.pictureInPictureFrameCount == 1)
+  }
+
+  @Test func \`a close whose unloaded isn't a real boolean changes nothing, and a missing one is a close the person made\`() throws {
+    for (encoded, kind) in values {
+      var rule = awayWithOnePoppedOut()
+      var data: [String: Any] = ["active": false]
+      if let value = try decoded(encoded) { data["unloaded"] = value }
+      let result = rule.report(data, from: "frame")
+      switch kind {
+      case "true":
+        #expect(result?.active == false && result?.reported.heldNow == false)
+        #expect(!rule.heldUntilBack)
+      case "false", "missing":
+        #expect(result?.active == false && result?.reported.heldNow == true)
+        #expect(rule.heldUntilBack)
+      default:
+        #expect(result == nil)
+        #expect(rule.pictureInPictureFrameCount == 1)
+        #expect(!rule.heldUntilBack)
+        #expect(rule.reportedActive)
+      }
+    }
+  }
+
+  @Test func \`hostile frame ids never grow the frame set past its limit or close another frame's picture in picture\`() {
+    var rule = WebKitAutoPictureInPicture()
+    #expect(rule.pictureInPicture(in: "real", active: true) == true)
+    let frames: [String] = [${frames.join(", ")}]
+    for encoded in frames {
+      let frame = String(decoding: Data(base64Encoded: encoded)!, as: UTF8.self)
+      _ = rule.pictureInPicture(in: frame, active: true)
+      #expect(rule.pictureInPicture(in: frame + "-other", active: false) == nil)
+    }
+    #expect(rule.pictureInPictureFrameCount <= WebKitAutoPictureInPicture.pictureInPictureFrameLimit)
+  }
+}
+`,
+  );
+  runSwiftTests(t, "pip-hostile-test", ["../ios/WebKitAutoPictureInPicture.swift", source]);
+});
+
+test("a dead content process forgets its picture in picture frames without holding the tab", () => {
+  assert.match(tab, /resetNowPlaying\(\)\n\s+pictureInPicturePageGone\(\)\n\s+processTerminated\(\)/);
+  assert.match(sight, /func pictureInPicturePageGone\(\) \{\n\s+if autoPictureInPictureRule\.pageGone\(\) \{ emit\("pictureInPicture", \["kind": "video", "active": false\]\) \}/);
+});
+
+test("the page tab's own Picture in Picture close is marked as asked for, and a failed close is cleared", () => {
+  assert.match(pageTab, /func exitPictureInPicture\(\) \{\n\s+autoPictureInPictureRule\.noteRequestedClose\(\)\n\s+let view = webView\n\s+setPictureInPicture\(false\) \{ \[weak self, weak view\] answer in\n\s+guard let self, let view, self\.webView === view, answer == \.failed else \{ return \}\n\s+view\.autoPictureInPictureRule\.requestedCloseFailed\(\)/);
 });

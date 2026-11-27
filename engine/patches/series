@@ -72,6 +72,7 @@ chromium chromium-safe-storage-name.patch mac
 chromium chromium-safe-storage-no-silent-reset.patch mac
 chromium chromium-safe-storage-one-key-for-every-data-dir.patch mac
 chromium chromium-pref-hash-safe-storage-key-change.patch
+chromium chromium-pref-hash-new-mac-waits-for-safe-storage.patch mac
 chromium chromium-password-bubble-hook.patch
 chromium chromium-password-generation-local.patch
 chromium chromium-password-string-erase.patch

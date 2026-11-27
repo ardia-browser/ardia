@@ -35,6 +35,9 @@ export type ScopeState = {
   seen: Record<string, number>;
   joined: boolean;
   awaitRemote?: boolean;
+  awaitSince?: number;
+  rebase?: string[];
+  rebaseId?: string;
   applyAs?: Record<string, "joined" | "joining">;
   applying?: ApplyBatch[];
   snapshotAt: number;
@@ -74,6 +77,7 @@ export type Extraction = {
   values: Map<string, unknown>;
   ignore?: (key: string) => boolean;
   republish?: (key: string) => boolean;
+  keepLocal?: (key: string) => boolean;
   published?: (keys: Set<string>) => void;
   json?: (key: string, value: unknown) => string | undefined;
 };
@@ -84,6 +88,7 @@ export type ApplyRecords = {
   horizon: number;
   joined: boolean;
   held(): boolean;
+  rebasing?: boolean;
   landed(key: string): void;
   defer(key: string): void;
 };
@@ -103,6 +108,7 @@ export interface Adapter {
   editedAt?(value: unknown): number | undefined;
   extractsOnlyFrom?(): object | undefined;
   adoptRemoteOnJoin?: boolean;
+  sessionBacked?: boolean;
   publishAfterPull?: boolean;
   extractUsesBase?: boolean;
   savesWhole?: boolean;

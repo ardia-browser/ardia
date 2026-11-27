@@ -249,7 +249,10 @@ const OUR_IMAGES = /^(Ardia|ArdiaCore|ArdiaShell|Chromium Framework|Expo|ExpoMod
 const STRIPPED_EXPORT = /^(?:ArdiaCoreMain|ChromeMain|ChromeWebAppShortcutCopierMain|ac_[a-z0-9_]+)$/;
 const NEAREST_EXPORT_DISTANCE = 0x4000;
 
-function nativeImageName(image: unknown): string {
+const EXACT_IMAGE_NAME = /^[A-Za-z0-9][\w .+%-]{0,63}$/;
+
+function nativeImageName(image: unknown, exact = false): string {
+  if (exact && typeof image === "string" && EXACT_IMAGE_NAME.test(image)) return image;
   return typeof image === "string" ? frameFile(image.replace(/\s/g, "_")).replace(/_/g, " ") : "<unknown>";
 }
 
@@ -261,9 +264,9 @@ function realSymbol(f: NativeFrame, inApp: boolean): string | null {
   return f.symbol.replace(/\S*\/\S*/g, "<path>").replace(/"[^"]*"/g, "<text>").slice(0, 200);
 }
 
-export function nativeFrames(frames: NativeFrame[], limit = 64): ExceptionFrame[] {
+export function nativeFrames(frames: NativeFrame[], limit = 64, exactImages = false): ExceptionFrame[] {
   return frames.slice(0, limit).map((f): ExceptionFrame => {
-    const image = nativeImageName(f.image);
+    const image = nativeImageName(f.image, exactImages);
     const inApp = OUR_IMAGES.test(image);
     const symbol = realSymbol(f, inApp);
     const offset = typeof f.offset === "number" && Number.isSafeInteger(f.offset) && f.offset >= 0 ? `0x${f.offset.toString(16)}` : null;
@@ -304,6 +307,7 @@ type NativeCrash = {
   exceptionSubtype?: string;
   frames: NativeFrame[];
   exceptionFrames?: NativeFrame[];
+  postedFrames?: NativeFrame[];
   images?: NativeImage[];
 };
 
@@ -314,16 +318,19 @@ export function nativeCrashExceptions(report: NativeCrash) {
   const subtype = report.exceptionSubtype && SUBTYPE.test(report.exceptionSubtype) ? report.exceptionSubtype : null;
   const images = nativeImages(report.images);
   const crash = { type: machType, value: signal ? `${machType} (${signal})` : machType, frames: nativeFrames(report.frames) };
-  if (!report.exceptionFrames?.length && !name) return { name, signal, subtype, images, exceptions: [crash] };
+  const posted = report.postedFrames?.length ? [{ type: "PostedTask", value: "Task posted from", frames: nativeFrames(report.postedFrames, 17, true) }] : [];
+  if (!report.exceptionFrames?.length && !name) return { name, signal, subtype, images, exceptions: [crash, ...posted] };
   const type = name ?? "NSException";
   const thrown = { type, value: `Uncaught ${type}`, frames: nativeFrames(report.exceptionFrames ?? []) };
-  return { name, signal, subtype, images, exceptions: [thrown, crash] };
+  return { name, signal, subtype, images, exceptions: [thrown, crash, ...posted] };
 }
 
 export const nativeCrashTermination = (namespace: string | undefined) => (namespace && SUBTYPE.test(namespace) ? namespace : null);
 
 type PropertyValue = string | number | boolean | null;
 
+export const SOURCE_PLACE = /^(?=.{1,80}$)[A-Za-z0-9_+-]{1,70}\.(?:cc|cpp|cxx|c|h|hh|hpp|mm|m|swift|rs|ts|tsx|js|mjs):[1-9]\d{0,5}$/;
+const SOURCE_PLACE_KEY = /^crash_(?:fatal_at|posted_from)$/;
 const WEBUI_PAGE_KEY = /(?:^|_)webui_page$/;
 const WEBUI_PAGES_KEY = /(?:^|_)webui_pages$/;
 const WEBUI_PAGE_NAME = "[a-z0-9-]{1,32}(?:/[a-z0-9-]{1,32})?";
@@ -350,7 +357,8 @@ export function cleanProperties(props: Record<string, unknown>): Record<string, 
     else if (typeof value === "number") {
       if (Number.isFinite(value)) out[key] = value;
     } else if (typeof value === "string") {
-      out[key] = WEBUI_PAGE_KEY.test(key) ? scrubWebuiPage(value) : WEBUI_PAGES_KEY.test(key) ? scrubWebuiPages(value) : scrubText(value, 64);
+      if (SOURCE_PLACE_KEY.test(key)) out[key] = SOURCE_PLACE.test(value) ? value : null;
+      else out[key] = WEBUI_PAGE_KEY.test(key) ? scrubWebuiPage(value) : WEBUI_PAGES_KEY.test(key) ? scrubWebuiPages(value) : scrubText(value, 64);
     }
   }
   return out;

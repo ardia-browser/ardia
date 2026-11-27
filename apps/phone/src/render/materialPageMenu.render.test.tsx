@@ -8,6 +8,7 @@ import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { setDynamicScheme } from "../state/app/dynamicScheme";
 import { useBrowse } from "../state/browse/store";
 import { useLibrary } from "../state/library/store";
+import { usePageUi } from "../state/page/store";
 import * as pageActions from "../state/page/actions";
 import { usePages } from "../state/pages/store";
 import { blocking } from "../platform/blocking";
@@ -18,7 +19,7 @@ import { useDefaultBrowser } from "../state/settings/defaultBrowser";
 import { useSettingsNav } from "../state/settings/nav";
 import { useTabs } from "../state/tabs/store";
 import { selectedTab } from "../state/tabs/tabsState";
-import { classicOnAndroid, renderSurface, unmount, withTabs, withMaterialYou } from "../../test/render/harness";
+import { classicOnAndroid, renderSurface, textOf, unmount, withTabs, withMaterialYou } from "../../test/render/harness";
 
 withMaterialYou();
 
@@ -96,42 +97,92 @@ onAndroid("the material page menu is a Material bottom sheet: a title row, navig
   unmount(root);
 });
 
-onAndroid("History, Bookmarks and Downloads rows on Android close the menu and open the library at their section", async () => {
-  const close = jest.spyOn(pageActions, "closePageMenu");
-  for (const [title, section] of [["History", "history"], ["Bookmarks", "bookmarks"], ["Downloads", "downloads"]] as const) {
-    const root = await openMenu();
-    act(() => {
-      pressable(root, `pageMenuRow:${title}`).props.onPress();
-    });
-    expect(useLibrary.getState()).toMatchObject({ open: true, section });
-    unmount(root);
-    act(() => useLibrary.setState({ open: false }));
-  }
-  expect(close).toHaveBeenCalledTimes(3);
+onAndroid("the Material page menu has no History, Bookmarks, Downloads, Night Shade, Page Zoom or Desktop Site rows: the Library is in the tab switcher's menu and the site's own switches in Site Settings", async () => {
+  const root = await openMenu();
+  for (const title of ["History", "Bookmarks", "Downloads"]) expect(node(root, `pageMenuRow:${title}`)).toBeUndefined();
+  for (const title of ["Night Shade", "Desktop Site"]) expect(node(root, `menuToggle:${title}`)).toBeUndefined();
+  expect(node(root, "menuZoom")).toBeUndefined();
+  expect(node(root, "materialZoomReset")).toBeUndefined();
+  expect(root.root.findAll((found) => found.props.accessibilityLabel === "Zoom In")).toHaveLength(0);
+  expect(node(root, "pageMenuRow:Site Settings")).toBeDefined();
+  unmount(root);
 });
 
 onAndroid("toggle rows carry a Material switch: one switch for TalkBack, a tap anywhere flips it, and the handle grows from 16 to 24 dp as it moves", async () => {
-  const flip = jest.spyOn(pageActions, "setNightShadeOn").mockImplementation(() => undefined as never);
+  const flip = jest.spyOn(pageActions, "setBlockersOn").mockImplementation(() => undefined as never);
   const root = await openMenu();
-  const row = pressable(root, "menuToggle:Night Shade");
+  const row = pressable(root, "menuToggle:Block Ads and Trackers");
   expect(row.props.accessibilityRole).toBe("switch");
-  expect(row.props.accessibilityState).toMatchObject({ checked: false, disabled: false });
+  expect(row.props.accessibilityState).toMatchObject({ checked: true, disabled: false });
   expect(row.findAll((found) => found.props.testID === "materialSwitch" && typeof found.type === "string")).toHaveLength(1);
   act(() => {
     row.props.onPress();
   });
-  expect(flip).toHaveBeenCalledWith(true);
+  expect(flip).toHaveBeenCalledWith(false);
   expect(materialSwitchHandle(0)).toEqual({ size: 16, left: 6, top: 6 });
   expect(materialSwitchHandle(1)).toEqual({ size: 24, left: 22, top: 2 });
   unmount(root);
 });
 
-onAndroid("Page Zoom keeps its minus, reset and plus as 48 dp controls", async () => {
+async function materialSiteSettings() {
   const root = await openMenu();
-  expect(flat(node(root, "materialMenuIcon:Zoom Out"))).toMatchObject({ width: 48, height: 48 });
-  expect(flat(node(root, "materialMenuIcon:Zoom In"))).toMatchObject({ width: 48, height: 48 });
-  expect(flat(node(root, "materialZoomReset")).height).toBe(48);
-  expect(node(root, "materialZoomReset")!.props.accessibilityValue).toEqual({ text: "100%" });
+  act(() => usePageUi.setState({ zoomLevels: [0.5, 1, 1.5, 2] }));
+  await act(async () => {
+    pressable(root, "pageMenuRow:Site Settings").props.onPress();
+  });
+  return root;
+}
+
+const labelled = (root: Root, label: string) => root.root.findAll((found) => found.props.accessibilityLabel === label && typeof found.type === "string")[0];
+const pressLabelled = (root: Root, label: string) => act(() => root.root.findAll((found) => found.props.accessibilityLabel === label && typeof found.props.onPress === "function")[0]!.props.onPress());
+
+onAndroid("the Material Site Settings starts with the site's group: its host above Night Shade, Page Zoom and Desktop Site as Material rows, with 48 dp zoom controls", async () => {
+  const root = await materialSiteSettings();
+  const sheet = node(root, "materialPageMenuSiteSettings")!;
+  const words = textOf({ root: sheet } as never).split("\n");
+  expect(words.indexOf("site0.example")).toBeGreaterThanOrEqual(0);
+  expect(words.indexOf("site0.example")).toBeLessThan(words.indexOf("Night Shade"));
+  expect(words.indexOf("Night Shade")).toBeLessThan(words.indexOf("Block Cookie Banners"));
+  expect(words).toEqual(expect.arrayContaining(["Page Zoom", "Desktop Site", "Desktop Site applies to this tab."]));
+  const shade = pressable(root, "materialSettingsRow:Night Shade");
+  expect(shade.props.accessibilityRole).toBe("switch");
+  expect(shade.props.accessibilityState).toMatchObject({ checked: false, disabled: false });
+  expect(pressable(root, "materialSettingsRow:Desktop Site").props.accessibilityRole).toBe("switch");
+  expect(flat(labelled(root, "Zoom Out"))).toMatchObject({ width: 48, height: 48 });
+  expect(flat(labelled(root, "Zoom In"))).toMatchObject({ width: 48, height: 48 });
+  expect(flat(labelled(root, "Reset Zoom")).height).toBe(48);
+  expect(labelled(root, "Reset Zoom")!.props.accessibilityValue).toEqual({ text: "100%" });
+  unmount(root);
+});
+
+onAndroid("the Material site group's Night Shade, Zoom In and Desktop Site write to the page and count, and opening Site Settings from the menu is counted", async () => {
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
+  const shade = jest.spyOn(pages, "setNightShade").mockResolvedValue(undefined);
+  const zoomIn = jest.spyOn(pages, "zoomIn").mockResolvedValue(1.5);
+  const desktop = jest.spyOn(pages, "setDesktopSite").mockResolvedValue(undefined);
+  const root = await materialSiteSettings();
+  act(() => pressable(root, "materialSettingsRow:Night Shade").props.onPress());
+  pressLabelled(root, "Zoom In");
+  await act(async () => {
+    for (let turn = 0; turn < 5; turn++) await Promise.resolve();
+  });
+  act(() => pressable(root, "materialSettingsRow:Desktop Site").props.onPress());
+  await act(async () => {
+    for (let turn = 0; turn < 5; turn++) await Promise.resolve();
+  });
+  expect(shade).toHaveBeenCalledWith("always", "site0.example", false);
+  expect(zoomIn).toHaveBeenCalledWith("t0");
+  expect(desktop).toHaveBeenCalledWith("t0", true);
+  expect(counted.mock.calls.map(([field]) => field).filter((field) => field === "page_menu_site_settings_opened" || field.startsWith("site_settings_")).sort()).toEqual(["page_menu_site_settings_opened", "site_settings_desktop_site_changed", "site_settings_night_shade_changed", "site_settings_zoom_changed"]);
+  unmount(root);
+});
+
+onAndroid("Filter Lists from the Material Site Settings closes the menu and opens Settings on Filter Lists over Site Settings", async () => {
+  const root = await materialSiteSettings();
+  act(() => pressable(root, "materialSettingsRow:Filter Lists").props.onPress());
+  expect(pageActions.siteSettingsInMenu()).toBe(false);
+  expect(useSettingsNav.getState()).toMatchObject({ open: true, stack: [{ page: "siteSettings" }, { page: "filterLists" }] });
   unmount(root);
 });
 

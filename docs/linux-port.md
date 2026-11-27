@@ -1355,8 +1355,11 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
   command runs:
   - With an engine that advertises both `report.files` and `report.send` it opens the Mac's report sheet (Problem
     reports below).
-  - Otherwise, or when the host sets a `feedbackURL` with `%s`, it opens a new issue in a tab (GitHub's, or that
-    page), its body a short template and Copy Diagnostics' report. The shell's `connect-src 'none'` stops the sheet's
+  - Otherwise it opens the repo's bug form (`issues/new?template=bug_report.yml`) in a tab with its fields filled:
+    `what-happened` gets a short template and Copy Diagnostics' report, `version` the app version and `app` Windows or
+    Linux (from `osBuild`). The form, not a blank issue, because the repo turns blank issues off. A host's own
+    `feedbackURL` with `%s` gets the same text instead. Either address is kept under GitHub's 8,000-character limit by
+    dropping the report's last lines first (`report_sheet_opened` `trimmed`). The shell's `connect-src 'none'` stops the sheet's
     own post, and `ArdiaReport` answers unavailable or empty values (`appModuleFallbacks.ts`).
 - **Favicon accents.** `ArdiaDockSelection.iconAccent` (the command bar's scope pulse) runs in the shell: a port of
   the Mac's dominant-hue pick over a 32 px canvas copy of a `data:` or `blob:` favicon (`iconAccent.ts`). Other URLs

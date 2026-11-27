@@ -7,7 +7,7 @@ import { useToasts } from "../../browser/src/state/app/toasts.ts";
 import { PLATFORM_TERMS } from "../../browser/src/lib/platformTerms.ts";
 import { useReportSheet } from "../../browser/src/state/report/store.ts";
 import { APP_COMMAND_HANDLERS } from "../../browser/src/state/commands/appCommands.ts";
-import { LINUX_REPORT_TEMPLATE, openReport } from "./reportProblem.ts";
+import { BUG_FORM_URL, LINUX_REPORT_TEMPLATE, REPORT_URL_MAX_CHARS, bugFormPage, openReport } from "./reportProblem.ts";
 import { appMenuChoice, appMenuCommandEvent, appMenuItems } from "./appMenu.ts";
 import { APP_LAUNCH_LOCK, APP_LAUNCH_MARK, FRESH_PROFILE_DOCUMENT, LAUNCH_STEPS, LINUX_APP_COMMANDS, UTILITY_APP_COMMANDS, claimAppLaunch, hostLaunchRecord, onboardingAction, recordFreshProfile, runAppCommand, runLaunchServices, serveUtilityCommands, startAppCommands } from "./appServices.ts";
 
@@ -273,15 +273,20 @@ const tabsIn = (windowId) => Object.values(useBrowser.getState().tabs).filter((t
 const tabURL = (tab) => tab.url ?? tab.navigation?.url ?? "";
 const waitFor = async (check) => { for (let i = 0; i < 100 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 5)); };
 
-test("Report a Problem opens one prefilled GitHub issue in the window that asked, since the sheet can't send from Linux", async () => {
+const formFields = (url) => Object.fromEntries(url.slice(url.indexOf("?") + 1).split("&").map((pair) => pair.split("=").map(decodeURIComponent)));
+
+test("Report a Problem opens one prefilled bug form in the window that asked, since the sheet can't send from this host", async () => {
   const { first, second } = twoWindows();
   useReportSheet.setState(useReportSheet.getInitialState(), true);
   const before = tabsIn(first).length;
   assert.equal(runAppCommand(first, "reportProblem", capabilities), true);
   await waitFor(() => tabsIn(first).length > before);
-  const opened = tabsIn(first).filter((tab) => tabURL(tab).startsWith("https://github.com/ardia-browser/ardia/issues/new?body="));
+  const opened = tabsIn(first).filter((tab) => tabURL(tab).startsWith(`${BUG_FORM_URL}?template=bug_report.yml&`));
   assert.equal(opened.length, 1);
-  const body = decodeURIComponent(tabURL(opened[0]).split("?body=")[1]);
+  const fields = formFields(tabURL(opened[0]));
+  assert.equal(fields.version, appInfo.appVersion);
+  assert.ok(["Windows", "Linux", "Something else"].includes(fields.app), fields.app);
+  const body = fields["what-happened"];
   assert.ok(body.startsWith(LINUX_REPORT_TEMPLATE), body);
   assert.match(body, /Windows: 2 \(\+0 incognito\)/);
   assert.equal(tabsIn(second).length, 1);
@@ -296,7 +301,7 @@ test("Report a Problem from the check-in or the command bar reaches the same iss
     assert.ok(tabsIn(first).some((tab) => tabURL(tab).startsWith("https://feedback.example/new?text=What%20happened%3F")));
     appInfo.feedbackURL = "http://insecure.example/?q=%s";
     await openReport(first);
-    assert.ok(tabsIn(first).some((tab) => tabURL(tab).startsWith("https://github.com/ardia-browser/ardia/issues/new?body=")));
+    assert.ok(tabsIn(first).some((tab) => tabURL(tab).startsWith(`${BUG_FORM_URL}?template=bug_report.yml&`)));
     const count = tabsIn(first).length;
     await openReport("settings");
     await openReport(null);
@@ -304,6 +309,29 @@ test("Report a Problem from the check-in or the command bar reaches the same iss
   } finally {
     delete appInfo.feedbackURL;
   }
+});
+
+test("the bug form names the app for Windows and Linux, and a body too long for GitHub's address limit loses its last lines first", () => {
+  assert.equal(formFields(bugFormPage("x", "0.2.50", "Windows").url).app, "Windows");
+  assert.equal(formFields(bugFormPage("x", "0.2.50", "Linux").url).app, "Linux");
+  assert.equal(formFields(bugFormPage("x", "0.2.50", "Plan 9").url).app, "Something else");
+  const short = bugFormPage(`${LINUX_REPORT_TEMPLATE}Engine: ArdiaCore`, "0.2.50", "Windows");
+  assert.equal(short.trimmed, false);
+  const long = `${LINUX_REPORT_TEMPLATE}${Array.from({ length: 400 }, (_, i) => `line ${i} ${"é".repeat(20)}`).join("\n")}`;
+  const fitted = bugFormPage(long, "0.2.50", "Windows");
+  assert.equal(fitted.trimmed, true);
+  assert.ok(fitted.url.length <= REPORT_URL_MAX_CHARS, String(fitted.url.length));
+  const kept = formFields(fitted.url)["what-happened"];
+  assert.ok(kept.startsWith(`${LINUX_REPORT_TEMPLATE}line 0 `), kept.slice(0, 80));
+  assert.ok(long.startsWith(kept));
+  for (let pad = 0; pad < 256; pad++) {
+    const emoji = bugFormPage(`${"x".repeat(7900 + pad)}😀${"y".repeat(255)}`, "0.2.50", "Linux");
+    assert.ok(emoji.url.length <= REPORT_URL_MAX_CHARS);
+    assert.doesNotThrow(() => formFields(emoji.url));
+  }
+  const oneLine = bugFormPage("y".repeat(20_000), "0.2.50", "Linux");
+  assert.equal(oneLine.trimmed, true);
+  assert.ok(oneLine.url.length <= REPORT_URL_MAX_CHARS);
 });
 
 test("the shared command handler never also runs an app command Linux runs itself, so nothing opens twice", () => {

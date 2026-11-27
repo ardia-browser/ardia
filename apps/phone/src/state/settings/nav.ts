@@ -98,6 +98,10 @@ export function closeSettings() {
 
 export const settingsNav = () => useSettingsNav.getState();
 
+export function closeSettingsFrom(generation: number) {
+  if (useSettingsNav.getState().generation === generation) closeSettings();
+}
+
 const SIMPLE_PAGES = new Set<SettingsRoute["page"]>(["root", "general", "tabs", "search", "experimental", "appearance", "theme", "searchEngine", "browseForMe", "pageSummary", "siteSettings", "filterLists", "myFilters", "trustedSites", "clearData", "sync", "defaultBrowser", "syncConnect", "syncWords", "syncScan", "about", "licenses", "whatsSent"]);
 
 export const settingsRouteKey = (route: SettingsRoute): string => (route.page === "filterList" ? `filterList:${route.id}` : route.page);
@@ -127,9 +131,9 @@ export function settingsDestinationKeys(stack: readonly SettingsRoute[]): string
   return [...new Set([...settingsPath(stack), ...linked.map(settingsRouteKey)])];
 }
 
-export function followSettingsPath(path: readonly string[]) {
-  const { open, stack } = useSettingsNav.getState();
-  if (!open) return;
+export function followSettingsPath(path: readonly string[], generation?: number) {
+  const { open, stack, generation: current } = useSettingsNav.getState();
+  if (!open || (generation !== undefined && generation !== current)) return;
   const routes = path.map(settingsRouteFromKey).filter((route): route is SettingsRoute => route !== null);
   const next: SettingsRoute[] = [stack[0] ?? { page: "root" }, ...routes];
   if (next.length === stack.length && next.every((route, index) => settingsRouteKey(route) === settingsRouteKey(stack[index]!))) return;

@@ -135,7 +135,7 @@ export type PictureInPictureActivation = { move: boolean; activated: boolean; ep
 export type PictureInPictureResize = { inside: boolean; cursorShown: boolean; epoch: string };
 export const AUTO_PICTURE_IN_PICTURE_MISSES = ["missedTabSwitch", "missedAppSwitch", "missedSpaceSwitch", "missedOther", "missedSiteAsked", "leftOnSpaceSwitch", "leftOnSpaceSwitchJoining"] as const;
 export type AutoPictureInPictureMiss = (typeof AUTO_PICTURE_IN_PICTURE_MISSES)[number];
-type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying" | AutoPictureInPictureMiss;
+type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying" | "closedWhileAway" | AutoPictureInPictureMiss;
 export type MediaFault = { reason: string; muted?: boolean; blockerActive?: boolean };
 export type ControlPress = { clickAt: number; control: number };
 export type ActivateRequest = { reason: "pictureInPicture" | "page" | "window"; fromOtherApp?: boolean };
@@ -314,6 +314,8 @@ export type WebViewHandle = {
   resolveUnresponsive(terminate: boolean): Promise<void>;
   discard(options?: { unload?: boolean }): Promise<DiscardOutcome>;
   sleepIfHidden(seconds: number): Promise<DiscardRefusal[]>;
+  sleepIfUnused?(seconds: number): Promise<DiscardRefusal[]>;
+  wakeIfSleeping?(): Promise<boolean>;
   setFrozen(frozen: boolean): Promise<void>;
 };
 

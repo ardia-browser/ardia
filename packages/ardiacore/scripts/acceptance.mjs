@@ -63,7 +63,7 @@ const usesPageA = [
   "private-windows-create", "extension-private-window", "extension-installed-bubble", "popup-window", "popup-window-full-screen", "autofill-save-prompts",
   "settings-services", "download-navigation", "page-events", "page-background", "external-app-answer",
   "external-app-from-extension",
-  "notifications", "now-playing", "media-state", "auto-picture-in-picture", "auto-picture-in-picture-app-switch", "auto-picture-in-picture-other-window", "auto-picture-in-picture-paused", "auto-picture-in-picture-covered-quick", "media-plays-on-move", "picture-in-picture-opt-out", "pip-window", "pip-framing", "report-recording-pip", "report-recording-guard", "report-recording-webkit-media", "page-focus",
+  "notifications", "now-playing", "media-state", "auto-picture-in-picture", "auto-picture-in-picture-app-switch", "auto-picture-in-picture-closed-stays-closed", "auto-picture-in-picture-other-window", "auto-picture-in-picture-paused", "auto-picture-in-picture-covered-quick", "media-plays-on-move", "picture-in-picture-opt-out", "pip-window", "pip-framing", "report-recording-pip", "report-recording-guard", "report-recording-webkit-media", "page-focus",
   "fullscreen-tab-switch", "fullscreen-native", "fullscreen-system-title-bar", "fullscreen-transition-picture", "fullscreen-hidden-page", "fullscreen-split-sibling",
   "fullscreen-pip", "autofill-suggestions", "images", "extension-surfaces", "frozen", "discard",
   "permission-prompt", "popup-blocked", "move-tab-slow-mount", "move-last-tab-slow-mount",
@@ -3801,6 +3801,70 @@ try {
       await appActive(true);
       if (pausedPopped) throw new Error("a paused video popped out on leaving the app with its window covered");
       return { stayedVisibility, covered: covered.payload, away, uncovered: uncovered.payload, back: back.payload, atSwitch: atSwitch.payload };
+    } finally {
+      await appActive(true).catch(() => null);
+      for (const action of ["fakeWindowServer:hides", "fakeOcclusion:off"]) await win(action).catch(() => null);
+      await closeTab(tab.id);
+      await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    }
+  });
+
+  await check("auto-picture-in-picture-closed-stays-closed", async () => {
+    const n = await engine("tabs.devWindowNumber", { tabId: first.id });
+    const win = (action) => engine("windows.dev", { window: n, action });
+    const appActive = async (on) => {
+      const r = await win(`fakeAppActive:${on ? 1 : 0}`);
+      if (r !== (on ? "1" : "0")) throw new Error(`fakeAppActive: ${JSON.stringify(r)}`);
+    };
+    const mark = async (tabId) => (await eventsOf(tabId)).at(-1)?.t ?? 0;
+    const since = async (tabId, name, from) => (await eventsOf(tabId)).filter((x) => x.name === name && x.t > from);
+    const opened = async (tabId, from) => (await since(tabId, "pictureInPicture", from)).filter((x) => x.payload.kind === "video" && x.payload.active);
+    const glimpse = async () => {
+      await win("fakeWindowServer:shows");
+      await win("fakeOcclusion:visible");
+      await sleep(1500);
+      await win("fakeWindowServer:hides");
+      await win("fakeOcclusion:occluded");
+      await sleep(2500);
+    };
+    const tab = await openTab(`${secureBase}/video?auto&file`, "Video");
+    try {
+      await win("fakeOcclusion:visible");
+      await win("fakeWindowServer:shows");
+      await startVideo(tab.id, true);
+      await until("live.playingAudio", async () => (await live(tab.id))?.playingAudio === true, 8000);
+      await until("onNowPlaying with video", async () => lastEvent(tab.id, "nowPlaying", (p) => p.state?.hasVideo && p.state?.playbackState === "playing"), 5000);
+      await sleep(300);
+      const leftAt = await mark(tab.id);
+      await appActive(false);
+      await win("fakeWindowServer:hides");
+      await win("fakeOcclusion:occluded");
+      await until("auto PiP once the window was out of sight", async () => (await opened(tab.id, leftAt))[0] ?? null, 8000);
+      await until("Chrome's PiP window, styled", async () => (await pipWindows())?.find((w) => w.video && w.styled) ?? null, 5000);
+      const closedAt = await mark(tab.id);
+      await engine("tabs.devPictureInPictureAction", { action: "close" });
+      const closed = await until("closed with Chrome's close button", async () => (await since(tab.id, "pictureInPicture", closedAt)).find((x) => !x.payload.active) ?? null, 8000);
+      if (closed.payload.closedBy !== "chrome") throw new Error(`not closed as the user does: ${JSON.stringify(closed.payload)}`);
+      if ((await live(tab.id))?.playingAudio !== true) throw new Error("closing the Picture in Picture window paused the video");
+      for (let round = 0; round < 2; round++) {
+        await glimpse();
+        const again = await opened(tab.id, closedAt);
+        if (again.length) throw new Error(`a glimpse of the window reopened the Picture in Picture closed while away (round ${round}): ${JSON.stringify(again.map((x) => x.payload))}`);
+      }
+      const kept = (await since(tab.id, "autoPictureInPictureKept", closedAt)).map((x) => x.payload.reason ?? (x.payload.appSwitch ? "appSwitch" : "onScreen"));
+      if (kept.join() !== "closedWhileAway") throw new Error(`autoPictureInPictureKept after the close: ${JSON.stringify(kept)}`);
+      await win("fakeOcclusion:visible");
+      await appActive(true);
+      await sleep(800);
+      if ((await opened(tab.id, closedAt)).length) throw new Error("coming back opened Picture in Picture");
+      const leftAgainAt = await mark(tab.id);
+      await appActive(false);
+      await win("fakeOcclusion:occluded");
+      const reopened = await until("auto PiP again once the person came back and left", async () => (await opened(tab.id, leftAgainAt))[0] ?? null, 8000);
+      await win("fakeOcclusion:visible");
+      await appActive(true);
+      await until("auto PiP ended on coming back", async () => (await lastEvent(tab.id, "pictureInPicture"))?.payload?.active === false || null, 8000);
+      return { closed: closed.payload, glimpses: 2, kept, reopened: reopened.payload };
     } finally {
       await appActive(true).catch(() => null);
       for (const action of ["fakeWindowServer:hides", "fakeOcclusion:off"]) await win(action).catch(() => null);

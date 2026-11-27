@@ -20,7 +20,7 @@ const pageMetrics = native("page_metrics.js");
 const messageReceivers = ["ArdiaWebView+PageMessages.mm", "ArdiaWebView+Peek.mm"].map(native);
 
 const WEBKIT_ONLY_EVENTS = new Set(["mediaFault", "focusRestore"]);
-const WINDOWS_ENGINE_ONLY_EVENTS = new Set(["autoplayBlocked"]);
+const WINDOWS_ENGINE_ONLY_EVENTS = new Set();
 
 test("the Chromium view emits every page event in PAGE_EVENTS except the WebKit-only and Windows-engine-only ones, and nothing else", () => {
   const expected = [...PAGE_EVENTS].filter((name) => !WEBKIT_ONLY_EVENTS.has(name) && !WINDOWS_ENGINE_ONLY_EVENTS.has(name));
@@ -84,6 +84,17 @@ test("every kind native sends into a frame has a page-script handler, and every 
   const called = collect(chromiumView, /kind:@"([A-Za-z]+)"/g);
   const handled = collect([pageScript, pageMetrics], /\bhandlers\.([A-Za-z]+) =/g);
   assert.deepEqual(sorted(handled), sorted(called));
+});
+
+test("an automatic Picture in Picture held back reaches its handler with why, a close while away included", async () => {
+  const { deliverPageEvent } = await import("./pageEvents.ts");
+  const seen = [];
+  const props = { onAutoPictureInPictureKept: (reason, epoch) => seen.push([reason, epoch]) };
+  deliverPageEvent(props, { name: "autoPictureInPictureKept", data: { reason: "closedWhileAway", epoch: "e1" } });
+  deliverPageEvent(props, { name: "autoPictureInPictureKept", data: { reason: "nothingPlaying", epoch: "e2" } });
+  deliverPageEvent(props, { name: "autoPictureInPictureKept", data: { appSwitch: true, epoch: "e3" } });
+  deliverPageEvent(props, { name: "autoPictureInPictureKept", data: { appSwitch: false } });
+  assert.deepEqual(seen, [["closedWhileAway", "e1"], ["nothingPlaying", "e2"], ["appSwitch", "e3"], ["onScreen", ""]]);
 });
 
 test("a Picture in Picture pinch reaches its handler with whether the window was unfocused and whether another app was in front", async () => {

@@ -7,6 +7,8 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "base/values.h"
 
@@ -34,6 +36,7 @@ enum class LinuxPageMessageKind {
   kLinkDrop,
   kNowPlaying,
   kNewTabLink,
+  kTrustedInput,
 };
 
 struct LinuxPageMessage {
@@ -85,8 +88,24 @@ struct LinuxPageOptions {
   std::string EffectiveSplit() const;
   std::optional<std::string> ActionFor(std::string_view key) const;
   base::DictValue PeekConfig(bool other_sites = false) const;
-  base::DictValue PageConfig(bool main, bool block_autoplay = false, bool other_sites = false) const;
+  base::DictValue PageConfig(bool main, bool block_autoplay = false, bool other_sites = false,
+                             std::optional<int> embed_input_age_ms = std::nullopt) const;
 };
+
+class LinuxTrustedInputs {
+ public:
+  static constexpr double kLifespanSeconds = 5;
+  static constexpr size_t kOriginsKept = 16;
+  void Note(std::string_view origin, double now_seconds);
+  std::optional<int> AgeMs(std::string_view origin, double now_seconds) const;
+  void Reset() { inputs_.clear(); }
+  size_t size() const { return inputs_.size(); }
+
+ private:
+  std::vector<std::pair<std::string, double>> inputs_;
+};
+
+bool LinuxTrustedInputOrigin(std::string_view origin);
 
 }
 

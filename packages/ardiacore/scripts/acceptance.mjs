@@ -4934,6 +4934,34 @@ try {
     }
   });
 
+  await check("fullscreen-exit-off-space", async () => {
+    const tab = await openTab(`${base}/b?fs-off-space`, "Page B");
+    const n = await engine("tabs.devWindowNumber", { tabId: tab.id });
+    const win = (action) => engine("windows.dev", { window: n, action });
+    const settled = (what, test) => until(what, async () => {
+      const w = await fsWindow(tab.id);
+      return !w.pageFullScreen?.transitioning && test(w) ? w : null;
+    }, 6000).catch(async (e) => { throw new Error(`${e.message}; window ${JSON.stringify(await fsWindow(tab.id))}`); });
+    try {
+      const t = await pageFor(tab.id, "/b?fs-off-space");
+      await fsEnter(tab.id, t);
+      await settled("the window in full screen", (w) => w.fullScreen && w.pageFullScreen?.entered);
+      await win("fakeOcclusion:occluded");
+      await cdp(t, "Runtime.evaluate", { expression: "document.exitFullscreen().then(() => 'ok', (e) => e.name)", awaitPromise: true, returnByValue: true });
+      await fsLeft(tab.id, t, "the page out of full screen with its window off the current Space");
+      await sleep(1000);
+      const away = await fsWindow(tab.id);
+      if (!away.fullScreen) throw new Error(`the window started leaving full screen off the current Space: ${JSON.stringify(away)}`);
+      await win("fakeOcclusion:visible");
+      const back = await settled("the window out of full screen once it's back", (w) => !w.fullScreen && !w.pageFullScreen?.entered);
+      return { away: away.pageFullScreen, back: back.pageFullScreen };
+    } finally {
+      await win("fakeOcclusion:off").catch(() => null);
+      await closeTab(tab.id).catch(() => null);
+      await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    }
+  });
+
   await check("fullscreen-system-title-bar", async () => {
     const tab = await openTab(`${base}/b?fs-title-bar`, "Page B");
     const n = await engine("tabs.devWindowNumber", { tabId: tab.id });

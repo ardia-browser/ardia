@@ -206,6 +206,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   CFTimeInterval _pageAskedAt;
   ArdiaConsentStamp *_pageAskedStamp;
   BOOL _inAnotherApp;
+  id _spaceObserver;
 }
 
 + (instancetype)ofWindow:(ArdiaCoreWindow *)coreWindow create:(BOOL)create {
@@ -244,6 +245,10 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
                  [weakSelf appActivated:YES];
                }]];
     _observers = observers;
+    _spaceObserver = [NSWorkspace.sharedWorkspace.notificationCenter addObserverForName:NSWorkspaceActiveSpaceDidChangeNotification
+                                                                                 object:nil
+                                                                                  queue:nil
+                                                                             usingBlock:^(NSNotification *) { [weakSelf sync]; }];
   }
   return self;
 }
@@ -257,10 +262,19 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
 
 - (void)dealloc {
   for (id observer in _observers) [NSNotificationCenter.defaultCenter removeObserver:observer];
+  if (_spaceObserver) [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:_spaceObserver];
 }
 
 - (BOOL)occlusionActed {
   return ardia_host::Background() && (![ArdiaLaunchConfig.shared instanceFlag:@"allowOcclusion"] || objc_getAssociatedObject(_coreWindow.window, kActedOcclusionKey));
+}
+
+- (BOOL)canLeaveFullScreen {
+  NSWindow *window = _coreWindow.window;
+  if (!window) return NO;
+  if (!ardia_host::Background()) return window.isOnActiveSpace;
+  NSNumber *acted = objc_getAssociatedObject(window, kActedOcclusionKey);
+  return !acted || acted.boolValue;
 }
 
 - (BOOL)windowVisible {
@@ -330,6 +344,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   if (did) _transitioning = NO;
   if (!_transitioning && [self windowVisible]) _settling = NO;
   [self updateSeen];
+  if ([name isEqualToString:NSWindowDidChangeOcclusionStateNotification]) [self sync];
   if (!did) return;
   [self uncoverWhenDrawn];
   const BOOL ours = _ours;
@@ -412,7 +427,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
     if (_telling > 0 || _picturing || ![self pageDrew:_tab entering:YES]) return;
     [self coverThenToggle:_tab entering:YES];
   } else if (toggle == -1) {
-    if (_telling > 0 || _picturing || ![self pageDrew:_leftTab entering:NO]) return;
+    if (_telling > 0 || _picturing || ![self canLeaveFullScreen] || ![self pageDrew:_leftTab entering:NO]) return;
     [self coverThenToggle:_leftTab entering:NO];
   } else if (!page) {
     _entered = NO;
@@ -457,7 +472,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   ArdiaCoreWindow *coreWindow = _coreWindow;
   NSWindow *window = coreWindow.window;
   const BOOL wanted = window && !_closed && !_transitioning && IsWindowFullScreen(window) != entering &&
-                      (entering ? _tab && !_entered : !_tab && _entered);
+                      (entering ? _tab && !_entered : !_tab && _entered && [self canLeaveFullScreen]);
   if (!wanted) {
     for (ArdiaPageCover *cover in _covers) [cover uncover:NO];
     _covers = nil;

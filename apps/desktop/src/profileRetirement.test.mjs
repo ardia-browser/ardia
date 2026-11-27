@@ -174,3 +174,32 @@ test("a forwarded deletion takes the profile out of sync on the authority, as a 
   await engine.syncNow();
   assert.equal(engine.useSync.getState().profiles[work], undefined, "the forwarded deletion retires it");
 });
+
+test("a setting chosen in a window that isn't the sync authority reaches the authority's ledger, as a choice on a Mac does", async () => {
+  const { forwardSettingChoices } = await import("./settingChoices.ts");
+  S().hydrate({});
+  useBrowser.setState({ bookmarksReady: { "": true } });
+  shell.docs.clear();
+  const engine = await import("../../browser/src/state/sync/engine.ts?desktop-choices");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  await engine.syncNow();
+  let leading = false;
+  const sent = [];
+  const stop = forwardSettingChoices(() => leading, async (names) => {
+    sent.push(names);
+    engine.noteSettingsChosen(names);
+  });
+  try {
+    S().updateSettings({ pageFrame: 12 });
+    assert.deepEqual(sent, [["pageFrame"]], "the choice is forwarded");
+    await engine.syncNow();
+    leading = true;
+    S().updateSettings({ pageFrame: 13 });
+    assert.equal(sent.length, 1, "the authority's own choices are left to its engine");
+  } finally {
+    stop();
+  }
+  engine.noteSettingsChosen(["sidebarSide"]);
+  assert.ok(JSON.parse(shell.docs.get("sync.json")).settingEdits?.sidebarSide, "a forwarded choice is stamped into the authority's ledger, though its own store never saw the choice");
+});

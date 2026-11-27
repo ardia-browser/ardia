@@ -518,3 +518,20 @@ test("a rebase gives a pinned group tab the synced home back over the older one 
   await syncAll([b, a]);
   assert.equal(memberOf(a, m)?.pinnedUrl, "https://later.example/", "not on the cycles after the rebase either");
 });
+
+test("a rebase keeps a tile turned into a row here and not sent yet, since its choice is newer than the synced tile", async () => {
+  const folder = new Folder();
+  const sessionBacked = () => pinnedArea.pinnedAreaAdapters("default").map((adapter) => ({ ...adapter, sessionBacked: true }));
+  const a = new Device("devA", folder, sessionBacked);
+  const b = new Device("devB", folder, sessionBacked);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([a, b]);
+  assert.ok(area(b).includes("mail:tile"));
+  b.with(() => S().placeTabs([tabOf("mail")], { pinned: true, row: true }));
+  assert.ok(area(b).includes("mail:row"));
+  startRebase(b.scope);
+  await syncAll([b, a]);
+  assert.ok(area(b).includes("mail:row"), "the rebase keeps the row chosen here");
+  assert.ok(area(a).includes("mail:row"), "and it reaches the other Mac");
+});

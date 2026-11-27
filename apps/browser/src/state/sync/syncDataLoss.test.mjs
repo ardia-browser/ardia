@@ -8,7 +8,7 @@ globalThis.__DEV__ = false;
 
 const folder = new Map();
 const downloading = new Set();
-const failing = { writes: 0, stateSeals: false, onWrite: null };
+const failing = { writes: 0, stateSeals: false, onWrite: null, onRead: null };
 let ids = 0;
 globalThis.acTestNativeModules = {
   ArdiaSync: {
@@ -28,6 +28,7 @@ globalThis.acTestNativeModules = {
       return id;
     },
     read: async (_folder, scope, known) => {
+      failing.onRead?.(scope);
       const here = [...folder].filter(([, f]) => f.scope === scope);
       const unknown = here.map(([id]) => id).filter((id) => !known.includes(id));
       const files = here.filter(([id]) => unknown.includes(id) && !downloading.has(id)).map(([id, f]) => ({ id, payload: f.payload }));
@@ -646,4 +647,112 @@ test("#1577: a pin still waiting to be sent when its profile went missing comes 
     await engineB.syncNow();
     assert.deepEqual(pinnedUrls(workOnB), ["https://one.example/", "https://queued.example/"]);
   });
+});
+
+const tombstones = () => published("pin:t:").filter((op) => op.v === null).length;
+
+test("#1577: a crash after the app scope moved the mark on, before a profile scope's first pull, still rebases that profile", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?scopesA1");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  const older = a.browser;
+  const engineA2 = await relaunch(a, "scopesA2");
+  await a.with(async () => {
+    pin(["https://two.example/"]);
+    await engineA2.syncNow();
+    await engineA2.syncNow();
+  });
+  a.browser = older;
+  const engineA3 = await import("./engine.ts?scopesA3");
+  let atCrash = null;
+  let sessionAtCrash = null;
+  await a.with(async () => {
+    engineA3.startSync();
+    await settle();
+    failing.onRead = (scope) => {
+      if (!atCrash && scope.startsWith("p:")) {
+        atCrash = new Map(shell.docs);
+        sessionAtCrash = S();
+      }
+    };
+    try {
+      await engineA3.syncNow();
+    } finally {
+      failing.onRead = null;
+    }
+  });
+  assert.ok(atCrash, "the profile scope was about to pull");
+  const saved = JSON.parse(atCrash.get("sync.json"));
+  assert.equal(saved.sessionMark, sessionAtCrash.syncMark, "the app scope had already made the marks match");
+  assert.ok(saved.rebaseScopes?.some((name) => name.startsWith("p:")), "but the profile's rebase was owed in sync.json");
+  a.docs = atCrash;
+  const before = tombstones();
+  const engineA4 = await relaunch(a, "scopesA4", sessionAtCrash);
+  await a.with(async () => {
+    await engineA4.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://two.example/"], "the profile still rebases");
+  });
+  assert.equal(tombstones(), before, "and deletes no pin");
+});
+
+test("#1577: a pin sent while quitting moves the mark in sync.json, leaving the closing session alone, so an older backup still rebases", async () => {
+  folder.clear();
+  downloading.clear();
+  const quit = await import("../app/quit.ts");
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?quitA1");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  const backup = a.browser;
+  let storeMark;
+  await a.with(async () => {
+    pin(["https://two.example/"]);
+    storeMark = S().syncMark;
+    quit.setQuitting(true);
+    try {
+      await engineA1.syncNow();
+    } finally {
+      quit.setQuitting(false);
+    }
+    assert.equal(S().syncMark, storeMark, "the session store, already saved for the quit, isn't touched");
+  });
+  assert.ok(published("pin:t:").some((op) => op.v?.u === "https://two.example/"), "the pin went out while quitting");
+  assert.notEqual(JSON.parse(a.docs.get("sync.json")).sessionMark, backup.syncMark, "sync.json's mark moved before it did");
+  const before = tombstones();
+  const engineA2 = await relaunch(a, "quitA2", backup);
+  await a.with(async () => {
+    await engineA2.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://two.example/"]);
+  });
+  assert.equal(tombstones(), before, "no pin is deleted");
+});
+
+test("#1577: when sync.json can't be saved, the batch that would need its new mark isn't journalled or sent", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?docFailA1");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  const journalHolds = (text) => [...a.docs].some(([name, contents]) => /^sync-journal-\d+\.nns$/.test(name) && contents.includes(text));
+  shell.refusedSaves.of.add("sync.json");
+  try {
+    await a.with(async () => {
+      pin(["https://two.example/"]);
+      await engineA1.syncNow();
+      assert.equal(engineA1.useSync.getState().status, "stalled");
+    });
+  } finally {
+    shell.refusedSaves.of.delete("sync.json");
+  }
+  assert.equal(journalHolds("two.example"), false, "nothing about the pin reached the journal");
+  assert.equal(published("pin:t:").some((op) => op.v?.u === "https://two.example/"), false, "or the folder");
+  await a.with(async () => {
+    await engineA1.syncNow();
+    assert.equal(engineA1.useSync.getState().status, "updated");
+  });
+  assert.ok(published("pin:t:").some((op) => op.v?.u === "https://two.example/"), "once sync.json saves, the pin goes out");
 });

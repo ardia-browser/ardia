@@ -37,6 +37,7 @@ import { deleteDocument, readDocument, refreshDocument, saveDocument } from "./s
 import { useBrowser } from "../../browser/src/state/browser/store";
 import { engineProfile } from "../../browser/src/state/browser/model";
 import { forwardProfileDeletions, whenProfileGone } from "./profileRetirement";
+import { forwardSettingChoices } from "./settingChoices";
 import {
   INTERACTIVE_CALL_TIMEOUT_MS,
   SYNC_CHANNEL,
@@ -172,6 +173,7 @@ function remoteFor(host: ArdiaHost): SyncRemote {
     removeSyncedDevice: (deviceId: string) => engine.removeSyncedDevice(deviceId),
     adoptProfileTheme: (profileId: string) => engine.adoptProfileTheme(profileId),
     retireProfile: (profileId: string) => whenProfileGone(useBrowser, profileId, () => engine.retireProfile(profileId)),
+    noteSettingsChosen: (names: string[]) => engine.noteSettingsChosen(names),
     useFolder: (path: string) => engine.setSyncFolder(path),
     moveFolder: (path: string) => engine.moveSyncFolder(path),
     sendTargets: (profileIds: string[]) => Object.fromEntries(profileIds.map((profileId) => [profileId, engine.sendTargets(profileId)])),
@@ -226,6 +228,7 @@ export function startLinuxSync(options: { host?: ArdiaHost; candidate: boolean; 
   });
   authority = started;
   forwardProfileDeletions(leading, (profileId) => forward("retireProfile", [profileId]), (profileId) => engine.retireProfile(profileId));
+  forwardSettingChoices(leading, (names) => forward("noteSettingsChosen", [names]));
   const stopTargets = useSync.subscribe(refreshSendTargets);
   if (typeof addEventListener === "function")
     addEventListener("pagehide", () => {

@@ -202,21 +202,28 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   files carry a mark (`syncMark` in the session, `sessionMark` in `sync.json`). It is a revision, not a
   launch id. Before any write that makes sync's saved state reflect a change to a session-backed adapter (the outgoing
   batch's journal entry, a journal part with the cycle's base, the sealed checkpoint), and before the one that records a
-  finished rebase, `sync.json` gets a new mark, written at once (`markBeforeDurable` in `syncFiles.ts`); the store takes
-  it too, so the session saved next carries it, and that save holds everything the write reflects. Equal marks
-  therefore always mean the session on disk covers the sync state on disk; a crash anywhere in between leaves them
-  apart. Not while quitting, so the session saved at quit still matches. A backup or an older build's file from
-  earlier in the same launch holds an older mark too. When the marks differ at launch, every scope starts a rebase
-  (`startRebase`), and the launch leaves the marks apart: only the rebase's own progress, journalled after its repair
-  reached the store, moves them on again, so a crash before the repaired session is saved rebases again on the next
-  launch, and a rebase already under way when the app stops carries on from its saved flags. A `sync.json` from before
+  finished rebase, `sync.json` gets a new mark (`markBeforeDurable` in `syncFiles.ts`). That `sync.json` save is awaited
+  before the write starts; if it fails, the write fails too and the mark stays owed for the next one, so nothing lands
+  that the mark doesn't cover. The store takes the mark too, so the session saved next carries it, and that save holds
+  everything the write reflects. Equal marks therefore always mean the session on disk covers the sync state on disk; a
+  crash anywhere in between leaves them apart. While quitting, `sync.json` still moves on but the store doesn't (the
+  session has saved for the quit), so a write that lands during the quit leaves the marks apart and the next launch
+  rebases. A backup or an older build's file from earlier in the same launch holds an older mark too. When the marks
+  differ at launch, every scope starts a rebase (`startRebase`), and `sync.json` lists each scope that owes one
+  (`rebaseScopes`); a scope leaves the list only once its own saved state, holding its rebase flags, is on disk. The
+  launch leaves the marks apart: only the rebase's own progress, journalled after its repair reached the store, moves
+  them on again. So a crash before the repaired session is saved rebases again on the next launch; a rebase already
+  under way when the app stops carries on from its saved flags; and a scope that hadn't saved anything yet when another
+  scope's progress made the marks match still rebases, from the list. A `sync.json` from before
   the marks existed that already holds a base rebases once on the first launch that reads it. While an adapter that reads the
   session (`sessionBacked`: the pinned area, settings and the profile, theme, Top Apps and All Open Tabs
   records) rebases, it publishes only keys no device has a record of, and no deletions; the cycle applies
   every record it has, tombstones included, so the store takes the synced state back. The exception is a value
   the adapter can show is newer than the record: a setting changed here (each local choice is stamped from the
   sync clock into `settingEdits` in `sync.json` at once, and dropped when its batch is on disk) or a pin placement
-  still in `pinChoices`; those go out instead (`keepLocal`). A rebasing adapter publishes after the cycle's pull,
+  still in `pinChoices`, including a tile turned into a row or back; those go out instead (`keepLocal`). On Linux and
+  Windows a setting chosen in a window that isn't the sync authority is forwarded to it (`noteSettingsChosen`) and
+  stamped there. A rebasing adapter publishes after the cycle's pull,
   and while anything in the scope is still downloading or damaged it neither publishes nor applies anything (its keys wait for the next cycle), so a
   record on its way can't be outrun by an older session value. An adapter told it's rebasing takes the synced
   value even where it would otherwise keep a local one that differs from its base (a pinned group tab's home). The rebase ends for an adapter once it applied
@@ -232,7 +239,11 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   that connected with a recovery phrase, and each profile scope it paired) joins once it has read
   a file from another device and nothing in it is still downloading or damaged, or a day after
   that held it back, and in any case a day after the scope first waited (`awaitSince`), so a scope whose
-  only file from another device never downloads doesn't wait for good (#1945; before, the first file from
+  only file from another device never downloads doesn't wait for good. That day is a fallback with a known risk: a
+  scope that joins by it without having read a file from another device starts publishing its own settings, profile
+  names, colours and switches, stamped now, so a file that was still downloading and arrives later loses to them where
+  both hold the same record. The alternative, waiting with no limit, would leave a Mac in "First sync in progress" for
+  good when a file never arrives (#1945; before, the first file from
   another device was enough, so a Mac whose
   iCloud Drive was still downloading published its own settings, colours and switches over the
   ones still on their way). Local data is published before remote data is applied, so joining is a union: no

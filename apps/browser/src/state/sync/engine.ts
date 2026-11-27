@@ -12,7 +12,7 @@ import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addSyncedProfile, appScopeOf, linkProfiles, readyToPair, retireDeletedProfile } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { markNewSync, sessionMovedBeforeDurable, settleLaunchMark } from "./sessionMarks";
+import { markNewSync, sessionMarkHooks, settleLaunchMark } from "./sessionMarks";
 import { noteChainStatus, noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
@@ -23,7 +23,7 @@ import { errorText } from "../../lib/errors";
 import { isQuitting, saveBeforeQuit } from "../app/quit";
 import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
 import { onProfileDeleted } from "../profiles/profiles";
-import { watchSettingEdits } from "./settingEdits";
+import { recordSettingEdits, watchSettingEdits } from "./settingEdits";
 export { takeSyncDataCounts } from "../telemetry/syncSafetyCounts";
 import { markOpenTabsSynced, openTabsClosed, recordOpenTabCloses } from "./openTabCloses";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
@@ -47,7 +47,7 @@ let again = false;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let stateLoading: Promise<unknown> = Promise.resolve();
-const { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint } = syncFiles(() => doc, (scopes) => sessionMovedBeforeDurable(doc, scopes));
+const { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint } = syncFiles(() => doc, sessionMarkHooks(() => doc));
 
 function load() {
   const loaded = read();
@@ -204,6 +204,8 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
 }
 
 export const adoptProfileTheme = (profileId: string): void => void (themeChosenHere(doc, profileId) && (save(), doc.enabled && scheduleSync(AFTER_EDIT_MS)));
+
+export const noteSettingsChosen = (names: string[]): void => void (recordSettingEdits(doc, names) && (cycle || save()));
 
 export const retireProfile = (profileId: string): void => void (doc.enabled && retireDeletedProfile(doc, profileId) && (cycle || save(), scheduleSync()));
 

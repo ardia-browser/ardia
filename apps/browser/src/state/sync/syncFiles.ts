@@ -91,7 +91,11 @@ function replayChanges(scopes: SyncDoc["scopes"], changes: Record<string, ScopeC
   }
 }
 
-export function syncFiles(current: () => SyncDoc, sessionMoved: (scopes: ScopeState[]) => boolean = () => false) {
+export type SessionMarkHooks = { moved: (scopes: ScopeState[]) => boolean; saved: (scopes: string[]) => void };
+
+const NO_MARKS: SessionMarkHooks = { moved: () => false, saved: () => {} };
+
+export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_MARKS) {
   const docFile = { json: "", lasting: "", savedAt: 0 };
   const journal = { batches: {} as Journal, parts: null as number | null, bytes: 0, legacy: false, lastId: 0 };
   const state = { json: "", onDisk: false, loaded: false, savedAt: 0, wanted: false, clock: null as Clock | null, heldSince: undefined as number | undefined };
@@ -204,7 +208,7 @@ export function syncFiles(current: () => SyncDoc, sessionMoved: (scopes: ScopeSt
       if (!fresh.length) return;
       for (const file of fresh) list.push(file);
       try {
-        markBeforeDurable([current().scopes[scope]]);
+        await markBeforeDurable([current().scopes[scope]]);
         await writePart({ journal: { [scope]: fresh } });
       } catch (error) {
         const failed = new Set(fresh);
@@ -229,9 +233,10 @@ export function syncFiles(current: () => SyncDoc, sessionMoved: (scopes: ScopeSt
       const part = { device: current().deviceId, clock: clock.last, changes: { [scope]: change } };
       return serial(async () => {
         try {
-          markBeforeDurable([scoped]);
+          await markBeforeDurable([scoped]);
           await writePart(part);
           writtenRest.set(scope, rest);
+          marks.saved([scope]);
         } catch (error) {
           warnFor(consent, "[sync] couldn't journal this cycle's changes", error);
           state.wanted = true;
@@ -244,7 +249,7 @@ export function syncFiles(current: () => SyncDoc, sessionMoved: (scopes: ScopeSt
     const device = current().deviceId;
     const parts = chunksOf(batch).map((chunk) => ({ device, applying: { [scope]: [chunk] } }));
     return serial(async () => {
-      markBeforeDurable([current().scopes[scope]]);
+      await markBeforeDurable([current().scopes[scope]]);
       for (const part of parts) await writePart(part);
     });
   };
@@ -265,16 +270,26 @@ export function syncFiles(current: () => SyncDoc, sessionMoved: (scopes: ScopeSt
     if (!Object.keys(journal.batches).length) clearJournal();
   }
 
-  function markBeforeDurable(scopes: (ScopeState | undefined)[]) {
-    if (sessionMoved(scopes.filter((scoped): scoped is ScopeState => !!scoped))) saveDoc();
+  let markOwed = false;
+
+  async function markBeforeDurable(scopes: (ScopeState | undefined)[]) {
+    if (marks.moved(scopes.filter((scoped): scoped is ScopeState => !!scoped))) markOwed = true;
+    if (!markOwed) return;
+    const { json, lasting } = docJson();
+    await saveDocument(DOC, json);
+    markOwed = false;
+    Object.assign(docFile, { json, lasting, savedAt: Date.now() });
+  }
+
+  function docJson() {
+    const { scopes, ...meta } = current();
+    const seqs = Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, writtenSeq(s)]));
+    return { json: versionedJson({ ...meta, seqs }, DOC_VERSION, "v"), lasting: versionedJson({ ...meta, lastSyncedAt: null, seqs }, DOC_VERSION, "v") };
   }
 
   function saveDoc() {
-    const { scopes, ...meta } = current();
-    const seqs = Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, writtenSeq(s)]));
-    const json = versionedJson({ ...meta, seqs }, DOC_VERSION, "v");
+    const { json, lasting } = docJson();
     if (json === docFile.json) return;
-    const lasting = versionedJson({ ...meta, lastSyncedAt: null, seqs }, DOC_VERSION, "v");
     const now = Date.now();
     if (lasting === docFile.lasting && now - docFile.savedAt < DOC_IDLE_MS) return;
     Object.assign(docFile, { json, lasting, savedAt: now });
@@ -307,7 +322,7 @@ export function syncFiles(current: () => SyncDoc, sessionMoved: (scopes: ScopeSt
     if (state.clock) seen.observe(state.clock.last);
     if (json !== state.json) {
       try {
-        markBeforeDurable(Object.values(doc.scopes));
+        await markBeforeDurable(Object.values(doc.scopes));
         const sealed = await SyncNative?.sealLocal(`{"covers":${covers},"clock":${JSON.stringify(seen.last)},"scopes":${json},"version":${CHECKPOINT_VERSION}}`);
         if (!sealed) return;
         await saveDocument(STATE, sealed);
@@ -316,6 +331,7 @@ export function syncFiles(current: () => SyncDoc, sessionMoved: (scopes: ScopeSt
         return;
       }
       Object.assign(state, { json, onDisk: true });
+      marks.saved(Object.keys(doc.scopes));
     }
     state.savedAt = Date.now();
     dropCoveredBatches(seqs);

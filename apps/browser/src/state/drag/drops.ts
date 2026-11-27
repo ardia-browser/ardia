@@ -7,6 +7,7 @@ import { placing, type TabPlacement } from "../pins/placing";
 import { splitOf } from "../splits/splits";
 import { addToTileFolder, tileFolderOf } from "../pins/tileFolders";
 import { entryKey } from "../sidebar/entryKey";
+import { inShownOrder, nestedOpener } from "../pins/pinChildren";
 
 type Slot = { readonly tabIds: readonly string[] };
 type Order = Pick<BrowserState, "tabs" | "windows">;
@@ -115,7 +116,7 @@ export function dropping(s: BrowserState, ids: string[], drop: Drop): BrowserSta
 export function stepDrop(s: BrowserState, tabId: string, delta: 1 | -1): Drop {
   const tab = s.tabs[tabId];
   const w = tab && s.windows[tab.windowId];
-  if (!tab || !w || tileFolderOf(tab)) return NO_DROP;
+  if (!tab || !w || tileFolderOf(tab) || nestedOpener(s, tabId)) return NO_DROP;
   const chainOf = (id: string) => {
     const g = innermostGroupOf(s.groups, id);
     return g ? [g.id, ...ancestorIds(s.groups, g.id)] : [];
@@ -176,7 +177,7 @@ export function clickedSelection(s: BrowserState, windowId: string, tabId: strin
     return { selection: next.length > 1 ? next : [], anchor: tabId };
   }
   if (!mods.shiftKey) return null;
-  const view = viewTabIds(s, windowId);
+  const view = inShownOrder(s, windowId, viewTabIds(s, windowId));
   const anchor = (anchorOutdated(s, windowId) ? undefined : s.selectionAnchors[windowId]?.tabId) ?? active ?? tabId;
   const from = view.indexOf(anchor);
   const to = view.indexOf(tabId);

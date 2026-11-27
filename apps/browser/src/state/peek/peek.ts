@@ -5,6 +5,8 @@ import type { BrowserState } from "../browser/store";
 import { activeTabId, makeTab, navigationTo, without } from "../browser/model";
 import { forgetOpeners, insertionIndex } from "../tabs/openers";
 import { groupWithOpener } from "../pins/tabGrouping";
+import { nestsUnder } from "../pins/pinChildren";
+import { notePinChildOpened } from "../telemetry/pinChildCounts";
 import { adoptedPage, hasNavigatedPage, isAsleep, loadedPage, renavigated } from "../tabs/pageSession";
 import { isSmall } from "../windows/small";
 import { activated, apply, removeTabs } from "../tabs/tabs";
@@ -129,6 +131,10 @@ export const createPeekSlice: StateCreator<BrowserState, [], [], PeekSlice> = (s
     const loaded = hasNavigatedPage(tab);
     const moved = { ...tab, openerId: s.tabs[peek.sourceId] ? peek.sourceId : null, page: loaded ? renavigated(tab, navigationTo(tab.url)) : tab.page, lastActiveAt: Date.now() };
     if (moved.openerId) moved.linkOpenerId = peek.sourceId;
+    if (nestsUnder(s, moved, moved.openerId)) {
+      moved.pinChildOf = peek.sourceId;
+      notePinChildOpened();
+    }
     const tabs = withEntry(s.tabs, tab.id, moved);
     const w = s.windows[windowId]!;
     const tabIds = [...w.tabIds];

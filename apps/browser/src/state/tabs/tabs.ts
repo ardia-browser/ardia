@@ -21,6 +21,8 @@ import { historyOf } from "../history/history";
 import { awayFromHome, pinHome, reopensAtPinnedUrl } from "../pins/pinHomes";
 import { notePinnedTabReopenChoice, noteTopAppsKeptRunning } from "../telemetry/tabSleepCounts";
 import type { ConsentToken } from "../telemetry/consentPeriod";
+import { notePinChildOpened } from "../telemetry/pinChildCounts";
+import { nestsUnder } from "../pins/pinChildren";
 
 export type NewTabOptions = {
   url?: string;
@@ -36,6 +38,8 @@ export type NewTabOptions = {
   gated?: boolean;
   replaced?: boolean;
   enginePage?: boolean;
+  link?: true;
+  consent?: ConsentToken | null;
 };
 
 
@@ -249,9 +253,11 @@ function adoptOrphans(tabs: Record<string, Tab>, before: Record<string, Tab>, go
   for (const t of Object.values(tabs)) {
     let opener = t.openerId;
     while (opener && gone.has(opener)) opener = before[opener]?.openerId ?? null;
-    if (opener === t.openerId) continue;
+    const orphaned = !!t.pinChildOf && gone.has(t.pinChildOf);
+    if (opener === t.openerId && !orphaned) continue;
     if (next === tabs) next = { ...tabs };
-    next[t.id] = { ...t, openerId: opener === t.id ? null : opener };
+    const { pinChildOf: _, ...unmarked } = t;
+    next[t.id] = { ...(orphaned ? unmarked : t), openerId: opener === t.id ? null : opener };
     adopted.push(t.id);
   }
   return linkEdits(next, tabs, adopted);
@@ -363,6 +369,10 @@ export function withNewTab(s: BrowserState, windowId: string, o: NewTabOptions =
   if (tab.page.kind === "loaded" && !o.snapshot) tab.page = loadedPage(navigationTo(url, !o.replaced));
   tab.openerId = o.openerId ?? null;
   if (o.openerId) tab.linkOpenerId = o.openerId;
+  if (o.link && nestsUnder(s, tab, o.openerId)) {
+    tab.pinChildOf = o.openerId;
+    notePinChildOpened(o.consent);
+  }
   if (o.background) tab.unseen = true;
   tab.pinnedUrl = tab.pin ? pinHome({ pinnedUrl: tab.pinnedUrl, url }, true) : tab.pinnedUrl || null;
   if (o.adoptId) tab.page = adoptedPage(o.adoptId);

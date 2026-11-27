@@ -4,7 +4,7 @@ import { inPinnedContainer, isIncognitoProfile, pinKeyOf } from "../browser/mode
 import { asleepFrom, frozenOn, hasPage, holderOfPage, needsPage, withNavigationAt, wokenPage } from "../tabs/pageSession";
 import { splitOf, splitTabIds } from "../splits/splits";
 import { sharedListTab } from "../tabs/tabShare";
-import type { BrowserWindow, Tab, TabGroup } from "../browser/types";
+import type { BrowserWindow, Tab } from "../browser/types";
 import { isRegularWindow } from "../windows/small";
 import { isTopApp, sameTopApp, sharingChanged } from "./topApps";
 
@@ -95,20 +95,19 @@ export function swapPinPage(s: BrowserState, id: string): { state: BrowserState;
   tabs[a] = { ...holder, windowId: to, profileId: copy.profileId, page: withNavigationAt(holder) };
   tabs[b] = { ...copy, ...shownFields(holder), windowId: from, profileId: holder.profileId, page: frozenOn(copy, a) };
   for (const t of Object.values(s.tabs)) {
-    if (t.id === a || t.id === b || !t.openerId) continue;
-    if (holderSide(t) && t.openerId === a) tabs[t.id] = { ...t, openerId: b };
-    else if (copySide(t) && t.openerId === b) tabs[t.id] = { ...t, openerId: a };
+    if (t.id === a || t.id === b || (!t.openerId && !t.pinChildOf)) continue;
+    const swap = (id: string) => (holderSide(t) && id === a ? b : copySide(t) && id === b ? a : id);
+    const openerId = t.openerId && swap(t.openerId);
+    const pinChildOf = t.pinChildOf && swap(t.pinChildOf);
+    if (openerId !== t.openerId || pinChildOf !== t.pinChildOf) tabs[t.id] = { ...t, openerId, ...(pinChildOf ? { pinChildOf } : {}) };
   }
   let groups = s.groups;
   for (const g of Object.values(s.groups)) {
     if (!holderSide(g) && !copySide(g)) continue;
     const tabIds = swapIds(g.tabIds, a, b);
-    const mine = holderSide(g) ? a : b;
-    const theirs = holderSide(g) ? b : a;
-    const opener = g.pinnedOpenerId === mine ? theirs : g.pinnedOpenerId;
-    if (tabIds === g.tabIds && opener === g.pinnedOpenerId) continue;
+    if (tabIds === g.tabIds) continue;
     if (groups === s.groups) groups = { ...s.groups };
-    groups[g.id] = { ...g, tabIds, ...(opener !== g.pinnedOpenerId ? { pinnedOpenerId: opener } : {}) } as TabGroup;
+    groups[g.id] = { ...g, tabIds };
   }
   let selection = s.selection;
   for (const w of new Set([from, to])) {

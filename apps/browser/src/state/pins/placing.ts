@@ -9,6 +9,8 @@ import type { BrowserWindow, TabPin, TileFolder } from "../browser/types";
 import { pinnedGroupMembers } from "../browser/structure";
 import { pinHome } from "./pinHomes";
 import { tileFolderOf } from "./tileFolders";
+import { settledPinChildren } from "./pinChildren";
+import type { ConsentToken } from "../telemetry/consentPeriod";
 
 export type TabPlacement = {
   pinned: boolean;
@@ -17,6 +19,7 @@ export type TabPlacement = {
   groupId?: string | null;
   last?: boolean;
   tileFolder?: TileFolder | null;
+  consent?: ConsentToken | null;
 };
 
 export function placing(s: BrowserState, ids: string[], p: TabPlacement): BrowserState {
@@ -85,7 +88,8 @@ export function placing(s: BrowserState, ids: string[], p: TabPlacement): Browse
   let tabIds = placeGroups(rest, groups, w.id);
   tabIds = orderSections(tabIds, tabs, groups);
   const window: BrowserWindow = { ...w, tabIds };
-  return { ...s, tabs: linkEdits(tabs, s.tabs, moving), pinChoices, pinSync, groups: syncGroupOrder(groups, window), windows: { ...s.windows, [w.id]: window } };
+  const placed = { ...s, tabs: linkEdits(tabs, s.tabs, moving), pinChoices, pinSync, groups: syncGroupOrder(groups, window), windows: { ...s.windows, [w.id]: window } };
+  return settledPinChildren(s, placed, moving, p.consent);
 }
 
 function withHomesOf(s: BrowserState, before: BrowserState, ids: string[]): BrowserState {

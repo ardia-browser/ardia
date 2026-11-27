@@ -9,6 +9,7 @@ import { forgetOpeners, joinedWithCurrent, newTabPlacement, switchKeepsOpeners }
 import { onUrlChange } from "../pins/organize";
 import { groupWithOpener } from "../pins/tabGrouping";
 import { stepDrop } from "../drag/drops";
+import { steppedPinChild } from "../pins/pinChildren";
 import { resolveTyped } from "../settings/settings";
 import { newTabPageChoice, settleWhenListed } from "./newTabHome";
 import { openSettings } from "../settings/settingsWindows";
@@ -263,6 +264,8 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
   },
 
   moveTabBy(id, delta) {
+    const stepped = steppedPinChild(get(), id, delta);
+    if (stepped) return void (stepped !== get() && set(stepped));
     get().dropTabs([id], stepDrop(get(), id, delta));
   },
 });

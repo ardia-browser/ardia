@@ -54,9 +54,11 @@ NSString *ContentOf(ArdiaSavedSession *session, NSString *windowId) {
   if (!window) return nil;
   NSMutableDictionary *tabs = [NSMutableDictionary dictionary];
   for (NSDictionary *t in session.tabs)
-    if ([t[@"windowId"] isEqual:windowId] && [t[@"id"] isKindOfClass:NSString.class])
-      tabs[t[@"id"]] = @[ t[@"title"] ?: NSNull.null, t[@"customTitle"] ?: NSNull.null, t[@"url"] ?: NSNull.null, t[@"favicon"] ?: NSNull.null,
-                          t[@"customIcon"] ?: NSNull.null, [session pinOfTab:t] ?: NSNull.null, t[@"muted"] ?: NSNull.null ];
+    if ([t[@"windowId"] isEqual:windowId] && [t[@"id"] isKindOfClass:NSString.class]) {
+      NSArray *row = @[ t[@"title"] ?: NSNull.null, t[@"customTitle"] ?: NSNull.null, t[@"url"] ?: NSNull.null, t[@"favicon"] ?: NSNull.null,
+                        t[@"customIcon"] ?: NSNull.null, [session pinOfTab:t] ?: NSNull.null, t[@"muted"] ?: NSNull.null ];
+      tabs[t[@"id"]] = [t[@"pinChildOf"] isKindOfClass:NSString.class] ? [row arrayByAddingObject:t[@"pinChildOf"]] : row;
+    }
   NSMutableArray *groups = [NSMutableArray array];
   for (NSDictionary *g in session.groups)
     if ([g[@"windowId"] isEqual:windowId]) [groups addObject:g];

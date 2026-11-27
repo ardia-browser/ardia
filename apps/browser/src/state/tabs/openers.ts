@@ -2,7 +2,8 @@ import { linkEdits } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
 import { withShownTab } from "../groups/shownTabs";
 import { inPinnedContainer } from "../browser/model";
-import { groupOf, pinnedChildGroup } from "../pins/tabGrouping";
+import { groupOf } from "../pins/tabGrouping";
+import { pinChildInsertion } from "../pins/pinChildren";
 import { splitOf, splitTabIds, splitTabIdsOf } from "../splits/splits";
 import type { BrowserWindow, Tab } from "../browser/types";
 import { holderOfPage, isAsleep } from "./pageSession";
@@ -15,15 +16,13 @@ export const sleepsNow = (s: BrowserState, id: string) => isAsleep(s.tabs[id]) |
 export function insertionIndex(s: BrowserState, w: BrowserWindow, tab: Tab, background: boolean): number {
   const opener = tab.openerId ? s.tabs[tab.openerId] : undefined;
   let index: number;
-  if (opener && opener.windowId === w.id && opener.profileId === tab.profileId && regular(s, opener.id)) {
+  if (tab.pinChildOf) index = pinChildInsertion(s, w, tab.pinChildOf, firstRegular(s, w, tab.profileId));
+  else if (opener && opener.windowId === w.id && opener.profileId === tab.profileId && regular(s, opener.id)) {
     const panes = splitTabIdsOf(splitOf(s, opener.id)) ?? [opener.id];
     const at = Math.max(...panes.map((id) => w.tabIds.indexOf(id))) + 1;
     index = background ? afterFamily(s, w, tab, at, opener.id) : at;
   } else if (opener && opener.windowId === w.id && opener.profileId === tab.profileId) {
-    const gathered = pinnedChildGroup(s, opener.id, tab.profileId);
-    index = gathered
-      ? Math.max(...gathered.tabIds.map((id) => w.tabIds.indexOf(id))) + 1
-      : afterFamily(s, w, tab, firstRegular(s, w, tab.profileId), opener.id);
+    index = afterFamily(s, w, tab, firstRegular(s, w, tab.profileId), opener.id);
   } else {
     index = listStart(s, w, tab.profileId);
     if (opener) index = afterFamily(s, w, tab, index, opener.id);

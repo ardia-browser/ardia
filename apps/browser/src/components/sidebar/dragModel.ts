@@ -14,7 +14,7 @@ export type RowSection = Exclude<Section, "tiles" | "folder">;
 
 type Folding = { collapsed: boolean; foldedHeight: () => number };
 
-export type ItemSpec = { tabIds: string[]; section: Section; parentGroup?: string } & (
+export type ItemSpec = { tabIds: string[]; section: Section; parentGroup?: string; nestedUnder?: string } & (
   | { kind: "row" | "split" | "tail" }
   | { kind: "tile"; folderId?: string }
   | ({ kind: "group"; groupId: string } & Folding)

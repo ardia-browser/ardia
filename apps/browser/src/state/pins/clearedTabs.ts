@@ -6,6 +6,7 @@ import { hasPage } from "../tabs/pageSession";
 import { shownLiveOf } from "../tabs/tabLive";
 import { tileFolderOf } from "./tileFolders";
 import { closedTabEntry } from "./closedTabs";
+import { nestedOpener } from "./pinChildren";
 
 export type ClearedTabs = {
   windowId: string;
@@ -40,7 +41,7 @@ function withSplitPanes(s: BrowserState, ids: string[]): Set<string> {
 
 export function clearedTabIds(s: BrowserState, windowId: string): string[] {
   const all = viewTabIds(s, windowId);
-  const ids = all.filter((id) => !inPinnedContainer(s, id));
+  const ids = all.filter((id) => !inPinnedContainer(s, id) && !nestedOpener(s, id));
   const active = activeTabId(s, windowId);
   const playing = (id: string) => !!shownLiveOf(s, id).playingAudio;
   const kept = withSplitPanes(s, all.filter((id) => id === active || playing(id)));

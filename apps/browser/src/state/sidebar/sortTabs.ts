@@ -5,7 +5,8 @@ import { dropping } from "../drag/drops";
 import { splitRowPanes } from "../splits/splits";
 import { sameList } from "../../lib/lists";
 import { groupEntries, sidebarEntries } from "./entries";
-import { parseEntry } from "./entryKey";
+import { entryId, parseEntry } from "./entryKey";
+import { nestedOpener } from "../pins/pinChildren";
 
 export type SortKey = "site" | "title";
 
@@ -24,7 +25,7 @@ function entriesOf(s: BrowserState, { windowId, groupId }: SortTarget): string[]
   if (!w || w.kind === "small") return null;
   if (!groupId) return sidebarEntries(s, windowId).list;
   const g = s.groups[groupId];
-  return g && g.windowId === windowId && g.profileId === w.profileId ? groupEntries(s, groupId) : null;
+  return g && g.windowId === windowId && g.profileId === w.profileId ? groupEntries(s, groupId).filter((e) => !nestedOpener(s, entryId(e, "tab") ?? "")) : null;
 }
 
 function entryTabIds(s: Place, windowId: string, entry: string): string[] {

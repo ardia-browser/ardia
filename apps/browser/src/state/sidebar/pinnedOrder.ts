@@ -5,13 +5,16 @@ import type { LiveFolder } from "../live/types";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { pinnedAreaKeys } from "../pins/pinnedArea";
 import { findLast, isPinnedRow, pinKeyOf } from "../browser/model";
-import { splitRowPanes, splitTabIdsOf } from "../splits/splits";
+import { splitOf, splitRowPanes, splitTabIdsOf } from "../splits/splits";
+import { nestedOpener } from "../pins/pinChildren";
 import { mainWindowFor } from "../windows/small";
 import { sidebarEntries } from "./entries";
 import { entryId, entryKey, parseEntry } from "./entryKey";
 
 export function anchorKey(s: Pick<BrowserState, "tabs" | "groups" | "splits" | "windows">, entry: string): string {
   const { kind, id } = parseEntry(entry);
+  const opener = kind === "tab" ? nestedOpener(s, id) : undefined;
+  if (opener) return anchorKey(s, openerEntry(s, opener));
   if (kind === "split") {
     const panes = splitTabIdsOf(s.splits[id]) ?? [];
     const last = findLast(s.windows[s.splits[id]?.windowId ?? ""]?.tabIds ?? [], (t) => panes.includes(t));
@@ -19,6 +22,11 @@ export function anchorKey(s: Pick<BrowserState, "tabs" | "groups" | "splits" | "
   }
   const x = kind === "group" ? s.groups[id] : s.tabs[id];
   return entryKey(kind, x ? pinKeyOf(x) : id);
+}
+
+function openerEntry(s: Pick<BrowserState, "tabs" | "splits">, openerId: string): string {
+  const split = splitOf(s, openerId);
+  return split && splitRowPanes(s, split).includes(openerId) ? entryKey("split", split.id) : entryKey("tab", openerId);
 }
 
 const foldersOf = (folders: Record<string, LiveFolder>, order: string[], profileId: string): LiveFolder[] =>
@@ -29,7 +37,7 @@ export function withLiveFolders(entries: string[], keys: string[], folders: Pick
   const known = new Set(keys);
   const at = (after: string | null) => folders.filter((f) => f.after === after).map((f) => entryKey("live", f.id));
   const out = at(null);
-  entries.forEach((entry, i) => out.push(entry, ...at(keys[i]!)));
+  entries.forEach((entry, i) => out.push(entry, ...(keys[i] === keys[i + 1] ? [] : at(keys[i]!))));
   for (const f of folders) if (f.after === undefined || (f.after !== null && !known.has(f.after))) out.push(entryKey("live", f.id));
   return out;
 }

@@ -92,7 +92,7 @@ function openNow(request: OpenWindowRequest, page: PageRef, gated: boolean) {
     return void openWindow(w.kind === "private" ? { kind: "private", url, profileId: originalProfile(s, w) } : { profileId: from.profileId, url, adoptId });
   }
   const background = disposition === "background" || from.profileId !== w.profileId;
-  const opened = s.newTab(w.id, { url, adoptId, openerId: from.tabId, profileId: from.profileId, background, gated });
+  const opened = s.newTab(w.id, { url, adoptId, openerId: from.tabId, profileId: from.profileId, background, gated, ...(request.popup ? {} : { link: true as const }) });
   if (background) noteBackgroundTab(w.id, opened, page.tabId);
   else if (adoptId) noteLinkTabLoad(opened);
 }

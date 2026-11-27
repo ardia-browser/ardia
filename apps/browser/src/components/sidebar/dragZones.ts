@@ -89,6 +89,11 @@ function groupHit(p: Pointing): { g: Extract<Item, { kind: "group" }>; into: boo
     .sort((a, z) => a.h - z.h)[0];
 }
 
+const besideOwnOpener = (p: Pointing, above: Item | undefined) => {
+  const opener = p.source.nestedUnder;
+  return !!opener && !!above && (above.nestedUnder === opener || above.tabIds.includes(opener));
+};
+
 const group: Zone = (p) => {
   if (!p.tabsDrag && p.source.kind !== "group" && p.source.kind !== "split") return null;
   const hit = groupHit(p);
@@ -96,7 +101,8 @@ const group: Zone = (p) => {
   const groupId = hit.g.groupId;
   if (hit.into) return { spot: { zone: "group", groupId, beforeId: null }, sequence: rest(p), gapKey: null, into: groupId };
   const members = p.live.filter((i) => (i.kind === "row" || i.kind === "group" || i.kind === "split") && i.parentGroup === groupId).sort(p.byY);
-  const before = members.find((m) => p.cy(m) > p.y);
+  if (besideOwnOpener(p, members.filter((m) => p.cy(m) <= p.y).at(-1))) return NO_AIM;
+  const before = members.find((m) => p.cy(m) > p.y && !m.nestedUnder);
   return { spot: { zone: "group", groupId, beforeId: p.firstTab(before) }, sequence: rest(p), gapKey: before?.key ?? tailKey({ group: groupId }) };
 };
 
@@ -111,9 +117,13 @@ const pinnedRows: Zone = (p) => {
   const here = ((p.tabsDrag || kind === "split") && p.overPinnedRows()) || ((kind === "group" || kind === "live") && p.inPinned);
   if (!here) return null;
   const keys = rest(p);
-  const before = p.blocks.find((b) => p.cy(b) > p.y);
-  const at = before ? p.blocks.indexOf(before) : p.blocks.length;
-  const next = p.blocks.slice(at).find((b) => p.firstTab(b) !== null);
+  const pointed = p.blocks.findIndex((b) => p.cy(b) > p.y);
+  const below = pointed < 0 ? p.blocks.length : pointed;
+  if (besideOwnOpener(p, p.blocks[below - 1])) return NO_AIM;
+  let at = below;
+  while (p.blocks[at]?.nestedUnder) at++;
+  const before = p.blocks[at];
+  const next = p.blocks.slice(at).find((b) => p.firstTab(b) !== null && !b.nestedUnder);
   return {
     spot: { zone: "pinnedRows", beforeId: p.firstTab(next) },
     sequence: [...keys.slice(0, at), ...p.moved, ...keys.slice(at)],

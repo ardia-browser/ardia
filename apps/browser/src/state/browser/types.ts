@@ -67,6 +67,7 @@ export type Tab = {
   page: TabPage;
   openerId: string | null;
   linkOpenerId?: string;
+  pinChildOf?: string;
   liveItem?: { folderId: string; itemId: string; completed?: true };
   pinKey?: string;
   engine?: PageEngine;
@@ -117,7 +118,6 @@ export type TabGroup = {
   tabIds: string[];
   createdAt: number;
   autoUngroup?: boolean;
-  pinnedOpenerId?: string;
   pinKey?: string;
   parentId?: string;
   shownTabIds?: string[];

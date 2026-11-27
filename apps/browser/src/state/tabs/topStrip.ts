@@ -10,6 +10,7 @@ import { groupEntries } from "../sidebar/entries";
 import { renameFolder } from "../sidebar/tileFolderUi";
 import { chooseFromMenu, type ChoiceItem } from "../app/menuChoice";
 import { parseEntry } from "../sidebar/entryKey";
+import { nestedOpener } from "../pins/pinChildren";
 import { splitTabIdsOf } from "../splits/splits";
 
 function tuckTarget(s: BrowserState, windowId: string, profileId: string, groupId: string): string | undefined {
@@ -44,6 +45,7 @@ export function folderMenuItems(s: BrowserState, groupId: string, activeId: stri
       const g = s.groups[id];
       return g ? [{ id: entry, title: groupLabel(s, g), symbol: "folder", children: folderMenuItems(s, id, activeId) }] : [];
     }
+    if (kind === "tab" && nestedOpener(s, id)) return [];
     const tabIds = kind === "split" ? (splitTabIdsOf(s.splits[id]) ?? []) : [id];
     return tabIds.flatMap((t): FolderMenuItem[] => (s.tabs[t] ? [{ value: { tabId: t }, title: tabLabel(s.tabs[t]!), checked: t === activeId }] : []));
   });

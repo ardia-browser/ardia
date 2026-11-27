@@ -7,15 +7,16 @@ import { hasPage } from "../tabs/pageSession";
 import { splitRowPanes, splitTabIds, splitTabIdsOf } from "../splits/splits";
 import { groupIndex, splitIndex, stableList } from "../browser/structure";
 import { tileCells } from "../pins/tileFolders";
-import { entryKey, parseEntry } from "./entryKey";
+import { entryId, entryKey, parseEntry } from "./entryKey";
 import { sameList } from "../../lib/lists";
+import { nestedOpener, shownPinChildren, type PinChildIndex } from "../pins/pinChildren";
 
 type SidebarEntries = { tiles: string[]; cells: string[]; pinned: string[]; list: string[] };
 
-export const ENTRY_TAB_FIELDS = ["pin", "liveItem", "profileId", "url", "page"] as const satisfies readonly (keyof Tab)[];
+export const ENTRY_TAB_FIELDS = ["pin", "pinChildOf", "liveItem", "profileId", "url", "page"] as const satisfies readonly (keyof Tab)[];
 
 const placesAlike = (a: Tab | undefined, b: Tab | undefined) =>
-  a === b || (!!a && !!b && a.pin === b.pin && a.liveItem === b.liveItem && a.profileId === b.profileId && !a.url === !b.url && hasPage(a) === hasPage(b));
+  a === b || (!!a && !!b && a.pin === b.pin && a.pinChildOf === b.pinChildOf && a.liveItem === b.liveItem && a.profileId === b.profileId && !a.url === !b.url && hasPage(a) === hasPage(b));
 
 function sameEntryTabs(tabs: BrowserState["tabs"], was: BrowserState["tabs"]): boolean {
   if (tabs === was) return true;
@@ -23,7 +24,7 @@ function sameEntryTabs(tabs: BrowserState["tabs"], was: BrowserState["tabs"]): b
   return true;
 }
 
-export type EntriesInputs = Pick<BrowserState, "tabs" | "windows" | "groups" | "splits"> & Pick<BrowserState["settings"], "newTabOpens" | "minimalismMode">;
+export type EntriesInputs = Pick<BrowserState, "tabs" | "windows" | "groups" | "splits"> & Pick<BrowserState["settings"], "newTabOpens" | "minimalismMode" | "tabLayout">;
 
 export const entriesInputs = (s: BrowserState): EntriesInputs => ({
   tabs: s.tabs,
@@ -32,6 +33,7 @@ export const entriesInputs = (s: BrowserState): EntriesInputs => ({
   splits: s.splits,
   newTabOpens: s.settings.newTabOpens,
   minimalismMode: s.settings.minimalismMode,
+  tabLayout: s.settings.tabLayout,
 });
 
 export function sameEntriesInputs(s: BrowserState, was: EntriesInputs): boolean {
@@ -41,6 +43,7 @@ export function sameEntriesInputs(s: BrowserState, was: EntriesInputs): boolean 
     s.splits === was.splits &&
     s.settings.newTabOpens === was.newTabOpens &&
     s.settings.minimalismMode === was.minimalismMode &&
+    s.settings.tabLayout === was.tabLayout &&
     sameEntryTabs(s.tabs, was.tabs);
   if (same) was.tabs = s.tabs;
   return same;
@@ -75,9 +78,10 @@ function computeEntries(s: BrowserState, windowId: string, profileId?: string): 
   const rootGroups = groupIndex(s.groups);
   const splits = splitIndex(s.splits);
   const seen = new Set<string>();
+  const kids = shownPinChildren(s, windowId);
   for (const id of viewTabIds(s, windowId, profileId)) {
     const tab = s.tabs[id]!;
-    if ((tab.liveItem && !tab.pin) || hiddenEmptyCard(s, tab)) continue;
+    if (!shownRow(s, tab) || (kids.size && tab.pinChildOf && nestedOpener(s, id))) continue;
     if (tab.pin) {
       if (!isPinnedRow(tab)) tiles.push(id);
       else {
@@ -94,7 +98,17 @@ function computeEntries(s: BrowserState, windowId: string, profileId?: string): 
     if (groupId && s.groups[groupId]!.pinned) pinned.push(entry);
     else list.push(entry);
   }
-  return { tiles, cells: tileCells(s.tabs, tiles), pinned, list };
+  return { tiles, cells: tileCells(s.tabs, tiles), pinned: kids.size ? pinned.flatMap((e) => (entryId(e, "group") === null ? [e, ...nestedEntries(s, kids, entryTabIds(s, e))] : [e])) : pinned, list };
+}
+
+const shownRow = (s: BrowserState, tab: Tab) => !(tab.liveItem && !tab.pin) && !hiddenEmptyCard(s, tab);
+
+const NO_IDS: readonly string[] = [];
+
+function nestedEntries(s: BrowserState, kids: PinChildIndex, openers: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const opener of openers) for (const kid of kids.get(opener) ?? NO_IDS) if (shownRow(s, s.tabs[kid]!)) out.push(entryKey("tab", kid));
+  return out;
 }
 
 export function numberedTabs(s: BrowserState, windowId: string, eligible: (id: string) => boolean = () => true): string[] {
@@ -123,7 +137,7 @@ export function numberedTabs(s: BrowserState, windowId: string, eligible: (id: s
   return [...tiles, ...pinned.flatMap(rowTab), ...list.flatMap(rowTab)];
 }
 
-const groupMemo = new WeakMap<object, { tabs: BrowserState["tabs"]; splits: BrowserState["splits"]; groupsId: number; result: string[] }>();
+const groupMemo = new WeakMap<object, { tabs: BrowserState["tabs"]; splits: BrowserState["splits"]; groupsId: number; kids: PinChildIndex; result: string[] }>();
 
 const groupsIds = new WeakMap<object, number>();
 let lastGroupsId = 0;
@@ -183,7 +197,7 @@ function entryTabIds(s: BrowserState, entry: string): string[] {
 
 export function holdsTab(s: BrowserState, entry: string, tabId: string): boolean {
   const { kind, id } = parseEntry(entry);
-  if (kind === "group") return !!s.groups[id]?.tabIds.includes(tabId);
+  if (kind === "group") return !!s.groups[id] && (s.groups[id]!.tabIds.includes(tabId) || s.groups[id]!.tabIds.includes(nestedOpener(s, tabId) ?? ""));
   if (kind === "split") return !!splitTabIdsOf(s.splits[id])?.includes(tabId);
   return id === tabId;
 }
@@ -193,7 +207,8 @@ export function groupEntries(s: BrowserState, groupId: string): string[] {
   if (!g) return [];
   const cached = groupMemo.get(g);
   const groupsId = groupsIdOf(s.groups);
-  if (cached && cached.splits === s.splits && cached.groupsId === groupsId && sameEntryTabs(s.tabs, cached.tabs)) {
+  const kids = shownPinChildren(s, g.windowId);
+  if (cached && cached.splits === s.splits && cached.groupsId === groupsId && cached.kids === kids && sameEntryTabs(s.tabs, cached.tabs)) {
     cached.tabs = s.tabs;
     return cached.result;
   }
@@ -209,9 +224,10 @@ export function groupEntries(s: BrowserState, groupId: string): string[] {
       seen.add(entry);
       out.push(entry);
     }
+    if (!child && kids.size) out.push(...nestedEntries(s, kids, [id]));
   }
   const result = stableList(cached?.result, out);
-  groupMemo.set(g, { tabs: s.tabs, splits: s.splits, groupsId, result });
+  groupMemo.set(g, { tabs: s.tabs, splits: s.splits, groupsId, kids, result });
   return result;
 }
 

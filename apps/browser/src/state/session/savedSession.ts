@@ -10,6 +10,7 @@ import { isOwnId, pageFromDisk, pinFromDisk, sessionRowsMisfiled, splitsChecked,
 import { profilesKeepingLegacyDots } from "../profiles/switcherMark";
 import { profilesWithOwnLooks } from "../../lib/presetLook";
 import { layoutDrops } from "../browser/hydratedLayout";
+import { sessionWithPinChildMarkers } from "../pins/pinChildren";
 
 export const SESSION_VERSION = 11;
 const onListedRows = (migrations: Migrations): Migrations =>
@@ -66,8 +67,10 @@ export function parseSession(json: string | null | undefined): SavedSession | nu
   return raw ? sessionFromSaved(raw) : null;
 }
 
+const listedSession = (saved: SavedObject): SavedObject => sessionWithPinChildMarkers(sessionWithListedRows(saved));
+
 export function sessionFromSaved(saved: SavedObject): SavedSession {
-  const raw = sessionWithListedRows(saved);
+  const raw = listedSession(saved);
   const savedWindowRows = rows<SavedObject>(raw.windows, windowOk);
   const settings = settingsWithAutoHideTabs(raw.settings, savedWindowRows);
   return {
@@ -101,7 +104,7 @@ const listed = (value: unknown) => (Array.isArray(value) ? value.length : 0);
 const keyed = (value: unknown) => (isFields(value) ? Object.keys(value).length : 0);
 const CLOSED_LISTS = ["closedTabs", "closedWindows", "closedGroups", "deletedGroups", "cleanedTabs"] as const;
 
-export const droppedRows = (saved: SavedObject, session: SavedSession, raw = sessionWithListedRows(saved)) =>
+export const droppedRows = (saved: SavedObject, session: SavedSession, raw = listedSession(saved)) =>
   sessionRowsMisfiled(saved) ||
   layoutDrops(session) ||
   listed(raw.windows) > Object.keys(session.windows).length ||

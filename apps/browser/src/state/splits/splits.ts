@@ -7,6 +7,7 @@ import { placing } from "../pins/placing";
 import { crossesLane } from "./lanes";
 import { choose } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
+import { settledPinChildren } from "../pins/pinChildren";
 import type { AdoptId, BrowserWindow, SplitSlot, SplitView, Tab } from "../browser/types";
 import { evenSlots, insertPane, MAX_SPLIT_PANES, movePaneTo, normalized, paneNeighbor, type PaneDirection, type SplitSide, splitTabIds, splitTabIdsOf, swappedPanes, withoutPanes, withPaneIds } from "./layout";
 
@@ -186,7 +187,7 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
     const ids = tabs.map((t) => t.id);
     const splits = removeFromSplits(s.splits, new Set(ids));
     const split: SplitView = { id: newId("split"), windowId: first.windowId, orientation, slots: evenSlots(ids) };
-    set(gather({ ...s, splits: { ...splits, [split.id]: split } }, first.id, ids));
+    set(settledPinChildren(s, gather({ ...s, splits: { ...splits, [split.id]: split } }, first.id, ids), ids));
     return split.id;
   },
 

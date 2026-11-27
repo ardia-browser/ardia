@@ -95,6 +95,7 @@ export const takeExternalAppRequests = () => {
 };
 
 export { takePopupTabCounts } from "./popupTabCounts";
+export { takePinChildCounts } from "./pinChildCounts";
 
 let firstWindowAt: number | null = null;
 

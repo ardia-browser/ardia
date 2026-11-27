@@ -12,6 +12,7 @@ import type { ClosedTab, Tab, TabGroup, TabPin } from "../browser/types";
 import { samePage } from "../../lib/url";
 import { isRegularWindow } from "../windows/small";
 import { hiddenEmptyCard } from "../omnibox/newTabBarPolicy";
+import { nestedOpener } from "./pinChildren";
 
 type TidyPlan = {
   closes: { tabId: string; keeperId: string }[];
@@ -55,8 +56,8 @@ function folderSites(s: Pick<BrowserState, "tabs" | "groups">, g: TabGroup): str
 
 const isUnpinnedTab = (t: Tab | undefined) => !!t && !t.pin && !t.liveItem;
 
-const isLoose = (s: Pick<BrowserState, "tabs" | "groups">, id: string, scope: TidyScope) =>
-  scope === "pins" ? isPinnedRow(s.tabs[id]) : isUnpinnedTab(s.tabs[id]) && !innermostGroupOf(s.groups, id);
+const isLoose = (s: Pick<BrowserState, "tabs" | "groups" | "splits">, id: string, scope: TidyScope) =>
+  scope === "pins" ? isPinnedRow(s.tabs[id]) : isUnpinnedTab(s.tabs[id]) && !innermostGroupOf(s.groups, id) && !nestedOpener(s, id);
 
 export function tidyPlan(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "splits">, windowId: string, profileId?: string, scope: TidyScope = "pins"): TidyPlan | null {
   const w = s.windows[windowId];

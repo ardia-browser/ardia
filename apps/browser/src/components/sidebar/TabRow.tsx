@@ -6,6 +6,7 @@ import { arcSelectedFill } from "../ui/tokens";
 import { useIsActiveTab, usePageProfileId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
 import { returnToPinnedUrl } from "../../state/pins/actions";
 import { useSplitRowPanes } from "../../state/sidebar/hooks";
+import { useNestedOpener, useNestIndent } from "../../state/pins/pinChildHooks";
 import { useTabHasBadges } from "../../state/media/tabBadges";
 import { muteTitle } from "../../state/tabs/mute";
 import { usePictureInPicture } from "../../state/media/media";
@@ -44,6 +45,7 @@ import { entryKey } from "../../state/sidebar/entryKey";
 import type { RowSection } from "./dragModel";
 import type { SplitDropSide } from "../../state/drag/drops";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { GROUP_INDENT } from "./geometry";
 
 export const TabRowItem = memo(function TabRowItem({
   tabId,
@@ -56,9 +58,11 @@ export const TabRowItem = memo(function TabRowItem({
   parentGroup?: string;
   motion?: EntryMotion | null;
 }) {
-  const { wrapper, handle, splitSide } = useDragItem(entryKey("tab", tabId), { kind: "row", tabIds: [tabId], section, parentGroup }, motion?.clip);
+  const nestedUnder = useNestedOpener(tabId);
+  const indented = useNestIndent(tabId, nestedUnder, !!parentGroup);
+  const { wrapper, handle, splitSide } = useDragItem(entryKey("tab", tabId), { kind: "row", tabIds: [tabId], section, parentGroup, nestedUnder }, motion?.clip);
   return (
-    <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle}>
+    <Animated.View ref={wrapper.ref} style={indented ? [wrapper.style, NESTED_ROW] : wrapper.style} {...handle}>
       <TabRow tabId={tabId} splitSide={splitSide} shift={motion?.shift ?? null} />
     </Animated.View>
   );
@@ -205,6 +209,7 @@ export const TabRow = memo(function TabRow({
 });
 
 const AWAY_FRAME = { flex: 1, marginLeft: TAB_ROW.titleGap } as const;
+const NESTED_ROW = { paddingLeft: GROUP_INDENT } as const;
 const singles = new Map<string, string[]>();
 const SINGLE = (tabId: string) => singles.get(tabId) ?? (singles.set(tabId, [tabId]), singles.get(tabId)!);
 const NO_SLOT = { display: "none" } as const;

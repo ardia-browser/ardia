@@ -1,6 +1,6 @@
 import { continuousCorners, Dot, Panel, Symbol, Button, tabularNums, Text, useHover, reduceMotion } from "../ui";
 import { useShallow } from "zustand/react/shallow";
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Animated, Image, Pressable, View } from "react-native";
 import { switchToTab, toggleMute } from "../../state/browser/actions";
 import { useTheme } from "../ui/theme";
@@ -35,8 +35,8 @@ import { hostOf } from "@ardia/core";
 import { Marquee, useMarqueeGroup } from "./Marquee";
 import { TimeBar } from "./MiniPlayer";
 import { useMediaTokens } from "./tokens";
+import { CONTROLS_ROW, EXPANDED_HEIGHT, GROWTH, ROW_HEIGHT, SEEK_ROW, settlePlayerMotion, type PlayerMotion } from "./playerMotion";
 
-const ROW_HEIGHT = 40;
 const ROW_INSET = space.s;
 const TRAILING_INSET = space.xs;
 const ART = 28;
@@ -45,13 +45,8 @@ const BUTTON = 24;
 const TITLE_HEIGHT = 16;
 const ARTIST_HEIGHT = 14;
 const TITLE_DROP = ARTIST_HEIGHT / 2;
-const SEEK_ROW = 18;
-const CONTROLS_ROW = 32;
 const CONTROLS_GAP = space.s;
 const CONTROLS_LIFT = space.s;
-const EXPANDED_BOTTOM = space.xs;
-const EXPANDED_HEIGHT = ROW_HEIGHT + SEEK_ROW + CONTROLS_ROW + EXPANDED_BOTTOM;
-const GROWTH = EXPANDED_HEIGHT - ROW_HEIGHT;
 const HOVER_SLOP = space.m;
 const EXPAND_MS = 220;
 const COLLAPSE_MS = 180;
@@ -62,23 +57,6 @@ const MARQUEE_PASSES_AT_REST = 1;
 export const SIDEBAR_PLAYER_HEIGHT = ROW_HEIGHT + 8;
 export const SIDEBAR_PLAYER_GROWTH = GROWTH;
 
-type PlayerMotion = {
-  progress: Animated.Value;
-  overhang: Animated.Value;
-  listClip: Animated.AnimatedMultiplication<number>;
-  listUnclip: Animated.AnimatedMultiplication<number>;
-  expandedSlot: { current: boolean };
-};
-
-export function usePlayerMotion(): PlayerMotion {
-  const [motion] = useState(() => {
-    const progress = new Animated.Value(0);
-    const overhang = new Animated.Value(1);
-    const listClip = Animated.multiply(progress.interpolate({ inputRange: [0, 1], outputRange: [0, -GROWTH] }), overhang);
-    return { progress, overhang, listClip, listUnclip: Animated.multiply(listClip, -1), expandedSlot: { current: false } };
-  });
-  return motion;
-}
 
 export function useSidebarPlayerTab(windowId: string, profileId: string, current: boolean): string | undefined {
   const sessions = useMedia(useShallow((m) => Object.keys(m.sessions)));
@@ -97,45 +75,40 @@ export function useSidebarPlayerTab(windowId: string, profileId: string, current
 
 const isLive = (session: Session) => session.duration === null;
 
-function useExpansion(want: boolean, motion: PlayerMotion) {
-  const [expanded, setExpanded] = useState(false);
-  const [slot, setSlot] = useState<"row" | "expanded">("row");
+function useExpansion(want: boolean, motion: PlayerMotion, leads: boolean) {
+  const { expanded, slot } = useSyncExternalStore(motion.state.subscribe, motion.state.get);
   const [opens] = useState(sidebarPlayerOpenCounter);
   useEffect(() => {
-    if (want === expanded) return;
-    if (want) return setExpanded(true);
-    const timer = setTimeout(() => setExpanded(false), COLLAPSE_DELAY_MS);
+    if (!leads || want === expanded) return;
+    if (want) return motion.state.set({ expanded: true });
+    const timer = setTimeout(() => motion.state.set({ expanded: false }), COLLAPSE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [want, expanded]);
+  }, [want, expanded, leads]);
   useLayoutEffect(() => {
+    if (!leads) return;
     motion.expandedSlot.current = slot === "expanded";
     if (slot === "expanded") {
       if (expanded) return void motion.overhang.setValue(0);
-      return setSlot("row");
+      return motion.state.set({ slot: "row" });
     }
     motion.overhang.setValue(1);
-    opens.motionStarted(expanded);
+    const target = expanded ? 1 : 0;
+    if (motion.target.current !== target) opens.motionStarted(expanded);
+    motion.target.current = target;
     const run = Animated.timing(motion.progress, {
-      toValue: expanded ? 1 : 0,
+      toValue: target,
       duration: reduceMotion() !== false ? 0 : expanded ? EXPAND_MS : COLLAPSE_MS,
       easing: curve.fade,
       useNativeDriver: true,
     });
     run.start(({ finished }) => {
       if (!finished) return;
-      if (expanded) setSlot("expanded");
+      if (expanded) motion.state.set({ slot: "expanded" });
       else opens.closeFinished();
     });
     return () => run.stop();
-  }, [expanded, slot]);
-  useLayoutEffect(
-    () => () => {
-      motion.progress.setValue(0);
-      motion.overhang.setValue(1);
-      motion.expandedSlot.current = false;
-    },
-    [],
-  );
+  }, [expanded, slot, leads]);
+  useLayoutEffect(() => () => void (motion.shared || settlePlayerMotion(motion)), [motion]);
   return { expanded, slot };
 }
 
@@ -288,7 +261,7 @@ function useReveal(progress: Animated.Value) {
   return reveal;
 }
 
-export function SidebarPlayer({ tabId, motion, docked }: { tabId: string; motion: PlayerMotion; docked: boolean }) {
+export function SidebarPlayer({ tabId, motion, docked, leads }: { tabId: string; motion: PlayerMotion; docked: boolean; leads: boolean }) {
   const tokens = useSidebarTokens();
   const session = useSession(tabId);
   const shown = useTab(tabId) !== undefined;
@@ -296,7 +269,7 @@ export function SidebarPlayer({ tabId, motion, docked }: { tabId: string; motion
   const { hovered, hoverProps } = useHover();
   const [seeking, setSeeking] = useState(false);
   const want = hovered || seeking;
-  const { expanded, slot } = useExpansion(want, motion);
+  const { expanded, slot } = useExpansion(want, motion, leads);
   const reveal = useReveal(motion.progress);
   const settled = expanded && slot === "expanded";
   const { pinned, trailingHoverProps } = usePinnedTrailing(slot, reveal.pin);

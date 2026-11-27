@@ -7,7 +7,7 @@ import { mapSlotIds, normalized, removeFromSplits, splitTabIds, stackAt } from "
 import { sharedListTab, sharesTabs } from "../tabs/tabShare";
 import { removeTabs } from "../tabs/tabs";
 import type { BrowserWindow, SplitView, Tab, TabGroup } from "../browser/types";
-import { samePage } from "../../lib/url";
+import { sameAddress, samePage } from "../../lib/url";
 import { isRegularWindow } from "../windows/small";
 import { tileFolderOf } from "./tileFolders";
 import { keepsLastPage } from "./pinHomes";
@@ -250,7 +250,7 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
     };
     patch.pinnedUrl = src.pinnedUrl || (tile ? src.url : null) || null;
     const keptPage = keepsLastPage(s.settings, { url: t.url, pinnedUrl: t.pinnedUrl, reopenAtPinnedUrl: src.reopenAtPinnedUrl });
-    if (tile && !hasPage(t) && !keptPage && !samePage(t.url, pinHomeOf(src))) Object.assign(patch, { url: pinHomeOf(src), title: src.title, favicon: src.favicon });
+    if (tile && !hasPage(t) && !keptPage && !sameAddress(t.url, pinHomeOf(src))) Object.assign(patch, { url: pinHomeOf(src), title: src.title, favicon: src.favicon });
     tabs[t.id] = { ...t, ...patch };
     return t.id;
   };

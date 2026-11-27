@@ -7,7 +7,7 @@ import type { PinChoices, PinSync } from "./pinChoices";
 import { groupOf } from "./tabGrouping";
 import { placing, type TabPlacement } from "./placing";
 import { pinnedGroupMembers } from "../browser/structure";
-import { samePage } from "../../lib/url";
+import { sameAddress, samePage } from "../../lib/url";
 import { pinHome } from "./pinHomes";
 import { sameList } from "../../lib/lists";
 
@@ -150,7 +150,7 @@ export const createOrganizeSlice: StateCreator<BrowserState, [], [], OrganizeSli
     const next = url ?? t?.url;
     if (!t || !next || !inPinnedContainer(get(), tabId)) return;
     get().updateTab(tabId, { pinnedUrl: next });
-    if (url && !samePage(t.url, url)) get().navigate(tabId, url);
+    if (url && !sameAddress(t.url, url)) get().navigate(tabId, url);
   },
 
 });

@@ -9,7 +9,8 @@ import { PageProfileContext, useSettings, useWindowId } from "../../state/browse
 import { newTab } from "../../state/tabs/actions";
 import { sidebarListLengthNow, useSidebarCells } from "../../state/sidebar/hooks";
 import { useNewTabAtTop, useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
-import { SIDEBAR_PLAYER_GROWTH, SIDEBAR_PLAYER_HEIGHT, SidebarPlayer, usePlayerMotion, useSidebarPlayerTab } from "../media/SidebarPlayer";
+import { SIDEBAR_PLAYER_GROWTH, SIDEBAR_PLAYER_HEIGHT, SidebarPlayer, useSidebarPlayerTab } from "../media/SidebarPlayer";
+import { usePlayerMotion } from "../media/playerMotion";
 import { usePageStyle } from "../../state/windows/profilePager";
 import { notePlayerTop, useSharedTilesStyle, useStationaryPlayerStyle } from "../../state/sidebar/sharedTiles";
 import { DragScope, useDragPage, useDragController, useDragging, usePinnedCount } from "./DragProvider";
@@ -69,8 +70,9 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   const offScreen = beside && !current;
   const playerTab = useSidebarPlayerTab(windowId, profileId, current);
   const playerHeight = playerTab ? SIDEBAR_PLAYER_HEIGHT : 0;
-  const playerMotion = usePlayerMotion();
   const playerAcrossProfiles = useSettings((st) => st.playingNowAcrossProfiles);
+  const sharedPlayer = paging && playerAcrossProfiles;
+  const playerMotion = usePlayerMotion(sharedPlayer ? windowId : null);
   const stationaryPlayer = useStationaryPlayerStyle(windowId, slot, width, paging && playerAcrossProfiles && !!playerTab);
   const wasCurrent = useRef(current);
   useEffect(() => {
@@ -260,7 +262,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                     onLayout={(e) => notePlayerTop(windowId, profileId, e.nativeEvent.layout.y + (docked ? space.m : 0))}
                     style={[{ paddingHorizontal: layout.sidebarInset, paddingTop: docked ? space.m : 0, paddingBottom: docked ? 0 : space.m }, stationaryPlayer]}
                   >
-                    <SidebarPlayer tabId={playerTab} motion={playerMotion} docked={docked} />
+                    <SidebarPlayer tabId={playerTab} motion={playerMotion} docked={docked} leads={!sharedPlayer || current} />
                   </Animated.View>
                 ) : null}
                 {docked && newTabShown ? (

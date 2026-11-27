@@ -185,3 +185,50 @@ test("with it on, parking still takes the pin home, hash routes included", () =>
   S().closeWindow(w);
   assert.equal(S().parkedPins.default.tabs.find((t) => t.pinnedUrl === HOME).url, HOME);
 });
+
+const copyIn = (windowId, home) => model.viewTabIds(S(), windowId).find((id) => S().tabs[id].pinnedUrl === home);
+const navUrl = (id) => S().tabs[id].page.nav?.url;
+const shownUrl = (id) => {
+  const page = S().tabs[id].page;
+  return page.kind === "frozen" ? S().tabs[page.holderId].url : page.nav?.url;
+};
+
+test("with it off, closing a pin on another route lets its sleeping copy in a second window open that route, and reopening it in the first keeps it", () => {
+  pinnedAt(HOME, AWAY);
+  S().updateSettings({ pinnedTabsReopenAtPinnedUrl: false });
+  try {
+    const first = S().windowOrder[0];
+    const p = copyIn(first, HOME);
+    const second = S().createWindow();
+    const copy = copyIn(second, HOME);
+    assert.equal(S().tabs[copy].page.kind, "asleep");
+    S().closeTab(p);
+    assert.equal(S().tabs[p].url, AWAY);
+    assert.equal(S().tabs[copy].url, AWAY, "the sleeping copy takes the kept route");
+    S().activate(copy);
+    assert.equal(S().tabs[copy].url, AWAY);
+    assert.equal(navUrl(copy), AWAY, "and opens it");
+    S().activate(p);
+    assert.equal(S().tabs[p].url, AWAY, "reopening it in the first window keeps the route");
+  } finally {
+    S().updateSettings({ pinnedTabsReopenAtPinnedUrl: true });
+  }
+});
+
+test("a hash-only pinned URL edit moves a sleeping copy to the new route, and it opens there", () => {
+  const { p } = pinnedAt(HOME, HOME);
+  const first = S().windowOrder[0];
+  const second = S().createWindow();
+  const copy = copyIn(second, HOME);
+  S().closeTab(p);
+  assert.equal(S().tabs[copy].page.kind, "asleep");
+  assert.equal(S().tabs[p].page.kind, "asleep");
+  S().setPinnedUrl(p, AWAY);
+  assert.equal(navUrl(p), AWAY, "the edited tab navigates to the new route, though only the fragment changed");
+  S().updateTab(p, { url: AWAY });
+  assert.equal(S().tabs[copy].pinnedUrl, AWAY);
+  assert.equal(S().tabs[copy].url, AWAY, "the copy moved with the edit");
+  S().activate(copy);
+  assert.equal(shownUrl(copy), AWAY, "and opens the new route");
+  assert.ok(first);
+});

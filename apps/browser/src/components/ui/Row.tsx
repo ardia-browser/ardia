@@ -59,7 +59,13 @@ export function Row({
   if (!onPress) return body;
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} accessibilityLabel={label} onAccessibilityTap={onPress} {...(hasControls ? {} : { accessibilityRole: "button" as const })}>
+      <Pressable
+        onPress={onPress}
+        accessibilityLabel={label}
+        accessibilityHint={typeof description === "string" ? description : undefined}
+        onAccessibilityTap={onPress}
+        {...(hasControls ? {} : { accessibilityRole: "button" as const })}
+      >
         {body}
       </Pressable>
     </View>

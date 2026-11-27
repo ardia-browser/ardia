@@ -10,15 +10,17 @@ extension ArdiaWebView: LoginListTarget {
     fillLoginList(["username": username, "password": password], origin: frameOrigin, completion: done)
   }
 
-  func loginListFillCode(_ code: String, frameOrigin: String, done: @escaping (Bool) -> Void) { done(false) }
+  func loginListFillCode(_ code: String, frameOrigin: String, done: @escaping (Bool) -> Void) {
+    fillLoginList(["code": code], origin: frameOrigin, completion: done)
+  }
 
   func loginListSync(open: Bool, picking: Bool) { syncLoginList(open: open, picking: picking) }
 
   func loginListConnect() { connectApplePasswordsFromLoginList() }
 
-  @objc(showLoginListFrom:screenRect:typing:typed:)
-  func showLoginList(from origin: String, screenRect: NSRect, typing: Bool, typed: String) {
-    LoginList.shared.show(self, field: LoginListField(frameOrigin: origin, screenRect: screenRect, trigger: typing ? .typing : .press, typed: typed))
+  @objc(showLoginListFrom:screenRect:typing:typed:code:)
+  func showLoginList(from origin: String, screenRect: NSRect, typing: Bool, typed: String, code: Bool) {
+    LoginList.shared.show(self, field: LoginListField(frameOrigin: origin, screenRect: screenRect, trigger: typing ? .typing : .press, typed: typed, kind: code ? .code : .login))
   }
 
   @objc(keyLoginList:)

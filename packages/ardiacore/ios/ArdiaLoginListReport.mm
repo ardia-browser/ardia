@@ -53,14 +53,14 @@ NSDictionary *ArdiaLoginListReport(id message) {
     NSString *key = Choice(d, @"key", @[ @"down", @"up", @"enter", @"escape", @"tab" ]);
     return key ? @{@"event" : event, @"token" : token, @"key" : key} : nil;
   }
-  NSString *field = Choice(d, @"field", @[ @"username", @"password" ]);
+  NSString *field = Choice(d, @"field", @[ @"username", @"password", @"code" ]);
   if (!field) return nil;
   const NSRect rect = NSMakeRect(Coordinate(d, @"x"), Coordinate(d, @"y"), MAX(1, Coordinate(d, @"width")), MAX(1, Coordinate(d, @"height")));
   return @{
     @"event" : event,
     @"token" : token,
     @"field" : field,
-    @"typed" : [field isEqualToString:@"password"] ? @"" : Typed(d),
+    @"typed" : [field isEqualToString:@"username"] ? Typed(d) : @"",
     @"rect" : [NSValue valueWithRect:rect],
   };
 }

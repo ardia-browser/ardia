@@ -89,7 +89,7 @@ import { iconRoles, LookBackdrop, MotionView, pageReportsDrawn, type MotionCurve
 import { hideArchiveCard, offerArchiveCard, offerArchiveCardNow, showArchiveCardNow, useArchiveCardShowing } from "../../state/browse/archiveCard";
 import { sendDeckCommand, takeDeckCommand, useDeckCommand } from "../../state/browse/deckCommands";
 import { ArchiveIntervalCard } from "./ArchiveIntervalCard";
-import { DeckBottomBar, incognitoInHeader } from "./DeckBottomBar";
+import { DeckBottomBar } from "./DeckBottomBar";
 import { useBottomBarLayout } from "../ui/useBottomBarLayout";
 import { DeckHeader, deckHeaderBottom } from "./DeckHeader";
 import { deckLook } from "./deckLook";
@@ -114,7 +114,7 @@ import { cardHitSeq, currentPhoneGeneration, DECK_HIT_LABELS, deckAwaitsEntrance
 import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 import { DECK_PULL, pullTarget, stackPullTarget } from "../../lib/deckPull";
 import { glassFadeMs } from "../ui/motion";
-import { barSpanCenter } from "../../lib/bottomBarSpan";
+import { barSpanCenter, incognitoInHeader } from "../../lib/bottomBarSpan";
 import { useBarGlyphFade, useDeckPulled } from "./deckPulled";
 
 type Phase = { kind: "opening" | "settled" | "closing"; id: string | null };

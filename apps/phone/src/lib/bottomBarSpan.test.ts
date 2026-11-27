@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { besideStrip, bottomBarLayout, DUO_PLUS_ABOVE, duoFieldReach, duoSqueeze, isOpenDuo } from "./bottomBarSpan.ts";
+import { besideStrip, bottomBarLayout, DUO_PLUS_ABOVE, duoFieldReach, duoSqueeze, incognitoInHeader, isOpenDuo } from "./bottomBarSpan.ts";
 
 test("with no hinge every bottom bar pads by the larger side inset plus its own side, on both sides, and nothing goes to a strip", () => {
   assert.deepEqual(bottomBarLayout(402, { left: 0, right: 0 }, "none", 24), { span: { left: 24, right: 24 }, strip: null });
@@ -106,4 +106,12 @@ test("Duo's strip control is the shared 48-point bar control, not a second defin
   assert.equal(DUO_BAR.button, FLOATING_BAR_PLACE.control);
   assert.match(source, /button: FLOATING_BAR_PLACE\.control/);
   assert.equal(DUO_BAR.axis, 48);
+});
+
+test("with sync on the deck's Incognito switch moves to the header and Spaces takes its bar slot on any iPhone and the closed Duo, but the open Duo keeps the switch in its strip's middle slot; with sync off it never moves", () => {
+  const iphone = bottomBarLayout(402, { left: 0, right: 0 }, "none", 24);
+  const closed = bottomBarLayout(466, { left: 0, right: 84 }, "closed", 24);
+  const open = bottomBarLayout(951, { left: 0, right: 84 }, "fullyOpen", 24);
+  assert.deepEqual([iphone, closed, open].map((layout) => incognitoInHeader(true, layout)), [true, true, false]);
+  assert.deepEqual([iphone, closed, open].map((layout) => incognitoInHeader(false, layout)), [false, false, false]);
 });

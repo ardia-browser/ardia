@@ -2185,7 +2185,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `page_summaries_on_device`, `page_summaries_excerpts`, `page_summaries_failed` | Pinch to Summarize on iPhone | A rising excerpt share can point to problems with Apple Intelligence. A rising failure share can point to problems reading pages |
 | `page_summaries_chatgpt`, `page_summaries_chatgpt_fallbacks` | Pinch to Summarize on Android | Android has no excerpts, so `page_summaries_failed` against `page_summaries_on_device` is the share of phones without a ready Gemini Nano. How many summaries the opt-in ChatGPT choice writes; fallbacks rising against `page_summaries_chatgpt` mean the Responses call or the token refresh broke. On Android, pinch opens against menu opens show the passive pinch watcher working, and zero pinch opens after a release with steady menu opens mean it stopped |
 | `gemini_nano_downloading`, `gemini_nano_not_offered`, `gemini_nano_needs_update`, `gemini_nano_errors`, `gemini_nano_download_failed`, `gemini_nano_write_failed`, `gemini_nano_download_rewrites` | Gemini Nano on Android | Why Browse for Me and Pinch to Summarize fell back. `not_offered` is the share of Android users on phones Google keeps the Prompt API from; `needs_update` or `errors` rising after a release or an AICore update means the ML Kit version and AICore disagree, so bump `genai-prompt`. `write_failed` against `browse_answers_on_device` plus `page_summaries_on_device` is the share of supported phones where Nano started but couldn't write: rising means the prompt or `fit` broke. `download_failed` is downloads AICore stopped, and `download_rewrites` against `downloading` shows whether people come back for the Nano answer |
-| `deck_spaces_button_taps` | the deck's bottom-left Spaces button, which takes the Incognito switch's place when sync is on (#4551) | Whether Spaces is reached from the deck now that it has its own button; read it against `deck_incognito_switches`, which should not fall to zero for synced testers (their switch moved to the header), and a zero across synced testers means the button stopped opening the Spaces sheet |
+| `deck_spaces_button_taps` | the deck's bottom-left Spaces button, which takes the Incognito switch's place when sync is on (#4551) | Whether Spaces is reached from the deck now that it has its own button; read it against `deck_incognito_switches`, which should not fall to zero for synced testers (their switch moved to the header). It counts taps, before the sheet opens: a zero across synced testers means the button is gone or not reached, not that the sheet failed |
 | `start_no_tabs_button_taps` | Start's Archive or Synced Tabs button, which takes the place of Tabs when no tabs are open (#3324) | Whether people use it instead of landing on an empty tab view; zero across testers after a release means the swap stopped or the button stopped opening the Archive or the spaces |
 | `tray_incognito_switches` | the search panel's Incognito eyes turning Incognito on (Redesigned look) | On Android, real finger presses on the eyes and on the panel's rows did nothing in 1.0.2: the panel's keyboard lift reached the view but not Fabric, so `Pressable` cancelled on the first MOVE. Near zero on Android beside iPhone's after a release means presses in the panel died again |
 | `incognito_unavailable` | Incognito refused because this phone's Android System WebView can't keep private pages separate (no multi-profile support), shown as a toast that opens the WebView's store page, or an Incognito page that failed to open and was closed | Before, every Incognito page on such a WebView stayed blank and took no taps, with no message. Anything above zero means people on old WebViews meet Incognito; it should stay at zero on iPhone |
@@ -2636,7 +2636,7 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   fully or partly open one at 600 wide or more is the open bar.
   - **Closed** (under 600 wide): Tabs on the bar's centre line, `+` 55 above it. The bar row keeps only the address
     capsule with its `···`, from 24 to 12 short of the strip (24 to 370 on 466). The start bar keeps Settings in that
-    span; the deck bar keeps the Incognito switch and Search Tabs there, its `+` in the strip on the bar's line. It
+    span; the deck bar keeps the Incognito switch (Spaces with sync on, the switch then in the header, #4551) and Search Tabs there, its `+` in the strip on the bar's line. It
     never squeezes: with Collapse Bottom Bar on it folds into the host pill as any iPhone does, strip buttons
     included, and with it off it never collapses.
   - **Open** (600 wide or more), from the owner's sketch: three fixed slots, `+` 110 and Tabs 55 above the bar's line
@@ -4221,13 +4221,14 @@ button's touch-and-hold menu, the search panel's eyes, a search row's touch and 
   glass, opening the Spaces sheet (`openSpacesFromDeck`, `deck_spaces_button_taps`), so Spaces keeps its bottom-left
   place once tabs are open, as the original look's deck bar already had it. The pull from a page into the deck
   cross-fades the bar's tabs circle into the laptop instead of the eyes (`DeckLeadingGlyph`), so the bar still lands
-  on the button that is there.
+  on the button that is there. Long space names shrink beside the two header circles, keeping the chevron inside.
 - The Incognito switch then sits in the header, a 44-point circle beside the `···`, where main's SwiftUI deck has its
   Incognito pill. Its tap, its hint and its touch and hold (Close Incognito Tabs) are unchanged, and the deck's
   entrance takes an early touch on either as before (`DeckHitTarget` `privacy`, and `sheet` for Spaces).
 - With sync off there are no spaces to show, and the deck is as before: the switch is the bottom-left button. Spaces
-  stays in the `···` menu. The closed Duo's strip keeps the switch in its strip slot. One rule decides it
-  (`incognitoInHeader`). Both phones' redesigned look; Material You's deck is unchanged.
+  stays in the `···` menu. The closed Duo takes the iPhone's arrangement in its bar row; the open Duo keeps the switch
+  in its strip's middle slot, and the page's Tabs button turns into whichever glyph the deck puts there. One rule
+  decides it for the deck and the pull (`incognitoInHeader` in `lib/bottomBarSpan.ts`). Both phones' redesigned look; Material You's deck is unchanged.
 
 #### Android's page menu and Site Settings (2026-11-25)
 

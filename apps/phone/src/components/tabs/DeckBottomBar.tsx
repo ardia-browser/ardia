@@ -18,7 +18,7 @@ import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { deckLook } from "./deckLook";
 import { useKeyboardTopFromBottom } from "../search/useKeyboardHeight";
 import { FadingGlyphs, GlassCircleButton, PlusMenuButton, type ChromeFade } from "./ChromeButtons";
-import { besideStrip, duoFieldReach, type BottomBarLayout } from "../../lib/bottomBarSpan";
+import { besideStrip, duoFieldReach, incognitoInHeader, type BottomBarLayout } from "../../lib/bottomBarSpan";
 import { DeckHitTarget } from "./DeckHitTarget";
 import { claimDeckSearchFocus } from "../../state/browse/deckTurn";
 
@@ -41,8 +41,6 @@ type Props = {
 
 
 export const SPACES_HINT = "Shows your Mac’s spaces.";
-
-export const incognitoInHeader = (syncEnabled: boolean, layout: BottomBarLayout) => syncEnabled && !layout.strip?.ends;
 
 export function IncognitoSwitch({ incognito, dark, onLongPress, diameter = controlSize.bar, underlay = false, glassShown, glassShownMs, glyphFade }: { incognito: boolean; dark: boolean; onLongPress?: () => void; diameter?: number; underlay?: boolean } & ChromeFade) {
   const size = { width: diameter, height: diameter };

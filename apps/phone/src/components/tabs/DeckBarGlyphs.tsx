@@ -1,7 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
 import { BarPlusGlyph, deckChromeLayout, font, iPhoneOr, rolesFor, startLayout, SystemGlyph } from "../ui";
-import { useSyncEnabled } from "../../state/sync/hooks";
 import { CIRCLE_SYSTEM_GLYPH } from "./ChromeButtons";
 
 export function IncognitoGlyph({ incognito, dark }: { incognito: boolean; dark: boolean }) {
@@ -12,8 +11,8 @@ export function SpacesGlyph({ dark }: { dark: boolean }) {
   return <SystemGlyph systemName="laptopcomputer" pointSize={CIRCLE_SYSTEM_GLYPH} weight="medium" name="laptop" size={startLayout.circleGlyph} color={rolesFor(dark).label} />;
 }
 
-export function DeckLeadingGlyph({ incognito, dark }: { incognito: boolean; dark: boolean }) {
-  return useSyncEnabled() ? <SpacesGlyph dark={dark} /> : <IncognitoGlyph incognito={incognito} dark={dark} />;
+export function DeckLeadingGlyph({ spaces, incognito, dark }: { spaces: boolean; incognito: boolean; dark: boolean }) {
+  return spaces ? <SpacesGlyph dark={dark} /> : <IncognitoGlyph incognito={incognito} dark={dark} />;
 }
 
 export function SearchTabsGlyphs({ dark }: { dark: boolean }) {

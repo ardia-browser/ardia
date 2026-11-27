@@ -14,6 +14,8 @@ export const DUO_PLUS_ABOVE = DUO_BAR.button + DUO_BAR.buttonGap;
 
 export const isOpenDuo = (width: number, hinge: ScreenHinge) => (hinge === "fullyOpen" || hinge === "partiallyOpen") && width >= DUO_BAR.openFrom;
 
+export const incognitoInHeader = (syncEnabled: boolean, layout: BottomBarLayout) => syncEnabled && !layout.strip?.ends;
+
 export function bottomBarLayout(width: number, insets: { left: number; right: number }, hinge: ScreenHinge, side: number): BottomBarLayout {
   const stripLeft = insets.left > insets.right;
   const inset = stripLeft ? insets.left : insets.right;

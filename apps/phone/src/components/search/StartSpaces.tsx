@@ -237,7 +237,7 @@ export function emojiOf(icon: string | null): string | null {
 
 const styles = StyleSheet.create({
   title: { flexDirection: "row", alignItems: "center", gap: startLayout.titleSpacing, minHeight: browseLayout.hitTarget },
-  headline: { fontWeight: "600" },
+  headline: { fontWeight: "600", flexShrink: 1 },
   logoButton: { alignItems: "center", justifyContent: "center" },
   centered: { alignItems: "center", justifyContent: "center" },
 });

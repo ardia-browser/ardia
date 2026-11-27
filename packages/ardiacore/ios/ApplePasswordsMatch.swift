@@ -80,6 +80,11 @@ enum ApplePasswordsMatch {
       .sorted { $0.user.localizedCaseInsensitiveCompare($1.user) == .orderedAscending }
   }
 
+  static func typedFirst(_ codes: [ApplePasswordsCode], user: String?) -> [ApplePasswordsCode] {
+    guard let typed = user?.lowercased() else { return codes }
+    return codes.filter { $0.user.lowercased() == typed } + codes.filter { $0.user.lowercased() != typed }
+  }
+
   static func codeHosts(_ codes: [ApplePasswordsCode]) -> [String] { codes.map { normalized($0.domain) }.filter { !$0.isEmpty } }
 
   static func codes(_ codes: [ApplePasswordsCode], host: String, domains: [String: String]) -> [ApplePasswordsCode] {

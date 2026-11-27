@@ -52,7 +52,17 @@ final class LoginList: NSObject {
     var domains: [String: String] = [:]
   }
 
+  private struct Account {
+    weak var target: LoginListTarget?
+    let site: String
+    let user: String
+    let at: Date
+  }
+
+  static let accountSeconds: TimeInterval = 300
+
   private var shown: Shown?
+  private var accounts: [Account] = []
   private var ticket = 0
   private var declined: Set<String> = []
   private var resume: Shown?
@@ -93,14 +103,15 @@ final class LoginList: NSObject {
         guard let self, let target, asked == self.ticket, Self.origin(of: target.loginListPage) == page else { return }
         guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return self.close(target) }
         let site = domains[pageHost] ?? pageHost
+        if !field.typed.isEmpty { self.remember(field.typed, on: ApplePasswordsMatch.site(pageHost, domains: domains), in: target) }
+        var next = Shown(target: target, field: field, page: page, host: host, site: site, logins: [])
+        next.domains = domains
         switch result {
         case .success:
-          let logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains)
-          self.present(Shown(target: target, field: field, page: page, host: host, site: site, logins: logins), notice: nil)
-        case .failure(.notConnected):
-          self.offerConnect(Shown(target: target, field: field, page: page, host: host, site: site, logins: []))
-        case .failure(let problem):
-          self.present(Shown(target: target, field: field, page: page, host: host, site: site, logins: []), notice: Self.notice(problem))
+          next.logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains)
+          self.present(next, notice: nil)
+        case .failure(.notConnected): self.offerConnect(next)
+        case .failure(let problem): self.present(next, notice: Self.notice(problem))
         }
       }
     }
@@ -128,7 +139,7 @@ final class LoginList: NSObject {
         next.domains = domains
         switch result {
         case .success:
-          next.codes = ApplePasswordsMatch.codes(found, host: host, domains: domains)
+          next.codes = ApplePasswordsMatch.typedFirst(ApplePasswordsMatch.codes(found, host: host, domains: domains), user: self.account(on: next.codeSite, in: target))
           guard !next.codes.isEmpty else { return self.close(target) }
           self.present(next, notice: nil)
         case .failure(.notConnected): self.offerConnect(next)
@@ -136,6 +147,14 @@ final class LoginList: NSObject {
         }
       }
     }
+  }
+
+  private func remember(_ user: String, on site: String, in target: LoginListTarget) {
+    accounts = accounts.filter { $0.target != nil && $0.target !== target } + [Account(target: target, site: site, user: user, at: Date())]
+  }
+
+  private func account(on site: String, in target: LoginListTarget) -> String? {
+    accounts.last { $0.target === target && $0.site == site && Date().timeIntervalSince($0.at) < Self.accountSeconds }?.user
   }
 
   static func domains(_ hosts: [String], profile: String, done: @escaping ([String: String]) -> Void) {
@@ -276,6 +295,7 @@ final class LoginList: NSObject {
         switch result {
         case .success(let password):
           ApplePasswordsSaving.remember(scheme: login.insecure ? "http" : "https", host: current.host, user: login.user, password: password)
+          self.remember(login.user, on: ApplePasswordsMatch.site(current.host, domains: current.domains), in: target)
           target.loginListFill(username: login.user, password: password, frameOrigin: current.field.frameOrigin) { filled in
             Self.count(filled ? "filled" : "fillFailed", engine: engine)
           }

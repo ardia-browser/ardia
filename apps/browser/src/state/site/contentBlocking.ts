@@ -29,7 +29,7 @@ const LIST_ADDRESS_LIMIT = 2048;
 
 export function filterListAddress(typed: string): string | null {
   const text = typed.trim();
-  if (!text || text.length > LIST_ADDRESS_LIMIT) return null;
+  if (!text || text.length > LIST_ADDRESS_LIMIT || /\s/.test(text)) return null;
   const parts = webUrl(/^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`);
   if (!parts || (!parts.host.includes(".") && parts.host !== "localhost")) return null;
   return formatUrl(parts);

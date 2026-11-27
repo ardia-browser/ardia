@@ -36,12 +36,33 @@ int main() {
 }
 `;
 
-function reports(messages) {
+const TICKET_DRIVER = `
+#import <Foundation/Foundation.h>
+#import "ArdiaLoginListReport.h"
+int main() {
+  @autoreleasepool {
+    NSData *input = [[NSFileHandle fileHandleWithStandardInput] readDataToEndOfFile];
+    NSArray *lines = [[[NSString alloc] initWithData:input encoding:NSUTF8StringEncoding] componentsSeparatedByString:@"\\n"];
+    NSMutableArray *out = [NSMutableArray array];
+    for (NSString *line in lines) {
+      if (!line.length) continue;
+      id message = [NSJSONSerialization JSONObjectWithData:[line dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+      id ticket = [message isKindOfClass:NSDictionary.class] ? ((NSDictionary *)message)[@"ticket"] : nil;
+      [out addObject:ArdiaLoginListTicket(ticket) ?: NSNull.null];
+    }
+    NSData *json = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
+    fwrite(json.bytes, 1, json.length, stdout);
+  }
+  return 0;
+}
+`;
+
+function reports(messages, source = DRIVER) {
   const dir = mkdtempSync(join(tmpdir(), "login-list-report-"));
   try {
     const driver = join(dir, "driver.mm");
     const binary = join(dir, "driver");
-    writeFileSync(driver, DRIVER);
+    writeFileSync(driver, source);
     const built = spawnSync("xcrun", ["clang++", "-std=c++20", "-fobjc-arc", "-Wall", "-Werror", "-framework", "Foundation", "-framework", "AppKit", "-I", ios, guard, driver, "-o", binary], { encoding: "utf8", timeout: 60_000 });
     assert.equal(built.status, 0, built.stderr || String(built.error));
     const ran = spawnSync(binary, [], { input: messages.map((m) => JSON.stringify(m) ?? "null").join("\n"), encoding: "utf8", timeout: 20_000 });
@@ -117,4 +138,19 @@ test("B1: every hostile value in every field of a Login list report is refused o
   assert.deepEqual(broken.slice(0, 5), []);
   assert.ok(seen.some((r) => r?.event === "show"), "some reports still go through, so the check above ran on real ones");
   for (const typed of seen.filter((r) => r?.typed !== undefined).map((r) => r.typed)) assert.ok(typed.length <= 200);
+});
+
+test("B1: every hostile value as a loginFilled ticket is refused or kept as the digit token native issued", { skip: process.platform !== "darwin" }, () => {
+  const messages = [{ ticket: "7", filled: true }, { ticket: "1234567890123456", filled: false }];
+  for (const { value } of HOSTILE_VALUES) {
+    messages.push(value, { ticket: value, filled: true });
+    for (const wrapped of [`7${typeof value === "string" ? value : ""}`, `${typeof value === "string" ? value : ""}7`]) messages.push({ ticket: wrapped, filled: true });
+  }
+  messages.push({ ticket: "12345678901234567", filled: true }, { ticket: "-7", filled: true }, { ticket: "7.0", filled: true }, { ticket: "\uff17", filled: true });
+  const seen = reports(messages, TICKET_DRIVER);
+  assert.equal(seen.length, messages.length);
+  assert.deepEqual(seen.slice(0, 2), ["7", "1234567890123456"], "a ticket native issued still goes through, so the check below ran on real ones");
+  const broken = seen.map((ticket, i) => [ticket, messages[i]]).filter(([ticket, message]) => ticket !== null && !(/^[0-9]{1,16}$/.test(ticket) && String(message.ticket).includes(ticket)));
+  assert.deepEqual(broken.slice(0, 5), []);
+  assert.deepEqual(seen.slice(-4), [null, null, null, null], "a 17-digit, signed, decimal or full-width ticket is refused");
 });

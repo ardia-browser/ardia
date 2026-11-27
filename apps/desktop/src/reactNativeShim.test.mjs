@@ -105,6 +105,10 @@ export function reactNativeMembers(path, text) {
         }
       }
     }
+    if (ts.isIdentifier(node) && locals.has(node.text) && !destructured.has(node.text) && !ts.isImportSpecifier(node.parent)) {
+      const use = useOf(node);
+      if (use.kind === "call") used.push({ api: locals.get(node.text), member: null, kind: "call", optional: use.optional, at: at(node) });
+    }
     if (ts.isIdentifier(node) && destructured.has(node.text) && !ts.isBindingElement(node.parent)) {
       const use = useOf(node);
       if (use.kind === "call") {
@@ -215,6 +219,17 @@ test("calls through destructured and namespace-destructured bindings are checked
   assert.deepEqual(missingFromShim({ AccessibilityInfo: { notAFunction: () => {} }, Flag: () => {} }, reactNativeMembers("demo.ts", text), new Set()), []);
 });
 
+test("a direct call to a named react-native import is checked like any other call", () => {
+  const text = [
+    'import { useWindowDimensions, findNodeHandle as handleOf, Platform } from "react-native";',
+    "useWindowDimensions(); (handleOf!)(null); Platform.select({});",
+  ].join("\n");
+  const used = reactNativeMembers("demo.ts", text);
+  assert.deepEqual(used.map(({ api, member, kind }) => `${api}${member === null ? "" : `.${member}`}:${kind}`), ["useWindowDimensions:call", "findNodeHandle:call", "Platform.select:call"]);
+  assert.deepEqual(missingFromShim({ useWindowDimensions: () => ({}), findNodeHandle: () => null, Platform: { select: () => null } }, used, new Set()), []);
+  assert.deepEqual(missingFromShim({ useWindowDimensions: undefined, findNodeHandle: {}, Platform: { select: () => null } }, used, new Set()), ["useWindowDimensions() (demo.ts:2)", "findNodeHandle() (demo.ts:2)"]);
+});
+
 test("a destructuring default stands in only for undefined, so a null member still fails its call while ?. tolerates it", () => {
   const text = [
     'import { AccessibilityInfo as A11y } from "react-native";',
@@ -231,6 +246,7 @@ test("every react-native API member the shared UI uses at run time exists in the
   const shim = await import("./shims/react-native.tsx");
   const used = sharedSources().flatMap((path) => reactNativeMembers(path, readFileSync(REPO + path, "utf8")));
   assert.ok(used.some(({ api, member, kind }) => api === "AccessibilityInfo" && member === "isHighContrastEnabled" && kind === "call"), "the scan still finds the sidebar's contrast check");
+  assert.ok(used.some(({ member, kind }) => member === null && kind === "call"), "the scan still finds direct calls to named imports");
   assert.deepEqual(missingFromShim(shim, used), [], "add the member to apps/desktop/src/shims/react-native.tsx, or guard the use with ?. where react-native-web has no twin");
 });
 

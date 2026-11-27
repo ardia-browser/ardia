@@ -13,6 +13,7 @@ struct WebKitAutoPictureInPicture {
   private(set) var fullScreen = false
   private(set) var settlingFromFullScreen = false
   private(set) var seenInFullScreen = false
+  var opensOverFullScreen: Bool { fullScreen && seenInFullScreen }
   private(set) var openRequests = 0
   private var heldWhileAway = false
   private var cancelledRequest: Int?

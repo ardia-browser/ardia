@@ -377,7 +377,7 @@ enum WebKitPageScript {
       schedule();
       return !!m || pageActions.length > 0;
     },
-    pictureInPicture(on, automatic) {
+    pictureInPicture(on, automatic, overFullScreen) {
       const shownFullScreen = () => {
         for (let w = window; ; w = w.parent) {
           let d;
@@ -400,7 +400,7 @@ enum WebKitPageScript {
       const largest = () => videos.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
       const v = videos.find(playing) || (automatic ? null : largest());
       if (!v) return automatic ? "nothingPlaying" : false;
-      if (automatic && shownFullScreen()) return false;
+      if (automatic && !overFullScreen && shownFullScreen()) return false;
       if (v.webkitSupportsPresentationMode && v.webkitSupportsPresentationMode("picture-in-picture")) v.webkitSetPresentationMode("picture-in-picture");
       else if (v.requestPictureInPicture) v.requestPictureInPicture();
       else return false;

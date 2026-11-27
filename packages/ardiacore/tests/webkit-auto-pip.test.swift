@@ -223,4 +223,27 @@ struct AutoPictureInPictureRule {
     let closes7 = rule.reported(active: true)
     #expect(!closes7)
   }
+
+  @Test func `leaving the Space of a full screen the page was seen in opens over it`() {
+    var rule = WebKitAutoPictureInPicture()
+    rule.pageFullScreen(true, tab: 1)
+    #expect(!rule.opensOverFullScreen)
+    #expect(rule.sight(true, enabled: true, playing: true) == .none)
+    #expect(rule.sight(false, enabled: true, playing: true) == .open)
+    #expect(rule.opensOverFullScreen)
+  }
+
+  @Test func `a sight change while WebKit is leaving full screen holds, even after the full screen was seen`() {
+    var rule = WebKitAutoPictureInPicture()
+    rule.pageFullScreen(true, tab: 1)
+    #expect(rule.sight(true, enabled: true, playing: true) == .none)
+    rule.pageFullScreen(false, tab: 1)
+    #expect(!rule.seenInFullScreen)
+    #expect(!rule.opensOverFullScreen)
+    #expect(rule.sight(false, enabled: true, playing: true) == .heldForFullScreen)
+    rule.pageFullScreen(false, tab: 1)
+    #expect(rule.sight(false, enabled: true, playing: true) == .none)
+    #expect(rule.sight(true, enabled: true, playing: true) == .none)
+    #expect(rule.sight(false, enabled: true, playing: true) == .open)
+  }
 }

@@ -63,7 +63,7 @@ extension WebKitTab {
       let stamp = ArdiaConsentStamp.begin()
       let request = autoPictureInPictureRule.openRequests
       let view = webView
-      setPictureInPicture(true, automatic: true) { [weak self, weak view] answer in
+      setPictureInPicture(true, automatic: true, overFullScreen: autoPictureInPictureRule.opensOverFullScreen) { [weak self, weak view] answer in
         guard let self, let view, !self.closed, self.webView === view else { return }
         view.autoPictureInPictureRule.answered(request, opened: answer == .opened)
         if answer == .nothingPlaying { self.emit("autoPictureInPictureKept", stamp.onto(["reason": "nothingPlaying"])) }
@@ -78,7 +78,7 @@ extension WebKitTab {
   }
 
   private func followPageFullScreen() {
-    autoPictureInPictureRule.pageFullScreen((webView?.fullscreenState ?? .notInFullscreen) != .notInFullscreen, tab: browserId)
+    autoPictureInPictureRule.pageFullScreen(WebKitFullscreenPage.isOn(webView?.fullscreenState ?? .notInFullscreen), tab: browserId)
   }
 
   private func noteStayedOnAppSwitch() {

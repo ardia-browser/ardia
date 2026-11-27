@@ -132,7 +132,7 @@ export function startNewTabBar() {
   queueMicrotask(noteLaunchCards);
   if (!NEW_TAB_BAR_POLICY.dismissOnWindowDeactivation) return;
   onAppEvent((e) => {
-    if (e.type === "resignActive" || e.type === "screenLocked") dismissBars();
+    if (e.type === "screenLocked") dismissBars();
   });
   onWindowEvent((e) => {
     if (e.type === "focus") dismissBars(e.id);

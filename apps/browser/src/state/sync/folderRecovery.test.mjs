@@ -232,6 +232,10 @@ test("recreateSyncFolder handles iCloud off, already-reappeared folder, existing
   const { folderRecreateMessage } = await import("./folderRecovery.ts");
   assert.equal(partial.error, "uploadFailed");
   assert.equal(folderRecreateMessage(partial, "iCloud Drive > Ardia Sync"), null);
+  assert.equal(
+    folderRecreateMessage({ error: "failed", message: "You don’t have permission to save the file “x” in the folder “Ardia Sync”." }, "~/Sync"),
+    "Couldn’t recreate the sync folder at ~/Sync: You don’t have permission to save the file “x” in the folder “Ardia Sync”.",
+  );
   assert.match(partial.message, /disk full/);
   assert.equal(engine.useSync.getState().status, "stalled");
   assert.ok(JSON.parse(shell.docs.get("sync.json")).reseedScopes?.includes(scope), "unseeded scope stays queued for retry");

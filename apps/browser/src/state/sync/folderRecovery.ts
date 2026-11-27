@@ -83,7 +83,7 @@ export function folderRecreateMessage(result: FolderRecreateResult, label: strin
     case "uploadFailed":
       return null;
     case "failed":
-      return `Couldn’t recreate the sync folder at ${label}: ${result.message}.`;
+      return `Couldn’t recreate the sync folder at ${label}: ${result.message.replace(/\.+$/, "")}.`;
   }
 }
 

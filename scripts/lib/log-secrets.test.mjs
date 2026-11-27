@@ -76,3 +76,16 @@ test("extra text, such as the system log, is scanned under its own name", () => 
   const { hits } = scanLogs({ dirs: [], secrets: [CODE], extra: { "system log": `{"composedMessage":"paired with 482916"}` } });
   assert.deepEqual(hits.map((h) => [h.file, h.label]), [["system log", CODE.label]]);
 });
+
+test("a code inside a UUID is part of that identifier, not a leak; beside other letters it still counts", () => {
+  const root = tree({
+    "a.log": "nw_connection FA482916-FA27-4C1B-9E0D-1234567890AB ready\nflow 1b2c3d4e-5f60-4718-a9b0-c1d2e3482916 done\n",
+    "b.log": "otp=x482916\n",
+    "c.log": Buffer.from("id FA482916-FA27-4C1B-9E0D-1234567890AB\n", "utf16le"),
+  });
+  try {
+    assert.deepEqual(scanLogs({ dirs: [root], secrets: [CODE] }).hits.map((h) => h.file), [join(root, "b.log")]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

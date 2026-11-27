@@ -20,13 +20,27 @@ export function logFiles(dirs) {
 }
 
 const DIGIT = (byte) => byte >= 0x30 && byte <= 0x39;
+const UUID_PART = (byte) => DIGIT(byte) || (byte >= 0x41 && byte <= 0x46) || (byte >= 0x61 && byte <= 0x66) || byte === 0x2d;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_LENGTH = 36;
+
+function insideUuid(buffer, at, length, width) {
+  const unit = (i) => (width === 2 && buffer[i + 1] !== 0 ? -1 : buffer[i]);
+  let start = at;
+  while (start - width >= 0 && at - (start - width) <= UUID_LENGTH * width && UUID_PART(unit(start - width))) start -= width;
+  let end = at + length;
+  while (end + width <= buffer.length && end - start < UUID_LENGTH * width && UUID_PART(unit(end))) end += width;
+  const units = [];
+  for (let i = start; i < end; i += width) units.push(buffer[i]);
+  return UUID.test(String.fromCharCode(...units));
+}
 
 function occurs(buffer, needle, whole, width) {
   for (let at = buffer.indexOf(needle); at >= 0; at = buffer.indexOf(needle, at + 1)) {
     if (!whole) return at;
     const before = at >= width ? buffer[at - width] : -1;
     const after = at + needle.length < buffer.length ? buffer[at + needle.length] : -1;
-    if (!DIGIT(before) && !DIGIT(after)) return at;
+    if (!DIGIT(before) && !DIGIT(after) && !insideUuid(buffer, at, needle.length, width)) return at;
   }
   return -1;
 }

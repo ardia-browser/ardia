@@ -17,28 +17,12 @@ import { cleanHeaders, decodedBytes, fileFailure, siteHeadersOf, siteTarget, sta
 import { activeManifest, currentPlugins, NO_RECORD, recordOf } from "./store";
 import { isOfficialFolder } from "./appChecks";
 import { hiddenPageTransport } from "./siteContexts";
+import { admit, SITES_LIMITS, takeToken } from "./siteBudget";
 
 export { decodedBytes, siteHeadersOf, siteTarget } from "./siteRules";
+export { activeSiteRequests, SITES_LIMITS, takeToken } from "./siteBudget";
 
 export const SITES_METHODS = ["sites.available", "sites.fetch", "sites.download", "sites.cancel", "sites.status", "sites.session"] as const;
-
-export const SITES_LIMITS = {
-  bodyBytes: 1024 * 1024,
-  replyBodyBytes: 768 * 1024,
-  timeoutMs: [1000, 120_000],
-  defaultTimeoutMs: 30_000,
-  ratePerSecond: 5,
-  burst: 20,
-  active: 4,
-  chunkBytes: 2 * 1024 * 1024,
-  chunkWaitMs: 90_000,
-  startWaitMs: 120_000,
-  cancelWaitMs: 3000,
-  maxDownloadBytes: 2 * 1024 * 1024 * 1024,
-  progressGapMs: 250,
-  keptEnded: 16,
-  sessions: 8,
-} as const;
 
 const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"];
 const SIGNED_OUT_OFF = "You turned off this plugin's use of your sign-in in Settings › Plugins.";
@@ -46,15 +30,12 @@ const ENDED = "The plugin stopped, or its use of your sign-in was turned off.";
 const NO_TRANSPORT = "Only Ardia's own official plugins can use your sign-in on a site in this version of Ardia.";
 
 type Caller = { name: string; run: number };
-type Bucket = { tokens: number; at: number };
 type Op = { caller: Caller; generation: number };
 type DownloadState = { download: string; state: "running" | "done" | "failed" | "cancelled"; received: number; total?: number; size?: number; code?: string; error?: string };
 type Download = Op & { id: string; to: string; stage: string; cancelled: boolean; key: string | null; halt: () => void; halted: Promise<void>; last: DownloadState };
 type Session = SitePlace & { plugin: string; run: number };
 
 let transport: SiteTransport | null = null;
-const buckets = new Map<string, Bucket>();
-const active = new Map<string, number>();
 const generations = new Map<string, number>();
 const downloads = new Map<string, Download>();
 const ended = new Map<string, Map<string, DownloadState>>();
@@ -91,28 +72,6 @@ function refused(message: string, consent: ConsentToken | null): Body {
   notePlugin("plugin_site_refusals", consent);
   return failure("refused", message);
 }
-
-export function takeToken(name: string, now = Date.now()): boolean {
-  const b = buckets.get(name) ?? { tokens: SITES_LIMITS.burst, at: now };
-  b.tokens = Math.min(SITES_LIMITS.burst, b.tokens + ((now - b.at) / 1000) * SITES_LIMITS.ratePerSecond);
-  b.at = now;
-  buckets.set(name, b);
-  if (b.tokens < 1 || (active.get(name) ?? 0) >= SITES_LIMITS.active) return false;
-  b.tokens -= 1;
-  return true;
-}
-
-function admit(name: string): () => void {
-  active.set(name, (active.get(name) ?? 0) + 1);
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    active.set(name, Math.max(0, (active.get(name) ?? 1) - 1));
-  };
-}
-
-export const activeSiteRequests = (name: string) => active.get(name) ?? 0;
 
 function currentPlace(): SitePlace | Body {
   const s = useBrowser.getState();

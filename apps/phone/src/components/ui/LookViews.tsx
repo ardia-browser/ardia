@@ -1,13 +1,14 @@
 import {
   DeckBackdrop,
   Frost,
-  FrostSource,
+  FrostSource as NativeFrostSource,
   Glass,
   GlassBackdrop,
   glassIsNative,
   INCOGNITO_LOOK,
   lookIsNative,
   ProfileBackdrop,
+  type FrostSourceProps,
   type FrostVariant,
   type GlassShape,
 } from "@ardia/phone-native";
@@ -53,11 +54,31 @@ function useGlassPrivately() {
   return side ?? browsing;
 }
 
-const makeHeldFrostSource = () => Animated.createAnimatedComponent(FrostSource);
+const makeHeldFrostSource = () => Animated.createAnimatedComponent(NativeFrostSource);
 
 let heldFrostSource: ReturnType<typeof makeHeldFrostSource> | null = null;
 
+export function FrostSource(props: FrostSourceProps) {
+  if (!useNativeLook()) {
+    const { name: _name, heldFill: _heldFill, heldUntil: _heldUntil, ...rest } = props;
+    return <View {...rest} />;
+  }
+  return <NativeFrostSource {...props} />;
+}
+
 export function HeldFrostSource(props: ComponentProps<ReturnType<typeof makeHeldFrostSource>>) {
+  if (!useNativeLook()) {
+    return (
+      <View
+        testID={props.testID as string | undefined}
+        style={props.style as StyleProp<ViewStyle>}
+        pointerEvents={props.pointerEvents as ComponentProps<typeof View>["pointerEvents"]}
+        collapsable={props.collapsable as boolean | undefined}
+      >
+        {props.children as ReactNode}
+      </View>
+    );
+  }
   const Held = (heldFrostSource ??= makeHeldFrostSource());
   return <Held {...props} />;
 }

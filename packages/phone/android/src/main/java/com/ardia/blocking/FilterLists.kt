@@ -133,6 +133,7 @@ class FilterLists(
     private var building: Deferred<Unit>? = null
     private var needsBuild = false
     private var revision = 0L
+    private var hasCompiled = false
     private val loaded = HashMap<String, ParsedFilterList>()
 
     var isDemo = false
@@ -206,7 +207,7 @@ class FilterLists(
         }
         val changedUrgent = download(urgent, allowExpensive = true, force = false)
         val changedDue = download(due, allowExpensive = false, force = false)
-        if (changedUrgent || changedDue || (loaded.isEmpty() && enabledIds().isNotEmpty())) rebuildOnSerial()
+        if (changedUrgent || changedDue || (!hasCompiled && enabledIds().isNotEmpty())) rebuildOnSerial()
     }
 
     suspend fun addList(url: String): String? = try {
@@ -357,7 +358,7 @@ class FilterLists(
         if (isDemo) return
         val ids = enabledIds().filter { sourceFile(it).isFile }
         val signature = buildSignature(ids)
-        if (signature == record.signature && (mutableCompiled.value != null || (ids.isEmpty() && myFilters.isEmpty()))) {
+        if (signature == record.signature && (hasCompiled || (ids.isEmpty() && myFilters.isEmpty()))) {
             lastBuildStats = BuildStats(ids.size, 0, 0)
             return
         }
@@ -412,7 +413,15 @@ class FilterLists(
         }
         if (mine != null) sources += EngineSource(mine, null, isOwner = true)
         revision++
+        hasCompiled = true
         mutableCompiled.value = CompiledFilters(sources, revision)
+    }
+
+    internal suspend fun releaseCompiled(installedRevision: Long) = withContext(serial) {
+        if (revision == installedRevision) {
+            loaded.clear()
+            mutableCompiled.value = null
+        }
     }
 
     private class CompileOutput(

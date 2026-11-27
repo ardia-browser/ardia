@@ -46,6 +46,7 @@ export { useIncreasedContrast, useReduceMotion, useReduceTransparency } from "./
 export { FadingBackdrop } from "./FadingBackdrop";
 export { ChromeSurface, CustomLookBackdrop, DeckLookBackdrop, DeckLookBackdropBase, LookBackdrop, LookBackdropBase, LookFrost, LookGlass, GlassBehind, GlassBranch, GlassPrivacy, GlassSource, PAGE_FROST, START_FROST, SURFACES_FROST, usesGlass } from "./LookViews";
 export { appDesign, currentDesign, DesignProvider, designWith, followDesign, materialYouOffered, useDesign, usePageUnderBars } from "./design";
-export { FadeView, fadeIsNative, FrostSource, motionReportsNearEnd, pageObscuresInsets, pageReportsDrawn, PasteButton, pasteButtonIsNative, ScrollActions } from "@ardia/phone-native";
+export { FadeView, fadeIsNative, motionReportsNearEnd, pageObscuresInsets, pageReportsDrawn, PasteButton, pasteButtonIsNative, ScrollActions } from "@ardia/phone-native";
+export { FrostSource } from "./LookViews";
 export { MotionView, type MotionCurve, type MotionTarget } from "@ardia/phone-native";
 export { AppIconPreview, neverBounces, BrowseForMeSettings, CheckmarkLabel, chromeSurface, ColorSwatch, contentMargins, FilterTextEditor, FullScreenCover, GlassCircleButton, legibleInk, minListRowHeight, modifierList, navigationBarBackButtonHidden, PinnedTiles, pressableStyle, profileLook, settingsChrome, SettingsHeroContent, SettingsIconTile, settingsPage, SettingsRowLabel, SettingsShortcuts, settingsSwitchStyle, settingsUIAvailable, SetupStepRow, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, type ProfilePresetName, type SettingsTintName, type SetupProgress } from "./settingsPieces";

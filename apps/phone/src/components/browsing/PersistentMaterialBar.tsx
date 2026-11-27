@@ -63,6 +63,37 @@ export function useMaterialSearchBarVisible() {
   }, [store]);
 }
 
+function sameObject(a: Record<string, unknown> | undefined, b: Record<string, unknown> | undefined) {
+  if (Object.is(a, b)) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    const va = a[key];
+    const vb = b[key];
+    if (typeof va === "function" && typeof vb === "function") continue;
+    if (!Object.is(va, vb)) return false;
+  }
+  return true;
+}
+
+function sameRegistration(current: Entry | null, next: Registration, owner: object) {
+  if (!current || current.owner !== owner) return false;
+  return (
+    current.hidden === next.hidden &&
+    current.blocked === next.blocked &&
+    current.tabId === next.tabId &&
+    current.gesture === next.gesture &&
+    current.siteSettingsSheet === next.siteSettingsSheet &&
+    current.collapse?.progress === next.collapse?.progress &&
+    current.collapse?.travel === next.collapse?.travel &&
+    current.fold?.progress === next.fold?.progress &&
+    current.fold?.collapsed === next.fold?.collapsed &&
+    sameObject(current.bar as Record<string, unknown>, next.bar as Record<string, unknown>)
+  );
+}
+
 export function useMaterialBarRegistration(slot: keyof Slots, registration: Registration | null) {
   const context = useContext(BarContext);
   const owner = useRef({}).current;
@@ -70,8 +101,20 @@ export function useMaterialBarRegistration(slot: keyof Slots, registration: Regi
   const enabled = context?.enabled ?? false;
   useLayoutEffect(() => {
     if (!store) return;
-    if (enabled && registration) store.setState({ [slot]: { ...registration, owner } });
-    else if (store.getState()[slot]?.owner === owner) store.setState({ [slot]: null });
+    const current = store.getState()[slot];
+    if (enabled && registration) {
+      if (sameRegistration(current, registration, owner)) {
+        if (current) {
+          current.bar = registration.bar;
+          current.measure = registration.measure;
+          if (current.fold && registration.fold) current.fold.expand = registration.fold.expand;
+        }
+        return;
+      }
+      store.setState({ [slot]: { ...registration, owner } });
+    } else if (current?.owner === owner) {
+      store.setState({ [slot]: null });
+    }
   });
   useLayoutEffect(() => () => {
     if (store?.getState()[slot]?.owner === owner) store.setState({ [slot]: null });

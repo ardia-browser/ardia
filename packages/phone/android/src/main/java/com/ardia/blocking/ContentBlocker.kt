@@ -141,8 +141,13 @@ class ContentBlocker(
                 null
             }
         }
-        if (next != null) engine = next
-        installedRevision = latest.revision
+        if (next != null) {
+            engine = next
+            installedRevision = latest.revision
+            filterLists.releaseCompiled(latest.revision)
+        } else {
+            installedRevision = latest.revision
+        }
     }
 
     companion object {

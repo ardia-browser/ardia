@@ -1,7 +1,7 @@
 import { sleep } from "../../../../scripts/lib/instance.mjs";
 
 const q = JSON.stringify;
-const KEYS = { down: ["", 125], up: ["", 126], enter: ["\r", 36], escape: ["\u001b", 53], tab: ["\t", 48] };
+const KEYS = { down: ["", 125], up: ["", 126], enter: ["\r", 36], escape: ["\u001b", 53], tab: ["\t", 48], backspace: ["\u007f", 51] };
 const ROW = { inset: 5, login: 36, notice: 62 };
 
 export async function waitFor(what, test, ms = 10_000) {
@@ -27,8 +27,10 @@ export function parseRows(ax) {
     if (line.depth !== depth || (line.role !== "AXMenuItem" && line.role !== "AXStaticText")) return;
     let end = i + 1;
     while (end < lines.length && lines[end].depth > depth) end++;
-    const icon = lines.slice(i + 1, end).find((c) => c.role === "AXImage")?.label ?? "";
-    rows.push({ title: line.label.split(", ")[0], label: line.label, notice: line.role !== "AXMenuItem", icon });
+    const inside = lines.slice(i + 1, end);
+    const icon = inside.find((c) => c.role === "AXImage")?.label ?? "";
+    const bold = inside.map((c) => c.label.split(" | ").find((part) => part.startsWith("bold="))?.slice(5)).find((run) => run !== undefined) ?? "";
+    rows.push({ title: line.label.split(", ")[0], label: line.label, notice: line.role !== "AXMenuItem", icon, bold });
   });
   return rows;
 }
@@ -134,7 +136,7 @@ export function engineTabs(app, { log = () => {}, engine: engineName = "webkit" 
       async rows() {
         const shown = await panel();
         if (!shown) return null;
-        return parseRows(await act(shown.number, "ax"));
+        return parseRows(await act(shown.number, "ax:bold"));
       },
       async waitRows(what = "the Login list", ms = 10_000) {
         return waitFor(what, async () => {
@@ -153,7 +155,7 @@ export function engineTabs(app, { log = () => {}, engine: engineName = "webkit" 
       },
       async pick(title) {
         const shown = await panel();
-        const rows = shown ? parseRows(await act(shown.number, "ax")) : [];
+        const rows = shown ? parseRows(await act(shown.number, "ax:bold")) : [];
         const index = rows.findIndex((r) => r.title === title);
         if (index < 0) throw new Error(`no row ${q(title)} in ${q(rows)}`);
         const y = ROW.inset + rows.slice(0, index).reduce((sum, r) => sum + (r.notice ? ROW.notice : ROW.login), 0) + ROW.login / 2;

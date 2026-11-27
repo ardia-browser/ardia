@@ -12,6 +12,7 @@ export const CONNECT = "Connect Apple Passwords";
 export const NOT_NOW = "Not now";
 export const FILL_FAILED = "Apple Passwords didn't fill this login. Unlock the Passwords app and try again.";
 const OPENED_PASSWORDS = "[logins] Passwords app (background mode, not opened)";
+const COUNTED_SHOWN = "[logins] Login list counted: shown\n";
 
 const usersFor = (host) =>
   FIXTURES.logins
@@ -46,6 +47,18 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
     assert(!rows.some((r) => FIXTURES.logins.some((l) => l.user === r.title)), "no login rows while Pairing has ended", rows);
     return rows;
   };
+
+  const typedRows = async (tab, text, expected, what) => {
+    if (text) await tab.type(text);
+    let seen = null;
+    return waitFor(what, async () => {
+      seen = await tab.rows();
+      return seen && q(titles(seen)) === q(expected) ? seen : null;
+    }, 10_000).catch(() => {
+      throw new Error(`${what}: wanted ${q(expected)}, saw ${q(seen && titles(seen))}`);
+    });
+  };
+  const FILTERED = ["anna@example.test", "Ännabel", "joanna.k@mail.test"];
 
   const open = async (host, pathname = "/login") => {
     const shared = await paired();
@@ -297,6 +310,131 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         }
       }
       return { engine: engineName, ...seen };
+    },
+    async E34() {
+      const { app } = await paired();
+      const shownCounts = () => app.output().split(COUNTED_SHOWN).length - 1;
+      const tab = await open("filter.localhost", "/login-ready");
+      try {
+        const before = shownCounts();
+        await tab.click("#u");
+        const all = await tab.waitRows();
+        assert(q(titles(all.slice(0, -1))) === q(usersFor("filter.localhost")), "the click lists every login for the site", all);
+        await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
+        await typedRows(tab, "n", [...FILTERED, FOOTER], "the list for ann");
+        await sleep(300);
+        assert(shownCounts() - before === 1, "refiltering an open list counts one showing", shownCounts() - before);
+        return { engine: engineName, an: FILTERED, shownCounted: shownCounts() - before };
+      } finally {
+        await tab.close();
+      }
+    },
+    async E35() {
+      const { app } = await paired();
+      const shownCounts = () => app.output().split(COUNTED_SHOWN).length - 1;
+      const tab = await open("filter.localhost", "/login-ready");
+      try {
+        const before = shownCounts();
+        await tab.click("#u");
+        await tab.waitRows();
+        await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
+        await tab.type("zzz");
+        await waitFor("the list closed on zzz", async () => ((await tab.rows())?.length ? null : true), 5000);
+        assert(!(await tab.noList(800)), "a list that matches nothing stays closed", null);
+        for (let i = 0; i < 3; i++) await tab.key("backspace");
+        assert((await tab.value(`document.getElementById("u").value`)) === "an", "Backspace leaves an", null);
+        await typedRows(tab, "", [...FILTERED, FOOTER], "the list back on an");
+        await sleep(300);
+        assert(shownCounts() - before === 2, "closing on no match and reopening on Backspace counts two showings", shownCounts() - before);
+        return { engine: engineName, back: FILTERED, shownCounted: shownCounts() - before };
+      } finally {
+        await tab.close();
+      }
+    },
+    async E36() {
+      const tab = await open("filter.localhost", "/login-ready");
+      const page = () => tab.value(`({ u: document.getElementById("u").value, p: document.getElementById("p").value, submits: ${PAGE_EVENTS}.filter((e) => e[0] === "submit").length })`);
+      try {
+        await tab.click("#u");
+        await tab.waitRows();
+        await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
+        await tab.key("enter");
+        const submitted = await waitFor("the form submitted", async () => {
+          const now = await page();
+          return now?.submits ? now : null;
+        }, 5000);
+        assert(submitted.u === "an" && !submitted.p, "Enter with no row chosen fills nothing", { u: submitted.u, filled: !!submitted.p });
+        assert(!(await tab.noList(800)), "Enter closes the list", null);
+        await typedRows(tab, "n", [...FILTERED, FOOTER], "the list for ann");
+        await tab.key("escape");
+        assert(!(await tab.noList(800)), "Escape closes the list", null);
+        const kept = await page();
+        assert(kept.u === "ann" && !kept.p && kept.submits === 1, "Escape keeps the typed text", { u: kept.u, submits: kept.submits });
+        await tab.key("down");
+        await typedRows(tab, "", [...FILTERED, FOOTER], "the list Down opens on ann");
+        await tab.key("down");
+        await tab.key("enter");
+        const first = FIXTURES.logins.find((l) => l.user === FILTERED[0]);
+        const filled = await waitFor("the keyed fill", async () => {
+          const now = await page();
+          return now?.p ? now : null;
+        });
+        assert(filled.u === first.user && filled.p === first.password, "Down then Enter fills the first row", { u: filled.u });
+        assert(filled.submits === 1, "picking a row doesn't submit", filled.submits);
+        return { engine: engineName, submitted: "an", kept: kept.u, filled: filled.u };
+      } finally {
+        await tab.close();
+      }
+    },
+    async E37() {
+      const { app, fake } = await paired();
+      const every = [...usersFor("filter.localhost"), FOOTER];
+      const seen = {};
+      const tab = await open("filter.localhost", "/login-ready");
+      try {
+        await tab.click("#p");
+        await typedRows(tab, "", every, "the list on the password field");
+        await tab.type("an");
+        await waitFor("the typed password", async () => ((await tab.value(`document.getElementById("p").value.length`)) === 2 ? true : null), 5000);
+        await sleep(600);
+        await typedRows(tab, "", every, "the same list after typing in the password field");
+        seen.password = "unchanged";
+        await tab.click("#u");
+        await tab.waitRows();
+        await typedRows(tab, "an", [...FILTERED, FOOTER], "the footer while filtering");
+        seen.footer = FOOTER;
+        await tab.key("escape");
+        await endPairing(app, fake);
+        await tab.click("#u");
+        await tab.waitRows();
+        await typedRows(tab, "n", [CONNECT, NOT_NOW], `${CONNECT} while filtering`);
+        seen.connect = CONNECT;
+        await tab.pick(CONNECT);
+        await pairAgain(app, fake);
+        await tab.waitRows("the logins after Pairing");
+        await tab.key("escape");
+      } finally {
+        await tab.close();
+      }
+      return { engine: engineName, ...seen };
+    },
+    async E38() {
+      const tab = await open("filter.localhost", "/login-ready");
+      const bolds = (rows) => rows.map((r) => [r.title, r.bold]);
+      try {
+        await tab.click("#u");
+        const all = await tab.waitRows();
+        assert(all.every((r) => !r.bold), "nothing is bold before typing", bolds(all));
+        const an = await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
+        const wantAn = [["anna@example.test", "an"], ["Ännabel", "Än"], ["joanna.k@mail.test", "an"], [FOOTER, ""]];
+        assert(q(bolds(an)) === q(wantAn), "each row's matched run is bold", bolds(an));
+        const ann = await typedRows(tab, "n", [...FILTERED, FOOTER], "the list for ann");
+        const wantAnn = [["anna@example.test", "ann"], ["Ännabel", "Änn"], ["joanna.k@mail.test", "ann"], [FOOTER, ""]];
+        assert(q(bolds(ann)) === q(wantAnn), "the bold run follows the typing", bolds(ann));
+        return { engine: engineName, an: bolds(an), ann: bolds(ann) };
+      } finally {
+        await tab.close();
+      }
     },
     async E17() {
       const { app } = await paired();

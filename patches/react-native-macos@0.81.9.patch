@@ -4045,7 +4045,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..c75665485afa81574f2f0be0829c1f3a
 +@end
 +#endif // macOS]
 diff --git a/React/Views/ScrollView/RCTScrollView.m b/React/Views/ScrollView/RCTScrollView.m
-index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..11c865c24b85680f13b5673c93904d5b10395192 100644
+index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..9369f6d8e7ba91b339904e4aba0c7fc46555c6e0 100644
 --- a/React/Views/ScrollView/RCTScrollView.m
 +++ b/React/Views/ScrollView/RCTScrollView.m
 @@ -50,6 +50,7 @@ + (BOOL)isCompatibleWithResponsiveScrolling;
@@ -4068,7 +4068,15 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..11c865c24b85680f13b5673c93904d5b
  #endif // macOS]
  
  - (BOOL)shouldGroupAccessibilityChildren
-@@ -535,11 +541,9 @@ - (void)setInverted:(BOOL)inverted
+@@ -320,6 +326,7 @@ @implementation RCTScrollView {
+   CGRect _prevFirstVisibleFrame;
+   __weak RCTPlatformView *_firstVisibleView; // [macOS]
+   RCTCustomScrollView *_scrollView;
++  NSTimeInterval _scrollerPressTimestamp;
+ #if !TARGET_OS_OSX // [macOS]
+   UIView *_contentView;
+ #endif // [macOS]
+@@ -535,11 +542,9 @@ - (void)setInverted:(BOOL)inverted
  
  - (void)setHasOverlayStyleIndicator:(BOOL)hasOverlayStyle
  {
@@ -4083,7 +4091,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..11c865c24b85680f13b5673c93904d5b
  }
  #endif // macOS]
  
-@@ -702,6 +706,10 @@ - (void)layoutSubviews
+@@ -702,6 +707,10 @@ - (void)layoutSubviews
  
  - (void)updateClippedSubviews
  {
@@ -4094,7 +4102,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..11c865c24b85680f13b5673c93904d5b
    // Find a suitable view to use for clipping
    RCTPlatformView *clipView = [self react_findClipView]; // [macOS]
    if (!clipView) {
-@@ -730,6 +738,7 @@ - (void)updateClippedSubviews
+@@ -730,6 +739,7 @@ - (void)updateClippedSubviews
      [self react_updateClippedSubviewsWithClipRect:clipRect relativeToView:clipView];
      _lastClippedToRect = bounds;
    }
@@ -4102,7 +4110,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..11c865c24b85680f13b5673c93904d5b
  }
  
  #if TARGET_OS_OSX // [macOS
-@@ -740,13 +749,29 @@ - (void)viewDidMoveToWindow
+@@ -740,13 +750,29 @@ - (void)viewDidMoveToWindow
    NSNotificationCenter *defaultCenter = [NSNotificationCenter defaultCenter];
    if ([self window] == nil) {
      // Unregister for bounds change notifications
@@ -4133,7 +4141,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..11c865c24b85680f13b5673c93904d5b
      // Register for bounds change notifications so we can track scrolling
      [defaultCenter addObserver:self
                        selector:@selector(scrollViewDocumentViewBoundsDidChange:)
-@@ -756,6 +781,10 @@ - (void)viewDidMoveToWindow
+@@ -756,6 +782,10 @@ - (void)viewDidMoveToWindow
                        selector:@selector(preferredScrollerStyleDidChange:)
                            name:NSPreferredScrollerStyleDidChangeNotification
                          object:nil];
@@ -4144,7 +4152,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..11c865c24b85680f13b5673c93904d5b
    }
  
    _notifyDidScroll = ([self window] != nil);
-@@ -886,8 +915,13 @@ - (void)flashScrollIndicators
+@@ -886,8 +916,13 @@ - (void)flashScrollIndicators
  #pragma mark - ScrollView delegate
  
  #if TARGET_OS_OSX // [macOS
@@ -4159,16 +4167,21 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..11c865c24b85680f13b5673c93904d5b
    if (_disableScrollEvents) {
      return;
    }
-@@ -1427,6 +1461,14 @@ - (void)keyUp:(NSEvent *)event {
+@@ -1427,6 +1462,19 @@ - (void)keyUp:(NSEvent *)event {
    }
  }
  
 +- (void)scrollViewWillStartLiveScroll:(__unused NSNotification *)notification
 +{
-+  NSEventType type = NSApp.currentEvent.type;
-+  if (type == NSEventTypeLeftMouseDown || type == NSEventTypeLeftMouseDragged) {
-+    RCT_SEND_SCROLL_EVENT(onScrollBeginDrag, (@{@"scroller" : @YES}));
++  NSEvent *press = NSApp.currentEvent;
++  if (press.type != NSEventTypeLeftMouseDown && press.type != NSEventTypeLeftMouseDragged) {
++    return;
 +  }
++  if (press.timestamp == _scrollerPressTimestamp) {
++    return;
++  }
++  _scrollerPressTimestamp = press.timestamp;
++  RCT_SEND_SCROLL_EVENT(onScrollBeginDrag, (@{@"scroller" : @YES}));
 +}
 +
  - (void)preferredScrollerStyleDidChange:(__unused NSNotification *)notification {

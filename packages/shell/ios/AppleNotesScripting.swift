@@ -48,11 +48,13 @@ enum AppleNotesScripting {
       const created = notes.creationDate();
       const modified = notes.modificationDate();
       let locked = [];
-      try { locked = notes.passwordProtected(); } catch (e) { locked = ids.map(() => false); }
+      try { locked = notes.passwordProtected(); } catch (e) { locked = []; }
       const out = [];
       const end = Math.min(total, \(max(0, offset)) + \(max(0, min(limit, 200))));
       for (let i = \(max(0, offset)); i < end; i++) {
-        const note = { id: ids[i], name: names[i], created: +created[i], modified: +modified[i], locked: !!locked[i], body: "" };
+        let isLocked = locked[i];
+        if (typeof isLocked !== "boolean") { try { isLocked = notes[i].passwordProtected(); } catch (e) { isLocked = true; } }
+        const note = { id: ids[i], name: names[i], created: +created[i], modified: +modified[i], locked: isLocked !== false, body: "" };
         if (!note.locked) { try { note.body = notes[i].body(); } catch (e) { note.body = ""; } }
         out.push(note);
       }

@@ -50,7 +50,8 @@ const settle = async () => {
 };
 let nextId = 0;
 
-const NOTES = { manifest: 2, name: "notes", title: "Notes", main: "dist/index.js", permissions: { storage: true, files: true, folders: true } };
+const NOTES = { manifest: 2, name: "notes", title: "Notes", main: "dist/index.js", permissions: { storage: true, files: true, folders: true, appleNotes: true } };
+const APP = { manifest: 2, name: "appy", title: "Appy", main: "dist/index.js", permissions: { app: true } };
 const DATA_ONLY = { manifest: 2, name: "scratch", title: "Scratch", main: "dist/index.js", permissions: { files: true } };
 const NOTHING = { manifest: 2, name: "bare", title: "Bare", main: "dist/index.js", permissions: {} };
 const b64 = (text) => Buffer.from(text, "utf8").toString("base64");
@@ -703,39 +704,46 @@ test("files.pick turns whatever the open panel answers into plain names in a che
   }
 });
 
-test("app.controlStatus says whether the Command Line plugin and program control are on, to any plugin", async () => {
-  await enable(NOTHING);
-  const run = await activated("bare");
+test("app.controlStatus says whether the Command Line plugin and program control are on, with the app permission", async () => {
+  await enable(APP);
+  const run = await activated("appy");
   S().updateSettings({ cliControl: false });
-  assert.deepEqual((await askLong("bare", "app.controlStatus", {}, run)).result, { command: false, control: false });
+  assert.deepEqual((await askLong("appy", "app.controlStatus", {}, run)).result, { command: false, control: false });
   S().updateSettings({ cliControl: true });
-  assert.deepEqual((await askLong("bare", "app.controlStatus", {}, run)).result, { command: false, control: true });
+  assert.deepEqual((await askLong("appy", "app.controlStatus", {}, run)).result, { command: false, control: true });
   S().updateSettings({ cliControl: false });
 });
 
-test("app.openSettings opens only the Plugins or Advanced pane, with a window, at most every 2 s, for any plugin", async () => {
-  await enable(NOTHING);
-  const run = await activated("bare");
+test("app.openSettings opens only the Plugins or Advanced pane, with a window, at most every 2 s, with the app permission", async () => {
+  await enable(APP);
+  const run = await activated("appy");
   const { useSettingsNav } = await import("../settings/settingsWindows.ts");
-  assert.equal((await askLong("bare", "app.openSettings", { pane: "advanced" }, run)).error.code, "no_window");
+  assert.equal((await askLong("appy", "app.openSettings", { pane: "advanced" }, run)).error.code, "no_window");
   S().createWindow({ url: "https://a.example/" });
-  assert.deepEqual((await askLong("bare", "app.openSettings", { pane: "advanced" }, run)).result, { ok: true });
+  assert.deepEqual((await askLong("appy", "app.openSettings", { pane: "advanced" }, run)).result, { ok: true });
   assert.equal(useSettingsNav.getState().pane, "advanced");
-  assert.equal((await askLong("bare", "app.openSettings", { pane: "plugins" }, run)).error.code, "refused", "too soon after the last");
-  for (const { value } of HOSTILE_VALUES) assert.equal((await askLong("bare", "app.openSettings", { pane: value }, run)).error.code, "bad_request");
-  assert.equal((await askLong("bare", "app.openSettings", { pane: "general" }, run)).error.code, "bad_request");
+  assert.equal((await askLong("appy", "app.openSettings", { pane: "plugins" }, run)).error.code, "refused", "too soon after the last");
+  for (const { value } of HOSTILE_VALUES) assert.equal((await askLong("appy", "app.openSettings", { pane: value }, run)).error.code, "bad_request");
+  assert.equal((await askLong("appy", "app.openSettings", { pane: "general" }, run)).error.code, "bad_request");
   assert.equal(useSettingsNav.getState().pane, "advanced", "nothing hostile moved Settings");
   assert.ok(takePluginCounts().plugin_settings_opens >= 1);
 });
 
-test("app.icon gives an app's icon only for apps in /Applications or /System/Applications", async () => {
+test("codex S3: the app calls need the app permission", async () => {
   await enable(NOTHING);
   const run = await activated("bare");
-  assert.equal((await askLong("bare", "app.icon", { path: "/System/Applications/Notes.app", size: 64 }, run)).result.icon, "data:image/png;base64,iVBORw0KGgo=");
+  for (const [method, params] of [["app.controlStatus", {}], ["app.openSettings", { pane: "plugins" }], ["app.icon", { path: "/System/Applications/Notes.app" }]])
+    assert.equal((await askLong("bare", method, params, run)).error.code, "refused", method);
+});
+
+test("app.icon gives an app's icon only for apps in /Applications or /System/Applications", async () => {
+  await enable(APP);
+  const run = await activated("appy");
+  assert.equal((await askLong("appy", "app.icon", { path: "/System/Applications/Notes.app", size: 64 }, run)).result.icon, "data:image/png;base64,iVBORw0KGgo=");
   for (const path of ["/Users/me/secret.app", "/Applications/../Users/me/x.app", "/Applications/Notes", "/System/Applications/Notes.app/Contents/Info.plist", "Applications/X.app", "/Applications/a/b/c/d.app"])
-    assert.equal((await askLong("bare", "app.icon", { path }, run)).error.code, "bad_request", path);
-  for (const { value } of HOSTILE_VALUES) assert.equal((await askLong("bare", "app.icon", { path: value }, run)).error.code, "bad_request");
-  assert.equal((await askLong("bare", "app.icon", { path: "/Applications/X.app", size: 4096 }, run)).error.code, "bad_request");
+    assert.equal((await askLong("appy", "app.icon", { path }, run)).error.code, "bad_request", path);
+  for (const { value } of HOSTILE_VALUES) assert.equal((await askLong("appy", "app.icon", { path: value }, run)).error.code, "bad_request");
+  assert.equal((await askLong("appy", "app.icon", { path: "/Applications/X.app", size: 4096 }, run)).error.code, "bad_request");
 });
 
 test("appleNotes reads only after Ardia's own consent sheet, for that run, with whatever Notes answers cleaned", async () => {
@@ -763,7 +771,11 @@ test("appleNotes reads only after Ardia's own consent sheet, for that run, with 
   assert.equal(page.notes[1].body, "", "a locked note's body never reaches the plugin");
   assert.equal((await askLong("notes", "appleNotes.notes", { folder: "x", limit: 201 }, run)).error.code, "bad_request");
   appleNotesFake.raw = JSON.stringify({ total: "lots", notes: [{ id: 3 }, { id: "ok", name: { toString: 1 }, created: -5, body: 7 }, null] });
-  assert.deepEqual((await askLong("notes", "appleNotes.notes", { folder: "x" }, run)).result, { total: 0, notes: [{ id: "ok", name: "", created: 0, modified: 0, locked: false, body: "" }] });
+  assert.deepEqual((await askLong("notes", "appleNotes.notes", { folder: "x" }, run)).result, { total: 0, notes: [{ id: "ok", name: "", created: 0, modified: 0, locked: true, body: "" }] });
+  appleNotesFake.raw = JSON.stringify({ total: 1, notes: [{ id: "u", name: "Unknown", body: "<div>maybe locked</div>" }, { id: "o", name: "Open", locked: false, body: "<div>open</div>" }] });
+  const unknown = (await askLong("notes", "appleNotes.notes", { folder: "x" }, run)).result.notes;
+  assert.equal(unknown[0].body, "", "codex S3: a note whose locked status is unknown is skipped");
+  assert.equal(unknown[1].body, "<div>open</div>", "positive control");
   appleNotesFake.raw = "not json";
   assert.equal((await askLong("notes", "appleNotes.folders", {}, run)).error.code, "failed");
   appleNotesFake.raw = null;
@@ -791,4 +803,22 @@ test("codex S2: a picked file is bound to the file itself, so another file put a
   files.put("scratch", "/Users/me/Downloads", "export.zip", "swapped in later");
   assert.equal((await askLong("scratch", "files.read", { path: "export.zip", root: one.id }, run)).error.code, "refused");
   assert.ok(files.calls.at(-1).fileIdentity, "the read carries the picked file's identity");
+});
+
+test("codex S3: Apple Notes needs the appleNotes permission, and its sheet says so when the plugin can reach the network", async () => {
+  const { appleNotesFake } = stub;
+  appleNotesFake.reset();
+  await enable({ ...NOTES, name: "plain", permissions: { files: true } });
+  S().createWindow({ url: "https://a.example/" });
+  const run = await activated("plain");
+  assert.equal((await askLong("plain", "appleNotes.request", {}, run)).error.code, "refused");
+  const { appleNotesDisclosure } = await import("./channelAppleNotes.ts");
+  const { readManifest } = await import("../../lib/pluginManifest.ts");
+  const offline = readManifest(JSON.stringify(NOTES)).manifest;
+  assert.match(appleNotesDisclosure(offline), /Nothing is sent anywhere/);
+  const online = readManifest(JSON.stringify({ ...NOTES, permissions: { ...NOTES.permissions, sites: ["app.notion.com"] } })).manifest;
+  assert.doesNotMatch(appleNotesDisclosure(online), /Nothing is sent anywhere/);
+  assert.match(appleNotesDisclosure(online), /app\.notion\.com/);
+  const any = readManifest(JSON.stringify({ ...NOTES, permissions: { ...NOTES.permissions, network: "*" } })).manifest;
+  assert.match(appleNotesDisclosure(any), /the internet/);
 });

@@ -57,7 +57,8 @@ async function appIcon(params: Record<string, unknown>): Promise<Body> {
   return { result: { icon: typeof icon === "string" && icon.startsWith("data:image/png;base64,") ? icon : null } };
 }
 
-export function appMethod(c: Caller, _m: PluginManifest, method: string, params: Record<string, unknown>, now = Date.now()): Body | Promise<Body> {
+export function appMethod(c: Caller, m: PluginManifest, method: string, params: Record<string, unknown>, now = Date.now()): Body | Promise<Body> {
+  if (!m.permissions.app) return failure("refused", `${method} needs the app permission.`);
   if (method === "app.controlStatus") return { result: controlStatus() };
   if (method === "app.icon") return appIcon(params);
   return openArdiaSettings(c, params, now);

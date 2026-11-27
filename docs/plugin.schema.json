@@ -170,6 +170,14 @@
             "type": "boolean",
             "description": "Keep secrets in the Keychain"
           },
+          "appleNotes": {
+            "type": "boolean",
+            "description": "Ask to read your Apple Notes (ardia.appleNotes), after its own consent sheet and macOS's"
+          },
+          "app": {
+            "type": "boolean",
+            "description": "Read whether the ardia command and program control are on, open Ardia's Plugins or Advanced settings, and read the icons of apps in /Applications (ardia.app)"
+          },
           "network": {
             "anyOf": [
               {

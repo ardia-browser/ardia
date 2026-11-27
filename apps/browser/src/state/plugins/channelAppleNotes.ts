@@ -49,7 +49,7 @@ export function cleanNotes(raw: unknown): { total: number; notes: AppleNotesNote
     const x = n as Record<string, unknown>;
     const id = text(x.id, APPLE_NOTES_LIMITS.idChars);
     if (!id) continue;
-    const locked = x.locked === true;
+    const locked = x.locked !== false;
     notes.push({ id, name: text(x.name, APPLE_NOTES_LIMITS.nameChars), created: time(x.created), modified: time(x.modified), locked, body: locked ? "" : text(x.body, APPLE_NOTES_LIMITS.bodyChars) });
   }
   return { total: count(r.total), notes };
@@ -73,6 +73,13 @@ function answerOf(answer: { ok: boolean; json?: string; error?: string; code?: n
   }
 }
 
+export function appleNotesDisclosure(m: PluginManifest): string {
+  const p = m.permissions;
+  const reaches = p.network === "*" ? "the internet" : [...(p.network || []), ...p.sites].join(", ");
+  const sent = reaches ? `${m.title} can also reach ${reaches}, so it could send what it reads there.` : "Nothing is sent anywhere.";
+  return `It copies your notes' titles, text, pictures, folders and dates into ${m.title}, in Ardia on this Mac. ${sent} Apple Notes isn't changed, and locked notes are skipped. Next, macOS asks you to let Ardia control the Notes app.`;
+}
+
 async function request(c: Caller, m: PluginManifest): Promise<Body> {
   listen();
   if (granted.get(c.name) === c.run) return { result: { granted: true } };
@@ -85,7 +92,7 @@ async function request(c: Caller, m: PluginManifest): Promise<Body> {
   try {
     const answer = await confirm({
       title: `${m.title} wants to read your Apple Notes`,
-      message: `It copies your notes' titles, text, pictures, folders and dates into ${m.title}, in Ardia on this Mac. Nothing is sent anywhere, Apple Notes isn't changed, and locked notes are skipped. Next, macOS asks you to let Ardia control the Notes app.`,
+      message: appleNotesDisclosure(m),
       confirmTitle: "Allow",
       windowId,
       sheetOnly: true,
@@ -102,6 +109,7 @@ async function request(c: Caller, m: PluginManifest): Promise<Body> {
 }
 
 export async function appleNotesMethod(c: Caller, m: PluginManifest, method: string, params: Record<string, unknown>): Promise<Body> {
+  if (!m.permissions.appleNotes) return failure("refused", `${method} needs the appleNotes permission.`);
   if (method === "appleNotes.request") return request(c, m);
   const consent = consentToken();
   if (granted.get(c.name) !== c.run) return failure("refused", "Ask with appleNotes.request first; the person allows it for this run of the plugin.");

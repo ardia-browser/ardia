@@ -407,6 +407,8 @@ plugin that isn't needed yet costs nothing: no host process, no memory. The firs
 | `storage` | `true` | A private key-value store in `PluginData/<name>/storage.json`, at most 2 MB in all and 256 KB a value (`plugin_storage_writes`). `storage.get` answers `{found: true, value}` or `{found: false}`. A file Ardia can't read or parse, an empty one included, fails every call; Ardia never overwrites it with an empty store |
 | `files` | `true` | Files of its own under `PluginData/<name>/files` through `ardia.files` ([files](#files)): read, write, append, list, remove and watch, at most 2 GiB in all. The consent sheet says "Keeps its own files on this Mac" |
 | `folders` | `true` | Folders you grant through `ardia.folders` ([folders](#folders)): one it makes in iCloud Drive › Ardia Shared or one you pick, which `ardia.files` then reaches by the grant's id (that needs `files` too). The consent sheet says "Reads and writes folders you choose, like a shared folder in iCloud Drive" |
+| `appleNotes` | `true` | `ardia.appleNotes` ([appleNotes](#applenotes)): asks to read your Apple Notes, after Ardia's sheet and macOS's Automation prompt. The consent sheet says "Can ask to read your Apple Notes; you choose each time it starts" |
+| `app` | `true` | `ardia.app` ([app](#app)): whether the ardia command and program control are on, opening Settings at Plugins or Advanced, and app icons. The consent sheet says "Sees whether the ardia command is on, opens Ardia's Plugins and Advanced settings and shows the icons of your apps" |
 | `secrets` | `true` | Keychain items of its own (`ardia.plugin.<name>.<key>`, at most 64, 16 KB each; `plugin_secret_writes`). If the Keychain's list of them can't be read, Ardia keeps it, fails secret writes and deletes, and says removing the plugin left its secrets |
 | `network` | `false`, `"*"`, or 1 to 32 host patterns | main's `fetch` reaches only these hosts (`*.example.com` included); a sidecar gets the network as in v1. A web view the plugin shows (its page, a `file` panel) goes online only with `"*"`: WebKit's traffic can't be held to a list of hosts, so with a list it stays offline and the plugin reaches its hosts through `net.fetch` |
 | `state` | `{"events"?, "intents"?}` or `false` | `events`: any of `tabs`, `workspace`, `navigation` (each needs `tabs`) and `downloads`, heard after Ardia commits them, redacted. `intents`: any of `tabs.group`, `tabs.ungroup`, `tabs.move`, `tabs.pin`, `tabs.unpin`, `tabs.mute`, `tabs.unmute`, `tabs.activate` and `groups.update` (needs `tabs: write`). See [State events and intents](#state-events-and-intents) |
@@ -491,7 +493,8 @@ normal window open (`no_window`).
 
 ### app
 
-Any plugin may ask two things of Ardia itself, so it can point you to a switch without reaching it:
+A plugin with `permissions.app` may ask a few things of Ardia itself, so it can point you to a switch without reaching
+it (without the permission each call is `refused`):
 
 ```ts
 ardia.app.controlStatus()        // { command, control }: the Command Line plugin is on; Let programs control Ardia is on
@@ -512,9 +515,12 @@ ardia.appleNotes.folders()                          // [{ id, name, account, par
 ardia.appleNotes.notes(folder, { offset?, limit? }) // { total, notes: [{ id, name, created, modified, locked, body }] }
 ```
 
-`request` shows Ardia's sheet in a normal window: "<Plugin> wants to read your Apple Notes. It copies your notes'
-titles, text, pictures, folders and dates into <Plugin>, in Ardia on this Mac. Nothing is sent anywhere, Apple Notes
-isn't changed, and locked notes are skipped. Next, macOS asks you to let Ardia control the Notes app." (Allow / Cancel). Allowed, it lasts until the
+It needs `permissions.appleNotes` (without it each call is `refused`). `request` shows Ardia's sheet in a normal
+window: "<Plugin> wants to read your Apple Notes. It copies your notes' titles, text, pictures, folders and dates into
+<Plugin>, in Ardia on this Mac. Nothing is sent anywhere, Apple Notes isn't changed, and locked notes are skipped.
+Next, macOS asks you to let Ardia control the Notes app." (Allow / Cancel). For a plugin that can reach the network or
+a site, "Nothing is sent anywhere." becomes "<Plugin> can also reach <its hosts, or the internet>, so it could send
+what it reads there." A note whose locked flag Notes doesn't answer counts as locked, so its body is never read. Allowed, it lasts until the
 plugin's run ends. The first read then sends Notes an Apple Event, and macOS shows its own Automation prompt, once
 per Mac ("“Ardia” wants access to control “Notes”"), with Ardia's purpose string; refused there (or later in System
 Settings › Privacy & Security › Automation) every read is `refused` and says where to turn it on. Ardia runs only its
@@ -1363,10 +1369,10 @@ Requests from the helper (`{"id", "method", "params"}`):
 | `files.list` `{"dir"?, "root"?, "recursive"?}` | `files` | `{"entries"}` |
 | `files.remove` `{"path", "root"?}` | `files` | `{"removed"}` |
 | `files.watch` `{"root"?}`, `files.unwatch` `{"watch"}` | `files` | `{"watch": id}`, then `{"event": "files.changed", "time", "data": {"watch", "root", "paths"}}` lines to that run, and one with `"paths": [], "gone": true` if its root goes away, which ends it; `{"ok": true}` |
-| `app.controlStatus` | none | `{"command", "control"}`: the Command Line plugin is on; Settings › Advanced › Let programs control Ardia is on ([app](#app)) |
-| `app.icon` `{"path", "size"?}` | none | `{"icon"}`: a PNG data URL or null ([app](#app)) |
-| `appleNotes.request`, `appleNotes.folders`, `appleNotes.notes` `{"folder", "offset"?, "limit"?}` | none (Ardia's sheet, then macOS's) | `{"granted"}`, `{"folders"}`, `{"total", "notes"}` ([appleNotes](#applenotes)) |
-| `app.openSettings` `{"pane"}` | none | `{"ok": true}`; pane is `plugins` or `advanced` ([app](#app)) |
+| `app.controlStatus` | `app` | `{"command", "control"}`: the Command Line plugin is on; Settings › Advanced › Let programs control Ardia is on ([app](#app)) |
+| `app.icon` `{"path", "size"?}` | `app` | `{"icon"}`: a PNG data URL or null ([app](#app)) |
+| `appleNotes.request`, `appleNotes.folders`, `appleNotes.notes` `{"folder", "offset"?, "limit"?}` | `appleNotes` (Ardia's sheet, then macOS's) | `{"granted"}`, `{"folders"}`, `{"total", "notes"}` ([appleNotes](#applenotes)) |
+| `app.openSettings` `{"pane"}` | `app` | `{"ok": true}`; pane is `plugins` or `advanced` ([app](#app)) |
 | `files.pick` `{"multiple"?}` | `files` | `{"files": [{"id", "name", "size"}]}` ([files](#files)) |
 | `folders.list`, `folders.create` `{"name"}`, `folders.pick` `{"prompt"?}`, `folders.share` `{"id"}`, `folders.forget` `{"id"}` | `folders` | `{"folders"}`, `{"folder"}` (a grant or null), `{"ok"}` ([folders](#folders)) |
 | `result` `{"call", "result"? , "error"?}` | | `{"ok": true}`: the answer to a call (below) |

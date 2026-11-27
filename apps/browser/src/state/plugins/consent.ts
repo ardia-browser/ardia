@@ -124,6 +124,8 @@ function permissionLines(m: PluginManifest): ConsentLine[] {
   if (p.files) lines.push({ icon: "folder", text: "Keeps its own files on this " + PLATFORM_TERMS.computer });
   if (p.folders) lines.push({ icon: "person.2", text: `Reads and writes folders you choose, like a shared folder in ${PLATFORM_TERMS.cloudDrive}` });
   if (p.secrets) lines.push({ icon: "key", text: "Keeps secrets, like sign-in tokens, in your Keychain" });
+  if (p.appleNotes) lines.push({ icon: "note.text", text: "Can ask to read your Apple Notes; you choose each time it starts" });
+  if (p.app) lines.push({ icon: "gearshape", text: "Sees whether the ardia command is on, opens Ardia's Plugins and Advanced settings and shows the icons of your apps" });
   return lines;
 }
 

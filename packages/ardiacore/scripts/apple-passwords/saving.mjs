@@ -136,6 +136,33 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         await tab.close();
       }
     },
+    async E22garbled() {
+      const { fake, tabs } = await session();
+      const kept = fixture("garbled@save.test");
+      const changed = `fixture-pw-garbled-${engineName}-${Date.now()}`;
+      const tab = await tabs.open(sites.url(SITE));
+      try {
+        await signIn(tab, kept.user, changed);
+        const offered = await promptShown(tab, "the update prompt");
+        assert(offered.state === "update" && offered.copy.title === UPDATE_TITLE, "the prompt offers to update the saved login", offered);
+        fake.setMode({ garble: { 6: true } });
+        assert(await tab.answer("update"), "Update is pressed", null);
+        const told = await promptShown(tab, "the prompt saying it wasn't saved");
+        assert(told.copy.title === NOT_SAVED_TITLE && told.state === "notSaved", `an unreadable reply to an update says ${NOT_SAVED_TITLE}`, told);
+        assert(await tab.answer("dismiss"), "OK closes it", null);
+        fake.setMode({ garble: {} });
+        assert(fake.savedLogins().find((l) => l.user === kept.user)?.password === kept.password, "Apple Passwords still holds the old password", null);
+        await tab.navigate(sites.url(SITE));
+        await signIn(tab, kept.user, changed);
+        const again = await promptShown(tab, "the update prompt again");
+        assert(again.state === "update", "the failed update was not remembered, so signing in with that password asks again", again);
+        assert(await tab.answer("dismiss"), "the second prompt closes", null);
+        return { engine: engineName, title: told.copy.title };
+      } finally {
+        fake.setMode({ garble: {} });
+        await tab.close();
+      }
+    },
     async E33() {
       const { fake, tabs } = await session();
       const login = { user: `http-${Date.now()}@plain.test`, password: "fixture-pw-http-14" };

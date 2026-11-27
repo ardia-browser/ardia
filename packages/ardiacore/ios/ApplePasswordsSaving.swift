@@ -50,13 +50,13 @@ final class ApplePasswordsSaving: NSObject {
     }
   }
 
-  static func save(origin: String, username: String, password: String, engine: String, done: @escaping (Bool) -> Void) {
+  static func save(origin: String, username: String, password: String, update: Bool, engine: String, done: @escaping (Bool) -> Void) {
     dispatchPrecondition(condition: .onQueue(.main))
     guard let (scheme, host) = page(origin), ApplePasswordsMatch.savable(username: username, password: password) != nil else {
       count("saveFailed", engine: engine)
       return done(false)
     }
-    ApplePasswordsClient.shared.save(host: host, insecure: scheme == "http", user: username, password: password) { result in
+    ApplePasswordsClient.shared.save(host: host, insecure: scheme == "http", user: username, password: password, update: update) { result in
       DispatchQueue.main.async {
         let saved = (try? result.get()) != nil
         if saved { remember(scheme: scheme, host: host, user: username, password: password) }
@@ -80,6 +80,7 @@ final class ApplePasswordsSaving: NSObject {
     let password: String
     let turn: Int
     var shown = false
+    var update = false
 
     init(origin: String, username: String, password: String, turn: Int) {
       self.origin = origin
@@ -110,6 +111,7 @@ final class ApplePasswordsSaving: NSObject {
         return show(nil)
       }
       pending.shown = true
+      pending.update = state == "update"
       show(prompt(state, origin: origin, username: username, passwordLength: password.count, usernames: [username]))
     }
   }
@@ -122,7 +124,7 @@ final class ApplePasswordsSaving: NSObject {
     held.removeObject(forKey: view)
     guard action == "save" || action == "update" else { return chrome }
     let name = username ?? login.username
-    save(origin: login.origin, username: name, password: login.password, engine: "chromium") { saved in
+    save(origin: login.origin, username: name, password: login.password, update: login.update && name == login.username, engine: "chromium") { saved in
       guard !saved else { return }
       notSaved(prompt(Self.notSaved, origin: login.origin, username: name, passwordLength: login.password.count, usernames: [name]))
     }

@@ -297,7 +297,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   static func savedSite(host: String, insecure: Bool) -> String { insecure ? "http://\(host)" : host }
 
-  func save(host: String, insecure: Bool, user: String, password: String, _ done: @escaping (Result<Void, Problem>) -> Void) {
+  func save(host: String, insecure: Bool, user: String, password: String, update: Bool, _ done: @escaping (Result<Void, Problem>) -> Void) {
     queue.async {
       done(Result {
         do {
@@ -306,6 +306,10 @@ final class ApplePasswordsClient: @unchecked Sendable {
             ["ACT": 4, "URL": "", "USR": "", "PWD": "", "NURL": Self.savedSite(host: host, insecure: insecure), "NUSR": user, "NPWD": password],
             wait: Self.saveSeconds, also: 4, kept: [Self.alreadyKeptStatus])
         } catch Failure.unexpected {
+          guard !update else {
+            Self.log.notice("update had no readable answer, not saved")
+            throw Problem.failed
+          }
           Self.log.notice("save had no readable answer, reading the list")
           let answer = try self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds)
           guard Self.entries(answer).contains(where: { $0["USR"] as? String == user }) else { throw Problem.failed }

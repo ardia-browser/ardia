@@ -196,7 +196,7 @@ export function removeTabs(
       const closeBatch = gone.size > 1 ? newId("batch") : undefined;
       w.tabIds.forEach((id, index) => {
         const t = s.tabs[id];
-        if (!t || !gone.has(id) || (!t.url && !t.pin)) return;
+        if (!t || !gone.has(id) || (!t.url && !t.pin && !(t.keptEmpty && !splitOf(s, id)))) return;
         closed.push({ ...closedTabEntry(s, t, { windowId: w.id, index }, now), ...(closeBatch ? { closeBatch } : {}), ...(w.kind === "small" ? { small: true } : {}) });
       });
     }

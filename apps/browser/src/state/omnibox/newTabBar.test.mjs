@@ -377,6 +377,22 @@ test("reopening a closed window brings its kept empty tab back kept, listed and 
   assert.deepEqual(panel(back).newTab, { kind: "list" }, "⌘T opens a new tab instead of filling it");
 });
 
+test("Reopen Closed Tab brings back a closed kept empty tab kept; a closed empty card isn't recorded", () => {
+  reset("commandBar");
+  const { w } = windowWith("a");
+  const kept = S().newTab(w, { newTabCommand: true, keptEmpty: true });
+  S().closeTab(kept);
+  assert.equal(S().tabs[kept], undefined);
+  S().reopenClosed(w);
+  const back = S().windows[w].tabIds.find((id) => S().tabs[id].keptEmpty);
+  assert.ok(back, "the closed kept tab comes back kept");
+  assert.equal(urlOf(back), "");
+  const card = S().newTab(w);
+  const recorded = S().closedTabs.length;
+  S().closeTab(card);
+  assert.equal(S().closedTabs.length, recorded, "an empty card leaves no entry");
+});
+
 test("a snapshot's kept flag only holds on a tab with no address", () => {
   reset("commandBar");
   const { w } = windowWith("a");

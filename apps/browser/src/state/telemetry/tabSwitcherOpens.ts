@@ -25,6 +25,18 @@ export function takeTabSwitcherRowCloses(): number {
   return taken;
 }
 
+let rowSleeps = 0;
+
+export function noteTabSwitcherRowSlept(consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => void rowSleeps++);
+}
+
+export function takeTabSwitcherRowSleeps(): number {
+  const taken = rowSleeps;
+  rowSleeps = 0;
+  return taken;
+}
+
 let menuReleases = 0;
 
 onConsentPeriodChange(() => (menuReleases = 0));

@@ -133,6 +133,8 @@ public class FocusModule: Module, FocusNative {
       case 123: emit(["type": "switcherKey", "key": "previous"])
       case _ where event.charactersIgnoringModifiers?.lowercased() == "w" && !event.isARepeat && !event.modifierFlags.intersection([.control, .command]).isEmpty:
         emit(["type": "switcherKey", "key": "close"])
+      case _ where event.charactersIgnoringModifiers?.lowercased() == "s" && !event.isARepeat && !event.modifierFlags.contains(.option) && !event.modifierFlags.intersection([.control, .command]).isEmpty:
+        emit(["type": "switcherKey", "key": "sleep"])
       default: break
       }
       return nil

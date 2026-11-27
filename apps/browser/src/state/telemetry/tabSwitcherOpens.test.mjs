@@ -7,7 +7,7 @@ globalThis.fetch = async () => ({ status: 200 });
 
 const client = await import("./client.ts");
 const usage = await import("./usage.ts");
-const { noteTabSwitcherOpenedInWebKit, noteTabSwitcherReleasedInMenu } = await import("./tabSwitcherOpens.ts");
+const { noteTabSwitcherOpenedInWebKit, noteTabSwitcherReleasedInMenu, noteTabSwitcherRowSlept } = await import("./tabSwitcherOpens.ts");
 after(() => client.setSharing(false, "settings"));
 
 async function usageCounts() {
@@ -38,6 +38,18 @@ test("an hour with only switcher opens over a WebKit page still sends usage_coun
   noteTabSwitcherOpenedInWebKit();
   usage.sessionEnding();
   assert.deepEqual((await usageCounts()).map((p) => p.tab_switcher_opens_in_webkit), [2, 1]);
+});
+
+test("a tab put to sleep from the switcher sends tab_switcher_row_sleeps once, then resets", async () => {
+  client.setSharing(true, "onboarding");
+  const before = (await usageCounts()).length;
+  noteTabSwitcherRowSlept();
+  usage.sessionEnding();
+  const sent = (await usageCounts()).slice(before);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].tab_switcher_row_sleeps, 1);
+  usage.sessionEnding();
+  assert.equal((await usageCounts()).length, before + 1);
 });
 
 test("a switcher let go of while a right-click menu was open sends tab_switcher_menu_releases once, then resets", async () => {

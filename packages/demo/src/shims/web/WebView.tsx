@@ -4,6 +4,7 @@ import type { NavigationState, WebViewHandle, WebViewProps } from "@ardia-real/a
 import { hostOf, isFrameable } from "../../frameable";
 import { faviconFor, PAGE_THEMES, pageTitle } from "../../pages";
 import { useBrowser } from "../../../../../apps/browser/src/state/browser/store";
+import { markSleeping } from "../../../../../apps/browser/src/state/tabs/sleepingTabs";
 import { REFUSED_PAGE_THEME } from "./RefusedPage";
 import { RefusedPage } from "./RefusedPage";
 import { createFrame, moveFrame, noteFrameSize, parkFrame, takeFrame } from "./framePool";
@@ -106,7 +107,12 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
       navigationEntries: async () => stack.current.entries.map((url, i) => ({ url, title: pageTitle(url), current: i === stack.current.index })),
       evaluate: async () => null,
       discard: async () => "unsupported",
-      sleepIfHidden: async () => [-1],
+      sleepIfHidden: async () => {
+        const id = latest.current.tabId;
+        if (!id) return [-1];
+        markSleeping(id);
+        return [];
+      },
       capturePicture: async () => null,
       getSecurityInfo: async () => {
         const url = stack.current.entries[stack.current.index] ?? "";

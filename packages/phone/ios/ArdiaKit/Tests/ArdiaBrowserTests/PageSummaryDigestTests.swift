@@ -43,6 +43,12 @@ import Testing
     #expect(ResearchAnswer.blocks(lines.joined(separator: "\n")).allSatisfy { if case .bullet = $0 { true } else { false } })
   }
 
+  @Test func excerptsWithBarsReadBackAsWritten() {
+    let line = "Basic | Pro | Enterprise are the three plans offered by this service, billed monthly."
+    let text = PageSummaryDigest.excerpts(content([line, String(repeating: "Filler words here. ", count: 20)]))
+    #expect(PageSummaryOutline(text, finished: true, format: .excerpts).lead == line)
+  }
+
   @Test func excerptsFallBackToAClippedParagraph() {
     let long = String(repeating: "word ", count: 120)
     let lines = PageSummaryDigest.excerpts(content([long]))

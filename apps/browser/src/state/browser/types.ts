@@ -63,6 +63,7 @@ export type Tab = {
   customIcon: string | null;
   tileLetters?: string;
   pinnedUrl: string | null;
+  reopenAtPinnedUrl?: boolean;
   page: TabPage;
   openerId: string | null;
   linkOpenerId?: string;
@@ -154,7 +155,7 @@ export type TabSnapshot = Pick<
   Tab,
   "url" | "title" | "favicon" | "pin" | "muted" | "zoom" | "customTitle" | "customIcon" | "profileId"
 > &
-  Partial<Pick<Tab, "pinnedUrl" | "engine" | "lastActiveAt" | "tileLetters">>;
+  Partial<Pick<Tab, "pinnedUrl" | "reopenAtPinnedUrl" | "engine" | "lastActiveAt" | "tileLetters">>;
 
 export type ClosedTab = {
   kind: "tab";

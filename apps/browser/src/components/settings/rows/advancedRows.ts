@@ -45,6 +45,14 @@ export const advancedRows = {
           description: "How hard Ardia works to free memory.",
           keywords: ["sleep", "sleeping tabs", "tab sleeping", "discard", "hibernate", "memory", "ram", "inactive tabs", "unload", "suspend", "performance", "moderate", "balanced", "maximum", "memory savings", "profiles", "launch", "extensions", "lazy", "defer", "load profiles when opened", "idle", "inactive", "timeout", "unload inactive profiles"],
         },
+        sleepUnusedTabsAfter: {
+          title: "Sleep tabs unused for",
+          explained: true,
+          description: "Includes pinned tabs. A sleeping tab sends no notifications until you open it.",
+          keywords: ["sleep", "unload", "unused tabs", "inactive tabs", "pinned tabs", "idle tabs", "discard", "free memory", "ram", "timeout", "after", "hours", "suspend", "hibernate", "memory saver"],
+          shown: (s: Settings) => PLATFORM_FEATURES.sleepsUnusedTabs && s.memorySaver,
+          ...(PLATFORM_FEATURES.sleepsUnusedTabs ? { needs: "Turn on Memory Saver to use this" } : {}),
+        },
         keepActiveSites: {
           title: "Keep these sites awake",
           explained: true,
@@ -167,6 +175,13 @@ export const advancedRows = {
           title: "ardia command",
           keywords: ["cli", "command line", "terminal", "shell", "install", "the ardia command", "devtools", "automation", "remote debugging", "let the ardia command control ardia"],
           shown: () => PLATFORM_FEATURES.ardiaCommand && !PLATFORM_FEATURES.plugins,
+        },
+        showCliPill: {
+          title: "Show the control pill",
+          explained: true,
+          description: "Shows who is controlling Ardia at the bottom of the page with a Stop button. You can still stop programs above.",
+          keywords: ["cli", "control pill", "is controlling", "agent", "claude code", "codex", "hide", "dismiss", "turn off", "banner", "indicator", "stop"],
+          shown: () => PLATFORM_FEATURES.ardiaCommand,
         },
         compactCliPill: {
           title: "Show the control pill as an icon and Stop",

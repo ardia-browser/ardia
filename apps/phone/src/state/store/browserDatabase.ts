@@ -186,6 +186,18 @@ export function deleteVisitsFor(db: SqlDatabase, urls: readonly string[], profil
   else db.run(`DELETE FROM visits WHERE url IN (${marks}) AND profileSyncId = ?`, [...urls, profileSyncId]);
 }
 
+export const distinctVisitUrls = (db: SqlDatabase) => db.all<{ url: string }>("SELECT DISTINCT url FROM visits").map((row) => row.url);
+
+export function deleteVisitsEverywhere(db: SqlDatabase, urls: readonly string[]) {
+  if (!urls.length) return;
+  db.transaction(() => {
+    for (let start = 0; start < urls.length; start += ID_CHUNK) {
+      const chunk = urls.slice(start, start + ID_CHUNK);
+      db.run(`DELETE FROM visits WHERE url IN (${chunk.map(() => "?").join(",")})`, chunk);
+    }
+  });
+}
+
 export type ImportRows = {
   tabs: readonly BrowserTab[];
   states: readonly { id: string; data: string }[];

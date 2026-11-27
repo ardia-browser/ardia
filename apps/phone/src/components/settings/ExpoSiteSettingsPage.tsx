@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { PlatformColor, View } from "react-native";
 import { Button, ConfirmationDialog, Form, HStack, LabeledContent, NavigationLink, Picker, RNHostView, Section, SwipeActions, Text, Toggle, VStack } from "@expo/ui/swift-ui";
-import { accessibilityElement, accessibilityHint, font, foregroundStyle, frame, navigationBarTitleDisplayMode, navigationTitle, pickerStyle, tag, tint } from "@expo/ui/swift-ui/modifiers";
+import { accessibilityElement, accessibilityHint, accessibilityLabel, accessibilityValue, buttonStyle, disabled, font, foregroundStyle, frame, labelStyle, monospacedDigit, navigationBarTitleDisplayMode, navigationTitle, pickerStyle, tag, tint } from "@expo/ui/swift-ui/modifiers";
 import { bottomBarCollapses } from "../../lib/barCollapse";
 import { permissionSummary, PERMISSION_NAMES, sortedPermissions } from "../../lib/sitePermissionNames";
 import { setBlockingCategory, setCollapsesBottomBar, setDefaultNightShade, setSwipeNavigation, useBlocking, useEngines } from "../../state/settings/actions";
@@ -12,9 +12,12 @@ import { refreshSitePermissions, revokeSiteAccess, useSitePermissions } from "..
 import type { SitePermissionGrant } from "../../platform/pages";
 import { contentMargins, Favicon, modifierList, neverBounces, settingsChrome, settingsLayout, settingsSwitchStyle, useDesign } from "../ui";
 import { ExpoRowText } from "./ExpoRowLabel";
-import { NIGHT_SHADE, SWIPE_NAVIGATION } from "./SitePages";
+import { NIGHT_SHADE, SITE_DEFAULTS_FOOTER, SWIPE_NAVIGATION } from "./SitePages";
+import { THIS_SITE_FOOTER, useThisSite } from "./ThisSite";
+import { resetZoom, setDesktopSite, setNightShadeOn, zoomIn, zoomOut } from "../../state/page/actions";
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
+const ZOOM_GAP = 16;
 const FILL = Number.MAX_SAFE_INTEGER;
 
 export function ExpoSiteSettingsPage() {
@@ -27,6 +30,7 @@ export function ExpoSiteSettingsPage() {
   const trusted = state?.exemptHosts.length ?? 0;
   return (
     <Form modifiers={modifierList(navigationTitle("Site settings"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+      <ExpoThisSite />
       <Section title="Content blocking">
         <Toggle isOn={state?.blocksAds ?? true} onIsOnChange={(on) => setBlockingCategory("ads", on)} modifiers={modifierList(settingsSwitchStyle())}>
           <ExpoRowText title="Block ads" />
@@ -48,7 +52,7 @@ export function ExpoSiteSettingsPage() {
           </LabeledContent>
         </NavigationLink>
       </Section>
-      <Section title="Browsing" footer={<Text>Change one site from its page menu.</Text>}>
+      <Section title="Browsing" footer={<Text>{SITE_DEFAULTS_FOOTER}</Text>}>
         <Picker label={<ExpoRowText title="Night Shade" description="Darkens light pages." />} selection={nightShade} onSelectionChange={setDefaultNightShade} modifiers={[pickerStyle("menu"), tint("secondary")]}>
           {NIGHT_SHADE.map((option) => (
             <Text key={option.id} modifiers={[tag(option.id)]}>
@@ -69,6 +73,31 @@ export function ExpoSiteSettingsPage() {
       </Section>
       <AllowedSites />
     </Form>
+  );
+}
+
+function ExpoThisSite() {
+  const site = useThisSite();
+  if (!site) return null;
+  const { host, model } = site;
+  return (
+    <Section title={host} footer={<Text>{THIS_SITE_FOOTER}</Text>}>
+      <Toggle isOn={model.nightShadeOn} onIsOnChange={setNightShadeOn} modifiers={modifierList(settingsSwitchStyle(), disabled(!model.siteSwitches))}>
+        <ExpoRowText title="Night Shade" />
+      </Toggle>
+      <LabeledContent label={<ExpoRowText title="Page zoom" />}>
+        <HStack spacing={ZOOM_GAP}>
+          <Button systemImage="minus" label="Zoom Out" onPress={zoomOut} modifiers={[buttonStyle("borderless"), labelStyle("iconOnly"), disabled(!model.zoomOut)]} />
+          <Button onPress={resetZoom} modifiers={[buttonStyle("borderless"), accessibilityLabel("Reset Zoom"), accessibilityValue(model.zoomPercent), disabled(!model.isWebPage)]}>
+            <Text modifiers={[font({ textStyle: "body" }), monospacedDigit(), foregroundStyle(SECONDARY)]}>{model.zoomPercent}</Text>
+          </Button>
+          <Button systemImage="plus" label="Zoom In" onPress={zoomIn} modifiers={[buttonStyle("borderless"), labelStyle("iconOnly"), disabled(!model.zoomIn)]} />
+        </HStack>
+      </LabeledContent>
+      <Toggle isOn={model.desktopSite} onIsOnChange={setDesktopSite} modifiers={modifierList(settingsSwitchStyle())}>
+        <ExpoRowText title="Desktop site" />
+      </Toggle>
+    </Section>
   );
 }
 

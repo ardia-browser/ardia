@@ -31,7 +31,8 @@ export type PlatformCopy = {
   untitledTabByAddress: boolean;
   devicesShowLastSeen: boolean;
   devicesNameMacModels: boolean;
-  stopSyncAsActionSheet: boolean;
+  confirmsAsActionSheet: boolean;
+  forgottenSearchLeaves: string;
   menuRowTogglesSwitch: boolean;
   menuLargeTextScale: number;
   pinFeedbackInMenu: boolean;
@@ -71,7 +72,8 @@ const ANDROID: PlatformCopy = {
   untitledTabByAddress: true,
   devicesShowLastSeen: true,
   devicesNameMacModels: false,
-  stopSyncAsActionSheet: false,
+  confirmsAsActionSheet: false,
+  forgottenSearchLeaves: "your history on this phone",
   menuRowTogglesSwitch: true,
   menuLargeTextScale: 1.3,
   pinFeedbackInMenu: false,
@@ -116,7 +118,8 @@ const IOS: PlatformCopy = {
   untitledTabByAddress: false,
   devicesShowLastSeen: false,
   devicesNameMacModels: true,
-  stopSyncAsActionSheet: true,
+  confirmsAsActionSheet: true,
+  forgottenSearchLeaves: "your history on this iPhone",
   menuRowTogglesSwitch: false,
   menuLargeTextScale: 1.6,
   pinFeedbackInMenu: true,

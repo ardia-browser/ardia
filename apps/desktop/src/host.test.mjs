@@ -315,6 +315,20 @@ test("restore-disabled sessions park pinned tabs and groups and retain ordinary 
   assert.ok(Object.values(useBrowser.getState().tabs).filter((t) => t.url).every((t) => t.page.kind === "asleep"));
 });
 
+test("restore-disabled startup parks a pin on its last page when Reopen closed pinned tabs at their pinned URL is off, and at its pinned URL when on", () => {
+  const { host } = fixture();
+  const parkedUrl = (pinnedTabsReopenAtPinnedUrl) => {
+    const saved = initialHostSession(host, null, 100);
+    const template = Object.values(saved.tabs)[0];
+    saved.tabs = { tile: { ...template, id: "tile", url: "https://app.example/#/settings", title: "Settings", pin: { as: "tile" }, pinnedUrl: "https://app.example/#/home" } };
+    saved.windows.w_linux = { ...saved.windows.w_linux, tabIds: ["tile"], activeTabIds: { default: "tile" } };
+    saved.settings = { restoreSession: false, pinnedTabsReopenAtPinnedUrl };
+    return initialHostSession(host, saved, 200).parkedPins.default.tabs[0].url;
+  };
+  assert.equal(parkedUrl(false), "https://app.example/#/settings");
+  assert.equal(parkedUrl(true), "https://app.example/#/home");
+});
+
 function browserState() {
   const { host } = fixture();
   const session = initialHostSession(host, null, 100);

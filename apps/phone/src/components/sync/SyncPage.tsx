@@ -136,7 +136,7 @@ export function SyncPage() {
       setStopping(false);
     },
   };
-  const confirmStop = (event?: GestureResponderEvent) => (copy().stopSyncAsActionSheet ? showActionSheet(stopConfirmation) : setConfirmation({ ...stopConfirmation, opener: event?.currentTarget }));
+  const confirmStop = (event?: GestureResponderEvent) => (copy().confirmsAsActionSheet ? showActionSheet(stopConfirmation) : setConfirmation({ ...stopConfirmation, opener: event?.currentTarget }));
   return (
     <SettingsPage title={destinationWords.sync} onBack={popSettings} onRefresh={status.isEnabled ? syncNow : undefined} heroTitle>
       <SyncHero title={destinationWords.sync} subtitle={hero.text} warning={hero.isWarning}>

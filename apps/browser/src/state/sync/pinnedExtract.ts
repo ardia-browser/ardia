@@ -102,6 +102,7 @@ export function extractPinned(profileId: string, base: (key: string) => unknown,
     values,
     ignore: (k) => k.startsWith(PIN_ROW),
     republish: (k) => k.startsWith("pin:") && choiceStillOut(chosen, choiceOf(k), stamp(k)) && !queued(k),
+    keepLocal: (k) => k.startsWith("pin:") && choiceStillOut(chosen, choiceOf(k), stamp(k)),
     published: (keys) =>
       settleChoices(profileId, Object.fromEntries([...keys].filter((k) => k.startsWith("pin:")).map(choiceOf).filter((c) => c in chosen).map((c) => [c, chosen[c]!]))),
   } satisfies Extraction;

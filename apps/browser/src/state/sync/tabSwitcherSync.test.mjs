@@ -7,6 +7,8 @@ const { useEditClock } = await import("./editClock.ts");
 const { settingsAdapter, settleSettingsFromSavedSync } = await import("./settingsAdapter.ts");
 const { ctrlTabKeys } = await import("../commands/commandShortcuts.ts");
 
+let syncTime = 0;
+const nextSyncTime = () => (syncTime = Math.max(Date.now(), syncTime + 1));
 const S = () => useBrowser.getState();
 const STEP = { nextTab: ["\t", "control"], previousTab: ["\t", "control", "shift"] };
 const SWITCHER = { "tabSwitcher:forward": ["\t", "control"], "tabSwitcher:backward": ["\t", "control", "shift"] };
@@ -38,7 +40,7 @@ class Peer {
     this.folder = folder;
     this.values = values;
     this.scope = emptyScope();
-    this.clock = new Clock(id);
+    this.clock = new Clock(id, null, nextSyncTime);
   }
   set(values) {
     this.values = values;
@@ -56,7 +58,7 @@ class Device {
     S().hydrate({});
     this.browser = S();
     this.scope = emptyScope();
-    this.clock = new Clock(id);
+    this.clock = new Clock(id, null, nextSyncTime);
   }
   with(fn) {
     useEditClock(this.clock);
@@ -163,6 +165,7 @@ test("two upgraded Macs that inferred stepping from an older Mac both keep it wh
 test("shortcuts chosen here, a legacy stepping record and an idle sync leave a joining Mac stepping too", async () => {
   const folder = new Folder();
   const b = new Device("B", folder);
+  await b.sync();
   b.with(() => S().updateSettings({ shortcuts: { reload: ["r", "command", "shift"] } }));
   await b.sync();
   const legacy = new Peer("old", folder, { shortcuts: STEP });

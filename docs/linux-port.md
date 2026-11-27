@@ -1,7 +1,7 @@
 # Ardia on Linux
 
-The Linux port runs the same browser UI as the Mac app on the same Chromium (158.0.8127.36) and Helium (0.22.2, with
-helium-linux 0.22.2.1) pins. It targets x86-64 Linux on Wayland, with Hyprland and Omarchy as the main desktop; X11
+The Linux port runs the same browser UI as the Mac app on the same Chromium (158.0.8127.88) and Helium (0.22.4, with
+helium-linux 0.22.4.1) pins. It targets x86-64 Linux on Wayland, with Hyprland and Omarchy as the main desktop; X11
 works, and arm64 builds are configured but untested. It answers upstream issue #1, "Linux Support".
 
 On the Mac, ArdiaCore is a framework that the React Native app hosts. On Linux there is no React Native: Chromium's own
@@ -535,8 +535,8 @@ export PYTHONDONTWRITEBYTECODE=1
 mkdir -p "$AC_CHROMIUM_BUILD"
 
 git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "$AC_CHROMIUM_BUILD/depot_tools"
-git clone --depth 1 --branch 0.22.2 https://github.com/imputnet/helium-chromium.git "$AC_CHROMIUM_BUILD/helium"
-git clone --depth 1 --branch 0.22.2.1 https://github.com/imputnet/helium-linux.git "$AC_CHROMIUM_BUILD/helium-linux"
+git clone --depth 1 --branch 0.22.4 https://github.com/imputnet/helium-chromium.git "$AC_CHROMIUM_BUILD/helium"
+git clone --depth 1 --branch 0.22.4.1 https://github.com/imputnet/helium-linux.git "$AC_CHROMIUM_BUILD/helium-linux"
 git -C "$AC_CHROMIUM_BUILD/helium" fetch --depth 1 origin "$(sed -n 's/^helium_chromium_commit = //p' engine/patches/build/helium-pins.ini)"
 
 source engine/patches/build/env.sh
@@ -618,14 +618,9 @@ a `.sha256` file beside it (`sha256sum -c <asset>.sha256` checks a download):
   with the new release's `.flatpak` (`flatpak update` takes over once Ardia is on Flathub); Ardia says when one is out.
   `flatpak uninstall --delete-data dev.ardia.Ardia` removes it and its data. What works differently in the sandbox is
   under Packaging and installing › Flatpak.
-- **Arch: `ardia-bin`.** Once the package is on the AUR, which follows stable releases:
-
-  ```bash
-  yay -S ardia-bin
-  ```
-
-  Without the AUR, or for a nightly, build it from the release's Arch source package. It holds the PKGBUILD and
-  `.SRCINFO` pinned to that release's tarball, which makepkg downloads and checks against its sha256:
+- **Arch: `ardia-bin`.** Build it from the release's Arch source package; `ardia-bin` isn't on the AUR yet. The
+  package holds the PKGBUILD and `.SRCINFO` pinned to that release's tarball, which makepkg downloads and checks
+  against its sha256:
 
   ```bash
   tar xf ardia-bin-<version>.src.tar.gz
@@ -655,9 +650,9 @@ a `.sha256` file beside it (`sha256sum -c <asset>.sha256` checks a download):
   `/usr/share/polkit-1/actions/dev.ardia.linux.policy` and, on Ubuntu, `/etc/apparmor.d/ardia`.
 
 The `.deb`, a tarball installed with `install.sh` and the AppImage update themselves from each release's signed
-self-update manifest (`lib/ardia/ardia-update`, under Packaging and installing). `ardia-bin` updates with pacman like
-any AUR package, the `.rpm` with dnf or zypper and the Flatpak with flatpak: Ardia tells you about a new release and
-leaves installing it to them.
+self-update manifest (`lib/ardia/ardia-update`, under Packaging and installing). `ardia-bin` updates by building the
+new release's Arch source package, the `.rpm` by installing the new one with dnf or zypper and the Flatpak by
+installing the new `.flatpak`: Ardia tells you about a new release and leaves installing it to you.
 
 ## Packaging and installing
 
@@ -847,7 +842,7 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   icon, `cobalt.ini` and zypak are there, the permissions hold the grants above and nothing more of the home folder,
   `ardia-update kind` is `managed`, Ardia starts headless with renderers and no `--no-sandbox` through zypak and
   opens a page over DevTools, and `flatpak uninstall --delete-data` leaves no app, export or data folder.
-- **Arch.** `scripts/linux/arch/PKGBUILD` is the AUR package `ardia-bin`: it downloads
+- **Arch.** `scripts/linux/arch/PKGBUILD` is the package `ardia-bin`: it downloads
   `Ardia-<version>-linux-x64.tar.xz` from the `v<version>` release, checks its pinned sha256 and installs it with the
   tarball's `install.sh`, then makes `chrome-sandbox` setuid root, as Arch's own `chromium` does, for kernels without
   unprivileged user namespaces. `scripts/linux/arch/update-pkgbuild.sh <version> --package <tarball>` (or `--sha256`) sets
@@ -856,11 +851,12 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   pins the 0.2.47-nightly.2 test build this was verified with, on purpose: its sha256 is a real tarball's, and every
   release writes its own pair with `--out` instead of moving it. The release preflight
   (`scripts/release/preflight.mjs`) checks the `pkgver` and tarball URL `update-pkgbuild.sh` derives for the version and
-  that the committed `.SRCINFO` matches. The AUR copy moves with each stable release.
+  that the committed `.SRCINFO` matches. `ardia-bin` isn't on the AUR yet: there's no AUR account or
+  `AUR_SSH_PRIVATE_KEY`, so the publishing below only dry-runs until there is.
   `scripts/linux/arch/publish-aur.sh <version> --sha256 <digest>` clones `ssh://aur@aur.archlinux.org/ardia-bin.git`
   (host keys pinned in `aur_known_hosts`), refuses to go back a version (a nightly counts as older than its stable), checks that the release's tarball has the
   digest, commits and pushes; `--dry-run` clones over HTTPS and pushes nothing. The Release workflow runs it after
-  each stable release ([linux-ci.md](linux-ci.md) › The AUR).
+  each stable release, as a dry run while the key is missing ([linux-ci.md](linux-ci.md) › The AUR).
   `release.sh` also packs the PKGBUILD and `.SRCINFO` it pins to the release's tarball into
   `ardia-bin-<version>.src.tar.gz` (a folder `ardia-bin/`), which every release carries, nightlies included.
   To try a local tarball, write the pair with `update-pkgbuild.sh <version> --package <tarball> --out <folder>`, put
@@ -1033,11 +1029,11 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
   ready, and Check Now and the app menu read Restart to Update. Every update toast has Later, which only closes it:
   the same version isn't offered again, and a dismissed Restart toast isn't shown again by another window. Where it can't (an engine without the methods, or
   `unsupported`), Check Now asks before opening the release page and an automatic check offers it once as a toast, and
-  the toggle is hidden. An install a package manager owns (`managed`: the AUR's `ardia-bin`, the `.rpm`, the Flatpak)
-  is told to update there and offered the release page (Open Release Page, or the toast's View): a Flatpak to
-  install the new `.flatpak`, the others the AUR command or the new `.rpm`. No command is copied: the `.rpm` and the
-  Flatpak bundle have no repository or remote to update from, and `ardia-update kind` says only `managed`, so the
-  dialog can't tell an AUR install apart (#4078). When Check Now runs in Settings and no regular window is open to show the page, a dialog gives
+  the toggle is hidden. An install a package manager owns (`managed`: `ardia-bin`, the `.rpm`, the Flatpak) is
+  offered the release page (Open Release Page, or the toast's View): a Flatpak to install the new `.flatpak`, the
+  others the new `.rpm` or the new Arch source package to build with `makepkg -si`. No command is copied: Ardia has
+  no repository, AUR package or Flatpak remote to update from yet, and `ardia-update kind` says only `managed`, so the
+  dialog can't tell an Arch install from an `.rpm` (#4078). When Check Now runs in Settings and no regular window is open to show the page, a dialog gives
   its link with Copy Link instead. A failed download or install falls back to the release page once and isn't retried automatically.
 - **Self-update.** `ac_linux_self_update.cc` serves `ArdiaUpdates.installKind`, `update(version)`, `status()`,
   `claimOutcome(run)` and `restart`; the rules are in `ac_linux_self_update_policy.h`. The engine owns each run, so it
@@ -1355,8 +1351,11 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
   command runs:
   - With an engine that advertises both `report.files` and `report.send` it opens the Mac's report sheet (Problem
     reports below).
-  - Otherwise, or when the host sets a `feedbackURL` with `%s`, it opens a new issue in a tab (GitHub's, or that
-    page), its body a short template and Copy Diagnostics' report. The shell's `connect-src 'none'` stops the sheet's
+  - Otherwise it opens the repo's bug form (`issues/new?template=bug_report.yml`) in a tab with its fields filled:
+    `what-happened` gets a short template and Copy Diagnostics' report, `version` the app version and `app` Windows or
+    Linux (from `osBuild`). The form, not a blank issue, because the repo turns blank issues off. A host's own
+    `feedbackURL` with `%s` gets the same text instead. Either address is kept under GitHub's 8,000-character limit by
+    dropping the report's last lines first (`report_sheet_opened` `trimmed`). The shell's `connect-src 'none'` stops the sheet's
     own post, and `ArdiaReport` answers unavailable or empty values (`appModuleFallbacks.ts`).
 - **Favicon accents.** `ArdiaDockSelection.iconAccent` (the command bar's scope pulse) runs in the shell: a port of
   the Mac's dominant-hue pick over a 32 px canvas copy of a `data:` or `blob:` favicon (`iconAccent.ts`). Other URLs

@@ -85,6 +85,10 @@ function environment({ top = true, page = "https://page.example", selection = nu
       this.path = init.path ?? [];
       this.prevented = false;
       this.stopped = false;
+      this.phase = 0;
+    }
+    get eventPhase() {
+      return this.phase;
     }
     get defaultPrevented() {
       return this.prevented;
@@ -160,7 +164,15 @@ function environment({ top = true, page = "https://page.example", selection = nu
     }
   }
   const document = new Document();
-  const window = { open: (...args) => opened.push(args), setTimeout: (fn) => timers.push(fn) };
+  const window = {
+    open: (...args) => {
+      opened.push(args);
+      if ("openResult" in window) return window.openResult;
+      if (/^_(self|top|parent)$/i.test(args[1] ?? "")) return window;
+      return { opener: window, location: { href: args[0] ? String(args[0]) : "about:blank" }, history: { length: 1 }, document: { body: { childElementCount: 0, textContent: "" } } };
+    },
+    setTimeout: (fn) => timers.push(fn),
+  };
   class UserActivation {
     get isActive() {
       return activation.active;
@@ -221,12 +233,16 @@ function environment({ top = true, page = "https://page.example", selection = nu
   new Function(...Object.keys(env), source)(...Object.values(env));
   const fire = (type, path, init = {}, page) => {
     const e = new MouseEvent(type, { path: [...path, document, window], ...init });
+    e.phase = 1;
     for (const fn of listeners[type] ?? []) fn(e);
+    e.phase = 3;
     page?.(e);
-    if (e.propagationStopped) return e;
-    const after = bubbling[type] ?? [];
-    bubbling[type] = after.filter((l) => !l.once);
-    for (const l of after) l.fn(e);
+    if (!e.propagationStopped) {
+      const after = bubbling[type] ?? [];
+      bubbling[type] = after.filter((l) => !l.once);
+      for (const l of after) l.fn(e);
+    }
+    e.phase = 0;
     return e;
   };
   const gesture = (path, keys, { move = 0, release = path, between, page } = {}) => {
@@ -612,6 +628,7 @@ test("a plain click on a link that opens a new tab notes it at the end of the cl
   const env = environment();
   env.gesture([env.link("https://other.example/x", { target: "_blank" })], {});
   assert.deepEqual(newTabLinks(env), ["https://other.example/x"]);
+  assert.equal(env.sent.find((m) => m.kind === "newTabLink").blankWindow, undefined);
   env.flush();
   assert.deepEqual(newTabLinks(env), ["https://other.example/x"], "noted once");
   env.gesture([env.link("https://other.example/y", { target: "_blank" })], {}, { page: (e) => e.stopPropagation() });
@@ -722,6 +739,97 @@ test("a modified, cancelled, untrusted or non-primary click isn't noted", () => 
   env.gesture([blank("/cancelled")], {}, { page: (e) => e.preventDefault() });
   env.flush();
   assert.deepEqual(newTabLinks(env), []);
+});
+
+test("a cancelled click that opens no window leaves nothing for a later blank window to borrow", () => {
+  const env = environment();
+  env.gesture([env.link("https://other.example/routed", { target: "_blank" })], {}, { page: (e) => e.preventDefault() });
+  env.flush();
+  env.activation.active = true;
+  env.window.open("", "_blank");
+  env.window.open("about:blank");
+  env.flush();
+  assert.deepEqual(newTabLinks(env), []);
+});
+
+test("a new-tab link whose click the page cancels to open a blank window itself is noted, as Gmail's message links are (#4110)", () => {
+  const env = environment({ page: "https://mail.google.com" });
+  const wrapped = "https://www.google.com/url?q=https://other.example/&source=gmail";
+  const a = env.link("https://other.example/", { target: "_blank" });
+  env.gesture([a], {}, {
+    page: (e) => {
+      e.preventDefault();
+      a.setAttribute("href", wrapped);
+      env.activation.active = true;
+      env.window.open("", "_blank");
+    },
+  });
+  env.flush();
+  assert.deepEqual(newTabLinks(env), [wrapped]);
+  assert.equal(env.sent.find((m) => m.kind === "newTabLink").blankWindow, true, "native pairs it only with a blank tab, oldest first");
+  const stopped = env.link("https://other.example/stopped", { target: "_blank" });
+  env.gesture([stopped], {}, { page: (e) => (e.preventDefault(), e.stopPropagation(), env.window.open("about:blank")) });
+  env.flush();
+  assert.deepEqual(newTabLinks(env), [wrapped, "https://other.example/stopped"], "a stopped click is noted once dispatch is over");
+  const late = env.link("https://other.example/late", { target: "_blank" });
+  env.gesture([late], {}, { page: (e) => e.preventDefault() });
+  env.window.open("");
+  env.flush();
+  assert.deepEqual(newTabLinks(env), [wrapped, "https://other.example/stopped"], "a blank window opened after the click's dispatch isn't tied to it");
+});
+
+test("a cancelled click is tied only to a new blank window it opened while the click was being handled", () => {
+  const env = environment();
+  const cancelled = (href, open) => env.gesture([env.link(href, { target: "_blank" })], {}, { page: (e) => (e.preventDefault(), open?.()) });
+  cancelled("https://other.example/self", () => env.window.open("", "_self"));
+  cancelled("https://other.example/top", () => env.window.open("about:blank", "_top"));
+  env.window.openResult = null;
+  cancelled("https://other.example/noopener", () => env.window.open("", "_blank", "noopener"));
+  delete env.window.openResult;
+  env.window.openResult = { opener: env.window, location: { href: "https://reused.example/" }, history: { length: 3 } };
+  cancelled("https://other.example/reused", () => env.window.open("", "named"));
+  delete env.window.openResult;
+  env.flush();
+  assert.deepEqual(newTabLinks(env), []);
+  const stopped = env.link("https://other.example/stopped-late", { target: "_blank" });
+  env.gesture([stopped], {}, { page: (e) => (e.preventDefault(), e.stopPropagation()) });
+  env.window.open("");
+  env.flush();
+  assert.deepEqual(newTabLinks(env), [], "an opening after a stopped click's dispatch, before its cleanup, isn't tied to it");
+  const named = { opener: env.window, location: { href: "about:blank" }, history: { length: 1 }, document: { body: { childElementCount: 0, textContent: "" } } };
+  env.window.openResult = named;
+  cancelled("https://other.example/first", () => env.window.open("", "_blank"));
+  cancelled("https://other.example/named-again", () => env.window.open("", "_blank"));
+  delete env.window.openResult;
+  cancelled("https://other.example/named-target", () => env.window.open("", "results"));
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/first"], "a window window.open already returned, or a named target, is never a new tab");
+  env.window.openResult = { opener: env.window, location: { href: "about:blank" }, history: { length: 1 }, document: { body: { childElementCount: 2, textContent: "Report" } } };
+  cancelled("https://other.example/written", () => env.window.open("", "_blank"));
+  delete env.window.openResult;
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/first"], "a blank window the page wrote content into is the page's own, never a new-tab link");
+  cancelled("https://other.example/fresh", () => env.window.open("", "_blank"));
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/first", "https://other.example/fresh"]);
+});
+
+test("a cancelled click whose page opened its own window with an address is noted once, by that address", () => {
+  const env = environment();
+  const a = env.link("https://other.example/shown", { target: "_blank" });
+  env.gesture([a], {}, {
+    page: (e) => {
+      e.preventDefault();
+      env.activation.active = true;
+      env.window.open("https://other.example/opened");
+    },
+  });
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/opened"]);
+  const same = env.link("/in-page");
+  env.gesture([same], {}, { page: (e) => e.preventDefault() });
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/opened"], "a cancelled link that replaces the page is never noted");
 });
 
 test("downloads, non-http(s) links and links in editable content aren't noted", () => {

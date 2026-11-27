@@ -1,9 +1,13 @@
 package com.ardia.phone
 
+import android.app.DownloadManager
 import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
+import androidx.core.content.ContextCompat
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
@@ -11,18 +15,33 @@ import expo.modules.kotlin.modules.ModuleDefinition
 
 class DownloadsModule : Module() {
     private val context: Context get() = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "The app context is gone", null)
+    private var completions: BroadcastReceiver? = null
 
     override fun definition() = ModuleDefinition {
         Name("ArdiaPhoneDownloads")
 
-        Events("onDownloadEvent")
+        Events("onDownloadEvent", "onAppUpdateDownloaded", "onAppUpdateInstallStatus")
 
         OnCreate {
             PhonePages.downloadSink = { sendEvent("onDownloadEvent", it) }
+            AppUpdateInstaller.statusSink = { sendEvent("onAppUpdateInstallStatus", it) }
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(received: Context, intent: Intent) {
+                    val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+                    if (id > 0) sendEvent("onAppUpdateDownloaded", mapOf("id" to id.toString()))
+                }
+            }
+            appContext.reactContext?.let { owner ->
+                runCatching { ContextCompat.registerReceiver(owner, receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), ContextCompat.RECEIVER_EXPORTED) }
+                    .onSuccess { completions = receiver }
+            }
         }
 
         OnDestroy {
             PhonePages.downloadSink = null
+            AppUpdateInstaller.statusSink = null
+            completions?.let { receiver -> runCatching { appContext.reactContext?.unregisterReceiver(receiver) } }
+            completions = null
         }
 
         AsyncFunction("active") { ->
@@ -57,6 +76,38 @@ class DownloadsModule : Module() {
                 false
             }
         }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("handOffAppUpdate") { url: String, title: String ->
+            AppUpdateHandoff.start(context, appContext.currentActivity, url, title)
+        }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("appUpdateStatus") { id: String -> AppUpdateHandoff.status(context, id) }
+
+        AsyncFunction("appUpdateProgress") { id: String -> AppUpdateHandoff.progress(context, id) }
+
+        AsyncFunction("verifyAppUpdate") { id: String, sha256: String, fileName: String -> AppUpdateHandoff.verify(context, id, sha256, fileName) }
+
+        AsyncFunction("installVerifiedUpdate") { fileName: String, sha256: String, downloadId: String -> AppUpdateHandoff.installVerified(context, fileName, sha256, downloadId) }
+
+        Function("updateNotificationsShown") { AppUpdateHandoff.notificationsShown(context) }
+
+        Function("takeInstallRequest") { AppUpdateHandoff.takeInstallRequest(context, appContext.currentActivity) }
+
+        Function("takeInstallStatus") { AppUpdateInstaller.takeUnreported() }
+
+        AsyncFunction("notifyUpdateReady") { fileName: String, title: String, text: String -> AppUpdateHandoff.notifyReady(context, fileName, title, text) }
+
+        AsyncFunction("askForUpdateNotifications") { AppUpdateHandoff.askForNotifications(appContext.currentActivity) }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("discardAppUpdate") { id: String -> AppUpdateHandoff.discard(context, id) }
+
+        Function("canInstallPackages") { AppUpdateHandoff.canInstallPackages(context) }
+
+        AsyncFunction("openInstallPermission") { AppUpdateHandoff.openInstallPermission(context, appContext.currentActivity) }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("installDownloadedFile") { uri: String -> AppUpdateHandoff.installDownloadedFile(context, uri) }
+
+        OnNewIntent { intent -> appContext.reactContext?.let { AppUpdateHandoff.noteInstallRequest(it, intent) } }
 
         AsyncFunction("files") { -> DownloadedFiles.list(context) }
 

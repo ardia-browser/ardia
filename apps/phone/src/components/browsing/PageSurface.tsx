@@ -10,11 +10,14 @@ import { useCanReopen } from "../../state/tabs/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { usePreferences } from "../../state/settings/hooks";
 import { pageSwipe } from "../../state/settings/settingsRules";
-import { PageView, useTheme, type PageViewHandle } from "../ui";
+import { nativeLookColors } from "../../lib/profileLook";
+import { PageView, useProfileLook, useTheme, type PageViewHandle } from "../ui";
 
 export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, topClearance, pinsSafeArea, testID }: { tab: BrowserTab; toneBottom: number; obscured?: { top: number; bottom: number }; summaryBottomInset?: number; topClearance?: number; pinsSafeArea?: boolean; testID?: string }) {
   const handle = useRef<PageViewHandle>(null);
   const theme = useTheme();
+  const look = useProfileLook();
+  const summaryLook = useMemo(() => ({ ...nativeLookColors(look, theme.dark), dark: theme.dark }), [look, theme.dark]);
   const id = tab.id;
   const swipe = usePreferences((p) => p.swipeNavigation);
   const canReopen = useCanReopen();
@@ -66,6 +69,7 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
       toneInsets={toneInsets}
       obscuredInsets={obscuredInsets}
       summaryBottomInset={summaryBottomInset}
+      summaryLook={summaryLook}
       obscuredColors={obscuredColors}
       topClearance={topClearance}
       pinsSafeArea={pinsSafeArea}

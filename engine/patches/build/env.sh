@@ -5,12 +5,12 @@ export AC_REPO="${AC_REPO:-$_ac_repo}"
 unset _ac_repo
 export DEPOT_TOOLS_UPDATE=0
 export PATH="$CB/depot_tools:$PATH"
-export CHROMIUM_VERSION=158.0.8127.36
-export HELIUM_TAG=0.22.2
-export HELIUM_MACOS_TAG=0.22.2.1
+export CHROMIUM_VERSION=158.0.8127.88
+export HELIUM_TAG=0.22.4
+export HELIUM_MACOS_TAG=0.22.4.1
 export HELIUM_DIR="$CB/helium"
 export HELIUM_MACOS_DIR="$CB/helium-macos"
-export HELIUM_LINUX_TAG=0.22.2.1
+export HELIUM_LINUX_TAG=0.22.4.1
 export HELIUM_LINUX_DIR="$CB/helium-linux"
 _ac_target_config=$(python3 "$(dirname "${BASH_SOURCE[0]:-$0}")/target_config.py" --shell) || return $?
 eval "$_ac_target_config"

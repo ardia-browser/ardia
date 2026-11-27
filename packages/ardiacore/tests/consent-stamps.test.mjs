@@ -34,6 +34,15 @@ test("a paint check is stamped with the epoch when it is scheduled, and its reco
   assert.doesNotMatch(probe, /@"seconds"/);
 });
 
+test("a WebKit page reclaimed after full screen is counted with the stamp taken when that exit was scheduled", () => {
+  const page = read("../ios/WebKitTab+FullscreenPage.swift");
+  const moved = page.slice(page.indexOf("func fullscreenPageMoved"), page.indexOf("func noteFullscreenPageKeptShown"));
+  assert.ok(moved.indexOf("epoch: ArdiaEvents.consentEpoch") >= 0 && moved.indexOf("epoch: ArdiaEvents.consentEpoch") < moved.indexOf("asyncAfter"), "the epoch is taken before the reclaim is deferred");
+  const reclaim = page.slice(page.indexOf("private func reclaimPage"), page.indexOf("private func countFullscreenPage"));
+  assert.match(reclaim, /countFullscreenPage\("fullscreenPageReclaimed", stamp: ArdiaConsentStamp\(epoch: ticket\.epoch\)\)/);
+  assert.doesNotMatch(reclaim, /ArdiaConsentStamp\.begin/);
+});
+
 const IOS = new URL("../ios/", import.meta.url);
 const sources = () => readdirSync(IOS).filter((name) => /\.(mm|swift)$/.test(name)).map((name) => [name, readFileSync(new URL(name, IOS), "utf8")]);
 const STAMPED = ["engine.devToolsKeyKept", "engine.hoverLost", "engine.pressLoopLong", "engine.windowUnpainted", "engine.cursorRestored", "engine.popupProtectedMedia", "pictureInPictureDragged", "pictureInPictureResized", "pictureInPictureSkip", "autoPictureInPictureKept"];

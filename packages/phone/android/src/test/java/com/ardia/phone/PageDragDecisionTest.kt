@@ -99,14 +99,42 @@ class PageDragDecisionTest {
 
     @Test
     fun thePageReportsTheScrollerUnderTheFingerAndAnOlderTouchsReportIsIgnored() {
-        assertEquals(TouchScrollers.Report(true, false, 7L), TouchScrollers.parse("touchScroller:10", 7L))
-        assertEquals(TouchScrollers.Report(false, false, 7L), TouchScrollers.parse("touchScroller:00", 7L))
-        assertNull(TouchScrollers.parse("touchScroller:1", 7L))
+        assertEquals(TouchScrollers.Report(true, false, 7L), TouchScrollers.parse("touchScroller:100", 7L))
+        assertEquals(TouchScrollers.Report(false, false, 7L, canScrollUp = true), TouchScrollers.parse("touchScroller:001", 7L))
+        assertNull(TouchScrollers.parse("touchScroller:10", 7L))
+        assertNull(TouchScrollers.parse("touchScroller:1x0", 7L))
         assertNull(TouchScrollers.parse("nightShade", 7L))
         val key = Any()
-        TouchScrollers.report(key, "touchScroller:11", 100L)
+        assertEquals(false, TouchScrollers.everReported(key))
+        TouchScrollers.report(key, "touchScroller:110", 100L)
+        assertEquals(true, TouchScrollers.everReported(key))
         assertEquals(true, TouchScrollers.since(key, 90L)?.canScrollLeft)
         assertNull(TouchScrollers.since(key, 120L))
         assertNull(TouchScrollers.since(Any(), 0L))
+    }
+
+    @Test
+    fun aPullWaitsForThePageAndLeavesTheDragToAScrollerThatCanScrollUp() {
+        val atTop = TouchScrollers.Report(false, false, 0L, canScrollUp = false)
+        val scrolledDown = TouchScrollers.Report(false, false, 0L, canScrollUp = true)
+        assertEquals(PageDragDecision.Settle.Yield, PageDragDecision.settlePull(false, scrolledDown, true, 0L))
+        assertEquals(PageDragDecision.Settle.Yield, PageDragDecision.settlePull(true, atTop, true, 0L))
+        assertEquals(PageDragDecision.Settle.Claim, PageDragDecision.settlePull(false, atTop, true, 0L))
+        assertEquals(PageDragDecision.Settle.Wait, PageDragDecision.settlePull(false, null, true, 50L))
+        assertEquals(PageDragDecision.Settle.Claim, PageDragDecision.settlePull(false, null, true, PageDragDecision.REPORT_WAIT_MILLIS))
+        assertEquals(PageDragDecision.Settle.Claim, PageDragDecision.settlePull(false, null, false, 0L))
+    }
+
+    @Test
+    fun aBigInnerScrollerReportsItsOffsetAndBadReportsAreDropped() {
+        assertEquals(TouchScrollers.InnerScroll("ab12cd.3", 840.0, false), TouchScrollers.parseInnerScroll("innerScroll:ab12cd.3:840:0"))
+        assertEquals(TouchScrollers.InnerScroll("ab12cd.3", 0.0, true), TouchScrollers.parseInnerScroll("innerScroll:ab12cd.3:0:1"))
+        assertNull(TouchScrollers.parseInnerScroll("innerScroll:ab12cd.3:-4:0"))
+        assertNull(TouchScrollers.parseInnerScroll("innerScroll:ab12cd.3:12.5:0"))
+        assertNull(TouchScrollers.parseInnerScroll("innerScroll:ab/cd:12:0"))
+        assertNull(TouchScrollers.parseInnerScroll("innerScroll::12:0"))
+        assertNull(TouchScrollers.parseInnerScroll("innerScroll:a:12:2"))
+        assertNull(TouchScrollers.parseInnerScroll("innerScroll:a:12"))
+        assertNull(TouchScrollers.parseInnerScroll("touchScroller:100"))
     }
 }

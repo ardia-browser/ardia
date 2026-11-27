@@ -62,6 +62,14 @@ const MEMORY_SAVER_LEVELS: Record<MemorySaverPreset, { title: string; descriptio
 };
 const TAB_SLEEP: Record<MemorySaverMode, string> = { moderate: "Sleeps tabs slowly", balanced: "Sleeps idle tabs automatically", maximum: "Sleeps tabs aggressively" };
 
+const SLEEP_UNUSED_OPTIONS: { value: Settings["sleepUnusedTabsAfter"]; title: string }[] = [
+  { value: "never", title: "Never" },
+  { value: "1h", title: "1 hour" },
+  { value: "4h", title: "4 hours" },
+  { value: "12h", title: "12 hours" },
+  { value: "24h", title: "1 day" },
+];
+
 const MEMORY_SAVER_PRESETS = Object.keys(MEMORY_SAVER_LEVELS) as MemorySaverPreset[];
 
 const UNLOAD_AFTER: Record<Settings["unloadProfilesAfter"], string> = { never: "", "5m": "5 minutes", "15m": "15 minutes", "1h": "an hour", "2h": "2 hours" };
@@ -101,6 +109,7 @@ function PerformanceSection() {
   const memorySaverMode = useSettings((s) => s.memorySaverMode);
   const loadProfilesWhenOpened = useSettings((s) => s.loadProfilesWhenOpened);
   const unloadProfilesAfter = useSettings((s) => s.unloadProfilesAfter);
+  const sleepUnusedTabsAfter = useSettings((s) => s.sleepUnusedTabsAfter);
   const keys = { memorySaver, memorySaverMode, loadProfilesWhenOpened, unloadProfilesAfter };
   const batterySaverWhen = useSettings((s) => s.batterySaverWhen);
   const keepActiveSites = useSettings((s) => s.keepActiveSites);
@@ -113,6 +122,9 @@ function PerformanceSection() {
       <Group>
         <Row anchor="advanced.memorySaver" description={level === "custom" ? customDescription(keys) : MEMORY_SAVER_LEVELS[level].description()}>
           <PopUp value={level} options={options} onChange={(v) => v !== "custom" && updateSettings(MEMORY_SAVER_LEVELS[v].settings)} minWidth={190} />
+        </Row>
+        <Row anchor="advanced.sleepUnusedTabsAfter">
+          <PopUp value={sleepUnusedTabsAfter} options={SLEEP_UNUSED_OPTIONS} onChange={(v) => updateSettings({ sleepUnusedTabsAfter: v })} minWidth={190} />
         </Row>
         <Row anchor="advanced.keepActiveSites">
           <Button title="Add Site…" icon="plus" onPress={() => showSettingsSheet(<KeepActiveSiteSheet />)} />
@@ -227,6 +239,7 @@ function ProgramsRows() {
 
 function CommandLineSection() {
   const on = useSettings((settings) => programControlOn({ settings }));
+  const showCliPill = useSettings((s) => s.showCliPill);
   const install = useCommandInstall();
   const server = useControlServer((s) => s.server);
   const ruleRows = useAutomationRuleRows();
@@ -272,7 +285,8 @@ function CommandLineSection() {
           <Toggle value={on} accessibilityLabel="ardia command" onChange={setOn} />
         </Row>
         )}
-        <SettingToggle anchor="advanced.compactCliPill" />
+        <SettingToggle anchor="advanced.showCliPill" />
+        <SettingToggle anchor="advanced.compactCliPill" disabled={!showCliPill} />
         {ruleRows}
       </Group>
     </>

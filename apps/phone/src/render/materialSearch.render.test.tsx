@@ -7,6 +7,7 @@ import { act, type ReactTestInstance } from "react-test-renderer";
 import { SearchTray } from "../components/search/SearchTray";
 import { materialSearchFocusDelay, materialSearchMs } from "../components/search/MaterialSearchView";
 import { DesignProvider } from "../components/ui";
+import { floatingPanelLayout } from "../components/ui/tokens";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { setDynamicScheme } from "../state/app/dynamicScheme";
 import * as browse from "../state/browse/store";
@@ -69,7 +70,7 @@ onAndroid("the Material search capsule uses the same docked sheet as the page me
     borderTopRightRadius: 28,
   });
   expect(node(root, "materialDragHandle")).toBeDefined();
-  expect(node(root, "materialSheetDockedBar")).toHaveAnimatedStyle({ left: 16, right: 16, bottom: 40 });
+  expect(node(root, "materialSheetDockedBar")).toHaveAnimatedStyle({ left: 16 + floatingPanelLayout.inset, right: 16 + floatingPanelLayout.inset, bottom: 40 });
   expect(flat(node(root, "materialSheetDockedBar"))).toMatchObject({ height: 48, borderRadius: 9999, backgroundColor: LIGHT.surfaceContainerHigh });
   expect(flat(node(root, "materialSearchBar"))).toMatchObject({
     height: 48,
@@ -117,7 +118,7 @@ onAndroid("the expanded field lands in the sheet header with results visible bel
   const root = tray();
   const bar = node(root, "materialSheetDockedBar")!;
   act(() => jest.advanceTimersByTime(400));
-  expect(bar).toHaveAnimatedStyle({ left: 16, transform: [{ translateY: -228 }] });
+  expect(bar).toHaveAnimatedStyle({ left: 16 + floatingPanelLayout.inset, transform: [{ translateY: -228 }] });
   act(() => closeSearch(root));
   expect(node(root, "materialSheet")).toBeDefined();
   act(() => jest.advanceTimersByTime(400));
@@ -176,14 +177,14 @@ onAndroid.each([["start", 24], ["browsing", 80], ["deck", 80]] as const)("search
   act(() => closeSearch(root));
   act(() => jest.advanceTimersByTime(100));
   const moving = getAnimatedStyle(bar) as { left: number; transform: [{ translateY: number }] };
-  expect(moving.left).toBe(16);
+  expect(moving.left).toBe(16 + floatingPanelLayout.inset);
   expect(moving.transform[0].translateY).toBeLessThan(0);
   expect(node(root, "materialSearchEditing")!).toHaveAnimatedStyle({ opacity: 1 });
   expect(flat(node(root, "materialSearchEditing")).width).toBe(360);
   expect(node(root, "materialSearchLanding")!).toHaveAnimatedStyle({ opacity: 0 });
   act(() => jest.advanceTimersByTime(100));
   const landing = getAnimatedStyle(bar) as { left: number; transform: [{ translateY: number }] };
-  expect(landing.left).toBeGreaterThan(moving.left);
+  expect(landing.left).toBeGreaterThanOrEqual(moving.left);
   expect(landing.left).toBeLessThanOrEqual(side);
   expect(landing.transform[0].translateY).toBe(0);
   expect(getAnimatedStyle(node(root, "materialSearchLanding")!).opacity).toBeGreaterThan(0);

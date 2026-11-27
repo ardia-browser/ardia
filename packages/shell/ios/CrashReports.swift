@@ -187,6 +187,7 @@ enum CrashReports {
       report["jsFatal"] = reason
       report["jsFatalSource"] = "reactNative"
     }
+    if process == "browser" { report.merge(EngineFatalNote.fields(body)) { current, _ in current } }
     return report
   }
 

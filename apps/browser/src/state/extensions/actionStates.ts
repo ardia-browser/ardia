@@ -1,5 +1,7 @@
 import { extensionActionStates } from "../../platform/extensions";
 import { useBrowser } from "../browser/store";
+import { usePages } from "../tabs/pageState";
+import { pageDocumentOf } from "../engines/pageDocuments";
 import { activeTabId } from "../browser/model";
 import { extensionProfile, readyTabOf, tabProfile, useExtensions, windowExtensions } from "./store";
 import { singleFlight } from "../../lib/singleFlight";
@@ -34,10 +36,13 @@ async function pass(only: Set<string> | null) {
       const tabId = readyTabOf(activeTabId(s, windowId));
       if (!ids.length || !tabId) return;
       const consent = consentToken();
+      const readiness = usePages.getState().ready[tabId];
+      const document = pageDocumentOf(tabId);
       noteExtensionActionStateRequest();
       const states = await extensionActionStates(tabId, ids, tabProfile(tabId)).catch(() => (noteExtensionActionStateFailure(consent), null));
+      if (!states || !useBrowser.getState().tabs[tabId] || usePages.getState().ready[tabId] !== readiness || pageDocumentOf(tabId) !== document) return;
       const previous = useExtensions.getState().actions[tabId];
-      if (!states || (previous && JSON.stringify(previous) === JSON.stringify(states))) return;
+      if (previous && JSON.stringify(previous) === JSON.stringify(states)) return;
       useExtensions.setState((e) => ({ actions: { ...e.actions, [tabId]: states } }));
     }),
   );

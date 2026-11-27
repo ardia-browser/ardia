@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { capWarmPanes, warmOrder, engineVeto, FREQUENT_SWITCHES, MINUTE, RECENTLY_AUDIBLE_MS, RECENTLY_SEEN_MS, sleepRules, sleepVeto, tabsToSleep } from "./sleepPolicy.ts";
+import { capWarmPanes, warmOrder, engineVeto, FREQUENT_SWITCHES, MINUTE, RECENTLY_AUDIBLE_MS, RECENTLY_SEEN_MS, sleepRules, sleepVeto, sleptPastSoftKeeps, tabsToSleep, unusedAfterMs, unusedTabsToSleep } from "./sleepPolicy.ts";
 import { countSwitch } from "./tabSwitches.ts";
 import { frontTabChanges } from "../windows/frontTabs.ts";
 
@@ -112,4 +112,36 @@ test("each engine's own kept-by codes keep their meaning: the Mac veto's 100-103
   const desktop = (await import("./engineKeptCodes.desktop.ts")).ENGINE_KEPT_CODES;
   assert.deepEqual(mac.map((k) => [k.code, k.veto, k.userMayOverride]), [[100, "postedDocument", true], [101, "beforeUnload", true], [102, "download", true], [103, "cliSession", true]]);
   assert.deepEqual(desktop, [], "the desktop engines report none of these codes");
+});
+
+test("the budget stops at each mode's ceiling, so a 64 GB Mac no longer keeps 64 tabs loaded", () => {
+  const sys = (gib) => ({ memoryPressure: "normal", physicalMemory: gib * 2 ** 30 });
+  const tabs = (memorySaverMode, gib) => sleepRules({ memorySaver: true, memorySaverMode }, sys(gib)).tabs;
+  assert.deepEqual([8, 16, 24, 32, 64, 128].map((gib) => tabs("balanced", gib)), [10, 16, 24, 24, 24, 24]);
+  assert.deepEqual([8, 16, 24, 32, 64].map((gib) => tabs("moderate", gib)), [20, 32, 48, 48, 48]);
+  assert.deepEqual([8, 16, 24, 32, 64].map((gib) => tabs("maximum", gib)), [5, 8, 12, 12, 12]);
+});
+
+test("a tab reopened soon after the budget slept it is kept at normal pressure only", () => {
+  assert.equal(sleepVeto(idle("t", 120, { reopenedSoon: true }), NOW, normal), "reopenedSoon");
+  assert.equal(sleepVeto(idle("t", 120, { reopenedSoon: true }), NOW, { hiddenMs: 5 * MINUTE, pressure: "warning" }), null);
+  assert.deepEqual(tabsToSleep([idle("a", 120, { reopenedSoon: true }), idle("b", 90), idle("c", 60)], NOW, normal), { sleep: [], vetoed: [{ id: "a", veto: "reopenedSoon" }] });
+});
+
+test("Sleep tabs unused for picks every tab hidden that long, oldest first, whatever the budget or how often it was used", () => {
+  const tabs = [idle("young", 30), idle("old", 300, { switches: FREQUENT_SWITCHES, reopenedSoon: true }), idle("mid", 200), idle("loud", 400, { audible: true }), idle("shown", 500, { shown: true })];
+  assert.deepEqual(unusedTabsToSleep(tabs, NOW, 120 * MINUTE), {
+    sleep: ["old", "mid"],
+    vetoed: [{ id: "shown", veto: "shown" }, { id: "loud", veto: "audible" }],
+  });
+  assert.deepEqual(unusedTabsToSleep(tabs, NOW, 600 * MINUTE).sleep, [], "nothing has been unused for ten hours");
+  assert.deepEqual(unusedTabsToSleep([idle("t", 300, { askAgainAt: NOW + 1 })], NOW, 60 * MINUTE).vetoed, [{ id: "t", veto: "keptRecently" }]);
+});
+
+test("the unused wait follows the setting and Memory Saver, and only the engine's own past-soft-keeps answer counts as such a sleep", () => {
+  const on = (sleepUnusedTabsAfter, memorySaver = true) => unusedAfterMs({ memorySaver, sleepUnusedTabsAfter });
+  assert.deepEqual(["never", "1h", "4h", "12h", "24h", "bogus"].map((v) => on(v)), [null, 60 * MINUTE, 240 * MINUTE, 720 * MINUTE, 1440 * MINUTE, null]);
+  assert.equal(on("1h", false), null, "Memory Saver off sleeps nothing");
+  assert.equal(sleptPastSoftKeeps([200]), true);
+  for (const kept of [[], [13], [25, 23, 13], [200, 26], [-1]]) assert.equal(sleptPastSoftKeeps(kept), false, `${JSON.stringify(kept)} isn't a forced sleep`);
 });

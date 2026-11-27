@@ -557,7 +557,7 @@ an aborted query is cancelled (the program is killed). The program prints `[{"ti
 the request arrives until its reply is written, then the usual 3 s hold. A `run`, `apply` or `caller` on a connection whose
 `hello` named a caller puts that name (and app icon) on the pill, the most recent one winning (`docs/cli.md`). The indicator combines CDP connections and
 socket runs; neither overwrites the other. `hello`, `commands`, `windows`, `workspace` and `subscribe` don't show it, so a hooks
-runner connected all day doesn't keep it up. Stop hides it at once.
+runner connected all day doesn't keep it up. Stop turns control off and hides it at once; the close button hides the pill without stopping control until control is toggled off and back on, Ardia restarts or Settings › Advanced › Command line and automation › Show the control pill is turned back on. Turning Show the control pill off in Settings hides the pill persistently (programs can't change `showCliPill` through `config.json` or the control socket).
 
 ## The ardia command
 

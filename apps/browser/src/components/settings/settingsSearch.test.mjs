@@ -37,7 +37,9 @@ const TOP = [
   ["right sidebar", ["tabs.sidebarSide"]],
   ["vertical tabs", ["tabs.layout"]],
   ["tab menu button", ["tabs.showTabMenuButton"]],
-  ["pinned", ["profiles.shareTopApps", "tabs.balancedTopApps", "tabs.sleepingTabs"]],
+  ["pinned", ["profiles.shareTopApps", "tabs.balancedTopApps", "tabs.sleepingTabs", "tabs.pinnedTabsReopenAtPinnedUrl"]],
+  ["pinned url closed", ["tabs.pinnedTabsReopenAtPinnedUrl"]],
+  ["reopen pinned", ["tabs.pinnedTabsReopenAtPinnedUrl"]],
   ["strikethrough", ["tabs.sleepingTabs"]],
   ["sleeping tabs", ["tabs.sleepingTabs"]],
   ["split", ["shortcuts.splitLinkModifier"]],
@@ -427,4 +429,10 @@ test("with Minimalism mode off, searching favicons or site logos still finds Min
     assert.equal(hit.entry.needs, "Turn on Minimalism mode to use this");
   }
   assert.equal(findSetting("appearance.minimalismPinnedIcons").description.includes("With Letters"), true);
+});
+
+test("searching for hiding or showing the control pill surfaces advanced.showCliPill", () => {
+  for (const query of ["show control pill", "hide control pill", "dismiss control pill"]) {
+    assert.ok(ids(query).includes("advanced.showCliPill"), query);
+  }
 });

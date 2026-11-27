@@ -2,6 +2,7 @@
 #import "ArdiaInterfaceScale.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaRuntime.h"
+#import "ArdiaChromeWindowHost.h"
 
 #import <QuartzCore/QuartzCore.h>
 #import <React/UIView+React.h>
@@ -288,12 +289,13 @@ NSView *LingeringPaneOver(NSView *view) {
   const NSUInteger change = [changes objectForKey:tab].unsignedIntegerValue + 1;
   [changes setObject:@(change) forKey:tab];
   ArdiaWebView *view = [ArdiaTabRegistry viewForTab:tab];
+  if (view && !view->_reports.autoPictureInPictureHold.tellsChrome(view.userBackOnTab)) return;
   if (view.seenByUser) return [tab noteShownByHost:YES];
   if (view.autoPictureInPicture) return [tab noteShownByHost:NO];
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 300 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
     if ([changes objectForKey:tab].unsignedIntegerValue != change) return;
     ArdiaWebView *now = [ArdiaTabRegistry viewForTab:tab];
-    if (!now.seenByUser) [tab noteShownByHost:NO];
+    if (!now.seenByUser && !(now && now->_reports.autoPictureInPictureHold.held)) [tab noteShownByHost:NO];
   });
 }
 
@@ -310,8 +312,17 @@ NSView *LingeringPaneOver(NSView *view) {
   return _visible && [ArdiaWindowController userSees:self.window];
 }
 
+- (BOOL)userBackOnTab {
+  return self.seenByUser && !ArdiaChromeWindowHost.userInAnotherApp;
+}
+
 - (void)userSightChanged {
+  const bool wasHeld = _reports.autoPictureInPictureHold.held;
   if (_tab) [ArdiaWebView noteShown:_tab];
+  if (wasHeld && !_reports.autoPictureInPictureHold.held) {
+    [self notePictureInPictureSight:@"hold released"];
+    [self autoPictureInPictureInputsChanged];
+  }
   const BOOL seen = self.seenByUser;
   const BOOL kept = seen && _visible && [ArdiaWindowController userSeesOnlyThroughWindowServer:self.window];
   if (!kept) {

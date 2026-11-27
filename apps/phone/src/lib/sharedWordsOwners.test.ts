@@ -13,7 +13,7 @@ const literal = (word: string) => new RegExp(`(["'\`>])${word}(["'\`<])`);
 
 test("Open has one owner: native and drawn Archive and Spaces and the open-link prompt read actionWords.open", () => {
   assert.equal(actionWords.open, "Open");
-  for (const path of ["components/tabs/ExpoArchive.tsx", "components/tabs/ArchiveView.tsx", "components/sync/ExpoSpaces.tsx", "components/sync/SpacesView.tsx", "state/page/pagePrompts.ts"]) {
+  for (const path of ["components/tabs/ExpoArchive.tsx", "components/tabs/ArchiveView.tsx", "components/sync/ExpoSpaces.tsx", "components/sync/SpacesParts.tsx", "state/page/pagePrompts.ts"]) {
     const text = source(path);
     assert.doesNotMatch(text, literal("Open"), path);
     assert.match(text, /actionWords\.open/, path);

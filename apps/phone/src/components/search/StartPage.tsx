@@ -12,6 +12,7 @@ import { useHasTabs, useIncognito } from "../../state/tabs/hooks";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
 import { chromeLayout, controlSize, FrostSource, GlassSource, space, START_FROST, startLayout, startMotion, tabsCurve, tabsLayout, useReduceMotion, useTheme, type SymbolName } from "../ui";
 import { StartCircleButton } from "./StartBarButtons";
+import { useUpdateDot } from "../../state/appUpdate/store";
 import { PlusMenuButton } from "../tabs/ChromeButtons";
 import { StartMark, StartSpaces, startBarCenterY, type StartGeometry } from "./StartSpaces";
 import { useBottomBarLayout } from "../ui/useBottomBarLayout";
@@ -20,6 +21,7 @@ import { barSpanCenter, besideStrip, DUO_BAR } from "../../lib/bottomBarSpan";
 
 export function StartPage() {
   const insets = useSafeAreaInsets();
+  const updateDot = useUpdateDot();
   const window = useWindowDimensions();
   const { width, height } = measuredOr(useRootSize(), window);
   const trayUp = useSearchOpen();
@@ -66,7 +68,7 @@ export function StartPage() {
       <Animated.View testID="startBar" {...hidden} style={[styles.bar, { top: barTop, paddingLeft: barSpan.left, paddingRight: barSpan.right }, strip?.ends ? styles.barEnds : null, barStyle]}>
         {strip ? null : tabs}
         {strip ? null : plus}
-        <StartCircleButton icon="gearshape" label={destinationWords.settings} testID="startBarSettings" dark={dark} incognito={incognito} onPress={() => openSettings()} />
+        <StartCircleButton icon="gearshape" label={destinationWords.settings} testID="startBarSettings" dark={dark} incognito={incognito} dot={updateDot} onPress={() => openSettings()} />
       </Animated.View>
       {strip ? (
         <>

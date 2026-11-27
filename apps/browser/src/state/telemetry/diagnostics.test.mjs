@@ -467,9 +467,12 @@ test("an unpainted window sends its enums, flags, counts and reason bits, capped
   useBrowser.setState({ settings: { ...settings, shareTabsAcrossWindows: true } });
   diagnostics.trackWindowUnpainted({ ...record, epoch: client.consentEpoch() });
   useBrowser.setState({ settings });
+  diagnostics.trackWindowUnpainted({ ...record, reasons: 1 << 8, heldMs: 1234.4, webkitViews: 2, webkitOnTop: true, stillUnpainted: 1, stillReasons: (1 << 3) | (1 << 20), epoch: client.consentEpoch() });
+  diagnostics.trackWindowUnpainted({ ...record, heldMs: 1e12, webkitViews: 1e9, webkitOnTop: "yes", stillUnpainted: -3, stillReasons: "all", url: "https://private.example", epoch: client.consentEpoch() });
+  diagnostics.trackWindowUnpainted({ ...record, heldMs: -5, webkitViews: "two", stillUnpainted: null, stillReasons: -1, epoch: client.consentEpoch() });
   await new Promise((resolve) => setTimeout(resolve, 1100));
   await client.saveQueueNow();
-  const [first, odd, shared] = events("window_unpainted").map((e) => e.properties);
+  const [first, odd, shared, followed, extreme, negative] = events("window_unpainted").map((e) => e.properties);
   assert.equal(first.app_active, true);
   assert.equal(first.windows, 2);
   assert.equal(first.share_tabs, false);
@@ -491,6 +494,31 @@ test("an unpainted window sends its enums, flags, counts and reason bits, capped
   assert.equal(first.stand_in_lent, false);
   assert.equal(first.stand_in_leaving, false);
   assert.equal(first.veil_up, true);
+  assert.equal(first.stand_in_showing, false);
+  assert.equal(first.held_ms, null);
+  assert.equal(first.webkit_views, null);
+  assert.equal(first.webkit_on_top, null);
+  assert.equal(first.still_unpainted, null);
+  assert.equal(first.still_reasons, null);
+  assert.equal(followed.stand_in_showing, true);
+  assert.equal(followed.page_detached, false);
+  assert.equal(followed.stand_in_lent, false);
+  assert.equal(followed.alpha_zero, false);
+  assert.equal(followed.held_ms, 1234);
+  assert.equal(followed.webkit_views, 2);
+  assert.equal(followed.webkit_on_top, true);
+  assert.equal(followed.still_unpainted, 1);
+  assert.equal(followed.still_reasons, 1 << 3);
+  assert.equal(extreme.held_ms, 600_000);
+  assert.equal(extreme.webkit_views, 1000);
+  assert.equal(extreme.webkit_on_top, null);
+  assert.equal(extreme.still_unpainted, 0);
+  assert.equal(extreme.still_reasons, null);
+  assert.equal(JSON.stringify(extreme).includes("private.example"), false);
+  assert.equal(negative.held_ms, 0);
+  assert.equal(negative.webkit_views, null);
+  assert.equal(negative.still_unpainted, null);
+  assert.equal(negative.still_reasons, null);
   assert.equal(odd.window, "unknown");
   assert.equal(odd.trigger, "unknown");
   assert.equal(odd.seen, false);
@@ -500,6 +528,10 @@ test("an unpainted window sends its enums, flags, counts and reason bits, capped
   assert.equal(odd.unpainted, 1000);
   assert.equal(odd.alpha_zero, false);
   assert.equal(odd.veil_up, false);
+  assert.equal(odd.stand_in_showing, false);
+  assert.equal(odd.held_ms, null);
+  assert.equal(odd.webkit_on_top, null);
+  assert.equal(odd.still_reasons, null);
   assert.equal(JSON.stringify(odd).includes("private.example"), false);
   assert.equal(JSON.stringify(odd).includes("Inbox"), false);
   assert.equal(JSON.stringify(odd).includes("Work"), false);
@@ -604,6 +636,15 @@ const sent = async () => {
   await client.saveQueueNow();
   return events("tab_presses").at(-1).properties;
 };
+
+test("an hour with only a blocked hover player still sends it", async () => {
+  const hoverCards = await import("./hoverCardCounts.ts");
+  const before = events("tab_presses").length;
+  hoverCards.noteTabHoverPlayerSkippedBeforePlayback(client.consentToken());
+  const props = await sent();
+  assert.equal(events("tab_presses").length, before + 1);
+  assert.deepEqual([props.tab_hover_players_skipped_before_playback, props.presses], [1, 0]);
+});
 
 test("a click endHeldTabPress drops is counted under the condition that dropped it, with no tab id", async () => {
   const held = await import("../sidebar/heldTabPress.ts");

@@ -1,6 +1,7 @@
 export * from "./WebView";
 export * from "./pageTypes";
 export type { NativeProps, PageEvent, PageEventName } from "./pageEvents";
+export { fullScreenTransitionOf } from "./pageEvents";
 export * from "./downloads";
 export * from "./permissions";
 export * from "./engineDomain";

@@ -26,6 +26,7 @@ export type WebKitCount =
   | "linkSplit"
   | "littleArdiaLink"
   | "scrollZoom"
+  | "mouseNavigation"
   | "sampledTint"
   | "authPrompt"
   | "authPromptBlocked"
@@ -49,10 +50,14 @@ export type WebKitCount =
   | "pageMuteFallback"
   | "fullscreen"
   | "fullscreenFrameKept"
+  | "autoPictureInPictureFullscreenHold"
   | "discard"
   | "discardWake"
   | "backdropHidden"
   | "historyRestored"
+  | "fullscreenKeptShown"
+  | "fullscreenMovedWithTab"
+  | "fullscreenPageReclaimed"
   | "unresponsive"
   | "unresponsiveEnded"
   | "downloadSkipped";
@@ -85,6 +90,7 @@ export const WEBKIT_COUNTS = {
   linkSplit: "webKitLinkSplits",
   littleArdiaLink: "webKitLittleArdiaLinks",
   scrollZoom: "webKitScrollZooms",
+  mouseNavigation: "webKitMouseNavigations",
   sampledTint: "webKitSampledTints",
   authPrompt: "webKitAuthPrompts",
   authPromptBlocked: "webKitAuthPromptsBlocked",
@@ -108,10 +114,14 @@ export const WEBKIT_COUNTS = {
   pageMuteFallback: "webKitPageMuteFallbacks",
   fullscreen: "webKitFullscreens",
   fullscreenFrameKept: "webKitFullscreenFramesKept",
+  autoPictureInPictureFullscreenHold: "webKitAutoPictureInPictureFullscreenHolds",
   discard: "webKitDiscards",
   discardWake: "webKitDiscardWakes",
   backdropHidden: "webKitBackdropsHidden",
   historyRestored: "webKitHistoryRestores",
+  fullscreenKeptShown: "webKitFullscreenPagesKeptShown",
+  fullscreenMovedWithTab: "webKitFullscreenPagesMovedWithTab",
+  fullscreenPageReclaimed: "webKitFullscreenPagesReclaimed",
   unresponsive: "webKitUnresponsive",
   unresponsiveEnded: "webKitUnresponsiveEnded",
   downloadSkipped: "webKitDownloadsSkipped",

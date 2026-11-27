@@ -14,6 +14,7 @@ export type SleepVeto =
   | "audible"
   | "recentlyAudible"
   | "frequentlyUsed"
+  | "reopenedSoon"
   | "recentlySeen"
   | "keptRecently"
   | "loading"
@@ -36,19 +37,20 @@ export type TabSleepFacts = {
   pictureInPicture: boolean;
   loading: boolean;
   askAgainAt: number;
+  reopenedSoon?: boolean;
 };
 
 export const MINUTE = 60_000;
 export const RECENTLY_SEEN_MS = 10 * MINUTE;
 export const RECENTLY_AUDIBLE_MS = MINUTE;
 export const FREQUENT_SWITCHES = 15;
-const SLEEPS_PER_TICK = 4;
+export const SLEEPS_PER_TICK = 4;
 
 const GIB = 2 ** 30;
-const MODES: Record<SleepMode, { floor: number; perGib: number; hiddenMs: number }> = {
-  moderate: { floor: 20, perGib: 2, hiddenMs: 120 * MINUTE },
-  balanced: { floor: 10, perGib: 1, hiddenMs: 60 * MINUTE },
-  maximum: { floor: 5, perGib: 0.5, hiddenMs: 30 * MINUTE },
+const MODES: Record<SleepMode, { floor: number; ceiling: number; perGib: number; hiddenMs: number }> = {
+  moderate: { floor: 20, ceiling: 48, perGib: 2, hiddenMs: 120 * MINUTE },
+  balanced: { floor: 10, ceiling: 24, perGib: 1, hiddenMs: 60 * MINUTE },
+  maximum: { floor: 5, ceiling: 12, perGib: 0.5, hiddenMs: 30 * MINUTE },
 };
 const UNDER_PRESSURE: Record<Exclude<MemoryPressure, "normal">, { hiddenMs: number; everyMs: number }> = {
   warning: { hiddenMs: 5 * MINUTE, everyMs: 15_000 },
@@ -63,7 +65,7 @@ export function sleepRules(settings: { memorySaver: boolean; memorySaverMode: st
   const mode = MODES[settings.memorySaverMode as SleepMode] ?? MODES.balanced;
   const pressure = pressureOf(sys.memoryPressure);
   if (pressure !== "normal") return { tabs: mode.floor, hiddenMs: Math.min(mode.hiddenMs, UNDER_PRESSURE[pressure].hiddenMs), pressure, perTick: SLEEPS_PER_TICK, everyMs: UNDER_PRESSURE[pressure].everyMs };
-  return { tabs: Math.max(mode.floor, Math.round((sys.physicalMemory / GIB) * mode.perGib)), hiddenMs: mode.hiddenMs, pressure, perTick: SLEEPS_PER_TICK, everyMs: MINUTE };
+  return { tabs: Math.min(mode.ceiling, Math.max(mode.floor, Math.round((sys.physicalMemory / GIB) * mode.perGib))), hiddenMs: mode.hiddenMs, pressure, perTick: SLEEPS_PER_TICK, everyMs: MINUTE };
 }
 
 const warmViewCap = (pressure: MemoryPressure) => WARM_VIEWS[pressure];
@@ -93,6 +95,7 @@ export function sleepVeto(tab: TabSleepFacts, now: number, rules: Pick<SleepRule
   if (tab.audible) return "audible";
   if (now - tab.lastAudibleAt < RECENTLY_AUDIBLE_MS) return "recentlyAudible";
   if (tab.switches >= FREQUENT_SWITCHES) return "frequentlyUsed";
+  if (tab.reopenedSoon && rules.pressure === "normal") return "reopenedSoon";
   if (now - tab.lastSeenAt < seenWindowMs(rules)) return "recentlySeen";
   if (tab.askAgainAt > now) return "keptRecently";
   if (tab.loading) return "loading";
@@ -113,6 +116,30 @@ export function tabsToSleep(awake: readonly TabSleepFacts[], now: number, rules:
   }
   return plan;
 }
+
+export type SleepUnusedAfter = "never" | "1h" | "4h" | "12h" | "24h";
+
+export const SLEEP_UNUSED_AFTER: readonly SleepUnusedAfter[] = ["never", "1h", "4h", "12h", "24h"];
+
+const UNUSED_AFTER_MS: Record<SleepUnusedAfter, number | null> = { never: null, "1h": 60 * MINUTE, "4h": 240 * MINUTE, "12h": 720 * MINUTE, "24h": 1440 * MINUTE };
+
+export const unusedAfterMs = (settings: { memorySaver: boolean; sleepUnusedTabsAfter: string }): number | null =>
+  settings.memorySaver === false ? null : (UNUSED_AFTER_MS[settings.sleepUnusedTabsAfter as SleepUnusedAfter] ?? null);
+
+export function unusedTabsToSleep(awake: readonly TabSleepFacts[], now: number, afterMs: number): SleepPlan {
+  const plan: SleepPlan = { sleep: [], vetoed: [] };
+  for (const tab of [...awake].sort((a, b) => a.lastSeenAt - b.lastSeenAt)) {
+    const veto = sleepVeto({ ...tab, switches: 0, reopenedSoon: false }, now, { hiddenMs: afterMs, pressure: "normal" });
+    if (veto === "recentlySeen") continue;
+    if (veto) plan.vetoed.push({ id: tab.id, veto });
+    else plan.sleep.push(tab.id);
+  }
+  return plan;
+}
+
+export const SLEPT_PAST_SOFT_KEEPS = 200;
+
+export const sleptPastSoftKeeps = (keptBy: readonly number[]) => keptBy.length === 1 && keptBy[0] === SLEPT_PAST_SOFT_KEEPS;
 
 const ENGINE_VETOES: Readonly<Record<number, SleepVeto>> = {
   [-1]: "notSleepable",

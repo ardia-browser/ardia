@@ -7,8 +7,15 @@ public enum PageSummaryDigest {
 
   public static let instructions = """
     You summarize one web page using only the page text you are given. \
-    Write two to four lines, each starting with "- ", with the page's main points in the order they matter. \
-    Keep every line short and plain. Never add facts, opinions or links that are not in the text.
+    First write one line starting with "= " that gives the page's main point in one or two sentences. \
+    Then write three to five lines for its key points in the order they matter, each as "- symbol | Label | detail": \
+    symbol is an SF Symbol name that fits the point, such as heart.fill, drop.fill, clock, dollarsign.circle or leaf.fill, \
+    Label is two to five words in title case, and detail is one or two short, specific sentences. \
+    Start every "= " and "- " line on a new line, like this:
+    = The main point in one or two sentences.
+    - leaf.fill | Short Label | One or two sentences.
+    - clock | Another Label | One or two sentences.
+    Keep every line plain. Never add facts, opinions or links that are not in the text.
     """
 
   public static func isSummarizable(_ content: ReadableContent) -> Bool {

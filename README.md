@@ -10,11 +10,11 @@
 </p>
 
 <h3 align="center">
-  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48 for Mac</a>
+  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.49/Ardia-0.2.49.dmg">Download Ardia 0.2.49 for Mac</a>
 </h3>
 
 <p align="center">
-  134 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
+  136 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
   Like your paint wet? <a href="https://ardia.dev/nightly">The nightly</a> has every fix the day it’s made, smudges and all.<br>
   Homebrew: <code>brew install ardia-browser/tap/ardia</code> · nightly: <code>brew install ardia-browser/tap/ardia@nightly</code><br>
   On your phone: <a href="https://testflight.apple.com/join/yXHasDmr">iPhone (TestFlight)</a> · <a href="https://github.com/ardia-browser/ardia/releases/download/android-v1.0.2/Ardia-1.0.2.apk">Android (APK)</a><br>
@@ -86,11 +86,11 @@ Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions a
 | Intel Macs | Apple Silicon only. | ✗ No |
 
 <h3 align="center">
-  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48</a>
+  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.49/Ardia-0.2.49.dmg">Download Ardia 0.2.49</a>
 </h3>
 
 <p align="center">
-  It’s 134 MB and one drag into Applications.<br>
+  It’s 136 MB and one drag into Applications.<br>
   Not on a Mac? Watch › Custom › Releases up top and GitHub tells you when it is.
 </p>
 
@@ -120,7 +120,7 @@ packages/
 The Linux desktop target is `apps/desktop`, for x86-64 Linux on Wayland or X11. Releases ship it as a `.deb`
 (`sudo apt install ./Ardia-<version>-linux-x64.deb`), an `.rpm` (`sudo dnf install ./Ardia-<version>-linux-x64.rpm`),
 a Flatpak (`flatpak install --user ./Ardia-<version>-linux-x64.flatpak`), an AppImage, a tarball and an Arch source
-package, and stables as `ardia-bin` on the AUR: [docs/linux-port.md › Installing on Linux](docs/linux-port.md#installing-on-linux). The same
+package (`makepkg -si`), all from the release page: [docs/linux-port.md › Installing on Linux](docs/linux-port.md#installing-on-linux). The same
 file has the source-build and packaging instructions. It builds against the dedicated Linux Chromium host.
 
 The macOS app requires Xcode 26+, CocoaPods, Node 24 (pinned in `.nvmrc`), pnpm 12.
@@ -137,7 +137,7 @@ is newer than the last release's, work from a release tag (`v0.2.30`, say), or r
 cards need our team ID and won't work in a build signed by anyone else.
 
 To change the engine itself (anything under `engine/`), build it from source: Chrome's framework from our patched
-Chromium tree in `~/chromium-build` (Chromium 158.0.8127.36 with the patch series in `engine/patches`;
+Chromium tree in `~/chromium-build` (Chromium 158.0.8127.88 with the patch series in `engine/patches`;
 `docs/engine-build.md` › "Rebuilding", then `engine/chromium/apply.sh`,
 `engine/ardiacore/apply.sh` and `autoninja -C out/Release_GN_arm64 chrome_framework`; the first build takes about 2
 hours). The app's build stages it from there when it exists.

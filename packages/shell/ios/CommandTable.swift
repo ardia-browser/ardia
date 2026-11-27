@@ -14,6 +14,7 @@ enum CommandTable {
     case focusCommandBar
     case closeTab
     case closeAllTabs
+    case closeDuplicateTabs
     case print
     case copyUrl
     case copyUrlAsMarkdown
@@ -93,6 +94,7 @@ enum CommandTable {
     case newGroupWithTabs
     case cleanUpTabs
     case tidyPins
+    case sortTabs
     case searchTabs
     case renameTab
     case changeTabIcon
@@ -137,6 +139,7 @@ enum CommandTable {
     "focusCommandBar": "Open Command Bar",
     "closeTab": "Close Tab",
     "closeAllTabs": "Close All Tabs",
+    "closeDuplicateTabs": "Close Duplicate Tabs",
     "print": "Print…",
     "copyUrl": "Copy URL",
     "copyUrlAsMarkdown": "Copy URL as Markdown",
@@ -223,6 +226,8 @@ enum CommandTable {
     "newGroupWithTabs": "New Group with Tab",
     "cleanUpTabs": "Clean Up Tabs",
     "tidyPins": "Tidy Pins",
+    "sortTabs:site": "Sort Tabs by Site",
+    "sortTabs:title": "Sort Tabs by Title",
     "searchTabs": "Search Tabs…",
     "renameTab": "Rename…",
     "changeTabIcon": "Change Icon…",

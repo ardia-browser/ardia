@@ -111,6 +111,7 @@ export function appMenuItems(state: MenuState, shortcuts: AppMenuShortcuts = new
       windowAction("close", "Close Window"),
       cmd("closeTab"),
       cmd("closeAllTabs"),
+      cmd("closeDuplicateTabs"),
       cmd("cleanUpTabs"),
       separator,
       cmd("savePage"),

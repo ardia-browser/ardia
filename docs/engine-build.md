@@ -1,8 +1,8 @@
 # Building the engine from source
 
 Ardia runs on ArdiaCore: Chrome's own framework (`//chrome:chrome_framework`) built from our Chromium tree, with our
-layers linked in (`docs/ardiacore-spike.md`). The tree is **Chromium 158.0.8127.36** (`CHROMIUM_VERSION` in
-`env.sh`), plus **Helium** 0.22.2 (helium-chromium) and 0.22.2.1 (helium-macos) minus a short skip list, then our
+layers linked in (`docs/ardiacore-spike.md`). The tree is **Chromium 158.0.8127.88** (`CHROMIUM_VERSION` in
+`env.sh`), plus **Helium** 0.22.4 (helium-chromium) and 0.22.4.1 (helium-macos) minus a short skip list, then our
 patch series. Nothing of CEF's is checked out or built. CEF left the tree
 on 2026-10-09: its 117 patches to Chrome are gone, except a few kept as `chromium-cef-carryover.patch`
 ([below](#cefs-117-patches)), and the seams of theirs ArdiaCore used are our own hooks H1–H6
@@ -50,6 +50,7 @@ What the build adds:
 | `chromium-safe-storage-name.patch` | The Safe Storage key lives in its own "Ardia Safe Storage" keychain item, account "Ardia". **Load-bearing:** it's Chromium's own `os_crypt` code, so ArdiaCore uses it too, and every user's saved passwords and cookies are encrypted with that item's key. Keep it, unchanged, through every re-sync and version bump; without it Chrome reads "Chromium Safe Storage" and nothing decrypts | Never: every user's saved passwords and cookies are encrypted with this item's key |
 | `chromium-safe-storage-no-silent-reset.patch` | Ardia never replaces its Safe Storage key. Chromium added a new key whenever the item didn't show up, and its add looked the item up again and overwrote it if it was there by then, so an item briefly invisible at login left every saved password and cookie undecryptable. Now a missing item may be created only when `g_ardia_safe_storage_key_may_be_created` says so: ArdiaCore (`ac_safe_storage.mm`) allows it when, at startup, the user data dir had no `Local State` and no entry holding `Preferences`, `Cookies`, `Network/Cookies`, `Login Data` or `Web Data` and every check answered cleanly (any error but "not found", and any link that doesn't resolve, counts as existing data), or once after the user chose to start over. The add is add-only (`KeychainV2::AddGenericPasswordIfAbsent`): an item that appeared meanwhile is read back, never overwritten. Otherwise the key provider retries 3 × 1 s and fails closed; `g_ardia_safe_storage_unreadable` then gets the error and the retry, and ArdiaCore asks: a missing item, "Ardia can't read its Safe Storage key." with Quit (the default) or Start Over with a New Key, the only choice that lets one key be made; a locked keychain or denied access, unlock it or allow Ardia in Keychain Access; a missing entitlement, reinstall Ardia from ardia.dev; an undecodable secret, "Ardia's Safe Storage key is damaged." (restore the keychain from a backup, or delete the item and try again, which then reaches the missing-item dialog); anything else, a neutral try-again. Each of those offers Quit or Try Again and creates nothing. Test instances can use a file-backed keychain (`ARDIA_TEST` `keychain=file`, `keychainHiddenReads=<n>`, `keychainFail=decode\|denied\|interaction\|entitlement\|io`, `safeStorageAnswer=start-over`), honoured only by the test gate (`ac_launch_switches.cc`: not signed for distribution, the mock keychain, `--user-data-dir` resolving to `--ardia-data-dir`/Chromium) | All of these hold upstream: a Safe Storage key is written add-only, never over an item that appeared meanwhile; a missing item is never created for a profile that already has data, only for a fresh data dir or on the user's explicit choice; and a key that can't be read fails closed with a way to retry, start over with a new key or quit. Until then the patch and `ac_safe_storage.mm`'s recovery dialogs stay |
 | `chromium-safe-storage-one-key-for-every-data-dir.patch` | Chromium 158 gives a browser on a non-default user data directory its own Safe Storage key: with `KeychainKeyProviderUserDataDirProtection` (on by default) the "v10" key is reported unavailable and new data is encrypted as "v11" with another salt. ArdiaCore always passes `--user-data-dir`, so every Ardia profile would count as non-default and every user's saved passwords and cookies would stop decrypting. Ardia keeps the one provider and the one key for every data directory, whatever the feature says | Never while users' data is encrypted with the one "v10" key; moving to per-directory keys would need a migration that re-encrypts it first |
+| `chromium-pref-hash-new-mac-waits-for-safe-storage.patch` | A profile keeps its extensions on a new Mac. Chrome's first, synchronous check of protected preferences uses only the legacy HMAC (an empty seed and the machine's IOPlatformUUID), so after Migration Assistant, a Time Machine restore or a copied data directory every HMAC failed and every extension was removed for good, with developer mode, pinned tabs and startup pages, before the encrypted hash (Safe Storage key, which migrates with the login keychain) was read. That first pass can't wait for the key (the startup profile loads synchronously, and the key arrives as a task on the same thread), so it still resets before anything is published, but what it resets that has an encrypted hash is set aside in the protected store's own file (`ardia_awaiting_safe_storage`, never seen by the PrefService) and left off `prefs.tracked_preferences_reset`. A record goes pending → verified (the second pass decrypted and checked its hash with the Keychain Safe Storage key only: a hash without the `v10` tag, or one the Encryptor opens with its public empty-password fallback key, is refused; a temporarily unavailable key leaves it pending, a failed check drops and lists it) → restored (the next launch's first pass puts it back before anything is published, where nothing replaced it) → gone (the next second pass to get the key checks the value it put back, kept in the record, against its hash again, with no HMAC fallback, and removes and lists the entry if it fails, while the live entry is still the one it put back (it counts as replaced only when both carry a non-empty `first_install_time` and they differ, a reinstall; a non-dictionary value when it differs); the live value is never what's checked, so a later change by sync or the user isn't mistaken for tampering). Nothing returns in the session it was reset in, because an extension entry the loader never registered crashes `PreferenceAPI::Shutdown`. Watch `extensions_loaded` `dropped_new`, and `enabled_last_launch` against `enabled` on the launches after an install's first launch on new hardware (#4492) | Chromium checks protected preferences once, with the key, or restores what its first pass reset when the encrypted hash verifies |
 | `chromium-pref-hash-safe-storage-key-change.patch` | A profile keeps its extensions and protected settings when the Safe Storage key changes. A tracked preference's encrypted hash (made with the Safe Storage key) that doesn't verify falls back to its legacy HMAC (seed and machine id): if that holds, the value stays and Chrome re-hashes it with the current key; if not, it resets as before. Chrome had removed every extension and turned developer mode off in a profile hashed under an earlier key (FB-5GA3). It trusts nothing Chrome doesn't: a preference with no encrypted hash is checked by its HMAC alone, and `kDisallowLegacyPrefMacFallback` still turns every fallback off | Chromium itself falls back to a preference's HMAC when its encrypted hash doesn't verify |
 | `chromium-device-chooser-hook.patch` | `chrome::ShowDeviceChooserDialog` (and its extension-page variant) asks ArdiaCore (`g_ardia_device_chooser`) once Chrome's `DropFullscreenForChooserDialog` has dropped the page's full screen and revalidated the frame and active tab: ArdiaCore gets that WebContents and the full-screen blocker, which its chooser holds until it closes | Never: Ardia feature (its own device chooser) |
 | `chromium-media-access-hook.patch` | `MediaCaptureDevicesDispatcher::ProcessMediaAccessRequest` asks ArdiaCore first (`g_ardia_media_access_request`, `ac_desktop_capture.mm`'s `AnswerNativeDisplayCapture`), whichever delegate passed the request on (a tab, Document Picture-in-Picture, an extension host): while pages pick their display media natively, a page's screen or window capture without a click is refused (`NO_TRANSIENT_ACTIVATION`); everything else goes on to Chrome's handlers | Never while pages pick their display media natively (`ac_desktop_capture.mm`) |
@@ -648,7 +649,7 @@ Rules for editing the tree after the first build:
      checkout first and syncing again took 3.5 minutes in all, so do that up front.
   5. Step 3's `guard` stage fails when a skipped patch has left Helium's series (check what replaced it) or an
      applied one now touches what a skip protects (Safe Storage, password saving, Sparkle, the product dir, mDNS);
-     `GUARD_ALLOWED` in `03-helium.py` lists the hits reviewed for 0.19.4 (unchanged through 0.22.2). A patch that no longer applies without
+     `GUARD_ALLOWED` in `03-helium.py` lists the hits reviewed for 0.19.4 (unchanged through 0.22.4). A patch that no longer applies without
      fuzz fails `patches`, and names any skipped patch that shares its files.
   6. Our patches and the hooks may need their context refreshed; `series.py check` and `apply.sh --check` say
      which. A patch whose file moved is rewritten for the new path, and the new path's file goes into the series
@@ -657,7 +658,7 @@ Rules for editing the tree after the first build:
 ## Helium
 
 [Helium](https://github.com/imputnet/helium-chromium) is built on ungoogled-chromium. Step 3 (`03-helium.py`) applies
-helium-chromium 0.22.2's series and then helium-macos 0.22.2.1's, as `patch -p1 -l -N` with no fuzz (Helium allows 2).
+helium-chromium 0.22.4's series and then helium-macos 0.22.4.1's, as `patch -p1 -l -N` with no fuzz (Helium allows 2).
 Helium's build-time downloads (its uBlock Origin, the onboarding page, the non-free search engine data) are never
 fetched, and the hunks of its patches that edit them are left out.
 
@@ -670,11 +671,11 @@ fetched, and the hunks of its patches that edit them are left out.
 | `ungoogled-chromium/fix-building-without-mdns-and-service-discovery` | empties `DnsSdDeviceLister`; the Cast dialog needs mDNS |
 | `helium/macos/change-keychain-name` | renames the Safe Storage item; every user's passwords and cookies are encrypted with "Ardia Safe Storage" (`chromium-safe-storage-name.patch`) |
 | `helium/macos/change-product-dir-name` | moves the fallback product dir to `net.imput.helium` |
-| `rebel/macos/sparkle-integration`, `helium/macos/updater/{fixup-sparkle-glue,sparkle2-integration,disable-default-updater}` | Sparkle inside the framework; the app has its own updater |
+| `helium/macos/updater/{sparkle-glue,sparkle2-integration}` | Sparkle inside the framework; the app has its own updater |
 | `helium/ui/crash-dialog` | a startup infobar asking to upload crashes to `crash.helium.computer` |
 | `helium/core/use-system-python3`, `helium/core/rbe-nativelink-config`, `helium/macos/rbe-linux-clang-wrapper` | Helium's build setup (`.gn`'s `script_executable` would rerun every action; its remote build) |
 | `helium/macos/chromium-signing` | Helium's signing flow; `scripts/release.sh` signs Ardia |
-| `helium/core/pins/{pin-state,pin-sync,sync-splits,sync-drags,hibernate-on-close,pinned-url,open-links-outside,migrate-legacy-pins}`, `helium/ui/pins-ui` | Helium 0.22.2's shared pinned tabs and their tab-strip UI; Ardia keeps its own pins in the sidebar |
+| `helium/core/pins/{pin-state,pin-sync,sync-splits,sync-drags,hibernate-on-close,pinned-url,open-links-outside,migrate-legacy-pins,persistent-pins-pref}`, `helium/ui/{pins-ui,drag-to-pin}` | Helium 0.22.2's shared pinned tabs (and 0.22.4's pref that turns them off), their tab-strip UI and 0.22.4's pinning by drag in that tab strip; Ardia keeps its own pins in the sidebar |
 
 The `guard` stage checks, before anything is applied, that every skipped patch is still in Helium's series and that no
 applied patch's added lines touch what a skip protects, beyond the reviewed hits in `GUARD_ALLOWED`. Some patches
@@ -762,8 +763,11 @@ The pins live in four files that have to agree: `env.sh` (`CHROMIUM_VERSION`, `H
 `scripts/windows/engine/prebuilt.json` (its `chromium`, and its `source`, a full commit). `scripts/engine/upstream-pins.mjs --check`
 fails, offline, when one is missing or malformed (versions and tags are dotted numbers, commits full hashes) or when
 they disagree on the Chromium version, the helium-chromium tag or commit, or a platform tag that isn't a release of the
-pinned helium-chromium; its test runs it in every pull request (Checks, "repository, vouch and stale tests"). Bump
-them in one pull request.
+pinned helium-chromium; its test runs it in every pull request (Checks, "repository, vouch and stale tests"). The
+first three move together in one pull request. `prebuilt.json` records the Windows engine that is actually published,
+so its `chromium` may lag the others until a Windows engine is built from the new pins (never lead them), and it has
+to match the `[chromium] version` in `scripts/windows/engine/helium-pins.ini` at its own `source` commit; `--check`
+reads that commit with `git show` and only warns when the clone doesn't have it.
 
 The Upstream pins workflow (`.github/workflows/upstream.yml`) runs every Monday and compares the pins with the latest
 published releases of helium-chromium, helium-macos, helium-linux and helium-windows and with `chromium_version.txt` at
@@ -779,6 +783,46 @@ step is checked against the bot's own comments, so a run that failed halfway is 
 repeated comment. Run it locally with `GITHUB_TOKEN=$(gh auth token) node scripts/engine/upstream-pins.mjs` (add
 `--issue --dry-run` with `GITHUB_REPOSITORY` to see the issue plan; real writes come only from the workflow), or
 dispatch the workflow with `dry_run`. The script and the workflow sit outside every engine key.
+
+### 0.22.2 → 0.22.4 (Chromium 158.0.8127.88, 2026-11-24)
+
+A Chromium patch release, through Helium 0.22.4, helium-macos 0.22.4.1 (pinned by commit, `0b5bf12`, before its tag was
+published), helium-linux 0.22.4.1 and helium-windows 0.22.4.1. Chromium's only security fix is CVE-2026-134401
+(`4338319`, "Disable VariationsService HTTP fallback by default"), which never ran in Ardia: Helium's
+`bromite/disable-fetching-field-trials` makes `IsFetchingEnabled()` return `false`, so no seed fetch is made and none
+falls back to HTTP. It also brings the Variations seed key rotation (`b7c78a3`) and `884ba9c`, which reads File System
+Access handles that sites stored in IndexedDB before 158. What changed in Helium, and what we did:
+
+- **Series.** helium-chromium added `helium/core/add-cache-encryption-flag` (an `enable-cache-encryption` switch and
+  chrome://flags entry, off by default), `helium/core/pins/persistent-pins-pref` and `helium/ui/drag-to-pin` (pin and
+  unpin by dragging in Chrome's own tab strip), and removed `helium/core/sync/provider/repository` (its sync moved to
+  prefs). helium-macos folded `rebel/macos/sparkle-integration` and `helium/macos/updater/fixup-sparkle-glue` into one
+  `helium/macos/updater/sparkle-glue`, and moved `helium/macos/updater/disable-default-updater`'s change (the help page's
+  updater falls back to `version_updater_basic.cc`) into `sparkle2-integration`; both stay skipped. helium-linux's and
+  helium-windows' series are unchanged. `deps.ini` moves uBlock Origin to 1.77.0, which we omit; `flags.gn` is unchanged.
+- **Skips.** `SKIP` swaps the three old Sparkle patches for `sparkle-glue` (its only shared file with an applied patch,
+  `chrome_command_ids.h`, is a separate hunk of `native-translation-context-option`) and adds `persistent-pins-pref`: it
+  edits `helium_pins_service.cc` and the other files only the skipped pins patches create, and nothing later in the
+  series refers to its pref. `drag-to-pin` is skipped too: its `helium_pins_drag_util.cc` calls
+  `TabStripModel::SetTabsPinned`, which only the skipped `sync-splits` makes public, so the engine didn't compile with
+  it (the first Mac build stopped there). It is a leaf: no later patch of helium-chromium, helium-macos or helium-linux
+  touches its nine files, and it changes only Chrome's own tab strip, which ArdiaCore never shows. The `guard` stage
+  passes on both platforms with the same reviewed hits (mac: 23 skips, 371 applied patches, 4 hits; linux: 19 skips,
+  360 applied patches, 3 hits).
+- **Pins.** `upstream-pins.mjs --check` now lets `prebuilt.json`'s `chromium` lag the pins (never lead them): the
+  published Windows engine is still 158.0.8127.36 until one is built from these pins.
+- **Patches.** `chromium-helium-branding-mac.patch` is remade for `add-cache-encryption-flag`, which adds a switch to
+  `helium_flag_choices.h` and an entry to `helium_flag_entries.h`; the new entry's text says Ardia flag. The rest of the
+  series applies to a .88 tree unchanged.
+- **Mac build** (2026-11-26, `mbp2`, a second tree in `~/chromium-build-158-88` beside the live 158.0.8127.36 one):
+  step 1 6 min (deps cloned fresh), step 3 2 min 49 s, then 1 h 54 min to the `drag-to-pin` compile error. Step 3 ran
+  again on the reset tree with `out/` kept, and the rebuild took 1 h 11 min (17,000 steps; the reset gave the files
+  Helium changes and our series reverts new mtimes, so protoc and everything generated from protos rebuilt).
+  `helium-check-build.py` passes. Published: Mac engine `engine-659b17962c65` and the mac/arm64 series base; the app
+  built on it shows 158.0.8127.88 in chrome://version and loads pages.
+- **`series.py apply` can skip a patch that isn't applied.** Its "already applied" test falls back to `patch -R` with
+  patch's default fuzz, and a patch that only deletes lines (`chromium-helium-behavior-switches-off`) passes it on a
+  tree without it. `series.py check` catches the difference; on this tree the patch went in with `git apply`.
 
 ### 0.21.1 → 0.21.2 (Chromium 157.0.8103.50, 2026-11-12)
 

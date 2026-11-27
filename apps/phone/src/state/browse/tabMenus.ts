@@ -7,24 +7,46 @@ import { copyLink as copyCleanLink, copyText, pressHaptic, shareLink, successHap
 import { linkToCopy } from "../page/linkCopy";
 import { settled } from "../pages/store";
 import type { TrayRow } from "../search/omnibox";
+import { canForgetSearch, forgetSearch } from "../search/store";
 import { closeTabById, currentTabs, deleteArchivedTabsById, setIncognito, useTabs } from "../tabs/store";
 import { isSyncableUrl, type BrowserTab } from "../tabs/tabModels";
 import { recentOtherTabs, tabMenuTitle } from "../tabs/tabsState";
 import { showToast } from "../toasts/store";
 import { openPage, openTab, reopenArchived } from "./store";
 
-export type RowAction = { label: string; icon: "eyes" | "squareOnSquare" | typeof iconRoles.copyLink | typeof iconRoles.share | typeof iconRoles.copyText; run: () => void };
+export type RowConfirmation = { title: string; message: string; action: string };
+
+export type RowAction = {
+  label: string;
+  icon: "eyes" | "squareOnSquare" | "trash" | typeof iconRoles.copyLink | typeof iconRoles.share | typeof iconRoles.copyText;
+  run: () => void;
+  destructive?: boolean;
+  confirm?: RowConfirmation;
+};
+
+export const FORGET_SEARCH = "Delete";
+
+export function forgetSearchConfirmation(query: string): RowConfirmation {
+  return { title: "Delete This Search?", message: `“${query.trim()}” will be removed from ${copy().forgottenSearchLeaves}.`, action: FORGET_SEARCH };
+}
 
 function openSwitchingMode(url: string, origin: "search" | "typed") {
   if (!setIncognito(!useTabs.getState().incognito)) return;
   openPage(url, origin);
 }
 
+export function trayRowHoldAction(row: TrayRow): RowAction | null {
+  if (row.kind !== "query" || !canForgetSearch(row.query)) return null;
+  return { label: FORGET_SEARCH, icon: "trash", destructive: true, confirm: forgetSearchConfirmation(row.query), run: () => forgetSearch(row.query) };
+}
+
 export function trayRowActions(row: TrayRow): RowAction[] {
   const incognito = useTabs.getState().incognito;
   const icon = incognito ? "squareOnSquare" : "eyes";
   if (row.kind === "query") {
-    return [{ label: incognito ? "Search in New Tab" : "Search in Incognito Tab", icon, run: () => openSwitchingMode(row.url, "search") }];
+    const search: RowAction = { label: incognito ? "Search in New Tab" : "Search in Incognito Tab", icon, run: () => openSwitchingMode(row.url, "search") };
+    const forget = trayRowHoldAction(row);
+    return forget ? [search, forget] : [search];
   }
   if (row.kind === "calc") return [{ label: actionWords.copyText, icon: iconRoles.copyText, run: () => quietly(() => copyText(row.value)) }];
   if (row.kind === "paste" || row.kind === "browseForMe") return [];

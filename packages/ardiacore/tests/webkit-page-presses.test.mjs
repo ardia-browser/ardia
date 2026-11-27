@@ -27,10 +27,14 @@ test("the WebKit page view puts every mouse button event through the press gate"
   }
   assert.match(webView, /presses\.verdict\(for: event, on: self\)/);
   assert.match(webView, /case \.refuse:\n\s+onPressRefused\?\(\)\n\s+return false/);
+  assert.match(webView, /case \.navigate\(let direction\):\n\s+onNavigate\?\(direction\)\n\s+return false/);
   assert.equal(tab.match(/^ {4}listen\(to: view\)$/gm)?.length, 1);
   assert.equal(tab.match(/^ {4}stopListening\(to: view\)$/gm)?.length, 3);
   assert.match(pageInput, /view\.onPressRefused = \{ \[weak self\] in self\?\.pagePressRefused\(\) \}/);
+  assert.match(pageInput, /view\.onNavigate = \{ \[weak self\] in self\?\.pageNavigated\(\$0\) \}/);
   assert.match(pageInput, /private func pagePressRefused\(\) \{ emit\("pagePress", \["refused": true\]\) \}/);
+  assert.match(pageInput, /private func pageNavigated\(_ direction: WebKitPagePresses\.Navigation\) \{/);
+  assert.match(pageInput, /emit\("command", \["command": direction == \.back \? "back" : "forward", "text": ""\]\)/);
 });
 
 test("a click on something drawn over a WebKit page stays off the page", (t) => {

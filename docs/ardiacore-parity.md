@@ -186,6 +186,7 @@ counts its calls) on the media copy.
 | prompt-follows-page | An open prompt stays with its page across a switch; a hidden page asks only once shown; a split's unfocused pane asks at once |
 | background-window | A window made behind the user's, its Space changed, its shown tab closed: Chrome's last focused window and last used profile stay the user's; nothing asks AppKit to focus it |
 | extension-window-focus | `chrome.windows.update(B, { focused: true })` asks AppKit to focus B and Chrome follows; back to A the same; `focused: false` changes nothing (Chrome on macOS) |
+| call-closed-stays-closed | The call popped out while the user is in another app and closed from its window stays closed through two glimpses of the Ardia window (the window server showing it, then not); coming back and leaving again pops it out once more |
 | quiet-commands | Save Page on the split's unfocused pane (the call): no `tabs.onActivated`, Chrome's selection unchanged; DevTools docked there (Chrome selects the inspected tab itself, as in Chrome): the call stays put |
 
 The engine's own run (`spikes/ardiacore-host/acceptance.mjs`, 96 checks at 66a7e266; the host was deleted in e360995a,

@@ -53,10 +53,8 @@ SKIP = {
     'helium/macos/change-keychain-name.patch':
         'renames the Safe Storage item; every user\'s passwords and cookies are encrypted with "Ardia Safe Storage"',
     'helium/macos/change-product-dir-name.patch': 'moves the fallback product dir to net.imput.helium',
-    'rebel/macos/sparkle-integration.patch': 'Sparkle inside the framework; the app has its own updater',
-    'helium/macos/updater/fixup-sparkle-glue.patch': 'Sparkle inside the framework',
+    'helium/macos/updater/sparkle-glue.patch': 'Sparkle inside the framework; the app has its own updater',
     'helium/macos/updater/sparkle2-integration.patch': 'Sparkle inside the framework',
-    'helium/macos/updater/disable-default-updater.patch': 'Sparkle inside the framework',
     'helium/ui/crash-dialog.patch': 'a startup infobar asking to upload crashes to crash.helium.computer',
     'helium/core/use-system-python3.patch': 'Helium\'s build setup: .gn script_executable (reruns every action)',
     'helium/core/rbe-nativelink-config.patch': 'Helium\'s remote build setup',
@@ -70,7 +68,10 @@ SKIP = {
     'helium/core/pins/pinned-url.patch': 'Helium\'s shared pinned tabs: a pin returns to the URL it was pinned at',
     'helium/core/pins/open-links-outside.patch': 'Helium\'s shared pinned tabs: other sites open from a pin in new tabs',
     'helium/core/pins/migrate-legacy-pins.patch': 'Helium\'s shared pinned tabs: per-window pins merged into one set',
+    'helium/core/pins/persistent-pins-pref.patch': 'Helium\'s shared pinned tabs: a pref and Settings toggle for them',
     'helium/ui/pins-ui.patch': 'Helium\'s tab strip UI for its shared pins; Ardia draws its own sidebar',
+    'helium/ui/drag-to-pin.patch':
+        'pins by dragging in Chrome\'s own tab strip, which ArdiaCore never shows; needs sync-splits\' public SetTabsPinned',
 }
 
 LINUX_SKIP = {

@@ -182,6 +182,7 @@ function TabsAndTopAppsSection() {
             minWidth={150}
           />
         </Row>
+        <SettingToggle anchor="tabs.pinnedTabsReopenAtPinnedUrl" />
         <SettingToggle anchor="tabs.keepTopAppsRunning" />
         <SettingToggle anchor="tabs.closedTopAppTiles" />
         <SettingToggle anchor="tabs.balancedTopApps" />

@@ -108,7 +108,7 @@ test("with every new capability on, each Settings row the engine unlocks is show
     assert.ok(searchable.has(id), `${id} is searchable`);
     if (id !== "automations.meetingAlertCondition") assert.ok(without.has(id), `${id} stays hidden on an engine without it`);
   }
-  for (const id of ["tabs.videoUpscaling", "advanced.ardiaCommand", "advanced.compactCliPill"]) assert.equal(settings.settingUnavailable(id), true, `${id} still waits for its own backend`);
+  for (const id of ["tabs.videoUpscaling", "advanced.ardiaCommand", "advanced.showCliPill", "advanced.compactCliPill"]) assert.equal(settings.settingUnavailable(id), true, `${id} still waits for its own backend`);
   for (const id of ["advanced.pageEngine", "advanced.websiteEngines"]) assert.equal(searchable.has(id), false, id);
 });
 

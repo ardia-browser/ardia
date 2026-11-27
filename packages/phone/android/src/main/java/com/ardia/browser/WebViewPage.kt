@@ -143,7 +143,7 @@ internal class WebViewPage(
 
     override fun makeLive() {
         if (webView != null || released) return
-        if (processRecovery.awaitsReload && !isShownNow()) return
+        if (!processRecovery.loadsWhenMadeLive(isShownNow())) return
         val web = engine.createWebView(isPrivate)
         configure(web)
         webView = web
@@ -195,6 +195,7 @@ internal class WebViewPage(
     override fun close() = engine.close(id)
 
     override fun load(url: String) {
+        processRecovery.personReloaded()
         failedUrl = null
         update { it.copy(failure = null) }
         val web = webView
@@ -775,6 +776,7 @@ internal class WebViewPage(
 
     internal fun historyUpdated(web: WebView, url: String, isReload: Boolean) {
         if (web !== webView) return
+        processRecovery.pageCommitted(BrowserUrl.host(url)?.let(com.ardia.blocking.PublicSuffixes.shared::registrableDomain))
         viewMoved()
         val previous = lastCommittedUrl
         lastCommittedUrl = url

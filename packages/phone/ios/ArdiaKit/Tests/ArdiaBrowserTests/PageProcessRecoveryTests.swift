@@ -140,6 +140,42 @@ import Testing
     #expect(recovery.loadsWhenMadeLive(shown: true))
   }
 
+  @Test func theFailurePageSurvivesARemountUntilThePersonActs() {
+    var recovery = PageProcessRecovery()
+    #expect(recovery.processEnded(shown: true, at: 0) == .reload)
+    recovery.reloadStarted()
+    #expect(recovery.loadFinished(at: 1) == .recovered)
+    #expect(recovery.processEnded(shown: true, at: 2) == .showFailure)
+    #expect(recovery.showsFailure)
+    #expect(!recovery.loadsWhenMadeLive(shown: true))
+    #expect(recovery.pageShown() == .wait)
+    recovery.personReloaded()
+    #expect(!recovery.showsFailure)
+    #expect(recovery.loadsWhenMadeLive(shown: true))
+  }
+
+  @Test func aCommitOnAnotherSiteStartsAFreshRetryWindow() {
+    var recovery = PageProcessRecovery()
+    recovery.pageCommitted(site: "a.com")
+    #expect(recovery.processEnded(shown: true, at: 0) == .reload)
+    recovery.reloadStarted()
+    recovery.pageCommitted(site: "a.com")
+    #expect(recovery.loadFinished(at: 1) == .recovered)
+    recovery.pageCommitted(site: "b.org")
+    #expect(recovery.processEnded(shown: true, at: 2) == .reload)
+  }
+
+  @Test func aCommitOnTheSameSiteKeepsTheRetryWindow() {
+    var recovery = PageProcessRecovery()
+    recovery.pageCommitted(site: "a.com")
+    #expect(recovery.processEnded(shown: true, at: 0) == .reload)
+    recovery.reloadStarted()
+    recovery.pageCommitted(site: "a.com")
+    #expect(recovery.loadFinished(at: 1) == .recovered)
+    recovery.pageCommitted(site: "a.com")
+    #expect(recovery.processEnded(shown: true, at: 2) == .showFailure)
+  }
+
   @Test func aFailedLoadEndsTheRecoveryWithoutCountingIt() {
     var recovery = PageProcessRecovery()
     #expect(recovery.processEnded(shown: true, at: 0) == .reload)

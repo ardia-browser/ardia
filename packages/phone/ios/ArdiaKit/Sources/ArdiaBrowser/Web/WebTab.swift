@@ -115,6 +115,7 @@ public final class WebTab: DiscardablePage, Identifiable {
 
   public func load(_ url: URL) {
     failure = nil
+    processRecovery.personReloaded()
     guard let webView else {
       pendingURL = url
       self.url = url
@@ -360,8 +361,8 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   func saveState() {
-    guard let webView, let engine, webView.backForwardList.currentItem != nil else { return }
-    engine.tabs.saveInteractionState(webView.interactionState as? Data, for: id)
+    guard let engine, let session = PageSession.toSave(from: webView, stored: nil) else { return }
+    engine.tabs.saveInteractionState(session, for: id)
   }
 
   static func makeConfiguration(dataStore: WKWebsiteDataStore) -> WKWebViewConfiguration {
@@ -515,6 +516,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   fileprivate func didCommit() {
+    processRecovery.pageCommitted(site: webView?.url?.host().map(RegistrableDomain.of))
     hasCommittedLoad = true
     committedDocuments += 1
     capturingOrigins = [:]

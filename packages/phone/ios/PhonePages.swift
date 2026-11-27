@@ -245,8 +245,7 @@ final class PhonePages {
 
   func saveState(_ pageID: String) -> String? {
     guard let tabID = tabIDs[pageID] else { return nil }
-    let live = engine.existingWebTab(tabID)?.webView?.interactionState as? Data
-    return (live ?? engine.tabs.tab(tabID)?.interactionState)?.base64EncodedString()
+    PageSession.toSave(from: engine.existingWebTab(tabID)?.webView, stored: engine.tabs.tab(tabID)?.interactionState)?.base64EncodedString()
   }
 
   func setDesktopSite(_ pageID: String, _ enabled: Bool) throws {

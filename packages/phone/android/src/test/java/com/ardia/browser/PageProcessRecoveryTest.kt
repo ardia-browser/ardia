@@ -147,4 +147,51 @@ class PageProcessRecoveryTest {
         recovery.reloadStarted()
         assertEquals(PageProcessOutcome.Recovered, recovery.loadFinished(now = 1_000L))
     }
+
+    @Test
+    fun failurePageSurvivesARemountUntilThePersonActs() {
+        val recovery = PageProcessRecovery()
+        recovery.processEnded(shown = true, now = 0L)
+        recovery.reloadStarted()
+        recovery.loadFinished(now = 1_000L)
+        assertEquals(PageProcessRecovery.Step.ShowFailure, recovery.processEnded(shown = true, now = 2_000L))
+        assertTrue(recovery.showsFailure)
+        assertFalse(recovery.loadsWhenMadeLive(shown = true))
+        recovery.personReloaded()
+        assertFalse(recovery.showsFailure)
+        assertTrue(recovery.loadsWhenMadeLive(shown = true))
+    }
+
+    @Test
+    fun waitingPageLoadsOnlyWhenShown() {
+        val recovery = PageProcessRecovery()
+        assertTrue(recovery.loadsWhenMadeLive(shown = false))
+        recovery.processEnded(shown = false, now = 0L)
+        assertFalse(recovery.loadsWhenMadeLive(shown = false))
+        assertTrue(recovery.loadsWhenMadeLive(shown = true))
+    }
+
+    @Test
+    fun commitOnAnotherSiteStartsAFreshRetryWindow() {
+        val recovery = PageProcessRecovery()
+        recovery.pageCommitted(site = "a.com")
+        recovery.processEnded(shown = true, now = 0L)
+        recovery.reloadStarted()
+        recovery.pageCommitted(site = "a.com")
+        recovery.loadFinished(now = 1_000L)
+        recovery.pageCommitted(site = "b.org")
+        assertEquals(PageProcessRecovery.Step.Reload, recovery.processEnded(shown = true, now = 2_000L))
+    }
+
+    @Test
+    fun commitOnTheSameSiteKeepsTheRetryWindow() {
+        val recovery = PageProcessRecovery()
+        recovery.pageCommitted(site = "a.com")
+        recovery.processEnded(shown = true, now = 0L)
+        recovery.reloadStarted()
+        recovery.pageCommitted(site = "a.com")
+        recovery.loadFinished(now = 1_000L)
+        recovery.pageCommitted(site = "a.com")
+        assertEquals(PageProcessRecovery.Step.ShowFailure, recovery.processEnded(shown = true, now = 2_000L))
+    }
 }

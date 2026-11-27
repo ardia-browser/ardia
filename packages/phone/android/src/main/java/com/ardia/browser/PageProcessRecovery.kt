@@ -13,7 +13,10 @@ internal class PageProcessRecovery {
         private set
     var isReloading = false
         private set
+    var showsFailure = false
+        private set
     private var recoveredAt: Long? = null
+    private var committedSite: String? = null
 
     fun processEnded(shown: Boolean, now: Long): Step {
         val diedRightAfterRecovery = recoveredAt?.let { now - it < RETRY_WINDOW_MS } ?: false
@@ -21,6 +24,7 @@ internal class PageProcessRecovery {
             isReloading = false
             awaitsReload = false
             recoveredAt = null
+            showsFailure = true
             return Step.ShowFailure
         }
         isReloading = false
@@ -34,8 +38,16 @@ internal class PageProcessRecovery {
         isReloading = true
     }
 
+    fun loadsWhenMadeLive(shown: Boolean): Boolean = !showsFailure && (!awaitsReload || shown)
+
     fun personReloaded() {
         recoveredAt = null
+        showsFailure = false
+    }
+
+    fun pageCommitted(site: String?) {
+        if (site != committedSite) recoveredAt = null
+        committedSite = site
     }
 
     fun loadFinished(now: Long): PageProcessOutcome? {

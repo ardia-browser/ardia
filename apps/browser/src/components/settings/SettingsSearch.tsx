@@ -188,7 +188,7 @@ function ResultRow({ hit, selected, rank, needs }: { hit: SettingsHit; selected:
     <ListRow
       selected={selected}
       selectedTone="accent"
-      accessibilityLabel={`${entry.title}, ${entry.paneTitle}`}
+      accessibilityLabel={[entry.title, [entry.paneTitle, ...(showSection ? [entry.section] : [])].join(" › "), needs].filter(Boolean).join(", ")}
       onPress={() => {
         selectSettingsResult(rank);
         revealSetting(entry, "click", rank, !!needs);
@@ -228,7 +228,7 @@ function CommandKeyRow({ hit, selected, rank }: { hit: CommandKeyHit; selected: 
     <ListRow
       selected={selected}
       selectedTone="accent"
-      accessibilityLabel={`${hit.item.title}, ${paneTitle("shortcuts")}`}
+      accessibilityLabel={`${hit.item.title}, ${hit.keys}, ${[paneTitle("shortcuts"), ...hit.item.path].join(" › ")}`}
       onPress={() => {
         selectSettingsResult(rank);
         revealCommandKeys(hit.keys, "click", rank);

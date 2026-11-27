@@ -8,6 +8,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
   static let browserName = "Ardia"
   static let manifestFolders = ["/Library/Google/Chrome/NativeMessagingHosts", "/System/Cryptexes/App/Library/Google/Chrome/NativeMessagingHosts"]
   static let fakeHelperKey = "applePasswordsManifest"
+  static let tooOldKey = "applePasswordsTooOld"
   static let helloSeconds: TimeInterval = 5
   static let pairingSeconds: TimeInterval = 15
   static let exitGraceSeconds: TimeInterval = 1
@@ -53,8 +54,16 @@ final class ApplePasswordsClient: @unchecked Sendable {
     #endif
   }
 
+  private static var actsTooOld: Bool {
+    #if DEBUG
+      return LaunchConfig.shared.testFlag(tooOldKey)
+    #else
+      return false
+    #endif
+  }
+
   private static var macOSSupported: Bool {
-    ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 15, minorVersion: 4, patchVersion: 0))
+    !actsTooOld && ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 15, minorVersion: 4, patchVersion: 0))
   }
 
   private static var manifests: [String] {

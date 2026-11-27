@@ -117,6 +117,33 @@ const FIXTURE_CARD = { name: `O'Brien "Q" \\ </script><script>x()</script>`, num
 
 const HELPER_MISSING = "Apple Passwords' browser helper is missing from this Mac. Update macOS in System Settings › General › Software Update, then try again.";
 
+const REFUSED = "Apple Passwords isn't available on this Mac.";
+const TOO_OLD = "Needs macOS 15.4 or later.";
+const NOT_ENTITLED = "This copy of Ardia can't use Apple Passwords.";
+
+async function noticeInBothEngines(text) {
+  const seen = {};
+  for (const [engine, tabs] of [["webkit", webkitTabs(app, { log: note })], ["chromium", chromiumTabs(app, { log: note })]]) {
+    const tab = await tabs.open(sites.url("example.localhost"));
+    try {
+      await tab.click("#u");
+      const rows = await tab.waitRows(`the ${engine} Login list`);
+      assert(rows[0]?.notice && rows[0].label === text, `the ${engine} Login list says ${text}`, rows);
+      assert(!rows.some((r) => FIXTURES.logins.some((l) => l.user === r.title)), `the ${engine} Login list lists no logins`, rows);
+      seen[engine] = rows[0].label;
+    } finally {
+      await tab.close();
+    }
+  }
+  return seen;
+}
+
+async function pickedWithout(state) {
+  await app.eval("return ac.applePasswords.loadApplePasswords().then(() => true)");
+  await choose("apple");
+  return until(pairingView, (v) => v.choice === "apple" && v.state === state);
+}
+
 const ME_CARD = { name: "Ada Lovelace", organization: "", emails: ["ada.lovelace@me.test"], phones: ["+1 415 555 0134"], addresses: [{ street: "1 Infinite Loop", city: "Cupertino", state: "CA", postalCode: "95014", country: "US" }] };
 
 const CHROME_ONLY_LOGIN = { username: "chrome-only@example.test", password: "fixture-pw-chrome-only-9" };
@@ -427,6 +454,28 @@ const CHECKS = {
       }
     }
     return seen;
+  },
+  async E43tooOld() {
+    const fake = fakeHelper(path.join(SCRATCH, "E43tooOld", "fake"));
+    await start("E43tooOld", { manifest: fake.manifest, test: { applePasswordsTooOld: true } });
+    await pickedWithout("tooOld");
+    const seen = await noticeInBothEngines(TOO_OLD);
+    assert(fake.launches() === 0, "a Mac too old for the helper never starts it", fake.launches());
+    return seen;
+  },
+  async E45refused() {
+    const fake = fakeHelper(path.join(SCRATCH, "E45refused", "fake"), { mode: { killedAtLaunch: true } });
+    await start("E45refused", { manifest: fake.manifest });
+    await app.eval("return ac.applePasswords.loadApplePasswords().then(() => true)");
+    await choose("apple");
+    await app.eval("return ac.applePasswords.startApplePasswordsPairing(null).then(() => true);", { timeout: 30_000 });
+    await until(pairingView, (v) => v.choice === "apple" && v.state === "refused");
+    return noticeInBothEngines(REFUSED);
+  },
+  async E45notEntitled() {
+    await start("E45notEntitled", { manifest: undefined });
+    await pickedWithout("notEntitled");
+    return noticeInBothEngines(NOT_ENTITLED);
   },
   async E40() {
     await meCardInstance("E40");

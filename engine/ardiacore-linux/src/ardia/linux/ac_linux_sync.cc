@@ -453,6 +453,7 @@ Outcome SyncCore::Write(const std::vector<JsonValue>& args) {
   std::string id;
   const VaultError error = Vault(*folder, *keys_).Write(*scope, bytes, &id);
   Wipe(bytes);
+  if (error.chain_missing) return Outcome::Error("ERR_SYNC_CHAIN_MISSING", error.message);
   if (!error.ok()) return Outcome::Error("ERR_SYNC_FOLDER", error.message);
   return Outcome::Value(JsonValue::String(id));
 }

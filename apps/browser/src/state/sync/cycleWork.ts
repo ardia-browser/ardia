@@ -9,13 +9,13 @@ let reapplied = 0;
 let chainGoneFor: string | null = null;
 let chainCounts = { missing: 0, returned: 0 };
 
-onConsentPeriodChange(() => ((work = NO_CYCLES), (reapplied = 0), (chainCounts = { missing: 0, returned: 0 })));
+onConsentPeriodChange(() => ((work = NO_CYCLES), (reapplied = 0), (chainGoneFor = null), (chainCounts = { missing: 0, returned: 0 })));
 
 export function noteChainStatus(token: ConsentToken | null, device: string, status: "ok" | "missing") {
+  if (token === null || !stillValid(token)) return status;
   const returned = chainGoneFor === device && status === "ok";
   const gone = chainGoneFor !== device && status === "missing";
   chainGoneFor = status === "missing" ? device : null;
-  if (token === null || !stillValid(token)) return status;
   if (gone) chainCounts.missing++;
   if (returned) chainCounts.returned++;
   return status;

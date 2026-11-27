@@ -114,6 +114,8 @@ async function runCycle({ retiring = false, forcePasswords = false }: CycleOptio
   }
 }
 
+const CHAIN_MISSING_TEXT = `This device is out of sync. Sync may have been reset from another device, or the sync folder hasn’t finished syncing. Everything on this ${PLATFORM_TERMS.computer} is kept, and sync carries on once its data is back. To set sync up again, choose Stop Syncing.`;
+
 async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring, forcePasswords }: Required<CycleOptions>) {
   const consent = consentToken();
   clearTimeout(timer);
@@ -122,7 +124,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     watchExtensions();
     const status = await native.chainStatus(folder);
     if (status === "unavailable") return publishUi({ status: "offline", error: null });
-    if (noteChainStatus(consent, device, status) === "missing") return publishUi({ status: "stalled", error: `This device is out of sync. Sync may have been reset from another device, or the sync folder hasn’t finished syncing. Everything on this ${PLATFORM_TERMS.computer} is kept, and sync carries on once its data is back. To set sync up again, choose Stop Syncing.` });
+    if (noteChainStatus(consent, device, status) === "missing") return publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT });
     const transport = folderTransport(native, folder);
     if (editClock().device !== device) startEditClock(device, doc.clock);
     const clock = editClock();
@@ -182,7 +184,11 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     doc.lastSyncedAt = Date.now();
     publishUi({ status: "updated", error: null, pending });
   } catch (error) {
-    if ((error as { code?: unknown } | null)?.code === "ERR_SYNC_FOLDER_UNREADABLE") {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (code === "ERR_SYNC_CHAIN_MISSING") {
+      noteChainStatus(consent, device, "missing");
+      publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT });
+    } else if (code === "ERR_SYNC_FOLDER_UNREADABLE") {
       publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
     } else if (useSync.getState().status !== "locked") {
       warnFor(consent, "[sync] cycle failed", error);

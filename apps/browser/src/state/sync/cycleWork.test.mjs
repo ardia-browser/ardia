@@ -62,3 +62,39 @@ test("with sharing on, each stretch the sync chain is missing counts once, and s
   const off = takeSnapshotWrites();
   assert.deepEqual([off.chainMissing, off.chainReturned], [0, 0], "turning sharing off forgets the count and nothing is counted while it's off");
 });
+
+test("a chain status noted under a stale consent token changes nothing, so it can't pair with a later one", () => {
+  client.setSharing(true, "onboarding");
+  takeSnapshotWrites();
+  const stale = client.consentToken();
+  client.setSharing(false, "settings");
+  client.setSharing(true, "settings");
+  const token = client.consentToken();
+  noteChainStatus(stale, "mac", "missing");
+  noteChainStatus(token, "mac", "ok");
+  let taken = takeSnapshotWrites();
+  assert.deepEqual([taken.chainMissing, taken.chainReturned], [0, 0], "a stale missing doesn't make the next ok a return");
+  noteChainStatus(token, "mac", "missing");
+  noteChainStatus(stale, "mac", "ok");
+  noteChainStatus(token, "mac", "missing");
+  taken = takeSnapshotWrites();
+  assert.deepEqual([taken.chainMissing, taken.chainReturned], [1, 0], "a stale ok doesn't end the stretch the chain is gone");
+});
+
+test("a new consent period starts with no missing chain, so a return across it isn't counted and the next missing stretch is", () => {
+  client.setSharing(true, "onboarding");
+  takeSnapshotWrites();
+  noteChainStatus(client.consentToken(), "mac", "missing");
+  client.setSharing(false, "settings");
+  client.setSharing(true, "settings");
+  const token = client.consentToken();
+  noteChainStatus(token, "mac", "ok");
+  let taken = takeSnapshotWrites();
+  assert.deepEqual([taken.chainMissing, taken.chainReturned], [0, 0], "a chain that went missing in an earlier period isn't counted back");
+  noteChainStatus(client.consentToken(), "mac", "missing");
+  client.setSharing(false, "settings");
+  client.setSharing(true, "settings");
+  noteChainStatus(client.consentToken(), "mac", "missing");
+  taken = takeSnapshotWrites();
+  assert.deepEqual([taken.chainMissing, taken.chainReturned], [1, 0], "the stretch is counted once in the period it's seen in");
+});

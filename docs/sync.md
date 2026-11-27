@@ -539,8 +539,10 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
   - Then Profiles (toggles, and Add to This Mac), All Open Tabs (a switch per synced profile: "Every open tab syncs, not
     just pinned ones. Closing a tab closes it on your other Macs too."), What Syncs (Bookmarks, History, Open Tabs,
     Pinned Tabs and Groups, Passwords, Extensions, Settings) and Devices (each with "last synced …").
-- **Stop Syncing This Device?** Dia's copy, plus "Everything on this Mac stays as it is", with
-  Save Recovery Kit / Cancel / Stop Syncing.
+- **Stop Syncing This Device?** Dia's copy, reworded so it also fits setting sync up afresh: "To sync with your
+  other devices again, you'll need one that is still syncing, or the recovery phrase from your Recovery Kit. You
+  can also set up sync from scratch in an empty folder. Everything on this Mac stays as it is.", with Save
+  Recovery Kit / Cancel / Stop Syncing.
   - Then **Delete Sync Data?**: "Would you also like to permanently delete your synced data
     from the sync folder? …", the checkbox "I understand this cannot be undone", and Keep Sync
     Data / Delete My Sync Data.
@@ -550,8 +552,10 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
     out of sync. Sync may have been reset from another device.", followed by "or the sync folder hasn't
     finished syncing" (a cloud drive that hasn't delivered the folder or evicted it looks the same), and
     stall. They keep their data, their key, their setup and their unsent changes, write nothing to the
-    folder, and carry on from where they were if the chain comes back. The line ends with "To set sync
-    up again, choose Stop Syncing.": Stop Syncing is how a Mac lets go, for example to join a new chain
+    folder, and carry on from where they were if the chain comes back. A chain deleted while a cycle runs
+    is never recreated by its writes: only turning sync on creates the chain, a write into a missing one fails with
+    `ERR_SYNC_CHAIN_MISSING` (Mac and Linux vaults), and the cycle stalls the same way. The line ends with "To set
+    sync up again, choose Stop Syncing.": Stop Syncing is how a Mac lets go, for example to join a new chain
     another Mac set up in the same folder (issue #302). The phone apps still reset here.
 - **Overflow menu.** One other device with open tabs shows "Your %@ Tabs" (the kind of Mac, from
   its name: "Your MacBook Pro Tabs"; "Your iPhone Tabs" for an iPhone). Several roll up into **Your Devices**

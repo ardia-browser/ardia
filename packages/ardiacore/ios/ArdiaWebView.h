@@ -144,6 +144,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ArdiaWebView (LoginList)
 @property (nonatomic, readonly, nullable) NSURL *loginListPageURL;
+- (void)fillLoginList:(NSDictionary<NSString *, NSString *> *)values origin:(NSString *)origin completion:(void (^)(BOOL filled))completion
+    NS_SWIFT_NAME(fillLoginList(_:origin:completion:));
 - (void)syncLoginListOpen:(BOOL)open picking:(BOOL)picking NS_SWIFT_NAME(syncLoginList(open:picking:));
 - (void)connectApplePasswordsFromLoginList;
 @end

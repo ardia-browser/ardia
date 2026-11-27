@@ -200,6 +200,8 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
       [ArdiaWebView noteFieldFocus:Text(dict, @"field", 16) sequence:sequence generation:generation query:Text(dict, @"query", 64) owner:tab];
   } else if ([kind isEqualToString:@"loginField"] && dict) {
     [self loginFieldFromPage:dict frame:frameId main:main origin:VerifiedOrigin(verifiedOrigin)];
+  } else if ([kind isEqualToString:@"loginFilled"] && dict) {
+    [self loginFilledFromPage:dict frame:frameId];
   } else if ([kind isEqualToString:@"fieldProviderHint"] && dict) {
     NSString *state = Text(dict, @"state", 16);
     if ([@[ @"shown", @"dismissed" ] containsObject:state ?: @""] && [self sameSiteFrame:main origin:sender] && FieldProviderFor(_profile))

@@ -82,7 +82,7 @@ struct ArdiaReveal {
 
 struct ArdiaLoginListField {
   NSDictionary *field;
-  NSMutableDictionary<NSString *, void (^)(BOOL)> *fills;
+  NSMutableDictionary<NSString *, NSDictionary *> *fills;
   NSInteger ticket{};
 };
 
@@ -340,6 +340,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)pushLoginList;
 - (void)loginFieldFromPage:(NSDictionary *)data frame:(NSString *)frameId main:(BOOL)main origin:(nullable NSString *)origin;
 - (void)endLoginField;
+- (void)loginFilledFromPage:(NSDictionary *)data frame:(NSString *)frameId;
 - (void)callFramesWithSameSite:(NSString *)json kind:(NSString *)kind otherwise:(NSString *)other;
 - (void)pushFieldProviderHint:(NSString *)json;
 - (BOOL)sameSiteFrame:(BOOL)main origin:(NSString *)origin;

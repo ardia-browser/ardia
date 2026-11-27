@@ -1032,7 +1032,7 @@
   handlers.fieldFocusQuery = (message) => fieldProviders.focusQuery(message && message.query);
   handlers.fieldProviderHint = fieldProviders.hint;
   const loginListKit = (env) => {
-    const { document, send, addEventListener } = env;
+    const { document, send, addEventListener, apply } = env;
     const KEYS = { ArrowDown: "down", ArrowUp: "up", Enter: "enter", Escape: "escape", Tab: "tab" };
     const TYPED_MAX = 200;
     let on = false;
@@ -1123,6 +1123,28 @@
       addEventListener("resize", () => active && hide());
       addEventListener("pagehide", () => active && hide());
     };
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    const focus = HTMLElement.prototype.focus;
+    const dispatch = EventTarget.prototype.dispatchEvent;
+    const NativeEvent = Event;
+    const put = (el, value) => {
+      if (document.activeElement !== el) apply(focus, el, []);
+      apply(valueSetter, el, [value]);
+      apply(dispatch, el, [new NativeEvent("input", { bubbles: true })]);
+      apply(dispatch, el, [new NativeEvent("change", { bubbles: true })]);
+    };
+    const fillable = (message) =>
+      on && !!message && !!active && message.token === active.token && message.origin === location.origin &&
+      active.el.isConnected && active.found.password.isConnected && document.activeElement === active.el;
+    const fill = (message) => {
+      const ticket = message && typeof message.ticket === "string" ? message.ticket : "";
+      if (!fillable(message)) return send("loginFilled", { ticket, filled: false });
+      const { username, password } = active.found;
+      if (username && typeof message.username === "string" && message.username) put(username, message.username);
+      if (typeof message.password === "string") put(password, message.password);
+      open = picking = false;
+      send("loginFilled", { ticket, filled: true });
+    };
     const configure = (state) => {
       on = !!(state && state.on === true);
       if (on) return listen();
@@ -1133,11 +1155,12 @@
       open = !!(message && message.open === true);
       picking = !!(message && message.picking === true);
     };
-    return { configure, state };
+    return { configure, state, fill };
   };
-  const loginList = loginListKit({ document, send, addEventListener });
+  const loginList = loginListKit({ document, send, addEventListener, apply });
   handlers.loginList = loginList.configure;
   handlers.loginListState = loginList.state;
+  handlers.loginFill = loginList.fill;
   const typedByUser = new WeakSet();
   let revealedField = null;
   let eyeField = null;

@@ -6,7 +6,7 @@ extension ArdiaWebView: LoginListTarget {
   var loginListWindow: NSWindow? { visible && !isHiddenOrHasHiddenAncestor ? window : nil }
 
   func loginListFill(username: String, password: String, frameOrigin: String, done: @escaping (Bool) -> Void) {
-    done(false)
+    fillLoginList(["username": username, "password": password], origin: frameOrigin, completion: done)
   }
 
   func loginListSync(open: Bool, picking: Bool) { syncLoginList(open: open, picking: picking) }

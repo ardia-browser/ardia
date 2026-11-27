@@ -102,6 +102,35 @@ NSDictionary *LoginListConfig(NSString *profile) {
   [self closeLoginList];
 }
 
+- (void)fillLoginList:(NSDictionary<NSString *, NSString *> *)values origin:(NSString *)origin completion:(void (^)(BOOL filled))completion {
+  NSDictionary *field = _loginList.field;
+  NSString *frame = field[@"frame"];
+  if (!field || ![field[@"origin"] isEqualToString:origin ?: @""] || ![OriginOf(_tab.url) isEqualToString:origin] || ![_tab hasLiveFrame:frame])
+    return completion(NO);
+  NSString *ticket = [NSString stringWithFormat:@"%ld", (long)++_loginList.ticket];
+  if (!_loginList.fills) _loginList.fills = [NSMutableDictionary dictionary];
+  _loginList.fills[ticket] = @{@"frame" : frame, @"done" : [completion copy]};
+  NSMutableDictionary *message = [@{@"ticket" : ticket, @"token" : field[@"token"], @"origin" : origin} mutableCopy];
+  for (NSString *key in @[ @"username", @"password" ])
+    if ([values[key] isKindOfClass:NSString.class]) message[key] = values[key];
+  [self callFrame:frame kind:@"loginFill" json:JSONText(message)];
+  __weak ArdiaWebView *weakSelf = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kFillSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    [weakSelf answerLoginFill:ticket frame:frame filled:NO];
+  });
+}
+
+- (void)answerLoginFill:(NSString *)ticket frame:(NSString *)frame filled:(BOOL)filled {
+  NSDictionary *fill = ticket ? _loginList.fills[ticket] : nil;
+  if (!fill || ![fill[@"frame"] isEqualToString:frame ?: @""]) return;
+  [_loginList.fills removeObjectForKey:ticket];
+  ((void (^)(BOOL))fill[@"done"])(filled);
+}
+
+- (void)loginFilledFromPage:(NSDictionary *)d frame:(NSString *)frameId {
+  [self answerLoginFill:LoginFieldToken(@{@"token" : Text(d, @"ticket", kTokenMax) ?: @""}) frame:frameId filled:Flag(d, @"filled")];
+}
+
 - (void)syncLoginListOpen:(BOOL)open picking:(BOOL)picking {
   NSString *frame = _loginList.field[@"frame"];
   if (frame) [self callFrame:frame kind:@"loginListState" json:JSONText(@{@"open" : @(open), @"picking" : @(picking)})];

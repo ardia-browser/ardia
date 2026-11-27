@@ -179,7 +179,7 @@ export const advancedRows = {
         showCliPill: {
           title: "Show the control pill",
           explained: true,
-          description: "Shows who is controlling Ardia at the bottom of the page with a Stop button. You can still stop programs above.",
+          description: "Shows who is controlling Ardia on the page with a Stop button. You can still stop programs above.",
           keywords: ["cli", "control pill", "is controlling", "agent", "claude code", "codex", "hide", "dismiss", "turn off", "banner", "indicator", "stop"],
           shown: () => PLATFORM_FEATURES.ardiaCommand,
         },

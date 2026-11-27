@@ -149,6 +149,10 @@ final class ApplePasswordsClient: @unchecked Sendable {
   }
 
   private func running() throws -> ApplePasswordsPipe {
+    if let stale = pipe, stale.hasEnded {
+      ended(generation, killedByMacOS: stale.killedByMacOS)
+      if killed { throw Failure.ended }
+    }
     if let pipe, !pipe.hasEnded { return pipe }
     guard let program = Self.helper else { throw Failure.missing }
     let started = ApplePasswordsPipe(program: program, origin: Self.origin)

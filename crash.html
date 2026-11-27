@@ -6,6 +6,8 @@
 <p id="s">Loading</p>
 <p id="t"></p>
 <p><a href="?when=none">A second page</a></p>
+<p><a id="c" href="#">Crash this page in 4 s</a></p>
+<p><a id="n" href="#">Next page</a></p>
 <script>
 const params = new URLSearchParams(location.search);
 const when = params.get("when") || "hidden";
@@ -21,8 +23,11 @@ function exhaust() {
   const hoard = [];
   for (let i = 0; ; i++) hoard.push(new Array(1e6).fill(i));
 }
+document.getElementById("c").href = "?when=k" + Date.now() + "&d=4";
+const page = Number(params.get("p") || 1);
+document.getElementById("n").href = "?when=none&p=" + (page + 1);
 if (when === "none") {
-  status.textContent = "Second page";
+  status.textContent = "Page " + page;
 } else if (count >= limit) {
   status.textContent = "Reloaded after " + count + (count === 1 ? " crash" : " crashes");
   status.style.background = "#86efac";

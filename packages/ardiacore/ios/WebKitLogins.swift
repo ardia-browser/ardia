@@ -44,6 +44,7 @@ final class WebKitLogins: NSObject {
   private var neverSaved = Set<String>()
   private var listings: [String: Listing] = [:]
   private var field: Field?
+  private var listFrames: [ObjectIdentifier: String] = [:]
   private var shownLogins: [String: Login] = [:]
   private var ticket = 0
   private lazy var dropdown: WebKitAutofillDropdown = {
@@ -125,11 +126,20 @@ final class WebKitLogins: NSObject {
   }
 
   private func pressed(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String, frame: WKFrameInfo) {
+    let id = ObjectIdentifier(tab)
+    let sender = "\(origin)\n\(report.token)"
+    let fromListFrame = listFrames[id].map { $0 == sender } ?? true
     switch report.event {
-    case "show", "input": show(tab, report: report, origin: origin, frame: frame)
-    case "key": key(tab, report.key)
+    case "show", "input":
+      listFrames[id] = sender
+      show(tab, report: report, origin: origin, frame: frame)
+    case "key" where fromListFrame: key(tab, report.key)
+    case "key": return
     case "passwordInput" where LoginList.shared.isShown(for: tab): return
-    default: close(tab)
+    case "hide" where !fromListFrame: return
+    default:
+      listFrames.removeValue(forKey: id)
+      close(tab)
     }
   }
 
@@ -440,6 +450,7 @@ final class WebKitLogins: NSObject {
   }
 
   func forget(_ tab: WebKitTab) {
+    listFrames.removeValue(forKey: ObjectIdentifier(tab))
     pending.removeValue(forKey: ObjectIdentifier(tab))
     landings.removeValue(forKey: ObjectIdentifier(tab))
     close(tab)

@@ -109,6 +109,15 @@ Object.defineProperty(window, "frameElement", { get: () => fake, configurable: t
     page(`Verify on ${host}`, `<form method="post" action="/signed-in"><input id="c" name="otp" autocomplete="one-time-code" inputmode="numeric" style="top:40px"><button id="go" style="top:100px">Verify</button></form>`),
   "/code-filled": (host) =>
     page(`Verify on ${host}`, `<form method="post" action="/signed-in"><input id="c" name="otp" autocomplete="one-time-code" inputmode="numeric" value="12" style="top:40px"><button id="go" style="top:100px">Verify</button></form>`),
+  "/framed-login": (host, { frame }) =>
+    page(
+      `Framed sign-in on ${host}`,
+      `<iframe id="frame" src="${frame}" style="position:absolute;left:20px;top:20px;width:420px;height:240px;border:0"></iframe>
+<form method="post" action="/signed-in"><input id="u" name="username" autocomplete="username" style="top:300px">
+<input id="p" name="password" type="password" autocomplete="current-password" style="top:360px">
+<button id="go" disabled style="top:420px">Sign in</button></form>`,
+      enableWhenFilled,
+    ),
   "/framed": (host, { frame }) =>
     page(`Framed on ${host}`, `<iframe id="frame" src="${frame}" style="position:absolute;left:20px;top:20px;width:420px;height:240px;border:0"></iframe>`),
 };

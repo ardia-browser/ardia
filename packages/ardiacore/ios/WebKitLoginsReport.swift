@@ -9,6 +9,7 @@ struct WebKitLoginsReport {
   var typed = ""
   var rect = NSRect.zero
   var rules = StrongPassword.Rules()
+  var token = ""
 
   static func normalized(_ origin: String) -> String {
     origin.hasSuffix("/") ? String(origin.dropLast()).lowercased() : origin.lowercased()
@@ -27,13 +28,28 @@ struct WebKitLoginsReport {
   static let events: Set<String> = ["show", "input", "key", "hide", "passwordInput"]
   static let keys: Set<String> = ["down", "up", "enter", "escape", "tab"]
 
+  static let tokenMax = 16
+
   static func read(_ data: [String: Any]) -> WebKitLoginsReport? {
-    guard let event = choice(data["event"], events) else { return nil }
+    guard let event = choice(data["event"], events), let token = token(data["token"]) else { return nil }
+    var report: WebKitLoginsReport
     switch event {
-    case "key": return choice(data["key"], keys).map { WebKitLoginsReport(event: event, key: $0) }
-    case "show", "input": break
-    default: return WebKitLoginsReport(event: event)
+    case "key":
+      guard let key = choice(data["key"], keys) else { return nil }
+      report = WebKitLoginsReport(event: event, key: key)
+    case "show", "input": report = field(event, data)
+    default: report = WebKitLoginsReport(event: event)
     }
+    report.token = token
+    return report
+  }
+
+  private static func token(_ value: Any?) -> String? {
+    guard let token = value as? String, (1...tokenMax).contains(token.utf16.count), token.utf16.allSatisfy({ (48...57).contains($0) }) else { return nil }
+    return token
+  }
+
+  private static func field(_ event: String, _ data: [String: Any]) -> WebKitLoginsReport {
     let password = flag(data["password"])
     let code = flag(data["code"])
     let fresh = password && flag(data["newPassword"])

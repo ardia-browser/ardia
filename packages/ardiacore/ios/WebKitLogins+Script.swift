@@ -9,6 +9,8 @@ extension WebKitLogins {
       window.webkit.messageHandlers.ardia.postMessage({ kind, data, frame: "logins" });
     } catch (e) {}
   };
+  const token = String(crypto.getRandomValues(new Uint32Array(1))[0] + 1);
+  const postField = (data) => post("loginField", { ...data, token });
   const visible = (el) => !!el && !el.disabled && !el.readOnly && el.getClientRects().length > 0;
   const passwordIn = (root) => Array.from((root || document).querySelectorAll("input[type=password]")).find(visible) || null;
   const usernameFor = (password) => {
@@ -88,7 +90,7 @@ extension WebKitLogins {
   let open = false;
   let picking = false;
   const hide = () => {
-    if (open) post("loginField", { event: "hide" });
+    if (open) postField({ event: "hide", origin: location.origin });
   };
   const report = (event, el) => {
     const found = loginField(el);
@@ -99,7 +101,7 @@ extension WebKitLogins {
     const r = inTopViewport(el);
     if (!r) return hide();
     active = { el, found, code, fresh };
-    post("loginField", {
+    postField({
       event, origin: location.origin, password: isPassword, code, newPassword: fresh.length > 0, identifier: !!found && !found.password, ...(fresh.length ? passwordRules(fresh) : {}),
       value: isPassword || code ? "" : String(el.value || "").slice(0, 200),
       x: r.x, y: r.y, width: r.width, height: r.height,
@@ -112,7 +114,7 @@ extension WebKitLogins {
     const el = e.target;
     if (!e.isTrusted || !el || el.tagName !== "INPUT") return;
     if (el.type === "password") {
-      if (open) post("loginField", { event: "passwordInput", origin: location.origin });
+      if (open) postField({ event: "passwordInput", origin: location.origin });
       return;
     }
     if (loginField(el)) report("input", el);
@@ -133,10 +135,10 @@ extension WebKitLogins {
       e.preventDefault();
       e.stopImmediatePropagation();
     }
-    post("loginField", { event: "key", key, origin: location.origin });
+    postField({ event: "key", key, origin: location.origin });
   }, true);
   addEventListener("focusout", (e) => {
-    if (active && e.target === active.el) post("loginField", { event: "hide" });
+    if (active && e.target === active.el) postField({ event: "hide", origin: location.origin });
   }, true);
   addEventListener("scroll", hide, true);
   addEventListener("resize", hide);

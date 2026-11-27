@@ -340,6 +340,35 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       }
       return { engine: engineName, ...seen };
     },
+    async E28frameHide() {
+      const tab = await open("example.localhost", "/framed-login?frame=example.localhost");
+      const framed = () => tab.value(`${PAGE_EVENTS}.filter((e) => e[0] === "framed").map((e) => e.slice(1).join(":"))`);
+      const login = FIXTURES.logins.find((l) => l.user === usersFor("example.localhost")[0]);
+      try {
+        const frame = await waitFor("the frame", () => tab.value(`(() => { const r = document.getElementById("frame").getBoundingClientRect(); return { x: r.x, y: r.y } })()`), 5000);
+        await waitFor("the sign-in page framed from the page's own origin", async () => {
+          await tab.clickAt(frame.x + 190, frame.y + 55);
+          return (await framed())?.includes("focusin:u") || null;
+        }, 10_000);
+        await tab.waitRows("the Login list in the frame");
+        await tab.click("#u");
+        await waitFor("the page's own username field focused", () => tab.value(`document.activeElement?.id === "u" || null`), 5000);
+        const rows = await tab.waitRows("the Login list on the page's own username field after the frame's field lost focus", 5000);
+        await sleep(800);
+        const still = await tab.rows();
+        assert(still?.length && q(titles(still)) === q([...usersFor("example.localhost"), FOOTER]), "the frame's field losing focus doesn't close the page's Login list", still);
+        await tab.pick(login.user);
+        const filled = await waitFor("the fill in the page", async () => {
+          const page = await tab.value(`({ u: document.getElementById("u").value, p: document.getElementById("p").value })`);
+          return page?.p ? page : null;
+        }, 10_000);
+        assert(filled.u === login.user && filled.p === login.password, "the picked login fills the page's own fields", { u: filled.u });
+        assert(!(await framed()).some((e) => e === "input:p"), "the frame's fields stay empty", await framed());
+        return { engine: engineName, rows: titles(rows) };
+      } finally {
+        await tab.close();
+      }
+    },
     async E28claim() {
       const shared = await paired();
       await (await (engineName === "chromium" ? shared.chromium : shared.tabs).open(sites.otherPortUrl("example.localhost"))).close();

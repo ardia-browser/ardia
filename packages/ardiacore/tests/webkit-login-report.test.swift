@@ -62,9 +62,10 @@ private struct Posted {
 private let hostile = ProcessInfo.processInfo.environment["ARDIA_HOSTILE_INPUTS"] ?? ""
 
 private let messages = """
-  const SHOW = { event: "show", origin: location.origin, password: false, code: false, newPassword: false, value: "ada", x: 10, y: 20, width: 300, height: 30 };
+  const SHOW = { event: "show", token: "4294967296", origin: location.origin, password: false, code: false, newPassword: false, value: "ada", x: 10, y: 20, width: 300, height: 30 };
   const NEW = { ...SHOW, password: true, newPassword: true, value: "", maxLength: 20, minLength: 8, pattern: "[a-z]+" };
-  const KEY = { event: "key", key: "down", origin: location.origin };
+  const KEY = { event: "key", key: "down", token: "4294967296", origin: location.origin };
+  const HIDE = { event: "hide", token: "4294967296", origin: location.origin };
   const MARKS = "a" + "\\u0301".repeat(10000);
   const SUBMIT = { username: "ada", password: "fixture-pw-ada-1", origin: location.origin, field: { name: "pass", id: "p", autocomplete: "current-password" } };
   let sent = 0;
@@ -80,6 +81,9 @@ private let messages = """
   post("loginField", { ...SHOW, origin: "\(otherSite)" });
   post("loginField", { ...SHOW, value: MARKS });
   post("loginField", { ...NEW, pattern: MARKS });
+  post("loginField", HIDE);
+  post("loginField", { ...SHOW, token: "12345678901234567" });
+  post("loginField", { ...HIDE, token: undefined });
   post("loginSubmit", SUBMIT);
   post("loginSubmit", { ...SUBMIT, origin: "\(otherSite)" });
   post("loginSubmit", { ...SUBMIT, username: "a".repeat(1024), password: "p".repeat(1024) });
@@ -90,6 +94,7 @@ private let messages = """
       post("loginField", { ...SHOW, [name]: value });
       post("loginField", { ...NEW, [name]: value });
       post("loginField", { ...KEY, [name]: value });
+      post("loginField", { ...HIDE, [name]: value });
     }
     for (const name of Object.keys(SUBMIT)) post("loginSubmit", { ...SUBMIT, [name]: value });
     if (typeof value === "string") {
@@ -105,8 +110,10 @@ private func finite(_ rect: NSRect) -> Bool {
   [rect.minX, rect.minY, rect.width, rect.height].allSatisfy { $0.isFinite && abs($0) <= 1e6 } && rect.width >= 1 && rect.height >= 1
 }
 
+private func digitToken(_ token: String) -> Bool { (1...16).contains(token.utf16.count) && token.utf16.allSatisfy { (48...57).contains($0) } }
+
 private func withinContract(_ report: WebKitLoginsReport) -> Bool {
-  guard events.contains(report.event) else { return false }
+  guard events.contains(report.event), digitToken(report.token) else { return false }
   if report.event == "key" { return keys.contains(report.key) }
   guard report.event == "show" || report.event == "input" else { return report.typed.isEmpty }
   let rules = report.rules
@@ -147,13 +154,16 @@ private func savable(_ login: (username: String, password: String)) -> Bool {
     #expect(field(2)?.event == "key" && field(2)?.key == "down")
     #expect(field(4)?.typed == "", "a typed value of one character with 10,000 marks is cut at a character boundary within 200 units")
     #expect(field(5)?.rules == StrongPassword.Rules(minLength: 8, maxLength: 20), "a page's pattern, however long, is never kept")
+    #expect(field(6)?.event == "hide" && field(6)?.token == "4294967296", "a hide names the frame's script token, so native can tell which frame it came from")
+    #expect(field(7) == nil, "a token past 16 digits is refused")
+    #expect(field(8) == nil, "a message with no token is refused")
     var kept = 0
     var broken: [String] = []
     for message in collector.posted where message.kind == "loginField" {
       guard WebKitLoginsReport.frameOrigin(message.origin, claimed: message.data["origin"]) != nil, let report = WebKitLoginsReport.read(message.data) else { continue }
       kept += 1
       if !withinContract(report) {
-        broken.append("\(report.event) key=\(report.key.prefix(20)) typed=\(units(report.typed)) rect=\(report.rect)")
+        broken.append("\(report.event) key=\(report.key.prefix(20)) token=\(report.token.prefix(20)) typed=\(units(report.typed)) rect=\(report.rect)")
       }
     }
     #expect(kept > 100, "some reports still go through, so the contract check ran on real ones")

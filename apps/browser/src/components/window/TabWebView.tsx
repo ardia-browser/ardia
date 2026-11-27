@@ -283,9 +283,9 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         downloadNavigated(tabId, committedUrl, skipped);
       }}
       onProgress={(progress) => !prewarmOnly() && !heldBySwap(tabId, { progress }) && setPageProgress(tabId, progress)}
-      onZoom={({ zoom, user }) => {
+      onZoom={({ zoom, user, scroll }) => {
         updateTab(tabId, { zoom });
-        if (user) zoomChangedByUser(tabId);
+        if (user) zoomChangedByUser(tabId, scroll);
       }}
       onFindResult={({ count, active }) => setFind(tabId, { count, active })}
       onFavicon={(favicon) => {

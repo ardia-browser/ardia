@@ -1,5 +1,5 @@
 import { runOnJS } from "react-native-reanimated";
-import { interactionLine, lookTotalsBetween, summarizeFrames, type LookTotals } from "../../lib/framePerf";
+import { interactionLine, lookTotalsBetween, slowFrameOffsets, summarizeFrames, type LookTotals } from "../../lib/framePerf";
 import { isLabBuild, labLog, lookActivity, lookTotals } from "../../platform/lab";
 
 export type UiFrameRecorder = { start: () => void; stop: () => number[] };
@@ -70,4 +70,5 @@ export function finishInteraction(elapsedMs?: number) {
   const ui = uiRecorder ? uiRecorder.stop() : null;
   const look = lookActivity();
   report(interactionLine(done.name, typeof elapsedMs === "number" ? Math.min(elapsedMs, done.windowMs) : done.windowMs, summarizeFrames(done.js), ui ? summarizeFrames(ui) : null, done.renders, look ? { ...look, during: lookTotalsBetween(done.lookAtStart, lookTotals()) } : null));
+  if (ui) report(`PAGELAB perf ${done.name} ui slow at ${slowFrameOffsets(ui).join(" ") || "none"}`);
 }

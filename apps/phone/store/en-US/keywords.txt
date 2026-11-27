@@ -1,0 +1,1 @@
+web,tabs,private,ad blocker,reader,summarize,sync,search,incognito,spaces,privacy,widgets,answers

@@ -59,9 +59,11 @@ test("settings and their bookkeeping save apart, read back the same, and a chang
   const saved = JSON.parse(stub.docs.get("session.json"));
   assert.ok(saved.version >= 8);
   assert.equal("chosen" in saved.settings || "inferred" in saved.settings, false);
-  assert.deepEqual(saved.settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: MARKERS });
+  const { chosenAt, ...meta } = saved.settingsMeta;
+  assert.deepEqual(meta, { chosen: ["tabLayout", "appearance"], inferred: MARKERS });
+  assert.deepEqual(Object.keys(chosenAt), ["appearance"], "the time of the choice made here is kept with it");
   S().hydrate(loadSession());
-  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: MARKERS });
+  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: MARKERS, chosenAt }, "and reads back the same");
   assert.equal(S().settings.appearance, "light");
 });
 

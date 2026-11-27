@@ -258,7 +258,8 @@ with `release.sh` and uploads them by hand.
 ### The AUR
 
 Every release carries `ardia-bin-<version>.src.tar.gz`, so Arch users can `makepkg -si` from the release page without
-the AUR ([linux-port.md](linux-port.md#installing-on-linux)). The AUR itself follows stable releases only.
+the AUR ([linux-port.md](linux-port.md#installing-on-linux)). `ardia-bin` isn't on the AUR yet; once it is, it follows
+stable releases only.
 
 After a stable release publishes, the `aur` job moves `ardia-bin` on the AUR to it: `scripts/linux/arch/publish-aur.sh
 <version> --sha256 <the tarball's digest>`, which checks the published tarball against that digest before it pushes,

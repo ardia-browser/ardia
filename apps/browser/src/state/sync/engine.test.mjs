@@ -356,8 +356,8 @@ test("a relaunch while the sync chain is missing keeps the unsent journal and th
     assert.equal(relaunched.useSync.getState().status, "stalled");
     assert.equal(relaunched.useSync.getState().enabled, true);
     assert.deepEqual(forgotten, []);
-    const withoutClock = (json) => ({ ...JSON.parse(json), clock: null });
-    assert.deepEqual(withoutClock(shell.docs.get("sync.json")), withoutClock(disk.get("sync.json")), "the setup is kept; only the clock catches up with its own journal");
+    const withoutClock = (json) => ({ ...JSON.parse(json), clock: null, sessionMark: null });
+    assert.deepEqual(withoutClock(shell.docs.get("sync.json")), withoutClock(disk.get("sync.json")), "the setup is kept; only the clock catches up with its own journal and the launch gets its own session mark");
     for (const [name, contents] of disk) if (name !== "sync.json") assert.equal(shell.docs.get(name), contents, `${name} is left as it was`);
 
     missing = false;

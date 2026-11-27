@@ -15,7 +15,7 @@ import { findTab } from "../../state/tabs/tabsState";
 import { labTrace, traceSlice } from "../../platform/lab";
 import { carryHeldBarAction, commitBarAction, dropBarAction, takeBarAction, type BarAction } from "../../state/browse/store";
 import { useWarmPicture } from "../../state/tabs/warmPictures";
-import { TabFace, tabsCurve, tabsLayout, tabsMotion, trayMotion, useTheme, useReduceMotion, smoothCorners } from "../ui";
+import { TabFace, tabsCurve, tabsLayout, tabsMotion, trayMotion, usePageTheme, useReduceMotion, smoothCorners } from "../ui";
 import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 
 export type TabPager = {
@@ -491,7 +491,7 @@ export function useTabPager({ width, selectedId, left, right, order, landsEarly 
 type NeighbourProps = { pager: TabPager; tab: BrowserTab; side: -1 | 0 | 1; width: number; statusHeight: number; statusOver?: boolean; hasLeft: boolean; hasRight: boolean; coverId?: string };
 
 export function PagerNeighbour({ pager, tab, side, width, statusHeight, statusOver = false, hasLeft, hasRight, coverId }: NeighbourProps) {
-  const theme = useTheme();
+  const theme = usePageTheme();
   const tone = usePageTone(tab.id);
   const { offset, from, cursor, rendered, renderedLeft, renderedRight } = pager;
   const reduceMotion = useReduceMotion();
@@ -548,7 +548,7 @@ export function aheadPose(side: -1 | 1, id: string, inner: string, cursor: strin
 type AheadProps = { pager: TabPager; tab: BrowserTab; side: -1 | 1; inner: string; width: number; statusHeight: number; statusOver?: boolean };
 
 export function PagerAhead({ pager, tab, side, inner, width, statusHeight, statusOver = false }: AheadProps) {
-  const theme = useTheme();
+  const theme = usePageTheme();
   const tone = usePageTone(tab.id);
   const { cursor, panning, travel } = pager;
   const style = useAnimatedStyle(() => {
@@ -582,7 +582,7 @@ export function zeroArmedTurn(turn: number, refused: number, panning: number): n
 }
 
 export function PagerBackdrop({ pager }: { pager?: TabPager }) {
-  const theme = useTheme();
+  const theme = usePageTheme();
   return (
     <View testID="pagerBackdrop" style={[StyleSheet.absoluteFill, { backgroundColor: theme.canvas }]}>
       {pager && tabSwitchCuts() ? <PagerMarks pager={pager} /> : null}

@@ -17,6 +17,7 @@ import { setDynamicScheme } from "../state/app/dynamicScheme";
 import { haptics } from "../state/app/haptics";
 import { useArchiveCard } from "../state/browse/archiveCard";
 import * as browse from "../state/browse/store";
+import { useLibrary } from "../state/library/store";
 import { currentPreferences, setPreference } from "../state/settings/store";
 import { OFF_STATUS, useSync } from "../state/sync/store";
 import { useSettingsNav } from "../state/settings/nav";
@@ -169,8 +170,36 @@ onAndroid("the transparent header keeps the title and the 48 dp More button abov
   expect(more.props.android_ripple).toMatchObject({ borderless: true, radius: 20 });
   const trigger = root.root.findAll((node) => node.type === MenuTrigger && node.findAll((inner) => inner.props.testID === "materialDeckMore").length > 0)[0]!;
   expect(trigger.props.trigger).toBe("tap");
-  expect(trigger.props.items.filter((item: unknown) => item !== "divider").map((item: { label: string }) => item.label)).toEqual(["Archive", "New Incognito Tab", "Close All Tabs", "Settings"]);
+  expect(trigger.props.items.map((item: "divider" | { label: string }) => (item === "divider" ? "—" : item.label))).toEqual(["Archive", "—", "History", "Bookmarks", "Downloads", "—", "Settings"]);
+  expect(trigger.props.items.filter((item: unknown) => item !== "divider").map((item: { icon: string }) => item.icon)).toEqual(["archivebox", "clockArrow", "folderFill", "arrowDownCircle", "gearshape"]);
   unmount(root);
+});
+
+onAndroid("the ··· menu's History, Bookmarks and Downloads open that Library section and count it, except in Incognito", () => {
+  const count = telemetry.countUsage as jest.Mock;
+  const deckCounts = () => count.mock.calls.map(([field]) => field as string).filter((field) => field.startsWith("deck_menu_"));
+  const moreRow = (root: Root, label: string) => {
+    const trigger = root.root.findAll((node) => node.type === MenuTrigger && node.findAll((inner) => inner.props.testID === "materialDeckMore").length > 0)[0]!;
+    return trigger.props.items.find((item: "divider" | { label: string }) => item !== "divider" && item.label === label) as { onPress: () => void };
+  };
+  const root = deck();
+  const sections = ["History", "Bookmarks", "Downloads"].map((label) => {
+    act(() => moreRow(root, label).onPress());
+    const { open, section } = useLibrary.getState();
+    act(() => useLibrary.setState({ open: false }));
+    return open ? section : null;
+  });
+  expect(sections).toEqual(["history", "bookmarks", "downloads"]);
+  expect(deckCounts()).toEqual(["deck_menu_history_opened", "deck_menu_bookmarks_opened", "deck_menu_downloads_opened"]);
+  unmount(root);
+  count.mockClear();
+  withPrivates(1, true);
+  const incognito = deck();
+  act(() => moreRow(incognito, "History").onPress());
+  expect(useLibrary.getState()).toMatchObject({ open: true, section: "history" });
+  expect(deckCounts()).toEqual([]);
+  act(() => useLibrary.setState({ open: false }));
+  unmount(incognito);
 });
 
 onAndroid("the capsule keeps add on the right with a 48 dp target and its long press menu", () => {
@@ -185,7 +214,8 @@ onAndroid("the capsule keeps add on the right with a 48 dp target and its long p
   expect(opened).toHaveBeenCalledTimes(1);
   const trigger = root.root.findAll((node) => node.type === MenuTrigger && node.findAll((inner) => inner.props.testID === "materialDeckFab").length > 0)[0]!;
   expect(trigger.props.trigger).toBe("longPress");
-  expect(trigger.props.items.map((item: { label: string }) => item.label)).toContain("New Incognito Tab");
+  expect(trigger.props.items.map((item: "divider" | { label: string }) => (item === "divider" ? "—" : item.label))).toEqual(["New Incognito Tab", "—", "Close All Tabs"]);
+  expect(trigger.props.items.at(-1)).toMatchObject({ destructive: true, icon: "xmark" });
   const row = flat(host(root, "materialDeckBottomRow"));
   expect(row).toMatchObject({ bottom: SAFE.bottom + 8, right: 16, height: 64, borderRadius: 9999, backgroundColor: LIGHT.surfaceContainer });
   unmount(root);

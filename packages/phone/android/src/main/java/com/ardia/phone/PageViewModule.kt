@@ -326,6 +326,14 @@ class PageViewModule : Module() {
             )
         }.runOnQueue(Queues.MAIN)
 
+        AsyncFunction("setPageScheme") { scheme: String? ->
+            if (scheme != null && scheme != PhoneSitePreferences.PAGE_LIGHT && scheme != PhoneSitePreferences.PAGE_DARK) throw PagePayloads.badArgs("Unknown page scheme $scheme")
+            val engine = PhonePages.engine(context)
+            PhonePages.sitePreferences.pageScheme = scheme
+            engine.pageNight = PhonePages.sitePreferences.pageNight
+            engine.pageIsNight
+        }.runOnQueue(Queues.MAIN)
+
         AsyncFunction("setNightShade") { mode: String?, host: String?, isPrivate: Boolean? ->
             val engine = PhonePages.engine(context)
             val parsed = mode?.let { PhoneSitePreferences.mode(it) ?: throw PagePayloads.badArgs("Unknown Night Shade mode $it") }

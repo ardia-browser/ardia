@@ -10,6 +10,7 @@ export const NO_LOGINS = "No saved logins";
 export const NOT_SECURE = "Not secure";
 export const CONNECT = "Connect Apple Passwords";
 export const NOT_NOW = "Not now";
+export const LIST_FAILED = "Apple Passwords didn't answer. Try again.";
 export const FILL_FAILED = "Apple Passwords didn't fill this login. Unlock the Passwords app and try again.";
 const OPENED_PASSWORDS = "[logins] Passwords app (background mode, not opened)";
 
@@ -310,6 +311,27 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         }
       }
       return { engine: engineName, ...seen };
+    },
+    async E16dropped() {
+      const { fake } = await paired();
+      const tab = await open("example.localhost");
+      try {
+        fake.dropNext(4);
+        await tab.click("#u");
+        const failed = await tab.waitRows("the list whose fetch got no answer", 20_000);
+        assert(failed[0]?.notice && failed[0].title === LIST_FAILED, `a fetch with no answer says ${LIST_FAILED}`, failed);
+        await tab.key("escape");
+        assert(!(await tab.noList(800)), "Escape closes it", null);
+        await tab.click("#u");
+        const rows = await waitFor("the logins on the next fetch", async () => {
+          const shown = await tab.rows();
+          return shown?.length && !shown[0].notice ? shown : null;
+        }, 8000);
+        assert(q(titles(rows.slice(0, -1))) === q(usersFor("example.localhost")), "the next Login list fetch lists the site's logins", rows);
+        return { engine: engineName, failed: titles(failed), next: titles(rows) };
+      } finally {
+        await tab.close();
+      }
     },
     async E34() {
       const { app } = await paired();

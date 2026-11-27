@@ -28,7 +28,9 @@ final class ApplePasswordsClient: @unchecked Sendable {
   private var pending: (srp: ApplePasswordsSRP, reply: String, generation: UUID)?
   private var session: ApplePasswordsSRP?
   private var lastState: String?
-  private var owed: [Int: Int] = [:]
+  private var owed: [Int: (count: Int, until: Date)] = [:]
+  private var requestId = 0
+  static let owedSeconds: TimeInterval = 30
 
   static var fakeManifest: String? {
     #if DEBUG
@@ -153,12 +155,24 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   private func exchange(_ message: [String: Any], cmd: Int, also: Int? = nil, wait: TimeInterval, keepsHelper: Bool = false) throws -> [String: Any] {
     let pipe = try running()
-    try pipe.write(message)
+    var sent = message
+    var id = 0
+    if sent["tabId"] != nil {
+      requestId = requestId >= Int(Int32.max) ? 1 : requestId + 1
+      id = requestId
+      sent["tabId"] = id
+    }
+    try pipe.write(sent)
     let deadline = Date().addingTimeInterval(wait)
     while let reply = pipe.next(until: deadline) {
       guard let got = reply["cmd"] as? Int else { continue }
-      if let late = owed[got], late > 0 {
-        owed[got] = late - 1
+      if let tabId = reply["tabId"] as? Int, tabId > 0 {
+        if tabId == id, got == cmd || got == also { return reply }
+        continue
+      }
+      owed = owed.filter { $0.value.until > Date() }
+      if let late = owed[got] {
+        owed[got] = late.count > 1 ? (late.count - 1, late.until) : nil
         continue
       }
       if got == cmd || got == also { return reply }
@@ -168,7 +182,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
       pipe.stop()
       throw Failure.timedOut
     }
-    if cmd != Self.saveCmd { owed[cmd, default: 0] += 1 }
+    if cmd != Self.saveCmd { owed[cmd] = ((owed[cmd]?.count ?? 0) + 1, Date().addingTimeInterval(Self.owedSeconds)) }
     throw Failure.timedOut
   }
 

@@ -51,6 +51,10 @@ export function fakeHelper(dir, { fixtures = FIXTURES, mode = {} } = {}) {
       const now = JSON.parse(fs.readFileSync(file("mode.json"), "utf8"));
       fs.writeFileSync(file("mode.json"), JSON.stringify({ ...now, endPairing: (now.endPairing ?? 0) + 1 }));
     },
+    dropNext: (cmd) => {
+      const now = JSON.parse(fs.readFileSync(file("mode.json"), "utf8"));
+      fs.writeFileSync(file("mode.json"), JSON.stringify({ ...now, drop: { ...now.drop, [cmd]: (now.drop?.[cmd] ?? 0) + 1 } }));
+    },
     launches: () => lines("started").length,
     requests: () => lines("requests.jsonl").map((l) => JSON.parse(l)),
     savedLogins: () => JSON.parse(fs.readFileSync(file("fixtures.json"), "utf8")).logins,

@@ -8,8 +8,10 @@
 //
 //   <state dir>/fixtures.json  { code, logins: [{ user, password, sites: [host or http://host] }], codes: [{ domain, username, code }] }
 //   <state dir>/mode.json      re-read on every message: { killedAtLaunch, wrongCode, status: { "<cmd>": n }, delay: { "<cmd>": ms }, endPairing: n,
-//                              garble: { "<cmd>": true } }
-//                              (garble: answer that cmd with a sealed reply that doesn't open, and change nothing)
+//                              garble: { "<cmd>": true }, drop: { "<cmd>": n } }
+//                              (garble: answer that cmd with a sealed reply that doesn't open, and change nothing;
+//                              drop: never answer that cmd until n of its requests have gone unanswered, counted from launch)
+//   Each reply carries the request's tabId and frameId back, as Apple's helper does (its extension routes replies by them).
 //                              (endPairing: bump the number and the helper ends the Pairing with a cmd 9 push)
 //   <state dir>/started        one line per launch (pid and time): the marker that the helper ran
 //   <state dir>/requests.jsonl one line per message: { cmd, qid?, url?, host? }, never a code or password
@@ -74,6 +76,7 @@ const jsonOf = (value) => (typeof value === "string" ? JSON.parse(value) : value
 
 let pending = null;
 let session = null;
+const dropped = {};
 let endedAt = mode().endPairing ?? 0;
 
 function send(message) {
@@ -167,9 +170,12 @@ function sealed(message) {
   const payload = jsonOf(message.payload);
   const body = open(payload?.SMSG);
   logRequest({ cmd: message.cmd, qid: payload?.QID, url: message.url, host: body?.URL ?? body?.NURL });
-  if (!body) return send({ cmd: message.cmd, payload: {} });
-  if (mode().garble?.[String(message.cmd)]) return send({ cmd: message.cmd, payload: { SMSG: { TID: session.tid, SDATA: enc(randomBytes(64)) } } });
-  const reply = { cmd: message.cmd, payload: { SMSG: seal(answer(message.cmd, body)) } };
+  const ids = { tabId: message.tabId, frameId: message.frameId };
+  if (!body) return send({ cmd: message.cmd, ...ids, payload: {} });
+  const key = String(message.cmd);
+  if ((dropped[key] ?? 0) < Number(mode().drop?.[key] ?? 0)) return void (dropped[key] = (dropped[key] ?? 0) + 1);
+  if (mode().garble?.[key]) return send({ cmd: message.cmd, ...ids, payload: { SMSG: { TID: session.tid, SDATA: enc(randomBytes(64)) } } });
+  const reply = { cmd: message.cmd, ...ids, payload: { SMSG: seal(answer(message.cmd, body)) } };
   const delay = Number(mode().delay?.[String(message.cmd)] ?? 0);
   if (delay > 0) setTimeout(() => send(reply), delay);
   else send(reply);

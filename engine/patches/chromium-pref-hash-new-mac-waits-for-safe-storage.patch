@@ -20,8 +20,10 @@ never seen by the PrefService), off prefs.tracked_preferences_reset. A record mo
   own checks and before anything is published, only where nothing has taken its place, with its encrypted hash and
   an HMAC stamped through the transaction, so it loads like any installed extension. One whose HMAC no longer matches
   (the profile moved again before it came back) goes back to pending, for the key to check again.
-- restored: the second pass of that launch checks the restored value against its encrypted hash again, strictly,
-  with no HMAC fallback, and removes it and lists it if it doesn't verify. Then the record is gone.
+- restored: the second pass of that launch checks the value as that launch published it (the load-time copy the
+  second pass already validates, so a later change by sync or the user isn't mistaken for tampering) against its
+  encrypted hash again, strictly, with no HMAC fallback, and removes it and lists it if it doesn't verify. Then the
+  record is gone.
 Nothing comes back in the session it was reset in: an extension entry the loader never registered breaks shutdown
 (PreferenceAPI clears content settings for every extension in the preferences). A pending or verified record is never
 trusted on its own: the verified step is the HMAC Chrome's first pass already accepts for every protected value, and
@@ -44,7 +46,7 @@ there.
 +  bool RestoreVerifiedForThisMachine(base::DictValue& pref_store_contents,
 +                                     PrefHashStoreTransaction* transaction);
 +
-+  void VerifyAwaitingSafeStorage();
++  void VerifyAwaitingSafeStorage(const base::DictValue& contents_at_load);
 +
 +  enum class SafeStorageVerdict { kVerified, kRejected, kUnavailable };
 +
@@ -183,7 +185,7 @@ there.
  
    // Perform the initial synchronous validation pass (without the encryptor).
    // This validates the super MAC and all individual preference MACs.
-@@ -374,11 +440,26 @@
+@@ -374,10 +440,25 @@
          prefs_altered = true;
        }
      }
@@ -195,21 +197,20 @@ there.
      if (hash_store_transaction->StampSuperHmac()) {
        prefs_altered = true;
      }
-   }
- 
++  }
++
 +  if (did_reset && contents_before_checks) {
 +    SetAsideForSafeStorage(*contents_before_checks, pref_store_contents,
 +                           reset_paths);
-+  }
+   }
 +  if (!awaiting_safe_storage_.empty()) {
 +    pref_store_contents.Set(kAwaitingSafeStorageKey,
 +                            awaiting_safe_storage_.Clone());
 +    prefs_altered = true;
 +  }
-+
+ 
    if (did_reset) {
      pref_store_contents.SetByDottedPath(
-         user_prefs::kPreferenceResetTime,
 @@ -395,6 +476,12 @@
    }
    reset_on_load_observer_.reset();
@@ -239,16 +240,16 @@ there.
    // Immediately call the callback with the original pref_store_contents to
    // allow startup to proceed without waiting for the encryptor.
    std::move(post_filter_on_load_callback)
-@@ -507,6 +585,8 @@
-   if (pref_to_write == user_prefs::kPreferenceResetTime) {
+@@ -508,6 +586,8 @@
      UpdateTrackedPreferencesResetListInPrefStore(pref_store_contents_at_load);
    }
-+
-+  VerifyAwaitingSafeStorage();
  
++  VerifyAwaitingSafeStorage(pref_store_contents_at_load);
++
    // This is the final validation pass. Log metrics if we haven't already.
    MaybeRecordTrackedPreferenceResetCount(pref_store_contents_at_load);
-@@ -541,9 +621,309 @@
+ 
+@@ -541,9 +621,311 @@
                             reset_list->Clone());
    } else {
      pref_service_->ClearPref(user_prefs::kTrackedPreferencesReset);
@@ -462,7 +463,8 @@ there.
 +         ValueState::UNCHANGED_ENCRYPTED;
 +}
 +
-+void PrefHashFilter::VerifyAwaitingSafeStorage() {
++void PrefHashFilter::VerifyAwaitingSafeStorage(
++    const base::DictValue& contents_at_load) {
 +  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 +  CHECK(encryptor_);
 +  if (awaiting_safe_storage_.empty() ||
@@ -494,26 +496,27 @@ there.
 +        continue;
 +      }
 +      if (InState(fields, kStateRestored)) {
-+        const base::Value* current =
-+            split ? (live ? live->Find(key) : nullptr)
-+                  : (pref && pref->HasUserSetting() ? pref->GetValue()
-+                                                    : nullptr);
-+        if (!current || !fields.encrypted_hash) {
++        const base::DictValue* loaded_split =
++            split ? contents_at_load.FindDictByDottedPath(path) : nullptr;
++        const base::Value* loaded =
++            split ? (loaded_split ? loaded_split->Find(key) : nullptr)
++                  : contents_at_load.FindByDottedPath(path);
++        if (!loaded || !fields.encrypted_hash) {
 +          settled.push_back(key);
 +          continue;
 +        }
 +        const SafeStorageVerdict verdict = CheckWithSafeStorage(
-+            path, split_key, *current, *fields.encrypted_hash);
++            path, split_key, *loaded, *fields.encrypted_hash);
 +        if (verdict == SafeStorageVerdict::kUnavailable) {
 +          continue;
 +        }
 +        settled.push_back(key);
 +        if (verdict == SafeStorageVerdict::kRejected) {
 +          AppendOnce(reset_list, reported_path);
-+          if (split) {
++          if (split && live && live->contains(key)) {
 +            live->Remove(key);
 +            live_changed = true;
-+          } else {
++          } else if (!split && pref && pref->HasUserSetting()) {
 +            pref_service_->ClearPref(path);
 +          }
 +        }

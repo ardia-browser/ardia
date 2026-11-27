@@ -13,7 +13,7 @@ import { consentToken, stillValid, type ConsentToken } from "../telemetry/client
 import { noteTabStripCommandRefused } from "../telemetry/tabStripCounts";
 import { changedIds } from "../browser/changes";
 import { chromeChanged, groupStep, stripActual, stripPlan, type GroupBindings } from "./liveTabs";
-import { recordAppSelection, judgeStripSelection } from "./stripBounce";
+import { recordAppSelection, judgeStripSelection, type StripBounceContext } from "./stripBounce";
 
 let started = false;
 const mirror = new Map<number, StripState>();
@@ -22,12 +22,15 @@ let early: TabStripTransaction[] = [];
 const seen = new Set<string>();
 const KINDS = ["arrange", "activate", "group"] as const;
 type Kind = (typeof KINDS)[number];
-const inflight = new Map<number, { kind: Kind; cmd: number; keys?: string[]; makes?: string; successor?: boolean; moves?: boolean }>();
+type Inflight = { kind: Kind; cmd: number; keys?: string[]; makes?: string; successor?: boolean; moves?: boolean };
+const inflight = new Map<number, Inflight>();
 const groups: GroupBindings = new Map();
 const tried = new Map<string, { sig: string; since: number }>();
 const changedAt = new Map<number, number>();
+const lastAck = new Map<number, { at: number; cmd: number }>();
 const madeInFront = new Map<number, { browser: number; over: string | null }>();
 let applyingStrip = false;
+const MAX_MS_SINCE_ACK = 60_000;
 
 if (__DEV__) {
   (globalThis as { acChromeTabs?: unknown }).acChromeTabs = {
@@ -39,7 +42,7 @@ if (__DEV__) {
   };
 }
 
-export const chromeTabsBookkeeping = () => ({ groups: groups.size, tried: tried.size, changedAt: changedAt.size });
+export const chromeTabsBookkeeping = () => ({ groups: groups.size, tried: tried.size, changedAt: changedAt.size, lastAck: lastAck.size });
 
 export function startChromeTabs() {
   if (started) return;
@@ -77,17 +80,20 @@ function receive(tx: TabStripTransaction) {
   for (const [strip, f] of inflight) {
     if (f.cmd !== tx.cmd) continue;
     inflight.delete(strip);
+    lastAck.set(strip, { at: Date.now(), cmd: f.cmd });
     const made = f.makes && tx.strips.find((x) => x.strip === strip)?.tabs.find((t) => t.key === f.keys?.[0])?.group;
     if (made && f.makes) groups.set(made, f.makes);
   }
   const start = useBrowser.getState();
   let s = start;
+  let context: StripBounceContext | undefined;
   for (const strip of tx.strips) {
     const before = mirror.get(strip.strip);
     if (strip.closed) {
       mirror.delete(strip.strip);
       madeInFront.delete(strip.strip);
       changedAt.delete(strip.strip);
+      lastAck.delete(strip.strip);
       for (const kind of KINDS) tried.delete(`${strip.strip}:${kind}`);
     } else mirror.set(strip.strip, strip);
     if (!strip.closed && (tx.cmd === null || tx.cmd < 0)) changedAt.set(strip.strip, tx.rev);
@@ -96,7 +102,8 @@ function receive(tx: TabStripTransaction) {
       const siblings = [...mirror.values()].filter((x) => x.window === strip.window && x.strip !== strip.strip);
       const made = strip.tabs.find((t) => t.active && !t.key && !before?.tabs.some((b) => b.browser === t.browser));
       if (made) madeInFront.set(strip.strip, { browser: made.browser, over: stripPlan(s, strip)?.active ?? null });
-      s = chromeChanged(s, before, strip, {
+      const known = bounceContext(tx, strip.strip, waiting, siblings.length > 0);
+      const next = chromeChanged(s, before, strip, {
         seen,
         siblings,
         groups,
@@ -107,12 +114,14 @@ function receive(tx: TabStripTransaction) {
           active: waiting?.kind === "activate" && !waiting.successor,
         },
       });
+      if (next !== s) context = known;
+      s = next;
     }
     for (const t of strip.tabs) if (t.key) seen.add(t.key);
   }
   if (seen.size > 2 * Object.keys(s.tabs).length + 64) for (const key of seen) if (!s.tabs[key]) seen.delete(key);
   if (s !== start) {
-    judgeStripSelection(start, s);
+    judgeStripSelection(start, s, Date.now(), context);
     applyingStrip = true;
     try {
       useBrowser.setState(s);
@@ -121,6 +130,20 @@ function receive(tx: TabStripTransaction) {
     }
   }
   scheduleProject();
+}
+
+function bounceContext(tx: TabStripTransaction, strip: number, waiting: Inflight | undefined, hasSibling: boolean): StripBounceContext {
+  const ack = lastAck.get(strip);
+  return {
+    trigger: tx.trigger,
+    deferred: tx.deferred === true,
+    ...(tx.deferred === true && typeof tx.deferredCmd === "number" && ack ? { deferredBehind: ack.cmd - tx.deferredCmd } : {}),
+    ...(ack ? { msSinceAck: Math.min(Math.max(Date.now() - ack.at, 0), MAX_MS_SINCE_ACK) } : {}),
+    inflight: waiting?.kind,
+    pendingActive: waiting?.kind === "activate" && !waiting.successor,
+    hasSibling,
+    activeFallback: tx.activeFallback === true,
+  };
 }
 
 let projectQueued = false;

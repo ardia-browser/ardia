@@ -264,7 +264,7 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
 }
 
 - (void)window:(ArdiaCoreWindow *)window didInsertTab:(ArdiaCoreTab *)tab opener:(ArdiaCoreTab *)opener disposition:(NSString *)disposition {
-  [ArdiaTabStrip changedInWindow:self profile:tab.profile];
+  [ArdiaTabStrip changedInWindow:self profile:tab.profile trigger:@"didInsertTab"];
   if (_hostChanges > 0) return;
   if (_awaitingApp) {
     __weak ArdiaWindowController *weakSelf = self;
@@ -288,7 +288,7 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
 
 - (void)window:(ArdiaCoreWindow *)window didRemoveTab:(ArdiaCoreTab *)tab {
   [ArdiaTabStrip removed:tab fromWindow:self];
-  if (ArdiaCoreProfile *profile = tab.profile) [ArdiaTabStrip changedInWindow:self profile:profile];
+  if (ArdiaCoreProfile *profile = tab.profile) [ArdiaTabStrip changedInWindow:self profile:profile trigger:@"didRemoveTab"];
   [[self viewFor:tab] tabRemovedFromWindow:window];
   if (_stray || _standalone || _awaitingApp) {
     __weak ArdiaWindowController *weakSelf = self;
@@ -321,7 +321,7 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
 - (void)window:(ArdiaCoreWindow *)window didActivateTab:(ArdiaCoreTab *)tab {
   if (_awaitingApp) _chromeActive = tab;
   [ArdiaTabStrip activated:tab inWindow:self];
-  [ArdiaTabStrip changedInWindow:self profile:tab.profile];
+  [ArdiaTabStrip changedInWindow:self profile:tab.profile cause:nil trigger:@"didActivateTab" activatedTab:tab];
   [[self viewFor:tab] tabActivatedByChrome:!self.appChanging];
 }
 

@@ -198,6 +198,11 @@ ordered transaction that names its cause. There are no echo windows, timers or "
     tab, a strip's placeholder tab going).
   - A transaction never mixes causes. Chrome's pending changes go out before a command runs; whatever Chrome does
     synchronously inside a command (selection, observers) is the command's.
+  - A transaction with `cmd` `null` or `-1` may say which native step sent it, for diagnostics only (the app never
+    changes what it does by them): `trigger` (`didActivateTab`, `didInsertTab`, `didRemoveTab`, `attach` for a
+    page's view attaching to its tab, or `groupObserver`), `activeFallback` when the strip's active tab is the first
+    tab because no tab was recorded as activated, and `deferred` with `deferredCmd` (the activate command's id) when
+    the report is the activation a command asked for that the engine postponed past the command's own transaction.
   - A change that isn't a command's and leaves its strip as it was last sent isn't sent (a new tab's insertion and
     placing made two identical transactions).
   - `strips` holds every strip the change touched, each whole: `{ strip, window, appWindow?, profile, tabs,

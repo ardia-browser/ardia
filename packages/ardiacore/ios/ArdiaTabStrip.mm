@@ -60,6 +60,24 @@ NSMapTable<ArdiaCoreProfile *, ArdiaCoreTab *> *ActiveTabs(ArdiaWindowController
   return active;
 }
 
+const NSTimeInterval kActivationMarkerSeconds = 5;
+
+NSMapTable<ArdiaCoreTab *, NSDictionary *> *Activations() {
+  static NSMapTable *asked = [NSMapTable weakToStrongObjectsMapTable];
+  return asked;
+}
+
+NSNumber *TakeActivation(ArdiaCoreTab *tab) {
+  NSDictionary *marker = tab ? [Activations() objectForKey:tab] : nil;
+  if (!marker) return nil;
+  [Activations() removeObjectForKey:tab];
+  return [NSProcessInfo processInfo].systemUptime - [marker[@"at"] doubleValue] <= kActivationMarkerSeconds ? marker[@"cmd"] : nil;
+}
+
+BOOL ActiveFallback(ArdiaWindowController *controller, ArdiaCoreProfile *profile) {
+  return ![ActiveTabs(controller) objectForKey:profile] && [controller.coreWindow tabsForProfile:profile].count > 0;
+}
+
 NSString *AppWindowOf(ArdiaWindowController *controller) {
   NSMutableArray<NSView *> *views = [NSMutableArray array];
   if (controller.root) [views addObject:controller.root];
@@ -141,22 +159,37 @@ NSArray<ArdiaCoreProfile *> *ProfilesWithTabs(ArdiaWindowController *controller)
                         for (ArdiaWindowController *c in ArdiaWindowController.all)
                           for (ArdiaCoreProfile *p in ardia_host::LoadedProfiles())
                             if ([c.coreWindow chromeWindowIdForProfile:p] == window.intValue)
-                              [ArdiaTabStrip changedInWindow:c profile:p cause:c.hostChanges > 0 ? @(-1) : NSNull.null];
+                              [ArdiaTabStrip changedInWindow:c profile:p cause:c.hostChanges > 0 ? @(-1) : NSNull.null trigger:@"groupObserver" activatedTab:nil];
                       }];
   [ArdiaServices call:@"ac_tabs_watch" profile:@"" args:nil completion:^(NSDictionary *) {}];
 }
 
-+ (void)changedInWindow:(ArdiaWindowController *)controller profile:(ArdiaCoreProfile *)profile {
-  [self changedInWindow:controller profile:profile cause:nil];
++ (void)changedInWindow:(ArdiaWindowController *)controller profile:(ArdiaCoreProfile *)profile trigger:(NSString *)trigger {
+  [self changedInWindow:controller profile:profile cause:nil trigger:trigger activatedTab:nil];
 }
 
-+ (void)changedInWindow:(ArdiaWindowController *)controller profile:(ArdiaCoreProfile *)profile cause:(id)cause {
++ (void)changedInWindow:(ArdiaWindowController *)controller
+                profile:(ArdiaCoreProfile *)profile
+                  cause:(id)cause
+                trigger:(NSString *)trigger
+           activatedTab:(ArdiaCoreTab *)activatedTab {
+  NSNumber *asked = TakeActivation(activatedTab);
   if (![ArdiaEvents listens:@"tabs"] || !controller || !profile || controller.standalone) return;
   if (gCommand && controller == gCommandWindow && profile == gCommandProfile) return;
   cause = cause ?: (gCommand ?: (controller.hostChanges > 0 ? @(-1) : NSNull.null));
   NSDictionary *strip = Strip(controller, profile);
-  if ((cause == NSNull.null || [cause isEqual:@(-1)]) && [Sent()[strip[@"strip"]] isEqualToDictionary:strip]) return;
-  Send(@{@"rev" : @(++gRev), @"cmd" : cause, @"strips" : @[ strip ]});
+  const BOOL unattributed = cause == NSNull.null || [cause isEqual:@(-1)];
+  if (unattributed && [Sent()[strip[@"strip"]] isEqualToDictionary:strip]) return;
+  NSMutableDictionary *tx = [@{@"rev" : @(++gRev), @"cmd" : cause, @"strips" : @[ strip ]} mutableCopy];
+  if (unattributed) {
+    if (trigger.length) tx[@"trigger"] = trigger;
+    if (ActiveFallback(controller, profile)) tx[@"activeFallback"] = @YES;
+    if (asked) {
+      tx[@"deferred"] = @YES;
+      tx[@"deferredCmd"] = asked;
+    }
+  }
+  Send(tx);
 }
 
 + (void)windowClosed:(ArdiaWindowController *)controller {
@@ -217,7 +250,9 @@ NSArray<ArdiaCoreProfile *> *ProfilesWithTabs(ArdiaWindowController *controller)
   if (found && [op isEqualToString:@"activate"]) {
     ArdiaCoreTab *tab = byKey[command[@"key"]];
     if (tab) {
+      [Activations() setObject:@{@"cmd" : @(commandId), @"at" : @([NSProcessInfo processInfo].systemUptime)} forKey:tab];
       [found.coreWindow activateTab:tab];
+      if ([ActiveTabs(found) objectForKey:profile] == tab) [Activations() removeObjectForKey:tab];
     } else {
       rejected = YES;
     }

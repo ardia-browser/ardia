@@ -34,6 +34,10 @@ export type TabStripTransaction = {
   cmd: number | null;
   strips: StripState[];
   rejected?: boolean;
+  trigger?: string;
+  deferred?: boolean;
+  deferredCmd?: number;
+  activeFallback?: boolean;
 };
 
 export type TabStripCommand =

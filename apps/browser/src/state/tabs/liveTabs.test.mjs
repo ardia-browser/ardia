@@ -406,6 +406,56 @@ test("a command Chrome refuses is counted while sharing is on, and doesn't hold 
   assert.equal(shown(win.w), "b");
 });
 
+test("a late report that undoes an acked switch is logged with what the strip knew, and counted under its trigger", async () => {
+  const { takeStripBounceCounts } = await import("./stripBounce.ts");
+  const { setSharing, saveQueueNow } = await import("../telemetry/client.ts");
+  const { docs } = await import("../../test-native/index.ts");
+  const fetched = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 200 });
+  const win = windowWith("a", "b", "c");
+  await settle(win);
+  const [a, b] = S().windows[win.w].tabIds;
+  const ids = [];
+  const sentOn = chrome.command;
+  chrome.command = function (command, id) {
+    ids.push(id);
+    return sentOn.call(this, command, id);
+  };
+  setSharing(true, "settings");
+  takeStripBounceCounts();
+  try {
+    S().activate(b);
+    await settle(win);
+    assert.equal(chromeShown(win.strip), "b", "Chrome acked the switch");
+    assert.equal(shown(win.w), "b");
+    chrome.activate(a);
+    Object.assign(chrome.outbox.at(-1), { trigger: "didActivateTab", deferred: true, deferredCmd: ids.at(-1) - 1, activeFallback: false });
+    await settle(win);
+    assert.equal(shown(win.w), "a", "behaviour is unchanged: the report still moves the window");
+    const counts = takeStripBounceCounts();
+    assert.equal(counts.strip_bounces_back, 1);
+    assert.equal(counts.strip_bounces_back_did_activate_tab, 1);
+    assert.equal(counts.strip_bounces_back_none, 0);
+    await saveQueueNow();
+    const logs = JSON.parse(docs.get("telemetry-queue.json")).logs.filter((l) => /tab strip selected/.test(JSON.stringify(l)));
+    const log = logs.at(-1);
+    const attrs = Object.fromEntries(log.attributes.map(({ key, value }) => [key, value.intValue ?? value.boolValue ?? value.stringValue]));
+    assert.equal(attrs.trigger, "didActivateTab");
+    assert.equal(attrs.deferred, true);
+    assert.equal(Number(attrs.deferredBehind), 1);
+    assert.equal(attrs.inflight, "none", "the switch's command was already acked");
+    assert.equal(attrs.pendingActive, false);
+    assert.equal(attrs.hasSibling, false);
+    assert.equal(attrs.activeFallback, false);
+    assert.ok(Number(attrs.msSinceAck) >= 0 && Number(attrs.msSinceAck) <= 60_000, "ms since the strip's last ack is bounded");
+    assert.ok(!JSON.stringify(log.attributes).includes(win.w), "no window, tab or strip id is logged");
+  } finally {
+    chrome.command = sentOn;
+    setSharing(false, "settings");
+    globalThis.fetch = fetched;
+  }
+});
+
 test("a switch made while a refused command was on its way goes out once the refusal comes back", async () => {
   const win = windowWith("a", "b", "c");
   await settle(win);

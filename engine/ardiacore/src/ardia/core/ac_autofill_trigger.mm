@@ -1,5 +1,7 @@
 #include "ardia/core/ac_autofill_trigger.h"
 
+#include <variant>
+
 #include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/sys_string_conversions.h"
@@ -17,6 +19,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "ardia/core/ac_hooks.h"
+#include "ardia/core/ac_mac_hooks.h"
 #include "ardia/core/ac_browser.h"
 #import "ardia/core/ardiacore_internal.h"
 
@@ -139,10 +142,39 @@ void ReportShown(content::WebContents* contents,
                      contents->GetWeakPtr(), items));
 }
 
+void SuggestionAccepted(content::WebContents* contents,
+                        const autofill::Suggestion& suggestion) {
+  if (suggestion.type != autofill::SuggestionType::kAddressEntry &&
+      suggestion.type != autofill::SuggestionType::kAddressEntryOnTyping) {
+    return;
+  }
+  const auto* address =
+      std::get_if<autofill::Suggestion::AutofillProfilePayload>(
+          &suggestion.payload);
+  if (!contents || !address || address->guid.value().empty()) {
+    return;
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          [](base::WeakPtr<content::WebContents> contents, NSString* entry) {
+            if (!contents) {
+              return;
+            }
+            ArdiaCoreTab* tab = TabBridge::GetOrCreate(contents.get())->tab();
+            id<ArdiaCoreTabDelegate> delegate = tab.delegate;
+            if ([delegate respondsToSelector:@selector(tab:didFillAutofillAddress:)]) {
+              [delegate tab:tab didFillAutofillAddress:entry];
+            }
+          },
+          contents->GetWeakPtr(), base::SysUTF8ToNSString(address->guid.value())));
+}
+
 }
 
 void TrackAutofillFocus(content::WebContents* contents) {
   autofill::g_ardia_autofill_suggestions_shown = &ReportShown;
+  autofill::g_ardia_autofill_suggestion_accepted = &SuggestionAccepted;
   auto* client =
       contents ? autofill::ContentAutofillClient::FromWebContents(contents) : nullptr;
   if (client && !FocusedField::FromWebContents(contents)) {

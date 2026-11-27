@@ -91,7 +91,7 @@ final class ApplePasswordsSaving: NSObject {
     waiting.removeAllObjects()
     for login in held {
       guard saving else {
-        count("saveFailed", engine: login.engine)
+        count("saveFailed", engine: login.engine, kind: ApplePasswordsClient.Problem.notConnected.kind)
         login.done(false)
         continue
       }
@@ -132,7 +132,8 @@ final class ApplePasswordsSaving: NSObject {
           remember(scheme: scheme, host: host, user: username, password: password)
           LoginList.shared.forgetFetchedLogins()
         }
-        count(saved ? "saved" : "saveFailed", engine: engine)
+        let problem: ApplePasswordsClient.Problem? = if case .failure(let failed) = result { failed } else { nil }
+        count(saved ? "saved" : "saveFailed", engine: engine, kind: problem?.kind)
         done(saved)
       }
     }
@@ -203,7 +204,9 @@ final class ApplePasswordsSaving: NSObject {
     return chrome
   }
 
-  private static func count(_ name: String, engine: String) {
-    ArdiaEvents.emit("passwords.applePasswordsSaveCounted", data: ArdiaConsentStamp.begin().onto(["name": name, "engine": engine]))
+  private static func count(_ name: String, engine: String, kind: String? = nil) {
+    var data = ["name": name, "engine": engine]
+    if let kind { data["kind"] = kind }
+    ArdiaEvents.emit("passwords.applePasswordsSaveCounted", data: ArdiaConsentStamp.begin().onto(data))
   }
 }

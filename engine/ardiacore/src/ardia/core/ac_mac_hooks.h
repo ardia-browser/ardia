@@ -19,6 +19,9 @@ namespace autofill {
 extern bool (*g_ardia_autofill_suggestions_suppressed)(
     content::WebContents* web_contents,
     base::span<const Suggestion> suggestions);
+extern void (*g_ardia_autofill_suggestion_accepted)(
+    content::WebContents* web_contents,
+    const Suggestion& suggestion);
 }
 
 extern bool (*g_ardia_password_filling_allowed)(content::WebContents* web_contents);

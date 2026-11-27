@@ -46,7 +46,14 @@
           "windows": "absent"
         }
       },
-      "events": {}
+      "events": {
+        "addressFilled": {
+          "topic": "autofill.addressFilled",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      }
     },
     "bookmarks": {
       "kind": "engine",

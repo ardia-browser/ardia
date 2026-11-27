@@ -12,4 +12,6 @@ export type AutofillCalls = {
   "autofill.showSuggestions": [{ tabId: string; passwords: boolean }, boolean];
 };
 
-export type AutofillEvents = {};
+export type AutofillEvents = {
+  "autofill.addressFilled": { entry: string; epoch?: string };
+};

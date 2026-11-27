@@ -47,3 +47,19 @@ test("turning the Me card on and macOS refusing it are counted, and a WebKit fil
   assert.equal(fills.webkit_autofill_me_card_fills, 1);
   await setMeCardFor("", false);
 });
+
+test("story 63: a Chromium tab's fill from a Me card entry counts as a Me card fill there, and an address saved in Ardia doesn't", async () => {
+  client.setSharing(true, "settings");
+  native.contacts.status = "authorized";
+  native.contacts.card = { name: "Ada Lovelace", organization: "", emails: ["ada@example.com"], phones: [], addresses: [] };
+  await setMeCardFor("", true);
+  await flush();
+  startMeCard();
+  takePasswordManagerCounts();
+  const [entry] = useMeCard.getState().entries[""];
+  native.emitEvent("autofill.addressFilled", { entry, epoch: client.consentEpoch() });
+  native.emitEvent("autofill.addressFilled", { entry: "an-address-saved-in-ardia", epoch: client.consentEpoch() });
+  assert.equal(takePasswordManagerCounts().me_card_fills_chromium, 1);
+  await setMeCardFor("", false);
+  native.contacts.card = null;
+});

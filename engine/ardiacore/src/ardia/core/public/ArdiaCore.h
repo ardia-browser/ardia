@@ -260,6 +260,7 @@ ARDIACORE_EXPORT
 - (void)tab:(ArdiaCoreTab*)tab requestsActivation:(NSString*)reason;
 - (void)tab:(ArdiaCoreTab*)tab didChangePictureInPicture:(NSDictionary<NSString*, id>*)state;
 - (void)tab:(ArdiaCoreTab*)tab didShowAutofillSuggestions:(NSArray<NSDictionary<NSString*, NSString*>*>*)items;
+- (void)tab:(ArdiaCoreTab*)tab didFillAutofillAddress:(NSString*)entry;
 - (void)tab:(ArdiaCoreTab*)tab didBlockRequests:(int)count lastURL:(NSString*)url;
 - (NSArray<NSDictionary<NSString*, NSString*>*>*)tab:(ArdiaCoreTab*)tab
                          contextMenuItemsForSelection:(NSString*)text;

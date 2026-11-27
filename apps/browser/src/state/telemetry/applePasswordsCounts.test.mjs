@@ -50,11 +50,17 @@ const FEATURE_COUNTS = {
   icloud_extension_failures: "how many times Ardia couldn't change it",
   password_manager_chose_apple: "how many times you picked Ardia, Apple Passwords, None or a plugin as a profile's password manager",
   webkit_autofill_me_card_fills: "how many of those addresses came from your Me card",
+  apple_passwords_login_list_fetch_failed: "how many times the Login list couldn't get the site's logins from Apple Passwords",
+  me_card_fills_chromium: "how many times your Me card filled a form in a Chromium tab",
 };
+const KINDS = { notPaired: "not_paired", refused: "refused", helperMissing: "helper_missing", timedOut: "timed_out", unreadable: "unreadable" };
+const WHY = "each of those failures also counted by why (not connected, refused, Apple's helper missing, no answer in time, or an answer Ardia couldn't read)";
+const KIND_CATEGORIES = { listFailed: "list", fillFailed: "fill", codeFillFailed: "code" };
+for (const category of [...Object.values(KIND_CATEGORIES), "save"]) for (const kind of Object.values(KINDS)) FEATURE_COUNTS[`apple_passwords_${category}_failures_${kind}`] = WHY;
 const BY_ENGINE = [
   "apple_passwords_login_list_shown", "apple_passwords_login_list_filled", "apple_passwords_fills_failed", "apple_passwords_login_list_connect_shown",
   "apple_passwords_login_list_connect_picked", "apple_passwords_login_list_not_now", "apple_passwords_codes_filled", "apple_passwords_codes_failed",
-  "apple_passwords_strong_passwords_used", "apple_passwords_saves_saved", "apple_passwords_saves_failed",
+  "apple_passwords_strong_passwords_used", "apple_passwords_saves_saved", "apple_passwords_saves_failed", "apple_passwords_login_list_fetch_failed",
 ];
 for (const field of BY_ENGINE) for (const engine of ["chromium", "webkit"]) FEATURE_COUNTS[`${field}_${engine}`] = ENGINES;
 const SNAPSHOT_COUNTS = { password_manager_profiles_apple: "how many of your profiles use Ardia's password manager, Apple Passwords, none or a password manager plugin" };
@@ -77,6 +83,7 @@ const LOGIN_LIST = {
   shown: "apple_passwords_login_list_shown", filled: "apple_passwords_login_list_filled", fillFailed: "apple_passwords_fills_failed",
   connectShown: "apple_passwords_login_list_connect_shown", connectPicked: "apple_passwords_login_list_connect_picked", notNow: "apple_passwords_login_list_not_now",
   codeFilled: "apple_passwords_codes_filled", codeFillFailed: "apple_passwords_codes_failed", strongPasswordUsed: "apple_passwords_strong_passwords_used",
+  listFailed: "apple_passwords_login_list_fetch_failed",
 };
 const SAVES = { saved: "apple_passwords_saves_saved", saveFailed: "apple_passwords_saves_failed" };
 const PAIRING_FAILURES = {
@@ -107,6 +114,12 @@ const NOTES = [
   ["noteICloudExtension failed", (c) => counts.noteICloudExtension("failed", c), ["icloud_extension_failures"]],
   ["notePasswordManagerChosen apple", (c) => counts.notePasswordManagerChosen("apple", c), ["password_manager_chose_apple"]],
   ["noteWebKitAutofillCount autofillMeCardFill", (c) => noteWebKitAutofillCount("autofillMeCardFill", c), ["webkit_autofill_me_card_fills"]],
+  ["noteMeCardFill chromium", (c) => counts.noteMeCardFill(c), ["me_card_fills_chromium"]],
+  ...Object.entries(KIND_CATEGORIES).flatMap(([name, category]) =>
+    Object.entries(KINDS).map(([kind, wire]) => [`noteLoginList ${name} ${kind}`, (c) => counts.noteLoginList(name, "webkit", c, kind), [LOGIN_LIST[name], `${LOGIN_LIST[name]}_webkit`, `apple_passwords_${category}_failures_${wire}`]]),
+  ),
+  ...Object.entries(KINDS).map(([kind, wire]) => [`noteApplePasswordsSave saveFailed ${kind}`, (c) => counts.noteApplePasswordsSave("saveFailed", "chromium", c, kind), [SAVES.saveFailed, `${SAVES.saveFailed}_chromium`, `apple_passwords_save_failures_${wire}`]]),
+  ["noteLoginList filled with a kind", (c) => counts.noteLoginList("filled", "webkit", c, "refused"), [LOGIN_LIST.filled, `${LOGIN_LIST.filled}_webkit`]],
 ];
 
 const take = () => ({ ...counts.takePasswordManagerCounts(), ...takeWebKitAutofillCounts() });
@@ -171,6 +184,8 @@ test("S10: no argument a caller or native passes (a site, a username, an unknown
   for ({ id, value } of HOSTILE_ARGS) {
     call("noteLoginList", () => counts.noteLoginList(value, value, token));
     call("noteLoginList", () => counts.noteLoginList("shown", value, token));
+    call("noteLoginList", () => counts.noteLoginList("fillFailed", "webkit", token, value));
+    call("noteApplePasswordsSave", () => counts.noteApplePasswordsSave("saveFailed", "webkit", token, value));
     call("noteApplePasswordsSave", () => counts.noteApplePasswordsSave(value, value, token));
     call("noteApplePasswordsSave", () => counts.noteApplePasswordsSave("saved", value, token));
     call("noteApplePasswordsPairing", () => counts.noteApplePasswordsPairing(value, token));
@@ -190,13 +205,17 @@ test("S10: no argument a caller or native passes (a site, a username, an unknown
     native.emitEvent("passwords.loginListCounted", wire({ name: value, engine: value }));
     native.emitEvent("passwords.loginListCounted", wire({ name: "filled", engine: value }));
     native.emitEvent("passwords.applePasswordsSaveCounted", wire({ name: value, engine: value }));
+    native.emitEvent("passwords.loginListCounted", wire({ name: "listFailed", engine: "webkit", kind: value }));
+    native.emitEvent("passwords.applePasswordsSaveCounted", wire({ name: "saveFailed", engine: "webkit", kind: value }));
   }
+  native.emitEvent("passwords.loginListCounted", wire({ name: "listFailed", engine: "chromium", kind: "timedOut" }));
   native.emitEvent("passwords.loginListCounted", wire({ name: "filled", engine: "webkit" }));
   const taken = take();
   assert.deepEqual(Object.keys(taken).sort(), shape, "no field was added");
   for (const [field, n] of Object.entries(taken)) assert.ok(Number.isSafeInteger(n) && n >= 0, `${field} is a count, not ${typeof n}`);
   assert.ok(taken.apple_passwords_login_list_filled > 0 && taken.apple_passwords_login_list_shown > 0, "real names still count, so the check ran on recorded counts");
   assert.deepEqual([taken.apple_passwords_login_list_filled_chromium, taken.apple_passwords_login_list_filled_webkit], [0, 1], "only a real engine name counts by engine");
+  assert.equal(taken.apple_passwords_list_failures_timed_out, 1, "only a real failure kind counts by kind");
   const sent = JSON.stringify(taken);
   for (const needle of ["bank.test", "ada@", "fixture-pw", "safari", "javascript:", "ardia-fixture", "__proto__", "[object"]) assert.ok(!sent.includes(needle), `the output has no ${needle}`);
   const snapshot = passwordManagerProfileCounts({ profiles: { [SITE]: { id: SITE, passwordManager: "apple" }, "ada@example.test": { id: "ada@example.test", passwordManager: "plugin:bitwarden" } } }, []);

@@ -326,7 +326,18 @@ final class ApplePasswordsClient: @unchecked Sendable {
     case unavailable(Outcome)
     case notConnected
     case refused
-    case failed
+    case timedOut
+    case unreadable
+
+    var kind: String {
+      switch self {
+      case .notConnected: "notPaired"
+      case .unavailable(.helperMissing): "helperMissing"
+      case .unavailable, .refused: "refused"
+      case .timedOut: "timedOut"
+      case .unreadable: "unreadable"
+      }
+    }
   }
 
   static let saveCmd = 6
@@ -359,7 +370,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
           let entries = Self.entries(answer)
           let entry = entries.first { ($0["sites"] as? [String] ?? []).contains(host) && $0["USR"] as? String == user }
             ?? entries.first { $0["USR"] as? String == user }
-          guard let password = entry?["PWD"] as? String, password != Self.noPassword else { return .failure(.failed) }
+          guard let password = entry?["PWD"] as? String, password != Self.noPassword else { return .failure(.unreadable) }
           return .success(password)
         })
       }
@@ -380,7 +391,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   func code(page: String, user: String, _ done: @escaping (Result<[ApplePasswordsCode], Problem>) -> Void) {
     queue.async {
-      guard self.session == nil || self.fillsCodes else { return done(.failure(.failed)) }
+      guard self.session == nil || self.fillsCodes else { return done(.failure(.refused)) }
       let body: [String: Any] = ["ACT": 2, "TYPE": "oneTimeCodes", "frameURLs": [page], "username": user]
       self.sealed(17, qid: "CmdDidFillOneTimeCode", url: nil, body, wait: Self.codeSeconds) { result in
         done(result.map { Self.entries($0).map(Self.code) }.mapError(Self.problem))
@@ -401,19 +412,19 @@ final class ApplePasswordsClient: @unchecked Sendable {
         guard case .failure(Failure.unexpected) = result else { return done(result.map { _ in () }.mapError(Self.problem)) }
         guard !update else {
           Self.log.notice("update had no readable answer, not saved")
-          return done(.failure(.failed))
+          return done(.failure(.unreadable))
         }
         Self.log.notice("save had no readable answer, reading the list")
         self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds) { listed in
           done(listed.mapError(Self.problem).flatMap { answer in
-            Self.entries(answer).contains(where: { $0["USR"] as? String == user }) ? .success(()) : .failure(.failed)
+            Self.entries(answer).contains(where: { $0["USR"] as? String == user }) ? .success(()) : .failure(.unreadable)
           })
         }
       }
     }
   }
 
-  private static func problem(_ error: Error) -> Problem { error as? Problem ?? .failed }
+  private static func problem(_ error: Error) -> Problem { error as? Problem ?? .unreadable }
 
   private static func entries(_ answer: [String: Any]) -> [[String: Any]] {
     if let list = answer["Entries"] as? [[String: Any]] { return list }
@@ -432,7 +443,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
       let payload = try Self.text(["QID": qid, "SMSG": try session.seal(body)])
       message = ["cmd": cmd, "tabId": 0, "frameId": 0, "payload": payload].merging(url.map { ["url": $0] } ?? [:]) { first, _ in first }
     } catch {
-      return done(.failure(Problem.failed))
+      return done(.failure(Problem.unreadable))
     }
     exchange(message, cmd: cmd, also: also, wait: wait, keepsHelper: true) { result in
       let reply: [String: Any]
@@ -440,7 +451,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
       case .success(let answer): reply = answer
       case .failure:
         if self.killed { return done(.failure(Problem.unavailable(.refused))) }
-        return done(.failure(self.generation == id && self.session != nil ? Problem.failed : Problem.notConnected))
+        return done(.failure(self.generation == id && self.session != nil ? Problem.timedOut : Problem.notConnected))
       }
       guard let answer = session.open(ApplePasswordsSRP.object(reply["payload"])?["SMSG"]) else { return done(.failure(Failure.unexpected)) }
       let status = answer["STATUS"] as? Int ?? 1

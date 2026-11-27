@@ -146,8 +146,10 @@ final class LoginList: NSObject {
     case .success(let entries):
       next.logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains)
       present(next, notice: nil)
-    case .failure(.notConnected): offerConnect(next)
-    case .failure(let problem): present(next, notice: Self.notice(problem))
+    case .failure(let problem):
+      Self.count("listFailed", in: target, kind: problem.kind)
+      if problem == .notConnected { return offerConnect(next) }
+      present(next, notice: Self.notice(problem))
     }
   }
 
@@ -180,8 +182,10 @@ final class LoginList: NSObject {
           next.codes = ApplePasswordsMatch.typedFirst(ApplePasswordsMatch.codes(found, host: host, domains: domains), user: self.account(on: next.codeSite, in: target))
           guard !next.codes.isEmpty else { return self.close(target) }
           self.present(next, notice: nil)
-        case .failure(.notConnected): self.offerConnect(next)
-        case .failure(let problem): self.present(next, notice: Self.notice(problem))
+        case .failure(let problem):
+          Self.count("listFailed", in: target, kind: problem.kind)
+          if problem == .notConnected { return self.offerConnect(next) }
+          self.present(next, notice: Self.notice(problem))
         }
       }
     }
@@ -228,7 +232,7 @@ final class LoginList: NSObject {
     switch problem {
     case .notConnected: "Apple Passwords isn't connected."
     case .refused: "Apple Passwords didn't share this site's logins. Unlock the Passwords app and try again."
-    case .failed: "Apple Passwords didn't answer. Try again."
+    case .timedOut, .unreadable: "Apple Passwords didn't answer. Try again."
     case .unavailable(.helperMissing): "Apple Passwords' browser helper is missing from this Mac. Update macOS in System Settings › General › Software Update, then try again."
     case .unavailable(.tooOld): "Needs macOS 15.4 or later."
     case .unavailable(.notEntitled): "This copy of Ardia can't use Apple Passwords."
@@ -348,7 +352,7 @@ final class LoginList: NSObject {
             Self.count(filled ? "filled" : "fillFailed", engine: engine)
           }
         case .failure(let problem):
-          Self.count("fillFailed", engine: engine)
+          Self.count("fillFailed", engine: engine, kind: problem.kind)
           guard asked == self.ticket else { return }
           if problem == .notConnected { return self.offerConnect(current) }
           self.present(current, notice: Self.fillFailed)
@@ -368,7 +372,8 @@ final class LoginList: NSObject {
           found.user.lowercased() == code.user.lowercased() && !ApplePasswordsMatch.codes([found], host: current.host, domains: current.domains).isEmpty
         }
         guard let value = fresh?.code, Self.isCode(value) else {
-          Self.count("codeFillFailed", engine: engine)
+          let problem: ApplePasswordsClient.Problem = if case .failure(let failed) = result { failed } else { .unreadable }
+          Self.count("codeFillFailed", engine: engine, kind: problem.kind)
           guard asked == self.ticket else { return }
           if case .failure(.notConnected) = result { return self.offerConnect(current) }
           return self.present(current, notice: Self.codeFillFailed)
@@ -396,11 +401,13 @@ final class LoginList: NSObject {
     NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
   }
 
-  private static func count(_ name: String, in target: LoginListTarget) { count(name, engine: target.loginListEngine) }
+  private static func count(_ name: String, in target: LoginListTarget, kind: String? = nil) { count(name, engine: target.loginListEngine, kind: kind) }
 
-  private static func count(_ name: String, engine: String) {
-    if LaunchConfig.shared.background { NSLog("[logins] Login list counted: %@ in %@", name, engine) }
-    ArdiaEvents.emit("passwords.loginListCounted", data: ArdiaConsentStamp.begin().onto(["name": name, "engine": engine]))
+  private static func count(_ name: String, engine: String, kind: String? = nil) {
+    if LaunchConfig.shared.background { NSLog("[logins] Login list counted: %@ in %@%@", name, engine, kind.map { " (\($0))" } ?? "") }
+    var data = ["name": name, "engine": engine]
+    if let kind { data["kind"] = kind }
+    ArdiaEvents.emit("passwords.loginListCounted", data: ArdiaConsentStamp.begin().onto(data))
   }
 
 

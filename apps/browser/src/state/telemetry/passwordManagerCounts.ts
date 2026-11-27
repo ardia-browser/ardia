@@ -1,4 +1,4 @@
-import type { ApplePasswordsPairing, ApplePasswordsSaveCount, LoginListCount, LoginListEngine } from "../../platform/applePasswords";
+import type { ApplePasswordsFailureKind, ApplePasswordsPairing, ApplePasswordsSaveCount, LoginListCount, LoginListEngine } from "../../platform/applePasswords";
 import type { FieldProviderOpened } from "../../platform/passwordProviders";
 import type { PasswordManagerKind } from "../site/passwordManagerChoice";
 import type { ConsentToken } from "./choice";
@@ -34,6 +34,7 @@ const ME_CARD_FIELDS: Record<"on" | "refused", string> = {
   on: "me_card_turned_on",
   refused: "me_card_access_refused",
 };
+const ME_CARD_FILL_CHROMIUM = "me_card_fills_chromium";
 
 type OnboardingOffer = "applePasswords" | "meCard";
 const OFFER_FIELDS: Record<OnboardingOffer, Record<"accepted" | "declined", string>> = {
@@ -83,6 +84,7 @@ const LOGIN_LIST_FIELDS: Record<LoginListCount, string> = {
   shown: "apple_passwords_login_list_shown",
   filled: "apple_passwords_login_list_filled",
   fillFailed: "apple_passwords_fills_failed",
+  listFailed: "apple_passwords_login_list_fetch_failed",
   connectShown: "apple_passwords_login_list_connect_shown",
   connectPicked: "apple_passwords_login_list_connect_picked",
   notNow: "apple_passwords_login_list_not_now",
@@ -95,6 +97,18 @@ const LOGIN_LIST_ENGINES: readonly LoginListEngine[] = ["chromium", "webkit"];
 const loginListEngineField = (name: LoginListCount, engine: LoginListEngine) => `${LOGIN_LIST_FIELDS[name]}_${engine}`;
 const LOGIN_LIST_ENGINE_FIELDS = (Object.keys(LOGIN_LIST_FIELDS) as LoginListCount[]).flatMap((name) => LOGIN_LIST_ENGINES.map((engine) => loginListEngineField(name, engine)));
 
+const FAILURE_KINDS: Record<ApplePasswordsFailureKind, string> = {
+  notPaired: "not_paired",
+  refused: "refused",
+  helperMissing: "helper_missing",
+  timedOut: "timed_out",
+  unreadable: "unreadable",
+};
+type FailureCategory = "list" | "fill" | "code" | "save";
+const FAILURE_CATEGORIES: Partial<Record<LoginListCount | ApplePasswordsSaveCount, FailureCategory>> = { listFailed: "list", fillFailed: "fill", codeFillFailed: "code", saveFailed: "save" };
+const failureField = (category: FailureCategory, kind: ApplePasswordsFailureKind) => `apple_passwords_${category}_failures_${FAILURE_KINDS[kind]}`;
+const FAILURE_FIELDS = (["list", "fill", "code", "save"] as const).flatMap((category) => (Object.keys(FAILURE_KINDS) as ApplePasswordsFailureKind[]).map((kind) => failureField(category, kind)));
+
 const SAVE_FIELDS: Record<ApplePasswordsSaveCount, string> = {
   saved: "apple_passwords_saves_saved",
   saveFailed: "apple_passwords_saves_failed",
@@ -102,7 +116,7 @@ const SAVE_FIELDS: Record<ApplePasswordsSaveCount, string> = {
 const saveEngineField = (name: ApplePasswordsSaveCount, engine: LoginListEngine) => `${SAVE_FIELDS[name]}_${engine}`;
 const SAVE_ENGINE_FIELDS = (Object.keys(SAVE_FIELDS) as ApplePasswordsSaveCount[]).flatMap((name) => LOGIN_LIST_ENGINES.map((engine) => saveEngineField(name, engine)));
 
-const FIELDS = [...Object.values(LOGIN_LIST_FIELDS), ...LOGIN_LIST_ENGINE_FIELDS, ...Object.values(SAVE_FIELDS), ...SAVE_ENGINE_FIELDS, ...Object.values(PAIRING_FIELDS), ...Object.values(PAIRING_FAILURE_FIELDS), ...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), ...Object.values(ME_CARD_FIELDS), ...Object.values(OFFER_FIELDS).flatMap(Object.values), ...Object.values(ICLOUD_EXTENSION_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
+const FIELDS = [...Object.values(LOGIN_LIST_FIELDS), ...LOGIN_LIST_ENGINE_FIELDS, ...Object.values(SAVE_FIELDS), ...SAVE_ENGINE_FIELDS, ...Object.values(PAIRING_FIELDS), ...Object.values(PAIRING_FAILURE_FIELDS), ...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), ...Object.values(ME_CARD_FIELDS), ...Object.values(OFFER_FIELDS).flatMap(Object.values), ...Object.values(ICLOUD_EXTENSION_FIELDS), ...FAILURE_FIELDS, ME_CARD_FILL_CHROMIUM, RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
 
 let counts: Record<string, number> = {};
 const bump = (field: string, consent?: ConsentToken | null, by = 1) => countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + by));
@@ -126,6 +140,8 @@ export const notePanelHint = (step: PanelHintStep) => bump(HINT_FIELDS[step]);
 
 export const noteMeCardSwitch = (step: keyof typeof ME_CARD_FIELDS, consent?: ConsentToken | null) => bump(ME_CARD_FIELDS[step], consent);
 
+export const noteMeCardFill = (consent: ConsentToken | null) => bump(ME_CARD_FILL_CHROMIUM, consent);
+
 export const noteOnboardingOffer = (offer: OnboardingOffer, answer: "accepted" | "declined", consent?: ConsentToken | null) => bump(OFFER_FIELDS[offer][answer], consent);
 
 export const noteICloudExtension = (step: keyof typeof ICLOUD_EXTENSION_FIELDS, consent?: ConsentToken | null) => bump(ICLOUD_EXTENSION_FIELDS[step], consent);
@@ -139,17 +155,22 @@ export function noteApplePasswordsPairingFailed(kind: PairingFailure, consent: C
   bump(PAIRING_FAILURE_FIELDS[kind], consent);
 }
 
-function bumpWithEngine(field: string, engineField: (engine: LoginListEngine) => string, engine: string | undefined, consent: ConsentToken | null) {
+const knownKind = (kind: unknown): ApplePasswordsFailureKind | undefined => (Object.keys(FAILURE_KINDS) as ApplePasswordsFailureKind[]).find((each) => each === kind);
+
+function bumpWithEngine(name: LoginListCount | ApplePasswordsSaveCount, field: string, engineField: (engine: LoginListEngine) => string, engine: string | undefined, consent: ConsentToken | null, kind?: string) {
   bump(field, consent);
   const known = LOGIN_LIST_ENGINES.find((each) => each === engine);
   if (known) bump(engineField(known), consent);
+  const category = Object.hasOwn(FAILURE_CATEGORIES, name) ? FAILURE_CATEGORIES[name] : undefined;
+  const why = knownKind(kind);
+  if (category && why) bump(failureField(category, why), consent);
 }
 
-export const noteLoginList = (name: LoginListCount, engine: string | undefined, consent: ConsentToken | null) =>
-  bumpWithEngine(LOGIN_LIST_FIELDS[name], (known) => loginListEngineField(name, known), engine, consent);
+export const noteLoginList = (name: LoginListCount, engine: string | undefined, consent: ConsentToken | null, kind?: string) =>
+  bumpWithEngine(name, LOGIN_LIST_FIELDS[name], (known) => loginListEngineField(name, known), engine, consent, kind);
 
-export const noteApplePasswordsSave = (name: ApplePasswordsSaveCount, engine: string | undefined, consent: ConsentToken | null) =>
-  bumpWithEngine(SAVE_FIELDS[name], (known) => saveEngineField(name, known), engine, consent);
+export const noteApplePasswordsSave = (name: ApplePasswordsSaveCount, engine: string | undefined, consent: ConsentToken | null, kind?: string) =>
+  bumpWithEngine(name, SAVE_FIELDS[name], (known) => saveEngineField(name, known), engine, consent, kind);
 
 export function takePasswordManagerCounts(): Record<string, number> {
   const taken = Object.fromEntries(FIELDS.map((field) => [field, counts[field] ?? 0]));

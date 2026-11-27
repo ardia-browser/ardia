@@ -2,6 +2,7 @@
 #import "ArdiaRuntime.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaContentBlockerInternal.h"
+#import "ArdiaEvents.h"
 
 #include <fcntl.h>
 #include <sys/file.h>
@@ -405,6 +406,10 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
 
 - (void)tab:(ArdiaCoreTab *)tab didShowAutofillSuggestions:(NSArray<NSDictionary<NSString *, NSString *> *> *)items {
   NoteEvent(ardia_host::BrowserId(tab), @"autofillSuggestions", @{@"items" : items ?: @[]});
+}
+
+- (void)tab:(ArdiaCoreTab *)tab didFillAutofillAddress:(NSString *)entry {
+  if (entry.length) [ArdiaEvents emit:@"autofill.addressFilled" data:[[ArdiaConsentStamp begin] onto:@{@"entry" : entry}]];
 }
 
 - (void)tab:(ArdiaCoreTab *)tab didShowContextMenu:(NSArray<NSDictionary *> *)items {

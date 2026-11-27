@@ -508,6 +508,27 @@ hook(["bool (*g_ardia_autofill_suggestions_suppressed)(\n",
       "  if (g_ardia_autofill_suggestions_suppressed && IsRootPopup() && web_contents_ &&\n"], edit, MAC_HOOKS)
 PY
 
+hook "$src/chrome/browser/ui/autofill/autofill_popup_controller_impl.cc" "AutofillPopupControllerImpl accepted suggestions" <<'PY'
+old_fn = "void AutofillPopupControllerImpl::AcceptSuggestion(\n"
+decl = ("// Ardia: ArdiaCore (engine/ardiacore) hears which saved address a dropdown filled.\n"
+        "void (*g_ardia_autofill_suggestion_accepted)(\n"
+        "    content::WebContents* web_contents,\n"
+        "    const Suggestion& suggestion) = nullptr;\n\n")
+old = """  delegate_->DidAcceptSuggestion(
+      suggestion, GetSuggestionMetadata(index, was_obscured),
+"""
+new = """  // Ardia: ArdiaCore
+  if (g_ardia_autofill_suggestion_accepted && web_contents_) {
+    g_ardia_autofill_suggestion_accepted(web_contents_.get(), suggestion);
+  }
+""" + old
+def edit(s):
+    assert s.count(old_fn) == 1 and s.count(old) == 1
+    return s.replace(old_fn, decl + old_fn).replace(old, new)
+hook(["void (*g_ardia_autofill_suggestion_accepted)(\n",
+      "  if (g_ardia_autofill_suggestion_accepted && web_contents_) {\n"], edit, MAC_HOOKS)
+PY
+
 hook "$src/components/password_manager/content/browser/content_password_manager_driver.cc" "ContentPasswordManagerDriver fill data" <<'PY'
 namespace_open = "namespace password_manager {\n"
 old_fn = ("void ContentPasswordManagerDriver::PropagateFillDataOnParsingCompletion(\n"

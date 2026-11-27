@@ -24,6 +24,7 @@ test("the Login list counts each time it is shown, each fill and each fill that 
     apple_passwords_login_list_connect_shown: 0,
     apple_passwords_login_list_connect_picked: 0,
     apple_passwords_login_list_not_now: 0,
+    apple_passwords_login_list_fetch_failed: 0,
   });
   client.setSharing(false, "settings");
   counted("shown");
@@ -34,6 +35,7 @@ test("the Login list counts each time it is shown, each fill and each fill that 
     apple_passwords_login_list_connect_shown: 0,
     apple_passwords_login_list_connect_picked: 0,
     apple_passwords_login_list_not_now: 0,
+    apple_passwords_login_list_fetch_failed: 0,
   });
 });
 
@@ -128,4 +130,24 @@ test("each strong password Ardia suggested and filled is counted, also by the ta
   client.setSharing(false, "settings");
   inEngine("strongPasswordUsed", "webkit");
   assert.equal(takePasswordManagerCounts().apple_passwords_strong_passwords_used, 0);
+});
+
+test("story 63: each Login list fetch, fill, code and save failure is counted by its kind", () => {
+  startLoginListCounts();
+  client.setSharing(true, "settings");
+  takePasswordManagerCounts();
+  const epoch = client.consentEpoch();
+  native.emitEvent("passwords.loginListCounted", { name: "listFailed", engine: "chromium", kind: "timedOut", epoch });
+  native.emitEvent("passwords.loginListCounted", { name: "fillFailed", engine: "webkit", kind: "refused", epoch });
+  native.emitEvent("passwords.loginListCounted", { name: "codeFillFailed", engine: "webkit", kind: "unreadable", epoch });
+  native.emitEvent("passwords.applePasswordsSaveCounted", { name: "saveFailed", engine: "chromium", kind: "notPaired", epoch });
+  native.emitEvent("passwords.loginListCounted", { name: "fillFailed", engine: "webkit", epoch });
+  const counts = takePasswordManagerCounts();
+  assert.equal(counts.apple_passwords_login_list_fetch_failed_chromium, 1);
+  assert.equal(counts.apple_passwords_list_failures_timed_out, 1);
+  assert.equal(counts.apple_passwords_fills_failed, 2, "a failure without a kind still counts as a failure");
+  assert.equal(counts.apple_passwords_fill_failures_refused, 1);
+  assert.equal(counts.apple_passwords_code_failures_unreadable, 1);
+  assert.equal(counts.apple_passwords_save_failures_not_paired, 1);
+  client.setSharing(false, "settings");
 });

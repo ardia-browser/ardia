@@ -253,10 +253,16 @@ try {
   });
 
   await check("E29 a Me card entry fills name, company, email, phone and address in a Chromium tab", async () => {
+    await app.eval(`globalThis.__chromiumFills = []; ac.engine.on("autofill.addressFilled", (e) => globalThis.__chromiumFills.push(e.entry ?? null)); return true`);
     const values = await fillInChromium();
     const wrong = filledLike(values, TWO_ADDRESSES);
     if (wrong) throw new Error(`${wrong}; form ${q(values)}`);
-    return values;
+    const ids = (await fromContactsIds()) ?? [];
+    const counted = await until("the Chromium fill reported with its Me card entry", async () => {
+      const entries = await app.eval(`return globalThis.__chromiumFills`);
+      return entries?.some((id) => ids.includes(id)) ? entries : null;
+    }, 4000);
+    return { ...values, counted: counted.length };
   });
 
   await check("E29 a Me card entry fills name, company, email, phone and address in a WebKit tab", async () => {

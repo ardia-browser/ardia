@@ -64,5 +64,12 @@ export const autofill = defineDomain({
       windows: "absent",
     },
   },
-  events: {},
+  events: {
+    addressFilled: {
+      payload: "{ entry: string; epoch?: string }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+  },
 });

@@ -3,6 +3,8 @@ import ExpoModulesCore
 public class AutofillModule: Module {
   public func definition() -> ModuleDefinition {
     Name(Self.calls.moduleName)
+    Events(Self.calls.domain)
+    Self.calls.forwardEvents(to: self)
 
     Self.calls.function
 

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { openExternalURL } from "../../platform/app";
-import { deleteAddress, saveAddress, type AddressInput } from "../../platform/autofill";
+import { deleteAddress, onAddressFilled, saveAddress, type AddressInput } from "../../platform/autofill";
 import { readDocument, saveDocument } from "../../platform/documents";
 import {
   contactsAuthorization,
@@ -18,7 +18,7 @@ import { onWebKitCount } from "../../platform/webkit";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
 import { nativeConsent } from "../telemetry/nativeConsent";
-import { noteMeCardSwitch } from "../telemetry/passwordManagerCounts";
+import { noteMeCardFill, noteMeCardSwitch } from "../telemetry/passwordManagerCounts";
 import { noteWebKitAutofillCount } from "../telemetry/webKitAutofillCounts";
 import { parseSaved, unchanged, versionedJson } from "../../lib/savedDocument";
 
@@ -139,6 +139,8 @@ export const useMeCardFor = (profile: string) => ({
 const NO_ENTRIES: string[] = [];
 export const useMeCardEntryIds = (profile: string) => useMeCard((s) => s.entries[profile] ?? NO_ENTRIES);
 
+const fromMeCard = (entry: string) => Object.values(useMeCard.getState().entries).some((ids) => ids.includes(entry));
+
 function refreshAll(consent: ConsentToken | null) {
   return Promise.all(Object.keys(useMeCard.getState().entries).map((profile) => refresh(profile).catch((e: unknown) => warnFor(consent, "[me card] refresh failed", e))));
 }
@@ -151,7 +153,10 @@ export function startMeCard() {
   onContactsChanged((change) => void refreshAll(nativeConsent(change)));
   onWebKitCount((count) => {
     if (count.name !== "autofillAddressFill" || !count.entry) return;
-    if (Object.values(useMeCard.getState().entries).some((ids) => ids.includes(count.entry!))) noteWebKitAutofillCount("autofillMeCardFill", nativeConsent(count));
+    if (fromMeCard(count.entry)) noteWebKitAutofillCount("autofillMeCardFill", nativeConsent(count));
+  });
+  onAddressFilled((fill) => {
+    if (typeof fill.entry === "string" && fromMeCard(fill.entry)) noteMeCardFill(nativeConsent(fill));
   });
   void refreshAll(consentToken());
 }

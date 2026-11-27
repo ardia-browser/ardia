@@ -107,7 +107,7 @@ enum ApplePasswordsMatch {
     let name = normalized(host)
     let parts = labels(name)
     guard !isAddress(name), parts.count > 1 else { return name }
-    let domain = domains[name] ?? name
+    guard let domain = domains[name] else { return name }
     if domain != name { return domain }
     if parts.count == 2 || domains[probeLabel + name] == name { return name }
     return parts.suffix(2).joined(separator: ".")

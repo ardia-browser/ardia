@@ -56,6 +56,13 @@ private func site(_ host: String) -> String { ApplePasswordsMatch.site(host, dom
     #expect(!ApplePasswordsMatch.sameSite("other.localhost", "example.localhost", domains: chromiumAnswers))
   }
 
+  @Test func `a host Chromium gave no answer for is its own site, so a failed lookup never joins sites under a public suffix`() {
+    #expect(ApplePasswordsMatch.site("bank.co.uk", domains: [:]) == "bank.co.uk")
+    #expect(!ApplePasswordsMatch.sameSite("bank.co.uk", "evil.co.uk", domains: [:]))
+    #expect(!ApplePasswordsMatch.sameSite("alice.github.io", "bob.github.io", domains: [:]))
+    #expect(ApplePasswordsMatch.sameSite("www.example.com", "www.example.com", domains: [:]))
+  }
+
   private let codes = [
     ApplePasswordsCode(user: "ann@example.com", domain: "example.localhost", source: "totp", code: ""),
     ApplePasswordsCode(user: "Bob@Example.com", domain: "accounts.example.localhost", source: "totp", code: ""),

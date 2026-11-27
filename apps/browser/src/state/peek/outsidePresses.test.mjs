@@ -11,7 +11,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
 const { forgetPeekStage, notePeekStageState } = await import("./gesturePresses.ts");
 const { shownPeek } = await import("./peek.ts");
-const { cancelPeekOutsidePress, endPeekOutsidePress, movePeekOutsidePress, notePressSwitchesProfile, OUTSIDE_CLICK_SLOP, pressPeekOutsideOnDragRegion, startPeekOutsidePress } = await import("./outsidePresses.ts");
+const { cancelPeekOutsidePress, endPeekOutsidePress, movePeekOutsidePress, notePressSwitchesProfile, noteTabDragKeepsPeek, OUTSIDE_CLICK_SLOP, pressPeekOutsideOnDragRegion, startPeekOutsidePress } = await import("./outsidePresses.ts");
 const { notePressKeepsPeek } = await import("./keptPresses.ts");
 const { clickTab } = await import("../sidebar/actions.ts");
 after(() => client.setSharing(false, "settings"));
@@ -98,6 +98,14 @@ test("a click on another tab that asks for it keeps the Peek even while the stor
   click(w, AT, 0, () => clickTab(w, b, { metaKey: true }));
   assert.equal(activeTabId(S(), w), a, "a ⌘-click only selected tab b");
   assert.equal(S().peeks[a], undefined, "so it was a click outside");
+});
+
+test("a tab strip drag that dropped within the click slop (pinning the first tab) keeps the Peek; an ended drag of a gone tab marks nothing", () => {
+  const { w, a, shown } = windowWithTwoPeeks();
+  click(w, { x: AT.x - 7, y: AT.y }, 0, () => noteTabDragKeepsPeek(a));
+  assert.equal(S().peeks[a]?.tabId, shown);
+  click(w, AT, 0, () => noteTabDragKeepsPeek("gone"));
+  assert.equal(S().peeks[a], undefined);
 });
 
 test("a profile dot keeps the Peek only when it switches to another space", () => {

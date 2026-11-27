@@ -14,6 +14,7 @@ import { autoScrollSpeed } from "./stripScroll";
 import { noteTabStripEdgeScroll } from "../../state/telemetry/tabStripCounts";
 import { endHeldTabPress, TAB_CLICK_SLOP } from "../../state/sidebar/heldTabPress";
 import { reorderTick } from "../../state/drag/reorderTick";
+import { noteTabDragKeepsPeek } from "../../state/peek/outsidePresses";
 
 const IDLE = { kind: "idle" } as const;
 
@@ -243,6 +244,7 @@ export function useStripDrag(item: StripDrag) {
           const stayed = to === from || (from < 0 && outcome.kind === "handedOff" && !lifted && !carried);
           const click = stayed && Math.max(far, travel(g.moveX, g.moveY), travel(e.nativeEvent.pageX, e.nativeEvent.pageY)) <= TAB_CLICK_SLOP;
           endHeldTabPress(ids, click ? e : null);
+          if (!click && ids[0]) noteTabDragKeepsPeek(ids[0]);
           if (outcome.kind === "across") return settleAcross(outcome.landing);
           if (outcome.kind !== "settle") return reset();
           settleInto(to === from ? null : to, () => {

@@ -57,3 +57,8 @@ export function notePressSwitchesProfile(windowId: string, profileId: string) {
   const current = useBrowser.getState().windows[windowId]?.profileId;
   if (current && current !== profileId) notePressKeepsPeek(windowId);
 }
+
+export function noteTabDragKeepsPeek(tabId: string) {
+  const windowId = useBrowser.getState().tabs[tabId]?.windowId;
+  if (windowId) notePressKeepsPeek(windowId);
+}

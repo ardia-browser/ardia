@@ -598,24 +598,28 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
     syncing · last synced %@", plus "Sync folder unavailable" when the folder itself isn't there (a drive is
     unplugged, iCloud Drive is off, or the folder was deleted), with the reason under the row. Downloads still to come
     add "· waiting for N files to download". A cycle that finds the folder or this phrase's data gone at any point,
-    at its start, on a write or on a read, reports that state and never "updated" (the Mac's read reports a missing
-    chain itself; on Linux and Windows, whose engine reads a missing chain as an empty folder, a read that comes back
-    empty for a scope whose files this computer knew checks the chain before it is used): a whole folder gone is "Sync folder unavailable", this phrase's folder gone from a folder that is
-    there is the waiting state below.
+    at its start, on a write or on a read, reports that state and never "updated": a whole folder gone is "Sync
+    folder unavailable", this phrase's folder gone from a folder that is there is the waiting state below. A failed
+    write is placed by asking for the folder's state (the Mac's `ERR_SYNC_CHAIN_MISSING` and the Linux and Windows
+    engine's `ERR_SYNC_FOLDER` alike). The Mac's read reports a missing chain itself. Linux and Windows read a missing
+    chain as an empty folder, so an empty read of a scope whose files this computer knew checks the chain at once,
+    and an empty read of a scope with no known files has the cycle check the chain once before "updated".
   - **Recreate Folder…** takes the place of Connect Another Device… only when the folder is missing ("Sync folder
     unavailable"), never in the waiting state: a cloud folder can look empty, or hold only `.DS_Store`, while its files
-    are still downloading, and a new chain there would race the one arriving (`folderRecovery.ts`). After a confirm it saves what this Mac owes the new folder to `sync.json` first (the scopes
-    whose snapshot is owed, and a mark that a whole cycle is owed), checks the folder again, stops if the app is
-    quitting, and then calls `createChainInNewFolder`. On the Mac that builds the folder and this phrase's chain in a
-    temporary folder on the same volume and renames it into place with `RENAME_EXCL`, so the pair appears at once or
-    not at all. A folder that appears while Recreate runs holding only Finder metadata (`.DS_Store`, `.localized`,
-    `Icon\r`, `._*`) loses that metadata and is replaced by a plain rename, which only replaces an empty folder; one
-    that was already there when Recreate checked the chain is refused. Anything else there, another phrase's chain included, is left alone and Recreate answers that a
-    folder is there. A failed try leaves only its own temporary folder, which is removed. Linux and Windows serve the
-    call in `hostSync.ts`: they refuse a folder that is there and otherwise use the engine's `createChain`, which keeps
-    a short window and can leave an empty folder if its second mkdir fails, until their engines get the same call
-    (#4638). Pairing stays off until a whole cycle has completed against the new folder, so every owed snapshot and
-    every write queued while the folder was gone has landed.
+    are still downloading, and a new chain there would race the one arriving (`folderRecovery.ts`). After a confirm it
+    saves what this Mac owes the new folder to `sync.json` first (the scopes whose snapshot is owed, and a mark that a
+    whole cycle is owed), checks the folder again, stops if the app is quitting, and then calls
+    `createChainInNewFolder`. Recreate never deletes, replaces or merges into anything it didn't make in that call:
+    if anything is at the folder's path when it gets there, empty or holding only Finder files included, it refuses
+    and the waiting state shows. On the Mac the call builds the folder and this phrase's chain in a temporary folder on
+    the same volume and renames it into place with `RENAME_EXCL`, so the pair appears at once or not at all. Where
+    the volume can't do that rename (ExFAT and FAT32 answer `ENOTSUP`), it makes the folder with an exclusive mkdir
+    and then the chain, and on a failure removes only those two folders, without recursing. A failed try leaves
+    nothing behind, so it never blocks the next. Linux and Windows serve the call in `hostSync.ts`: they refuse a
+    folder that is there and otherwise use the engine's `createChain`, which keeps a short window and can leave an
+    empty folder if its second mkdir fails, until their engines get the same call (#4638). Pairing stays off until a
+    whole cycle has completed against the new folder, so every owed snapshot and every write queued while the folder
+    was gone has landed.
   - **Connect Another Device…** shows the steps for the other Mac and a QR code of the phrase: the
     iPhone app scans it (Sync With Mac), or the iPhone's camera copies it to paste on another Mac with Universal
     Clipboard. It also has Show

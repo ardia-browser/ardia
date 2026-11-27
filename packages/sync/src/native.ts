@@ -10,7 +10,6 @@ export type FolderInfo = {
   exists: boolean;
   writable: boolean;
   hasSyncData: boolean;
-  vacant?: boolean;
 };
 
 export type PhraseResult =

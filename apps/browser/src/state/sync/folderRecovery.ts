@@ -62,20 +62,30 @@ export async function publishChainGone(status: string, { native, folder, device,
   return true;
 }
 
-export const chainCheckedTransport = (native: SyncNativeApi, folder: string): Transport => {
+const chainGoneError = () => Object.assign(new Error("This device's data is gone from the sync folder"), { code: "ERR_SYNC_CHAIN_MISSING" });
+
+export function chainCheckedTransport(native: SyncNativeApi, folder: string): { transport: Transport; confirmChain: () => Promise<void> } {
   const transport = folderTransport(native, folder);
+  let unconfirmedEmptyRead = false;
   const read: Transport["read"] = async (scope, known) => {
     const listing = await transport.read(scope, known);
-    if (known.length && !listing.present.length && (await native.chainStatus(folder)) !== "ok") {
-      throw Object.assign(new Error("This device's data is gone from the sync folder"), { code: "ERR_SYNC_CHAIN_MISSING" });
-    }
+    if (listing.present.length) return listing;
+    if (!known.length) unconfirmedEmptyRead = true;
+    else if ((await native.chainStatus(folder)) !== "ok") throw chainGoneError();
     return listing;
   };
-  return { ...transport, read };
-};
+  const confirmChain = async () => {
+    if (unconfirmedEmptyRead && (await native.chainStatus(folder)) !== "ok") throw chainGoneError();
+  };
+  return { transport: { ...transport, read }, confirmChain };
+}
 
-export const chainStatusAfterMissingWrite = (native: SyncNativeApi, folder: string) =>
-  native.chainStatus(folder).then((status) => (status === "unavailable" ? status : "missing"), () => "missing");
+export async function folderLossAfter(native: SyncNativeApi, folder: string, code: unknown): Promise<"unavailable" | "missing" | null> {
+  if (code !== "ERR_SYNC_CHAIN_MISSING" && code !== "ERR_SYNC_FOLDER") return null;
+  const status = await native.chainStatus(folder).catch(() => null);
+  if (status === "unavailable" || status === "missing") return status;
+  return code === "ERR_SYNC_CHAIN_MISSING" ? "missing" : null;
+}
 
 const folderExistsError = (error: unknown) => (error as { code?: unknown } | null)?.code === "ERR_SYNC_FOLDER_EXISTS";
 
@@ -155,7 +165,7 @@ export async function recreateChainFolder(
       noteFolderRecreate("failed", consent);
       return { error: "cloudDriveOff" };
     }
-    if (chain === "missing" || (info?.exists && !info.vacant)) {
+    if (chain === "missing" || info?.exists) {
       noteFolderRecreate("failed", consent);
       return { error: "exists" };
     }
@@ -176,7 +186,7 @@ export async function recreateChainFolder(
       doc.reseedCycleOwed = true;
       await ctx.saveNow();
       const again = await native.folderInfo?.(folder).catch(() => null);
-      if (again?.exists && !again.vacant) {
+      if (again?.exists) {
         await putBack();
         noteFolderRecreate("failed", consent);
         return { error: "exists" };

@@ -27,32 +27,39 @@ public final class SyncVault {
     public init() {}
   }
 
-  public static func isFinderMetadata(_ name: String) -> Bool {
-    [".DS_Store", ".localized", "Icon\r"].contains(name) || name.hasPrefix("._")
-  }
-
-  public static func isVacant(_ folder: URL) -> Bool {
-    guard let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return false }
-    return names.allSatisfy(isFinderMetadata)
-  }
+  var renameExclusive: (_ from: String, _ to: String) -> Int32 = { renamex_np($0, $1, UInt32(RENAME_EXCL)) == 0 ? 0 : errno }
 
   public func createChainInNewFolder() throws {
     let parent = folder.deletingLastPathComponent()
     try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
-    let staging = try fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: parent, create: true)
-    defer { try? fileManager.removeItem(at: staging) }
-    let staged = staging.appendingPathComponent(folder.lastPathComponent, isDirectory: true)
-    try fileManager.createDirectory(at: staged, withIntermediateDirectories: false)
-    try fileManager.createDirectory(at: staged.appendingPathComponent(keys.chainTag, isDirectory: true), withIntermediateDirectories: false)
-    if renamex_np(staged.path, folder.path, UInt32(RENAME_EXCL)) == 0 { return }
-    guard errno == EEXIST else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
-    guard Self.isVacant(folder) else { throw FolderExists() }
-    for name in (try? fileManager.contentsOfDirectory(atPath: folder.path)) ?? [] where Self.isFinderMetadata(name) {
-      try? fileManager.removeItem(at: folder.appendingPathComponent(name))
+    if let staging = try? fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: parent, create: true) {
+      defer { try? fileManager.removeItem(at: staging) }
+      let staged = staging.appendingPathComponent(folder.lastPathComponent, isDirectory: true)
+      try fileManager.createDirectory(at: staged, withIntermediateDirectories: false)
+      try fileManager.createDirectory(at: staged.appendingPathComponent(keys.chainTag, isDirectory: true), withIntermediateDirectories: false)
+      switch renameExclusive(staged.path, folder.path) {
+      case 0: return
+      case EEXIST: throw FolderExists()
+      case ENOTSUP, EINVAL, EXDEV: break
+      case let code: throw POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)
+      }
     }
-    if rename(staged.path, folder.path) == 0 { return }
-    if [ENOTEMPTY, EEXIST, ENOTDIR, EISDIR].contains(errno) { throw FolderExists() }
-    throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+    try createChainInPlace()
+  }
+
+  private func createChainInPlace() throws {
+    do {
+      try fileManager.createDirectory(at: folder, withIntermediateDirectories: false)
+    } catch let error as CocoaError where error.code == .fileWriteFileExists {
+      throw FolderExists()
+    }
+    do {
+      try fileManager.createDirectory(at: chainURL, withIntermediateDirectories: false)
+    } catch {
+      _ = rmdir(chainURL.path)
+      _ = rmdir(folder.path)
+      throw error
+    }
   }
 
   @discardableResult

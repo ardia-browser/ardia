@@ -22,7 +22,6 @@ public class SyncModule: Module, SyncNative {
       "exists": exists,
       "writable": exists && FileManager.default.isWritableFile(atPath: url.path),
       "hasSyncData": exists && SyncFolder.hasSyncData(url),
-      "vacant": exists && SyncVault.isVacant(url),
     ]
   }
 

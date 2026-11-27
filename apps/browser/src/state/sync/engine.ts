@@ -16,7 +16,7 @@ import { markNewSync, sessionMarkHooks, settleLaunchMark } from "./sessionMarks"
 import { noteChainStatus, noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
-import { chainCheckedTransport, chainStatusAfterMissingWrite, publishChainGone, recreateChainFolder, reseedPendingScopes, type FolderRecreateResult } from "./folderRecovery";
+import { chainCheckedTransport, folderLossAfter, publishChainGone, recreateChainFolder, reseedPendingScopes, type FolderRecreateResult } from "./folderRecovery";
 import { freezeRemovals, markDeviceRemoved, markRemoved, settleRemovals } from "./profileRemoval";
 import { profileScope } from "./records";
 import { queueSend, sendTargetsIn } from "./sentTabs";
@@ -116,7 +116,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
   try {
     watchExtensions();
     if (await gone(await native.chainStatus(folder))) return;
-    const transport = chainCheckedTransport(native, folder), clock = clockFor(device);
+    const { transport, confirmChain } = chainCheckedTransport(native, folder), clock = clockFor(device);
     if (doc.reseedScopes?.length) await reseedPendingScopes({ native, doc, folder, device, clock, watchScope, persistJournal, save });
     const app = appScopeOf(doc, consent);
     if (freezeRemovals(doc)) save();
@@ -157,6 +157,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       }
     }
     doc.clock = clock.last;
+    await confirmChain();
     delete doc.reseedScopes;
     delete doc.reseedCycleOwed;
     doc.lastSyncedAt = Date.now();
@@ -164,7 +165,8 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     publishUi({ status: "updated", error: null, pending, dataMissing: false });
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;
-    if (code === "ERR_SYNC_CHAIN_MISSING") await gone(await chainStatusAfterMissingWrite(native, folder));
+    const lost = await folderLossAfter(native, folder, code);
+    if (lost) await gone(lost);
     else if (code === "ERR_SYNC_FOLDER_UNREADABLE") {
       publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
     } else if (useSync.getState().status !== "locked") {

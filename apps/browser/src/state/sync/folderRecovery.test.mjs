@@ -18,6 +18,7 @@ let writeFindsChainGone = false;
 let beforeWrite = null;
 let beforeRead = null;
 let onFolderInfo = null;
+let desktopWriteErrors = false;
 
 const chainOf = (folder) => folders.get(folder);
 const scopeOf = (folder, chain, scope) => {
@@ -46,7 +47,6 @@ const native = {
     exists: folders.has(path),
     writable: true,
     hasSyncData: (chainOf(path)?.size ?? 0) > 0,
-    vacant: folders.has(path) && chainOf(path).size === 0,
   }),
   chooseFolder: async () => null,
   chainStatus: async (folder) => {
@@ -63,12 +63,13 @@ const native = {
   createChainInNewFolder: async (folder) => {
     onCreateChain?.(folder);
     if (createChainError) throw createChainError;
-    if (chainOf(folder)?.size) throw Object.assign(new Error("A folder is already there"), { code: "ERR_SYNC_FOLDER_EXISTS" });
+    if (folders.has(folder)) throw Object.assign(new Error("A folder is already there"), { code: "ERR_SYNC_FOLDER_EXISTS" });
     plant(folder, OURS);
   },
   deleteChain: async (folder) => void chainOf(folder)?.delete(OURS),
   write: async (folder, scope, payload) => {
     beforeWrite?.(folder);
+    if (desktopWriteErrors && !folders.has(folder)) throw Object.assign(new Error(`Couldn't write to ${folder}: No such file or directory`), { code: "ERR_SYNC_FOLDER" });
     if (writeFindsChainGone || !chainOf(folder)?.has(OURS)) throw Object.assign(new Error("This device's data is gone from the sync folder"), { code: "ERR_SYNC_CHAIN_MISSING" });
     if (writeFailsAfter-- <= 0) throw new Error("disk full");
     const id = `f${++ids}`;
@@ -76,7 +77,7 @@ const native = {
     return id;
   },
   read: async (folder, scope, known) => {
-    beforeRead?.(folder);
+    beforeRead?.(folder, scope, known);
     if (!chainOf(folder)?.has(OURS)) return { files: [], pending: [], damaged: [], present: [] };
     const here = [...(chainOf(folder).get(OURS).get(scope) ?? [])];
     return { files: here.filter(([id]) => !known.includes(id)).map(([id, payload]) => ({ id, payload })), pending: [], damaged: [], present: here.map(([id]) => id) };
@@ -110,6 +111,7 @@ const reset = () => {
   beforeWrite = null;
   beforeRead = null;
   onFolderInfo = null;
+  desktopWriteErrors = false;
   heldDocSaves.on = false;
   heldDocSaves.queue.length = 0;
   shell.docs.clear();
@@ -640,7 +642,7 @@ test("pairing stays off until the writes queued while the folder was gone have l
   assert.ok(Object.values(phone.records).some((r) => r.v?.t === "Made Offline"), "the offline edit reached the new folder before pairing opened");
 });
 
-test("a folder that looks empty while sync waits for its data is never recreated, but one that appears empty while Recreate runs is used", async () => {
+test("Recreate never takes over a folder that is there, empty or not, whether it was there at the status check or appeared after it", async () => {
   reset();
   const engine = await brokenFolder("vacant-folder");
   folders.set(SYNC_FOLDER, new Map());
@@ -656,7 +658,60 @@ test("a folder that looks empty while sync waits for its data is never recreated
     afterChainStatus = null;
     folders.set(folder, new Map());
   };
-  assert.deepEqual(await engine.recreateSyncFolder(), { ok: "recreated" }, "a folder holding only Finder files that appears after the status check is taken over");
-  assert.ok(chainOf(SYNC_FOLDER).has(OURS));
+  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" }, "an empty folder that appears while Recreate runs is left alone too");
+  assert.equal(chainOf(SYNC_FOLDER).size, 0);
+});
+
+test("a chain removed before the read of a scope with no known files waits for its data instead of reporting Updated, and an empty read with a healthy chain still passes", async () => {
+  reset();
+  const engine = await import("./engine.ts?chain-gone-before-empty-scope");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  await engine.syncNow();
+  await engine.syncNow();
+  for (const type of ["bookmarks", "history", "tabs", "pinned", "passwords", "extensions", "settings"]) engine.setTypeSynced(type, false);
+  let emptyScopeRead = false;
+  beforeRead = (folder, scope, known) => {
+    if (!known.length) emptyScopeRead = true;
+  };
+  S().createProfile({ name: "Work" });
+  await engine.syncNow();
+  assert.ok(emptyScopeRead, "a scope with no known files is read in each cycle");
+  assert.equal(engine.useSync.getState().status, "updated", "an empty scope with its chain there is a normal cycle");
+
+  let chain = null;
+  S().createProfile({ name: "Home" });
+  beforeRead = (folder, scope, known) => {
+    if (known.length) return;
+    beforeRead = null;
+    chain = chainOf(folder).get(OURS);
+    chainOf(folder).delete(OURS);
+  };
+  await engine.syncNow();
+  assert.ok(chain, "the chain went before that scope's read");
+  const waiting = engine.useSync.getState();
+  assert.equal(waiting.status, "stalled");
+  assert.equal(waiting.dataMissing, true);
+  chainOf(SYNC_FOLDER).set(OURS, chain);
+  await engine.syncNow();
   assert.equal(engine.useSync.getState().status, "updated");
+});
+
+test("a Linux or Windows write that fails because the whole folder went shows the folder as unavailable, with Recreate", async () => {
+  reset();
+  desktopWriteErrors = true;
+  const engine = await import("./engine.ts?desktop-folder-gone-at-write");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  await engine.syncNow();
+  S().addBookmark({ profileId: "default", url: "https://late.example/", title: "Late" });
+  beforeWrite = (folder) => {
+    beforeWrite = null;
+    folders.delete(folder);
+  };
+  await engine.syncNow();
+  const state = engine.useSync.getState();
+  assert.equal(state.status, "offline");
+  assert.equal(state.dataMissing, false);
+  assert.match(state.error ?? "", /sync folder is missing/i);
 });

@@ -4,7 +4,7 @@ import { isQuitting } from "../app/quit";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import type { ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
-import { noteChainStatus, noteFolderRecreate, noteFolderUnavailable } from "./cycleWork";
+import { noteChainMissing, noteFolderRecreate, noteFolderUnavailable } from "./cycleWork";
 import { historyExpired } from "./historyAdapter";
 import { APP_SCOPE, type SyncDoc, type SyncStatus, type SyncUi } from "./syncDoc";
 
@@ -48,16 +48,16 @@ export function unavailableFolderError(info: Pick<FolderInfo, "inICloud" | "iClo
 
 export const CHAIN_MISSING_TEXT = `This device is out of sync. Sync may have been reset from another device, or the sync folder hasn’t finished syncing. Everything on this ${PLATFORM_TERMS.computer} is kept, and sync carries on once its data is back. To set sync up again, choose Stop Syncing.`;
 
-type ChainGoneContext = { native: SyncNativeApi; folder: string; device: string; consent: ConsentToken | null; wasOffline: boolean; publish: (patch: Partial<SyncUi>) => void };
+type ChainGoneContext = { native: SyncNativeApi; doc: SyncDoc; folder: string; consent: ConsentToken | null; wasOffline: boolean; publish: (patch: Partial<SyncUi>) => void };
 
-export async function publishChainGone(status: string, { native, folder, device, consent, wasOffline, publish }: ChainGoneContext): Promise<boolean> {
+export async function publishChainGone(status: string, { native, doc, folder, consent, wasOffline, publish }: ChainGoneContext): Promise<boolean> {
   if (status === "unavailable") {
     if (!wasOffline) noteFolderUnavailable(consent);
     publish({ status: "offline", error: unavailableFolderError((await native.folderInfo?.(folder).catch(() => null)) ?? null), dataMissing: false });
     return true;
   }
   if (status !== "missing") return false;
-  noteChainStatus(consent, device, "missing");
+  noteChainMissing(doc, folder, consent);
   publish({ status: "stalled", error: CHAIN_MISSING_TEXT, dataMissing: true });
   return true;
 }
@@ -159,7 +159,7 @@ export async function reseedPendingScopes({ native, doc, folder, device, clock, 
 export async function recreateChainFolder(
   ctx: ReseedContext & { saveNow: () => Promise<void>; consent: ConsentToken | null; onUpdating: () => void; publish: (patch: Partial<SyncUi>) => void },
 ): Promise<FolderRecreateResult> {
-  const { native, doc, folder, device, consent, onUpdating, publish } = ctx;
+  const { native, doc, folder, consent, onUpdating, publish } = ctx;
   let created = false;
   try {
     const chain = await native.chainStatus(folder);
@@ -217,7 +217,7 @@ export async function recreateChainFolder(
     if (created) {
       warnFor(consent, "[sync] recreating sync folder failed while uploading data", error);
       const lost = await folderLossAfter(native, folder, error, false);
-      if (lost === "unavailable" || lost === "missing") await publishChainGone(lost, { native, folder, device, consent, wasOffline: false, publish });
+      if (lost === "unavailable" || lost === "missing") await publishChainGone(lost, { native, doc, folder, consent, wasOffline: false, publish });
       else publish({ status: "stalled", error: message });
       return { error: "uploadFailed", message };
     }

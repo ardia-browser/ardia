@@ -13,7 +13,7 @@ import { editClock, startEditClock } from "./editClock";
 import { addSyncedProfile, appScopeOf, linkProfiles, readyToPair, retireDeletedProfile } from "./profileLinks";
 import { summarize } from "./syncSummary";
 import { markNewSync, sessionMarkHooks, settleLaunchMark } from "./sessionMarks";
-import { noteChainStatus, noteCycle, timedCycle } from "./cycleWork";
+import { noteChainHealthy, noteChainMissing, noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
 import { chainCheckedTransport, folderLossAfter, publishChainGone, recreateChainFolder, reseedPendingScopes, type FolderRecreateResult } from "./folderRecovery";
@@ -44,7 +44,6 @@ export const currentSyncFolder = () => useSync.getState().folder;
 let doc: SyncDoc = emptyDoc();
 let cycle: Promise<void> | null = null;
 let again = false;
-let lossFirstSeen: ConsentToken | null | undefined;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let stateLoading: Promise<unknown> = Promise.resolve();
@@ -109,16 +108,14 @@ const clockFor = (device: string) => (editClock().device !== device && startEdit
 
 async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring, forcePasswords }: Required<CycleOptions>) {
   const consent = consentToken();
-  const firstSeen = () => (lossFirstSeen === undefined ? consent : lossFirstSeen);
-  const gone = (status: string, seen = consent) => publishChainGone(status, { native, folder, device, consent: seen, wasOffline: useSync.getState().status === "offline", publish: publishUi });
+  const gone = (status: string) => publishChainGone(status, { native, doc, folder, consent, wasOffline: useSync.getState().status === "offline", publish: publishUi });
   await stateLoading;
   if (useSync.getState().status === "locked") return;
   clearTimeout(timer);
   const slow = setTimeout(() => useSync.getState().status === "updated" && publishUi({ status: "updating" }), 1000);
   try {
     watchExtensions();
-    const opening = await native.chainStatus(folder);
-    if (opening !== "ok" && (await gone(opening, firstSeen()))) return void (lossFirstSeen = undefined);
+    if (await gone(await native.chainStatus(folder))) return;
     const { transport, confirmChain } = chainCheckedTransport(native, folder), clock = clockFor(device);
     if (doc.reseedScopes?.length) await reseedPendingScopes({ native, doc, folder, device, clock, watchScope, persistJournal, save });
     const app = appScopeOf(doc, consent);
@@ -164,16 +161,15 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     delete doc.reseedScopes;
     delete doc.reseedCycleOwed;
     doc.lastSyncedAt = Date.now();
-    noteChainStatus(consent, device, "ok");
-    lossFirstSeen = undefined;
+    noteChainHealthy(doc, folder);
     publishUi({ status: "updated", error: null, pending, dataMissing: false });
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;
-    const lost = await folderLossAfter(native, folder, error, lossFirstSeen === undefined);
-    const seen = firstSeen();
-    lossFirstSeen = lost === "back" ? consent : undefined;
-    if (lost === "back") again = true;
-    else if (lost) await gone(lost, seen);
+    const lost = await folderLossAfter(native, folder, error, !doc.chainOutage);
+    if (lost === "back") {
+      noteChainMissing(doc, folder, consent, false);
+      again = true;
+    } else if (lost) await gone(lost);
     else if (code === "ERR_SYNC_FOLDER_UNREADABLE") {
       publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
     } else if (useSync.getState().status !== "locked") {

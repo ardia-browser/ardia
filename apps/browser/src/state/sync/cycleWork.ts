@@ -1,6 +1,7 @@
 import { consentToken, onConsentPeriodChange, stillValid, type ConsentToken } from "../telemetry/choice";
 import { beginActivity } from "../app/jobActivity";
 import { takeFolderCounts } from "./folderMove";
+import type { ChainOutage } from "./syncDoc";
 import { takeReturnedDeviceRemovals, takeReturnedProfileRemovals, takeSyncedDeviceRemovals, takeSyncedProfileRemovals } from "./profileRemoval";
 
 const NO_CYCLES = { cycles: 0, ms: 0, longestMs: 0 };
@@ -9,19 +10,24 @@ let reapplied = 0;
 let folderUnavailable = 0;
 let folderRecreated = 0;
 let folderRecreateFailed = 0;
-let chainGoneFor: string | null = null;
 let chainCounts = { missing: 0, returned: 0 };
 
-onConsentPeriodChange(() => ((work = NO_CYCLES), (reapplied = 0), (chainGoneFor = null), (chainCounts = { missing: 0, returned: 0 }), (folderUnavailable = 0), (folderRecreated = 0), (folderRecreateFailed = 0)));
+onConsentPeriodChange(() => ((work = NO_CYCLES), (reapplied = 0), (chainCounts = { missing: 0, returned: 0 }), (folderUnavailable = 0), (folderRecreated = 0), (folderRecreateFailed = 0)));
 
-export function noteChainStatus(token: ConsentToken | null, device: string, status: "ok" | "missing") {
-  if (token === null || !stillValid(token)) return status;
-  const returned = chainGoneFor === device && status === "ok";
-  const gone = chainGoneFor !== device && status === "missing";
-  chainGoneFor = status === "missing" ? device : null;
-  if (gone) chainCounts.missing++;
-  if (returned) chainCounts.returned++;
-  return status;
+type OutageHolder = { chainOutage?: ChainOutage };
+
+export function noteChainMissing(holder: OutageHolder, folder: string, consent: ConsentToken | null, verdict = true) {
+  const outage = holder.chainOutage?.folder === folder ? holder.chainOutage : (holder.chainOutage = { folder, seen: consent, counted: false });
+  if (!verdict || outage.counted || !stillValid(outage.seen as ConsentToken | null)) return;
+  outage.counted = true;
+  chainCounts.missing++;
+}
+
+export function noteChainHealthy(holder: OutageHolder, folder: string) {
+  const outage = holder.chainOutage;
+  if (!outage) return;
+  delete holder.chainOutage;
+  if (outage.folder === folder && outage.counted && stillValid(outage.seen as ConsentToken | null)) chainCounts.returned++;
 }
 
 export function timedCycle(startedAt: number, cycle: Promise<void>): Promise<void> {

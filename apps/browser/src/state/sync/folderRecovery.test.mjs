@@ -821,3 +821,89 @@ test("a loss first seen while sharing was off is not counted when the next cycle
     telemetry.setSharing(false, "settings");
   }
 });
+
+const outageEngine = async (name, sharing) => {
+  const telemetry = await import("../telemetry/client.ts");
+  telemetry.loadChoice();
+  telemetry.setSharing(sharing, "settings");
+  const engine = await import(`./engine.ts?${name}`);
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  await engine.syncNow();
+  engine.takeSnapshotWrites();
+  return { telemetry, engine };
+};
+
+test("an outage first seen with sharing off is never counted, however long it lasts after sharing turns on", async () => {
+  reset();
+  const { telemetry, engine } = await outageEngine("outage-off-at-first-sight", false);
+  try {
+    chainOf(SYNC_FOLDER).delete(OURS);
+    await engine.syncNow();
+    telemetry.setSharing(true, "settings");
+    for (let i = 0; i < 3; i++) await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, true);
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 0);
+  } finally {
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+test("an outage first seen in one consent period is never counted in a later one, however many cycles it lasts", async () => {
+  reset();
+  const { telemetry, engine } = await outageEngine("outage-period-changes", true);
+  try {
+    writeFindsChainGone = true;
+    S().addBookmark({ profileId: "default", url: "https://one.example/", title: "One" });
+    await engine.syncNow();
+    telemetry.setSharing(false, "settings");
+    telemetry.setSharing(true, "settings");
+    for (let i = 0; i < 4; i++) await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, true);
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 0);
+  } finally {
+    writeFindsChainGone = false;
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+test("a relaunch before the verdict keeps the consent the outage was first seen under", async () => {
+  reset();
+  const { telemetry } = await outageEngine("outage-relaunch-before", false);
+  try {
+    writeFindsChainGone = true;
+    S().addBookmark({ profileId: "default", url: "https://one.example/", title: "One" });
+    const first = await import("./engine.ts?outage-relaunch-before");
+    await first.syncNow();
+    assert.equal(first.useSync.getState().dataMissing, false, "the first look defers its verdict");
+    telemetry.setSharing(true, "settings");
+    const relaunched = await import("./engine.ts?outage-relaunch-before-2");
+    relaunched.startSync();
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+    for (let i = 0; i < 2; i++) await relaunched.syncNow();
+    assert.equal(relaunched.useSync.getState().dataMissing, true);
+    assert.equal(relaunched.takeSnapshotWrites().chainMissing, 0);
+  } finally {
+    writeFindsChainGone = false;
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+test("a relaunch after an outage was counted never counts it again", async () => {
+  reset();
+  const { telemetry, engine } = await outageEngine("outage-relaunch-after", true);
+  try {
+    chainOf(SYNC_FOLDER).delete(OURS);
+    await engine.syncNow();
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 1, "counted before the relaunch");
+    assert.equal(JSON.parse(shell.docs.get("sync.json")).chainOutage?.counted, true, "the count is saved with the outage");
+    const relaunched = await import("./engine.ts?outage-relaunch-after-2");
+    relaunched.startSync();
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+    for (let i = 0; i < 2; i++) await relaunched.syncNow();
+    assert.equal(relaunched.useSync.getState().dataMissing, true);
+    assert.equal(relaunched.takeSnapshotWrites().chainMissing, 0);
+  } finally {
+    telemetry.setSharing(false, "settings");
+  }
+});

@@ -26,3 +26,16 @@ test("the Login list counts each time it is shown, each fill and each fill that 
   counted("shown");
   assert.deepEqual(listCounts(takePasswordManagerCounts()), { apple_passwords_login_list_shown: 0, apple_passwords_login_list_filled: 0, apple_passwords_fills_failed: 0 });
 });
+
+test("each login saved to Apple Passwords and each save it refused are counted, only while sharing is on", () => {
+  const saveCounts = (counts) => Object.fromEntries(Object.entries(counts).filter(([field]) => /^apple_passwords_saves/.test(field)));
+  const saved = (name) => native.emitEvent("passwords.applePasswordsSaveCounted", { name, epoch: client.consentEpoch() });
+  startLoginListCounts();
+  client.setSharing(true, "settings");
+  takePasswordManagerCounts();
+  for (const name of ["saved", "saved", "saveFailed"]) saved(name);
+  assert.deepEqual(saveCounts(takePasswordManagerCounts()), { apple_passwords_saves_saved: 2, apple_passwords_saves_failed: 1 });
+  client.setSharing(false, "settings");
+  saved("saved");
+  assert.deepEqual(saveCounts(takePasswordManagerCounts()), { apple_passwords_saves_saved: 0, apple_passwords_saves_failed: 0 });
+});

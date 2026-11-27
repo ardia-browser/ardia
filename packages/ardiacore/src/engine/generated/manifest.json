@@ -923,6 +923,12 @@
           "mac": "custom",
           "desktop": "absent",
           "windows": "absent"
+        },
+        "applePasswordsSaveCounted": {
+          "topic": "passwords.applePasswordsSaveCounted",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
         }
       }
     },

@@ -11,6 +11,7 @@ type VerificationCodeRefusal = "noTab" | "unknownToken" | "stale" | "navigated" 
 export type ApplePasswordsState = "connected" | "notConnected" | "refused" | "helperMissing" | "tooOld" | "notEntitled";
 export type ApplePasswordsPairing = "awaitingCode" | "paired" | "wrongCode" | "failed" | Exclude<ApplePasswordsState, "connected" | "notConnected">;
 export type LoginListCount = "shown" | "filled" | "fillFailed";
+export type ApplePasswordsSaveCount = "saved" | "saveFailed";
 export type VerificationCodeSetupResult = { opened: boolean; reason?: VerificationCodeRefusal };
 
 const Passwords = nativeModule("ArdiaPasswords");

@@ -1,4 +1,5 @@
 import type { ArdiaHost } from "./host";
+import type { PageRequest, PageRequestScope } from "./hostPageEvents";
 import type { CornerRadii } from "./hostExtensionView";
 import { enqueueTab } from "./hostTabQueue.ts";
 import { queueTabPresentation } from "./hostTabPresentations.ts";
@@ -13,7 +14,7 @@ type HostTabOptions = { key: string; profile?: string; url?: string; adoptId?: s
 type HostPageReceiver = {
   receive(module: string, id: string, payload: unknown): boolean;
   install(value: unknown): boolean;
-  captureRequest(): (() => boolean) | null;
+  captureRequest(): PageRequest | null;
   dispose(): void;
 };
 export type HostPageFactory = (claim: string, nativeId: () => number | undefined,
@@ -134,21 +135,27 @@ export class HostTab {
   }
 
 
+  private async sendCommand<T>(command: string, args: unknown[], page?: PageRequestScope): Promise<T> {
+    if (this.disposed || !this.identity || claims.get(this.host)?.get(this.key) !== this) throw new Error(`Ardia tab released: ${this.key}`);
+    return invokeHost<T>("tab.command", { id: this.identity.browserId, claim: this.claim, command, args, ...page }, this.host);
+  }
+
   async command<T = unknown>(command: string, args: unknown[] = []): Promise<T> {
     await this.ready;
-    const send = async () => {
-      if (this.disposed || !this.identity || claims.get(this.host)?.get(this.key) !== this) throw new Error(`Ardia tab released: ${this.key}`);
-      return invokeHost<T>("tab.command", { id: this.identity.browserId, claim: this.claim, command, args }, this.host);
-    };
+    const send = () => this.sendCommand<T>(command, args);
     return UNORDERED_COMMANDS.has(command) ? send() : enqueueTab(this.host, this.key, send);
   }
 
   async pageResult<T = unknown>(command: string, args: unknown[] = []): Promise<T | null> {
     await this.ready;
-    const current = this.disposed ? null : this.page?.captureRequest() ?? null;
-    if (!current) return null;
-    const result = await this.command<T>(command, args);
-    return current() ? result : null;
+    const request = this.disposed ? null : this.page?.captureRequest();
+    if (!request) return null;
+    const { current, ...scope } = request;
+    return enqueueTab(this.host, this.key, async () => {
+      if (!current()) return null;
+      const result = await this.sendCommand<T>(command, args, command === "evaluate" ? scope : undefined);
+      return current() ? result : null;
+    });
   }
 
   presentation(visible: boolean): Promise<void> {

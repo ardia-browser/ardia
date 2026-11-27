@@ -6,6 +6,7 @@ export {
   type StripTab,
   type StripGroup,
   type StripState,
+  type StripTrigger,
   type TabStripCommand,
   type TabStripTransaction,
   type PageEngine,

@@ -172,7 +172,8 @@ tests:
   verification (`packages/shell/plugin-tests`), import readers (`packages/import`), native messaging cleanup and the
   launch environment. The boundary table lists them so a change there is still reviewed.
 - Linux's and Windows' native sinks. The Linux C++ guard has its own scenarios in `engine/ardiacore-linux/tests`;
-  Windows has none yet.
+  on Windows only the pure policies in `scripts/windows/engine/tests` (the updater, window policy and `tab.command`
+  `evaluate` reply) run here, from `hostileInputs.test.mjs`, and the rest of the host needs a Windows build.
 - Anything that needs a real origin, such as the Chrome Web Store helper, or an OS prompt.
 - Timing: races between a check and a use, and stale state across navigations.
 

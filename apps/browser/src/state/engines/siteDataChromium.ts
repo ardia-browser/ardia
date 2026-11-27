@@ -5,7 +5,7 @@ import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { tabEngine } from "./engines";
-import { chromiumCookie, webOrigin } from "./siteDataMerge";
+import { chromiumCookie, cookieKey, keepChromiumSameSite, webOrigin } from "./siteDataMerge";
 import type { ConsentToken } from "../telemetry/client";
 import { noteCookieJarRead } from "../telemetry/siteDataCounts";
 import { beginActivity } from "../app/jobActivity";
@@ -188,7 +188,7 @@ export async function readChromium(profile: string, domains: string[], origins: 
   return { data: { cookies: read.cookies, storage }, page: read.page, pages };
 }
 
-type Written = { cookies: number; removed: number; storage: number; landed: Set<string>; overQuota?: number };
+type Written = { cookies: number; removed: number; storage: number; landed: Set<string>; overQuota?: number; sameSiteKept?: number; replaced?: number };
 
 export async function writeChromium(
   profile: string,
@@ -198,8 +198,14 @@ export async function writeChromium(
   storage: Record<string, StorageChange>,
   stillCurrent: () => boolean = () => true,
 ): Promise<Written | null> {
-  const reply = cookies.length || remove.length ? await read.page.siteData({ op: "write", cookies: cookies.map(chromiumCookie), remove, storage: {} }).catch(() => null) : { cookiesWritten: 0, removed: 0 };
+  const present = new Map(read.data.cookies.map((c) => [cookieKey(c), c]));
+  const sent = cookies.map((c) => keepChromiumSameSite(c, present.get(cookieKey(c))));
+  const reply = sent.length || remove.length ? await read.page.siteData({ op: "write", cookies: sent.map(chromiumCookie), remove, storage: {} }).catch(() => null) : { cookiesWritten: 0, removed: 0 };
   if (!reply) return null;
+  const landedCookies = reply.cookiesWritten ?? 0;
+  const allLanded = landedCookies >= sent.length;
+  const sameSiteKept = allLanded ? sent.filter((c, i) => c !== cookies[i]).length : 0;
+  const replaced = allLanded ? cookies.filter((c) => (present.get(cookieKey(c))?.value ?? c.value) !== c.value).length : 0;
   const landed = new Set<string>();
   let stored = 0;
   let overQuota = 0;
@@ -216,7 +222,7 @@ export async function writeChromium(
     if (count >= wanted) landed.add(origin);
     stored += count;
   }
-  return { cookies: reply.cookiesWritten ?? 0, removed: reply.removed ?? 0, storage: stored, landed, overQuota };
+  return { cookies: landedCookies, removed: reply.removed ?? 0, storage: stored, landed, overQuota, sameSiteKept, replaced };
 }
 
 export async function readChromiumStorageWithoutPage(profile: string, origins: string[]): Promise<SiteStorage> {

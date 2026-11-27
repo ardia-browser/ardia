@@ -15,6 +15,7 @@ export type SyncNative = {
   forget(account: string): Promise<void>;
   chainStatus(folder: string): Promise<"ok" | "missing" | "unavailable">;
   createChain(folder: string): Promise<void>;
+  createChainInNewFolder(folder: string): Promise<void>;
   write(folder: string, scope: string, payload: string): Promise<string>;
   read(folder: string, scope: string, known: string[]): Promise<Listing>;
   remove(folder: string, scope: string, ids: string[]): Promise<void>;

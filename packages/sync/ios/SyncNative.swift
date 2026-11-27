@@ -14,6 +14,7 @@ protocol SyncNative {
   func forget(_ account: String)
   func chainStatus(_ folder: String) throws -> String
   func createChain(_ folder: String) throws
+  func createChainInNewFolder(_ folder: String) throws
   func write(_ folder: String, _ scope: String, _ payload: String) throws -> String
   func read(_ folder: String, _ scope: String, _ known: [String]) throws -> [String: Any]
   func remove(_ folder: String, _ scope: String, _ ids: [String]) throws
@@ -87,6 +88,10 @@ extension SyncNative where Self: Module {
 
   var createChainFunction: AnyDefinition {
     AsyncFunction("createChain") { (folder: String) throws in try self.createChain(folder) }.runOnQueue(Self.queue)
+  }
+
+  var createChainInNewFolderFunction: AnyDefinition {
+    AsyncFunction("createChainInNewFolder") { (folder: String) throws in try self.createChainInNewFolder(folder) }.runOnQueue(Self.queue)
   }
 
   var writeFunction: AnyDefinition {

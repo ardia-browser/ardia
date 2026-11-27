@@ -4495,8 +4495,8 @@
       "types": "packages/sync/src/generated/native.ts",
       "swift": "packages/sync/ios/SyncNative.swift",
       "sha256": {
-        "types": "7460b2472cb552a9beb4f8a492262e300a37fe7a1a6b5857ae19ea42c64ec57f",
-        "swift": "2203881a4bb448ce6418c2e2a66f00c5b6475355899e72b9adc7cf5c4270c601"
+        "types": "b20d21546fbf88877d26f66bf8b52285bd5afdb9f468bbb42c26335d496c136d",
+        "swift": "a1ece123db0e2c1d1034df62b3618eb7b312eed10dd94877778f3ec75c168aa8"
       },
       "modules": {
         "ArdiaSync": {
@@ -4600,6 +4600,15 @@
               "async": true,
               "mac": "custom",
               "desktop": "adapted",
+              "windows": "custom"
+            },
+            "createChainInNewFolder": {
+              "args": [
+                "folder"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
               "windows": "custom"
             },
             "write": {

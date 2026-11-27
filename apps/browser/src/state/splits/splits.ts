@@ -10,7 +10,7 @@ import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, SplitSlot, SplitView, Tab } from "../browser/types";
 import { evenSlots, insertPane, MAX_SPLIT_PANES, movePaneTo, normalized, paneNeighbor, type PaneDirection, type SplitSide, splitTabIds, splitTabIdsOf, swappedPanes, withoutPanes, withPaneIds } from "./layout";
 
-export { evenSlots, isStacked, mapSlotIds, MAX_SPLIT_PANES, normalized, type PaneDirection, type SplitSide, slotTabIds, splitTabIds, splitTabIdsOf, stackAt, withPaneIds } from "./layout";
+export { evenSlots, isStacked, mapSlotIds, MAX_SPLIT_PANES, normalized, type PaneDirection, type SplitSide, slotTabIds, splitTabIds, splitTabIdsOf, withPaneIds } from "./layout";
 
 export type SplitsSlice = {
   splits: Record<string, SplitView>;
@@ -20,7 +20,7 @@ export type SplitsSlice = {
   replaceSplitPane(paneTabId: string, tabId: string): void;
   removeTabFromSplit(tabId: string): void;
   separateSplit(splitId: string): void;
-  updateSplit(id: string, patch: { sizes?: number[]; stackSizes?: [number, number] }): void;
+  updateSplit(id: string, patch: { sizes?: number[] } & ({ stackSizes: [number, number]; stackIndex: number } | { stackSizes?: never; stackIndex?: never })): void;
   flipSplit(splitId: string): void;
   toggleSplitOrientation(splitId: string): void;
   movePane(tabId: string, direction: PaneDirection): boolean;
@@ -227,8 +227,9 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
       set(s);
       return { ok: true, tabId, splitId: split.id };
     }
-    const split = insertPane(current, anchor.id, tabId, o.side ?? "right", windowId);
-    if (!split) return { ok: false, reason: "max" };
+    const split = insertPane(current, anchor.id, tabId, o.side ?? "right", windowId)
+      ?? (current && insertPane(current, anchor.id, tabId, current.orientation === "horizontal" ? "right" : "bottom", windowId));
+    if (!split) return { ok: false, reason: "invalid" };
     s = gather({ ...s, splits: { ...s.splits, [split.id]: split } }, anchor.id, splitTabIds(split), joining);
     if (!o.background) s = apply(s, activated(s, tabId));
     set(s);
@@ -272,13 +273,13 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
     });
   },
 
-  updateSplit(id, { sizes, stackSizes }) {
+  updateSplit(id, { sizes, stackSizes, stackIndex }) {
     set((s) => {
       const split = s.splits[id];
       if (!split) return {};
       const slots = split.slots.map((slot, i): SplitSlot => {
         const size = sizes && sizes.length === split.slots.length ? sizes[i]! : slot.size;
-        return "stack" in slot ? { ...slot, size, ...(stackSizes ? { stackSizes } : {}) } : { ...slot, size };
+        return "stack" in slot ? { ...slot, size, ...(stackSizes && stackIndex === i ? { stackSizes } : {}) } : { ...slot, size };
       });
       return { splits: { ...s.splits, [id]: { ...split, slots } } };
     });

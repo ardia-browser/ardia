@@ -183,3 +183,19 @@ test("each call counts in its method family, errors once more", async () => {
   assert.equal(counts.cli_socket_calls_core, 1);
   assert.equal(counts.cli_socket_call_failures, 1);
 });
+
+test("the socket describes both stacks of a grid and resizes its outer slots", async () => {
+  const { windowId, a, b, c } = await setup();
+  const d = S().newTab(windowId, { url: "https://d.example/", background: true });
+  const splitId = S().createSplit([a, c]);
+  S().openSplitPane(windowId, { tabId: b, anchorTabId: a, side: "bottom" });
+  S().openSplitPane(windowId, { tabId: d, anchorTabId: c, side: "bottom" });
+  const [grid] = await ok("splits.list", { window: windowId });
+  assert.deepEqual(grid.tabs, [a, b, c, d]);
+  assert.deepEqual(grid.panes, [{ size: 0.5, stack: [a, b], stackSizes: [0.5, 0.5] }, { size: 0.5, stack: [c, d], stackSizes: [0.5, 0.5] }]);
+  const resized = await ok("splits.resize", { split: splitId, sizes: [3, 1] });
+  assert.deepEqual(resized.panes.map((p) => p.size), [0.75, 0.25]);
+  assert.deepEqual(resized.panes.map((p) => p.stack), [[a, b], [c, d]]);
+  await ok("splits.removeTab", { tab: b });
+  assert.deepEqual((await ok("splits.list", { window: windowId }))[0].tabs, [a, c, d]);
+});

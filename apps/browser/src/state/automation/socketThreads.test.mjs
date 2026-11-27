@@ -79,9 +79,11 @@ test("splits.create takes two to the most panes a split holds, refused before th
   const tabs = [S().windows[windowId].tabIds[0], ...[1, 2, 3].map((i) => S().newTab(windowId, { url: `https://s${i}.example/`, background: true }))];
   const schema = methodsCatalog().find((m) => m.name === "splits.create").params.properties.tabs;
   assert.equal(schema.minItems, 2);
-  assert.equal(schema.maxItems, 3);
+  assert.equal(schema.maxItems, 4);
   const four = await call("splits.create", { tabs });
-  assert.equal(four.error?.code, "bad_request");
+  assert.deepEqual(four.result.tabs, tabs);
+  const fifth = S().newTab(windowId, { url: "https://fifth.example/", background: true });
+  assert.equal((await call("splits.create", { tabs: [...tabs, fifth] })).error?.code, "bad_request");
   assert.equal((await call("splits.create", { tabs: tabs.slice(0, 1) })).error?.code, "bad_request");
 });
 

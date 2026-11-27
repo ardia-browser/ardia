@@ -142,6 +142,7 @@ test("a split drop is counted only when the split is made, with its side and any
 
   const full = mixedScene();
   S().openSplitPane(full.w, { tabId: full.id.a, anchorTabId: full.id.s2, side: "right" });
+  S().openSplitPane(full.w, { tabId: full.id.b, anchorTabId: full.id.a, side: "right" });
   useToasts.setState({ toasts: {} });
   before = splitCounts();
   const refused = await dragOver(full, entryKey("tab", full.id.c), at(frameOf(full, entryKey("split", full.SP)), 0.9, 0.5));
@@ -229,8 +230,9 @@ test("a split row takes a third pane on the side it is dropped, and a full one s
 
   const full = mixedScene();
   S().openSplitPane(full.w, { tabId: full.id.a, anchorTabId: full.id.s2, side: "right" });
+  S().openSplitPane(full.w, { tabId: full.id.b, anchorTabId: full.id.a, side: "right" });
   const before = splitTabIdsOf(S().splits[full.SP]);
-  assert.equal(before.length, 3);
+  assert.equal(before.length, 4);
   const r2 = await dragOver(full, entryKey("tab", full.id.c), at(frameOf(full, entryKey("split", full.SP)), 0.9, 0.5));
   assert.deepEqual(r2.marks.split?.side, "right");
   r2.c.end(true);
@@ -401,15 +403,19 @@ test("a row held over a tile until it would make a folder shows the ring and ope
 });
 
 test("the split preview lays the panes out as the split row will: the row's inset, the panes' gap and equal slots, one more than the row has", async () => {
-  const { previewSlots, SPLIT_PANE, splitPaneShape, SPLIT_MAX_PANES } = await import("./splitPaneGeometry.ts");
+  const { previewSlots, previewPaneSlot, SPLIT_PANE, splitPaneShape, SPLIT_MAX_PANES } = await import("./splitPaneGeometry.ts");
   const width = 172;
   const two = previewSlots(width, 1);
   assert.equal(two.slot * 2 + SPLIT_PANE.gap + SPLIT_PANE.inset * 2, width);
   assert.equal(two.pitch, two.slot + SPLIT_PANE.gap);
   const three = previewSlots(width, 2);
   assert.equal(three.slot * 3 + SPLIT_PANE.gap * 2 + SPLIT_PANE.inset * 2, width);
+  const four = previewSlots(width, 3);
+  assert.equal(four.slot * 4 + SPLIT_PANE.gap * 3 + SPLIT_PANE.inset * 2, width);
+  assert.ok(previewPaneSlot({ x: 0, y: 0, w: width }, 3, "right"));
+  assert.equal(previewPaneSlot({ x: 0, y: 0, w: width }, 4, "right"), null);
   assert.equal(splitPaneShape().height + SPLIT_PANE.inset * 2, ROW, "a pane fills the row's height inside its inset");
-  assert.equal(SPLIT_MAX_PANES, 3, "a full split previews nothing: it can't take another pane");
+  assert.equal(SPLIT_MAX_PANES, 4, "a full split previews nothing: it can't take another pane");
 });
 
 test("a split made from below the row it joins starts where the preview showed and slides up into place", async () => {
@@ -467,7 +473,7 @@ test("an armed split half turns the ghost into the pane the tab will be: half th
   const full = mixedScene();
   const fullKey = entryKey("split", full.SP);
   const { c } = mount({ entries: full.L.entries, regions: full.regions });
-  c.items.get(fullKey).tabIds = [full.id.s1, full.id.s2, full.id.a];
+  c.items.get(fullKey).tabIds = [full.id.s1, full.id.s2, full.id.a, full.id.b];
   const f = frameOf(full, entryKey("tab", full.id.c));
   await c.begin(entryKey("tab", full.id.c), f.x + 20, f.y + 10);
   c.move(...Object.values(at(frameOf(full, fullKey), 0.9, 0.5)));

@@ -27,10 +27,11 @@ export function paneSideAt(pane: Rect, px: number, py: number, sides: readonly P
   return sides.includes("center") ? "center" : null;
 }
 
-export function paneDropTarget(panes: [string, Rect][], px: number, py: number, current: DropTarget | null, sides: readonly PaneDropSide[] = DROP_SIDES): DropTarget | null {
+export function paneDropTarget(panes: [string, Rect][], px: number, py: number, current: DropTarget | null, sides: readonly PaneDropSide[] = DROP_SIDES, allow?: (tabId: string, side: PaneDropSide) => boolean): DropTarget | null {
   for (const [tabId, pane] of panes) {
     if (!contains(pane, px, py)) continue;
-    const side = paneSideAt(pane, px, py, sides, current?.tabId === tabId ? current.side : null);
+    const allowed = allow ? sides.filter((side) => allow(tabId, side)) : sides;
+    const side = paneSideAt(pane, px, py, allowed, current?.tabId === tabId ? current.side : null);
     return side && { tabId, side };
   }
   return null;

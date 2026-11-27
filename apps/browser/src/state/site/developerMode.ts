@@ -4,7 +4,8 @@ import { useSettings } from "../browser/hooks";
 import { noteDeveloperModeToggled } from "../telemetry/developerModeCounts";
 import { showMenu } from "../app/system";
 import { openSplitPane } from "../splits/actions";
-import { MAX_SPLIT_PANES, splitOf, splitTabIds, type SplitSide } from "../splits/splits";
+import { splitOf, type SplitSide } from "../splits/splits";
+import { canInsertPane } from "../splits/layout";
 import { addressFieldShown, clickBarPlacement } from "../omnibox/barPlacement";
 import { activate } from "../tabs/actions";
 import { activeTabId } from "../browser/model";
@@ -63,8 +64,7 @@ const SPLIT_SIDES: { side: SplitSide; title: string; symbol: string }[] = [
 
 export async function showSplitSidesMenu(tabId: string, stillTarget: () => boolean = () => true) {
   const split = splitOf(useBrowser.getState(), tabId);
-  const enabled = !split || splitTabIds(split).length < MAX_SPLIT_PANES;
-  const item = ({ side, title, symbol }: (typeof SPLIT_SIDES)[number]) => ({ id: side, title, symbol, enabled });
+  const item = ({ side, title, symbol }: (typeof SPLIT_SIDES)[number]) => ({ id: side, title, symbol, enabled: canInsertPane(split, tabId, side) });
   const choice = await showMenu([...SPLIT_SIDES.slice(0, 2).map(item), { separator: true as const }, ...SPLIT_SIDES.slice(2).map(item)]);
   const picked = SPLIT_SIDES.find((s) => s.side === choice);
   const tab = useBrowser.getState().tabs[tabId];

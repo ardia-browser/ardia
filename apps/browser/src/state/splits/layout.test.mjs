@@ -61,12 +61,12 @@ test("inserting follows the split's axis, stacks across it, and refuses a full s
   const two = split("horizontal", pane("A", 0.4), pane("B", 0.6));
   assert.equal(shape(insertPane(two, "A", "C", "left", "w")), "horizontal|C,A,B");
   assert.equal(shape(insertPane(two, "B", "C", "bottom", "w")), "horizontal|A,B+C");
-  assert.equal(insertPane(row, "A", "D", "right", "w"), null);
+  assert.equal(shape(insertPane(row, "A", "D", "right", "w")), "horizontal|A,D,B+C");
   const lone = split("horizontal", stack(1, "A", "B"));
   assert.equal(shape(insertPane(lone, "B", "C", "bottom", "w")), "vertical|A,B,C");
   assert.equal(canInsertPane(undefined, "A", "right"), true);
   assert.equal(canInsertPane(two, "A", "bottom"), true);
-  assert.equal(canInsertPane(row, "A", "right"), false);
+  assert.equal(canInsertPane(row, "A", "right"), true);
   assert.equal(canInsertPane(split("horizontal", pane("A", 0.5), pane("B", 0.5)), "Z", "right"), false);
   assert.equal(canInsertPane({ ...row, slots: [pane("A", 0.5), stack(0.5, "B", "C")] }, "B", "bottom"), false);
 });
@@ -137,4 +137,16 @@ test("a saved split of one stacked slot is read as two plain panes, and a move t
   assert.equal(moved.orientation, "vertical");
   assert.deepEqual(splitTabIds(moved), ["C", "B"]);
   assert.deepEqual(moved.slots.map((slot) => slot.size), [0.7, 0.3]);
+});
+
+
+test("a second stack accepts the fourth pane and removal normalizes only a lone stack", () => {
+  const grid = insertPane(row, "A", "D", "bottom", "w");
+  assert.equal(shape(grid), "horizontal|A+D,B+C");
+  assert.equal(shape(withoutPanes(grid, new Set(["A"]))), "horizontal|D,B+C");
+  assert.equal(shape(withoutPanes(grid, new Set(["A", "D"]))), "vertical|B,C");
+  assert.equal(shape(withoutPanes(grid, new Set(["A", "B"]))), "horizontal|D,C");
+  assert.equal(shape(movePaneTo(grid, "D", "B", "left")), "horizontal|A,D,B+C");
+  assert.equal(shape(movePaneTo(grid, "D", "A", "bottom")), shape(grid));
+  assert.equal(movePaneTo(grid, "A", "B", "bottom"), null);
 });

@@ -76,7 +76,7 @@ test("Move Pane swaps with the geometric neighbor and keeps every size", () => {
   const { a, b, c } = freshWindow();
   const id = S().createSplit([a, b]);
   S().openSplitPane(S().tabs[a].windowId, { anchorTabId: b, tabId: c, side: "bottom" });
-  S().updateSplit(id, { sizes: [0.3, 0.7], stackSizes: [0.4, 0.6] });
+  S().updateSplit(id, { sizes: [0.3, 0.7], stackSizes: [0.4, 0.6], stackIndex: 1 });
   const before = S().splits[id];
   assert.equal(S().movePane(a, "up"), false);
   assert.equal(S().movePane(c, "left"), true);
@@ -132,7 +132,7 @@ test("the split menu offers Add Right and Add Bottom by the insert rule and move
   assert.equal(shape(split).startsWith(`horizontal|${b},${a}+`), true);
 
   items = await menuOf(a);
-  assert.deepEqual(items.slice(0, 2).map((it) => it.enabled), [false, false]);
+  assert.deepEqual(items.slice(0, 2).map((it) => it.enabled), [true, false]);
   assert.deepEqual(arrange(items).map((it) => it.id), ["moveLeft", "moveRight", "moveUp", "moveDown", "flip", "convert"]);
   assert.deepEqual(arrange(items).slice(0, 4).map((it) => it.enabled), [true, false, false, true]);
 

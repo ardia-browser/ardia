@@ -1,7 +1,7 @@
 import { newId } from "../browser/model";
 import type { SplitSlot, SplitView } from "../browser/types";
 
-export const MAX_SPLIT_PANES = 3;
+export const MAX_SPLIT_PANES = 4;
 
 export type SplitSide = "left" | "right" | "top" | "bottom";
 export type PaneDirection = "left" | "right" | "up" | "down";
@@ -29,15 +29,6 @@ const evened = (slots: SplitSlot[]): SplitSlot[] => slots.map((slot) => ({ ...sl
 
 export const mapSlotIds = (slots: SplitSlot[], f: (id: string) => string): SplitSlot[] =>
   slots.map((slot) => ("stack" in slot ? { ...slot, stack: [f(slot.stack[0]), f(slot.stack[1])] } : { ...slot, tabId: f(slot.tabId) }));
-
-export function stackAt(split: Pick<SplitView, "slots">): number {
-  let at = 0;
-  for (const slot of split.slots) {
-    if ("stack" in slot) return at;
-    at += 1;
-  }
-  return -1;
-}
 
 export function withPaneIds(split: SplitView, ids: string[]): SplitView {
   let i = 0;

@@ -1,8 +1,9 @@
+import { MAX_SPLIT_PANES } from "../../state/splits/layout";
 import { layout } from "../ui/theme";
 import { radius, space } from "../ui/tokens";
 
 export const SPLIT_PANE = { inset: space.xs, gap: space.xs, closeInset: space.xxs } as const;
-export const SPLIT_MAX_PANES = 3;
+export const SPLIT_MAX_PANES = MAX_SPLIT_PANES;
 
 export function splitPaneShape() {
   const height = layout.rowHeight - SPLIT_PANE.inset * 2;

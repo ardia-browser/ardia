@@ -1635,7 +1635,7 @@ Metal.
   | Page bar: tabs circle, address capsule, `+` | `page` | live, lens and rim | the same |
   | Host pill (bar collapsed) | `page` | live, lens and rim | the same |
   | Start page's tabs, `+`, Settings | `start` | live | the same |
-  | Deck's switcher, Incognito, `···`, Spaces, Search Tabs, `+` | `deck` | live | the same |
+  | Deck's switcher, `···`, Incognito, Spaces, Search Tabs, `+` | `deck` | live | the same |
   | Toasts, Reader's buttons, the Duo toolbar | `surfaces`, `reader` | live | the same |
   | Drawn menus (VoiceOver's Recent Tabs, a link's press menu) | none (`frost={null}`) | a solid panel with a ring | live, from `page` (`glassSource`) |
   | Drawn menus over the app's own surfaces | `surfaces` | SwiftUI thin material, fill and ring | live |
@@ -2185,7 +2185,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `page_summaries_on_device`, `page_summaries_excerpts`, `page_summaries_failed` | Pinch to Summarize on iPhone | A rising excerpt share can point to problems with Apple Intelligence. A rising failure share can point to problems reading pages |
 | `page_summaries_chatgpt`, `page_summaries_chatgpt_fallbacks` | Pinch to Summarize on Android | Android has no excerpts, so `page_summaries_failed` against `page_summaries_on_device` is the share of phones without a ready Gemini Nano. How many summaries the opt-in ChatGPT choice writes; fallbacks rising against `page_summaries_chatgpt` mean the Responses call or the token refresh broke. On Android, pinch opens against menu opens show the passive pinch watcher working, and zero pinch opens after a release with steady menu opens mean it stopped |
 | `gemini_nano_downloading`, `gemini_nano_not_offered`, `gemini_nano_needs_update`, `gemini_nano_errors`, `gemini_nano_download_failed`, `gemini_nano_write_failed`, `gemini_nano_download_rewrites` | Gemini Nano on Android | Why Browse for Me and Pinch to Summarize fell back. `not_offered` is the share of Android users on phones Google keeps the Prompt API from; `needs_update` or `errors` rising after a release or an AICore update means the ML Kit version and AICore disagree, so bump `genai-prompt`. `write_failed` against `browse_answers_on_device` plus `page_summaries_on_device` is the share of supported phones where Nano started but couldn't write: rising means the prompt or `fit` broke. `download_failed` is downloads AICore stopped, and `download_rewrites` against `downloading` shows whether people come back for the Nano answer |
-| `deck_spaces_button_taps` | the deck's bottom-left Spaces button, which took the Incognito switch's place when sync is on (#4551) | Whether Spaces is reached from the deck now that it has its own button; read it against `deck_incognito_switches`, which should not fall to zero (the switch moved to the header), and a zero across synced testers means the button stopped opening the Spaces sheet |
+| `deck_spaces_button_taps` | the deck's bottom-left Spaces button, which takes the Incognito switch's place when sync is on (#4551) | Whether Spaces is reached from the deck now that it has its own button; read it against `deck_incognito_switches`, which should not fall to zero for synced testers (their switch moved to the header), and a zero across synced testers means the button stopped opening the Spaces sheet |
 | `start_no_tabs_button_taps` | Start's Archive or Synced Tabs button, which takes the place of Tabs when no tabs are open (#3324) | Whether people use it instead of landing on an empty tab view; zero across testers after a release means the swap stopped or the button stopped opening the Archive or the spaces |
 | `tray_incognito_switches` | the search panel's Incognito eyes turning Incognito on (Redesigned look) | On Android, real finger presses on the eyes and on the panel's rows did nothing in 1.0.2: the panel's keyboard lift reached the view but not Fabric, so `Pressable` cancelled on the first MOVE. Near zero on Android beside iPhone's after a release means presses in the panel died again |
 | `incognito_unavailable` | Incognito refused because this phone's Android System WebView can't keep private pages separate (no multi-profile support), shown as a toast that opens the WebView's store page, or an Incognito page that failed to open and was closed | Before, every Incognito page on such a WebView stayed blank and took no taps, with no message. Anything above zero means people on old WebViews meet Incognito; it should stay at zero on iPhone |
@@ -2390,7 +2390,7 @@ and drawn-menu usage counts; no new telemetry fields are sent.
   - A space with no icon shows its name alone, with no initial in a circle, everywhere its title is drawn: the deck's header, the start page and the Spaces sheet's header (build 19, the owner on the sheet's "D Default": "why the spaces one has icon left to it? Doesn't make sense"). A space with a symbol or an emoji keeps it beside the name. The space menus' fallback symbol is `<letter>.square.fill`, then `square.fill`.
   - The deck is the stack; Grid is a choice in Settings › Appearance › Tabs ("How your open tabs are laid out. Swipe up on the bottom bar to see them."), iPhone only. The deck's bars have no grid button.
   - The tabs button with one tab open draws its card upright-ish (−4°) in the same 20 × 26 tile box the pair uses, so it sits centred in the circle; it used to hang off the circle's centre because the lone card had no box around it in the glass button's glyph layer (build 16, the owner: "one tab looks bad in the left button"). Android's original bar centred the lone card already, and the box lands it on the same pixels (`render/tabStack.render.test.tsx`).
-  - The deck's Incognito switch is a 44-point circle in the header, beside the `···` (#4551; it was the bottom bar's 48-point left button until then). It draws Arc Search-style
+  - The deck's bottom bar has a 48-point Incognito switch 24 points from the left edge; with sync on, Spaces takes that place and the switch is a 44-point circle in the header beside the `···` (#4551). It draws Arc Search-style
     eyes, open when off and closed when on. The selected fill covers the whole circle, white in dark mode and the
     Incognito card colour in light mode. The browsing bar draws the same glyph during a pull into the deck. The
     pill, cards, Duo controls, search field, address bar and Incognito menus use the thin specs.
@@ -2438,7 +2438,7 @@ What main changed, by screen:
 - Page menu: word rows without icons, icon-only Reader, Copy Link and Share capsules, new Print, History, Bookmarks, Downloads and Site Settings rows, Open in Default Browser on its own (`ToolbarSheet.swift`, `Menu/`).
 - Library: one History, Bookmarks and Downloads sheet. History merges this phone's visits with the current space's synced history and remembers deletions per space (`Library/`, `HistoryTimeline.swift`, 68440816a, 6cf89268b).
 - Site permissions: camera, microphone and location answers are saved per site and listed and revocable in Site Settings (`SitePermissions.swift`). The Expo iPhone saves and lists them the same way since 942dc45df.
-- Deck: header with the space switcher, an Incognito pill and a `···` menu (Archive, Spaces, New Incognito Tab, Reopen, Close All, Settings); bottom bar of a grid button, Search Tabs and plus (the Expo app's has Spaces where the grid button was when sync is on, and its Incognito switch where main's Incognito pill is, #4551); a grid view; a slim Archive capsule under the header; cards about 24 pt lower (`TabSwitcherView.swift`, `DeckChrome.swift`, `TabGridView.swift`, `TabsTokens.swift`, `TabsDeckGeometry.swift`).
+- Deck: header with the space switcher, an Incognito pill and a `···` menu (Archive, Spaces, New Incognito Tab, Reopen, Close All, Settings); bottom bar of a grid button, Search Tabs and plus (the Expo app's has the Incognito switch where the grid button was, or with sync on Spaces there and the switch where main's Incognito pill is, #4551); a grid view; a slim Archive capsule under the header; cards about 24 pt lower (`TabSwitcherView.swift`, `DeckChrome.swift`, `TabGridView.swift`, `TabsTokens.swift`, `TabsDeckGeometry.swift`).
 - Start page: no logo; the space switcher at 0.44 of the height, the space's pinned tiles (4 a row, icon only) and page dots; a sideways swipe changes space. In light mode a themed backdrop gets a 34% white veil (`SearchHomeView.swift`, `PinnedTiles.swift`, `ProfileBackdrop.themeVeil`).
 - Tray: a floating glass panel, 8 pt in from the sides and above the keyboard, radius concentric with the field (its inset plus half its height: 9 pt in plus half the 47.5 pt field, 32.75, in SwiftUI; the Expo app derives it the same way from its own field, `searchPanelRadius`); a submitted search lifts it 120 pt and fades it (`SearchTrayHost.swift`).
 - Spaces: tabs belong to one Mac space; the deck, the tab swipe and Switch to Tab show the current space's tabs, and the app takes its colour (`TabSpaces.swift`). The Spaces sheet gets the switcher and page dots.
@@ -4217,14 +4217,17 @@ docked Material menu, Duo):
 A tester on Discord: once a tab is open there were four ways into Incognito (the deck's bottom-left switch, the +
 button's touch-and-hold menu, the search panel's eyes, a search row's touch and hold) and one, hidden, way to Spaces
 (the deck's `···`). With no tabs, Spaces is the start page's bottom-left button.
-- The deck's bottom-left button is now Spaces when sync is on: the start page's laptop button on the same 48-point
+- With sync on, the deck's bottom-left button is now Spaces: the start page's laptop button on the same 48-point
   glass, opening the Spaces sheet (`openSpacesFromDeck`, `deck_spaces_button_taps`), so Spaces keeps its bottom-left
-  place once tabs are open. With sync off there is nothing to show and Search Tabs takes the room.
-- The Incognito switch moved to the header, a 44-point circle beside the `···`, where main's SwiftUI deck has its
+  place once tabs are open, as the original look's deck bar already had it. The pull from a page into the deck
+  cross-fades the bar's tabs circle into the laptop instead of the eyes (`DeckLeadingGlyph`), so the bar still lands
+  on the button that is there.
+- The Incognito switch then sits in the header, a 44-point circle beside the `···`, where main's SwiftUI deck has its
   Incognito pill. Its tap, its hint and its touch and hold (Close Incognito Tabs) are unchanged, and the deck's
-  entrance takes an early touch on it as before (`DeckHitTarget` `privacy`, and `sheet` for Spaces).
-- Spaces stays in the `···` menu. The closed Duo's strip layout keeps the switch in its strip slot and has no Spaces
-  button, as before. Both phones' redesigned look; Material You's deck is unchanged.
+  entrance takes an early touch on either as before (`DeckHitTarget` `privacy`, and `sheet` for Spaces).
+- With sync off there are no spaces to show, and the deck is as before: the switch is the bottom-left button. Spaces
+  stays in the `···` menu. The closed Duo's strip keeps the switch in its strip slot. One rule decides it
+  (`incognitoInHeader`). Both phones' redesigned look; Material You's deck is unchanged.
 
 #### Android's page menu and Site Settings (2026-11-25)
 

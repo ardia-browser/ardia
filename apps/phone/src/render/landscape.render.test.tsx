@@ -143,8 +143,7 @@ for (const pose of DUO_POSES) {
     const deck = redesigned(<TabDeck />);
     const deckBar = hosts(deck, "deckBottomBar")[0]!;
     expect(flat(deckBar)).toMatchObject({ paddingLeft: pose.span.left, paddingRight: pose.span.right });
-    expect(holds(deckBar, "deckBarIncognito")).toBe(false);
-    expect(holds(hosts(deck, "deckHeader")[0]!, "deckBarIncognito")).toBe(!pose.ends);
+    expect(holds(deckBar, "deckBarIncognito")).toBe(!pose.ends);
     expect(holds(deckBar, "deckBarPlus")).toBe(false);
     const stripPlus = hosts(deck, "deckStripPlus")[0]!;
     expect(flat(stripPlus)).toMatchObject({ top: pose.deckPlusY, left: pose.stripX - 24, width: 48 });

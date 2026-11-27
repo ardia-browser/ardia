@@ -42,6 +42,8 @@ type Props = {
 
 export const SPACES_HINT = "Shows your Mac’s spaces.";
 
+export const incognitoInHeader = (syncEnabled: boolean, layout: BottomBarLayout) => syncEnabled && !layout.strip?.ends;
+
 export function IncognitoSwitch({ incognito, dark, onLongPress, diameter = controlSize.bar, underlay = false, glassShown, glassShownMs, glyphFade }: { incognito: boolean; dark: boolean; onLongPress?: () => void; diameter?: number; underlay?: boolean } & ChromeFade) {
   const size = { width: diameter, height: diameter };
   return (
@@ -253,13 +255,15 @@ export function DeckBottomBar({ searchOpener, shown, barCenterY, deckHeight, wid
   const rowTop = centerY - controlSize.bar / 2;
   const plusTop = strip ? (strip.ends ? strip.plus : strip.tabs) : 0;
   const plusPlace = strip ? { bottom: deckHeight - centerY - controlSize.bar / 2 - plusTop, ...besideStrip(strip, width, tabsLayout.menuWidth, deckChromeLayout.menuGap) } : { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, right: span.right, width: tabsLayout.menuWidth };
-  const incognitoSwitch = strip?.ends ? <IncognitoSwitchMenu incognito={incognito} dark={dark} privateCount={privateCount} onCloseIncognito={onCloseIncognito} menusShown={menusShown} onMenu={onMenu} place={plusPlace} hits={false} originY={rowTop} {...fade} /> : null;
+  const switchPlace = strip ? plusPlace : { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, left: span.left, width: tabsLayout.menuWidth };
   const syncs = useSyncEnabled();
-  const spacesButton = syncs ? (
+  const leading = incognitoInHeader(syncs, layout) ? (
     <DeckHitTarget control="sheet" live={rowHits} originY={rowTop} style={styles.circleHit}>
       <GlassCircleButton icon="laptop" label={destinationWords.spaces} hint={SPACES_HINT} testID="deckBarSpaces" dark={dark} incognito={incognito} onPress={openSpacesFromDeck} {...fade} />
     </DeckHitTarget>
-  ) : null;
+  ) : (
+    <IncognitoSwitchMenu incognito={incognito} dark={dark} privateCount={privateCount} onCloseIncognito={onCloseIncognito} menusShown={menusShown} onMenu={onMenu} place={switchPlace} hits={rowHits} originY={rowTop} {...fade} />
+  );
   const ends = strip?.ends ?? false;
   const opened = search.focused || search.text !== "";
   const reduceMotion = useReduceMotion();
@@ -294,7 +298,7 @@ export function DeckBottomBar({ searchOpener, shown, barCenterY, deckHeight, wid
       {shown ? <FabricCatchUp motion={riseNow} testID="deckBarFabricCatchUp" /> : null}
       {shown && LIVE_KEYBOARD ? <LiveKeyboardTop into={keyboardTop} /> : null}
       <View ref={row} testID="deckBottomBar" onLayout={measure} pointerEvents="box-none" style={[styles.bar, { paddingLeft: span.left, paddingRight: span.right }]}>
-        {strip?.ends ? null : spacesButton}
+        {strip?.ends ? null : leading}
         {ends ? (
           <Animated.View testID="deckSearchGrow" collapsable={false} style={[styles.searchHit, styles.grows, grow]}>
             <SearchTabsField search={search} style={styles.searchHit} resting={!opened} incognito={incognito} contentStyle={fieldFade} {...fade} />
@@ -314,7 +318,7 @@ export function DeckBottomBar({ searchOpener, shown, barCenterY, deckHeight, wid
         {strip ? null : plus}
       </View>
       {strip ? <View testID="deckStripPlus" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: plusTop }]}>{plus}</View> : null}
-      {strip?.ends ? <View testID="deckStripIncognito" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: strip.tabs }]}>{incognitoSwitch}</View> : null}
+      {strip?.ends ? <View testID="deckStripIncognito" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: strip.tabs }]}>{leading}</View> : null}
     </Animated.View>
   );
 }

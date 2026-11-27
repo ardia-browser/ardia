@@ -34,7 +34,7 @@ import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { useDeckOwnsBar } from "../../state/browse/hooks";
 import { usePageBusy } from "../../state/page/hooks";
 import { PullGhost, PullGlyphs } from "./PagePull";
-import { IncognitoGlyph, PlusGlyph, SearchTabsGlyph, SearchTabsGlyphs } from "../tabs/DeckBarGlyphs";
+import { DeckLeadingGlyph, PlusGlyph, SearchTabsGlyph, SearchTabsGlyphs } from "../tabs/DeckBarGlyphs";
 import { DUO_PLUS_ABOVE, type DuoSqueeze } from "../../lib/bottomBarSpan";
 import { pageWords } from "../../lib/sharedWords";
 
@@ -466,7 +466,7 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
             </PullGlyphs>
             {ghost ? (
               <PullGhost style={styles.ghost}>
-                <IncognitoGlyph incognito={tab.isPrivate} dark={dark} />
+                <DeckLeadingGlyph incognito={tab.isPrivate} dark={dark} />
               </PullGhost>
             ) : null}
           </ChromeSurface>

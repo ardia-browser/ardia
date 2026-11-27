@@ -445,6 +445,23 @@ onIos("on iPhone the handover never waits for the fresh picture of the page: the
   expect(sources()).toEqual([FRESH]);
 });
 
+test("with sync on the tabs circle's pull ghost is the deck bar's Spaces glyph, not the Incognito eyes, so the bar lands on the button the deck puts there", () => {
+  const { OFF_STATUS, useSync } = require("../state/sync/store") as typeof import("../state/sync/store");
+  const glyphsOf = (node: ReactTestInstance) => node.findAll((inner) => typeof inner.props.systemName === "string").map((inner) => inner.props.systemName);
+  const eyesOf = (node: ReactTestInstance) => node.findAll((inner) => inner.props.testID === "incognitoEyes" || (typeof inner.type !== "string" && (inner.type as { name?: string }).name === "IncognitoEyes"));
+  act(() => useSync.setState((state) => ({ ...state, status: { ...OFF_STATUS, isEnabled: true } })));
+  const synced = app();
+  const ghost = hosts(synced, "pullGhost")[0]!;
+  expect(glyphsOf(ghost)).toContain("laptopcomputer");
+  expect(eyesOf(ghost)).toHaveLength(0);
+  unmount(synced);
+  act(() => useSync.setState((state) => ({ ...state, status: OFF_STATUS })));
+  const plain = app();
+  expect(glyphsOf(hosts(plain, "pullGhost")[0]!)).not.toContain("laptopcomputer");
+  expect(eyesOf(hosts(plain, "pullGhost")[0]!).length).toBeGreaterThan(0);
+  unmount(plain);
+});
+
 const BROWSING_GLASS = ["floatingBarTabs", "floatingBarAddress", "floatingBarPlus"];
 const DECK_GLASS = ["deckBarIncognito", "deckSearchTabs", "deckBarPlus"];
 const DECK_GLYPHS = ["deckBarIncognitoGlyph", "deckSearchTabsContent", "deckBarPlusGlyph"];

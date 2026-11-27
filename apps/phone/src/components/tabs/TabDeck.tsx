@@ -89,7 +89,7 @@ import { iconRoles, LookBackdrop, MotionView, pageReportsDrawn, type MotionCurve
 import { hideArchiveCard, offerArchiveCard, offerArchiveCardNow, showArchiveCardNow, useArchiveCardShowing } from "../../state/browse/archiveCard";
 import { sendDeckCommand, takeDeckCommand, useDeckCommand } from "../../state/browse/deckCommands";
 import { ArchiveIntervalCard } from "./ArchiveIntervalCard";
-import { DeckBottomBar } from "./DeckBottomBar";
+import { DeckBottomBar, incognitoInHeader } from "./DeckBottomBar";
 import { useBottomBarLayout } from "../ui/useBottomBarLayout";
 import { DeckHeader, deckHeaderBottom } from "./DeckHeader";
 import { deckLook } from "./deckLook";
@@ -1438,7 +1438,7 @@ export const TabDeck = memo(function TabDeck() {
                     <DeckHeader
                       moreOpener={moreOpener}
                       spacesOpener={spacesOpener}
-                      privacy={deckBarLayout.strip?.ends ? undefined : { privateCount, onCloseIncognito: confirmLeaveIncognito }}
+                      privacy={incognitoInHeader(syncEnabled, deckBarLayout) ? { privateCount, onCloseIncognito: confirmLeaveIncognito } : undefined}
                       underlay={chromeGlassHeld}
                       hits={pulls}
                       safeTop={g.safeTop}

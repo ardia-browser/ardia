@@ -19,7 +19,7 @@ const CIRCLE_SYSTEM_NAMES: Partial<Record<SymbolName, string>> = {
   squareGrid2x2: "square.grid.2x2",
 };
 
-const CIRCLE_SYSTEM_GLYPH = 16;
+export const CIRCLE_SYSTEM_GLYPH = 16;
 
 export const CLOSE_ALL_TABS = "Close All Tabs";
 

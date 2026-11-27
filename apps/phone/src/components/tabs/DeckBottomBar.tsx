@@ -42,7 +42,7 @@ type Props = {
 
 export const SPACES_HINT = "Shows your Mac’s spaces.";
 
-export function IncognitoSwitch({ incognito, dark, onLongPress, diameter = controlSize.bar, underlay = false, glassShown, glassShownMs, glyphFade }: { incognito: boolean; dark: boolean; onLongPress?: () => void; diameter?: number; underlay?: boolean } & ChromeFade) {
+export function IncognitoSwitch({ incognito, dark, onLongPress, screenReaderLongPress, diameter = controlSize.bar, underlay = false, glassShown, glassShownMs, glyphFade }: { incognito: boolean; dark: boolean; onLongPress?: () => void; screenReaderLongPress?: () => void; diameter?: number; underlay?: boolean } & ChromeFade) {
   const size = { width: diameter, height: diameter };
   return (
     <ToggleIconButton
@@ -53,6 +53,7 @@ export function IncognitoSwitch({ incognito, dark, onLongPress, diameter = contr
       onChange={switchIncognitoSide}
       onLongPress={onLongPress}
       longPressLabel={onLongPress ? incognitoWords.closeIncognitoTabs : undefined}
+      screenReaderLongPress={screenReaderLongPress}
       onPressIn={haptics.barPress}
       visual={diameter}
       dims="glyph"
@@ -76,7 +77,7 @@ export function IncognitoSwitchMenu({ incognito, dark, privateCount, onCloseInco
   return (
     <DeckHitTarget control="privacy" live={hits} originY={originY} style={size}>
       <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} style={size}>
-        {({ onLongPress }) => <IncognitoSwitch incognito={incognito} dark={dark} diameter={diameter} underlay={underlay} onLongPress={switchMenuShown ? (onLongPress ?? holdOwnedByMenu) : undefined} {...fade} />}
+        {({ onLongPress }) => <IncognitoSwitch incognito={incognito} dark={dark} diameter={diameter} underlay={underlay} onLongPress={switchMenuShown ? (onLongPress ?? holdOwnedByMenu) : undefined} screenReaderLongPress={switchMenuShown && !onLongPress ? onCloseIncognito : undefined} {...fade} />}
       </MenuTrigger>
     </DeckHitTarget>
   );

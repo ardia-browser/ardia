@@ -217,7 +217,7 @@ nativeTest("the deck header shows a space's name alone when it has no icon of it
   unmount(marked);
 });
 
-nativeTest("holding the Incognito switch offers Close Incognito Tabs, which asks with an action sheet first, and the hold is the menu's, so letting go doesn't also flip the switch", async () => {
+nativeTest("holding the Incognito switch offers Close Incognito Tabs, which asks with an action sheet first, and the hold is the menu's, so letting go doesn't also flip the switch, while VoiceOver's action asks the same confirmation", async () => {
   act(() => tabStore.useTabs.setState((state) => ({ ...state, privates: someTabs(2, true) })));
   const leave = jest.spyOn(browse, "leaveIncognito").mockImplementation(() => undefined);
   const root = deck();
@@ -228,6 +228,14 @@ nativeTest("holding the Incognito switch offers Close Incognito Tabs, which asks
   expect(typeof toggle.props.onLongPress).toBe("function");
   act(() => toggle.props.onLongPress());
   expect(tabStore.useTabs.getState().incognito).toBe(false);
+  expect(mockNative.sheets).toHaveLength(0);
+  const named = (toggle.props.accessibilityActions ?? []) as { name: string }[];
+  expect(named.map((action) => action.name)).toContain("Close Incognito Tabs");
+  act(() => toggle.props.onAccessibilityAction({ nativeEvent: { actionName: "Close Incognito Tabs" } }));
+  await act(async () => undefined);
+  expect(mockNative.sheets[0]).toMatchObject({ title: "Close Incognito Tabs?" });
+  expect(leave).not.toHaveBeenCalled();
+  mockNative.sheets.length = 0;
   choose(pill, "Close Incognito Tabs");
   await act(async () => undefined);
   expect(mockNative.sheets[0]).toMatchObject({ title: "Close Incognito Tabs?", message: "Their pages, cookies and history are cleared." });

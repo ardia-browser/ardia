@@ -110,6 +110,7 @@ test("settings: read, schema, set what config.json takes, refuse control itself,
   const schema = await ok("settings.schema");
   assert.equal(schema.find((s) => s.key === "tabLayout").writable, true);
   assert.equal(schema.find((s) => s.key === "cliControl").writable, false);
+  assert.equal(schema.find((s) => s.key === "showCliPill").writable, false);
   const set = await ok("settings.set", { values: { tabLayout: "top", showUnreadCounts: true } });
   assert.deepEqual(set.changed.sort(), ["showUnreadCounts", "tabLayout"]);
   assert.equal(S().settings.tabLayout, "top");
@@ -117,8 +118,11 @@ test("settings: read, schema, set what config.json takes, refuse control itself,
   assert.equal(bad.error.code, "bad_request");
   assert.equal(S().settings.showUnreadCounts, true);
   assert.equal((await call("settings.set", { values: { cliControl: false } })).error.code, "refused");
+  assert.equal((await call("settings.set", { values: { showCliPill: false } })).error.code, "refused");
+  assert.equal((await call("settings.reset", { keys: ["showCliPill"] })).error.code, "refused");
   assert.match((await call("settings.set", { values: { defaultProfileId: "x" } })).error.message, /profiles\.setDefault/);
   assert.equal(S().settings.cliControl, true);
+  assert.equal(S().settings.showCliPill, true);
   await ok("settings.reset", { keys: ["tabLayout"] });
   assert.equal(S().settings.tabLayout, "sidebar");
 });

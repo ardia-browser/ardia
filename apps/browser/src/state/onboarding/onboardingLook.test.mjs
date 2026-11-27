@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { useBrowser } from "../browser/store.ts";
-import { chooseSource, goToStep, previewTheme, skipStep, startOnboarding, useOnboarding } from "./onboarding.ts";
+import { chooseSource, goToStep, previewTheme, questionsFor, skipStep, startOnboarding, useOnboarding } from "./onboarding.ts";
 import { adoptSetupChoices } from "./setupCodeChoices.ts";
 import { usePlugins } from "../plugins/store.ts";
 
@@ -18,7 +18,7 @@ test("skipping the colour step after the window changed profile puts the look ba
   S().setProfileLook(work, { theme: look(0.9), presetThemes: { blue: look(0.9) } });
   startOnboarding(windowId, "source");
   chooseSource("fresh");
-  goToStep("look");
+  goToStep("layout", questionsFor("layout").findIndex((q) => q.id === "color"));
   previewTheme(look(0.5));
   useBrowser.setState((s) => ({ windows: { ...s.windows, [windowId]: { ...s.windows[windowId], profileId: work } } }));
   skipStep();
@@ -37,7 +37,7 @@ test("previewing in Personal, switching the window to Work and resetting Work's 
   S().setProfileLook(work, { theme: look(0.9), presetThemes: { blue: look(0.9) } });
   startOnboarding(windowId, "source");
   chooseSource("fresh");
-  goToStep("look");
+  goToStep("layout", questionsFor("layout").findIndex((q) => q.id === "color"));
   previewTheme(look(0.5));
   useBrowser.setState((s) => ({ windows: { ...s.windows, [windowId]: { ...s.windows[windowId], profileId: work } } }));
   previewTheme(null);
@@ -57,7 +57,7 @@ test("a setup code that sets the colour drops only the window profile's snapshot
   S().setProfileLook(work, { theme: look(0.9), presetThemes: { blue: look(0.9) } });
   startOnboarding(windowId, "source");
   chooseSource("fresh");
-  goToStep("look");
+  goToStep("layout", questionsFor("layout").findIndex((q) => q.id === "color"));
   useBrowser.setState((s) => ({ windows: { ...s.windows, [windowId]: { ...s.windows[windowId], profileId: work } } }));
   previewTheme(null);
   useBrowser.setState((s) => ({ windows: { ...s.windows, [windowId]: { ...s.windows[windowId], profileId: personal } } }));

@@ -60,3 +60,23 @@ export function sendTabStripCommand(command: TabStripCommand, refused?: (id: num
 export type LinkRoute = { profile?: string; adoptIds?: (string | null)[]; dismissed?: number[] };
 
 export type WindowRequest = { request: OpenWindowRequest; profile: string; fromWindow?: string };
+
+export type TabConsoleLevel = "debug" | "info" | "warning" | "error";
+
+export type TabConsoleEntry = { seq: number; time: number; level: TabConsoleLevel; message: string; source: string; line: number; frame: "main" | "sub"; clipped?: boolean };
+
+export type TabNetworkEntry = { seq: number; time: number; method: string; url: string; status: number; type: string; frame: "main" | "sub"; durationMs?: number; error?: string; failed?: boolean; cached?: boolean };
+
+export type TabEngineRefusal = { ok: false; code: string; reason: string };
+
+export type TabDiagnosticsRead = { ok: true; console: TabConsoleEntry[]; network: TabNetworkEntry[]; nextSeq: number; clearedBefore: number; capacity: { console: number; network: number } };
+
+export type TabInputAction = "click" | "dblclick" | "move" | "down" | "up" | "wheel" | "key" | "text";
+
+export type TabInputModifier = "shift" | "control" | "alt" | "meta";
+
+export type TabInputArgs = { tabId: string; action: TabInputAction; x?: number; y?: number; button?: "left" | "middle"; clickCount?: number; modifiers?: TabInputModifier[]; deltaX?: number; deltaY?: number; key?: string; code?: string; text?: string; prime?: boolean; token?: number };
+
+export type TabInputPrimed = { ok: true; painted: boolean; token?: number };
+
+export type TabInputDone = { ok: true; acked: boolean; sent?: boolean; viewport: { width: number; height: number } };

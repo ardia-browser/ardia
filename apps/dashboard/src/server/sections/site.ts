@@ -31,6 +31,8 @@ const CLICK_EVENTS = [
   ["release_notes_viewed", "Release notes"],
   ["notify_clicked", "Notify me"],
   ["discord_clicked", "Discord"],
+  ["donate_clicked", "Donate"],
+  ["sponsor_clicked", "Sponsor logo"],
   ["send_to_mac_clicked", "Send to my Mac"],
   ["testflight_clicked", "iPhone TestFlight"],
   ["android_apk_clicked", "Android APK"],
@@ -268,35 +270,57 @@ function normalCdf(z: number) {
   return z > 0 ? 1 - p : p;
 }
 
-export async function siteExperiment(range: RangeKey, signal?: AbortSignal, zone = UTC) {
+type ExperimentSpec = { flag: string; control: string; treatment: string; goal: string; secondary: string };
+
+const DOWNLOAD_BAND: ExperimentSpec = {
+  flag: "download-band",
+  control: "control",
+  treatment: "band",
+  goal: "event = 'download_clicked'",
+  secondary: "event = 'download_clicked' AND properties['location'] = 'office-band'",
+};
+
+const DONATE_FLOOR: ExperimentSpec = {
+  flag: "donate-floor",
+  control: "ten",
+  treatment: "five",
+  goal: "event = 'donate_clicked' AND properties['amount'] != ''",
+  secondary: "event = 'donate_clicked' AND properties['amount'] IN ('5', '10')",
+};
+
+async function flagExperiment(spec: ExperimentSpec, range: RangeKey, signal?: AbortSignal, zone = UTC) {
   const w = windowFor(range, zone);
+  const exposure = `event = '$feature_flag_called' AND properties['$feature_flag'] = '${spec.flag}'`;
   const rows = await query(
-    `SELECT variant, count(), countIf(clicked_after), countIf(band_click)
+    `SELECT variant, count(), countIf(reached_goal), countIf(reached_secondary)
      FROM (
        SELECT distinct_id,
-         argMinIf(properties['$feature_flag_response'], timestamp, event = '$feature_flag_called') AS variant,
-         minIf(timestamp, event = '$feature_flag_called') AS exposed_at,
-         maxIf(timestamp, event = 'download_clicked') >= exposed_at AND countIf(event = 'download_clicked') > 0 AS clicked_after,
-         countIf(event = 'download_clicked' AND properties['location'] = 'office-band') > 0 AS band_click
+         argMinIf(properties['$feature_flag_response'], timestamp, ${exposure}) AS variant,
+         minIf(timestamp, ${exposure}) AS exposed_at,
+         countIf(${spec.goal}) > 0 AND maxIf(timestamp, ${spec.goal}) >= exposed_at AS reached_goal,
+         countIf(${spec.secondary}) > 0 AND maxIf(timestamp, ${spec.secondary}) >= exposed_at AS reached_secondary
        FROM telemetry.events
-       WHERE event IN ('$feature_flag_called', 'download_clicked') AND ${since(w.start)} AND ${SITE}
+       WHERE (${exposure} OR ${spec.goal}) AND ${since(w.start)} AND ${SITE}
        GROUP BY distinct_id
-       HAVING countIf(event = '$feature_flag_called' AND properties['$feature_flag'] = 'download-band') > 0
+       HAVING countIf(${exposure}) > 0
      )
      GROUP BY variant ORDER BY variant`,
     signal,
   );
-  const variants = rows.map((r) => ({ variant: str(r[0]) || "unknown", exposed: num(r[1]), clicked: num(r[2]), bandClicks: num(r[3]) }));
-  const control = variants.find((v) => v.variant === "control");
-  const band = variants.find((v) => v.variant === "band");
+  const variants = rows.map((r) => ({ variant: str(r[0]) || "unknown", exposed: num(r[1]), clicked: num(r[2]), secondary: num(r[3]) }));
+  const control = variants.find((v) => v.variant === spec.control);
+  const treatment = variants.find((v) => v.variant === spec.treatment);
   let pValue: number | null = null;
-  if (control && band && control.exposed > 0 && band.exposed > 0) {
-    const pooled = (control.clicked + band.clicked) / (control.exposed + band.exposed);
-    const se = Math.sqrt(pooled * (1 - pooled) * (1 / control.exposed + 1 / band.exposed));
-    if (se > 0) pValue = 2 * (1 - normalCdf(Math.abs((band.clicked / band.exposed - control.clicked / control.exposed) / se)));
+  if (control && treatment && control.exposed > 0 && treatment.exposed > 0) {
+    const pooled = (control.clicked + treatment.clicked) / (control.exposed + treatment.exposed);
+    const se = Math.sqrt(pooled * (1 - pooled) * (1 / control.exposed + 1 / treatment.exposed));
+    if (se > 0) pValue = 2 * (1 - normalCdf(Math.abs((treatment.clicked / treatment.exposed - control.clicked / control.exposed) / se)));
   }
   return { variants, pValue };
 }
+
+export const siteExperiment = (range: RangeKey, signal?: AbortSignal, zone = UTC) => flagExperiment(DOWNLOAD_BAND, range, signal, zone);
+export const siteDonateExperiment = (range: RangeKey, signal?: AbortSignal, zone = UTC) => flagExperiment(DONATE_FLOOR, range, signal, zone);
 
 export async function siteVitals(range: RangeKey, signal?: AbortSignal, zone = UTC) {
   const w = windowFor(range, zone);

@@ -3,7 +3,6 @@ import { capsule, ink, radius, Symbol, useTheme } from "../ui";
 import { MiniWindow, type MiniWindowLook } from "./MiniWindow";
 import { choicePreview as P } from "./tokens";
 import { useSettingsColors } from "./useSettingsColors";
-import type { CtrlTabPreset } from "../../state/commands/ctrlTabKeys";
 import type { Settings } from "../../state/settings/settings";
 
 type FieldPlace = "side" | "toolbar";
@@ -31,24 +30,36 @@ export function AfterClosingTabPreview({ mode, top, side }: { mode: Settings["af
   );
 }
 
-export function CtrlTabPreview({ preset }: { preset: CtrlTabPreset }) {
+export function TabSwitcherOrderPreview({ order }: { order: Settings["tabSwitcherOrder"] }) {
   const look = useLook();
-  if (preset === "step") return <MiniWindow size="l" layout="side" bars={P.tabRows} faintBar={1} accentBar={2} look={look} />;
-  return (
-    <MiniWindow
-      size="l"
-      layout="side"
-      bars={P.tabRows}
-      look={{ ...look, accent: undefined }}
-      overlay={
-        <View style={[SWITCHER, { backgroundColor: look.window }]}>
-          {P.switcherCards.map((focused, i) => (
-            <View key={i} style={[SWITCHER_CARD, focused ? { borderColor: look.accent, backgroundColor: `${look.accent}${P.litAlpha}` } : { borderColor: ink.clear, backgroundColor: look.bar }]} />
-          ))}
-        </View>
-      }
-    />
+  return order === "recent" ? (
+    <MiniWindow size="l" layout="side" bars={P.tabRows} faintBar={2} accentBar={0} look={look} />
+  ) : (
+    <MiniWindow size="l" layout="side" bars={P.tabRows} faintBar={1} accentBar={2} look={look} />
   );
+}
+
+export function TabSwitcherViewPreview({ view }: { view: Settings["tabSwitcherView"] }) {
+  const look = useLook();
+  if (view === "none") return <MiniWindow size="l" layout="side" bars={P.tabRows} faintBar={1} accentBar={2} look={look} />;
+  const lit = { borderColor: look.accent, backgroundColor: `${look.accent}${P.litAlpha}` };
+  const overlay =
+    view === "thumbnails" ? (
+      <View style={[SWITCHER, { backgroundColor: look.window }]}>
+        {P.switcherCards.map((focused, i) => (
+          <View key={i} style={[SWITCHER_CARD, focused ? lit : { borderColor: ink.clear, backgroundColor: look.bar }]} />
+        ))}
+      </View>
+    ) : (
+      <View style={[SWITCHER_LIST, { backgroundColor: look.window }]}>
+        {P.switcherRows.map((w, i) => (
+          <View key={i} style={[SWITCHER_ROW, i === P.switcherRowLit ? lit : { borderColor: ink.clear }]}>
+            <View style={[SWITCHER_ROW_LINE, { width: `${w * 100}%` as DimensionValue, backgroundColor: i === P.switcherRowLit ? look.accent : look.bar }]} />
+          </View>
+        ))}
+      </View>
+    );
+  return <MiniWindow size="l" layout="side" bars={P.tabRows} look={{ ...look, accent: undefined }} overlay={overlay} />;
 }
 
 export function AddressBarPreview({ addressBar }: { addressBar: Settings["addressBar"] }) {
@@ -105,6 +116,9 @@ export function ScrollToolbarPreview({ hides }: { hides: boolean }) {
 
 const SWITCHER = { flexDirection: "row", gap: P.gap, padding: P.gap, width: "78%", borderRadius: radius.tile * P.scale } as const;
 const SWITCHER_CARD = { flex: 1, height: P.switcherCard, borderRadius: radius.tile * P.scale * 0.75, borderWidth: P.litBorder } as const;
+const SWITCHER_LIST = { gap: P.gap / 2, padding: P.gap, width: "56%", borderRadius: radius.tile * P.scale } as const;
+const SWITCHER_ROW = { height: P.switcherRow, justifyContent: "center", paddingHorizontal: P.gap, borderRadius: radius.tile * P.scale * 0.5, borderWidth: P.litBorder / 1.5 } as const;
+const SWITCHER_ROW_LINE = { height: P.line, borderRadius: capsule(P.line) } as const;
 const COMMAND_BAR = { gap: P.gap, padding: P.gap, width: "70%", borderRadius: radius.tile * P.scale } as const;
 const COMMAND_FIELD = { height: P.commandField, borderRadius: capsule(P.commandField), borderWidth: P.litBorder / 1.5 } as const;
 const LINE = { height: P.line, borderRadius: capsule(P.line) } as const;

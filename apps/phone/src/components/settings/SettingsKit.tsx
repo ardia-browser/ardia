@@ -5,11 +5,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isSettingsOpening, rememberSettingsScroll, settingsScroll, useSettingsNav } from "../../state/settings/nav";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialMediumTitle, MaterialNavRow, MaterialPickerRow, MaterialSettingsAppBar, MaterialToggleRow, MaterialValueRow, materialMediumTitleHeight, materialSettingsListStyles } from "./MaterialSettingsKit";
-import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleRow as SharedToggleRow, Tappable, smoothCorners, slotAround, controlSize, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, rolesFor, ToggleRow as SharedToggleRow, Tappable, smoothCorners, slotAround, controlSize, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
 import { useMaterialTheme } from "../ui/materialTheme";
 import { revealInList, type SettingsReveal } from "./settingsReveal";
+import { NoticeDot, withUpdateWords } from "./UpdateDot";
 
 export const SettingsHostedContext = createContext(false);
+export const SettingsFormColorsContext = createContext<ReturnType<typeof rolesFor> | null>(null);
 
 type PageProps = { title: string; onBack?: () => void; onClose?: () => void; leading?: ReactNode; trailing?: ReactNode; children: ReactNode; scroll?: boolean; onRefresh?: () => Promise<unknown>; heroTitle?: boolean; mediumAppBar?: boolean; overlay?: ReactNode; dismissesKeyboard?: boolean; revealRef?: RefObject<SettingsReveal | null> };
 
@@ -17,6 +19,7 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
   const design = useDesign();
   const material = design === "material";
   const theme = useTheme();
+  const form = useContext(SettingsFormColorsContext);
   const { scheme } = useMaterialTheme();
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
@@ -50,8 +53,8 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
   const titleStyle = useAnimatedStyle(() => ({ opacity: titleOpacity.value }));
   const hosted = useContext(SettingsHostedContext);
   return (
-    <View testID={material ? "materialSettingsPage" : undefined} style={[StyleSheet.absoluteFill, material ? { backgroundColor: scheme.surfaceContainer } : null]}>
-      {material ? null : <LookBackdrop />}
+    <View testID={material ? "materialSettingsPage" : undefined} style={[StyleSheet.absoluteFill, material ? { backgroundColor: scheme.surfaceContainer } : form ? { backgroundColor: form.groupedBackground } : null]}>
+      {material || form ? null : <LookBackdrop />}
       {material ? (
         <MaterialSettingsAppBar
           title={title}
@@ -78,7 +81,7 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
           <View style={styles.topSide}>
             {onBack ? (
               <Tappable kind="icon" label="Back" onPress={onBack} style={styles.back}>
-                <Symbol name="chevronLeft" size={22} color={theme.formAccent} />
+                <Symbol name="chevronLeft" size={22} color={form?.label ?? theme.formAccent} />
               </Tappable>
             ) : null}
             {leading}
@@ -169,15 +172,17 @@ export function CrossfadeText({ text, style, testID }: { text: string; style: St
 
 function ClassicBarButton({ title, onPress, emphasized, enabled = true }: { title: string; onPress: () => void; emphasized?: boolean; enabled?: boolean }) {
   const theme = useTheme();
+  const accent = useContext(SettingsFormColorsContext)?.formAccent ?? theme.formAccent;
   return (
     <Tappable kind="text" label={title} disabled={!enabled} onPress={onPress} style={styles.barButton}>
-      <Text style={[font.body, emphasized ? styles.bold : null, { color: enabled ? theme.formAccent : theme.tertiaryLabel }]}>{title}</Text>
+      <Text style={[font.body, emphasized ? styles.bold : null, { color: enabled ? accent : theme.tertiaryLabel }]}>{title}</Text>
     </Tappable>
   );
 }
 
 function ClassicGroup({ header, footer, children }: { header?: string; footer?: string | null; children: ReactNode }) {
   const theme = useTheme();
+  const fill = useContext(SettingsFormColorsContext)?.groupedCell ?? theme.groupFill;
   return (
     <View style={styles.groupOuter}>
       {header ? (
@@ -185,7 +190,7 @@ function ClassicGroup({ header, footer, children }: { header?: string; footer?: 
           {header}
         </Text>
       ) : null}
-      <View style={[styles.group, { backgroundColor: theme.groupFill }]}>{children}</View>
+      <View style={[styles.group, { backgroundColor: fill }]}>{children}</View>
       {footer ? <Text style={[font.footnote, styles.groupFooter, { color: theme.secondaryLabel }]}>{footer}</Text> : null}
     </View>
   );
@@ -199,12 +204,19 @@ function ClassicIconTile({ icon, tint, side = settingsLayout.tile }: { icon: Sym
   );
 }
 
-function Label({ title, icon, tint, color }: { title: string; icon?: SymbolName; tint?: string; color?: string }) {
+function Label({ title, icon, tint, color, detail }: { title: string; icon?: SymbolName; tint?: string; color?: string; detail?: string }) {
   const theme = useTheme();
   return (
     <View style={styles.label}>
       {icon && tint ? <IconTile icon={icon} tint={tint} /> : null}
-      <Text style={[font.body, styles.labelText, { color: color ?? theme.label }]}>{title}</Text>
+      {detail ? (
+        <View style={styles.labelLines}>
+          <Text style={[font.body, styles.labelText, { color: color ?? theme.label }]}>{title}</Text>
+          <Text style={[font.footnote, styles.labelText, { color: theme.secondaryLabel }]}>{detail}</Text>
+        </View>
+      ) : (
+        <Text style={[font.body, styles.labelText, { color: color ?? theme.label }]}>{title}</Text>
+      )}
     </View>
   );
 }
@@ -216,32 +228,33 @@ function ClassicDivider({ inset = settingsLayout.rowInset }: { inset?: number })
 
 type RowBase = { title: string; icon?: SymbolName; tint?: string; divider?: boolean };
 
-function ClassicNavRow({ title, icon, tint, value, divider, onPress }: RowBase & { value?: string; onPress: () => void }) {
+function ClassicNavRow({ title, icon, tint, value, detail, chevron = true, divider, dot = false, valueActs = false, onPress }: RowBase & { value?: string; detail?: string; chevron?: boolean; dot?: boolean; valueActs?: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
     <View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={title}
+        accessibilityLabel={withUpdateWords(detail ? `${title}, ${detail}` : title, dot)}
         accessibilityValue={value ? { text: value } : undefined}
         onPress={onPress} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
-        <Label title={title} icon={icon} tint={tint} />
+        <Label title={title} icon={icon} tint={tint} detail={detail} />
+        {dot ? <NoticeDot /> : null}
         {value ? (
-          <Text style={[font.body, styles.value, { color: theme.secondaryLabel }]} numberOfLines={1}>
+          <Text style={[font.body, styles.value, { color: valueActs ? theme.formAccent : theme.secondaryLabel }]} numberOfLines={1}>
             {value}
           </Text>
         ) : null}
-        <Symbol name="chevronRight" size={14} color={theme.tertiaryLabel} />
+        {chevron ? <Symbol name="chevronRight" size={14} color={theme.tertiaryLabel} /> : null}
       </Pressable>
       {divider ? <Divider /> : null}
     </View>
   );
 }
 
-function ClassicToggleRow({ title, icon, tint, divider, value, onChange, detail, buttonRef }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null> }) {
+function ClassicToggleRow({ title, icon, tint, divider, value, onChange, detail, buttonRef, disabled = false }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null>; disabled?: boolean }) {
   return (
     <View>
-      <SharedToggleRow buttonRef={buttonRef} label={title} detail={detail} detailInset={icon ? settingsLayout.tile + settingsLayout.labelGap : 0} value={value} onChange={onChange} style={styles.row}>
+      <SharedToggleRow buttonRef={buttonRef} label={title} detail={detail} detailInset={icon ? settingsLayout.tile + settingsLayout.labelGap : 0} value={value} disabled={disabled} onChange={onChange} style={styles.row}>
         <Label title={title} icon={icon} tint={tint} />
       </SharedToggleRow>
       {divider ? <Divider /> : null}
@@ -371,6 +384,7 @@ const styles = StyleSheet.create({
   tile: { alignItems: "center", justifyContent: "center", ...smoothCorners },
   label: { flexDirection: "row", alignItems: "center", gap: settingsLayout.labelGap, flexShrink: 1, flexGrow: 1 },
   labelText: { flexShrink: 1 },
+  labelLines: { flexShrink: 1, gap: space.tight },
   divider: { height: StyleSheet.hairlineWidth },
   row: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: settingsLayout.rowMinHeight, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.s },
   value: { flexShrink: 0, maxWidth: "55%", textAlign: "right" },

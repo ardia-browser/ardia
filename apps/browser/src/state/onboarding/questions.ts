@@ -1,8 +1,11 @@
 import { tabLayoutOf } from "../browser/model";
+import type { Settings } from "../settings/settings";
 import { useBrowser } from "../browser/store";
 import { QUESTIONS, questionsFor, useOnboarding, type OnboardingStep, type QuestionId } from "./onboarding";
 
 export const keysOf = (step: Exclude<OnboardingStep, "intro">) => QUESTIONS[step].flatMap((q) => q.keys);
+
+export const ALL_QUESTION_KEYS: readonly (keyof Settings)[] = [...new Set(Object.values(QUESTIONS).flatMap((list) => list.flatMap((q) => q.keys)))];
 
 export const questionKeys = (id: QuestionId) => Object.values(QUESTIONS).flat().find((q) => q.id === id)?.keys ?? [];
 

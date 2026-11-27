@@ -14,6 +14,7 @@ import { openProfileItemMenu } from "../../profiles/profileMenu";
 import { requestCreateProfile } from "../../../state/profiles/createProfileRequest";
 import { curve } from "../../ui/motion";
 import { settingsMotion } from "../tokens";
+import { noteSettingsProfiles } from "../../../state/telemetry/usage";
 
 export const listOf = (names: string[], joiner = "and") => (names.length <= 2 ? names.join(` ${joiner} `) : `${names.slice(0, -1).join(", ")}, ${joiner} ${names.at(-1)}`);
 
@@ -26,8 +27,15 @@ export function useSharedWith(profileId: string): string[] {
   }, [order, profiles, profileId]);
 }
 
+function pickProfile(profileId: string) {
+  noteSettingsProfiles("picked");
+  replaceSettingsPlace(profileId);
+}
+
 const settle = (value: Animated.Value, toValue: number) =>
   Animated.timing(value, { toValue, duration: settingsMotion.profileRowSettle, easing: curve.enter, useNativeDriver: true });
+
+let savedStripX = 0;
 
 export function ProfileBar({ selectedId }: { selectedId: string }) {
   const theme = useTheme();
@@ -36,7 +44,10 @@ export function ProfileBar({ selectedId }: { selectedId: string }) {
   const thumb = useSlidingThumb(selectedId);
   const slots = thumb.slots;
   const scroller = useRef<ScrollView>(null);
-  const view = useRef({ x: 0, width: 0 });
+  const view = useRef({ x: savedStripX, width: 0 });
+  const restored = useRef(false);
+  const selectedRef = useRef(selectedId);
+  selectedRef.current = selectedId;
   const offsetOf = (id: string) => {
     let v = offsets.get(id);
     if (!v) offsets.set(id, (v = new Animated.Value(0)));
@@ -51,14 +62,27 @@ export function ProfileBar({ selectedId }: { selectedId: string }) {
     offsets.forEach((v) => v.setValue(0));
   }, [order]);
 
-  useEffect(() => {
-    const slot = slots.get(selectedId);
+  const revealSelected = (animated: boolean) => {
+    const slot = slots.get(selectedRef.current);
     const { x, width } = view.current;
     if (!slot || !width) return;
     const left = slot.x + TRAY_PAD;
     const right = left + slot.width + TRAY_PAD;
-    if (left - TRAY_PAD < x) scroller.current?.scrollTo({ x: Math.max(0, left - TRAY_PAD * 2), animated: true });
-    else if (right > x + width) scroller.current?.scrollTo({ x: right - width + TRAY_PAD, animated: true });
+    let next = x;
+    if (left - TRAY_PAD < x) next = Math.max(0, left - TRAY_PAD * 2);
+    else if (right > x + width) next = right - width + TRAY_PAD;
+    if (!restored.current) {
+      restored.current = true;
+      view.current.x = next;
+      savedStripX = next;
+      if (next > 0) scroller.current?.scrollTo({ x: next, animated: false });
+      return;
+    }
+    if (next !== x) scroller.current?.scrollTo({ x: next, animated });
+  };
+
+  useEffect(() => {
+    revealSelected(true);
   }, [selectedId]);
 
   const controller = useRef({
@@ -112,8 +136,15 @@ export function ProfileBar({ selectedId }: { selectedId: string }) {
           horizontal
           showsHorizontalScrollIndicator={false}
           scrollEventThrottle={16}
-          onScroll={(e) => void (view.current.x = e.nativeEvent.contentOffset.x)}
-          onLayout={(e) => void (view.current.width = e.nativeEvent.layout.width)}
+          onScroll={(e) => {
+            view.current.x = e.nativeEvent.contentOffset.x;
+            savedStripX = view.current.x;
+          }}
+          onLayout={(e) => {
+            view.current.width = e.nativeEvent.layout.width;
+            revealSelected(false);
+          }}
+          onContentSizeChange={() => revealSelected(false)}
           contentContainerStyle={TRAY_SCROLL}
         >
           <View style={TRAY_CONTENT}>
@@ -126,7 +157,10 @@ export function ProfileBar({ selectedId }: { selectedId: string }) {
                 offset={offsetOf(id)}
                 lifted={dragging === id}
                 controller={controller}
-                onLayout={(e) => thumb.measure(id, e)}
+                onLayout={(e) => {
+                  thumb.measure(id, e);
+                  if (id === selectedRef.current) revealSelected(false);
+                }}
               />
             ))}
           </View>
@@ -180,7 +214,7 @@ function ProfilePill({
       <ContextMenuArea onContextMenu={() => void openProfileItemMenu(profileId, "settings", SETTINGS_WINDOW_ID, anchor.current)}>
         <View {...hoverProps} ref={anchor} collapsable={false}>
           <Pressable
-            onPress={() => !selected && replaceSettingsPlace(profileId)}
+            onPress={() => !selected && pickProfile(profileId)}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             accessibilityLabel={profile.name}

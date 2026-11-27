@@ -57,7 +57,15 @@ extension PluginPrograms {
   }
 
   private static func aclGrantsChanges(_ path: String, following: Bool) -> Bool {
-    guard let acl = following ? acl_get_file(path, ACL_TYPE_EXTENDED) : acl_get_link_np(path, ACL_TYPE_EXTENDED) else { return errno != ENOENT }
+    aclGrantsChanges(following ? acl_get_file(path, ACL_TYPE_EXTENDED) : acl_get_link_np(path, ACL_TYPE_EXTENDED))
+  }
+
+  static func aclGrantsChanges(fd: Int32) -> Bool {
+    aclGrantsChanges(acl_get_fd_np(fd, ACL_TYPE_EXTENDED))
+  }
+
+  private static func aclGrantsChanges(_ given: acl_t?) -> Bool {
+    guard let acl = given else { return errno != ENOENT }
     defer { acl_free(UnsafeMutableRawPointer(acl)) }
     let changes: [acl_perm_t] = [ACL_ADD_FILE, ACL_ADD_SUBDIRECTORY, ACL_DELETE_CHILD, ACL_DELETE, ACL_WRITE_SECURITY, ACL_CHANGE_OWNER]
     var entry: acl_entry_t?

@@ -8,6 +8,7 @@ import { MaterialDialog, useMaterialRipple } from "../ui/MaterialSurfaces";
 import { useMaterialTheme } from "../ui/materialTheme";
 import { MATERIAL_SEGMENT_GAP, materialSegmentCorners, materialShape, materialSize, materialType } from "../ui/materialTokens";
 import { dismissWords } from "../../lib/sharedWords";
+import { NoticeDot, withUpdateWords } from "./UpdateDot";
 
 const AVATAR = 40;
 const RADIO = 20;
@@ -116,13 +117,13 @@ export function MaterialIconTile({ icon, side = AVATAR }: { icon: SymbolName; ti
   );
 }
 
-function ItemText({ title, supporting, color }: { title: string; supporting?: string | null; color?: string }) {
+function ItemText({ title, supporting, color, supportingActs = false }: { title: string; supporting?: string | null; color?: string; supportingActs?: boolean }) {
   const { scheme } = useMaterialTheme();
   return (
     <View style={styles.fill}>
       <Text style={[materialType.bodyLarge, { color: color ?? scheme.onSurface }]}>{title}</Text>
       {supporting ? (
-        <Text numberOfLines={2} style={[materialType.bodyMedium, { color: scheme.onSurfaceVariant }]}>
+        <Text numberOfLines={2} style={[materialType.bodyMedium, { color: supportingActs ? scheme.primary : scheme.onSurfaceVariant }]}>
           {supporting}
         </Text>
       ) : null}
@@ -132,27 +133,56 @@ function ItemText({ title, supporting, color }: { title: string; supporting?: st
 
 export function MaterialSettingsLeading({ icon }: { icon?: SymbolName }) {
   const { scheme } = useMaterialTheme();
-  return <View testID="materialSettingsIconSlot" style={styles.leading}>{icon ? <Symbol name={icon} size={materialSize.icon} color={scheme.onSurfaceVariant} /> : null}</View>;
+  if (!icon) return null;
+  return (
+    <View testID="materialSettingsIconSlot" style={styles.leading}>
+      <Symbol name={icon} size={materialSize.icon} color={scheme.onSurfaceVariant} />
+    </View>
+  );
+}
+
+export function MaterialCheckRow({ title, checked, onPress, disabled = false }: { title: string; checked: boolean; onPress: () => void; disabled?: boolean; divider?: boolean }) {
+  const { scheme } = useMaterialTheme();
+  const ripple = useMaterialRipple();
+  const ink = disabled ? withAlpha(scheme.onSurface, MATERIAL_STATE.disabledContent) : scheme.onSurface;
+  const ring = disabled ? ink : checked ? scheme.primary : scheme.onSurfaceVariant;
+  return (
+    <Pressable
+      testID={`materialSettingsRow:${title}`}
+      accessibilityRole="radio"
+      accessibilityLabel={title}
+      accessibilityState={{ selected: checked, checked, ...(disabled ? { disabled } : {}) }}
+      disabled={disabled}
+      android_ripple={ripple}
+      onPress={onPress}
+      style={styles.row}
+    >
+      <ItemText title={title} color={ink} />
+      <View style={[styles.radio, { borderColor: ring }]}>{checked ? <View style={[styles.radioDot, { backgroundColor: ring }]} /> : null}</View>
+    </Pressable>
+  );
 }
 
 type RowBase = { title: string; icon?: SymbolName; tint?: string; divider?: boolean };
 
 const rowStyle = (supporting: unknown) => [styles.row, supporting ? styles.rowTwoLine : null];
 
-export function MaterialNavRow({ title, icon, value, onPress }: RowBase & { value?: string; onPress: () => void }) {
+export function MaterialNavRow({ title, icon, value, detail, dot = false, valueActs = false, onPress }: RowBase & { value?: string; detail?: string; dot?: boolean; valueActs?: boolean; onPress: () => void }) {
   const ripple = useMaterialRipple();
+  const supporting = value ?? detail;
   return (
-    <Pressable testID={`materialSettingsRow:${title}`} accessibilityRole="button" accessibilityLabel={title} accessibilityValue={value ? { text: value } : undefined} android_ripple={ripple} onPress={onPress} style={rowStyle(value)}>
+    <Pressable testID={`materialSettingsRow:${title}`} accessibilityRole="button" accessibilityLabel={withUpdateWords(detail ? `${title}, ${detail}` : title, dot)} accessibilityValue={value ? { text: value } : undefined} android_ripple={ripple} onPress={onPress} style={rowStyle(supporting)}>
       <MaterialSettingsLeading icon={icon} />
-      <ItemText title={title} supporting={value} />
+      <ItemText title={title} supporting={supporting} supportingActs={valueActs && value !== undefined} />
+      {dot ? <NoticeDot /> : null}
     </Pressable>
   );
 }
 
-export function MaterialToggleRow({ title, icon, value, onChange, detail, buttonRef }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null> }) {
+export function MaterialToggleRow({ title, icon, value, onChange, detail, buttonRef, disabled = false }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null>; disabled?: boolean }) {
   const ripple = useMaterialRipple();
   return (
-    <Pressable ref={buttonRef} testID={`materialSettingsRow:${title}`} accessibilityRole="switch" accessibilityLabel={title} accessibilityHint={detail} accessibilityState={{ checked: value }} android_ripple={ripple} onPress={() => onChange(!value)} style={rowStyle(detail)}>
+    <Pressable ref={buttonRef} testID={`materialSettingsRow:${title}`} accessibilityRole="switch" accessibilityLabel={title} accessibilityHint={detail} accessibilityState={{ checked: value, disabled }} disabled={disabled} android_ripple={ripple} onPress={() => onChange(!value)} style={[rowStyle(detail), disabled ? styles.disabledRow : null]}>
       <View style={styles.rowInner} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         <MaterialSettingsLeading icon={icon} />
         <ItemText title={title} supporting={detail} />
@@ -257,6 +287,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 16, minHeight: materialSize.listItemOneLine, paddingHorizontal: 16, paddingVertical: 8 },
   rowTwoLine: { minHeight: materialSize.listItemTwoLine },
   leading: { width: materialSize.icon, height: materialSize.icon, alignItems: "center", justifyContent: "center" },
+  disabledRow: { opacity: MATERIAL_STATE.disabledContent },
   rowInner: { flex: 1, flexDirection: "row", alignItems: "center", gap: 16 },
   radioList: { marginHorizontal: -24 },
   radioRow: { flexDirection: "row", alignItems: "center", minHeight: materialSize.touchTarget + 8, paddingHorizontal: 12, gap: 4 },

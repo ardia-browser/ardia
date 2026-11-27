@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
 import { SearchTray } from "../components/search/SearchTray";
 import { searchFieldHeight, searchFieldRadius, searchPanel, searchPanelPlace, searchPanelPreferredHeight, searchPanelRadius } from "../components/search/searchPanelTokens";

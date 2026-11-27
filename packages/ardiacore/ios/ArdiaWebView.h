@@ -28,6 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) BOOL warm;
 @property (nonatomic) BOOL neighbour;
 @property (nonatomic) BOOL autoPictureInPicture;
+@property (nonatomic, copy) NSArray<NSDictionary<NSString *, NSString *> *> *pageMenuItems;
 @property (nonatomic, readonly) BOOL discarded;
 @property (nonatomic) BOOL frozen;
 @property (nonatomic, readonly) int browserId;
@@ -62,6 +63,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
 - (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfHidden(for:));
+- (NSArray<NSNumber *> *)sleepIfUnusedFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfUnused(for:));
+- (BOOL)wakeIfSleeping;
 @end
 
 @interface ArdiaWebView (Reveals)
@@ -96,6 +99,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ArdiaWebView (PaintedFrame)
 @property (nonatomic, readonly) BOOL showsPaintedFrame;
+@end
+
+@interface ArdiaWebView (LeavePrompt)
+@property (nonatomic, readonly) BOOL asksBeforeLeaving;
+- (void)askBeforeLeaving:(void (^)(BOOL leave))answer NS_SWIFT_NAME(askBeforeLeaving(_:));
 @end
 
 @interface ArdiaWebView (NeighbourPages)
@@ -208,6 +216,7 @@ NS_ASSUME_NONNULL_BEGIN
     NS_SWIFT_NAME(setVideoUpscalingTestConditions(_:));
 + (NSDictionary<NSString *, id> *)videoUpscalingState;
 + (NSDictionary<NSString *, NSNumber *> *)takeContentDrift;
++ (NSDictionary<NSString *, NSNumber *> *)takePageMetrics;
 - (BOOL)takeControlPressAt:(double)clickMs control:(NSInteger)target NS_SWIFT_NAME(takeControlPress(clickAt:control:));
 - (void)requestPictureInPictureForClickAt:(double)clickMs
                                   control:(NSInteger)target

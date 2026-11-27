@@ -91,7 +91,10 @@ void ClearRootFill(ArdiaEarlyShown *s, NSView *root) {
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
   [root setValue:nil forKey:@"backgroundColor"];
-  if (s.picture) root.alphaValue = 0;
+  if (s.picture) {
+    ardia_host::KeepHitsWhileClear(root, true);
+    root.alphaValue = 0;
+  }
   [CATransaction commit];
 }
 
@@ -107,6 +110,7 @@ void ReleasePictures(NSView *picture, NSView *backdrop, NSView *root, NSColor *f
   if (root) {
     [root setValue:fill forKey:@"backgroundColor"];
     root.alphaValue = 1;
+    ardia_host::KeepHitsWhileClear(root, false);
   }
   [CATransaction commit];
 }

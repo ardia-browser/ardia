@@ -8,8 +8,12 @@ import { hasPage } from "../tabs/pageSession";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
 import { notePageOverlay } from "../telemetry/usage";
+import type { ConsentToken } from "../telemetry/client";
+import { noteCommandBarKeyDismissal } from "../telemetry/inlineCompletionCounts";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { navigateTyped, noteTypedOpen } from "../plugins/typedAddresses";
+import { focusHeroBar } from "./barState";
+import { heldBarDismissed } from "./barKeyLoss";
 
 export { isEmptyCardTab };
 
@@ -32,6 +36,25 @@ export function showNewTabBar(windowId: string, target: NewTabTarget = IN_LIST):
   if (!barOpensHere(s, windowId)) return false;
   s.openPanel(windowId, "", barTarget(s, windowId, target));
   return true;
+}
+
+const openedByCommandKey = new WeakSet<object>();
+
+export function showNewTabBarForCommandKey(windowId: string): boolean {
+  if (!showNewTabBar(windowId)) return false;
+  const panel = store().windowUi[windowId]?.panel;
+  if (panel) openedByCommandKey.add(panel);
+  return true;
+}
+
+export const commandKeyOpenedNewTabBar = (panel: object | undefined) => !!panel && openedByCommandKey.has(panel);
+
+export function dismissNewTabBarByCommandKey(windowId: string, consent: ConsentToken | null) {
+  closeNewTabBar(windowId);
+  const now = store();
+  const active = activeTabId(now, windowId);
+  if (active && !now.tabs[active]?.url) focusHeroBar(windowId, active);
+  noteCommandBarKeyDismissal(consent);
 }
 
 export function toggleNewTabBar(windowId: string, target: NewTabTarget = IN_LIST): boolean {
@@ -102,15 +125,18 @@ function noteLaunchCards() {
 
 function dismissBars(except?: string) {
   const s = store();
-  for (const [windowId, ui] of Object.entries(s.windowUi)) if (windowId !== except && ui.panel.newTab) s.closePanel(windowId);
+  for (const [windowId, ui] of Object.entries(s.windowUi)) {
+    if (windowId === except || !ui.panel.newTab) continue;
+    heldBarDismissed(windowId);
+    s.closePanel(windowId);
+  }
 }
 
 export function startNewTabBar() {
   for (const id of Object.keys(store().tabs)) launchTabs.add(id);
   queueMicrotask(noteLaunchCards);
-  if (!NEW_TAB_BAR_POLICY.dismissOnWindowDeactivation) return;
   onAppEvent((e) => {
-    if (e.type === "resignActive" || e.type === "screenLocked") dismissBars();
+    if (e.type === "screenLocked" || (e.type === "resignActive" && NEW_TAB_BAR_POLICY.dismissOnWindowDeactivation)) dismissBars();
   });
   onWindowEvent((e) => {
     if (e.type === "focus") dismissBars(e.id);

@@ -5,6 +5,7 @@ import { switchOn } from "../../state/app/switches";
 import { useTheme } from "../ui/theme";
 import { curve, keepAttached, useGated } from "../ui/motion";
 import { Panel, reduceMotion, WindowBackdrop, WindowDragRegion } from "../ui";
+import { PeekEdge } from "./PeekEdge";
 import { useSidebarSide, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useSidebarDockState } from "../../state/windows/hooks";
 import { useShownSidebarWidth } from "../../state/sidebar/shownWidth";
@@ -22,7 +23,7 @@ import {
   noteSidebarPeekClosedWhileResizing,
   noteSidebarPeekFrame,
   noteSidebarPeekRevealHeldBack,
-  noteSidebarScreenEdge,
+  noteSidebarEdgeEvent,
   noteSidebarSlide,
 } from "../../state/telemetry/dockCounts";
 import { ProfileSwipe } from "./ProfileSwipe";
@@ -237,9 +238,9 @@ function SidebarDock({
     dismissHoverIn(windowId);
   };
   const peek = usePeek((!open || fullscreen) && !moving, arc, () => edgeOver.current || emptyWindow.held() || peekHeld(windowId), closed, opened);
-  const reveal = () => {
+  const reveal = (throughOverlay = false) => {
     emptyWindow.byHand();
-    if (arm.current.armed) latestPeek.current.show();
+    if (arm.current.armed) latestPeek.current[throughOverlay ? "showThroughOverlay" : "show"]();
     else noteSidebarPeekRevealHeldBack();
   };
   const latestPeek = useRef(peek);
@@ -266,13 +267,13 @@ function SidebarDock({
     if (!watching) return;
     const sub = onWindowEvent((e) => {
       if (e.type !== "sidebarEdge" || e.id !== windowId) return;
-      if (e.screenEdge) noteSidebarScreenEdge(e.screenEdge);
+      noteSidebarEdgeEvent(e);
       const at = latestReveal.current;
       if (e.over && e.screenEdge !== "returned" && !edgeEventReveals(at.state, e.point[0], at.right, at.windowWidth, at.band)) return;
       edgeOver.current = e.over;
       arm.current = edgeSeen(arm.current, "native", e.over);
       if (e.screenEdge === "crossed") dismissHoverIn(windowId);
-      if (e.over) latestReveal.current.reveal();
+      if (e.over) latestReveal.current.reveal(!!e.overlay);
       else latestPeek.current.hide(e.screenEdge === "crossed");
     });
     watchSidebarEdge(windowId, true, nativeHold, right, holding || draggingTab);
@@ -369,7 +370,7 @@ function SidebarDock({
               style={{ position: "absolute", top: 0, bottom: 0, [edgeSide]: -bleed, [right ? "left" : "right"]: 0, opacity: panelOn }}
               onLayout={(e) => setPanelHeight(e.nativeEvent.layout.height)}
             >
-              <Panel fill={theme.windowTint[0]} radius={peekAt.radius} shadow={SHADOWS.sidebarPeek} style={StyleSheet.absoluteFill} />
+              <Panel fill={theme.windowTint[0]} radius={peekAt.radius} border={null} shadow={SHADOWS.sidebarPeek} style={StyleSheet.absoluteFill} />
               {peeking && (
                 <View style={[StyleSheet.absoluteFill, { borderRadius: peekAt.radius, overflow: "hidden" }]}>
                   <WindowBackdrop
@@ -390,6 +391,7 @@ function SidebarDock({
             </Animated.View>
           )}
           <View style={[{ flex: 1, paddingTop: controlsRow }, peeking ? { borderRadius: peekAt.radius, overflow: "hidden" } : null]}>{sidebar}</View>
+          {strip.current && peeking ? <PeekEdge side={edgeSide} bleed={bleed} right={right} radius={peekAt.radius} shown={panelOn} /> : null}
           <ResizeHandle windowId={windowId} />
         </Animated.View>
       </Animated.View>

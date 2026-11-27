@@ -6,6 +6,10 @@ export const PROTECTED_VIDEO_COUNTS = [
   "drm_refusals_create_keys",
   "drm_refusals_licence",
   "drm_refusals_keystatus",
+  "drm_refusals_listed_sites",
+  "drm_refusals_webkit_sites",
+  "webkit_fullscreens",
+  "webkit_fullscreen_frames_kept",
 ] as const;
 
 export type ProtectedVideoCounts = {
@@ -14,6 +18,10 @@ export type ProtectedVideoCounts = {
   createKeys: number;
   licence: number;
   keystatus: number;
+  listedSites: number;
+  webKitSites: number;
+  webKitFullscreens: number;
+  fullscreenFramesKept: number;
 };
 
 export type ProtectedVideoUsage = ProtectedVideoCounts & { version: string; people: number };
@@ -30,7 +38,7 @@ export function protectedVideoRows(usage: ProtectedVideoUsage[], cdm: { installe
     cdmShare: cdm.reported ? cdm.installed / cdm.reported : null,
     total: total ? { ...total, ...withUnstaged(total) } : null,
     versions: usage
-      .filter((u) => u.version !== "" && u.refusals)
+      .filter((u) => u.version !== "" && (u.refusals || u.webKitFullscreens))
       .map((u) => ({ ...u, nightly: isNightly(u.version), ...withUnstaged(u) }))
       .sort((a, b) => compareVersions(b.version, a.version)),
   };

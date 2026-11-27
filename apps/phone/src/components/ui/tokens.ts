@@ -139,6 +139,8 @@ export const menuLayout = {
   halfSheetGrabber: { width: 32, height: 4, top: 10 },
 } as const;
 
+export const floatingSheetLayout = { inset: 8, bottomRadius: 50, halfShare: 0.5156, topGap: 0, grabber: { width: 60, height: 4, top: 6 } } as const;
+
 export const pageMenuLayout = { actionGlyph: 24, barSpacing: 8, groupSpacing: 16, zoomHeight: 32, zoomButtonWidth: 40, zoomReset: 48, rowInset: 16, accessibilityBottom: 24 } as const;
 
 export const pageMenuInk = {
@@ -228,6 +230,8 @@ export const settingsTint = {
   appLinks: "#3EA82E",
   defaultBrowser: "#007AFF",
   bottomBar: "#30B0C7",
+  orange: "#FF901A",
+  purple: "#B059EE",
 } as const;
 
 export const faviconInk = { letter: "#FFFFFF", lightPlate: "rgba(255,255,255,0.92)", darkPlate: "rgba(0,0,0,0.78)" } as const;
@@ -258,7 +262,7 @@ const iPhoneMenuLook = {
   labelLines: 3,
   iconSide: "leading" as "leading" | "trailing",
   disabledOpacity: 0.4,
-  frost: "thin" as const,
+  frost: "glass" as "thin" | "glass",
   frosted: true,
   shadow: "0px 10px 40px rgba(0,0,0,0.12)",
 };
@@ -419,11 +423,10 @@ export const voiceInk = {
   bar: "rgba(255,255,255,0.85)",
   glass: "rgba(255,255,255,0.18)",
   transcript: "rgba(0,0,0,0.18)",
-  logoShadow: "0px 6px 12px rgba(0, 0, 0, 0.15)",
 } as const;
 
 export const voiceLayout = {
-  logo: 128,
+  appIcon: 104,
   pill: 50,
   cancel: 44,
   icon: 17,

@@ -11,6 +11,7 @@ const CAPTION = { textAlign: "center" } as const;
 
 export function PictureChoice({
   title,
+  accessibilityLabel,
   selected,
   onPress,
   tooltip,
@@ -19,6 +20,7 @@ export function PictureChoice({
   children,
 }: {
   title: string;
+  accessibilityLabel?: string;
   caption?: string;
   selected: boolean;
   onPress: () => void;
@@ -33,7 +35,7 @@ export function PictureChoice({
   const icon = size === "icon";
   return (
     <View {...hoverProps} style={icon ? { width: pictureChoice.iconWidth } : { flex: 1 }}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} tooltip={tooltip} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={title} accessibilityHint={caption}>
+      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} tooltip={tooltip} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={accessibilityLabel ?? title} accessibilityHint={caption}>
         <Box gap="m" style={{ alignItems: "center" }}>
           <Animated.View style={[icon ? { width: pictureChoice.icon } : { width: "100%" }, scaleStyle]}>
             <SelectableCard

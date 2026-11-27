@@ -32,8 +32,22 @@ test("refusals count by the stage they stopped at, an unknown stage counts only 
     drm_refusals_create_keys: 1,
     drm_refusals_licence: 1,
     drm_refusals_keystatus: 1,
+    drm_refusals_listed_sites: 0,
+    drm_refusals_webkit_sites: 0,
   });
   assert.equal(takeProtectedVideoCounts().drm_refusals, 0);
+});
+
+test("a refusal on a streaming-list site, or on a site Ardia's settings send to WebKit, is counted apart, so a page left in Chromium shows up", () => {
+  const consent = sharing();
+  noteProtectedVideoRefusal({ keySystem: "com.widevine.alpha", stage: "access" }, consent, { listed: true, routedToWebKit: true });
+  noteProtectedVideoRefusal({ keySystem: "com.widevine.alpha", stage: "access" }, consent, { listed: true, routedToWebKit: false });
+  noteProtectedVideoRefusal({ keySystem: "com.widevine.alpha", stage: "access" }, consent, { listed: false, routedToWebKit: true });
+  noteProtectedVideoRefusal({ keySystem: "com.widevine.alpha", stage: "access" }, consent, { listed: false, routedToWebKit: false });
+  const counts = takeProtectedVideoCounts();
+  assert.equal(counts.drm_refusals, 4);
+  assert.equal(counts.drm_refusals_listed_sites, 2);
+  assert.equal(counts.drm_refusals_webkit_sites, 2);
 });
 
 test("a refusal counts only under the consent period it started in, and never without one", () => {
@@ -51,6 +65,8 @@ test("a refusal counts only under the consent period it started in, and never wi
     drm_refusals_create_keys: 0,
     drm_refusals_licence: 0,
     drm_refusals_keystatus: 0,
+    drm_refusals_listed_sites: 0,
+    drm_refusals_webkit_sites: 0,
   });
 });
 

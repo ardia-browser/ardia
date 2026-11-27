@@ -4,7 +4,7 @@ import { test } from "node:test";
 globalThis.__DEV__ = false;
 await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
-const { clearedTabIds } = await import("./tabCleanup.ts");
+const { clearedTabIds } = await import("./clearedTabs.ts");
 const { setLive } = await import("../tabs/tabLive.ts");
 const { holderOfPage } = await import("../tabs/pageSession.ts");
 

@@ -92,6 +92,10 @@ class ScrollDirectionTracker(private val threshold: Double = 24.0, private val r
         anchor = offset
     }
 
+    fun moveAnchor(offset: Double) {
+        anchor = offset
+    }
+
     private fun update(next: ScrollDirection): ScrollDirection? {
         if (next == direction) return null
         direction = next

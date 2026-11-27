@@ -3,10 +3,13 @@ import { hostSupports, INPUT_REGIONS_METHOD, invokeHost, reportHostError, type A
 import { createInputRegions, type InputRegionsRegistry, type RegionDeps, type RegionShape } from "./inputRegions.ts";
 import { clippedRectOf } from "./hostViewport.ts";
 import { createPageHoles, type PageHoles } from "./pageHoles.ts";
+import { PEEK_MOVING_ATTRIBUTE } from "./peekStageMotion.ts";
 import { startShellGlass } from "./shellGlass.ts";
+import { GLASS_BEHIND_WINDOW } from "./glassRegions.ts";
 import { currentWindowCorners, onWindowCornersChanged } from "./windowDecorations.ts";
 
 const SHELL_ABOVE_CLASS = "ardia-shell-above";
+const MOVING_STAGE = `[${PEEK_MOVING_ATTRIBUTE}]`;
 const MOTION_EVENTS = ["transitionrun", "transitionend", "transitioncancel", "animationstart", "animationend", "animationcancel"] as const;
 
 let regions: InputRegionsRegistry | null = null;
@@ -64,11 +67,13 @@ function conceal(element: Element, hidden: boolean) {
 
 export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.body) {
   document.documentElement.classList.add(SHELL_ABOVE_CLASS);
-  const painter = createPageHoles(root, () => host.bootstrap.shellZoom ?? 1, currentWindowCorners);
+  const inMovingStage = (element: Element) => !!element.closest?.(MOVING_STAGE);
+  const painter = createPageHoles(root, () => host.bootstrap.shellZoom ?? 1, currentWindowCorners, inMovingStage);
   const stopCorners = onWindowCornersChanged(() => painter.windowChanged());
-  const glass = startShellGlass(host);
+  const glass = startShellGlass(host, (next) => painter.glassChanged(next));
   const registry = createInputRegions({
     ...domRegionDeps(host),
+    pageFrozen: inMovingStage,
     conceal,
     pagesChanged: (areas) => {
       painter.pagesChanged(areas);
@@ -82,15 +87,41 @@ export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.bo
     registry.refresh();
     painter.windowChanged();
   };
+  const stagesMoving = new MutationObserver(resized);
+  stagesMoving.observe(root, { subtree: true, attributes: true, attributeFilter: [PEEK_MOVING_ATTRIBUTE] });
   window.addEventListener("resize", resized);
   window.addEventListener("scroll", refresh, true);
   return () => {
+    stagesMoving.disconnect();
     window.removeEventListener("resize", resized);
     window.removeEventListener("scroll", refresh, true);
     document.documentElement.classList.remove(SHELL_ABOVE_CLASS);
     glass.stop();
     stopCorners();
     if (regions === registry) regions = null;
+    if (holes === painter) holes = null;
+  };
+}
+
+const UTILITY_GLASS_CLASS = "ardia-utility-glass";
+
+export function startUtilityShellGlass(host: ArdiaHost, root: HTMLElement = document.body) {
+  const transparent = hostSupports(GLASS_BEHIND_WINDOW, host);
+  if (transparent) document.documentElement.classList.add(UTILITY_GLASS_CLASS);
+  const painter = createPageHoles(root, () => host.bootstrap.shellZoom ?? 1, currentWindowCorners);
+  const stopCorners = onWindowCornersChanged(() => painter.windowChanged());
+  const glass = startShellGlass(host, (next) => painter.glassChanged(next));
+  holes = painter;
+  const resized = () => {
+    glass.glass.refresh();
+    painter.windowChanged();
+  };
+  window.addEventListener("resize", resized);
+  return () => {
+    window.removeEventListener("resize", resized);
+    document.documentElement.classList.remove(UTILITY_GLASS_CLASS);
+    glass.stop();
+    stopCorners();
     if (holes === painter) holes = null;
   };
 }
@@ -103,6 +134,8 @@ export function useInputRegion(ref: RefObject<Element | null>, shape: RegionShap
 }
 
 export const AbovePages = createContext(false);
+export const NativeBackdropRoot = createContext(false);
+export const useNativeBackdropRoot = () => useContext(NativeBackdropRoot);
 
 export function usePageHoleLayer(ref: RefObject<HTMLElement | null>) {
   const abovePages = useContext(AbovePages);

@@ -8,17 +8,15 @@ globalThis.acTestNativeModules = {
 };
 
 const mac = await import("./reportSupport.ts");
-const windows = await import("./reportSupport.windows.ts");
 const { sendsReportFiles, recordsReports, setReportPlatform, uploadFile } = await import("./report.ts");
 
-test("Windows has no native report uploader or recorder, so it sends reports without files", () => {
-  assert.deepEqual(windows.REPORT_SUPPORT, { recording: false, files: false });
+test("a platform without a native report uploader or recorder sends reports without files", () => {
   assert.deepEqual(mac.REPORT_SUPPORT, { recording: true, files: true });
   assert.equal(sendsReportFiles(), true);
   assert.equal(recordsReports(), true);
   setReportPlatform({ recording: false });
   assert.equal(sendsReportFiles(), true);
-  setReportPlatform(windows.REPORT_SUPPORT);
+  setReportPlatform({ recording: false, files: false });
   assert.equal(sendsReportFiles(), false);
   setReportPlatform(mac.REPORT_SUPPORT);
 });

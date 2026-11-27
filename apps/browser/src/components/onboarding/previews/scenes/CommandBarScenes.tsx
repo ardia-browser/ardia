@@ -1,94 +1,89 @@
-import { Animated } from "react-native";
-import { CRUMB_X, FIELD, fill, type Rect, ROW, rowY, sideCard } from "../geometry";
-import { BLANK } from "../content";
+import { CRUMB_X, FIELD, type Geo, type Rect, STRIP_H } from "../geometry";
+import type { Look } from "../look";
 import { tracker } from "../timeline";
-import { Caret, Highlight, Label, NewTabButton, Rows, TabRow } from "../Kit";
-import { NewTabPage } from "../MockPages";
+import { Caret, Label } from "../Kit";
 import { InputRow, Panel } from "../Floating";
 import { sceneMs } from "../tokens";
 import { radius, space } from "../../../ui/tokens";
 import { BAR_TYPE, SUGGESTION } from "../../../omnibox/tokens";
-import type { Scene } from "../scene";
-import { centredFrame, CURRENT, Divider, drop, FRESH, grow, KeyPress, listTop, PANEL_H, SelectedUrl, Std, SuggestionList } from "./SceneParts";
+import type { Scene, SceneOpts } from "../scene";
+import { cardOf, centredFrame, CURRENT, Divider, dropTrip, FRESH, growTrip, KeyPress, PANEL_H, Rest, SelectedUrl, SuggestionList, tabCount, tabsSlot } from "./SceneParts";
+import { FadingCrumb, InsertedList, NewTabArrives } from "./ListMotion";
 import { keyText } from "../../../../state/commands/keyText";
+
+const OPEN = 380;
+const CLOSE = 1900;
+
+function fieldPanel(g: Geo, opts: SceneOpts): { from: Rect; to: Rect } {
+  if (opts.addressInSidebar) return { from: FIELD, to: { x: FIELD.x, y: FIELD.y, w: FIELD.w + 137, h: 40 + 3 * SUGGESTION.height + 14 } };
+  const c = cardOf(g, opts);
+  const crumbX = opts.top ? 118 : CRUMB_X;
+  const top = opts.top ? STRIP_H : c.y;
+  return {
+    from: { x: c.x + crumbX - 8, y: top + 6, w: 300, h: 30 },
+    to: { x: c.x + crumbX - 40, y: top + 0.5, w: Math.min(480, c.w - crumbX + 28), h: PANEL_H },
+  };
+}
 
 export const CmdlField: Scene = ({ g, look, p, opts }) => {
   const t = tracker(p, sceneMs.commandBar);
-  const c = sideCard(g);
-  if (opts.addressInSidebar) {
-    const to: Rect = { x: FIELD.x, y: FIELD.y, w: FIELD.w + 137, h: 40 + 3 * SUGGESTION.height + 14 };
-    return (
-      <>
-        <Std g={g} look={look} opts={opts} />
-        <Panel g={g} look={look} rect={to} radius={radius.panel} style={grow(t, g, FIELD, to, 240)}>
-          <InputRow g={g} look={look} height={40}>
-            <SelectedUrl g={g} look={look} />
-          </InputRow>
-          <Divider g={g} look={look} />
-          <SuggestionList g={g} look={look} t={t} rows={CURRENT} ms={400} />
-        </Panel>
-        <KeyPress g={g} t={t} label={keyText("⌘L")} />
-      </>
-    );
-  }
-  const from: Rect = { x: c.x + CRUMB_X - 8, y: c.y + 6, w: 300, h: 30 };
-  const to: Rect = { x: c.x + CRUMB_X - 40, y: c.y + 0.5, w: Math.min(480, c.w - CRUMB_X + 28), h: PANEL_H };
+  const { from, to } = fieldPanel(g, opts);
+  const field = opts.addressInSidebar;
   return (
-    <>
-      <Std g={g} look={look} opts={opts} />
-      <Panel g={g} look={look} rect={to} style={grow(t, g, from, to, 240)}>
-        <InputRow g={g} look={look}>
-          <SelectedUrl g={g} look={look} />
-        </InputRow>
-        <Divider g={g} look={look} />
-        <SuggestionList g={g} look={look} t={t} rows={CURRENT} ms={400} />
-      </Panel>
-      <KeyPress g={g} t={t} label={keyText("⌘L")} />
-    </>
+    <Rest
+      g={g}
+      look={look}
+      opts={opts}
+      over={
+        <>
+          <Panel g={g} look={look} rect={to} radius={field ? radius.panel : undefined} style={growTrip(t, g, from, to, OPEN, CLOSE)}>
+            <InputRow g={g} look={look} height={field ? 40 : undefined}>
+              <SelectedUrl g={g} look={look} />
+            </InputRow>
+            <Divider g={g} look={look} />
+            <SuggestionList g={g} look={look} t={t} rows={CURRENT} ms={OPEN + 160} />
+          </Panel>
+          <KeyPress g={g} t={t} label={keyText("⌘L")} ms={OPEN - 240} back={CLOSE} />
+        </>
+      }
+    />
   );
 };
 
 export const CmdlCentred: Scene = ({ g, look, p, opts }) => {
   const t = tracker(p, sceneMs.commandBar);
   return (
-    <>
-      <Std g={g} look={look} opts={opts} />
-      <Panel g={g} look={look} rect={centredFrame(g)} style={drop(t, g, 240)}>
-        <InputRow g={g} look={look}>
-          <SelectedUrl g={g} look={look} />
-        </InputRow>
-        <Divider g={g} look={look} />
-        <SuggestionList g={g} look={look} t={t} rows={CURRENT} ms={400} />
-      </Panel>
-      <KeyPress g={g} t={t} label={keyText("⌘L")} />
-    </>
+    <Rest
+      g={g}
+      look={look}
+      opts={opts}
+      over={
+        <>
+          <Panel g={g} look={look} rect={centredFrame(g, opts)} style={dropTrip(t, g, OPEN, CLOSE)}>
+            <InputRow g={g} look={look}>
+              <SelectedUrl g={g} look={look} />
+            </InputRow>
+            <Divider g={g} look={look} />
+            <SuggestionList g={g} look={look} t={t} rows={CURRENT} ms={OPEN + 160} />
+          </Panel>
+          <KeyPress g={g} t={t} label={keyText("⌘L")} ms={OPEN - 240} back={CLOSE} />
+        </>
+      }
+    />
   );
 };
 
 export const NewTabOpensPage: Scene = ({ g, look, p, opts }) => {
   const t = tracker(p, sceneMs.newTab);
-  const c = sideCard(g);
-  const top = listTop(opts);
-  const field = opts.addressInSidebar;
   return (
-    <Std
+    <Rest
       g={g}
       look={look}
       opts={opts}
-      rows={
-        <>
-          <Highlight g={g} look={look} y={rowY(0, top)} style={{ opacity: t.out(360, 200) }} />
-          <Rows g={g} look={look} n={4} top={top} newTab={false} />
-          <TabRow g={g} look={look} t={BLANK} y={rowY(4, top)} selected style={{ opacity: t.in(300, 240), transform: [{ translateX: t([[300, -12 * g.s], [600, 0]]) }] }} />
-          <NewTabButton g={g} look={look} y={rowY(4, top)} style={{ transform: [{ translateY: t([[300, 0], [600, ROW.pitch * g.s]]) }] }} />
-          <KeyPress g={g} t={t} label={keyText("⌘T")} />
-        </>
-      }
-      card={
-        <Animated.View style={[fill, { opacity: t.in(420, 300) }]}>
-          <NewTabPage g={g} look={look} width={c.w} top={field ? 0 : 0} />
-        </Animated.View>
-      }
+      {...tabsSlot(opts, <InsertedList g={g} look={look} opts={opts} t={t} at={endSlot(g, opts)} ms={OPEN} back={CLOSE} />)}
+      crumb={<FadingCrumb g={g} look={look} t={t} ms={OPEN + 100} back={CLOSE} />}
+      page={<NewTabArrives g={g} look={look} opts={opts} t={t} ms={OPEN + 160} back={CLOSE} />}
+      over={<KeyPress g={g} t={t} label={keyText("⌘T")} ms={OPEN - 240} back={CLOSE} />}
     />
   );
 };
@@ -96,56 +91,43 @@ export const NewTabOpensPage: Scene = ({ g, look, p, opts }) => {
 export const NewTabOpensBar: Scene = ({ g, look, p, opts }) => {
   const t = tracker(p, sceneMs.newTab);
   return (
-    <>
-      <Std g={g} look={look} opts={opts} />
-      <Panel g={g} look={look} rect={centredFrame(g)} style={drop(t, g, 240)}>
-        <InputRow g={g} look={look}>
-          <Caret g={g} look={look} style={{ marginRight: space.xxs * g.s }} />
-          <Label g={g} size={BAR_TYPE.floatingField.fontSize} color={look.t.placeholder}>
-            Search or enter address
-          </Label>
-        </InputRow>
-        <Divider g={g} look={look} />
-        <SuggestionList g={g} look={look} t={t} rows={FRESH} ms={400} />
-      </Panel>
-      <KeyPress g={g} t={t} label={keyText("⌘T")} />
-    </>
+    <Rest
+      g={g}
+      look={look}
+      opts={opts}
+      over={
+        <>
+          <Panel g={g} look={look} rect={centredFrame(g, opts)} style={dropTrip(t, g, OPEN, CLOSE)}>
+            <InputRow g={g} look={look}>
+              <Caret g={g} look={look} style={{ marginRight: space.xxs * g.s }} />
+              <Label g={g} size={BAR_TYPE.floatingField.fontSize} color={look.t.placeholder}>
+                Search or enter address
+              </Label>
+            </InputRow>
+            <Divider g={g} look={look} />
+            <SuggestionList g={g} look={look} t={t} rows={FRESH} ms={OPEN + 160} />
+          </Panel>
+          <KeyPress g={g} t={t} label={keyText("⌘T")} ms={OPEN - 240} back={CLOSE} />
+        </>
+      }
+    />
   );
 };
+
+const endSlot = (g: Geo, opts: SceneOpts) => (opts.top ? tabCount(g, opts) - 1 : tabCount(g, opts));
 
 export function newTabAt(at: "top" | "bottom" | "next"): Scene {
   return ({ g, look, p, opts }) => {
     const t = tracker(p, sceneMs.newTabPosition);
-    const list = listTop(opts);
-    const shift = { transform: [{ translateY: t([[200, 0], [520, ROW.pitch * g.s]]) }] };
-    const slot = at === "top" ? 0 : at === "next" ? 1 : 4;
-    const pushed = at === "next" ? 1 : 0;
+    const slot = at === "top" ? 0 : at === "next" ? 1 : endSlot(g, opts);
     return (
-      <Std
+      <Rest
         g={g}
         look={look}
         opts={opts}
-        rows={
-          <>
-            <Highlight g={g} look={look} y={rowY(0, list)} style={[at === "top" ? shift : null, { opacity: t.out(280, 220) }]} />
-            {pushed ? <Rows g={g} look={look} n={1} top={list} newTab={false} /> : null}
-            <Animated.View style={[fill, at === "bottom" ? null : shift]}>
-              <Rows g={g} look={look} from={pushed} n={4 - pushed} top={rowY(pushed, list)} newTab={false} />
-            </Animated.View>
-            <TabRow
-              g={g}
-              look={look}
-              t={BLANK}
-              y={rowY(slot, list)}
-              selected
-              style={{
-                opacity: t.in(at === "bottom" ? 220 : 320, 240),
-                transform: at === "bottom" ? [{ translateY: t([[220, -8 * g.s], [520, 0]]) }, { scale: t([[220, 0.96], [520, 1]]) }] : [{ translateX: t([[320, -12 * g.s], [620, 0]]) }],
-              }}
-            />
-            <NewTabButton g={g} look={look} y={rowY(4, list)} style={at === "bottom" ? null : shift} />
-          </>
-        }
+        {...tabsSlot(opts, <InsertedList g={g} look={look} opts={opts} t={t} at={slot} ms={OPEN} back={CLOSE - 300} />)}
+        crumb={<FadingCrumb g={g} look={look} t={t} ms={OPEN + 100} back={CLOSE - 300} />}
+        over={<KeyPress g={g} t={t} label={keyText("⌘T")} ms={OPEN - 240} back={CLOSE - 300} />}
       />
     );
   };

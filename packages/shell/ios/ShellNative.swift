@@ -61,6 +61,7 @@ protocol AppWindowsNative {
   static func setTrafficLightsCenter(_ id: String, _ center: CGPoint?, _ trailing: Bool)
   static func watchSidebarEdge(_ id: String, _ on: Bool, _ hold: Double, _ right: Bool, _ whilePressed: Bool)
   static func focusWindow(_ id: String)
+  static func setWindowShown(_ id: String, _ shown: Bool, _ burst: Bool)
   static func restoreFullScreen(_ ids: [String], _ focus: String?)
   static func dragPreviewBegin(_ windowId: String, _ chip: CGRect, _ grab: CGPoint)
   static func dragPreviewPage(_ base64: String, _ frame: CGRect)
@@ -120,6 +121,10 @@ extension AppWindowsNative {
 
   static var focusWindowFunction: AnyDefinition {
     AsyncFunction("focusWindow") { (id: String) in Self.focusWindow(id) }.runOnQueue(.main)
+  }
+
+  static var setWindowShownFunction: AnyDefinition {
+    AsyncFunction("setWindowShown") { (id: String, shown: Bool, burst: Bool) in Self.setWindowShown(id, shown, burst) }.runOnQueue(.main)
   }
 
   static var restoreFullScreenFunction: AnyDefinition {
@@ -203,6 +208,8 @@ protocol FocusNative {
   static func saveKeyResponder(_ windowId: String) -> Int
   static func restoreKeyResponder(_ token: Int) -> Bool
   static func discardKeyResponder(_ token: Int)
+  static func fieldBlurCause(_ fieldTag: Int) -> String
+  static func watchFieldBlurs(_ fieldTag: Int, _ watch: Bool)
   func setSwitcherCapture(_ active: Bool)
   func setDragEscapeCapture(_ active: Bool)
   static func takeHoverCounts() -> [String: [String: Int]]
@@ -250,6 +257,14 @@ extension FocusNative {
 
   static var discardKeyResponderFunction: AnyDefinition {
     AsyncFunction("discardKeyResponder") { (token: Int) in Self.discardKeyResponder(token) }.runOnQueue(.main)
+  }
+
+  static var fieldBlurCauseFunction: AnyDefinition {
+    Function("fieldBlurCause") { (fieldTag: Int) -> String in Self.fieldBlurCause(fieldTag) }
+  }
+
+  static var watchFieldBlursFunction: AnyDefinition {
+    Function("watchFieldBlurs") { (fieldTag: Int, watch: Bool) in Self.watchFieldBlurs(fieldTag, watch) }
   }
 
   static var takeHoverCountsFunction: AnyDefinition {
@@ -913,7 +928,7 @@ protocol SystemNative {
   static func launchAtLoginStatus() -> String
   static func setLaunchAtLogin(_ enabled: Bool) throws
   static func fileExists(_ path: String) -> Bool
-  static func openFile(_ path: String) -> Bool
+  static func openFile(_ path: String, _ promise: Promise)
   static func revealFile(_ path: String) -> Bool
   static func moveToTrash(_ path: String) -> Bool
   static func fileIcon(_ path: String, _ size: Double) -> String?
@@ -938,7 +953,7 @@ extension SystemNative {
   }
 
   static var launchAtLoginStatusFunction: AnyDefinition {
-    AsyncFunction("launchAtLoginStatus") { () -> String in Self.launchAtLoginStatus() }.runOnQueue(.main)
+    AsyncFunction("launchAtLoginStatus") { () -> String in Self.launchAtLoginStatus() }.runOnQueue(DispatchQueue.global(qos: .utility))
   }
 
   static var setLaunchAtLoginFunction: AnyDefinition {
@@ -950,7 +965,7 @@ extension SystemNative {
   }
 
   static var openFileFunction: AnyDefinition {
-    AsyncFunction("openFile") { (path: String) -> Bool in Self.openFile(path) }.runOnQueue(.main)
+    AsyncFunction("openFile") { (path: String, promise: Promise) in Self.openFile(path, promise) }.runOnQueue(.main)
   }
 
   static var revealFileFunction: AnyDefinition {
@@ -1169,6 +1184,30 @@ extension MagnifyAreaNative {
 
   static var devMagnifyFunction: AnyDefinition {
     AsyncFunction("devMagnify") { (windowId: String, x: Double, y: Double, steps: [[String: Any]]) -> [String: Any] in Self.devMagnify(windowId, x, y, steps) }.runOnQueue(.main)
+  }
+}
+
+protocol WheelAreaNative {
+  static func devWheel(_ windowId: String, _ x: Double, _ y: Double, _ steps: [[String: Any]], _ promise: Promise)
+  func glideScroll(_ tag: Int, _ y: Double, _ durationMs: Double)
+  func steerScroll(_ tag: Int, _ lo: Double, _ hi: Double, _ glideMs: Double, _ canForward: Bool, _ canBack: Bool)
+}
+
+extension WheelAreaNative {
+  static var moduleName: String { "ArdiaWheelArea" }
+
+  static var devWheelFunction: AnyDefinition {
+    AsyncFunction("devWheel") { (windowId: String, x: Double, y: Double, steps: [[String: Any]], promise: Promise) in Self.devWheel(windowId, x, y, steps, promise) }.runOnQueue(.main)
+  }
+}
+
+extension WheelAreaNative where Self: Module {
+  var glideScrollFunction: AnyDefinition {
+    AsyncFunction("glideScroll") { (tag: Int, y: Double, durationMs: Double) in self.glideScroll(tag, y, durationMs) }.runOnQueue(.main)
+  }
+
+  var steerScrollFunction: AnyDefinition {
+    AsyncFunction("steerScroll") { (tag: Int, lo: Double, hi: Double, glideMs: Double, canForward: Bool, canBack: Bool) in self.steerScroll(tag, lo, hi, glideMs, canForward, canBack) }.runOnQueue(.main)
   }
 }
 
@@ -1724,6 +1763,7 @@ extension TelemetryLocalNative {
 protocol FieldGlowNative {
   static func show(_ id: String, _ timings: [Double])
   static func progress(_ id: String, _ progress: Double, _ still: Bool)
+  static func pulse(_ id: String, _ period: Double, _ low: Double)
   static func finish(_ id: String, _ still: Bool)
   static func reset(_ id: String)
 }
@@ -1737,6 +1777,10 @@ extension FieldGlowNative {
 
   static var progressFunction: AnyDefinition {
     Function("progress") { (id: String, progress: Double, still: Bool) in Self.progress(id, progress, still) }
+  }
+
+  static var pulseFunction: AnyDefinition {
+    Function("pulse") { (id: String, period: Double, low: Double) in Self.pulse(id, period, low) }
   }
 
   static var finishFunction: AnyDefinition {

@@ -25,8 +25,8 @@ export const tabRows = {
         autoHideTabs: {
           title: "Auto-hide tabs",
           explained: true,
-          description: `Tabs slide away until you point at the edge. ${keyText("⌘S")} toggles.`,
-          keywords: ["hide tabs", "hide sidebar", "show sidebar", "toggle sidebar", "hide tab bar", "tab strip", "top tabs", "focus mode", "full screen", "zen", "window edge", "slide", "one window"],
+          description: "Tabs slide away until you point at the edge.",
+          keywords: ["hide tabs", "hide sidebar", "show sidebar", "toggle sidebar", "sidebar shortcut", "cmd s", "change shortcut", "hide tab bar", "tab strip", "top tabs", "focus mode", "full screen", "zen", "window edge", "slide", "one window"],
         },
         hideToolbarWhileScrolling: {
           title: "Hide toolbar while scrolling",
@@ -54,6 +54,12 @@ export const tabRows = {
           title: "Sleeping and unloaded tabs",
           description: "How tabs whose page isn't loaded look.",
           keywords: ["unloaded", "asleep", "sleeping", "discarded", "dim", "grey", "gray", "inactive", "pinned", "closed", "fade icons of unloaded tabs", "strikethrough", "strike", "line through", "crossed out", "memory saver", "title", "strike through sleeping tabs", "fade", "strike through"],
+        },
+        pinnedTabsReopenAtPinnedUrl: {
+          title: "Reopen closed pinned tabs at their pinned URL",
+          explained: true,
+          description: "Off, a pinned tab you close comes back on the last page it showed. A pinned tab's Customize menu changes it for that tab.",
+          keywords: ["pinned", "pinned url", "home", "reset", "reopen", "closed", "close", "cmd w", "last page", "last visited", "remember", "restore", "original url", "top apps", "arc", "dia"],
         },
         keepTopAppsRunning: {
           title: "Keep Top Apps running when closed",
@@ -132,8 +138,10 @@ export const tabRows = {
         newTabUrl: {
           title: "Custom address",
           explained: true,
-          description: "A page to open instead of the New Tab page. Leave empty for the default.",
-          keywords: ["custom new tab", "new tab url", "home page", "homepage", "start page", "custom url", "cmd t", "new tab page address"],
+          description: PLATFORM_FEATURES.extensionNewTabOverride
+            ? "A page to open instead of the New Tab page: a web address or an extension's page. Leave empty for the default, or for the page a New Tab extension sets."
+            : "A page to open instead of the New Tab page: a web address or an extension's page. Leave empty for the default.",
+          keywords: ["custom new tab", "new tab url", "home page", "homepage", "start page", "custom url", "cmd t", "new tab page address", "extension", "chrome-extension", "speed dial"],
           shown: (s) => newTabOpensOf(s) === "page",
           needs: "Set New tab opens to New Tab page",
         },
@@ -141,6 +149,11 @@ export const tabRows = {
           title: "Add new tabs",
           description: `Where ${keyText("⌘T")} puts the new tab.`,
           keywords: ["new tab position", "next to current tab", "after current tab", "beside", "right of", "below", "adjacent", "end", "left", "top", "bottom", "order", "cmd t", "new tab button", "plus", "+", "sticky", "docked", "position"],
+        },
+        showTabMenuButton: {
+          title: "Show tab menu button",
+          description: "Use the chevron next to New Tab to see open tabs and reopen closed ones.",
+          keywords: ["overflow menu", "hide chevron", "new tab arrow"],
         },
         appLinksFirst: {
           title: "Put links from other apps first",

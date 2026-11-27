@@ -76,7 +76,7 @@ import { cpus, loadavg, totalmem } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { appEnv, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, isAlive, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
 import { mergeRivals, rivalWarnings, RivalsRefused } from "./xbench-rivals.mjs";
 import { appIdentity, copyCachedTemplate, fileSha256, keyProblems, lookupTemplate, storeTemplate, TEMPLATE_MAX_AGE_HOURS, templateKey } from "./template-cache.mjs";
 import { templateSizes } from "./template-state.mjs";
@@ -451,12 +451,7 @@ class Instance {
     if (this.pid && !this.alive()) throw new Error(`${this.name} (pid ${this.pid}) died`);
   }
   alive() {
-    try {
-      process.kill(this.pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
+    return isAlive(this.pid);
   }
   env() {
     const env = { HOME: this.home, CFFIXED_USER_HOME: this.home };

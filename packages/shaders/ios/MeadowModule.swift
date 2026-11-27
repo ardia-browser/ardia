@@ -16,7 +16,8 @@ public class MeadowModule: Module, MeadowNative {
 
     View(MeadowView.self) {
       Prop("night") { (view: MeadowView, night: Bool) in view.night = night }
-      Events("onTone")
+      Prop("creeper") { (view: MeadowView, creeper: Bool) in view.creeper = creeper }
+      Events("onTone", "onReady", "onBoom")
     }
   }
 }

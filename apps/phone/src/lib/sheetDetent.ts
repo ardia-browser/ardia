@@ -10,6 +10,16 @@ export function sheetHalfRest(fullHeight: number, screenHeight: number): number 
   return Math.max(fullHeight - screenHeight * SHEET_HALF_SHARE, 0);
 }
 
+export function floatingSheetHalfRest(fullHeight: number, screenHeight: number, halfShare: number, scale: number): number {
+  "worklet";
+  return Math.max(fullHeight - (screenHeight * halfShare) / scale, 0);
+}
+
+export function floatingSheetScale(width: number, inset: number): number {
+  "worklet";
+  return width > 2 * inset ? (width - 2 * inset) / width : 1;
+}
+
 export function halfSheetPosition(rest: number, translation: number): number {
   "worklet";
   const position = rest + translation;

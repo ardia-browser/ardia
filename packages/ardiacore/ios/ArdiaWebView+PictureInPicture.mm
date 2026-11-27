@@ -11,6 +11,7 @@ using namespace ardia_web_view;
 using namespace ardia_runtime;
 
 static const NSUInteger kControlPressesKept = 8;
+static const NSTimeInterval kAutoPictureInPictureGrace = 2.5;
 static const NSTimeInterval kControlClickLifetime = 10;
 static const NSTimeInterval kControlKeyLifetime = 2;
 static const double kControlClickMatchMs = 1;
@@ -110,10 +111,10 @@ BOOL TracingPictureInPicture() {
 
 - (void)notePictureInPictureSight:(NSString *)what {
   ardia_host::NoteFocusChange(
-      [NSString stringWithFormat:@"pip %@ seenByUser=%d seenNow=%d visible=%d appActive=%d key=%d autoActive=%d inPip=%d", what,
+      [NSString stringWithFormat:@"pip %@ seenByUser=%d seenNow=%d visible=%d appActive=%d key=%d autoActive=%d inPip=%d held=%d", what,
                                  _reports.seenByUser, self.seenByUser, _visible, NSApp.isActive,
                                  self.window.isKeyWindow, _reports.autoPictureInPictureActive,
-                                 _reports.inPictureInPicture],
+                                 _reports.inPictureInPicture, _reports.autoPictureInPictureHold.held],
       self.window);
 }
 
@@ -193,6 +194,7 @@ BOOL TracingPictureInPicture() {
 }
 
 - (BOOL)playsForAutoPictureInPicture {
+  if (_reports.autoPictureInPictureHold.held) return NO;
   NSDictionary *np = _reports.nowPlaying.selected;
   return _autoPictureInPicture && ([np[@"playbackState"] isEqual:@"playing"] || _reports.capturing);
 }
@@ -223,10 +225,39 @@ BOOL TracingPictureInPicture() {
   [self emit:@"autoPictureInPictureKept" payload:[ArdiaConsentStamp.begin onto:@{@"appSwitch" : @YES}]];
 }
 
+- (NSString *)autoPictureInPictureMissReason {
+  if (!_visible) return @"missedTabSwitch";
+  if (!NSApp.isActive) return @"missedAppSwitch";
+  if (self.window && !self.window.isOnActiveSpace) return @"missedSpaceSwitch";
+  return @"missedOther";
+}
+
+- (BOOL)siteAskedForAutoPictureInPicture {
+  NSArray *actions = _reports.nowPlaying.selected[@"actions"];
+  return _reports.capturing || ([actions isKindOfClass:NSArray.class] && [actions containsObject:@"enterpictureinpicture"]);
+}
+
+- (void)watchAutoPictureInPictureOpens {
+  if (_reports.inPictureInPicture) return;
+  NSString *reason = self.autoPictureInPictureMissReason;
+  ArdiaConsentStamp *stamp = ArdiaConsentStamp.begin;
+  const NSUInteger watch = ++_reports.autoPictureInPictureWatch;
+  __weak ArdiaWebView *weakSelf = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kAutoPictureInPictureGrace * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    ArdiaWebView *view = weakSelf;
+    if (!view || view->_reports.autoPictureInPictureWatch != watch || !view->_tab) return;
+    if (view->_reports.seenByUser || view->_reports.inPictureInPicture || !view.playsForAutoPictureInPicture) return;
+    [view traceAutoPictureInPicture:[@"app: auto PiP didn't open, " stringByAppendingString:reason]];
+    [view emit:@"autoPictureInPictureKept" payload:[stamp onto:@{@"reason" : reason}]];
+    if (view.siteAskedForAutoPictureInPicture) [view emit:@"autoPictureInPictureKept" payload:[stamp onto:@{@"reason" : @"missedSiteAsked"}]];
+  });
+}
+
 - (void)updateAutoPictureInPicture {
   if (!_tab) return;
   if (!_reports.seenByUser && self.playsForAutoPictureInPicture) {
     [self traceAutoPictureInPicture:@"app: auto PiP left to Chrome"];
+    [self watchAutoPictureInPictureOpens];
   } else if (_reports.seenByUser && (_reports.autoPictureInPictureActive || _reports.inPictureInPicture)) {
     [self notePictureInPictureSight:@"exit requested"];
     _reports.autoPictureInPictureActive = NO;
@@ -238,9 +269,19 @@ BOOL TracingPictureInPicture() {
   [_tab exitPictureInPicture];
 }
 
+- (void)holdAutoPictureInPictureAfterEnd:(BOOL)appAsked {
+  if (!_reports.autoPictureInPictureHold.ended(appAsked, self.seenByUser)) return;
+  [self notePictureInPictureSight:@"held until back"];
+  [self traceAutoPictureInPicture:@"app: closed while the user was away, held until they are back on the tab"];
+  [self emit:@"autoPictureInPictureKept" payload:[ArdiaConsentStamp.begin onto:@{@"reason" : @"closedWhileAway"}]];
+  __weak ArdiaWebView *weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf autoPictureInPictureInputsChanged]; });
+}
+
 - (void)tab:(ArdiaCoreTab *)tab didChangePictureInPicture:(NSDictionary<NSString *, id> *)state {
   ArdiaConsentStamp *stamp = _pictureInPictureRequestStamp ?: ArdiaConsentStamp.begin;
   if ([state[@"active"] boolValue]) _pictureInPictureRequestStamp = nil;
+  if ([state[@"active"] boolValue]) _reports.autoPictureInPictureWatch++;
   const BOOL active = [state[@"active"] boolValue];
   NSMutableDictionary *payload = [@{@"kind" : [state[@"kind"] isEqual:@"document"] ? @"document" : @"video", @"active" : @(active)} mutableCopy];
   ardia_pip::NoteGesture(@"pip %@ kind=%@ by=%@ auto=%d appActive=%d seenByUser=%d", active ? @"opened" : @"closed", payload[@"kind"],
@@ -255,6 +296,7 @@ BOOL TracingPictureInPicture() {
     payload[@"closedBy"] = state[@"closedBy"];
     payload[@"auto"] = @([state[@"auto"] boolValue]);
   }
+  if (!active && _reports.inPictureInPicture) [self holdAutoPictureInPictureAfterEnd:[state[@"closedBy"] isEqual:@"app"]];
   if (![state[@"kind"] isEqual:@"document"]) {
     if (!active && !_reports.inPictureInPicture) return;
     _reports.inPictureInPicture = active;

@@ -1,3 +1,10 @@
+ac_linux_document_reducer.cc
+ac_linux_document_reducer.h
+ac_linux_document_schema.cc
+ac_linux_document_service.cc
+ac_linux_document_service.h
+ac_linux_documents.cc
+ac_linux_documents.h
 ac_linux_session.cc
 ac_linux_session.h
 bootstrap.js

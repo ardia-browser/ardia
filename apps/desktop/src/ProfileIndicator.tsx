@@ -5,7 +5,7 @@ import { AppMenuButton } from "./AppMenuButton";
 import { profileNameColor, useTheme } from "../../browser/src/components/ui/theme";
 import { useIsIncognito, useProfiles, useWindowId, useWindowProfile } from "../../browser/src/state/browser/hooks";
 import { setMeasuredWidth, useMeasuredWidth } from "../../browser/src/state/windows/measuredWidths";
-import { useMenuBesideWindowButtons } from "./sidebarHeaderLayout";
+import { useAppMenuInHeader } from "./appMenuPlacement";
 import { headerIndicatorLayout } from "./profileIndicatorLayout";
 
 export { profileIndicatorX } from "../../browser/src/components/profiles/ProfileIndicator";
@@ -16,13 +16,13 @@ function useIndicator(room: number, profileShown: boolean) {
   const profile = useWindowProfile();
   const name = incognito ? "Incognito" : profile?.name ?? "Personal";
   const textWidth = useMeasuredWidth(`linux-profile-name|${name}`);
-  const menuInHeader = !useMenuBesideWindowButtons();
+  const menuInHeader = useAppMenuInHeader();
   return { incognito, profile, name, textWidth, ...headerIndicatorLayout({ room, textWidth, named: profileShown && (incognito || profiles.length >= 2), menuInHeader }) };
 }
 
 export const useProfileIndicatorWidth = (room: number, profileShown = true) => useIndicator(room, profileShown).width;
 
-export const useAppMenuInHeader = (): boolean => !useMenuBesideWindowButtons();
+export { useAppMenuInHeader };
 
 export function HeaderAppMenu({ size }: { size: number }) {
   const windowId = useWindowId();

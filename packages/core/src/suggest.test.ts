@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { BUILT_IN_ENGINES, engineById, parseRemoteSuggestions, parseSuggestions } from "./engines.ts";
+import { BUILT_IN_ENGINES, engineById, parseRemoteSuggestions, parseSuggestions, suggestRequestUrl } from "./engines.ts";
 import { buildSuggestions, listsRoutesApart, suggestionKey, type Suggestion } from "./suggest.ts";
-import { createSuggestFetcher, type FetchLike } from "./suggestFetcher.ts";
+import { createSuggestFetcher, createSuggestStore, type FetchLike } from "./suggestFetcher.ts";
 
 const now = Date.UTC(2026, 8, 24);
 const DAY = 86_400_000;
@@ -954,4 +954,197 @@ test("a spaced address reads a tab's current address even when the same tab row 
   const urls = buildSuggestions("example.com/my pag", source, { now }).items.flatMap((i) => (i.kind === "page" && i.tabId === "t1" ? [i.url] : []));
   assert.ok(urls.length > 0, "the tab's row is listed");
   assert.ok(urls.every((u) => u === row.url), urls.join(", "));
+});
+
+test("suggestRequestUrl refuses oversized queries and URLs", () => {
+  assert.ok(suggestRequestUrl(google, "a".repeat(200)));
+  assert.equal(suggestRequestUrl(google, "a".repeat(201)), null);
+  assert.equal(suggestRequestUrl(google, "https://example.com/" + "x".repeat(500)), null);
+  const longHostEngine = { ...google, suggestUrl: `https://example.com/${"p".repeat(2030)}?q=%s` };
+  assert.equal(suggestRequestUrl(longHostEngine, "hello world"), null);
+});
+
+test("suggest fetcher paces rapid requests with minInterval and collapses fast bursts", async () => {
+  let clock = 1000;
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const { fetch, calls } = fakeFetch();
+    const results: string[] = [];
+    const fetcher = createSuggestFetcher({ fetch, delay: 150, minInterval: 250, now: () => clock });
+    for (const q of ["r", "re", "rea", "reac", "react"]) {
+      fetcher.request(google, q, () => results.push(q));
+      clock += 80;
+      mock.timers.tick(80);
+    }
+    assert.equal(calls.length, 0);
+    clock += 150;
+    mock.timers.tick(150);
+    await flush();
+    assert.equal(calls.length, 1);
+    assert.deepEqual(results, ["react"]);
+
+    clock += 50;
+    mock.timers.tick(50);
+    fetcher.request(google, "react n", () => results.push("react n"));
+    clock += 150;
+    mock.timers.tick(150);
+    assert.equal(calls.length, 1);
+    clock += 50;
+    mock.timers.tick(50);
+    await flush();
+    assert.equal(calls.length, 2);
+    assert.deepEqual(results, ["react", "react n"]);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("suggest fetcher backs off exponentially after 429/403 across shared stores and resets on 200", async () => {
+  let clock = 10_000;
+  let status: "blocked" | "ok" = "blocked";
+  let hits = 0;
+  let throttled = 0;
+  let failed = 0;
+  const fetch: FetchLike = async (url) => {
+    hits++;
+    if (status === "blocked") return { ok: false, blocked: true, text: async () => "" };
+    const q = new URL(url).searchParams.get("q") ?? "";
+    return { ok: true, text: async () => JSON.stringify([q, [`${q} ok`]]) };
+  };
+  const store = createSuggestStore();
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const f1 = createSuggestFetcher({ fetch, delay: 10, minInterval: 0, backoffBaseMs: 30_000, backoffMaxMs: 120_000, now: () => clock, store, onThrottled: () => throttled++ });
+    f1.request(google, "first", () => {}, () => failed++);
+    mock.timers.tick(10);
+    await flush();
+    assert.equal(hits, 1);
+    assert.equal(failed, 1);
+
+    const f2 = createSuggestFetcher({ fetch, delay: 10, minInterval: 0, backoffBaseMs: 30_000, backoffMaxMs: 120_000, now: () => clock, store, onThrottled: () => throttled++ });
+    f2.request(google, "second", () => {}, () => failed++);
+    await flush();
+    assert.equal(hits, 1);
+    assert.equal(throttled, 1);
+    assert.equal(failed, 2);
+
+    clock += 30_000;
+    f2.request(google, "third", () => {}, () => failed++);
+    mock.timers.tick(10);
+    await flush();
+    assert.equal(hits, 2);
+    assert.equal(failed, 3);
+
+    clock += 30_000;
+    f2.request(google, "fourth", () => {}, () => failed++);
+    await flush();
+    assert.equal(hits, 2);
+    assert.equal(throttled, 2);
+
+    status = "ok";
+    clock += 30_000;
+    const got: string[][] = [];
+    f2.request(google, "fifth", (q) => got.push(q), () => failed++);
+    mock.timers.tick(10);
+    await flush();
+    assert.equal(hits, 3);
+    assert.deepEqual(got, [["fifth ok"]]);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("suggest fetcher does not cache failed HTTP or malformed JSON replies", async () => {
+  let attempt = 0;
+  const fetch: FetchLike = async (url) => {
+    attempt++;
+    if (attempt === 1) return { ok: false, text: async () => "" };
+    if (attempt === 2) return { ok: true, text: async () => "not-json" };
+    if (attempt === 3) return { ok: true, text: async () => "{}" };
+    if (attempt === 4) return { ok: true, text: async () => '["retry", null]' };
+    const q = new URL(url).searchParams.get("q") ?? "";
+    return { ok: true, text: async () => JSON.stringify([q, [`${q} recovered`]]) };
+  };
+  const fetcher = createSuggestFetcher({ fetch, delay: 0, minInterval: 0 });
+  const r1 = await new Promise<string>((resolve) => fetcher.request(google, "retry", () => resolve("ok"), () => resolve("fail")));
+  const r2 = await new Promise<string>((resolve) => fetcher.request(google, "retry", () => resolve("ok"), () => resolve("fail")));
+  const r3 = await new Promise<string>((resolve) => fetcher.request(google, "retry", () => resolve("ok"), () => resolve("fail")));
+  const r4 = await new Promise<string>((resolve) => fetcher.request(google, "retry", () => resolve("ok"), () => resolve("fail")));
+  const r5 = await new Promise<string[]>((resolve) => fetcher.request(google, "retry", (q) => resolve(q), () => resolve([])));
+  assert.equal(r1, "fail");
+  assert.equal(r2, "fail");
+  assert.equal(r3, "fail");
+  assert.equal(r4, "fail");
+  assert.deepEqual(r5, ["retry recovered"]);
+  assert.equal(attempt, 5);
+
+  let emptyHits = 0;
+  const emptyFetcher = createSuggestFetcher({
+    fetch: async () => {
+      emptyHits++;
+      return { ok: true, text: async () => JSON.stringify(["nothing", []]) };
+    },
+    delay: 0,
+    minInterval: 0,
+  });
+  const e1 = await new Promise<string[]>((resolve) => emptyFetcher.request(google, "nothing", (q) => resolve(q)));
+  const e2 = await new Promise<string[]>((resolve) => emptyFetcher.request(google, "nothing", (q) => resolve(q)));
+  assert.deepEqual(e1, []);
+  assert.deepEqual(e2, []);
+  assert.equal(emptyHits, 1, "valid empty reply is still cached");
+});
+
+test("buildSuggestions keeps exact URL while bounding indexed text for giant URLs", () => {
+  const giantUrl = `https://www.google.com/search?q=react+${"x".repeat(120_000)}`;
+  const giantHistory = [{ url: giantUrl, title: `React ${"t".repeat(4000)}`, favicon: null, visits: 5, lastVisit: now - 1000 }];
+  const result = buildSuggestions("react", { tabs: [], history: giantHistory }, { now });
+  const page = result.items.find((i) => i.kind === "page");
+  assert.ok(page && page.kind === "page");
+  assert.equal(page.url, giantUrl);
+});
+
+test("clipped history URLs do not inline-complete past their clipped path", () => {
+  const longPathUrl = `https://docs.example.com/guide/${"a".repeat(2200)}?secret=1`;
+  const result = buildSuggestions("docs.example.com/guide/aaa", { tabs: [], history: [{ url: longPathUrl, title: "Long", favicon: null, visits: 10, lastVisit: now - 1000 }] }, { now });
+  assert.equal(result.completion, "");
+});
+
+test("concurrent fetchers sharing a store stay paced and an earlier 200 never clears a newer 429 cooldown", async () => {
+  let clock = 5000;
+  const pending: { resolve: (r: { ok: boolean; blocked?: boolean; text: () => Promise<string> }) => void; at: number }[] = [];
+  const fetch: FetchLike = () =>
+    new Promise((resolve) => {
+      pending.push({ resolve, at: clock });
+    });
+  const store = createSuggestStore();
+  let throttled = 0;
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const f1 = createSuggestFetcher({ fetch, delay: 50, minInterval: 250, backoffBaseMs: 30_000, now: () => clock, store, onThrottled: () => throttled++ });
+    const f2 = createSuggestFetcher({ fetch, delay: 50, minInterval: 250, backoffBaseMs: 30_000, now: () => clock, store, onThrottled: () => throttled++ });
+    f1.request(google, "alpha", () => {});
+    f2.request(google, "beta", () => {});
+    clock += 50;
+    mock.timers.tick(50);
+    assert.equal(pending.length, 1, "only one fetcher dispatches while minInterval holds");
+    clock += 249;
+    mock.timers.tick(249);
+    assert.equal(pending.length, 1);
+    clock += 1;
+    mock.timers.tick(1);
+    assert.equal(pending.length, 2);
+    assert.equal(pending[1]!.at - pending[0]!.at, 250);
+
+    pending[1]!.resolve({ ok: false, blocked: true, text: async () => "" });
+    await flush();
+    pending[0]!.resolve({ ok: true, text: async () => JSON.stringify(["alpha", ["alpha ok"]]) });
+    await flush();
+
+    f2.request(google, "gamma", () => {});
+    await flush();
+    assert.equal(pending.length, 2, "same-ms 200 did not clear newer 429 cooldown");
+    assert.equal(throttled, 1);
+  } finally {
+    mock.timers.reset();
+  }
 });

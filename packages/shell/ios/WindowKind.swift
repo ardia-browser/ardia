@@ -5,6 +5,7 @@ enum WindowKind: String, Enumerable {
   case small
   case settings
   case `import`
+  case intro
 
   var isBrowser: Bool { self == .browser || self == .small }
 }

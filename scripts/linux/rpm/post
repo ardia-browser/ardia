@@ -1,0 +1,10 @@
+#!/bin/sh
+if [ -e /etc/apparmor.d/abi/4.0 ] && [ -f /usr/share/ardia/apparmor/ardia ]; then
+  install -m 0644 /usr/share/ardia/apparmor/ardia /etc/apparmor.d/ardia
+  if command -v apparmor_parser >/dev/null 2>&1 && [ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null)" = Y ]; then
+    apparmor_parser -r /etc/apparmor.d/ardia >/dev/null 2>&1 || true
+  fi
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database -q /usr/share/applications || true; fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true; fi
+exit 0

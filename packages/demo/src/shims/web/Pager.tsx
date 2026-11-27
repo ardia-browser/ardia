@@ -3,6 +3,7 @@ import { View } from "react-native";
 import type { PagerSnapshot, SwipeAreaHandle, SwipeAreaProps } from "@ardia-real/ardiacore";
 import { Pager, type PagerArea } from "./motion/pager";
 import { addSwipeTarget, simulate, type SwipeTarget } from "./motion/swipe";
+import { invalidateLiquidGlass, liquidGlassMoving } from "./liquidGlass";
 
 export const switchPager = async (key: string, index: number, order?: readonly string[]) => Pager.existing(key)?.switchTo(index, order) ?? false;
 
@@ -15,19 +16,25 @@ export const pagerState = (key: string): PagerSnapshot | null => Pager.existing(
 export const devPagerState = async (key: string) => Pager.existing(key)?.debug() ?? null;
 
 export const SwipeArea = forwardRef<SwipeAreaHandle, SwipeAreaProps>(function SwipeArea(
-  { onSwipe, onPagerState, onPagerPosition, nativePager, canSwipeBack, canSwipeForward, tracksUnavailableDirections, allowsVerticalMotion, isPager, ...props },
+  { onSwipe, onPagerState, onPagerPosition, nativePager, canSwipeBack, canSwipeForward, tracksUnavailableDirections, allowsVerticalMotion, isPager, pageTabId, ...props },
   ref,
 ) {
   const node = useRef<HTMLElement | null>(null);
-  const latest = useRef({ onSwipe, onPagerState, onPagerPosition, nativePager, canSwipeBack, canSwipeForward, tracksUnavailableDirections, allowsVerticalMotion, isPager });
-  latest.current = { onSwipe, onPagerState, onPagerPosition, nativePager, canSwipeBack, canSwipeForward, tracksUnavailableDirections, allowsVerticalMotion, isPager };
+  const latest = useRef({ onSwipe, onPagerState, onPagerPosition, nativePager, canSwipeBack, canSwipeForward, tracksUnavailableDirections, allowsVerticalMotion, isPager, pageTabId });
+  latest.current = { onSwipe, onPagerState, onPagerPosition, nativePager, canSwipeBack, canSwipeForward, tracksUnavailableDirections, allowsVerticalMotion, isPager, pageTabId };
   const pager = useRef<Pager | null>(null);
 
   const area = useRef<PagerArea>({
     pageWidth: () => latest.current.nativePager?.width || node.current?.getBoundingClientRect().width || 0,
     attached: () => !!node.current?.isConnected,
-    onPosition: (position) => (latest.current.onPagerPosition as ((e: unknown) => void) | undefined)?.({ nativeEvent: { position } }),
-    onState: (event) => latest.current.onPagerState?.(event),
+    onPosition: (position) => {
+      liquidGlassMoving();
+      (latest.current.onPagerPosition as ((e: unknown) => void) | undefined)?.({ nativeEvent: { position } });
+    },
+    onState: (event) => {
+      if (event.phase === "settled") invalidateLiquidGlass();
+      latest.current.onPagerState?.(event);
+    },
   }).current;
 
   const target = useRef<SwipeTarget>({

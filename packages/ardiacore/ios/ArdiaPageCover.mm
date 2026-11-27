@@ -15,20 +15,23 @@ static const NSTimeInterval kPageCoverLimit = 4;
 @implementation ArdiaPageCover {
   CGImageRef _picture;
   NSSize _pictured;
+  BOOL _keepsShape;
 }
 
-+ (void)coverTabs:(NSArray<ArdiaCoreTab *> *)tabs then:(void (^)(NSArray<ArdiaPageCover *> *covers))then {
++ (void)coverTabs:(NSArray<ArdiaCoreTab *> *)tabs
+    keepingShapeOf:(ArdiaCoreTab *)shaped
+              then:(void (^)(NSArray<ArdiaPageCover *> *covers))then {
   NSMutableArray<ArdiaPageCover *> *covers = [NSMutableArray array];
   __block NSUInteger waiting = tabs.count + 1;
   void (^one)(ArdiaPageCover *) = ^(ArdiaPageCover *cover) {
     if (cover) [covers addObject:cover];
     if (--waiting == 0) then(covers);
   };
-  for (ArdiaCoreTab *tab in tabs) [self coverTab:tab then:one];
+  for (ArdiaCoreTab *tab in tabs) [self coverTab:tab keepingShape:tab == shaped then:one];
   one(nil);
 }
 
-+ (void)coverTab:(ArdiaCoreTab *)tab then:(void (^)(ArdiaPageCover *cover))then {
++ (void)coverTab:(ArdiaCoreTab *)tab keepingShape:(BOOL)keepsShape then:(void (^)(ArdiaPageCover *cover))then {
   NSView *page = tab.view;
   if (gPageCoverOff || !page.window || page.isHiddenOrHasHiddenAncestor) return then(nil);
   __weak ArdiaCoreTab *weakTab = tab;
@@ -42,10 +45,11 @@ static const NSTimeInterval kPageCoverLimit = 4;
           if (!picture || !now.window || now.window != weakWindow || now.superview != weakHost) return then(nil);
           ArdiaPageCover *cover = [[ArdiaPageCover alloc] initWithFrame:now.bounds picture:picture];
           cover->_tab = t;
+          cover->_keepsShape = keepsShape;
           cover->_pictured = pictured;
           [now addSubview:cover];
           [cover displayIfNeeded];
-          cover.layer.contents = (__bridge id)cover->_picture;
+          [cover updateLayer];
           then(cover);
         }];
 }
@@ -73,7 +77,37 @@ static const NSTimeInterval kPageCoverLimit = 4;
 
 - (void)updateLayer {
   self.layer.contents = (__bridge id)_picture;
-  self.layer.contentsGravity = kCAGravityResize;
+  self.layer.contentsGravity = _keepsShape ? kCAGravityResizeAspect : kCAGravityResize;
+  self.layer.backgroundColor = _keepsShape ? NSColor.blackColor.CGColor : nil;
+}
+
+- (double)shownShapeOverPictureShape {
+  const NSSize shown = self.bounds.size;
+  if (!_picture || shown.width < 1 || shown.height < 1) return 1;
+  const double pictureShape = (double)CGImageGetWidth(_picture) / MAX(1, CGImageGetHeight(_picture));
+  return shown.width / shown.height / pictureShape;
+}
+
+- (double)stretch {
+  NSString *gravity = self.layer.contentsGravity;
+  return [gravity isEqualToString:kCAGravityResize] ? fabs(self.shownShapeOverPictureShape - 1) : 0;
+}
+
+- (double)crop {
+  const double ratio = self.shownShapeOverPictureShape;
+  return [self.layer.contentsGravity isEqualToString:kCAGravityResizeAspectFill] ? 1 - MIN(ratio, 1 / ratio) : 0;
+}
+
++ (double)most:(double (^)(ArdiaPageCover *cover))measure ofCoversOver:(ArdiaCoreTab *)tab in:(NSView *)root {
+  double most = 0;
+  NSMutableArray<NSView *> *views = [NSMutableArray arrayWithObject:root ?: [NSView new]];
+  while (views.count) {
+    NSView *view = views.lastObject;
+    [views removeLastObject];
+    if ([view isKindOfClass:ArdiaPageCover.class] && ((ArdiaPageCover *)view).tab == tab) most = MAX(most, measure((ArdiaPageCover *)view));
+    [views addObjectsFromArray:view.subviews];
+  }
+  return most;
 }
 
 - (NSView *)hitTest:(NSPoint)point {

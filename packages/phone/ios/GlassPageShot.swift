@@ -18,7 +18,7 @@ final class GlassPageShot {
   private var takenAt: CFTimeInterval = 0
   private var pendingToken: Int?
   private var pending: Bool { pendingToken != nil }
-  private var busy: [(token: Int, start: TimeInterval, end: TimeInterval?)] = []
+  private var busy: [(token: Int, start: TimeInterval, end: TimeInterval?, privately: Bool, consentWindow: Int?)] = []
   private var movedWhilePending = false
   private var requestedOffset: CGPoint = .zero
   private var lastOffset: CGPoint?
@@ -31,7 +31,7 @@ final class GlassPageShot {
   private(set) var rejected = 0
   private(set) var uncovered = 0
   private(set) var moving = 0
-  var onMainWork: ((Double) -> Void)?
+  var onMainWork: ((Double, Bool, Int?) -> Void)?
   var heldUntil: CFTimeInterval = 0
   private(set) var arrived = false
   private(set) var held = 0
@@ -71,17 +71,17 @@ final class GlassPageShot {
     return true
   }
 
-  func request(_ web: WKWebView, around needed: CGRect, pixelsPerPoint: CGFloat, now: CFTimeInterval) {
+  func request(_ web: WKWebView, around needed: CGRect, pixelsPerPoint: CGFloat, now: CFTimeInterval, privately: Bool, consentWindow: Int?) {
     guard !isHeld(at: now) else { return }
     switch GlassLaunch.pageShot {
-    case .pdf: requestDocument(web, around: needed, pixelsPerPoint: pixelsPerPoint, now: now)
-    case .snapshot: requestSnapshot(web, pixelsPerPoint: pixelsPerPoint, now: now)
+    case .pdf: requestDocument(web, around: needed, pixelsPerPoint: pixelsPerPoint, now: now, privately: privately, consentWindow: consentWindow)
+    case .snapshot: requestSnapshot(web, pixelsPerPoint: pixelsPerPoint, now: now, privately: privately, consentWindow: consentWindow)
     }
   }
 
   private var speed: CGFloat { hypot(velocity.x, velocity.y) }
 
-  private func requestDocument(_ web: WKWebView, around needed: CGRect, pixelsPerPoint: CGFloat, now: CFTimeInterval) {
+  private func requestDocument(_ web: WKWebView, around needed: CGRect, pixelsPerPoint: CGFloat, now: CFTimeInterval, privately: Bool, consentWindow: Int?) {
     let (key, committed) = Self.key(of: web)
     guard !pending, committed, key == gate.key, now >= gate.nextRequest, now - gate.lastRequest >= GlassFlowRules.documentGap else { return }
     let still = stillFrames >= GlassFlowRules.stillFramesForSnapshot
@@ -98,14 +98,14 @@ final class GlassPageShot {
     let configuration = WKPDFConfiguration()
     configuration.rect = area
     let started = CACurrentMediaTime()
-    busy = busy.filter { started - ($0.end ?? started) <= LiquidGlassRules.budgetWindow } + [(token: token, start: started, end: nil)]
+    busy = busy.filter { started - ($0.end ?? started) <= LiquidGlassRules.budgetWindow } + [(token: token, start: started, end: nil, privately: privately, consentWindow: consentWindow)]
     let width = max(Int((area.width * GlassFlowRules.rasterScale(area: area, zoom: zoom, pixelsPerPoint: pixelsPerPoint)).rounded()), 1)
     if PhoneTestBuild.isOn { NSLog("PAGELAB time glass pdf ask %.0f", Date().timeIntervalSince1970 * 1000) }
     web.createPDF(configuration: configuration) { [weak self, weak web] result in
       MainActor.assumeIsolated {
         let working = CACurrentMediaTime()
         guard let self else { return }
-        defer { self.onMainWork?((CACurrentMediaTime() - working) * 1000) }
+        defer { self.onMainWork?((CACurrentMediaTime() - working) * 1000, privately, consentWindow) }
         guard let web, self.web === web, self.gate.accepts(token: token, key: key), web.scrollView.zoomScale == zoom, case .success(let data) = result else {
           self.settle(token, at: working)
           self.rejected += 1
@@ -125,7 +125,7 @@ final class GlassPageShot {
           DispatchQueue.main.async {
             MainActor.assumeIsolated {
               let landed = CACurrentMediaTime()
-              defer { self.onMainWork?((CACurrentMediaTime() - landed) * 1000) }
+              defer { self.onMainWork?((CACurrentMediaTime() - landed) * 1000, privately, consentWindow) }
               self.settle(token, at: landed)
               guard self.web === web, self.gate.accepts(token: token, key: key), web.scrollView.zoomScale == zoom else {
                 self.rejected += 1
@@ -152,7 +152,7 @@ final class GlassPageShot {
     }
   }
 
-  private func requestSnapshot(_ web: WKWebView, pixelsPerPoint: CGFloat, now: CFTimeInterval) {
+  private func requestSnapshot(_ web: WKWebView, pixelsPerPoint: CGFloat, now: CFTimeInterval, privately: Bool, consentWindow: Int?) {
     let (key, committed) = Self.key(of: web)
     let distance = image == nil ? .infinity : max(abs(web.scrollView.contentOffset.y - requestedOffset.y), abs(web.scrollView.contentOffset.x - requestedOffset.x))
     let ask = GlassSnapshotAsk(hasImage: image != nil, pending: pending, stillFrames: stillFrames, distance: distance, age: now - takenAt, committed: committed, speed: speed, allowsMoving: GlassLaunch.movingSnapshots)
@@ -173,7 +173,7 @@ final class GlassPageShot {
       MainActor.assumeIsolated {
         let working = CACurrentMediaTime()
         guard let self else { return }
-        defer { self.onMainWork?((CACurrentMediaTime() - working) * 1000) }
+        defer { self.onMainWork?((CACurrentMediaTime() - working) * 1000, privately, consentWindow) }
         self.settle(token, at: working)
         guard let web, self.web === web, self.gate.accepts(token: token, key: key), Self.key(of: web).key == key else {
           self.rejected += 1
@@ -206,6 +206,8 @@ final class GlassPageShot {
   }
 
   func isOverBudget(now: CFTimeInterval) -> Bool { GlassFlowRules.documentOverBudget(busy.map { (start: $0.start, end: $0.end) }, now: now) }
+
+  func isOverBudgetPublicly(now: CFTimeInterval, consentWindow: Int?) -> Bool { GlassFlowRules.documentOverBudgetPublicly(busy.map { (start: $0.start, end: $0.end, privately: $0.privately, consentWindow: $0.consentWindow) }, now: now, consentWindow: consentWindow) }
 
   private func keep(_ picture: CGImage, rows: [Float], area: CGRect, zoom: CGFloat, at time: CFTimeInterval, moved: Bool) {
     gate.succeeded()

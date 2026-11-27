@@ -73,13 +73,14 @@ export function sampleOmniboxLatency(key: OmniboxKey) {
 
 export const takeOmniboxLatency = () => latency.splice(0);
 
-let suggests = { search_suggest_ok: 0, search_suggest_blocked: 0, search_suggest_failed: 0 };
+let suggests = { search_suggest_ok: 0, search_suggest_blocked: 0, search_suggest_failed: 0, search_suggest_throttled: 0 };
 
-export const noteSearchSuggest = (outcome: "ok" | "blocked" | "failed", consent: ConsentToken | null) => counted(consent, () => void suggests[`search_suggest_${outcome}`]++);
+export const noteSearchSuggest = (outcome: "ok" | "blocked" | "failed" | "throttled", consent: ConsentToken | null) =>
+  counted(consent, () => void suggests[`search_suggest_${outcome}`]++);
 
 export const takeSearchSuggests = () => {
   const taken = suggests;
-  suggests = { search_suggest_ok: 0, search_suggest_blocked: 0, search_suggest_failed: 0 };
+  suggests = { search_suggest_ok: 0, search_suggest_blocked: 0, search_suggest_failed: 0, search_suggest_throttled: 0 };
   return taken;
 };
 
@@ -97,9 +98,9 @@ export { takePopupTabCounts } from "./popupTabCounts";
 
 let firstWindowAt: number | null = null;
 
-export function markFirstWindow() {
+export function markFirstWindow(at = Date.now()) {
   if (firstWindowAt !== null) return;
-  firstWindowAt = Date.now();
+  firstWindowAt = at;
   const start = appInfo().processStart;
   if (!isSharing() || !start) return;
   if (firstWindowAt - start > 0 && firstWindowAt - start < 10 * 60_000) launchFirstWindow(firstWindowAt);

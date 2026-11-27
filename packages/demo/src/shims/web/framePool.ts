@@ -15,6 +15,7 @@ export function noteFrameSize(width: number, height: number) {
 function poolHost() {
   if (host?.isConnected) return host;
   host = document.createElement("div");
+  host.className = "ardia-webview-host";
   host.setAttribute("aria-hidden", "true");
   Object.assign(host.style, { position: "fixed", left: "0", top: "0", zIndex: "-1", pointerEvents: "none", opacity: "0" });
   document.body.prepend(host);

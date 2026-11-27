@@ -15,6 +15,9 @@ import { MiniWindow } from "../MiniWindow";
 import { PictureChoice } from "../PictureChoice";
 import { useSettingsColors } from "../useSettingsColors";
 import { keyText } from "../../../state/commands/keyText";
+import { useShortcutHint } from "../../../state/commands/commandShortcuts";
+import { noteSettingsPick } from "../../../state/telemetry/settingsPickerCounts";
+import { CommandKeyField, ShortcutConflict, useCommandConflicts } from "../ShortcutField";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import type { SettingsPlace } from "../../../state/settings/settingsWindows";
 
@@ -116,6 +119,8 @@ function LayoutSection() {
   );
 }
 
+const autoHideDescription = (top: boolean, keys: string | undefined) => `Tabs slide away until you point at the ${top ? "top edge" : "edge"}.${keys ? ` ${keys} toggles.` : ""}`;
+
 const SCROLL_TOOLBAR: { hides: boolean; title: string; caption: string }[] = [
   { hides: false, title: "Keep the toolbar", caption: "Stays put while the page scrolls." },
   { hides: true, title: "Shrink while scrolling", caption: "Shrinks to a strip as you scroll down." },
@@ -140,8 +145,11 @@ function ScrollToolbarChoices() {
 
 function AutoHideTabsRow({ top }: { top: boolean }) {
   const on = useAutoHidesTabsInFocused();
+  const keys = useShortcutHint("toggleSidebar");
+  const conflicts = useCommandConflicts("toggleSidebar");
   return (
-    <Row anchor="tabs.autoHideTabs" description={`Tabs slide away until you point at the ${top ? "top edge" : "edge"}. ${keyText("⌘S")} toggles.`}>
+    <Row anchor="tabs.autoHideTabs" description={conflicts.length ? <ShortcutConflict titles={conflicts} /> : autoHideDescription(top, keys)}>
+      <CommandKeyField command="toggleSidebar" onChange={(change) => change !== "mouse" && noteSettingsPick("autoHideTabsKeys", change)} />
       <Toggle value={on} accessibilityLabel={setting("tabs.autoHideTabs").title} onChange={(next) => updateSettings({ autoHideTabs: next })} />
     </Row>
   );
@@ -182,6 +190,7 @@ function TabsAndTopAppsSection() {
             minWidth={150}
           />
         </Row>
+        <SettingToggle anchor="tabs.pinnedTabsReopenAtPinnedUrl" />
         <SettingToggle anchor="tabs.keepTopAppsRunning" />
         <SettingToggle anchor="tabs.closedTopAppTiles" />
         <SettingToggle anchor="tabs.balancedTopApps" />
@@ -216,6 +225,7 @@ function NewTabsSection() {
         <Row anchor="tabs.newTabPosition">
           <PopUp value={newTabPosition} options={top ? NEW_TABS_ACROSS : NEW_TABS_DOWN} onChange={choosePosition} minWidth={190} />
         </Row>
+        <SettingToggle anchor="tabs.showTabMenuButton" />
         <SettingToggle anchor="tabs.appLinksFirst" />
         <SettingToggle anchor="tabs.shareTabsAcrossWindows" />
       </Group>

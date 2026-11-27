@@ -286,7 +286,7 @@ changes it today, 🔍 read only, 🗺️ designed below, ⛔ deliberately not e
 
 | Area | Read | Write |
 | --- | --- | --- |
-| tabs | `tabs.list {window?, profile?}`, `tabs.get {tab}` | `tabs.navigate {tab, url}`, `tabs.reload`, `tabs.back`, `tabs.forward`, `tabs.duplicate`, `tabs.setPinnedUrl {tab, url?}`, `tabs.returnToPinnedUrl`, `tabs.hold {session, tabs, seconds?}` → `{held, gone, seconds, engineKeeps?}` and `tabs.release {session}`: a session keeps the tabs it drives loaded (Memory Saver's `cliSession` veto, and their profile isn't unloaded). On macOS Chromium's own discards keep them too: the app hands the engine each held tab with the wall-clock time its hold ends (`until`, in ms), which the engine turns into its own deadline when the update arrives (so time an update spends queued never lengthens a hold; at most 300 s), on every change and every 10 s while any hold lasts (`engine.setCliHeldTabs {tabs: [{tabId, until}]}`, an empty list when the socket stops), `tabs.hold` answers only once the engine has them and `tabs.release` only once the engine has let them go, with `engineKeeps: true` only when the engine marked every held tab and the hold is still running when the answer goes out (false when it didn't answer within 3 s, refused, found no page for a tab, or the hold had already ended) (only Ardia's own budget keeps the tabs then; macOS only), and the engine's discard veto keeps a tab with kept-by code 103 until that deadline (so a hold the app forgets, for example across a JS reload, still ends) through Memory Saver's timer, urgent and frozen-memory discards and a queued idle-profile unload, while the tab menu's Sleep Tab still puts one to sleep. On Linux and Windows Chromium keeps them only while a debugger is attached. Each call replaces that session's list and lasts at most 300 s on the app's own clock, so the session renews while it works. One session's release never ends another's hold, at most 4 sessions hold at once, a hold nobody renews runs out, and the socket stopping ends them all. `tabs.hold {…, untilDisconnect: true}` ties the hold to the connection that sent it instead of a timer: it needs no renewing (`seconds` answers null), the app renews the engine's 300 s deadline itself every 10 s, and it ends the moment that connection closes, whatever ended the command (a crash or SIGKILL closes the socket too), or at `tabs.release` from that connection; it belongs to the connection as well as the session name, so another connection using the same name keeps its own holds and can neither replace nor release this one, a caller with no connection of its own is refused, and a timed hold still outlives the one-shot connection that sent it. `live: true` (macOS) also keeps the held tabs drawing and laying out in the background, so screenshots, hover and hit tests work without showing them: the engine raises the tab's capturer count with `stay_hidden` false while the hold lasts (`engine.setCliHeldTabs {tabs: [{tabId, until, live}]}`) and drops it when the hold ends, the tab is released, or its own deadline passes. `tabs.consoleDelta {tab, after?, generation?, limit?}` → `{entries, generation, reset, next, last, dropped, withheld, errors, more}` (macOS) reads the console warnings, errors and uncaught exceptions the engine has kept for the tab since it joined a tab strip (the last 200, text cut to 2048 bytes): pass the reply's `next` as `after` and its `generation` as `generation` (a replaced ring or a watermark past its end starts over with `reset: true`), `dropped` counts entries that left the ring unread, `withheld` those from frames Chrome's DevTools policy keeps from inspection, a tab the policy keeps from inspection is refused, and each entry has `seq`, `level`, `exception`, `mainFrame`, `text`, `source`, `line` and `time` |
+| tabs | `tabs.list {window?, profile?}`, `tabs.get {tab}` | `tabs.navigate {tab, url}`, `tabs.reload`, `tabs.back`, `tabs.forward`, `tabs.duplicate`, `tabs.setPinnedUrl {tab, url?}`, `tabs.returnToPinnedUrl`, `tabs.hold {session, tabs, seconds?}` → `{held, gone, seconds, engineKeeps?}` and `tabs.release {session}`: a session keeps the tabs it drives loaded (Memory Saver's `cliSession` veto, and their profile isn't unloaded). On macOS Chromium's own discards keep them too: the app hands the engine each held tab with the wall-clock time its hold ends (`until`, in ms), which the engine turns into its own deadline when the update arrives (so time an update spends queued never lengthens a hold; at most 300 s), on every change and every 10 s while any hold lasts (`engine.setCliHeldTabs {tabs: [{tabId, until}]}`, an empty list when the socket stops), `tabs.hold` answers only once the engine has them and `tabs.release` only once the engine has let them go, with `engineKeeps: true` only when the engine marked every held tab and the hold is still running when the answer goes out (false when it didn't answer within 3 s, refused, found no page for a tab, or the hold had already ended) (only Ardia's own budget keeps the tabs then; macOS only), and the engine's discard veto keeps a tab with kept-by code 103 until that deadline (so a hold the app forgets, for example across a JS reload, still ends) through Memory Saver's timer, urgent and frozen-memory discards and a queued idle-profile unload, while the tab menu's Sleep Tab still puts one to sleep. On Linux and Windows Chromium keeps them only while a debugger is attached. Each call replaces that session's list and lasts at most 300 s on the app's own clock, so the session renews while it works. One session's release never ends another's hold, at most 4 sessions hold at once, a hold nobody renews runs out, and the socket stopping ends them all. `tabs.hold {…, untilDisconnect: true}` ties the hold to the connection that sent it instead of a timer: it needs no renewing (`seconds` answers null), the app renews the engine's 300 s deadline itself every 10 s, and it ends the moment that connection closes, whatever ended the command (a crash or SIGKILL closes the socket too), or at `tabs.release` from that connection; it belongs to the connection as well as the session name, so another connection using the same name keeps its own holds and can neither replace nor release this one, a caller with no connection of its own is refused, and a timed hold still outlives the one-shot connection that sent it. `live: true` (macOS) also keeps the held tabs drawing and laying out in the background, so screenshots, hover and hit tests work without showing them: the engine raises the tab's capturer count with `stay_hidden` false while the hold lasts (`engine.setCliHeldTabs {tabs: [{tabId, until, live}]}`) and drops it when the hold ends, the tab is released, or its own deadline passes. `tabs.consoleDelta {tab, after?, generation?, limit?}` → `{entries, generation, reset, next, last, dropped, withheld, errors, more}` (macOS) reads the console warnings, errors and uncaught exceptions the engine has kept for the tab since it joined a tab strip (the last 200, text cut to 2048 bytes): pass the reply's `next` as `after` and its `generation` as `generation` (a replaced ring or a watermark past its end starts over with `reset: true`), `dropped` counts entries that left the ring unread, `withheld` those from frames Chrome's DevTools policy keeps from inspection, a tab the policy keeps from inspection is refused, and each entry has `seq`, `level`, `exception`, `mainFrame`, `text`, `source`, `line` and `time`. `tabs.diagnostics` and `tabs.input` (macOS, below) read a tab's console and network log and send it trusted input with no debugger attached |
 | windows | `windows.get {window}`, `windows.geometry {window}` | `windows.create {profile?, url?, layout?}`, `windows.close`, `windows.focus`, `windows.setLayout {window, layout?, tabsShown?}`, `windows.switchProfile`, `windows.merge`, `windows.setFrame {window, frame}`, `windows.setMaximized {window, on}`, `windows.setFullScreen {window, on}` |
 | closed | `closed.list {window?}` | `closed.restore {id, window?}`, `closed.clear {window?}` → `{cleared}`; both act on the window's profile, the last focused main window when `window` is left out, and answer `no_window` when there's none |
 | profiles | `profiles.list` | `profiles.create`, `profiles.update`, `profiles.setLook`, `profiles.reorder`, `profiles.setDefault`, `profiles.delete {profile}` (Ardia asks the user first) |
@@ -501,6 +501,70 @@ loaded, and Chromium's own eligibility flag (`incognito_access.is_enabled`) isn'
 A packed or Web Store extension whose manifest says `"incognito": "not_allowed"` can't turn it on. Otherwise the
 Incognito write is read back, so a change Chromium declines without an error answers `failed`.
 
+### Tab diagnostics and trusted input
+
+Both are macOS only for now (`PLATFORM_FEATURES.nativeTabTools`; Linux and Windows don't list them, so the command gets
+`unknown_method`), engine calls the app passes straight through (`tabs.diagnostics` → `ac_tab_diagnostics`,
+`tabs.input` → `ac_tab_input`, `engine/ardiacore/src/ardia/core/ac_tab_diagnostics.cc`, `ac_tab_input.cc`), and neither attaches a
+DevTools session, raises the debugger infobar, shows the tab, focuses its window or activates Ardia.
+
+- `tabs.diagnostics {tab, since?, kind?, onlyErrors?, limit?, clear?}` → `{tab, nextSeq, console, network, dropped, more,
+  capacity}`. From the moment a tab is created (`TabBridge`'s constructor) the engine keeps its console messages of
+  every level, with uncaught exceptions (`kind: "exception"`) and unhandled rejections (`kind: "rejection"`), and its
+  requests: each subresource as it completes and each document load, with method, status, request destination
+  (`type`, `fetch` for fetch and XHR), net error (`ERR_NAME_NOT_RESOLVED`), `durationMs` and `failed` (an error or a
+  status of 400 or more). Console and network share one `seq`, so `nextSeq` is one watermark: pass it as `since`. A
+  limit (default 200, at most 500) or the reply's byte budget stops the read at the last entry sent (`more: true`), so
+  nothing is skipped. `dropped` counts entries at or after `since` that the tab's rings had already overwritten; what
+  `clear` forgot isn't counted. `clear` forgets everything before the reply's `nextSeq`, and `cleared` says whether it took. `dropped` counts only up
+  to the returned `nextSeq`, so paged reads never count a gap twice. Memory is fixed per tab: 150
+  console warnings and errors, 50 other console messages, 100 failed and 150 other requests, each message cut to 1000
+  UTF-16 units and each address to 512 bytes, freed with the tab and emptied when it is discarded. Only the tab's
+  primary page is kept (not a prerender or the back-forward cache), and only frames Chrome's DevTools policy may
+  inspect; a tab it may not inspect is `refused`, and a private tab keeps nothing. No headers, cookies or bodies are
+  kept. Addresses lose their user name, password, query and fragment in the engine, and the app replaces tokens, keys,
+  passwords, JWTs, private keys and secret-looking path segments in messages and addresses with `[redacted]`
+  (`state/automation/tabDiagnostics.ts`). `tabs.consoleDelta` stays as it was for the command that reads it.
+- `tabs.input {tab, action, …}` → `{tab, action, acked, sent?, viewport}` sends `click`, `dblclick`, `move`, `down`, `up`
+  (`x`, `y`, `button` left or middle, `clickCount` for `down` and `up` only, `modifiers`; a button pressed with `down`
+  stays held once the renderer acknowledged it, so `move` and `wheel` carry it until its `up` or the page changes, and
+  a second `down` for it, an `up` for a button that isn't down or a `click` on a held button is `bad_request`; a
+  `down`, `up`, `click` or `dblclick` sent while another of them is still unanswered is `failed` (busy), and its
+  prime token is spent; a field that is present must be valid (no wrong type is read as left out); only an acknowledged `down` or `up` changes
+  the held buttons, never `key`, `text`, `move` or `wheel`; the engine takes the same fields per action as the socket), `wheel` (`x`, `y`, `deltaX`, `deltaY` in CSS pixels, positive scrolls
+  right and down), `key` (`key`, a character or a key value such as `Enter`; `code`, such as `KeyA`; `modifiers`) and
+  `text` (inserted at the caret as typing does, at most 4096 UTF-16 code units) to the tab's `RenderWidgetHost`
+  (`ForwardMouseEvent`, `ForwardWheelEvent`, `ForwardKeyboardEvent`, `WebContents::InsertText`), so the page gets
+  `isTrusted: true` events. `x` and `y` are CSS pixels from the viewport's top left at the tab's zoom and must fall
+  inside it. The page gets page focus (as a click gives it) but the window and the app don't, and a background tab
+  stays hidden to its page: while input is in flight the engine keeps it painting with a hidden capturer
+  (`stay_hidden`), released 3 s after the last input. Keys go with `skip_if_unhandled`, so an unhandled key never
+  reaches Ardia's menus or shortcuts (⌘W closes nothing). A right click or a Control-click would open Ardia's own
+  context menu and a wheel with Control or Command would zoom, so those are `bad_request`. Only web pages take input
+  (http, https, file, about:blank, for the main frame and the focused frame): Ardia's own and `chrome:` pages are
+  `refused`. A never-painted background page drops input, so the app first sends the same input with
+  `prime` (`ac_tab_input`): the engine checks it, starts the hidden capturer and answers once the page commits a frame
+  (`painted`), or after 1 s with `painted: false`, which the socket answers as `failed`. A painted prime also returns a token (at most 16 wait per tab;
+  past that a prime answers `failed` rather than drop a live one) that names the
+  page's document and, for `key` and `text`, the focused frame's document. Only then, and only while control is still
+  on (checked just before the call goes out), does the app send the input itself with that token. The engine checks it
+  again and sends it at once, in the same task, only if the page and focused frame are still the documents the token
+  names (`page_changed`, answered as `failed`, otherwise) and the page drew a frame since its last navigation (if the
+  capturer lapsed in between it answers `not_painting`, answered as `failed`; the app never primes again on its own,
+  since a new prime could name a different page). A new primary page (a navigation or a back-forward cache restore) clears the tab's tokens, held buttons and
+  painted state and answers a waiting prime as not painted. Nothing waits in the engine. A
+  call already on its way to the engine when control is turned off is still sent, as for every socket method. The context menu key (and Shift+F10) would open Ardia's own menu, so it is `bad_request` too; Ardia's
+  error pages and `about:blank` documents that inherit a browser page's origin don't take input. `acked` is true once the renderer itself answered this call's last event within 2 s (an
+  answer from the browser, which filtered it, counts as not acked; for `wheel` that is the event carrying the delta,
+  and a wheel merged with its own end event counts as answered with it; a `move` merged into a later one doesn't); `text` has no event to answer, so it answers
+  `acked: false, sent: true` once the text was handed to the page's focused frame. Input goes to the main frame's widget, so a click lands in a cross-site iframe only as far as the main
+  frame's own hit test reaches it. Bad params are `bad_request` before the engine is asked
+  (`state/automation/tabInput.ts`), and the engine checks them again.
+- Telemetry: `cli_tab_diagnostics_reads`, `cli_tab_diagnostics_gaps` (reads with `dropped`), `cli_tab_diagnostics_refusals`,
+  `cli_tab_input_<action>`, `cli_tab_input_unacked`, `cli_tab_input_refusals` and `cli_tab_tools_engine_missing`; counts
+  only. `packages/ardiacore/scripts/tab-tools-check.mjs <app built with --bundle>` checks both end to end in a hidden
+  instance with no DevTools port.
+
 ### Window geometry
 
 `windows.geometry`, `windows.setFrame`, `windows.setMaximized` and `windows.setFullScreen` call four public
@@ -531,9 +595,8 @@ socket's `failed`, "Timed out…"), and the window stays busy until that transit
 against the request, waits for the store to follow (`failed` if it doesn't within 4 s), and answers `refused` while a
 page is full screen in the window, `failed` if the window didn't get there. None of the three acts while a page is full screen in the window. The store's `frame` and `fullScreen` follow through the
 window events they already listen to. `PLATFORM_FEATURES.windowGeometry` is on for macOS only: Linux needs the same
-four calls in `engine/ardiacore-linux` (an engine change, so a new engine), and Windows in `WindowManager` of
-`apps/browser/windows` (its maximize already exists as `toggleMaximizeWindow`); until then the methods are `refused`
-there.
+four calls in `engine/ardiacore-linux` (an engine change, so a new engine), and Windows in the WebUI host
+(`scripts/windows/engine/src/ardia/win/webui`); until then the methods are `refused` there.
 
 ### Clearing site data is per site
 

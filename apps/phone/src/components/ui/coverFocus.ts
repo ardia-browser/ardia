@@ -1,4 +1,4 @@
-import { announceNatively, focusViewNatively, screenReaderFocusIsNative } from "@ardia/phone-native";
+import { announceNatively, focusViewNatively, handOverFocusNatively, screenReaderFocusIsNative, screenReaderHandOverIsNative } from "@ardia/phone-native";
 import { useEffect, type RefObject } from "react";
 import { AccessibilityInfo, findNodeHandle, Platform, type View, type ViewInstance } from "react-native";
 
@@ -8,7 +8,11 @@ type Focusable = Parameters<typeof findNodeHandle>[0];
 
 const nativeFocus = () => Platform.OS === "android" && screenReaderFocusIsNative();
 
-export function focusForScreenReader(target: () => Focusable | null | undefined, still: () => boolean = () => true, { returning = false }: { returning?: boolean } = {}): () => void {
+export type FocusHandOver = { within: boolean };
+
+const nativeHandOver = () => Platform.OS === "android" && screenReaderHandOverIsNative();
+
+export function focusForScreenReader(target: () => Focusable | null | undefined, still: () => boolean = () => true, { returning = false, handover = null }: { returning?: boolean; handover?: FocusHandOver | null } = {}): () => void {
   let live = true;
   let frame: number | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -20,6 +24,11 @@ export function focusForScreenReader(target: () => Focusable | null | undefined,
   };
   void AccessibilityInfo.isScreenReaderEnabled().then((on) => {
     if (!on || !ok()) return;
+    if (handover && nativeHandOver()) {
+      const handle = handleNow();
+      if (handle && ok()) revoke = handOverFocusNatively(handle, handover.within);
+      return;
+    }
     const land = () => {
       timer = null;
       if (!ok()) return;

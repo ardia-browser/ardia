@@ -5,12 +5,21 @@ import { Animated as WebAnimated, TextInput as WebTextInput, UIManager } from "r
 export * from "react-native-web";
 export { MacPressable as Pressable, MacView as View } from "./web/motion/macView";
 export { MacText as Text } from "./web/MacText";
+export { ScaledImage as Image } from "./web/ScaledImage";
 
 export const unstable_batchedUpdates = batchedUpdates;
 
 type Measured = (x: number, y: number, width: number, height: number) => void;
+type MeasuredOnPage = (x: number, y: number, width: number, height: number, pageX: number, pageY: number) => void;
 const pageMeasureInWindow = (UIManager as unknown as { measureInWindow: (node: Element, callback: Measured) => void }).measureInWindow;
+const layoutMeasure = (UIManager as unknown as { measure: (node: Element, callback: MeasuredOnPage) => void }).measure;
 Object.assign(UIManager, {
+  measure(node: Element, callback: MeasuredOnPage) {
+    layoutMeasure(node, (x, y, width, height) => {
+      const box = node.getBoundingClientRect();
+      callback(x, y, width, height, box.left + window.scrollX, box.top + window.scrollY);
+    });
+  },
   measureInWindow(node: Element, callback: Measured) {
     pageMeasureInWindow(node, (x, y, width, height) => {
       const frame = node.closest?.(".ardia-window")?.getBoundingClientRect();
@@ -37,7 +46,15 @@ export const Animated = {
   event: (mapping: never, config?: Driven) => WebAnimated.event(mapping, jsDriven(config) as never),
 } as unknown as typeof WebAnimated;
 
-export const findNodeHandle = (component: unknown) => (component instanceof Element ? component : null) as unknown as number | null;
+export const findNodeHandle = (component: unknown) => {
+  if (component instanceof Element) return component as unknown as number;
+  const getter = (component as { getScrollableNode?: () => unknown } | null)?.getScrollableNode;
+  if (typeof getter === "function") {
+    const inner = getter.call(component);
+    if (inner instanceof Element) return inner as unknown as number;
+  }
+  return null;
+};
 
 type KeyMatch = { key: string; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; ctrlKey?: boolean };
 type MacTextInputProps = ComponentProps<typeof WebTextInput> & {

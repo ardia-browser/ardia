@@ -60,19 +60,20 @@ linux="$dist/linux"
 if [ -d "$linux" ]; then
   linux_package="$linux/Ardia-$version-linux-x64.tar.xz"
   linux_cli="$linux/ardia-cli-$version-linux-x64.tar.gz"
-  linux_deb="$linux/Ardia-$version-linux-x64.deb"
   linux_appimage="$linux/Ardia-$version-linux-x64.AppImage"
   linux_arch="$linux/ardia-bin-$version.src.tar.gz"
   provenance="$linux/provenance.txt"
   [ -f "$provenance" ] || die "$linux has no provenance.txt"
-  grep -q '^engine key [0-9a-f]\{40\} (exact)' "$provenance" && ! grep -q 'uncommitted changes' "$provenance" \
+  grep -q '^engine key [0-9a-f]\{40\} (exact[,)]' "$provenance" && ! grep -q 'uncommitted changes' "$provenance" \
     || die "$linux is a Linux test build (an inexact engine or uncommitted changes, $provenance), not a release"
   linux_files=("$linux_package" "$linux_appimage" "$linux_arch" "$linux_cli")
-  if grep -q '^deb dropped' "$provenance"; then
-    echo "note: $(grep -m1 '^deb dropped' "$provenance"): the release ships without the .deb"
-  else
-    linux_files+=("$linux_deb")
-  fi
+  for format in deb rpm flatpak; do
+    if grep -q "^$format dropped" "$provenance"; then
+      echo "note: $(grep -m1 "^$format dropped" "$provenance"): the release ships without the .$format"
+    else
+      linux_files+=("$linux/Ardia-$version-linux-x64.$format")
+    fi
+  done
   linux_sums=()
   for file in "${linux_files[@]}"; do
     for asset in "$file" "$file.sha256"; do

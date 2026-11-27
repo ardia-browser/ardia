@@ -33,6 +33,7 @@ class CompletingFieldModule : Module() {
             Prop("maxLength") { view: CompletingFieldView, value: Int? -> view.setMaxLength(value) }
             Prop("autoFocus") { view: CompletingFieldView, value: Boolean? -> view.autoFocus = value == true }
             Prop("fieldLabel") { view: CompletingFieldView, value: String? -> view.setLabel(value) }
+            Prop("revealFocus") { view: CompletingFieldView, generation: Int? -> view.revealFocusProp = generation ?: 0 }
 
             OnViewDidUpdateProps { view -> view.propsUpdated() }
 

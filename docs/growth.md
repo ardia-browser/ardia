@@ -33,6 +33,7 @@ Shipped (site only, not yet deployed):
 - **Windows / Linux:** Download stays, plus "Mac only for now. Follow the case on GitHub." under the hero and
   closing buttons (`github_clicked { link: notify }`). Event: `non_mac_visit { os }`, once per session.
 - **Download band experiment** on Macs (below).
+- **Donate floor experiment** for everyone who reaches the donate amounts (below).
 - Dead clicks, dead swipes and rage clicks are captured (`$dead_click`, `$dead_swipe`, `$rageclick`).
 
 How visitors are sorted: `apps/site/src/components/Device.astro`, before first paint, sets
@@ -62,6 +63,29 @@ or narrower.
 - **Launched** 2026-09-29 17:23 UTC, as PostHog experiment 98483 (flag 293364) until the 2026-09-30 switch.
   Read it with the `download-band` query in `.claude/skills/stats/queries.md` (exposed Mac visitors per variant
   who clicked Download after exposure). Secondary: `download_clicked` with `location = office-band`.
+
+Result: _pending._
+
+### Experiment: `donate-floor`
+
+- **Hypothesis:** the lowest donate amount sets the anchor. $5 gets more people to give; $10 raises more per gift.
+  Which one raises more money, and how many people give at all?
+- **Flag key:** `donate-floor`. **Variants:** `ten` (control: $10 is the lowest amount), `five` ($5 instead). 50/50,
+  on every device. Both amounts stay in the page (`apps/site/src/components/Donate.astro`); the variant sets
+  `<html data-donate-floor>`, which shows one of them.
+- **Who's in it:** visitors who come within 800px of the donate section, or hover, focus or click the header's
+  Donate pill. Only then does the page ask for the variant, recording `$feature_flag_called` (the exposure).
+  Visitors with telemetry off are never exposed and see $10.
+- **Primary metric:** money raised per exposed visitor, read in Stripe: every payment link the page shows carries
+  `client_reference_id=donate-floor_ten` or `donate-floor_five`, so each Checkout Session says which arm it came
+  from. The custom monthly form (`/api/donate/monthly`) isn't tagged. Secondary: the share of exposed visitors who
+  click an amount (`donate_clicked` with an `amount`), and who click the lowest one (`amount` 5 or 10), on the
+  dashboard's Site › Experiment: donate-floor.
+- **Stopping rule:** at least 300 exposures per variant and 7 days. Gifts are rare, so read the money too and
+  expect to call it on direction if payments stay in single digits.
+- **Local check:** `http://localhost:4321/?nnflag=five` (or `ten`) forces a variant on localhost only.
+- **Launched:** _pending deploy._ Stripe: the $5 links (`donate_once_5`, `donate_monthly_5`) and the $10 links
+  (`donate_once_10`, `donate_monthly_10`) are all live.
 
 Result: _pending._
 
@@ -172,7 +196,18 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     crashed process's main thread name, `CrRendererMain`, `CrGpuMain`, `CrUtilityMain`). New fields: `crash_process`
     (`browser`, `renderer`, `gpu`, `utility`, `alerts`, `plugin`), `crashed_version` and `crashed_build` (the app version
     that crashed, which is the previous one when the report is found after an update; empty for helpers),
-    `crashed_engine_version` (helpers), `crash_termination` (`SIGNAL`, `CODESIGNING`…), `crash_uptime_s` (how
+    `crashed_engine_version` (helpers), `crash_termination` (`SIGNAL`, `CODESIGNING`…), and since #2371
+    `crash_termination_code` (the report's termination code: the signal number for `SIGNAL`),
+    `crash_termination_indicator` (the system's indicator as a fixed kind, its trailing code dropped: `trace_trap`,
+    `segmentation_fault`, `bus_error`, `abort_trap`, `illegal_instruction`, `killed`, `terminated`, `floating_point`,
+    `invalid_page`, else `other`), `crash_exception_code` (the first Mach exception code: 1 is `KERN_INVALID_ADDRESS` for
+    `EXC_BAD_ACCESS`), `crash_fault_near_null` (`EXC_BAD_ACCESS` only, from the second exception code: whether the
+    faulting address is below 1 MiB. That's an address-range indicator, not proof of a null dereference: it fits a null
+    pointer plus an offset, and also a corrupted pointer that happens to land low. The address itself is never sent),
+    `crash_thread` (the crashed thread's kind from a fixed list, only when the report names its faulting thread:
+    `chrome_main` for `CrBrowserMain`, `CrRendererMain`, `CrGpuMain` and `CrUtilityMain`, `thread_pool`, `io`, `compositor`, `web_worker`, `media`, `react_js`, `react_other`, `appkit_events`, `apple_other`, else `other`;
+    never the name) and `crash_queue` (`main` for the main dispatch queue, else `other`; likewise only for a named
+    faulting thread), `crash_uptime_s` (how
     long the process ran), `crash_vm_writable_mb` (the report's `Writable regions: Total=`, the virtual size of its
     writable regions, not what it wrote), and the context saved before the crash:
     `ctx_tabs`, `ctx_windows`, `ctx_profiles`, `ctx_footprint_mb` (the app process's physical footprint),

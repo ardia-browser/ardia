@@ -15,12 +15,31 @@ const NONE = {
   plugin_split_opens: 0,
   program_links: 0,
   program_link_failures: 0,
+  program_link_cause_name: 0,
+  program_link_cause_bin_folder: 0,
+  program_link_cause_bin_shared: 0,
+  program_link_cause_shadowed: 0,
+  program_link_cause_taken: 0,
+  program_link_cause_other_plugin: 0,
+  program_link_cause_busy: 0,
+  program_link_cause_io: 0,
+  program_link_cause_other: 0,
   program_unlinks: 0,
   program_links_kept: 0,
   official_fetches: 0,
   official_fetch_failures: 0,
   official_fetch_offline: 0,
   official_verify_failures: 0,
+  official_fetch_cause_permission: 0,
+  official_fetch_cause_disk: 0,
+  official_fetch_cause_folder: 0,
+  official_fetch_cause_mismatch: 0,
+  official_fetch_cause_unpack: 0,
+  official_fetch_cause_server: 0,
+  official_fetch_cause_network: 0,
+  official_fetch_cause_timeout: 0,
+  official_fetch_cause_io: 0,
+  official_fetch_cause_other: 0,
   official_migrations_kept: 0,
   official_updates_waiting: 0,
   official_updates_auto: 0,
@@ -70,6 +89,15 @@ const NONE = {
 };
 
 export type PluginCount = keyof typeof NONE;
+
+const FETCH_CAUSES = new Set(["permission", "disk", "folder", "mismatch", "unpack", "server", "network", "timeout", "io", "other"]);
+const LINK_CAUSES = new Set(["name", "bin_folder", "bin_shared", "shadowed", "taken", "other_plugin", "busy", "io", "other"]);
+
+export const officialFetchCause = (cause: unknown): PluginCount =>
+  `official_fetch_cause_${typeof cause === "string" && FETCH_CAUSES.has(cause) ? cause : "other"}` as PluginCount;
+
+export const programLinkCause = (cause: unknown): PluginCount =>
+  `program_link_cause_${typeof cause === "string" && LINK_CAUSES.has(cause) ? cause : "other"}` as PluginCount;
 
 let counts = { ...NONE };
 

@@ -7,6 +7,10 @@ type WindowDragOptions = {
 export type WindowDragHost = { move(): Promise<unknown>; doubleClick(): Promise<unknown> };
 
 export const WINDOW_DRAG_ROUTES = ["ArdiaShell.startWindowMove", "ArdiaShell.captionDoubleClick"] as const;
+export const WINDOW_DRAG_ATTRIBUTE = "data-ardia-drag";
+
+export const markWindowDrag = (element: Pick<HTMLElement, "setAttribute">, titleBarDoubleClick: boolean, clickable: boolean) =>
+  element.setAttribute(WINDOW_DRAG_ATTRIBUTE, titleBarDoubleClick && !clickable ? "caption" : "action");
 
 const DRAG_DISTANCE = 3;
 

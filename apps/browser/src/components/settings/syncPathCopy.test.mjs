@@ -12,7 +12,6 @@ const COPY_NAMING_THE_SYNC_PATH = [
   "apps/phone/ios/Config/TestFlight-WhatToTest.txt",
   "packages/phone/android/src/main/java/com/ardia/sync/SyncJoin.kt",
   "packages/sync/ios/Core/RecoveryKit.swift",
-  "packages/expo-windows/src/sync/kit.ts",
 ];
 
 const OLD_PATH = /Settings\s*(›|>|→|\\u203a)\s*Sync\b/;

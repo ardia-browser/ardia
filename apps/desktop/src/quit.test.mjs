@@ -152,3 +152,13 @@ test("an unreadable download count fails closed", async () => {
   assert.equal(f.quits(), 0);
   f.retire();
 });
+
+test("a host with quit but no download count quits without asking about downloads", async () => {
+  const f = fixture({ downloads: 3, supported: capabilities.filter((method) => method !== "ArdiaShell.downloadsInProgress") });
+  state().updateSettings({ warnBeforeQuitting: false });
+  assert.equal(await f.quit(), "quitting");
+  assert.equal(f.quits(), 1);
+  assert.equal(f.requests.some((r) => r.method === "ArdiaShell.downloadsInProgress"), false);
+  assert.deepEqual(f.asked(), []);
+  f.retire();
+});

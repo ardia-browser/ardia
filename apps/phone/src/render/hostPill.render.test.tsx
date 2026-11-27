@@ -2,7 +2,7 @@ import { Platform, StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { BrowsingScreen } from "../components/browsing/BrowsingScreen";
-import { HostPill } from "../components/browsing/HostPill";
+import { FOLD_REST_EDGE, HostPill } from "../components/browsing/HostPill";
 import { appDesign, DesignProvider } from "../components/ui";
 import type { Design } from "../lib/design";
 import { useBrowse } from "../state/browse/store";
@@ -99,10 +99,10 @@ test("on iPhone's design, scrolling down with Collapse Bottom Bar on shrinks the
   expect(host(root, "floatingBarFold")!.props.pointerEvents).toBe("none");
   expect(host(root, "floatingBarFold")!.props.accessibilityElementsHidden).toBe(true);
   expect(moved(host(root, "pageBar")!)).toEqual({ opacity: 1, translateY: 0, scale: 1 });
-  for (const [fold, layer] of [["floatingBarFold", "floatingBarFoldLayer"], ["hostPillFold", "hostPillFoldLayer"]] as const) {
+  for (const [fold, layer, textured] of [["floatingBarFold", "floatingBarFoldLayer", false], ["hostPillFold", "hostPillFoldLayer", android]] as const) {
     expect(host(root, fold)!.props.needsOffscreenAlphaCompositing).toBe(android);
     expect(host(root, fold)!.props.renderToHardwareTextureAndroid).toBeFalsy();
-    expect(host(root, layer)!.props.renderToHardwareTextureAndroid).toBe(android);
+    expect(host(root, layer)!.props.renderToHardwareTextureAndroid).toBe(textured);
     expect(host(root, layer)!.props.pointerEvents).toBe("box-none");
   }
   unmount(root);
@@ -326,7 +326,7 @@ test("on Android a fold reversed partway keeps both glasses until it settles on 
       for (let frame = 0; frame < 120; frame++) {
         act(() => jest.advanceTimersByTime(16));
         const now = progress();
-        if (now > 0 && now < 1) bothShown(`after reversing at ${at}, progress ${now.toFixed(2)}`);
+        if (now > FOLD_REST_EDGE && now < 1 - FOLD_REST_EDGE) bothShown(`after reversing at ${at}, progress ${now.toFixed(2)}`);
       }
       settle();
       expect(pillShown()).toBe(!folding);

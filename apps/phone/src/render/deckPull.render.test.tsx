@@ -6,7 +6,7 @@ import { act, type ReactTestInstance } from "react-test-renderer";
 import { DECK_PULL, pullPagePose, pullShrink } from "../lib/deckPull";
 import { deckGeometry, deckLeading } from "../lib/deckGeometry";
 import { deckHeaderBottom } from "../components/tabs/DeckHeader";
-import { framesUntil, landOpeningPage, renderSurface, unmount, withTabs } from "../../test/render/harness";
+import { framesUntil, landOpeningPage, layOutDeckControls, renderSurface, unmount, withTabs } from "../../test/render/harness";
 
 const mockMotion = { reduced: false };
 
@@ -22,6 +22,7 @@ const { runDeckPullScript, DECK_PULL_SCRIPT } = require("../state/browse/deckPul
 const { sendDeckCommand } = require("../state/browse/deckCommands") as typeof import("../state/browse/deckCommands");
 const deckGrid = require("../state/browse/deckGrid") as typeof import("../state/browse/deckGrid");
 const browse = require("../state/browse/store") as typeof import("../state/browse/store");
+const { currentPhoneGeneration } = require("../state/browse/deckTurn") as typeof import("../state/browse/deckTurn");
 const { setRootSize } = require("../state/app/rootSize") as typeof import("../state/app/rootSize");
 const { resizeRoot } = require("../state/browse/deckHold") as typeof import("../state/browse/deckHold");
 const { writePreference } = require("../state/store/browserDatabase") as typeof import("../state/store/browserDatabase");
@@ -98,6 +99,7 @@ function app() {
   mounted.push(root);
   act(() => jest.advanceTimersByTime(tabsMotion.deckStandby + 50));
   frame();
+  layOutDeckControls(root);
   return root;
 }
 
@@ -207,7 +209,7 @@ test("let go past the commit point, the page lands in its own card and only then
   expect(deckPull.stage.value).toBe(PULL_STAGE.idle);
   const deck = host(root, "tabDeck")!;
   expect(moved(deck).translateX).toBe(0);
-  expect(deck.props.pointerEvents).toBe("auto");
+  expect(deck.props.jestAnimatedProps?.value?.pointerEvents ?? deck.props.pointerEvents).toBe("auto");
   expect(opacity(host(root, "deckCards")!)).toBe(1);
   expect(hosts(root, "deckCard").every((card) => before.has(card))).toBe(true);
   expect(hosts(root, "deckCard").every((card) => opacity(card) === 1)).toBe(true);
@@ -498,6 +500,54 @@ test("the bar is one bar throughout: its three glass shapes stay while the brows
   frame();
 });
 
+function deferUiWork() {
+  const reanimated = require("react-native-reanimated") as typeof import("react-native-reanimated");
+  const queued: (() => void)[] = [];
+  const spy = jest.spyOn(reanimated, "runOnUI").mockImplementation(((work: (...args: unknown[]) => void) => (...args: unknown[]) => void queued.push(() => work(...args))) as never);
+  return {
+    queued,
+    release: () => spy.mockRestore(),
+    runOnUi: () => act(() => queued.splice(0).forEach((work) => work())),
+  };
+}
+
+test("a pull ended on JS keeps the bar the page's: a bar-cleared report the page sent before that end is dropped when it reaches JS, and the end on the UI thread hands the bar back even after a report sent in between", () => {
+  act(() => {
+    deckPull.barCleared.value = true;
+    pull.setDeckOwnsBar(true);
+  });
+  const sentBefore = deckPull.barTurn.value;
+  const ui = deferUiWork();
+  act(() => pull.endDeckPull());
+  ui.release();
+  expect(pull.usePullBar.getState().deckOwns).toBe(false);
+  act(() => pull.reportDeckOwnsBar(true, sentBefore));
+  expect(pull.usePullBar.getState().deckOwns).toBe(false);
+  act(() => pull.reportDeckOwnsBar(true, deckPull.barTurn.value));
+  expect(pull.usePullBar.getState().deckOwns).toBe(true);
+  expect(ui.queued).toHaveLength(1);
+  ui.runOnUi();
+  frame();
+  expect(deckPull.barCleared.value).toBe(false);
+  expect(deckPull.barOwned.value).toBe(false);
+  expect(pull.usePullBar.getState().deckOwns).toBe(false);
+});
+
+test("a card that grows right after a pull ended keeps the bar: the old end's hand-back, reaching JS after the grow took the bar, never gives the bar back to the page mid-grow", () => {
+  const target = { id: currentTabs().selectedId!, screenWidth: SCREEN.width, screenHeight: SCREEN.height, width: 160, height: 356, centerX: 100, centerY: 300, corner: 12, screenCorner: 40, reach: 500, pull: 400 };
+  const ui = deferUiWork();
+  act(() => pull.endDeckPull());
+  act(() => void pull.growDeckPull(target, jest.fn(), jest.fn()));
+  ui.release();
+  expect(pull.usePullBar.getState().deckOwns).toBe(true);
+  expect(ui.queued).toHaveLength(2);
+  ui.runOnUi();
+  frame();
+  expect(deckPull.stage.value).toBe(PULL_STAGE.growing);
+  expect(deckPull.barOwned.value).toBe(true);
+  expect(pull.usePullBar.getState().deckOwns).toBe(true);
+});
+
 const onAndroid = Platform.OS === "android" ? test : test.skip;
 
 const PULL_SETTLE_STARTED_MS = 100;
@@ -518,7 +568,7 @@ for (const lands of [true, false]) {
     act(() => void jest.advanceTimersByTime(PULL_SETTLE_STARTED_MS));
     expect(settled).not.toHaveBeenCalled();
     act(() => void jest.advanceTimersByTime(PULL_SETTLE_CAP_MS));
-    expect(settled).toHaveBeenCalledWith(id, lands, expect.any(Number), ...(lands ? [""] : []));
+    expect(settled).toHaveBeenCalledWith(id, lands, expect.any(Number), "", 0, expect.any(Number));
   });
 }
 
@@ -811,7 +861,7 @@ test("a Tabs tap while a long-held pull springs back is still ignored: the pull 
     })(-Math.min(step, 40)));
     frame();
   }
-  act(() => runOnUI((tab: string, settled: (id: string, landed: boolean, worst: number) => void) => {
+  act(() => runOnUI((tab: string, settled: typeof browse.deckPullSettled) => {
     "worklet";
     pull.releaseDeckPull(tab, 0, false, () => undefined, settled);
   })(id, browse.deckPullSettled));
@@ -1043,13 +1093,13 @@ test("a pull whose frames stalled is counted once it settles, and not in Incogni
   framesUntil(() => deckPull.stage.value === PULL_STAGE.idle, 240);
   frame();
   expect(counted).not.toHaveBeenCalledWith("deck_pulls_hitched");
-  act(() => browse.deckPullSettled(id, false, DECK_PULL.hitchMs));
+  act(() => browse.deckPullSettled(id, false, DECK_PULL.hitchMs, "", 0, currentPhoneGeneration()));
   expect(counted).not.toHaveBeenCalledWith("deck_pulls_hitched");
-  act(() => browse.deckPullSettled(id, false, DECK_PULL.hitchMs + 1));
+  act(() => browse.deckPullSettled(id, false, DECK_PULL.hitchMs + 1, "", 0, currentPhoneGeneration()));
   expect(counted).toHaveBeenCalledWith("deck_pulls_hitched");
   counted.mockClear();
   act(() => useTabs.setState({ incognito: true }));
-  act(() => browse.deckPullSettled(id, false, 200));
+  act(() => browse.deckPullSettled(id, false, 200, "", 0, currentPhoneGeneration()));
   expect(counted).not.toHaveBeenCalledWith("deck_pulls_hitched");
   expect(root).toBeDefined();
 });

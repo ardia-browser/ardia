@@ -34,6 +34,7 @@ public class EngineModule: Module {
     info: { _, reply in reply.ok(ArdiaHost.engineInfo) },
     components: { _, reply in ArdiaServices.components { reply.service($0, $1) } },
     tasks: { _, reply in ArdiaServices.tasks { reply.service($0, $1) } },
+    nativeMessagingHosts: { _, reply in DispatchQueue.global(qos: .utility).async { reply.ok(ArdiaHost.nativeMessagingHosts) } },
     childProcessCpu: { _, reply in ChildProcessCpu.sample { reply.ok($0) } },
     beginTracing: { _, reply in ArdiaHost.beginTracing { reply.ok($0) } },
     endTracing: { args, reply in ArdiaHost.endTracing(keep: try args.bool("keep")) { reply.ok($0) } },

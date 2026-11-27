@@ -6,7 +6,8 @@ import { plural, tabTitle, viewTabIds } from "../browser/model";
 import { cleanedTabsFor, keptDeletedGroups } from "../pins/closedTabs";
 import { openSyncedTab, syncedDevicesMenuItem } from "../sync/menu";
 import { setSidebarUi } from "./sidebarUi";
-import { cleanUpWithUndo, closeAllTabs } from "./clearTabs";
+import { cleanUpWithUndo, closeAllTabs, closeDuplicateTabs } from "./clearTabs";
+import { hasDuplicateTabs } from "../pins/duplicateTabs";
 import { sections, sep } from "./menuParts";
 import { clearableRecentlyClosed, closedWindowTitle } from "../windows/recentlyClosedList";
 import { consentToken } from "../telemetry/client";
@@ -68,6 +69,7 @@ export async function openOverflowMenu(windowId: string, onOpenTabPicked?: () =>
     { id: "closed", title: "Recently Closed", symbol: "clock.arrow.circlepath", enabled: history.length > 0, children: history.length ? history : [{ id: "none", title: "Empty", enabled: false }] },
     sep,
     { id: "clean", title: "Clean Up Tabs", symbol: "wand.and.stars", ...menuShortcut("cleanUpTabs") },
+    { id: "closeDuplicates", title: "Close Duplicate Tabs", symbol: "square.on.square", enabled: hasDuplicateTabs(s, windowId), ...menuShortcut("closeDuplicateTabs") },
     { id: "closeAll", title: "Close All Tabs", symbol: "xmark", ...menuShortcut("closeAllTabs") },
   ]);
   if (!choice) return;
@@ -83,5 +85,6 @@ export async function openOverflowMenu(windowId: string, onOpenTabPicked?: () =>
   else if (choice === "restoreAll") s.restoreCleaned(undefined, windowId);
   else if (choice === "clearClosed") s.clearRecentlyClosed(windowId);
   else if (choice === "clean") cleanUpWithUndo(windowId);
+  else if (choice === "closeDuplicates") closeDuplicateTabs(windowId, { consent });
   else if (choice === "closeAll") closeAllTabs(windowId, { consent });
 }

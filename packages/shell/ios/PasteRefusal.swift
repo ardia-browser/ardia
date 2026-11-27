@@ -14,7 +14,6 @@ enum Refusal: String {
   case mouseDown = "mouse_down"
   case windowLeft = "window_left"
   case noText = "no_text"
-  case deferred
   case refused
 }
 
@@ -37,13 +36,13 @@ enum PasteRefusal {
     }
   }
 
-  static func reportMenuPaste(_ action: Selector, _ reason: Refusal) {
+  static func reportMenuPaste(_ action: Selector, _ reason: Refusal, _ details: [String: Any] = [:], stamp: ArdiaConsentStamp = ArdiaConsentStamp.begin()) {
     guard pasteActions.contains(action) else { return }
     let responder = NSApp.keyWindow?.firstResponder
     if reason == .refused, !MainMenu.editsText(responder) { return }
-    guard !reportedResponder else { return report(reason) }
+    guard !reportedResponder else { return report(reason, details, stamp: stamp) }
     reportedResponder = true
-    report(reason, ["responder": responder.map { String(describing: type(of: $0)) } ?? "nil"])
+    report(reason, details.merging(["responder": responder.map { String(describing: type(of: $0)) } ?? "nil"]) { $1 }, stamp: stamp)
   }
 
   static func report(_ reason: Refusal, _ details: [String: Any] = [:], stamp: ArdiaConsentStamp = ArdiaConsentStamp.begin()) {

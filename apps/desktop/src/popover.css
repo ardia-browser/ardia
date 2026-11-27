@@ -1,0 +1,234 @@
+html.ardia-popover-surface,
+html.ardia-popover-surface body,
+html.ardia-popover-surface #root {
+  background: transparent;
+  color-scheme: light dark;
+}
+
+html.ardia-popover-surface,
+html.ardia-popover-surface body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.ardia-popover-list {
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  gap: 1px;
+  color: rgba(0, 0, 0, 0.85);
+  font-size: 13px;
+}
+
+.ardia-popover-heading {
+  padding: 4px 9px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.ardia-popover-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.ardia-popover-row:not(:disabled):hover,
+.ardia-popover-row:focus-visible {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.ardia-popover-row:disabled {
+  opacity: 0.4;
+}
+
+.ardia-popover-row-title {
+  flex: 1;
+}
+
+.ardia-popover-row-detail {
+  opacity: 0.55;
+  font-size: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ardia-popover-list {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  .ardia-popover-heading {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .ardia-popover-row:not(:disabled):hover,
+  .ardia-popover-row:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.ardia-popover-downloads {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  color: rgba(0, 0, 0, 0.85);
+  font-size: 13px;
+  --ardia-popover-secondary: rgba(0, 0, 0, 0.5);
+  --ardia-popover-hover: rgba(0, 0, 0, 0.08);
+  --ardia-popover-accent: #0a63e0;
+  --ardia-popover-warning: #d70015;
+}
+
+.ardia-popover-downloads[data-ardia-dark="true"] {
+  color: rgba(255, 255, 255, 0.88);
+  --ardia-popover-secondary: rgba(255, 255, 255, 0.5);
+  --ardia-popover-hover: rgba(255, 255, 255, 0.1);
+  --ardia-popover-accent: #3d8bff;
+  --ardia-popover-warning: #ff6961;
+}
+
+.ardia-popover-downloads-header {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ardia-popover-secondary);
+}
+
+.ardia-popover-downloads-header span {
+  flex: 1;
+}
+
+.ardia-popover-downloads-empty {
+  height: 32px;
+  padding: 0 10px;
+  line-height: 32px;
+  color: var(--ardia-popover-secondary);
+}
+
+.ardia-popover-downloads-list {
+  max-height: 352px;
+  overflow-y: auto;
+}
+
+.ardia-popover-download {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 44px;
+  border-radius: 6px;
+}
+
+.ardia-popover-download:hover {
+  background: var(--ardia-popover-hover);
+}
+
+.ardia-popover-download-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  height: 100%;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.ardia-popover-download-main:disabled {
+  opacity: 1;
+}
+
+.ardia-popover-download-title,
+.ardia-popover-download-status {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ardia-popover-download[data-missing="true"] .ardia-popover-download-title {
+  color: var(--ardia-popover-secondary);
+  text-decoration: line-through;
+}
+
+.ardia-popover-download-status {
+  font-size: 11px;
+  color: var(--ardia-popover-secondary);
+}
+
+.ardia-popover-download-status[data-warning="true"] {
+  color: var(--ardia-popover-warning);
+}
+
+.ardia-popover-download-track {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ardia-popover-hover);
+  overflow: hidden;
+}
+
+.ardia-popover-download-track span {
+  display: block;
+  height: 100%;
+  background: var(--ardia-popover-accent);
+}
+
+.ardia-popover-download-track[data-paused="true"] span {
+  background: var(--ardia-popover-secondary);
+}
+
+.ardia-popover-text-button {
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ardia-popover-accent);
+  font: inherit;
+  font-size: 12px;
+}
+
+.ardia-popover-text-button:hover,
+.ardia-popover-text-button:focus-visible {
+  background: var(--ardia-popover-hover);
+}
+
+.ardia-popover-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--ardia-popover-hover);
+}
+
+.ardia-popover-downloads .ardia-popover-row {
+  display: flex;
+  height: 30px;
+  align-items: center;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.ardia-popover-downloads .ardia-popover-row:hover {
+  background: var(--ardia-popover-hover);
+}

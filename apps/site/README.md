@@ -84,8 +84,9 @@ same answer the page acted on.
 
 Visitors are sorted before the first paint (`src/components/Device.astro`): phones and tablets get
 "Send to my Mac" instead of Download (`src/scripts/send-to-mac.ts`), Windows and Linux get a "Mac only for now"
-line, and only Macs evaluate the `download-band` experiment (`src/components/Showcase.astro`). On localhost,
-`?nndevice=phone|mac|other` and `?nnflag=band|control` force them. The experiment log is `docs/growth.md`.
+line, and only Macs evaluate the `download-band` experiment (`src/components/Showcase.astro`). The `donate-floor`
+experiment (`src/components/Donate.astro`) is evaluated by anyone who nears the donate amounts. On localhost,
+`?nndevice=phone|mac|other` and `?nnflag=band|control|five|ten` force them. The experiment log is `docs/growth.md`.
 
 Only ardia.dev reports. `pnpm dev`, `pnpm preview` and any other host stay silent unless you opt in from
 the console with `localStorage.setItem("ac:telemetry", "dev")`, and then

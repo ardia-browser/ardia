@@ -75,7 +75,7 @@ echo "==> Strip"
 "$root/packages/ardiacore/scripts/strip-engine.sh" "$work/Ardia.app" "$out/symbols"
 echo "==> Pack"
 tar --no-mac-metadata -cf - -C "$work/Ardia.app/Contents/Frameworks" "Chromium Framework.framework" | xz -T0 -9 >"$archive"
-rm -rf "$work"
+packed="$work/Ardia.app/Contents/Frameworks/Chromium Framework.framework"
 sha="$(shasum -a 256 "$archive" | awk '{ print $1 }')"
 echo "$sha  $(basename "$archive")" >"$archive.sha256"
 echo "==> Source"
@@ -94,7 +94,9 @@ if [ "$dry" = 1 ]; then
   echo "$line"
 else
   [ "$(gh release view "$tag" -R "$REPO" --json isPrerelease -q .isPrerelease)" = true ] || die "$tag isn't a prerelease"
+  "$root/scripts/lib/engine-symbols-published.sh" "$tag" "$packed" || die "$tag went up without symbols that name this engine's crashes (above): upload them again before committing the table line"
   printf '%s\n' "$line" >>"$table"
   echo "Published $tag. Commit packages/ardiacore/prebuilt-engines.tsv (appended: $line)."
 fi
+rm -rf "$work"
 du -sh "${assets[@]}"

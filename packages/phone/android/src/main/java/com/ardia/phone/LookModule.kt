@@ -244,9 +244,18 @@ class LookModule : Module() {
             Name("GlassBackdrop")
         }
 
+        View(FrameMarkView::class) {
+            Name("FrameMark")
+            Prop("mark") { view: FrameMarkView, value: String? -> view.mark(value) }
+            Prop("drawn") { view: FrameMarkView, value: Boolean? -> view.drawnOnly(value == true) }
+            Prop("markWhenShown") { view: FrameMarkView, value: String? -> view.markWhenShown(value) }
+        }
+
         View(FrostSourceView::class) {
             Name("FrostSource")
             Prop("name") { view: FrostSourceView, value: String? -> view.sourceId = value }
+            Prop("heldFill") { view: FrostSourceView, value: android.graphics.Color? -> view.heldFill = value?.toArgb() }
+            Prop("heldUntil") { view: FrostSourceView, value: String? -> view.heldUntil = value?.takeIf { it.isNotEmpty() } }
         }
 
         View(FrostView::class) {
@@ -284,6 +293,7 @@ class LookModule : Module() {
             Prop("classicChrome") { view: GlassView, value: Map<String, Any?>? -> view.classicFill = GlassRules.chromeFill(value) }
             Prop("shown") { view: GlassView, value: Boolean? -> view.shown = value ?: true }
             Prop("shownMs") { view: GlassView, value: Float? -> view.shownMs = (value ?: GlassRules.DEFAULT_SHOWN_MS).coerceAtLeast(0f) }
+            Prop("sampleHold") { view: GlassView, value: String? -> view.sampleHold = value?.takeIf { it.isNotEmpty() } }
             OnViewDidUpdateProps { view -> view.update() }
         }
     }

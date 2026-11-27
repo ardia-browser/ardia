@@ -146,3 +146,15 @@ test("suspend cancels pending dialogs and refuses admissions until every token r
   await turn(); f.emit("Again"); assert.equal(await work, "Again");
   f.dialogs.retire();
 });
+
+test("dialogs go native only when the host serves ArdiaShell.beginDialog; a host without it uses the shell's own window.confirm instead of refusing every close", async () => {
+  const { dialogRoute, NATIVE_DIALOG_CALL } = await import("./hostDialogs.ts");
+  const host = (capabilities) => ({ bootstrap: { windowId: "main", profileId: "default", capabilities }, invoke: async () => null });
+  assert.equal(NATIVE_DIALOG_CALL, "ArdiaShell.beginDialog");
+  assert.equal(dialogRoute(host(["ArdiaShell.beginDialog", "ArdiaShell.cancelDialog"])), "native");
+  assert.equal(dialogRoute(host(["ArdiaShell.openWindow"])), "page");
+  assert.equal(dialogRoute(null), "web");
+  const shell = (await import("node:fs")).readFileSync(new URL("./shims/shell.tsx", import.meta.url), "utf8");
+  assert.match(shell, /\.\.\.\(ardiaHost && nativeDialogs\(\) \? \{\n\s+ask: /);
+  assert.match(shell, /dialogRoute\(ardiaHost\) === "page" \? Promise\.resolve\(pageConfirm\(options\)\)/);
+});

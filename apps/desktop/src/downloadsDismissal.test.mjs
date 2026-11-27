@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { startDownloadsDismissal } from "./downloadsDismissal.ts";
 
-function harness({ typing = false, menu = false } = {}) {
+function harness({ typing = false, menu = false, ownMenu } = {}) {
   const target = new EventTarget();
   const bubble = { name: "bubble" };
   const pageWatchers = new Set();
@@ -15,6 +15,7 @@ function harness({ typing = false, menu = false } = {}) {
     onInsidePress: () => insidePresses.push(clock),
     close: () => closes.push(clock),
     menuShown: () => menu,
+    opensItsOwnMenu: ownMenu,
     watchPageFocus: (listener) => {
       pageWatchers.add(listener);
       return () => pageWatchers.delete(listener);
@@ -149,4 +150,30 @@ test("a right-click while the closing press is held doesn't let the held press t
   for (const type of ["contextmenu", "auxclick"]) assert.equal(h.fire(type, outside).reached, false, `${type} of the chorded right button`);
   for (const type of ["pointerup", "mouseup", "click"]) assert.equal(h.fire(type, outside, { pointerId: 1 }).reached, false, `${type} of the closing press`);
   assert.equal(h.fire("click", outside).reached, true, "a later click is left alone");
+});
+
+test("a right-click on the Downloads button reaches its own menu and leaves the panel open; other presses still close it (#1199)", () => {
+  const button = { name: "downloads button" };
+  const h = harness({ ownMenu: (event) => event.button === 2 && event.target === button });
+  assert.equal(h.fire("pointerdown", button, { button: 2 }).reached, true);
+  assert.equal(h.fire("mousedown", button, { button: 2 }).reached, true);
+  assert.equal(h.fire("contextmenu", button, { button: 2 }).reached, true, "the menu handler gets the right-click");
+  assert.equal(h.closes.length, 0);
+  assert.equal(h.fire("pointerdown", button, { button: 0 }).reached, false, "a left press on the button still closes the panel");
+  assert.equal(h.closes.length, 1);
+  h.tick(2000);
+  assert.equal(h.fire("pointerdown", { name: "sidebar" }, { button: 2 }).reached, false, "a right-click elsewhere still closes it");
+  assert.equal(h.closes.length, 2);
+  h.stop();
+});
+
+test("the Downloads button carries the test id both outside-press listeners look for", async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  assert.match(read("./DownloadsPopover.tsx"), /opensItsOwnMenu: pressOpensDownloadsMenu/);
+  assert.match(read("./DownloadsPopover.tsx"), /OutsidePressIgnoreContext\.Provider value=\{pressOpensDownloadsMenu\}/);
+  assert.match(read("./shims/web/chrome.tsx"), /useContext\(OutsidePressIgnoreContext\)/);
+  assert.match(read("./shims/web/chrome.tsx"), /watchOutsidePresses\(/);
+  assert.match(read("./downloadsButtonPress.ts"), /data-testid="\$\{DOWNLOADS_BUTTON_TEST_ID\}"/);
+  assert.match(read("../../browser/src/components/downloads/DownloadsButton.tsx"), /<ContextMenuArea testID=\{DOWNLOADS_BUTTON_TEST_ID\} onContextMenu=/);
 });

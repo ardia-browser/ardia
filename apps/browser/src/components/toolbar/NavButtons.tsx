@@ -25,7 +25,7 @@ const SYMBOL_FRAME = { width: SYMBOL_BOX, height: SYMBOL_BOX };
 const ReloadGlyphColor = createContext("");
 const ReloadGlyphBreathing = createContext(false);
 
-const navSymbol = (name: string, color: string) => drawnSymbol({ name, size: NAV_GLYPH.size, weight: NAV_GLYPH.weight, color, style: SYMBOL_FRAME });
+const navSymbol = (name: string, color: string) => drawnSymbol({ name, size: NAV_GLYPH.size, weight: name === "xmark" ? "medium" : NAV_GLYPH.weight, color, style: SYMBOL_FRAME });
 
 function ReloadSymbol({ name }: { name: "arrow.clockwise" | "xmark" }) {
   useScopedTheme();

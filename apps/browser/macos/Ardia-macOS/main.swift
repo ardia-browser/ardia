@@ -1,11 +1,13 @@
 import AppKit
 import ArdiaCore
+import ArdiaShell
 import ArdiaSync
 
 ArdiaHost.markMainStarted()
 
 let config = LaunchConfig.shared
 if config.prewarm { exit(0) }
+WebUIShellLaunch.routeIfRequested(config)
 
 LegacyMigration.moveToNewName()
 

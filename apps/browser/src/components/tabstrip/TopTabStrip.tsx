@@ -9,7 +9,7 @@ import { usePagerPages } from "../../state/windows/profilePager";
 import { DownloadsButton } from "../downloads/DownloadsButton";
 import { useMinimalism } from "../../state/windows/layout";
 import { ProfileIndicator, useProfileIndicatorWidth } from "../profiles/ProfileIndicator";
-import { ClipView, ContextMenuArea, Panel, shadow, WindowDragRegion } from "../ui";
+import { ClipView, ContextMenuArea, continuousCorners, Panel, shadow, WindowDragRegion } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { TintInk } from "../ui/TintInk";
 import { radius } from "../ui/tokens";
@@ -115,7 +115,7 @@ function StripDropArea({ style, children }: { style: ViewStyle; children: React.
 
 function StripDropHighlight({ left, right }: { left: number; right: number }) {
   const corner = tabRadius();
-  const place = useMemo(() => ({ left: left - 4, right: right - 4, top: ITEM_TOP - 1, height: ITEM_HEIGHT + 2, borderRadius: corner + 1 }), [left, right, corner]);
+  const place = useMemo(() => ({ left: left - 4, right: right - 4, top: ITEM_TOP - 1, height: ITEM_HEIGHT + 2, ...continuousCorners(corner + 1) }), [left, right, corner]);
   return <WindowDropGlow place={place} />;
 }
 

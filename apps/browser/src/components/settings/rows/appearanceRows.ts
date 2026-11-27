@@ -101,9 +101,14 @@ export const appearanceRows = {
       section: "Switching tabs",
       rows: {
         ctrlTab: {
-          title: `What ${PLATFORM_TERMS.switchTabsKey} does`,
-          description: "Step through your tabs in order, or open the recent tabs switcher.",
-          keywords: ["ctrl tab", "control tab", "alt tab", "tab switcher", "switch tabs", "switching tabs", "recent tabs", "recently used", "last tab", "previous tab", "next tab", "cycle tabs", "mru", "tabbing", "arc", "dia", "chrome"],
+          title: `${PLATFORM_TERMS.switchTabsKey} goes to`,
+          description: "Your most recent tabs first, or the next tab down the list.",
+          keywords: ["ctrl tab", "control tab", "alt tab", "tab switcher", "switch tabs", "switching tabs", "recent tabs", "recently used", "last tab", "previous tab", "next tab", "cycle tabs", "mru", "in order", "order", "tabbing", "arc", "dia", "chrome"],
+        },
+        tabSwitcherView: {
+          title: "Tab switcher shows",
+          description: "Page previews, a compact list of titles, or nothing at all while you switch.",
+          keywords: ["tab switcher", "switcher", "compact list", "list", "thumbnails", "previews", "page previews", "pictures", "overlay", "hud", "none", "ctrl tab", "control tab"],
         },
         afterClosingTab: {
           title: "After closing a tab",
@@ -153,6 +158,14 @@ export const appearanceRows = {
           explained: true,
           description: `Just tabs and the page, no toolbar. ${keyText("⌃⌘M")} toggles it.`,
           keywords: ["minimal", "minimalism", "minimalist", "clean", "compact", "zen", "simple", "distraction free", "no toolbar", "hide toolbar", "search browser", "quiet", "focus"],
+        },
+        minimalismPinnedIcons: {
+          title: "Minimalism tiles",
+          explained: true,
+          description: "Letters or each site’s logo on Top Apps. With Letters, right-click a tile to change its letters.",
+          keywords: ["minimalism", "minimal", "letters", "letter", "initials", "logos", "logo", "site logos", "favicons", "favicon", "site icons", "icons", "top apps", "tiles"],
+          shown: (s) => s.minimalismMode,
+          needs: "Turn on Minimalism mode to use this",
         },
         bookmarksBar: {
           title: "Bookmarks bar",

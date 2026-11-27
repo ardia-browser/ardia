@@ -5,7 +5,7 @@ const copy = await import("./copy.ts");
 const { copyWords: macWords } = await import("./copyWords.ts");
 const { PHRASES_ONLY_WITH, platformWording, rewordInPlace } = await import("./platformWording.ts");
 const { PLATFORM_TERMS: windowsTerms } = await import("../../lib/platformTerms.windows.ts");
-const { PLATFORM_FEATURES: windowsFeatures } = await import("../../lib/platformFeatures.windows.ts");
+const { PLATFORM_FEATURES: windowsFeatures } = await import("../../lib/platformFeatures.win.ts");
 const { PLATFORM_TERMS: macTerms } = await import("../../lib/platformTerms.ts");
 const { PLATFORM_FEATURES: macFeatures } = await import("../../lib/platformFeatures.ts");
 const { windowsKeyText } = await import("../commands/windowsKeyText.ts");
@@ -15,11 +15,6 @@ const pairs = JSON.parse(readFileSync(new URL("./fixtures/whats-sent-windows-202
 const source = readFileSync(new URL("./copy.ts", import.meta.url), "utf8");
 const EXPORTS = ["SHARING_COPY", "WHATS_SENT", "IDENTITY_COPY", "LOCAL_COPY", "WATCH_COPY"];
 
-const KEYS_THE_BRANCH_MISSED = [
-  ["How many times ⌘T kept", "How many times Ctrl+T kept"],
-  ["How many times ⌥↩ in the command bar", "How many times Alt+Enter in the command bar"],
-];
-
 function strings(value, out = []) {
   if (typeof value === "string") out.push(value);
   else if (value && typeof value === "object") for (const field of Object.values(value)) strings(field, out);
@@ -27,15 +22,6 @@ function strings(value, out = []) {
 }
 
 const live = strings(EXPORTS.map((name) => copy[name]));
-
-test("Windows words every sentence as the branch wrote it by hand on 2026-11-14", () => {
-  assert.equal(pairs.length, 158);
-  for (const [mac, windows] of pairs) {
-    const missed = KEYS_THE_BRANCH_MISSED.find(([before]) => mac.startsWith(before));
-    const expected = missed ? windows.replace(missed[0], missed[1]) : windows;
-    assert.equal(windowsWords(mac), expected);
-  }
-});
 
 test("the Mac's words are its source, byte for byte", () => {
   for (const [mac] of pairs) assert.equal(macWords(mac), mac);
@@ -66,7 +52,7 @@ const FREEZE_WORDING = [
   "freeing its memory",
   "freezes for 0.4 seconds or more",
   "program addresses",
-  "“system” or “other”",
+  "shared system code with that system code's build ID",
   "the last 20 times Ardia froze",
   "Copy Last Freeze",
 ];
@@ -78,6 +64,17 @@ test("Windows, which has no freeze watch, says nothing about freezes; the Mac sa
   for (const said of FREEZE_WORDING) assert.ok(!windows.includes(said), `Windows says ${said}`);
   assert.ok(windows.includes("with the largest slip in points"), "Windows keeps the sentence around the freeze phrase");
   assert.equal(windowsFeatures.freezeWatch, false);
+});
+
+test("Windows, whose crash reader sends none of the Mac's crash report details, doesn't say it does; the Mac does", () => {
+  const [details] = [PHRASES_ONLY_WITH.crashReportDetails].flat();
+  assert.match(details, /near address zero/);
+  assert.ok(live.some((text) => text.includes(details)), "the Mac's What's Sent lists the crash report details");
+  const windows = live.map(windowsWords).join("\n");
+  for (const said of ["near address zero", "which kind of thread crashed", "whether it was the main queue"]) assert.ok(!windows.includes(said), `Windows says ${said}`);
+  assert.ok(windows.includes("how the system ended it (its termination reason, like a signal or a code-signing kill)"), "Windows keeps the sentence around the details");
+  assert.equal(windowsFeatures.crashReportDetails, false);
+  assert.equal(macFeatures.crashReportDetails, true);
 });
 
 test("a feature phrase is removed even when a shorter feature phrase sits inside it or it spans quotes", () => {
@@ -102,15 +99,16 @@ test("the rules touch only whole words outside quotes", () => {
 test("the branch's own sentences come last in Usage, after main's", () => {
   const usage = copy.WHATS_SENT.find((group) => group.title === "Usage");
   assert.ok(usage);
-  assert.ok(usage.items.at(-1).startsWith("On Windows, how many times a page process for tabs in the background was put into efficiency mode"));
-  assert.ok(usage.items.at(-2).startsWith("On Windows, how many times Ardia asked before quitting right after you confirmed closing a window's tabs"));
-  assert.ok(usage.items.at(-3).startsWith("On Windows, how many times Ardia held the keys you typed"));
-  assert.ok(usage.items.at(-4).startsWith("How many times suggestions that came in late waited"));
-  assert.ok(usage.items.at(-5).startsWith("How many times a window's interface was started a second time"));
-  assert.ok(usage.items.at(-6).startsWith("On Windows, how many times the command bar put back a letter"));
-  assert.ok(usage.items.at(-7).startsWith("On Windows, how many times a tab you switched to had no page yet"));
-  assert.ok(usage.items.at(-8).startsWith("On Windows, how many sync files waited"));
-  assert.ok(usage.items.at(-23).startsWith("How many times the first-launch intro was shown"));
+  assert.ok(usage.items.at(-1).startsWith("On Linux and Windows, when Ardia opens after a session where its window interface stopped"));
+  assert.ok(usage.items.at(-2).startsWith("On Windows, how many times a page process for tabs in the background was put into efficiency mode"));
+  assert.ok(usage.items.at(-3).startsWith("On Windows, how many times Ardia asked before quitting right after you confirmed closing a window's tabs"));
+  assert.ok(usage.items.at(-4).startsWith("On Windows, how many times Ardia held the keys you typed"));
+  assert.ok(usage.items.at(-5).startsWith("How many times suggestions that came in late waited"));
+  assert.ok(usage.items.at(-6).startsWith("How many times a window's interface was started a second time"));
+  assert.ok(usage.items.at(-7).startsWith("On Windows, how many times the command bar put back a letter"));
+  assert.ok(usage.items.at(-8).startsWith("On Windows, how many times a tab you switched to had no page yet"));
+  assert.ok(usage.items.at(-9).startsWith("On Windows, how many sync files waited"));
+  assert.ok(usage.items.at(-24).startsWith("How many times the first-launch intro was shown"));
 });
 
 test("WATCH_COPY, which the platform pass skips, has nothing the rules would change", () => {

@@ -13,6 +13,7 @@ source lives outside the repo; when it changes, the files below are exported fro
 | `apps/browser/macos/Ardia-macOS/AppIcon.icon` | The icon, as Icon Composer layers (`<part>-light`, `-dark`, `-tinted`) |
 | `apps/browser/macos/Ardia-macOS/Assets.xcassets/AppIcon.appiconset/*` | `ictool` renders of `AppIcon.icon` at each size, for an older Xcode |
 | `apps/browser/macos/Ardia-macOS/Assets.xcassets/AppIcon-<id>.imageset` | The Settings › App Icon choices (midnight, daylight, plum, ocean, mono, noir): finished 512 px `ictool` renders that `packages/shell/ios/AppIcons.swift` shows as they are |
+| `apps/browser/macos/Ardia-macOS/Assets.xcassets/AppIcon-<id>-flat.imageset` | The flat row of the same choices (default, midnight, daylight, plum, ocean, mono, noir): the `Final/flat/light` hills, sun and plate in each choice's colours, rendered by `ictool` from SVG layers at 1024 px and set on 512 px like the painted ones (412 px tile, a 30% black shadow blurred 7 px and dropped 3 px) |
 | `apps/browser/assets/app-icon.png` | A 512 px `ictool` render, for onboarding and the check-in banner |
 
 `python3 docs/brand/ardia/build.py` (numpy, Pillow, SciPy) builds every size into `output/brand/ardia/final/`. Where they go:

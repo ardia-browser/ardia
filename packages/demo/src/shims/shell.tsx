@@ -7,6 +7,7 @@ import { setTrafficLightsCenter } from "./web/windowChrome";
 
 export { Symbol } from "./web/Symbol";
 export { ActivitySpinner } from "./web/motion/ActivitySpinner";
+export { Breathe } from "./web/motion/Breathe";
 export {
   ContextMenuArea,
   DockSelection,
@@ -21,6 +22,7 @@ export { FadeLabel } from "./web/FadeLabel";
 export { EdgeFadeMask } from "./web/EdgeFadeMask";
 export { FolderIcon } from "./web/FolderIcon";
 export { MouseArea } from "./web/MouseArea";
+export { WheelArea } from "./web/WheelArea";
 export { showMenu } from "./web/menus";
 
 const SYSTEM_INFO: SystemInfo = {

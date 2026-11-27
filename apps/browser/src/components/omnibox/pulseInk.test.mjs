@@ -13,6 +13,7 @@ test("a site search finds its brand colour by host, subdomain or www", () => {
   assert.equal(brandColorFor("m.youtube.com"), "#FF0000");
   assert.equal(brandColorFor("maps.google.com"), "#34A853");
   assert.equal(brandColorFor("news.google.com"), "#4285F4");
+  assert.equal(brandColorFor("claude.ai"), "#D97757");
   assert.equal(brandColorFor("example.org"), null);
   assert.equal(brandColorFor(""), null);
 });

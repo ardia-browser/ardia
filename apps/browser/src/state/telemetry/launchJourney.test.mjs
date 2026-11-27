@@ -43,14 +43,14 @@ test("a launch with sharing on at start sends one perf_launch with launch_ms, ho
   assert.equal(client.isSharing(), true);
   journeys.startJourneys(null);
 
-  journeys.launchCommitted(Date.now() - 20);
-  journeys.launchCommitted(Date.now() - 5000);
+  journeys.launchCommitted(client.consentNow(), Date.now() - 20);
+  journeys.launchCommitted(client.consentNow(), Date.now() - 5000);
   assert.equal(journeys.devJourneys().pending.length, 1);
   const deadline = Date.now() + 10_000;
   while (journeys.devJourneys().pending[0]?.usable === undefined && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
   assert.notEqual(journeys.devJourneys().pending[0]?.usable, undefined);
   track.markFirstWindow();
-  journeys.launchCommitted();
+  journeys.launchCommitted(client.consentNow());
   journeys.emitJourneys();
   journeys.journeysEnding();
 

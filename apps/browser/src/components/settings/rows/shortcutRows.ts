@@ -42,7 +42,8 @@ export const shortcutRows = {
         cmdClickCreatesTabGroup: {
           title: `${keyText("⌘")}-clicking links creates tab groups`,
           explained: true,
-          keywords: ["command click", "cmd click"],
+          description: "Puts the link's background tab in a tab group with the page you clicked it on.",
+          keywords: ["command click", "cmd click", "control click", "ctrl click", "tab group", "auto group", "automatic grouping", "group tabs", "nested tabs", "background tab"],
         },
         optShiftClickOpensInGroup: {
           title: `${keyText("⌥⇧")}-click opens tab in group`,

@@ -19,6 +19,7 @@ export const SECTION_NAMES = [
   "site.clicks",
   "site.friction",
   "site.experiment",
+  "site.donateExperiment",
   "site.vitals",
   "errors.exceptions",
   "errors.logs",

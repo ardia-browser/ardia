@@ -7,6 +7,8 @@
 namespace ardia::linux_extensions {
 namespace {
 
+constexpr size_t kMaxSitePatternLength = 2048;
+
 bool Only(const base::DictValue& input, std::initializer_list<std::string_view> keys) {
   if (input.size() != keys.size()) return false;
   for (const auto key : keys) {
@@ -137,6 +139,9 @@ std::optional<base::DictValue> Configuration(const base::DictValue& input) {
     } else if (key == "siteAccess") {
       if (!value.is_string() ||
           (value.GetString() != "allSites" && value.GetString() != "specificSites" && value.GetString() != "onClick"))
+        return std::nullopt;
+    } else if (key == "grantSite" || key == "revokeSite") {
+      if (!value.is_string() || value.GetString().empty() || value.GetString().size() > kMaxSitePatternLength)
         return std::nullopt;
     } else if (key == "pinnedIndex") {
       if (!value.is_int() || value.GetInt() < 0) return std::nullopt;

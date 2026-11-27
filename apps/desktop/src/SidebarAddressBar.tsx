@@ -1,5 +1,6 @@
 import { SidebarHeaderTools as NavigationTools, useHeaderToggleX } from "../../browser/src/components/sidebar/AddressBar";
-import { useMenuBesideWindowButtons, useSidebarCaptionRoom } from "./sidebarHeaderLayout";
+import { useSidebarCaptionRoom } from "./sidebarHeaderLayout";
+import { useAppMenuInHeader } from "./appMenuPlacement";
 import { HEADER_TOOLS, headerToggleRightEdge } from "../../browser/src/components/window/dockMotion";
 import { ARC_LIGHTS_CENTER } from "../../browser/src/state/windows/dockMotion";
 import { WINDOW_CONTROLS, windowControlsWidth } from "../../browser/src/lib/windowChrome";
@@ -18,7 +19,7 @@ export function SidebarHeaderTools({ width }: { width: number }) {
   const controls = WINDOW_CONTROLS.edge + windowControlsWidth(useWindowChrome().trailingButtons.length);
   const toggleOnly = headerToggleRightEdge(useHeaderToggleX(windowId));
   const captionRoom = useSidebarCaptionRoom();
-  const menuInHeader = !useMenuBesideWindowButtons();
+  const menuInHeader = useAppMenuInHeader();
   const { tools, navigation, menuLeft } = sidebarHeaderSplit({ width, captionRoom, controls, toggleOnly, menuInHeader, slot: SLOT });
   if (!tools) return null;
   return (

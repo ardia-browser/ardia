@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { popoverOf, setPopover } from "../tabs/pageState";
+import { noteCommandScrollZoom } from "../telemetry/commandScrollZoomCounts";
 
 const CLOSE_AFTER_MS = 1500;
 
@@ -47,7 +48,8 @@ function closeZoomBubble(tabId: string) {
   markShown(tabId, false);
 }
 
-export function zoomChangedByUser(tabId: string) {
+export function zoomChangedByUser(tabId: string, scroll?: string) {
+  noteCommandScrollZoom(scroll);
   const open = popoverOf(tabId) ?? null;
   if (open !== null && (open !== "zoom" || !isZoomBubble(tabId))) return;
   markShown(tabId, true);

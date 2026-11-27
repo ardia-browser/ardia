@@ -9,7 +9,7 @@ import { healthProtectedVideo } from "./protected-video";
 import { performanceAll } from "./performance";
 import { freezesBySignature } from "./freezes";
 import { settingsOverview, settingsTint } from "./settings";
-import { siteBreakdowns, siteClicks, siteExperiment, siteFriction, siteTraffic, siteVitals } from "./site";
+import { siteBreakdowns, siteClicks, siteDonateExperiment, siteExperiment, siteFriction, siteTraffic, siteVitals } from "./site";
 import { usersActive, usersOptedIn, usersUsage, usersVersions } from "./users";
 
 export const sections = {
@@ -33,6 +33,7 @@ export const sections = {
   "site.clicks": siteClicks,
   "site.friction": siteFriction,
   "site.experiment": siteExperiment,
+  "site.donateExperiment": siteDonateExperiment,
   "site.vitals": siteVitals,
   "errors.exceptions": errorsExceptions,
   "errors.logs": errorsLogs,

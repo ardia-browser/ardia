@@ -1,6 +1,7 @@
 import { onConsentPeriodChange, stillValid, type ConsentToken } from "./choice";
 import { consentOrNow, countFor } from "./countFor";
 import { SOCKET_FAMILIES, type SocketFamily } from "../automation/socketCatalog";
+import { INPUT_ACTIONS, type InputAction } from "../automation/tabInputActions";
 
 const TOKEN_COMMAND_DOMAINS = ["accessibility", "ardia", "browser", "dom", "emulation", "fetch", "input", "network", "page", "runtime", "storage", "target", "other"] as const;
 type TokenCommandDomain = (typeof TOKEN_COMMAND_DOMAINS)[number];
@@ -49,6 +50,7 @@ type EngineCliTotals = Partial<Record<EngineCliTotalKey, number>>;
 const NONE = {
   cli_pill_shows: 0,
   cli_pill_compact_shows: 0,
+  cli_pill_dismissals: 0,
   cli_auto_installs: 0,
   cli_auto_install_failures: 0,
   cli_auto_enables: 0,
@@ -88,6 +90,13 @@ const NONE = {
   cli_files_uploads_answered: 0,
   cli_files_downloads_placed: 0,
   cli_files_arm_failures: 0,
+  cli_tab_diagnostics_reads: 0,
+  cli_tab_diagnostics_gaps: 0,
+  cli_tab_diagnostics_refusals: 0,
+  cli_tab_input_refusals: 0,
+  cli_tab_input_unacked: 0,
+  cli_tab_tools_engine_missing: 0,
+  ...(Object.fromEntries(INPUT_ACTIONS.map((action) => [`cli_tab_input_${action}`, 0])) as Record<`cli_tab_input_${InputAction}`, number>),
   ...(Object.fromEntries(SOCKET_FAMILIES.map((family) => [`cli_socket_calls_${family}`, 0])) as Record<`cli_socket_calls_${SocketFamily}`, number>),
   ...(Object.fromEntries(TOKEN_COMMAND_DOMAINS.map((domain) => [`cli_cdp_commands_${domain}`, 0])) as Record<`cli_cdp_commands_${TokenCommandDomain}`, number>),
 };
@@ -107,6 +116,7 @@ export function noteCliPillShown(compact: boolean) {
   counts.cli_pill_shows++;
   if (compact) counts.cli_pill_compact_shows++;
 }
+export const noteCliPillDismissed = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts.cli_pill_dismissals++);
 export function noteSocketCall(family: SocketFamily, failed: boolean, consent?: ConsentToken | null) {
   const field = `cli_socket_calls_${family}` as const;
   countFor(consentOrNow(consent), () => void counts[field]++);
@@ -128,6 +138,25 @@ export type FileArmCount = "upload_arms" | "download_arms" | "uploads_answered" 
 export function noteFileArm(kind: FileArmCount, amount = 1, consent?: ConsentToken | null) {
   const add = Math.max(0, Math.round(amount));
   if (add) countFor(consentOrNow(consent), () => void (counts[`cli_files_${kind}`] += add));
+}
+export type TabToolOutcome = "done" | "refused" | "missing";
+export function noteTabDiagnostics(outcome: TabToolOutcome, gap: boolean, consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => {
+    if (outcome === "done") counts.cli_tab_diagnostics_reads++;
+    else if (outcome === "refused") counts.cli_tab_diagnostics_refusals++;
+    else counts.cli_tab_tools_engine_missing++;
+    if (gap) counts.cli_tab_diagnostics_gaps++;
+  });
+}
+export function noteTabInput(action: InputAction, outcome: TabToolOutcome, acked: boolean, consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => {
+    if (outcome === "refused") counts.cli_tab_input_refusals++;
+    else if (outcome === "missing") counts.cli_tab_tools_engine_missing++;
+    else {
+      counts[`cli_tab_input_${action}`]++;
+      if (!acked) counts.cli_tab_input_unacked++;
+    }
+  });
 }
 export const noteCliAutoEnabled = () => void counts.cli_auto_enables++;
 

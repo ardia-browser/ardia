@@ -16,12 +16,18 @@ function executable(path, body) {
   chmodSync(path, 0o755);
 }
 
-function launch(t, args, { command = "data", env = {}, folder = null, installed = "script", status = 0 } = {}) {
+function launch(t, args, { command = "data", env = {}, folder = null, installed = "script", status = 0, flatpak = false, namespaces = true } = {}) {
   const root = mkdtempSync(join(tmpdir(), "ardia-launch-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const runtime = join(root, "lib/ardia");
   mkdirSync(runtime, { recursive: true });
-  writeFileSync(join(runtime, "ardia-launch"), readFileSync(LAUNCHER, "utf8").replaceAll("/proc/sys/", `${root}/proc/sys/`));
+  writeFileSync(join(runtime, "ardia-launch"), readFileSync(LAUNCHER, "utf8").replaceAll("/proc/sys/", `${root}/proc/sys/`).replaceAll("/.flatpak-info", `${root}/.flatpak-info`));
+  if (!namespaces) {
+    mkdirSync(join(root, "proc/sys/user"), { recursive: true });
+    writeFileSync(join(root, "proc/sys/user/max_user_namespaces"), "0\n");
+  }
+  if (flatpak) writeFileSync(join(root, ".flatpak-info"), "[Application]\nname=dev.ardia.Ardia\n");
+  executable(join(root, "bin/cobalt"), 'printf "cobalt %s\\n" "$@"');
   chmodSync(join(runtime, "ardia-launch"), 0o755);
   executable(join(runtime, "chrome"), 'printf "browser %s\\n" "$@"');
   const homes = { data: join(root, "data/ardia/cli"), own: join(root, "own"), home: join(root, "home/.local/share/ardia/cli") };
@@ -34,7 +40,7 @@ function launch(t, args, { command = "data", env = {}, folder = null, installed 
   }
   writeFileSync(join(root, "page"), "");
   if (folder) mkdirSync(join(root, folder));
-  const variables = { PATH: process.env.PATH, XDG_DATA_HOME: join(root, "data"), HOME: join(root, "home"), ...env };
+  const variables = { PATH: `${join(root, "bin")}:${process.env.PATH}`, XDG_DATA_HOME: join(root, "data"), HOME: join(root, "home"), ...env };
   if (variables.ARDIA_CLI_HOME) variables.ARDIA_CLI_HOME = join(root, variables.ARDIA_CLI_HOME);
   const result = spawnSync(join(runtime, "ardia-launch"), args, { cwd: root, env: variables, encoding: "utf8" });
   assert.equal(result.status, status, result.stderr);
@@ -87,4 +93,19 @@ test("a command that isn't a runnable file leaves the word to the browser", (t) 
 
 test("as root a command word stays in the browser", { skip: !AS_ROOT && "runs only as root" }, (t) => {
   assert.deepEqual(launch(t, ["tabs"]), ["browser tabs"]);
+});
+
+test("in a Flatpak the browser starts through cobalt and zypak, which run Chromium's sandbox without user namespaces or a setuid helper", (t) => {
+  const flatpak = { flatpak: true, namespaces: false, env: { FLATPAK_ID: "dev.ardia.Ardia" } };
+  assert.deepEqual(launch(t, ["--version"], { ...flatpak, command: null }), ["cobalt --version"]);
+  assert.deepEqual(launch(t, ["https://example.com"], flatpak), ["cobalt https://example.com"]);
+});
+
+test("outside a Flatpak cobalt is never used, and without a sandbox the launch is refused", (t) => {
+  assert.deepEqual(launch(t, ["--version"], { env: { FLATPAK_ID: "dev.ardia.Ardia" }, command: null }), ["browser --version"]);
+  assert.deepEqual(launch(t, ["--version"], { namespaces: false, env: { FLATPAK_ID: "dev.ardia.Ardia" }, command: null, status: 1 }), [""]);
+});
+
+test("inside another app's Flatpak the launcher starts the browser itself, not through cobalt", (t) => {
+  assert.deepEqual(launch(t, ["--version"], { flatpak: true, env: { FLATPAK_ID: "org.gnome.Builder" }, command: null }), ["browser --version"]);
 });

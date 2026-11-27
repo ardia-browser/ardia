@@ -242,6 +242,10 @@ void AcceptDrops(NSView *root, BOOL accept) {
   [self schedulePainting];
 }
 
+- (NSArray<NSDictionary<NSString *, NSString *> *> *)pageMenuItems {
+  return _pageMenuItems ?: @[];
+}
+
 - (void)setAutoPictureInPicture:(BOOL)autoPictureInPicture {
   _autoPictureInPicture = autoPictureInPicture;
   [self autoPictureInPictureInputsChanged];

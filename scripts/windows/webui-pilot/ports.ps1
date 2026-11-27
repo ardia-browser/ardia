@@ -45,7 +45,7 @@ $rb = Get-Content -LiteralPath $outB -Raw -ErrorAction SilentlyContinue | Conver
 Log "concurrent run A: $($ra | ConvertTo-Json -Compress)"
 Log "concurrent run B: $($rb | ConvertTo-Json -Compress)"
 $distinct = $ra.port -and $rb.port -and ($ra.port -ne $rb.port)
-Check 'concurrent-runs-get-their-own-ports' ($distinct -and $ra.ready -and $rb.ready -and $ra.ownerIsThisRun -and $rb.ownerIsThisRun -and $ra.identity -eq 'main' -and $rb.identity -eq 'main') "run A port $($ra.port) owned by its own browser $($ra.ownerIsThisRun); run B port $($rb.port) owned by its own browser $($rb.ownerIsThisRun)"
+Check 'concurrent-runs-get-their-own-ports' ($distinct -and $ra.ready -and $rb.ready -and $ra.ownerIsThisRun -and $rb.ownerIsThisRun -and (Is-Window $ra.identity) -and (Is-Window $rb.identity)) "run A port $($ra.port) owned by its own browser $($ra.ownerIsThisRun); run B port $($rb.port) owned by its own browser $($rb.ownerIsThisRun); identities $(Identity-Text $ra.identity) and $(Identity-Text $rb.identity)"
 Remove-Item -LiteralPath $outA, $outB -ErrorAction SilentlyContinue
 $results | ConvertTo-Json -Depth 4 | Set-Content "$Proof\ports-results.json"
 "DONE ports"

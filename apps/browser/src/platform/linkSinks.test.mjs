@@ -114,8 +114,6 @@ const e = "x" as unknown as string;`;
 test("only the platform clipboard modules call the native copy bridge, so app code can't hand it a raw address", () => {
   assert.deepEqual(callersOf(/\.copy(?:Text|URL)\??\.?\(/), [
     "apps/browser/src/platform/clipboard.ts",
-    "packages/expo-windows/src/selfCheck/shell.ts",
-    "packages/expo-windows/src/shellClipboard.ts",
   ]);
   assert.deepEqual(callersOf(/\bsetStringAsync\(/), ["apps/phone/src/platform/system.ts"]);
 });

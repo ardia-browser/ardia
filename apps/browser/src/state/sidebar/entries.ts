@@ -97,17 +97,18 @@ function computeEntries(s: BrowserState, windowId: string, profileId?: string): 
   return { tiles, cells: tileCells(s.tabs, tiles), pinned, list };
 }
 
-export function numberedTabs(s: BrowserState, windowId: string): string[] {
+export function numberedTabs(s: BrowserState, windowId: string, eligible: (id: string) => boolean = () => true): string[] {
   const { tiles, pinned, list } = sidebarEntries(s, windowId);
   const active = activeTabId(s, windowId);
   const profileId = s.windows[windowId]?.profileId;
-  const latest = (ids: string[]) => ids.reduce<string | undefined>((a, b) => (!a || s.tabs[b]!.lastActiveAt > s.tabs[a]!.lastActiveAt ? b : a), undefined);
+  const latest = (ids: string[]) => ids.filter(eligible).reduce<string | undefined>((a, b) => (!a || s.tabs[b]!.lastActiveAt > s.tabs[a]!.lastActiveAt ? b : a), undefined);
   const collapsedGroup = (groupId: string): string[] => {
     const keptRows = profileId ? keptEntries(s, windowId, profileId, groupId) : [];
     const kept = keptRows.flatMap(rowTab);
     const onScreen = new Set(keptRows.flatMap((entry) => entryTabIds(s, entry)));
     const members = s.groups[groupId]!.tabIds.filter((id) => s.tabs[id]);
-    const header = latest(members.filter((id) => !onScreen.has(id))) ?? latest(members);
+    const hidden = members.filter((id) => !onScreen.has(id));
+    const header = hidden.length ? latest(hidden) : latest(members);
     return header ? [header, ...kept] : kept;
   };
   const rowTab = (entry: string): string[] => {

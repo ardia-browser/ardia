@@ -35,12 +35,8 @@ export const LINUX_WORDING: readonly Wording[] = [
     ],
   },
   {
-    file: "components/onboarding/previews/MockWindow.tsx",
-    replacements: [["{`Auto · ${look.dark ? \"Dark\" : \"Light\"} like your ${PLATFORM_TERMS.computer}`}", "{`Auto · ${look.dark ? \"Dark\" : \"Light\"} like your desktop`}"]],
-  },
-  {
     file: "components/onboarding/previews/scenes/LookScenes.tsx",
-    replacements: [["`Auto · ${toDark ? \"Dark\" : \"Light\"} like your ${PLATFORM_TERMS.computer}`", "`Auto · ${toDark ? \"Dark\" : \"Light\"} like your desktop`"]],
+    replacements: [["`Auto · ${isDark ? \"Dark\" : \"Light\"} like your ${PLATFORM_TERMS.computer}`", "`Auto · ${isDark ? \"Dark\" : \"Light\"} like your desktop`"]],
   },
   {
     file: "components/settings/panes/General.tsx",
@@ -50,7 +46,11 @@ export const LINUX_WORDING: readonly Wording[] = [
     file: "state/telemetry/copy.ts",
     replacements: [
       ...[PHRASES_ONLY_WITH.freezeWatch ?? []].flat().map((phrase): [string, string] => [phrase, ""]),
+      ...[PHRASES_ONLY_WITH.crashReportDetails ?? []].flat().map((phrase): [string, string] => [phrase, ""]),
       ["how many tab changes this Mac sent,", "how many tab changes this computer sent,"],
+      ["; on macOS, from Chromium pages while sharing is on, how many video and audio elements failed to play and why (aborted, network, decoding, unsupported source or other), how many video frames were shown and dropped, how many scrolls there were and how many frames they drew in how many milliseconds, each grouped by whether the display runs at 60 Hz or faster and whether Low Power Mode was on, never which page;", ","],
+      ["; on macOS, how many update downloads started, finished or failed and why (like a network error or a full disk), how many updates began installing, and how many couldn't be unpacked, failed their signature check or didn't install", ""],
+      ["      \"At launch on macOS while sharing is on: how many of the password managers Ardia connects to (1Password, Bitwarden, KeePassXC, Proton Pass and Apple's Passwords) have a helper Ardia could register so their browser extension can reach the app, how many Ardia has registered, how many were set up some other way and left alone, how many have no helper registered, and how many of those apps are installed but have no helper Ardia can use. Counts only, never which apps\",\n", ""],
       ["while the Mac reported its memory running low or critically low,", "while the system reported its memory running low or critically low,"],
       ["Sent to ardia.dev with a random ID made on this Mac, and kept", "Sent to ardia.dev with a random ID made on this computer, and kept"],
       [`keptOnThisMac: "Kept on this Mac"`, `keptOnThisMac: "Kept on this computer"`],
@@ -195,7 +195,6 @@ export const LINUX_WORDING: readonly Wording[] = [
     file: "state/onboarding/tour.ts",
     replacements: [
       ["${keyText(\"⌘L\")} brings the command bar up from any page, and ${keyText(\"⌘T\")} opens a new tab.", "Ctrl+L brings the command bar up from any page, and Ctrl+T opens a new tab."],
-      ["${keyText(\"⌘S\")} hides the sidebar.", "Ctrl+S hides the sidebar."],
       ["or press ${keyText(\"⌃⇧=\")}. ${keyText(\"⌃⇧]\")} and ${keyText(\"⌃⇧[\")} move between the panes.", "or press Super+Shift+=. Super+Shift+] and Super+Shift+[ move between the panes."],
       ["Everything else is in the menu bar and in Settings (⌘,).", "Everything else is in the menu button's menus and in Settings (Ctrl+,)."],
       ["`Everything else is in Settings (${keyText(\"⌘,\")}).`", "\"Everything else is in Settings (Ctrl+,).\""],

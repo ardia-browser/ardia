@@ -25,6 +25,7 @@ private final class PagerFrames: NSObject {
   }
 
   @objc func frame(_ link: CADisplayLink) {
+    pager?.noteFrame(interval: link.targetTimestamp - link.timestamp, generation: generation)
     guard let pager, pager.frame(generation: generation, fromLink: true) else { return link.invalidate() }
   }
 }
@@ -35,6 +36,12 @@ final class Pager {
   private struct Drag {
     var start = 0.0, lo = 0, hi = 0, home = 0, detent = 0
     weak var area: SwipeArea?
+  }
+
+  private struct SettleFrames {
+    var count = 0, long = 0
+    var worst = 0.0
+    var last: CFTimeInterval = 0
   }
 
   private struct Spring {
@@ -82,6 +89,9 @@ final class Pager {
   private var spring: Spring?
   private var link: CADisplayLink?
   private var lastLinkFrame: CFTimeInterval = 0
+  private var settleFrames = SettleFrames()
+  private var settleInterval: CFTimeInterval = 1.0 / 60
+  private var motion = 0
   private var timer: Timer?
   private var generation = 0
   #if DEBUG
@@ -191,6 +201,7 @@ final class Pager {
   }
 
   private func begin(_ area: SwipeArea) {
+    if phase == .idle { motion = Pager.next() }
     announceActivity()
     stopSpring()
     let home = selected
@@ -279,7 +290,7 @@ final class Pager {
     count = ids.count
     order = ids
     jump(to: index, selection: true)
-    emitState("selected")
+    emitState("selected", inMotion: false)
     return true
   }
 
@@ -291,6 +302,7 @@ final class Pager {
   }
 
   private func settle(to target: Int, velocity v: Double, from origin: SwipeArea? = nil) {
+    if phase == .idle { motion = Pager.next() }
     announceActivity()
     if target != selected {
       selected = target
@@ -302,11 +314,15 @@ final class Pager {
     stopSpring()
     phase = .settling
     velocity = v
-    spring = Spring(from: position, target: target, velocity: v, start: CACurrentMediaTime())
+    let springStart = CACurrentMediaTime()
+    spring = Spring(from: position, target: target, velocity: v, start: springStart)
+    settleFrames = SettleFrames(last: springStart)
     let generation = self.generation
+    settleInterval = 1.0 / 60
     if let screen = origin?.window?.screen ?? areas.allObjects.lazy.compactMap({ $0.window?.screen }).first {
       let link = screen.displayLink(target: PagerFrames(self, generation: generation), selector: #selector(PagerFrames.frame(_:)))
       let fps = Float(max(60, screen.maximumFramesPerSecond))
+      settleInterval = 1 / Double(fps)
       link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: fps, preferred: fps)
       link.add(to: .main, forMode: .common)
       self.link = link
@@ -322,9 +338,20 @@ final class Pager {
     publish()
   }
 
+  fileprivate func noteFrame(interval linkInterval: CFTimeInterval, generation: Int) {
+    guard generation == self.generation, spring != nil else { return }
+    if linkInterval > 0 { settleInterval = linkInterval }
+    let now = CACurrentMediaTime()
+    let gap = now - settleFrames.last
+    settleFrames.worst = max(settleFrames.worst, gap)
+    if gap > settleInterval * 1.5 { settleFrames.long += 1 }
+    settleFrames.count += 1
+    settleFrames.last = now
+  }
+
   fileprivate func frame(generation: Int, fromLink: Bool = false) -> Bool {
     guard generation == self.generation, spring != nil else { return false }
-    if fromLink { lastLinkFrame = CACurrentMediaTime() }
+    if fromLink { lastLinkFrame = CACurrentMediaTime() } else { noteFrame(interval: 1.0 / 60, generation: generation) }
     step()
     return generation == self.generation
   }
@@ -345,7 +372,7 @@ final class Pager {
       sequence = Pager.next()
       publish()
       emitPosition()
-      emitState("settled")
+      emitState("settled", extra: ["frames": settleFrames.count, "longFrames": settleFrames.long, "worstGapMs": (settleFrames.worst * 1000).rounded()])
       reconcile()
       return
     }
@@ -382,8 +409,10 @@ final class Pager {
     (area ?? all.first { $0.window != nil } ?? all.first)?.onPagerPosition(["position": position])
   }
 
-  private func emitState(_ name: String) {
+  private func emitState(_ name: String, extra: [String: Any] = [:], inMotion: Bool = true) {
     var event: [String: Any] = ["phase": name, "sequence": sequence, "position": position, "selected": selected, "velocity": velocity]
+    if inMotion { event["motion"] = motion }
+    event.merge(extra) { _, new in new }
     if order != nil { event["profileId"] = selectedId }
     for area in areas.allObjects { area.onPagerState(event) }
   }

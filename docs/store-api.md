@@ -53,7 +53,8 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
   The whole session also has immutable daily backups (`session-backup-<ms>.json`, the 7 newest kept) and pre-migration
   snapshots (`session-premigration-<ms>.json`, the 3 newest kept), and a damaged `session.json`
   is copied aside and the newest backup restored before anything is saved over it (`state/session/sessionSafety.ts`,
-  docs/conventions.md).
+  docs/conventions.md). A `session.json` from a newer build is never written; an older build saves to
+  `session-older-build-v<version>.json` instead, outside the daily backups.
 - Pins are per profile in every window (state/pins/pinMirror.ts): each regular window showing a profile holds its own copy
   (a Tab, a TabGroup) of every pinned tile and pinned group, linked by `pinKey` (unset on the first copy, whose id is
   the key; `pinKeyOf`). A store listener (`mirrorPins`) carries a change of one window's pinned section to the others
@@ -109,7 +110,8 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
   `settings.mutedSites`; a private window's mutes stay in `privateSiteMutes[windowId]`, in memory; a tab is silent if either is on, `isSilenced` in state/tabs/mute.ts), `groupTabs` (pinned by default, like Dia), `moveGroup`, `duplicateGroup`, `newTabInGroup`,
   `closeGroup` → `closedGroups` (History › Recently Closed Groups; `restoreClosed` takes their ids), `moveGroupToBookmarksBar`,
   `cleanUpTabs` → `cleanedTabs` / `restoreCleaned(entryId?, windowId?)` (a private window's go to `privateCleanedTabs[windowId]`,
-  in memory, and only back into that window; read either with `cleanedTabsFor(s, windowId)`), `closeAbandonedNewTabs`. `newTab` with `openerId` + `background` (⌘-click)
+  in memory, and only back into that window; read either with `cleanedTabsFor(s, windowId)`), `clearUnpinnedTabs` and `closeDuplicateTabs` (state/pins/duplicateTabs.ts) →
+  `ClearedTabs`, put back with `undoClearTabs`, `closeAbandonedNewTabs`. `newTab` with `openerId` + `background` (⌘-click)
   joins the opener's group (`settings.cmdClickCreatesTabGroup`). Sidebar UI lives in components/sidebar/.
 - Profiles: `createProfile` (`shareWith`: share another profile's data), `updateProfile`, `deleteProfile`, `reorderProfiles`, `setDefaultProfile`.
   `deleteProfile` queues engine data no profile uses any more in `orphanedProfileData` (saved); state/profiles/profileData.ts deletes it

@@ -1,0 +1,57 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@platform/*": [
+        "./src/platform/*.mac.ts",
+        "./src/platform/*.mac.tsx",
+        "./src/platform/*.desktop.ts",
+        "./src/platform/*.desktop.tsx"
+      ],
+      "react-native": [
+        "../../node_modules/react-native-macos"
+      ],
+      "react-native-web": [
+        "./src/shims/react-native-web.d.ts"
+      ],
+      "@ardia/shell": [
+        "./src/shims/shell.tsx"
+      ],
+      "@ardia/ardiacore": [
+        "./src/shims/ardiacore.tsx"
+      ],
+      "@ardia/shaders": [
+        "./src/shims/shaders.tsx"
+      ],
+      "@ardia/sync": [
+        "./src/shims/sync.tsx"
+      ],
+      "@ardia/import": [
+        "./src/shims/import.tsx"
+      ],
+      "@ardia-real/shell": [
+        "../../packages/shell/src/index.tsx"
+      ],
+      "@ardia-real/ardiacore": [
+        "../../packages/ardiacore/src/index.ts"
+      ],
+      "@ardia-real/shaders": [
+        "../../packages/shaders/src/index.tsx"
+      ],
+      "@ardia-real/sync": [
+        "../../packages/sync/src/index.ts"
+      ],
+      "@ardia-real/import": [
+        "../../packages/import/src/index.ts"
+      ]
+    }
+  },
+  "exclude": [
+    "src/platform/linux",
+    "src/platform/win",
+    "src/platform/*.linux.ts",
+    "src/platform/*.linux.tsx",
+    "src/platform/*.win.ts",
+    "src/platform/*.win.tsx"
+  ]
+}

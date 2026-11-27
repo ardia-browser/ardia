@@ -6,6 +6,7 @@ import { sidebarSliding, useDockMotion } from "../windows/dockMotion";
 import { cardReach, pointInRect, type Point, type Rect } from "./hoverAim";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
 import { releaseLaunchRows } from "./launchRows";
+import { armHoverWake, cancelHoverWake } from "../tabs/hoverWake";
 
 export type HoverPointerEvent = { nativeEvent?: { screenX?: unknown; screenY?: unknown } } | undefined;
 type Row = { windowId: string; id: string };
@@ -180,6 +181,7 @@ export function holdHover(on: boolean) {
 }
 
 export function dismissHover() {
+  cancelHoverWake();
   card.held = false;
   owner = null;
   ticket++;
@@ -192,6 +194,7 @@ export function dismissHoverIn(windowId: string) {
 }
 
 export function releaseAnchor(windowId: string, id: string) {
+  cancelHoverWake(id);
   if (underPointer === id) underPointer = null;
   forgetWaiting(windowId, id);
   if (owner?.id === id && owner.windowId === windowId) return dismissHover();
@@ -207,8 +210,10 @@ export function rowEntered(windowId: string, target: Target | null, event: Hover
   holdFor({ windowId, target, arrive: enter });
 }
 
-export function rowShown(windowId: string, target: Target | null) {
+export function rowShown(windowId: string, target: Target | null, pointed: Target | null = target) {
   underPointer = target?.id ?? null;
+  if (pointed?.kind === "tab" && !suppressed) armHoverWake(pointed.id);
+  else cancelHoverWake();
   if (target) hoverEnter(windowId, target);
   else hoverLeave(undefined, true);
 }
@@ -222,7 +227,8 @@ function leftAwayFromCard(): boolean {
   return behind || card.exit.y <= y + EXIT_SLOP;
 }
 
-export function rowLeft(windowId: string, target: Target | null, event: HoverPointerEvent, onPage: boolean) {
+export function rowLeft(windowId: string, target: Target | null, event: HoverPointerEvent, onPage: boolean, pointed: Target | null = target) {
+  if (pointed) cancelHoverWake(pointed.id);
   forgetWaiting(windowId, target?.id);
   if (underPointer === target?.id) underPointer = null;
   const shownHere = !!target && isShown(windowId, target.id);
@@ -247,10 +253,10 @@ function settleWhenStill(windowId: string) {
   for (const enter of held?.values() ?? []) enter();
 }
 
-export function noteRowsScrolled(windowId: string) {
+export function noteRowsScrolled(windowId: string, list: string, y: number) {
   releaseLaunchRows(windowId, "scroll");
   const now = Date.now();
-  noteSidebarScrolled(now);
+  noteSidebarScrolled(now, y, `${windowId}\u0000${list}`);
   scrolledAt.set(windowId, now);
 }
 

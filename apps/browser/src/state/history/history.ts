@@ -6,6 +6,7 @@ import { engineProfiles } from "../profiles/engineProfiles";
 import type { ClosedTab, HistoryEntry } from "../browser/types";
 import { withImportedCleaned } from "../pins/importedCleaned";
 import { isWebPageUrl } from "../../lib/url";
+import { MAX_HISTORY } from "./historyLimits";
 
 export type HistoryView = { list: HistoryEntry[]; floor: number; ready: boolean };
 
@@ -20,8 +21,7 @@ export type HistorySlice = {
 
 type HistoryImportOutcome = { added: number; batches: number; failedBatches: number };
 
-export const MAX_HISTORY = 100_000;
-export const MAX_VISIT_TIMES = 50;
+export { MAX_HISTORY, MAX_VISIT_TIMES } from "./historyLimits";
 export const SUGGESTION_HISTORY = 5000;
 export const SUGGESTION_FREQUENT = 2000;
 export const FREQUENT_VISITS = 4;

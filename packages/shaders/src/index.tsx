@@ -115,7 +115,7 @@ export type MeadowIntroEvent =
   | { kind: "mute"; muted: boolean }
   | { kind: "closed" };
 
-export type MeadowProps = ViewProps & { night: boolean; onTone?: (tone: MeadowTone) => void; intro?: MeadowIntro; onIntro?: (event: MeadowIntroEvent) => void };
+export type MeadowProps = ViewProps & { night: boolean; creeper?: boolean; onReady?: () => void; onBoom?: () => void; onTone?: (tone: MeadowTone) => void; intro?: MeadowIntro; onIntro?: (event: MeadowIntroEvent) => void };
 
 export type { MeadowPageConfig, MeadowPageReport, MeadowPageState } from "./meadowPage/config";
 

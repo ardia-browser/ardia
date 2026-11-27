@@ -19,7 +19,6 @@ No workflow uses a GitHub App token of its own. When the budget runs out, every 
 | `vouch` | the same by anyone else | 1 page of open pull requests, plus writes that change something | 1, plus up to 3 while `mergeable` is unknown |
 | `linked-issue` | opened, edited, reopened | 1, plus 1 per closing reference on a non-default base | 0 |
 | `stale` | anything on a pull request not labelled `stale` | 0 | 0 |
-| `route` (checks, linux, android) | same-repo team pull requests | 2 run lists per repo, the newest 4 runs' jobs, and the rest of the budget only when those don't prove GitHub busy; at most 30 | 0 |
 
 ## Keeping it low
 - Read what the event already holds (`github.event.pull_request`: labels, author, association) before calling the API.
@@ -33,5 +32,5 @@ No workflow uses a GitHub App token of its own. When the budget runs out, every 
 - Never skip a required check's job to save calls: a skipped job counts as passed. Return early inside the step.
 - Every script runs from the default branch (`sparse-checkout: .github`, `persist-credentials: false`), never
   from the pull request, so a pull request can't change its own checks or the lists they trust.
-- Each script's tests (`.github/*/*.test.cjs`, `scripts/ci/route-runner.test.mjs`) pin its calls with a stub that
+- Each script's tests (`.github/*/*.test.cjs`) pin its calls with a stub that
   records every request.

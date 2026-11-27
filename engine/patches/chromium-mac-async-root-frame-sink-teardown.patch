@@ -1,0 +1,44 @@
+A window's compositor is torn down without waiting on the GPU process (#3688). `HostFrameSinkManager::
+InvalidateFrameSinkId` called `DestroyCompositorFrameSink` as a synchronous mojo call for every root frame sink made
+with GPU compositing, so the browser's UI thread waited for viz each time a `ui::Compositor` went: a window closing
+(`ViewsNSWindowDelegate windowWillClose:` → `~NativeWidgetMacNSWindowHost`) or a retired page compositor
+(`BrowserCompositorMac::ReleaseRetiredCompositor`). It was the top main-thread freeze of 0.2.47 and 0.2.48 (p50
+~0.6 s, up to 4.4 s while the GPU process was busy). The wait exists so a GL surface drawing into an X11 window or a
+non-DirectComposition HWND is gone before that window is; on macOS viz draws into IOSurfaces it hands the browser as
+`CALayerParams` and never holds the NSWindow, the case Windows already exempts for DirectComposition. The Mac root
+frame sink is now created with `maybe_wait_on_destruction` false, so the sink goes with the ordered, asynchronous
+`InvalidateFrameSinkId`, which erases the root sink in viz itself. `--disable-features=AsyncRootFrameSinkTeardown`
+brings the synchronous wait back, for a before/after on one build.
+
+--- a/content/browser/compositor/viz_process_transport_factory.cc
++++ b/content/browser/compositor/viz_process_transport_factory.cc
+@@ -9,6 +9,7 @@
+ 
+ #include "base/command_line.h"
+ #include "base/debug/dump_without_crashing.h"
++#include "base/feature_list.h"
+ #include "base/functional/bind.h"
+ #include "base/memory/raw_ptr.h"
+ #include "base/memory/scoped_refptr.h"
+@@ -63,6 +64,10 @@
+ namespace content {
+ namespace {
+ 
++#if BUILDFLAG(IS_MAC)
++BASE_FEATURE(kAsyncRootFrameSinkTeardown, base::FEATURE_ENABLED_BY_DEFAULT);
++#endif
++
+ // The client id for the browser process. It must not conflict with any
+ // child process client id.
+ constexpr uint32_t kBrowserClientId = 0u;
+@@ -457,6 +462,10 @@
+   // CompositorFrameSink.
+   GetHostFrameSinkManager()->CreateRootCompositorFrameSink(
+       std::move(root_params), !using_direct_composition);
++#elif BUILDFLAG(IS_MAC)
++  GetHostFrameSinkManager()->CreateRootCompositorFrameSink(
++      std::move(root_params),
++      !base::FeatureList::IsEnabled(kAsyncRootFrameSinkTeardown));
+ #else
+   GetHostFrameSinkManager()->CreateRootCompositorFrameSink(
+       std::move(root_params));

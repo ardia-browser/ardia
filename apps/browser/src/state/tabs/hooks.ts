@@ -1,8 +1,6 @@
 import { useBrowser, type BrowserState } from "../browser/store";
 import { muteState, type MuteState } from "./mute";
 import { useTabState } from "./tabStateWatch";
-import { groupOf } from "../pins/tabGrouping";
-import type { GroupColor } from "../browser/types";
 
 export const useTabs = <T>(select: (tabs: BrowserState["tabs"]) => T): T => useBrowser((s) => select(s.tabs));
 
@@ -12,4 +10,3 @@ export const useMuteState = (tabId: string | undefined): MuteState =>
     return tab ? muteState(s, tab) : null;
   });
 
-export const useTabGroupColor = (tabId: string | undefined): GroupColor | null | undefined => useBrowser((s) => groupOf(s, tabId)?.color);

@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
-Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @"
+. (Join-Path $PSScriptRoot 'wait.ps1')
+Add-Type -TypeDefinition @"
 using System;
 using System.Text;
 using System.Threading;
@@ -139,6 +140,11 @@ public static class Pilot {
     EnumWindows((h, l) => { if (IsShell(h)) n++; return true; }, IntPtr.Zero);
     return n;
   }
+  public static List<IntPtr> Shells() {
+    var found = new List<IntPtr>();
+    EnumWindows((h, l) => { if (IsShell(h)) found.Add(h); return true; }, IntPtr.Zero);
+    return found;
+  }
   public static RECT Frame(IntPtr hwnd) { RECT r; DwmGetWindowAttribute(hwnd, 9, out r, Marshal.SizeOf(typeof(RECT))); return r; }
   public static RECT Outer(IntPtr hwnd) { RECT r; GetWindowRect(hwnd, out r); return r; }
   public static string Hit(int x, int y) {
@@ -155,6 +161,7 @@ public static class Pilot {
 [Pilot]::Aware() | Out-Null
 
 function Shot([string]$path) {
+  if (-not (Test-Path -LiteralPath C:\tools\ffmpeg.exe -PathType Leaf)) { return }
   & C:\tools\ffmpeg.exe -hide_banner -loglevel error -y -f gdigrab -framerate 1 -i desktop -frames:v 1 $path
 }
 
@@ -170,50 +177,6 @@ function Wait-Shell([int]$seconds = 60) {
   throw "no Ardia WebUI window after $seconds s"
 }
 
-function Wait-Until([scriptblock]$Condition, [double]$Seconds = 10, [string]$What = 'a condition', [switch]$NoThrow) {
-  $deadline = (Get-Date).AddSeconds($Seconds)
-  while ((Get-Date) -lt $deadline) {
-    $value = $null
-    try { $value = & $Condition } catch { $value = $null }
-    if ($value) { return $value }
-    Start-Sleep -Milliseconds 100
-  }
-  $value = $null
-  try { $value = & $Condition } catch { $value = $null }
-  if ($value) { return $value }
-  if ($NoThrow) { Log "gave up after $Seconds s waiting for $What"; return $null }
-  throw "timed out after $Seconds s waiting for $What"
-}
-
-function Never([scriptblock]$Condition, [double]$Seconds = 3) {
-  $deadline = (Get-Date).AddSeconds($Seconds)
-  while ((Get-Date) -lt $deadline) {
-    $seen = $null
-    try { $seen = & $Condition } catch { $seen = $null }
-    if ($seen) { return $false }
-    Start-Sleep -Milliseconds 100
-  }
-  $true
-}
-
-function Wait-Settled([scriptblock]$Read, [double]$Seconds = 5, [int]$StableMilliseconds = 400) {
-  $deadline = (Get-Date).AddSeconds($Seconds)
-  $last = "$(& $Read)"
-  $since = Get-Date
-  while ((Get-Date) -lt $deadline) {
-    Start-Sleep -Milliseconds 50
-    $now = "$(& $Read)"
-    if ($now -ne $last) { $last = $now; $since = Get-Date; continue }
-    if (((Get-Date) - $since).TotalMilliseconds -ge $StableMilliseconds) { return $now }
-  }
-  $last
-}
-
-function Hold([int]$Milliseconds) {
-  $deadline = (Get-Date).AddMilliseconds($Milliseconds)
-  while ((Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 20 }
-}
-
 function Shell-Lines { @(Get-Content "$($script:Data)\Chromium\chrome_debug.log" -ErrorAction SilentlyContinue | Select-String 'WebUI shell' | ForEach-Object { $_.Line.Substring($_.Line.IndexOf('WebUI shell')) }) }
 
 function Shell-Lines-Matching([string]$pattern, [int]$after = 0) { @(Shell-Lines | Select-Object -Skip $after | Where-Object { $_ -match $pattern }) }
@@ -221,7 +184,7 @@ function Shell-Lines-Matching([string]$pattern, [int]$after = 0) { @(Shell-Lines
 function Wait-ShellReady([int]$Seconds = 60, [int]$After = 0) {
   $h = Wait-Shell $Seconds
   Wait-Until { DevTools-Port } $Seconds "this run's own DevTools port" | Out-Null
-  Wait-Until { (Shell-Lines-Matching 'shell painted; the start is settled' $After).Count -ge 1 } $Seconds 'the shell to report it painted' | Out-Null
+  Wait-Until { (Shell-Lines-Matching 'shell painted( in window \S+|; the start is settled)' $After).Count -ge 1 } $Seconds 'the shell to report it painted' | Out-Null
   Wait-Until { (Cdp-Eval 'typeof window.__ardiaHost === "object" && !!document.querySelector(".ardia-window-controls") && document.getElementById("root").innerText.trim().length > 0') -eq $true } $Seconds 'the shell UI to render' | Out-Null
   $h
 }
@@ -279,8 +242,9 @@ function Cdp-Eval([string]$expression, [string]$match = 'chrome://ardia/') {
 }
 
 $App = if ($env:PILOT_APP) { $env:PILOT_APP } else { 'C:\pilot\app' }
-$RunsRoot = 'C:\pilot\runs'
-$Proof = 'C:\pilot\proof'
+$RunsRoot = if ($env:PILOT_RUNS) { $env:PILOT_RUNS } else { 'C:\pilot\runs' }
+$Proof = if ($env:PILOT_PROOF) { $env:PILOT_PROOF } else { 'C:\pilot\proof' }
+$Launcher = 'chrome.exe'
 $RunRoot = $null
 $Data = $null
 $Port = 0
@@ -317,28 +281,43 @@ function Start-Shell([switch]$Fresh, [string[]]$Extra = @()) {
   $script:PortOwner = 0
   Remove-Item -LiteralPath (Join-Path $script:Data 'Chromium\DevToolsActivePort') -Force -ErrorAction SilentlyContinue
   $arguments = @('--ardia-shell=webui', '--enable-logging', '--v=0') + $Extra
-  $p = Start-Process "$App\chrome.exe" -ArgumentList (Join-Arguments $arguments) -PassThru
+  $p = Start-Process (Join-Path $App $script:Launcher) -ArgumentList (Join-Arguments $arguments) -PassThru
   [Pilot]::Roots.Add($p.Id) | Out-Null
   $p
 }
 
-function Quote-Argument([string]$value) {
-  if ($value -and $value -notmatch '[\s"]') { return $value }
-  $out = '"'
-  $slashes = 0
-  foreach ($c in $value.ToCharArray()) {
-    if ($c -eq '\') { $slashes++; continue }
-    if ($c -eq '"') { $out += ('\' * ($slashes * 2 + 1)) + '"' } else { $out += ('\' * $slashes) + $c }
-    $slashes = 0
-  }
-  $out + ('\' * ($slashes * 2)) + '"'
+function Find-Launcher([string]$folder) {
+  foreach ($name in 'chrome.exe', 'Ardia.exe') { if (Test-Path -LiteralPath (Join-Path $folder $name) -PathType Leaf) { return $name } }
+  'chrome.exe'
 }
 
-function Join-Arguments([string[]]$arguments) { ($arguments | ForEach-Object { Quote-Argument $_ }) -join ' ' }
+function Use-App([string]$folder) {
+  $script:App = $folder.TrimEnd('\')
+  $script:Launcher = Find-Launcher $script:App
+  [Pilot]::AppDir = $script:App + '\'
+  $script:Port = 0
+  $script:PortOwner = 0
+}
 
-[Pilot]::AppDir = $App + '\'
+Use-App $App
 
-function Engine-Processes { @(Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { [Pilot]::IsTracked($_.Id) }) }
+function Window-Identity([string]$match = 'chrome://ardia/') {
+  $answer = Cdp-Eval '__ardiaHost.invoke("ArdiaShell.windowIdentity", {}).then(r => JSON.stringify(r === undefined ? null : r), e => JSON.stringify({ error: String(e && e.message || e) }))' $match
+  if ($answer) { $answer | ConvertFrom-Json } else { $null }
+}
+
+function Is-Window([object]$identity, [string]$windowId = 'main') {
+  [bool]($identity -and ($identity.windowId -is [string]) -and ($identity.windowId -ceq $windowId) -and ("$($identity.rendererGeneration)" -match '^[1-9]\d{0,19}$'))
+}
+
+function Identity-Text([object]$identity) { if ($null -eq $identity) { 'no answer' } else { $identity | ConvertTo-Json -Compress } }
+
+function App-Processes {
+  $folder = $App.TrimEnd('\') + '\'
+  @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($folder, [StringComparison]::OrdinalIgnoreCase) })
+}
+
+function Engine-Processes { @(Get-Process chrome, Ardia -ErrorAction SilentlyContinue | Where-Object { [Pilot]::IsTracked($_.Id) }) }
 
 function Stop-Engine {
   Engine-Processes | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -351,7 +330,3 @@ function Start-Recording([string]$name, [int]$seconds) {
 
 function Shell-Rect($h) { [Pilot]::Frame($h) }
 
-function Log([string]$line) {
-  $stamp = (Get-Date).ToString('HH:mm:ss.fff')
-  "$stamp $line" | Tee-Object -FilePath "$Proof\steps.log" -Append
-}

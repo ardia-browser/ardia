@@ -98,8 +98,9 @@ final class PeekMotion {
   func setGeometry(_ next: PeekGeometry, at now: Double) {
     guard next != geometry else { return }
     let first = !geometry.valid
+    let relaidOut = !first && next.samePlacement(as: geometry)
     geometry = next
-    if first { return }
+    if first || relaidOut { return }
     switch phase {
     case .entering, .gesture, .settling: snapOpen(at: now)
     case .closing: finish(.closed)
@@ -211,14 +212,14 @@ final class PeekMotion {
     gestureSample = (now, value)
   }
 
-  func gestureEnded(_ total: Double, cancelled: Bool, at now: Double) -> PinchOutcome {
+  func gestureEnded(_ total: Double, cancelled: Bool, closes: Bool = true, at now: Double) -> PinchOutcome {
     guard phase == .gesture else { return .stay }
     let value = gestureBase + total
     let result: PinchOutcome = cancelled ? .stay : value >= Self.openAt ? .open : value <= Self.closeAt ? .close : .stay
     switch result {
     case .open: _ = promote(at: now)
-    case .close: _ = close(at: now)
-    case .stay:
+    case .close where closes: _ = close(at: now)
+    case .close, .stay:
       phase = .settling
       m.aim(0, response: 0.2)
     }
@@ -292,7 +293,8 @@ final class PeekMotion {
       f.chromeAlpha = 0
       f.topRadius = g.fullscreen ? 0 : g.tabTopRadius
       f.bottomRadius = g.fullscreen ? 0 : g.tabBottomRadius
-      f.shownPage = g.page
+      f.page = g.fullscreen ? .identity : PeekAffine.mapping(g.page, to: g.tab)
+      f.shownPage = g.fullscreen ? g.page : g.tab
       return f
     }
     f.topRadius = g.restRadius
@@ -335,7 +337,7 @@ final class PeekMotion {
     }
     let mv = m.value
     let e = mv >= 0 ? Self.rubber(mv / Self.spreadToTab) : 0
-    let expand: PeekAffine = mv >= 0 ? .mapping(g.rest, to: Self.lerp(g.rest, g.page, e)) : .scale(max(Self.smallestScale, 1 + mv), about: Self.center(g.card))
+    let expand: PeekAffine = mv >= 0 ? .mapping(g.rest, to: Self.lerp(g.rest, g.tab, e)) : .scale(max(Self.smallestScale, 1 + mv), about: Self.center(g.card))
     let a = presence.value
     let cs = Self.center(g.card), ss = Self.center(g.source)
     let gs = Self.lerp(Self.startScale, 1, a)

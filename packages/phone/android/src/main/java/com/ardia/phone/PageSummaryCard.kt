@@ -128,7 +128,7 @@ private fun PageSummaryCard(session: PageSummarySession, maxHeight: Dp, modifier
             },
     ) {
         Header(session, onClose)
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.tight)) {
+        Column(Modifier.verticalScroll(rememberScrollState(), overscrollEffect = null), verticalArrangement = Arrangement.spacedBy(Spacing.tight)) {
             Body(session)
         }
     }

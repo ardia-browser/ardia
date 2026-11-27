@@ -5,6 +5,7 @@ export type EngineCalls = {
   "engine.info": [{}, EngineInfo];
   "engine.components": [{}, EngineComponent[]];
   "engine.tasks": [{}, EngineTask[]];
+  "engine.nativeMessagingHosts": [{}, { found: number; registered: number; keptTheirs: number; missing: number; unusable: number }];
   "engine.childProcessCpu": [{}, ChildProcessCpu[]];
   "engine.beginTracing": [{}, boolean];
   "engine.endTracing": [{ keep: boolean }, string | null];

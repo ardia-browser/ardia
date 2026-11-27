@@ -139,7 +139,7 @@ for (const design of DESIGNS) {
     expect(useBrowse.getState().surface).toBe("deck");
     expect(frames).toBeLessThanOrEqual(pulls(design) ? 16 : 1);
     act(() => jest.advanceTimersByTime(16));
-    expect(deck(root)!.props.pointerEvents).toBe("auto");
+    expect(deck(root)!.props.jestAnimatedProps?.value?.pointerEvents ?? deck(root)!.props.pointerEvents).toBe("auto");
     act(() => jest.advanceTimersByTime(200));
     expect(opacity(cardsLayer(root))).toBe(1);
     expect(deckCards(root).every((card) => before.has(card))).toBe(true);

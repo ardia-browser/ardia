@@ -30,6 +30,17 @@ Ardia builds on and ships third-party software under its own licenses, including
   the phone apps' Liquid Glass lens and rim light are a port of its glass shader's height profile, refraction
   and specular math (packages/phone/android/src/main/java/com/ardia/phone/LiquidGlass.kt on Android,
   packages/phone/ios/ArdiaKit/Sources/ArdiaDesign/LiquidGlassShader.swift on iPhone)
+- liquid-glass by Bilal Abdullah Gürşen (MIT, see third_party/liquid-glass/LICENSE), https://github.com/bilalgursen/liquid-glass:
+  its shared WebGL2 glass engine and DOM snapshot, vendored from commit 6b3913ff171ad592a4d8c8b8a9d72fb64647c305 with a
+  leading `// @ts-nocheck` and Ardia's patches (listeners released on WebGL context loss and once no glass is left, no
+  engine built while a lost context awaits restore and views reattached when it does, no cursor-light frames unless a
+  lens asks for it, a press latched on pointerdown to the frontmost glass it began on and let go on window blur, stale GL
+  errors drained before an allocation and a failed or out-of-memory upload falling back one view, canvases rechecked
+  before each copy, image callbacks released on error as on load, an optional still rim key light per lens that
+  never follows the pointer)
+  (third_party/liquid-glass/engine.ts and dom-snapshot.ts), draw the web Liquid Glass
+  of ardia.dev's demo and of the Linux, Windows and pre-Tahoe Mac app; its glass-layer.tsx mount is adapted in
+  packages/demo/src/shims/web/liquidGlass.tsx and apps/desktop/src/shims/web/liquidGlass.tsx
 - React Native and React Native macOS (MIT)
 - Phonon 31M (Apache-2.0), copyright Gradium, https://huggingface.co/gradium/phonon-31m-en, with its voices from
   https://huggingface.co/gradium/phonon-voices (Apache-2.0), run through Gradium's ptts package (MIT or Apache-2.0),

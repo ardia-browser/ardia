@@ -216,7 +216,7 @@ $targets = (Cdp-List)
 $restoredPage = $targets | Where-Object { $_.url -like 'file:///C:/pilot/form.html*' }
 Check 'relaunch-reopens' (($h -ne [IntPtr]::Zero) -and [bool]$restoredPage) ("window back; session tab restored: {0}; targets {1}" -f [bool]$restoredPage, (($targets | ForEach-Object { $_.url }) -join ' | '))
 Shot "$Proof\$Label-09-relaunched.png"
-$second = Start-Process "$App\chrome.exe" -ArgumentList '--ardia-shell=webui' -PassThru; [Pilot]::Roots.Add($second.Id) | Out-Null
+$second = Start-Process (Join-Path $App $Launcher) -ArgumentList '--ardia-shell=webui' -PassThru; [Pilot]::Roots.Add($second.Id) | Out-Null
 $second.WaitForExit(20000) | Out-Null
 Wait-Until { Shell-Foreground } 10 'the first window to come forward' -NoThrow | Out-Null
 $windows = [Pilot]::CountShells('Ardia')

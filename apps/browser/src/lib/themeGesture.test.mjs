@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { themeGesture } = await import("./themeGesture.ts");
+const { sameData, themeGesture } = await import("./themeGesture.ts");
 
 const look = (intensity) => ({ stops: [{ x: 0.5, y: 0.5, color: { r: 0.5, g: 0.4, b: 0.6, a: 1 } }], intensity, mode: "auto", grain: 0, texture: "grain", translucency: 1 });
 
 function rig(showing = "p:plum") {
   const applied = [];
+  const finals = [];
   const frames = new Map();
   let next = 1;
   const state = { showing, draft: null, current: {} };
   const g = themeGesture({
-    apply: (theme) => (applied.push([state.showing, theme?.intensity ?? null]), (state.current = {})),
+    apply: (theme, final) => (applied.push([state.showing, theme?.intensity ?? null]), finals.push(final), (state.current = {})),
     showing: () => state.showing,
     current: () => state.current,
     draft: (edit) => void (state.draft = edit),
@@ -23,7 +24,7 @@ function rig(showing = "p:plum") {
     frames.clear();
     runs.forEach((run) => run());
   };
-  return { g, applied, state, tick, frames };
+  return { g, applied, finals, state, tick, frames };
 }
 
 test("a drag writes once a frame and its release lands at once", () => {
@@ -33,6 +34,16 @@ test("a drag writes once a frame and its release lands at once", () => {
   tick();
   g.change(look(0.3), "p:plum", true);
   assert.deepEqual(applied, [["p:plum", 0.2], ["p:plum", 0.3]]);
+});
+
+test("frames during a drag are marked live and only the release is marked final", () => {
+  const { g, finals, tick } = rig();
+  g.change(look(0.1), "p:plum");
+  tick();
+  g.change(look(0.2), "p:plum");
+  tick();
+  g.change(look(0.3), "p:plum", true);
+  assert.deepEqual(finals, [false, false, true]);
 });
 
 test("switching presets mid-drag drops the queued frame and the rest of that drag, and the next drag edits the new preset", () => {
@@ -146,4 +157,61 @@ test("a release after an outside change drops the drag and leaves the next gestu
   assert.deepEqual(applied, []);
   g.change(look(0.3), "p:plum", true);
   assert.deepEqual(applied, [["p:plum", 0.3]], "the next click lands");
+});
+
+function echoRig(start) {
+  const applied = [];
+  const frames = new Map();
+  let next = 1;
+  const state = { current: start };
+  const g = themeGesture({
+    apply: (theme) => (applied.push(theme?.angle ?? theme?.intensity ?? null), (state.current = theme)),
+    showing: () => "p:plum",
+    current: () => state.current,
+    same: sameData,
+    draft: () => {},
+    requestFrame: (run) => (frames.set(next, run), next++),
+    cancelFrame: (handle) => void frames.delete(handle),
+  });
+  const tick = () => {
+    const runs = [...frames.values()];
+    frames.clear();
+    runs.forEach((run) => run());
+  };
+  return { g, applied, state, tick };
+}
+
+test("a drag keeps going when the host hands back the look it just wrote as a new but equal copy", () => {
+  const { g, applied, state, tick } = echoRig(look(0.1));
+  g.change(look(0.2), "p:plum");
+  tick();
+  state.current = JSON.parse(JSON.stringify({ ...state.current, dark: undefined }));
+  g.change(look(0.3), "p:plum");
+  tick();
+  state.current = structuredClone(state.current);
+  g.change(look(0.4), "p:plum", true);
+  assert.deepEqual(applied, [0.2, 0.3, 0.4]);
+});
+
+test("an outside edit smaller than the preset-matching tolerance still cancels the drag", async () => {
+  const { sameTheme } = await import("./presetLook.ts");
+  const { g, applied, state, tick } = echoRig({ ...look(0.5), angle: 146 });
+  g.change({ ...look(0.5), angle: 140 }, "p:plum");
+  tick();
+  const nudged = { ...state.current, angle: 140.25 };
+  assert.ok(sameTheme(nudged, state.current), "the tolerant preset match would miss this edit");
+  state.current = nudged;
+  g.change({ ...look(0.5), angle: 130 }, "p:plum");
+  tick();
+  g.change({ ...look(0.5), angle: 120 }, "p:plum", true);
+  assert.deepEqual(applied, [140]);
+});
+
+test("exact theme data equality ignores fields left undefined and nothing else", () => {
+  assert.ok(sameData({ a: 1, b: undefined, c: [1, { d: 2 }] }, { c: [1, { d: 2 }], a: 1 }));
+  assert.ok(!sameData({ a: 1 }, { a: 1.0001 }));
+  assert.ok(!sameData({ a: [1, 2] }, { a: [1] }));
+  assert.ok(!sameData({ a: null }, { a: undefined }));
+  assert.ok(!sameData(null, undefined));
+  assert.ok(sameData(null, null));
 });

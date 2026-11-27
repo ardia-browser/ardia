@@ -1,5 +1,6 @@
 import { TAB_ORIGINS, type BrowserTab, type TabOrigin } from "../tabs/tabModels.ts";
 import type { SqlDatabase, SqlValue } from "../../lib/sqlDatabase.ts";
+import { PENDING_CRASH_KEY } from "../../lib/crashReports.ts";
 
 export type VisitTransition = "typed" | "link" | "backForward" | "formSubmit" | "restored" | "other";
 
@@ -185,6 +186,18 @@ export function deleteVisitsFor(db: SqlDatabase, urls: readonly string[], profil
   else db.run(`DELETE FROM visits WHERE url IN (${marks}) AND profileSyncId = ?`, [...urls, profileSyncId]);
 }
 
+export const distinctVisitUrls = (db: SqlDatabase) => db.all<{ url: string }>("SELECT DISTINCT url FROM visits").map((row) => row.url);
+
+export function deleteVisitsEverywhere(db: SqlDatabase, urls: readonly string[]) {
+  if (!urls.length) return;
+  db.transaction(() => {
+    for (let start = 0; start < urls.length; start += ID_CHUNK) {
+      const chunk = urls.slice(start, start + ID_CHUNK);
+      db.run(`DELETE FROM visits WHERE url IN (${chunk.map(() => "?").join(",")})`, chunk);
+    }
+  });
+}
+
 export type ImportRows = {
   tabs: readonly BrowserTab[];
   states: readonly { id: string; data: string }[];
@@ -259,9 +272,12 @@ export const countTabStates = (db: SqlDatabase, ids: readonly string[]) => {
 
 export const countVisits = (db: SqlDatabase) => db.first<{ n: number }>("SELECT count(*) AS n FROM visits")?.n ?? 0;
 
+export const readPreference = (db: SqlDatabase, key: string) =>
+  db.first<{ value: string }>("SELECT value FROM preferences WHERE key = ?", [key])?.value ?? null;
+
 export function readPreferences(db: SqlDatabase): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const row of db.all<{ key: string; value: string }>("SELECT key, value FROM preferences")) out[row.key] = row.value;
+  for (const row of db.all<{ key: string; value: string }>("SELECT key, value FROM preferences WHERE key <> ?", [PENDING_CRASH_KEY])) out[row.key] = row.value;
   return out;
 }
 

@@ -10,7 +10,7 @@ import { setMeasuredWidth, useMeasuredWidth } from "../../state/windows/measured
 import { groupTint, useSidebarTokens } from "../sidebar/tokens";
 import type { GroupColor } from "../../state/browser/types";
 import { AnimatedFolder } from "../sidebar/AnimatedFolder";
-import { ContextMenuArea, Offstage, Symbol, useOffstage, useTooltip } from "../ui";
+import { clippedContinuousCorners, ContextMenuArea, Offstage, Symbol, useOffstage, useTooltip } from "../ui";
 import { curve, useGated } from "../ui/motion";
 import { useTheme } from "../ui/theme";
 import { font, ink, space, weight, withAlpha } from "../ui/tokens";
@@ -140,7 +140,7 @@ function FolderFace({ icon, color, label, ink: titleInk, border, fill }: { icon:
         alignItems: "center",
         paddingLeft: FOLDER_PAD.left,
         paddingRight: FOLDER_PAD.right,
-        borderRadius: folderRadius(),
+        ...clippedContinuousCorners(folderRadius()),
         borderWidth: CHIP_HAIRLINE,
         borderColor: border,
         backgroundColor: fill,

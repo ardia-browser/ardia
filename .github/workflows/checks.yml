@@ -50,14 +50,12 @@ concurrency:
 jobs:
   changes:
     name: which checks run
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     permissions:
-      actions: read
       contents: read
       pull-requests: read
     outputs:
-      target: ${{ steps.target.outputs.target }}
       code: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.code == 'true' }}
       browser: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.browser == 'true' }}
       repo: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.repo == 'true' }}
@@ -166,51 +164,6 @@ jobs:
               - "**/*Tests.swift"
               - "**/test_*.py"
               - "**/*Test.kt"
-      - id: router
-        name: The router, from main
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        continue-on-error: true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: refs/heads/main
-          path: .route
-          persist-credentials: false
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /scripts/ci/
-            /.github/TEAM.td
-            /.github/vouch/vouch.cjs
-      - id: route
-        name: GitHub or Boat for the long jobs
-        if: steps.router.outcome == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        continue-on-error: true
-        timeout-minutes: 1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          BOAT_CI_LIMITS_KEY: ${{ secrets.BOAT_CI_LIMITS_KEY }}
-          BOAT_OVERFLOW: ${{ vars.BOAT_OVERFLOW }}
-          BOAT_OVERFLOW_REPOS: ${{ vars.BOAT_OVERFLOW_REPOS }}
-          BOAT_OVERFLOW_QUEUED: ${{ vars.BOAT_OVERFLOW_QUEUED }}
-          BOAT_OVERFLOW_BUSY: ${{ vars.BOAT_OVERFLOW_BUSY }}
-          BOAT_OVERFLOW_QUEUED_AGE: ${{ vars.BOAT_OVERFLOW_QUEUED_AGE }}
-          BOAT_OVERFLOW_DAY_STARTS: ${{ vars.BOAT_OVERFLOW_DAY_STARTS }}
-          BOAT_OVERFLOW_HOUR_STARTS: ${{ vars.BOAT_OVERFLOW_HOUR_STARTS }}
-          BOAT_OVERFLOW_MINUTE_STARTS: ${{ vars.BOAT_OVERFLOW_MINUTE_STARTS }}
-          BOAT_OVERFLOW_VM_HOURS: ${{ vars.BOAT_OVERFLOW_VM_HOURS }}
-          BOAT_OVERFLOW_SANDBOXES: ${{ vars.BOAT_OVERFLOW_SANDBOXES }}
-        run: node .route/scripts/ci/route-runner.mjs --fallback ubuntu-latest --jobs 7
-      - id: target
-        name: The runner the long jobs use
-        if: always()
-        env:
-          OUTCOME: ${{ steps.route.outcome }}
-          PICKED: ${{ steps.route.outputs.target }}
-        run: |
-          if [ "$OUTCOME" = success ] && [ "$PICKED" = boat ]; then
-            echo "target=boat" >> "$GITHUB_OUTPUT"
-          else
-            echo "target=github" >> "$GITHUB_OUTPUT"
-          fi
 
   check:
     name: typecheck, tests and Mac bundle
@@ -219,7 +172,7 @@ jobs:
     concurrency:
       group: checks-code-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ${{ github.run_attempt == '1' && needs.changes.result == 'success' && needs.changes.outputs.target == 'boat' && 'boat-large' || 'ubuntu-latest' }}
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -265,7 +218,7 @@ jobs:
     concurrency:
       group: checks-browser-${{ matrix.shard }}-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ${{ github.run_attempt == '1' && needs.changes.result == 'success' && needs.changes.outputs.target == 'boat' && 'boat-large' || 'ubuntu-latest' }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -311,7 +264,7 @@ jobs:
     concurrency:
       group: checks-repo-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

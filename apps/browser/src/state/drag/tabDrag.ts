@@ -8,14 +8,16 @@ import { useBrowser } from "../browser/store";
 import type { Frame } from "../browser/types";
 import { tabTitle } from "../browser/model";
 import { splitOf, type SplitSide, splitTabIdsOf, splitViewAvailable } from "../splits/splits";
-import { dropTabIntoSplit } from "../splits/actions";
+import { dropTabOnPane, swapSplitPanes } from "../splits/actions";
 import { dropTabsOutside, rootPointIn, screenPoint, windowUnder } from "./windowDrop";
 import { dropTabsOnBar, followTabDragOnBar } from "../bookmarks/barDrag";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 
-type DropTarget = { tabId: string; side: SplitSide };
+export type PaneDropSide = SplitSide | "center";
+export type DropTarget = { tabId: string; side: PaneDropSide };
 type Insert = { windowId: string; beforeId: string | null };
 type Picture = { chip: () => [number, number, number, number]; grab: [number, number] };
-type TabDragSession = { seq: number; liveFrame: Frame | null; pointer: [number, number]; picture: Picture | null; sentShape: DragPreviewShape };
+type TabDragSession = { seq: number; liveFrame: Frame | null; pointer: [number, number]; picture: Picture | null; sentShape: DragPreviewShape; consent: ConsentToken | null; staysOnPage: boolean };
 
 type TabDragging = {
   phase: "tab";
@@ -66,7 +68,9 @@ export const tabDragging = () => useTabDrag.getState().phase !== "idle";
 
 export const tabDragOutside = () => !!tabDragState()?.outside;
 
-export function beginTabDrag(tabId: string | null, tabIds: string[] = tabId ? [tabId] : []): number {
+export const tabDragSeq = () => tabDragState()?.session.seq ?? 0;
+
+export function beginTabDrag(tabId: string | null, tabIds: string[] = tabId ? [tabId] : [], { staysOnPage = false } = {}): number {
   if (previewShown) dragPreview.cancel();
   previewShown = false;
   const seq = ++dragSeq;
@@ -75,7 +79,7 @@ export function beginTabDrag(tabId: string | null, tabIds: string[] = tabId ? [t
     useTabDrag.setState(IDLE, true);
     return seq;
   }
-  const session: TabDragSession = { seq, liveFrame: null, pointer: [-1, -1], picture: null, sentShape: "hidden" };
+  const session: TabDragSession = { seq, liveFrame: null, pointer: [-1, -1], picture: null, sentShape: "hidden", consent: consentToken(), staysOnPage };
   useTabDrag.setState(
     { phase: "tab", tabId, tabIds, windowId, x: -1, y: -1, lifted: null, onPage: false, target: null, outside: false, overWindow: null, overPoint: null, insert: null, session },
     true,
@@ -124,6 +128,7 @@ export function setInsert(windowId: string, beforeId: string | null | undefined)
 
 function previewShape(d: TabDragging): DragPreviewShape {
   if (d.outside) return d.overWindow && d.insert?.windowId === d.overWindow ? "pill" : "card";
+  if (d.target) return "hidden";
   return (d.lifted ?? d.onPage) ? "card" : "hidden";
 }
 
@@ -173,11 +178,20 @@ export function setDropTarget(offered: DropTarget | null) {
   const d = tabDragState();
   if (!d || (d.target?.tabId === target?.tabId && d.target?.side === target?.side)) return;
   useTabDrag.setState({ target });
+  syncPreview();
 }
 
 let resolveTarget: ((x: number, y: number, current: DropTarget | null, outside: boolean) => DropTarget | null) | null = null;
 export function setTargetResolver(resolver: typeof resolveTarget) {
   resolveTarget = resolver;
+}
+
+export function setPageDrop(offered: DropTarget | null, onPage: boolean) {
+  const target = splitViewAvailable ? offered : null;
+  const d = tabDragState();
+  if (!d || (d.onPage === onPage && d.target?.tabId === target?.tabId && d.target?.side === target?.side)) return;
+  useTabDrag.setState({ target, onPage });
+  syncPreview();
 }
 
 export function setOnPage(onPage: boolean) {
@@ -208,9 +222,9 @@ export function endTabDrag(): boolean {
   }
   if (target && tabId) {
     dragPreview.end();
-    return !!dropTabIntoSplit(tabId, target.tabId, target.side);
+    return target.side === "center" ? swapSplitPanes(tabId, target.tabId, "drag", session.consent) : !!dropTabOnPane(tabId, target.tabId, target.side, session.consent);
   }
-  if (!(outside || onPage)) {
+  if (!(outside || onPage) || (!outside && session.staysOnPage)) {
     if (shown) dragPreview.end();
     return false;
   }
@@ -221,6 +235,7 @@ export function endTabDrag(): boolean {
   if (moved) focus(moved);
   return true;
 }
+
 
 export function cancelTabDrag() {
   useTabDrag.setState(IDLE, true);

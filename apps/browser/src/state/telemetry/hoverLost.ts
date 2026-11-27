@@ -7,7 +7,9 @@ const HOVER_REASONS = new Set(["halfActive", "staleMenu", "notKeyOrMain", "cover
 const HOVER_RESPONDERS = new Set(["none", "window", "otherWindow", "page", "control"]);
 const HOVER_WINDOW_KINDS = new Set(["none", "hidden", "blockerPage", "internal", "ardiaPanel", "popup", "browser", "other"]);
 const HOVER_COVERS = new Set(["none", "reactNative", "chromium", "other"]);
-const HOVER_ENDINGS = new Set(["hover", "heal", "appInactive", "windowClosed"]);
+const HOVER_COVER_VIEWS = new Set(["none", "rnView", "rnText", "rnImage", "rnTextInput", "rnScroll", "rnOther", "expo", "pageHost", "ardia", "appKit", "chromium", "other"]);
+const HOVER_COVER_SIZES = new Set(["none", "small", "large", "full"]);
+const HOVER_ENDINGS = new Set(["hover", "heal", "appInactive", "windowClosed", "quit"]);
 const HEAL_REFUSALS = new Set([
   "none",
   "notVisible",
@@ -42,7 +44,7 @@ const clickCount = (value: unknown) =>
 export function hoverLostProperties(e: HoverLostEpisode, sessionMin: number) {
   return {
     reason: oneOf(HOVER_REASONS, e.reason),
-    trigger: e.trigger === "click" ? "click" : "move",
+    trigger: e.trigger === "click" || e.trigger === "key" ? e.trigger : "move",
     key_window: oneOf(HOVER_WINDOW_KINDS, e.keyWindow),
     main_window: oneOf(HOVER_WINDOW_KINDS, e.mainWindow),
     prevent_key: e.preventKey === true,
@@ -56,6 +58,9 @@ export function hoverLostProperties(e: HoverLostEpisode, sessionMin: number) {
     over_page: e.overPage === true,
     cover: oneOf(HOVER_COVERS, e.cover),
     cover_clear: e.coverClear === true,
+    cover_view: oneOf(HOVER_COVER_VIEWS, e.coverView),
+    cover_clear_view: oneOf(HOVER_COVER_VIEWS, e.coverClearView),
+    cover_size: oneOf(HOVER_COVER_SIZES, e.coverSize),
     responder: oneOf(HOVER_RESPONDERS, e.responder),
     cover_window: oneOf(HOVER_WINDOW_KINDS, e.coverWindow ?? "none"),
     healed: e.healed === true,

@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 const { shellMigrationReport, pendingShellMigration, reportShellMigration, SHELL_MIGRATION_ATTEMPT_DOC, SHELL_MIGRATION_REPORTED_DOC } = await import("./shellMigration.ts");
 const { HOST_SHELL } = await import("./hostShell.ts");
-const { HOST_SHELL: RNW } = await import("./hostShell.windows.ts");
 const { HOST_SHELL: WEBUI } = await import("./hostShell.win.ts");
 
 const RUN = "0123456789abcdef0123456789abcdef";
@@ -23,9 +22,8 @@ function documents(initial) {
   return { docs, read: (name) => docs.get(name) ?? null, save: async (name, contents) => void docs.set(name, contents) };
 }
 
-test("host_shell is rnw on React Native Windows, webui on the Windows WebUI build and absent elsewhere", () => {
+test("host_shell is webui on the Windows WebUI build and absent elsewhere", () => {
   assert.equal(HOST_SHELL, null);
-  assert.equal(RNW, "rnw");
   assert.equal(WEBUI, "webui");
 });
 

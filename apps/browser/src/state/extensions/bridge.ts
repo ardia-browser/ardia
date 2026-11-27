@@ -6,6 +6,7 @@ import { startActionStates, watchActionsOf } from "./actionWatch";
 import { startExtensionSearchEngines } from "./searchEngines";
 import { reportExtensionsLoaded } from "./loadHealth";
 import { watchExtensionInstallFailures } from "./crxDrop";
+import { watchPasswordAppPairing } from "./passwordAppPairingPrompt";
 import { onSyncedExtensionChange } from "../sync/extensions";
 import { openRequestedTab } from "./tabsRequests";
 import { pruneToolbarAnchors, toolbarAnchor } from "./toolbarAnchors";
@@ -52,6 +53,7 @@ export function startExtensionsBridge() {
   startActionPopups();
   startWebStoreIntegration();
   watchExtensionInstallFailures();
+  watchPasswordAppPairing();
   if (__DEV__) Object.assign(globalThis, { acExtensionsApp: { ...state, bridge: { openExtensionFromMenu } } });
 }
 

@@ -17,6 +17,7 @@ import { isSmallWindow } from "./small";
 import type { PagerPage } from "./profilePager";
 import { isWebPageUrl } from "../../lib/url";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { PAGE_STACKING } from "../../lib/pageStacking";
 import { webviews } from "../../platform/webviews";
 import { notePageOverlay } from "../telemetry/usage";
 import { liveOf } from "../tabs/tabLive";
@@ -165,7 +166,7 @@ export function newTabLingeringOver(windowId: string, from: string | undefined, 
     notePageOverlay("newTabLeftForWebKit");
     return undefined;
   }
-  if (!PLATFORM_FEATURES.newTabWaitsForFirstFrame) {
+  if (!newTabSinksUnderPages()) {
     notePageOverlay("newTabLeftWithoutLinger");
     return undefined;
   }
@@ -175,6 +176,8 @@ export function newTabLingeringOver(windowId: string, from: string | undefined, 
 }
 
 const holdsForFirstFrame = (engine: PageEngine) => engine === "chromium";
+
+export const newTabSinksUnderPages = () => PLATFORM_FEATURES.newTabWaitsForFirstFrame && !PAGE_STACKING.shellAbovePages;
 
 const heldUntilPainted = (adopted: AdoptKind | undefined) => !adopted || adopted === "restore" || adopted === "clone";
 

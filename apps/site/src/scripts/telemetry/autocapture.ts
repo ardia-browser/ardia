@@ -1,27 +1,9 @@
 import { capture, type Props } from "./core";
+import { NO_CAPTURE_SELECTOR } from "../../data/telemetry";
+import { elementText, isField, ownText, sensitive, textIsHidden } from "./elementText";
 
 const AUTOCAPTURE = 'a, button, [role="button"], [role="link"], summary, label, select, input[type="button"], input[type="submit"], input[type="checkbox"], input[type="radio"], [data-track]';
-const NO_CAPTURE = ".ph-no-capture, [data-ac-no-capture]";
-const PRIVATE = ".ac-private, [data-private], .ph-sensitive";
-const FIELD = /^(input|textarea|select|option)$/;
-
-const clean = (s: string) => s.replace(/\s+/g, " ").trim();
-const sensitive = (s: string) => /\b(?:\d[ -]?){13,16}\b/.test(s) || /\b\d{3}-\d{2}-\d{4}\b/.test(s);
-
-function ownText(el: Element): string {
-  if (FIELD.test(el.tagName.toLowerCase()) || (el as HTMLElement).isContentEditable || el.closest(PRIVATE)) return "";
-  let text = "";
-  for (const node of el.childNodes) if (node.nodeType === Node.TEXT_NODE) text += ` ${node.textContent ?? ""}`;
-  text = clean(text).slice(0, 255);
-  return sensitive(text) ? "" : text;
-}
-
-function elementText(el: Element): string {
-  const own = ownText(el);
-  if (own || el.closest(PRIVATE)) return own;
-  const all = clean(el.textContent ?? "").slice(0, 255);
-  return sensitive(all) ? "" : all;
-}
+const NO_CAPTURE = NO_CAPTURE_SELECTOR;
 
 const quote = (s: string) => s.replace(/"|\\"/g, '\\"');
 
@@ -29,8 +11,8 @@ function elementsChain(target: Element): string {
   const parts: string[] = [];
   for (let el: Element | null = target; el && el !== document.documentElement; el = el.parentElement) {
     const tag = el.tagName.toLowerCase();
-    const field = FIELD.test(tag) || (el as HTMLElement).isContentEditable;
-    const hidden = !!el.closest(PRIVATE);
+    const field = isField(el as HTMLElement);
+    const hidden = textIsHidden(el);
     const attrs: Record<string, string> = {};
     const text = ownText(el);
     if (text) attrs.text = text;

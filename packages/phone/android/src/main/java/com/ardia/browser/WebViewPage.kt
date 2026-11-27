@@ -91,11 +91,15 @@ internal class WebViewPage(
     private var installedBundle: String? = null
     private val progressThrottle = ProgressThrottle()
     private val scrollTracker = ScrollDirectionTracker()
+    private var scrollSource: String? = ROOT_SCROLLER
     private var isNavigatingHistory = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private val clearHistoryNavigationRunnable = Runnable {
         isNavigatingHistory = false
-        webView?.let { scrollTracker.snapTo(it.scrollY.toDouble()) }
+        webView?.let {
+            scrollTracker.snapTo(it.scrollY.toDouble())
+            scrollSource = ROOT_SCROLLER
+        }
     }
     private var pendingVisit: VisitKind? = null
     private var lastCommitAt = Long.MIN_VALUE / 2
@@ -107,6 +111,22 @@ internal class WebViewPage(
     private var lastTouchY = 0f
     internal val answeredSignIns = HashSet<String>()
     internal var lastCaptureRoute: CaptureRoute? = null
+    internal var viewVersion = 0L
+        private set
+    private var viewMovedOnce: ((version: Long) -> Unit)? = null
+
+    internal val viewIdentity: Int get() = webView?.let(System::identityHashCode) ?: 0
+
+    internal fun whenViewMoves(moved: (version: Long) -> Unit) {
+        viewMovedOnce = moved
+    }
+
+    private fun viewMoved() {
+        viewVersion += 1
+        val moved = viewMovedOnce ?: return
+        viewMovedOnce = null
+        moved(viewVersion)
+    }
     private var reportsContent = false
     private var nextVisualStateRequest = 1L
 
@@ -127,6 +147,7 @@ internal class WebViewPage(
         configure(web)
         webView = web
         mutableView.value = web
+        viewMoved()
         val zoom = engine.sitePreferences.pageZoom(mutableState.value.host, isPrivate) ?: 1.0
         web.settings.textZoom = (zoom * 100).roundToInt()
         update { it.copy(isLive = true, pageZoom = zoom, isDesktopSite = desktopSite) }
@@ -218,6 +239,7 @@ internal class WebViewPage(
         isNavigatingHistory = true
         scheduleClearHistoryNavigation(HISTORY_NAVIGATION_GUARD_MILLIS)
         scrollTracker.snapTo(web.scrollY.toDouble())
+        scrollSource = ROOT_SCROLLER
         update { it.copy(failure = null, scrollDirection = ScrollDirection.Up) }
         val list = web.copyBackForwardList()
         list.getItemAtIndex(list.currentIndex + step)?.url?.let { prepareNavigation(web, it) }
@@ -464,6 +486,7 @@ internal class WebViewPage(
                     isNavigatingHistory = false
                     mainHandler.removeCallbacks(clearHistoryNavigationRunnable)
                     scrollTracker.snapTo(web.scrollY.toDouble())
+                    scrollSource = ROOT_SCROLLER
                 }
             }
             if (event.actionMasked == MotionEvent.ACTION_MOVE) scrollTracker.dragged(event.rawY.toDouble())
@@ -471,8 +494,12 @@ internal class WebViewPage(
             false
         }
         web.setOnLongClickListener { longPressed(web) }
-        web.setOnScrollChangeListener { _, _, scrollY, _, _ -> scrolled(web, scrollY) }
-        web.addOnLayoutChangeListener { view, left, top, right, bottom, _, oldTop, _, oldBottom ->
+        web.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            if (web === webView) viewMoved()
+            scrolled(web, scrollY)
+        }
+        web.addOnLayoutChangeListener { view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (web === webView && (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop)) viewMoved()
             engine.notePageSize(view, right - left, bottom - top)
             if (bottom - top != oldBottom - oldTop) scrollTracker.resized(SystemClock.uptimeMillis())
         }
@@ -491,6 +518,9 @@ internal class WebViewPage(
                     }
                     data?.startsWith(PageScripts.NIGHT_SHADE_VERDICT_MESSAGE) == true -> {
                         if (isMainFrame) nightShadeMeasured(web, BrowserUrl.host(origin.toString()), PageScripts.nightShadeVerdict(data))
+                    }
+                    data?.startsWith(TouchScrollers.INNER_SCROLL_PREFIX) == true -> {
+                        if (isMainFrame) TouchScrollers.parseInnerScroll(data)?.let { innerScrolled(web, it) }
                     }
                     else -> TouchScrollers.report(web, data, android.os.SystemClock.uptimeMillis())
                 }
@@ -583,6 +613,7 @@ internal class WebViewPage(
         isNavigatingHistory = false
         progressThrottle.reset()
         scrollTracker.reset()
+        scrollSource = ROOT_SCROLLER
         update { it.copy(isLive = false, isLoading = false, progress = 0f) }
     }
 
@@ -639,6 +670,7 @@ internal class WebViewPage(
 
     internal fun pageStarted(web: WebView, url: String) {
         if (web !== webView) return
+        viewMoved()
         filterPageUrl = url
         reportsContent = false
         desktopLoad += 1
@@ -669,6 +701,7 @@ internal class WebViewPage(
         } else {
             scrollTracker.reset()
         }
+        scrollSource = ROOT_SCROLLER
         val zoom = engine.sitePreferences.pageZoom(host, isPrivate) ?: 1.0
         web.settings.textZoom = (zoom * 100).roundToInt()
         val keepsFailure = failedUrl != null && BrowserUrl.withoutFragment(failedUrl!!) == BrowserUrl.withoutFragment(url)
@@ -723,8 +756,13 @@ internal class WebViewPage(
         }
     }
 
+    internal fun scaleChanged(web: WebView) {
+        if (web === webView) viewMoved()
+    }
+
     internal fun historyUpdated(web: WebView, url: String, isReload: Boolean) {
         if (web !== webView) return
+        viewMoved()
         val previous = lastCommittedUrl
         lastCommittedUrl = url
         val kind = pendingVisit
@@ -965,6 +1003,10 @@ internal class WebViewPage(
     internal fun scrolled(web: WebView, scrollY: Int) {
         if (web !== webView) return
         val atTop = scrollY <= 1
+        if (scrollSource != ROOT_SCROLLER) {
+            scrollSource = ROOT_SCROLLER
+            scrollTracker.moveAnchor(scrollY.toDouble())
+        }
         if (isNavigatingHistory) {
             scrollTracker.snapTo(scrollY.toDouble())
             val current = mutableState.value
@@ -977,6 +1019,22 @@ internal class WebViewPage(
         val current = mutableState.value
         if (atTop == current.isScrolledToTop && (direction == null || direction == current.scrollDirection)) return
         update { it.copy(isScrolledToTop = atTop, scrollDirection = direction ?: it.scrollDirection) }
+    }
+
+    internal fun innerScrolled(web: WebView, scroll: TouchScrollers.InnerScroll) {
+        if (web !== webView) return
+        if (isNavigatingHistory) {
+            scrollSource = null
+            return
+        }
+        if (scrollSource != scroll.scroller) {
+            scrollSource = scroll.scroller
+            scrollTracker.moveAnchor(scroll.offset)
+            return
+        }
+        val direction = scrollTracker.offer(scroll.offset, scroll.atEnd, SystemClock.uptimeMillis()) ?: return
+        if (direction == mutableState.value.scrollDirection) return
+        update { it.copy(scrollDirection = direction) }
     }
 
     private fun scheduleClearHistoryNavigation(delayMillis: Long) {
@@ -1073,6 +1131,7 @@ internal class WebViewPage(
 
     private fun applyZoom(zoom: Double) {
         webView?.settings?.textZoom = (zoom * 100).roundToInt()
+        viewMoved()
         if (mutableState.value.pageZoom != zoom) update { it.copy(pageZoom = zoom) }
     }
 
@@ -1091,6 +1150,7 @@ internal class WebViewPage(
     private inline fun update(transform: (PageState) -> PageState) = mutableState.update(transform)
 
     companion object {
+        private const val ROOT_SCROLLER = "root"
         private const val SAVED_STATE_LIMIT = 512 * 1024
         private const val LOG_TAG = "ArdiaPages"
         private const val DESKTOP_SITE_KEY = "ardia.desktopSite"

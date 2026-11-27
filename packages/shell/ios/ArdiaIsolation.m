@@ -36,7 +36,9 @@ static void IsolatePasteboard(NSString *dataDirectory) {
 @implementation ArdiaIsolation
 
 + (void)load {
-  NSString *dataDirectory = ArdiaLaunchConfig.shared.dataDirectory;
+  ArdiaLaunchConfig *config = ArdiaLaunchConfig.shared;
+  if (config.webUIRefusedDataDirectory) return;
+  NSString *dataDirectory = config.dataDirectory;
   if (!dataDirectory) return;
 #if DEBUG
   IsolatePasteboard(dataDirectory);

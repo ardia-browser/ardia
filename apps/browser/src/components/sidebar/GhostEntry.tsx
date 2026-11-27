@@ -1,7 +1,7 @@
 import { tabTitle } from "../../state/browser/model";
 import { View } from "react-native";
 import { knownFaviconTheme, resolveFavicon } from "../../state/favicons/favicons";
-import { Divider, FadeLabel, radius, space, Symbol, Text, tintedImage, withAlpha } from "../ui";
+import { clippedContinuousCorners, continuousCorners, Divider, FadeLabel, radius, space, Symbol, Text, tintedImage, withAlpha } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import type { BrowserState } from "../../state/browser/store";
 import type { GroupColor } from "../../state/browser/types";
@@ -101,7 +101,7 @@ function tabGhost(shot: TabShot, theme: ReturnType<typeof useTheme>, top = 0) {
       style={{
         marginTop: top,
         height: layout.rowHeight,
-        borderRadius: radius.chrome,
+        ...continuousCorners(radius.chrome),
         flexDirection: "row",
         alignItems: "center",
         paddingLeft: shot.textOnly ? TAB_ROW.contentLeft - TAB_ROW.titleGap : TAB_ROW.contentLeft,
@@ -120,7 +120,7 @@ function tabGhost(shot: TabShot, theme: ReturnType<typeof useTheme>, top = 0) {
 function SplitGhost({ shot }: { shot: SplitShot }) {
   const theme = useTheme();
   return (
-    <View style={{ height: layout.rowHeight, borderRadius: radius.chrome, flexDirection: "row", alignItems: "center", paddingHorizontal: space.xs }}>
+    <View style={{ height: layout.rowHeight, ...continuousCorners(radius.chrome), flexDirection: "row", alignItems: "center", paddingHorizontal: space.xs }}>
       {shot.panes.map((pane, i) => (
         <View key={pane.key} style={{ flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0, gap: space.xxs }}>
           {i > 0 && <Divider vertical thick length={16} />}
@@ -142,7 +142,7 @@ function GroupGhost({ shot }: { shot: GroupShot }) {
   const { fill, stroke } = groupSurface(shot.color, tokens);
   return (
     <View style={{ paddingVertical: GROUP_BORDER }}>
-      {shot.hovered || groupBoxAtRest(shot.color) ? <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: GROUP_RADIUS, backgroundColor: fill, borderWidth: GROUP_BORDER, borderColor: stroke }} /> : null}
+      {shot.hovered || groupBoxAtRest(shot.color) ? <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, ...clippedContinuousCorners(GROUP_RADIUS), backgroundColor: fill, borderWidth: GROUP_BORDER, borderColor: stroke }} /> : null}
       <View style={{ height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingLeft: TAB_ROW.contentLeft, paddingRight: TAB_ROW.trailing }}>
         <FolderOrIcon icon={shot.icon} open={!shot.collapsed} color={shot.color} />
         <View style={{ flexShrink: 1, height: TAB_ROW.titleHeight, marginLeft: TAB_ROW.titleGap, paddingRight: space.m, justifyContent: "center" }}>

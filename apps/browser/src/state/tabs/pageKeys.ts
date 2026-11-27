@@ -2,13 +2,24 @@ import type { BrowserState } from "../browser/store";
 import { pinSection } from "../browser/model";
 import { pinnedGroupMembers } from "../browser/structure";
 
+const DEFAULT_PORTS: Partial<Record<string, string>> = { "http://": "80", "https://": "443", "ws://": "80", "wss://": "443" };
+
+function canonicalHost(scheme: string, host: string): string {
+  const lower = host.toLowerCase();
+  const m = /^([\s\S]*?)(?::(\d*))?$/.exec(lower);
+  const port = m?.[2]?.replace(/^0+(?=\d)/, "");
+  if (!m || port === undefined) return lower;
+  return port === "" || port === DEFAULT_PORTS[scheme] ? m[1]! : `${m[1]}:${port}`;
+}
+
 export function pageKey(url: string): string {
-  const m = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#]*)(.*)$/i.exec(url.trim());
+  const m = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#]*)([\s\S]*)$/i.exec(url.trim().replace(/[\t\n\r]/g, ""));
   if (!m) return url;
   const at = m[2]!.lastIndexOf("@");
-  const host = `${m[2]!.slice(0, at + 1)}${m[2]!.slice(at + 1).toLowerCase()}`;
+  const scheme = m[1]!.toLowerCase();
+  const host = `${m[2]!.slice(0, at + 1)}${canonicalHost(scheme, m[2]!.slice(at + 1))}`;
   const rest = m[3]!.startsWith("/") ? m[3]! : `/${m[3]}`;
-  return `${m[1]!.toLowerCase()}${host}${rest.replace(/#$/, "")}`;
+  return `${scheme}${host}${rest.replace(/#$/, "")}`;
 }
 
 const pageKeys = (tabs: { url: string; pinnedUrl?: string | null }[]): Set<string> =>

@@ -84,26 +84,55 @@ export type ToolbarGeometry = {
   urlLeft: number;
   trailing: number;
   cardRadius: number;
+  leadingAtCardCorner: boolean;
 };
 
 const geometries = new Map<string, ToolbarGeometry>();
 
-type GeometryOptions = { sidebarButton: boolean; trailing?: number; cardRadius?: number };
+type GeometryOptions = { sidebarButton: boolean; trailing?: number; cardRadius?: number; leadingAtCardCorner?: boolean };
 
 export function toolbarGeometry(o: GeometryOptions): ToolbarGeometry {
-  const key = `${o.sidebarButton}|${o.trailing ?? 0}|${o.cardRadius ?? 0}`;
+  const key = `${o.sidebarButton}|${o.trailing ?? 0}|${o.cardRadius ?? 0}|${o.leadingAtCardCorner ?? false}`;
   let g = geometries.get(key);
   if (!g) geometries.set(key, (g = computeToolbarGeometry(o)));
   return g;
+}
+
+export function toolbarLeadingCorner(geometry: ToolbarGeometry, row: { button: number; buttonRadius: number; center: number }): { button: "sidebar" | "back"; radius: number } | { button: null } {
+  if (!geometry.leadingAtCardCorner) return { button: null };
+  const button = geometry.sidebarButton === null ? "back" : "sidebar";
+  const center = button === "sidebar" ? geometry.sidebarButton! : geometry.back;
+  const left = center - row.button / 2;
+  const top = row.center - row.button / 2;
+  const inset = Math.max(left, top);
+  const nestedRadius = Math.max(0, geometry.cardRadius - inset);
+  const radius = Math.max(row.buttonRadius, Math.min(row.button / 2, nestedRadius));
+  return { button, radius };
+}
+
+export function toolbarButtonPlacements(geometry: ToolbarGeometry, row: { button: number; center: number; buttonRadius: number }) {
+  const top = row.center - row.button / 2;
+  const place = (center: number | null) => ({ position: "absolute" as const, top, left: (center ?? 0) - row.button / 2 });
+  const leading = toolbarLeadingCorner(geometry, row);
+  const hit = (topLeftRadius?: number) => ({ width: row.button, height: row.button, plateX: 0, plateY: 0, box: row.button, radius: row.buttonRadius, ...(topLeftRadius === undefined ? {} : { topLeftRadius }) });
+  const nav = (center: number | null, topLeftRadius?: number) => ({ style: place(center), hit: hit(topLeftRadius) });
+  return {
+    top,
+    sidebarButton: nav(geometry.sidebarButton, leading.button === "sidebar" ? leading.radius : undefined),
+    back: nav(geometry.back, leading.button === "back" ? leading.radius : undefined),
+    forward: nav(geometry.forward),
+    reload: nav(geometry.reload),
+  };
 }
 
 function computeToolbarGeometry(o: GeometryOptions): ToolbarGeometry {
   const [c0, c1, c2, c3] = layout.toolbarIconCenters;
   const trailing = o.trailing ?? 0;
   const cardRadius = o.cardRadius ?? 0;
-  if (o.sidebarButton) return { sidebarButton: c0, back: c1, forward: c2, reload: c3, urlLeft: layout.breadcrumbX - 8, trailing, cardRadius };
+  const leadingAtCardCorner = o.leadingAtCardCorner ?? false;
+  if (o.sidebarButton) return { sidebarButton: c0, back: c1, forward: c2, reload: c3, urlLeft: layout.breadcrumbX - 8, trailing, cardRadius, leadingAtCardCorner };
   const shift = c1 - c0;
-  return { sidebarButton: null, back: c1 - shift, forward: c2 - shift, reload: c3 - shift, urlLeft: layout.breadcrumbX - 8 - shift, trailing, cardRadius };
+  return { sidebarButton: null, back: c1 - shift, forward: c2 - shift, reload: c3 - shift, urlLeft: layout.breadcrumbX - 8 - shift, trailing, cardRadius, leadingAtCardCorner };
 }
 
-export const NO_TOOLBAR: ToolbarGeometry = { sidebarButton: null, back: 21, forward: 21, reload: 21, urlLeft: 8, trailing: 0, cardRadius: 0 };
+export const NO_TOOLBAR: ToolbarGeometry = { sidebarButton: null, back: 21, forward: 21, reload: 21, urlLeft: 8, trailing: 0, cardRadius: 0, leadingAtCardCorner: false };

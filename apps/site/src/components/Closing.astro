@@ -8,6 +8,7 @@ import DownloadButton from "./DownloadButton.astro";
 import MacOnlyNote from "./MacOnlyNote.astro";
 import PcNote from "./PcNote.astro";
 import SendToMac from "./SendToMac.astro";
+import Donate from "./Donate.astro";
 import { DISCORD, MIN_MACOS, VERSION } from "../data/release";
 const hillsMask = await getImage({ src: hills, width: 320, format: "webp" });
 const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-notes/${VERSION}/` : `${base}/release-notes/`;
@@ -40,7 +41,11 @@ const formats = import.meta.env.DEV ? [] : ["avif"];
       <p class="nightly not-phone not-pc" data-reveal style="--i: 3">
         Nightly ships daily fixes. Switch back to stable any time in Settings › General.
       </p>
-      <p class="brew not-phone not-pc">Homebrew: <code>brew install ardia-browser/tap/ardia</code></p>
+      <p class="brew not-phone not-pc">
+        <span>Homebrew: <code>brew install ardia-browser/tap/ardia</code></span>
+        <span>Nightly: <code>brew install ardia-browser/tap/ardia@nightly</code></span>
+      </p>
+      <Donate location="closing" />
     </div>
     <div class="closing-stage" data-tilt data-sunset aria-hidden="true">
       <div class="sunset" data-depth="14,10">
@@ -127,6 +132,9 @@ const formats = import.meta.env.DEV ? [] : ["avif"];
     color: var(--ink-2);
   }
   .brew {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     margin-top: 10px;
     font-size: var(--t-small);
     color: var(--ink-2);
@@ -134,6 +142,9 @@ const formats = import.meta.env.DEV ? [] : ["avif"];
   .brew code {
     font-family: var(--mono);
     color: var(--ink);
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     user-select: all;
   }
   .closing-stage {

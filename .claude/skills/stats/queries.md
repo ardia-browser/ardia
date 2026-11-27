@@ -99,6 +99,21 @@ SELECT variant, count() AS exposed,
 FROM exposures GROUP BY variant;
 ```
 
+## Experiment `donate-floor`
+
+```sql
+-- Exposed visitors per variant ($10 or $5 as the lowest amount), and how many clicked an amount after exposure.
+-- Money raised per variant is in Stripe: Checkout Sessions with client_reference_id donate-floor_ten or donate-floor_five.
+WITH exposures AS (
+  SELECT distinct_id, any(properties['$feature_flag_response']) AS variant, min(timestamp) AS exposed_at
+  FROM telemetry.events WHERE event = '$feature_flag_called' AND properties['$feature_flag'] = 'donate-floor' AND SITE
+  GROUP BY distinct_id)
+SELECT variant, count() AS exposed,
+       countIf(distinct_id IN (SELECT distinct_id FROM telemetry.events WHERE event = 'donate_clicked' AND properties['amount'] != '' AND SITE)) AS clicked,
+       round(100 * clicked / exposed, 1) AS pct
+FROM exposures GROUP BY variant;
+```
+
 ## App and installs
 
 ```sql

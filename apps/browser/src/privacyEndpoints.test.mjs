@@ -11,13 +11,11 @@ const DOC = "docs/privacy.md";
 const SCANNED = [
   "apps/browser/src",
   "apps/browser/macos",
-  "apps/browser/windows",
   "apps/browser/official-plugins.json",
   "apps/desktop/src",
   "packages/ardiacore",
   "packages/core",
   "packages/core-rs",
-  "packages/expo-windows",
   "packages/hostapi",
   "packages/import",
   "packages/plugin-broker",

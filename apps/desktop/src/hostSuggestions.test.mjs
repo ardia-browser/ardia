@@ -188,16 +188,31 @@ test("with the shared fetcher, stale, failed, malformed and offline replies neve
   replies[0].resolve({ body: JSON.stringify(["lin", ["stale"]]) });
   await settle();
   assert.deepEqual(results, [["linux", ["linux parity"]]]);
-  fetcher.request(google, "linux mint", (list) => results.push(["mint", list]));
+  const failed = [];
+  fetcher.request(google, "linux mint", (list) => results.push(["mint", list]), () => failed.push("mint"));
   await settle();
   replies[2].reject(Object.assign(new Error("Search suggestions are unavailable"), { code: "ERR_SUGGEST" }));
   await settle();
-  fetcher.request(google, "linux arch", (list) => results.push(["arch", list]));
+  fetcher.request(google, "linux arch", (list) => results.push(["arch", list]), () => failed.push("arch"));
   await settle();
   replies[3].resolve({ body: "<html>not json" });
   await settle();
-  assert.deepEqual(results, [["linux", ["linux parity"]], ["arch", []]]);
+  assert.deepEqual(results, [["linux", ["linux parity"]]]);
+  assert.deepEqual(failed, ["mint", "arch"]);
   fetcher.cancel();
+});
+
+test("429 and 403 host replies are marked blocked and other non-2xx replies fail", async () => {
+  for (const status of [403, 429]) {
+    const { host } = fakeHost({ reply: async () => ({ status, body: "" }) });
+    const response = await hostSuggestFetch(host)(suggestRequestUrl(google, "a"), { signal: new AbortController().signal });
+    assert.equal(response.ok, false);
+    assert.equal(response.blocked, true);
+  }
+  const { host } = fakeHost({ reply: async () => ({ status: 503, body: '["a",["nope"]]' }) });
+  const unavailable = await hostSuggestFetch(host)(suggestRequestUrl(google, "a"), { signal: new AbortController().signal });
+  assert.equal(unavailable.ok, false);
+  assert.equal(unavailable.blocked, undefined);
 });
 
 test("each request carries its own id and an abort cancels exactly that native fetch", async () => {

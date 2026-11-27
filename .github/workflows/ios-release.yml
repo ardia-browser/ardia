@@ -69,7 +69,7 @@ permissions:
 jobs:
   status:
     if: inputs.mode == 'status'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -92,7 +92,7 @@ jobs:
 
   public-link:
     if: inputs.mode == 'public-link'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -118,7 +118,7 @@ jobs:
 
   add-tester:
     if: inputs.mode == 'add-tester'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -144,7 +144,7 @@ jobs:
 
   expire:
     if: inputs.mode == 'expire'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -169,7 +169,7 @@ jobs:
 
   certificate:
     if: inputs.mode == 'certificate'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -202,7 +202,7 @@ jobs:
 
   release:
     if: inputs.mode == 'dry-run' || inputs.mode == 'upload' || inputs.mode == 'device'
-    runs-on: xcode-27
+    runs-on: blacksmith-12vcpu-macos-27
     timeout-minutes: 120
     concurrency:
       group: ios-release

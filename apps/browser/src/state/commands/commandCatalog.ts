@@ -40,6 +40,7 @@ export const COMMANDS = {
   focusCommandBar: { title: "Open Command Bar", keys: ["⌘L", "⌃F5"], ...inWindow },
   closeTab: { title: "Close Tab", symbol: "xmark", keys: ["⌘W"], ...inWindow },
   closeAllTabs: { title: "Close All Tabs", symbol: "xmark.square", keys: ["⇧⌘K"], ...windowOffInLittleArdia },
+  closeDuplicateTabs: { title: "Close Duplicate Tabs", symbol: "square.on.square", ...windowOffInLittleArdia },
   print: { title: "Print…", symbol: "printer", keys: ["⌘P"], ...pageInLittleArdia },
   copyUrl: { title: "Copy URL", symbol: "link", keys: ["⇧⌘C"], ...pageInLittleArdia, onInternalPages: true },
   copyUrlAsMarkdown: { title: "Copy URL as Markdown", symbol: "link", keys: ["⌥⇧⌘C"], ...pageInLittleArdia, onInternalPages: true },
@@ -72,11 +73,16 @@ export const COMMANDS = {
   toggleCompactToolbar: { title: "Compact Toolbar", symbol: "rectangle.compress.vertical", toggles: "compactToolbar", ...offInLittleArdia },
   togglePinnedFold: { title: "Collapse Pinned Tabs", symbol: "rectangle.compress.vertical", ...windowOffInLittleArdia },
   openSplitPane: { title: "Open Split Pane", keys: ["⌃⇧=", "⌃+"], ...windowOffInLittleArdia },
+  openSplitPaneBelow: { title: "Open Split Pane Below", keys: ["⌃⇧-", "⌃_"], ...windowOffInLittleArdia },
   useSelectionForFind: { title: "Use Selection for Find", keys: ["⌘E"], ...pageInLittleArdia },
   findAndReplace: { title: "Find and Replace…", keys: ["⌥⌘F"], ...pageInLittleArdia },
   jumpToSelection: { title: "Jump to Selection", keys: ["⌘J"], ...pageInLittleArdia },
   focusNextPane: { title: "Focus Next Split Pane", keys: ["⌃⇧]", "⌃}"], ...offInLittleArdia },
   focusPreviousPane: { title: "Focus Previous Split Pane", keys: ["⌃⇧[", "⌃{"], ...offInLittleArdia },
+  moveSplitPaneLeft: { title: "Move Split Pane Left", keys: ["⌃⌥←"], ...windowOffInLittleArdia },
+  moveSplitPaneRight: { title: "Move Split Pane Right", keys: ["⌃⌥→"], ...windowOffInLittleArdia },
+  moveSplitPaneUp: { title: "Move Split Pane Up", keys: ["⌃⌥↑"], ...windowOffInLittleArdia },
+  moveSplitPaneDown: { title: "Move Split Pane Down", keys: ["⌃⌥↓"], ...windowOffInLittleArdia },
   toggleFullUrl: { title: "Show Full URL", symbol: "text.alignleft", toggles: "showFullUrl", ...offInLittleArdia },
   toggleJavaScriptFromAppleEvents: { title: "Allow JavaScript from Apple Events", toggles: "allowJavaScriptFromAppleEvents" },
   toggleAddressBar: { title: "Show Address Bar in Sidebar", ...offInLittleArdia },
@@ -92,8 +98,8 @@ export const COMMANDS = {
   viewSource: { title: "View Source", keys: ["⌥⌘U"], ...pageInLittleArdia },
   back: { title: "Go Back", keys: ["⌘[", "⌘←"], scope: "window", littleArdia: "page" },
   forward: { title: "Go Forward", keys: ["⌘]", "⌘→"], scope: "window", littleArdia: "page" },
-  nextTab: { title: "Next Tab", keys: ["⇧⌘]", "⌘}", "⌃⇥", "⌃⇟", "⌥⌘↓"], ...windowOffInLittleArdia },
-  previousTab: { title: "Previous Tab", keys: ["⇧⌘[", "⌘{", "⌃⇧⇥", "⌃⇞", "⌥⌘↑"], ...windowOffInLittleArdia },
+  nextTab: { title: "Next Tab", keys: ["⇧⌘]", "⌘}", "⌃⇟", "⌥⌘↓"], ...windowOffInLittleArdia },
+  previousTab: { title: "Previous Tab", keys: ["⇧⌘[", "⌘{", "⌃⇞", "⌥⌘↑"], ...windowOffInLittleArdia },
   selectTab: {
     ...windowOffInLittleArdia,
     variants: Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), { title: `Select Tab ${n}`, keys: [`⌘${n}`] }])),
@@ -136,6 +142,14 @@ export const COMMANDS = {
   newGroupWithTabs: { title: "New Group with Tab", symbol: "folder.badge.plus", keys: ["⌃⌘N", "⌃⌘P"], ...windowOffInLittleArdia },
   cleanUpTabs: { title: "Clean Up Tabs", symbol: "sparkles", keys: ["⌥⌘K"], ...windowOffInLittleArdia },
   tidyPins: { title: "Tidy Pins", symbol: "sparkles" },
+  sortTabs: {
+    symbol: "arrow.up.arrow.down",
+    ...windowOffInLittleArdia,
+    variants: {
+      site: { title: "Sort Tabs by Site" },
+      title: { title: "Sort Tabs by Title" },
+    },
+  },
   searchTabs: { title: "Search Tabs…", symbol: "magnifyingglass", keys: ["⇧⌘A"], ...windowOffInLittleArdia },
   renameTab: { title: "Rename…", barTitle: "Rename Tab", symbol: "pencil", ...windowOffInLittleArdia },
   changeTabIcon: { title: "Change Icon…", ...windowOffInLittleArdia },
@@ -143,8 +157,8 @@ export const COMMANDS = {
   tabSwitcher: {
     ...windowOffInLittleArdia,
     variants: {
-      forward: { title: "Tab Switcher (forward)" },
-      backward: { title: "Tab Switcher (backward)" },
+      forward: { title: "Tab Switcher (forward)", keys: ["⌃⇥"] },
+      backward: { title: "Tab Switcher (backward)", keys: ["⌃⇧⇥"] },
     },
   },
   share: { title: "Share…", symbol: "square.and.arrow.up", keys: ["⌥⌘S"], ...pageInLittleArdia },
@@ -229,7 +243,7 @@ export const PAGE_COMMANDS = commandsWhere((c) => c.scope === "page");
 export const PAGE_COMMANDS_OFF_INTERNAL_PAGES = commandsWhere((c) => c.scope === "page" && !c.onInternalPages);
 export const WINDOW_COMMANDS = commandsWhere((c) => c.scope !== undefined);
 export const LITTLE_ARDIA_DISABLED_COMMANDS = commandsWhere((c) => c.littleArdia === "off");
-const SPLIT_VIEW_COMMANDS: readonly BrowserCommand[] = ["openSplitPane", "focusNextPane", "focusPreviousPane"];
+const SPLIT_VIEW_COMMANDS: readonly BrowserCommand[] = ["openSplitPane", "openSplitPaneBelow", "focusNextPane", "focusPreviousPane", "moveSplitPaneLeft", "moveSplitPaneRight", "moveSplitPaneUp", "moveSplitPaneDown"];
 const EXPORT_COMMANDS: readonly BrowserCommand[] = ["exportBookmarks"];
 const WEBKIT_COMMANDS: readonly BrowserCommand[] = ["togglePageEngine"];
 const HIDING_COMMANDS: readonly BrowserCommand[] = ["hideElement", "showHiddenElements"];

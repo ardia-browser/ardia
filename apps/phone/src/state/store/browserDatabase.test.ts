@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { nodeDatabase } from "../../../test/nodeDatabase.ts";
+import { PENDING_CRASH_KEY } from "../../lib/crashReports.ts";
 import { createHistoryLog } from "../history/historyLog.ts";
 import { parsePreferences } from "../settings/preferences.ts";
 import type { BrowserTab } from "../tabs/tabModels.ts";
@@ -12,6 +13,7 @@ import {
   knownReceivedKeys,
   readArchivedTabs,
   readOpenTabs,
+  readPreference,
   readPreferences,
   readTabState,
   writeTabState,
@@ -147,6 +149,22 @@ test("preferences keep Android's keys and fall back on bad values", () => {
   assert.equal(parsePreferences(readPreferences(db)).autoArchiveInterval, "day");
 });
 
+test("a stored crash is read only by its own key, never by a full preference read or another key", () => {
+  const db = fresh();
+  writePreference(db, "telemetry.sharing", "off");
+  writePreference(db, PENDING_CRASH_KEY, '{"kind":"js"}');
+  const asked: unknown[] = [];
+  const watched = { ...db, first: <T,>(sql: string, params?: readonly (string | number | null)[]) => (asked.push(params?.[0]), db.first<T>(sql, params)) };
+  assert.equal(readPreference(watched, "telemetry.sharing"), "off");
+  assert.equal(readPreference(watched, "telemetry.installId"), null);
+  assert.deepEqual(asked, ["telemetry.sharing", "telemetry.installId"]);
+  assert.equal(readPreferences(db)[PENDING_CRASH_KEY], undefined);
+  assert.equal(readPreferences(db)["telemetry.sharing"], "off");
+  assert.equal(readPreference(db, PENDING_CRASH_KEY), '{"kind":"js"}');
+  const telemetry = readFileSync(new URL("../telemetry/telemetry.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(telemetry, /\breadPreferences\b/);
+});
+
 test("received keys already in the store are known, and the Mac's history removals cut only their profile's visits", () => {
   const db = nodeDatabase();
   migrate(db);
@@ -167,4 +185,31 @@ test("received keys already in the store are known, and the Mac's history remova
     log.search("", 10).map((v) => v.url),
     ["https://b.example/"],
   );
+});
+
+test("forgetting a search removes every matching visit, also ones older than the summary reads", () => {
+  const db = nodeDatabase();
+  migrate(db);
+  const log = createHistoryLog(db);
+  log.record("https://duckduckgo.com/?q=otters", "otters", "typed", "work", 1);
+  for (let at = 2; at < 40; at += 1) log.record(`https://site${at}.example/`, "site", "link", null, at);
+  log.record("https://www.google.com/search?q=Otters", "Otters", "typed", null, 50);
+  assert.equal(log.summary(10, 10).some((row) => row.url.startsWith("https://duckduckgo.com")), false);
+  const before = log.revision();
+  assert.equal(log.forget((url) => url.includes("otters") || url.includes("Otters")), 2);
+  assert.ok(log.revision() > before);
+  assert.equal(log.search("otters", 10).length, 0);
+  assert.equal(log.search("", 100).length, 38);
+  assert.equal(log.forget(() => false), 0);
+});
+
+test("forgetting a search that matches more urls than one delete statement binds removes all of them", () => {
+  const db = nodeDatabase();
+  migrate(db);
+  const log = createHistoryLog(db);
+  for (let at = 1; at <= 1201; at += 1) log.record(`https://duckduckgo.com/?q=otters&page=${at}`, "otters", "link", at % 2 ? "work" : null, at);
+  log.record("https://site.example/", "site", "link", null, 2000);
+  assert.equal(log.forget((url) => url.includes("otters")), 1201);
+  assert.equal(log.search("otters", 2000).length, 0);
+  assert.deepEqual(log.search("", 2000).map((visit) => visit.url), ["https://site.example/"]);
 });

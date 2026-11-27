@@ -2,7 +2,6 @@
   "sources": {
     "rust": "packages/core-rs/crates/ardia-import-core (netscape_bookmarks), the answer under expect",
     "swift": "run: packages/import/ios/Core/NetscapeBookmarks.swift (NetscapeBookmarks.load) on macOS 27.2, by tests/import-netscape/test_import_netscape.py",
-    "windows": "run: packages/expo-windows/src/import/fileFormats.ts (bookmarksFromHtml) on Node 24 with index.ts readFile and apps/browser/windows/Ardia/ImportFiles.h TextOf emulated (64 MiB, one BOM, UTF-8 or windows-1252), lone surrogates written as U+FFFD, by tests/import-netscape/test_import_netscape.py",
     "linux": "run: engine/ardiacore-linux/src/ardia/linux/ac_linux_import_formats.cc (ParseNetscapeBookmarks) built against engine/ardiacore-linux/tests/fixtures/import_base.h, by tests/import-netscape/test_import_netscape.py"
   },
   "inputs": {
@@ -215,72 +214,6 @@
             "type": "folder"
           }
         },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "Getting Started",
-                "url": "https://www.mozilla.org/en-US/firefox/central/",
-                "dateAdded": 1700000000000
-              },
-              {
-                "type": "url",
-                "title": "Recent Tags",
-                "url": "place:parent=menu________&queryType=1",
-                "dateAdded": 1700000000000
-              },
-              {
-                "type": "folder",
-                "title": "Mozilla Firefox",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "Get Help",
-                    "url": "https://support.mozilla.org/",
-                    "dateAdded": 1700000004000
-                  }
-                ],
-                "dateAdded": 1700000002000
-              },
-              {
-                "type": "folder",
-                "title": "Bookmarks Toolbar",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "Most Visited",
-                    "url": "PLACE:sort=8&maxResults=10"
-                  },
-                  {
-                    "type": "url",
-                    "title": "Toolbar",
-                    "url": "https://toolbar.example/",
-                    "dateAdded": 1700000007000
-                  }
-                ],
-                "dateAdded": 1700000005000,
-                "role": "toolbar"
-              },
-              {
-                "type": "folder",
-                "title": "Other Bookmarks",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "Unsorted",
-                    "url": "https://unsorted.example/",
-                    "dateAdded": 1700000010000
-                  }
-                ],
-                "dateAdded": 1700000008000,
-                "role": "other"
-              }
-            ]
-          }
-        },
         "linux": {
           "ok": {
             "children": [
@@ -481,19 +414,6 @@
             "title": "Bookmarks",
             "type": "folder"
           }
-        },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "[\u0000] [�] [�] [&#x110000;] [&#;] [&#x;] [&#+65;] [&#-65;] [&#x+41;] [&#65a;]",
-                "url": "https://n.example/"
-              }
-            ]
-          }
         }
       }
     },
@@ -609,39 +529,6 @@
         }
       },
       "platforms": {
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "https://empty.example/",
-                "url": "https://empty.example/"
-              },
-              {
-                "type": "url",
-                "title": "https://blank.example/",
-                "url": "https://blank.example/"
-              },
-              {
-                "type": "url",
-                "title": "https://nbsp.example/",
-                "url": "https://nbsp.example/"
-              },
-              {
-                "type": "url",
-                "title": "x",
-                "url": "https://ideographic.example/"
-              },
-              {
-                "type": "url",
-                "title": "y",
-                "url": "https://bom.example/"
-              }
-            ]
-          }
-        },
         "linux": {
           "ok": {
             "children": [
@@ -713,24 +600,6 @@
             "title": "Bookmarks",
             "type": "folder"
           }
-        },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "blank",
-                "url": "   "
-              },
-              {
-                "type": "url",
-                "title": "kept",
-                "url": "https://kept.example/"
-              }
-            ]
-          }
         }
       }
     },
@@ -774,24 +643,6 @@
             ],
             "title": "Bookmarks",
             "type": "folder"
-          }
-        },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "padded",
-                "url": "  https://padded.example/ \t"
-              },
-              {
-                "type": "url",
-                "title": "entity",
-                "url": " https://entity.example/\n"
-              }
-            ]
           }
         }
       }
@@ -841,34 +692,6 @@
             ],
             "title": "Bookmarks",
             "type": "folder"
-          }
-        },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "lower",
-                "url": "place:sort=8"
-              },
-              {
-                "type": "url",
-                "title": "mixed",
-                "url": "Place:sort=8"
-              },
-              {
-                "type": "url",
-                "title": "padded",
-                "url": " place:sort=8"
-              },
-              {
-                "type": "url",
-                "title": "placed",
-                "url": "placed:sort=8"
-              }
-            ]
           }
         },
         "linux": {
@@ -1064,93 +887,6 @@
             "title": "Bookmarks",
             "type": "folder"
           }
-        },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "int",
-                "url": "https://d.example/1",
-                "dateAdded": 1700000000000
-              },
-              {
-                "type": "url",
-                "title": "spaces",
-                "url": "https://d.example/2",
-                "dateAdded": 1700000000000
-              },
-              {
-                "type": "url",
-                "title": "zero",
-                "url": "https://d.example/3"
-              },
-              {
-                "type": "url",
-                "title": "negative",
-                "url": "https://d.example/4"
-              },
-              {
-                "type": "url",
-                "title": "fraction",
-                "url": "https://d.example/5",
-                "dateAdded": 1500
-              },
-              {
-                "type": "url",
-                "title": "plus",
-                "url": "https://d.example/6",
-                "dateAdded": 1700000000000
-              },
-              {
-                "type": "url",
-                "title": "exponent",
-                "url": "https://d.example/7",
-                "dateAdded": 1000000000000
-              },
-              {
-                "type": "url",
-                "title": "hex",
-                "url": "https://d.example/8",
-                "dateAdded": 16000
-              },
-              {
-                "type": "url",
-                "title": "word",
-                "url": "https://d.example/9"
-              },
-              {
-                "type": "url",
-                "title": "empty",
-                "url": "https://d.example/10"
-              },
-              {
-                "type": "url",
-                "title": "max",
-                "url": "https://d.example/11",
-                "dateAdded": 9.223372036854776e+21
-              },
-              {
-                "type": "url",
-                "title": "over",
-                "url": "https://d.example/12",
-                "dateAdded": 9.223372036854776e+21
-              },
-              {
-                "type": "url",
-                "title": "entity",
-                "url": "https://d.example/13"
-              },
-              {
-                "type": "url",
-                "title": "zeros",
-                "url": "https://d.example/14",
-                "dateAdded": 1700000000000
-              }
-            ]
-          }
         }
       }
     },
@@ -1259,20 +995,6 @@
             "title": "Bookmarks",
             "type": "folder"
           }
-        },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "dup",
-                "url": "https://second.example/",
-                "dateAdded": 1600000000000
-              }
-            ]
-          }
         }
       }
     },
@@ -1326,26 +1048,6 @@
             }
           ]
         }
-      },
-      "platforms": {
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "before",
-                "url": "https://before.example/"
-              },
-              {
-                "type": "url",
-                "title": "after",
-                "url": "https://after.example/"
-              }
-            ]
-          }
-        }
       }
     },
     {
@@ -1389,19 +1091,6 @@
             "title": "Bookmarks",
             "type": "folder"
           }
-        },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "kept",
-                "url": "https://kept.example/"
-              }
-            ]
-          }
         }
       }
     },
@@ -1440,26 +1129,6 @@
               "url": "https://shown.example/"
             }
           ]
-        }
-      },
-      "platforms": {
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "shown",
-                "url": "https://shown.example/"
-              },
-              {
-                "type": "url",
-                "title": "hidden",
-                "url": "https://hidden.example/"
-              }
-            ]
-          }
         }
       }
     },
@@ -1540,19 +1209,6 @@
             ],
             "title": "Bookmarks",
             "type": "folder"
-          }
-        },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "a",
-                "url": "https://lt.example/"
-              }
-            ]
           }
         }
       }
@@ -1748,24 +1404,6 @@
             ],
             "title": "Bookmarks",
             "type": "folder"
-          }
-        },
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "title\na description",
-                "url": "https://dd.example/"
-              },
-              {
-                "type": "url",
-                "title": "next",
-                "url": "https://next.example/"
-              }
-            ]
           }
         },
         "linux": {
@@ -2229,21 +1867,6 @@
             }
           ]
         }
-      },
-      "platforms": {
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "“quoted” €",
-                "url": "https://cp.example/"
-              }
-            ]
-          }
-        }
       }
     },
     {
@@ -2262,21 +1885,6 @@
               "url": "https://s.example/"
             }
           ]
-        }
-      },
-      "platforms": {
-        "windows": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "url",
-                "title": "í € cafÃ©",
-                "url": "https://s.example/"
-              }
-            ]
-          }
         }
       }
     },
@@ -2313,13 +1921,6 @@
             "folders": 70,
             "depth": 70
           }
-        },
-        "windows": {
-          "shape": {
-            "links": 71,
-            "folders": 70,
-            "depth": 70
-          }
         }
       }
     },
@@ -2337,13 +1938,6 @@
       },
       "platforms": {
         "swift": {
-          "shape": {
-            "links": 1,
-            "folders": 99,
-            "depth": 99
-          }
-        },
-        "windows": {
           "shape": {
             "links": 1,
             "folders": 99,
@@ -2367,9 +1961,6 @@
       "platforms": {
         "swift": {
           "error": "crashed"
-        },
-        "windows": {
-          "error": "RangeError: Maximum call stack size exceeded"
         }
       }
     },
@@ -2387,13 +1978,6 @@
       },
       "platforms": {
         "swift": {
-          "shape": {
-            "links": 250001,
-            "folders": 0,
-            "depth": 0
-          }
-        },
-        "windows": {
           "shape": {
             "links": 250001,
             "folders": 0,
@@ -2417,13 +2001,6 @@
       },
       "platforms": {
         "swift": {
-          "shape": {
-            "links": 250000,
-            "folders": 3,
-            "depth": 3
-          }
-        },
-        "windows": {
           "shape": {
             "links": 250000,
             "folders": 3,
@@ -2486,9 +2063,6 @@
             "title": "Bookmarks",
             "type": "folder"
           }
-        },
-        "windows": {
-          "error": "unreadable"
         }
       }
     },

@@ -160,8 +160,8 @@ try {
   $state = if ($power.ok -and $power.r -is [string]) { $power.r | ConvertFrom-Json } else { $null }
   Check 'power-state' (($power.r -is [string]) -and $state -and $state.power -eq 'windows' -and $state.physicalMemory -gt 0 -and ($state.onBattery -is [bool])) "answer $($power | ConvertTo-Json -Compress -Depth 4)"
 
-  $identity = Cdp-Eval '__ardiaHost.invoke("ArdiaShell.windowIdentity", {})'
-  Check 'bridge-answers-after-platform-calls' ($identity -eq 'main') "windowIdentity '$identity'"
+  $identity = Window-Identity
+  Check 'bridge-answers-after-platform-calls' (Is-Window $identity) "windowIdentity $(Identity-Text $identity)"
 } catch {
   $failedRun = $true
   Log "FAIL platform harness: $($_.Exception.Message)"

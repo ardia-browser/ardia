@@ -57,7 +57,7 @@ test("a cold launch three days into a version sends cold_nth 2 and version_age <
   assert.equal(session.coldNth, 2);
   assert.equal(JSON.parse(stub.docs.get("telemetry.json")).versionColdLaunches, 2);
   journeys.startJourneys(session);
-  journeys.launchCommitted();
+  journeys.launchCommitted(client.consentNow());
   const deadline = Date.now() + 10_000;
   while (journeys.devJourneys().pending[0]?.usable === undefined && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
   track.markFirstWindow();

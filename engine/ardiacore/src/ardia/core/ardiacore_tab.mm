@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "base/functional/bind.h"
 #include "base/strings/sys_string_conversions.h"
 #include "chrome/browser/ardia/ac_tab_restore.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
@@ -50,6 +51,22 @@
 #import "ardia/core/ardiacore_tab_internal.h"
 
 using ardiacore::NS;
+
+static BOOL OnlySoftDiscardKeeps(NSArray<NSNumber*>* kept) {
+  using performance_manager::policies::CannotDiscardReason;
+  if (!kept.count) {
+    return NO;
+  }
+  for (NSNumber* code in kept) {
+    const int reason = code.intValue;
+    if (reason != static_cast<int>(CannotDiscardReason::kNotificationsEnabled) &&
+        reason != static_cast<int>(CannotDiscardReason::kPinnedTab) &&
+        reason != static_cast<int>(CannotDiscardReason::kBackgroundActivity)) {
+      return NO;
+    }
+  }
+  return YES;
+}
 
 @interface ArdiaCoreInputSuppression : NSObject
 - (instancetype)initWithContents:(content::WebContents*)contents;
@@ -173,6 +190,10 @@ using ardiacore::NS;
   if (!_contents) {
     return NO;
   }
+  ardiacore::TabBridge* asking = ardiacore::TabBridge::FromWebContents(_contents);
+  if (asking && asking->holds_leave_ask()) {
+    return NO;
+  }
   auto* unit =
       resource_coordinator::TabLifecycleUnitExternal::FromWebContents(_contents);
   return unit && unit->DiscardTab(
@@ -227,6 +248,14 @@ using ardiacore::NS;
     return unavailable;
   }
   return @[];
+}
+
+- (NSArray<NSNumber*>*)sleepIfUnusedFor:(NSTimeInterval)seconds {
+  NSArray<NSNumber*>* kept = [self sleepIfHiddenFor:seconds];
+  if (!OnlySoftDiscardKeeps(kept) || ![self discard] || !self.discarded) {
+    return kept;
+  }
+  return @[ @(ardiacore::kSleptPastSoftKeeps) ];
 }
 
 - (BOOL)discarded {
@@ -463,6 +492,10 @@ using ardiacore::NS;
           TabStripModel::kNoTab) {
     return;
   }
+  if (bridge->asking_before_leaving() && !browser_shutdown::HasShutdownStarted()) {
+    bridge->CloseAfterLeaveAsk();
+    return;
+  }
   bridge->set_closed_by_host();
   if (!browser_shutdown::HasShutdownStarted() &&
       _contents->NeedToFireBeforeUnloadOrUnloadEvents()) {
@@ -472,6 +505,29 @@ using ardiacore::NS;
     return;
   }
   ardiacore::DeleteTabClosedByHost(_contents);
+}
+
+- (BOOL)asksBeforeLeaving {
+  if (!_contents) {
+    return NO;
+  }
+  ardiacore::TabBridge* bridge = ardiacore::TabBridge::FromWebContents(_contents);
+  if (bridge && bridge->asking_before_leaving()) {
+    return YES;
+  }
+  return !(bridge && bridge->closing_after_unload()) &&
+         _contents->NeedToFireBeforeUnload();
+}
+
+- (void)askBeforeLeaving:(void (^)(BOOL leave))answer {
+  if (!self.asksBeforeLeaving) {
+    answer(YES);
+    return;
+  }
+  ardiacore::TabBridge::GetOrCreate(_contents)->AskBeforeLeaving(
+      base::BindOnce(^(bool leave) {
+        answer(leave);
+      }));
 }
 
 - (void)close {
@@ -488,7 +544,12 @@ using ardiacore::NS;
   if (!browser) {
     return;
   }
-  ardiacore::TabBridge::GetOrCreate(_contents)->set_closed_by_host();
+  ardiacore::TabBridge* bridge = ardiacore::TabBridge::GetOrCreate(_contents);
+  if (bridge->asking_before_leaving() && !browser_shutdown::HasShutdownStarted()) {
+    bridge->CloseAfterLeaveAsk();
+    return;
+  }
+  bridge->set_closed_by_host();
   TabStripModel* model = browser->GetTabStripModel();
   int index = model->GetIndexOfWebContents(_contents);
   if (index != TabStripModel::kNoTab) {

@@ -1,4 +1,5 @@
 import { ardiaHost, hostSupports, type ArdiaHost } from "./host.ts";
+import { PLATFORM_TERMS } from "../../browser/src/lib/platformTerms";
 
 export type LinuxCapabilities = {
   defaultBrowser: boolean;
@@ -102,7 +103,7 @@ export function unavailableSettingIds(capabilities: LinuxCapabilities, settingId
   if (!capabilities.defaultBrowser) ids.add("general.defaultBrowser");
   if (!capabilities.launchAtLogin) ids.add("general.openAtLogin");
   if (!capabilities.videoUpscaling) ids.add("tabs.videoUpscaling");
-  if (!capabilities.cliControl) for (const id of ["advanced.ardiaCommand", "advanced.compactCliPill"]) ids.add(id);
+  if (!capabilities.cliControl) for (const id of ["advanced.ardiaCommand", "advanced.showCliPill", "advanced.compactCliPill"]) ids.add(id);
   if (!capabilities.commandScrollZoom) ids.add("advanced.commandScrollZoom");
   if (!capabilities.peekOtherSites) ids.add("tabs.peekLinksToOtherSites");
   if (!capabilities.popupsOpenAsTabs) ids.add("tabs.popupsOpenAsTabs");
@@ -123,4 +124,4 @@ export const unavailableCommands = (capabilities: LinuxCapabilities): Set<string
   ]);
 
 
-export const unavailableError = (feature: string) => Object.assign(new Error(`${feature} is unavailable on Linux`), { code: "ERR_UNAVAILABLE" });
+export const unavailableError = (feature: string) => Object.assign(new Error(`${feature} is unavailable on ${PLATFORM_TERMS.os}`), { code: "ERR_UNAVAILABLE" });

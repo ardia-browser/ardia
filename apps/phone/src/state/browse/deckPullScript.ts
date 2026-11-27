@@ -39,8 +39,8 @@ function replay(id: string, path: PullPath): Promise<"landed" | "returned" | "re
       path,
       () => deckPullBegan(id),
       (lands) => deckPullReleased(id, lands),
-      (settledId, landed, worstFrameMs) => {
-        deckPullSettled(settledId, landed, worstFrameMs);
+      (settledId, landed, worstFrameMs, openAfter, turn, phone) => {
+        deckPullSettled(settledId, landed, worstFrameMs, openAfter, turn, phone);
         done(landed ? "landed" : "returned");
       },
       () => done("refused"),

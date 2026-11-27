@@ -29,6 +29,7 @@ class ArdiaVideoOverlayWindow : public VideoOverlayWindowViews {
   ~ArdiaVideoOverlayWindow() override;
 
   void ShowInactive() override;
+  void SetForcedTucking(bool tuck) override;
   void Hide() override;
   void SetMediaPosition(const media_session::MediaPosition& position) override;
   void OnNativeWidgetMove() override;
@@ -39,6 +40,7 @@ class ArdiaVideoOverlayWindow : public VideoOverlayWindowViews {
   gfx::Rect GetProgressViewBounds() override;
 
  private:
+  gfx::Rect GetWorkAreaForWindow() const override;
   gfx::Rect CalculateAndUpdateWindowBounds() override;
   void SetUpViews() override;
 
@@ -53,6 +55,7 @@ class ArdiaVideoOverlayWindow : public VideoOverlayWindowViews {
   base::TimeDelta ac_hide_fade_;
   base::OneShotTimer ac_hide_timer_;
   std::optional<gfx::Rect> ac_pending_bounds_;
+  std::optional<gfx::Rect> ac_opening_work_area_;
   base::OneShotTimer ac_save_bounds_timer_;
   std::vector<base::CallbackListSubscription> ac_button_state_subscriptions_;
 };

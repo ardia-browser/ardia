@@ -46,6 +46,11 @@ final class FieldGlow: ExpoView, FieldGlowTarget {
 
   override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    layers.syncPulse(glowId.flatMap { Self.hub.model($0)?.pulse })
+  }
+
   override func layout() {
     super.layout()
     layoutGlow()

@@ -19,15 +19,19 @@ import { popSettings, pushSettings, settingsRouteKey } from "../../state/setting
 import { ExpoSettingsStack } from "./ExpoSettingsStack";
 import { BrowseForMePage } from "./BrowseForMePage";
 import { PageSummaryPage } from "./PageSummaryPage";
+import { ExperimentalPane, GeneralPane, SearchPane, TabsPane } from "./SettingsPanes";
+import { DesignProvider, rolesFor, useDesign, useTheme } from "../ui";
+import { SettingsFormColorsContext } from "./SettingsKit";
 
 export function SettingsPageFor({ route }: { route: SettingsRoute }) {
   switch (route.page) {
     case "root":
+      return <SettingsRoot />;
     case "general":
     case "tabs":
     case "search":
     case "experimental":
-      return <SettingsRoot />;
+      return <PaneFor page={route.page} />;
     case "appearance":
       return <AppearancePage />;
     case "theme":
@@ -82,9 +86,21 @@ export function SettingsPageFor({ route }: { route: SettingsRoute }) {
   }
 }
 
+function PaneFor({ page }: { page: "general" | "tabs" | "search" | "experimental" }) {
+  if (page === "general") return <GeneralPane />;
+  if (page === "tabs") return <TabsPane />;
+  if (page === "search") return <SearchPane />;
+  return <ExperimentalPane />;
+}
+
 export function SettingsView() {
+  const material = useDesign() === "material";
   if (Platform.OS === "ios") return <ExpoSettingsStack />;
-  return <HandBuiltSettings />;
+  return (
+    <DesignProvider design={material ? "material" : "redesigned"}>
+      <HandBuiltSettings material={material} />
+    </DesignProvider>
+  );
 }
 
 type ShownPage = { key: string; route: SettingsRoute };
@@ -94,7 +110,9 @@ const shownPageOf = (open: boolean, stack: readonly SettingsRoute[]): ShownPage 
   return route ? { key: `${stack.length}:${settingsRouteKey(route)}`, route } : null;
 };
 
-function HandBuiltSettings() {
+function HandBuiltSettings({ material }: { material: boolean }) {
+  const dark = useTheme().dark;
+  const form = material ? null : rolesFor(dark);
   const open = useSettingsNav((s) => s.open);
   const generation = useSettingsNav((s) => s.generation);
   const stack = useSettingsNav((s) => s.stack);
@@ -109,7 +127,9 @@ function HandBuiltSettings() {
   return (
     <View testID="settingsStack" style={StyleSheet.absoluteFill}>
       <View key={`${generation}:${shown.key}`} testID="settingsPage" style={StyleSheet.absoluteFill}>
-        <SettingsPageFor route={shown.route} />
+        <SettingsFormColorsContext.Provider value={form}>
+          <SettingsPageFor route={shown.route} />
+        </SettingsFormColorsContext.Provider>
       </View>
     </View>
   );

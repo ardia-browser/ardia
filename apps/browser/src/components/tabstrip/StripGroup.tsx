@@ -7,7 +7,7 @@ import { pressGroupClose, useGroupCloseControl } from "../../state/sidebar/close
 import { openGroupMenu } from "../../state/sidebar/menus";
 import { moveInGroup, tuckGroup, useHasTuckTarget } from "../../state/tabs/topStrip";
 import { groupTint, useSidebarTokens } from "../sidebar/tokens";
-import { Button, ContextMenuArea, Divider, FadeLabel, useTooltip } from "../ui";
+import { Button, ContextMenuArea, clippedContinuousCorners, Divider, FadeLabel, useTooltip } from "../ui";
 import { useTheme } from "../ui/theme";
 import { font, ink, weight, withAlpha } from "../ui/tokens";
 import { FolderMeasures, GroupMember, StripGroupIcon } from "./GroupMember";
@@ -234,7 +234,7 @@ function GroupFill({ hover, width, tint, bare }: { hover: ChipHover; width: Anim
         top: ITEM_TOP,
         width,
         height: ITEM_HEIGHT,
-        borderRadius: tabRadius(),
+        ...clippedContinuousCorners(tabRadius()),
         borderWidth: CHIP_HAIRLINE,
         borderColor: bare ? ink.clear : theme.pinnedRestingStroke,
         backgroundColor: tint ? withAlpha(tint, hovered ? 0.24 : GROUP_TRAY_ALPHA) : hovered ? tokens.groupHeaderHover : bare ? ink.clear : tokens.groupFill,

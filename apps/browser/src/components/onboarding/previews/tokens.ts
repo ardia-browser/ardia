@@ -2,20 +2,19 @@ import { curve, duration } from "../../ui/motion";
 import { ink, type ShadowLevel } from "../../ui/tokens";
 
 export const sceneMs = {
-  tabs: 1200,
-  address: 1100,
-  commandBar: 1200,
-  newTab: 1300,
-  newTabPosition: 1100,
-  tidy: 1500,
-  quit: 1500,
-  windows: 1400,
-  appearance: 1200,
+  tabs: 2800,
+  commandBar: 3000,
+  newTab: 3000,
+  newTabPosition: 2800,
+  ctrlTab: 3200,
+  tidy: 3600,
+  quit: 3400,
+  windows: 3800,
+  appearance: 3000,
   style: 1300,
-  siteColor: 1300,
-  block: 1300,
-  links: 1500,
-  autoBadge: 900,
+  siteColor: 2800,
+  block: 3200,
+  links: 4000,
 } as const;
 
 export const mockMotion = {
@@ -31,6 +30,8 @@ export const mockShadow = {
 } satisfies Record<string, ShadowLevel>;
 
 export const mockArt = { blobRadius: 80 } as const;
+
+export const mockSwitcher = { card: 124, shot: 76, label: 24, favicon: 22, labelFavicon: 12, ring: { focused: 2, rest: 1 } } as const;
 
 export const mockNtp = { barTop: 120, barMaxWidth: 520 } as const;
 

@@ -8,6 +8,7 @@ const SYMBOL_CONTEXT = /icon|symbol|glyph|chevron|name=/i;
 const ICON_KEYS = /^(icon|icons|symbol|name|glyph|chevron|fallback)$/i;
 const KEYED = /([A-Za-z_$][\w$]*)\??\s*[:=]\s*\{?\s*(?:(["'`])[^"'`]*\2\s*\|\s*)*$/;
 const COMPARED = /(===|!==|==|!=|case)\s*$/;
+const PLAIN_CALL_ARGUMENT = /\b(?![\w$]*(?:icon|symbol|glyph|image))[A-Za-z_$][\w$]*\(\s*(?:[\w$.]+\s*,\s*)*$/i;
 const NOT_A_SYMBOL = /typeof |kind ===|step ===|type Step|e\.key|command ===|MOD_ORDER|case "|LiveError|Outcome|APP_SCOPE|field:|params:/;
 
 function sourceFiles() {
@@ -67,6 +68,7 @@ export function collectAppSymbols(vocabulary) {
         if (!vocabulary.has(match[2])) continue;
         const before = line.slice(0, match.index);
         if (COMPARED.test(before)) continue;
+        if (PLAIN_CALL_ARGUMENT.test(before)) continue;
         const key = before.match(KEYED)?.[1];
         if (key && !ICON_KEYS.test(key) && !/ICON|SYMBOL|GLYPH/.test(key)) continue;
         add(match[2], `${relative}:${index + 1}`);

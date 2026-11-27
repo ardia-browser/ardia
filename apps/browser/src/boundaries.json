@@ -554,12 +554,12 @@
    ]
   },
   {
-   "id": "webkit-page-listener-count:WebKitLogins.swift",
+   "id": "webkit-page-listener-count:WebKitLogins+Script.swift",
    "source": "page",
    "guard": "Isolated world; trusted pointer or key before a field counts; submit is open (B4)",
    "count": 9,
    "checks": [
-    "packages/ardiacore/ios/WebKitLogins.swift"
+    "packages/ardiacore/ios/WebKitLogins+Script.swift"
    ],
    "findings": [
     "B4"

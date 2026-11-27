@@ -479,12 +479,21 @@
   {
    "id": "webkit-page-message:loginField",
    "source": "frame",
-   "guard": "Main frame only, trusted pointer or key, bound to the page origin; fills only after a native dropdown pick; a Verification code only on https, into an empty, visible code field, and only a code of 4 to 10 letters and digits; a new-password field's maxlength and minlength are clamped to 0 to 1024 and a pattern past 512 characters is dropped (LoginListField.rules); a strong password only into the new-password fields of the field's form"
+   "guard": "Main frame only, trusted pointer or key; the origin is the frame's own (frameInfo), and a page's claimed origin only has to match it; WebKitLoginsReport keeps only a listed event and key, true booleans, a username's typed value (200 UTF-16 units, cut at a character), a rect clamped to finite values within 1e6, and for a new-password field a maxlength and minlength clamped to 0 to 1024 and a pattern of at most 512 UTF-16 units (LoginListField.rules); fills only after a native dropdown pick; a Verification code only on https, into an empty, visible code field, and only a code of 4 to 10 letters and digits; a strong password only into the new-password fields of the field's form",
+   "checks": [
+    "packages/ardiacore/ios/WebKitLoginsReport.swift#static func read",
+    "packages/ardiacore/ios/WebKitLoginsReport.swift#static func frameOrigin",
+    "packages/ardiacore/ios/LoginListField.swift#static func rules"
+   ]
   },
   {
    "id": "webkit-page-message:loginSubmit",
    "source": "frame",
-   "guard": "Main frame only, origin from frameInfo; offers save or update for that origin only. Open: synthetic submit not refused (B4)",
+   "guard": "Main frame only, origin from frameInfo, and a page's claimed origin only has to match it; offers save or update for that origin only; Apple Passwords saves only a non-empty password and a username of at most 1024 UTF-16 units each, with no NUL and no lone surrogate (ApplePasswordsMatch.savable, checked again before every save). Open: synthetic submit not refused (B4)",
+   "checks": [
+    "packages/ardiacore/ios/ApplePasswordsMatch.swift#static func savable",
+    "packages/ardiacore/ios/ApplePasswordsSaving.swift#ApplePasswordsMatch.savable"
+   ],
    "findings": [
     "B4"
    ]

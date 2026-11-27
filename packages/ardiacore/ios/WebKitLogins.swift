@@ -60,10 +60,6 @@ final class WebKitLogins: NSObject {
     return dropdown
   }()
 
-  static func normalized(_ origin: String) -> String {
-    origin.hasSuffix("/") ? String(origin.dropLast()).lowercased() : origin.lowercased()
-  }
-
   private static func verdict(_ use: WebKitPasswordGate.Use, for profile: String, _ done: @escaping (WebKitPasswordGate.Verdict) -> Void) {
     WebKitAutofill.profileToggles(profile) { toggles in
       let verdict = WebKitPasswordGate.verdict(
@@ -78,7 +74,7 @@ final class WebKitLogins: NSObject {
 
   private static func count(_ name: String) { ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": name])) }
 
-  private static func pageOrigin(_ tab: WebKitTab) -> String? { tab.webView?.url.flatMap { Origins.of($0) }.map(normalized) }
+  private static func pageOrigin(_ tab: WebKitTab) -> String? { tab.webView?.url.flatMap { Origins.of($0) }.map(WebKitLoginsReport.normalized) }
 
   private static func secretCall(_ name: String, profile: String, args: [String: Any], done: @escaping ([String: Any]) -> Void) {
     guard var json = try? JSONSerialization.data(withJSONObject: args) else { return done(["error": "bad arguments"]) }
@@ -117,72 +113,57 @@ final class WebKitLogins: NSObject {
   private func exactLogins(profile: String, origin: String, done: @escaping ([Login]) -> Void) {
     ArdiaServices.listPasswords(profile: profile) { value, _ in
       let entries = (value as? [String: Any])?["passwords"] as? [[String: Any]] ?? []
-      let usernames = Set(entries.filter { Self.normalized($0["origin"] as? String ?? "") == origin }.compactMap { $0["username"] as? String })
+      let usernames = Set(entries.filter { WebKitLoginsReport.normalized($0["origin"] as? String ?? "") == origin }.compactMap { $0["username"] as? String })
       let logins = usernames.sorted().map { Login(username: $0, realm: origin + "/", match: "exact") }
       DispatchQueue.main.async { done(logins) }
     }
   }
 
-  static func frameOrigin(_ origin: WKSecurityOrigin, claimed: Any?) -> String? {
-    let scheme = origin.protocol.lowercased()
-    guard scheme == "https" || scheme == "http", !origin.host.isEmpty else { return nil }
-    let frame = normalized(Origins.of(origin))
-    guard let claimed = claimed as? String, normalized(claimed) == frame else { return nil }
-    return frame
-  }
-
   func fieldPressed(_ tab: WebKitTab, data: [String: Any], origin: WKSecurityOrigin) {
-    guard let frame = Self.frameOrigin(origin, claimed: data["origin"]) else { return close(tab) }
-    pressed(tab, data: data, origin: frame)
+    guard let frame = WebKitLoginsReport.frameOrigin(origin, claimed: data["origin"]), let report = WebKitLoginsReport.read(data) else { return close(tab) }
+    pressed(tab, report: report, origin: frame)
   }
 
-  private func pressed(_ tab: WebKitTab, data: [String: Any], origin: String) {
-    switch data["event"] as? String ?? "show" {
-    case "show", "input": show(tab, data: data, origin: origin)
-    case "key": key(tab, data["key"] as? String ?? "")
+  private func pressed(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String) {
+    switch report.event {
+    case "show", "input": show(tab, report: report, origin: origin)
+    case "key": key(tab, report.key)
     case "passwordInput" where LoginList.shared.isShown(for: tab): return
     default: close(tab)
     }
   }
 
-  private func show(_ tab: WebKitTab, data: [String: Any], origin: String) {
+  private func show(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String) {
     ticket += 1
     let asked = ticket
     Self.verdict(.fill, for: tab.profile) { [weak self, weak tab] verdict in
       guard let self, let tab, asked == self.ticket else { return }
       switch verdict {
-      case .ardia where data["code"] as? Bool != true: self.showFilling(tab, data: data, origin: origin)
-      case .applePasswords: self.showApplePasswords(tab, data: data, origin: origin)
+      case .ardia where report.kind != .code: self.showFilling(tab, report: report, origin: origin)
+      case .applePasswords: self.showApplePasswords(tab, report: report, origin: origin)
       default: self.close(tab)
       }
     }
   }
 
-  private static func fieldRect(_ data: [String: Any], in view: WKWebView) -> NSRect {
+  private static func fieldRect(_ page: NSRect, in view: WKWebView) -> NSRect {
     let zoom = view.pageZoom * view.magnification
-    return NSRect(
-      x: (data["x"] as? Double ?? 0) * zoom, y: (data["y"] as? Double ?? 0) * zoom,
-      width: max(1, (data["width"] as? Double ?? 0) * zoom), height: max(1, (data["height"] as? Double ?? 0) * zoom))
+    return NSRect(x: page.minX * zoom, y: page.minY * zoom, width: page.width * zoom, height: page.height * zoom)
   }
 
-  private func showApplePasswords(_ tab: WebKitTab, data: [String: Any], origin: String) {
+  private func showApplePasswords(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String) {
     guard let view = tab.webView, let window = tab.window, Self.pageOrigin(tab) == origin else { return close(tab) }
-    let password = data["password"] as? Bool ?? false
-    let code = data["code"] as? Bool == true
-    let fresh = password && data["newPassword"] as? Bool == true
     var field = LoginListField(
-      frameOrigin: origin, screenRect: window.convertToScreen(tab.convert(Self.fieldRect(data, in: view), to: nil)),
-      trigger: data["event"] as? String == "input" ? .typing : .press, typed: password || code ? "" : data["value"] as? String ?? "",
-      kind: code ? .code : fresh ? .newPassword : .login)
-    if fresh { field.rules = LoginListField.rules(maxLength: data["maxLength"], minLength: data["minLength"], pattern: data["pattern"]) }
+      frameOrigin: origin, screenRect: window.convertToScreen(tab.convert(Self.fieldRect(report.rect, in: view), to: nil)),
+      trigger: report.event == "input" ? .typing : .press, typed: report.typed, kind: report.kind)
+    field.rules = report.rules
     LoginList.shared.show(tab, field: field)
   }
 
-  private func showFilling(_ tab: WebKitTab, data: [String: Any], origin: String) {
+  private func showFilling(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String) {
     guard let view = tab.webView, let url = view.url, let page = Self.pageOrigin(tab), origin == page else { return close(tab) }
-    let rect = Self.fieldRect(data, in: view)
-    let password = data["password"] as? Bool ?? false
-    let current = Field(tab: tab, origin: page, url: url.absoluteString, rect: rect, password: password, typed: password ? "" : data["value"] as? String ?? "")
+    let rect = Self.fieldRect(report.rect, in: view)
+    let current = Field(tab: tab, origin: page, url: url.absoluteString, rect: rect, password: report.password, typed: report.typed)
     field = current
     ticket += 1
     let mine = ticket
@@ -271,7 +252,7 @@ final class WebKitLogins: NSObject {
   }
 
   func submitted(_ tab: WebKitTab, data: [String: Any], origin: WKSecurityOrigin) {
-    guard let frame = Self.frameOrigin(origin, claimed: data["origin"]) else { return }
+    guard let frame = WebKitLoginsReport.frameOrigin(origin, claimed: data["origin"]) else { return }
     submitted(tab, data: data, frame: frame)
   }
 
@@ -287,16 +268,15 @@ final class WebKitLogins: NSObject {
   }
 
   private func submittedToApplePasswords(_ tab: WebKitTab, data: [String: Any], origin: String) {
-    guard let password = data["password"] as? String, !password.isEmpty,
+    guard let (username, password) = ApplePasswordsMatch.savable(username: data["username"], password: data["password"]),
       origin.hasPrefix("https://") || origin.hasPrefix("http://"),
       !neverSaved.contains(origin)
     else { return }
-    let username = data["username"] as? String ?? ""
     let field = Self.submittedField(data["field"])
     let url = Self.pageOrigin(tab) == origin ? tab.webView?.url?.absoluteString ?? origin + "/" : origin + "/"
     let profile = tab.profile
     ArdiaServices.neverSaveOrigins(profile: profile) { [weak self, weak tab] value, _ in
-      let refused = ((value as? [String: Any])?["origins"] as? [String] ?? []).map(Self.normalized)
+      let refused = ((value as? [String: Any])?["origins"] as? [String] ?? []).map(WebKitLoginsReport.normalized)
       DispatchQueue.main.async {
         guard self != nil, !refused.contains(origin) else { return }
         ApplePasswordsSaving.decide(origin: origin, profile: profile, username: username, password: password) { [weak self, weak tab] state in
@@ -342,7 +322,7 @@ final class WebKitLogins: NSObject {
   private func submittedOnExactSite(_ tab: WebKitTab, url: String, origin: String, username: String, password: String, field: [String: String]) {
     let profile = tab.profile
     ArdiaServices.neverSaveOrigins(profile: profile) { [weak self, weak tab] value, _ in
-      let refused = ((value as? [String: Any])?["origins"] as? [String] ?? []).map(Self.normalized)
+      let refused = ((value as? [String: Any])?["origins"] as? [String] ?? []).map(WebKitLoginsReport.normalized)
       DispatchQueue.main.async {
         guard let self, !refused.contains(origin) else { return }
         self.exactLogins(profile: profile, origin: origin) { [weak self, weak tab] logins in

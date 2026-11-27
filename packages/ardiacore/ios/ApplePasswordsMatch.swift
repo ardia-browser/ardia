@@ -22,6 +22,30 @@ enum ApplePasswordsMatch {
 
   static let probeLabel = "a."
 
+  static let savedMax = 1024
+
+  static func savable(username: Any?, password: Any?) -> (username: String, password: String)? {
+    guard let password = password as? NSString, password.length > 0, fits(password) else { return nil }
+    let username = username as? NSString ?? ""
+    guard fits(username) else { return nil }
+    return (username as String, password as String)
+  }
+
+  private static func fits(_ text: NSString) -> Bool {
+    guard text.length <= savedMax else { return false }
+    var i = 0
+    while i < text.length {
+      let unit = text.character(at: i)
+      if unit == 0 || UTF16.isTrailSurrogate(unit) { return false }
+      if UTF16.isLeadSurrogate(unit) {
+        guard i + 1 < text.length, UTF16.isTrailSurrogate(text.character(at: i + 1)) else { return false }
+        i += 1
+      }
+      i += 1
+    }
+    return true
+  }
+
   private static func labels(_ host: String) -> [Substring] { host.split(separator: ".") }
 
   private static func isAddress(_ host: String) -> Bool {

@@ -28,7 +28,7 @@ final class ApplePasswordsSaving: NSObject {
   @objc(decideForOrigin:profile:username:password:completion:)
   static func decide(origin: String, profile: String, username: String, password: String, done: @escaping (String?) -> Void) {
     dispatchPrecondition(condition: .onQueue(.main))
-    guard let (scheme, host) = page(origin) else { return done(nil) }
+    guard let (scheme, host) = page(origin), ApplePasswordsMatch.savable(username: username, password: password) != nil else { return done(nil) }
     let remembered = confirmed[key(scheme, host, username)]
     if remembered == digest(password) { return done(nil) }
     ApplePasswordsClient.shared.logins(host: host) { result in
@@ -52,7 +52,7 @@ final class ApplePasswordsSaving: NSObject {
 
   static func save(origin: String, username: String, password: String, engine: String, done: @escaping (Bool) -> Void) {
     dispatchPrecondition(condition: .onQueue(.main))
-    guard let (scheme, host) = page(origin) else {
+    guard let (scheme, host) = page(origin), ApplePasswordsMatch.savable(username: username, password: password) != nil else {
       count("saveFailed", engine: engine)
       return done(false)
     }

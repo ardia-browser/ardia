@@ -12,30 +12,6 @@ protocol LoginListTarget: AnyObject {
   func loginListConnect()
 }
 
-struct LoginListField {
-  enum Trigger { case press, typing }
-  enum Kind { case login, code, newPassword }
-
-  static let lengthMax = 1024
-  static let patternMax = 512
-
-  let frameOrigin: String
-  let screenRect: NSRect
-  let trigger: Trigger
-  let typed: String
-  var kind: Kind = .login
-  var rules = StrongPassword.Rules()
-
-  static func rules(maxLength: Any?, minLength: Any?, pattern: Any?) -> StrongPassword.Rules {
-    let length = { (value: Any?) -> Int in
-      guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.isFinite else { return 0 }
-      return Int(max(0, min(Double(lengthMax), number.doubleValue.rounded(.down))))
-    }
-    let text = pattern as? String ?? ""
-    return StrongPassword.Rules(minLength: length(minLength), maxLength: length(maxLength), pattern: text.count <= patternMax ? text : "")
-  }
-}
-
 final class LoginList: NSObject {
   static let shared = LoginList()
   static let passwordsApp = "com.apple.Passwords"
@@ -102,7 +78,7 @@ final class LoginList: NSObject {
     return dropdown
   }()
 
-  static func origin(of url: URL?) -> String? { url.flatMap { Origins.of($0) }.map(WebKitLogins.normalized) }
+  static func origin(of url: URL?) -> String? { url.flatMap { Origins.of($0) }.map(WebKitLoginsReport.normalized) }
 
   func isShown(for target: LoginListTarget) -> Bool { dropdown.isShown && shown?.target === target }
 

@@ -115,6 +115,8 @@ async function pairApplePasswords(fake) {
 
 const FIXTURE_CARD = { name: `O'Brien "Q" \\ </script><script>x()</script>`, number: "4111111111111111", expMonth: 7, expYear: 2031 };
 
+const HELPER_MISSING = "Apple Passwords' browser helper is missing from this Mac. Update macOS in System Settings › General › Software Update, then try again.";
+
 const CHROME_ONLY_LOGIN = { username: "chrome-only@example.test", password: "fixture-pw-chrome-only-9" };
 
 async function openSignIn(host, pathname = "/login") {
@@ -334,6 +336,27 @@ const CHECKS = {
     const saved = await waitFor("the login in Apple Passwords", async () => fake.savedLogins().find((l) => l.user === CHROME_ONLY_LOGIN.username) ?? null, 20_000);
     assert(saved.password === CHROME_ONLY_LOGIN.password, "Save puts it in Apple Passwords", { user: saved.user, sites: saved.sites });
     return { state: prompt.state, sites: saved.sites };
+  },
+  async E44() {
+    const missing = path.join(SCRATCH, "E44", "no-such-manifest.json");
+    fs.rmSync(missing, { force: true });
+    await start("E44", { manifest: missing });
+    await app.eval("return ac.applePasswords.loadApplePasswords().then(() => true)");
+    await choose("apple");
+    await until(pairingView, (v) => v.choice === "apple" && v.state === "helperMissing");
+    const seen = {};
+    for (const [engine, tabs] of [["webkit", webkitTabs(app, { log: note })], ["chromium", chromiumTabs(app, { log: note })]]) {
+      const tab = await tabs.open(sites.url("example.localhost"));
+      try {
+        await tab.click("#u");
+        const rows = await tab.waitRows(`the ${engine} Login list`);
+        assert(rows[0]?.notice && rows[0].label === HELPER_MISSING, `the ${engine} Login list says the helper is missing and how to get it back`, rows);
+        seen[engine] = rows[0].label;
+      } finally {
+        await tab.close();
+      }
+    }
+    return seen;
   },
   async cardWebKit() {
     const fake = fakeHelper(path.join(SCRATCH, "cardWebKit", "fake"));

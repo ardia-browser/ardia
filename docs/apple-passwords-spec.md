@@ -181,6 +181,7 @@ Each test is one red → green cycle, written and run one at a time in the order
 | E1 | 1 | In a hidden instance pointed at the fake helper, Pairing with the fixture code reads Connected | the client's framing, SRP and sealing against a peer that checks them | how Apple's helper differs from Yab's reading of it |
 | E2 | 1 | A fake helper that is killed at launch shows "Apple Passwords isn't available" | the refused path | — |
 | E3 | 1 | With no helper manifest, Settings shows how to install it | the missing path | — |
+| E44 | 1 | With Apple Passwords picked and no helper manifest, the Login list's failure row says the helper is missing and how to get it back, in the same words as Settings (both engines) | a dead end with no fix | — |
 | E4 | 1 | A Release build ignores the fake-helper override (the fake writes a marker file when started; none appears) | a shipped way to swap Apple's helper | a build signed differently from the release |
 | E32 | 1 | Picking Apple Passwords in a profile with the iCloud Passwords extension on turns it off and shows the message; "Turn it back on" turns it on; switching back to Ardia turns it on only if Ardia turned it off | two lists on one field; extensions left changed | — |
 

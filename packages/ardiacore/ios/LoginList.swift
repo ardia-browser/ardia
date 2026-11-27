@@ -232,7 +232,7 @@ final class LoginList: NSObject {
     case .notConnected: "Apple Passwords isn't connected."
     case .refused: "Apple Passwords didn't share this site's logins. Unlock the Passwords app and try again."
     case .failed: "Apple Passwords didn't answer. Try again."
-    case .unavailable(.helperMissing): "Apple Passwords' browser helper is missing from this Mac."
+    case .unavailable(.helperMissing): "Apple Passwords' browser helper is missing from this Mac. Update macOS in System Settings › General › Software Update, then try again."
     case .unavailable(.tooOld): "Needs macOS 15.4 or later."
     case .unavailable(.notEntitled): "This copy of Ardia can't use Apple Passwords."
     case .unavailable: "Apple Passwords isn't available on this Mac."

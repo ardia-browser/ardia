@@ -1,4 +1,4 @@
-import { diagnosticsSample, hardwareInfo, onAppEvent, type HardwareInfo } from "../../platform/app";
+import { diagnosticsSample, hardwareInfo, type HardwareInfo } from "../../platform/app";
 import { onHoverLost, onWindowUnpainted, systemState, type HoverLostEpisode, type WindowUnpaintedRecord } from "../../platform/performance";
 import { controlStatus } from "../../platform/control";
 import { call } from "../../platform/engine";
@@ -215,6 +215,11 @@ export function startContextSamples() {
   watchWebuiPage();
 }
 
+export function resumeAfterCancelledQuit() {
+  startContextSamples();
+  dropHeldQuitEpisode();
+}
+
 export function stopContextSamples() {
   clearTimeout(firstSample);
   clearInterval(everySample);
@@ -352,9 +357,6 @@ export function trackWindowUnpainted(r: WindowUnpaintedRecord) {
 export function watchEngineReports() {
   void sendCommittedQuitEpisode();
   onHoverLost(trackHoverLost);
-  onAppEvent((e) => {
-    if (e.type === "quitCancelled") dropHeldQuitEpisode();
-  });
   onConsentPeriodChange(dropQuitEpisodes);
   onWindowUnpainted(trackWindowUnpainted);
 }

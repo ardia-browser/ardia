@@ -12,7 +12,8 @@ import Animated, { cancelAnimation, FadeIn, FadeOut, runOnJS, runOnUI, useAnimat
 import type { GestureType } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { activateRow, cancelSearch, submitSearch, toggleTrayIncognito } from "../../state/browse/store";
-import { copyLink, menuOpenedHaptic, trayRowActions } from "../../state/browse/tabMenus";
+import { copyLink, menuOpenedHaptic, trayRowActions, trayRowHoldAction, type RowAction } from "../../state/browse/tabMenus";
+import { rowMenuItems, useRowConfirm } from "./rowConfirm";
 import { useSearchEditsPage, useSearchFieldVersion, useSearchInitialText, useSearchOpen, useSearchOrigin, useSearchRows, useSearchSession, useSearchText } from "../../state/search/hooks";
 import { SEARCH_ANCHOR_ID, SEARCH_FACE_ID, SEARCH_FIELD_ID, SEARCH_REVEAL_ID, SEARCH_ROWS_REVEAL_ID, setStageMorphs, stageExit, stageOpened, stagePresented, stageSettled, useStageBar } from "../../state/search/stageBar";
 import { SearchStage, SearchStagePanel, searchStageIsNative, type SearchStageHandle, type SearchStageLift } from "../../platform/searchStage";
@@ -42,6 +43,7 @@ import { plateMaterial, SEARCH_PANEL_FACE, useSolidChrome, usesGlass, type Plate
 import { actionWords } from "../../lib/sharedWords";
 import { panelRowLayout, panelTitleLines, SuggestionRow } from "./SuggestionRow";
 import { MaterialSearchTray } from "./MaterialSearchView";
+import { PanelPins, usePanelPins } from "./NewTabPins";
 import { TrayInput, type TrayInputHandle } from "./TrayInput";
 import { canSearchByVoice } from "../../state/voice/store";
 import { presentVoiceSearchFrom } from "./VoiceSearchView";
@@ -53,7 +55,7 @@ import { tabSwitchCuts } from "../../state/browse/tabSwitch";
 import { useKeyboardTopFromBottom } from "./useKeyboardHeight";
 import { chromeInk, chromeLayout, nativeClassicChrome } from "../ui/tokens";
 import { incognitoTheme, type Theme } from "../ui/theme";
-import { searchFieldHeight, searchFieldInnerHeight, searchFieldRadius, searchPanel, searchPanelFieldCenter, searchPanelInk, searchPanelPlace, searchPanelPlacement, searchPanelRadius, searchTrayHeight, type SearchPanelCorners } from "./searchPanelTokens";
+import { searchFieldHeight, searchFieldInnerHeight, searchFieldRadius, searchPanel, searchPanelFieldCenter, searchPanelInk, searchPanelPlace, searchPanelPlacement, searchPanelRadius, searchTrayHeight, type SearchPanelCorners, type SearchPanelPlace } from "./searchPanelTokens";
 import type { Point } from "../../lib/menuPlace";
 
 
@@ -336,7 +338,9 @@ function TrayLayer({ session, closing, standby = false, onClosed }: LayerProps) 
   useLayoutEffect(() => {
     if (!standby) setSearchClearsPagePrefill(arcPanel);
   }, [arcPanel, standby]);
-  const trayHeight = searchTrayHeight({ commandBarMaxHeight: command?.maxHeight ?? null, placement, place, fieldHeight, fontScale: window.fontScale, rowsHeight, windowHeight: window.height, safeTop: insets.top, resting });
+  const baseTrayHeight = searchTrayHeight({ commandBarMaxHeight: command?.maxHeight ?? null, placement, place, fieldHeight, fontScale: window.fontScale, rowsHeight, windowHeight: window.height, safeTop: insets.top, resting });
+  const pinsBlock = usePanelPins({ closing, room: arcPanel && !standby && furnished ? pinsRoom(window.height, insets.top, place, resting, baseTrayHeight) : 0 });
+  const trayHeight = baseTrayHeight + pinsBlock.height;
   const extend = placement === "underKeyboard" ? window.height : 0;
   const closedOnPressIn = useRef(false);
   const closeFromTouch = (): boolean => {
@@ -611,6 +615,7 @@ function TrayLayer({ session, closing, standby = false, onClosed }: LayerProps) 
           <SearchPanelFace incognito={incognito} dark={theme.dark} panelRadius={panelRadius} corners={corners} waiting={standby || !furnished} />
           <View style={[styles.clip, panelCornerStyle(panelRadius, corners), { height: trayHeight }]}>
             <SearchPanelContext.Provider value={arcPanel}>
+              <PanelPins block={pinsBlock} closing={closing} onLeave={beginDeparture} />
               <GestureDetector gesture={dismissDrag}>
                 <View collapsable={false}>
                   <TrayField key={fieldKey} closing={closing} standby={standby} reveal={fieldKey === "kept" ? fieldReveal : undefined} />
@@ -662,6 +667,8 @@ function TrayLayer({ session, closing, standby = false, onClosed }: LayerProps) 
 }
 
 
+const pinsRoom = (windowHeight: number, safeTop: number, place: SearchPanelPlace, resting: number, baseTrayHeight: number) => Math.max(0, windowHeight - safeTop - place.gapAbove - resting - place.gapAboveKeyboard - baseTrayHeight);
+
 let knownLift = 0;
 let knownFieldHeight = 0;
 let knownRowsHeight = 0;
@@ -712,7 +719,9 @@ function StagedTray() {
   const placement = searchPanelPlacement(arcPanel, command !== null);
   const place = searchPanelPlace(placement, resting);
   const corners = place.corners;
-  const trayHeight = searchTrayHeight({ commandBarMaxHeight: command?.maxHeight ?? null, placement, place, fieldHeight, fontScale: window.fontScale, rowsHeight, windowHeight: window.height, safeTop: insets.top, resting });
+  const baseTrayHeight = searchTrayHeight({ commandBarMaxHeight: command?.maxHeight ?? null, placement, place, fieldHeight, fontScale: window.fontScale, rowsHeight, windowHeight: window.height, safeTop: insets.top, resting });
+  const pinsBlock = usePanelPins({ closing, room: mounted !== null && arcPanel && command === null ? pinsRoom(window.height, insets.top, place, resting, baseTrayHeight) : 0 });
+  const trayHeight = baseTrayHeight + pinsBlock.height;
   const underKeyboard = place.underKeyboard;
   const morphs = phoneLayout && !reduceMotion && command === null && pills > 0;
   live.current.morphs = morphs;
@@ -967,11 +976,11 @@ function StagedTray() {
       focusNativeId={SEARCH_FIELD_ID}
       revealNativeId={SEARCH_REVEAL_ID}
       rowsRevealNativeId={SEARCH_ROWS_REVEAL_ID}
-      fieldCenter={searchPanelFieldCenter(fieldHeight)}
+      fieldCenter={searchPanelFieldCenter(fieldHeight) + pinsBlock.height}
       cardInset={place.cardInset}
       cardGap={place.cardGap}
       fieldInset={place.fieldInset}
-      fieldTop={place.fieldTop}
+      fieldTop={place.fieldTop + pinsBlock.height}
       commandTop={command ? command.top : null}
       landsDirectly={landsDirectly}
       morphLook={morphLook}
@@ -1013,6 +1022,7 @@ function StagedTray() {
                   <TrayContentContext.Provider value={measuredRows}>
                   <SearchPanelContext.Provider value={arcPanel}>
                     <TrayListContext.Provider value={arcPanel ? trayList : null}>
+                    <PanelPins block={pinsBlock} closing={closing} anchorShift={lift.up ? -lift.lift : 0} />
                     <StagedFieldContext.Provider value={field}>
                       <GestureDetector gesture={dismissDrag}>
                         <View collapsable={false}>
@@ -1292,15 +1302,21 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
   const [bottoms, setBottoms] = useState<number[]>([]);
   const refine = useCallback((row: TrayRow) => setSearchText(refinedText(row)), []);
   const [menu, setMenu] = useState<{ row: TrayRow; at: Point } | null>(null);
+  const confirm = useRowConfirm();
   const menuOpen = menu !== null;
   useEffect(() => (menuOpen ? coverTray() : undefined), [menuOpen]);
   const window = useWindowDimensions();
   const keyboardTop = useKeyboardTopFromBottom();
-  const showMenu = useCallback((row: TrayRow, at: Point) => {
-    if (!trayRowActions(row).length) return;
-    menuOpenedHaptic();
-    setMenu({ row, at });
-  }, []);
+  const showMenu = useCallback(
+    (row: TrayRow, at: Point) => {
+      const hold = trayRowHoldAction(row);
+      if (!hold && !trayRowActions(row).length) return;
+      menuOpenedHaptic();
+      if (hold) confirm.choose(hold);
+      else setMenu({ row, at });
+    },
+    [confirm.choose],
+  );
   const arc = useContext(SearchPanelContext);
   const list = useContext(TrayListContext);
   const reportRows = useContext(TrayContentContext);
@@ -1346,9 +1362,9 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
       </GestureDetector>
     );
   }
-  const menuView = menu ? (
+  const floatingMenu = menu ? (
     <FloatingMenu
-      items={trayRowActions(menu.row).map((action) => ({ label: action.label, icon: action.icon, onPress: action.run }))}
+      items={rowMenuItems(trayRowActions(menu.row), confirm.choose)}
       at={menu.at}
       floor={keyboardTop ? window.height - keyboardTop : undefined}
       dimmed
@@ -1357,19 +1373,25 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
       onDismiss={() => setMenu(null)}
     />
   ) : null;
+  const menuView = (
+    <>
+      {floatingMenu}
+      {confirm.dialog}
+    </>
+  );
   const measure = (index: number, layout: { y: number; height: number }) => {
     const bottom = layout.y + layout.height;
     setBottoms((known) => (known[index] === bottom ? known : Object.assign([...known], { [index]: bottom })));
   };
   const rowViews = rows.map((row, index) => (
     <View key={index} onLayout={arc ? undefined : (event) => measure(index, event.nativeEvent.layout)}>
-      <SuggestionRow row={row} typed={typed} roles={theme} menu={trayRowActions(row)} onActivate={leaving.activate} onRefine={refine} onMenu={showMenu} />
+      <SuggestionRow row={row} typed={typed} roles={theme} menu={confirm.guarded(trayRowActions(row))} onActivate={leaving.activate} onRefine={refine} onMenu={showMenu} />
     </View>
   ));
   if (window.fontScale <= LARGE_FONT_SCALE && !arc) {
     return (
       <Animated.View key="rows" testID="trayRows" entering={resultsIn} exiting={resultsOut} style={styles.rows} onLayout={(event) => setRoom(event.nativeEvent.layout.height)}>
-        <ScrubbedRows rows={rows} typed={typed} budget={room} onRefine={refine} onMenu={showMenu} onContentHeight={(height) => reportRowsHeight(reportRows, height)} />
+        <ScrubbedRows rows={rows} typed={typed} budget={room} guard={confirm.guarded} onRefine={refine} onMenu={showMenu} onContentHeight={(height) => reportRowsHeight(reportRows, height)} />
         {menuView}
       </Animated.View>
     );
@@ -1457,10 +1479,11 @@ type ScrubbedProps = {
   budget: number;
   onRefine: (row: TrayRow) => void;
   onMenu: (row: TrayRow, at: Point) => void;
+  guard: (actions: readonly RowAction[]) => RowAction[];
   onContentHeight: (height: number) => void;
 };
 
-function ScrubbedRows({ rows, typed, budget, onRefine, onMenu, onContentHeight }: ScrubbedProps) {
+function ScrubbedRows({ rows, typed, budget, guard, onRefine, onMenu, onContentHeight }: ScrubbedProps) {
   const leaving = useLeavingActions();
   const theme = useTrayTheme();
   const latest = useRef({ rows, budget });
@@ -1495,7 +1518,7 @@ function ScrubbedRows({ rows, typed, budget, onRefine, onMenu, onContentHeight }
     [onMenu],
   );
   const incognito = useIncognito();
-  const menus = useMemo(() => rows.map(trayRowActions), [rows, incognito]);
+  const menus = useMemo(() => rows.map((row) => guard(trayRowActions(row))), [rows, incognito, guard]);
 
   const gesture = useMemo(
     () =>

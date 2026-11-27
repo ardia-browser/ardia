@@ -136,15 +136,15 @@ onIos("with sync on and nothing from the Mac yet, Spaces shows the shared loadin
   unmount(root);
 });
 
-onIos("the header's Archive and Done faces and the page dots are rounded rectangles, and Done dismisses as the other sheets' Done does", async () => {
+onIos("the header's Archive face is a circle, Done and the page dots are capsules, and Done dismisses as the other sheets' Done does", async () => {
   withProfiles([profile("work", "Work"), profile("home", "Home")]);
   const root = renderSurface(<Surfaces />);
   await open();
   const surfaces = hosts(spacesSheet(root), (props) => Array.isArray(props.modifiers)).flatMap((node) => (node.props.modifiers as { $type: string; shape?: string }[]).filter((modifier) => modifier.$type === "ardia.chromeSurface"));
   expect(surfaces).toHaveLength(2);
-  expect(surfaces.every((modifier) => modifier.shape === "rounded")).toBe(true);
+  expect(surfaces.map((modifier) => modifier.shape)).toEqual(["circle", "capsule"]);
   const dots = spacesSheet(root).findAll((node) => node.props.count === 2 && Array.isArray(node.props.modifiers))[0]!;
-  expect((dots.props.modifiers as { $type: string; shape?: string }[]).filter((modifier) => modifier.$type === "ardia.chromeSurface")).toEqual([expect.objectContaining({ shape: "rounded" })]);
+  expect((dots.props.modifiers as { $type: string; shape?: string }[]).filter((modifier) => modifier.$type === "ardia.chromeSurface")).toEqual([expect.objectContaining({ shape: "capsule" })]);
   expect(hosts(spacesSheet(root), (props) => props.label === "Close" || props.symbol === "xmark")).toHaveLength(0);
   const labelled = (label: string) => hosts(spacesSheet(root), (props) => Array.isArray(props.modifiers) && (props.modifiers as { $type: string; label?: string }[]).some((modifier) => modifier.$type === "accessibilityLabel" && modifier.label === label))[0]!;
   expect(labelled("Archive")).toBeDefined();

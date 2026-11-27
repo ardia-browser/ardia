@@ -14,7 +14,7 @@ import { dedupeByLanding, displayHost, landingKey } from "../../lib/url.ts";
 import type { PasteOffer } from "./pasteRow.ts";
 
 export type TrayRow =
-  | { key: string; kind: "query"; title: string; url: string; query: string; detail?: string | null }
+  | { key: string; kind: "query"; title: string; url: string; query: string; detail?: string | null; past?: boolean }
   | { key: string; kind: "page"; title: string; detail: string; url: string; favicon: string | null; tabId: string | null; switchesTab: boolean; fromMac?: string | null }
   | { key: string; kind: "calc"; title: string; detail: string; url: string; value: string }
   | { key: string; kind: "paste"; title: string; detail: string; url: string; offer: PasteOffer }

@@ -225,8 +225,10 @@ export async function pinToMac(tab: BrowserTab, onSetup: () => void, showInTitle
   announce(pinned ? "pinned" : "failed");
 }
 
+export const opensRemotely = (url: string) => /^https?:\/\//i.test(url);
+
 export function openRemote(url: string, title: string, profileSyncId: string | null, pinnedKey: string | null = null) {
-  if (!/^https?:\/\//i.test(url)) return;
+  if (!opensRemotely(url)) return;
   useBrowse.setState({ sheet: null });
   setIncognito(false);
   if (profileSyncId && syncData().status.isEnabled && profileSyncId !== selectedProfileId()) selectProfile(profileSyncId);

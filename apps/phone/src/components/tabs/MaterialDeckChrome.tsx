@@ -18,6 +18,8 @@ import { useKeyboardHeight } from "../search/useKeyboardHeight";
 import { useSearchTabs } from "./DeckBottomBar";
 import { deckMoreMenuItems, useDeckSpaces } from "./DeckHeader";
 import { MATERIAL_DECK, useDeckScheme } from "./MaterialDeckLayout";
+import { dotBesideGlyph, NoticeDot, withUpdateWords } from "../settings/UpdateDot";
+import { useUpdateDot } from "../../state/appUpdate/store";
 
 export { MaterialBarIconButton as MaterialIconButton } from "../ui/MaterialBottomBar";
 
@@ -61,12 +63,13 @@ type TopBarProps = Menus & { safeTop: number; safeSide: number; incognito: boole
 
 export function MaterialDeckTopBar({ safeTop, safeSide, incognito, privateCount, hasTabs, chromeStyle, onCloseIncognito, onCloseAll, menusShown, onMenu }: TopBarProps) {
   const scheme = useDeckScheme(incognito);
+  const updateDot = useUpdateDot();
   const canReopen = useCanReopen();
   const { syncEnabled, spaces, current, spaceItems } = useDeckSpaces();
   const side = safeSide + MATERIAL_DECK.barSide;
   const below = safeTop + materialSize.topAppBar;
   const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, privately: incognito, onOpen: () => onMenu(true), onClose: () => onMenu(false) };
-  const moreItems = deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll, material: true });
+  const moreItems = deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll, material: true, updateDot });
   const title = current?.name ?? "Tabs";
   return (
     <Animated.View testID="materialDeckTopBar" pointerEvents="box-none" style={[styles.topBar, { paddingTop: safeTop, height: safeTop + materialSize.topAppBar, paddingHorizontal: side }, chromeStyle]}>
@@ -97,7 +100,12 @@ export function MaterialDeckTopBar({ safeTop, safeSide, incognito, privateCount,
         )}
       </View>
       <MenuTrigger items={moreItems} {...menu} place={{ top: below, right: side }}>
-        {({ onPress }) => <MaterialIconButton testID="materialDeckMore" icon="ellipsis" label={actionWords.more} scheme={scheme} turned onPress={onPress ?? noop} />}
+        {({ onPress }) => (
+          <View>
+            <MaterialIconButton testID="materialDeckMore" icon="ellipsis" label={withUpdateWords(actionWords.more, updateDot)} scheme={scheme} turned onPress={onPress ?? noop} />
+            {updateDot ? <NoticeDot style={dotBesideGlyph(materialSize.touchTarget)} /> : null}
+          </View>
+        )}
       </MenuTrigger>
     </Animated.View>
   );

@@ -75,7 +75,7 @@ cat > "$base/README.md" <<'README'
 Every build fetches, detaches it at the requested commit and resets it there; untracked files are removed, and only
 the build outputs Git ignores stay. Never edit, commit or push from here: all work happens in the main checkout on
 the Mac. `apps/phone/scripts/corex-test` runs the Kotlin unit tests here too: it may apply a diff from the main
-checkout for one run and resets the clone when it ends. Both hold `clone.lock`. `tools/` holds the branch head's `apps/phone/scripts` and `apps/phone/test/r8`, rewritten every build.
+checkout for one run and resets the clone when it ends. Both hold `clone.lock`. `tools/` holds the branch head's `apps/phone/scripts`, `apps/phone/src/lib/androidRelease.ts` (which android-version.ts imports) and `apps/phone/test/r8`, rewritten every build.
 `pnpm-<version>/` is the pinned pnpm, `sdk-view/` the pinned apkanalyzer in an SDK layout that links the shared
 SDK's parts, and `tmp/` holds the bundle exports.
 APKs go to `~/Developer/ardia-phone-apks/`.
@@ -94,7 +94,9 @@ git -C "$src" clean -ffdq
 [ -z "$(git -C "$src" status --porcelain)" ] || { echo "the build clone isn't clean at $commit" >&2; exit 1; }
 rm -rf "$tools"
 mkdir -p "$tools"
-git -C "$src" archive "$head" apps/phone/scripts apps/phone/test/r8 | tar -x -C "$tools"
+toolPaths=(apps/phone/scripts apps/phone/test/r8)
+if git -C "$src" cat-file -e "$head:apps/phone/src/lib/androidRelease.ts" 2>/dev/null; then toolPaths+=(apps/phone/src/lib/androidRelease.ts); fi
+git -C "$src" archive "$head" "${toolPaths[@]}" | tar -x -C "$tools"
 sdkView="$base/sdk-view"
 mkdir -p "$sdkView/cmdline-tools"
 for part in build-tools platform-tools platforms; do

@@ -8,6 +8,7 @@ import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup
 import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, rolesFor, ToggleRow as SharedToggleRow, Tappable, smoothCorners, slotAround, controlSize, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
 import { useMaterialTheme } from "../ui/materialTheme";
 import { revealInList, type SettingsReveal } from "./settingsReveal";
+import { NoticeDot, withUpdateWords } from "./UpdateDot";
 
 export const SettingsHostedContext = createContext(false);
 export const SettingsFormColorsContext = createContext<ReturnType<typeof rolesFor> | null>(null);
@@ -227,18 +228,19 @@ function ClassicDivider({ inset = settingsLayout.rowInset }: { inset?: number })
 
 type RowBase = { title: string; icon?: SymbolName; tint?: string; divider?: boolean };
 
-function ClassicNavRow({ title, icon, tint, value, detail, chevron = true, divider, onPress }: RowBase & { value?: string; detail?: string; chevron?: boolean; onPress: () => void }) {
+function ClassicNavRow({ title, icon, tint, value, detail, chevron = true, divider, dot = false, valueActs = false, onPress }: RowBase & { value?: string; detail?: string; chevron?: boolean; dot?: boolean; valueActs?: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
     <View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={detail ? `${title}, ${detail}` : title}
+        accessibilityLabel={withUpdateWords(detail ? `${title}, ${detail}` : title, dot)}
         accessibilityValue={value ? { text: value } : undefined}
         onPress={onPress} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
         <Label title={title} icon={icon} tint={tint} detail={detail} />
+        {dot ? <NoticeDot /> : null}
         {value ? (
-          <Text style={[font.body, styles.value, { color: theme.secondaryLabel }]} numberOfLines={1}>
+          <Text style={[font.body, styles.value, { color: valueActs ? theme.formAccent : theme.secondaryLabel }]} numberOfLines={1}>
             {value}
           </Text>
         ) : null}

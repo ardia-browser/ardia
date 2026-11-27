@@ -67,6 +67,7 @@ import { useMaterialTheme } from "./components/ui/materialTheme";
 import type { Design } from "./lib/design";
 import { onMaterialBackSwiped } from "./components/ui/MaterialSurfaces";
 import { useTabs } from "./state/tabs/store";
+import { startUpdateChecks } from "./state/appUpdate/store";
 
 export default function App() {
   useState(() =>
@@ -92,6 +93,7 @@ export default function App() {
     const frame = requestAnimationFrame(() => {
       if (Platform.OS === "android") followDynamicScheme();
       void reportLaunch(Date.now());
+      startUpdateChecks();
     });
     return () => cancelAnimationFrame(frame);
   }, [ready]);

@@ -16,6 +16,7 @@ import { Portal } from "./Overlay";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
 import { dismissWords } from "../../lib/sharedWords";
+import { floatingPanelLayout } from "./tokens";
 
 const HIDE_FALLBACK_MS = 900;
 const SHEET_TOP_GAP = materialSize.topAppBar;
@@ -131,6 +132,13 @@ export function MaterialSwitchTrack({ value, disabled }: { value: boolean; disab
     </Animated.View>
   );
 }
+
+export const materialSheetFrame = (expanded: number, searching: number, across: number, sheetWidth: number, width: number, safeLeft: number) => {
+  "worklet";
+  const centred = safeLeft + (across - sheetWidth) / 2;
+  const side = Math.max(floatingPanelLayout.inset - (across - sheetWidth) / 2, 0) * searching * (1 - expanded);
+  return { left: centred * (1 - expanded) + side, width: sheetWidth + (width - sheetWidth) * expanded - side * 2 };
+};
 
 export const materialSheetMs = (reduceMotion: boolean, entering: boolean) =>
   reduceMotion ? reducedMotionMs(materialDuration.short3) : entering ? materialMotion.sheetEnter.durationMs : materialMotion.sheetExit.durationMs;
@@ -307,8 +315,7 @@ export function MaterialSheet({ open, onDismiss, onTapAway, onBack, onHidden, ex
     return {
       height: searching || progress > 0 ? liveSheetHeight.value : undefined,
       maxHeight: searching || progress > 0 ? height : maxHeight,
-      left: (insets.left + (across - sheetWidth) / 2) * (1 - progress),
-      width: sheetWidth + (width - sheetWidth) * progress,
+      ...materialSheetFrame(progress, searchProgress.value, across, sheetWidth, width, insets.left),
       paddingTop: insets.top * progress,
       paddingLeft: insets.left * progress,
       paddingRight: insets.right * progress,
@@ -319,8 +326,7 @@ export function MaterialSheet({ open, onDismiss, onTapAway, onBack, onHidden, ex
   });
   const dockedBarStyle = useAnimatedStyle(() => {
     const expanded = expansion.value;
-    const panelLeft = (insets.left + (across - sheetWidth) / 2) * (1 - expanded);
-    const panelWidth = sheetWidth + (width - sheetWidth) * expanded;
+    const { left: panelLeft, width: panelWidth } = materialSheetFrame(expanded, searchProgress.value, across, sheetWidth, width, insets.left);
     const barSide = search?.barSide ?? Math.max(insets.left, insets.right) + materialBottomBar.edge + materialBottomBar.pad + materialSize.touchTarget + materialBottomBar.gap;
     const bottom = insets.bottom + materialBottomBar.inset + (materialBottomBar.height - materialBottomBar.field) / 2;
     const dockInset = materialSize.touchTarget + insets.top * expanded;

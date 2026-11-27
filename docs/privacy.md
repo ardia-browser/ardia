@@ -143,7 +143,7 @@ domain reliability, GCM). Each row cites the file that turns it off and a litera
 | Helium's translation providers | Page text sent to a translation provider | `engine/patches/chromium-helium-translate-providers-off.patch` | `HasTranslationProvider`, `return false;` |
 | Helium's search engine assets | Non-free search engine icons fetched at build time | `engine/patches/chromium-helium-search-assets-off.patch` | `enable_builtin_search_provider_assets = is_internal_chrome_branded` |
 | Helium's crash upload prompt (`crash.helium.computer`) | An infobar asking to upload crashes | `engine/patches/build/03-helium.py` | `crash-dialog.patch` |
-| Helium's Sparkle updater in the engine | A second updater inside the framework | `engine/patches/build/03-helium.py` | `sparkle-integration.patch` |
+| Helium's Sparkle updater in the engine | A second updater inside the framework | `engine/patches/build/03-helium.py` | `sparkle-glue.patch` |
 | Component updater, everything but security components | Widevine, hints, models and other downloads | `engine/patches/chromium-component-updater-security-only.patch` | `kCrlSetId`, `kComponentDownloadHost` |
 | Gemini in Chrome (Glic) and contextual cueing | Google's in-browser assistant | `engine/ardiacore/src/ardia/core/ac_main_delegate.cc` | `Glic,GlicActor` |
 | Proxy and remote debugging switches | Command-line routes around the system proxy and into the profile | `engine/ardiacore/src/ardia/core/ac_main_delegate.cc` | `proxy-server` |

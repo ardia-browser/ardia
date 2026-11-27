@@ -6,7 +6,6 @@ import { useLive } from "../live/store";
 import { liveActiveTab, liveItemTab, liveStrays } from "./liveRows";
 import type { Tab } from "../browser/types";
 import { awayFromPin } from "../pins/organize";
-import { cleanedTabsFor } from "../pins/closedTabs";
 import { groupLabel } from "../pins/tabGrouping";
 import { offersTidyTabs } from "../pins/tidy";
 import { folderIn } from "../pins/tileFolders";
@@ -74,8 +73,6 @@ export const useSidebarCells = (windowId: string, profileId: string, offScreen: 
   useBrowser((s) => (offScreen ? NO_CELLS : sidebarEntries(s, windowId, profileId).cells));
 
 export const useOffersTidyTabs = (windowId: string, profileId: string, skip: boolean) => useBrowser((s) => !skip && offersTidyTabs(s, windowId, profileId));
-
-export const useCleanedCount = (windowId: string) => useBrowser((s) => cleanedTabsFor(s, windowId).length);
 
 export const useShownTabId = (windowId: string) => useBrowser((s) => activeTabId(s, windowId));
 

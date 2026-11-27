@@ -6,7 +6,8 @@ import { inlineOffer } from "../../lib/inlineOffer";
 import { trayMaxHeight } from "../../lib/trayMotion";
 import { MaterialSearchBar, type MaterialSearchBarHandle } from "../../platform/completingField";
 import { activateRow, cancelSearch, submitSearch, toggleTrayIncognito } from "../../state/browse/store";
-import { menuOpenedHaptic, trayRowActions } from "../../state/browse/tabMenus";
+import { menuOpenedHaptic, trayRowActions, trayRowHoldAction } from "../../state/browse/tabMenus";
+import { rowMenuItems, useRowConfirm } from "./rowConfirm";
 import { useSurface } from "../../state/browse/hooks";
 import { useSearchCompletedFor, useSearchCompletion, useSearchFieldVersion, useSearchFromDockedMenu, useSearchInitialText, useSearchOpen, useSearchRows, useSearchSession, useSearchText } from "../../state/search/hooks";
 import { refinedText, type TrayRow } from "../../state/search/omnibox";
@@ -28,6 +29,7 @@ import { MaterialSheet, materialSheetMs, type MaterialSheetSearch } from "../ui/
 import { useMaterialTheme } from "../ui/materialTheme";
 import { MATERIAL_SEGMENT_GAP, materialBottomBar, materialDuration, materialSegmentCorners, materialShape, materialSize, materialType } from "../ui/materialTokens";
 import { SuggestionRow } from "./SuggestionRow";
+import { NewTabPins } from "./NewTabPins";
 
 const SHEET_ABOVE_KEYBOARD = 340;
 const FOCUS_AFTER_ENTER_MS = 32;
@@ -197,14 +199,20 @@ export function MaterialSearchResults({ scrollY }: { scrollY: SharedValue<number
   const rows = useSearchRows();
   const typed = useSearchText();
   const [menu, setMenu] = useState<{ row: TrayRow; at: Point } | null>(null);
+  const confirm = useRowConfirm();
   const menuOpen = menu !== null;
   useEffect(() => (menuOpen ? coverTray() : undefined), [menuOpen]);
   const refine = useCallback((row: TrayRow) => setSearchText(refinedText(row)), []);
-  const showMenu = useCallback((row: TrayRow, at: Point) => {
-    if (!trayRowActions(row).length) return;
-    menuOpenedHaptic();
-    setMenu({ row, at });
-  }, []);
+  const showMenu = useCallback(
+    (row: TrayRow, at: Point) => {
+      const hold = trayRowHoldAction(row);
+      if (!hold && !trayRowActions(row).length) return;
+      menuOpenedHaptic();
+      if (hold) confirm.choose(hold);
+      else setMenu({ row, at });
+    },
+    [confirm.choose],
+  );
   if (incognito && !typed.trim())
     return (
       <View testID="materialSearchIncognitoNote" style={[styles.group, styles.note, materialSegmentCorners(0, 1), { backgroundColor: scheme.surfaceContainer }]}>
@@ -216,6 +224,7 @@ export function MaterialSearchResults({ scrollY }: { scrollY: SharedValue<number
   return (
     <View testID="materialSearchResults" style={styles.results}>
       <Animated.ScrollView bounces={false} overScrollMode="never" testID="materialSearchRows" onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
+        <NewTabPins />
         {rows.length ? (
           <View testID="materialSearchGroup" style={[styles.group, styles.segments]}>
             {rows.map((row, index) => (
@@ -224,7 +233,7 @@ export function MaterialSearchResults({ scrollY }: { scrollY: SharedValue<number
                 testID="materialSearchSegment"
                 style={[styles.segment, materialSegmentCorners(index, rows.length)]}
               >
-                <SuggestionRow row={row} typed={typed} roles={rowRoles} menu={trayRowActions(row)} onActivate={activateRow} onRefine={refine} onMenu={showMenu} />
+                <SuggestionRow row={row} typed={typed} roles={rowRoles} menu={confirm.guarded(trayRowActions(row))} onActivate={activateRow} onRefine={refine} onMenu={showMenu} />
               </View>
             ))}
           </View>
@@ -232,7 +241,7 @@ export function MaterialSearchResults({ scrollY }: { scrollY: SharedValue<number
       </Animated.ScrollView>
       {menu ? (
         <FloatingMenu
-          items={trayRowActions(menu.row).map((action) => ({ label: action.label, icon: action.icon, onPress: action.run }))}
+          items={rowMenuItems(trayRowActions(menu.row), confirm.choose)}
           at={menu.at}
           dimmed
           frost={null}
@@ -240,6 +249,7 @@ export function MaterialSearchResults({ scrollY }: { scrollY: SharedValue<number
           onDismiss={() => setMenu(null)}
         />
       ) : null}
+      {confirm.dialog}
     </View>
   );
 }

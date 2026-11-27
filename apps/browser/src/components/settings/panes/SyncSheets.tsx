@@ -336,7 +336,7 @@ export function showStopSync() {
 function StopSheet() {
   return (
     <Sheet size="s" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle={`Syncing will stop on this device. To re-enable sync, you’ll need another device that is currently syncing, or the recovery phrase from your Recovery Kit. Everything on this ${PLATFORM_TERMS.computer} stays as it is.`}>
+      <DialogTitle subtitle={`Syncing will stop on this device. To sync with your other devices again, you’ll need one that is still syncing, or the recovery phrase from your Recovery Kit. You can also set up sync from scratch in an empty folder. Everything on this ${PLATFORM_TERMS.computer} stays as it is.`}>
         Stop Syncing This Device?
       </DialogTitle>
       <DialogActions leading={<Button title="Save Recovery Kit" onPress={() => showSettingsSheet(<RecoveryKitSheet />)} />}>

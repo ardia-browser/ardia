@@ -24,6 +24,8 @@ import { spaceMenuSymbol, SpaceTitle } from "../search/StartSpaces";
 import { DUO } from "./duoLayout";
 import { DuoAddressField, useTabPrivate } from "./DuoToolbar";
 import { CLOSE_TAB } from "../tabs/tabCard";
+import { dotBesideGlyph, NoticeDot, withUpdateWords } from "../settings/UpdateDot";
+import { useUpdateDot } from "../../state/appUpdate/store";
 
 export type DuoSidebarVariant = "overlay" | "panel";
 
@@ -111,6 +113,7 @@ const noop = () => undefined;
 
 function MoreMenu({ dark, hasTabs, syncEnabled, onCloseAll }: { dark: boolean; hasTabs: boolean; syncEnabled: boolean; onCloseAll: () => void }) {
   const canReopen = useCanReopen();
+  const updateDot = useUpdateDot();
   const items: MenuItem[] = [
     { label: destinationWords.archive, icon: "archivebox", onPress: openArchive },
     ...(syncEnabled ? [{ label: destinationWords.spaces, icon: "macAndPhone" as const, onPress: openSpaces }] : []),
@@ -119,13 +122,14 @@ function MoreMenu({ dark, hasTabs, syncEnabled, onCloseAll }: { dark: boolean; h
     ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
     ...(hasTabs ? [{ label: "Close All Tabs", icon: "xmark" as const, destructive: true, onPress: onCloseAll }] : []),
     "divider",
-    { label: destinationWords.settings, icon: "gearshape", onPress: () => openSettings() },
+    { label: destinationWords.settings, icon: "gearshape", dot: updateDot, onPress: () => openSettings() },
   ];
   return (
     <MenuTrigger frost={null} items={items} trigger="tap" fixedOrder haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }}>
       {({ onPress }) => (
-        <Tappable testID="duoSidebarMore" kind="icon" label={actionWords.more} onPress={onPress ?? noop} style={styles.headerButton}>
+        <Tappable testID="duoSidebarMore" kind="icon" label={withUpdateWords(actionWords.more, updateDot)} onPress={onPress ?? noop} style={styles.headerButton}>
           <Symbol name={iconRoles.more} size={DUO.sidebarMoreGlyph} color={rolesFor(dark).foregroundPrimary} />
+          {updateDot ? <NoticeDot style={dotBesideGlyph(DUO.hitTarget)} /> : null}
         </Tappable>
       )}
     </MenuTrigger>

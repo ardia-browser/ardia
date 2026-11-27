@@ -110,7 +110,8 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
   `settings.mutedSites`; a private window's mutes stay in `privateSiteMutes[windowId]`, in memory; a tab is silent if either is on, `isSilenced` in state/tabs/mute.ts), `groupTabs` (pinned by default, like Dia), `moveGroup`, `duplicateGroup`, `newTabInGroup`,
   `closeGroup` → `closedGroups` (History › Recently Closed Groups; `restoreClosed` takes their ids), `moveGroupToBookmarksBar`,
   `cleanUpTabs` → `cleanedTabs` / `restoreCleaned(entryId?, windowId?)` (a private window's go to `privateCleanedTabs[windowId]`,
-  in memory, and only back into that window; read either with `cleanedTabsFor(s, windowId)`), `closeAbandonedNewTabs`. `newTab` with `openerId` + `background` (⌘-click)
+  in memory, and only back into that window; read either with `cleanedTabsFor(s, windowId)`), `clearUnpinnedTabs` and `closeDuplicateTabs` (state/pins/duplicateTabs.ts) →
+  `ClearedTabs`, put back with `undoClearTabs`, `closeAbandonedNewTabs`. `newTab` with `openerId` + `background` (⌘-click)
   joins the opener's group (`settings.cmdClickCreatesTabGroup`). Sidebar UI lives in components/sidebar/.
 - Profiles: `createProfile` (`shareWith`: share another profile's data), `updateProfile`, `deleteProfile`, `reorderProfiles`, `setDefaultProfile`.
   `deleteProfile` queues engine data no profile uses any more in `orphanedProfileData` (saved); state/profiles/profileData.ts deletes it

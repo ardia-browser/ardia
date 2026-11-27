@@ -207,15 +207,24 @@ enum WebKitPageScript {
       },
       true,
     );
-  const pip = (on) => post("pip", { active: on });
-  document.addEventListener("enterpictureinpicture", () => pip(true), true);
-  document.addEventListener("leavepictureinpicture", () => pip(false), true);
+  let pipVideo = null;
+  const pip = (video, on) => {
+    if (on ? pipVideo === video : pipVideo !== video) return;
+    pipVideo = on ? video : null;
+    post("pip", { active: on });
+  };
+  document.addEventListener("enterpictureinpicture", (e) => pip(e.target, true), true);
+  document.addEventListener("leavepictureinpicture", (e) => pip(e.target, false), true);
   document.addEventListener(
     "webkitpresentationmodechanged",
-    (e) => e.target instanceof HTMLVideoElement && pip(e.target.webkitPresentationMode === "picture-in-picture"),
+    (e) => e.target instanceof HTMLVideoElement && pip(e.target, e.target.webkitPresentationMode === "picture-in-picture"),
     true,
   );
   addEventListener("pagehide", () => {
+    if (pipVideo) {
+      pipVideo = null;
+      post("pip", { active: false, unloaded: true });
+    }
     if (isTop) return;
     post("media", { playing: false, muted });
     post("nowPlaying", null);
@@ -377,7 +386,20 @@ enum WebKitPageScript {
       schedule();
       return !!m || pageActions.length > 0;
     },
-    pictureInPicture(on, automatic) {
+    pictureInPicture(on, automatic, overFullScreen) {
+      const shownFullScreen = () => {
+        for (let w = window; ; w = w.parent) {
+          let d;
+          try {
+            d = w.document;
+          } catch (e) {
+            return false;
+          }
+          if (d.fullscreenElement || d.webkitFullscreenElement) return true;
+          for (const v of d.querySelectorAll?.("video") ?? []) if (v.webkitDisplayingFullscreen || v.webkitPresentationMode === "fullscreen") return true;
+          if (w === w.parent || w === w.top) return false;
+        }
+      };
       if (!on) {
         if (document.pictureInPictureElement) document.exitPictureInPicture();
         for (const v of document.querySelectorAll("video")) if (v.webkitPresentationMode === "picture-in-picture") v.webkitSetPresentationMode("inline");
@@ -387,6 +409,7 @@ enum WebKitPageScript {
       const largest = () => videos.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
       const v = videos.find(playing) || (automatic ? null : largest());
       if (!v) return automatic ? "nothingPlaying" : false;
+      if (automatic && !overFullScreen && shownFullScreen()) return false;
       if (v.webkitSupportsPresentationMode && v.webkitSupportsPresentationMode("picture-in-picture")) v.webkitSetPresentationMode("picture-in-picture");
       else if (v.requestPictureInPicture) v.requestPictureInPicture();
       else return false;

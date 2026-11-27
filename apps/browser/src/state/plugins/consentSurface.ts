@@ -8,7 +8,8 @@ type ConsentOwner = "onboarding" | "settings";
 let onboarding: { id: number; alive: () => boolean; windowId: string | null } | null = null;
 
 export function claimOnboardingConsent(id: number, windowId: string | null, alive: () => boolean): boolean {
-  if (currentPlugins().consent?.id !== id || !alive()) return false;
+  const pending = currentPlugins().consent;
+  if ((pending && pending.id !== id) || !alive()) return false;
   onboarding = { id, alive, windowId };
   return true;
 }

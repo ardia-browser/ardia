@@ -171,7 +171,7 @@ const sessionOnDisk = (saved: HydrateData): HydrateData => withPinChoicesOnDisk(
 const inClosingOrder = <T extends { closedAt: number }>(entries: T[]) => [...entries].sort((a, b) => a.closedAt - b.closedAt).slice(-MAX_CLOSED_WINDOWS);
 
 function withoutRestoredWindows(saved: HydrateData, now: number): HydrateData {
-  const source = { tabs: saved.tabs ?? {}, groups: saved.groups ?? {}, splits: saved.splits ?? {}, history: {}, profiles: saved.profiles ?? {} };
+  const source = { tabs: saved.tabs ?? {}, groups: saved.groups ?? {}, splits: saved.splits ?? {}, history: {}, profiles: saved.profiles ?? {}, settings: saved.settings };
   const windows = Object.values(saved.windows ?? {}).filter((w) => w.kind === "main");
   let parkedPins = saved.parkedPins ?? {};
   for (const w of windows) parkedPins = parkWindowPins(parkedPins, w, source);

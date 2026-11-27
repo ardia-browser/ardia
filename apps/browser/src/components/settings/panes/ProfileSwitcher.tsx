@@ -14,7 +14,7 @@ import { openProfileItemMenu } from "../../profiles/profileMenu";
 import { requestCreateProfile } from "../../../state/profiles/createProfileRequest";
 import { curve } from "../../ui/motion";
 import { settingsMotion } from "../tokens";
-import { noteSettingsProfilePick } from "../../../state/telemetry/usage";
+import { noteSettingsProfiles } from "../../../state/telemetry/usage";
 
 export const listOf = (names: string[], joiner = "and") => (names.length <= 2 ? names.join(` ${joiner} `) : `${names.slice(0, -1).join(", ")}, ${joiner} ${names.at(-1)}`);
 
@@ -28,7 +28,7 @@ export function useSharedWith(profileId: string): string[] {
 }
 
 function pickProfile(profileId: string) {
-  noteSettingsProfilePick();
+  noteSettingsProfiles("picked");
   replaceSettingsPlace(profileId);
 }
 

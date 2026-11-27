@@ -24,6 +24,7 @@ import { SettingsConsentSheet } from "../plugins/SettingsConsentSheet";
 import { claimSettingsOpenAt, forgetSettingsScroll, goToSettingsPane, SETTINGS_WINDOW_ID, settingsScrollFor, settingsBack, settingsForward, settingsPageKey, settingsPlaceKey, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
 import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
 import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
+import { showCreateProfileSheets } from "../profiles/CreateProfile";
 import { settingsProfileFor } from "../../state/extensions/store";
 import { useSettingsColors } from "./useSettingsColors";
 import { paneTile, paneTints, settingsLayout } from "./tokens";
@@ -163,6 +164,7 @@ export function SettingsWindow() {
     trackSettingsSection(shown.pane, since ? Date.now() - since : undefined);
   }, [shown?.pane]);
   useEffect(() => settingsSearchHost(), []);
+  useEffect(showCreateProfileSheets, []);
   useEffect(() => markCaptionRegions(SETTINGS_WINDOW_ID, [[TITLE_LEFT, 0, CONTROLS_ROOM, TOOLBAR]]), []);
   useEffect(() => void setTrafficLightsCenter(SETTINGS_WINDOW_ID, [LIGHTS_CENTER[0], TOOLBAR / 2]), []);
   const scroller = useRef<ScrollView>(null);

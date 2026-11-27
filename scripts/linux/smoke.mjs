@@ -121,6 +121,16 @@ export const WINDOW_STATE_CAPABILITIES = ["ArdiaShell.windowButtonLayout", "Ardi
 export const UNKNOWN_WINDOW_ERROR = "No such native window";
 export const SCRIPT_NAME = "Ardia smoke script";
 export const SCRIPT_TITLE_PREFIX = "Scripted: ";
+export const PAGE_CONTENT_OPEN = "<<<UNTRUSTED_PAGE_CONTENT";
+export const PAGE_CONTENT_CLOSE = "<<<END_UNTRUSTED_PAGE_CONTENT";
+
+export function pageAnswer(stdout) {
+  const lines = stdout.trim().split("\n");
+  const open = lines.findIndex((line) => line.startsWith(PAGE_CONTENT_OPEN));
+  if (open === -1) return lines.at(-1) ?? "";
+  const close = lines.findIndex((line, at) => at > open && line.startsWith(PAGE_CONTENT_CLOSE));
+  return lines.slice(open + 1, close === -1 ? undefined : close).at(-1) ?? "";
+}
 
 export function userScriptSource() {
   return ["// ==UserScript==", `// @name        ${SCRIPT_NAME}`, "// @version     1.0.0", "// @match       http://127.0.0.1/smoke/*", "// @run-at      document-end", "// @grant       none", "// ==/UserScript==", "", `document.title = ${JSON.stringify(SCRIPT_TITLE_PREFIX)} + document.title;`, ""].join("\n");
@@ -1161,7 +1171,7 @@ class Smoke {
         const result = await this.browse(profile, "scripts", ["get", "title"]);
         steps.push({ step, ...brief(result) });
         if (result.code !== 0) throw new Error(`ardia browse get title exited ${result.code}: ${brief(result).out}`);
-        return result.stdout.trim().split("\n").at(-1) ?? "";
+        return pageAnswer(result.stdout);
       };
       const install = await this.ardia(["scripts", "install", script, "--data-dir", profile], { timeout: 90000 });
       steps.push({ step: "scripts install", ...brief(install) });

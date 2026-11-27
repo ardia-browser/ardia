@@ -61,6 +61,12 @@ internal object PageDragDecision {
         if (direction == SwipeDirection.Back) it.canScrollLeft else it.canScrollRight
     }
 
+    fun settlePull(contentClaimed: Boolean, report: TouchScrollers.Report?, pageReports: Boolean, millisSinceSlop: Long): Settle = when {
+        contentClaimed || report?.canScrollUp == true -> Settle.Yield
+        report != null || !pageReports || millisSinceSlop >= REPORT_WAIT_MILLIS -> Settle.Claim
+        else -> Settle.Wait
+    }
+
     data class Decided(val drag: Drag, val direction: SwipeDirection?)
 
     fun decide(
@@ -172,6 +178,10 @@ internal class PageGestures(private val owner: ViewGroup, private val host: View
             }
             MotionEvent.ACTION_MOVE -> {
                 val waiting = pending
+                if (waiting != null && waiting.drag == PageDragDecision.Drag.Pull) {
+                    tracker?.addMovement(event)
+                    return settlePendingPull(current, event)
+                }
                 if (waiting != null) {
                     tracker?.addMovement(event)
                     val dx = event.x - downX
@@ -229,7 +239,7 @@ internal class PageGestures(private val owner: ViewGroup, private val host: View
                 lab {
                     val canScroll = "page scroll ${if (web?.canScrollHorizontally(-1) == true) "L" else "-"}${if (web?.canScrollHorizontally(1) == true) "R" else "-"}"
                     val history = "history ${if (state.canGoBack) "B" else "-"}${if (state.canGoForward) "F" else "-"}"
-                    val chosen = choice?.let { if (it.drag == PageDragDecision.Drag.Swipe) "swipe ${it.direction!!.name.lowercase()}, waiting" else "pull" } ?: "left to the page"
+                    val chosen = choice?.let { if (it.drag == PageDragDecision.Drag.Swipe) "swipe ${it.direction!!.name.lowercase()}, waiting" else "pull, checking the scroller" } ?: "left to the page"
                     "swipe decide dx ${dp(dx)} dy ${dp(dy)} dp, $canScroll, $history, scroller ${describe(scrollerReport(current))}, ${mode.raw} -> $chosen"
                 }
                 choice ?: return false
@@ -239,11 +249,9 @@ internal class PageGestures(private val owner: ViewGroup, private val host: View
                     pendingX = dx
                     return false
                 }
-                decided = choice
-                activationX = dx
-                activationY = dy
-                beginPull()
-                return true
+                pending = choice
+                pendingAt = event.eventTime
+                return settlePendingPull(current, event)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 deciding = false
@@ -251,6 +259,27 @@ internal class PageGestures(private val owner: ViewGroup, private val host: View
             }
         }
         return false
+    }
+
+    private fun settlePendingPull(current: Page, event: MotionEvent): Boolean {
+        val report = scrollerReport(current)
+        val waited = event.eventTime - pendingAt
+        when (PageDragDecision.settlePull(contentClaimed, report, TouchScrollers.everReported(current.view.value), waited)) {
+            PageDragDecision.Settle.Wait -> return false
+            PageDragDecision.Settle.Yield -> {
+                pending = null
+                lab { "pull left to the page after $waited ms: ${if (contentClaimed) "the page asked to keep it" else "a scroller under the finger can scroll up"}" }
+                return false
+            }
+            PageDragDecision.Settle.Claim -> {
+                pending = null
+                decided = PageDragDecision.Decided(PageDragDecision.Drag.Pull, null)
+                activationX = event.x - downX
+                activationY = event.y - downY
+                beginPull()
+                return true
+            }
+        }
     }
 
     fun contentTookTheDrag() {
@@ -261,7 +290,7 @@ internal class PageGestures(private val owner: ViewGroup, private val host: View
     private fun scrollerReport(current: Page): TouchScrollers.Report? = TouchScrollers.since(current.view.value, downAt)
 
     private fun describe(report: TouchScrollers.Report?): String = report?.let {
-        "${if (it.canScrollLeft) "L" else "-"}${if (it.canScrollRight) "R" else "-"} ${it.atMillis - downAt} ms after down"
+        "${if (it.canScrollLeft) "L" else "-"}${if (it.canScrollRight) "R" else "-"}${if (it.canScrollUp) "U" else "-"} ${it.atMillis - downAt} ms after down"
     } ?: "not reported"
 
     private fun dp(px: Float): Int = (px / density).toInt()

@@ -16,6 +16,8 @@ import { StartMark } from "./StartSpaces";
 import { reducedMotionMs } from "../ui/motion";
 import type { MaterialScheme } from "../../lib/material/schemes";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
+import { dotBesideGlyph, NoticeDot, withUpdateWords } from "../settings/UpdateDot";
+import { useUpdateDot } from "../../state/appUpdate/store";
 
 export const materialStartMs = (reduceMotion: boolean, searching: boolean) =>
   reduceMotion ? reducedMotionMs(materialDuration.short3) : searching ? materialMotion.fadeThroughOut.durationMs : materialMotion.fadeThroughIn.durationMs;
@@ -25,6 +27,7 @@ export function MaterialStart() {
   const { scheme } = useMaterialTheme(incognito);
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const updateDot = useUpdateDot();
   const searching = useSearchOpen();
   const hasTabs = useHasTabs();
   const canReopen = useCanReopen();
@@ -64,7 +67,7 @@ export function MaterialStart() {
           <StartIconButton icon="eyes" label={actionWords.newIncognitoTab} scheme={scheme} onPress={newIncognitoTab} />
         )}
         {canReopen && !incognito ? <StartIconButton icon="arrowUturnBackward" label="Reopen Closed Tab" scheme={scheme} onPress={reopenLastClosed} /> : null}
-        <StartIconButton icon="gearshape" label={destinationWords.settings} scheme={scheme} onPress={() => openSettings()} />
+        <StartIconButton icon="gearshape" label={destinationWords.settings} scheme={scheme} dot={updateDot} onPress={() => openSettings()} />
       </Animated.View>
       <Animated.View
         testID="materialStartCenter"
@@ -99,8 +102,15 @@ export function MaterialStart() {
   );
 }
 
-function StartIconButton({ icon, label, scheme, onPress }: { icon: SymbolName; label: string; scheme: MaterialScheme; onPress: () => void }) {
-  return <MaterialIconButton testID={`materialStart:${label}`} icon={icon} label={label} scheme={scheme} onPress={onPress} />;
+function StartIconButton({ icon, label, scheme, dot = false, onPress }: { icon: SymbolName; label: string; scheme: MaterialScheme; dot?: boolean; onPress: () => void }) {
+  const button = <MaterialIconButton testID={`materialStart:${label}`} icon={icon} label={withUpdateWords(label, dot)} scheme={scheme} onPress={onPress} />;
+  if (!dot) return button;
+  return (
+    <View>
+      {button}
+      <NoticeDot style={dotBesideGlyph(materialSize.touchTarget)} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

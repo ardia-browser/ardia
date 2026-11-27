@@ -4,6 +4,7 @@ import { consentOrNow, countFor } from "./countFor";
 import { takePopupProtectedMediaCounts } from "./popupProtectedMedia";
 import { takeSecretDropCounts } from "./secretDrops";
 import { takeChangeDetectionCounts } from "../browser/changes";
+import { takeSharedGroupCounts } from "./sharedGroupCounts";
 
 type SyncWorkKind = "bookmark" | "history";
 type Phase = "extract" | "apply";
@@ -83,6 +84,7 @@ onConsentPeriodChange(() => {
   syncPending = noSync();
   pending = none();
   takeChangeDetectionCounts();
+  takeSharedGroupCounts();
 });
 
 const count = (key: keyof ReturnType<typeof none>, consent?: ConsentToken | null) =>
@@ -113,4 +115,4 @@ export function takeLiveWorkCounts() {
   };
 }
 
-export const takeWorkCounts = () => ({ ...takeSyncWorkCounts(), ...takeLiveWorkCounts(), ...takePopupProtectedMediaCounts(), ...takeChangeDetectionCounts(), ...takeSecretDropCounts() });
+export const takeWorkCounts = () => ({ ...takeSyncWorkCounts(), ...takeLiveWorkCounts(), ...takePopupProtectedMediaCounts(), ...takeChangeDetectionCounts(), ...takeSecretDropCounts(), ...takeSharedGroupCounts() });

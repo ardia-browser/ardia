@@ -182,6 +182,7 @@ function TabsAndTopAppsSection() {
             minWidth={150}
           />
         </Row>
+        <SettingToggle anchor="tabs.pinnedTabsReopenAtPinnedUrl" />
         <SettingToggle anchor="tabs.keepTopAppsRunning" />
         <SettingToggle anchor="tabs.closedTopAppTiles" />
         <SettingToggle anchor="tabs.balancedTopApps" />
@@ -216,6 +217,7 @@ function NewTabsSection() {
         <Row anchor="tabs.newTabPosition">
           <PopUp value={newTabPosition} options={top ? NEW_TABS_ACROSS : NEW_TABS_DOWN} onChange={choosePosition} minWidth={190} />
         </Row>
+        <SettingToggle anchor="tabs.showTabMenuButton" />
         <SettingToggle anchor="tabs.appLinksFirst" />
         <SettingToggle anchor="tabs.shareTabsAcrossWindows" />
       </Group>

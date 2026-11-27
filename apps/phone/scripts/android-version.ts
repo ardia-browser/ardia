@@ -7,23 +7,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { androidRelease } from "../src/lib/androidRelease.ts";
 
 export type AndroidVersion = { name: string; code: number; channel: "stable" | "nightly" };
 
-const STABLE_SLOT = 999;
-const LAB_CODE = 2;
-
 export function androidVersion(release: string): AndroidVersion {
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:-nightly\.(\d+))?$/.exec(release.trim());
-  if (!match) throw new Error(`${release} is neither a stable (<major>.<minor>.<patch>) nor a nightly (<next stable>-nightly.<n>) version`);
-  const [major, minor, patch] = [Number(match[1]), Number(match[2]), Number(match[3])];
-  const nightly = match[4] === undefined ? null : Number(match[4]);
-  if (major > 20 || minor > 99 || patch > 999) throw new Error(`${release}: the versionCode leaves room for major ≤ 20, minor ≤ 99 and patch ≤ 999`);
-  if (nightly !== null && (nightly < 1 || nightly >= STABLE_SLOT)) throw new Error(`${release}: a nightly's number runs from 1 to ${STABLE_SLOT - 1}`);
-  const code = major * 100_000_000 + minor * 1_000_000 + patch * 1_000 + (nightly ?? STABLE_SLOT);
-  if (code > 2_100_000_000) throw new Error(`${release}: versionCode ${code} is above Android's limit`);
-  if (code <= LAB_CODE) throw new Error(`${release}: versionCode ${code} isn't above the lab builds' ${LAB_CODE}`);
-  return { name: release.trim(), code, channel: nightly === null ? "stable" : "nightly" };
+  const parsed = androidRelease(release.trim());
+  return { name: parsed.text, code: parsed.code, channel: parsed.channel };
 }
 
 export function macMarketingVersion(root: string): string {

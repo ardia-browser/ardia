@@ -28,3 +28,4 @@ export const ADVANCED_PANE_SYMBOL = "slider.horizontal.3";
 export const PANEL_FIELD_LIFT = 0;
 
 export const REFRESH_ARROW_RING_OFFSET = { x: -0.25, y: 1.3 } as const;
+export const NAVIGATION_GLYPH_WEIGHT = "semibold" as const;

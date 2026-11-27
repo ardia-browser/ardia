@@ -7,7 +7,7 @@ import { actionWords, dismissWords } from "../../lib/sharedWords";
 import { PROBLEM_TEXT, voiceControl, type Dictation } from "../../state/voice/dictation";
 import { browseSpoken, closeVoiceSearch, openSpeechSettings, presentVoiceSearch, searchSpoken, startListening, stopListening, useDictation, useVoiceLevels, useVoicePresented } from "../../state/voice/store";
 import { browseForMeOffered } from "../../state/browseForMe/offer";
-import { ActionButton, ArdiaLogo, font, FrostSource, LookBackdrop, motionAliases, smoothCorners, space, useModalOverlay, voiceInk, voiceLayout, useReduceMotion } from "../ui";
+import { ActionButton, AppIcon, appIconLayout, font, FrostSource, LookBackdrop, motionAliases, smoothCorners, space, useModalOverlay, voiceInk, voiceLayout, useReduceMotion } from "../ui";
 import { OverlayCancelButton } from "../ui/LookViews";
 import type { FocusTarget } from "../ui/coverFocus";
 
@@ -47,7 +47,7 @@ function VoiceCover({ closing }: { closing: boolean }) {
       </FrostSource>
       <View style={[styles.column, { paddingTop: insets.top, paddingBottom: insets.bottom + space.xl, paddingLeft: insets.left + space.xl, paddingRight: insets.right + space.xl }]}>
         <View style={styles.fill} />
-        <LevelLogo level={dictation.level} />
+        <LevelIcon level={dictation.level} />
         <Transcript dictation={dictation} />
         <View style={styles.fill} />
         <Waveform listening={dictation.phase === "listening"} />
@@ -58,7 +58,7 @@ function VoiceCover({ closing }: { closing: boolean }) {
   );
 }
 
-function LevelLogo({ level }: { level: number }) {
+function LevelIcon({ level }: { level: number }) {
   const reduceMotion = useReduceMotion();
   const shown = useSharedValue(level);
   useEffect(() => {
@@ -66,8 +66,8 @@ function LevelLogo({ level }: { level: number }) {
   }, [level]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: reduceMotion ? 1 : 0.92 + shown.value * 0.16 }] }));
   return (
-    <Animated.View style={[styles.logo, style]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <ArdiaLogo width={voiceLayout.logo} />
+    <Animated.View testID="voiceAppIcon" style={[styles.icon, style]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <AppIcon side={voiceLayout.appIcon} scalesWithText={false} />
     </Animated.View>
   );
 }
@@ -78,7 +78,7 @@ function Transcript({ dictation }: { dictation: Dictation }) {
       <View style={styles.message}>
         <Text accessibilityRole="header" style={[font.title3, styles.bold, styles.centered, { color: voiceInk.label }]}>Speech and Mic permissions required.</Text>
         <Text style={[font.subheadline, styles.centered, { color: voiceInk.soft }]}>{copy().voicePermission}</Text>
-        <ActionButton testID="voiceOpenSettings" title={actionWords.openSettings} tone="overlay" onPress={openSpeechSettings} stretch />
+        <ActionButton testID="voiceOpenSettings" title={actionWords.openSettings} tone="overlay" onPress={openSpeechSettings} stretch capsule />
       </View>
     );
   }
@@ -132,10 +132,10 @@ function Controls({ dictation }: { dictation: Dictation }) {
   const control = voiceControl(dictation);
   return (
     <View style={styles.controls}>
-      {control?.kind === "done" ? <ActionButton testID="voiceDone" title={dismissWords.done} icon="stopFill" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={stopListening} stretch /> : null}
-      {control?.kind === "search" ? <ActionButton testID="voiceSearch" title="Search" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={() => searchSpoken(control.text)} stretch /> : null}
-      {control?.kind === "search" && browseForMeOffered() ? <ActionButton testID="voiceBrowseForMe" title="Browse for Me" icon="sparkleMagnifyingglass" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={() => browseSpoken(control.text)} stretch /> : null}
-      {control?.kind === "tryAgain" ? <ActionButton testID="voiceTryAgain" title={actionWords.tryAgain} icon="micFill" tone="overlay" onPress={() => void startListening()} stretch /> : null}
+      {control?.kind === "done" ? <ActionButton testID="voiceDone" title={dismissWords.done} icon="stopFill" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={stopListening} stretch capsule /> : null}
+      {control?.kind === "search" ? <ActionButton testID="voiceSearch" title="Search" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={() => searchSpoken(control.text)} stretch capsule /> : null}
+      {control?.kind === "search" && browseForMeOffered() ? <ActionButton testID="voiceBrowseForMe" title="Browse for Me" icon="sparkleMagnifyingglass" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={() => browseSpoken(control.text)} stretch capsule /> : null}
+      {control?.kind === "tryAgain" ? <ActionButton testID="voiceTryAgain" title={actionWords.tryAgain} icon="micFill" tone="overlay" onPress={() => void startListening()} stretch capsule /> : null}
     </View>
   );
 }
@@ -147,13 +147,12 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   bold: { fontWeight: "600" },
   centered: { textAlign: "center" },
-  logo: {
-    width: voiceLayout.logo,
-    height: voiceLayout.logo,
-    borderRadius: voiceLayout.logo / 2,
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: voiceInk.logoShadow,
+  icon: {
+    padding: appIconLayout.welcomeFrame,
+    borderRadius: voiceLayout.appIcon * appIconLayout.corner + appIconLayout.welcomeFrame,
+    backgroundColor: appIconLayout.fill,
+    ...smoothCorners,
+    boxShadow: appIconLayout.welcomeShadow,
   },
   message: { alignItems: "center", gap: space.m, alignSelf: "stretch" },
   transcript: { backgroundColor: voiceInk.transcript, borderRadius: voiceLayout.transcriptRadius, paddingHorizontal: space.xl, paddingVertical: space.m, overflow: "hidden", ...smoothCorners },

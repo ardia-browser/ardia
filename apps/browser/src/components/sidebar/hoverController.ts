@@ -3,7 +3,7 @@ import type { LayoutChangeEvent } from "react-native";
 import { markHoverProps } from "../../lib/hoverMarks";
 import { currentWindow } from "../../state/browser/current";
 import { PageProfileContext, useSettings, useWindow } from "../../state/browser/hooks";
-import { cardTargetFor, cardTargetNow } from "../../state/sidebar/cardTarget";
+import { cardTargetFor, cardTargetNow, noteSkippedHoverPlayer } from "../../state/sidebar/cardTarget";
 import {
   cardEntered,
   cardLaidOut,
@@ -20,7 +20,7 @@ import {
   type HoverPointerEvent,
 } from "../../state/sidebar/hover";
 import type { Target } from "../../state/sidebar/sidebarUi";
-import { useMedia, usePinnedWithMediaControls } from "../../state/media/media";
+import { useShowsMiniPlayer } from "../../state/media/media";
 
 export type AwaySource = { away: () => boolean; subscribe: (changed: () => void) => () => void };
 
@@ -51,12 +51,8 @@ export const cardHoverProps = {
 export function useCardTarget<T extends Target>(target: T | null): T | null {
   const cards = useSettings((s) => s.showTabHoverMenu);
   const playerTab = !cards && target?.kind === "tab" ? target.id : undefined;
-  const pinned = usePinnedWithMediaControls(playerTab);
-  const playing = useMedia((m) => {
-    const session = playerTab ? m.sessions[playerTab] : undefined;
-    return !!session && session.controllable && session.playbackState !== "none" && !!(session.title || session.artwork);
-  });
-  return cardTargetFor(target, cards, pinned && playing);
+  const player = useShowsMiniPlayer(playerTab);
+  return cardTargetFor(target, cards, player);
 }
 
 
@@ -129,6 +125,7 @@ export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
     const target = cardTargetNow(latest.current.rowTarget);
     entered.current = target;
     if (holdEnterWhileScrolling(windowId, row, () => inside.current && enterRow(inside.current))) return;
+    noteSkippedHoverPlayer(latest.current.rowTarget);
     watchCovered(windowId, refresh, true);
     const enter = () => {
       if (isAway()) return;

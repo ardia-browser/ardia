@@ -52,6 +52,14 @@ class AutomationWindowTests(unittest.TestCase):
         release = body(host, 'if (method == "tab.release") {', 'if (method == "session.read") {')
         self.assertLess(release.index('offscreen_released_.erase('), release.index('return std::move(done).Run(false, base::Value("No owned live tab"));'))
 
+    def test_releasing_a_tab_the_host_already_closed_succeeds_before_the_no_owned_live_tab_refusal(self):
+        host = (LINUX / 'ac_linux_host.cc').read_text()
+        release = body(host, 'if (method == "tab.release") {', 'if (method == "session.read") {')
+        gone = 'if (!binding && TabIsGone(args.FindInt("id").value_or(0))) return std::move(done).Run(true, base::Value());'
+        self.assertIn(gone, release)
+        self.assertLess(release.index('offscreen_released_.erase('), release.index(gone))
+        self.assertLess(release.index(gone), release.index('return std::move(done).Run(false, base::Value("No owned live tab"));'))
+
     def test_off_screen_tabs_close_with_the_last_browser_window_so_they_never_keep_ardia_running(self):
         host = (LINUX / 'ac_linux_host.cc').read_text()
         close = body(host, 'void CloseUtilitiesWithoutBrowserWindows() {', '\n}\n')

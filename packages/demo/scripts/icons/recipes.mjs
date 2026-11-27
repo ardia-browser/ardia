@@ -32,6 +32,8 @@ export const RECIPES = {
   "rectangle.inset.filled": one(O("rectangle.inset.filled")),
   "rectangle.lefthalf.filled": one(O("rectangle.half.filled")),
   "rectangle.righthalf.filled": one(O("rectangle.half.filled", { flip: -1 })),
+  "rectangle.tophalf.filled": one(O("rectangle.half.filled", { rot: 90 })),
+  "rectangle.bottomhalf.filled": one(O("rectangle.half.filled", { rot: -90 })),
   "rectangle.righthalf.inset.filled": one(O("rectangle.righthalf.inset.filled")),
   "rectangle.bottomhalf.inset.filled": one(O("rectangle.bottomhalf.inset.filled")),
   "rectangle.topthird.inset.filled": one(O("rectangle.topthird.inset.filled")),

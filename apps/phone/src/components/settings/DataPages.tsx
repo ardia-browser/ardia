@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { haptics } from "../../state/app/haptics";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { appVersion, clearBrowsingData, openFromSettings, websiteDataClearsByTime } from "../../state/settings/actions";
@@ -9,6 +9,8 @@ import { copy } from "../../lib/platformCopy";
 import { libraryCredits } from "../../state/settings/libraryCredits";
 import { ButtonRow, Divider, Group, NavRow, PickerRow, SettingsPage, ToggleRow, ValueRow } from "./SettingsKit";
 import { destinationWords } from "../../lib/sharedWords";
+import { updateRow } from "../../lib/appUpdate";
+import { appUpdatesOffered, markUpdateSeen, openUpdate, pollDownloadProgress, refreshDownload, showingUpdateRow, useAppUpdate } from "../../state/appUpdate/store";
 
 export function ClearDataPage({ onBack = popSettings }: { onBack?: () => void }) {
   const [range, setRange] = useState<ClearRange>("today");
@@ -66,6 +68,34 @@ function LinkRow({ title, icon, url, divider }: { title: string; icon: SymbolNam
   );
 }
 
+const PROGRESS_POLL_MS = 1000;
+
+function UpdateGroup() {
+  const status = useAppUpdate((s) => s.status);
+  const offer = useAppUpdate((s) => s.offer);
+  const handoff = useAppUpdate((s) => s.handoff);
+  const progress = useAppUpdate((s) => s.progress);
+  const row = updateRow(status, offer, handoff, progress);
+  useEffect(() => {
+    void refreshDownload(false);
+    return showingUpdateRow();
+  }, []);
+  useEffect(() => {
+    if (offer) markUpdateSeen();
+  }, [offer, status]);
+  useEffect(() => {
+    if (handoff !== "downloading") return;
+    void pollDownloadProgress();
+    const timer = setInterval(() => void pollDownloadProgress(), PROGRESS_POLL_MS);
+    return () => clearInterval(timer);
+  }, [handoff]);
+  return (
+    <Group>
+      <NavRow title={row.title} icon="arrowDownCircle" detail={row.detail} value={row.actionLabel} valueActs chevron={false} onPress={() => void openUpdate()} />
+    </Group>
+  );
+}
+
 export function AboutPage() {
   const theme = useTheme();
   return (
@@ -79,6 +109,7 @@ export function AboutPage() {
           <Text style={[font.subheadline, { color: theme.secondaryLabel }]}>{appVersion()}</Text>
         </View>
       </View>
+      {appUpdatesOffered() ? <UpdateGroup /> : null}
       <Group footer={copy().privacy}>
         <LinkRow title="ardia.dev" icon="globe" url="https://ardia.dev" divider />
         <LinkRow title="Release Notes" icon="sparkles" url="https://ardia.dev/release-notes" divider />

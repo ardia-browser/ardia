@@ -21,6 +21,9 @@ export const restoreKeyResponder = (token: number): Promise<boolean> => (token ?
 export const discardKeyResponder = (token: number): void => {
   if (token) void Focus.discardKeyResponder(token);
 };
+export type FieldBlurCause = "keyLoss" | "inWindow";
+export const fieldBlurCause = (fieldTag: number): FieldBlurCause => Focus.fieldBlurCause?.(fieldTag) ?? "inWindow";
+export const watchFieldBlurs = (fieldTag: number, watch: boolean) => void Focus.watchFieldBlurs?.(fieldTag, watch);
 export const pressRepeated = (): Promise<{ landedOn: string; ms: number } | null> => Focus.pressRepeated();
 export const pressesWithoutRelease = (): number => Focus.pressesWithoutRelease();
 export const takeFocusHandoffCounts = (): Record<string, Record<string, number>> => Focus.takeFocusHandoffCounts?.() ?? {};

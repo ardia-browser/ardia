@@ -9,7 +9,7 @@ import { idleRows, remoteSuggestions, searchEngineRevision, setSearchEngine, set
 import { withPasteRow, type PasteOffer } from "./pasteRow";
 import { clipboardOffer } from "../../platform/system";
 import { settled } from "../pages/store";
-import { buildSources, recentSearches, sourcesKey } from "./sources";
+import { buildSources, recentSearches, searchKey, searchesByQuery, sourcesKey } from "./sources";
 import { spaceTabs } from "../tabs/tabsState";
 import { browseForMeOffered } from "../browseForMe/offer";
 import { markSearchClosing, markSearchPhase, markSearchPressed } from "./searchTiming";
@@ -86,7 +86,7 @@ function idleRowsNow(): TrayRow[] {
   const scope = idleScope();
   const made = idleMade.get(scope);
   if (made && made.revision === idleRevision()) return made.rows;
-  const rows = useTabs.getState().incognito ? [] : idleRows(recentSearches(history().summary()), idleMacTabs(selectedProfile(), syncData().view.devices));
+  const rows = useTabs.getState().incognito ? [] : markPastSearches(idleRows(recentSearches(history().summary()), idleMacTabs(selectedProfile(), syncData().view.devices)));
   idleMade.delete(scope);
   idleMade.set(scope, { revision: idleRevision(), engine: searchEngineRevision(), rows });
   if (idleMade.size > IDLE_SCOPES_KEPT) idleMade.delete(idleMade.keys().next().value!);
@@ -167,14 +167,16 @@ export function feedSources() {
 
 function suggestionsFor(text: string, remoteValues: readonly string[]): { rows: TrayRow[]; completion: string } {
   if (!text.trim()) return { rows: rowsFor(text, remoteValues), completion: "" };
-  return suggest(text, remoteValues, context, macTabIndex(selectedProfile(), syncData().view.devices), browseForMeOffered());
+  const suggested = suggest(text, remoteValues, context, macTabIndex(selectedProfile(), syncData().view.devices), browseForMeOffered());
+  return { ...suggested, rows: markPastSearches(suggested.rows) };
 }
 
 function rowsFor(text: string, remoteValues: readonly string[]): TrayRow[] {
-  const profile = selectedProfile();
-  if (text.trim()) return suggest(text, remoteValues, context, macTabIndex(profile, syncData().view.devices), browseForMeOffered()).rows;
+  if (text.trim()) return suggestionsFor(text, remoteValues).rows;
   return withPasteRow(idleRowsNow(), text, paste);
 }
+
+const markPastSearches = (rows: TrayRow[]): TrayRow[] => rows.map((row) => (row.kind === "query" && canForgetSearch(row.query) ? { ...row, past: true } : row));
 
 function offerPaste(session: number) {
   void settled(() => clipboardOffer(), null).then((offer) => {
@@ -204,6 +206,28 @@ export function endPasteRead(session: number, pasted: boolean): boolean {
 }
 
 export const refreshSearchRows = () => useSearch.setState((state) => ({ rows: rowsFor(state.text, []) }));
+
+let searched: { revision: number; byQuery: Map<string, string[]> } | null = null;
+
+function searchedUrls(query: string): readonly string[] {
+  const revision = history().revision();
+  if (searched?.revision !== revision) searched = { revision, byQuery: searchesByQuery(history().summary()) };
+  return searched.byQuery.get(query.trim().toLowerCase()) ?? [];
+}
+
+export const canForgetSearch = (query: string) => searchedUrls(query).length > 0;
+
+export function forgetSearch(query: string) {
+  const forgotten = query.trim().toLowerCase();
+  if (!forgotten || !history().forget((url) => searchKey(url) === forgotten)) return;
+  if (!useTabs.getState().incognito) countUsage("searches_forgotten");
+  feedSources();
+  const { text } = useSearch.getState();
+  if (!text.trim()) return useSearch.setState({ rows: rowsFor(text, []) });
+  const carried = remote.text && text.startsWith(remote.text) ? remote.values.filter((value) => value.trim().toLowerCase() !== forgotten) : [];
+  const suggested = suggestionsFor(text, carried);
+  useSearch.setState({ rows: suggested.rows, completion: suggested.completion, completedFor: text });
+}
 
 export function applySearchEngine() {
   const { status, view } = syncData();
@@ -315,6 +339,15 @@ export function typeSearch(text: string) {
     typed = null;
     if (next !== null && ownsSearch(next)) showRows(next.text);
   });
+}
+
+export function searchFieldText(): string {
+  const { text, session } = useSearch.getState();
+  return typed !== null && typed.session === session ? typed.text : text;
+}
+
+export function settleSearchAsSubmitted() {
+  if (!useSearch.getState().open) useSearch.setState({ ending: "submitted" });
 }
 
 export function setSearchText(text: string) {

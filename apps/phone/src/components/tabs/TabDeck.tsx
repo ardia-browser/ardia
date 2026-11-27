@@ -3,6 +3,7 @@ import { DeckLookProbe } from "./DeckLookProbe";
 import { deckHitAccepted, newTab as openNewTab, switchDeckIncognito } from "../../state/browse/store";
 import { actionWords, destinationWords, incognitoWords } from "../../lib/sharedWords";
 import { IncognitoLook } from "../ui/theme";
+import { GlassPrivacy } from "../ui/LookViews";
 import { useDeckOwnsBar, useSheet, useSurface } from "../../state/browse/hooks";
 import { useHeldDeckOrder, useHeldRootSize, useHeldSearchOpen } from "../../state/browse/deckHold";
 import { beginInteraction, countRender, INTERACTION_WINDOW_MS, interactionPerfEnabled, markNextUiFrame, markTiming } from "../../state/app/interactionPerf";
@@ -119,6 +120,8 @@ import { useBarGlyphFade, useDeckPulled } from "./deckPulled";
 type Phase = { kind: "opening" | "settled" | "closing"; id: string | null };
 
 type DeckPrivateBackdrop = "instant" | "fade" | null;
+
+export const deckGlassPrivately = (incognito: boolean, side: boolean, privateBackdrop: DeckPrivateBackdrop) => incognito || side || privateBackdrop !== null;
 
 const SETTLED: Phase = { kind: "settled", id: null };
 
@@ -1266,6 +1269,7 @@ export const TabDeck = memo(function TabDeck() {
   const [privateBackdrop, setPrivateBackdrop] = useState<DeckPrivateBackdrop>(privateLook ? "instant" : null);
   if (privateLook && privateBackdrop === null) setPrivateBackdrop(shown ? "fade" : "instant");
   if (!privateLook && privateBackdrop !== null && !shown) setPrivateBackdrop(null);
+  const glassPrivately = deckGlassPrivately(incognito, side, privateBackdrop);
   const gridTabs = gridAvailable && (grid || gridLayer) ? order.flatMap((id) => {
     const tab = tabs.get(id);
     return tab && !hidden.current.has(id) ? [tab] : [];
@@ -1290,6 +1294,7 @@ export const TabDeck = memo(function TabDeck() {
   return (
     <MenuFloorProvider value={deckBarTop}>
     <IncognitoLook value={privateLook}>
+    <GlassPrivacy value={glassPrivately}>
     <Animated.View
       testID="tabDeck"
       style={[StyleSheet.absoluteFill, shown ? null : pulls ? styles.parked : styles.hidden, handOverStyle]}
@@ -1518,6 +1523,7 @@ export const TabDeck = memo(function TabDeck() {
       {cardMenu && order.includes(cardMenu.id) ? <CardMenuAt items={cardMenuItems(order.indexOf(cardMenu.id))} privately={tabs.get(cardMenu.id)?.isPrivate === true} at={cardMenu} control={cardMenu.control} floor={deckBarTop} screen={{ width, height }} onDismiss={dismissCardMenu} /> : null}
       {confirmation ? <ConfirmSheet confirmation={confirmation} onClose={() => setConfirmation(null)} /> : null}
     </Animated.View>
+    </GlassPrivacy>
     </IncognitoLook>
     </MenuFloorProvider>
   );

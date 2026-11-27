@@ -2,7 +2,9 @@ import type { WindowEvent } from "../../platform/windows";
 import type { ConsentToken } from "./choice";
 import { countFor } from "./consentPeriod";
 
-type ScreenEdge = NonNullable<Extract<WindowEvent, { type: "sidebarEdge" }>["screenEdge"]>;
+type SidebarEdgeEvent = Extract<WindowEvent, { type: "sidebarEdge" }>;
+type ScreenEdge = NonNullable<SidebarEdgeEvent["screenEdge"]>;
+type MenuOwner = NonNullable<SidebarEdgeEvent["heldByMenu"]>;
 
 const NONE = {
   sidebar_slides: 0,
@@ -15,6 +17,9 @@ const NONE = {
   sidebar_peek_closes_while_resizing: 0,
   sidebar_screen_edge_crossings: 0,
   sidebar_screen_edge_returns: 0,
+  sidebar_edge_reveals_through_overlay: 0,
+  sidebar_peeks_held_by_app_menu: 0,
+  sidebar_peeks_held_by_system_menu: 0,
   sidebar_full_screen_peeks: 0,
   sidebar_full_screen_peek_quick_closes: 0,
   sidebar_field_remeasures: 0,
@@ -47,13 +52,24 @@ const SCREEN_EDGE_COUNTS = {
   returned: "sidebar_screen_edge_returns",
 } as const satisfies Record<ScreenEdge, keyof typeof NONE>;
 
-export const noteSidebarScreenEdge = (edge: ScreenEdge) => void counts[SCREEN_EDGE_COUNTS[edge]]++;
+
+const MENU_HOLD_COUNTS = {
+  app: "sidebar_peeks_held_by_app_menu",
+  system: "sidebar_peeks_held_by_system_menu",
+} as const satisfies Record<MenuOwner, keyof typeof NONE>;
+
+export function noteSidebarEdgeEvent({ screenEdge, heldByMenu }: Pick<SidebarEdgeEvent, "screenEdge" | "heldByMenu">) {
+  if (screenEdge) counts[SCREEN_EDGE_COUNTS[screenEdge]]++;
+  if (heldByMenu) counts[MENU_HOLD_COUNTS[heldByMenu]]++;
+}
 
 export const noteFullScreenPeek = () => void counts.sidebar_full_screen_peeks++;
 
 export const noteFullScreenPeekClosed = (shownMs: number) => void (shownMs < QUICK_PEEK_CLOSE_MS && counts.sidebar_full_screen_peek_quick_closes++);
 
 export const noteSidebarPeekFrame = (frameInset: number) => void (frameInset < FRAME_UNDER_OLD_PEEK_GAP && counts.sidebar_thin_frame_peeks++);
+
+export const noteSidebarEdgeRevealThroughOverlay = (consent: ConsentToken | null) => countFor(consent, () => void counts.sidebar_edge_reveals_through_overlay++);
 
 export const noteSidebarFieldRemeasure = () => void counts.sidebar_field_remeasures++;
 

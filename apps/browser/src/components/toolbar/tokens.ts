@@ -1,11 +1,12 @@
 import { curve, duration } from "../ui/motion";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
+import { NAVIGATION_GLYPH_WEIGHT } from "../../lib/platformChrome";
 
 export const GLYPH = 13;
 
 export const SYMBOL_BOX = 16;
 
-export const NAV_GLYPH = { size: GLYPH, weight: "medium" } as const;
+export const NAV_GLYPH = { size: GLYPH, weight: NAVIGATION_GLYPH_WEIGHT } as const;
 
 export const TOOLBAR_MOTION = { dim: duration.base, hide: duration.base, show: duration.base, settle: 0 } as const;
 

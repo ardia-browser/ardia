@@ -127,6 +127,28 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await tab.close();
       }
     },
+    async E41() {
+      const shared = await paired();
+      const tabs = engineName === "chromium" ? shared.chromium : shared.tabs;
+      const tab = await open("example.localhost");
+      let other = null;
+      try {
+        await tab.click("#u");
+        await tab.waitRows();
+        other = await tabs.open(sites.url("other.localhost"));
+        await other.front();
+        assert(!(await tab.noList(1500)), "switching to another tab closes the Login list", await tab.lists());
+        await tab.front();
+        await tab.click("#u");
+        await tab.waitRows("the Login list again");
+        await tab.close();
+        assert(!(await other.noList(1500)), "closing the tab closes its Login list", await other.lists());
+        return { engine: engineName };
+      } finally {
+        await tab.close();
+        await other?.close();
+      }
+    },
     async E9() {
       const tab = await open("accounts.example.localhost");
       try {

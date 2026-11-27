@@ -192,6 +192,7 @@ Each test is one red → green cycle, written and run one at a time in the order
 | E5 | 1 | Clicking the username field on a fixture sign-in page lists only that site's logins, each with the Apple key icon, ending in "Open Passwords app" (both engines) | the list, its source and site filtering | the list's exact look (checked by eye) |
 | E6 | 1 | Picking a row fills username and password, and the page records input and change events and enables its button (both engines) | fills the page never notices | — |
 | E7 | 1 | ArrowDown opens the list, Down and Enter fill, Escape closes it (both engines) | keyboard handling | — |
+| E41 | 1 | Switching to another tab closes an open Login list, and so does closing its tab (both engines) | a list left over another page | — |
 | E8 | 1 | On an Apple Passwords profile, Chrome's own password list never appears over a sign-in field | two lists at once | — |
 | E9 | 1 | A login saved for example.test is offered on accounts.example.test | registrable-site matching | — |
 | E10 | 1 | A site with no logins shows "No saved logins" and "Open Passwords app" | an empty list that looks broken | — |

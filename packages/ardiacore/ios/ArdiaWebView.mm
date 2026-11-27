@@ -193,6 +193,7 @@ void AcceptDrops(NSView *root, BOOL accept) {
   if (!newWindow) [self lendPageToSuccessor];
   if (self.window && newWindow != self.window && (_visible || _reveal.active)) [ArdiaWebView dropNativeRevealsInWindow:self.window];
   if (newWindow != self.window) [self leaveScreenAhead];
+  if (newWindow != self.window) [self endLoginField];
   [super viewWillMoveToWindow:newWindow];
 }
 

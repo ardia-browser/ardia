@@ -14,7 +14,7 @@ test("B1 and B2: hostile WebKit loginField and loginSubmit messages, posted thro
 
 test("B2: WebKit Login list native reads the page's claimed origin only to check it against the frame's", () => {
   const reads = logins.match(/data\["origin"\]/g) ?? [];
-  const checked = logins.match(/WebKitLoginsReport\.frameOrigin\(origin, claimed: data\["origin"\]\)/g) ?? [];
+  const checked = logins.match(/WebKitLoginsReport\.frameOrigin\((origin|frame\.securityOrigin), claimed: data\["origin"\]\)/g) ?? [];
   assert.ok(reads.length > 0);
   assert.equal(checked.length, reads.length, "every read of the page's origin is the claim frameOrigin checks");
 });

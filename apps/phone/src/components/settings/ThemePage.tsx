@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView, LegacyScrollView } from "react-native-gesture-handler";
 import { lookAngle, MAX_THEME_STOPS, THEME_TEXTURES, withAddedStop, withAngle, withoutStop, withTexture, type ProfileTheme, type ThemeMode, type ThemeTexture } from "@ardia/core/src/theme.ts";
-import { customLook, type ProfileLook } from "../../lib/profileLook";
+import { customLook } from "../../lib/profileLook";
 import { editedLook, keptReadable, TEXTURE_NAMES, THEME_MODES } from "../../lib/themeEditor";
 import { dropThemeDraft, editCustomTheme, editedChoice, startingCustomTheme } from "../../state/settings/customTheme";
 import { popSettings } from "../../state/settings/nav";
@@ -13,15 +13,17 @@ import { themeStepperLayout } from "./settingsTokens";
 import { ColorPad, DirectionDial, LightnessBar, ThemeSlider, type BlockedScroll } from "./ThemeControls";
 import { usePreferences } from "../../state/settings/hooks";
 import { SettingsPageOpenedContext } from "./settingsOpened";
+import type { ColorChoice } from "../../state/settings/preferences";
+import { useSyncEnabled } from "../../state/sync/hooks";
 
-function useLiveTheme(stored: ProfileTheme, look: ProfileLook) {
+function useLiveTheme(stored: ProfileTheme, target: ColorChoice) {
   const opened = useContext(SettingsPageOpenedContext);
   const [local, setLocal] = useState<ProfileTheme | null>(null);
   const frame = useRef<number | null>(null);
   const pending = useRef<ProfileTheme | null>(null);
   const showing = useRef(opened);
-  const lookNow = useRef(look);
-  lookNow.current = look;
+  const targetNow = useRef(target);
+  targetNow.current = target;
   const endDraft = useCallback(() => {
     if (frame.current !== null) cancelAnimationFrame(frame.current);
     frame.current = null;
@@ -42,7 +44,7 @@ function useLiveTheme(stored: ProfileTheme, look: ProfileLook) {
       frame.current = null;
       pending.current = null;
       setLocal(null);
-      editCustomTheme(next, true, lookNow.current);
+      editCustomTheme(next, true, targetNow.current);
       return;
     }
     setLocal(next);
@@ -52,23 +54,28 @@ function useLiveTheme(stored: ProfileTheme, look: ProfileLook) {
       if (pending.current && showing.current) editCustomTheme(pending.current, false);
     });
   }, []);
-  return { theme: local ?? stored, change };
+  const cancel = useCallback(() => {
+    endDraft();
+    setLocal(null);
+  }, [endDraft]);
+  return { theme: local ?? stored, change, cancel };
 }
 
 export function ThemePage() {
   const look = useProfileLook();
   const stored = useCustomTheme();
-  const editing = editedChoice(usePreferences((p) => p.colorChoice), look);
+  const matchingMac = useSyncEnabled() && usePreferences((p) => p.colorChoice === null);
+  const editing = editedChoice(usePreferences((p) => p.colorChoice), look, matchingMac);
   const saved = stored !== null;
-  const fallback = useMemo(() => (saved ? null : startingCustomTheme(look)), [editing, saved]);
-  return <ThemeEditor key={editing} stored={stored ?? fallback!} look={look} />;
+  const fallback = useMemo(() => (saved ? null : startingCustomTheme(look)), [editing, saved, look]);
+  return <ThemeEditor key={editing} stored={stored ?? fallback!} target={editing} />;
 }
 
-function ThemeEditor({ stored, look }: { stored: ProfileTheme; look: ProfileLook }) {
+function ThemeEditor({ stored, target }: { stored: ProfileTheme; target: ColorChoice }) {
   const ui = useTheme();
   const dark = ui.dark;
   const { theme: editing, editsDark } = editedLook(stored, dark);
-  const { theme, change } = useLiveTheme(editing, look);
+  const { theme, change, cancel } = useLiveTheme(editing, target);
   const [selected, setSelected] = useState(0);
   const index = Math.min(selected, theme.stops.length - 1);
   const scroll = useRef(null);
@@ -85,8 +92,8 @@ function ThemeEditor({ stored, look }: { stored: ProfileTheme; look: ProfileLook
       </Group>
       <Group header="Colors" footer={editsDark === null ? null : `Separate light and dark looks. Editing keeps the ${editsDark ? "dark" : "light"} one.`}>
         <View style={styles.colors}>
-          <ColorPad theme={theme} selected={index} onSelect={setSelected} onChange={change} blocks={blocks} />
-          <LightnessBar theme={theme} index={index} onChange={change} blocks={blocks} />
+          <ColorPad theme={theme} selected={index} onSelect={setSelected} onChange={change} onCancel={cancel} blocks={blocks} />
+          <LightnessBar theme={theme} index={index} onChange={change} onCancel={cancel} blocks={blocks} />
           <View style={styles.count}>
             <Text style={[font.body, styles.fill, { color: ui.secondaryLabel }]}>
               {theme.stops.length} of {MAX_THEME_STOPS} colors
@@ -113,13 +120,13 @@ function ThemeEditor({ stored, look }: { stored: ProfileTheme; look: ProfileLook
         </View>
       </Group>
       <Group>
-        <ThemeSlider title="Intensity" value={theme.intensity} onChange={live("intensity")} blocks={blocks} />
-        <ThemeSlider title="Pass-Through Blur" value={theme.translucency} onChange={live("translucency")} blocks={blocks} />
-        <ThemeSlider title="Noise" value={theme.grain} onChange={live("grain")} blocks={blocks} />
+        <ThemeSlider title="Intensity" value={theme.intensity} onChange={live("intensity")} onCancel={cancel} blocks={blocks} />
+        <ThemeSlider title="Pass-Through Blur" value={theme.translucency} onChange={live("translucency")} onCancel={cancel} blocks={blocks} />
+        <ThemeSlider title="Noise" value={theme.grain} onChange={live("grain")} onCancel={cancel} blocks={blocks} />
         <PickerRow<ThemeTexture> title="Texture" options={THEME_TEXTURES.map((id) => ({ id, title: TEXTURE_NAMES[id] }))} selected={theme.texture} divider onSelect={(texture) => change(withTexture(theme, texture), true)} />
         <Row title="Direction">
           <Text style={[font.body, styles.degrees, { color: ui.secondaryLabel }]}>{Math.round(lookAngle(theme))}°</Text>
-          <DirectionDial angle={lookAngle(theme)} onChange={(angle, settle) => change(withAngle(theme, angle), settle)} blocks={blocks} />
+          <DirectionDial angle={lookAngle(theme)} onChange={(angle, settle) => change(withAngle(theme, angle), settle)} onCancel={cancel} blocks={blocks} />
         </Row>
       </Group>
       <Group footer={kept ? `Kept ${dark ? "dark" : "light"} so text stays readable.` : null}>

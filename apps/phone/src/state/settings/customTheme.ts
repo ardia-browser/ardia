@@ -19,19 +19,20 @@ export function chooseCustomTheme(look: ProfileLook) {
 
 const isPresetColor = (key: string | null): key is PresetColor => PRESET_COLORS.includes(key as PresetColor);
 
-export function editedChoice(colorChoice: ColorChoice | null, look: ProfileLook | null): ColorChoice {
+export function editedChoice(colorChoice: ColorChoice | null, look: ProfileLook, matchingMac: boolean): ColorChoice {
   if (colorChoice !== null) return colorChoice;
-  return look && !look.custom && isPresetColor(look.preset) ? look.preset : CUSTOM_CHOICE;
+  if (matchingMac) return CUSTOM_CHOICE;
+  return !look.custom && isPresetColor(look.preset) ? look.preset : CUSTOM_CHOICE;
 }
 
-export function editCustomTheme(theme: ProfileTheme, settle: boolean, look: ProfileLook | null = null) {
+export function editCustomTheme(theme: ProfileTheme, settle: boolean, target: ColorChoice = CUSTOM_CHOICE) {
   if (!settle) {
     useThemeDraft.setState({ draft: theme });
     return;
   }
   useThemeDraft.setState({ draft: null });
   const { colorChoice, presetThemes } = currentPreferences();
-  const edited = editedChoice(colorChoice, look);
+  const edited = colorChoice ?? target;
   if (edited !== CUSTOM_CHOICE) {
     setPreference("presetThemes", { ...presetThemes, [edited]: theme });
   } else {

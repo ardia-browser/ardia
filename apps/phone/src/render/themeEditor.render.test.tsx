@@ -184,6 +184,73 @@ test("with no color chosen, editing the Plum the Appearance page shows edits Plu
   unmount(editor);
 });
 
+function matchMac(profile: Record<string, unknown>) {
+  const shown = { ...view().profiles[0]!, syncId: "work", ...profile };
+  act(() => useSync.setState((state) => ({ ...state, status: status({ selectedProfileId: "work" }), view: view({ profiles: [shown as never], selectedProfileId: "work" }) })));
+}
+
+test("an edit while matching a Mac on stock Green edits a copy in Custom and never the phone's own edited Green", () => {
+  const phoneGreen = { ...blue, grain: 0.91 };
+  act(() => usePreferences.setState({ colorChoice: null, presetThemes: { green: phoneGreen } }));
+  matchMac({ color: "green", theme: null });
+  const editor = inDesign(<ThemePage />);
+  press(editor, "Add Color");
+  expect(usePreferences.getState().presetThemes.green).toEqual(phoneGreen);
+  expect(usePreferences.getState().colorChoice).toBe("custom");
+  expect(stored().stops.length).toBe(3);
+  expect(stored().grain).not.toBe(phoneGreen.grain);
+  unmount(editor);
+});
+
+test("while matching the Mac, the Theme page starts from the Mac's current look, also after the Mac's theme changes", () => {
+  act(() => usePreferences.setState({ colorChoice: null }));
+  const macTheme = (grain: number) => ({ colors: ["#5CD6D3", "#5C71D6"], darkColors: null, mode: "auto" as const, look: { ...blue, grain }, dark: null });
+  matchMac({ theme: macTheme(0.15) });
+  const editor = inDesign(<ThemePage />);
+  matchMac({ theme: macTheme(0.85) });
+  press(editor, "Add Color");
+  expect(usePreferences.getState().colorChoice).toBe("custom");
+  expect(stored().grain).toBe(0.85);
+  unmount(editor);
+});
+
+test("a slider drag the system cancels saves nothing and leaves no draft", () => {
+  act(() => usePreferences.setState({ colorChoice: "green" }));
+  const editor = inDesign(<ThemePage />);
+  layOut(editor, "Noise", 226);
+  act(() => {
+    fireGestureHandler(getByGestureTestId("themeTrack:Noise"), [
+      { state: State.BEGAN, x: 13, y: 10 },
+      { state: State.ACTIVE, x: 13, y: 10 },
+      { state: State.ACTIVE, x: 213, y: 10 },
+      { state: State.CANCELLED, x: 213, y: 10 },
+    ]);
+  });
+  flush();
+  expect(usePreferences.getState().presetThemes).toEqual({});
+  expect(useThemeDraft.getState().draft).toBeNull();
+  unmount(editor);
+});
+
+test("a pad or dial drag the system cancels saves nothing and leaves no draft", () => {
+  act(() => usePreferences.setState({ colorChoice: "green" }));
+  const editor = inDesign(<ThemePage />);
+  for (const id of ["themePad", "themeDial"]) {
+    act(() => {
+      fireGestureHandler(getByGestureTestId(id), [
+        { state: State.BEGAN, x: 20, y: 20 },
+        { state: State.ACTIVE, x: 20, y: 20 },
+        { state: State.ACTIVE, x: 40, y: 30 },
+        { state: State.CANCELLED, x: 40, y: 30 },
+      ]);
+    });
+    flush();
+    expect(`${id}: ${JSON.stringify(usePreferences.getState().presetThemes)}`).toBe(`${id}: {}`);
+    expect(useThemeDraft.getState().draft).toBeNull();
+  }
+  unmount(editor);
+});
+
 test("the Theme page adds up to three colours and removes down to one", () => {
   withCustom();
   const root = inDesign(<ThemePage />);

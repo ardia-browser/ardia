@@ -88,6 +88,7 @@ constexpr std::string_view kBrowserWindowCapabilities[] = {
     "ArdiaShell.copyText",
     "ArdiaShell.readText",
     "ArdiaShell.quit",
+    webui_window::kSessionEndedCall,
     "ArdiaShell.onOpenURLs",
     "ArdiaShell.listenForOpenURLs",
     "ArdiaTelemetry.post",
@@ -375,12 +376,28 @@ void ShellHostView::Invoke(const std::string& method,
   }
   if (method == "ArdiaShell.quit") {
     std::move(done).Run(true, base::Value());
-    QuitEverything();
+    WindowRegistry::Get().EndSessionThen(this, base::BindOnce(&QuitEverything));
     return;
+  }
+  if (method == webui_window::kSessionEndedCall) {
+    const std::string token = values && !values->empty() &&
+                                      (*values)[0].is_string()
+                                  ? (*values)[0].GetString()
+                                  : std::string();
+    if (!webui_window::ValidSessionToken(token)) {
+      return std::move(done).Run(
+          false,
+          Failure("ERR_SESSION_TOKEN", "A valid session token is required"));
+    }
+    WindowRegistry::Get().SessionEndAcknowledged(token);
+    return std::move(done).Run(true, base::Value());
   }
   if (HandlesUpdateCall(method)) {
     return InvokeUpdates(method, args.Find("args"), std::move(done),
-                         base::BindOnce(&QuitEverything));
+                         base::BindOnce([] {
+                           WindowRegistry::Get().EndSessionThen(
+                               nullptr, base::BindOnce(&QuitEverything));
+                         }));
   }
   if (method == "ArdiaShell.focusWindow") {
     const std::string target = values && !values->empty() &&

@@ -163,6 +163,9 @@ class ShellHostView : public views::View,
   int private_ordinal() const { return private_ordinal_; }
   void set_private_ordinal(int ordinal) { private_ordinal_ = ordinal; }
   bool closing() const { return closing_; }
+  bool LeavingSession() const;
+  bool ListensForSessionEnd() const;
+  void EmitShellEvent(std::string_view name, base::DictValue data);
   BrowserWindowInterface* browser() const { return browser_; }
   Profile* app_profile() const { return app_profile_; }
   Profile* page_profile() const;
@@ -240,6 +243,8 @@ class ShellHostView : public views::View,
  private:
   friend class PageBinding;
   friend class ShellBridge;
+
+  void CommitClose();
 
   struct CompanionConfirmation {
     CompanionConfirmation();
@@ -348,6 +353,8 @@ class ShellHostView : public views::View,
   bool closing_ = false;
   bool utility_ready_ = false;
   bool close_confirming_ = false;
+  bool close_committed_ = false;
+  bool close_started_ = false;
   std::vector<std::shared_ptr<base::RepeatingClosure>> confirmation_steps_;
   bool creating_tab_ = false;
   bool painted_ = false;

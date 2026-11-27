@@ -19,12 +19,14 @@
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/uuid.h"
 #include "content/public/browser/web_contents.h"
 #include "url/gurl.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
@@ -830,6 +832,107 @@ void WindowRegistry::ContinueHandOver(
     return;
   }
   browser->GetWindow()->Close();
+}
+
+size_t WindowRegistry::OpenBrowserWindowsBesides(
+    const ShellHostView* closing) const {
+  size_t open = 0;
+  for (const auto& [session, host] : hosts_) {
+    if (host != closing && !host->is_utility() && !host->LeavingSession()) {
+      ++open;
+    }
+  }
+  return open;
+}
+
+ShellHostView* WindowRegistry::SessionEndListener(ShellHostView* asker) const {
+  if (asker && !asker->is_utility() && asker->ListensForSessionEnd()) {
+    return asker;
+  }
+  for (auto it = activation_order_.rbegin(); it != activation_order_.rend();
+       ++it) {
+    const auto found = hosts_.find(*it);
+    if (found != hosts_.end() && !found->second->is_utility() &&
+        found->second->ListensForSessionEnd()) {
+      return found->second;
+    }
+  }
+  for (const auto& [session, host] : hosts_) {
+    if (!host->is_utility() && host->ListensForSessionEnd()) {
+      return host;
+    }
+  }
+  return nullptr;
+}
+
+void WindowRegistry::EndSessionThen(ShellHostView* asker,
+                                    base::OnceClosure then) {
+  const std::string token = base::Uuid::GenerateRandomV4().AsLowercaseString();
+  switch (session_end_.Begin(token)) {
+    case webui_window::SessionEndStep::kProceed:
+      std::move(then).Run();
+      return;
+    case webui_window::SessionEndStep::kJoin:
+      after_session_end_.push_back(std::move(then));
+      return;
+    case webui_window::SessionEndStep::kAsk:
+      break;
+  }
+  after_session_end_.push_back(std::move(then));
+  ShellHostView* listener = SessionEndListener(asker);
+  if (!listener) {
+    SessionEndSettled(token);
+    return;
+  }
+  listener->EmitShellEvent(webui_window::kSessionEndingEvent,
+                           base::DictValue().Set("token", token));
+  session_end_deadline_.Start(
+      FROM_HERE, base::Milliseconds(webui_window::kSessionEndDeadlineMs),
+      base::BindOnce(&WindowRegistry::SessionEndSettled,
+                     weak_factory_.GetWeakPtr(), token));
+}
+
+void WindowRegistry::SessionEndAcknowledged(const std::string& token) {
+  if (webui_window::ValidSessionToken(token)) {
+    SessionEndSettled(token);
+  }
+}
+
+void WindowRegistry::SessionEndSettled(std::string token) {
+  if (!session_end_.Settle(token)) {
+    return;
+  }
+  session_end_deadline_.Stop();
+  std::vector<base::OnceClosure> after = std::exchange(after_session_end_, {});
+  quit_watch_.Start(
+      FROM_HERE, base::Milliseconds(webui_window::kQuitWatchIntervalMs),
+      base::BindRepeating(&WindowRegistry::WatchForCancelledQuit,
+                          weak_factory_.GetWeakPtr()));
+  for (base::OnceClosure& run : after) {
+    std::move(run).Run();
+  }
+}
+
+void WindowRegistry::WatchForCancelledQuit() {
+  if (hosts_.empty()) {
+    quit_watch_.Stop();
+    return;
+  }
+  const std::string token = session_end_.Resume(
+      browser_shutdown::IsTryingToQuit(), OpenBrowserWindowsBesides(nullptr));
+  if (token.empty()) {
+    if (!session_end_.ended()) {
+      quit_watch_.Stop();
+    }
+    return;
+  }
+  quit_watch_.Stop();
+  for (const auto& [session, host] : hosts_) {
+    if (!host->is_utility() && host->browser()) {
+      host->EmitShellEvent(webui_window::kSessionResumedEvent,
+                           base::DictValue().Set("token", token));
+    }
+  }
 }
 
 void WindowRegistry::ResetAllCompanionConfirmations() {

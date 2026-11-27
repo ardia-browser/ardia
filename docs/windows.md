@@ -942,6 +942,19 @@ in `webui_frame.cc`: top-edge resize, `HTMAXBUTTON` over the shell's maximize bu
   (`ArdiaShell.quit`, closing the last window) through `ResetAllCompanionConfirmations`. `closing_` is set only when the
   widget actually starts closing (`OnWidgetClosing`), so a cancelled `beforeunload` never leaves documents refused.
   Companions closed after their window are emptied without prompts.
+- Ending the session: the shell has no close-drain protocol, and the shared bootstrap drops every request made after
+  `pagehide`, so the UI can't save its telemetry session from a close listener. Instead the host holds the close for it
+  (`webui_session_end_policy.h`, `WindowRegistry::EndSessionThen`). When the last browser window commits its close
+  (`CommitClose`, after the companions' `beforeunload`), or on `ArdiaShell.quit` and the update restart, it sends
+  `ArdiaShell` `shell` `shell.sessionEnding` with a token to a live window. That window ends the session through
+  `settleTelemetry` and answers `ArdiaShell.sessionEnded(token)`, and only then does the host close (3 s at most). A
+  quit that Chromium's `beforeunload` or download prompt cancels afterwards is caught by a 1 s watch: no longer quitting
+  and a browser window still open means `shell.sessionResumed` goes out, and the window that ended the session reopens
+  it. A window counts as leaving only while its close is in flight (`LeavingSession`: the handshake is pending or
+  Chromium's `UnloadController` is still attempting the close), so a close its own tabs cancel afterwards makes it an
+  open window again: it can be closed again, and the watch reopens the session. `WM_CLOSE` on the last browser window
+  is taken even without companion tabs, so the system's close goes through the same path. Logging off still closes
+  without the handshake.
 - A `session.write` broadcasts `ArdiaHost` `session` (`base`, `session`, `sourceWindowId`) to every non-private
   window, the writer getting its own base back, so Settings changes reach open windows at once. Entering and leaving
   full screen sends `ArdiaShell` `onWindowEvent` `{type: "fullScreen", id, on}`, and `minimizeWindow` takes a target

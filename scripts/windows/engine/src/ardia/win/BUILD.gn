@@ -95,6 +95,7 @@ source_set("win") {
     "webui/webui_mode.cc",
     "webui/webui_mode.h",
     "webui/webui_policy.h",
+    "webui/webui_session_end_policy.h",
     "webui/webui_shell.cc",
     "webui/webui_shell.h",
     "webui/webui_storage.cc",

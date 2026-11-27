@@ -1280,13 +1280,16 @@ void ShellHostView::RememberPlacement() {
 }
 
 void ShellHostView::RequestClose() {
-  if (!browser_ || closing_ || close_confirming_) {
+  if (!browser_ || closing_ || close_confirming_ ||
+      (close_committed_ && LeavingSession())) {
     return;
   }
+  close_committed_ = false;
+  close_started_ = false;
   RememberPlacement();
   ResetUnloadConfirmations();
   if (!CompanionsHoldTabs() || browser_shutdown::IsTryingToQuit()) {
-    browser_->GetWindow()->Close();
+    CommitClose();
     return;
   }
   close_confirming_ = true;
@@ -1301,14 +1304,72 @@ void ShellHostView::RequestClose() {
                      " was cancelled by one of its pages");
           return;
         }
-        host->browser_->GetWindow()->Close();
+        host->CommitClose();
       },
       GetWeakPtr()));
 }
 
+void ShellHostView::CommitClose() {
+  if (!browser_) {
+    return;
+  }
+  close_committed_ = true;
+  WindowRegistry& registry = WindowRegistry::Get();
+  if (is_utility() || !webui_window::ClosingEndsSession(
+                          registry.OpenBrowserWindowsBesides(this))) {
+    close_started_ = true;
+    browser_->GetWindow()->Close();
+    return;
+  }
+  Note("window " + config_.window_id + " ends the session as it closes");
+  registry.EndSessionThen(
+      this, base::BindOnce(
+                [](base::WeakPtr<ShellHostView> host) {
+                  if (host && host->browser_) {
+                    host->close_started_ = true;
+                    host->browser_->GetWindow()->Close();
+                  }
+                },
+                GetWeakPtr()));
+}
+
+bool ShellHostView::LeavingSession() const {
+  if (closing_ || !browser_) {
+    return true;
+  }
+  if (!close_committed_) {
+    return false;
+  }
+  if (!close_started_) {
+    return true;
+  }
+  UnloadController* unload = UnloadController::From(browser_.get());
+  return unload && unload->is_attempting_to_close_browser();
+}
+
+bool ShellHostView::ListensForSessionEnd() const {
+  return browser_ && !closing_ && handler_ &&
+         OwnsHandler(handler_, handler_->generation());
+}
+
+void ShellHostView::EmitShellEvent(std::string_view name,
+                                   base::DictValue data) {
+  Emit("ArdiaShell", "shell",
+       base::Value(base::DictValue()
+                       .Set("name", name)
+                       .Set("data", std::move(data))));
+}
+
 bool ShellHostView::InterceptSystemClose() {
-  if (!browser_ || closing_ || browser_shutdown::IsTryingToQuit() ||
-      !CompanionsHoldTabs()) {
+  if (!browser_ || closing_ || (close_committed_ && LeavingSession()) ||
+      browser_shutdown::IsTryingToQuit()) {
+    return false;
+  }
+  const WindowRegistry& registry = WindowRegistry::Get();
+  const bool ends_session = !is_utility() && !registry.SessionEnded() &&
+                            webui_window::ClosingEndsSession(
+                                registry.OpenBrowserWindowsBesides(this));
+  if (!CompanionsHoldTabs() && !ends_session) {
     return false;
   }
   base::SequencedTaskRunner::GetCurrentDefault()->PostTask(

@@ -1,11 +1,11 @@
 import { AccessibilityInfo as WebAccessibilityInfo } from "react-native-web";
+import type { EventSubscription as Subscription } from "../expo-modules-core";
 
 type ContrastQuery = {
   matches: boolean;
   addEventListener(type: "change", listener: (event: { matches: boolean }) => void): void;
   removeEventListener(type: "change", listener: (event: { matches: boolean }) => void): void;
 };
-type Subscription = { remove(): void };
 type Listener = (value: boolean) => void;
 
 export const HIGH_CONTRAST_QUERY = "(prefers-contrast: more), (forced-colors: active)";

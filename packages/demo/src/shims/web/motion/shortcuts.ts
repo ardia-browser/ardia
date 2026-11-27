@@ -141,7 +141,7 @@ function onKeyDown(e: KeyboardEvent) {
   if (e.isComposing || e.key === "Process" || e.keyCode === IME_PROCESS_KEY_CODE) return;
   if (switcher.capturing && !(e.code === "Tab" && (e.ctrlKey || e.altKey))) {
     const closes = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "w" && !e.repeat;
-    const sleeps = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && !e.repeat;
+    const sleeps = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && !e.altKey && !e.repeat;
     const key = e.key === "Escape" ? "escape" : e.key === "ArrowRight" ? "next" : e.key === "ArrowLeft" ? "previous" : closes ? "close" : sleeps ? "sleep" : null;
     if (key) emitAppEvent({ type: "switcherKey", key });
     e.preventDefault();

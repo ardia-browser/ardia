@@ -96,7 +96,7 @@ export async function startLinuxShortcuts(host: ArdiaHost) {
     const binding = bindings.find((b) => b.keyCode === combo.keyCode && b.modifiers === combo.flags);
     if (capturing && binding?.command !== "tabSwitcher") {
       const closes = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "w" && !event.repeat;
-      const sleeps = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s" && !event.repeat;
+      const sleeps = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s" && !event.altKey && !event.repeat;
       const key = event.key === "Escape" ? "escape" : event.key === "ArrowRight" ? "next" : event.key === "ArrowLeft" ? "previous" : closes ? "close" : sleeps ? "sleep" : null;
       if (key) appEvent({ type: "switcherKey", key });
       event.preventDefault();

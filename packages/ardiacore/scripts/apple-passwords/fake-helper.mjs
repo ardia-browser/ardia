@@ -8,13 +8,16 @@
 //
 //   <state dir>/fixtures.json  { code, logins: [{ user, password, sites: [host or http://host] }], codes: [{ domain, username, code }] }
 //   <state dir>/mode.json      re-read on every message: { killedAtLaunch, wrongCode, status: { "<cmd>": n }, delay: { "<cmd>": ms }, endPairing: n,
-//                              garble: { "<cmd>": true }, drop: { "<cmd>": n } }
+//                              garble: { "<cmd>": true }, drop: { "<cmd>": n }, saveChoice: "save" | "notNow" }
 //                              (garble: answer that cmd with a sealed reply that doesn't open, and change nothing;
 //                              drop: never answer that cmd until n of its requests have gone unanswered, counted from launch)
 //   Each reply carries the request's tabId and frameId back, as Apple's helper does (its extension routes replies by them).
 //                              (endPairing: bump the number and the helper ends the Pairing with a cmd 9 push)
+//                              (saveChoice: what the simulated user clicks in the helper's own "Save Password?" window, default
+//                              "save"; either way the reply is cmd 4 with STATUS 0, as Apple's helper answers, and only "save" stores)
 //   <state dir>/started        one line per launch (pid and time): the marker that the helper ran
 //   <state dir>/requests.jsonl one line per message: { cmd, qid?, url?, host? }, never a code or password
+//   <state dir>/asked.jsonl    one line each time the helper's own save window would ask: { user, site, update, choice }
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -153,9 +156,13 @@ function answer(cmd, body) {
     const insecure = (site) => site.startsWith("http://");
     const kept = logins.find((l) => l.user === body.NUSR && sameSite(l.sites.filter((site) => insecure(site) === insecure(host)), bare(host)));
     if (kept?.password === body.NPWD) return { STATUS: 7 };
-    const rest = logins.filter((l) => l !== kept);
-    fs.writeFileSync(file("fixtures.json"), JSON.stringify({ ...fixtures(), logins: [...rest, { user: body.NUSR, password: body.NPWD, sites: [host] }] }, null, 2));
-    return { STATUS: 0 };
+    const choice = mode().saveChoice === "notNow" ? "notNow" : "save";
+    fs.appendFileSync(file("asked.jsonl"), `${JSON.stringify({ user: body.NUSR, site: host, update: !!kept, choice })}\n`);
+    if (choice === "save") {
+      const rest = logins.filter((l) => l !== kept);
+      fs.writeFileSync(file("fixtures.json"), JSON.stringify({ ...fixtures(), logins: [...rest, { user: body.NUSR, password: body.NPWD, sites: [host] }] }, null, 2));
+    }
+    return { RequiresUserAuthenticationToFill: false, STATUS: 0 };
   }
   if (cmd === 16 || cmd === 17) {
     const page = (body.frameURLs ?? [])[0] ?? "";
@@ -172,7 +179,7 @@ const LIST_CMD = 4;
 function sealed(message) {
   const payload = jsonOf(message.payload);
   const body = open(payload?.SMSG);
-  logRequest({ cmd: message.cmd, qid: payload?.QID, url: message.url, host: body?.URL ?? body?.NURL });
+  logRequest({ cmd: message.cmd, qid: payload?.QID, url: message.url, host: body?.URL || body?.NURL });
   const ids = { tabId: message.tabId, frameId: message.frameId };
   if (!body) return send({ cmd: message.cmd, ...ids, payload: {} });
   const key = String(message.cmd);

@@ -43,7 +43,12 @@ final class ApplePasswordsSaving: NSObject {
         guard kept else { return done(remembered == nil ? "save" : "update") }
         ApplePasswordsClient.shared.password(host: host, user: username) { result in
           DispatchQueue.main.async {
-            guard case .success(let saved) = result else { return done(nil) }
+            let saved: String
+            switch result {
+            case .success(let kept): saved = kept
+            case .failure(.unavailable): return done(nil)
+            case .failure: return done("update")
+            }
             guard Data(saved.utf8) != Data(password.utf8) else {
               remember(scheme: scheme, host: host, user: username, password: password)
               return done(nil)

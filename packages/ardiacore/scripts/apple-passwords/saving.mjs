@@ -143,6 +143,25 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         await tab.close();
       }
     },
+    async E20unread() {
+      const { fake, tabs } = await session();
+      const kept = fixture("unread@save.test");
+      const changed = `fixture-pw-unread-${engineName}-${Date.now()}`;
+      const tab = await tabs.open(sites.url(SITE));
+      try {
+        fake.setMode({ status: { 5: 2 } });
+        await signIn(tab, kept.user, changed);
+        const prompt = await promptShown(tab, "the prompt when the kept password can't be read");
+        assert(prompt.state === "update" && prompt.copy.title === UPDATE_TITLE && prompt.username === kept.user, "a sign-in whose kept password can't be read still asks to update", prompt);
+        fake.setMode({ status: {} });
+        assert(await tab.answer("update"), "Update is pressed", null);
+        await waitFor("the new password in Apple Passwords", async () => (fake.savedLogins().find((l) => l.user === kept.user)?.password === changed ? true : null), 20_000);
+        return { engine: engineName, title: prompt.copy.title };
+      } finally {
+        fake.setMode({ status: {} });
+        await tab.close();
+      }
+    },
     async E22garbled() {
       const { fake, tabs } = await session();
       const kept = fixture("garbled@save.test");

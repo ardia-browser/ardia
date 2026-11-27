@@ -85,6 +85,10 @@ function environment({ top = true, page = "https://page.example", selection = nu
       this.path = init.path ?? [];
       this.prevented = false;
       this.stopped = false;
+      this.phase = 0;
+    }
+    get eventPhase() {
+      return this.phase;
     }
     get defaultPrevented() {
       return this.prevented;
@@ -160,7 +164,15 @@ function environment({ top = true, page = "https://page.example", selection = nu
     }
   }
   const document = new Document();
-  const window = { open: (...args) => opened.push(args), setTimeout: (fn) => timers.push(fn) };
+  const window = {
+    open: (...args) => {
+      opened.push(args);
+      if ("openResult" in window) return window.openResult;
+      if (/^_(self|top|parent)$/i.test(args[1] ?? "")) return window;
+      return { opener: window, location: { href: args[0] ? String(args[0]) : "about:blank" }, history: { length: 1 } };
+    },
+    setTimeout: (fn) => timers.push(fn),
+  };
   class UserActivation {
     get isActive() {
       return activation.active;
@@ -221,12 +233,16 @@ function environment({ top = true, page = "https://page.example", selection = nu
   new Function(...Object.keys(env), source)(...Object.values(env));
   const fire = (type, path, init = {}, page) => {
     const e = new MouseEvent(type, { path: [...path, document, window], ...init });
+    e.phase = 1;
     for (const fn of listeners[type] ?? []) fn(e);
+    e.phase = 3;
     page?.(e);
-    if (e.propagationStopped) return e;
-    const after = bubbling[type] ?? [];
-    bubbling[type] = after.filter((l) => !l.once);
-    for (const l of after) l.fn(e);
+    if (!e.propagationStopped) {
+      const after = bubbling[type] ?? [];
+      bubbling[type] = after.filter((l) => !l.once);
+      for (const l of after) l.fn(e);
+    }
+    e.phase = 0;
     return e;
   };
   const gesture = (path, keys, { move = 0, release = path, between, page } = {}) => {
@@ -758,6 +774,29 @@ test("a new-tab link whose click the page cancels to open a blank window itself 
   env.window.open("");
   env.flush();
   assert.deepEqual(newTabLinks(env), [wrapped, "https://other.example/stopped"], "a blank window opened after the click's dispatch isn't tied to it");
+});
+
+test("a cancelled click is tied only to a new blank window it opened while the click was being handled", () => {
+  const env = environment();
+  const cancelled = (href, open) => env.gesture([env.link(href, { target: "_blank" })], {}, { page: (e) => (e.preventDefault(), open?.()) });
+  cancelled("https://other.example/self", () => env.window.open("", "_self"));
+  cancelled("https://other.example/top", () => env.window.open("about:blank", "_top"));
+  env.window.openResult = null;
+  cancelled("https://other.example/noopener", () => env.window.open("", "_blank", "noopener"));
+  delete env.window.openResult;
+  env.window.openResult = { opener: env.window, location: { href: "https://reused.example/" }, history: { length: 3 } };
+  cancelled("https://other.example/reused", () => env.window.open("", "named"));
+  delete env.window.openResult;
+  env.flush();
+  assert.deepEqual(newTabLinks(env), []);
+  const stopped = env.link("https://other.example/stopped-late", { target: "_blank" });
+  env.gesture([stopped], {}, { page: (e) => (e.preventDefault(), e.stopPropagation()) });
+  env.window.open("");
+  env.flush();
+  assert.deepEqual(newTabLinks(env), [], "an opening after a stopped click's dispatch, before its cleanup, isn't tied to it");
+  cancelled("https://other.example/fresh", () => env.window.open("", "_blank"));
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/fresh"]);
 });
 
 test("a cancelled click whose page opened its own window with an address is noted once, by that address", () => {

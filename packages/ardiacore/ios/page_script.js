@@ -306,43 +306,59 @@
   };
   for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteUse, true);
   const INHERITED_ACTIVATION_WINDOW_MS = 1000;
+  const INHERITED_ACTIVATION_SETTLED_MS = 7000;
   const INHERITED_ACTIVATION_POLL_MS = 100;
-  const INHERITED_ACTIVATION_GIVE_UP_MS = 15000;
-  const judgeFrameActivation = (crossOrigin, isActive, now, schedule) => {
-    if (!crossOrigin) return isActive;
-    const startedAt = now();
-    let inherited = false;
-    let watching = false;
-    const look = () => {
-      const age = now() - startedAt;
-      if (inherited && (!isActive() || age > INHERITED_ACTIVATION_GIVE_UP_MS)) inherited = false;
-      else if (!inherited && age < INHERITED_ACTIVATION_WINDOW_MS && isActive()) inherited = true;
-      watching = inherited || age < INHERITED_ACTIVATION_WINDOW_MS;
-      if (watching) schedule(look, INHERITED_ACTIVATION_POLL_MS);
+  const judgeFrameActivation = (guarded, isActive, embedFocused, now, embedStartedAt, schedule) => {
+    if (!guarded) return isActive;
+    let cleared = false;
+    const observe = () => {
+      const active = isActive();
+      const age = now() - embedStartedAt;
+      if (age >= INHERITED_ACTIVATION_SETTLED_MS || (age >= INHERITED_ACTIVATION_WINDOW_MS && !active)) cleared = true;
+      return active;
     };
-    look();
-    return () => {
-      const age = now() - startedAt;
-      if (!isActive()) return false;
-      if (age < INHERITED_ACTIVATION_WINDOW_MS) {
-        inherited = true;
-        if (!watching) look();
+    const poll = () => {
+      observe();
+      if (!cleared) schedule(poll, INHERITED_ACTIVATION_POLL_MS);
+    };
+    poll();
+    return () => observe() && (cleared || embedFocused());
+  };
+  const frameActivated = (() => {
+    if (isTop) return () => false;
+    const nativeDateNow = Date.now;
+    const nativeSetTimeout = window.setTimeout;
+    const userActivationGet = Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation")?.get;
+    const isActiveGet = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive")?.get;
+    const hasFocusOf = Document.prototype.hasFocus;
+    const now = () => apply(nativeDateNow, Date, []);
+    const startedAt = now();
+    const isActive = () => {
+      if (!userActivationGet || !isActiveGet) return false;
+      const activation = apply(userActivationGet, navigator, []);
+      return !!activation && !!apply(isActiveGet, activation, []);
+    };
+    let embed = window;
+    try {
+      while (embed !== window.top && embed.parent.document) embed = embed.parent;
+    } catch (e) {}
+    let embedStartedAt = startedAt;
+    if (embed !== window) {
+      try {
+        const [entry] = embed.performance.getEntriesByType("navigation");
+        const began = embed.performance.timeOrigin + (entry ? entry.responseStart : 0);
+        if (isFinite(began) && began <= startedAt) embedStartedAt = began;
+      } catch (e) {}
+    }
+    const embedFocused = () => {
+      try {
+        return !!apply(hasFocusOf, embed.document, []);
+      } catch (e) {
         return false;
       }
-      return !inherited;
     };
-  };
-  const transientActivation = () => !!(navigator.userActivation && navigator.userActivation.isActive);
-  const crossOriginFrame = () => {
-    try {
-      return !window.top.document;
-    } catch (e) {
-      return true;
-    }
-  };
-  const frameActivated = isTop
-    ? () => false
-    : judgeFrameActivation(crossOriginFrame(), transientActivation, () => performance.now(), (fn, ms) => setTimeout(guard(fn), ms));
+    return judgeFrameActivation(embed !== window.top, isActive, embedFocused, now, embedStartedAt, (fn, ms) => apply(nativeSetTimeout, window, [guard(fn), ms]));
+  })();
   const askedToPlay = () => usedHere || frameActivated();
   let autoplayBlocks = 0;
   const reportAutoplayBlocks = later(() => {
@@ -364,8 +380,7 @@
     if (e.type === "play" || e.type === "playing") playingMedia.add(m);
     else if (e.type === "pause" || e.type === "ended" || e.type === "emptied") playingMedia.delete(m);
     if (blockAutoplay && e.type === "play" && !askedToPlay()) {
-      m.pause();
-      noteAutoplayBlocked(1);
+      noteAutoplayBlocked(pauseUnasked([m], false));
       return;
     }
     if (e.type === "emptied") timeline?.mediaTimes.delete(m);
@@ -1655,6 +1670,7 @@
     };
     let openingsNoted = 0;
     let clickInFlight = null;
+    const eventPhaseOf = getter(Event.prototype, "eventPhase");
     const noteOpening = (url) => {
       openingsNoted++;
       send("newTabLink", { url });
@@ -1676,7 +1692,7 @@
         const path = apply(composedPath, e, []);
         const forSite = !!site && timeStamp(e) === site.stamp && apply(includes, path, [site.link]);
         const link = forSite ? site.link : hit.link;
-        const click = { notedBefore: openingsNoted, openedBlank: false };
+        const click = { event: e, notedBefore: openingsNoted, openedBlank: false };
         clickInFlight = click;
         let decided = false;
         const decide = guard((ev) => {
@@ -1736,16 +1752,31 @@
     }
     const openDescriptor = Object.getOwnPropertyDescriptor(window, "open");
     if (tracksActivation && openDescriptor && typeof openDescriptor.value === "function") {
+      const addressOf = (args) => (!args.length || args[0] === undefined || args[0] === null ? "" : `${args[0]}`);
       const openedByUser = (args) => {
-        const raw = !args.length || args[0] === undefined || args[0] === null ? "" : `${args[0]}`;
-        if (clickInFlight && apply(test, /^(about:blank)?$/i, [raw])) clickInFlight.openedBlank = true;
+        const raw = addressOf(args);
         if (!raw || !activated()) return;
         const url = new URLCtor(raw, baseURI(document)).href;
         if (apply(test, /^https?:/i, [url])) noteOpening(url);
       };
+      const freshBlankWindow = (opened) => {
+        if (!opened || opened === window || opened === window.top || opened === window.parent) return false;
+        try {
+          return opened.opener === window && opened.location.href === "about:blank" && opened.history.length <= 1;
+        } catch (e) {
+          return false;
+        }
+      };
+      const openedBlankDuringClick = (args, opened) => {
+        const click = clickInFlight;
+        if (!click || eventPhaseOf(click.event) === 0 || !apply(test, /^(about:blank)?$/i, [addressOf(args)])) return;
+        if (freshBlankWindow(opened)) click.openedBlank = true;
+      };
       const open = asNative(openDescriptor.value, (target, self, args) => {
         guard(openedByUser)(args);
-        return apply(target, self, args);
+        const opened = apply(target, self, args);
+        guard(openedBlankDuringClick)(args, opened);
+        return opened;
       });
       Object.defineProperty(window, "open", { ...openDescriptor, value: open });
     }

@@ -10,16 +10,17 @@ const playableSource = script.match(/const playableMedia = (\(all\) => .*);\n/)?
 assert.ok(playableSource, "page_script.js defines playableMedia");
 const playableMedia = new Function(`return ${playableSource}`)();
 
-const judgeSource = script.match(/const judgeFrameActivation = (\(crossOrigin, isActive, now, schedule\) => \{[\s\S]*?\n {2}\});\n/)?.[1];
+const judgeSource = script.match(/const judgeFrameActivation = (\(guarded, isActive, embedFocused, now, embedStartedAt, schedule\) => \{[\s\S]*?\n {2}\});\n/)?.[1];
 const judgeConstants = [...script.matchAll(/const (INHERITED_ACTIVATION_[A-Z_]+) = (\d+);\n/g)].map((m) => `const ${m[1]} = ${m[2]};`).join("\n");
-assert.ok(judgeSource && judgeConstants.includes("INHERITED_ACTIVATION_WINDOW_MS"), "page_script.js defines judgeFrameActivation and its constants");
+assert.ok(judgeSource && judgeConstants.includes("INHERITED_ACTIVATION_SETTLED_MS"), "page_script.js defines judgeFrameActivation and its constants");
 const judgeFrameActivation = new Function(`${judgeConstants}\nreturn ${judgeSource}`)();
 
-function frame({ crossOrigin = true } = {}) {
-  let clock = 0;
-  let active = false;
+function frame({ guarded = true, embedStartedAt = 0, startAt = embedStartedAt, pollDelay = (ms) => ms, activeAtStart = false } = {}) {
+  let clock = startAt;
+  let active = activeAtStart;
+  let focused = false;
   let timers = [];
-  const judge = judgeFrameActivation(crossOrigin, () => active, () => clock, (fn, ms) => timers.push({ at: clock + ms, fn }));
+  const judge = judgeFrameActivation(guarded, () => active, () => focused, () => clock, embedStartedAt, (fn, ms) => timers.push({ at: clock + pollDelay(ms), fn }));
   const advanceTo = (t) => {
     for (;;) {
       timers.sort((a, b) => a.at - b.at);
@@ -31,7 +32,7 @@ function frame({ crossOrigin = true } = {}) {
     }
     clock = t;
   };
-  return { judge, advanceTo, setActive: (on) => (active = on), pending: () => timers.length };
+  return { judge, advanceTo, setActive: (on) => (active = on), setFocused: (on) => (focused = on), pending: () => timers.length };
 }
 
 test("a cross-origin player doesn't take the click that navigated its parent as a request to play, however late it ends (gong.bg's Vbox7, #3883)", () => {
@@ -49,6 +50,16 @@ test("a cross-origin player doesn't take the click that navigated its parent as 
   assert.equal(f.pending(), 0, "nothing keeps polling");
 });
 
+test("a late first timer never mistakes an inherited activation that is still on for a fresh one", () => {
+  const f = frame({ pollDelay: () => 1200 });
+  f.advanceTo(100);
+  f.setActive(true);
+  f.advanceTo(1200);
+  assert.equal(f.judge(), false);
+  f.advanceTo(4000);
+  assert.equal(f.judge(), false);
+});
+
 test("an inherited activation a play() sees before the first poll is caught too", () => {
   const f = frame();
   f.setActive(true);
@@ -61,6 +72,20 @@ test("an inherited activation a play() sees before the first poll is caught too"
   assert.equal(f.judge(), true);
 });
 
+test("past the settled bound nothing inherited can still be on, so activation counts and polling stops", () => {
+  const f = frame({ pollDelay: () => 100000 });
+  f.setActive(true);
+  f.advanceTo(7000);
+  assert.equal(f.judge(), true);
+});
+
+test("a media frame that a same-origin controller frame starts on Play plays at once, while focus is in that embed", () => {
+  const f = frame({ embedStartedAt: 0, startAt: 3000, activeAtStart: true });
+  assert.equal(f.judge(), false, "an activation with focus outside the embed is still suspect");
+  f.setFocused(true);
+  assert.equal(f.judge(), true, "the user clicked inside the embed");
+});
+
 test("a cross-origin frame that inherits nothing honours activation once its first second has passed", () => {
   const f = frame();
   f.advanceTo(2000);
@@ -70,8 +95,8 @@ test("a cross-origin frame that inherits nothing honours activation once its fir
   assert.equal(f.judge(), true);
 });
 
-test("a frame on the top page's origin plays on a Play button in its parent at once", () => {
-  const f = frame({ crossOrigin: false });
+test("a frame in the top page's origin chain plays on a Play button in its parent at once", () => {
+  const f = frame({ guarded: false });
   f.setActive(true);
   assert.equal(f.judge(), true);
   assert.equal(f.pending(), 0);
@@ -88,6 +113,13 @@ test("media playing before the config came is paused", () => {
 test("the same element listed twice (the active one, then from the DOM) is paused once", () => {
   const video = media(true);
   assert.equal(pauseUnasked([video, video, null], false), 1);
+  assert.ok(video.paused);
+});
+
+test("one blocked attempt counts once: the config pauses it, then its queued play event finds it paused", () => {
+  const video = media(true);
+  const counted = pauseUnasked([video], false) + pauseUnasked([video], false);
+  assert.equal(counted, 1);
   assert.ok(video.paused);
 });
 

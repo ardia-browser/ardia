@@ -36,6 +36,13 @@ static BOOL gBlockAutoplayEverywhere = NO;
 static char kScriptFramesKey;
 static char kSameSiteFramesKey;
 
+static NSInteger AutoplayBlockedCount(id value) {
+  if (![value isKindOfClass:NSNumber.class] || CFGetTypeID((__bridge CFTypeRef)value) == CFBooleanGetTypeID()) return 0;
+  const double count = [value doubleValue];
+  if (!std::isfinite(count) || count < 1) return 0;
+  return count >= 20 ? 20 : (NSInteger)count;
+}
+
 static NSDictionary *DisplayMediaAudioOffer(NSDictionary *message) {
   if (!Flag(message, @"audio")) return nil;
   NSDictionary *support = ArdiaCoreEngine.desktopCaptureAudio;
@@ -165,11 +172,11 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   } else if ([kind isEqualToString:@"newTabLink"] && dict) {
     [self noteNewTabLink:Text(dict, @"url", 8192)];
   } else if ([kind isEqualToString:@"autoplayBlocked"] && dict) {
-    NSNumber *count = [dict[@"count"] isKindOfClass:NSNumber.class] ? dict[@"count"] : nil;
+    const NSInteger count = AutoplayBlockedCount(dict[@"count"]);
     const CFTimeInterval now = CACurrentMediaTime();
-    if (count && count.doubleValue >= 1 && now - _autoplayBlockedAt >= 1) {
+    if (count > 0 && now - _autoplayBlockedAt >= 1) {
       _autoplayBlockedAt = now;
-      [self emit:@"autoplayBlocked" payload:@{@"count" : @(MIN(count.integerValue, 20))}];
+      [self emit:@"autoplayBlocked" payload:@{@"count" : @(count)}];
     }
   } else if ([kind isEqualToString:@"linkDrop"] && main) {
     NSString *url = Text(dict, @"url", 8192);

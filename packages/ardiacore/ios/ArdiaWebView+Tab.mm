@@ -17,8 +17,19 @@ const int kNewTabLinkTries = 8;
 const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
 
 BOOL IsWebAddress(NSString *url) {
-  NSString *scheme = url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil;
-  return [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"];
+  if (![url isKindOfClass:NSString.class] || !url.length || url.length > 8192) return NO;
+  NSMutableCharacterSet *refused = [NSMutableCharacterSet whitespaceAndNewlineCharacterSet];
+  [refused formUnionWithCharacterSet:NSCharacterSet.controlCharacterSet];
+  [refused formUnionWithCharacterSet:NSCharacterSet.illegalCharacterSet];
+  if ([url rangeOfCharacterFromSet:refused].location != NSNotFound) return NO;
+  NSString *lower = url.lowercaseString;
+  if (![lower hasPrefix:@"http://"] && ![lower hasPrefix:@"https://"]) return NO;
+  NSURL *parsed = [NSURL URLWithString:url];
+  return parsed.host.length > 0 && !parsed.user && !parsed.password;
+}
+
+BOOL IsBlankAddress(NSString *url) {
+  return !url.length || [url isEqualToString:@"about:blank"];
 }
 }
 
@@ -326,7 +337,7 @@ BOOL IsWebAddress(NSString *url) {
           disposition:(NSString *)disposition
               clicked:(nullable NSString *)clicked
              linkWait:(nullable NSString *)linkWait {
-  NSString *url = IsWebAddress(clicked) && !IsWebAddress(tab.url) ? clicked : tab.url;
+  NSString *url = IsWebAddress(clicked) && IsBlankAddress(tab.url) ? clicked : tab.url;
   NSMutableDictionary *payload = [@{
     @"url" : url ?: @"",
     @"disposition" : disposition,

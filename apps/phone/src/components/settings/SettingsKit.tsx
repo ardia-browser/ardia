@@ -251,10 +251,10 @@ function ClassicNavRow({ title, icon, tint, value, detail, chevron = true, divid
   );
 }
 
-function ClassicToggleRow({ title, icon, tint, divider, value, onChange, detail, buttonRef }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null> }) {
+function ClassicToggleRow({ title, icon, tint, divider, value, onChange, detail, buttonRef, disabled = false }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null>; disabled?: boolean }) {
   return (
     <View>
-      <SharedToggleRow buttonRef={buttonRef} label={title} detail={detail} detailInset={icon ? settingsLayout.tile + settingsLayout.labelGap : 0} value={value} onChange={onChange} style={styles.row}>
+      <SharedToggleRow buttonRef={buttonRef} label={title} detail={detail} detailInset={icon ? settingsLayout.tile + settingsLayout.labelGap : 0} value={value} disabled={disabled} onChange={onChange} style={styles.row}>
         <Label title={title} icon={icon} tint={tint} />
       </SharedToggleRow>
       {divider ? <Divider /> : null}

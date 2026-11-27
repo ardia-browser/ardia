@@ -3,6 +3,9 @@ import { resetZoom, setDesktopSite, setNightShadeOn, siteSettingsInMenu, zoomIn,
 import { useMenuModel } from "../../state/page/hooks";
 import type { MenuModel } from "../../state/page/pageMenu";
 import { usePageUi } from "../../state/page/store";
+import { usePages } from "../../state/pages/store";
+import { display } from "../../state/search/omnibox";
+import { useTabs } from "../../state/tabs/store";
 import { useSelectedTabId } from "../../state/tabs/hooks";
 import { font, MaterialIconButton, settingsLayout, settingsTint, smoothCorners, Symbol, useDesign, usePressStyle, useTheme, type PressKind } from "../ui";
 import { useMaterialTheme } from "../ui/materialTheme";
@@ -16,10 +19,12 @@ export const THIS_SITE_FALLBACK = "This Site";
 export function useThisSite(): { tabId: string; host: string; model: MenuModel } | null {
   const tabId = useSelectedTabId() ?? "";
   const model = useMenuModel(tabId);
-  const host = usePageUi((s) => s.menuSite?.host ?? null);
+  const url = usePages((s) => s.navigation[tabId]?.url) ?? null;
+  const tabUrl = useTabs((s) => s.open.find((t) => t.id === tabId)?.url ?? s.privates.find((t) => t.id === tabId)?.url ?? null);
   const inMenu = usePageUi(siteSettingsInMenu);
   if (!inMenu || !tabId || !model.pageRows || !model.isWebPage) return null;
-  return { tabId, host: host ?? THIS_SITE_FALLBACK, model };
+  const shown = url ?? tabUrl;
+  return { tabId, host: (shown && display(shown).host) || THIS_SITE_FALLBACK, model };
 }
 
 export function ThisSiteGroup() {
@@ -28,7 +33,7 @@ export function ThisSiteGroup() {
   const { host, model } = site;
   return (
     <Group header={host} footer={THIS_SITE_FOOTER}>
-      <ToggleRow title="Night Shade" icon="moonFill" tint={settingsTint.nightShade} value={model.nightShadeOn} divider onChange={setNightShadeOn} />
+      <ToggleRow title="Night Shade" icon="moonFill" tint={settingsTint.nightShade} value={model.nightShadeOn} disabled={!model.siteSwitches} divider onChange={setNightShadeOn} />
       <ZoomRow model={model} />
       <ToggleRow title="Desktop Site" icon="desktop" tint={settingsTint.neutral} value={model.desktopSite} onChange={setDesktopSite} />
     </Group>

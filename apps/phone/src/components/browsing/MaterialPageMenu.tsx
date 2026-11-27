@@ -30,7 +30,6 @@ import {
 import { menuSwitchHint, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
 import { useMenuTitle, useTitleFeedback } from "../../state/page/hooks";
 import type { MenuPage } from "../../state/page/store";
-import type { SettingsRoute } from "../../state/settings/nav";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { syncOffered } from "../../state/sync/offer";
 import { useTab } from "../../state/tabs/hooks";
@@ -51,7 +50,6 @@ const SEND_MENU_WIDTH = 250;
 const TITLE_IN = FadeIn.duration(materialDuration.short4);
 const TITLE_OUT = FadeOut.duration(materialDuration.short2);
 
-const openDirectSiteSettingsRoute = (route: SettingsRoute) => openSiteSettingsRoute(route, { direct: true });
 
 export function MaterialPageMenu({ tabId, model, page = "main", onTranslate }: { tabId: string; model: MenuModel; page?: MenuPage; onTranslate: () => void }) {
   if (page === "siteSettings") {
@@ -88,7 +86,7 @@ export function MaterialSiteSettingsContent() {
   return (
     <MaterialSettingsSheetSurface>
       <ThisSiteGroup />
-      <SiteSettingsGroups openRoute={openDirectSiteSettingsRoute} />
+      <SiteSettingsGroups openRoute={openSiteSettingsRoute} />
       <AllowedSites />
     </MaterialSettingsSheetSurface>
   );

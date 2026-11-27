@@ -46,7 +46,6 @@ import { endMenuTiming, markMenuPhase } from "../../state/page/menuTiming";
 import { pageUi, type MenuPage } from "../../state/page/store";
 import { AllowedSites, SiteSettingsGroups } from "../settings/SitePages";
 import { ThisSiteGroup } from "../settings/ThisSite";
-import type { SettingsRoute } from "../../state/settings/nav";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { useSearchFromDockedMenu, useSearchOpen, useSearchSession } from "../../state/search/hooks";
 import { cancelSearch } from "../../state/browse/store";
@@ -345,13 +344,12 @@ function MenuSiteSettings() {
         <View style={styles.subpageBalance} />
       </View>
       <ThisSiteGroup />
-      <SiteSettingsGroups openRoute={openDirectSiteSettingsRoute} />
+      <SiteSettingsGroups openRoute={openSiteSettingsRoute} />
       <AllowedSites />
     </ScrollView>
   );
 }
 
-const openDirectSiteSettingsRoute = (route: SettingsRoute) => openSiteSettingsRoute(route, { direct: true });
 
 function NavigationCapsule({ tabId }: { tabId: string }) {
   const theme = useTheme();

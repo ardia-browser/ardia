@@ -19,7 +19,7 @@ import { backLayer, downloadedToast, downloadFailedToast, downloadingToast, open
 import { installDownloadedPackage } from "../appUpdate/store";
 import { onboardingBack } from "../onboarding/store";
 import { refreshSettings } from "../settings/actions";
-import { closeSettings, openSettings, openSettingsPage, popSettings, settingsNav, useSettingsNav, type SettingsRoute } from "../settings/nav";
+import { closeSettings, openSettings, openSettingsPage, popSettings, pushSettings, settingsNav, useSettingsNav, type SettingsRoute } from "../settings/nav";
 import { pinToMac, sendTab } from "../sync/actions";
 import type { SyncedDevice } from "../../platform/sync";
 import { linkToCopy } from "./linkCopy";
@@ -179,7 +179,7 @@ async function showPageMenu(menuDocked: boolean) {
   const shown = pageUi().menuSite;
   const known = tab.isPrivate || !host ? null : (knownSites.get(host) ?? null);
   const startSite = known && sameSite(shown, known) ? shown : known;
-  usePageUi.setState({ menuOpen: true, menuOpening: thisOpening.id, menuPage: "main", menuDocked, titleFeedback: null, menuSite: startSite, translationAsk: null });
+  usePageUi.setState({ menuOpen: true, menuOpening: thisOpening.id, menuPage: "main", menuSettings: null, menuDocked, titleFeedback: null, menuSite: startSite, translationAsk: null });
   markMenuPhase("open");
   if (menuDocked && !tab.isPrivate) countUsage("site_settings_sheet_opened");
   const [, capabilities, translation] = await Promise.all([
@@ -385,20 +385,26 @@ export const closeMenuSubpage = () => usePageUi.setState({ menuPage: "main" });
 
 export function openSiteSettingsSheet() {
   if (!pageUi().menuOpen) return;
-  usePageUi.setState({ menuPage: "siteSettings" });
+  usePageUi.setState({ menuPage: "siteSettings", menuSettings: settingsNav().generation + 1 });
   openSettingsPage({ page: "siteSettings" });
   countSiteSettingsOpened();
 }
 
 export const siteSettingsInMenu = (ui: { menuOpen: boolean; menuPage: string } = pageUi()) => ui.menuOpen && ui.menuPage === "siteSettings";
 
-function countSiteChange(field: "site_settings_zoom_changed" | "site_settings_night_shade_changed" | "site_settings_desktop_site_changed") {
-  if (siteSettingsInMenu() && !selectedTab()?.isPrivate) countUsage(field);
+export const settingsInMenu = (ui: { menuOpen: boolean; menuPage: string; menuSettings: number | null } = pageUi(), generation = settingsNav().generation) => siteSettingsInMenu(ui) && ui.menuSettings === generation;
+
+type SiteChange = "site_settings_zoom_changed" | "site_settings_night_shade_changed" | "site_settings_desktop_site_changed";
+
+function siteChangeCounter(field: SiteChange): () => void {
+  if (!siteSettingsInMenu() || selectedTab()?.isPrivate) return () => undefined;
+  return () => countUsage(field);
 }
 
-export function openSiteSettingsRoute(route: SettingsRoute, { direct = false } = {}) {
+export function openSiteSettingsRoute(route: SettingsRoute) {
   closePageMenu();
-  openSettings(route, { direct });
+  openSettingsPage({ page: "siteSettings" });
+  pushSettings(route);
 }
 
 const withPage = (run: (id: string) => Promise<unknown>) => {
@@ -580,28 +586,50 @@ export function setNightShadeOn(on: boolean) {
   if (!target) return;
   const { tab, site, host, url } = target;
   const mode: NightShadeMode = on ? "always" : "disabled";
-  countSiteChange("site_settings_night_shade_changed");
+  const counted = siteChangeCounter("site_settings_night_shade_changed");
   const next = { ...site, nightShade: mode };
   const revision = writeSite(next);
   usePageUi.setState({ menuSite: next });
   void Promise.resolve()
     .then(() => pages.setNightShade(mode, host, tab.isPrivate))
-    .catch(() => siteWriteFailed(next, revision, url));
+    .then(counted, () => siteWriteFailed(next, revision, url));
 }
 
-const zoomed = (run: (id: string) => Promise<unknown>) => {
-  countSiteChange("site_settings_zoom_changed");
-  withPage(run);
-};
+export function refreshMenuSite() {
+  const now = opening;
+  const tab = selectedTab();
+  if (!pageUi().menuOpen || !now || !tab || tab.id !== now.tabId) return;
+  const url = tabUrl(tab);
+  const host = hostOf(url);
+  if (!host || host !== now.host) return;
+  void readMenuSite(url, host, tab.isPrivate).then(publishSite, () => undefined);
+}
+
+const pageZoomOf = (id: string) => usePages.getState().navigation[id]?.pageZoom ?? 1;
+
+function zoomed(run: (id: string) => Promise<unknown>, changes: (id: string) => boolean = () => true) {
+  const id = selectedId();
+  if (!id) return;
+  const counted = changes(id) ? siteChangeCounter("site_settings_zoom_changed") : () => undefined;
+  quietly(async () => {
+    await run(id);
+    counted();
+  });
+}
 
 export const zoomOut = () => zoomed((id) => pages.zoomOut(id));
 export const zoomIn = () => zoomed((id) => pages.zoomIn(id));
-export const resetZoom = () => zoomed((id) => pages.setPageZoom(id, 1));
+export const resetZoom = () => zoomed((id) => pages.setPageZoom(id, 1), (id) => Math.abs(pageZoomOf(id) - 1) > 0.001);
 
 export function setDesktopSite(on: boolean) {
-  countSiteChange("site_settings_desktop_site_changed");
+  const counted = siteChangeCounter("site_settings_desktop_site_changed");
   closePageMenu();
-  withPage((id) => pages.setDesktopSite(id, on));
+  const id = selectedId();
+  if (!id) return;
+  quietly(async () => {
+    await pages.setDesktopSite(id, on);
+    counted();
+  });
 }
 
 export function setBlockersOn(on: boolean) {
@@ -872,9 +900,11 @@ usePages.subscribe((pagesNow, pagesBefore) => {
 });
 
 useSettingsNav.subscribe((nav, before) => {
-  if (before.open && !nav.open && siteSettingsInMenu()) closePageMenu();
+  const ui = pageUi();
+  if (!siteSettingsInMenu(ui) || ui.menuSettings === null) return;
+  if (ui.menuSettings !== nav.generation || (before.open && !nav.open)) closePageMenu();
 });
 
 usePageUi.subscribe((ui, before) => {
-  if (siteSettingsInMenu(before) && !siteSettingsInMenu(ui) && settingsNav().open) closeSettings();
+  if (settingsInMenu(before) && !siteSettingsInMenu(ui) && settingsNav().open) closeSettings();
 });

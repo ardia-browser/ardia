@@ -82,7 +82,7 @@ function ExpoThisSite() {
   const { host, model } = site;
   return (
     <Section title={host} footer={<Text>{THIS_SITE_FOOTER}</Text>}>
-      <Toggle isOn={model.nightShadeOn} onIsOnChange={setNightShadeOn} modifiers={modifierList(settingsSwitchStyle())}>
+      <Toggle isOn={model.nightShadeOn} onIsOnChange={setNightShadeOn} modifiers={modifierList(settingsSwitchStyle(), disabled(!model.siteSwitches))}>
         <ExpoRowText title="Night Shade" />
       </Toggle>
       <LabeledContent label={<ExpoRowText title="Page zoom" />}>

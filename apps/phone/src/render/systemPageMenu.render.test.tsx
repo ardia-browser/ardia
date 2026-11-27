@@ -4,17 +4,16 @@ import "../platform/copy";
 import { blocking } from "../platform/blocking";
 import { pages } from "../platform/pages";
 import { SystemPageMenuHost } from "../components/browsing/SystemPageMenu";
-import { ExpoLibrarySheet } from "../components/library/ExpoLibrary";
+import { ExpoSettingsSheet } from "../components/settings/ExpoSettingsStack";
 import { DesignProvider } from "../components/ui";
 import { askTranslation, closePageMenu, confirmTranslation, openPageMenu, openSiteSettingsSheet, pageMenuHidden, pageMenuPresentation, printCurrentPage, setBlockersOn, setNightShadeOn, showFind } from "../state/page/actions";
-import { useSettingsNav } from "../state/settings/nav";
+import { closeSettings, openSettings, useSettingsNav } from "../state/settings/nav";
+import { setDefaultNightShade } from "../state/settings/actions";
 import { registerPageHandle } from "../state/pages/store";
 import { menuModel } from "../state/page/pageMenu";
 import { usePageUi } from "../state/page/store";
 import { usePages } from "../state/pages/store";
 import { useBrowse } from "../state/browse/store";
-import * as library from "../state/library/store";
-import { useLibrary } from "../state/library/store";
 import { useTabs } from "../state/tabs/store";
 import * as telemetry from "../state/telemetry/telemetry";
 import { pressButton, renderSurface, unmount, withTabs } from "../../test/render/harness";
@@ -35,8 +34,8 @@ beforeEach(() => {
   withTabs(1);
   act(() => usePageUi.setState({ menuOpen: false, menuPage: "main", menuSite: null, findOpen: false, readerTabId: null, press: null }));
   act(() => useBrowse.setState({ surface: "browsing", sheet: null }));
-  act(() => useLibrary.setState({ open: false, section: "history", path: [], history: [], historyLoaded: false, files: [], filesLoaded: false }));
-  jest.spyOn(library, "loadHistory").mockImplementation(() => undefined);
+  act(() => useSettingsNav.setState({ open: false, stack: [], popping: false }));
+  jest.spyOn(pages, "listsSitePermissions").mockReturnValue(false);
   jest.spyOn(pages, "nightShade").mockResolvedValue({ mode: "always" } as never);
   jest.spyOn(blocking, "isEnabledForSite").mockResolvedValue(false);
 });
@@ -62,7 +61,7 @@ function menu() {
   return renderSurface(
     <DesignProvider design="redesigned">
       <SystemPageMenuHost tabId="t0" />
-      <ExpoLibrarySheet />
+      <ExpoSettingsSheet />
     </DesignProvider>,
   );
 }
@@ -168,24 +167,204 @@ onIos("a late site read from one tab's menu never lands in another tab's menu, a
   expect(write).toHaveBeenCalledTimes(1);
 });
 
-onIos("History opens inside the page menu's own sheet at full height instead of waiting for the menu to close, and closing either closes both", async () => {
+const settingsSheet = (root: Root) => sheetIn(root, "expoSettingsSheet")!;
+const usage = () => (telemetry.countUsage as jest.Mock).mock.calls.map(([field]) => field as string);
+const siteCounts = () => usage().filter((field) => field === "page_menu_site_settings_opened" || field.startsWith("site_settings_"));
+const siteGroup = (root: Root, host: string) => hosts(root.root, (props) => props.title === host)[0];
+const composite = (node: ReactTestInstance, has: (props: Record<string, unknown>) => boolean) => node.findAll((inner) => typeof inner.type !== "string" && inner.props.onGlobalEvent === undefined && has(inner.props));
+const modifiersOf = (node: ReactTestInstance) => (node.props.modifiers ?? []) as { $type: string; label?: string; disabled?: boolean }[];
+const siteToggle = (group: ReactTestInstance, title: string) => composite(group, (props) => typeof props.onIsOnChange === "function").find((node) => hosts(node, (props) => props.text === title).length > 0)!;
+const siteButton = (group: ReactTestInstance, label: string) => composite(group, (props) => typeof props.onPress === "function").find((node) => node.props.label === label || modifiersOf(node).some((modifier) => modifier.$type === "accessibilityLabel" && modifier.label === label))!;
+const isDisabled = (node: ReactTestInstance) => modifiersOf(node).some((modifier) => modifier.$type === "disabled" && modifier.disabled === true);
+const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const zoomed = (zoom: number) => act(() => usePages.setState((state) => ({ ...state, navigation: { ...state.navigation, t0: { ...(state.navigation.t0 as object), pageZoom: zoom } as never } })));
+
+async function siteSettingsInMenu(root: Root) {
+  await act(async () => void (await openPageMenu()));
+  act(() => usePageUi.setState({ zoomLevels: ZOOM_LEVELS }));
+  await pressButton(root, "Site Settings");
+  await flush();
+}
+
+onIos("Site Settings opens inside the page menu's own sheet at full height while Settings' own sheet stays down, and is counted", async () => {
+  jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
   page("https://site0.example/", false);
   const root = menu();
-  await act(async () => void openPageMenu());
-  await pressButton(root, "History");
-  expect(usePageUi.getState()).toMatchObject({ menuOpen: true, menuPage: "library" });
-  expect(useLibrary.getState()).toMatchObject({ open: true, section: "history" });
-  expect(sheetIn(root, "expoLibrarySheet")!.props.isPresented).toBe(false);
+  await siteSettingsInMenu(root);
+  expect(usePageUi.getState()).toMatchObject({ menuOpen: true, menuPage: "siteSettings", menuSettings: useSettingsNav.getState().generation });
+  expect(useSettingsNav.getState()).toMatchObject({ open: true, stack: [{ page: "siteSettings" }] });
   expect(menuSheet(root)!.props.isPresented).toBe(true);
-  expect(titled(menuSheet(root)!, "History")).not.toHaveLength(0);
+  expect(settingsSheet(root).props.isPresented).toBe(false);
+  expect(hosts(menuSheet(root)!, (props) => props.testID === "systemPageMenuSiteSettings")).toHaveLength(1);
+  expect(titled(menuSheet(root)!, "Site settings")).not.toHaveLength(0);
+  expect(menuRows(root)).toHaveLength(0);
+  expect(siteCounts()).toEqual(["page_menu_site_settings_opened"]);
+  unmount(root);
+});
+
+onIos("closing the page menu over Site Settings closes that Settings too, and closing that Settings closes the menu", async () => {
+  page("https://site0.example/", false);
+  const root = menu();
+  await siteSettingsInMenu(root);
   act(() => menuSheet(root)!.props.onIsPresentedChange({ nativeEvent: { isPresented: false, token: showing() } }));
   expect(usePageUi.getState().menuOpen).toBe(false);
-  expect(useLibrary.getState().open).toBe(false);
-  expect(sheetIn(root, "expoLibrarySheet")!.props.isPresented).toBe(false);
-  await act(async () => void openPageMenu());
-  await pressButton(root, "Bookmarks");
-  act(() => library.closeLibrary());
+  expect(useSettingsNav.getState().open).toBe(false);
+  expect(settingsSheet(root).props.isPresented).toBe(false);
+  await siteSettingsInMenu(root);
+  expect(useSettingsNav.getState().open).toBe(true);
+  act(() => closeSettings());
   expect(usePageUi.getState().menuOpen).toBe(false);
+  expect(settingsSheet(root).props.isPresented).toBe(false);
+  act(() => pageMenuHidden());
+  await act(async () => void (await openPageMenu()));
+  expect(usePageUi.getState().menuPage).toBe("main");
+  unmount(root);
+});
+
+onIos("Settings opened anew while Site Settings sits in the menu takes its own sheet: the menu closes and leaves that Settings open", async () => {
+  page("https://site0.example/", false);
+  const root = menu();
+  await siteSettingsInMenu(root);
+  act(() => openSettings({ page: "general" }));
+  expect(usePageUi.getState().menuOpen).toBe(false);
+  expect(useSettingsNav.getState()).toMatchObject({ open: true, stack: [{ page: "root" }, { page: "general" }] });
+  expect(settingsSheet(root).props.isPresented).toBe(true);
+  act(() => pageMenuHidden());
+  expect(useSettingsNav.getState().open).toBe(true);
+  expect(settingsSheet(root).props.isPresented).toBe(true);
+  unmount(root);
+});
+
+onIos("the in-menu Site Settings starts with a section for the site: its host, Night Shade, Page zoom and Desktop site, and the footer saying Desktop Site is for this tab", async () => {
+  page("https://site0.example/", false);
+  const root = menu();
+  await siteSettingsInMenu(root);
+  const group = siteGroup(root, "site0.example")!;
+  expect(group).toBeDefined();
+  const texts = hosts(group, (props) => typeof props.text === "string").map((node) => node.props.text);
+  expect(texts).toEqual(["Desktop Site applies to this tab.", "Night Shade", "Page zoom", "100%", "Desktop site"]);
+  expect(siteToggle(group, "Night Shade").props.isOn).toBe(true);
+  expect(siteToggle(group, "Desktop site").props.isOn).toBe(false);
+  expect(["Zoom Out", "Reset Zoom", "Zoom In"].map((label) => isDisabled(siteButton(group, label)))).toEqual([false, false, false]);
+  unmount(root);
+});
+
+onIos("the site section's Zoom In, Zoom Out, Reset Zoom, Night Shade and Desktop site write to the page and each counts only once its write lands", async () => {
+  const count = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
+  let zoomInLands: (zoom: number) => void = () => undefined;
+  const zoomIn = jest.spyOn(pages, "zoomIn").mockImplementation(() => new Promise((resolve) => (zoomInLands = resolve)));
+  const zoomOut = jest.spyOn(pages, "zoomOut").mockResolvedValue(1.25);
+  const reset = jest.spyOn(pages, "setPageZoom").mockResolvedValue(1);
+  const shade = jest.spyOn(pages, "setNightShade").mockResolvedValue(undefined);
+  const desktop = jest.spyOn(pages, "setDesktopSite").mockResolvedValue(undefined);
+  page("https://site0.example/", false);
+  zoomed(1.25);
+  const root = menu();
+  await siteSettingsInMenu(root);
+  count.mockClear();
+  const group = () => siteGroup(root, "site0.example")!;
+  act(() => siteButton(group(), "Zoom In").props.onPress());
+  await flush();
+  expect(zoomIn).toHaveBeenCalledWith("t0");
+  expect(siteCounts()).toEqual([]);
+  zoomInLands(1.5);
+  await flush();
+  expect(siteCounts()).toEqual(["site_settings_zoom_changed"]);
+  act(() => siteButton(group(), "Zoom Out").props.onPress());
+  act(() => siteButton(group(), "Reset Zoom").props.onPress());
+  await flush();
+  expect(zoomOut).toHaveBeenCalledWith("t0");
+  expect(reset).toHaveBeenCalledWith("t0", 1);
+  act(() => siteToggle(group(), "Night Shade").props.onIsOnChange(false));
+  await flush();
+  expect(shade).toHaveBeenCalledWith("disabled", "site0.example", false);
+  expect(usePageUi.getState()).toMatchObject({ menuOpen: true, menuPage: "siteSettings" });
+  act(() => siteToggle(group(), "Desktop site").props.onIsOnChange(true));
+  await flush();
+  expect(desktop).toHaveBeenCalledWith("t0", true);
+  expect(siteCounts()).toEqual(["site_settings_zoom_changed", "site_settings_zoom_changed", "site_settings_zoom_changed", "site_settings_night_shade_changed", "site_settings_desktop_site_changed"]);
+  expect(usePageUi.getState().menuOpen).toBe(false);
+  expect(useSettingsNav.getState().open).toBe(false);
+  unmount(root);
+});
+
+onIos("a write the page refuses counts nothing, and Reset Zoom on a page already at 100% counts nothing", async () => {
+  const count = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
+  const reset = jest.spyOn(pages, "setPageZoom").mockResolvedValue(1);
+  jest.spyOn(pages, "zoomIn").mockRejectedValue(new Error("gone"));
+  jest.spyOn(pages, "setNightShade").mockRejectedValue(new Error("refused"));
+  jest.spyOn(pages, "setDesktopSite").mockRejectedValue(new Error("gone"));
+  page("https://site0.example/", false);
+  const root = menu();
+  await siteSettingsInMenu(root);
+  count.mockClear();
+  const group = () => siteGroup(root, "site0.example")!;
+  act(() => siteButton(group(), "Reset Zoom").props.onPress());
+  act(() => siteButton(group(), "Zoom In").props.onPress());
+  act(() => siteToggle(group(), "Night Shade").props.onIsOnChange(false));
+  await flush();
+  act(() => siteToggle(group(), "Desktop site").props.onIsOnChange(true));
+  await flush();
+  expect(reset).toHaveBeenCalledWith("t0", 1);
+  expect(siteCounts()).toEqual([]);
+  unmount(root);
+});
+
+onIos("from a private tab neither opening Site Settings nor changing its site is counted", async () => {
+  jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
+  jest.spyOn(pages, "zoomIn").mockResolvedValue(1.25);
+  act(() => useTabs.setState((state) => ({ ...state, privates: [{ ...state.open[0]!, id: "p0", isPrivate: true }], selectedId: "p0", incognito: true })));
+  act(() => usePages.setState((state) => ({ ...state, navigation: { p0: navigation("https://site0.example/", false) } })));
+  const root = renderSurface(
+    <DesignProvider design="redesigned">
+      <SystemPageMenuHost tabId="p0" />
+      <ExpoSettingsSheet />
+    </DesignProvider>,
+  );
+  await siteSettingsInMenu(root);
+  expect(usePageUi.getState()).toMatchObject({ menuOpen: true, menuPage: "siteSettings" });
+  act(() => siteButton(siteGroup(root, "site0.example")!, "Zoom In").props.onPress());
+  await flush();
+  expect(pages.zoomIn).toHaveBeenCalledWith("p0");
+  expect(siteCounts()).toEqual([]);
+  unmount(root);
+});
+
+onIos("the site section names the page's current address and keeps Night Shade off-limits until that site's own setting is read", async () => {
+  let answer: (mode: { mode: string }) => void = () => undefined;
+  jest.spyOn(pages, "nightShade").mockImplementation((host) => (host === "moved-on.example" ? new Promise((resolve) => (answer = resolve as never)) : Promise.resolve({ mode: "disabled" })) as never);
+  page("https://moved-on.example/article", false);
+  const root = menu();
+  act(() => void openPageMenu());
+  await pressButton(root, "Site Settings");
+  const group = () => siteGroup(root, "moved-on.example")!;
+  expect(group()).toBeDefined();
+  expect(isDisabled(siteToggle(group(), "Night Shade"))).toBe(true);
+  expect(isDisabled(siteToggle(group(), "Desktop site"))).toBe(false);
+  answer({ mode: "always" });
+  await flush();
+  expect(isDisabled(siteToggle(group(), "Night Shade"))).toBe(false);
+  expect(siteToggle(group(), "Night Shade").props.isOn).toBe(true);
+  unmount(root);
+});
+
+onIos("changing the Night Shade default while Site Settings is in the menu re-reads the site, so a site that follows the default flips with it", async () => {
+  let mode = "disabled";
+  jest.spyOn(pages, "nightShade").mockImplementation(() => Promise.resolve({ mode }) as never);
+  jest.spyOn(pages, "setNightShade").mockImplementation(async (next) => void (mode = next ?? "disabled"));
+  page("https://follows-default.example/", false);
+  const root = menu();
+  await siteSettingsInMenu(root);
+  expect(siteToggle(siteGroup(root, "follows-default.example")!, "Night Shade").props.isOn).toBe(false);
+  act(() => setDefaultNightShade("always"));
+  await flush();
+  await flush();
+  expect(usePageUi.getState().menuSite).toMatchObject({ host: "follows-default.example", nightShade: "always" });
+  expect(siteToggle(siteGroup(root, "follows-default.example")!, "Night Shade").props.isOn).toBe(true);
   unmount(root);
 });
 
@@ -364,6 +543,7 @@ onIos("Share in the iPhone menu opens the page's own Share sheet over the menu, 
   page("https://share-print.example/", false);
   jest.spyOn(pages, "sharesWithPrint").mockReturnValue(true);
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
   let finish: (activity: string | null) => void = () => undefined;
   const shared = jest.spyOn(pages, "sharePage").mockImplementation(() => new Promise((resolve) => (finish = resolve)) as never);
   const root = menu();

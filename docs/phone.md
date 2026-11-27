@@ -4335,6 +4335,12 @@ Whole stack (`SettingsView.swift`):
 - Presentation: main uses a plain `.sheet(item:)` from `RootView`, with no presentation modifiers. On iPhone ours is
   Expo UI's `BottomSheet` with none either (`ExpoSettingsSheet`): system detent, corners, drag to dismiss and
   scaled-back page; Done and a drag both close Settings through `onIsPresentedChange`.
+- Every page a screen links to is drawn whole before the tap, so a push slides in with its title and rows from the
+  first frame (#4066; a title-only placeholder slid in empty for about 380 ms). A page drawn early touches no
+  network and no site data: its mount work (refreshes, `settings_panes_opened`) runs through `useWhenOpened` each
+  time it is on the path, and Site settings mounts its allowed sites, with their favicons, only once opened. Sync,
+  Connect, the recovery phrase, Clear Data, Trusted Sites and My Filters read or show such data as they draw, so
+  they stay title-only until pushed (`HELD_UNTIL_PUSHED` in `ExpoSettingsStack.tsx`).
 - Rule: a toolkit screen is hosted in a container the system positions, never inside a view we animate by
   transform, because SwiftUI records its accessibility frames at layout time and never updates them after our slide.
 - Every toolkit screen's simulator pass reads three elements' frames from the accessibility tree (`snapshot --json`)

@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { SettingsView } from "../components/settings/SettingsView";
-import { SettingsShortcuts } from "../components/ui";
+import { PROFILE_COLORS, SettingsShortcuts } from "../components/ui";
 import * as deckGrid from "../state/browse/deckGrid";
 import { writePreference } from "../state/store/browserDatabase";
 import { browserDatabase } from "../state/store/database";
@@ -14,6 +14,10 @@ import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 import { pages as platformPages } from "../platform/pages";
 import { drawnBeforePush } from "../components/settings/ExpoSettingsStack";
 import * as defaultBrowser from "../state/settings/defaultBrowser";
+import { useSitePermissions } from "../state/settings/sitePermissions";
+import { startingTheme } from "@ardia/core/src/theme.ts";
+import { setColorChoice } from "../state/settings/actions";
+import { useThemeDraft } from "../state/settings/themeDraft";
 
 const onIos = Platform.OS === "ios" ? test : test.skip;
 
@@ -231,6 +235,60 @@ onIos("a pane drawn before its push runs none of its reads or counts until it is
   expect(refreshed).toHaveBeenCalledTimes(1);
   unmount(root);
   jest.restoreAllMocks();
+});
+
+onIos("a pane drawn before its push touches no site data and no network: Site settings mounts no favicon and lists no allowed site until it opens, and Trusted Sites and My Filters wait as a title", () => {
+  quietNativeReads();
+  act(() => useSitePermissions.setState({ listed: true, grants: [{ origin: "https://review-permission.example", host: "review-permission.example", permissions: ["camera"], grantedAt: 1 }] }));
+  openSettings();
+  const root = renderSurface(<SettingsView />);
+  const site = () => paneOf(root, "siteSettings");
+  const favicons = () => site().findAll((node) => node.props.pageUrl === "https://review-permission.example");
+  expect(favicons()).toHaveLength(0);
+  expect(textsIn(site()).some((text) => text.includes("review-permission"))).toBe(false);
+  act(() => pushSettings({ page: "siteSettings" }));
+  expect(favicons().length).toBeGreaterThan(0);
+  expect(isPlaceholder(paneOf(root, "trustedSites"))).toBe(true);
+  expect(drawnBeforePush("myFilters")).toBe(false);
+  unmount(root);
+  act(() => useSitePermissions.setState({ listed: false, grants: [] }));
+  jest.restoreAllMocks();
+});
+
+onIos("a pane opened twice in one Settings session counts and refreshes on each open", () => {
+  quietNativeReads();
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  const refreshed = jest.spyOn(defaultBrowser, "refreshDefaultBrowser").mockImplementation(async () => null);
+  openSettings();
+  const root = renderSurface(<SettingsView />);
+  act(() => followSettingsPath(["general"]));
+  act(() => followSettingsPath([]));
+  act(() => followSettingsPath(["general"]));
+  expect(counted.mock.calls.filter(([field]) => field === "settings_panes_opened")).toHaveLength(2);
+  expect(refreshed).toHaveBeenCalledTimes(2);
+  unmount(root);
+  jest.restoreAllMocks();
+});
+
+onIos("the theme editor starts from the swatch being edited: after editing Plum, an unedited Green edits from Green, not Plum", () => {
+  act(() => {
+    usePreferences.setState({ colorChoice: "plum", customTheme: null, presetThemes: {} });
+    useThemeDraft.setState({ draft: null });
+  });
+  openSettings({ page: "appearance" });
+  const root = renderSurface(<SettingsView />);
+  act(() => pushSettings({ page: "theme" }));
+  act(() => followSettingsPath(["appearance"]));
+  act(() => setColorChoice("green"));
+  act(() => pushSettings({ page: "theme" }));
+  const add = paneOf(root, "theme").findAll((node) => node.props.accessibilityLabel === "Add Color" && typeof node.props.onPress === "function")[0]!;
+  act(() => add.props.onPress());
+  const green = usePreferences.getState().presetThemes.green!;
+  const start = startingTheme(PROFILE_COLORS.green.swatch);
+  expect(green.stops.slice(0, start.stops.length).map((stop) => stop.color)).toEqual(start.stops.map((stop) => stop.color));
+  expect(usePreferences.getState().presetThemes.plum).toBeUndefined();
+  unmount(root);
+  act(() => usePreferences.setState({ colorChoice: null, presetThemes: {} }));
 });
 
 onIos("a pane being popped keeps its real content through the pop instead of turning back into its placeholder", () => {

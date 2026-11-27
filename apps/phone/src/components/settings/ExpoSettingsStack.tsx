@@ -121,6 +121,7 @@ function SettingsNavigation() {
   if (open && stack.length) kept.current = stack;
   const shown = open ? stack : kept.current;
   const path = settingsPath(shown);
+  const onPath = new Set(path);
   const seen = useRef<{ open: boolean; keys: Set<string> }>({ open, keys: new Set() });
   if (open && !seen.current.open) seen.current = { open, keys: new Set() };
   else seen.current.open = open;
@@ -131,7 +132,7 @@ function SettingsNavigation() {
       <StackRoot route={shown[0]} />
       {destinations.map((key) => (
         <NavigationDestination key={key} value={key}>
-          <Destination routeKey={key} pushed={seen.current.keys.has(key)} />
+          <Destination routeKey={key} pushed={seen.current.keys.has(key)} opened={onPath.has(key)} />
         </NavigationDestination>
       ))}
     </NavigationStack>
@@ -155,17 +156,17 @@ export const HERO_TITLED = new Set<SettingsRoute["page"]>(["sync", "syncConnect"
 
 export const placeholderTitle = (page: SettingsRoute["page"]) => (HERO_TITLED.has(page) ? "" : TITLES[page]);
 
-const READS_AS_IT_DRAWS = new Set<SettingsRoute["page"]>(["sync", "syncConnect", "syncWords", "clearData"]);
+const HELD_UNTIL_PUSHED = new Set<SettingsRoute["page"]>(["sync", "syncConnect", "syncWords", "clearData", "trustedSites", "myFilters"]);
 
-export const drawnBeforePush = (page: SettingsRoute["page"]) => CONVERTED[page] !== undefined && !READS_AS_IT_DRAWS.has(page);
+export const drawnBeforePush = (page: SettingsRoute["page"]) => CONVERTED[page] !== undefined && !HELD_UNTIL_PUSHED.has(page);
 
-function Destination({ routeKey, pushed }: { routeKey: string; pushed: boolean }) {
+function Destination({ routeKey, pushed, opened }: { routeKey: string; pushed: boolean; opened: boolean }) {
   const route = settingsRouteFromKey(routeKey);
   if (!route) return null;
   const Converted = CONVERTED[route.page];
   if (Converted && (pushed || drawnBeforePush(route.page))) {
     return (
-      <SettingsPageOpenedContext.Provider value={pushed}>
+      <SettingsPageOpenedContext.Provider value={opened}>
         <Converted route={route} />
       </SettingsPageOpenedContext.Provider>
     );

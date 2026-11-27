@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { PlatformColor, View } from "react-native";
 import { Button, ConfirmationDialog, Form, HStack, LabeledContent, NavigationLink, Picker, RNHostView, Section, SwipeActions, Text, Toggle, VStack } from "@expo/ui/swift-ui";
 import { accessibilityElement, accessibilityHint, font, foregroundStyle, frame, navigationBarTitleDisplayMode, navigationTitle, pickerStyle, tag, tint } from "@expo/ui/swift-ui/modifiers";
@@ -13,12 +13,13 @@ import type { SitePermissionGrant } from "../../platform/pages";
 import { contentMargins, Favicon, modifierList, neverBounces, settingsChrome, settingsLayout, settingsSwitchStyle, useDesign } from "../ui";
 import { ExpoRowText } from "./ExpoRowLabel";
 import { NIGHT_SHADE, SWIPE_NAVIGATION } from "./SitePages";
-import { useWhenOpened } from "./settingsOpened";
+import { SettingsPageOpenedContext, useWhenOpened } from "./settingsOpened";
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
 
 export function ExpoSiteSettingsPage() {
+  const opened = useContext(SettingsPageOpenedContext);
   const design = useDesign();
   const state = useBlocking((s) => s.state);
   const nightShade = useEngines((s) => s.nightShade);
@@ -68,7 +69,7 @@ export function ExpoSiteSettingsPage() {
           <ExpoRowText title="Collapse bottom bar" description="Shrinks the bar while you scroll down a page." />
         </Toggle>
       </Section>
-      <AllowedSites />
+      {opened ? <AllowedSites /> : null}
     </Form>
   );
 }

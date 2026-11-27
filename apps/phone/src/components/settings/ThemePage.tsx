@@ -11,6 +11,7 @@ import { capsule, CustomLookBackdrop, font, settingsLayout, slotAround, space, S
 import { Group, PickerRow, SettingsHostedContext, SettingsPage } from "./SettingsKit";
 import { themeStepperLayout } from "./settingsTokens";
 import { ColorPad, DirectionDial, LightnessBar, ThemeSlider, type BlockedScroll } from "./ThemeControls";
+import { usePreferences } from "../../state/settings/hooks";
 
 function useLiveTheme(stored: ProfileTheme) {
   const [local, setLocal] = useState<ProfileTheme | null>(null);
@@ -42,11 +43,14 @@ function useLiveTheme(stored: ProfileTheme) {
   return { theme: local ?? stored, change };
 }
 
+const MATCHING_MAC = "matchMac";
+
 export function ThemePage() {
   const look = useProfileLook();
   const stored = useCustomTheme();
-  const [fallback] = useState(() => startingCustomTheme(look));
-  return <ThemeEditor stored={stored ?? fallback} />;
+  const editing = usePreferences((p) => p.colorChoice) ?? MATCHING_MAC;
+  const fallback = useMemo(() => startingCustomTheme(look), [editing]);
+  return <ThemeEditor key={editing} stored={stored ?? fallback} />;
 }
 
 function ThemeEditor({ stored }: { stored: ProfileTheme }) {

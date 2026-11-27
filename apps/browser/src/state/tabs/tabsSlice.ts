@@ -236,7 +236,6 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
       snapshot: { ...snapshotTab(source), pin: null, lastActiveAt: undefined },
       index: w.tabIds.indexOf(id) + 1,
       adoptId: source.url ? cloneId(id) : undefined,
-      keptEmpty: source.keptEmpty,
     });
     set(next);
     return copy;

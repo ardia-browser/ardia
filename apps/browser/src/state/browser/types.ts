@@ -156,7 +156,7 @@ export type TabSnapshot = Pick<
   Tab,
   "url" | "title" | "favicon" | "pin" | "muted" | "zoom" | "customTitle" | "customIcon" | "profileId"
 > &
-  Partial<Pick<Tab, "pinnedUrl" | "reopenAtPinnedUrl" | "engine" | "lastActiveAt" | "tileLetters">>;
+  Partial<Pick<Tab, "pinnedUrl" | "reopenAtPinnedUrl" | "engine" | "lastActiveAt" | "tileLetters" | "keptEmpty">>;
 
 export type ClosedTab = {
   kind: "tab";

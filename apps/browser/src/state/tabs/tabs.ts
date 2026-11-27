@@ -365,7 +365,8 @@ export function withNewTab(s: BrowserState, windowId: string, o: NewTabOptions =
   tab.openerId = o.openerId ?? null;
   if (o.openerId) tab.linkOpenerId = o.openerId;
   if (o.background) tab.unseen = true;
-  if (o.keptEmpty && !url) tab.keptEmpty = true;
+  if ((o.keptEmpty || o.snapshot?.keptEmpty) && !url) tab.keptEmpty = true;
+  else delete tab.keptEmpty;
   tab.pinnedUrl = tab.pin ? pinHome({ pinnedUrl: tab.pinnedUrl, url }, true) : tab.pinnedUrl || null;
   if (o.adoptId) tab.page = adoptedPage(o.adoptId);
   else if (o.wakeAdoptId) tab.page = { kind: "idle", wake: o.wakeAdoptId };

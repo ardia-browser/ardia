@@ -1,6 +1,6 @@
 import { isFields } from "../../lib/decode";
 import type { PluginManifest } from "../../lib/pluginManifest";
-import { filesCall, filesTicket, sendToPlugin } from "../../platform/plugins";
+import { filesCall, filesRevoke, filesTicket, sendToPlugin } from "../../platform/plugins";
 import { secureRandomHex } from "../../platform/secureRandom";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
@@ -214,8 +214,14 @@ function send(d: Download) {
   if (acceptsRun(d.caller.name, d.caller.run)) sendToPlugin(d.caller.name, d.caller.run, JSON.stringify({ event: "sites.download", time: Date.now(), data: d.last }));
 }
 
+const DOWNLOAD_OPERATION = "operation:";
+
 const filesOp = (name: string, op: "stage" | "publish" | "discard", path: string, stage: string, data?: string, first = false) =>
-  filesCall({ op, plugin: name, root: null, ticket: filesTicket(), path, stage, ...(data !== undefined ? { data } : {}), ...(first ? { first: true } : {}) }).catch((error: unknown) => ({ ok: false as const, code: "unavailable" as const, message: String(error) }));
+  filesCall({ op, plugin: name, root: null, ticket: filesTicket(), path, stage, ...(op === "discard" ? {} : { operation: stage }), ...(data !== undefined ? { data } : {}), ...(first ? { first: true } : {}) }).catch((error: unknown) => ({
+    ok: false as const,
+    code: "unavailable" as const,
+    message: String(error),
+  }));
 
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
@@ -263,8 +269,9 @@ async function runDownload(t: SiteTransport, d: Download, target: SiteTarget, he
     received += bytes;
     if (received > maxBytes) return fail("too_large", `The file is over the ${maxBytes} bytes this download allows.`);
     if (bytes || !staged) {
-      const outcome = await filesOp(d.caller.name, "stage", d.to, d.stage, step.data, !staged);
-      if (isFields(outcome) && outcome.ok === true) staged = true;
+      const first = !staged;
+      staged = true;
+      const outcome = await filesOp(d.caller.name, "stage", d.to, d.stage, step.data, first);
       if (!live()) return finish("cancelled");
       if (!isFields(outcome) || outcome.ok !== true) {
         const error = fileFailure(outcome);
@@ -275,6 +282,7 @@ async function runDownload(t: SiteTransport, d: Download, target: SiteTarget, he
       if (!live() || !t.alive(opened.key)) return finish("cancelled");
       const published = await filesOp(d.caller.name, "publish", d.to, d.stage);
       if (!isFields(published) || published.ok !== true) {
+        if (!live()) return finish("cancelled");
         const error = fileFailure(published);
         return fail(error.code, error.message);
       }
@@ -322,6 +330,7 @@ function siteDownload(t: SiteTransport, c: Caller, m: PluginManifest, params: Re
 
 function cancelDownload(d: Download) {
   d.cancelled = true;
+  filesRevoke(d.caller.name, `${DOWNLOAD_OPERATION}${d.stage}`);
   d.halt();
 }
 
@@ -384,6 +393,7 @@ export function setPluginSignIn(name: string, on: boolean): boolean {
     consent,
   );
   if (!on) stopPluginSites(name);
+  else for (const d of [...downloads.values()]) if (d.caller.name === name) cancelDownload(d);
   if (saved && !on) notePlugin("plugin_site_signin_revokes", consent);
   return saved;
 }

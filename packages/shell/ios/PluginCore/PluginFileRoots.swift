@@ -36,29 +36,62 @@ struct PluginFileIdentity: Equatable {
   var reply: [String: Any] { ["device": device, "inode": inode] }
 }
 
+protocol PluginCommitGate {
+  func commit<T>(_ body: () -> T) -> T?
+}
+
 final class PluginFileAccess {
+  static let operationPrefix = "operation:"
   private let lock = NSLock()
+  private var commits = pthread_rwlock_t()
   private var generation = 0
   private var revokedAt: [String: Int] = [:]
+
+  init() { pthread_rwlock_init(&commits, nil) }
+  deinit { pthread_rwlock_destroy(&commits) }
 
   private static func key(_ plugin: String, _ root: String?) -> String { root.map { "\(plugin)\u{0}\($0)" } ?? plugin }
 
   func ticket() -> Int { lock.withLock { generation } }
 
   func revoke(plugin: String, root: String?) {
+    pthread_rwlock_wrlock(&commits)
+    defer { pthread_rwlock_unlock(&commits) }
     lock.withLock {
       generation += 1
       revokedAt[Self.key(plugin, root)] = generation
     }
   }
 
-  func allows(_ ticket: Int?, plugin: String, root: String?) -> Bool {
+  func allows(_ ticket: Int?, plugin: String, root: String?, operation: String? = nil) -> Bool {
     guard let ticket, ticket >= 0 else { return false }
     return lock.withLock {
       guard revokedAt[plugin, default: 0] <= ticket else { return false }
+      if let operation, revokedAt[Self.key(plugin, Self.operationPrefix + operation), default: 0] > ticket { return false }
       guard let root else { return true }
       return revokedAt[Self.key(plugin, root), default: 0] <= ticket
     }
+  }
+
+  func commit<T>(ticket: Int?, plugin: String, root: String?, operation: String?, _ body: () -> T) -> T? {
+    pthread_rwlock_rdlock(&commits)
+    defer { pthread_rwlock_unlock(&commits) }
+    guard allows(ticket, plugin: plugin, root: root, operation: operation) else { return nil }
+    return body()
+  }
+
+  struct Gate: PluginCommitGate {
+    let access: PluginFileAccess
+    let ticket: Int?
+    let plugin: String
+    let root: String?
+    let operation: String?
+
+    func commit<T>(_ body: () -> T) -> T? { access.commit(ticket: ticket, plugin: plugin, root: root, operation: operation, body) }
+  }
+
+  func gate(ticket: Int?, plugin: String, root: String?, operation: String?) -> PluginCommitGate {
+    Gate(access: self, ticket: ticket, plugin: plugin, root: root, operation: operation)
   }
 }
 

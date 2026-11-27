@@ -3,13 +3,16 @@ import { beforeEach, test } from "node:test";
 import { HOSTILE_VALUES } from "../../../../../scripts/security/hostile-inputs.mjs";
 import { shellNativeModules } from "../../test-native/shell.ts";
 
-const gate = { write: null };
+const gate = { write: null, publish: null, afterPublish: null };
 globalThis.acTestNativeModules = {
   ArdiaPlugins: {
     ...shellNativeModules.ArdiaPlugins,
     filesCall: async (spec) => {
       if (gate.write && spec.op === "stage" && !spec.first) await gate.write;
-      return shellNativeModules.ArdiaPlugins.filesCall(spec);
+      if (gate.publish && spec.op === "publish") await gate.publish;
+      const answer = await shellNativeModules.ArdiaPlugins.filesCall(spec);
+      if (spec.op === "publish") gate.afterPublish?.();
+      return answer;
     },
   },
 };
@@ -142,6 +145,8 @@ beforeEach(() => {
   page.startHold = null;
   page.cancelHold = null;
   gate.write = null;
+  gate.publish = null;
+  gate.afterPublish = null;
   setSiteTransport(hiddenPageTransport);
   host.fetchResult = null;
   host.fetches.length = 0;
@@ -621,4 +626,56 @@ test("codex B1: a hidden page that navigates off its origin is dropped at once",
   assert.ok(useSiteContexts.getState().contexts[key], "positive control: its own origin keeps it");
   noteContextNavigation(key, "https://evil.example/");
   assert.equal(useSiteContexts.getState().contexts[key], undefined);
+});
+
+test("codex S1: a cancel while the publish waits in native revokes that download's commit: no file, and it ends cancelled", async () => {
+  await enable(NOTES);
+  const run = await activated("notes");
+  const part = Buffer.alloc(500, 3).toString("base64");
+  page.start = () => ({ status: 200, total: 500 });
+  page.chunks = [{ data: part, size: 500, end: true }];
+  let release;
+  gate.publish = new Promise((resolve) => (release = resolve));
+  const started = await ask("notes", "sites.download", { url: "https://file.notion.com/f/x.zip", to: "late.zip" }, run);
+  await settle(30);
+  await ask("notes", "sites.cancel", { download: started.result.download }, run);
+  assert.ok(files.revokes.some((r) => r.plugin === "notes" && r.root?.startsWith("operation:")), "the cancel reached native");
+  release();
+  const last = await untilDone("notes", started.result.download);
+  assert.equal(last.state, "cancelled");
+  assert.equal(files.root("notes", null).files.has("late.zip"), false);
+  assert.equal(files.staged.size, 0, "the stage is discarded");
+});
+
+test("codex S1: turning the sites switch off and on while the publish waits still ends it cancelled, without the file", async () => {
+  await enable(NOTES);
+  const run = await activated("notes");
+  const part = Buffer.alloc(500, 3).toString("base64");
+  page.start = () => ({ status: 200, total: 500 });
+  page.chunks = [{ data: part, size: 500, end: true }];
+  let release;
+  gate.publish = new Promise((resolve) => (release = resolve));
+  const started = await ask("notes", "sites.download", { url: "https://file.notion.com/f/x.zip", to: "flip.zip" }, run);
+  await settle(30);
+  assert.ok(setPluginSignIn("notes", false));
+  assert.ok(setPluginSignIn("notes", true));
+  release();
+  const last = await untilDone("notes", started.result.download);
+  assert.equal(last.state, "cancelled");
+  assert.equal(files.root("notes", null).files.has("flip.zip"), false);
+});
+
+test("codex S7: a first part that fails still discards the stage", async () => {
+  await enable(NOTES);
+  const run = await activated("notes");
+  const part = Buffer.alloc(500, 3).toString("base64");
+  page.start = () => ({ status: 200, total: 500 });
+  page.chunks = [{ data: part, size: 500, end: true }];
+  files.failNext = { code: "unavailable", message: "disk full" };
+  const started = await ask("notes", "sites.download", { url: "https://file.notion.com/f/x.zip", to: "first.zip" }, run);
+  const last = await untilDone("notes", started.result.download);
+  assert.equal(last.state, "failed");
+  await settle(20);
+  const ops = files.calls.filter((c) => c.path === "first.zip").map((c) => c.op);
+  assert.deepEqual(ops, ["stage", "discard"], "the failed first part is followed by a discard");
 });

@@ -786,7 +786,7 @@ export function officialPinnedFromPin(): { name: string; version: string; folder
 }
 const pinnedNow = () => (pluginHost.pinned === undefined ? officialPinnedFromPin() : pluginHost.pinned);
 const pluginEvents = nativeEvents();
-type PluginFilesSpecFake = { op: string; plugin: string; root: string | null; path: string; data?: string; offset?: number; length?: number; exclusive?: boolean; recursive?: boolean; rootIdentity?: { device: number; inode: number }; ticket?: number; stage?: string; first?: boolean };
+type PluginFilesSpecFake = { op: string; plugin: string; root: string | null; path: string; data?: string; offset?: number; length?: number; exclusive?: boolean; recursive?: boolean; rootIdentity?: { device: number; inode: number }; ticket?: number; stage?: string; first?: boolean; operation?: string };
 type PluginFilesFailureFake = { ok: false; code: "not_found" | "exists" | "too_large" | "bad_path" | "refused" | "unavailable"; message: string };
 type PluginFileFake = { data: Uint8Array; mtimeMs: number; placeholder?: boolean };
 const FILES_MAX_DATA = 4 << 20;
@@ -893,7 +893,13 @@ async function filesCallFake(spec: PluginFilesSpecFake) {
   pluginFiles.calls.push({ ...spec });
   const ticket = spec.ticket;
   const revokedSince = (key: string) => (pluginFiles.revokedAt[key] ?? 0) > (ticket ?? -1);
-  if (typeof ticket !== "number" || ticket < 0 || revokedSince(spec.plugin) || (spec.root !== null && revokedSince(`${spec.plugin}\u0000${spec.root}`)))
+  if (
+    typeof ticket !== "number" ||
+    ticket < 0 ||
+    revokedSince(spec.plugin) ||
+    (spec.root !== null && revokedSince(`${spec.plugin}\u0000${spec.root}`)) ||
+    (spec.operation !== undefined && revokedSince(`${spec.plugin}\u0000operation:${spec.operation}`))
+  )
     return filesFail("refused", "the plugin's access ended");
   if (pluginFiles.failNext) {
     const failure = pluginFiles.failNext;

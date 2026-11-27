@@ -177,6 +177,58 @@ final class PluginFileHardeningTests: XCTestCase {
     XCTAssertFalse(try outside("a").contains("x.zip"))
   }
 
+  func gatedStore(_ access: PluginFileAccess, operation: String? = nil) -> PluginFileStore {
+    var gated = PluginFileStore(root: root, isData: true, quota: PluginFileQuota())
+    gated.gate = access.gate(ticket: access.ticket(), plugin: "p", root: nil, operation: operation)
+    return gated
+  }
+
+  func testARevokeAfterTheTicketCheckStopsTheWriteAtItsCommit() throws {
+    let access = PluginFileAccess()
+    let gated = gatedStore(access)
+    PluginFileStore.commitPoint = { label in if label == "write" { access.revoke(plugin: "p", root: nil) } }
+    XCTAssertEqual(code(write("late.md", "x", on: gated)), "refused")
+    PluginFileStore.commitPoint = nil
+    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root).filter { !$0.hasPrefix(".") || $0.contains(".ardia-") }, [])
+    XCTAssertEqual(write("fresh.md", "x", on: gatedStore(access))["ok"] as? Bool, true, "positive control: a ticket taken after the revoke works")
+  }
+
+  func testARevokeWaitsForACommitAlreadyUnderWay() throws {
+    let access = PluginFileAccess()
+    let gated = gatedStore(access)
+    let order = NSLock()
+    var events: [String] = []
+    let revoked = expectation(description: "revoked")
+    PluginFileStore.mutationPoint = { label in
+      guard label == "write" else { return }
+      DispatchQueue.global().async {
+        access.revoke(plugin: "p", root: nil)
+        let landed = FileManager.default.fileExists(atPath: "\(self.root)/racing.md")
+        order.withLock { events.append(landed ? "revoked after the commit" : "revoked mid-commit") }
+        revoked.fulfill()
+      }
+      Thread.sleep(forTimeInterval: 0.2)
+      order.withLock { events.append("committing") }
+    }
+    XCTAssertEqual(write("racing.md", "x", on: gated)["ok"] as? Bool, true)
+    PluginFileStore.mutationPoint = nil
+    wait(for: [revoked], timeout: 5)
+    XCTAssertEqual(order.withLock { events }, ["committing", "revoked after the commit"])
+    XCTAssertEqual(code(write("after.md", "x", on: gated)), "refused")
+  }
+
+  func testAnOperationRevokedEndsOnlyThatOperationsCommits() throws {
+    let access = PluginFileAccess()
+    let stage = UUID().uuidString
+    let gated = gatedStore(access, operation: stage)
+    XCTAssertEqual(gated.perform(["op": "stage", "path": "x.zip", "stage": stage, "data": b64("part"), "first": true])["ok"] as? Bool, true)
+    access.revoke(plugin: "p", root: PluginFileAccess.operationPrefix + stage)
+    XCTAssertEqual(code(gated.perform(["op": "publish", "path": "x.zip", "stage": stage])), "refused")
+    XCTAssertFalse(FileManager.default.fileExists(atPath: "\(root)/x.zip"))
+    XCTAssertEqual(write("other.md", "x", on: gated)["ok"] as? Bool, false, "the same gate carries the operation")
+    XCTAssertEqual(write("other.md", "x", on: gatedStore(access))["ok"] as? Bool, true, "other calls of the plugin go on")
+  }
+
   func testRecursiveListSkipsAFolderMovedOutMidway() throws {
     XCTAssertEqual(write("a/b/secret.md", "k")["ok"] as? Bool, true)
     PluginFileStore.commitPoint = { label in if label == "list:a" { try? FileManager.default.moveItem(atPath: "\(self.root)/a", toPath: "\(self.base)/outside-a") } }

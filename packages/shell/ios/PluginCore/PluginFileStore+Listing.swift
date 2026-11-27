@@ -100,33 +100,35 @@ extension PluginFileStore {
       let kind = info.st_mode & S_IFMT
       if kind == S_IFLNK { return .failure(PluginFileFailure(.refused, "that's a link")) }
       guard kind == S_IFREG || kind == S_IFDIR else { return .failure(PluginFileFailure(.refused, "that isn't a plain file")) }
-      let doomed = Self.temporaryName(for: name)
-      mutating("remove")
-      guard renameatx_np(directory.fd, target, directory.fd, doomed, UInt32(RENAME_EXCL)) == 0 else {
-        if errno == ENOENT { return .success(["removed": false]) }
-        return .failure(PluginFileFailure(.unavailable, "it couldn't be removed (\(Self.errnoText(errno)))"))
-      }
-      let putBack = { _ = renameatx_np(directory.fd, doomed, directory.fd, target, UInt32(RENAME_EXCL)) }
-      guard intact(directory, in: opened) else {
-        putBack()
-        return .failure(Self.movedOut)
-      }
-      if kind == S_IFDIR {
-        guard unlinkat(directory.fd, doomed, AT_REMOVEDIR) == 0 else {
+      return gated {
+        let doomed = Self.temporaryName(for: name)
+        mutating("remove")
+        guard renameatx_np(directory.fd, target, directory.fd, doomed, UInt32(RENAME_EXCL)) == 0 else {
+          if errno == ENOENT { return .success(["removed": false]) }
+          return .failure(PluginFileFailure(.unavailable, "it couldn't be removed (\(Self.errnoText(errno)))"))
+        }
+        let putBack = { _ = renameatx_np(directory.fd, doomed, directory.fd, target, UInt32(RENAME_EXCL)) }
+        guard intact(directory, in: opened) else {
+          putBack()
+          return .failure(Self.movedOut)
+        }
+        if kind == S_IFDIR {
+          guard unlinkat(directory.fd, doomed, AT_REMOVEDIR) == 0 else {
+            let code = errno
+            putBack()
+            if code == ENOTEMPTY || code == EEXIST { return .failure(PluginFileFailure(.refused, "the folder isn't empty")) }
+            return .failure(PluginFileFailure(.refused, "the folder couldn't be removed (\(Self.errnoText(code)))"))
+          }
+          return .success(["removed": true])
+        }
+        guard unlinkat(directory.fd, doomed, 0) == 0 else {
           let code = errno
           putBack()
-          if code == ENOTEMPTY || code == EEXIST { return .failure(PluginFileFailure(.refused, "the folder isn't empty")) }
-          return .failure(PluginFileFailure(.refused, "the folder couldn't be removed (\(Self.errnoText(code)))"))
+          return .failure(PluginFileFailure(.unavailable, "the file couldn't be removed (\(Self.errnoText(code)))"))
         }
+        if isData, target == name { quota?.adjust(root, by: -Int64(info.st_size)) }
         return .success(["removed": true])
       }
-      guard unlinkat(directory.fd, doomed, 0) == 0 else {
-        let code = errno
-        putBack()
-        return .failure(PluginFileFailure(.unavailable, "the file couldn't be removed (\(Self.errnoText(code)))"))
-      }
-      if isData, target == name { quota?.adjust(root, by: -Int64(info.st_size)) }
-      return .success(["removed": true])
     }
   }
 

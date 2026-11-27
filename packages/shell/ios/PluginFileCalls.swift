@@ -55,11 +55,14 @@ enum PluginFileCalls {
     guard PluginFolders.isName(plugin) else { return done(PluginFileFailure(.refused, "that isn't a plugin's name").reply) }
     let root = spec["root"] as? String
     let ticket = PluginFileStore.integer(spec["ticket"])
+    let operation = (spec["operation"] as? String).flatMap { UUID(uuidString: $0)?.uuidString }
     queue(for: plugin).async {
-      guard access.allows(ticket, plugin: plugin, root: root) else { return done(PluginFileFailure(.refused, "the plugin's access ended").reply) }
+      guard access.allows(ticket, plugin: plugin, root: root, operation: operation) else { return done(PluginFileStore.accessEnded.reply) }
       switch store(plugin, root: root, identity: PluginFileIdentity(spec: spec["rootIdentity"])) {
       case .failure(let failure): done(failure.reply)
-      case .success(let store): done(store.perform(spec))
+      case .success(var store):
+        store.gate = access.gate(ticket: ticket, plugin: plugin, root: root, operation: operation)
+        done(store.perform(spec))
       }
     }
   }

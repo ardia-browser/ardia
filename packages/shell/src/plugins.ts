@@ -69,6 +69,7 @@ export type PluginFilesSpec = {
   recursive?: boolean;
   stage?: string;
   first?: boolean;
+  operation?: string;
   rootIdentity?: PluginFolderIdentity;
   ticket: number;
 };

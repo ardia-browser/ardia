@@ -66,9 +66,10 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       }
     },
     async E19() {
-      const { fake, tabs } = await session();
+      const { app, fake, tabs } = await session();
       const kept = fixture("changed@save.test");
       const changed = "fixture-pw-changed-10";
+      const before = await ardiaStore(app);
       const tab = await tabs.open(sites.url(SITE));
       try {
         await signIn(tab, kept.user, changed);
@@ -79,6 +80,8 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         await waitFor("the changed password in Apple Passwords", async () => (fake.savedLogins().find((l) => l.user === kept.user)?.password === changed ? true : null), 20_000);
         const copies = fake.savedLogins().filter((l) => l.user === kept.user);
         assert(copies.length === 1, "the login is changed, not added again", copies.length);
+        const after = await ardiaStore(app);
+        assert(q(after) === q(before), "Ardia's own store is unchanged", { before, after });
         return { engine: engineName, title: prompt.copy.title };
       } finally {
         await tab.close();

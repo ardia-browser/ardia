@@ -195,6 +195,28 @@ test("where the native page view reports hosting, a laid-out page whose web view
   }
 });
 
+test("a laid-out page whose native view never reports hosting opens once on the cap, counts once, and a report after that changes nothing", () => {
+  mockReportsHosted = true;
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  const { root, id } = openFocusedCard();
+  expect(landOpeningPage(root)).toBe(true);
+  cardLandsWithinCap();
+  expect(useBrowse.getState().surface).toBe("deck");
+  expect(deckPull.pageLive.value).toBe(false);
+  framesUntil(() => useBrowse.getState().surface === "browsing", 20);
+  expect(useBrowse.getState()).toMatchObject({ surface: "browsing", opening: null });
+  const waited = () => counted.mock.calls.filter(([name]) => name === "card_opens_waited").length;
+  expect(waited()).toBe(1);
+  const settled = useBrowse.getState();
+  reportHosted(root, id);
+  act(() => jest.advanceTimersByTime(500));
+  expect(waited()).toBe(1);
+  expect(useBrowse.getState()).toMatchObject({ surface: settled.surface, opening: settled.opening, arriving: settled.arriving });
+  expect(currentTabs().selectedId).toBe(id);
+  counted.mockRestore();
+  unmount(root);
+});
+
 test("a page whose native view reports hosting before its layout arrives takes the card's place on that layout, not on the cap", () => {
   mockReportsHosted = true;
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
@@ -213,14 +235,16 @@ test("a page whose native view reports hosting before its layout arrives takes t
 test("a hosting report from an earlier mount of the same tab, arriving after the tab's new page is made, can't release the open: only the new page's own report does", () => {
   mockReportsHosted = true;
   withTabs(3);
-  const tab = currentTabs().open.find((open) => open.id === currentTabs().selectedId)!;
-  const earlier = renderSurface(<PageSurface tab={tab} toneBottom={0} />);
-  const earlierReport = pageViewOf(earlier, tab.id).props.onPageEvent;
-  unmount(earlier);
+  const earlierReports = new Map<string, (event: { nativeEvent: { name: "hosted" } }) => void>();
+  for (const tab of currentTabs().open) {
+    const earlier = renderSurface(<PageSurface tab={tab} toneBottom={0} />);
+    earlierReports.set(tab.id, pageViewOf(earlier, tab.id).props.onPageEvent);
+    reportHosted(earlier, tab.id);
+    unmount(earlier);
+  }
   act(() => jest.runOnlyPendingTimers());
   const { root, id } = openFocusedCard();
-  expect(id).toBe(tab.id);
-  act(() => earlierReport({ nativeEvent: { name: "hosted" } }));
+  act(() => earlierReports.get(id)!({ nativeEvent: { name: "hosted" } }));
   expect(landOpeningPage(root)).toBe(true);
   cardLandsWithinCap();
   expect(useBrowse.getState().surface).toBe("deck");

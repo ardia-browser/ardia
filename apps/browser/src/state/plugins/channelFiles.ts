@@ -1,4 +1,4 @@
-import { filesCall, filesRevoke, filesTicket, filesUnwatch, filesWatch, onPluginFilesChange, pluginFolderInfo, sendToPlugin, type PluginFilesResult, type PluginFilesSpec, type PluginFolderIdentity } from "../../platform/plugins";
+import { callPlugin, filesCall, filesRevoke, filesTicket, filesUnwatch, filesWatch, onPluginFilesChange, pluginFolderInfo, sendToPlugin, type PluginFilesResult, type PluginFilesSpec, type PluginFolderIdentity } from "../../platform/plugins";
 import { errorText } from "../../lib/errors";
 import { pickFiles } from "../../platform/dialogs";
 import { useBrowser } from "../browser/store";
@@ -244,7 +244,7 @@ function deliverChange(change: { id: string; paths: string[]; gone?: boolean }) 
   if (!watchLive(w)) return dropWatch(change.id);
   if (change.gone === true) {
     watches.delete(change.id);
-    sendToPlugin(w.name, w.run, JSON.stringify({ event: "files.changed", time: Date.now(), data: { watch: change.id, root: w.label, paths: [], gone: true } }));
+    callPlugin(w.name, w.run, JSON.stringify({ event: "files.changed", time: Date.now(), data: { watch: change.id, root: w.label, paths: [], gone: true } }));
     return;
   }
   const paths = (Array.isArray(change.paths) ? change.paths : []).filter((p): p is string => typeof p === "string" && pathProblem(p) === null);

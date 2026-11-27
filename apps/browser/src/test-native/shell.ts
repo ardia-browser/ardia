@@ -742,7 +742,7 @@ export const pluginHost = {
   fileReads: [] as { name: string; folderId: string; approved: string; path: string }[],
   stops: [] as { name: string; run: number; graceMs: number }[],
   replies: [] as { name: string; run: number; line: string }[],
-  events: [] as { name: string; run: number; line: string }[],
+  events: [] as { name: string; run: number; line: string; kept?: boolean }[],
   removed: [] as string[],
   removeFolderIds: [] as (string | null)[],
   links: [] as { name: string; folderId: string; approved: string; version: string | null; programs: { name: string; path: string; afterUpdate?: string[][] }[] }[],
@@ -1002,7 +1002,7 @@ const plugins: Modules["ArdiaPlugins"] = {
   stop: async (name, run, graceMs) => void (pluginHost.stops.push({ name, run, graceMs }), await pluginHost.stopGate),
   reply: (name, run, line) => void pluginHost.replies.push({ name, run, line }),
   event: (name, run, line) => void pluginHost.events.push({ name, run, line }),
-  call: (name, run, line) => void pluginHost.events.push({ name, run, line }),
+  call: (name, run, line) => void pluginHost.events.push({ name, run, line, kept: true }),
   remove: async (name, official, folderId) => (await pluginHost.removeGate, pluginHost.removeFolderIds.push(folderId), pluginHost.removed.push(official ? `official:${name}` : name), (pluginHost.folders = pluginHost.folders.filter((f) => f.name !== name)), { ok: true }),
   linkPrograms: async (spec) => {
     pluginHost.links.push({ ...spec, programs: spec.programs.map((p) => ({ ...p })) });

@@ -64,7 +64,7 @@ const usesPageA = [
   "settings-services", "download-navigation", "page-events", "page-background", "external-app-answer",
   "external-app-from-extension",
   "notifications", "now-playing", "media-state", "auto-picture-in-picture", "auto-picture-in-picture-app-switch", "auto-picture-in-picture-closed-stays-closed", "auto-picture-in-picture-other-window", "auto-picture-in-picture-paused", "auto-picture-in-picture-covered-quick", "media-plays-on-move", "picture-in-picture-opt-out", "pip-window", "pip-framing", "report-recording-pip", "report-recording-guard", "report-recording-webkit-media", "page-focus",
-  "fullscreen-tab-switch", "fullscreen-native", "fullscreen-system-title-bar", "fullscreen-transition-picture", "fullscreen-hidden-page", "fullscreen-split-sibling",
+  "fullscreen-tab-switch", "fullscreen-native", "fullscreen-exit-off-space", "fullscreen-system-title-bar", "fullscreen-transition-picture", "fullscreen-hidden-page", "fullscreen-split-sibling",
   "fullscreen-pip", "autofill-suggestions", "images", "extension-surfaces", "frozen", "discard",
   "permission-prompt", "popup-blocked", "move-tab-slow-mount", "move-last-tab-slow-mount",
   "move-tab-closed-while-parked", "move-tab-to-window", "title-bar-close", "last-used-profile",
@@ -4929,6 +4929,34 @@ try {
       return out;
     } finally {
       await engine("windows.dev", { window: await engine("tabs.devWindowNumber", { tabId: first.id }), action: "fakeFullScreenMs:0" }).catch(() => null);
+      await closeTab(tab.id).catch(() => null);
+      await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    }
+  });
+
+  await check("fullscreen-exit-off-space", async () => {
+    const tab = await openTab(`${base}/b?fs-off-space`, "Page B");
+    const n = await engine("tabs.devWindowNumber", { tabId: tab.id });
+    const win = (action) => engine("windows.dev", { window: n, action });
+    const settled = (what, test) => until(what, async () => {
+      const w = await fsWindow(tab.id);
+      return !w.pageFullScreen?.transitioning && test(w) ? w : null;
+    }, 6000).catch(async (e) => { throw new Error(`${e.message}; window ${JSON.stringify(await fsWindow(tab.id))}`); });
+    try {
+      const t = await pageFor(tab.id, "/b?fs-off-space");
+      await fsEnter(tab.id, t);
+      await settled("the window in full screen", (w) => w.fullScreen && w.pageFullScreen?.entered);
+      await win("fakeOcclusion:occluded");
+      await cdp(t, "Runtime.evaluate", { expression: "document.exitFullscreen().then(() => 'ok', (e) => e.name)", awaitPromise: true, returnByValue: true });
+      await fsLeft(tab.id, t, "the page out of full screen with its window off the current Space");
+      await sleep(1000);
+      const away = await fsWindow(tab.id);
+      if (!away.fullScreen) throw new Error(`the window started leaving full screen off the current Space: ${JSON.stringify(away)}`);
+      await win("fakeOcclusion:visible");
+      const back = await settled("the window out of full screen once it's back", (w) => !w.fullScreen && !w.pageFullScreen?.entered);
+      return { away: away.pageFullScreen, back: back.pageFullScreen };
+    } finally {
+      await win("fakeOcclusion:off").catch(() => null);
       await closeTab(tab.id).catch(() => null);
       await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
     }

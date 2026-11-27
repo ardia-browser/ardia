@@ -86,6 +86,7 @@ struct PluginFileStore {
   let identity: PluginFileIdentity?
 
   nonisolated(unsafe) static var commitPoint: ((String) -> Void)?
+  nonisolated(unsafe) static var mutationPoint: ((String) -> Void)?
 
   init(root: String, isData: Bool, coordinated: Bool = false, quota: PluginFileQuota? = nil, identity: PluginFileIdentity? = nil) {
     self.root = root
@@ -146,9 +147,19 @@ struct PluginFileStore {
 
   final class Directory {
     let fd: Int32
-    init(_ fd: Int32) { self.fd = fd }
+    let parent: Directory?
+    let name: String?
+    init(_ fd: Int32, parent: Directory? = nil, name: String? = nil) {
+      self.fd = fd
+      self.parent = parent
+      self.name = name
+    }
     deinit { Darwin.close(fd) }
     var path: String? { PluginFiles.openedPath(fd) }
+    var identity: PluginFileIdentity? {
+      var info = stat()
+      return fstat(fd, &info) == 0 ? PluginFileIdentity(info) : nil
+    }
   }
 
   struct OpenedRoot {
@@ -183,9 +194,33 @@ struct PluginFileStore {
     return path == root.real || path.hasPrefix(root.real.hasSuffix("/") ? root.real : root.real + "/")
   }
 
+  func intact(_ directory: Directory, in root: OpenedRoot) -> Bool {
+    guard confined(directory, in: root), root.directory.path == root.real else { return false }
+    var node = directory
+    while let parent = node.parent, let name = node.name {
+      var entry = stat()
+      guard fstatat(parent.fd, name, &entry, AT_SYMLINK_NOFOLLOW) == 0, (entry.st_mode & S_IFMT) == S_IFDIR,
+        let held = node.identity, held == PluginFileIdentity(entry)
+      else { return false }
+      node = parent
+    }
+    guard let top = node.identity, let rootIdentity = root.directory.identity, top == rootIdentity else { return false }
+    if let identity, identity != rootIdentity { return false }
+    return true
+  }
+
+  static let movedOut = PluginFileFailure(.refused, "the folder moved out of the root")
+
   func committed(_ directory: Directory, in root: OpenedRoot, _ label: String) -> PluginFileFailure? {
     Self.commitPoint?(label)
-    return confined(directory, in: root) ? nil : PluginFileFailure(.refused, "the folder moved out of the root")
+    return intact(directory, in: root) ? nil : Self.movedOut
+  }
+
+  func mutating(_ label: String) { Self.mutationPoint?(label) }
+
+  func entryIdentity(_ directory: Directory, _ name: String) -> PluginFileIdentity? {
+    var info = stat()
+    return fstatat(directory.fd, name, &info, AT_SYMLINK_NOFOLLOW) == 0 ? PluginFileIdentity(info) : nil
   }
 
   func confinedFile(_ fd: Int32, in root: OpenedRoot) -> Bool {
@@ -201,8 +236,13 @@ struct PluginFileStore {
     var current = Directory(first)
     for part in parts {
       var next = openat(current.fd, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+      var made = false
       if next < 0, errno == ENOENT, create {
-        if mkdirat(current.fd, part, directoryMode) != 0, errno != EEXIST {
+        if let failure = committed(current, in: root, "mkdir:\(part)") { return .failure(failure) }
+        mutating("mkdir:\(part)")
+        if mkdirat(current.fd, part, directoryMode) == 0 {
+          made = true
+        } else if errno != EEXIST {
           return .failure(PluginFileFailure(.unavailable, "the folder “\(part)” couldn't be made (\(Self.errnoText(errno)))"))
         }
         next = openat(current.fd, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
@@ -216,9 +256,14 @@ struct PluginFileStore {
         if code == ENOTDIR || (found && (info.st_mode & S_IFMT) != S_IFDIR) { return .failure(PluginFileFailure(.badPath, "“\(part)” isn't a folder")) }
         return .failure(PluginFileFailure(.unavailable, "the folder “\(part)” couldn't be opened (\(Self.errnoText(code)))"))
       }
-      current = Directory(next)
+      let child = Directory(next, parent: current, name: part)
+      if made, !intact(child, in: root) {
+        if let held = child.identity, entryIdentity(current, part) == held { unlinkat(current.fd, part, AT_REMOVEDIR) }
+        return .failure(Self.movedOut)
+      }
+      current = child
     }
-    guard confined(current, in: root) else { return .failure(PluginFileFailure(.refused, "the path left the folder")) }
+    guard intact(current, in: root) else { return .failure(PluginFileFailure(.refused, "the path left the folder")) }
     return .success(current)
   }
 
@@ -465,6 +510,7 @@ struct PluginFileStore {
       if isData, let quota, usage(opened) - oldSize + Int64(data.count) > quota.cap {
         return .failure(PluginFileFailure(.tooLarge, "the plugin's files would pass \(quota.cap >> 20) MiB"))
       }
+      if let failure = committed(directory, in: opened, "temporary") { return .failure(failure) }
       let temporary = Self.temporaryName(for: name)
       let fd = openat(directory.fd, temporary, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, fileMode)
       guard fd >= 0 else { return .failure(PluginFileFailure(.unavailable, "the file couldn't be written (\(Self.errnoText(errno)))")) }
@@ -478,17 +524,40 @@ struct PluginFileStore {
         unlinkat(directory.fd, temporary, 0)
         return .failure(failure)
       }
-      guard renameatx_np(directory.fd, temporary, directory.fd, name, exclusive ? UInt32(RENAME_EXCL) : 0) == 0 else {
-        let code = errno
-        unlinkat(directory.fd, temporary, 0)
-        if code == EEXIST { return .failure(PluginFileFailure(.exists, "the file already exists")) }
-        if code == EISDIR || code == ENOTDIR || code == ENOTEMPTY { return .failure(PluginFileFailure(.refused, "that's a folder, not a file")) }
-        return .failure(PluginFileFailure(.unavailable, "the file couldn't be saved (\(Self.errnoText(code)))"))
-      }
+      if let failure = replace(directory, temporary: temporary, name: name, exclusive: exclusive, in: opened) { return .failure(failure) }
       let answer = result(directory, name)
       if isData, case .success(let values) = answer, let size = values["size"] as? Int64 { quota?.adjust(root, by: size - oldSize) }
       return answer
     }
+  }
+
+  func replace(_ directory: Directory, temporary: String, name: String, exclusive: Bool, in opened: OpenedRoot) -> PluginFileFailure? {
+    let written = entryIdentity(directory, temporary)
+    mutating("write")
+    var swapped = false
+    if renameatx_np(directory.fd, temporary, directory.fd, name, UInt32(RENAME_EXCL)) != 0 {
+      let code = errno
+      if code == EEXIST, !exclusive, renameatx_np(directory.fd, temporary, directory.fd, name, UInt32(RENAME_SWAP)) == 0 {
+        swapped = true
+      } else {
+        let code = code == EEXIST && !exclusive ? errno : code
+        unlinkat(directory.fd, temporary, 0)
+        if code == EEXIST { return PluginFileFailure(.exists, "the file already exists") }
+        if code == EISDIR || code == ENOTDIR || code == ENOTEMPTY { return PluginFileFailure(.refused, "that's a folder, not a file") }
+        return PluginFileFailure(.unavailable, "the file couldn't be saved (\(Self.errnoText(code)))")
+      }
+    }
+    guard intact(directory, in: opened) else {
+      if swapped {
+        renameatx_np(directory.fd, temporary, directory.fd, name, UInt32(RENAME_SWAP))
+        unlinkat(directory.fd, temporary, 0)
+      } else if let written, entryIdentity(directory, name) == written {
+        unlinkat(directory.fd, name, 0)
+      }
+      return Self.movedOut
+    }
+    if swapped { unlinkat(directory.fd, temporary, 0) }
+    return nil
   }
 
   func append(_ path: String, data: Data) -> Result<[String: Any], PluginFileFailure> {
@@ -521,6 +590,8 @@ struct PluginFileStore {
         }
       }
       if let failure = committed(directory, in: opened, "append") { return .failure(failure) }
+      let existed = entryIdentity(directory, name) != nil
+      mutating("append")
       let fd = openat(directory.fd, name, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, fileMode)
       guard fd >= 0 else {
         let code = errno
@@ -530,18 +601,30 @@ struct PluginFileStore {
         return .failure(PluginFileFailure(.unavailable, "the file couldn't be opened (\(Self.errnoText(code)))"))
       }
       defer { Darwin.close(fd) }
+      let dropMade = {
+        if !existed, let made = PluginFileIdentity(fd: fd), self.entryIdentity(directory, name) == made { unlinkat(directory.fd, name, 0) }
+      }
       var info = stat()
       guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { return .failure(PluginFileFailure(.refused, "that isn't a plain file")) }
       guard info.st_nlink <= 1 else { return .failure(Self.hardLinkRefusal) }
-      guard confinedFile(fd, in: opened) else { return .failure(PluginFileFailure(.refused, "the file moved out of the root")) }
+      guard intact(directory, in: opened), confinedFile(fd, in: opened) else {
+        dropMade()
+        return .failure(PluginFileFailure(.refused, "the file moved out of the root"))
+      }
       if isDataless(info, path) {
         requestDownload(path)
         return .failure(PluginFileFailure(.unavailable, "the file isn't downloaded yet"))
       }
       _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) & ~O_NONBLOCK)
+      let before = info.st_size
       let complete = Self.writeAll(fd, data) && fsync(fd) == 0
+      guard intact(directory, in: opened), confinedFile(fd, in: opened) else {
+        ftruncate(fd, before)
+        dropMade()
+        return .failure(Self.movedOut)
+      }
       guard fstat(fd, &info) == 0 else { return .failure(PluginFileFailure(.unavailable, "the file couldn't be read back")) }
-      if isData { quota?.adjust(root, by: Int64(data.count)) }
+      if isData { quota?.adjust(root, by: Int64(info.st_size - before)) }
       guard complete else { return .failure(PluginFileFailure(.unavailable, "the file couldn't be written")) }
       return .success(["size": Int64(info.st_size), "mtimeMs": Self.mtimeMs(info)])
     }

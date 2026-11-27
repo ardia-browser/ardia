@@ -17,6 +17,7 @@ final class PluginFileHardeningTests: XCTestCase {
 
   override func tearDownWithError() throws {
     PluginFileStore.commitPoint = nil
+    PluginFileStore.mutationPoint = nil
     try? FileManager.default.removeItem(atPath: base)
   }
 
@@ -101,6 +102,79 @@ final class PluginFileHardeningTests: XCTestCase {
     XCTAssertEqual(write("b/keep.md", "k")["ok"] as? Bool, true)
     PluginFileStore.commitPoint = moveOut("b")
     XCTAssertEqual(code(store.perform(["op": "read", "path": "b/keep.md"])), "refused")
+  }
+
+  func moveOutAt(_ label: String, _ name: String) -> (String) -> Void {
+    let move = moveOut(name)
+    return { at in if at == label { move(at) } }
+  }
+
+  func outside(_ name: String) throws -> [String] {
+    try FileManager.default.contentsOfDirectory(atPath: "\(base)/outside-\(name)").sorted()
+  }
+
+  func testAFolderMadeAfterItsParentMovedOutIsTakenBack() throws {
+    XCTAssertEqual(write("a/keep.md", "k")["ok"] as? Bool, true)
+    PluginFileStore.mutationPoint = moveOutAt("mkdir:new", "a")
+    XCTAssertEqual(code(write("a/new/n.md", "x")), "refused")
+    PluginFileStore.mutationPoint = nil
+    XCTAssertEqual(try outside("a"), ["keep.md"])
+  }
+
+  func testANewFileRenamedInAfterTheFolderMovedOutIsTakenBack() throws {
+    XCTAssertEqual(write("a/keep.md", "k")["ok"] as? Bool, true)
+    PluginFileStore.mutationPoint = moveOutAt("write", "a")
+    XCTAssertEqual(code(write("a/n.md", "x")), "refused")
+    PluginFileStore.mutationPoint = nil
+    XCTAssertEqual(try outside("a"), ["keep.md"])
+  }
+
+  func testAnOverwriteAfterTheFolderMovedOutPutsTheOldFileBack() throws {
+    XCTAssertEqual(write("a/keep.md", "k")["ok"] as? Bool, true)
+    PluginFileStore.mutationPoint = moveOutAt("write", "a")
+    XCTAssertEqual(code(write("a/keep.md", "changed")), "refused")
+    PluginFileStore.mutationPoint = nil
+    XCTAssertEqual(try outside("a"), ["keep.md"])
+    XCTAssertEqual(try String(contentsOfFile: "\(base)/outside-a/keep.md", encoding: .utf8), "k")
+  }
+
+  func testAnAppendAfterTheFolderMovedOutIsUndone() throws {
+    XCTAssertEqual(write("a/keep.md", "k")["ok"] as? Bool, true)
+    PluginFileStore.mutationPoint = moveOutAt("append", "a")
+    XCTAssertEqual(code(store.perform(["op": "append", "path": "a/keep.md", "data": b64("more")])), "refused")
+    XCTAssertEqual(try String(contentsOfFile: "\(base)/outside-a/keep.md", encoding: .utf8), "k")
+    try FileManager.default.moveItem(atPath: "\(base)/outside-a", toPath: "\(root)/a")
+    PluginFileStore.mutationPoint = moveOutAt("append", "a")
+    XCTAssertEqual(code(store.perform(["op": "append", "path": "a/log", "data": b64("x")])), "refused")
+    PluginFileStore.mutationPoint = nil
+    XCTAssertEqual(try outside("a"), ["keep.md"])
+  }
+
+  func testARemoveAfterTheFolderMovedOutPutsTheFileBack() throws {
+    XCTAssertEqual(write("a/keep.md", "k")["ok"] as? Bool, true)
+    PluginFileStore.mutationPoint = moveOutAt("remove", "a")
+    XCTAssertEqual(code(store.perform(["op": "remove", "path": "a/keep.md"])), "refused")
+    PluginFileStore.mutationPoint = nil
+    XCTAssertEqual(try outside("a"), ["keep.md"])
+    XCTAssertEqual(store.perform(["op": "remove", "path": "keep-missing.md"])["removed"] as? Bool, false)
+    XCTAssertEqual(write("b/gone.md", "g")["ok"] as? Bool, true)
+    XCTAssertEqual(store.perform(["op": "remove", "path": "b/gone.md"])["removed"] as? Bool, true, "positive control")
+    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: "\(root)/b"), [])
+  }
+
+  func testStagingAndPublishingAfterTheFolderMovedOutAreUndone() throws {
+    XCTAssertEqual(write("a/keep.md", "k")["ok"] as? Bool, true)
+    let stage = UUID().uuidString
+    PluginFileStore.mutationPoint = moveOutAt("stage", "a")
+    XCTAssertEqual(code(store.perform(["op": "stage", "path": "a/x.zip", "stage": stage, "data": b64("part"), "first": true])), "refused")
+    PluginFileStore.mutationPoint = nil
+    XCTAssertEqual(try outside("a"), ["keep.md"])
+    try FileManager.default.moveItem(atPath: "\(base)/outside-a", toPath: "\(root)/a")
+    XCTAssertEqual(store.perform(["op": "stage", "path": "a/x.zip", "stage": stage, "data": b64("part"), "first": true])["ok"] as? Bool, true)
+    PluginFileStore.mutationPoint = moveOutAt("publish", "a")
+    XCTAssertEqual(code(store.perform(["op": "publish", "path": "a/x.zip", "stage": stage])), "refused")
+    PluginFileStore.mutationPoint = nil
+    XCTAssertFalse(try outside("a").contains("x.zip"))
   }
 
   func testRecursiveListSkipsAFolderMovedOutMidway() throws {

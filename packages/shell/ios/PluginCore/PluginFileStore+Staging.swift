@@ -41,17 +41,37 @@ extension PluginFileStore {
     if isData, let quota, usage(opened) + Int64(data.count) > quota.cap {
       return .failure(PluginFileFailure(.quota, "the plugin's files would pass \(quota.cap >> 20) MiB"))
     }
+    if let failure = committed(directory, in: opened, "stage") { return .failure(failure) }
     let flags = O_WRONLY | O_APPEND | O_NOFOLLOW | O_CLOEXEC | (first ? O_CREAT | O_EXCL : 0)
+    mutating("stage")
     let fd = openat(directory.fd, staging, flags, fileMode)
     guard fd >= 0 else { return .failure(PluginFileFailure(.unavailable, "the download couldn't be written (\(Self.errnoText(errno)))")) }
     defer { Darwin.close(fd) }
     var info = stat()
-    guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_nlink == 1 else { return .failure(PluginFileFailure(.refused, "the download's file isn't Ardia's own")) }
+    let dropMade = {
+      if first, let made = PluginFileIdentity(fd: fd), self.entryIdentity(directory, staging) == made { unlinkat(directory.fd, staging, 0) }
+    }
+    guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_nlink == 1 else {
+      dropMade()
+      return .failure(PluginFileFailure(.refused, "the download's file isn't Ardia's own"))
+    }
+    let before = info.st_size
     let complete = Self.writeAll(fd, data)
-    guard fstat(fd, &info) == 0 else { return .failure(PluginFileFailure(.unavailable, "the download couldn't be read back")) }
-    if isData { quota?.adjust(root, by: Int64(data.count)) }
-    guard complete else { return .failure(PluginFileFailure(.unavailable, "the download couldn't be written")) }
-    return .success(["size": Int64(info.st_size)])
+    let after = fstat(fd, &info) == 0 ? info.st_size : before
+    let undo = {
+      ftruncate(fd, before)
+      dropMade()
+    }
+    guard intact(directory, in: opened) else {
+      undo()
+      return .failure(Self.movedOut)
+    }
+    guard complete else {
+      undo()
+      return .failure(PluginFileFailure(.unavailable, "the download couldn't be written"))
+    }
+    if isData { quota?.adjust(root, by: Int64(after - before)) }
+    return .success(["size": Int64(after)])
   }
 
   func publishStage(_ path: String, stage: String) -> Result<[String: Any], PluginFileFailure> {
@@ -68,10 +88,15 @@ extension PluginFileStore {
       Darwin.close(fd)
       guard synced else { return .failure(PluginFileFailure(.unavailable, "the download couldn't be saved")) }
       if let failure = committed(directory, in: opened, "write") { return .failure(failure) }
+      mutating("publish")
       guard renameatx_np(directory.fd, staging, directory.fd, name, UInt32(RENAME_EXCL)) == 0 else {
         let code = errno
         if code == EEXIST { return .failure(PluginFileFailure(.exists, "a file is already at that path")) }
         return .failure(PluginFileFailure(.unavailable, "the download couldn't be saved (\(Self.errnoText(code)))"))
+      }
+      guard intact(directory, in: opened) else {
+        renameatx_np(directory.fd, name, directory.fd, staging, UInt32(RENAME_EXCL))
+        return .failure(Self.movedOut)
       }
       return result(directory, name)
     }

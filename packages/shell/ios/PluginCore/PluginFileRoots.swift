@@ -14,6 +14,12 @@ struct PluginFileIdentity: Equatable {
     self.init(device: Int64(info.st_dev), inode: Int64(info.st_ino))
   }
 
+  init?(fd: Int32) {
+    var info = stat()
+    guard fstat(fd, &info) == 0 else { return nil }
+    self.init(info)
+  }
+
   init?(spec: Any?) {
     guard let given = spec as? [String: Any], let device = PluginFileStore.integer(given["device"]), let inode = PluginFileStore.integer(given["inode"]),
       device >= 0, inode >= 0

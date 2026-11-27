@@ -89,8 +89,9 @@
   {
    "id": "chromium-page-message:loginField",
    "source": "frame",
-   "guard": "Apple Passwords profiles only; the frame's origin is the engine's verified one, never the page's, and must be the top page's; trusted pointer or key; the Login list fills only after a native pick, into the frame and field token it was opened for",
+   "guard": "ArdiaLoginListReport keeps only an event, a digit token, a field kind, the username field's typed value (200 characters) and a bounded rect; Apple Passwords profiles only; the frame's origin is the engine's verified one, never the page's, and must be the top page's; trusted pointer or key; the Login list fills only after a native pick, into the frame and field token it was opened for",
    "checks": [
+    "packages/ardiacore/ios/ArdiaLoginListReport.mm#ArdiaLoginListReport",
     "packages/ardiacore/ios/ArdiaWebView+LoginList.mm#loginFieldFromPage"
    ]
   },
@@ -99,6 +100,7 @@
    "source": "frame",
    "guard": "Only answers a fill native started: the ticket must be pending and the reply must come from the frame it was sent to; it carries only whether the fill happened",
    "checks": [
+    "packages/ardiacore/ios/ArdiaLoginListReport.mm#ArdiaLoginListTicket",
     "packages/ardiacore/ios/ArdiaWebView+LoginList.mm#answerLoginFill"
    ]
   },

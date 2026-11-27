@@ -46,6 +46,7 @@ const native = {
     exists: folders.has(path),
     writable: true,
     hasSyncData: (chainOf(path)?.size ?? 0) > 0,
+    vacant: folders.has(path) && chainOf(path).size === 0,
   }),
   chooseFolder: async () => null,
   chainStatus: async (folder) => {
@@ -62,7 +63,7 @@ const native = {
   createChainInNewFolder: async (folder) => {
     onCreateChain?.(folder);
     if (createChainError) throw createChainError;
-    if (folders.has(folder)) throw Object.assign(new Error("A folder is already there"), { code: "ERR_SYNC_FOLDER_EXISTS" });
+    if (chainOf(folder)?.size) throw Object.assign(new Error("A folder is already there"), { code: "ERR_SYNC_FOLDER_EXISTS" });
     plant(folder, OURS);
   },
   deleteChain: async (folder) => void chainOf(folder)?.delete(OURS),
@@ -85,7 +86,6 @@ const native = {
   openLocal: async (sealed) => (sealed.startsWith("sealed:") ? sealed.slice(7) : null),
   readPasswords: async () => null,
 };
-const exclusiveCreate = native.createChainInNewFolder;
 globalThis.acTestNativeModules = { ArdiaSync: native };
 
 const shell = await import("../../test-native/index.ts");
@@ -110,7 +110,6 @@ const reset = () => {
   beforeWrite = null;
   beforeRead = null;
   onFolderInfo = null;
-  native.createChainInNewFolder = exclusiveCreate;
   heldDocSaves.on = false;
   heldDocSaves.queue.length = 0;
   shell.docs.clear();
@@ -452,6 +451,7 @@ test("a folder that is there but lost this device's data waits without offering 
   assert.equal(engine.useSync.getState().dataMissing, false);
 
   const chain = chainOf(SYNC_FOLDER).get(OURS);
+  plant(SYNC_FOLDER, "other-chain");
   chainOf(SYNC_FOLDER).delete(OURS);
   await engine.syncNow();
   const waiting = engine.useSync.getState();
@@ -462,7 +462,7 @@ test("a folder that is there but lost this device's data waits without offering 
   assert.equal(engine.useSync.getState().dataMissing, true, "a settings change while the data is missing keeps pairing off");
   engine.setTypeSynced("history", true);
   assert.equal(engine.useSync.getState().dataMissing, true);
-  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" }, "recreate never makes a chain in a folder that is there");
+  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" }, "recreate never makes a chain in a folder that holds other data");
   assert.equal(chainOf(SYNC_FOLDER).has(OURS), false);
 
   chainOf(SYNC_FOLDER).set(OURS, chain);
@@ -533,14 +533,14 @@ test("pairing stays off after a recreation until a cycle has uploaded this devic
   const failed = engine.useSync.getState();
   assert.equal(failed.status, "stalled");
   assert.equal(failed.reseeding, true, "the new folder holds none of this device's data yet, so pairing stays off");
-  assert.ok(JSON.parse(shell.docs.get("sync.json")).reseedScopes?.length, "what is owed survives a relaunch");
+  assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedCycleOwed, true, "what is owed survives a relaunch");
 
   writeFailsAfter = Infinity;
   await engine.syncNow();
   const done = engine.useSync.getState();
   assert.equal(done.status, "updated");
   assert.equal(done.reseeding, false);
-  assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedScopes, undefined);
+  assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedCycleOwed, undefined);
   assert.ok([...chainOf(SYNC_FOLDER).get(OURS).values()].some((files) => files.size > 0), "the first upload landed");
 });
 
@@ -551,15 +551,6 @@ test("a folder that comes back after the last check is never written into: the n
   assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" });
   assert.equal(chainOf(SYNC_FOLDER).has(OURS), false, "no chain of this phrase next to the one that came back");
   assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedScopes, undefined, "nothing is owed to a folder that wasn't created");
-});
-
-test("a host without the exclusive create still recreates through createChain", async () => {
-  reset();
-  native.createChainInNewFolder = undefined;
-  const engine = await brokenFolder("plain-create");
-  assert.deepEqual(await engine.recreateSyncFolder(), { ok: "recreated" });
-  assert.ok(chainOf(SYNC_FOLDER).has(OURS));
-  assert.equal(engine.useSync.getState().status, "updated");
 });
 
 test("a whole folder removed right before a write shows the folder as unavailable, with Recreate, not the waiting state", async () => {
@@ -623,4 +614,40 @@ test("a quit that starts during the last folder check creates nothing", async ()
   } finally {
     setQuitting(false);
   }
+});
+
+test("pairing stays off until the writes queued while the folder was gone have landed, not just the snapshots", async () => {
+  reset();
+  const { Clock, emptyScope, pull } = await import("@ardia/sync");
+  const engine = await brokenFolder("pending-write-fails");
+  const scope = `p:${JSON.parse(shell.docs.get("sync.json")).profiles.default.syncId}`;
+  S().addBookmark({ profileId: "default", url: "https://offline.example/", title: "Made Offline" });
+  let writes = 0;
+  beforeWrite = () => {
+    if (++writes > 2) throw new Error("disk full");
+  };
+  assert.deepEqual(await engine.recreateSyncFolder(), { ok: "recreated" });
+  assert.ok(writes > 2, "both snapshots landed and a later write failed");
+  const failed = engine.useSync.getState();
+  assert.equal(failed.status, "stalled");
+  assert.equal(failed.reseeding, true, "pairing stays off while a queued write is still owed");
+
+  beforeWrite = null;
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().status, "updated");
+  assert.equal(engine.useSync.getState().reseeding, false);
+  const phone = emptyScope();
+  await pull(phone, { write: () => {}, read: (s, known) => native.read(SYNC_FOLDER, s, known), remove: () => {} }, scope, new Clock("iphone"), Date.now());
+  assert.ok(Object.values(phone.records).some((r) => r.v?.t === "Made Offline"), "the offline edit reached the new folder before pairing opened");
+});
+
+test("a folder left empty by an earlier failed recreate offers Recreate again instead of answering exists forever", async () => {
+  reset();
+  const engine = await brokenFolder("vacant-left-over");
+  folders.set(SYNC_FOLDER, new Map());
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().dataMissing, true);
+  assert.deepEqual(await engine.recreateSyncFolder(), { ok: "recreated" });
+  assert.ok(chainOf(SYNC_FOLDER).has(OURS));
+  assert.equal(engine.useSync.getState().status, "updated");
 });

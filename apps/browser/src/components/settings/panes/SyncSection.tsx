@@ -173,10 +173,10 @@ function SyncOn({ info, onReload }: { info: FolderInfo | null; onReload: () => P
   const reseeding = useSync((s) => s.reseeding);
   const dataMissing = useSync((s) => s.dataMissing);
   const cloudDriveOff = !!info && info.inICloud && !info.iCloudAvailable;
-  const folderMissing = offline && !!info && !info.exists && !cloudDriveOff;
+  const folderMissing = (offline && !!info && !info.exists && !cloudDriveOff) || (dataMissing && !!info?.vacant);
   useEffect(() => {
-    if (offline) void reloadRef.current();
-  }, [offline]);
+    if (offline || dataMissing) void reloadRef.current();
+  }, [offline, dataMissing]);
   const move = async () => {
     if (!info) return;
     setMoved(null);

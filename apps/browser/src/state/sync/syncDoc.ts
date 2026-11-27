@@ -58,6 +58,7 @@ export type SyncDoc = {
   joining: boolean;
   seqs?: Record<string, number>;
   reseedScopes?: string[];
+  reseedCycleOwed?: true;
   sends?: Record<string, SendLedger>;
   tabCloses?: Record<string, string[]>;
   removing?: string[] | Record<string, ProfileRemoval>;

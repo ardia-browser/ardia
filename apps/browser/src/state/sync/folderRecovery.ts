@@ -65,8 +65,6 @@ export async function publishChainGone(status: string, { native, folder, device,
 export const chainStatusAfterMissingWrite = (native: SyncNativeApi, folder: string) =>
   native.chainStatus(folder).then((status) => (status === "unavailable" ? status : "missing"), () => "missing");
 
-const createInNewFolder = (native: SyncNativeApi, folder: string) => (native.createChainInNewFolder ? native.createChainInNewFolder(folder) : native.createChain(folder));
-
 const folderExistsError = (error: unknown) => (error as { code?: unknown } | null)?.code === "ERR_SYNC_FOLDER_EXISTS";
 
 export function folderRecreateMessage(result: FolderRecreateResult, label: string): string | null {
@@ -125,7 +123,6 @@ export async function reseedPendingScopes({ native, doc, folder, device, clock, 
         await settled();
       }
     }
-    if (!state || !hasScopeData(state)) continue;
     const left = (doc.reseedScopes ?? []).filter((entry) => entry !== scope);
     if (left.length) doc.reseedScopes = left;
     else delete doc.reseedScopes;
@@ -141,32 +138,33 @@ export async function recreateChainFolder(
   try {
     const chain = await native.chainStatus(folder);
     if (chain === "ok") return { ok: "existing" };
-    if (chain === "missing") {
-      noteFolderRecreate("failed", consent);
-      return { error: "exists" };
-    }
     const info = await native.folderInfo?.(folder).catch(() => null);
     if (info && info.inICloud && !info.iCloudAvailable) {
       noteFolderRecreate("failed", consent);
       return { error: "cloudDriveOff" };
     }
-    if (info?.exists) {
+    if (chain === "missing" ? !info?.vacant : info?.exists && !info.vacant) {
       noteFolderRecreate("failed", consent);
       return { error: "exists" };
     }
     const queued = doc.reseedScopes;
+    const cycleOwed = doc.reseedCycleOwed;
     const putBack = async () => {
       if (queued) doc.reseedScopes = queued;
       else delete doc.reseedScopes;
+      if (cycleOwed) doc.reseedCycleOwed = cycleOwed;
+      else delete doc.reseedCycleOwed;
       await ctx.saveNow().catch(() => ctx.save());
     };
     const scopes = Object.entries(doc.scopes)
       .filter(([, state]) => hasScopeData(state))
       .map(([scope]) => scope);
     try {
-      doc.reseedScopes = [...new Set([...(queued ?? []), APP_SCOPE, ...scopes])];
+      if (scopes.length) doc.reseedScopes = [...new Set([...(queued ?? []), ...scopes])];
+      doc.reseedCycleOwed = true;
       await ctx.saveNow();
-      if ((await native.folderInfo?.(folder).catch(() => null))?.exists) {
+      const again = await native.folderInfo?.(folder).catch(() => null);
+      if (again?.exists && !again.vacant) {
         await putBack();
         noteFolderRecreate("failed", consent);
         return { error: "exists" };
@@ -175,7 +173,7 @@ export async function recreateChainFolder(
         await putBack();
         return { error: "busy" };
       }
-      await createInNewFolder(native, folder);
+      await native.createChainInNewFolder(folder);
     } catch (error) {
       await putBack();
       if (!folderExistsError(error)) throw error;

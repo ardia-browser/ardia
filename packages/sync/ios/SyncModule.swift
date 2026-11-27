@@ -22,6 +22,7 @@ public class SyncModule: Module, SyncNative {
       "exists": exists,
       "writable": exists && FileManager.default.isWritableFile(atPath: url.path),
       "hasSyncData": exists && SyncFolder.hasSyncData(url),
+      "vacant": exists && SyncVault.isVacant(url),
     ]
   }
 
@@ -97,11 +98,7 @@ public class SyncModule: Module, SyncNative {
   }
 
   func createChainInNewFolder(_ folder: String) throws {
-    do {
-      try self.vault(folder).createChainInNewFolder()
-    } catch is SyncVault.FolderExists {
-      throw Exception(name: "folderExists", description: "A folder is already there", code: "ERR_SYNC_FOLDER_EXISTS")
-    }
+    do { try self.vault(folder).createChainInNewFolder() } catch is SyncVault.FolderExists { throw Exception(name: "folderExists", description: "A folder is already there", code: "ERR_SYNC_FOLDER_EXISTS") }
   }
 
   private static func chainMissing() -> Exception { Exception(name: "chainMissing", description: "This device's data is gone from the sync folder", code: "ERR_SYNC_CHAIN_MISSING") }

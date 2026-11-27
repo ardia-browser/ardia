@@ -601,16 +601,19 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
     at its start, on a write or a read, or in its last check before "updated", reports that state and never
     "updated": a whole folder gone is "Sync folder unavailable", this phrase's folder gone from a folder that is
     there is the waiting state below.
-  - **Recreate Folder…** takes the place of Connect Another Device… when the folder is missing (`folderRecovery.ts`).
-    After a confirm it saves what this Mac owes the new folder (the app scope and every scope with data) to
-    `sync.json` first, checks the folder is still missing, stops if the app is quitting, and then creates the folder
-    and this phrase's chain in one native call that fails if anything is already there (`createChainInNewFolder`,
-    Mac only; it leaves no folder behind if the chain can't be made, so a failed try never blocks the next).
-    A folder that comes back at any point, another phrase's included, is left alone and Recreate answers that a
-    folder is there. Hosts without that call (Linux, Windows) use `createChain` after the check, which leaves a
-    short window and can leave an empty folder if the second mkdir fails; their engines need the same call. Pairing
-    stays off until a whole cycle has uploaded this Mac's data into the new folder, also when nothing had been saved
-    to reseed, and the owed list clears only then.
+  - **Recreate Folder…** takes the place of Connect Another Device… when the folder is missing, or when it is there but
+    vacant (empty, or holding only Finder metadata such as `.DS_Store`, as an earlier failed try can leave it)
+    (`folderRecovery.ts`). After a confirm it saves what this Mac owes the new folder to `sync.json` first (the scopes
+    whose snapshot is owed, and a mark that a whole cycle is owed), checks the folder again, stops if the app is
+    quitting, and then calls `createChainInNewFolder`. On the Mac that builds the folder and this phrase's chain in a
+    temporary folder on the same volume and renames it into place with `RENAME_EXCL`, so the pair appears at once or
+    not at all. A vacant folder loses its Finder metadata and is replaced by a plain rename, which only replaces an
+    empty folder. Anything else there, another phrase's chain included, is left alone and Recreate answers that a
+    folder is there. A failed try leaves only its own temporary folder, which is removed. Linux and Windows serve the
+    call in `hostSync.ts`: they refuse a folder that is there and otherwise use the engine's `createChain`, which keeps
+    a short window and can leave an empty folder if its second mkdir fails, until their engines get the same call
+    (#4638). Pairing stays off until a whole cycle has completed against the new folder, so every owed snapshot and
+    every write queued while the folder was gone has landed.
   - **Connect Another Device…** shows the steps for the other Mac and a QR code of the phrase: the
     iPhone app scans it (Sync With Mac), or the iPhone's camera copies it to paste on another Mac with Universal
     Clipboard. It also has Show

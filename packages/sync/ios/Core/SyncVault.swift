@@ -27,19 +27,32 @@ public final class SyncVault {
     public init() {}
   }
 
+  public static func isFinderMetadata(_ name: String) -> Bool {
+    [".DS_Store", ".localized", "Icon\r"].contains(name) || name.hasPrefix("._")
+  }
+
+  public static func isVacant(_ folder: URL) -> Bool {
+    guard let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return false }
+    return names.allSatisfy(isFinderMetadata)
+  }
+
   public func createChainInNewFolder() throws {
-    try fileManager.createDirectory(at: folder.deletingLastPathComponent(), withIntermediateDirectories: true)
-    do {
-      try fileManager.createDirectory(at: folder, withIntermediateDirectories: false)
-    } catch where fileManager.fileExists(atPath: folder.path) {
-      throw FolderExists()
+    let parent = folder.deletingLastPathComponent()
+    try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+    let staging = try fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: parent, create: true)
+    defer { try? fileManager.removeItem(at: staging) }
+    let staged = staging.appendingPathComponent(folder.lastPathComponent, isDirectory: true)
+    try fileManager.createDirectory(at: staged, withIntermediateDirectories: false)
+    try fileManager.createDirectory(at: staged.appendingPathComponent(keys.chainTag, isDirectory: true), withIntermediateDirectories: false)
+    if renamex_np(staged.path, folder.path, UInt32(RENAME_EXCL)) == 0 { return }
+    guard errno == EEXIST else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+    guard Self.isVacant(folder) else { throw FolderExists() }
+    for name in (try? fileManager.contentsOfDirectory(atPath: folder.path)) ?? [] where Self.isFinderMetadata(name) {
+      try? fileManager.removeItem(at: folder.appendingPathComponent(name))
     }
-    do {
-      try fileManager.createDirectory(at: chainURL, withIntermediateDirectories: false)
-    } catch {
-      _ = rmdir(folder.path)
-      throw error
-    }
+    if rename(staged.path, folder.path) == 0 { return }
+    if [ENOTEMPTY, EEXIST, ENOTDIR, EISDIR].contains(errno) { throw FolderExists() }
+    throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
   }
 
   @discardableResult

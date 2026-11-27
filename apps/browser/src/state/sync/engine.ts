@@ -56,7 +56,7 @@ function publishUi(patch: Partial<SyncUi> = {}) {
   useSync.setState({
     enabled: doc.enabled,
     joining: doc.enabled && doc.joining,
-    reseeding: doc.enabled && !!doc.reseedScopes?.length,
+    reseeding: doc.enabled && (!!doc.reseedScopes?.length || !!doc.reseedCycleOwed),
     dataMissing: doc.enabled && useSync.getState().dataMissing,
     folder: doc.folder,
     types: { ...doc.types },
@@ -159,6 +159,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     doc.clock = clock.last;
     if (await gone(await native.chainStatus(folder))) return;
     delete doc.reseedScopes;
+    delete doc.reseedCycleOwed;
     doc.lastSyncedAt = Date.now();
     noteChainStatus(consent, device, "ok");
     publishUi({ status: "updated", error: null, pending, dataMissing: false });

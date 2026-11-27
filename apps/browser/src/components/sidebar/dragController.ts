@@ -38,7 +38,7 @@ export class DragController extends DragTargeting {
     const source = this.drag.sources[0];
     if (!target?.frame || !source?.frame || this.crossed) return 0;
     const shown = this.shown(target).y;
-    const natural = this.at(target.frame, this.still(target))!.y;
+    const natural = this.placed(target)!.y;
     const leaving = source.frame.y < target.frame.y && source.section !== "folder" ? source.frame.h + layout.rowGap : 0;
     return shown - (natural - leaving);
   }
@@ -144,6 +144,7 @@ export class DragController extends DragTargeting {
     const pass = ++session.measures;
     if (this.foldsPending() && !(await this.foldsSettled(current))) return false;
     const scrollY = this.scrollY;
+    const folderScrollY = this.folderScrollY;
     const items = [...this.items.values()];
     const held = items.map((i) => i.held ?? 0);
     const regions = [...this.regions];
@@ -158,6 +159,7 @@ export class DragController extends DragTargeting {
     this.rootFrame = rootFrame ?? this.rootFrame;
     session.viewport = viewport;
     session.startScrollY = scrollY;
+    session.startFolderScrollY = folderScrollY;
     items.forEach((i, k) => this.items.get(i.key) === i && (i.held ?? 0) === held[k] && ([i.frame, i.headerFrame] = frames[k]!));
     for (const [name, frame] of regionFrames) session.regionFrames.set(name, frame);
     session.gridBase = items.some((i) => i.kind === "tile") ? (session.regionFrames.get("tiles") ?? null) : null;
@@ -243,6 +245,11 @@ export class DragController extends DragTargeting {
     this.aimEdge(x, y);
     this.autoScroll(session.overProfile ? null : y);
     this.retarget();
+  }
+
+  folderScrolled(y: number) {
+    this.folderScrollY = y;
+    if (this.session?.measured) this.retarget();
   }
 
   interrupt() {
@@ -363,7 +370,7 @@ export class DragController extends DragTargeting {
     if (!emptied && source !== ref && source.frame && source.frame.y < top)
       closing += now(source.size);
     const container = ref.kind === "tail" ? [...this.items.values()].find((i) => i !== source && i.kind !== "tail" && i.frame && i.section === ref.section && i.parentGroup === ref.parentGroup) : ref;
-    const home = target ? null : this.at(source.frame, this.still(source));
+    const home = target ? null : this.placed(source);
     if (home) return Promise.resolve({ x: home.x, y: home.y });
     const held = ref.held;
     return Promise.all([measure(ref.view), emptied ? measure(group!.view) : null]).then(([f, gone]) => {

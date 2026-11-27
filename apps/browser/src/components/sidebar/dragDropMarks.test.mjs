@@ -382,6 +382,32 @@ test("inside an open folder panel a member dragged up or down opens a gap at its
   }
 });
 
+test("a folder panel scrolled under a held member aims where the pointer is over the rows it now shows", async () => {
+  const m = panelScene();
+  const [t1, , t3] = m.members;
+  const first = frameOf(m, `fm:${t1}`);
+  const tail = frameOf(m, tailKey("folder"));
+  const pointer = { x: first.x + 40, y: first.y + ROW * 0.15 };
+  const scroll = tail.y + 6 - pointer.y;
+  const r = await dragOver(m, `fm:${t3}`, pointer);
+  try {
+    const before = readDrag(r.c);
+    r.c.folderScrolled(scroll);
+    const scrolled = readDrag(r.c);
+    r.c.folderScrolled(0);
+    r.c.move(pointer.x, pointer.y + scroll);
+    const moved = readDrag(r.c);
+    assert.notDeepEqual(scrolled.drop, before.drop, "scrolling the panel under a still pointer changes where it drops");
+    assert.equal(scrolled.drop.type, "folder");
+    assert.equal(scrolled.drop.beforeId, null, "scrolled past the last member, it drops at the end");
+    assert.deepEqual([scrolled.drop, scrolled.gapKey], [moved.drop, moved.gapKey], "the same as moving the pointer that far down an unscrolled panel");
+  } finally {
+    r.c.end(false);
+    r.c.folderScrolled(0);
+    useFolderPanel.setState({ open: null });
+  }
+});
+
 test("a row held over a tile until it would make a folder shows the ring and opens no gap", async () => {
   const m = tilesScene();
   const grid = m.regions.tiles;

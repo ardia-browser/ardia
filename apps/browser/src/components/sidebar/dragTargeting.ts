@@ -161,7 +161,7 @@ export class DragTargeting extends DragGeometry {
       const f = this.shown(i);
       return f.y + Math.min(f.h, i.headerFrame?.h ?? f.h) / 2;
     };
-    const byY = (a: Item, b: Item) => this.at(a.frame, this.still(a))!.y - this.at(b.frame, this.still(b))!.y || a.frame!.x - b.frame!.x;
+    const byY = (a: Item, b: Item) => this.placed(a)!.y - this.placed(b)!.y || a.frame!.x - b.frame!.x;
     const dragged = new Set(sources.flatMap((s) => s.tabIds));
     const firstTab = (i: Item | undefined) => i?.tabIds.find((id) => !dragged.has(id)) ?? null;
     const tabsDrag = source.kind === "row" || source.kind === "tile";

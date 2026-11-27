@@ -19,6 +19,7 @@ import { closeFolderPanel, closeFolderPanelOnPress, closeFolderPanelWhenWindowMo
 import { tailKey } from "./dragModel";
 import { useStruckTitle } from "../../state/sidebar/rowState";
 import { watchSidebarControlsRow } from "../../state/windows/layout";
+import { onWindowRootSize } from "../../state/windows/rootSize";
 import { useSidebarScroller } from "./sidebarScroller";
 
 const PANEL_GAP = space.s;
@@ -46,7 +47,12 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
   useEffect(() => {
     const measureRoot = () => controller?.root?.measureInWindow((x, y, w, h) => setRoot({ x, y, w, h }));
     measureRoot();
-    return watchSidebarControlsRow(windowId, () => requestAnimationFrame(measureRoot));
+    const stopRow = watchSidebarControlsRow(windowId, () => requestAnimationFrame(measureRoot));
+    const stopSize = onWindowRootSize(windowId, () => requestAnimationFrame(measureRoot));
+    return () => {
+      stopRow();
+      stopSize();
+    };
   }, [controller, windowId]);
   useEffect(() => {
     if (!root) return;
@@ -61,6 +67,7 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
   useEffect(
     () => () => {
       controller?.regions.delete("folder");
+      controller?.folderScrolled(0);
     },
     [controller],
   );
@@ -87,7 +94,13 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
           <ContextMenuArea onContextMenu={() => void openTileFolderMenu(windowId, folderId)}>
             <SectionLabel title={`${label} · ${plural(members.length, "tab")}`} inset={space.s} top={space.xxs} bottom={space.s} />
           </ContextMenuArea>
-          <ScrollView ref={scroll} {...scroller} contentContainerStyle={{ gap: layout.rowGap }}>
+          <ScrollView
+            ref={scroll}
+            {...scroller}
+            scrollEventThrottle={16}
+            onScroll={(e) => controller?.folderScrolled(e.nativeEvent.contentOffset.y)}
+            contentContainerStyle={{ gap: layout.rowGap }}
+          >
             {members.map((id) => (
               <MemberRow key={id} tabId={id} windowId={windowId} />
             ))}

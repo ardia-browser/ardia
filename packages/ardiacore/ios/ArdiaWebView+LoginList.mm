@@ -13,6 +13,7 @@ using namespace ardia_runtime;
 - (void)showLoginListFrom:(NSString *)origin screenRect:(NSRect)rect typing:(BOOL)typing typed:(NSString *)typed;
 - (void)keyLoginList:(NSString *)key;
 - (void)closeLoginList;
+@property (nonatomic, readonly) BOOL loginListShown;
 @end
 
 namespace {
@@ -69,8 +70,13 @@ NSDictionary *LoginListConfig(NSString *profile) {
   }
   NSString *origin = WebOrigin(sender);
   if (!self.loginListOn || !origin || ![self sameSiteFrame:main origin:origin]) return [self endLoginField];
+  const BOOL sameField = [current[@"frame"] isEqualToString:frameId] && [current[@"token"] isEqualToString:report[@"token"]];
+  if ([event isEqualToString:@"passwordInput"]) {
+    if (!sameField || !self.loginListShown) [self endLoginField];
+    return;
+  }
   if ([event isEqualToString:@"key"]) {
-    if ([current[@"frame"] isEqualToString:frameId] && [current[@"token"] isEqualToString:report[@"token"]]) [self keyLoginList:report[@"key"]];
+    if (sameField) [self keyLoginList:report[@"key"]];
     return;
   }
   _loginList.field = @{@"frame" : frameId, @"token" : report[@"token"], @"origin" : origin};

@@ -22,4 +22,6 @@ extension ArdiaWebView: LoginListTarget {
   func keyLoginList(_ key: String) { LoginList.shared.key(self, key) }
 
   @objc func closeLoginList() { LoginList.shared.close(self) }
+
+  @objc var loginListShown: Bool { LoginList.shared.isShown(for: self) }
 }

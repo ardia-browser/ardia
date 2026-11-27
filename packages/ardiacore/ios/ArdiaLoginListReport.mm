@@ -44,10 +44,11 @@ NSString *ArdiaLoginListTicket(id value) {
 NSDictionary *ArdiaLoginListReport(id message) {
   if (![message isKindOfClass:NSDictionary.class]) return nil;
   NSDictionary *d = message;
-  NSString *event = Choice(d, @"event", @[ @"show", @"input", @"key", @"hide" ]);
+  NSString *event = Choice(d, @"event", @[ @"show", @"input", @"key", @"hide", @"passwordInput" ]);
   if ([event isEqualToString:@"hide"]) return @{@"event" : event};
   NSString *token = ArdiaLoginListTicket(d[@"token"]);
   if (!event || !token) return nil;
+  if ([event isEqualToString:@"passwordInput"]) return @{@"event" : event, @"token" : token};
   if ([event isEqualToString:@"key"]) {
     NSString *key = Choice(d, @"key", @[ @"down", @"up", @"enter", @"escape", @"tab" ]);
     return key ? @{@"event" : event, @"token" : token, @"key" : key} : nil;

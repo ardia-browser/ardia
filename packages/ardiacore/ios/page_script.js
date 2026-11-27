@@ -1092,7 +1092,7 @@
         (e) => {
           const el = e.target;
           if (!e.isTrusted || !el || el.localName !== "input") return;
-          if (el.type === "password") return active && hide();
+          if (el.type === "password") return open && active && send("loginField", { event: "passwordInput", token: active.token });
           if (loginField(el)) report("input", el);
         },
         true,
@@ -1107,7 +1107,7 @@
             if (key === "down") {
               e.preventDefault();
               report("show", e.target);
-            }
+            } else if (key === "escape") send("loginField", { event: "key", key, token: active.token });
             return;
           }
           if (key !== "tab" && (key !== "enter" || picking)) {

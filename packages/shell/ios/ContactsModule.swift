@@ -42,7 +42,7 @@ public class ContactsModule: Module, ContactsNative {
     }
   }
 
-  func meCard() -> [String: Any]? {
+  func meCard() throws -> [String: Any]? {
     if let path = Self.fixturePath { return Self.fixtureCard(path) }
     guard Self.readable(Self.authorizationStatus()) else { return nil }
     let keys: [CNKeyDescriptor] = [
@@ -52,7 +52,12 @@ public class ContactsModule: Module, ContactsNative {
       CNContactPhoneNumbersKey as CNKeyDescriptor,
       CNContactPostalAddressesKey as CNKeyDescriptor,
     ]
-    guard let me = try? store.unifiedMeContactWithKeys(toFetch: keys) else { return nil }
+    let me: CNContact
+    do {
+      me = try store.unifiedMeContactWithKeys(toFetch: keys)
+    } catch let error as CNError where error.code == .recordDoesNotExist {
+      return nil
+    }
     return [
       "name": CNContactFormatter.string(from: me, style: .fullName) ?? "",
       "organization": me.organizationName,

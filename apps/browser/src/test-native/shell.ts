@@ -433,6 +433,7 @@ export const contacts = {
   card: null as MeCard | null,
   opened: 0,
   reads: 0,
+  readError: null as string | null,
   changed: (epoch?: string) => contactsEvents.emit("onContactsChanged", { epoch }),
   listeners: () => contactsEvents.count("onContactsChanged"),
 };
@@ -446,6 +447,7 @@ const contactsModule: Modules["ArdiaContacts"] = {
   },
   meCard: () => {
     contacts.reads++;
+    if (contacts.readError) return Promise.reject(new Error(contacts.readError));
     return Promise.resolve(contacts.status === "authorized" && contacts.card ? structuredClone(contacts.card) : null);
   },
   openMeCard: () => {

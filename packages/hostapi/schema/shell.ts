@@ -300,7 +300,7 @@ export const shell = defineModuleDomain({
       functions: {
         authorizationStatus: { args: [], result: "ContactsAuthorization", swiftResult: "String", async: false, mac: "custom", desktop: "absent", windows: "absent" },
         requestAccess: { args: [], result: "ContactsAccessRequest", async: true, promise: true, queue: "main", instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
-        meCard: { args: [], result: "MeCard | null", swiftResult: "[String: Any]?", async: true, queue: "userInitiated", instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
+        meCard: { args: [], result: "MeCard | null", swiftResult: "[String: Any]?", async: true, throws: true, queue: "userInitiated", instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
         openMeCard: { args: [], result: "void", async: true, queue: "main", instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
       },
       events: {

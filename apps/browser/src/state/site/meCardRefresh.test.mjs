@@ -73,3 +73,60 @@ test("a burst of Contacts changes reads the Me card at most twice", async () => 
   await setMeCardFor("q", false);
   native.contacts.card = null;
 });
+
+test("a Me card Ardia isn't allowed to read keeps the saved entries and says why", async () => {
+  native.contacts.status = "authorized";
+  native.contacts.card = ADA;
+  await setMeCardFor("denied", true);
+  const ids = [...useMeCard.getState().entries.denied];
+  assert.equal(stored("denied").length, 1);
+
+  native.contacts.status = "denied";
+  native.contacts.changed();
+  await settle();
+  assert.deepEqual(useMeCard.getState().entries.denied, ids, "the switch keeps its entries");
+  assert.equal(stored("denied").length, 1, "the saved entry still fills");
+  assert.match(useMeCard.getState().hints.denied ?? "", /isn't allowed to read your contacts/, "Settings says why the card isn't updating");
+
+  native.contacts.status = "authorized";
+  native.contacts.card = { ...ADA, phones: ["+44 20 7946 0002"] };
+  native.contacts.changed();
+  await settle();
+  assert.equal(useMeCard.getState().hints.denied ?? null, null, "access back clears the hint");
+  assert.deepEqual(stored("denied").map((a) => a.phone), ["+44 20 7946 0002"], "and the card is read again");
+  await setMeCardFor("denied", false);
+});
+
+test("a Me card refresh before Contacts access was decided keeps the entries, asks nothing and says how to allow it", async () => {
+  native.contacts.status = "authorized";
+  native.contacts.card = ADA;
+  await setMeCardFor("fresh", true);
+  native.contacts.status = "notDetermined";
+  native.contacts.requests = 0;
+  native.contacts.changed();
+  await settle();
+  assert.equal(native.contacts.requests, 0, "only the switch or onboarding asks for Contacts");
+  assert.equal(stored("fresh").length, 1, "the saved entry still fills");
+  assert.match(useMeCard.getState().hints.fresh ?? "", /Turn this switch off and on/);
+  native.contacts.status = "authorized";
+  await setMeCardFor("fresh", false);
+});
+
+test("a Me card read that fails keeps the saved entries", async () => {
+  native.contacts.status = "authorized";
+  native.contacts.card = ADA;
+  await setMeCardFor("flaky", true);
+  const ids = [...useMeCard.getState().entries.flaky];
+  native.contacts.readError = "the Contacts store isn't ready";
+  native.contacts.card = { ...ADA, phones: ["+44 20 7946 0003"] };
+  native.contacts.changed();
+  await settle();
+  native.contacts.readError = null;
+  assert.deepEqual(useMeCard.getState().entries.flaky, ids);
+  assert.equal(stored("flaky").length, 1, "nothing was deleted");
+  native.contacts.changed();
+  await settle();
+  assert.deepEqual(stored("flaky").map((a) => a.phone), ["+44 20 7946 0003"], "the next change reads it");
+  await setMeCardFor("flaky", false);
+  native.contacts.card = null;
+});

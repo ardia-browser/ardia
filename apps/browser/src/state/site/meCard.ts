@@ -50,6 +50,8 @@ function accessHint(status: ContactsAuthorization, error: string | null): string
   return `Ardia isn't allowed to read your contacts. Turn on Ardia in ${CONTACTS_PRIVACY}.`;
 }
 
+const UNDECIDED_HINT = "Ardia hasn't been allowed to read Contacts yet, so your Me card isn't updating. Turn this switch off and on to allow it.";
+
 const canRead = (status: ContactsAuthorization) => status === "authorized" || status === "limited";
 
 async function askForContacts(): Promise<Pick<ContactsAccessRequest, "status" | "error">> {
@@ -126,13 +128,20 @@ const serially = <T>(work: () => Promise<T>): Promise<T> => {
 
 const unstartedRefreshes = new Map<string, Promise<void>>();
 
+function contactsReadable(profile: string): boolean {
+  const status = contactsAuthorization();
+  const hint = canRead(status) ? null : status === "notDetermined" ? UNDECIDED_HINT : accessHint(status, null);
+  if ((useMeCard.getState().hints[profile] ?? null) !== hint) patch("hints", profile, hint);
+  return hint === null;
+}
+
 const refresh = (profile: string): Promise<void> => {
   const unstarted = unstartedRefreshes.get(profile);
   if (unstarted) return unstarted;
   const run = serially(async () => {
     unstartedRefreshes.delete(profile);
     const had = useMeCard.getState().entries[profile];
-    if (!had) return;
+    if (!had || !contactsReadable(profile)) return;
     const card = await readMeCard();
     const wanted = card ? meCardEntries(card) : [];
     const key = JSON.stringify(wanted);

@@ -1021,7 +1021,7 @@ extension CalendarNative where Self: Module {
 protocol ContactsNative {
   static func authorizationStatus() -> String
   func requestAccess(_ promise: Promise)
-  func meCard() -> [String: Any]?
+  func meCard() throws -> [String: Any]?
   func openMeCard()
 }
 
@@ -1045,7 +1045,7 @@ extension ContactsNative where Self: Module {
   }
 
   var meCardFunction: AnyDefinition {
-    AsyncFunction("meCard") { () -> [String: Any]? in self.meCard() }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
+    AsyncFunction("meCard") { () throws -> [String: Any]? in try self.meCard() }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
   }
 
   var openMeCardFunction: AnyDefinition {

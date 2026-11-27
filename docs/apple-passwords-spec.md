@@ -89,7 +89,7 @@ Separately, a profile can turn on "Use my Me card from Contacts". The Me card th
 
 ### When Apple Passwords can't be reached
 
-43. As a user on a macOS too old for Apple's helper, I want the Login list and Settings to say "Needs macOS 15.4 or later", so that I know why it doesn't work.
+43. As a user who picked Apple Passwords on a Mac that is now on a macOS too old for Apple's helper, I want the Login list and Settings to say "Needs macOS 15.4 or later", so that I know why it doesn't work. On such a Mac the Password manager menu never offers Apple Passwords to a profile that hasn't picked it (S2), so the text shows only for a stored choice.
 44. As a user without the Passwords app's helper installed, I want a plain row saying so with how to fix it, so that I'm not left guessing.
 45. As a user whose Mac refused Apple's helper, I want one plain row saying Apple Passwords isn't available, so that I know it's not my fault.
 46. As a user with Apple Passwords picked, I want Ardia never to quietly fill from or save to its own store instead, so that my logins stay where I chose.
@@ -172,7 +172,8 @@ Each test is one red → green cycle, written and run one at a time in the order
 | # | Seam | Behavior | Catches | Misses |
 | --- | --- | --- | --- | --- |
 | S1 | 2 | The Password manager menu lists Apple Passwords on an entitled Mac | the option and its value are wired | the real entitlement read |
-| S2 | 2 | It is absent on an unentitled build, on Linux and on Windows | an option offered where it can't work | — |
+| S2 | 2 | It is absent on an unentitled build, on macOS before 15.4, on Linux and on Windows | an option offered where it can't work | — |
+| S12 | 2 | A profile that already chose Apple Passwords, on macOS before 15.4, keeps the choice in the menu and its status says "Needs macOS 15.4 or later" with no Connect button | a stored choice left with no reason | the Login list's row (native, the same text) |
 | S3 | 2 | Picking it asks for the code; the right code saves the choice and the status reads Connected | the Settings Pairing flow | the real helper's answer |
 | S4 | 2 | A wrong code shows an error, allows a retry and leaves the choice unchanged | a half-saved choice | — |
 | S5 | 2 | Cancel leaves the choice unchanged | losing the old Password manager | — |

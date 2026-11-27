@@ -106,6 +106,17 @@ test("S2: Apple Passwords is absent on an unentitled build, on macOS before 15.4
   }
 });
 
+test("story 43: a profile that already chose Apple Passwords says Needs macOS 15.4 or later once macOS is too old, and keeps the choice in the menu", async () => {
+  const profileId = await settingsOn("tooOld");
+  S().updateProfile(profileId, { passwordManager: "apple" });
+  await flush();
+  assert.equal(statusOf(profileId)?.text, "Needs macOS 15.4 or later.");
+  assert.equal(statusOf(profileId).connect, null, "no Connect button that can't work");
+  const menu = managerMenu(profileId);
+  assert.equal(menu.value, "apple");
+  assert.ok(offersApple(menu), "the stored choice stays listed so the menu shows it");
+});
+
 test("S3: picking Apple Passwords asks for the Passwords app's code; the right code saves the choice and the status reads Connected", async () => {
   const profileId = await settingsOn("notConnected");
   managerMenu(profileId).onChange("apple");

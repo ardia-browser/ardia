@@ -21,6 +21,7 @@ export const OVERLAY = {
   selection: 1 << 14,
   loading: 1 << 15,
   control: 1 << 16,
+  applePasswordsPairing: 1 << 17,
 } as const;
 
 export type Overlay = keyof typeof OVERLAY;
@@ -34,6 +35,7 @@ export const pageOverlays = (p: PageState): number =>
   (p.passwordPrompt ? OVERLAY.password : 0) |
   (p.autofillPrompt ? OVERLAY.autofill : 0) |
   (p.verificationCode ? OVERLAY.verificationCode : 0) |
+  (p.applePasswordsPairing ? OVERLAY.applePasswordsPairing : 0) |
   (p.externalApp ? OVERLAY.externalApp : 0);
 
 export const overlayBits = (on: Partial<Record<Overlay, boolean>>): number => {

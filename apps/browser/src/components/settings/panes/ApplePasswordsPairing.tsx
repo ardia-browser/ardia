@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { cancelPairing, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords, type ApplePasswordsState } from "../../../state/site/applePasswords";
+import { cancelPairing, PAIRING_CODE_DIGITS, pairingCodeInput, pairingPrompt, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords, type ApplePasswordsState } from "../../../state/site/applePasswords";
 import { turnICloudExtensionBackOn, useICloudExtensionNote } from "../../../state/site/iCloudPasswordsExtension";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { Box, Button, DialogActions, DialogTitle, Sheet, space, Text, TextField } from "../../ui";
 import { Row } from "../Form";
 
-const CODE_DIGITS = 6;
 const FIELDS = { marginTop: space.l } as const;
 const ERROR = { marginTop: space.ml } as const;
 
@@ -58,17 +57,17 @@ function ApplePasswordsPairingSheet() {
     closeSettingsSheet();
   };
   const connect = async () => {
-    if (code.length !== CODE_DIGITS) return;
+    if (code.length !== PAIRING_CODE_DIGITS) return;
     if (await submitApplePasswordsCode(code)) closeSettingsSheet();
   };
-  const prompt = pairing.step === "starting" ? "Opening the Passwords app…" : pairing.step === "failed" ? null : "Enter the six-digit code the Passwords app shows.";
+  const prompt = pairingPrompt(pairing.step);
   return (
     <Sheet size="s" onClose={cancel}>
       <DialogTitle>Connect Apple Passwords</DialogTitle>
       {prompt ? <Text>{prompt}</Text> : null}
       {pairing.step === "code" || pairing.step === "checking" ? (
         <Box row gap="m" style={FIELDS}>
-          <TextField value={code} onChangeText={(text) => setCode(text.replace(/\D/g, "").slice(0, CODE_DIGITS))} onSubmit={() => void connect()} onEscape={cancel} autoFocus mono width={120} disabled={pairing.step === "checking"} />
+          <TextField value={code} onChangeText={(text) => setCode(pairingCodeInput(text))} onSubmit={() => void connect()} onEscape={cancel} autoFocus mono width={120} disabled={pairing.step === "checking"} />
         </Box>
       ) : null}
       {pairing.error ? (
@@ -78,7 +77,7 @@ function ApplePasswordsPairingSheet() {
       ) : null}
       <DialogActions>
         <Button title="Cancel" onPress={cancel} />
-        {pairing.step === "failed" ? null : <Button title="Connect" kind="primary" disabled={pairing.step !== "code" || code.length !== CODE_DIGITS} onPress={() => void connect()} />}
+        {pairing.step === "failed" ? null : <Button title="Connect" kind="primary" disabled={pairing.step !== "code" || code.length !== PAIRING_CODE_DIGITS} onPress={() => void connect()} />}
       </DialogActions>
     </Sheet>
   );

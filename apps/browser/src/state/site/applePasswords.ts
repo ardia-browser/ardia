@@ -46,6 +46,13 @@ export const PAIRING_FAILURES: Record<Exclude<ApplePasswordsPairing, "awaitingCo
   notEntitled: "This copy of Ardia can't use Apple Passwords.",
 };
 
+export const PAIRING_CODE_DIGITS = 6;
+
+export const pairingPrompt = (step: PairingStep): string | null =>
+  step === "starting" ? "Opening the Passwords app…" : step === "failed" ? null : "Enter the six-digit code the Passwords app shows.";
+
+export const pairingCodeInput = (text: string) => text.replace(/\D/g, "").slice(0, PAIRING_CODE_DIGITS);
+
 const setPairing = (pairing: Pairing | null) => useApplePasswords.setState({ pairing });
 const current = (pairing: Pairing) => useApplePasswords.getState().pairing === pairing;
 

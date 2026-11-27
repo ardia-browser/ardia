@@ -6,7 +6,7 @@
 //
 //   fake-helper.mjs <state dir> <origin>
 //
-//   <state dir>/fixtures.json  { code, logins: [{ user, password, sites: [host] }], codes: [{ domain, username, code }] }
+//   <state dir>/fixtures.json  { code, logins: [{ user, password, sites: [host or http://host] }], codes: [{ domain, username, code }] }
 //   <state dir>/mode.json      re-read on every message: { killedAtLaunch, wrongCode, status: { "<cmd>": n }, endPairing: n }
 //                              (endPairing: bump the number and the helper ends the Pairing with a cmd 9 push)
 //   <state dir>/started        one line per launch (pid and time): the marker that the helper ran
@@ -131,7 +131,8 @@ function seal(object) {
   return { TID: session.tid, SDATA: enc(Buffer.concat([nonce, ciphertext, cipher.getAuthTag()])) };
 }
 
-const sameSite = (sites, host) => sites.some((site) => site === host || host.endsWith(`.${site}`) || site.endsWith(`.${host}`));
+const bare = (site) => site.replace(/^https?:\/\//, "");
+const sameSite = (sites, host) => sites.map(bare).some((site) => site === host || host.endsWith(`.${site}`) || site.endsWith(`.${host}`));
 
 function answer(cmd, body) {
   const forced = mode().status?.[String(cmd)];
@@ -144,7 +145,8 @@ function answer(cmd, body) {
     return login ? { STATUS: 0, Entries: [{ USR: login.user, sites: login.sites, PWD: login.password }] } : { STATUS: 3, Entries: [] };
   }
   if (cmd === 6) {
-    const kept = logins.find((l) => l.user === body.NUSR && sameSite(l.sites, host));
+    const insecure = (site) => site.startsWith("http://");
+    const kept = logins.find((l) => l.user === body.NUSR && sameSite(l.sites.filter((site) => insecure(site) === insecure(host)), bare(host)));
     if (kept?.password === body.NPWD) return { STATUS: 7 };
     const rest = logins.filter((l) => l !== kept);
     fs.writeFileSync(file("fixtures.json"), JSON.stringify({ ...fixtures(), logins: [...rest, { user: body.NUSR, password: body.NPWD, sites: [host] }] }, null, 2));

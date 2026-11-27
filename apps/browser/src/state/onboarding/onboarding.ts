@@ -14,6 +14,7 @@ import { isLiquidGlass } from "../../platform/app";
 import { noteOnboarding } from "../telemetry/usage";
 import { openSettings } from "../settings/settingsWindows";
 import { pluginsStepShown } from "./pluginsOffer";
+import { autofillStepOffers } from "./autofillOffers";
 
 import { QUESTIONS, QUESTION_ORDER, type OnboardingStep, type Question, type QuestionId } from "./questionList";
 import { markCompleted, readSaved, saveOnboarding as save, type Saved } from "./onboardingDocument";
@@ -34,7 +35,7 @@ export { playIntroMusic, setIntroMusicMuted, stopIntroMusic, type IntroMusicCues
 export { introStartDelayMs };
 export { PRESET_NAMES, PRESETS, presetFor, type BrowserSourceId, type Preset } from "./presets";
 
-export const STEPS: OnboardingStep[] = stepsForThisSurface(["intro", "source", "layout", "tabs", "look", "searchPrivacy", "pins", "home", "plugins", "outro"]);
+export const STEPS: OnboardingStep[] = stepsForThisSurface(["intro", "source", "layout", "tabs", "look", "searchPrivacy", "pins", "autofill", "home", "plugins", "outro"]);
 
 const answeredByPreset = (q: Question, preset: Preset) => !q.askedWithPreset && q.keys.length > 0 && q.keys.every((k) => k in PRESETS[preset]);
 
@@ -44,6 +45,7 @@ export const liquidGlass = isLiquidGlass();
 export function questionsFor(step: OnboardingStep): Question[] {
   if (step === "intro" || (step === "plugins" && !pluginsStepShown())) return [];
   const state = useOnboarding.getState();
+  if (step === "autofill" && !autofillStepOffers(onboardingProfile(state.windowId)).length) return [];
   const preset = draftPreset(state);
   const asked = preset && setsUpLikeBrowser(state.source) ? QUESTIONS[step].filter((q) => !answeredByPreset(q, preset)) : QUESTIONS[step];
   const list = liquidGlass ? asked : asked.filter((q) => q.id !== "style");
@@ -52,6 +54,8 @@ export function questionsFor(step: OnboardingStep): Question[] {
   const { tabLayout } = resolveDraft(["tabLayout"], state.draft, preset, { ...b.settings, tabLayout: tabLayoutOf(b, state.windowId) }, b.settingsMeta.chosen);
   return tabLayout === "top" ? list.filter((q) => !SIDEBAR_ONLY.includes(q.id)) : list;
 }
+
+export const onboardingProfile = (windowId: string | null) => (windowId ? useBrowser.getState().windows[windowId]?.profileId : undefined);
 
 export const activeSteps = () => STEPS.filter((step) => step === "intro" || questionsFor(step).length > 0);
 

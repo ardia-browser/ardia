@@ -139,7 +139,7 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface ArdiaWebView (ChromeLists)
-+ (void)hideChromeListsInProfiles:(NSArray<NSString *> *)profiles NS_SWIFT_NAME(hideChromeLists(inProfiles:));
++ (void)applePasswordsProfilesChanged;
 @end
 
 @interface ArdiaWebView (FieldProviders)

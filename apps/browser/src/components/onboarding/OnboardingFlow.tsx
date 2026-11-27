@@ -21,6 +21,8 @@ import { SearchPrivacyStep } from "./PrivacyStep";
 import { PinnedTabsStep } from "./PinnedTabsStep";
 import { HomeStep } from "./HomeStep";
 import { PluginsStep } from "./PluginsStep";
+import { AutofillStep } from "./AutofillStep";
+import { loadApplePasswords } from "../../state/site/applePasswords";
 import { OutroStep } from "./OutroStep";
 import { SetupCodeOutro } from "./SetupCodeOutro";
 
@@ -51,6 +53,8 @@ function renderSection(section: OnboardingSection) {
       return <SearchPrivacyStep />;
     case "pins":
       return <PinnedTabsStep />;
+    case "autofill":
+      return <AutofillStep />;
     case "home":
       return <HomeStep />;
     case "plugins":
@@ -78,6 +82,8 @@ export function OnboardingFlow() {
   useEffect(() => {
     keys.current?.focus();
   }, [active]);
+
+  useEffect(() => void loadApplePasswords(), []);
 
   return (
     <FlowSlotsContext.Provider value={slots}>

@@ -24,4 +24,3 @@ export const getNeverSavePasswordOrigins = async (profile: string) => (await cal
 export const exportPasswords = (profile: string) => call("passwords.export", { profile });
 export const getPasswordAutofill = (profile = "") => call("passwords.autofillEnabled", { profile });
 export const setPasswordAutofill = (enabled: boolean, profile = "") => call("passwords.setAutofillEnabled", { profile, enabled });
-export const hideChromeLists = (profiles: string[]) => call("passwords.hideChromeLists", { profiles });

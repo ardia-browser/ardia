@@ -3,7 +3,7 @@ import { defineDomain } from "../define.ts";
 export const passwords = defineDomain({
   kind: "engine",
   imports: {
-    "../../passwords": ["FieldProviderProfile", "PasswordExportStatus", "SavedPassword", "SystemPanelResult", "VerificationCodeSetupResult", "ApplePasswordsState", "ApplePasswordsPairing"],
+    "../../passwords": ["FieldProviderProfile", "PasswordExportStatus", "SavedPassword", "SystemPanelResult", "VerificationCodeSetupResult", "ApplePasswordsState", "ApplePasswordsPairing", "LoginListCount", "ApplePasswordsSaveCount"],
     "../wire": ["Profile"],
   },
   calls: {
@@ -140,7 +140,7 @@ export const passwords = defineDomain({
       mac: "custom",
       windows: "absent",
     },
-    hideChromeLists: {
+    setApplePasswordsProfiles: {
       args: "{ profiles: string[] }",
       result: "null",
       desktop: "absent",
@@ -151,6 +151,18 @@ export const passwords = defineDomain({
   events: {
     applePasswordsChanged: {
       payload: "{ state: ApplePasswordsState; epoch?: string }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    loginListCounted: {
+      payload: "{ name: LoginListCount; epoch?: string }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    applePasswordsSaveCounted: {
+      payload: "{ name: ApplePasswordsSaveCount; epoch?: string }",
       desktop: "absent",
       mac: "custom",
       windows: "absent",

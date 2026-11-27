@@ -15,6 +15,7 @@ final class WebKitLogins: NSObject {
     let password: String
     let update: Bool
     let field: [String: String]
+    var applePasswords = false
   }
 
   private struct Listing {
@@ -180,13 +181,13 @@ final class WebKitLogins: NSObject {
     origin.hasSuffix("/") ? String(origin.dropLast()).lowercased() : origin.lowercased()
   }
 
-  private static func manages(_ use: WebKitPasswordGate.Use, for profile: String, _ done: @escaping (Bool) -> Void) {
+  private static func verdict(_ use: WebKitPasswordGate.Use, for profile: String, _ done: @escaping (WebKitPasswordGate.Verdict) -> Void) {
     WebKitAutofill.profileToggles(profile) { toggles in
       let verdict = WebKitPasswordGate.verdict(
         use, passwordsOn: toggles["passwords"] ?? false, systemProvider: ArdiaWebView.fieldProvider(profile: profile) != nil,
-        privateProfile: WebKitStores.isPrivate(profile))
+        applePasswords: ApplePasswordsProfiles.contains(profile), privateProfile: WebKitStores.isPrivate(profile))
       if verdict == .leftToManager { count("passwordsLeftToManager") }
-      done(verdict == .ardia)
+      done(verdict)
     }
   }
 
@@ -263,18 +264,35 @@ final class WebKitLogins: NSObject {
   private func show(_ tab: WebKitTab, data: [String: Any], origin: String) {
     ticket += 1
     let asked = ticket
-    Self.manages(.fill, for: tab.profile) { [weak self, weak tab] on in
+    Self.verdict(.fill, for: tab.profile) { [weak self, weak tab] verdict in
       guard let self, let tab, asked == self.ticket else { return }
-      if on { self.showFilling(tab, data: data, origin: origin) } else { self.close(tab) }
+      switch verdict {
+      case .ardia: self.showFilling(tab, data: data, origin: origin)
+      case .applePasswords: self.showApplePasswords(tab, data: data, origin: origin)
+      default: self.close(tab)
+      }
     }
+  }
+
+  private static func fieldRect(_ data: [String: Any], in view: WKWebView) -> NSRect {
+    let zoom = view.pageZoom * view.magnification
+    return NSRect(
+      x: (data["x"] as? Double ?? 0) * zoom, y: (data["y"] as? Double ?? 0) * zoom,
+      width: max(1, (data["width"] as? Double ?? 0) * zoom), height: max(1, (data["height"] as? Double ?? 0) * zoom))
+  }
+
+  private func showApplePasswords(_ tab: WebKitTab, data: [String: Any], origin: String) {
+    guard let view = tab.webView, let window = tab.window, Self.pageOrigin(tab) == origin else { return close(tab) }
+    let password = data["password"] as? Bool ?? false
+    let field = LoginListField(
+      frameOrigin: origin, screenRect: window.convertToScreen(tab.convert(Self.fieldRect(data, in: view), to: nil)),
+      trigger: data["event"] as? String == "input" ? .typing : .press, typed: password ? "" : data["value"] as? String ?? "")
+    LoginList.shared.show(tab, field: field)
   }
 
   private func showFilling(_ tab: WebKitTab, data: [String: Any], origin: String) {
     guard let view = tab.webView, let url = view.url, let page = Self.pageOrigin(tab), origin == page else { return close(tab) }
-    let zoom = view.pageZoom * view.magnification
-    let rect = NSRect(
-      x: (data["x"] as? Double ?? 0) * zoom, y: (data["y"] as? Double ?? 0) * zoom,
-      width: max(1, (data["width"] as? Double ?? 0) * zoom), height: max(1, (data["height"] as? Double ?? 0) * zoom))
+    let rect = Self.fieldRect(data, in: view)
     let password = data["password"] as? Bool ?? false
     let current = Field(tab: tab, origin: page, url: url.absoluteString, rect: rect, password: password, typed: password ? "" : data["value"] as? String ?? "")
     field = current
@@ -307,6 +325,7 @@ final class WebKitLogins: NSObject {
   }
 
   private func key(_ tab: WebKitTab, _ key: String) {
+    if LoginList.shared.isShown(for: tab) { return LoginList.shared.key(tab, key) }
     guard dropdown.isShown, field?.tab === tab else { return }
     switch key {
     case "down": dropdown.move(1)
@@ -326,6 +345,7 @@ final class WebKitLogins: NSObject {
   }
 
   private func close(_ tab: WebKitTab) {
+    LoginList.shared.close(tab)
     guard field == nil || field?.tab === tab else { return }
     ticket += 1
     dropdown.close()
@@ -368,9 +388,35 @@ final class WebKitLogins: NSObject {
   }
 
   private func submitted(_ tab: WebKitTab, data: [String: Any], frame origin: String) {
-    Self.manages(.offerToSave, for: tab.profile) { [weak self, weak tab] on in
-      guard let self, let tab, on else { return }
-      self.submittedWhileSaving(tab, data: data, origin: origin)
+    Self.verdict(.offerToSave, for: tab.profile) { [weak self, weak tab] verdict in
+      guard let self, let tab else { return }
+      switch verdict {
+      case .ardia: self.submittedWhileSaving(tab, data: data, origin: origin)
+      case .applePasswords: self.submittedToApplePasswords(tab, data: data, origin: origin)
+      default: break
+      }
+    }
+  }
+
+  private func submittedToApplePasswords(_ tab: WebKitTab, data: [String: Any], origin: String) {
+    guard let password = data["password"] as? String, !password.isEmpty,
+      origin.hasPrefix("https://") || origin.hasPrefix("http://"),
+      !neverSaved.contains(origin)
+    else { return }
+    let username = data["username"] as? String ?? ""
+    let field = Self.submittedField(data["field"])
+    let url = Self.pageOrigin(tab) == origin ? tab.webView?.url?.absoluteString ?? origin + "/" : origin + "/"
+    let profile = tab.profile
+    ArdiaServices.neverSaveOrigins(profile: profile) { [weak self, weak tab] value, _ in
+      let refused = ((value as? [String: Any])?["origins"] as? [String] ?? []).map(Self.normalized)
+      DispatchQueue.main.async {
+        guard self != nil, !refused.contains(origin) else { return }
+        ApplePasswordsSaving.decide(origin: origin, profile: profile, username: username, password: password) { [weak self, weak tab] state in
+          guard let self, let tab, let state else { return }
+          let login = Pending(url: url, origin: origin, username: username, password: password, update: state == "update", field: field, applePasswords: true)
+          self.offer(login, usernames: [username], in: tab)
+        }
+      }
     }
   }
 
@@ -425,10 +471,14 @@ final class WebKitLogins: NSObject {
     landingTurns += 1
     let turn = landingTurns
     landings[key] = turn
-    let prompt: [String: Any] = [
-      "state": login.update ? "update" : "save", "origin": login.origin, "username": login.username, "passwordLength": login.password.count,
-      "federation": "", "usernames": usernames,
-    ]
+    let state = login.update ? "update" : "save"
+    let prompt: [String: Any] =
+      login.applePasswords
+      ? ApplePasswordsSaving.prompt(state, origin: login.origin, username: login.username, passwordLength: login.password.count, usernames: usernames)
+      : [
+        "state": state, "origin": login.origin, "username": login.username, "passwordLength": login.password.count,
+        "federation": "", "usernames": usernames,
+      ]
     let deadline = Date().addingTimeInterval(Self.landingSeconds)
     DispatchQueue.main.asyncAfter(deadline: .now() + Self.navigationGrace) { [weak self, weak tab] in
       self?.land(key, turn: turn, prompt: prompt, deadline: deadline, in: tab)
@@ -473,6 +523,14 @@ final class WebKitLogins: NSObject {
     let name = username ?? login.username
     let secret = password ?? login.password
     listings.removeValue(forKey: listingKey(profile, login.origin))
+    if login.applePasswords, action == "save" || action == "update" {
+      return ApplePasswordsSaving.save(origin: login.origin, username: name, password: secret) { [weak tab] saved in
+        guard !saved, let tab else { return }
+        tab.emit(
+          "passwordPrompt",
+          ApplePasswordsSaving.prompt(ApplePasswordsSaving.notSaved, origin: login.origin, username: name, passwordLength: secret.count, usernames: [name]))
+      }
+    }
     switch action {
     case "save":
       ArdiaServices.savePassword(profile: profile, origin: login.origin, username: name, password: secret) { _, error in

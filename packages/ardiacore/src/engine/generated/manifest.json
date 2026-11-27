@@ -905,7 +905,7 @@
           "desktop": "absent",
           "windows": "absent"
         },
-        "hideChromeLists": {
+        "setApplePasswordsProfiles": {
           "mac": "custom",
           "desktop": "absent",
           "windows": "absent"
@@ -914,6 +914,18 @@
       "events": {
         "applePasswordsChanged": {
           "topic": "passwords.applePasswordsChanged",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "loginListCounted": {
+          "topic": "passwords.loginListCounted",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "applePasswordsSaveCounted": {
+          "topic": "passwords.applePasswordsSaveCounted",
           "mac": "custom",
           "desktop": "absent",
           "windows": "absent"

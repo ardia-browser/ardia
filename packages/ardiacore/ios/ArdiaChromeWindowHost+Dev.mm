@@ -469,7 +469,7 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
       NSMutableArray *children = [NSMutableArray array];
       for (NSWindow *child in w.childWindows)
         [children addObject:@{@"class" : NSStringFromClass(child.class), @"frame" : NSStringFromRect(child.frame),
-                              @"visible" : @(child.visible), @"title" : child.title ?: @""}];
+                              @"visible" : @(child.visible), @"title" : child.title ?: @"", @"number" : @(child.windowNumber)}];
       return JSONText(children, @"[]");
     },
     @"hit" : ^NSString *(NSWindow *w, NSString *at) { return Describe([w.contentView.superview hitTest:WindowPoint(w, at)]); },

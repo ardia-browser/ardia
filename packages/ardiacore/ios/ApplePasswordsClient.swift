@@ -12,6 +12,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
   static let pairingSeconds: TimeInterval = 15
   static let exitGraceSeconds: TimeInterval = 1
   static let endedPushes: Set<Int> = [9, 10]
+  static let changed = Notification.Name("ArdiaApplePasswordsChanged")
   private static let log = Logger(subsystem: "com.ardia.browser", category: "ApplePasswords")
 
   enum Outcome: String {
@@ -26,6 +27,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
   private var pending: (srp: ApplePasswordsSRP, reply: String, generation: UUID)?
   private var session: ApplePasswordsSRP?
   private var lastState: String?
+  private var owed: [Int: Int] = [:]
 
   static var fakeManifest: String? {
     #if DEBUG
@@ -103,6 +105,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
     let now = state
     guard now != lastState else { return }
     lastState = now
+    NotificationCenter.default.post(name: Self.changed, object: nil, userInfo: ["state": now])
     ArdiaEvents.emit("passwords.applePasswordsChanged", data: ArdiaConsentStamp.begin().onto(["state": now]))
   }
 
@@ -128,6 +131,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   private func ended(_ id: UUID, killedByMacOS: Bool) {
     guard generation == id else { return }
+    owed = [:]
     if killedByMacOS {
       killed = true
       Self.log.error("helper killed by macOS at launch")
@@ -146,15 +150,24 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   private enum Failure: Error { case missing, ended, timedOut, unexpected }
 
-  private func exchange(_ message: [String: Any], cmd: Int, wait: TimeInterval) throws -> [String: Any] {
+  private func exchange(_ message: [String: Any], cmd: Int, also: Int? = nil, wait: TimeInterval, keepsHelper: Bool = false) throws -> [String: Any] {
     let pipe = try running()
     try pipe.write(message)
     let deadline = Date().addingTimeInterval(wait)
     while let reply = pipe.next(until: deadline) {
-      if reply["cmd"] as? Int == cmd { return reply }
+      guard let got = reply["cmd"] as? Int else { continue }
+      if let late = owed[got], late > 0 {
+        owed[got] = late - 1
+        continue
+      }
+      if got == cmd || got == also { return reply }
     }
     if pipe.hasEnded { throw Failure.ended }
-    pipe.stop()
+    guard keepsHelper else {
+      pipe.stop()
+      throw Failure.timedOut
+    }
+    if cmd != Self.saveCmd { owed[cmd, default: 0] += 1 }
     throw Failure.timedOut
   }
 
@@ -208,6 +221,104 @@ final class ApplePasswordsClient: @unchecked Sendable {
     } catch {
       return failure(error)
     }
+  }
+
+  enum Problem: Error, Equatable {
+    case unavailable(Outcome)
+    case notConnected
+    case refused
+    case failed
+  }
+
+  static let saveCmd = 6
+  static let saveSeconds: TimeInterval = 120
+  static let alreadyKeptStatus = 7
+  static let listSeconds: TimeInterval = 10
+  static let passwordSeconds: TimeInterval = 120
+  static let successStatuses: Set<Int> = [0, 3]
+  static let sessionOverStatus = 9
+  static let placeholderUser = "Passwords\u{a0}not\u{a0}saved"
+  static let noPassword = "Not Included"
+
+  func logins(host: String, _ done: @escaping (Result<[ApplePasswordsEntry], Problem>) -> Void) {
+    queue.async {
+      done(Result {
+        let answer = try self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds)
+        return Self.entries(answer).compactMap { entry in
+          guard let user = entry["USR"] as? String, user != Self.placeholderUser else { return nil }
+          return ApplePasswordsEntry(user: user, sites: entry["sites"] as? [String] ?? [])
+        }
+      }.mapError(Self.problem))
+    }
+  }
+
+  func password(host: String, user: String, _ done: @escaping (Result<String, Problem>) -> Void) {
+    queue.async {
+      done(Result {
+        let answer = try self.sealed(5, qid: "CmdGetPassword4LoginName", url: host, ["ACT": 2, "URL": host, "USR": user], wait: Self.passwordSeconds)
+        let entries = Self.entries(answer)
+        let entry = entries.first { ($0["sites"] as? [String] ?? []).contains(host) && $0["USR"] as? String == user }
+          ?? entries.first { $0["USR"] as? String == user }
+        guard let password = entry?["PWD"] as? String, password != Self.noPassword else { throw Problem.failed }
+        return password
+      }.mapError(Self.problem))
+    }
+  }
+
+  static func savedSite(host: String, insecure: Bool) -> String { insecure ? "http://\(host)" : host }
+
+  func save(host: String, insecure: Bool, user: String, password: String, _ done: @escaping (Result<Void, Problem>) -> Void) {
+    queue.async {
+      done(Result {
+        do {
+          _ = try self.sealed(
+            Self.saveCmd, qid: "CmdSetPassword4LoginName_URL", url: nil,
+            ["ACT": 4, "URL": "", "USR": "", "PWD": "", "NURL": Self.savedSite(host: host, insecure: insecure), "NUSR": user, "NPWD": password],
+            wait: Self.saveSeconds, also: 4, kept: [Self.alreadyKeptStatus])
+        } catch Failure.unexpected {
+          Self.log.notice("save had no readable answer, reading the list")
+          let answer = try self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds)
+          guard Self.entries(answer).contains(where: { $0["USR"] as? String == user }) else { throw Problem.failed }
+        }
+      }.mapError(Self.problem))
+    }
+  }
+
+  private static func problem(_ error: Error) -> Problem { error as? Problem ?? .failed }
+
+  private static func entries(_ answer: [String: Any]) -> [[String: Any]] {
+    if let list = answer["Entries"] as? [[String: Any]] { return list }
+    return answer.keys.filter { $0.hasPrefix("Entry_") }.sorted().compactMap { answer[$0] as? [String: Any] }
+  }
+
+  private func sealed(
+    _ cmd: Int, qid: String, url: String?, _ body: [String: Any], wait: TimeInterval, also: Int? = nil, kept: Set<Int> = []
+  ) throws -> [String: Any] {
+    if let barrier = barrier() { throw Problem.unavailable(barrier) }
+    guard let session, pipe?.hasEnded == false else { throw Problem.notConnected }
+    let id = generation
+    let smsg = try session.seal(body)
+    let payload = try Self.text(["QID": qid, "SMSG": smsg])
+    var message: [String: Any] = ["cmd": cmd, "tabId": 0, "frameId": 0, "payload": payload]
+    if let url { message["url"] = url }
+    let reply: [String: Any]
+    do {
+      reply = try exchange(message, cmd: cmd, also: also, wait: wait, keepsHelper: true)
+    } catch {
+      if killed { throw Problem.unavailable(.refused) }
+      throw generation == id && self.session != nil ? Problem.failed : Problem.notConnected
+    }
+    guard let answer = session.open(ApplePasswordsSRP.object(reply["payload"])?["SMSG"]) else { throw Failure.unexpected }
+    let status = answer["STATUS"] as? Int ?? 1
+    if status == Self.sessionOverStatus {
+      drop(id, why: "status \(status)")
+      throw Problem.notConnected
+    }
+    guard Self.successStatuses.contains(status) || kept.contains(status) else {
+      Self.log.notice("request \(cmd, privacy: .public) refused with status \(status, privacy: .public)")
+      throw Problem.refused
+    }
+    return answer
   }
 
   private static func text(_ object: [String: Any]) throws -> String {

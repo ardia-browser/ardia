@@ -168,16 +168,13 @@ const providerFakes = {
   systemPanelAvailable: () => ({ chromium: true, webkit: true }),
   otpauthHandler: async () => (passwordProviders.calls.push(["otpauthHandler"]), await passwordProviders.handlerGate, { app: passwordProviders.handlerApp }),
   setUpVerificationCode: ({ tab, token, generation }: { tab: string; token: string; generation?: number }) => (passwordProviders.opened.push({ tab, token, generation }), { opened: passwordProviders.openResult }),
+  setApplePasswordsProfiles: ({ profiles }: { profiles: string[] }) => (passwordProviders.calls.push(["setApplePasswordsProfiles", [...profiles]]), null),
 };
 export const applePasswords = {
   state: "notEntitled" as CallResult<"passwords.applePasswordsStatus">["state"],
   code: "246810",
   calls: [] as string[],
   hold: null as Promise<void> | null,
-};
-export const chromeLists = { hidden: null as string[] | null };
-const chromeListsFakes = {
-  hideChromeLists: ({ profiles }: { profiles: string[] }) => ((chromeLists.hidden = [...profiles]), null),
 };
 const applePasswordsFakes = {
   applePasswordsStatus: () => ({ state: applePasswords.state }),
@@ -632,7 +629,6 @@ const fakeModules = {
       },
       ...providerFakes,
       ...applePasswordsFakes,
-      ...chromeListsFakes,
     },
     {
       save: async (_profile: string, origin: string, username: string, password: string) => {

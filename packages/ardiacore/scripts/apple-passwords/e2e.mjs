@@ -8,21 +8,27 @@
 //   E3  with no helper manifest, Pairing says how to get the helper back
 //   E4  a Release build ignores the fake-helper override: the fake never starts (needs --release)
 //   E8  on Apple Passwords, Chrome keeps its offer to save on but never shows its own password list over a sign-in field
+//   E5… the Login list in a WebKit tab (login-list.mjs), in one paired instance shared by those checks; E15 ends the
+//       fake's Pairing and pairs again from the Login list, leaving that instance paired
+//   E18… saving to Apple Passwords from a WebKit tab (saving.mjs), in the same paired instance; E33 saves on an http page
 //   E32 with a stand-in for the iCloud Passwords extension (its id, from icloud-extension.mjs), picking Apple Passwords
 //       turns it off and says so, "Turn it back on" turns it on, and switching to Ardia turns it on only if Ardia turned
 //       it off; it is never uninstalled
 //
 // Each check launches its own instance (scripts/lib/instance.mjs) with ARDIA_TEST applePasswordsManifest at the fake's
-// manifest and Chromium resolving the fixture sites (sites.mjs: https example.test, accounts.example.test and other.test,
-// http plain.test), drives the same Settings state the Password manager menu and Pairing sheet use (ac.applePasswords), and
+// manifest and the fixture sites (sites.mjs: https example.localhost, accounts.example.localhost, other.localhost and
+// empty.localhost, save.localhost, http plain.localhost and plain-save.localhost, all on loopback with their ports), drives the same Settings state the Password manager menu and Pairing sheet use (ac.applePasswords), and
 // prints one PASS or FAIL line; details go to <scratch dir>/e2e.log. METRO_PORT picks the Metro serving this tree.
 // Exit code 1 if any check failed.
 import fs from "node:fs";
 import path from "node:path";
 import { launch, reporter, sleep } from "../../../../scripts/lib/instance.mjs";
 import { fakeHelper } from "./fake.mjs";
-import { fixtureSites } from "./sites.mjs";
 import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
+import { loginListChecks } from "./login-list.mjs";
+import { savingChecks } from "./saving.mjs";
+import { fixtureSites } from "./sites.mjs";
+import { webkitTabs } from "./webkit.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -52,6 +58,7 @@ const note = report.log;
 const sites = await fixtureSites(path.join(SCRATCH, "tls"));
 const READY = { timeout: 90_000, test: "return ac.store.getState().windowOrder.length > 0" };
 let app = null;
+let shared = null;
 
 async function start(name, { manifest, binary = APP, files = {} }) {
   const data = path.join(SCRATCH, name, "data");
@@ -61,9 +68,25 @@ async function start(name, { manifest, binary = APP, files = {} }) {
 }
 
 async function stop() {
-  if (!app) return;
+  if (!app || app === shared?.app) return;
   if (!keep) note("quit:", (await app.quit()).how);
   app = null;
+}
+
+async function paired() {
+  if (shared && !shared.app.exited) {
+    app = shared.app;
+    return shared;
+  }
+  const fake = fakeHelper(path.join(SCRATCH, "paired", "fake"));
+  await start("paired", { manifest: fake.manifest });
+  const shown = await pickApplePasswords();
+  assert(shown.step === "code", "the code step opens", shown);
+  await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${JSON.stringify(fake.fixtures.code)}).then(() => true);`, { timeout: 60_000 });
+  const done = await until(pairingView, (v) => v.state === "connected" && v.choice === "apple");
+  note("paired", JSON.stringify(done));
+  shared = { app, fake, tabs: webkitTabs(app, { log: note }) };
+  return shared;
 }
 
 async function until(body, test, timeout = 30_000) {
@@ -193,12 +216,12 @@ const CHECKS = {
   async E8() {
     const fake = fakeHelper(path.join(SCRATCH, "E8", "fake"));
     await start("E8", { manifest: fake.manifest });
-    const origin = new URL(sites.url("example.test")).origin;
+    const origin = new URL(sites.url("example.localhost")).origin;
     const seeded = await app.eval(
       `return globalThis.expo.modules.ArdiaPasswords.save("", ${JSON.stringify(origin)}, ${JSON.stringify(CHROME_ONLY_LOGIN.username)}, ${JSON.stringify(CHROME_ONLY_LOGIN.password)}).then(() => true).catch((e) => ({ error: e.message }))`,
     );
     assert(seeded === true, "a login saved in Chrome's own store", seeded);
-    const first = await openSignIn("example.test");
+    const first = await openSignIn("example.localhost");
     const control = await chromeListAfterAsking(first.tabId, first.url);
     assert(control.items.some((i) => [i.label, i.sublabel].includes(CHROME_ONLY_LOGIN.username)), "on Ardia, Chrome's list shows its saved login (control)", control);
     await pairApplePasswords(fake);
@@ -208,7 +231,7 @@ const CHECKS = {
     await sleep(1500);
     const reloaded = await chromeListAfterAsking(first.tabId, first.url);
     assert(reloaded.items.length === 0, "an open tab shows no Chrome password list once the profile is on Apple Passwords", reloaded);
-    const second = await openSignIn("example.test", "/login?again");
+    const second = await openSignIn("example.localhost", "/login?again");
     const fresh = await chromeListAfterAsking(second.tabId, second.url);
     assert(fresh.items.length === 0, "a new tab shows no Chrome password list on Apple Passwords", fresh);
     return { control: control.items.length, reloaded: reloaded.asked, fresh: fresh.asked };
@@ -248,6 +271,8 @@ const CHECKS = {
     assert(Object.values(steps).every((v) => v.installed), "never uninstalled", steps);
     return Object.fromEntries(Object.entries(steps).map(([k, v]) => [k, v.enabled]));
   },
+  ...loginListChecks({ paired, sites }),
+  ...savingChecks({ paired, sites }),
 };
 
 const names = wanted.length ? wanted : Object.keys(CHECKS);
@@ -259,5 +284,6 @@ for (const name of names) {
   await report.check(name, CHECKS[name], { onFail: async () => app && note("app log tail:", app.output().slice(-3000)) });
   await stop();
 }
+if (shared && !keep) note("quit shared:", (await shared.app.quit()).how);
 await sites.close();
 process.exit(report.summary() ? 0 : 1);

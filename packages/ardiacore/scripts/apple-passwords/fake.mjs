@@ -8,14 +8,17 @@ export const ORIGIN = "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/";
 export const FIXTURES = {
   code: "482916",
   logins: [
-    { user: "ada@example.test", password: "fixture-pw-ada-1", sites: ["example.test"] },
-    { user: "grace@example.test", password: "fixture-pw-grace-2", sites: ["example.test"] },
-    { user: "linus@other.test", password: "fixture-pw-linus-3", sites: ["other.test"] },
-    { user: "plain@plain.test", password: "fixture-pw-plain-4", sites: ["plain.test"] },
+    { user: "ada@example.test", password: "fixture-pw-ada-1", sites: ["example.localhost"] },
+    { user: "grace@example.test", password: "fixture-pw-grace-2", sites: ["example.localhost"] },
+    { user: "linus@other.test", password: "fixture-pw-linus-3", sites: ["other.localhost"] },
+    { user: "plain@plain.test", password: "fixture-pw-plain-4", sites: ["http://plain.localhost"] },
+    { user: "secure@plain.test", password: "fixture-pw-secure-5", sites: ["plain.localhost"] },
+    { user: "changed@save.test", password: "fixture-pw-changed-7", sites: ["save.localhost"] },
+    { user: "same@save.test", password: "fixture-pw-same-8", sites: ["save.localhost"] },
   ],
   codes: [
-    { domain: "example.test", username: "ada@example.test", code: "135790" },
-    { domain: "example.test", username: "grace@example.test", code: "246802" },
+    { domain: "example.localhost", username: "ada@example.test", code: "135790" },
+    { domain: "example.localhost", username: "grace@example.test", code: "246802" },
   ],
 };
 

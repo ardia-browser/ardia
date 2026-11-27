@@ -563,20 +563,25 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       }
     },
     async E34() {
-      const { app } = await paired();
+      const { app, fake } = await paired();
       const shownCounts = () => app.output().split(COUNTED_SHOWN).length - 1;
+      const wordStart = { user: "kim.anders@mail.test", password: "fixture-pw-kim-24", sites: ["filter.localhost"] };
+      fake.setLogins((logins) => [...logins, wordStart]);
       const tab = await open("filter.localhost", "/login-ready");
       try {
         const before = shownCounts();
         await tab.click("#u");
         const all = await tab.waitRows();
-        assert(q(titles(all.slice(0, -1))) === q(usersFor("filter.localhost")), "the click lists every login for the site", all);
-        await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
-        await typedRows(tab, "n", [...FILTERED, FOOTER], "the list for ann");
+        const every = [...usersFor("filter.localhost"), wordStart.user].sort((a, b) => a.localeCompare(b));
+        assert(q(titles(all.slice(0, -1))) === q(every), "the click lists every login for the site", all);
+        const an = ["anna@example.test", "Ännabel", wordStart.user, "joanna.k@mail.test"];
+        await typedRows(tab, "an", [...an, FOOTER], "the list for an: starts-with, then word-start, then anywhere");
+        await typedRows(tab, "n", [...FILTERED, FOOTER], `the list for ann, without ${wordStart.user}`);
         await sleep(300);
         assert(shownCounts() - before === 1, "refiltering an open list counts one showing", shownCounts() - before);
-        return { engine: engineName, an: FILTERED, shownCounted: shownCounts() - before };
+        return { engine: engineName, an, ann: FILTERED, shownCounted: shownCounts() - before };
       } finally {
+        fake.setLogins((logins) => logins.filter((l) => l.user !== wordStart.user));
         await tab.close();
       }
     },

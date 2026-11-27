@@ -735,6 +735,11 @@ void TrustedInputs() {
   Expect(stamp && stamp->data.GetDict().empty(), "nothing the page sends is kept");
   Expect(NormalizeLinuxPageMessage(LinuxPageMessageKind::kTrustedInput, base::Value()).has_value(), "the payload is ignored");
 
+  Expect(!NormalizeLinuxPageMessage(LinuxPageMessageKind::kNewTabLink, Dict(base::DictValue().Set("url", "https://a.test/x").Set("blankWindow", true))),
+         "a blank-window note never reaches Linux's unpaired link fallback");
+  Expect(NormalizeLinuxPageMessage(LinuxPageMessageKind::kNewTabLink, Dict(base::DictValue().Set("url", "https://a.test/x").Set("blankWindow", false))).has_value(),
+         "an ordinary new-tab link note still does");
+
   LinuxTrustedInputs inputs;
   inputs.Note("https://player.test", 10);
   Expect(inputs.AgeMs("https://player.test", 10.25) == 250, "the age of the last press, in ms");

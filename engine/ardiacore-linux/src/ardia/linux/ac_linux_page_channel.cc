@@ -490,6 +490,7 @@ void LinuxPageChannel::RenderFrameHostChanged(content::RenderFrameHost* old_host
 }
 
 void LinuxPageChannel::PrimaryPageChanged(content::Page& page) {
+  trusted_inputs_.Reset();
   ForgetDocument();
   Watch(page.GetMainDocument().GetRenderWidgetHost());
   if (!hooks_) return;

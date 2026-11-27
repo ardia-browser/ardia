@@ -12,6 +12,8 @@
 namespace ardia_blank_window_notes {
 
 constexpr double kPairWithinSeconds = 0.25;
+constexpr double kFreshNoteSeconds = 0.05;
+constexpr double kOlderTabSeconds = 0.05;
 constexpr double kUnboundSeconds = 1;
 constexpr std::size_t kTabsKept = 8;
 constexpr std::size_t kNotesKept = 8;
@@ -31,7 +33,7 @@ class Pairing {
   }
 
   std::optional<std::string> Take(std::uint64_t tab, double now) {
-    Bind();
+    Bind(now);
     Expire(now);
     const auto found = std::find_if(tabs_.begin(), tabs_.end(), [tab](const Tab& t) { return t.id == tab; });
     if (found == tabs_.end() || !found->url) return std::nullopt;
@@ -71,7 +73,7 @@ class Pairing {
     std::erase_if(notes_, [&](const Note& n) { return now - n.at > kUnboundSeconds && !OpenTabNear(n.at); });
   }
 
-  void Bind() {
+  void Bind(double now) {
     for (;;) {
       Tab* closest_tab = nullptr;
       auto closest_note = notes_.end();
@@ -81,6 +83,7 @@ class Pairing {
         for (auto note = notes_.begin(); note != notes_.end(); ++note) {
           const double gap = std::fabs(note->at - tab.at);
           if (gap > closest || (closest_tab && gap == closest)) continue;
+          if (now - note->at < kFreshNoteSeconds && note->at - tab.at > kOlderTabSeconds) continue;
           closest = gap;
           closest_tab = &tab;
           closest_note = note;

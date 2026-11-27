@@ -177,6 +177,7 @@ std::optional<LinuxPageMessage> NormalizeLinuxPageMessage(LinuxPageMessageKind k
       return Message(kind, Theme(value));
     case LinuxPageMessageKind::kLinkDrop:
     case LinuxPageMessageKind::kNewTabLink: {
+      if (kind == LinuxPageMessageKind::kNewTabLink && dict && dict->FindBool("blankWindow").value_or(false)) return std::nullopt;
       const std::string* url = dict ? BoundedString(*dict, "url", kLinuxPageUrlMax) : nullptr;
       if (!url || !IsLinuxPageHttpUrl(*url)) return std::nullopt;
       return Message(kind, base::Value(base::DictValue().Set("url", *url)));

@@ -75,6 +75,61 @@ final class ApplePasswordsSaving: NSObject {
     ]
   }
 
+  private final class Held {
+    let origin: String
+    let username: String
+    let password: String
+    let turn: Int
+    var shown = false
+
+    init(origin: String, username: String, password: String, turn: Int) {
+      self.origin = origin
+      self.username = username
+      self.password = password
+      self.turn = turn
+    }
+  }
+
+  private static let held = NSMapTable<AnyObject, Held>.weakToStrongObjects()
+  private static var turns = 0
+
+  @objc(offerLogin:profile:on:show:)
+  static func offer(_ login: [String: String], profile: String, on view: AnyObject, show: @escaping ([String: Any]?) -> Void) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    held.removeObject(forKey: view)
+    guard let origin = login["origin"], let password = login["password"], !password.isEmpty, page(origin) != nil,
+      !ArdiaHost.isPrivateProfile(profile)
+    else { return show(nil) }
+    let username = login["username"] ?? ""
+    turns += 1
+    let pending = Held(origin: origin, username: username, password: password, turn: turns)
+    held.setObject(pending, forKey: view)
+    decide(origin: origin, profile: profile, username: username, password: password) { [weak view] state in
+      guard let view, held.object(forKey: view)?.turn == pending.turn else { return }
+      guard let state else {
+        held.removeObject(forKey: view)
+        return show(nil)
+      }
+      pending.shown = true
+      show(prompt(state, origin: origin, username: username, passwordLength: password.count, usernames: [username]))
+    }
+  }
+
+  @objc(answer:username:on:notSaved:)
+  static func answer(_ action: String, username: String?, on view: AnyObject, notSaved: @escaping ([String: Any]) -> Void) -> String {
+    dispatchPrecondition(condition: .onQueue(.main))
+    let chrome = action == "never" ? "never" : "dismiss"
+    guard let login = held.object(forKey: view), login.shown else { return chrome }
+    held.removeObject(forKey: view)
+    guard action == "save" || action == "update" else { return chrome }
+    let name = username ?? login.username
+    save(origin: login.origin, username: name, password: login.password) { saved in
+      guard !saved else { return }
+      notSaved(prompt(Self.notSaved, origin: login.origin, username: name, passwordLength: login.password.count, usernames: [name]))
+    }
+    return chrome
+  }
+
   private static func count(_ name: String) {
     ArdiaEvents.emit("passwords.applePasswordsSaveCounted", data: ArdiaConsentStamp.begin().onto(["name": name]))
   }

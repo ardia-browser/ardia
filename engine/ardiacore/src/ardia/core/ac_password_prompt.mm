@@ -8,6 +8,7 @@
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_string.h"
 #include "components/password_manager/core/common/password_manager_ui.h"
+#include "crypto/process_bound_string.h"
 #include "url/origin.h"
 
 namespace ardiacore {
@@ -66,6 +67,26 @@ NSDictionary<NSString*, id>* PasswordPrompt(content::WebContents* contents) {
     @"passwordLength" : @(length),
     @"federation" : federation,
     @"usernames" : usernames,
+  };
+}
+
+NSDictionary<NSString*, NSString*>* PendingLogin(content::WebContents* contents) {
+  base::WeakPtr<PasswordsModelDelegate> model = ModelFor(contents);
+  using password_manager::ui::State;
+  if (!model || (model->GetState() != State::PENDING_PASSWORD_STATE &&
+                 model->GetState() != State::PENDING_PASSWORD_UPDATE_STATE)) {
+    return nil;
+  }
+  const password_manager::PasswordForm& form = model->GetPendingPassword();
+  if (form.password_value.empty() || form.federation_origin.IsValid()) {
+    return nil;
+  }
+  const crypto::SecureU16String password = form.password_value.secure_value();
+  return @{
+    @"origin" : base::SysUTF8ToNSString(model->GetOrigin().Serialize()),
+    @"username" : base::SysUTF16ToNSString(form.username_value),
+    @"password" : [NSString stringWithCharacters:reinterpret_cast<const unichar*>(password.data())
+                                          length:password.size()],
   };
 }
 

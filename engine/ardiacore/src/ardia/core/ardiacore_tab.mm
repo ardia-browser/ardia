@@ -541,6 +541,10 @@ using ardiacore::NS;
   return ardiacore::PasswordPrompt(_contents);
 }
 
+- (NSDictionary<NSString*, NSString*>*)pendingLogin {
+  return ardiacore::PendingLogin(_contents);
+}
+
 - (void)resolvePasswordPrompt:(NSString*)action
                      username:(NSString*)username
                      password:(NSString*)password {

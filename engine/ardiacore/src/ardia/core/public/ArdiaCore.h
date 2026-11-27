@@ -300,6 +300,7 @@ ARDIACORE_EXPORT
 - (void)stopFinding;
 - (void)close;
 @property(readonly, nullable) NSDictionary<NSString*, id>* passwordPrompt;
+@property(readonly, nullable) NSDictionary<NSString*, NSString*>* pendingLogin;
 - (void)resolvePasswordPrompt:(NSString*)action
                      username:(nullable NSString*)username
                      password:(nullable NSString*)password;

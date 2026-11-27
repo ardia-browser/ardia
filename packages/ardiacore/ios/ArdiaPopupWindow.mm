@@ -407,8 +407,7 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
     NSLog(@"[ardiacore] dropped a popup's password prompt: no window of its profile is open");
     return;
   }
-  ardia_host::NotePasswordPromptSource(opener, tab);
-  [opener emit:@"passwordPrompt" payload:prompt];
+  [opener passwordPrompt:prompt fromTab:tab];
 }
 
 - (void)window:(ArdiaCoreWindow *)window didRemoveTab:(ArdiaCoreTab *)tab {

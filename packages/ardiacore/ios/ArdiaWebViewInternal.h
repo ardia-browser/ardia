@@ -214,6 +214,10 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)forgetRestoreKey;
 @end
 
+@interface ArdiaWebView (SiteInternal)
+- (void)passwordPrompt:(NSDictionary<NSString *, id> *)prompt fromTab:(nullable ArdiaCoreTab *)source;
+@end
+
 @interface ArdiaWebView (TabInternal)
 - (ArdiaCoreAdoption)adoptIntoWindow;
 - (ArdiaCoreAdoption)windowTakes:(ArdiaCoreTab *)tab;

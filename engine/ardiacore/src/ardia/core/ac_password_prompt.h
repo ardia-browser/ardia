@@ -11,6 +11,8 @@ namespace ardiacore {
 
 NSDictionary<NSString*, id>* PasswordPrompt(content::WebContents* contents);
 
+NSDictionary<NSString*, NSString*>* PendingLogin(content::WebContents* contents);
+
 void PasswordPromptShown(content::WebContents* contents);
 void PasswordConfirmationShown(content::WebContents* contents);
 

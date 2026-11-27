@@ -146,6 +146,10 @@ public final class WebTab: DiscardablePage, Identifiable {
     webView?.evaluateJavaScript("window.__ardiaNightShade && window.__ardiaNightShade(\"\(mode.rawValue)\")", in: nil, in: ReadableContent.world)
   }
 
+  func applyPageStyle(_ style: UIUserInterfaceStyle) {
+    if let webView, webView.overrideUserInterfaceStyle != style { webView.overrideUserInterfaceStyle = style }
+  }
+
   func applySwipeNavigation(_ mode: SwipeNavigationMode) {
     webView?.allowsBackForwardNavigationGestures = mode == .screenEdges
   }
@@ -253,6 +257,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     let configuration = popupConfiguration ?? Self.makeConfiguration(dataStore: isPrivate ? engine.privateDataStore() : .default())
     popupConfiguration = nil
     let webView = FindReportingWebView(frame: .zero, configuration: configuration)
+    webView.overrideUserInterfaceStyle = engine.pageStyleForNewPage()
     webView.onFindSessionChange = { [weak self] active in self?.isFindingInPage = active }
     let coordinator = WebTabCoordinator(tab: self)
     self.coordinator = coordinator

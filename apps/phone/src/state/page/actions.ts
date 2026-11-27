@@ -19,6 +19,7 @@ import { backLayer, downloadedToast, downloadFailedToast, downloadingToast, open
 import { installDownloadedPackage } from "../appUpdate/store";
 import { onboardingBack } from "../onboarding/store";
 import { refreshSettings } from "../settings/actions";
+import { notePageDark } from "../settings/appearance";
 import { closeSettings, openSettings, openSettingsPage, popSettings, pushSettings, settingsNav, useSettingsNav, type SettingsRoute } from "../settings/nav";
 import { pinToMac, sendTab } from "../sync/actions";
 import type { SyncedDevice } from "../../platform/sync";
@@ -787,6 +788,9 @@ function pageEvent(event: PageEngineEvent) {
     }
     case "page.summarySettled":
       if (!event.isPrivate) for (const field of [...pageSummarySettledCounts(event.outcome, event.chatGPTFellBack), ...geminiNanoMissingCount(event.geminiNanoMissing)]) countUsage(field);
+      return;
+    case "pages.dark":
+      notePageDark(event.dark);
       return;
     case "pages.webVideo":
       if (!event.isPrivate) countUsage(event.outcome === "floated" ? "web_videos_floated" : "web_videos_kept_playing");

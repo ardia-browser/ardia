@@ -41,6 +41,7 @@ export const BUILT_IN_ENGINES: readonly SearchEngine[] = [
   },
   { id: "perplexity", name: "Perplexity", keyword: "perplexity.ai", url: "https://www.perplexity.ai/search?q=%s" },
   { id: "chatgpt", name: "ChatGPT", keyword: "chatgpt.com", url: "https://chatgpt.com/?q=%s" },
+  { id: "claude", name: "Claude", keyword: "claude.ai", url: "https://claude.ai/new?q=%s" },
   {
     id: "ecosia",
     name: "Ecosia",

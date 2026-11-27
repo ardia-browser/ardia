@@ -120,7 +120,7 @@ packages/
 The Linux desktop target is `apps/desktop`, for x86-64 Linux on Wayland or X11. Releases ship it as a `.deb`
 (`sudo apt install ./Ardia-<version>-linux-x64.deb`), an `.rpm` (`sudo dnf install ./Ardia-<version>-linux-x64.rpm`),
 a Flatpak (`flatpak install --user ./Ardia-<version>-linux-x64.flatpak`), an AppImage, a tarball and an Arch source
-package, and stables as `ardia-bin` on the AUR: [docs/linux-port.md › Installing on Linux](docs/linux-port.md#installing-on-linux). The same
+package (`makepkg -si`), all from the release page: [docs/linux-port.md › Installing on Linux](docs/linux-port.md#installing-on-linux). The same
 file has the source-build and packaging instructions. It builds against the dedicated Linux Chromium host.
 
 The macOS app requires Xcode 26+, CocoaPods, Node 24 (pinned in `.nvmrc`), pnpm 12.

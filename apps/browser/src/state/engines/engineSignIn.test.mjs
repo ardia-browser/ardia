@@ -736,7 +736,8 @@ test("a carry is a main-thread job while it writes, not while it waits for its b
   assert.equal(jobs.activityDuring(began, Date.now(), Date.now(), jobs.holdsMainThread), "none", "waiting for the batch holds nothing");
   for (let i = 0; i < 100 && !webKit.writing; i++) await new Promise((resolve) => setTimeout(resolve, 2));
   assert.ok(webKit.writing, "the carry reached its write");
-  await new Promise((resolve) => setTimeout(resolve, 5));
+  const heldFrom = Date.now();
+  for (let i = 0; i < 100 && Date.now() < heldFrom + 2; i++) await new Promise((resolve) => setTimeout(resolve, 1));
   finishWrite();
   await carry;
   assert.equal(jobs.activityDuring(began, Date.now(), Date.now(), jobs.holdsMainThread), "siteDataCarry", "the write into WebKit counts");

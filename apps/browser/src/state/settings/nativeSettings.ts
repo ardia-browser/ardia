@@ -8,6 +8,7 @@ import { useBrowser } from "../browser/store";
 import type { Settings } from "./settings";
 import { startInterfaceScale } from "./interfaceScaleSync";
 import { setPressMotion } from "../../lib/pressMotion";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
 type Mirror = { key: keyof Settings; send: (settings: Settings) => unknown };
 
@@ -17,7 +18,7 @@ const NATIVE_SETTINGS: Mirror[] = [
   mirror("appearance", setAppearance),
   mirror("autoPictureInPicture", setAutoPictureInPicture),
   mirror("videoUpscaling", setVideoUpscaling),
-  mirror("webKitFraudWarnings", setWebKitFraudWarnings),
+  ...(PLATFORM_FEATURES.webKit ? [mirror("webKitFraudWarnings", setWebKitFraudWarnings)] : []),
   mirror("popupsOpenAsTabs", setPopupsOpenAsTabs),
   mirror("blockAutoplayEverywhere", setBlockAutoplayEverywhere),
   mirror("pressMotion", setPressMotion),

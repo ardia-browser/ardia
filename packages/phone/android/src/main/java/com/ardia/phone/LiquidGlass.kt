@@ -369,26 +369,45 @@ internal object GlassShaders {
         private set
     var rim = ShaderSlot("rim")
         private set
+    var readable = ShaderSlot("readable")
+        private set
     var makeLens: ((LiquidGlassRules.LensField) -> RenderEffect)? = null
     var makeRim: (() -> RuntimeShader)? = null
+    var makeReadable: (() -> RuntimeShader)? = null
     var onFailed: (() -> Unit)? = null
+    private var readableShader: RuntimeShader? = null
+
+    fun readableFor(key: ReadablePlate.Key): RenderEffect? {
+        if (Build.VERSION.SDK_INT < LiquidGlassRules.LENS_MIN_SDK) return null
+        return readable.attempt {
+            val shader = readableShader ?: (makeReadable ?: ReadablePlate::shader)().also { readableShader = it }
+            ReadablePlate.effect(shader, key)
+        }
+    }
 
     fun lensFor(field: LiquidGlassRules.LensField, cached: () -> RuntimeShader): RenderEffect? = lens.attempt {
         makeLens?.invoke(field) ?: LiquidGlassShaders.lensEffect(LiquidGlassShaders.apply(cached(), field))
     }
 
     fun retryFailed(): Boolean {
-        val anyFailed = lens.failed || rim.failed
+        val anyFailed = lens.failed || rim.failed || readable.failed
         if (lens.failed) lens = ShaderSlot("lens")
         if (rim.failed) rim = ShaderSlot("rim")
+        if (readable.failed) {
+            readable = ShaderSlot("readable")
+            readableShader = null
+        }
         return anyFailed
     }
 
     fun reset() {
         lens = ShaderSlot("lens")
         rim = ShaderSlot("rim")
+        readable = ShaderSlot("readable")
         makeLens = null
         makeRim = null
+        makeReadable = null
+        readableShader = null
         onFailed = null
     }
 }

@@ -91,12 +91,30 @@ public struct LookFrost: View {
   private let reduceTransparencyOverride: Bool?
 
   @Environment(\.accessibilityReduceTransparency) private var systemReduceTransparency
+  @Environment(\.colorScheme) private var colorScheme
 
   public init(variant: Variant, look: ProfileLook, cornerRadius: Double = 0, reduceTransparency: Bool? = nil) {
     self.variant = variant
     self.look = look
     self.cornerRadius = cornerRadius
     reduceTransparencyOverride = reduceTransparency
+  }
+
+  public nonisolated static func veil(for variant: Variant, look: ProfileLook, dark: Bool) -> GlassInk? {
+    let shadeDark = dark || look.isAlwaysDark
+    switch variant {
+    case .bar, .sheet:
+      return LiquidGlassRules.materialVeil(tint: look.surfaceInk(dark: shadeDark, alpha: profileSheetTintShare), dark: shadeDark)
+    case .thin:
+      return LiquidGlassRules.materialVeil(tint: look.surfaceInk(dark: shadeDark, alpha: 0), dark: shadeDark)
+    case .glass:
+      return nil
+    }
+  }
+
+  private var veilColor: Color {
+    guard let ink = Self.veil(for: variant, look: look, dark: colorScheme == .dark) else { return .clear }
+    return Color(.sRGB, red: ink.red, green: ink.green, blue: ink.blue, opacity: ink.alpha)
   }
 
   public var body: some View {
@@ -111,14 +129,15 @@ public struct LookFrost: View {
         switch variant {
         case .bar:
           shape.fill(.bar)
-          shape.fill(look.surface.opacity(profileSheetTintShare))
+          shape.fill(veilColor)
         case .sheet:
           shape.fill(.regularMaterial)
-          shape.fill(look.surface.opacity(profileSheetTintShare))
+          shape.fill(veilColor)
         case .glass:
           LiquidGlassFill(shape)
         case .thin:
           shape.fill(.ultraThinMaterial)
+          shape.fill(veilColor)
         }
       }
     }

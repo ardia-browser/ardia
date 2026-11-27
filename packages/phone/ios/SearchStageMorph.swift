@@ -494,7 +494,7 @@ final class StageMorphView: UIView {
       classicFill = nil
     } else if look.frosted {
       let frost = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
-      frost.contentView.backgroundColor = look.classicPanel
+      frost.contentView.backgroundColor = Self.readablePanel(look.classicPanel)
       frost.clipsToBounds = true
       frost.layer.cornerCurve = .continuous
       surface = frost
@@ -532,6 +532,16 @@ final class StageMorphView: UIView {
   }
 
   required init?(coder: NSCoder) { nil }
+
+  private static func readablePanel(_ panel: UIColor) -> UIColor {
+    func veiled(_ style: UIUserInterfaceStyle) -> UIColor {
+      let veil = LiquidGlassRules.materialVeil(tint: GlassInk(panel.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))), dark: style == .dark)
+      return UIColor(red: veil.red, green: veil.green, blue: veil.blue, alpha: veil.alpha)
+    }
+    let light = veiled(.light)
+    let dark = veiled(.dark)
+    return UIColor { traits in traits.userInterfaceStyle == .dark ? dark : light }
+  }
 
   func carry(_ face: UIView) {
     faceSlot.subviews.forEach { $0.removeFromSuperview() }

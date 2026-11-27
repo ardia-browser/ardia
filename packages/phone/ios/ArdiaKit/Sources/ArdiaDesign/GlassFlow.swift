@@ -168,6 +168,10 @@ public struct GlassPageFollow: Sendable {
 }
 
 public enum GlassToneSend {
+  public static let pageSource = "page"
+
+  public static func tells(source: String?) -> Bool { source == pageSource }
+
   public static func needed(toneChanged: Bool, hasColors: Bool, barDark: Bool?, sentBarDark: Bool?) -> Bool {
     guard toneChanged || barDark != sentBarDark else { return false }
     return hasColors || barDark != nil || sentBarDark != nil

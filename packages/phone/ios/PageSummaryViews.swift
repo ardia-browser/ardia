@@ -163,6 +163,12 @@ struct PageSummaryFooter: View {
   let model: PageSummaryStageModel
   let onClose: @MainActor () -> Void
   @Environment(\.displayScale) private var displayScale
+  @Environment(\.colorScheme) private var colorScheme
+
+  private var veil: Color {
+    let ink = LiquidGlassRules.materialVeil(dark: colorScheme == .dark)
+    return Color(.sRGB, red: ink.red, green: ink.green, blue: ink.blue, opacity: ink.alpha)
+  }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -198,7 +204,12 @@ struct PageSummaryFooter: View {
       Spacer(minLength: 0)
     }
     .background {
-      Rectangle().fill(.regularMaterial).opacity(model.showsText ? 1 : 0).ignoresSafeArea()
+      ZStack {
+        Rectangle().fill(.regularMaterial)
+        Rectangle().fill(veil)
+      }
+      .opacity(model.showsText ? 1 : 0)
+      .ignoresSafeArea()
     }
     .animation(.easeOut(duration: 0.35), value: model.showsText)
   }

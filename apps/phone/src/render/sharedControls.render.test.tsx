@@ -4,7 +4,7 @@ import { act, type ReactTestInstance } from "react-test-renderer";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { PressedGlyph } from "../components/ui/PressInPlace";
-import { ActionButton, EmptyState, FieldAccessory, LoadingLine, LoadingState, ModalOverlay, overlayInk, press, PressInPlace, Tappable, Toggle, ToggleIconButton, ToggleRow, useTheme, type Theme } from "../components/ui";
+import { ActionButton, EmptyState, FieldAccessory, LoadingLine, LoadingState, ModalOverlay, overlayInk, overlayPlateFill, press, PressInPlace, Tappable, Toggle, ToggleIconButton, ToggleRow, useTheme, type Theme } from "../components/ui";
 import { renderSurface, unmount, updateSurface } from "../../test/render/harness";
 import { switchColors, SYSTEM_SWITCH_COLOR_NAMES } from "../components/ui/Toggle";
 import { readFileSync } from "node:fs";
@@ -338,7 +338,7 @@ test("the page loading line draws the readable accent ink on every layout", () =
   unmount(root);
 });
 
-test("the glass overlay action is the shared action: glass fill, white label, the filled press, and the same busy and disabled contract", () => {
+test("the glass overlay action is the shared action: the readable overlay veil, white label, the filled press, and the same busy and disabled contract", () => {
   const onPress = jest.fn();
   const root = renderSurface(
     <>
@@ -348,7 +348,7 @@ test("the glass overlay action is the shared action: glass fill, white label, th
     </>,
   );
   const search = pressableNamed(root, "Search");
-  expect(pressedStyleOf(search, false)).toMatchObject({ backgroundColor: overlayInk.glass, alignSelf: "stretch", borderCurve: "continuous" });
+  expect(pressedStyleOf(search, false)).toMatchObject({ backgroundColor: overlayPlateFill, alignSelf: "stretch", borderCurve: "continuous" });
   expect(pressedStyleOf(search, true).opacity).toBe(press.filledOpacity);
   expect(flat(host(search.findAll((node) => node.type === Text)[0]).props.style).color).toBe(overlayInk.label);
   const busy = pressableNamed(root, "Done");

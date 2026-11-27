@@ -13,6 +13,8 @@ export const useNavigation = <T>(id: string | null, select: (navigation: PageSta
 
 export const usePageTone = (id: string | null): PageTone | null => usePages((s) => (id ? shownPageTone(s, id) : null));
 
+export const usePageTopTone = (id: string | null, stored: string | null): string | null => usePages((s) => (id ? (shownPageTone(s, id)?.top ?? stored) : null));
+
 export const useFrozenOrder = () => useBrowse((s) => s.frozenOrder);
 
 export const useOpeningTab = () => useBrowse((s) => s.opening);

@@ -46,6 +46,7 @@ import {
   GlassBranch,
   GlassSource,
   PAGE_FROST,
+  usesGlass,
   pageReportsDrawn,
   useDesign,
   usePageUnderBars,
@@ -80,7 +81,7 @@ import { PagerAhead, PagerBackdrop, PagerNeighbour, useTabPager } from "./TabPag
 import { TabSwipeHint } from "./tabSwipeHint";
 import { PageProgressLine } from "./PageProgressLine";
 import { labTrace } from "../../platform/lab";
-import { barIsDark, shownTone } from "../../lib/pageTone";
+import { pageBarDark, shownTone } from "../../lib/pageTone";
 import { besideStrip, bottomBarLayout, DUO_BAR, duoSqueeze } from "../../lib/bottomBarSpan";
 import { useScreenLayout } from "../../state/app/screenLayout";
 
@@ -286,7 +287,7 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
   const bottom = pageTone?.bottom ?? blankPage;
   const barKept = tabSwitchCuts() && design === "redesigned";
   const sourceHold = usePageSourceHold(barKept);
-  const barDark = barIsDark({ design, glassTone: failed ? undefined : tone?.barDark, toneBottom: pageTone?.bottom, themeDark: theme.dark, bottomDark: isDarkColor(bottom) });
+  const barDark = pageBarDark({ design, glassTone: failed ? undefined : tone?.barDark, toneBottom: pageTone?.bottom, themeDark: theme.dark, bottomDark: isDarkColor(bottom), incognitoLook: tab.isPrivate, os: Platform.OS, nativeGlass: usesGlass() });
   const bodyStyle = useAnimatedStyle(() => ({ transform: [{ translateX: barKept && pageBodyShown.value === 0 ? BODY_UNDER_DECK : 0 }] }));
   const bodyProps = useAnimatedProps<{ pointerEvents: "box-none" | "none"; importantForAccessibility: "auto" | "no-hide-descendants" }>(() => ({
     pointerEvents: barKept && (pageBodyShown.value === 0 || deckCutOwns()) ? "none" : "box-none",

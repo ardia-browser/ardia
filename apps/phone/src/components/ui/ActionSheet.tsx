@@ -202,7 +202,8 @@ export const materialDialogWidth = (room: number) => Math.min(materialDialogLook
 
 function SheetCard({ title, message, actions, cancel = dismissWords.cancel, onCancel }: Props) {
   const theme = useTheme();
-  const paint = theme.dark ? actionSheetInk.dark : actionSheetInk.light;
+  const sheetDark = theme.dark;
+  const paint = sheetDark ? actionSheetInk.dark : actionSheetInk.light;
   const reduceMotion = useReduceMotion();
   const window = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -222,7 +223,7 @@ function SheetCard({ title, message, actions, cancel = dismissWords.cancel, onCa
       <Pressable testID="drawnConfirmationOutside" {...(announces ? { accessible: false, importantForAccessibility: "no" as const } : { accessibilityRole: "button" as const, accessibilityLabel: cancel })} style={[StyleSheet.absoluteFill, { backgroundColor: ink.clear }]} onPress={onCancel} />
       <View style={styles.centre} pointerEvents="box-none">
         <View ref={card} testID="drawnActionSheet" accessibilityViewIsModal style={[styles.card, { width, maxHeight, borderColor: paint.rim, boxShadow: actionSheetLook.shadow }]}>
-          <MenuMaterial source={null} fill={paint.fill} solid={paint.solid} radius={shape.panel} style={[styles.material, { maxHeight: maxHeight - 2 * actionSheetLook.rim }]}>
+          <MenuMaterial source={null} dark={sheetDark} fill={paint.fill} solid={paint.solid} radius={shape.panel} style={[styles.material, { maxHeight: maxHeight - 2 * actionSheetLook.rim }]}>
             <ScrollView testID="drawnConfirmationScroll" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.content} bounces={false} overScrollMode="never">
             {heading ? (
               <View ref={spoken} testID="drawnConfirmationHeading" accessible accessibilityRole="header" accessibilityLabel={heading} {...cancelAction}>

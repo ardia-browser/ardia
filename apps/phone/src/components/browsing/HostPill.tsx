@@ -6,7 +6,7 @@ import { haptics } from "../../state/app/haptics";
 import { launchArguments } from "../../state/app/launchFlags";
 import { usePageBusy } from "../../state/page/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { capsule, chromeInk, chromeLayout, ChromeSurface, controlSize, Favicon, floatingBarLayout, motionAliases, pressedLook, slopToReach, Symbol, tabsMotion, useTheme } from "../ui";
+import { capsule, chromeLayout, ChromeSurface, controlSize, Favicon, floatingBarLayout, motionAliases, PlateInk, pressedLook, slopToReach, Symbol, tabsMotion, useTheme } from "../ui";
 import { privateMark } from "../ui/IncognitoSpecs";
 import { barAddress, spokenAddress } from "./FloatingBar";
 import { hostPillLayout } from "./hostPillTokens";
@@ -21,7 +21,6 @@ export const pillSampleHold = (android: boolean, collapsed: boolean, asked: bool
   android && collapsed && asked ? `${tabId}:${isPrivate ? "private" : "open"}:${dark ? "dark" : "light"}` : null;
 
 export function HostPill({ tab, dark, shown, anchors = false, sampleHold = null, contentStyle, onExpand }: { tab: BrowserTab; dark: boolean; shown: boolean; anchors?: boolean; sampleHold?: string | null; contentStyle: ComponentProps<typeof Animated.View>["style"]; onExpand: () => void }) {
-  const ink = dark ? chromeInk.dark : chromeInk.light;
   const { rowPressed } = useTheme();
   const address = barAddress(tab);
   const busy = usePageBusy(address.tabId);
@@ -46,15 +45,21 @@ export function HostPill({ tab, dark, shown, anchors = false, sampleHold = null,
       <Animated.View testID="hostPillCentreGlyphs" collapsable={false} style={[styles.content, back.centreGlyphs]}>
       <Animated.View testID="hostPillContent" nativeID={ids?.face} collapsable={false} style={[styles.content, contentStyle]}>
       <Pressable testID="hostPillButton" accessibilityRole="button" accessibilityLabel="Show Toolbar" accessibilityValue={{ text: spokenAddress(address) }} accessibilityState={{ busy }} onPress={onExpand} onPressIn={pressIn} onPressOut={pressOut} style={[styles.hit, pressedLook("text", pressed, false, rowPressed)]}>
-        {address.isPrivate ? <Symbol name={privateMark} size={hostPillLayout.siteIcon * hostPillLayout.privateSymbolShare} color={ink.secondary} /> : null}
-        {address.insecure ? (
-          <NotSecureLock testID="hostPillNotSecure" size={hostPillLayout.siteIcon} color={ink.notSecure} />
-        ) : address.isPrivate ? null : address.pageUrl ? (
-          <Favicon iconUrl={address.iconUrl} pageUrl={address.pageUrl} size={hostPillLayout.siteIcon} />
-        ) : null}
-        <Text testID="hostPillHost" maxFontSizeMultiplier={hostPillLayout.maxTextScale} numberOfLines={1} ellipsizeMode="middle" style={[styles.host, { color: ink.foreground }]}>
-          {address.host}
-        </Text>
+        <PlateInk>
+          {({ chrome: ink }) => (
+            <>
+              {address.isPrivate ? <Symbol name={privateMark} size={hostPillLayout.siteIcon * hostPillLayout.privateSymbolShare} color={ink.secondary} /> : null}
+              {address.insecure ? (
+                <NotSecureLock testID="hostPillNotSecure" size={hostPillLayout.siteIcon} color={ink.notSecure} />
+              ) : address.isPrivate ? null : address.pageUrl ? (
+                <Favicon iconUrl={address.iconUrl} pageUrl={address.pageUrl} size={hostPillLayout.siteIcon} />
+              ) : null}
+              <Text testID="hostPillHost" maxFontSizeMultiplier={hostPillLayout.maxTextScale} numberOfLines={1} ellipsizeMode="middle" style={[styles.host, { color: ink.foreground }]}>
+                {address.host}
+              </Text>
+            </>
+          )}
+        </PlateInk>
       </Pressable>
       </Animated.View>
       </Animated.View>

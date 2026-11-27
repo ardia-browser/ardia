@@ -20,7 +20,7 @@ import { haptics } from "../../state/app/haptics";
 import { TabsMenuTrigger } from "./tabsMenu";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { BarPlusGlyph, capsule, chromeInk, chromeLayout, ChromeSurface, floatingBarLayout, PressInPlace, Symbol, type ColorRoles } from "../ui";
+import { BarPlusGlyph, capsule, chromeLayout, ChromeSurface, floatingBarLayout, PlateInk, PressInPlace, Symbol, type ColorRoles } from "../ui";
 import { newTabLabel } from "./barWords";
 import { openPageMenuFrom } from "./pageMenuOpener";
 import { privateMark } from "../ui/IncognitoSpecs";
@@ -102,9 +102,9 @@ function useHereAddress(swipe: SwipeAddresses | null, ownerId: string) {
   }, [ownerId, leftId, rightId]);
 }
 
-type LandedLeafProps = { tab: BrowserTab; side: -1 | 0 | 1; ownerId: string; cursor: SharedValue<string>; dark: boolean };
+type LandedLeafProps = { tab: BrowserTab; side: -1 | 0 | 1; ownerId: string; cursor: SharedValue<string> };
 
-function LandedLeaf({ tab, side, ownerId, cursor, dark }: LandedLeafProps) {
+function LandedLeaf({ tab, side, ownerId, cursor }: LandedLeafProps) {
   const shown = useAnimatedStyle(() => {
     const at = cursor.value;
     return { opacity: landedLeafShown(at, tab.id, ownerId) ? 1 : 0 };
@@ -116,7 +116,7 @@ function LandedLeaf({ tab, side, ownerId, cursor, dark }: LandedLeafProps) {
   const named = side < 0 ? "Left" : side > 0 ? "Right" : "Self";
   return (
     <Animated.View testID={`floatingBarLanded${named}`} collapsable={false} pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={[StyleSheet.absoluteFill, styles.addressStack, shown]}>
-      <AddressLeaf address={barAddress(tab)} dark={dark} testIDPrefix={`floatingBar${named}`} style={styles.addressHit} />
+      <AddressLeaf address={barAddress(tab)} testIDPrefix={`floatingBar${named}`} style={styles.addressHit} />
       {side !== 0 ? <UiFrameMark testID="landedBarMark" markWhenShown={`dest-bar:${tab.id}`} style={[uiFrameMarkStyle, marked]} /> : null}
     </Animated.View>
   );
@@ -229,7 +229,6 @@ export function FloatingBar({ tab, preview = null, standsIn = false, privateLook
   const styledTab = looksPrivate === tab.isPrivate ? tab : { ...tab, isPrivate: looksPrivate };
   useLayoutEffect(() => markShownFrame(`bar:${tab.id}`), [tab.id]);
   const landedHere = useHereAddress(swipe, tab.id);
-  const ink = dark ? chromeInk.dark : chromeInk.light;
   const address = barAddress(tab);
   const { spoken, backShown } = useSpokenAddress(swipe, tab.id, spokenAddress(address));
   const menuButton = useRef<ViewInstance>(null);
@@ -312,23 +311,23 @@ export function FloatingBar({ tab, preview = null, standsIn = false, privateLook
         <PullGlyphs style={styles.addressRow}>
         <Animated.View testID="floatingBarAddressFade" collapsable={false} style={[styles.addressFade, addressFade]} pointerEvents={squeezed ? "none" : "box-none"} importantForAccessibility={squeezed ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={squeezed}>
         <Animated.View testID="floatingBarAddressStack" collapsable={false} style={[styles.addressStack, landedHere, previewHides]} pointerEvents="box-none">
-          <AddressFace address={address} dark={dark} testIDPrefix="floatingBar" style={styles.addressHit} onPress={onAddress} onPressIn={haptics.barPress} pressRef={addressButton} spoken={SPEAKS_LANDED_ADDRESS && tabSwitchCuts() ? spoken : undefined} />
+          <AddressFace address={address} testIDPrefix="floatingBar" style={styles.addressHit} onPress={onAddress} onPressIn={haptics.barPress} pressRef={addressButton} spoken={SPEAKS_LANDED_ADDRESS && tabSwitchCuts() ? spoken : undefined} />
         </Animated.View>
         {preview ? (
           <Animated.View testID="floatingBarPreview" collapsable={false} pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={[StyleSheet.absoluteFill, styles.addressStack, previewShows]}>
-            <AddressLeaf address={barAddress(preview)} dark={dark} testIDPrefix="floatingBarPreview" style={styles.addressHit} />
+            <AddressLeaf address={barAddress(preview)} testIDPrefix="floatingBarPreview" style={styles.addressHit} />
           </Animated.View>
         ) : null}
-        {standsIn ? <DestinationFallbackLeaf shownId={tab.id} leafId={previewId} dark={dark} style={styles.addressHit} /> : null}
-        {swipe ? landedLeaves(swipe, tab).map((leaf) => <LandedLeaf key={leaf.tab.id} tab={leaf.tab} side={leaf.side} ownerId={tab.id} cursor={swipe.cursor} dark={dark} />) : null}
+        {standsIn ? <DestinationFallbackLeaf shownId={tab.id} leafId={previewId} style={styles.addressHit} /> : null}
+        {swipe ? landedLeaves(swipe, tab).map((leaf) => <LandedLeaf key={leaf.tab.id} tab={leaf.tab} side={leaf.side} ownerId={tab.id} cursor={swipe.cursor} />) : null}
         </Animated.View>
         <PressInPlace ref={menuButton} label={squeezed ? `Page Menu, ${spokenAddress(address)}` : "Page Menu"} busy={squeezed ? squeezedBusy : undefined} onPress={() => openPageMenuFrom(() => menuButton.current, onMore)} onPressIn={haptics.barPress} style={styles.menu}>
           <Animated.View style={[styles.menuGlyph, dotsFade]}>
-            <Symbol name="ellipsis" size={floatingBarLayout.menuSymbol} color={ink.foreground} />
+            <PlateInk>{(plate) => <Symbol name="ellipsis" size={floatingBarLayout.menuSymbol} color={plate.chrome.foreground} />}</PlateInk>
           </Animated.View>
           {squeeze && address.insecure ? (
             <Animated.View style={[styles.menuGlyph, styles.menuLock, lockFade]}>
-              <NotSecureLock testID="floatingBarMoreNotSecure" size={floatingBarLayout.siteIcon} color={ink.notSecure} />
+              <PlateInk>{(plate) => <NotSecureLock testID="floatingBarMoreNotSecure" size={floatingBarLayout.siteIcon} color={plate.chrome.notSecure} />}</PlateInk>
             </Animated.View>
           ) : null}
         </PressInPlace>
@@ -339,10 +338,10 @@ export function FloatingBar({ tab, preview = null, standsIn = false, privateLook
           <PullGhost style={squeeze ? styles.ghostEnd : styles.ghostRow}>
             {squeeze ? (
               <View testID="floatingBarSearchGhost" style={styles.ghostSlot}>
-                <SearchTabsGlyph dark={dark} />
+                <SearchTabsGlyph />
               </View>
             ) : (
-              <SearchTabsGlyphs dark={dark} />
+              <SearchTabsGlyphs />
             )}
           </PullGhost>
         )}
@@ -459,14 +458,14 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
               <Animated.View collapsable={false} style={foldGlyphs}>
                 <PressedGlyph>
                   <Animated.View testID={`${testID}Glyphs`} pointerEvents="none" style={glyphs}>
-                    <TabStack tabs={order.slice(-2)} roles={roles} />
+                    <PlateInk>{(plate) => <TabStack tabs={order.slice(-2)} roles={plate.roles} />}</PlateInk>
                   </Animated.View>
                 </PressedGlyph>
               </Animated.View>
             </PullGlyphs>
             {ghost ? (
               <PullGhost style={styles.ghost}>
-                <IncognitoGlyph incognito={tab.isPrivate} dark={dark} />
+                <IncognitoGlyph incognito={tab.isPrivate} />
               </PullGhost>
             ) : null}
           </ChromeSurface>
@@ -479,7 +478,6 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
 }
 
 export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, fold = null, ghost = false, swipe = null, hidden = false, onPlus }: ButtonProps & { swipe?: SwipeAddresses | null; hidden?: boolean; onPlus: () => void }) {
-  const ink = dark ? chromeInk.dark : chromeInk.light;
   const foldGlyphs = useFoldGlyphs(fold);
   const plusNow = useRef(onPlus);
   plusNow.current = onPlus;
@@ -529,14 +527,14 @@ export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, fold = nu
           <Animated.View collapsable={false} style={foldGlyphs}>
             <PressedGlyph>
               <Animated.View testID={`${testID}Glyphs`} pointerEvents="none" style={glyphs}>
-                <BarPlusGlyph testID={`${testID}Glyph`} color={ink.foreground} />
+                <PlateInk>{(plate) => <BarPlusGlyph testID={`${testID}Glyph`} color={plate.chrome.foreground} />}</PlateInk>
               </Animated.View>
             </PressedGlyph>
           </Animated.View>
         </PullGlyphs>
         {ghost ? (
           <PullGhost style={styles.ghost}>
-            <PlusGlyph dark={dark} />
+            <PlusGlyph />
           </PullGhost>
         ) : null}
       </ChromeSurface>

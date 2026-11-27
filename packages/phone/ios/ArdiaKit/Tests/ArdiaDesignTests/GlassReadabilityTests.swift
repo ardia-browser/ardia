@@ -91,6 +91,46 @@ struct GlassReadabilityTests {
     }
   }
 
+  @Test func `system materials keep 4.5 to 1 over the worst page, with their veil and nothing from the material`() throws {
+    let looks = [ProfileLook.plum, ProfileLook(colorName: "#F4D7E0"), ProfileLook(colorName: "#4A1942"), ProfileLook(preset: .neutral), ProfileLook.incognito]
+    var veils: [(name: String, veil: GlassInk, dark: Bool)] = []
+    for look in looks {
+      for variant in [LookFrost.Variant.bar, .sheet, .thin] {
+        for dark in [true, false] {
+          let veil = try #require(LookFrost.veil(for: variant, look: look, dark: dark))
+          veils.append(("\(variant) \(look.surfaceInk(dark: dark)) dark \(dark)", veil, dark || look == .incognito))
+        }
+      }
+      #expect(LookFrost.veil(for: .glass, look: look, dark: true) == nil)
+    }
+    let panels = [(GlassInk(hex: 0xFFFFFF, alpha: 0.62), false), (GlassInk(red: 30 / 255, green: 30 / 255, blue: 32 / 255, alpha: 0.6), true), (GlassInk(red: 14 / 255, green: 14 / 255, blue: 16 / 255, alpha: 0.86), true)]
+    for (panel, dark) in panels {
+      veils.append(("search panel \(panel)", LiquidGlassRules.materialVeil(tint: panel, dark: dark), dark))
+    }
+    for dark in [true, false] {
+      veils.append(("summary dark \(dark)", LiquidGlassRules.materialVeil(dark: dark), dark))
+    }
+    for (name, veil, dark) in veils {
+      for backdrop in [0.0, 0.5, 1.0] {
+        let seen = [veil.red, veil.green, veil.blue].map { $0 * veil.alpha + backdrop * (1 - veil.alpha) }
+        #expect(Self.reads(seen, dark: dark) >= 4.5, "\(name), backdrop \(backdrop)")
+      }
+    }
+  }
+
+  @Test func `a material's veil keeps the look's own tint and only adds what is missing`() throws {
+    for look in [ProfileLook.plum, ProfileLook(colorName: "#F4D7E0"), ProfileLook(colorName: "#4A1942")] {
+      for dark in [true, false] {
+        let tint = look.surfaceInk(dark: dark, alpha: 0.8)
+        let veil = try #require(LookFrost.veil(for: .sheet, look: look, dark: dark))
+        #expect(veil.alpha >= tint.alpha)
+        #expect(veil.red == tint.red && veil.green == tint.green && veil.blue == tint.blue, "\(look) dark \(dark)")
+      }
+    }
+    let readable = GlassInk(hex: 0x101012, alpha: 0.95)
+    #expect(LiquidGlassRules.materialVeil(tint: readable, dark: true) == readable)
+  }
+
   @Test func `every frame of the crossfade between lens and clear glass stays readable`() throws {
     guard let lens = try Self.lens(over: [255, 255, 255, 255], dark: true) else { return }
     let veil = LiquidGlassRules.readableVeil(GlassFrostStyle.glass.clear(dark: true), dark: true)

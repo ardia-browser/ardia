@@ -15,7 +15,7 @@ import { selectProfile } from "../../state/sync/actions";
 import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import type { SyncedProfile } from "../../state/sync/store";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { AppIcon, browseLayout, CustomLookBackdrop, DEFAULT_PROFILE_COLOR, font, isSymbolName, PROFILE_PRESETS, rolesFor, spring, startInk, startLayout, Symbol, SystemGlyph, tabsCurve, useProfileLook, useReduceMotion, type SymbolName } from "../ui";
+import { AppIcon, browseLayout, CustomLookBackdrop, DEFAULT_PROFILE_COLOR, font, isSymbolName, PROFILE_PRESETS, spring, startInk, startLayout, Symbol, SystemGlyph, tabsCurve, useProfileLook, useReduceMotion, useSurfaceInk, type SymbolName } from "../ui";
 import { startGradient, startLogo } from "./startLook";
 
 export type StartGeometry = { width: number; height: number; safeSide: number; barCenterY: number };
@@ -189,8 +189,8 @@ export function StartMark({ incognito }: { incognito: boolean }) {
   );
 }
 
-export function SpaceTitle({ space: profile, dark, showsChevron }: { space: SyncedProfile; dark: boolean; showsChevron: boolean }) {
-  const roles = rolesFor(dark);
+export function SpaceTitle({ space: profile, showsChevron }: { space: SyncedProfile; showsChevron: boolean }) {
+  const { roles, dark } = useSurfaceInk();
   return (
     <View style={styles.title}>
       <SpaceGlyph space={profile} dark={dark} />

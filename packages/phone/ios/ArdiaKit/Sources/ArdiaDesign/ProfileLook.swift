@@ -233,6 +233,11 @@ public struct ProfileLook: Equatable, Hashable, Sendable {
 
   public var surfaceLow: Color { surface(at: 1) }
 
+  public func surfaceInk(dark: Bool, alpha: Double = 1) -> GlassInk {
+    let stop = backdropStops(dark: dark, themed: false)[0]
+    return GlassInk(red: stop.red, green: stop.green, blue: stop.blue, alpha: alpha)
+  }
+
   private func surface(at index: Int) -> Color {
     Color.adaptive(light: backdropStops(dark: false, themed: false)[index].color, dark: backdropStops(dark: true, themed: false)[index].color)
   }

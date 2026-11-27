@@ -23,7 +23,7 @@ import { closeLibrary, useLibrary } from "./state/library/store";
 import { SettingsView } from "./components/settings/SettingsView";
 import { SpacesView } from "./components/sync/SpacesView";
 import { ToastHost } from "./components/toasts/ToastHost";
-import { DesignProvider, followDesign, tabsMotion, useDesign, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onDrawnMenuActionChosen, onDrawnMenuOpened, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
+import { DesignProvider, followDesign, tabsMotion, useDesign, usePageUnderBars, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onDrawnMenuActionChosen, onDrawnMenuOpened, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
 import { useLook } from "./state/sync/hooks";
 import { startSettingsSources } from "./state/settings/actions";
 import { startSync } from "./state/sync/actions";
@@ -35,7 +35,7 @@ import { useOnboarding } from "./state/onboarding/hooks";
 import { bootApp, useBoot } from "./state/app/boot";
 import { startLinks } from "./state/links/links";
 import { useBaseSystemBars, useSystemBars } from "./state/app/systemBars";
-import { useSearchFromDockedMenu, useSearchOpen } from "./state/search/hooks";
+import { useSearchFromDockedMenu, useSearchOpen, useSearchOrigin } from "./state/search/hooks";
 import { useLeavingTab, useOpeningTab, useSheet, useSurface } from "./state/browse/hooks";
 import { appBecameActive, appWillResignActive, closeArchive, deckPullInFlight, goBackToStartIfEmpty, keepFrontPictureCurrent, startBrowser, type Surface } from "./state/browse/store";
 import { refreshHiddenDeck, resizeRoot } from "./state/browse/deckHold";
@@ -52,7 +52,9 @@ import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanima
 import { closeSettings } from "./state/settings/nav";
 import { applyLaunchSettings, runLaunchScenario } from "./state/app/launch";
 import { frontSheet } from "./state/settings/settingsRules";
-import { inkLayer, lightStatusIcons } from "./lib/statusInk";
+import { inkLayer, lightStatusIcons, underStatusBar } from "./lib/statusInk";
+import { usePageTopTone } from "./state/browse/hooks";
+import { tabsInk } from "./components/ui/tokens";
 import { whenIdle } from "./lib/whenIdle";
 import { countUsage, reportLaunch, startTelemetry } from "./state/telemetry/telemetry";
 import { useIncognito, useShownTabId } from "./state/tabs/hooks";
@@ -147,6 +149,15 @@ onMaterialBackSwiped(() => {
   if (!useTabs.getState().incognito) countUsage("material_back_swiped");
 });
 
+function useUnderStatusBar(surface: "start" | "deck" | "browsing", tabId: string | null, deck: string, incognito: boolean): string {
+  const theme = useTheme();
+  const stored = useTabs((s) => (tabId ? ((s.open.find((t) => t.id === tabId) ?? s.privates.find((t) => t.id === tabId))?.themeColorHex ?? null) : null));
+  const pageTop = usePageTopTone(tabId, stored);
+  const blankPage = usePageUnderBars() ? theme.pageSurface : theme.canvas;
+  const start = incognito ? tabsInk.incognitoBackdrop[0] : (theme.start.colors[0] ?? theme.canvas);
+  return underStatusBar({ surface, pageTop, blankPage, start, deck });
+}
+
 export function Surfaces() {
   const surface = useSurface();
   const sheet = useSheet();
@@ -181,7 +192,10 @@ export function Surfaces() {
   const incognitoScheme = useMaterialTheme(true).scheme;
   const behind = material && incognito ? incognitoScheme.surface : theme.backdrop[0];
   const settingsFullScreen = material && front === "settings";
-  const lightIcons = settingsFullScreen && layer === "sheet" ? theme.dark : lightStatusIcons(layer, { cover: behind, surface: theme.canvas, deck: behind, incognito: incognito && !libraryCovers });
+  const under = useUnderStatusBar(surface, tabId, behind, incognito);
+  const searchOrigin = useSearchOrigin();
+  const searchDim = searching && searchOrigin === "page" && !material ? theme.trayDim : null;
+  const lightIcons = settingsFullScreen && layer === "sheet" ? theme.dark : lightStatusIcons(layer, { cover: behind, under, deck: behind, searchDim, incognito: incognito && !libraryCovers });
   useEffect(goBackToStartIfEmpty, [tabId, surface]);
   const duo = useScreenLayout((s) => s.layout.name === "wide" || s.layout.name === "split");
   const deckMounted = useDeckStandby(surface, surface === "browsing" && tabId !== null && opening === null && leaving === null && !searching && !voice && !onboarding && front === null, tabId);

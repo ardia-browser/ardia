@@ -4225,6 +4225,8 @@ button's touch-and-hold menu, the search panel's eyes, a search row's touch and 
 - The Incognito switch then sits in the header, a 44-point circle beside the `···`, where main's SwiftUI deck has its
   Incognito pill. Its tap, its hint and its touch and hold (Close Incognito Tabs) are unchanged, and the deck's
   entrance takes an early touch on either as before (`DeckHitTarget` `privacy`, and `sheet` for Spaces).
+  On iPhone the hold belongs to the native menu, so letting go no longer also flips the switch underneath it
+  (the switch now swallows its own long press, as the `+` does; seen on the simulator at f2b6902, and on main too).
 - With sync off there are no spaces to show, and the deck is as before: the switch is the bottom-left button. Spaces
   stays in the `···` menu. The closed Duo takes the iPhone's arrangement in its bar row; the open Duo keeps the switch
   in its strip's middle slot, and the page's Tabs button turns into whichever glyph the deck puts there. One rule

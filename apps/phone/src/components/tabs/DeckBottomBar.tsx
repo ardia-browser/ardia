@@ -76,13 +76,15 @@ export function IncognitoSwitchMenu({ incognito, dark, privateCount, onCloseInco
   return (
     <DeckHitTarget control="privacy" live={hits} originY={originY} style={size}>
       <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} style={size}>
-        {({ onLongPress }) => <IncognitoSwitch incognito={incognito} dark={dark} diameter={diameter} underlay={underlay} onLongPress={switchMenuShown ? onLongPress : undefined} {...fade} />}
+        {({ onLongPress }) => <IncognitoSwitch incognito={incognito} dark={dark} diameter={diameter} underlay={underlay} onLongPress={switchMenuShown ? (onLongPress ?? holdOwnedByMenu) : undefined} {...fade} />}
       </MenuTrigger>
     </DeckHitTarget>
   );
 }
 
 const switchIncognitoSide = () => switchDeckIncognito();
+
+const holdOwnedByMenu = () => undefined;
 
 const LIVE_KEYBOARD = Platform.OS === "ios";
 

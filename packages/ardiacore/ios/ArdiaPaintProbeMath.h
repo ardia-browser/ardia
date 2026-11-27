@@ -66,6 +66,26 @@ inline double EarliestHold(double a, double b) {
   return a < b ? a : b;
 }
 
+inline double EarliestHold(double a, double b, double c) { return EarliestHold(EarliestHold(a, b), c); }
+
+constexpr double kInvisibleAlpha = 0.01;
+
+inline bool Invisible(bool hidden, double alpha, double layerOpacity) {
+  return hidden || alpha <= kInvisibleAlpha || layerOpacity <= kInvisibleAlpha;
+}
+
+struct StandInLayer {
+  bool attached = false;
+  bool hidden = false;
+  double alpha = 1;
+  bool abovePage = false;
+  bool pageShown = false;
+};
+
+inline bool StandInShows(const StandInLayer &layer) {
+  return layer.attached && !layer.hidden && layer.alpha > kInvisibleAlpha && (layer.abovePage || !layer.pageShown);
+}
+
 struct Tally {
   unsigned views = 0;
   unsigned unpainted = 0;
@@ -93,6 +113,24 @@ struct Episode {
     sent = true;
     return true;
   }
+};
+
+struct FollowUp {
+  unsigned long generation = 0;
+  bool pending = false;
+
+  unsigned long Hold() {
+    pending = true;
+    return ++generation;
+  }
+
+  bool Take(unsigned long due) {
+    if (!pending || due != generation) return false;
+    pending = false;
+    return true;
+  }
+
+  void Drop() { pending = false; }
 };
 
 struct StackStep {

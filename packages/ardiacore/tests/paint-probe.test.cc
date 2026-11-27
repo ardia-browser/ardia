@@ -143,6 +143,57 @@ int main() {
   CHECK(!DrawnAbove(StackPath{}, chromium));
   CHECK(!DrawnAbove(StackPath{{0, 2}}, chromium));
 
+  CHECK(EarliestHold(0, 0, 0) == 0);
+  CHECK(EarliestHold(0, 0, 4) == 4);
+  CHECK(EarliestHold(5, 0, 4) == 4);
+  CHECK(EarliestHold(3, 7, 4) == 3);
+
+  CHECK(Invisible(true, 1, 1));
+  CHECK(Invisible(false, 0, 1));
+  CHECK(Invisible(false, 1, 0));
+  CHECK(!Invisible(false, 1, 1));
+  CHECK(!Invisible(false, 0.5, 0.5));
+
+  StandInLayer coveringLayer{true, false, 1, true, true};
+  CHECK(StandInShows(coveringLayer));
+  StandInLayer tuckedUnder{true, false, 1, false, true};
+  CHECK(!StandInShows(tuckedUnder));
+  StandInLayer pageGone{true, false, 1, false, false};
+  CHECK(StandInShows(pageGone));
+  StandInLayer transparentLayer{true, false, 0, true, true};
+  CHECK(!StandInShows(transparentLayer));
+  StandInLayer hiddenLayer{true, true, 1, true, true};
+  CHECK(!StandInShows(hiddenLayer));
+  CHECK(!StandInShows(StandInLayer{}));
+
+  View tucked;
+  tucked.standInLent = true;
+  tucked.awaitingFrame = true;
+  tucked.standInShowing = StandInShows(tuckedUnder);
+  CHECK(ReasonsOf(tucked) == (kStandInLent | kFrameHoldAwaiting));
+  CHECK((ReasonsOf(tucked) & kBlockingReasons) != 0);
+  Tally tuckedTally;
+  tuckedTally.Add(ReasonsOf(tucked));
+  CHECK(tuckedTally.unpainted == 1);
+
+  FollowUp followUp;
+  const unsigned long first = followUp.Hold();
+  CHECK(followUp.pending);
+  CHECK(followUp.Take(first));
+  CHECK(!followUp.Take(first));
+  const unsigned long interrupted = followUp.Hold();
+  Episode stillBlankEpisode;
+  CHECK(stillBlankEpisode.ShouldSend(stillBlank));
+  CHECK(!stillBlankEpisode.ShouldSend(stillBlank));
+  CHECK(followUp.Take(interrupted));
+  const unsigned long replaced = followUp.Hold();
+  const unsigned long newer = followUp.Hold();
+  CHECK(!followUp.Take(replaced));
+  CHECK(followUp.Take(newer));
+  const unsigned long closed = followUp.Hold();
+  followUp.Drop();
+  CHECK(!followUp.Take(closed));
+
   if (failures) return 1;
   std::printf("paint-probe: ok\n");
   return 0;

@@ -23,15 +23,27 @@
   state.awaitingFrame = _frameHold.awaiting;
   state.standInLent = _standIn.lentTo || _standIn.tab || _standIn.page;
   state.standInLeaving = _standIn.leaving;
-  state.standInShowing = lent && lent.superview == self && !lent.hidden;
+  ardia_paint_probe::StandInLayer layer;
+  layer.attached = lent && lent.superview == self;
+  layer.hidden = lent.isHiddenOrHasHiddenAncestor;
+  layer.alpha = MIN(lent.alphaValue, lent.layer ? lent.layer.opacity : 1);
+  layer.pageShown = page && page != lent && page.superview == self && !page.isHiddenOrHasHiddenAncestor &&
+                    !ardia_paint_probe::Invisible(NO, page.alphaValue, page.layer ? page.layer.opacity : 1);
+  if (layer.attached && layer.pageShown) {
+    NSArray<NSView *> *order = self.subviews;
+    layer.abovePage = ardia_paint_probe::DrawnAbove({{lent.layer.zPosition, [order indexOfObjectIdenticalTo:lent]}},
+                                                    {{page.layer.zPosition, [order indexOfObjectIdenticalTo:page]}});
+  }
+  state.standInShowing = ardia_paint_probe::StandInShows(layer);
   state.veilUp = [ArdiaEarlyWindow veils:_tab];
   return ardia_paint_probe::ReasonsOf(state);
 }
 
 - (unsigned)paintProbeHeldMs {
-  const BOOL standIn = _standIn.lentTo || _standIn.tab || _standIn.page;
-  const CFTimeInterval since =
-      ardia_paint_probe::EarliestHold(_frameHold.awaiting ? _frameHold.tookOverAt : 0, standIn ? _standIn.lentAt : 0);
+  const BOOL holding = _standIn.tab || _standIn.page;
+  const BOOL lending = _standIn.lentTo != nil;
+  const CFTimeInterval since = ardia_paint_probe::EarliestHold(_frameHold.awaiting ? _frameHold.tookOverAt : 0,
+                                                               holding ? _standIn.heldSince : 0, lending ? _standIn.lentSince : 0);
   return ardia_paint_probe::HeldMs(CACurrentMediaTime(), since);
 }
 
@@ -40,6 +52,7 @@
 @interface ArdiaPaintWatch : NSObject {
  @public
   ardia_paint_probe::Episode _episode;
+  ardia_paint_probe::FollowUp _followUp;
   NSUInteger _generation;
   NSDictionary<NSString *, id> *_held;
   ArdiaConsentStamp *_heldStamp;
@@ -115,7 +128,7 @@ void CollectShownTabs(NSView *parent, const ardia_paint_probe::StackPath &above,
   for (NSView *child in parent.subviews) {
     ardia_paint_probe::StackPath path = above;
     path.push_back({child.layer.zPosition, index++});
-    if (child.hidden) continue;
+    if (ardia_paint_probe::Invisible(child.hidden, child.alphaValue, child.layer ? child.layer.opacity : 1)) continue;
     if (webKitTab && [child isKindOfClass:webKitTab]) webKit.push_back({child, path});
     else if ([child isKindOfClass:ArdiaWebView.class]) {
       if (((ArdiaWebView *)child).visible) chromium.push_back({child, path});
@@ -143,6 +156,7 @@ void SendHeldPaintRecord(ArdiaPaintWatch *watch, NSDictionary<NSString *, id> *f
   ArdiaConsentStamp *stamp = watch->_heldStamp;
   watch->_held = nil;
   watch->_heldStamp = nil;
+  watch->_followUp.Drop();
   if (!held || !stamp) return;
   NSMutableDictionary<NSString *, id> *record = [held mutableCopy];
   if (followUp) [record addEntriesFromDictionary:followUp];
@@ -187,14 +201,15 @@ void CheckPainting(NSWindow *window, NSString *trigger, ArdiaConsentStamp *stamp
   record[@"webkitViews"] = @(webKitShown);
   record[@"webkitOnTop"] = @(webKitOnTop);
   gLastPaintRecord = DescribePaint(record);
+  SendHeldPaintRecord(watch, nil);
   watch->_held = record;
   watch->_heldStamp = stamp;
-  const NSUInteger generation = watch->_generation;
+  const unsigned long due = watch->_followUp.Hold();
   __weak NSWindow *weakWindow = window;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kPaintFollowUpAfter * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
     NSWindow *checked = weakWindow;
     ArdiaPaintWatch *current = checked ? [PaintWatches() objectForKey:checked] : nil;
-    if (current && current->_generation == generation) CheckStillUnpainted(checked);
+    if (current && current->_followUp.Take(due)) CheckStillUnpainted(checked);
   });
 }
 
@@ -205,7 +220,6 @@ void SchedulePaintCheck(NSWindow *window, NSString *trigger, NSTimeInterval afte
     watch = [[ArdiaPaintWatch alloc] init];
     [PaintWatches() setObject:watch forKey:window];
   }
-  SendHeldPaintRecord(watch, nil);
   const NSUInteger generation = ++watch->_generation;
   ArdiaConsentStamp *stamp = ArdiaConsentStamp.begin;
   __weak NSWindow *weakWindow = window;

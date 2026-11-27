@@ -31,6 +31,7 @@ type Props = {
   incognito: boolean;
   privateCount?: number;
   onCloseIncognito?: () => void;
+  onCloseAll?: () => void;
   onQuery: (needle: string) => void;
   menusShown?: boolean;
   onMenu?: (open: boolean) => void;
@@ -185,7 +186,7 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, rest
   );
 }
 
-export function DeckBottomBar({ searchOpener, shown, barCenterY, deckHeight, width, layout, incognito, privateCount = 0, onCloseIncognito, onQuery, menusShown = true, onMenu, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
+export function DeckBottomBar({ searchOpener, shown, barCenterY, deckHeight, width, layout, incognito, privateCount = 0, onCloseIncognito, onCloseAll, onQuery, menusShown = true, onMenu, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
   const fade = { glassShown, glassShownMs, glyphFade };
   const roles = useTheme();
   const dark = roles.dark || incognito;
@@ -264,7 +265,7 @@ export function DeckBottomBar({ searchOpener, shown, barCenterY, deckHeight, wid
   const circleFade = useAnimatedStyle(() => ({ opacity: 1 - Math.min(Math.max(growth.value, 0), 1) }));
   const plus = (
     <DeckHitTarget control="plus" live={rowHits} originY={rowTop} style={styles.circleHit}>
-      <PlusMenuButton width={controlSize.bar} label={incognito ? actionWords.newIncognitoTab : actionWords.newTab} testID="deckBarPlus" dark={dark} incognito={incognito} place={plusPlace} menusShown={menusShown} onMenu={onMenu} {...fade} />
+      <PlusMenuButton width={controlSize.bar} label={incognito ? actionWords.newIncognitoTab : actionWords.newTab} testID="deckBarPlus" dark={dark} incognito={incognito} place={plusPlace} menusShown={menusShown} onMenu={onMenu} onCloseAll={onCloseAll} {...fade} />
     </DeckHitTarget>
   );
   const measure = () =>

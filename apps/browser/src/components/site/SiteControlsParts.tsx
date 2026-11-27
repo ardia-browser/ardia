@@ -237,7 +237,7 @@ export function ChipButton({
         {({ pressed }) => (
           <Tile shape="tile" quiet={quiet} height={SITE_PANEL.footerControl} hovered={!!onPress && hovered} pressed={pressed} open={open} style={[CHIP, scaleStyle]}>
             <Symbol name={icon} size={quiet ? 12 : 11} weight="medium" color={color ?? theme.icon} style={quiet ? QUIET_GLYPH : CHIP_GLYPH} />
-            <Text lines={1} size={quiet ? "body" : "small"} weight="medium" color={color}>
+            <Text lines={1} size={quiet ? "body" : "small"} weight="medium" color={color} ardiaCentersCapitals>
               {title}
             </Text>
           </Tile>

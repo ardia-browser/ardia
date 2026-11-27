@@ -171,7 +171,10 @@ function animate(value: AnimatedValue | AnimatedValueXY, toValue: number | { x: 
 
 type Readable = number | Pick<AnimatedValue, "__getValue">;
 const read = (node: Readable) => (typeof node === "number" ? node : node.__getValue());
-const combined = (get: () => number) => ({ __getValue: get });
+const combined = (get: () => number) => {
+  const node = { __getValue: get, interpolate: (config: { inputRange: number[]; outputRange: number[] }) => ({ config, source: node }) };
+  return node;
+};
 
 export const PanResponder = { create: () => ({ panHandlers: {} }) };
 
@@ -194,7 +197,7 @@ export const LayoutAnimation = {
   configureNext: (config: unknown) => void layoutAnimations.push(config),
 };
 
-export const findNodeHandle = () => null;
+export const findNodeHandle = (node?: { _nativeTag?: number } | null) => node?._nativeTag ?? null;
 
 export const unstable_batchedUpdates = (update: () => void) => update();
 

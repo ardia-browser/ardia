@@ -33,6 +33,8 @@ NSDictionary *ProbeFrame(NSWindow *window, ArdiaWindowFullScreen *state, CFTimeI
     @"size" : @[ @(size.width), @(size.height) ],
     @"cover" : @(state.covered),
     @"covers" : @(state.covers),
+    @"stretch" : @([ArdiaPageCover most:^double(ArdiaPageCover *c) { return c.stretch; } ofCoversOver:state.probedTab in:content]),
+    @"crop" : @([ArdiaPageCover most:^double(ArdiaPageCover *c) { return c.crop; } ofCoversOver:state.probedTab in:content]),
     @"transitioning" : @(state.transitioning),
   } mutableCopy];
   if (!NSEqualSizes(before, NSZeroSize) && !NSEqualSizes(before, size)) {

@@ -31,6 +31,7 @@ const { parseIntent, INTENT_SPECS } = await import("./state/plugins/stateIntents
 const { pluginStateUrl, redactedTabs } = await import("./state/plugins/pluginEventRedaction.ts");
 const { copyLinkFromPageMenu } = await import("./state/site/pageLinkCopy.ts");
 const { extensionSitePattern } = await import("./state/extensions/sitePatterns.ts");
+const { extensionNewTabPage } = await import("./state/extensions/newTabPage.ts");
 const { cleanUrl } = await import("@ardia/core");
 const { drainPassages } = await import("./state/site/translateDrain.ts");
 const { translatePack } = await import("./state/site/translate.ts");
@@ -1014,4 +1015,180 @@ test("T3: whatever the page hands over as passages, the model only gets numbered
     assert.equal(untouched.nodeValue, "Nicht angeboten", id);
     for (const node of texts) assert.equal(typeof node.nodeValue, "string", id);
   }
+});
+
+test("N1: whatever an extension's manifest names as its New Tab page, a real new tab opens only a page inside that extension", async () => {
+  const { useExtensions } = await import("./state/extensions/store.ts");
+  const { engineProfile } = await import("./state/browser/model.ts");
+  const id = "imfeikbeimbfpmgfkkmjekabdehiiajc";
+  const prefix = `chrome-extension://${id}/`;
+  S().updateSettings({ newTabUrl: "", newTabOpens: "page", minimalismMode: false });
+  const w = S().createWindow({ url: "https://ardia-fixture.invalid/" });
+  const profile = engineProfile(S(), S().windows[w].profileId);
+  const openWith = (ext) => {
+    useExtensions.setState({ lists: { [profile]: [ext] } });
+    const tabId = S().newTab(w, { newTabCommand: true });
+    const url = S().tabs[tabId]?.url ?? "";
+    S().closeTab(tabId);
+    return url;
+  };
+  const corpus = [...HOSTILE_VALUES, ...HOSTILE_STRINGS.map(({ id: name, value }) => ({ id: `nested.${name}`, value: `app/${value}/page.html` }))];
+  let opened = 0;
+  for (const { id: name, value } of corpus) {
+    const url = openWith({ id, name: "Speed Dial", enabled: true, newTabPage: value });
+    if (!url) continue;
+    opened++;
+    assert.ok(url.startsWith(prefix) && new URL(url).host === id && new URL(url).href.startsWith(prefix), `${name}: ${url}`);
+    assert.doesNotMatch(url, /[\s\\\u0000-\u001f\u2028\u2029]/, name);
+  }
+  for (const { id: name, value } of HOSTILE_VALUES) assert.equal(openWith({ id: value, name: "Speed Dial", enabled: true, newTabPage: "dial.html" }), "", `hostile id ${name}`);
+  assert.equal(openWith({ id, name: "Speed Dial", enabled: true, newTabPage: "dial.html" }), `${prefix}dial.html`, "the positive control opens through the same path");
+  assert.ok(opened > 0, "some hostile names are plain file names inside the extension and open, so the sink check ran");
+  useExtensions.setState({ lists: {} });
+});
+
+test("a full-screen transition event with any hostile field is dropped before it reaches the counters, and a well-formed one still counts", async () => {
+  const client = await import("./state/telemetry/client.ts");
+  const placement = await import("./state/telemetry/windowPlacementCounts.ts");
+  const { fullScreenTransitionOf } = await import("../../../packages/ardiacore/src/pageEvents.ts");
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const epoch = client.consentEpoch();
+  const counts = () => {
+    const { page_full_screen_starts, page_full_screen_slow_starts } = placement.takeWindowPlacementCounts();
+    return [page_full_screen_starts, page_full_screen_slow_starts];
+  };
+  counts();
+  const expected = [0, 0];
+  for (const { value } of HOSTILE_VALUES) {
+    for (const payload of [value, { entering: value, waitedMs: 900, epoch }, { entering: true, waitedMs: value, epoch }, { entering: true, waitedMs: 900, epoch: value }, [value]]) {
+      const decoded = fullScreenTransitionOf(payload);
+      assert.ok(decoded === null || (decoded.entering === payload.entering && decoded.waitedMs === payload.waitedMs && decoded.epoch === payload.epoch), show(payload));
+      assert.ok(decoded === null || (typeof decoded.entering === "boolean" && Number.isFinite(decoded.waitedMs) && decoded.waitedMs >= 0 && typeof decoded.epoch === "string"), show(payload));
+      if (decoded?.entering && decoded.epoch === epoch) {
+        expected[0]++;
+        if (decoded.waitedMs >= placement.SLOW_PAGE_FULL_SCREEN_START_MS) expected[1]++;
+      }
+      placement.notePageFullScreenTransition(decoded);
+    }
+  }
+  assert.deepEqual(counts(), expected);
+  for (const bad of [{ entering: 1, waitedMs: 900, epoch }, { entering: "true", waitedMs: 900, epoch }, { entering: true, waitedMs: -1, epoch }, { entering: true, waitedMs: Infinity, epoch }, { entering: true, waitedMs: "900", epoch }, { entering: true, waitedMs: 900 }]) {
+    assert.equal(fullScreenTransitionOf(bad), null, show(bad));
+    placement.notePageFullScreenTransition(fullScreenTransitionOf(bad));
+  }
+  assert.deepEqual(counts(), [0, 0]);
+  placement.notePageFullScreenTransition(fullScreenTransitionOf({ entering: true, waitedMs: 900, epoch }));
+  assert.deepEqual(counts(), [1, 1]);
+  client.setSharing(false, "settings");
+});
+
+test("a page's autoplayBlocked count and new-tab link reach native sinks only as a count of 1 to 20 and an http(s) address", (t) => {
+  const { spawnSync } = process.getBuiltinModule("node:child_process");
+  const { mkdtempSync, rmSync, writeFileSync } = process.getBuiltinModule("node:fs");
+  const { tmpdir } = process.getBuiltinModule("node:os");
+  const { join } = process.getBuiltinModule("node:path");
+  if (process.platform !== "darwin") return t.skip("the receivers are Objective-C++");
+  const ios = new URL("../../../packages/ardiacore/ios/", import.meta.url);
+  const slice = (file, head) => {
+    const source = readFileSync(new URL(file, ios), "utf8");
+    const from = source.indexOf(head);
+    const to = source.indexOf("\n}\n", from);
+    assert.ok(from >= 0 && to > from, `${file} still defines ${head}`);
+    return source.slice(from, to + 3);
+  };
+  const receiver = readFileSync(new URL("ArdiaWebView+PageMessages.mm", ios), "utf8");
+  assert.match(receiver, /const NSInteger count = AutoplayBlockedCount\(dict\[@"count"\]\);\n.*\n\s+if \(count > 0 && now - _autoplayBlockedAt >= 1\) \{/, "the receiver forwards only what AutoplayBlockedCount gives, once a second");
+  const tab = readFileSync(new URL("ArdiaWebView+Tab.mm", ios), "utf8");
+  assert.match(tab, /- \(void\)noteNewTabLink:\(NSString \*\)url blankWindow:\(BOOL\)blankWindow \{\n {2}if \(!IsWebAddress\(url\)\) return;/, "notes are kept only when IsWebAddress takes them");
+  assert.match(tab, /NSString \*url = IsWebAddress\(clicked\) && IsBlankAddress\(tab\.url\) \? clicked : tab\.url;/, "a note stands in only for a blank tab's address");
+  assert.match(tab, /if \(clicked && self\.opensNewTabLinksInPlace && \(\[clicked isEqualToString:tab\.url \?: @""\] \|\| IsBlankAddress\(tab\.url\)\)\) \{/, "Little Ardia closes and replaces a tab only when it is going to the noted link or still blank");
+  const scratch = mkdtempSync(join(tmpdir(), "ardia-receivers-"));
+  try {
+    const probe = join(scratch, "probe.mm");
+    writeFileSync(
+      probe,
+      `#import <Foundation/Foundation.h>
+#include <cmath>
+${slice("ArdiaWebView+PageMessages.mm", "static NSInteger AutoplayBlockedCount(id value) {")}
+${slice("ArdiaWebView+Tab.mm", "BOOL IsWebAddress(NSString *url) {")}
+${slice("ArdiaWebView+Tab.mm", "BOOL IsBlankAddress(NSString *url) {")}
+int main(int argc, char **argv) {
+  @autoreleasepool {
+    NSArray *messages = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:@(argv[1])] options:0 error:nil];
+    NSMutableArray *answers = [NSMutableArray array];
+    for (NSDictionary *message in messages) {
+      id url = message[@"url"];
+      NSString *text = [url isKindOfClass:NSString.class] ? url : nil;
+      [answers addObject:@{@"count" : @(AutoplayBlockedCount(message[@"count"])), @"web" : @(IsWebAddress(text)), @"blank" : @(IsBlankAddress(text))}];
+    }
+    NSData *json = [NSJSONSerialization dataWithJSONObject:answers options:0 error:nil];
+    fwrite(json.bytes, 1, json.length, stdout);
+  }
+  return 0;
+}
+`,
+    );
+    const binary = join(scratch, "probe");
+    const build = spawnSync("xcrun", ["clang++", "-std=c++20", "-fobjc-arc", "-w", "-framework", "Foundation", probe, "-o", binary], { encoding: "utf8" });
+    if (build.error?.code === "ENOENT") return t.skip("no clang here");
+    assert.equal(build.status, 0, build.stderr);
+    const controls = [
+      { count: 3, url: "https://ardia-fixture.invalid/landing?q=1" },
+      { count: 25, url: "http://ardia-fixture.invalid/" },
+      { count: 1.9, url: "about:blank" },
+      { count: 1e308, url: "" },
+    ];
+    const hostile = HOSTILE_VALUES.flatMap(({ value }) => [{ count: value, url: value }, { count: [value], url: [value] }, { count: { value }, url: `https://ardia-fixture.invalid/${typeof value === "string" ? value : ""}` }]);
+    const messages = [...controls, ...hostile];
+    const corpus = join(scratch, "messages.json");
+    writeFileSync(corpus, JSON.stringify(messages, (_key, value) => (typeof value === "string" && !value.isWellFormed() ? value.toWellFormed() : value)));
+    const run = spawnSync(binary, [corpus], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    assert.equal(run.status, 0, run.stderr);
+    const answers = JSON.parse(run.stdout);
+    assert.equal(answers.length, messages.length);
+    assert.deepEqual(answers.slice(0, 4), [
+      { count: 3, web: true, blank: false },
+      { count: 20, web: true, blank: false },
+      { count: 1, web: false, blank: true },
+      { count: 20, web: false, blank: true },
+    ]);
+    for (const [i, { count, web }] of answers.entries()) {
+      const message = messages[i];
+      const where = show(message);
+      assert.ok(Number.isInteger(count) && count >= 0 && count <= 20, `${where}: a count of 0 to 20`);
+      if (typeof message.count !== "number" || !(message.count >= 1)) assert.equal(count, 0, `${where}: anything but a number of at least 1 is dropped`);
+      if (web) {
+        assert.equal(typeof message.url, "string", where);
+        assert.match(message.url, /^https?:\/\//i, `${where}: only http(s)`);
+        assert.doesNotMatch(message.url, /[\s\u0000-\u001f\u007f-\u009f]/, `${where}: no whitespace or control character`);
+      }
+    }
+    for (const [name, scheme] of Object.entries(URL_SCHEMES)) {
+      const at = messages.findIndex((m) => m.url === scheme);
+      if (at >= 0) assert.equal(answers[at].web, false, `${name} is never a web address`);
+    }
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("a trustedInput message is only a same-origin stamp, and the age native hands back is taken only as 0 to 5000 ms", () => {
+  const receiver = readFileSync(new URL("../../../packages/ardiacore/ios/ArdiaWebView+PageMessages.mm", import.meta.url), "utf8");
+  assert.match(receiver, /\[kind isEqualToString:@"trustedInput"\] && !main\) \{\n {4}if \(\[VerifiedOrigin\(verifiedOrigin\) hasPrefix:@"http"\]\) \[self noteTrustedInputFrom:VerifiedOrigin\(verifiedOrigin\)\];\n/, "no payload is read, only the frame's verified origin");
+  assert.match(receiver, /if \(!main && sender\.length\)\n\s+if \(NSNumber \*age = \[\[ArdiaTabRegistry viewForTab:to\] trustedInputAgeMsForOrigin:sender\]\) config\[@"embedInputAgeMs"\] = age;/, "a frame hears only about its own origin");
+  const script = readFileSync(new URL("../../../packages/ardiacore/ios/page_script.js", import.meta.url), "utf8");
+  const lifespan = /const TRUSTED_INPUT_LIFESPAN_MS = (\d+);/.exec(script)?.[1];
+  const source = /const embedInputAge = (\(age\) => .*);\n/.exec(script)?.[1];
+  assert.ok(lifespan && source, "page_script.js defines embedInputAge");
+  const embedInputAge = new Function(`const TRUSTED_INPUT_LIFESPAN_MS = ${lifespan}; return ${source}`)();
+  assert.equal(embedInputAge(0), 0);
+  assert.equal(embedInputAge(4999), 4999);
+  for (const { id, value } of HOSTILE_VALUES) {
+    const age = embedInputAge(value);
+    if (age === null) continue;
+    assert.equal(typeof value, "number", id);
+    assert.ok(Number.isFinite(age) && age >= 0 && age < 5000, `${id}: ${show(value)}`);
+  }
+  for (const value of [5000, -1, NaN, Infinity, "10", [10], { valueOf: () => 10 }, true]) assert.equal(embedInputAge(value), null, show(value));
 });

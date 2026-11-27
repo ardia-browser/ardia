@@ -37,6 +37,10 @@ inline bool CanTransfer(bool offered, bool temporary, bool same_profile) {
   return offered && !temporary && same_profile;
 }
 
+inline bool ReleasedTabIsGone(bool has_binding, bool has_page) {
+  return !has_binding || !has_page;
+}
+
 inline std::string_view EventName(std::string_view topic) {
   for (const auto name : {"history.changed", "history.imported", "bookmarks.changed", "extensions.action", "extensions.sync", "downloads.changed", "downloads.removed"}) {
     if (topic == name) return name;

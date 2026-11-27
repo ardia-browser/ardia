@@ -129,7 +129,7 @@ freezes (`count()`), time frozen (`sum(freeze_ms)`), the most common thread and 
 three frames from Ardia's own images. Frames read as function names wherever the build's symbols are published; hover
 a place to see each name with its raw offset. The summary line says how many places are named. The names come from
 `sandbox.ardia_frame_symbols`, which the hourly frame-naming job fills (`docs/symbolication.md`). Errors names the native
-frames of the crashes it shows the same way, and each crash row says how many native frames were named. Hermes frames
+frames of the crashes it shows the same way, and each crash row says how many native frames were named. A browser crash that failed an engine check also lists, under **Task posted from:**, the frames of the code that queued the task it was running (`PostedTask` in `$exception_list`, up to 17), below the crash's own 40. Hermes frames
 stay raw.
 
 Android's Material You switch (Settings › General, off by default) is counted as `usage_counts.material_you_turned_on` and `material_you_turned_off`; `app_launched.material_colors` is `not_material` for launches with it off. The counts below are taken only with it on, except `find_closed_bar`.

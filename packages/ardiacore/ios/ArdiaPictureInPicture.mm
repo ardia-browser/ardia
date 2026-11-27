@@ -581,6 +581,10 @@ void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp) {
   return ActiveOnlyForPictureInPicture();
 }
 
++ (BOOL)userInAnotherApp {
+  return !NSApp.isActive || ActiveOnlyForPictureInPicture();
+}
+
 + (BOOL)activateForPictureInPictureReturn {
   return ActivateApp(@"Back to Tab (WebKit Picture in Picture)");
 }

@@ -4,12 +4,11 @@ import { Pressable } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { withAlpha } from "../../lib/color";
 import { copy } from "../../lib/platformCopy";
-import { actionWords, blockingWords, destinationWords } from "../../lib/sharedWords";
+import { actionWords, blockingWords } from "../../lib/sharedWords";
 import {
   canPrintPages,
   canSummarizePages,
   closeMenuSubpage,
-  closePageMenu,
   copyCurrentLink,
   editPageQuery,
   menuBack,
@@ -21,29 +20,23 @@ import {
   openSiteSettingsRoute,
   pinCurrentToMac,
   printCurrentPage,
-  resetZoom,
   sendCurrentTab,
   setBlockersOn,
-  setDesktopSite,
-  setNightShadeOn,
   shareCurrentPage,
   showFind,
   showReader,
-  zoomIn,
-  zoomOut,
   summarizeCurrentPage,
 } from "../../state/page/actions";
 import { menuSwitchHint, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
 import { useMenuTitle, useTitleFeedback } from "../../state/page/hooks";
 import type { MenuPage } from "../../state/page/store";
-import type { SettingsRoute } from "../../state/settings/nav";
-import { openLibrary, type LibrarySection } from "../../state/library/store";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { syncOffered } from "../../state/sync/offer";
 import { useTab } from "../../state/tabs/hooks";
 import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 import { MaterialSettingsSheetSurface } from "../settings/MaterialSettingsKit";
 import { AllowedSites, SiteSettingsGroups } from "../settings/SitePages";
+import { ThisSiteGroup } from "../settings/ThisSite";
 import { Favicon, iconRoles, MaterialIconButton, Symbol, Toggle, type MenuItem, type SymbolName } from "../ui";
 import { MATERIAL_STATE } from "../ui/materialRoles";
 import { useMaterialRipple } from "../ui/MaterialSurfaces";
@@ -57,12 +50,6 @@ const SEND_MENU_WIDTH = 250;
 const TITLE_IN = FadeIn.duration(materialDuration.short4);
 const TITLE_OUT = FadeOut.duration(materialDuration.short2);
 
-function openFromMenu(section: LibrarySection) {
-  closePageMenu();
-  openLibrary(section);
-}
-
-const openDirectSiteSettingsRoute = (route: SettingsRoute) => openSiteSettingsRoute(route, { direct: true });
 
 export function MaterialPageMenu({ tabId, model, page = "main", onTranslate }: { tabId: string; model: MenuModel; page?: MenuPage; onTranslate: () => void }) {
   if (page === "siteSettings") {
@@ -98,7 +85,8 @@ export function MaterialSiteSettingsHeader({ onBack }: { onBack: () => void }) {
 export function MaterialSiteSettingsContent() {
   return (
     <MaterialSettingsSheetSurface>
-      <SiteSettingsGroups openRoute={openDirectSiteSettingsRoute} />
+      <ThisSiteGroup />
+      <SiteSettingsGroups openRoute={openSiteSettingsRoute} />
       <AllowedSites />
     </MaterialSettingsSheetSurface>
   );
@@ -131,14 +119,6 @@ export function MaterialPageMenuItems({ tabId, model, onTranslate, onFind = show
           {canPrintPages() ? <ListRow icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
         </Group>
         <Group>
-          <ListRow icon="clockArrow" title={destinationWords.history} enabled onPress={() => openFromMenu("history")} />
-          <ListRow icon="folderFill" title={destinationWords.bookmarks} enabled onPress={() => openFromMenu("bookmarks")} />
-          <ListRow icon="arrowDownCircle" title={destinationWords.downloads} enabled onPress={() => openFromMenu("downloads")} />
-        </Group>
-        <Group>
-          {model.pageRows ? <SwitchRow which="nightShade" icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.siteSwitches} onChange={setNightShadeOn} /> : null}
-          {model.pageRows ? <ZoomRow model={model} large={large} /> : null}
-          {model.pageRows ? <SwitchRow which="desktopSite" icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
           {model.pageRows ? <ListRow icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
           {model.pageRows ? (
             <SwitchRow
@@ -324,43 +304,6 @@ function SwitchRow({ which, icon, title, value, enabled, supporting, onChange }:
   );
 }
 
-function ZoomRow({ model, large }: { model: MenuModel; large: boolean }) {
-  const { scheme } = useMaterialTheme();
-  const ripple = useMaterialRipple();
-  const controls = (
-    <View style={large ? styles.zoomBelow : styles.zoom}>
-      <IconButton icon="minus" label="Zoom Out" enabled={model.zoomOut} onPress={zoomOut} />
-      <Pressable
-        testID="materialZoomReset"
-        accessibilityRole="button"
-        accessibilityLabel="Reset Zoom"
-        accessibilityValue={{ text: model.zoomPercent }}
-        disabled={!model.isWebPage}
-        android_ripple={ripple}
-        onPress={resetZoom}
-        style={styles.zoomReset}
-      >
-        <Text style={[materialType.labelLarge, styles.digits, { color: scheme.onSurface }]}>{model.zoomPercent}</Text>
-      </Pressable>
-      <IconButton icon="plus" label="Zoom In" enabled={model.zoomIn} onPress={zoomIn} />
-    </View>
-  );
-  if (large)
-    return (
-      <View testID="menuZoom" style={styles.zoomStacked}>
-        <View style={styles.zoomHeading}>
-          <RowContent icon="textformatSize" title="Page Zoom" enabled={model.isWebPage} />
-        </View>
-        {controls}
-      </View>
-    );
-  return (
-    <View testID="menuZoom" style={styles.row}>
-      <RowContent icon="textformatSize" title="Page Zoom" enabled={model.isWebPage} trailing={controls} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   column: { paddingBottom: 16 },
   subpageHeader: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: materialSize.touchTarget, paddingLeft: 4, paddingRight: 16 },
@@ -376,9 +319,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 16, minHeight: materialSize.listItemOneLine, paddingLeft: 16, paddingRight: 16, paddingVertical: 8 },
   rowTwoLine: { minHeight: materialSize.listItemTwoLine },
   digits: { fontVariant: ["tabular-nums"] },
-  zoom: { flexDirection: "row", alignItems: "center", marginRight: -12 },
-  zoomStacked: { paddingHorizontal: 16, paddingVertical: 8, minHeight: materialSize.listItemTwoLine },
-  zoomHeading: { flexDirection: "row", alignItems: "center", gap: 16, minHeight: materialSize.touchTarget },
-  zoomBelow: { flexDirection: "row", alignItems: "center", marginLeft: materialSize.icon + 16 - 12 },
-  zoomReset: { minWidth: materialSize.touchTarget, paddingHorizontal: 4, height: materialSize.touchTarget, alignItems: "center", justifyContent: "center", borderRadius: materialShape.full, overflow: "hidden" },
 });

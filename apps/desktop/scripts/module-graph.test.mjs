@@ -155,7 +155,7 @@ test("production graph uses current Linux adapters and one canonical shared stat
   assert.ok(graph.get(`${desktop}shellEntry.tsx`).importedIds.includes(`${desktop}TrafficLights.tsx`), "Linux draws its own traffic lights when they are chosen");
   assert.ok(graph.get(`${desktop}TrafficLights.tsx`).importedIds.includes(`${desktop}captionControls.ts`), "the traffic lights close, minimize and maximize through the same adapters as the native buttons");
 
-  for (const [twin, suffix] of [["lib/platformFeatures", "linux"], ["lib/platformTerms", "linux"], ["lib/platformChrome", "desktop"], ["state/commands/comboWords", "desktop"], ["state/tabs/engineKeptCodes", "desktop"], ["lib/pageStacking", "desktop"]]) {
+  for (const [twin, suffix] of [["lib/platformFeatures", "linux"], ["lib/platformTerms", "linux"], ["lib/platformChrome", "desktop"], ["state/commands/comboWords", "desktop"], ["state/tabs/engineKeptCodes", "linux"], ["lib/pageStacking", "desktop"]]) {
     assert.ok(graph.has(`${browser}${twin}.${suffix}.ts`), `${twin} resolves to its .${suffix} twin`);
     assert.ok(!graph.has(`${browser}${twin}.ts`), `the macOS ${twin} stays out of the Linux bundle`);
   }

@@ -88,7 +88,7 @@ export function Badge({
   };
   return (
     <View pointerEvents="none" style={style ? [shape, style] : shape}>
-      <Text numberOfLines={1} style={scale === 1 ? type : { ...type, fontSize: type.fontSize * scale }}>
+      <Text numberOfLines={1} ardiaCentersCapitals style={scale === 1 ? type : { ...type, fontSize: type.fontSize * scale }}>
         {text}
       </Text>
       {fitting ? (

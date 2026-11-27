@@ -9,7 +9,7 @@ import { id, ids, obj, oneOf, PROFILE, text } from "./socketSchema";
 import { expect, now, profileArg } from "./socketTargets";
 import { closeWindow, windowIds } from "../../platform/windows";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
-import { latestSettingsRoot, openSettings, SETTINGS_PANES, SETTINGS_WINDOW_ID, settingsPlaceKey, shownSettingsProfile, useSettingsNav, useShownSettings, type SettingsPane, type SettingsPlace } from "../settings/settingsWindows";
+import { openSettings, SETTINGS_PANES, SETTINGS_WINDOW_ID, shownSettingsProfile, useSettingsNav, type SettingsPane } from "../settings/settingsWindows";
 import { OpError } from "./workspaceTargets";
 
 const OWN_METHOD: Partial<Record<SettingKey, string>> = {
@@ -158,24 +158,15 @@ async function settingsWindowOpen() {
   return ids.includes(SETTINGS_WINDOW_ID);
 }
 
-const placeRow = (open: boolean, place: SettingsPlace | null) => ({
-  open,
-  pane: place?.pane ?? null,
-  profile: place ? (place.pane === "profiles" ? shownSettingsProfile(place) : place.profileId) : null,
-  detail: place?.detail ?? null,
-  panes: SETTINGS_PANES,
-});
+function settingsPlaceRow(open: boolean) {
+  const place = useSettingsNav.getState();
+  return { open, pane: place.pane, profile: place.pane === "profiles" ? shownSettingsProfile(place) : place.profileId, detail: place.detail, panes: SETTINGS_PANES };
+}
 
 async function settingsWindowRow() {
   refuseWithoutSettingsWindowControl();
-  const open = await settingsWindowOpen();
-  return placeRow(open, open ? useShownSettings.getState().shown : useSettingsNav.getState());
+  return settingsPlaceRow(await settingsWindowOpen());
 }
-
-const shows = (place: SettingsPlace, newerThan: number) => {
-  const { shown, root } = useShownSettings.getState();
-  return root > newerThan && !!shown && settingsPlaceKey(shown) === settingsPlaceKey(place);
-};
 
 async function waitFor(done: () => Promise<boolean>) {
   const deadline = Date.now() + SETTINGS_WINDOW_WAIT_MS;
@@ -196,18 +187,15 @@ function openSettingsWindow(params: Record<string, unknown>, call: SocketCall) {
   if (params.profile !== undefined && pane !== "profiles") throw new OpError("bad_request", "Only the profiles pane takes a profile.");
   if (params.profile !== undefined) profileArg(params.profile);
   return oneSettingsChangeAtATime(async () => {
-    const profile = params.profile === undefined ? null : profileArg(params.profile);
-    const newerThan = (await settingsWindowOpen()) ? 0 : latestSettingsRoot();
     call.stillServing();
+    const profile = params.profile === undefined ? null : profileArg(params.profile);
     if (pane) openSettings(pane, profile);
     else openSettings();
-    const { pane: shownPane, profileId, detail } = useSettingsNav.getState();
-    const wanted = { pane: shownPane, profileId, detail };
-    if (profile) expect(profileId === profile, `Settings isn't showing profile ${profile}.`);
-    await waitFor(async () => shows(wanted, newerThan) && (await settingsWindowOpen()));
+    const nav = useSettingsNav.getState();
+    expect(!pane || (nav.pane === pane && (!profile || nav.profileId === profile)), `Settings didn't go to ${pane}.`);
+    await waitFor(settingsWindowOpen);
     expect(await settingsWindowOpen(), "the Settings window didn't open.");
-    expect(shows(wanted, newerThan), `Settings isn't showing ${wanted.pane}.`);
-    return placeRow(true, wanted);
+    return settingsPlaceRow(true);
   });
 }
 
@@ -220,7 +208,7 @@ function closeSettingsWindow(_params: Record<string, unknown>, call: SocketCall)
     }
     await waitFor(async () => !(await settingsWindowOpen()));
     expect(!(await settingsWindowOpen()), "the Settings window is still open.");
-    return placeRow(false, useSettingsNav.getState());
+    return settingsPlaceRow(false);
   });
 }
 
@@ -240,11 +228,11 @@ export const SETTINGS_METHODS: MethodSpec[] = [
     run: (p) => apply(p.values as Record<string, unknown>, "settings.set"),
   },
   { name: "settings.reset", mutates: true, description: "Put settings back to their defaults", params: obj({ keys: ids("Setting keys", 200) }, ["keys"]), result: "{changed, values}", run: reset },
-  { name: "settings.window", mutates: false, description: "Whether the Settings window is open, and the pane, profile and page it shows", params: obj({}), result: SETTINGS_WINDOW_RESULT, run: settingsWindowRow },
+  { name: "settings.window", mutates: false, description: "Whether the Settings window is open, and the pane, profile and page Settings is at (where it reopens when closed)", params: obj({}), result: SETTINGS_WINDOW_RESULT, run: settingsWindowRow },
   {
     name: "settings.open",
     mutates: true,
-    description: "Open the Settings window, or bring it forward, at a pane (the profiles pane at a profile); answers once Settings shows it",
+    description: "Open the Settings window, or bring it forward, at a pane (the profiles pane at a profile); without a pane it comes back where it was. Answers once the window is open; the pane draws as soon as it has loaded",
     params: obj({ pane: oneOf(SETTINGS_PANES, "The pane to show; the one it showed last when left out"), profile: PROFILE }),
     result: SETTINGS_WINDOW_RESULT,
     run: openSettingsWindow,

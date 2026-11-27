@@ -1290,17 +1290,12 @@ test("socket settings.open: a hostile pane or profile never reaches the Settings
   await tick();
   S().createWindow({ url: "https://a.example/" });
   const { shellNativeModules } = await import("./test-native/shell.ts");
-  const { newSettingsRoot, reportShownSettings, useSettingsNav } = await import("./state/settings/settingsWindows.ts");
+  const { useSettingsNav } = await import("./state/settings/settingsWindows.ts");
   const appWindows = shellNativeModules.ArdiaAppWindows;
   const openWindow = appWindows.openWindow;
   const opened = [];
   appWindows.openWindow = (id, options) => {
-    if (id === "settings") {
-      const { pane, profileId, detail } = useSettingsNav.getState();
-      opened.push(pane);
-      const root = newSettingsRoot();
-      setTimeout(() => reportShownSettings({ pane, profileId, detail }, root), 0);
-    }
+    if (id === "settings") opened.push(useSettingsNav.getState().pane);
     return openWindow(id, options);
   };
   let nextId = 900;

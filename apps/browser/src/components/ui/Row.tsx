@@ -53,17 +53,13 @@ export function Row({
         ) : null}
       </View>
       {hasControls ? <ControlLabelContext.Provider value={label}>{children}</ControlLabelContext.Provider> : null}
-      {onPress ? (
-        <View accessible={hasControls} accessibilityRole="button" accessibilityLabel={label} onAccessibilityTap={hasControls ? onPress : undefined}>
-          <Symbol name="chevron.right" size={11} weight="semibold" color={theme.textTertiary} style={{ width: 12, height: 14 }} />
-        </View>
-      ) : null}
+      {onPress && <Symbol name="chevron.right" size={11} weight="semibold" color={theme.textTertiary} style={{ width: 12, height: 14 }} />}
     </View>
   );
   if (!onPress) return body;
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} {...(hasControls ? { accessible: false } : { accessibilityRole: "button" as const, accessibilityLabel: label, onAccessibilityTap: onPress })}>
+      <Pressable onPress={onPress} {...(hasControls ? {} : { accessibilityRole: "button" as const, accessibilityLabel: label, onAccessibilityTap: onPress })}>
         {body}
       </Pressable>
     </View>

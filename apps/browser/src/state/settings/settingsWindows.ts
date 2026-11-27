@@ -46,22 +46,6 @@ const stopOf = (s: SettingsStop): SettingsStop =>
     ? { pane: s.pane, profileId: s.profileId, detail: s.detail, visit: s.visit, shownProfile: shownOffset.shownProfile, scroll: shownOffset.y }
     : { pane: s.pane, profileId: s.profileId, detail: s.detail, visit: s.visit, shownProfile: s.shownProfile, scroll: s.scroll };
 
-export const useShownSettings = create<{ shown: SettingsPlace | null; root: number }>()(() => ({ shown: null, root: 0 }));
-
-let lastSettingsRoot = 0;
-export const newSettingsRoot = () => ++lastSettingsRoot;
-export const latestSettingsRoot = () => lastSettingsRoot;
-
-export function reportShownSettings(place: SettingsPlace, root: number) {
-  const was = useShownSettings.getState();
-  if (root < was.root || (root === was.root && was.shown && settingsPlaceKey(was.shown) === settingsPlaceKey(place))) return;
-  useShownSettings.setState({ shown: { pane: place.pane, profileId: place.profileId, detail: place.detail }, root });
-}
-
-export function forgetShownSettings(root: number) {
-  if (useShownSettings.getState().root === root) useShownSettings.setState({ shown: null });
-}
-
 export const useSettingsNav = create<Nav>()(() => ({ pane: "general", profileId: null, detail: null, scroll: 0, visit: newSettingsVisit(), shownProfile: null, back: [], forward: [] }));
 
 export function goToSettingsPane(pane: SettingsPane, profileId: string | null = null, detail: string | null = null) {

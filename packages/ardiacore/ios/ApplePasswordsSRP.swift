@@ -217,9 +217,8 @@ struct ApplePasswordsSRP {
   }
 
   static func random(_ count: Int) -> [UInt8] {
-    var bytes = [UInt8](repeating: 0, count: count)
-    _ = SecRandomCopyBytes(kSecRandomDefault, count, &bytes)
-    return bytes
+    var generator = SystemRandomNumberGenerator()
+    return (0..<count).map { _ in UInt8.random(in: .min ... .max, using: &generator) }
   }
 
   func text(_ bytes: [UInt8], prefixed: Bool = true) -> String {

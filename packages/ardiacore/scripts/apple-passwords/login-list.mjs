@@ -1,5 +1,6 @@
 import { FIXTURES } from "./fake.mjs";
 import { PAGE_EVENTS } from "./sites.mjs";
+import { sleep } from "../../../../scripts/lib/instance.mjs";
 import { waitFor } from "./webkit.mjs";
 
 const q = JSON.stringify;
@@ -337,6 +338,38 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       } finally {
         await tab.close();
       }
+    },
+    async E37() {
+      const { app, fake } = await paired();
+      const every = [...usersFor("filter.localhost"), FOOTER];
+      const seen = {};
+      const tab = await open("filter.localhost", "/login-ready");
+      try {
+        await tab.click("#p");
+        await typedRows(tab, "", every, "the list on the password field");
+        await tab.type("an");
+        await waitFor("the typed password", async () => ((await tab.value(`document.getElementById("p").value.length`)) === 2 ? true : null), 5000);
+        await sleep(600);
+        await typedRows(tab, "", every, "the same list after typing in the password field");
+        seen.password = "unchanged";
+        await tab.click("#u");
+        await tab.waitRows();
+        await typedRows(tab, "an", [...FILTERED, FOOTER], "the footer while filtering");
+        seen.footer = FOOTER;
+        await tab.key("escape");
+        await endPairing(app, fake);
+        await tab.click("#u");
+        await tab.waitRows();
+        await typedRows(tab, "n", [CONNECT, NOT_NOW], `${CONNECT} while filtering`);
+        seen.connect = CONNECT;
+        await tab.pick(CONNECT);
+        await pairAgain(app, fake);
+        await tab.waitRows("the logins after Pairing");
+        await tab.key("escape");
+      } finally {
+        await tab.close();
+      }
+      return { engine: engineName, ...seen };
     },
     async E17() {
       const { app } = await paired();

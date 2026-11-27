@@ -79,7 +79,10 @@ final class WebKitLogins: NSObject {
   addEventListener("input", (e) => {
     const el = e.target;
     if (!e.isTrusted || !el || el.tagName !== "INPUT") return;
-    if (el.type === "password") return hide();
+    if (el.type === "password") {
+      if (open) post("loginField", { event: "passwordInput", origin: location.origin });
+      return;
+    }
     if (loginField(el)) report("input", el);
   }, true);
   addEventListener("keydown", (e) => {
@@ -257,6 +260,7 @@ final class WebKitLogins: NSObject {
     switch data["event"] as? String ?? "show" {
     case "show", "input": show(tab, data: data, origin: origin)
     case "key": key(tab, data["key"] as? String ?? "")
+    case "passwordInput" where LoginList.shared.isShown(for: tab): return
     default: close(tab)
     }
   }

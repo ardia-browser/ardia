@@ -109,15 +109,20 @@ blob, native sends `fetch <token> <url>` to the frames of the blob's own origin 
 frame that answers `start` with the size, type and name is bound, and native pulls 192 KiB base64 chunks one at a time
 (`next`/`chunk`), writing them through the same MediaStore entry as a web download. Every frame asked hears `cancel`
 when the request ends, a frame that answers an ended request is told `cancel` too, and the page drops a blob it was
-sending after 60 s idle. A new top document replaces the frames native knows (iframes are capped at 32, the top frame
-is never dropped), and a page restored from the back-forward cache says `hello` again. A private download is published
-under the same lock that ends private sessions, and deleted if the session ended while it was published. A blob no frame holds fails as
+sending after 60 s idle; a revoked blob pushed out by the caps is let go at once, not when its timer fires. A new top
+frame replaces the old one, a frame says `bye` on `pagehide` and is forgotten (iframes are capped at 32, the top frame is
+never dropped), and a page restored from the back-forward cache says `hello` again. Names are trimmed by whole
+characters, keeping the extension, to what the bridge carries; a name native still can't read leaves the download
+nameless rather than stopping it. When the last private tab closes, the engine tells `SystemDownloads` before the
+session stops being live; `SystemDownloads` marks the session ended under the lock its final check and publish hold,
+so a private file is either published while its session lives or not at all. A blob no frame holds fails as
 `server`, frames that never answer (5 s), a page that stops sending (15 s), goes away (`pagehide`), a closed tab and a
 private session ending all end as `Failed`. Names: the link's `download` attribute, then the `File`'s name, then
 WebView's guess with the extension of the blob's type. A download refused before it starts now says why in
 `page.download`'s `failure` (`unsupported` for `blob:` with no frame to read it and other schemes,
-`privateSessionEnded`). Tests: `DataUrlsTest`, `PageBlobsTest`, `PageMadeDownloadsTest` (with the shared hostile
-list) and the device test `SystemDownloadsTest`.
+`privateSessionEnded`). Tests: `DataUrlsTest`, `PageBlobsTest`, `PageBlobsScriptTest` (the real page script in node),
+`PageMadeDownloadsTest` (with the shared hostile list), `SystemDownloadsSessionTest` and the device tests
+`SystemDownloadsTest` and `PrivatePagesTest`.
 
 `browser`'s `Omnibox.kt` (the ScriptEngine bridge) and `PageSurface.kt` (Compose) are left out of the module's build:
 the Expo app calls `@ardia/core` itself and hosts the page's view natively.

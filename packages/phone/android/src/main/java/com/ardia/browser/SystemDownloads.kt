@@ -97,6 +97,7 @@ class SystemDownloads(
     @Volatile
     private var sessionListener: AutoCloseable? = null
     private val sessionLock = Any()
+    private val endedSessions = LinkedHashSet<String>()
 
     val active: StateFlow<List<DownloadProgress>> = mutableActive.asStateFlow()
 
@@ -116,7 +117,7 @@ class SystemDownloads(
             else -> "$UNBOUND_PRIVATE_SCOPE$id"
         }
         val entry = synchronized(sessionLock) {
-            if (!DownloadRules.liveCheckFor(download, sessions)()) return DownloadStart.Refused(DownloadFailure.PrivateSessionEnded)
+            if (hasEnded(download) || !DownloadRules.liveCheckFor(download, sessions)()) return DownloadStart.Refused(DownloadFailure.PrivateSessionEnded)
             Entry(download, transport.newCall(connectionScope)).also { entries[id] = it }
         }
         report(DownloadProgress(id, requestedName, 0, download.contentLength.takeIf { it > 0 }, isQueued = true))
@@ -160,7 +161,12 @@ class SystemDownloads(
         }
     }
 
+    private fun hasEnded(download: PageDownload): Boolean = download.isPrivate && download.privateSession in endedSessions
+
     private fun endSession(session: String) = synchronized(sessionLock) {
+        endedSessions.remove(session)
+        endedSessions += session
+        while (endedSessions.size > ENDED_SESSIONS_KEPT) endedSessions.remove(endedSessions.first())
         transport.endConnectionScope(session)
         for (entry in entries.values) {
             if (entry.download.isPrivate && entry.download.privateSession == session) {
@@ -240,7 +246,7 @@ class SystemDownloads(
         }
         synchronized(sessionLock) {
             entry.call.ensureActive()
-            if (entry.endedWithSession || !isLive()) throw DownloadRefused(DownloadFailure.PrivateSessionEnded)
+            if (entry.endedWithSession || hasEnded(entry.download) || !isLive()) throw DownloadRefused(DownloadFailure.PrivateSessionEnded)
             publish(target)
             if (!isLive()) {
                 discard(target)
@@ -313,6 +319,7 @@ class SystemDownloads(
 
     companion object {
         const val MAX_RUNNING = 3
+        private const val ENDED_SESSIONS_KEPT = 32
         private const val UNBOUND_PRIVATE_SCOPE = "unbound-private-"
         private const val REPORT_INTERVAL_NANOS = 250_000_000L
 

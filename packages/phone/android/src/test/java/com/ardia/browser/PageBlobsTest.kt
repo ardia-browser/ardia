@@ -281,15 +281,44 @@ class PageBlobsTest {
     }
 
     @Test
-    fun aNewTopDocumentDropsTheOldDocumentsFrames() {
-        Frame("https://old.example", main = true).hello()
-        Frame("https://ads.example").hello()
+    fun aNewTopDocumentReplacesTheOldTopFrameAndIframesLeaveWhenTheySayBye() {
+        val oldTop = Frame("https://old.example", main = true).also { it.hello() }
+        val ads = Frame("https://ads.example").also { it.hello() }
         Frame("https://new.example", main = true).hello()
         assertNull(blobs.sourceFor("blob:https://old.example/1"))
-        assertNull(blobs.sourceFor("blob:https://ads.example/1"))
         assertNotNull(blobs.sourceFor("blob:https://new.example/1"))
-        Frame("https://ads.example").hello()
         assertNotNull(blobs.sourceFor("blob:https://ads.example/1"))
+        ads.say("bye")
+        assertNull(blobs.sourceFor("blob:https://ads.example/1"))
+        oldTop.say("bye")
+        assertNotNull(blobs.sourceFor("blob:https://new.example/1"))
+    }
+
+    @Test
+    fun iframesThatWentAwayDoNotCrowdOutALiveOne() {
+        Frame("https://top.example", main = true).hello()
+        Frame("https://reports.example").hello()
+        repeat(40) {
+            val passing = Frame("https://ad$it.example")
+            passing.hello()
+            passing.say("bye")
+        }
+        assertNotNull(blobs.sourceFor("blob:https://reports.example/1"))
+        assertNull(blobs.sourceFor("blob:https://ad0.example/1"))
+    }
+
+    @Test
+    fun aNameTooLongToCarryStillLetsTheDownloadStart() {
+        val url = "blob:https://a.example/1"
+        val frame = Frame("https://a.example", answers = false).also { it.hello() }
+        val pending = openAsync(url)
+        val token = frame.next("fetch")[1]
+        val name = encode("\uD83C\uDF89".repeat(257) + ".txt")
+        assertTrue(name.length > PageMadeDownloads.MAX_NAME_FIELD_CHARS)
+        frame.say("start $token 2 text%2Fplain $name")
+        val response = pending.get(10, TimeUnit.SECONDS)
+        assertEquals(2L, response.contentLength)
+        assertNull(response.header("content-disposition"))
     }
 
     @Test

@@ -80,6 +80,7 @@ class PageBlobs(
         synchronized(lock) {
             when (message) {
                 BlobMessage.Hello -> remember(key, Frame(origin, isMainFrame, send))
+                BlobMessage.Bye -> frames.remove(key)
                 is BlobMessage.Name -> {
                     val fromItsOrigin = if (PageMadeDownloads.isBlob(message.key)) PageMadeDownloads.blobOrigin(message.key) == origin else isMainFrame
                     if (fromItsOrigin) {
@@ -101,7 +102,8 @@ class PageBlobs(
     }
 
     private fun remember(key: Any, frame: Frame) {
-        if (frame.isMain) frames.clear() else frames.remove(key)
+        frames.remove(key)
+        if (frame.isMain) frames.entries.removeAll { it.value.isMain }
         frames[key] = frame
         while (frames.size > MAX_FRAMES) {
             val oldest = frames.entries.firstOrNull { !it.value.isMain }?.key ?: break
@@ -269,6 +271,8 @@ class PageBlobs(
   const keptBytesCap = $KEPT_AFTER_REVOKE_BYTES;
   const keptCountCap = $KEPT_AFTER_REVOKE_COUNT;
   const sendingIdle = $SENDING_IDLE_MILLIS;
+  const nameChars = ${PageMadeDownloads.MAX_NAME_CHARS};
+  const nameEncoded = ${PageMadeDownloads.MAX_NAME_FIELD_CHARS};
   const made = new Map();
   const kept = [];
   let keptBytes = 0;
@@ -281,7 +285,30 @@ class PageBlobs(
   const forget = (key, entry) => {
     const at = kept.indexOf(entry);
     if (at >= 0) { kept.splice(at, 1); keptBytes -= entry.size; }
+    if (entry.timer) clearTimeout(entry.timer);
+    entry.timer = 0;
+    entry.blob = null;
     if (made.get(key) === entry) made.delete(key);
+  };
+  const expire = (key) => { const entry = made.get(key); if (entry && entry.revoked) forget(key, entry); };
+  const encodedLength = (text) => { try { return encodeURIComponent(text).length; } catch (error) { return -1; } };
+  const fit = (raw) => {
+    const whole = String(raw || "");
+    if (whole.length <= nameChars && encodedLength(whole) >= 0 && encodedLength(whole) <= nameEncoded) return whole;
+    const dot = whole.lastIndexOf(".");
+    let extension = dot > 0 && whole.length - dot <= 11 ? whole.slice(dot) : "";
+    if (encodedLength(extension) < 0) extension = "";
+    let stem = "";
+    let stemEncoded = 0;
+    const room = nameEncoded - encodedLength(extension);
+    for (const point of whole.slice(0, whole.length - extension.length)) {
+      const size = encodedLength(point);
+      if (size < 0) continue;
+      if (stem.length + point.length + extension.length > nameChars || stemEncoded + size > room) break;
+      stem += point;
+      stemEncoded += size;
+    }
+    return stem + extension;
   };
   URL.createObjectURL = function createObjectURL(object) {
     const url = create.call(URL, object);
@@ -302,7 +329,7 @@ class PageBlobs(
         kept.push(entry);
         keptBytes += entry.size;
         while (kept.length > 1 && (keptBytes > keptBytesCap || kept.length > keptCountCap)) forget(kept[0].key, kept[0]);
-        setTimeout(() => forget(key, entry), keepAfterRevoke);
+        entry.timer = setTimeout(() => expire(key), keepAfterRevoke);
       }
     } catch (error) {}
     return revoke.call(URL, url);
@@ -316,7 +343,7 @@ class PageBlobs(
       let key = null;
       if (href.startsWith("blob:")) { key = href; named.set(href, name); if (named.size > 32) named.delete(named.keys().next().value); }
       else if (href.startsWith("data:")) key = href.length + ":" + href.slice(0, edge) + ":" + href.slice(-edge);
-      if (key) say("name " + encodeURIComponent(key) + " " + encodeURIComponent(name));
+      if (key) say("name " + encodeURIComponent(key) + " " + encodeURIComponent(fit(name)));
     } catch (error) {}
   };
   const click = HTMLAnchorElement.prototype.click;
@@ -345,7 +372,7 @@ class PageBlobs(
   const answer = async (token, url) => {
     let blob = null;
     const entry = made.get(url);
-    if (entry) blob = entry.blob;
+    if (entry && entry.blob) blob = entry.blob;
     else {
       try {
         const response = await fetch(url);
@@ -354,7 +381,7 @@ class PageBlobs(
     }
     if (!blob) { say("missing " + token); return; }
     hold(token, blob);
-    const name = (typeof File !== "undefined" && blob instanceof File && blob.name) || named.get(url) || "";
+    const name = fit((typeof File !== "undefined" && blob instanceof File && blob.name) || named.get(url) || "");
     say("start " + token + " " + blob.size + " " + encodeURIComponent(blob.type || "") + " " + encodeURIComponent(name));
   };
   const send = (token, index) => {
@@ -382,6 +409,7 @@ class PageBlobs(
   addEventListener("pagehide", () => {
     for (const token of sending.keys()) say("fail " + token);
     sending.clear();
+    say("bye");
   });
   addEventListener("pageshow", (event) => { if (event.persisted) say("hello"); });
   say("hello");

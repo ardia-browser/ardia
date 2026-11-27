@@ -20,7 +20,8 @@ const posted = [];
 const bridgeListeners = [];
 const windowListeners = {};
 const dispatched = [];
-const timers = [];
+const timers = new Map();
+let timerIds = 0;
 let clock = 1000;
 let made = 0;
 class EventTarget { dispatchEvent(event) { dispatched.push(event); return true; } }
@@ -42,7 +43,8 @@ const context = {
   URL: { createObjectURL: () => "blob:https://a.example/" + (++made), revokeObjectURL: () => {} },
   Blob, File, FileReader, EventTarget, HTMLAnchorElement, Event, MouseEvent,
   fetch: async () => { throw new Error("revoked"); },
-  setTimeout: (run, delay) => { timers.push({ run, at: clock + delay }); return timers.length; },
+  setTimeout: (run, delay) => { timers.set(++timerIds, { run, at: clock + delay }); return timerIds; },
+  clearTimeout: (id) => { timers.delete(id); },
   Date: { now: () => clock },
   addEventListener: (type, listener) => { windowListeners[type] = listener; },
   queueMicrotask,
@@ -52,7 +54,7 @@ vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), context);
 const tell = (text) => bridgeListeners.forEach((listener) => listener({ data: "ardiaBlob:" + text }));
 const settle = () => new Promise((resolve) => setImmediate(resolve));
-const advance = (millis) => { clock += millis; for (const timer of timers.splice(0)) { if (timer.at <= clock) timer.run(); else timers.push(timer); } };
+const advance = (millis) => { clock += millis; for (const [id, timer] of [...timers]) { if (timer.at <= clock) { timers.delete(id); timer.run(); } } };
 const said = (start) => posted.filter((text) => text.startsWith("ardiaBlob:" + start));
 (async () => {
   const seen = {};
@@ -103,6 +105,37 @@ const said = (start) => posted.filter((text) => text.startsWith("ardiaBlob:" + s
   tell("next eeee 1");
   await settle();
   seen.idleExpiredFails = said("fail eeee").length;
+  windowListeners.pagehide();
+  seen.byeOnHide = said("bye").length;
+  const party = "\u{1F389}".repeat(257) + ".txt";
+  new HTMLAnchorElement("blob:https://a.example/party", party).dispatchEvent(new context.MouseEvent("click"));
+  const partyField = (said("name blob%3Ahttps%3A%2F%2Fa.example%2Fparty ")[0] || "").split(" ")[2] || "";
+  seen.fittedNameLength = partyField.length;
+  seen.fittedNameKeepsExtension = decodeURIComponent(partyField).endsWith(".txt");
+  seen.fittedNameWholeEmoji = [...decodeURIComponent(partyField).slice(0, -4)].every((point) => point === "\u{1F389}");
+  const longFile = context.URL.createObjectURL(new File(3, "text/plain", "x".repeat(5000) + ".csv"));
+  tell("fetch gggg " + longFile);
+  await settle();
+  const longField = decodeURIComponent((said("start gggg ")[0] || "").split(" ")[4] || "");
+  seen.fittedFileNameLength = longField.length;
+  seen.fittedFileNameKeepsExtension = longField.endsWith(".csv");
+  const refs = (() => {
+    const made = [];
+    const urls = [];
+    for (let index = 0; index < 20; index++) {
+      const blob = new Blob(8 * 1024 * 1024, "image/png");
+      made.push(new WeakRef(blob));
+      urls.push(context.URL.createObjectURL(blob));
+    }
+    for (const url of urls) context.URL.revokeObjectURL(url);
+    return made;
+  })();
+  await settle();
+  global.gc();
+  await settle();
+  global.gc();
+  seen.evictedStillAlive = refs.slice(0, 12).filter((ref) => ref.deref() !== undefined).length;
+  seen.keptAlive = refs.slice(12).filter((ref) => ref.deref() !== undefined).length;
   windowListeners.pageshow({ persisted: true });
   seen.helloAfterRestore = said("hello").length;
   console.log(JSON.stringify(seen));
@@ -116,7 +149,7 @@ const said = (start) => posted.filter((text) => text.startsWith("ardiaBlob:" + s
             try {
                 val script = File(folder, "script.js").apply { writeText(PageBlobs.script) }
                 val drive = File(folder, "drive.js").apply { writeText(driver) }
-                val process = ProcessBuilder("node", drive.absolutePath, script.absolutePath).redirectErrorStream(true).start()
+                val process = ProcessBuilder("node", "--expose-gc", drive.absolutePath, script.absolutePath).redirectErrorStream(true).start()
                 val output = process.inputStream.bufferedReader().readText()
                 assertTrue("node finished", process.waitFor(30, TimeUnit.SECONDS))
                 assertEquals(output, 0, process.exitValue())
@@ -153,6 +186,27 @@ const said = (start) => posted.filter((text) => text.startsWith("ardiaBlob:" + s
         assertEquals(1, seen.getInt("cancelledFails"))
         assertEquals(1, seen.getInt("chunkBeforeIdle"))
         assertEquals(1, seen.getInt("idleExpiredFails"))
+    }
+
+    @Test
+    fun evictedRevokedBlobsCanBeCollectedBeforeTheirTimersRun() {
+        assertEquals(0, seen.getInt("evictedStillAlive"))
+        assertEquals(8, seen.getInt("keptAlive"))
+    }
+
+    @Test
+    fun aLeavingPageSaysBye() {
+        assertEquals(1, seen.getInt("byeOnHide"))
+    }
+
+    @Test
+    fun longNamesAreFittedByWholeCharactersAndKeepTheirExtension() {
+        val fitted = seen.getInt("fittedNameLength")
+        assertTrue("$fitted", fitted in 3_000..PageMadeDownloads.MAX_NAME_FIELD_CHARS)
+        assertTrue(seen.getBoolean("fittedNameKeepsExtension"))
+        assertTrue(seen.getBoolean("fittedNameWholeEmoji"))
+        assertEquals(PageMadeDownloads.MAX_NAME_CHARS, seen.getInt("fittedFileNameLength"))
+        assertTrue(seen.getBoolean("fittedFileNameKeepsExtension"))
     }
 
     @Test

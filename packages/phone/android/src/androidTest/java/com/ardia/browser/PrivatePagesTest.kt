@@ -61,6 +61,22 @@ class PrivatePagesTest {
     }
 
     @Test
+    fun sessionEndListenersAreToldBeforeTheSessionStopsBeingLive() {
+        assumeTrue(onMain { harness.engine.separatesPrivatePages })
+        val page = harness.open("ordering", isPrivate = true)
+        set(page, "a")
+        val session = onMain { harness.engine.currentPrivateSession() }!!
+        val liveWhenTold = ArrayList<Boolean>()
+        val listening = onMain {
+            harness.engine.addPrivateSessionEndListener { ended -> if (ended == session) liveWhenTold += harness.engine.isPrivateSessionLive(ended) }
+        }
+        onMain { harness.engine.close("ordering") }
+        listening.close()
+        assertEquals(listOf(true), liveWhenTold)
+        assertFalse(onMain { harness.engine.isPrivateSessionLive(session) })
+    }
+
+    @Test
     fun privateDataIsGoneOnceTheLastPrivatePageCloses() {
         assumeTrue(onMain { harness.engine.separatesPrivatePages })
         var ended = 0

@@ -157,8 +157,7 @@ final class LoginList: NSObject {
 
   private func present(_ next: Shown, notice: String?) {
     guard let target = next.target else { return }
-    let typed = next.field.typed.lowercased()
-    let logins = typed.isEmpty ? next.logins : next.logins.filter { $0.user.lowercased().hasPrefix(typed) }
+    let logins = LoginListFilter.hits(next.logins.map(\.user), typed: next.field.typed).map { next.logins[$0.index] }
     let quiet = next.field.trigger == .typing && notice == nil && logins.isEmpty && !next.connect
     guard !quiet, let window = target.loginListWindow else { return close(target) }
     var current = next

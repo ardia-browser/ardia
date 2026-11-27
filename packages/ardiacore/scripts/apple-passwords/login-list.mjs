@@ -46,6 +46,18 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
     return rows;
   };
 
+  const typedRows = async (tab, text, expected, what) => {
+    if (text) await tab.type(text);
+    let seen = null;
+    return waitFor(what, async () => {
+      seen = await tab.rows();
+      return seen && q(titles(seen)) === q(expected) ? seen : null;
+    }, 10_000).catch(() => {
+      throw new Error(`${what}: wanted ${q(expected)}, saw ${q(seen && titles(seen))}`);
+    });
+  };
+  const FILTERED = ["anna@example.test", "Ännabel", "joanna.k@mail.test"];
+
   const open = async (host, pathname = "/login") => {
     const { tabs } = await paired();
     return tabs.open(sites.url(host, pathname));
@@ -260,6 +272,19 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         }
       }
       return { engine: engineName, ...seen };
+    },
+    async E34() {
+      const tab = await open("filter.localhost", "/login-ready");
+      try {
+        await tab.click("#u");
+        const all = await tab.waitRows();
+        assert(q(titles(all.slice(0, -1))) === q(usersFor("filter.localhost")), "the click lists every login for the site", all);
+        await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
+        await typedRows(tab, "n", [...FILTERED, FOOTER], "the list for ann");
+        return { engine: engineName, an: FILTERED };
+      } finally {
+        await tab.close();
+      }
     },
     async E17() {
       const { app } = await paired();

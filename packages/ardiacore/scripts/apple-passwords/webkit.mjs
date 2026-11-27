@@ -33,18 +33,22 @@ export function parseRows(ax) {
   return rows;
 }
 
-export function webkitTabs(app, { log = () => {} } = {}) {
+export const webkitTabs = (app, options = {}) => engineTabs(app, { ...options, engine: "webkit" });
+export const chromiumTabs = (app, options = {}) => engineTabs(app, { ...options, engine: "chromium" });
+
+export function engineTabs(app, { log = () => {}, engine: engineName = "webkit" } = {}) {
   const evalApp = (body, timeout = 20_000) => app.eval(body, { timeout });
   const engine = (name, payload) => evalApp(`return ac.engine.call(${q(name)}, ${q(payload)})`);
   const proceeded = new Set();
 
-  async function useWebKit(origins) {
-    await evalApp(`const s = ac.store.getState(); s.updateSettings({ websiteEngines: { ...s.settings.websiteEngines, ${origins.map((o) => `${q(o)}: "webkit"`).join(", ")} } }); return true`);
+  async function useEngine(origins, chosen = engineName) {
+    await evalApp(`const s = ac.store.getState(); const engines = { ...s.settings.websiteEngines }; for (const o of ${q(origins)}) ${chosen === "webkit" ? `engines[o] = "webkit"` : "delete engines[o]"}; s.updateSettings({ websiteEngines: engines }); return true`);
   }
+  const useWebKit = (origins) => useEngine(origins, "webkit");
 
   async function open(url, { kind } = {}) {
     const origin = new URL(url).origin;
-    await useWebKit([origin]);
+    await useEngine([origin]);
     let windowId;
     let id;
     if (kind) {
@@ -56,7 +60,8 @@ export function webkitTabs(app, { log = () => {} } = {}) {
     }
     const tab = handle(id, windowId, kind);
     await tab.loaded();
-    if (await engine("tabs.devBrowserId", { tabId: id }).catch(() => null)) throw new Error(`${url} opened in Chromium`);
+    const inChromium = !!(await engine("tabs.devBrowserId", { tabId: id }).catch(() => null));
+    if (inChromium !== (engineName === "chromium")) throw new Error(`${url} opened in ${inChromium ? "Chromium" : "WebKit"}, not ${engineName}`);
     if ((await tab.value("document.title")) === "Privacy error") {
       const host = `${kind ?? "normal"} ${new URL(url).hostname}`;
       if (proceeded.has(host)) throw new Error(`${host} shows the certificate warning again`);
@@ -93,7 +98,7 @@ export function webkitTabs(app, { log = () => {} } = {}) {
         await waitFor("the page script", () => value("document.readyState === 'complete' || null"), 10_000);
       },
       async navigate(url) {
-        await useWebKit([new URL(url).origin]);
+        await useEngine([new URL(url).origin]);
         await evalApp(`ac.store.getState().navigate(${q(id)}, ${q(url)}, { userInitiated: true }); return true`);
         await waitFor("the new page", async () => ((await value("location.href")) === url ? true : null), 20_000);
         await tab.loaded();
@@ -162,5 +167,5 @@ export function webkitTabs(app, { log = () => {} } = {}) {
     return tab;
   }
 
-  return { open, useWebKit };
+  return { open, useWebKit, engine: engineName };
 }

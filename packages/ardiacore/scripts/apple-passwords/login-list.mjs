@@ -47,8 +47,8 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
   };
 
   const open = async (host, pathname = "/login") => {
-    const { tabs } = await paired();
-    return tabs.open(sites.url(host, pathname));
+    const shared = await paired();
+    return (engineName === "chromium" ? shared.chromium : shared.tabs).open(sites.url(host, pathname));
   };
 
   return {

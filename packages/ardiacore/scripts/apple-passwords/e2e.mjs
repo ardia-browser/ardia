@@ -11,6 +11,7 @@
 //   E8save on Apple Passwords, signing in in a Chromium tab still gives Chrome's pending save (the save prompt fires)
 //   E5… the Login list in a WebKit tab (login-list.mjs), in one paired instance shared by those checks; E15 ends the
 //       fake's Pairing and pairs again from the Login list, leaving that instance paired
+//   E5chromium… the same Login list checks in a Chromium tab of that instance
 //   E18… saving to Apple Passwords from a WebKit tab (saving.mjs), in the same paired instance; E33 saves on an http page
 //   E32 with a stand-in for the iCloud Passwords extension (its id, from icloud-extension.mjs), picking Apple Passwords
 //       turns it off and says so, "Turn it back on" turns it on, and switching to Ardia turns it on only if Ardia turned
@@ -29,7 +30,7 @@ import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-
 import { loginListChecks } from "./login-list.mjs";
 import { savingChecks } from "./saving.mjs";
 import { fixtureSites } from "./sites.mjs";
-import { webkitTabs } from "./webkit.mjs";
+import { chromiumTabs, webkitTabs } from "./webkit.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -86,7 +87,7 @@ async function paired() {
   await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${JSON.stringify(fake.fixtures.code)}).then(() => true);`, { timeout: 60_000 });
   const done = await until(pairingView, (v) => v.state === "connected" && v.choice === "apple");
   note("paired", JSON.stringify(done));
-  shared = { app, fake, tabs: webkitTabs(app, { log: note }) };
+  shared = { app, fake, tabs: webkitTabs(app, { log: note }), chromium: chromiumTabs(app, { log: note }) };
   return shared;
 }
 
@@ -197,6 +198,8 @@ const choose = (manager) =>
 
 const setExtension = (enabled) =>
   app.eval(`return ac.engine.call("extensions.setEnabled", { profile: "", id: ${JSON.stringify(ICLOUD_PASSWORDS_EXTENSION_ID)}, enabled: ${enabled} }).then(() => true);`);
+
+const inChromium = (checks, names) => Object.fromEntries(names.map((name) => [`${name}chromium`, checks[name]]));
 
 const CHECKS = {
   async E1() {
@@ -310,6 +313,7 @@ const CHECKS = {
     return Object.fromEntries(Object.entries(steps).map(([k, v]) => [k, v.enabled]));
   },
   ...loginListChecks({ paired, sites }),
+  ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5"]),
   ...savingChecks({ paired, sites }),
 };
 

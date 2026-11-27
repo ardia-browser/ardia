@@ -49,6 +49,7 @@ extension WebKitTab {
 
   func updateSight() {
     guard !closed, let window else { return }
+    followPageFullScreen()
     let seen = seenByUser
     let kept = seen && ArdiaChromeWindowHost.userSeesOnlyThroughWindowServer(window)
     if !kept {
@@ -57,13 +58,27 @@ extension WebKitTab {
       pageMedia.keptByWindowServer = true
       emit("autoPictureInPictureKept", ArdiaConsentStamp.begin().onto(["appSwitch": false]))
     }
-    switch autoPictureInPictureRule.sight(seen, enabled: autoPictureInPicture, playing: playsMedia) {
+    switch autoPictureInPictureRule.sight(seen, inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia) {
     case .open:
       let stamp = ArdiaConsentStamp.begin()
-      setPictureInPicture(true, automatic: true) { [weak self] answer in if answer == .nothingPlaying { self?.emit("autoPictureInPictureKept", stamp.onto(["reason": "nothingPlaying"])) } }
+      let request = autoPictureInPictureRule.openRequests
+      let view = webView
+      setPictureInPicture(true, automatic: true, overFullScreen: autoPictureInPictureRule.opensOverFullScreen) { [weak self, weak view] answer in
+        guard let self, let view, !self.closed, self.webView === view else { return }
+        view.autoPictureInPictureRule.answered(request, opened: answer == .opened)
+        if answer == .nothingPlaying { self.emit("autoPictureInPictureKept", stamp.onto(["reason": "nothingPlaying"])) }
+      }
     case .close: setPictureInPicture(false) { _ in }
+    case .heldForFullScreen: ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "autoPictureInPictureFullscreenHold"]))
+    case .closeHeldForFullScreen:
+      setPictureInPicture(false) { _ in }
+      ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "autoPictureInPictureFullscreenHold"]))
     case .none: break
     }
+  }
+
+  private func followPageFullScreen() {
+    autoPictureInPictureRule.pageFullScreen(WebKitFullscreenPage.isOn(webView?.fullscreenState ?? .notInFullscreen), tab: browserId)
   }
 
   private func noteStayedOnAppSwitch() {

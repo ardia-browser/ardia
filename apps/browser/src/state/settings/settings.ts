@@ -76,7 +76,7 @@ export const SETTING_SPECS = {
   warnBeforeClosingLastTab: flag(true, SYNCED),
   afterClosingTab: oneOf(["previouslyActive", "tabAbove", "tabBelow"], "previouslyActive", SYNCED),
   tabSwitcherOrder: oneOf(["recent", "inOrder"], "recent", SYNCED), tabSwitcherView: oneOf(["thumbnails", "compactList", "none"], "thumbnails", SYNCED),
-  keepTopAppsRunning: flag(false, SYNCED),
+  keepTopAppsRunning: flag(false, SYNCED), pinnedTabsReopenAtPinnedUrl: flag(true, SYNCED),
   tabReorderHaptics: flag(true, SYNCED),
   swipeBetweenTabs: flag(true, SYNCED),
   undoReopensClosedTab: flag(false, SYNCED),

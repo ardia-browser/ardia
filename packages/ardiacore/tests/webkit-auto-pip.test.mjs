@@ -13,6 +13,7 @@ const sources = [
   "../ios/WebKitTab+PageTab.swift",
   "../ios/WebKitWebView.swift",
   "../ios/WebKitAutoPictureInPicture.swift",
+  "../ios/WebKitTab+Lifecycle.swift",
   "../ios/ArdiaChromeWindowHost.h",
   "../ios/ArdiaChromeWindowHost.mm",
   "./webkit-auto-pip.test.swift",
@@ -20,12 +21,13 @@ const sources = [
 const read = (name) => (existsSync(path(name)) ? readFileSync(path(name), "utf8") : "");
 const tab = read("../ios/WebKitTab.swift");
 const sight = read("../ios/WebKitTab+AutoPictureInPicture.swift");
+const lifecycle = read("../ios/WebKitTab+Lifecycle.swift");
 const pageTab = read("../ios/WebKitTab+PageTab.swift");
 const webView = read("../ios/WebKitWebView.swift");
 const windowHostHeader = read("../ios/ArdiaChromeWindowHost.h");
 const windowHost = read("../ios/ArdiaChromeWindowHost.mm");
 
-function pageWithVideos(videos) {
+function pageWithVideos(videos, shown = {}, parent = null) {
   const noop = () => {};
   const document = {
     readyState: "complete",
@@ -36,10 +38,12 @@ function pageWithVideos(videos) {
     pictureInPictureElement: null,
     body: null,
     documentElement: {},
+    ...shown,
   };
   const window = { document, addEventListener: noop, location: { protocol: "https:", origin: "https://example.test" }, navigator: {}, performance: { now: () => 0 }, setTimeout: noop, requestAnimationFrame: noop, EventTarget: class { addEventListener() {} } };
   window.window = window;
-  window.top = window;
+  window.parent = parent ?? window;
+  window.top = parent ? (parent.top ?? parent) : window;
   runInNewContext(webKitPageScript.replace("\\#(WebKitMediaFaults.sitesJSON)", "[]"), window);
   return window.__ardia;
 }
@@ -90,13 +94,13 @@ test("WebKit tabs report why automatic picture in picture held back, as Chromium
 });
 
 test("leaving opens picture in picture and returning closes it through the page's own player call", () => {
-  assert.match(sight, /case \.open:\s*let stamp = ArdiaConsentStamp\.begin\(\)\s*setPictureInPicture\(true, automatic: true\) \{ \[weak self\] answer in if answer == \.nothingPlaying \{ self\?\.emit\("autoPictureInPictureKept", stamp\.onto\(\["reason": "nothingPlaying"\]\)\) \} \}/);
+  assert.match(sight, /case \.open:[\s\S]*?setPictureInPicture\(true, automatic: true, overFullScreen: autoPictureInPictureRule\.opensOverFullScreen\)/);
   assert.match(sight, /case \.close: setPictureInPicture\(false\) \{ _ in \}/);
-  assert.match(sight, /autoPictureInPictureRule\.sight\(seen, enabled: autoPictureInPicture, playing: playsMedia\)/);
+  assert.match(sight, /autoPictureInPictureRule\.sight\(seen, inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia\)/);
 });
 
 test("the page's picture in picture reports reach the rule", () => {
-  assert.match(tab, /case "pip":\n\s+let active = dict\?\["active"\] as\? Bool \?\? false\n\s+autoPictureInPictureRule\.reported\(active: active\)/);
+  assert.match(tab, /case "pip":\n\s+let active = dict\?\["active"\] as\? Bool \?\? false\n\s+if autoPictureInPictureRule\.reported\(active: active\) \{ setPictureInPicture\(false\) \{ _ in \} \}/);
 });
 
 test("the sight observer is dropped when the window changes or the tab closes or gives its view away", () => {
@@ -160,8 +164,106 @@ test("a picture in picture the user asks for still takes the largest video when 
 });
 
 test("the tab asks the page for an automatic picture in picture and a manual request stays manual", () => {
-  assert.match(tab, /func setPictureInPicture\(_ on: Bool, automatic: Bool = false, completion: @escaping \(PictureInPictureAnswer\) -> Void\)/);
+  assert.match(tab, /func setPictureInPicture\(_ on: Bool, automatic: Bool = false, overFullScreen: Bool = false, completion: @escaping \(PictureInPictureAnswer\) -> Void\)/);
   assert.match(tab, /completion\(value as\? String == "nothingPlaying" \? \.nothingPlaying : \(value as\? NSNumber\)\?\.boolValue == true \? \.opened : \.failed\)/);
-  assert.match(tab, /window\.__ardia\.pictureInPicture\(\\\(on \? "true" : "false"\), \\\(automatic \? "true" : "false"\)\)/);
+  assert.match(tab, /window\.__ardia\.pictureInPicture\(\\\(on \? "true" : "false"\), \\\(automatic \? "true" : "false"\), \\\(overFullScreen \? "true" : "false"\)\)/);
   assert.match(pageTab, /setPictureInPicture\(true\) \{ completion\(\$0 == \.opened\) \}/);
+});
+
+test("a page in its own full screen holds automatic picture in picture, from the moment WebKit starts the move until it ends", () => {
+  assert.match(sight, /case \.heldForFullScreen: ArdiaEvents\.emit\("webKit\.counted", data: ArdiaConsentStamp\.begin\(\)\.onto\(\["name": "autoPictureInPictureFullscreenHold"\]\)\)/);
+});
+
+test("the page itself refuses an automatic picture in picture while something on it is full screen, and a manual one still opens", () => {
+  for (const key of ["fullscreenElement", "webkitFullscreenElement"]) {
+    const held = video("held", { paused: false });
+    assert.equal(pageWithVideos([held], { [key]: held }).pictureInPicture(true, true), false);
+    assert.equal(held.entered, false);
+    const asked = video("asked", { paused: false });
+    assert.equal(pageWithVideos([asked], { [key]: asked }).pictureInPicture(true), true);
+    assert.equal(asked.entered, true);
+  }
+});
+
+test("a video in a frame stays put when a page above it is full screen, and a frame above it that can't be read doesn't stop it", () => {
+  for (const key of ["fullscreenElement", "webkitFullscreenElement"]) {
+    const framed = video("framed", { paused: false });
+    const top = { document: { [key]: { tagName: "IFRAME" } } };
+    top.top = top;
+    top.parent = top;
+    const middle = { document: {}, top };
+    middle.parent = top;
+    assert.equal(pageWithVideos([framed], {}, middle).pictureInPicture(true, true), false);
+    assert.equal(framed.entered, false);
+  }
+  const free = video("free", { paused: false });
+  const sealed = {};
+  Object.defineProperty(sealed, "document", { get() { throw new Error("cross-origin"); } });
+  sealed.top = sealed;
+  sealed.parent = sealed;
+  assert.equal(pageWithVideos([free], {}, sealed).pictureInPicture(true, true), true);
+  assert.equal(free.entered, true);
+});
+
+test("every sight decision reads the view's own full-screen state, so an adopted view never keeps a stale hold", () => {
+  assert.match(sight, /func updateSight\(\) \{\n\s+guard !closed, let window else \{ return \}\n\s+followPageFullScreen\(\)\n/);
+  assert.match(sight, /private func followPageFullScreen\(\) \{\n\s+autoPictureInPictureRule\.pageFullScreen\(WebKitFullscreenPage\.isOn\(webView\?\.fullscreenState \?\? \.notInFullscreen\), tab: browserId\)\n\s+\}/);
+  assert.match(lifecycle, /private func fullscreenChanged\(_ state: WKWebView\.FullscreenState\) \{\n {4}updateSight\(\)\n/);
+});
+
+test("a pop out that slipped ahead of full screen is closed and counted once as held", () => {
+  assert.match(sight, /case \.close: setPictureInPicture\(false\) \{ _ in \}/);
+  assert.match(sight, /case \.closeHeldForFullScreen:\n\s+setPictureInPicture\(false\) \{ _ in \}\n\s+ArdiaEvents\.emit\("webKit\.counted", data: ArdiaConsentStamp\.begin\(\)\.onto\(\["name": "autoPictureInPictureFullscreenHold"\]\)\)/);
+});
+
+test("the tab tells the rule whether its automatic open request actually opened", () => {
+  assert.match(sight, /case \.open:\n\s+let stamp = ArdiaConsentStamp\.begin\(\)\n\s+let request = autoPictureInPictureRule\.openRequests\n\s+let view = webView/);
+  assert.match(sight, /setPictureInPicture\(true, automatic: true, overFullScreen: autoPictureInPictureRule\.opensOverFullScreen\) \{ \[weak self, weak view\] answer in\n\s+guard let self, let view, !self\.closed, self\.webView === view else \{ return \}\n\s+view\.autoPictureInPictureRule\.answered\(request, opened: answer == \.opened\)/);
+  assert.match(sight, /if answer == \.nothingPlaying \{ self\.emit\("autoPictureInPictureKept", stamp\.onto\(\["reason": "nothingPlaying"\]\)\) \}/);
+});
+
+test("a video in its own native full screen holds an automatic picture in picture, here or in a page above, and a manual one still opens", () => {
+  for (const shown of [{ webkitPresentationMode: "fullscreen" }, { webkitDisplayingFullscreen: true }]) {
+    const playing = video("playing", { paused: false });
+    const native = Object.assign(video("native", { paused: false }), shown);
+    assert.equal(pageWithVideos([playing, native]).pictureInPicture(true, true), false);
+    assert.equal(playing.entered || native.entered, false);
+    const framed = video("framed", { paused: false });
+    const top = { document: { querySelectorAll: () => [Object.assign(video("top", { paused: false }), shown)] } };
+    top.top = top;
+    top.parent = top;
+    assert.equal(pageWithVideos([framed], {}, top).pictureInPicture(true, true), false);
+    assert.equal(framed.entered, false);
+    const asked = video("asked", { paused: false });
+    assert.equal(pageWithVideos([asked, Object.assign(video("other", { paused: true }), shown)]).pictureInPicture(true), true);
+    assert.equal(asked.entered, true);
+  }
+});
+
+test("a pop out the page reports open after full screen cancelled it is closed again", () => {
+  assert.match(tab, /if autoPictureInPictureRule\.reported\(active: active\) \{ setPictureInPicture\(false\) \{ _ in \} \}/);
+});
+
+test("leaving a full-screen Space the page was seen in asks the page to pop out over its full screen, and the page does", () => {
+  for (const shown of [{ fullscreenElement: {} }, { webkitFullscreenElement: {} }]) {
+    const held = video("held", { paused: false });
+    assert.equal(pageWithVideos([held], shown).pictureInPicture(true, true, false), false, "a move into full screen still holds");
+    assert.equal(held.entered, false);
+    const left = video("left", { paused: false });
+    assert.equal(pageWithVideos([left], shown).pictureInPicture(true, true, true), true);
+    assert.equal(left.entered, true);
+  }
+  for (const shown of [{ webkitPresentationMode: "fullscreen" }, { webkitDisplayingFullscreen: true }]) {
+    const native = Object.assign(video("native", { paused: false }), shown);
+    assert.equal(pageWithVideos([native]).pictureInPicture(true, true, true), true);
+    assert.equal(native.entered, true);
+  }
+});
+
+test("WebKit leaving full screen starts the exit hold, as only entering and in full screen count as on", () => {
+  assert.match(read("../ios/WebKitFullscreenPage.swift"), /static func isOn\(_ state: WKWebView\.FullscreenState\) -> Bool \{\n\s+state == \.enteringFullscreen \|\| state == \.inFullscreen\n\s+\}/);
+});
+
+test("the tab tells the rule whether its sight is the inline tab or WebKit's full-screen window", () => {
+  assert.match(sight, /autoPictureInPictureRule\.sight\(seen, inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia\)/);
 });

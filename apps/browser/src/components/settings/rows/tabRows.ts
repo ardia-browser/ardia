@@ -55,6 +55,12 @@ export const tabRows = {
           description: "How tabs whose page isn't loaded look.",
           keywords: ["unloaded", "asleep", "sleeping", "discarded", "dim", "grey", "gray", "inactive", "pinned", "closed", "fade icons of unloaded tabs", "strikethrough", "strike", "line through", "crossed out", "memory saver", "title", "strike through sleeping tabs", "fade", "strike through"],
         },
+        pinnedTabsReopenAtPinnedUrl: {
+          title: "Reopen closed pinned tabs at their pinned URL",
+          explained: true,
+          description: "Off, a pinned tab you close comes back on the last page it showed. A pinned tab's Customize menu changes it for that tab.",
+          keywords: ["pinned", "pinned url", "home", "reset", "reopen", "closed", "close", "cmd w", "last page", "last visited", "remember", "restore", "original url", "top apps", "arc", "dia"],
+        },
         keepTopAppsRunning: {
           title: "Keep Top Apps running when closed",
           explained: true,

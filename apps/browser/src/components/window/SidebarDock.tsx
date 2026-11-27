@@ -23,7 +23,7 @@ import {
   noteSidebarPeekClosedWhileResizing,
   noteSidebarPeekFrame,
   noteSidebarPeekRevealHeldBack,
-  noteSidebarScreenEdge,
+  noteSidebarEdgeEvent,
   noteSidebarSlide,
 } from "../../state/telemetry/dockCounts";
 import { ProfileSwipe } from "./ProfileSwipe";
@@ -267,7 +267,7 @@ function SidebarDock({
     if (!watching) return;
     const sub = onWindowEvent((e) => {
       if (e.type !== "sidebarEdge" || e.id !== windowId) return;
-      if (e.screenEdge) noteSidebarScreenEdge(e.screenEdge);
+      noteSidebarEdgeEvent(e);
       const at = latestReveal.current;
       if (e.over && e.screenEdge !== "returned" && !edgeEventReveals(at.state, e.point[0], at.right, at.windowWidth, at.band)) return;
       edgeOver.current = e.over;

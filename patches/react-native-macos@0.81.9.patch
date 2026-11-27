@@ -4045,7 +4045,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..c75665485afa81574f2f0be0829c1f3a
 +@end
 +#endif // macOS]
 diff --git a/React/Views/ScrollView/RCTScrollView.m b/React/Views/ScrollView/RCTScrollView.m
-index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da564b946f8 100644
+index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..54ab9314315a9b1c10769fda042adc3417233905 100644
 --- a/React/Views/ScrollView/RCTScrollView.m
 +++ b/React/Views/ScrollView/RCTScrollView.m
 @@ -50,10 +50,16 @@ + (BOOL)isCompatibleWithResponsiveScrolling;
@@ -4060,13 +4060,13 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da5
 +@implementation RCTCustomScrollView {
 +#if TARGET_OS_OSX // [macOS
 +  NSTrackingArea *_scrollerReach;
-+  NSTimeInterval _scrollerFlashedAt;
++  NSTimer *_scrollerHold;
 +#endif // macOS]
 +}
  
  - (instancetype)initWithFrame:(CGRect)frame
  {
-@@ -302,6 +308,48 @@ - (void)setDocumentView:(__kindof NSView *)documentView
+@@ -302,6 +308,66 @@ - (void)setDocumentView:(__kindof NSView *)documentView
    [super setDocumentView:documentView];
    [documentView setAccessibilityLabel:[self accessibilityLabel]];
  }
@@ -4101,21 +4101,39 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da5
 +- (void)mouseMoved:(NSEvent *)event
 +{
 +  [super mouseMoved:event];
-+  if (_scrollerReach == nil) {
++  if (_scrollerReach == nil || _scrollerHold != nil || ![self pointerWithinScrollerReach]) {
 +    return;
 +  }
-+  NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
-+  CGFloat reach = [NSScroller scrollerWidthForControlSize:NSControlSizeRegular scrollerStyle:NSScrollerStyleOverlay];
-+  if (point.x < NSMaxX(self.bounds) - reach || event.timestamp - _scrollerFlashedAt < 0.25) {
-+    return;
-+  }
-+  _scrollerFlashedAt = event.timestamp;
 +  [self flashScrollers];
++  __weak RCTCustomScrollView *weakSelf = self;
++  _scrollerHold = [NSTimer scheduledTimerWithTimeInterval:0.5
++                                                  repeats:YES
++                                                    block:^(NSTimer *timer) {
++                                                      RCTCustomScrollView *strongSelf = weakSelf;
++                                                      if (strongSelf != nil && [strongSelf pointerWithinScrollerReach]) {
++                                                        [strongSelf flashScrollers];
++                                                        return;
++                                                      }
++                                                      [timer invalidate];
++                                                      if (strongSelf != nil) {
++                                                        strongSelf->_scrollerHold = nil;
++                                                      }
++                                                    }];
++}
++
++- (BOOL)pointerWithinScrollerReach
++{
++  if (self.window == nil || !_keepsOverlayScrollers) {
++    return NO;
++  }
++  NSPoint point = [self convertPoint:self.window.mouseLocationOutsideOfEventStream fromView:nil];
++  CGFloat reach = [NSScroller scrollerWidthForControlSize:NSControlSizeRegular scrollerStyle:NSScrollerStyleOverlay];
++  return NSPointInRect(point, self.bounds) && point.x >= NSMaxX(self.bounds) - reach;
 +}
  #endif // macOS]
  
  - (BOOL)shouldGroupAccessibilityChildren
-@@ -320,6 +368,7 @@ @implementation RCTScrollView {
+@@ -320,6 +386,7 @@ @implementation RCTScrollView {
    CGRect _prevFirstVisibleFrame;
    __weak RCTPlatformView *_firstVisibleView; // [macOS]
    RCTCustomScrollView *_scrollView;
@@ -4123,7 +4141,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da5
  #if !TARGET_OS_OSX // [macOS]
    UIView *_contentView;
  #endif // [macOS]
-@@ -535,11 +584,9 @@ - (void)setInverted:(BOOL)inverted
+@@ -535,11 +602,9 @@ - (void)setInverted:(BOOL)inverted
  
  - (void)setHasOverlayStyleIndicator:(BOOL)hasOverlayStyle
  {
@@ -4138,7 +4156,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da5
  }
  #endif // macOS]
  
-@@ -702,6 +749,10 @@ - (void)layoutSubviews
+@@ -702,6 +767,10 @@ - (void)layoutSubviews
  
  - (void)updateClippedSubviews
  {
@@ -4149,7 +4167,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da5
    // Find a suitable view to use for clipping
    RCTPlatformView *clipView = [self react_findClipView]; // [macOS]
    if (!clipView) {
-@@ -730,6 +781,7 @@ - (void)updateClippedSubviews
+@@ -730,6 +799,7 @@ - (void)updateClippedSubviews
      [self react_updateClippedSubviewsWithClipRect:clipRect relativeToView:clipView];
      _lastClippedToRect = bounds;
    }
@@ -4157,7 +4175,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da5
  }
  
  #if TARGET_OS_OSX // [macOS
-@@ -740,13 +792,29 @@ - (void)viewDidMoveToWindow
+@@ -740,13 +810,29 @@ - (void)viewDidMoveToWindow
    NSNotificationCenter *defaultCenter = [NSNotificationCenter defaultCenter];
    if ([self window] == nil) {
      // Unregister for bounds change notifications
@@ -4188,7 +4206,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da5
      // Register for bounds change notifications so we can track scrolling
      [defaultCenter addObserver:self
                        selector:@selector(scrollViewDocumentViewBoundsDidChange:)
-@@ -756,6 +824,10 @@ - (void)viewDidMoveToWindow
+@@ -756,6 +842,10 @@ - (void)viewDidMoveToWindow
                        selector:@selector(preferredScrollerStyleDidChange:)
                            name:NSPreferredScrollerStyleDidChangeNotification
                          object:nil];
@@ -4199,7 +4217,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da5
    }
  
    _notifyDidScroll = ([self window] != nil);
-@@ -886,8 +958,13 @@ - (void)flashScrollIndicators
+@@ -886,8 +976,13 @@ - (void)flashScrollIndicators
  #pragma mark - ScrollView delegate
  
  #if TARGET_OS_OSX // [macOS
@@ -4214,7 +4232,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..77300f8b4fc99b559b104c1455058da5
    if (_disableScrollEvents) {
      return;
    }
-@@ -1427,6 +1504,22 @@ - (void)keyUp:(NSEvent *)event {
+@@ -1427,6 +1522,22 @@ - (void)keyUp:(NSEvent *)event {
    }
  }
  

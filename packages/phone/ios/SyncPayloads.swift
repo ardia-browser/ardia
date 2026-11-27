@@ -128,6 +128,7 @@ enum SyncPayloads {
       "syncedAt": milliseconds(snapshot.syncedAt),
       "selectedProfileId": sync.selectedProfileId,
       "shownProfileId": sync.selectedProfile?.syncId,
+      "cacheRead": sync.hasReadCache,
       "receivers": sync.devicesThatReceiveTabs.map(device),
     ]
   }

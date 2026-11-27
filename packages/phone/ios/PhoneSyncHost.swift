@@ -167,7 +167,7 @@ public final class PhoneSyncHost {
   private func trackView(_ current: Int) {
     let service = service
     let widget = withObservationTracking {
-      _ = (service.snapshot, service.selectedProfileId, service.isEnabled)
+      _ = (service.snapshot, service.selectedProfileId, service.isEnabled, service.hasReadCache)
       return WidgetExporter.snapshot(sync: service, colorChoice: widgetColorChoice)
     } onChange: { [weak self] in
       Task { @MainActor [weak self] in

@@ -164,11 +164,19 @@ std::optional<PasswordSave> ParsePasswordSave(const std::vector<JsonValue>& args
   const std::string* username = StringArg(args, 2, kMaxSyncedFieldBytes);
   const std::string* sealed = StringArg(args, 3, kMaxSealedPasswordBytes);
   const JsonValue* replacing = ArgAt(args, 4);
-  if (!profile || !origin || !username || !sealed || !replacing || replacing->type != JsonValue::Type::kBool) {
+  if (!profile || !origin || !username || !sealed || !replacing) {
+    return std::nullopt;
+  }
+  std::optional<std::string> replaced;
+  if (replacing->is_string()) {
+    if (replacing->text.size() > kMaxSealedPasswordBytes) return std::nullopt;
+    if (!replacing->text.empty()) replaced = replacing->text;
+  } else if (replacing->type != JsonValue::Type::kNull &&
+             (replacing->type != JsonValue::Type::kBool || replacing->flag)) {
     return std::nullopt;
   }
   const bool holdable = LoginOrigin(*origin) == *origin && username->size() <= kMaxLoginUsernameBytes;
-  return PasswordSave{std::move(*profile), *origin, *username, *sealed, replacing->flag, holdable};
+  return PasswordSave{std::move(*profile), *origin, *username, *sealed, std::move(replaced), holdable};
 }
 
 std::optional<Route> RouteOf(std::string_view method) {
@@ -593,15 +601,25 @@ Outcome SyncCore::SealLogins(LoginRead read) {
   return Outcome::Value(std::move(logins));
 }
 
-std::optional<StoredLogin> SyncCore::OpenLogin(const PasswordSave& save) {
+std::optional<SyncedLogin> SyncCore::OpenLogin(const PasswordSave& save) {
   if (!keys_) return std::nullopt;
-  std::string password;
-  if (keys_->OpenPassword(save.sealed, save.origin, save.username, &password) != OpenError::kNone ||
-      password.empty() || password.size() > kMaxLoginPasswordBytes) {
-    Wipe(password);
-    return std::nullopt;
+  const auto open = [&](const std::string& sealed) -> std::optional<StoredLogin> {
+    std::string password;
+    if (keys_->OpenPassword(sealed, save.origin, save.username, &password) != OpenError::kNone ||
+        password.empty() || password.size() > kMaxLoginPasswordBytes) {
+      Wipe(password);
+      return std::nullopt;
+    }
+    return StoredLogin(save.origin, save.username, std::move(password), 0);
+  };
+  std::optional<StoredLogin> login = open(save.sealed);
+  if (!login) return std::nullopt;
+  SyncedLogin synced{std::move(*login), std::nullopt};
+  if (save.replaced) {
+    synced.replaced = open(*save.replaced);
+    if (!synced.replaced) return std::nullopt;
   }
-  return StoredLogin(save.origin, save.username, std::move(password), 0);
+  return synced;
 }
 
 ClipboardWrite PhraseClipboard(std::string words) {

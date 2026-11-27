@@ -13,6 +13,8 @@
 #include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
 
+class Profile;
+
 namespace content {
 class BrowserContext;
 class WebContents;
@@ -43,6 +45,13 @@ std::optional<GURL> AllowedPageUrl(const std::string& requested);
 std::unique_ptr<views::WebView> MakeViewport(content::BrowserContext* profile);
 
 std::span<const std::string_view> HostCapabilities(bool utility);
+
+std::string ArdiaProfileName(Profile* profile);
+
+bool SomeWindowIsNamed(Profile* profile, std::string_view requested);
+
+std::string ExecuteExtensionAction(content::WebContents* contents,
+                                   const base::ListValue* values);
 
 }
 

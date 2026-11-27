@@ -11,7 +11,7 @@ import Testing
     let suite = "summary-look-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
-    LaunchLook.remember(work, drawnDark: false, appDark: false, in: defaults)
+    LaunchLook.remember(LaunchLook.Recalled(colors: work), in: defaults)
     let summary = PageSummaryLook(isPrivate: false, colors: personal, dark: false)
     #expect(summary.look == personal.look)
     #expect(summary.look != LaunchLook.recalled(from: defaults).colors.look)

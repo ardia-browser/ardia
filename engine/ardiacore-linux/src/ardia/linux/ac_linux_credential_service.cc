@@ -686,11 +686,16 @@ void LinuxCredentialsReadLogins(const std::string& engine_profile,
   ResolveCredentialProfile(engine_profile, false, base::BindOnce(&ReadLoginsFor, std::move(done)));
 }
 
-void LinuxCredentialsSaveLogin(const std::string& engine_profile, linux_sync::StoredLogin login, bool replacing,
+void LinuxCredentialsSaveLogin(const std::string& engine_profile, linux_sync::SyncedLogin synced,
                                base::OnceCallback<void(LinuxSyncedSave)> done) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  const linux_sync::StoredLogin& login = synced.login;
+  std::optional<std::string_view> expected;
+  if (synced.replaced) {
+    expected = synced.replaced->password;
+  }
   credentials::Plan save =
-      credentials::PlanSyncedLogin(engine_profile, login.realm, login.username, login.password, replacing);
+      credentials::PlanSyncedLogin(engine_profile, login.realm, login.username, login.password, expected);
   if (!save.ok()) {
     return std::move(done).Run(LinuxSyncedSave::kSkipped);
   }

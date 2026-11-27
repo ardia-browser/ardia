@@ -44,6 +44,8 @@ export type ProfileLink = {
   tabsRetire?: true;
 };
 
+export type ChainOutage = { folder: string; seen: string | null; counted: boolean };
+
 export type SyncDoc = {
   v: 1;
   enabled: boolean;
@@ -58,6 +60,8 @@ export type SyncDoc = {
   joining: boolean;
   seqs?: Record<string, number>;
   reseedScopes?: string[];
+  reseedCycleOwed?: true;
+  chainOutage?: ChainOutage;
   sends?: Record<string, SendLedger>;
   tabCloses?: Record<string, string[]>;
   removing?: string[] | Record<string, ProfileRemoval>;

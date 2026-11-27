@@ -25,8 +25,8 @@ import { pageUi } from "../page/store";
 import { settingsNav } from "../settings/nav";
 import { refreshDefaultBrowser } from "../settings/defaultBrowser";
 import { forgetPosition, frontScrollCameToRest, saveTabPosition, watchFrontScroll } from "./positions";
-import { noteLocalChange, showSpace } from "../sync/store";
-import { isSplit, spaceToShow, tabsInSpace } from "../tabs/spaces";
+import { noteLocalChange, pickSpace, syncData } from "../sync/store";
+import { isSplit, spaceToPick, tabsInSpace } from "../tabs/spaces";
 import { currentPreferences, loadPreferences, setPreference } from "../settings/store";
 import type { VisitTransition, Visit } from "../store/browserDatabase";
 import { enterTarget, rowTarget, resolve, type TrayRow } from "../search/omnibox";
@@ -226,14 +226,14 @@ function copyCalculation(value: string) {
   showToast(`Copied ${value}`, "calculation");
 }
 
-function showSpaceOf(id: string) {
+function pickSpaceOf(id: string) {
   const data = currentTabs();
-  const space = spaceToShow(data.spaces, findTab(data, id));
-  if (space) showSpace(space);
+  const space = spaceToPick(data.spaces, findTab(data, id), syncData().pickedProfileId);
+  if (space) pickSpace(space);
 }
 
 export function beginOpeningTab(id: string, veiled = false, cardWidth: number | null = null) {
-  showSpaceOf(id);
+  pickSpaceOf(id);
   setIncognito(isPrivateTab(currentTabs(), id));
   selectTabById(id);
   cancelArrivalWait();
@@ -454,7 +454,7 @@ export function openTab(id: string) {
   takeLeavingPicture(id);
   hideArchiveCard();
   dismissSearch();
-  showSpaceOf(id);
+  pickSpaceOf(id);
   if (!setIncognito(isPrivateTab(currentTabs(), id))) {
     closePrivateTabs();
     useBrowse.setState({ surface: "start", sheet: null, opening: null, veiled: null, covered: null });

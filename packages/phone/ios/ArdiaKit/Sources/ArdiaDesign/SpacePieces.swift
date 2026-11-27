@@ -345,6 +345,7 @@ public struct PinnedTiles: View {
 private struct PinnedTileButton: View {
   let tile: PinnedTile
   let open: (_ url: String, _ title: String) -> Void
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
     if let folder = tile.folder, !folder.isEmpty {
@@ -353,14 +354,14 @@ private struct PinnedTileButton: View {
           Button(tab.title.isEmpty ? (BrowserURL.host(of: tab.url) ?? tab.url) : tab.title) { open(tab.url, tab.title) }
         }
       } label: {
-        TitledTileFace(tile: tile, isFolder: true)
+        titledFace(isFolder: true)
       }
       .buttonStyle(.plain)
       .accessibilityLabel(PinnedTileFace.label(for: tile))
       .accessibilityHint("Shows the folder’s tabs.")
     } else {
       Button { open(tile.url, tile.title) } label: {
-        TitledTileFace(tile: tile, isFolder: false)
+        titledFace(isFolder: false)
       }
       .buttonStyle(PressableStyle())
       .accessibilityLabel(PinnedTileFace.label(for: tile))
@@ -372,14 +373,8 @@ private struct PinnedTileButton: View {
       }
     }
   }
-}
 
-private struct TitledTileFace: View {
-  let tile: PinnedTile
-  let isFolder: Bool
-  @Environment(\.dynamicTypeSize) private var typeSize
-
-  var body: some View {
+  private func titledFace(isFolder: Bool) -> some View {
     VStack(spacing: TabsLayout.tileTitleGap) {
       PinnedTileFace(tile: tile, isFolder: isFolder)
       if !typeSize.isAccessibilitySize {
@@ -430,7 +425,8 @@ public struct PinnedTileFace: View {
   }
 
   public static func label(for tile: PinnedTile) -> String {
-    tile.title.isEmpty ? (BrowserURL.host(of: tile.url) ?? tile.url) : tile.title
+    let title = tile.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    return title.isEmpty ? (BrowserURL.host(of: tile.url) ?? tile.url) : title
   }
 }
 #endif

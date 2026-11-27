@@ -114,7 +114,7 @@ import { cardHitSeq, currentPhoneGeneration, DECK_HIT_LABELS, deckAwaitsEntrance
 import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 import { DECK_PULL, pullTarget, stackPullTarget } from "../../lib/deckPull";
 import { glassFadeMs } from "../ui/motion";
-import { barSpanCenter, deckStripOf } from "../../lib/bottomBarSpan";
+import { barSpanCenter, deckHeaderSides, deckStripOf } from "../../lib/bottomBarSpan";
 import { DeckStripClip } from "./DeckStripClip";
 import { useBarGlyphFade, useDeckPulled } from "./deckPulled";
 
@@ -182,6 +182,7 @@ export const TabDeck = memo(function TabDeck() {
   const deckStrip = deckStripOf(deckBarLayout, insets);
   const stripSide = deckStrip?.side ?? null;
   const stripInset = deckStrip?.inset ?? 0;
+  const headerSides = deckHeaderSides(insets, chromeLayout.barSideInset, deckStrip);
   const g = useMemo(
     () => (material ? materialDeckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, deckHeaderBottom(), DECK_SCREEN_CORNER()) : deckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, design, deckHeaderBottom(), DECK_SCREEN_CORNER(), "arc", stripSide ? { side: stripSide, inset: stripInset } : null)),
     [width, height, insets.top, insets.bottom, safeSide, design, stripSide, stripInset],
@@ -1446,8 +1447,9 @@ export const TabDeck = memo(function TabDeck() {
                       underlay={chromeGlassHeld}
                       hits={pulls}
                       safeTop={g.safeTop}
-                      safeSide={g.safeSide}
-                      sideInset={chromeLayout.barSideInset}
+                      sides={headerSides}
+                      stripSide={stripSide}
+                      width={width}
                       menusShown={shown && phase.kind === "settled"}
                       onMenu={setChromeMenu}
                       glassShown={chromeGlassHeld ? shown : glassShown}

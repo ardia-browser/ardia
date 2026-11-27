@@ -62,6 +62,8 @@ test("an iPhone 17 Pro on its side gets Arc's stack, its card as tall as the ban
   act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
   const root = redesigned(<TabDeck />);
   expect(hosts(root, "deckStripClip")).toHaveLength(0);
+  expect(hosts(root, "deckHeaderLead")).toHaveLength(0);
+  expect(hosts(root, "deckHeaderTrail")).toHaveLength(0);
   const card = root.root.findAll((node) => node.props.testID === "deckCard" && typeof node.type === "string")[0]!;
   const shown = deckGeometry(852, 393, 0, 21, 59, Platform.OS, "redesigned", deckHeaderBottom(), 55, "arc");
   expect(flat(card).width).toBeCloseTo(shown.cardWidth, 1);
@@ -145,14 +147,14 @@ for (const pose of DUO_POSES) {
     const deck = redesigned(<TabDeck />);
     const deckBar = hosts(deck, "deckBottomBar")[0]!;
     expect(flat(deckBar)).toMatchObject({ paddingLeft: pose.span.left, paddingRight: pose.span.right });
-    expect(holds(deckBar, "deckBarIncognito")).toBe(!pose.ends);
+    expect(holds(deckBar, "deckBarIncognito")).toBe(false);
     expect(holds(deckBar, "deckBarPlus")).toBe(false);
     const stripPlus = hosts(deck, "deckStripPlus")[0]!;
     expect(flat(stripPlus)).toMatchObject({ top: pose.deckPlusY, left: pose.stripX - 24, width: 48 });
-    const stripIncognito = hosts(deck, "deckStripIncognito")[0];
-    if (pose.ends) expect(flat(stripIncognito!)).toMatchObject({ top: pose.tabsY, left: pose.stripX - 24, width: 48 });
-    else expect(stripIncognito).toBeUndefined();
-    if (pose.ends) expect(holds(stripIncognito!, "deckBarIncognito")).toBe(true);
+    const stripIncognito = hosts(deck, "deckStripIncognito")[0]!;
+    expect(flat(stripIncognito)).toMatchObject({ top: -55, left: pose.stripX - 24, width: 48 });
+    expect(holds(stripIncognito, "deckBarIncognito")).toBe(true);
+    if (!pose.ends) expect(holds(deckBar, "deckSearchTabs")).toBe(true);
     const plus = deck.root.findAll((node) => node.props.testID === "deckBarPlus" && node.props.place)[0]!;
     expect(plus.props.place).toMatchObject({ right: pose.width - pose.stripX + 32 });
     unmount(deck);
@@ -186,8 +188,13 @@ for (const pose of DUO_POSES) {
     const clip = hosts(root, "deckStripClip")[0]!;
     expect(flat(clip)).toMatchObject({ left: 0, width: pose.width, overflow: "hidden" });
     expect(getAnimatedStyle(clip).transform).toEqual([{ translateX: strip - pose.width }]);
-    const header = root.root.findAll((node) => typeof node.type === "string" && node.props.testID === "deckHeader");
-    expect(flat(header[0]!).paddingHorizontal).toBe(pose.insets.right + 24);
+    const header = hosts(root, "deckHeader")[0]!;
+    expect(flat(header).paddingHorizontal).toBe(24);
+    expect(flat(header).top).toBe(4);
+    expect(holds(hosts(root, "deckHeaderTrail")[0]!, "deckHeaderMore")).toBe(true);
+    expect(holds(hosts(root, "deckHeaderLead")[0]!, "deckHeaderMore")).toBe(false);
+    expect(flat(hosts(root, "deckHeaderLead")[0]!)).toMatchObject({ flex: 1, flexBasis: 0, minWidth: 44 });
+    expect(flat(hosts(root, "deckHeaderTrail")[0]!)).toMatchObject({ flex: 1, flexBasis: 0, minWidth: 44, justifyContent: "flex-end" });
     if (Platform.OS !== "ios") return unmount(root);
     act(() => deckGrid.setDeckGrid(true));
     act(() => jest.advanceTimersByTime(1000));
@@ -195,6 +202,20 @@ for (const pose of DUO_POSES) {
     unmount(root);
   });
 }
+
+test("with the strip on the leading side the deck mirrors: the header's ··· leads in the strip, and Incognito and + stack in the strip 48 from the left edge", () => {
+  const [closed] = DUO_POSES;
+  onDuo({ ...closed, insets: { top: 0, bottom: 34, left: 84, right: 0 } } as unknown as (typeof DUO_POSES)[number]);
+  act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
+  const root = redesigned(<TabDeck />);
+  expect(flat(hosts(root, "deckHeader")[0]!).paddingHorizontal).toBe(24);
+  expect(holds(hosts(root, "deckHeaderLead")[0]!, "deckHeaderMore")).toBe(true);
+  expect(holds(hosts(root, "deckHeaderTrail")[0]!, "deckHeaderMore")).toBe(false);
+  expect(flat(hosts(root, "deckBottomBar")[0]!)).toMatchObject({ paddingLeft: 96, paddingRight: 24 });
+  expect(flat(hosts(root, "deckStripIncognito")[0]!)).toMatchObject({ top: -55, left: 24, width: 48 });
+  expect(flat(hosts(root, "deckStripPlus")[0]!)).toMatchObject({ top: 0, left: 24, width: 48 });
+  unmount(root);
+});
 
 test("with no hinge the page bar keeps Tabs and + in its row", () => {
   act(() => browse.useBrowse.setState({ surface: "browsing", sheet: null, deckEntrance: null, frozenOrder: null, opening: null }));

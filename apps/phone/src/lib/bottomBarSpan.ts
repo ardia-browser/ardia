@@ -59,3 +59,13 @@ export function besideStrip(strip: DuoStrip, width: number, menuWidth: number, m
 }
 
 export const deckStripOf = (layout: BottomBarLayout, insets: { left: number; right: number }): DeckStrip | null => (layout.strip ? { side: layout.strip.side, inset: layout.strip.side === "left" ? insets.left : insets.right } : null);
+
+export function deckHeaderSides(insets: { left: number; right: number }, side: number, strip: DeckStrip | null): BarSpan {
+  if (!strip) {
+    const safe = Math.max(insets.left, insets.right) + side;
+    return { left: safe, right: safe };
+  }
+  return { left: (strip.side === "left" ? 0 : insets.left) + side, right: (strip.side === "right" ? 0 : insets.right) + side };
+}
+
+export const deckStripSlots = (strip: DuoStrip) => (strip.ends ? { plus: strip.plus, incognito: strip.tabs } : { plus: strip.tabs, incognito: strip.plus });

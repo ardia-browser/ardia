@@ -16,11 +16,13 @@ import { SpaceTitle, spaceMenuSymbol } from "../search/StartSpaces";
 import { FadingGlyphs, GlassCircleButton, type ChromeFade } from "./ChromeButtons";
 import { DeckHitTarget } from "./DeckHitTarget";
 import { useUpdateDot } from "../../state/appUpdate/store";
+import type { BarSpan } from "../../lib/bottomBarSpan";
 
 type Props = {
   safeTop: number;
-  safeSide: number;
-  sideInset: number;
+  sides: BarSpan;
+  stripSide?: "left" | "right" | null;
+  width: number;
   menusShown?: boolean;
   onMenu?: (open: boolean) => void;
   moreOpener?: MenuOpener;
@@ -73,23 +75,38 @@ export function useDeckSpaces() {
   return { syncEnabled: status.isEnabled, spaces, current, spaceItems };
 }
 
-export function DeckHeader({ safeTop, safeSide, sideInset, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
+export function DeckHeader({ safeTop, sides, stripSide = null, width, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
   const theme = useTheme();
   const incognito = useIncognito();
   const updateDot = useUpdateDot();
   const { syncEnabled, spaces, current, spaceItems } = useDeckSpaces();
-  const side = safeSide + sideInset;
   const below = safeTop + deckHeaderBottom() + deckChromeLayout.menuGap;
   const opened = () => onMenu?.(true);
   const closed = () => onMenu?.(false);
   const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, onOpen: opened, onClose: closed };
   const moreItems = deckMoreMenuItems({ syncEnabled, archive: false, updateDot });
   const rowTop = safeTop + deckChromeLayout.headerCenter - browseLayout.hitTarget / 2;
+  const padding = sides.left === sides.right ? { paddingHorizontal: sides.left } : { paddingLeft: sides.left, paddingRight: sides.right };
+  const centred = stripSide !== null;
+  const moreLeads = stripSide === "left";
+  const spacesLeft = centred ? Math.max((width - tabsLayout.menuWidth) / 2, sides.left) : sides.left;
+  const more = (
+    <DeckHitTarget control="more" live={hits} originY={rowTop}>
+      <MenuTrigger opener={moreOpener} items={moreItems} {...menu} previewRadius={deckChromeLayout.headerCircle / 2} place={moreLeads ? { top: below, left: sides.left, width: tabsLayout.menuWidth } : { top: below, right: sides.right, width: tabsLayout.menuWidth }}>
+        {({ onPress }) => <GlassCircleButton icon={iconRoles.more} label={actionWords.more} testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} incognito={incognito} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} underlay={underlay} onPress={onPress ?? noop} />}
+      </MenuTrigger>
+    </DeckHitTarget>
+  );
   return (
-    <View testID="deckHeader" pointerEvents="box-none" style={[styles.row, { top: rowTop, paddingHorizontal: side }]}>
+    <View testID="deckHeader" pointerEvents="box-none" style={[styles.row, { top: rowTop }, padding]}>
+      {centred ? (
+        <View testID="deckHeaderLead" pointerEvents="box-none" style={styles.flank}>
+          {moreLeads ? more : null}
+        </View>
+      ) : null}
       {current && spaces.length > 1 ? (
         <DeckHitTarget control="spaces" live={hits} originY={rowTop} style={styles.switcher}>
-        <MenuTrigger opener={spacesOpener} items={spaceItems} {...menu} previewRadius={deckLook.switcherCorner} place={{ top: below, left: side, width: tabsLayout.menuWidth }}>
+        <MenuTrigger opener={spacesOpener} items={spaceItems} {...menu} previewRadius={deckLook.switcherCorner} place={{ top: below, left: spacesLeft, width: tabsLayout.menuWidth }}>
           {({ onPress }) => (
             <ChromeSurface testID="deckSwitcherGlass" shape="capsule" cornerRadius={deckLook.switcherCorner} incognito={incognito} dark={theme.dark} shown={glassShown} shownMs={glassShownMs} underlay={underlay}>
               <Tappable kind="text" label={`Space, ${current.name}`} hint="Shows your Mac’s spaces." onPress={onPress ?? noop} style={styles.switcherPress}>
@@ -114,12 +131,16 @@ export function DeckHeader({ safeTop, safeSide, sideInset, menusShown = true, on
           )}
         </FadingGlyphs>
       )}
-      <View style={styles.spacer} />
-      <DeckHitTarget control="more" live={hits} originY={rowTop}>
-        <MenuTrigger opener={moreOpener} items={moreItems} {...menu} previewRadius={deckChromeLayout.headerCircle / 2} place={{ top: below, right: side, width: tabsLayout.menuWidth }}>
-          {({ onPress }) => <GlassCircleButton icon={iconRoles.more} label={actionWords.more} testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} incognito={incognito} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} underlay={underlay} onPress={onPress ?? noop} />}
-        </MenuTrigger>
-      </DeckHitTarget>
+      {centred ? (
+        <View testID="deckHeaderTrail" pointerEvents="box-none" style={[styles.flank, styles.trail]}>
+          {moreLeads ? null : more}
+        </View>
+      ) : (
+        <>
+          <View style={styles.spacer} />
+          {more}
+        </>
+      )}
     </View>
   );
 }
@@ -131,5 +152,7 @@ const styles = StyleSheet.create({
   switcher: { flexShrink: 1 },
   switcherPress: { height: deckLook.switcherHeight, justifyContent: "center", paddingLeft: deckLook.switcherLead, paddingRight: deckLook.switcherTrail },
   spacer: { flex: 1 },
+  flank: { flex: 1, flexBasis: 0, minWidth: deckChromeLayout.headerCircle, flexDirection: "row", alignItems: "center" },
+  trail: { justifyContent: "flex-end" },
   fallback: { fontWeight: "600" },
 });

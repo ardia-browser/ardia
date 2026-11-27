@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { pageBarClearance, toastBottom, toastDragDismisses, toastPlace } from "./placement.ts";
+import { FLOATING_BAR_PLACE, floatingBarCenter } from "../../lib/deckGeometry.ts";
+import { floatingBarClearance, pageBarClearance, toastBottom, toastDragDismisses, toastPlace } from "./placement.ts";
 
 const base = { keyboardLift: null, safeBottom: 24, barClearance: 64, hostBottomY: 2400 / 2.75, barTopY: null, gap: 8 };
 
@@ -31,4 +32,13 @@ test("over a page the toast clears the floating bar by 64 points, and Android's 
   assert.equal(pageBarClearance(null, 64, 8), 64);
   assert.equal(pageBarClearance({ inset: 8, height: 64 }, 64, 8), 80);
   assert.equal(toastBottom({ ...base, barClearance: pageBarClearance({ inset: 8, height: 64 }, 64, 8) }), 104);
+});
+
+test("over a page with the floating bar the toast's bottom sits one gap above the bar's top, never on it", () => {
+  const android = { ...base, safeBottom: 0, barClearance: floatingBarClearance(floatingBarCenter(0, "android"), FLOATING_BAR_PLACE.control, 8, 0) };
+  assert.equal(toastBottom(android), 45.5 + 24 + 8);
+  const buttons = { ...base, safeBottom: 48, barClearance: floatingBarClearance(floatingBarCenter(48, "android"), FLOATING_BAR_PLACE.control, 8, 48) };
+  assert.equal(toastBottom(buttons), 48 + 8 + 24 + 24 + 8);
+  const iPhone = { ...base, safeBottom: 34, barClearance: floatingBarClearance(floatingBarCenter(34, "ios"), FLOATING_BAR_PLACE.control, 8, 34) };
+  assert.equal(toastBottom(iPhone), 45.5 + 24 + 8);
 });

@@ -13,6 +13,10 @@ export function pageBarClearance(materialBar: { inset: number; height: number } 
   return materialBar ? materialBar.inset + materialBar.height + gap : floatingClearance;
 }
 
+export function floatingBarClearance(barCenterFromBottom: number, control: number, gap: number, safeBottom: number): number {
+  return barCenterFromBottom + control / 2 + gap - safeBottom;
+}
+
 export function toastPlace(place: ToastPlacement & { safeTop: number }): { top: number } | { bottom: number } {
   if (place.keyboardLift !== null) return { top: place.safeTop + TOAST_KEYBOARD_TOP };
   return { bottom: toastBottom({ ...place, keyboardLift: null }) };

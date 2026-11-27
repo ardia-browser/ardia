@@ -7,7 +7,8 @@ import { keyboardIsUp } from "../../lib/trayMotion";
 import { useBottomLift } from "../search/useKeyboardHeight";
 import { useSurface } from "../../state/browse/hooks";
 import { useDeckBarTop, useToast } from "../../state/toasts/hooks";
-import { pageBarClearance, TOAST_MOTION, toastDragDismisses, toastPlace, type ToastPlacement } from "../../state/toasts/placement";
+import { floatingBarClearance, pageBarClearance, TOAST_MOTION, toastDragDismisses, toastPlace, type ToastPlacement } from "../../state/toasts/placement";
+import { FLOATING_BAR_PLACE, floatingBarCenter } from "../../lib/deckGeometry";
 import { dismissesToast, toastAnnouncement, toastDragReturn, toastSemantics, toastSpokenLabel } from "../../state/toasts/semantics";
 import { dismissToast, holdToast, tapToast, type ToastIcon } from "../../state/toasts/store";
 import { ChromeSurface, font, PlateSymbol, PlateText, space, stroke, tabsMotion, toastLayout, toastMotion, useDesign, usePressStyle, useTheme, type SymbolName, useReduceMotion } from "../ui";
@@ -46,14 +47,16 @@ function ToastLayer() {
   const insets = useSafeAreaInsets();
   const surface = useSurface();
   const barTop = useDeckBarTop();
-  const material = useDesign() === "material";
+  const design = useDesign();
+  const material = design === "material";
   const frame = useRef<ViewInstance>(null);
   const [hostBottom, setHostBottom] = useState(0);
+  const floatingClearance = design === "redesigned" ? floatingBarClearance(floatingBarCenter(insets.bottom, Platform.OS), FLOATING_BAR_PLACE.control, space.s, insets.bottom) : toastLayout.barClearance;
   const spot: ToastSpot = {
     safeTop: insets.top,
     keyboardLift: null,
     safeBottom: insets.bottom,
-    barClearance: pageBarClearance(material ? materialBottomBar : null, toastLayout.barClearance, space.s),
+    barClearance: pageBarClearance(material ? materialBottomBar : null, floatingClearance, space.s),
     hostBottomY: hostBottom,
     barTopY: surface === "browsing" ? null : barTop,
     gap: space.s,

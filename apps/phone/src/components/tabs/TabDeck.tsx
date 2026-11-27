@@ -1420,11 +1420,10 @@ export const TabDeck = memo(function TabDeck() {
                 deckHeight={deckHeight}
                 incognito={incognito}
                 privateCount={privateCount}
-                hasTabs={allTabs.length > 0}
                 chromeStyle={chromeStyle}
                 onQuery={setNeedle}
                 onCloseIncognito={confirmLeaveIncognito}
-                onCloseAll={confirmCloseAll}
+                onCloseAll={allTabs.length > 0 ? confirmCloseAll : undefined}
                 menusShown={shown && phase.kind === "settled"}
                 onMenu={setChromeMenu}
               />
@@ -1443,10 +1442,8 @@ export const TabDeck = memo(function TabDeck() {
                       safeTop={g.safeTop}
                       safeSide={g.safeSide}
                       sideInset={chromeLayout.barSideInset}
-                      hasTabs={allTabs.length > 0}
                       menusShown={shown && phase.kind === "settled"}
                       onMenu={setChromeMenu}
-                      onCloseAll={confirmCloseAll}
                       glassShown={chromeGlassHeld ? shown : glassShown}
                       glassShownMs={pulledIn.current || tabSwitchCuts() ? 0 : CHROME_GLASS_MS}
                       glyphFade={glassChrome && !chromeGlassHeld ? chromeOpacity : undefined}
@@ -1464,6 +1461,7 @@ export const TabDeck = memo(function TabDeck() {
                       incognito={incognito}
                       privateCount={privateCount}
                       onCloseIncognito={confirmLeaveIncognito}
+                      onCloseAll={allTabs.length > 0 ? confirmCloseAll : undefined}
                       onQuery={setNeedle}
                       menusShown={shown && phase.kind === "settled"}
                       onMenu={setChromeMenu}

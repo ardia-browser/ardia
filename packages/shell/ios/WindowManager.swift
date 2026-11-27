@@ -27,6 +27,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   private override init() {
     super.init()
+    SavedKeyResponders.shared.install()
     NotificationCenter.default.addObserver(self, selector: #selector(appDidBecomeActive(_:)), name: NSApplication.didBecomeActiveNotification, object: nil)
   }
   func window(_ id: String) -> NSWindow? { managed[id]?.window }
@@ -272,6 +273,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   }
   private func adopt(from: NSWindow, to: NSWindow) {
     guard let id = id(of: from), let entry = managed[id] else { return }
+    SavedKeyResponders.shared.windowReplaced(from)
     NotificationCenter.default.removeObserver(self, name: nil, object: from)
     entry.window = to
     if !from.title.isEmpty { to.title = from.title }
@@ -366,6 +368,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       return window.close()
     }
     managed[id] = nil
+    SavedKeyResponders.shared.windowClosed(window, id: id)
     NotificationCenter.default.removeObserver(self, name: nil, object: window)
     dropFrameReport(window)
     window.animationBehavior = .none
@@ -414,7 +417,10 @@ final class WindowManager: NSObject, NSWindowDelegate {
       lastPlaced = window
       lastKeyBrowser = window
     }
-    ShellEvents.send(.window, ["type": "focus", "id": id])
+    let becameKey = SavedKeyResponders.shared.restoreOnBecomeKey(window, id: id)
+    var event: [String: Any] = ["type": "focus", "id": id, "restored": becameKey.restored]
+    if let field = becameKey.field { event["field"] = field }
+    ShellEvents.send(.window, event)
   }
 
   @objc private func appDidBecomeActive(_ notification: Notification) {
@@ -438,6 +444,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   func windowWillClose(_ notification: Notification) {
     guard let window = notification.object as? NSWindow, let id = id(of: window), let entry = managed[id] else { return }
+    SavedKeyResponders.shared.windowClosed(window, id: id)
     let closedByJS = entry.closingFromJS
     flushFrameReport(window)
     managed[id] = nil

@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "../browser/store";
 import { engineBookmarkRoots, ensureRoots, removeBookmarkTree } from "../bookmarks/bookmarks";
-import { engineProfile, incognitoOriginal, newId, viewTabIds, without } from "../browser/model";
+import { engineProfile, incognitoOriginal, isIncognitoProfile, newId, viewTabIds, without } from "../browser/model";
 import { handPagesOutOfProfile } from "../pins/pinShare";
 import { DEFAULT_PROFILE_ID, settingsWith } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
@@ -13,7 +13,7 @@ export type ProfilesSlice = {
   profileOrder: string[];
   orphanedProfileData: string[];
 
-  createProfile(options: { name: string; color?: ProfileColor; icon?: string | null; shareWith?: string | null; shareTopApps?: boolean }): string;
+  createProfile(options: { id?: string; name: string; color?: ProfileColor; icon?: string | null; shareWith?: string | null; shareTopApps?: boolean }): string;
   updateProfile(id: string, patch: Partial<Pick<Profile, "name" | "icon" | "switcherDot" | "pinnedCollapsed" | "shareTopApps" | "syncTabs" | "passwordManager">>): void;
   setProfileLook(id: string, look: Partial<Pick<Profile, "color" | "theme" | "presetThemes">>): void;
   deleteProfile(id: string): void;
@@ -21,6 +21,13 @@ export type ProfilesSlice = {
   setDefaultProfile(id: string): void;
   profileDataDeleted(engineId: string): void;
 };
+
+const deletionListeners = new Set<(profileId: string) => void>();
+
+export function onProfileDeleted(listener: (profileId: string) => void): () => void {
+  deletionListeners.add(listener);
+  return () => void deletionListeners.delete(listener);
+}
 
 export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "plum", icon: null, createdAt: 0, presetThemes: {}, seenTheme: null, seenColor: "plum" };
 
@@ -54,12 +61,13 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     profileOrder: [DEFAULT_PROFILE.id],
     orphanedProfileData: [],
 
-    createProfile({ name, color, icon = null, shareWith, shareTopApps }) {
+    createProfile({ id, name, color, icon = null, shareWith, shareTopApps }) {
       const s = get();
       const source = shareWith ? s.profiles[shareWith] : undefined;
       const chosen = color ?? unusedProfileColor(s.profiles);
+      const reusable = !!id && !s.profiles[id] && !isIncognitoProfile(id) && !s.orphanedProfileData.includes(id);
       const profile: Profile = {
-        id: newId("p"),
+        id: reusable ? id : newId("p"),
         name: name.trim() || `Profile ${s.profileOrder.length + 1}`,
         color: chosen,
         icon,
@@ -145,6 +153,7 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
       for (const w of Object.values(get().windows)) {
         if (!viewTabIds(get(), w.id).length) get().newTab(w.id);
       }
+      for (const listener of [...deletionListeners]) listener(id);
     },
 
     reorderProfiles(ids) {

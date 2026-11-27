@@ -16,6 +16,9 @@ struct WebKitTabLife {
   var historySave: DispatchWorkItem?
   var pageColor: String?
   var contentsBackgroundColor: NSColor?
+  var fullscreenKeptShownCounted = false
+  var fullscreenExits = WebKitFullscreenExits()
+  var fullscreenSight: NSObjectProtocol?
 }
 
 enum WebKitTabHistory {
@@ -298,10 +301,14 @@ extension WebKitTab {
 
   func lifecycleWatches(_ view: WebKitWebView) -> [NSObject] {
     if life.frozen { applyFrozen() }
-    return [view.observe(\.fullscreenState) { [weak self] v, _ in self?.fullscreenChanged(v.fullscreenState) }]
+    return [view.observe(\.fullscreenState) { [weak self] v, _ in
+      self?.fullscreenPageMoved(v.fullscreenState)
+      self?.fullscreenChanged(v.fullscreenState)
+    }]
   }
 
   private func fullscreenChanged(_ state: WKWebView.FullscreenState) {
+    updateSight()
     let on = state == .enteringFullscreen || state == .inFullscreen
     guard on != pageMedia.fullscreen else { return }
     pageMedia.fullscreen = on

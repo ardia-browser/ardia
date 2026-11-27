@@ -131,6 +131,7 @@ class LinuxPageChannel : public content::WebContentsObserver,
   content::WeakDocumentPtr message_document_;
   base::WeakPtr<LinuxPageDropTrack> drop_track_;
   LinuxNewTabLinks new_tab_links_;
+  LinuxTrustedInputs trusted_inputs_;
   ardia::desktop_swipe::PageSwipe swipe_;
   double activating_input_at_ = -1;
   base::RepeatingClosureList page_video_listeners_;

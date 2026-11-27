@@ -47,10 +47,12 @@ export const cancelWindowRecording = () => Report().cancelRecording();
 export const recordingThumbnail = (path: string, out: string) => Report().recordingThumbnail(path, out);
 export const gzipFile = (source: string, destination: string, removeSource: boolean) => Report().gzipFile(source, destination, removeSource);
 export const gzipText = (text: string, destination: string) => Report().gzipText(text, destination);
+export const NO_UPLOADER = "no uploader";
+
 export async function uploadFile(id: string, url: string, method: string, headers: Record<string, string>, path: string): Promise<UploadReply> {
   const reply: unknown = await Report().upload(id, url, method, headers, path);
   const answer = reply && typeof reply === "object" ? (reply as Partial<UploadReply>) : {};
-  return { status: typeof answer.status === "number" ? answer.status : 0, body: typeof answer.body === "string" ? answer.body : "", error: answer.error ?? (reply ? null : "no uploader") };
+  return { status: typeof answer.status === "number" ? answer.status : 0, body: typeof answer.body === "string" ? answer.body : "", error: answer.error ?? (reply ? null : NO_UPLOADER) };
 }
 export const cancelUploads = () => ignoreFailure(Report().cancelUploads());
 export const onReportEvent = (listener: (event: ReportEvent) => void) => Report().addListener("onReport", listener);

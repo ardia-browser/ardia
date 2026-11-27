@@ -36,6 +36,16 @@ static BOOL gBlockAutoplayEverywhere = NO;
 static char kScriptFramesKey;
 static char kSameSiteFramesKey;
 
+const CFTimeInterval kTrustedInputSeconds = 5;
+const NSUInteger kTrustedInputOriginsKept = 16;
+
+static NSInteger AutoplayBlockedCount(id value) {
+  if (![value isKindOfClass:NSNumber.class] || CFGetTypeID((__bridge CFTypeRef)value) == CFBooleanGetTypeID()) return 0;
+  const double count = [value doubleValue];
+  if (!std::isfinite(count) || count < 1) return 0;
+  return count >= 20 ? 20 : (NSInteger)count;
+}
+
 static NSDictionary *DisplayMediaAudioOffer(NSDictionary *message) {
   if (!Flag(message, @"audio")) return nil;
   NSDictionary *support = ArdiaCoreEngine.desktopCaptureAudio;
@@ -71,6 +81,8 @@ void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL m
     if (main && ArdiaFieldTimingEnabled()) config[@"fieldTiming"] = @YES;
     if (main) config[@"selectionPopover"] = @(gSelectionPopover);
     if (main || (sender.length && [sender isEqualToString:OriginOf(to.url)])) config[@"fieldProvider"] = FieldProviderFor(profile) ?: @NO;
+    if (!main && sender.length)
+      if (NSNumber *age = [[ArdiaTabRegistry viewForTab:to] trustedInputAgeMsForOrigin:sender]) config[@"embedInputAgeMs"] = age;
     config[@"peek"] = gPeekModifier;
     config[@"split"] = SplitLinkModifier();
     config[@"peekOtherSites"] = @([ArdiaTabRegistry viewForTab:to].peeksLinksToOtherSites);
@@ -100,6 +112,19 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
 
 @implementation ArdiaWebView (PageMessages)
 
+- (void)noteTrustedInputFrom:(NSString *)origin {
+  if (!_trustedInputAt) _trustedInputAt = [NSMutableDictionary dictionary];
+  if (!_trustedInputAt[origin] && _trustedInputAt.count >= kTrustedInputOriginsKept) [_trustedInputAt removeAllObjects];
+  _trustedInputAt[origin] = @(CACurrentMediaTime());
+}
+
+- (nullable NSNumber *)trustedInputAgeMsForOrigin:(NSString *)origin {
+  NSNumber *at = _trustedInputAt[origin];
+  if (!at) return nil;
+  const CFTimeInterval age = CACurrentMediaTime() - at.doubleValue;
+  return age >= 0 && age < kTrustedInputSeconds ? @((NSInteger)(age * 1000)) : nil;
+}
+
 + (void)setDisplayMediaPicker:(BOOL)enabled {
   gDisplayMediaPicker = enabled;
   ArdiaCoreEngine.pagesPickDisplayMedia = enabled;
@@ -126,6 +151,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   NSDictionary *dict = [data isKindOfClass:NSDictionary.class] ? data : nil;
   frameId = frameId ?: @"";
   if ([kind isEqualToString:@"hello"]) {
+    if (main) [_trustedInputAt removeAllObjects];
     PeekTrace(@{@"event" : @"hello", @"main" : @(main), @"frame" : frameId ?: @"", @"url" : Text(dict, @"url", 8192) ?: @""});
     if (main && !tab.discarded) [self resetPageMedia];
     if (main) _reports.exclusiveFrames = nil;
@@ -163,7 +189,16 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   } else if ([kind isEqualToString:@"selection"] && main) {
     [self emit:@"selection" payload:@{@"selection" : SelectionState(dict, RootPointsPerLocalPoint(self)) ?: NSNull.null}];
   } else if ([kind isEqualToString:@"newTabLink"] && dict) {
-    [self noteNewTabLink:Text(dict, @"url", 8192)];
+    [self noteNewTabLink:Text(dict, @"url", 8192) blankWindow:Flag(dict, @"blankWindow")];
+  } else if ([kind isEqualToString:@"trustedInput"] && !main) {
+    if ([VerifiedOrigin(verifiedOrigin) hasPrefix:@"http"]) [self noteTrustedInputFrom:VerifiedOrigin(verifiedOrigin)];
+  } else if ([kind isEqualToString:@"autoplayBlocked"] && dict) {
+    const NSInteger count = AutoplayBlockedCount(dict[@"count"]);
+    const CFTimeInterval now = CACurrentMediaTime();
+    if (count > 0 && now - _autoplayBlockedAt >= 1) {
+      _autoplayBlockedAt = now;
+      [self emit:@"autoplayBlocked" payload:@{@"count" : @(count)}];
+    }
   } else if ([kind isEqualToString:@"linkDrop"] && main) {
     NSString *url = Text(dict, @"url", 8192);
     NSString *scheme = (url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil) ?: @"";

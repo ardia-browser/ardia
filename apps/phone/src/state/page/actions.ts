@@ -8,8 +8,7 @@ import { copyLink, openExternal, preferredLanguage, pressHaptic, shareLink, shar
 import { cancelSearch, closeArchive, deckPullCommitted, openTab, showDeck, takeSheetFromSettings, useBrowse } from "../browse/store";
 import { display } from "../search/omnibox";
 import { prepareSearch, presentSearch, searchState } from "../search/store";
-import { currentPreferences, setPreference } from "../settings/store";
-import { designFor } from "../../lib/design";
+import { setPreference } from "../settings/store";
 import { Platform } from "react-native";
 import { listenToPages, openPageInBackground, pageHandle, pageIsFullscreen, pageRequest, settled, storeFind, storeFullscreen, storeRequest, usePages } from "../pages/store";
 import { closeTabById, currentTabs, openNewTab, useTabs } from "../tabs/store";
@@ -20,7 +19,7 @@ import { backLayer, downloadedToast, downloadFailedToast, downloadingToast, open
 import { installDownloadedPackage } from "../appUpdate/store";
 import { onboardingBack } from "../onboarding/store";
 import { refreshSettings } from "../settings/actions";
-import { openSettings, openSettingsPage, popSettings, settingsNav, type SettingsRoute } from "../settings/nav";
+import { closeSettings, openSettings, openSettingsPage, popSettings, pushSettings, settingsNav, useSettingsNav, type SettingsRoute } from "../settings/nav";
 import { pinToMac, sendTab } from "../sync/actions";
 import type { SyncedDevice } from "../../platform/sync";
 import { linkToCopy } from "./linkCopy";
@@ -29,7 +28,7 @@ import { endMenuTiming, markMenuPhase, markMenuPressed } from "./menuTiming";
 import { markFindPhase, markFindPressed } from "./findTiming";
 import { closeVoiceSearch, useVoice } from "../voice/store";
 import { addOnlineAgainListener } from "../../platform/network";
-import { countUsage } from "../telemetry/telemetry";
+import { countUsage, usageCountingWindow } from "../telemetry/telemetry";
 import { geminiNanoMissingCount, pageSummaryOpenedCount, pageSummarySettledCounts } from "../../lib/telemetrySchema";
 import { pageSummariesEnabled, pageSummariesRevision, refreshPageSummariesEnabled } from "../pageSummary/enabled";
 import { dismissArchiveCard } from "../browse/archiveCard";
@@ -37,7 +36,7 @@ import { copy } from "../../lib/platformCopy";
 import { launchValues } from "../../platform/launch";
 import { actionWords } from "../../lib/sharedWords";
 import { syncData } from "../sync/store";
-import { closeLibrary, libraryBack, openLibrary, useLibrary, type LibrarySection } from "../library/store";
+import { libraryBack } from "../library/store";
 import { showToast, TOAST_LONG_DURATION_MS } from "../toasts/store";
 import { syncOffered } from "../../platform/system";
 
@@ -87,11 +86,12 @@ const READ_FAILED = Symbol("site read failed");
 
 async function readMenuSite(url: string, host: string | null, isPrivate: boolean): Promise<SiteRead | null> {
   const revision = bumpSite(host, isPrivate);
+  const defaults = nightShadeDefaults;
   const [shade, blockers] = await Promise.all([
     settled<Awaited<ReturnType<typeof pages.nightShade>> | typeof READ_FAILED>(() => pages.nightShade(host, isPrivate), READ_FAILED),
     settled<boolean | typeof READ_FAILED>(() => blocking.isEnabledForSite(url, isPrivate), READ_FAILED),
   ]);
-  if (shade === READ_FAILED || blockers === READ_FAILED || siteRevision(host, isPrivate) !== revision) return null;
+  if (shade === READ_FAILED || blockers === READ_FAILED || siteRevision(host, isPrivate) !== revision || defaults !== nightShadeDefaults) return null;
   const site: MenuSite = { host, isPrivate, nightShade: shade?.mode ?? "disabled", blockersEnabled: blockers };
   if (!isPrivate && host) knownSites.set(host, site);
   return { site, revision };
@@ -180,7 +180,7 @@ async function showPageMenu(menuDocked: boolean) {
   const shown = pageUi().menuSite;
   const known = tab.isPrivate || !host ? null : (knownSites.get(host) ?? null);
   const startSite = known && sameSite(shown, known) ? shown : known;
-  usePageUi.setState({ menuOpen: true, menuOpening: thisOpening.id, menuPage: "main", menuDocked, titleFeedback: null, menuSite: startSite, translationAsk: null });
+  usePageUi.setState({ menuOpen: true, menuOpening: thisOpening.id, menuPage: "main", menuSettings: null, menuDocked, titleFeedback: null, menuSite: startSite, translationAsk: null });
   markMenuPhase("open");
   if (menuDocked && !tab.isPrivate) countUsage("site_settings_sheet_opened");
   const [, capabilities, translation] = await Promise.all([
@@ -252,7 +252,7 @@ export function pageMenuPresentation({ phase, token }: MenuPresentation) {
   pageMenuHidden(token);
   if (!isCurrentShowing(token) || pageUi().menuOpen) return;
   endMenuTiming();
-  if (pageUi().menuPage === "library") usePageUi.setState({ menuPage: "main" });
+  if (pageUi().menuPage !== "main") usePageUi.setState({ menuPage: "main" });
 }
 
 export function askTranslation() {
@@ -280,11 +280,6 @@ export function releaseTranslationAsk(asked: TranslationAsk | null) {
   setTimeout(() => {
     if (asked && pageUi().translationAsk === asked) usePageUi.setState({ translationAsk: null });
   }, 0);
-}
-
-export function openLibraryInMenu(section: LibrarySection) {
-  usePageUi.setState({ menuPage: "library" });
-  openLibrary(section);
 }
 
 export const shareOverPageMenu = () => {
@@ -373,49 +368,45 @@ export function sendCurrentTab(device: SyncedDevice) {
   if (tab) void sendTab(tab, device);
 }
 
-export function openSiteSettings() {
-  usePageUi.setState({ menuPage: "siteSettings" });
-  if (materialDesign()) void refreshSettings();
+function countSiteSettingsOpened() {
+  markMenuPhase("siteSettingsOpened");
+  if (!selectedTab()?.isPrivate) countUsage("page_menu_site_settings_opened");
 }
 
-const materialDesign = () => designFor(Platform.OS, false, currentPreferences().materialYou) === "material";
+export function openSiteSettings() {
+  if (!pageUi().menuOpen) return;
+  usePageUi.setState({ menuPage: "siteSettings" });
+  countSiteSettingsOpened();
+  void refreshSettings();
+}
 
 export const openDockedSiteSettings = () => showPageMenu(true);
 
 export const closeMenuSubpage = () => usePageUi.setState({ menuPage: "main" });
 
 export function openSiteSettingsSheet() {
-  afterPageMenu(() => openSettingsPage({ page: "siteSettings" }), { sameDocument: false });
+  if (!pageUi().menuOpen) return;
+  usePageUi.setState({ menuPage: "siteSettings", menuSettings: settingsNav().generation + 1 });
+  openSettingsPage({ page: "siteSettings" });
+  countSiteSettingsOpened();
 }
 
-function somethingElseOverPage(tabId: string) {
-  const ui = pageUi();
-  const browse = useBrowse.getState();
-  return pageRequest(tabId) !== null || pageIsFullscreen(tabId) || ui.menuOpen || ui.findOpen || ui.readerTabId !== null || ui.press !== null || browse.surface !== "browsing" || browse.sheet !== null || searchState().open || settingsNav().open || useLibrary.getState().open || useVoice.getState().presented;
+export const siteSettingsInMenu = (ui: { menuOpen: boolean; menuPage: string } = pageUi()) => ui.menuOpen && ui.menuPage === "siteSettings";
+
+export const settingsInMenu = (ui: { menuOpen: boolean; menuPage: string; menuSettings: number | null } = pageUi(), generation = settingsNav().generation) => siteSettingsInMenu(ui) && ui.menuSettings === generation;
+
+type SiteChange = "site_settings_zoom_changed" | "site_settings_night_shade_changed" | "site_settings_desktop_site_changed";
+
+function siteChangeCounter(field: SiteChange): () => void {
+  if (!siteSettingsInMenu() || selectedTab()?.isPrivate) return () => undefined;
+  const count = usageCountingWindow();
+  return () => count(field);
 }
 
-export function openSiteSettingsOverMenu() {
-  const document = currentDocument();
-  markMenuPhase("siteSettingsPressed");
-  afterMenu = null;
+export function openSiteSettingsRoute(route: SettingsRoute) {
   closePageMenu();
-  const open = () => {
-    markMenuPhase("siteSettingsOpened");
-    openSettingsPage({ page: "siteSettings" });
-  };
-  if (!document) {
-    open();
-    return;
-  }
-  requestAnimationFrame(() => {
-    if (opening?.id !== document.opening || selectedId() !== document.tabId || somethingElseOverPage(document.tabId)) return;
-    open();
-  });
-}
-
-export function openSiteSettingsRoute(route: SettingsRoute, { direct = false } = {}) {
-  closePageMenu();
-  openSettings(route, { direct });
+  openSettingsPage({ page: "siteSettings" });
+  pushSettings(route);
 }
 
 const withPage = (run: (id: string) => Promise<unknown>) => {
@@ -597,21 +588,75 @@ export function setNightShadeOn(on: boolean) {
   if (!target) return;
   const { tab, site, host, url } = target;
   const mode: NightShadeMode = on ? "always" : "disabled";
+  const counted = siteChangeCounter("site_settings_night_shade_changed");
   const next = { ...site, nightShade: mode };
   const revision = writeSite(next);
   usePageUi.setState({ menuSite: next });
   void Promise.resolve()
     .then(() => pages.setNightShade(mode, host, tab.isPrivate))
-    .catch(() => siteWriteFailed(next, revision, url));
+    .then(counted, () => siteWriteFailed(next, revision, url));
 }
 
-export const zoomOut = () => withPage((id) => pages.zoomOut(id));
-export const zoomIn = () => withPage((id) => pages.zoomIn(id));
-export const resetZoom = () => withPage((id) => pages.setPageZoom(id, 1));
+let nightShadeDefaults = 0;
+
+export function nightShadeDefaultChanged() {
+  nightShadeDefaults++;
+  knownSites.clear();
+  preparedSite = null;
+  const now = opening;
+  const tab = selectedTab();
+  if (!pageUi().menuOpen || !now || !tab || tab.id !== now.tabId) return;
+  const url = tabUrl(tab);
+  const host = hostOf(url);
+  if (!host || host !== now.host) return;
+  if (pageUi().menuSite) usePageUi.setState({ menuSite: null });
+  void readMenuSite(url, host, tab.isPrivate).then(publishSite, () => undefined);
+}
+
+const pageZoomOf = (id: string) => usePages.getState().navigation[id]?.pageZoom ?? 1;
+
+const zoomQueues = new Map<string, Promise<number | null>>();
+const zoomsReadBack = new WeakMap<object, number>();
+
+const pageState = (id: string): object | undefined => usePages.getState().navigation[id];
+
+function knownZoom(id: string): number {
+  const state = pageState(id);
+  return (state && zoomsReadBack.get(state)) ?? pageZoomOf(id);
+}
+
+function zoomed(run: (id: string) => Promise<number>) {
+  const id = selectedId();
+  if (!id) return;
+  const counted = siteChangeCounter("site_settings_zoom_changed");
+  const step = (zoomQueues.get(id) ?? Promise.resolve(null)).then(async (previous) => {
+    const state = pageState(id);
+    const before = previous ?? knownZoom(id);
+    const after = await run(id);
+    if (state && pageState(id) === state) zoomsReadBack.set(state, after);
+    if (Math.abs(after - before) > 0.001) counted();
+    return after;
+  });
+  const settledStep = step.catch(() => null);
+  zoomQueues.set(id, settledStep);
+  void settledStep.then(() => {
+    if (zoomQueues.get(id) === settledStep) zoomQueues.delete(id);
+  });
+}
+
+export const zoomOut = () => zoomed((id) => pages.zoomOut(id));
+export const zoomIn = () => zoomed((id) => pages.zoomIn(id));
+export const resetZoom = () => zoomed((id) => pages.setPageZoom(id, 1));
 
 export function setDesktopSite(on: boolean) {
+  const counted = siteChangeCounter("site_settings_desktop_site_changed");
   closePageMenu();
-  withPage((id) => pages.setDesktopSite(id, on));
+  const id = selectedId();
+  if (!id) return;
+  quietly(async () => {
+    await pages.setDesktopSite(id, on);
+    counted();
+  });
 }
 
 export function setBlockersOn(on: boolean) {
@@ -881,11 +926,12 @@ usePages.subscribe((pagesNow, pagesBefore) => {
   if (!before || before.isLoading || before.url !== navigation.url) prepareSearch();
 });
 
-useLibrary.subscribe((library, before) => {
+useSettingsNav.subscribe((nav, before) => {
   const ui = pageUi();
-  if (before.open && !library.open && ui.menuOpen && ui.menuPage === "library") closePageMenu();
+  if (!siteSettingsInMenu(ui) || ui.menuSettings === null) return;
+  if (ui.menuSettings !== nav.generation || (before.open && !nav.open)) closePageMenu();
 });
 
 usePageUi.subscribe((ui, before) => {
-  if (before.menuOpen && !ui.menuOpen && ui.menuPage === "library" && useLibrary.getState().open) closeLibrary();
+  if (settingsInMenu(before) && !siteSettingsInMenu(ui) && settingsNav().open) closeSettings();
 });

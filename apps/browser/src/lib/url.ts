@@ -8,6 +8,10 @@ export const samePageKey = (url: string) => withoutFragment(url).replace(/\/$/, 
 
 export const samePage = (a: string, b: string) => samePageKey(a) === samePageKey(b);
 
+const fragmentOf = (url: string) => /#(.*)$/.exec(url)?.[1] ?? "";
+
+export const sameAddress = (a: string, b: string) => samePage(a, b) && fragmentOf(a) === fragmentOf(b);
+
 export const isWebPageUrl = (url: string) => /^(https?|file):/i.test(url);
 
 export const displayHostOf = (url: string) => displayHost(hostOf(url));

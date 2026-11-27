@@ -5,11 +5,13 @@ extension WebKitTab {
   func listen(to view: WebKitWebView) {
     view.onFocus = { [weak self] in self?.pageFocused() }
     view.onPressRefused = { [weak self] in self?.pagePressRefused() }
+    view.onNavigate = { [weak self] in self?.pageNavigated($0) }
   }
 
   func stopListening(to view: WebKitWebView) {
     view.onFocus = nil
     view.onPressRefused = nil
+    view.onNavigate = nil
   }
 
   func noteShownChanged() {
@@ -42,4 +44,8 @@ extension WebKitTab {
   private func pageFocused() { emit("focus") }
 
   private func pagePressRefused() { emit("pagePress", ["refused": true]) }
+
+  private func pageNavigated(_ direction: WebKitPagePresses.Navigation) {
+    emit("command", ["command": direction == .back ? "back" : "forward", "text": ""])
+  }
 }

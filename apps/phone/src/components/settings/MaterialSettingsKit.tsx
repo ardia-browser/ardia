@@ -179,10 +179,10 @@ export function MaterialNavRow({ title, icon, value, detail, dot = false, valueA
   );
 }
 
-export function MaterialToggleRow({ title, icon, value, onChange, detail, buttonRef }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null> }) {
+export function MaterialToggleRow({ title, icon, value, onChange, detail, buttonRef, disabled = false }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null>; disabled?: boolean }) {
   const ripple = useMaterialRipple();
   return (
-    <Pressable ref={buttonRef} testID={`materialSettingsRow:${title}`} accessibilityRole="switch" accessibilityLabel={title} accessibilityHint={detail} accessibilityState={{ checked: value }} android_ripple={ripple} onPress={() => onChange(!value)} style={rowStyle(detail)}>
+    <Pressable ref={buttonRef} testID={`materialSettingsRow:${title}`} accessibilityRole="switch" accessibilityLabel={title} accessibilityHint={detail} accessibilityState={{ checked: value, disabled }} disabled={disabled} android_ripple={ripple} onPress={() => onChange(!value)} style={[rowStyle(detail), disabled ? styles.disabledRow : null]}>
       <View style={styles.rowInner} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         <MaterialSettingsLeading icon={icon} />
         <ItemText title={title} supporting={detail} />
@@ -287,6 +287,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 16, minHeight: materialSize.listItemOneLine, paddingHorizontal: 16, paddingVertical: 8 },
   rowTwoLine: { minHeight: materialSize.listItemTwoLine },
   leading: { width: materialSize.icon, height: materialSize.icon, alignItems: "center", justifyContent: "center" },
+  disabledRow: { opacity: MATERIAL_STATE.disabledContent },
   rowInner: { flex: 1, flexDirection: "row", alignItems: "center", gap: 16 },
   radioList: { marginHorizontal: -24 },
   radioRow: { flexDirection: "row", alignItems: "center", minHeight: materialSize.touchTarget + 8, paddingHorizontal: 12, gap: 4 },

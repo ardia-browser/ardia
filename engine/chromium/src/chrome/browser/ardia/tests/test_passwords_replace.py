@@ -28,10 +28,11 @@ class PasswordsReplaceTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("passwords replace scenarios passed", result.stdout)
 
-    def test_replace_reaches_only_the_profile_store(self):
+    def test_replace_reaches_only_the_password_stores(self):
         text = SOURCE.read_text()
         self.assertIn("ProfilePasswordStoreFactory::GetForProfile", text)
-        for other in ("AccountPasswordStoreFactory", "PasswordsPrivateDelegate", "SavedPasswordsPresenter",
+        self.assertIn("AccountPasswordStoreFactory::GetForProfile", text)
+        for other in ("PasswordsPrivateDelegate", "SavedPasswordsPresenter",
                       "ChangeCredential", "AddPassword(", "Reauth"):
             self.assertNotIn(other, text)
         self.assertRegex(text, r"AC_PROFILE_CALL\(ac_passwords_replace, ardia::Sensitive\{")

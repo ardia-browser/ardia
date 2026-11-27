@@ -13,6 +13,7 @@ namespace ardia {
 
 namespace linux_sync {
 class StoredLogin;
+struct SyncedLogin;
 struct LoginRead;
 }
 
@@ -30,7 +31,7 @@ void LinuxCredentialsReadLogins(const std::string& engine_profile,
                                 base::OnceCallback<void(linux_sync::LoginRead)> done);
 enum class LinuxSyncedSave { kSaved, kSkipped, kFailed };
 
-void LinuxCredentialsSaveLogin(const std::string& engine_profile, linux_sync::StoredLogin login, bool replacing,
+void LinuxCredentialsSaveLogin(const std::string& engine_profile, linux_sync::SyncedLogin synced,
                                base::OnceCallback<void(LinuxSyncedSave)> done);
 bool LinuxCredentialsPasswordsUsable(Profile* profile);
 

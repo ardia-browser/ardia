@@ -21,10 +21,14 @@ import {
   shownProfile,
   syncBanner,
   inboxNotice,
+  launchSpace,
+  startupPatch,
+  pickAfterView,
   scanJudge,
   syncedEngineName,
   syncHeroSubtitle,
   syncRowSubtitle,
+  syncViewLoaded,
 } from "./syncRules.ts";
 
 test("the Sync With Mac row and page say what each phase needs, as SyncStatusWords does", () => {
@@ -239,6 +243,42 @@ test("the switcher marks the profile the view shows, even before the user has pi
   assert.equal(shownProfile(view({ shownProfileId: "gone", selectedProfileId: null }), status({ selectedProfileId: null }))?.syncId, "personal");
   assert.equal(shownProfile(view({ shownProfileId: undefined }), status({ selectedProfileId: "work" }))?.syncId, "work");
   assert.equal(shownProfile(view({ shownProfileId: "work" }), status({ isEnabled: false })), null);
+});
+
+test("the launch look follows the space just picked while sync's view still shows the one before", () => {
+  const before = view({ selectedProfileId: "work", shownProfileId: "work" });
+  assert.equal(launchSpace(before, status({ selectedProfileId: "work" }), "personal")?.syncId, "personal");
+  assert.equal(launchSpace(before, status({ selectedProfileId: "personal" }), "personal")?.syncId, "personal");
+  assert.equal(launchSpace(before, status({ selectedProfileId: "work" }), null)?.syncId, "work");
+  assert.equal(launchSpace(before, status({ selectedProfileId: "work" }), "gone")?.syncId, "work");
+  assert.equal(launchSpace(before, status({ isEnabled: false }), "personal"), null);
+});
+
+test("once sync's view confirms the picked space, a status that hasn't caught up never takes the launch look back", () => {
+  const confirmed = view({ selectedProfileId: "personal", shownProfileId: "personal" });
+  assert.equal(launchSpace(confirmed, status({ selectedProfileId: "work" }), pickAfterView("personal", confirmed))?.syncId, "personal");
+});
+
+test("a picked space is let go once sync's view shows it", () => {
+  assert.equal(pickAfterView("personal", view({ selectedProfileId: "work" })), "personal");
+  assert.equal(pickAfterView("personal", view({ selectedProfileId: "personal" })), null);
+  assert.equal(pickAfterView(null, view()), null);
+});
+
+test("sync's view counts as loaded only once a real view has come and native has read its cached spaces", () => {
+  assert.equal(syncViewLoaded(view({ profiles: [], selectedProfileId: null, cacheRead: false }), true), false);
+  assert.equal(syncViewLoaded(view({ cacheRead: true }), true), true);
+  assert.equal(syncViewLoaded(view(), true), true);
+  assert.equal(syncViewLoaded(view({ cacheRead: true }), false), false);
+});
+
+test("the startup fetch never replaces a status or view an event already brought", () => {
+  const fetchedView = view({ cacheRead: false, profiles: [] });
+  const fetchedStatus = status({ selectedProfileId: "personal" });
+  assert.deepEqual(startupPatch(fetchedStatus, fetchedView, { status: false, view: false }), { status: fetchedStatus, view: fetchedView });
+  assert.deepEqual(startupPatch(fetchedStatus, fetchedView, { status: true, view: true }), {});
+  assert.deepEqual(startupPatch(fetchedStatus, null, { status: false, view: false }), { status: fetchedStatus });
+  assert.deepEqual(startupPatch(null, fetchedView, { status: false, view: true }), {});
 });
 
 test("a synced group takes its Mac colour by name or hex", () => {

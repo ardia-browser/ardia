@@ -5,6 +5,7 @@ skip chromium-pref-hash-new-mac-waits-for-safe-storage.patch
 skip chromium-extension-state-mirror-hooks.patch
 skip chromium-embedder-discard-veto.patch
 skip chromium-mac-async-root-frame-sink-teardown.patch
+skip chromium-mac-soft-navigation-time-origin.patch
 skip chromium-extension-renderer-relaunch.patch
 take chromium-linux-action-popup-hook.patch
 take chromium-linux-settings-overrides.patch

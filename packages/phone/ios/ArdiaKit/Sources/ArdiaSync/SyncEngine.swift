@@ -128,9 +128,19 @@ public actor SyncEngine {
     host.use(grant)
   }
 
-  public func cachedSnapshot() -> SyncSnapshot? {
-    guard !retired, let data = host.files.readSealed(host.files.snapshotURL, keys: host.keys, fileId: SyncFiles.snapshotFile) else { return nil }
-    return try? Self.decoder.decode(SyncSnapshot.self, from: data)
+  public enum CachedSnapshot: Equatable, Sendable {
+    case missing
+    case read(SyncSnapshot)
+    case unreadable
+  }
+
+  public func cachedSnapshot() -> CachedSnapshot {
+    guard !retired else { return .unreadable }
+    switch host.files.read(host.files.snapshotURL, keys: host.keys, fileId: SyncFiles.snapshotFile) {
+    case .missing: return .missing
+    case .opened(let data): return (try? Self.decoder.decode(SyncSnapshot.self, from: data)).map(CachedSnapshot.read) ?? .unreadable
+    case .unreadable, .failed: return .unreadable
+    }
   }
 
   public func cycle(_ local: LocalBrowsing, retiring: Bool = false) throws -> CycleOutcome {

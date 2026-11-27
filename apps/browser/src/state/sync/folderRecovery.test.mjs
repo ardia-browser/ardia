@@ -15,6 +15,11 @@ let createChainError = null;
 let onCreateChain = null;
 let afterChainStatus = null;
 let writeFindsChainGone = false;
+let beforeWrite = null;
+let beforeRead = null;
+let onFolderInfo = null;
+let desktopWriteErrors = false;
+let beforeChainStatus = null;
 
 const chainOf = (folder) => folders.get(folder);
 const scopeOf = (folder, chain, scope) => {
@@ -35,7 +40,7 @@ const native = {
   createPhrase: async () => true,
   unlock: async () => true,
   forget: async () => {},
-  folderInfo: async (path) => ({
+  folderInfo: async (path) => (onFolderInfo?.(path), {
     path,
     defaultPath: "/Users/test/Library/Mobile Documents/com~apple~CloudDocs/Ardia Sync",
     iCloudAvailable,
@@ -46,6 +51,7 @@ const native = {
   }),
   chooseFolder: async () => null,
   chainStatus: async (folder) => {
+    beforeChainStatus?.(folder);
     const status = !folders.has(folder) ? "unavailable" : chainOf(folder).has(OURS) ? "ok" : "missing";
     afterChainStatus?.(folder);
     return status;
@@ -56,16 +62,25 @@ const native = {
     if (chainOf(folder)?.has(OURS)) throw new Error("the chain already exists");
     plant(folder, OURS);
   },
+  createChainInNewFolder: async (folder) => {
+    onCreateChain?.(folder);
+    if (createChainError) throw createChainError;
+    if (folders.has(folder)) throw Object.assign(new Error("A folder is already there"), { code: "ERR_SYNC_FOLDER_EXISTS" });
+    plant(folder, OURS);
+  },
   deleteChain: async (folder) => void chainOf(folder)?.delete(OURS),
   write: async (folder, scope, payload) => {
-    if (writeFindsChainGone) throw Object.assign(new Error("This device's data is gone from the sync folder"), { code: "ERR_SYNC_CHAIN_MISSING" });
+    beforeWrite?.(folder);
+    if (desktopWriteErrors && !folders.has(folder)) throw Object.assign(new Error(`Couldn't write to ${folder}: No such file or directory`), { code: "ERR_SYNC_FOLDER" });
+    if (writeFindsChainGone || !chainOf(folder)?.has(OURS)) throw Object.assign(new Error("This device's data is gone from the sync folder"), { code: "ERR_SYNC_CHAIN_MISSING" });
     if (writeFailsAfter-- <= 0) throw new Error("disk full");
     const id = `f${++ids}`;
     scopeOf(folder, OURS, scope).set(id, payload);
     return id;
   },
   read: async (folder, scope, known) => {
-    if (!chainOf(folder)?.has(OURS)) throw new Error(`no chain in ${folder}`);
+    beforeRead?.(folder, scope, known);
+    if (!chainOf(folder)?.has(OURS)) return { files: [], pending: [], damaged: [], present: [] };
     const here = [...(chainOf(folder).get(OURS).get(scope) ?? [])];
     return { files: here.filter(([id]) => !known.includes(id)).map(([id, payload]) => ({ id, payload })), pending: [], damaged: [], present: here.map(([id]) => id) };
   },
@@ -95,6 +110,11 @@ const reset = () => {
   onCreateChain = null;
   afterChainStatus = null;
   writeFindsChainGone = false;
+  beforeWrite = null;
+  beforeRead = null;
+  onFolderInfo = null;
+  desktopWriteErrors = false;
+  beforeChainStatus = null;
   heldDocSaves.on = false;
   heldDocSaves.queue.length = 0;
   shell.docs.clear();
@@ -216,6 +236,10 @@ test("recreateSyncFolder handles iCloud off, already-reappeared folder, existing
   const { folderRecreateMessage } = await import("./folderRecovery.ts");
   assert.equal(partial.error, "uploadFailed");
   assert.equal(folderRecreateMessage(partial, "iCloud Drive > Ardia Sync"), null);
+  assert.equal(
+    folderRecreateMessage({ error: "failed", message: "You don’t have permission to save the file “x” in the folder “Ardia Sync”." }, "~/Sync"),
+    "Couldn’t recreate the sync folder at ~/Sync: You don’t have permission to save the file “x” in the folder “Ardia Sync”.",
+  );
   assert.match(partial.message, /disk full/);
   assert.equal(engine.useSync.getState().status, "stalled");
   assert.ok(JSON.parse(shell.docs.get("sync.json")).reseedScopes?.includes(scope), "unseeded scope stays queued for retry");
@@ -481,6 +505,404 @@ test("a retry that sees the chain but finds it gone on write counts no return; a
     assert.equal(engine.useSync.getState().status, "updated");
     const back = engine.takeSnapshotWrites();
     assert.deepEqual({ missing: back.chainMissing, returned: back.chainReturned }, { missing: 0, returned: 1 });
+  } finally {
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+const brokenFolder = async (name) => {
+  const engine = await import(`./engine.ts?${name}`);
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  S().addBookmark({ profileId: "default", url: "https://kept.example/", title: "Kept" });
+  await engine.syncNow();
+  folders.delete(SYNC_FOLDER);
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().status, "offline");
+  return engine;
+};
+
+test("pairing stays off after a recreation until a cycle has uploaded this device's data, also when nothing was saved to reseed", async () => {
+  reset();
+  const engine = await import("./engine.ts?first-upload-fails");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  S().addBookmark({ profileId: "default", url: "https://first.example/", title: "First" });
+  folders.delete(SYNC_FOLDER);
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().status, "offline");
+
+  writeFailsAfter = 0;
+  assert.deepEqual(await engine.recreateSyncFolder(), { ok: "recreated" });
+  const failed = engine.useSync.getState();
+  assert.equal(failed.status, "stalled");
+  assert.equal(failed.reseeding, true, "the new folder holds none of this device's data yet, so pairing stays off");
+  assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedCycleOwed, true, "what is owed survives a relaunch");
+
+  writeFailsAfter = Infinity;
+  await engine.syncNow();
+  const done = engine.useSync.getState();
+  assert.equal(done.status, "updated");
+  assert.equal(done.reseeding, false);
+  assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedCycleOwed, undefined);
+  assert.ok([...chainOf(SYNC_FOLDER).get(OURS).values()].some((files) => files.size > 0), "the first upload landed");
+});
+
+test("a folder that comes back after the last check is never written into: the native create refuses it", async () => {
+  reset();
+  const engine = await brokenFolder("returns-at-create");
+  onCreateChain = (folder) => plant(folder, "other-chain");
+  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" });
+  assert.equal(chainOf(SYNC_FOLDER).has(OURS), false, "no chain of this phrase next to the one that came back");
+  assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedScopes, undefined, "nothing is owed to a folder that wasn't created");
+});
+
+test("a whole folder removed right before a write shows the folder as unavailable, with Recreate, not the waiting state", async () => {
+  reset();
+  const engine = await import("./engine.ts?folder-gone-at-write");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  await engine.syncNow();
+  S().addBookmark({ profileId: "default", url: "https://late.example/", title: "Late" });
+  beforeWrite = (folder) => {
+    beforeWrite = null;
+    folders.delete(folder);
+  };
+  await engine.syncNow();
+  const state = engine.useSync.getState();
+  assert.equal(state.status, "offline");
+  assert.equal(state.dataMissing, false);
+  assert.match(state.error ?? "", /sync folder is missing/i);
+});
+
+test("a chain removed during a cycle that writes nothing waits for its data instead of reporting Updated", async () => {
+  reset();
+  const engine = await import("./engine.ts?chain-gone-at-read");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  await engine.syncNow();
+  await engine.syncNow();
+  let writes = 0;
+  beforeWrite = () => writes++;
+  let chain = null;
+  beforeRead = (folder) => {
+    beforeRead = null;
+    chain = chainOf(folder).get(OURS);
+    chainOf(folder).delete(OURS);
+  };
+  await engine.syncNow();
+  assert.equal(writes, 0, "the cycle had nothing to write");
+  const waiting = engine.useSync.getState();
+  assert.equal(waiting.status, "stalled");
+  assert.equal(waiting.dataMissing, true, "pairing stays off while the chain is gone");
+
+  chainOf(SYNC_FOLDER).set(OURS, chain);
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().status, "updated");
+  assert.equal(engine.useSync.getState().dataMissing, false);
+});
+
+test("a quit that starts during the last folder check creates nothing", async () => {
+  reset();
+  const { setQuitting } = await import("../app/quit.ts");
+  const engine = await brokenFolder("quit-at-last-probe");
+  let probes = 0;
+  onFolderInfo = () => {
+    if (++probes === 2) setQuitting(true);
+  };
+  try {
+    assert.deepEqual(await engine.recreateSyncFolder(), { error: "busy" });
+    assert.equal(probes, 2);
+    assert.equal(folders.has(SYNC_FOLDER), false, "no folder or chain is created once quitting");
+    assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedScopes, undefined);
+  } finally {
+    setQuitting(false);
+  }
+});
+
+test("pairing stays off until the writes queued while the folder was gone have landed, not just the snapshots", async () => {
+  reset();
+  const { Clock, emptyScope, pull } = await import("@ardia/sync");
+  const engine = await brokenFolder("pending-write-fails");
+  const scope = `p:${JSON.parse(shell.docs.get("sync.json")).profiles.default.syncId}`;
+  S().addBookmark({ profileId: "default", url: "https://offline.example/", title: "Made Offline" });
+  let writes = 0;
+  beforeWrite = () => {
+    if (++writes > 2) throw new Error("disk full");
+  };
+  assert.deepEqual(await engine.recreateSyncFolder(), { ok: "recreated" });
+  assert.ok(writes > 2, "both snapshots landed and a later write failed");
+  const failed = engine.useSync.getState();
+  assert.equal(failed.status, "stalled");
+  assert.equal(failed.reseeding, true, "pairing stays off while a queued write is still owed");
+
+  beforeWrite = null;
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().status, "updated");
+  assert.equal(engine.useSync.getState().reseeding, false);
+  const phone = emptyScope();
+  await pull(phone, { write: () => {}, read: (s, known) => native.read(SYNC_FOLDER, s, known), remove: () => {} }, scope, new Clock("iphone"), Date.now());
+  assert.ok(Object.values(phone.records).some((r) => r.v?.t === "Made Offline"), "the offline edit reached the new folder before pairing opened");
+});
+
+test("Recreate never takes over a folder that is there, empty or not, whether it was there at the status check or appeared after it", async () => {
+  reset();
+  const engine = await brokenFolder("vacant-folder");
+  folders.set(SYNC_FOLDER, new Map());
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().dataMissing, true, "an empty folder that is there is the waiting state: its files may still be downloading");
+  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" });
+  assert.equal(chainOf(SYNC_FOLDER).size, 0);
+
+  folders.delete(SYNC_FOLDER);
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().status, "offline");
+  afterChainStatus = (folder) => {
+    afterChainStatus = null;
+    folders.set(folder, new Map());
+  };
+  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" }, "an empty folder that appears while Recreate runs is left alone too");
+  assert.equal(chainOf(SYNC_FOLDER).size, 0);
+});
+
+test("a chain removed before the read of a scope with no known files waits for its data instead of reporting Updated, and an empty read with a healthy chain still passes", async () => {
+  reset();
+  const engine = await import("./engine.ts?chain-gone-before-empty-scope");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  await engine.syncNow();
+  await engine.syncNow();
+  for (const type of ["bookmarks", "history", "tabs", "pinned", "passwords", "extensions", "settings"]) engine.setTypeSynced(type, false);
+  let emptyScopeRead = false;
+  beforeRead = (folder, scope, known) => {
+    if (!known.length) emptyScopeRead = true;
+  };
+  S().createProfile({ name: "Work" });
+  await engine.syncNow();
+  assert.ok(emptyScopeRead, "a scope with no known files is read in each cycle");
+  assert.equal(engine.useSync.getState().status, "updated", "an empty scope with its chain there is a normal cycle");
+
+  let chain = null;
+  S().createProfile({ name: "Home" });
+  beforeRead = (folder, scope, known) => {
+    if (known.length) return;
+    beforeRead = null;
+    chain = chainOf(folder).get(OURS);
+    chainOf(folder).delete(OURS);
+  };
+  await engine.syncNow();
+  assert.ok(chain, "the chain went before that scope's read");
+  const waiting = engine.useSync.getState();
+  assert.equal(waiting.status, "stalled");
+  assert.equal(waiting.dataMissing, true);
+  chainOf(SYNC_FOLDER).set(OURS, chain);
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().status, "updated");
+});
+
+test("a Linux or Windows write that fails because the whole folder went shows the folder as unavailable, with Recreate", async () => {
+  reset();
+  desktopWriteErrors = true;
+  const engine = await import("./engine.ts?desktop-folder-gone-at-write");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  await engine.syncNow();
+  S().addBookmark({ profileId: "default", url: "https://late.example/", title: "Late" });
+  beforeWrite = (folder) => {
+    beforeWrite = null;
+    folders.delete(folder);
+  };
+  await engine.syncNow();
+  const state = engine.useSync.getState();
+  assert.equal(state.status, "offline");
+  assert.equal(state.dataMissing, false);
+  assert.match(state.error ?? "", /sync folder is missing/i);
+});
+
+test("a folder that is back by the time a failed write is checked retries the cycle instead of reporting its data missing", async () => {
+  reset();
+  const telemetry = await import("../telemetry/client.ts");
+  const engine = await import("./engine.ts?folder-back-at-recheck");
+  telemetry.loadChoice();
+  telemetry.setSharing(true, "settings");
+  try {
+    engine.startSync();
+    assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+    await engine.syncNow();
+    engine.takeSnapshotWrites();
+    S().addBookmark({ profileId: "default", url: "https://blip.example/", title: "Blip" });
+    let held = null;
+    beforeWrite = (folder) => {
+      beforeWrite = null;
+      held = chainOf(folder);
+      folders.delete(folder);
+      beforeChainStatus = (back) => {
+        beforeChainStatus = null;
+        folders.set(back, held);
+      };
+    };
+    await engine.syncNow();
+    assert.ok(held, "the folder was gone at the write");
+    const after = engine.useSync.getState();
+    assert.equal(after.dataMissing, false, "a reconnect that is already over is not the waiting state");
+    assert.notEqual(after.status, "stalled");
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 0, "no missing stretch is recorded");
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().status, "updated");
+  } finally {
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+for (const desktop of [false, true]) {
+  test(`a folder lost during Recreate's first upload shows the folder as unavailable, not a generic stall (${desktop ? "Linux and Windows" : "Mac"} errors)`, async () => {
+    reset();
+    desktopWriteErrors = desktop;
+    const engine = await brokenFolder(`lost-during-reseed-${desktop}`);
+    beforeWrite = (folder) => {
+      beforeWrite = null;
+      folders.delete(folder);
+    };
+    assert.equal((await engine.recreateSyncFolder()).error, "uploadFailed");
+    const state = engine.useSync.getState();
+    assert.equal(state.status, "offline");
+    assert.match(state.error ?? "", /sync folder is missing/i);
+  });
+}
+
+test("a loss first seen while sharing was off is never counted after sharing turns on, even when its verdict waits a cycle", async () => {
+  reset();
+  const telemetry = await import("../telemetry/client.ts");
+  const engine = await import("./engine.ts?loss-consent-carried");
+  telemetry.loadChoice();
+  telemetry.setSharing(false, "settings");
+  try {
+    engine.startSync();
+    assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+    await engine.syncNow();
+    engine.takeSnapshotWrites();
+    writeFindsChainGone = true;
+    S().addBookmark({ profileId: "default", url: "https://one.example/", title: "One" });
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, false, "the first look defers its verdict");
+    telemetry.setSharing(true, "settings");
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, true, "the second look reports the data missing");
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 0, "counted under the consent of the cycle that first saw it");
+  } finally {
+    writeFindsChainGone = false;
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+test("a loss first seen while sharing was off is not counted when the next cycle's opening check finds the data gone after sharing turned on", async () => {
+  reset();
+  const telemetry = await import("../telemetry/client.ts");
+  const engine = await import("./engine.ts?loss-consent-preflight");
+  telemetry.loadChoice();
+  telemetry.setSharing(false, "settings");
+  try {
+    engine.startSync();
+    assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+    await engine.syncNow();
+    engine.takeSnapshotWrites();
+    writeFindsChainGone = true;
+    S().addBookmark({ profileId: "default", url: "https://one.example/", title: "One" });
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, false, "the first look defers its verdict");
+    writeFindsChainGone = false;
+    chainOf(SYNC_FOLDER).delete(OURS);
+    telemetry.setSharing(true, "settings");
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, true, "the opening check reports the data missing");
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 0, "a loss first seen with sharing off is never counted");
+  } finally {
+    writeFindsChainGone = false;
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+const outageEngine = async (name, sharing) => {
+  const telemetry = await import("../telemetry/client.ts");
+  telemetry.loadChoice();
+  telemetry.setSharing(sharing, "settings");
+  const engine = await import(`./engine.ts?${name}`);
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  await engine.syncNow();
+  engine.takeSnapshotWrites();
+  return { telemetry, engine };
+};
+
+test("an outage first seen with sharing off is never counted, however long it lasts after sharing turns on", async () => {
+  reset();
+  const { telemetry, engine } = await outageEngine("outage-off-at-first-sight", false);
+  try {
+    chainOf(SYNC_FOLDER).delete(OURS);
+    await engine.syncNow();
+    telemetry.setSharing(true, "settings");
+    for (let i = 0; i < 3; i++) await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, true);
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 0);
+  } finally {
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+test("an outage first seen in one consent period is never counted in a later one, however many cycles it lasts", async () => {
+  reset();
+  const { telemetry, engine } = await outageEngine("outage-period-changes", true);
+  try {
+    writeFindsChainGone = true;
+    S().addBookmark({ profileId: "default", url: "https://one.example/", title: "One" });
+    await engine.syncNow();
+    telemetry.setSharing(false, "settings");
+    telemetry.setSharing(true, "settings");
+    for (let i = 0; i < 4; i++) await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, true);
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 0);
+  } finally {
+    writeFindsChainGone = false;
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+test("a relaunch before the verdict keeps the consent the outage was first seen under", async () => {
+  reset();
+  const { telemetry } = await outageEngine("outage-relaunch-before", false);
+  try {
+    writeFindsChainGone = true;
+    S().addBookmark({ profileId: "default", url: "https://one.example/", title: "One" });
+    const first = await import("./engine.ts?outage-relaunch-before");
+    await first.syncNow();
+    assert.equal(first.useSync.getState().dataMissing, false, "the first look defers its verdict");
+    telemetry.setSharing(true, "settings");
+    const relaunched = await import("./engine.ts?outage-relaunch-before-2");
+    relaunched.startSync();
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+    for (let i = 0; i < 2; i++) await relaunched.syncNow();
+    assert.equal(relaunched.useSync.getState().dataMissing, true);
+    assert.equal(relaunched.takeSnapshotWrites().chainMissing, 0);
+  } finally {
+    writeFindsChainGone = false;
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+test("a relaunch after an outage was counted never counts it again", async () => {
+  reset();
+  const { telemetry, engine } = await outageEngine("outage-relaunch-after", true);
+  try {
+    chainOf(SYNC_FOLDER).delete(OURS);
+    await engine.syncNow();
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 1, "counted before the relaunch");
+    assert.equal(JSON.parse(shell.docs.get("sync.json")).chainOutage?.counted, true, "the count is saved with the outage");
+    const relaunched = await import("./engine.ts?outage-relaunch-after-2");
+    relaunched.startSync();
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+    for (let i = 0; i < 2; i++) await relaunched.syncNow();
+    assert.equal(relaunched.useSync.getState().dataMissing, true);
+    assert.equal(relaunched.takeSnapshotWrites().chainMissing, 0);
   } finally {
     telemetry.setSharing(false, "settings");
   }

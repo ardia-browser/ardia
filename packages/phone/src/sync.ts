@@ -83,6 +83,7 @@ export type SyncedView = {
   syncedAt: number | null;
   selectedProfileId: string | null;
   shownProfileId?: string | null;
+  cacheRead?: boolean;
   pendingPins?: { profileSyncId: string; url: string }[];
   receivers: SyncedDevice[];
 };

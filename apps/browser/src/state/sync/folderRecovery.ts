@@ -1,12 +1,12 @@
-import { compact, folderTransport, type Clock, type FolderInfo, type LogFile, type ScopeState, type SyncNative } from "../../platform/sync";
+import { compact, folderTransport, type Clock, type FolderInfo, type LogFile, type ScopeState, type SyncNative, type Transport } from "../../platform/sync";
 import { errorText } from "../../lib/errors";
 import { isQuitting } from "../app/quit";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import type { ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
-import { noteFolderRecreate } from "./cycleWork";
+import { noteChainMissing, noteFolderRecreate, noteFolderUnavailable } from "./cycleWork";
 import { historyExpired } from "./historyAdapter";
-import { APP_SCOPE, type SyncDoc, type SyncStatus } from "./syncDoc";
+import { APP_SCOPE, type SyncDoc, type SyncStatus, type SyncUi } from "./syncDoc";
 
 type SyncNativeApi = NonNullable<typeof SyncNative>;
 
@@ -46,6 +46,53 @@ export function unavailableFolderError(info: Pick<FolderInfo, "inICloud" | "iClo
   return "The sync folder isn’t available. Check that it’s still there and that Ardia can open it.";
 }
 
+export const CHAIN_MISSING_TEXT = `This device is out of sync. Sync may have been reset from another device, or the sync folder hasn’t finished syncing. Everything on this ${PLATFORM_TERMS.computer} is kept, and sync carries on once its data is back. To set sync up again, choose Stop Syncing.`;
+
+type ChainGoneContext = { native: SyncNativeApi; doc: SyncDoc; folder: string; consent: ConsentToken | null; wasOffline: boolean; publish: (patch: Partial<SyncUi>) => void };
+
+export async function publishChainGone(status: string, { native, doc, folder, consent, wasOffline, publish }: ChainGoneContext): Promise<boolean> {
+  if (status === "unavailable") {
+    if (!wasOffline) noteFolderUnavailable(consent);
+    publish({ status: "offline", error: unavailableFolderError((await native.folderInfo?.(folder).catch(() => null)) ?? null), dataMissing: false });
+    return true;
+  }
+  if (status !== "missing") return false;
+  noteChainMissing(doc, folder, consent);
+  publish({ status: "stalled", error: CHAIN_MISSING_TEXT, dataMissing: true });
+  return true;
+}
+
+const chainGoneError = () => Object.assign(new Error("This device's data is gone from the sync folder"), { code: "ERR_SYNC_CHAIN_MISSING" });
+
+export function chainCheckedTransport(native: SyncNativeApi, folder: string): { transport: Transport; confirmChain: () => Promise<void> } {
+  const transport = folderTransport(native, folder);
+  let unconfirmedEmptyRead = false;
+  const read: Transport["read"] = async (scope, known) => {
+    const listing = await transport.read(scope, known);
+    if (listing.present.length) return listing;
+    if (!known.length) unconfirmedEmptyRead = true;
+    else if ((await native.chainStatus(folder)) !== "ok") throw chainGoneError();
+    return listing;
+  };
+  const confirmChain = async () => {
+    if (unconfirmedEmptyRead && (await native.chainStatus(folder)) !== "ok") throw chainGoneError();
+  };
+  return { transport: { ...transport, read }, confirmChain };
+}
+
+export type FolderLoss = "unavailable" | "missing" | "back" | null;
+
+export async function folderLossAfter(native: SyncNativeApi, folder: string, error: unknown, firstLook: boolean): Promise<FolderLoss> {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code !== "ERR_SYNC_CHAIN_MISSING" && code !== "ERR_SYNC_FOLDER") return null;
+  const status = await native.chainStatus(folder).catch(() => null);
+  if (status === "unavailable" || status === "missing") return status;
+  if (status === "ok" && firstLook) return "back";
+  return code === "ERR_SYNC_CHAIN_MISSING" ? "missing" : null;
+}
+
+const folderExistsError = (error: unknown) => (error as { code?: unknown } | null)?.code === "ERR_SYNC_FOLDER_EXISTS";
+
 export function folderRecreateMessage(result: FolderRecreateResult, label: string): string | null {
   if ("ok" in result) return null;
   switch (result.error) {
@@ -60,7 +107,7 @@ export function folderRecreateMessage(result: FolderRecreateResult, label: strin
     case "uploadFailed":
       return null;
     case "failed":
-      return `Couldn’t recreate the sync folder at ${label}: ${result.message}.`;
+      return `Couldn’t recreate the sync folder at ${label}: ${result.message.replace(/\.+$/, "")}.`;
   }
 }
 
@@ -110,53 +157,54 @@ export async function reseedPendingScopes({ native, doc, folder, device, clock, 
 }
 
 export async function recreateChainFolder(
-  ctx: ReseedContext & { saveNow: () => Promise<void>; consent: ConsentToken | null; onUpdating: () => void; onUploadError: (message: string) => void },
+  ctx: ReseedContext & { saveNow: () => Promise<void>; consent: ConsentToken | null; onUpdating: () => void; publish: (patch: Partial<SyncUi>) => void },
 ): Promise<FolderRecreateResult> {
-  const { native, doc, folder, consent, onUpdating, onUploadError } = ctx;
+  const { native, doc, folder, consent, onUpdating, publish } = ctx;
   let created = false;
   try {
     const chain = await native.chainStatus(folder);
     if (chain === "ok") return { ok: "existing" };
-    if (chain === "missing") {
-      noteFolderRecreate("failed", consent);
-      return { error: "exists" };
-    }
     const info = await native.folderInfo?.(folder).catch(() => null);
     if (info && info.inICloud && !info.iCloudAvailable) {
       noteFolderRecreate("failed", consent);
       return { error: "cloudDriveOff" };
     }
-    if (info?.exists) {
+    if (chain === "missing" || info?.exists) {
       noteFolderRecreate("failed", consent);
       return { error: "exists" };
     }
     const queued = doc.reseedScopes;
+    const cycleOwed = doc.reseedCycleOwed;
     const putBack = async () => {
       if (queued) doc.reseedScopes = queued;
       else delete doc.reseedScopes;
+      if (cycleOwed) doc.reseedCycleOwed = cycleOwed;
+      else delete doc.reseedCycleOwed;
       await ctx.saveNow().catch(() => ctx.save());
     };
     const scopes = Object.entries(doc.scopes)
       .filter(([, state]) => hasScopeData(state))
       .map(([scope]) => scope);
     try {
-      if (scopes.length) {
-        doc.reseedScopes = [...new Set([...(queued ?? []), ...scopes])];
-        await ctx.saveNow();
+      if (scopes.length) doc.reseedScopes = [...new Set([...(queued ?? []), ...scopes])];
+      doc.reseedCycleOwed = true;
+      await ctx.saveNow();
+      const again = await native.folderInfo?.(folder).catch(() => null);
+      if (again?.exists) {
+        await putBack();
+        noteFolderRecreate("failed", consent);
+        return { error: "exists" };
       }
       if (isQuitting()) {
         await putBack();
         return { error: "busy" };
       }
-      if ((await native.folderInfo?.(folder).catch(() => null))?.exists) {
-        await putBack();
-        noteFolderRecreate("failed", consent);
-        return { error: "exists" };
-      }
-      await native.createChain(folder);
+      await native.createChainInNewFolder(folder);
     } catch (error) {
       await putBack();
-      throw error;
+      if (!folderExistsError(error)) throw error;
+      noteFolderRecreate("failed", consent);
+      return { error: "exists" };
     }
     created = true;
     onUpdating();
@@ -168,7 +216,9 @@ export async function recreateChainFolder(
     noteFolderRecreate("failed", consent);
     if (created) {
       warnFor(consent, "[sync] recreating sync folder failed while uploading data", error);
-      onUploadError(message);
+      const lost = await folderLossAfter(native, folder, error, false);
+      if (lost === "unavailable" || lost === "missing") await publishChainGone(lost, { native, doc, folder, consent, wasOffline: false, publish });
+      else publish({ status: "stalled", error: message });
       return { error: "uploadFailed", message };
     }
     return { error: "failed", message };

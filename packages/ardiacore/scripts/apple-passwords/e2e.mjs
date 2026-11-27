@@ -10,15 +10,17 @@
 //   E8  on Apple Passwords, Chrome keeps its offer to save on but never shows its own password list over a sign-in field
 //   E8save on Apple Passwords, signing in in a Chromium tab still gives Chrome's pending save (the save prompt fires)
 //   E5… the Login list in a WebKit tab (login-list.mjs), in one paired instance shared by those checks; E15 ends the
-//       fake's Pairing and pairs again from the Login list, leaving that instance paired
+//       fake's Pairing and pairs again from the Login list, leaving that instance paired; E34-E38 filter it as you type
+//       on filter.localhost's /login-ready (its Sign in button is enabled and submit is recorded, not sent), and E37
+//       ends Pairing and pairs again too
 //   E18… saving to Apple Passwords from a WebKit tab (saving.mjs), in the same paired instance; E33 saves on an http page
 //   E32 with a stand-in for the iCloud Passwords extension (its id, from icloud-extension.mjs), picking Apple Passwords
 //       turns it off and says so, "Turn it back on" turns it on, and switching to Ardia turns it on only if Ardia turned
 //       it off; it is never uninstalled
 //
 // Each check launches its own instance (scripts/lib/instance.mjs) with ARDIA_TEST applePasswordsManifest at the fake's
-// manifest and the fixture sites (sites.mjs: https example.localhost, accounts.example.localhost, other.localhost and
-// empty.localhost, save.localhost, http plain.localhost and plain-save.localhost, all on loopback with their ports), drives the same Settings state the Password manager menu and Pairing sheet use (ac.applePasswords), and
+// manifest and the fixture sites (sites.mjs: https example.localhost, accounts.example.localhost, other.localhost,
+// empty.localhost, save.localhost and filter.localhost, http plain.localhost and plain-save.localhost, all on loopback with their ports), drives the same Settings state the Password manager menu and Pairing sheet use (ac.applePasswords), and
 // prints one PASS or FAIL line; details go to <scratch dir>/e2e.log. METRO_PORT picks the Metro serving this tree.
 // Exit code 1 if any check failed.
 import fs from "node:fs";

@@ -837,7 +837,7 @@ internal class WebViewPage(
             web.destroy()
             return
         }
-        val shown = web.isAttachedToWindow && web.windowVisibility == View.VISIBLE
+        val shown = web.isShown && web.windowVisibility == View.VISIBLE
         tearDown(web)
         if (released) return
         Log.i(LOG_TAG, "renderer gone for $id, crashed $didCrash, shown $shown")

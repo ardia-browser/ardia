@@ -209,13 +209,21 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   the next launch, and a rebase already under way when the app stops carries on from its saved flags, though
   the marks then match. While an adapter that reads the
   session (`sessionBacked`: the pinned area, settings and the profile, theme, Top Apps and All Open Tabs
-  records) rebases, it publishes only keys no device has a record of and no deletions, and the cycle applies
-  every record it has, tombstones included, so the store takes the synced state back. The rebase ends for an
-  adapter once it applied without deferring, and for the scope once every session-backed adapter has.
-  Bookmarks, history, passwords and extensions live in Chrome's own files and aren't affected; open tabs
-  already send only closes made here. A mark that differs only because a save didn't land before a crash
-  costs one rebase and loses nothing (tested in `packages/sync/src/scope.test.ts` and
-  `state/sync/syncDataLoss.test.mjs`: an older session, a backup from the same launch, and a rebase cut short).
+  records) rebases, it publishes only keys no device has a record of, and no deletions; the cycle applies
+  every record it has, tombstones included, so the store takes the synced state back. The exception is a value
+  the adapter can show is newer than the record: a setting changed here (each local choice is stamped from the
+  sync clock into `settingEdits` in `sync.json` at once, and dropped when its batch is on disk) or a pin placement
+  still in `pinChoices`; those go out instead (`keepLocal`). A rebasing adapter publishes after the cycle's pull,
+  and while anything in the scope is still downloading or damaged it neither publishes nor applies its rebase, so a
+  record on its way can't be outrun by an older session value. The rebase ends for an adapter once it applied
+  without deferring and with nothing held back. The scope keeps the list of adapters that finished, so one that
+  isn't running yet (Settings turned off in What Syncs, pinned tabs off) still rebases on its first cycle when it
+  comes back. Bookmarks, history, passwords and extensions live in Chrome's own files and aren't affected; open
+  tabs already send only closes made here. A local edit to an existing record that has neither a stamp nor a
+  pending choice (for example a profile's colour changed in the moments before a crash) loses to the synced record
+  in a rebase (tested in `packages/sync/src/scope.test.ts`, `state/sync/syncDataLoss.test.mjs` and
+  `state/sync/settingEditsRebase.test.mjs`: an older session, a backup from the same launch, a rebase cut short, a
+  setting changed before a crash).
 - **Joining.** A scope set to wait for the other devices (`awaitRemote`: the app scope of a Mac
   that connected with a recovery phrase, and each profile scope it paired) joins once it has read
   a file from another device and nothing in it is still downloading or damaged, or a day after

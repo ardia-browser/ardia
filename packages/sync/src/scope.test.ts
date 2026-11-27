@@ -741,7 +741,7 @@ test("a rebase after the local data went back in time publishes no deletions, ta
   b.store = new Map<string, unknown>([["x:1", "one"], ["x:5", "five"], ["x:4", "four"]]);
   startRebase(b.state);
   await b.sync();
-  assert.equal(b.state.rebase, undefined, "the rebase ends once the scope applied");
+  assert.deepEqual(b.state.rebase, ["x:"], "the rebase ends for the adapter once it applied");
   assert.deepEqual(Object.fromEntries([...b.store].sort()), { "x:1": "one, renamed", "x:2": "two", "x:3": "three", "x:4": "four" }, "the synced data comes back, a deletion made elsewhere still applies, and what's only here stays");
 
   await a.sync();
@@ -771,6 +771,7 @@ test("a rebase leaves adapters that don't read the session alone, and stays on f
   const folder = new Folder();
   const a = new Device("a", folder);
   a.settings.set("set:theme", "dark");
+  a.store.set("x:1", "one");
   await a.sync();
   let ready = false;
   const b = new Device("b", folder);
@@ -786,7 +787,7 @@ test("a rebase leaves adapters that don't read the session alone, and stays on f
   assert.deepEqual(b.state.rebase, [], "the session-backed adapter couldn't apply, so the rebase waits for it");
   ready = true;
   await b.sync();
-  assert.equal(b.state.rebase, undefined);
+  assert.deepEqual(b.state.rebase, ["x:"]);
   await a.sync();
   assert.equal(a.store.get("x:9"), "nine");
 });
@@ -845,4 +846,78 @@ test("a cycle reports how many session-backed base writes it made, and only thos
   await b.sync();
   const pulled = await a.sync();
   assert.equal(pulled.sessionBaseWrites, 1, "applying a record from another device counts too");
+});
+
+class TwoSessionDevice extends Device {
+  withSettings = true;
+  override adapters(): Adapter[] {
+    return super.adapters().filter((adapter) => this.withSettings || adapter.prefix !== "set:").map((adapter) => ({ ...adapter, sessionBacked: true, adoptRemoteOnJoin: false }));
+  }
+}
+
+test("a rebase keeps a local value its adapter says is newer than the synced record", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  a.store.set("x:2", "two");
+  await a.sync();
+  const b = new SessionDevice("b", folder);
+  await b.sync();
+  b.store = new Map<string, unknown>([["x:1", "one, edited here and not sent yet"]]);
+  const own = b.adapters();
+  b.adapters = () => own.map((adapter) => (adapter.prefix === "x:" ? { ...adapter, extract: async (...args) => ({ ...(await adapter.extract(...args))!, keepLocal: (key: string) => key === "x:1" }) } : adapter));
+  startRebase(b.state);
+  await b.sync();
+  await a.sync();
+  assert.equal(a.store.get("x:1"), "one, edited here and not sent yet", "the edit the adapter vouches for goes out");
+  assert.equal(a.store.get("x:2"), "two", "and nothing is deleted");
+});
+
+test("a rebase stays open for a session-backed adapter that isn't running yet, so it can't publish stale values when it comes back", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.settings.set("set:theme", "light");
+  await a.sync();
+  const b = new TwoSessionDevice("b", folder);
+  await b.sync();
+  a.settings.set("set:theme", "dark");
+  await a.sync();
+  await b.sync();
+  assert.equal(b.settings.get("set:theme"), "dark");
+  b.settings.set("set:theme", "light");
+  b.withSettings = false;
+  startRebase(b.state);
+  await b.sync();
+  assert.deepEqual(b.state.rebase, ["x:"], "the adapter that ran finished its rebase; settings still has to");
+  b.withSettings = true;
+  await b.sync();
+  await a.sync();
+  assert.equal(a.settings.get("set:theme"), "dark", "the stale setting from the older session isn't published over the newer one");
+  assert.equal(b.settings.get("set:theme"), "dark", "and the device takes the synced value");
+});
+
+test("a rebase publishes nothing and doesn't finish while a file from another device is still downloading", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  await a.sync();
+  const b = new SessionDevice("b", folder);
+  await b.sync();
+  a.store.set("x:2", "two, newer");
+  await a.sync();
+  const later = [...folder.scope("s").keys()].at(-1)!;
+  folder.scope("s").get(later)!.hiddenFrom.add("b");
+  b.store = new Map<string, unknown>([["x:1", "one"], ["x:2", "two, from an older session"]]);
+  startRebase(b.state);
+  await b.sync();
+  await b.sync();
+  assert.deepEqual(b.state.rebase, [], "the rebase waits for the file still downloading");
+  await a.sync();
+  assert.equal(a.store.get("x:2"), "two, newer", "the older session's value isn't published while the newer record is on its way");
+  folder.scope("s").get(later)!.hiddenFrom.delete("b");
+  await b.sync();
+  assert.deepEqual(b.state.rebase, ["x:"]);
+  assert.equal(b.store.get("x:2"), "two, newer");
+  await a.sync();
+  assert.equal(a.store.get("x:2"), "two, newer");
 });

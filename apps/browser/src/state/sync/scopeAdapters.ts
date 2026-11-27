@@ -4,8 +4,11 @@ import { bookmarksAdapter, deviceAdapter, deviceTabsAdapter, inTodaysNames, pass
 import { historyAdapter } from "./historyAdapter";
 import { profileOpenTabsAdapter, profilesAdapter, profileThemesAdapter, profileTopAppsAdapter } from "./profileAdapters";
 import { settingsAdapter } from "./settingsAdapter";
+import { withSettingEdits } from "./settingEdits";
 import { pinnedAreaAdapters } from "./pinned";
-import { extensionsAdapterFor } from "./extensions";
+import { extensionsAdapterFor, watchExtensionIntents } from "./extensions";
+import { engineProfile } from "../browser/model";
+import { profileOpened } from "../profiles/profileLoading";
 import { APP_SCOPE, typeSyncedFor, type DataType, type SyncDoc } from "./syncDoc";
 import { sentTabsAdapter } from "./sentTabsAdapter";
 import { deliverSentTabs, sendLedger } from "./sentTabs";
@@ -22,6 +25,14 @@ export const deviceName = () => SyncNative?.deviceName() ?? `This ${PLATFORM_TER
 
 const passwordAdapters = new Map<string, (forced: boolean) => Adapter>();
 const extensionAdapters = new Map<string, ExtensionsAdapter>();
+
+export function watchSyncedExtensions(doc: SyncDoc) {
+  if (!doc.enabled) return;
+  const s = useBrowser.getState();
+  const watched = Object.entries(doc.profiles).filter(([id, l]) => l.enabled && s.profiles[id] && typeSynced(doc, "extensions", id));
+  const profiles = [...new Set(watched.map(([id]) => engineProfile(s, id)))].filter((engine) => profileOpened(engine));
+  if (profiles.length) watchExtensionIntents(profiles);
+}
 
 export function forgetScopeAdapters() {
   passwordAdapters.clear();
@@ -56,7 +67,7 @@ export function appAdapters(doc: SyncDoc, retiring: boolean): Adapter[] {
   const enabledLinks = () => Object.fromEntries(Object.entries(doc.profiles).filter(([, l]) => l.enabled));
   const removed = () => removedRecordKeys(doc);
   return [
-    ...(doc.types.settings ? [fromSession(inTodaysNames(settingsAdapter))] : []),
+    ...(doc.types.settings ? [fromSession(withSettingEdits(inTodaysNames(settingsAdapter), doc))] : []),
     sharedDataAdapter(() => doc.profiles, removed),
     fromSession(profilesAdapter(withSharedOwners(doc, enabledLinks), removed, () => doc.scopes[APP_SCOPE]?.records, enabledLinks)),
     fromSession(profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed)),

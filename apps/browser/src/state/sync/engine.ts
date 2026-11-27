@@ -5,8 +5,7 @@ import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import { historyExpired } from "./historyAdapter";
 import { settleRetiredDefaultsWithoutSync, settleSettingsFromSavedSync } from "./settingsAdapter";
-import { watchExtensionIntents } from "./extensions";
-import { appAdapters, extensionsOf, forgetScopeAdapters, profileAdapters, typeSynced } from "./scopeAdapters";
+import { appAdapters, extensionsOf, forgetScopeAdapters, profileAdapters, typeSynced, watchSyncedExtensions } from "./scopeAdapters";
 import { APP_SCOPE, emptyDoc, emptyUi, typeSyncedFor, type DataType, type SendTarget, type SyncDoc, type SyncUi } from "./syncDoc";
 import { syncFiles } from "./syncFiles";
 import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
@@ -24,6 +23,7 @@ import { errorText } from "../../lib/errors";
 import { isQuitting, saveBeforeQuit } from "../app/quit";
 import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
 import { onProfileDeleted } from "../profiles/profiles";
+import { watchSettingEdits } from "./settingEdits";
 export { takeSyncDataCounts } from "../telemetry/syncSafetyCounts";
 import { markOpenTabsSynced, openTabsClosed, recordOpenTabCloses } from "./openTabCloses";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
@@ -46,6 +46,7 @@ let cycle: Promise<void> | null = null;
 let again = false;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
+let stateLoading: Promise<unknown> = Promise.resolve();
 const { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
 
 function load() {
@@ -67,13 +68,7 @@ function publishUi(patch: Partial<SyncUi> = {}) {
   });
 }
 
-function watchExtensions() {
-  if (!doc.enabled) return;
-  const s = useBrowser.getState();
-  const watched = Object.entries(doc.profiles).filter(([id, l]) => l.enabled && s.profiles[id] && typeSynced(doc, "extensions", id));
-  const profiles = [...new Set(watched.map(([id]) => engineProfile(s, id)))].filter((engine) => profileOpened(engine));
-  if (profiles.length) watchExtensionIntents(profiles);
-}
+const watchExtensions = () => watchSyncedExtensions(doc);
 
 function scheduleSync(delay = AFTER_EDIT_MS) {
   if (!doc.enabled) return;
@@ -120,6 +115,8 @@ const CHAIN_MISSING_TEXT = `This device is out of sync. Sync may have been reset
 
 async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring, forcePasswords }: Required<CycleOptions>) {
   const consent = consentToken();
+  await stateLoading;
+  if (useSync.getState().status === "locked") return;
   clearTimeout(timer);
   const slow = setTimeout(() => useSync.getState().status === "updated" && publishUi({ status: "updating" }), 1000);
   try {
@@ -368,7 +365,7 @@ export function startSync() {
   watchExtensions();
   if (doc.enabled && doc.deviceId) {
     const consent = consentToken();
-    void SyncNative.unlock(doc.deviceId)
+    stateLoading = SyncNative.unlock(doc.deviceId)
       .then(async (ok) => {
         if (!ok) return publishUi({ status: "locked", error: `Enter your recovery phrase to keep syncing on this ${PLATFORM_TERMS.computer}.` });
         await loadSavedState(consent);
@@ -382,6 +379,7 @@ export function startSync() {
   }
   saveBeforeQuit(async () => void (await checkpoint()));
   onProfileDeleted(retireProfile);
+  watchSettingEdits(() => doc, () => void (cycle || save()));
   onProfilesOpened(() => {
     if (!doc.enabled || !doc.deviceId) return;
     watchExtensions();

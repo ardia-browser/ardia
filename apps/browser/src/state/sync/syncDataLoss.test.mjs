@@ -460,3 +460,13 @@ test("#1577: a profile added back under a new id, because its old one can't be r
     assert.deepEqual(Object.entries(syncDoc().profiles).filter(([, link]) => link.syncId === workSyncId).map(([id]) => id), [added]);
   });
 });
+
+test("#1945: a dormant link left waiting for the other devices doesn't keep Settings › Sync on First sync in progress", async () => {
+  const { firstSyncRunning } = await import("./syncSummary.ts");
+  S().hydrate({});
+  const doc = { joining: false, enabled: true, profiles: { gone: { syncId: "w", enabled: true } }, scopes: { app: { joined: true }, "p:w": { awaitRemote: true } } };
+  assert.equal(firstSyncRunning(doc), false, "the profile isn't on this Mac, so its scope never runs");
+  const here = S().createProfile({ name: "Here" });
+  const active = { ...doc, profiles: { [here]: { syncId: "w", enabled: true } } };
+  assert.equal(firstSyncRunning(active), true, "a profile that's here and still waiting does count");
+});

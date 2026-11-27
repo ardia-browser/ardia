@@ -18,7 +18,7 @@ import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } fro
 import { PRESS_MOTIONS } from "../../lib/pressMotion";
 import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteSettingChoices } from "../telemetry/settingChoices";
-import { checkedSettingsPatch, keptSettingsPatch } from "./settingsPatch";
+import { checkedSettingsPatch, settledPatch, settingsChosen } from "./settingsPatch";
 
 export const DEFAULT_PROFILE_ID = "default";
 
@@ -275,17 +275,11 @@ export function writableSettingsPatch(raw: Partial<Settings>): { patch: Partial<
 
 export const settingsWith = (settings: Settings, patch: Partial<Settings>): Settings => ({ ...settings, ...writableSettingsPatch(patch).patch });
 
-function settledPatch(settings: Settings, raw: Partial<Settings>): Partial<Settings> {
-  const patch = keptSettingsPatch(raw, SETTING_SPECS);
-  const next = { ...settings, ...patch };
-  const zeroWhenTabsHidden = next.pageFrameZeroInFullScreen && !next.pageFrameZeroWhenTabsHidden && !("pageFrameZeroWhenTabsHidden" in patch);
-  return zeroWhenTabsHidden ? { ...patch, pageFrameZeroWhenTabsHidden: true } : patch;
-}
-
 export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch: Partial<Settings>, { inferring = false } = {}): Pick<BrowserState, "settings" | "settingsMeta"> {
   const { chosen, inferred } = s.settingsMeta;
-  patch = settledPatch(s.settings, patch);
+  patch = settledPatch(s.settings, patch, SETTING_SPECS);
   noteSettingChoices(s.settings, patch, inferring);
+  if (!inferring) settingsChosen(Object.keys(patch));
   const next = { ...s.settings, ...patch };
   const added = Object.keys(patch).filter((k) => !chosen.includes(k));
   const left = inferring ? [...new Set([...inferred, ...Object.keys(patch)])] : inferred.filter((k) => !(k in patch));
@@ -363,7 +357,7 @@ export const createSettingsSlice: StateCreator<BrowserState, [], [], SettingsSli
     const { patch } = writableSettingsPatch(raw);
     set((s) => {
       const windows = windowsFollowingAutoHideTabs(s, patch);
-      if (fromSync) return { settings: { ...s.settings, ...settledPatch(s.settings, patch) }, ...windows };
+      if (fromSync) return { settings: { ...s.settings, ...settledPatch(s.settings, patch, SETTING_SPECS) }, ...windows };
       return { ...choose(s, withLinkKeysApart(s.settings, patch), { inferring: inferred }), ...windows };
     });
   },

@@ -10,7 +10,7 @@ import { APP_SCOPE, type RemoteProfile, type RemoteTabs, type SyncDoc, type Sync
 export function firstSyncRunning(doc: SyncDoc): boolean {
   const app = doc.scopes[APP_SCOPE];
   if (doc.joining || !app?.joined) return true;
-  return Object.values(doc.profiles).some((link) => link.enabled && doc.scopes[profileScope(link.syncId)]?.awaitRemote);
+  return Object.entries(doc.profiles).some(([id, link]) => link.enabled && !dormantLink(doc, id) && doc.scopes[profileScope(link.syncId)]?.awaitRemote);
 }
 
 export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" | "remoteProfiles" | "firstSync"> {

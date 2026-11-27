@@ -277,16 +277,18 @@ const startRebase = (state            ) => void (state.rebase = []);
 
 const rebasing = (state            , adapter         ) => !!state.rebase && !!adapter.sessionBacked && !state.rebase.includes(adapter.prefix);
 
-function noteRebased(state            , adapter         , adapters           ) {
+const publishesLate = (state            , adapter         ) => !!adapter.publishAfterPull || rebasing(state, adapter);
+
+function noteRebased(state            , adapter         ) {
   if (!rebasing(state, adapter)) return;
   for (const key of baseKeysWith(state, adapter.prefix)) if (!(key in state.records)) dropBase(state, key);
   state.rebase .push(adapter.prefix);
-  if (!adapters.some((a) => rebasing(state, a))) delete state.rebase;
 }
 
 async function changesOf(state            , adapter         , now        , options               = {}) {
   if (adapter.adoptRemoteOnJoin && !state.joined) return null;
   const adopting = rebasing(state, adapter);
+  if (adopting && holdsBack(state, now, options.damagedGiveUp ?? DEFAULTS.damagedGiveUp)) return { changes: [], settle: undefined, source: undefined };
   const source = adapter.extractsOnlyFrom?.();
   if (unchangedSinceExtracted(state, adapter, source)) return { changes: [], settle: undefined, source: undefined };
   let pending                     = null;
@@ -297,13 +299,13 @@ async function changesOf(state            , adapter         , now        , optio
   const extraction = first && state.applying ? await recoverBatches(state, adapter.prefix, first, adapter.extractUsesBase ? extractWith : null, !!adapter.savesWhole, options) : first;
   if (!extraction) return null;
   const changes           = [];
-  const { values, json: knownJson, republish, ignore } = extraction;
+  const { values, json: knownJson, republish, ignore, keepLocal } = extraction;
   const unsettled = failedTargets(state, adapter.prefix, options);
   values.forEach((value, key) => {
     if (value === null || value === undefined) throw new Error(`[sync] ${key}: a live value can't be null`);
     const json = knownJson?.(key, value) ?? canonical(value);
     if (unsettled?.get(key)?.has(json)) return;
-    if (adopting && key in state.records) return;
+    if (adopting && key in state.records && !keepLocal?.(key)) return;
     if (state.base[key] === json && (!republish?.(key) || awaitsRecovery(state, key))) return;
     changes.push({ key, value, json });
   });
@@ -506,21 +508,21 @@ async function syncScope(args
   let published = 0;
   const stamps = new Map                 ();
   for (const adapter of adapters) {
-    if (adapter.publishAfterPull) stamps.set(adapter, await candidateStamps(state, adapter, clock, now(), options));
+    if (publishesLate(state, adapter)) stamps.set(adapter, await candidateStamps(state, adapter, clock, now(), options));
     else published += (await publishAdapter(state, adapter, clock, device, now(), options)).size;
   }
   await flush(state, transport, scope, device, now(), options);
   const changed = await pull(state, transport, scope, clock, now(), options);
   const held = holdsBack(state, now(), options?.damagedGiveUp ?? DEFAULTS.damagedGiveUp);
   const keys = new Set([...state.unapplied, ...changed]);
-  for (const adapter of adapters) if (rebasing(state, adapter)) for (const key of Object.keys(state.records)) if (key.startsWith(adapter.prefix)) keys.add(key);
+  if (!held) for (const adapter of adapters) if (rebasing(state, adapter)) for (const key of Object.keys(state.records)) if (key.startsWith(adapter.prefix)) keys.add(key);
   const unapplied           = [];
   let heldApply = false;
   let journalFailed = false;
   const applyHeld = () => !!options?.holdApply?.();
   for (const adapter of adapters) {
     const publishLate = async () => {
-      const late = adapter.publishAfterPull && held ? new Set        () : await publishAdapter(state, adapter, clock, device, now(), options, stamps.get(adapter));
+      const late = publishesLate(state, adapter) && held ? new Set        () : await publishAdapter(state, adapter, clock, device, now(), options, stamps.get(adapter));
       published += late.size;
       for (const key of late) keys.delete(key);
       return late;
@@ -535,7 +537,7 @@ async function syncScope(args
     heldApply ||= !!ahead?.failed;
     const applied = !heldApply && !cancelled && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld, deferred));
     finishBatch(ahead?.batch ?? null, applied, options);
-    if (applied && !deferred.size) noteRebased(state, adapter, adapters);
+    if (applied && !deferred.size && !held) noteRebased(state, adapter);
     heldApply ||= applyHeld();
     if (!applied) for (const key of keys) if (key.startsWith(adapter.prefix)) unapplied.push(key);
     if (applied) for (const key of deferred) unapplied.push(key);
@@ -1252,6 +1254,7 @@ const emptyScope = ()             => ({
                           
                                
                                     
+                                       
                                        
                                           
                                                              

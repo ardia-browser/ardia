@@ -63,6 +63,7 @@ export type SyncDoc = {
   removingDevices?: string[] | Record<string, HLC>;
   sessionMark?: string;
   themesChosenWhileJoining?: string[];
+  settingEdits?: Record<string, HLC>;
 };
 
 export type ProfileRemoval = { keys: Record<string, HLC>; returned?: boolean };

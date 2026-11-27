@@ -1168,31 +1168,29 @@
     const fillable = (message) =>
       on && !!message && !!active && message.token === active.token && message.origin === location.origin &&
       active.el.isConnected && (active.found.code || active.found.password).isConnected && document.activeElement === active.el;
-    const fill = (message) => {
-      const ticket = message && typeof message.ticket === "string" ? message.ticket : "";
-      if (!fillable(message)) return send("loginFilled", { ticket, filled: false });
-      if (active.found.code) {
-        const filled = typeof message.code === "string" && CODE_SHAPE.test(message.code) && !!codeField(active.found.code);
-        if (filled) {
-          put(active.found.code, message.code);
-          open = picking = false;
-        }
-        return send("loginFilled", { ticket, filled });
-      }
-      if (typeof message.newPassword === "string") {
-        const fields = active.el === active.found.password ? newPasswords(active.el) : [];
-        const filled = !!message.newPassword && fields.length > 0;
-        if (filled) {
-          for (const field of fields) put(field, message.newPassword);
-          open = picking = false;
-        }
-        return send("loginFilled", { ticket, filled });
-      }
+    const fillCode = (message) => {
+      const filled = typeof message.code === "string" && CODE_SHAPE.test(message.code) && !!codeField(active.found.code);
+      if (filled) put(active.found.code, message.code);
+      return filled;
+    };
+    const fillNewPassword = (message) => {
+      const fields = active.el === active.found.password ? newPasswords(active.el) : [];
+      const filled = !!message.newPassword && fields.length > 0;
+      if (filled) for (const field of fields) put(field, message.newPassword);
+      return filled;
+    };
+    const fillLogin = (message) => {
       const { username, password } = active.found;
       if (username && typeof message.username === "string" && message.username) put(username, message.username);
       if (typeof message.password === "string") put(password, message.password);
-      open = picking = false;
-      send("loginFilled", { ticket, filled: true });
+      return true;
+    };
+    const fill = (message) => {
+      const ticket = message && typeof message.ticket === "string" ? message.ticket : "";
+      const filled =
+        fillable(message) && (active.found.code ? fillCode(message) : typeof message.newPassword === "string" ? fillNewPassword(message) : fillLogin(message));
+      if (filled) open = picking = false;
+      send("loginFilled", { ticket, filled });
     };
     const configure = (state) => {
       on = !!(state && state.on === true);

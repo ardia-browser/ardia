@@ -3,6 +3,32 @@ const { useBrowser } = await import("../../browser/store.ts");
 const { startAutomation } = await import("../controlSocket.ts");
 const { registerPluginSocketMethods } = await import("../../plugins/start.ts");
 const stub = await import("../../../test-native/index.ts");
+const { reportShownSettings, useSettingsNav } = await import("../../settings/settingsWindows.ts");
+const { shellNativeModules } = await import("../../../test-native/shell.ts");
+
+export const settingsUi = { delayMs: 0, shows: true };
+const appWindows = shellNativeModules.ArdiaAppWindows;
+const nativeOpenWindow = appWindows.openWindow;
+const nativeCloseWindow = appWindows.closeWindow;
+const shownPlace = () => {
+  const { pane, profileId, detail } = useSettingsNav.getState();
+  return { pane, profileId, detail };
+};
+const showSettingsSoon = () => setTimeout(() => settingsUi.shows && reportShownSettings(shownPlace()), settingsUi.delayMs);
+appWindows.openWindow = (id, options) => {
+  const opened = nativeOpenWindow(id, options);
+  if (id === "settings") showSettingsSoon();
+  return opened;
+};
+appWindows.closeWindow = (id) => {
+  if (id === "settings") reportShownSettings(null);
+  return nativeCloseWindow(id);
+};
+useSettingsNav.subscribe(() =>
+  void Promise.resolve(appWindows.windowIds())
+    .then((ids) => ids.includes("settings") && showSettingsSoon())
+    .catch(() => undefined),
+);
 
 export const S = () => useBrowser.getState();
 export const tick = () => new Promise((resolve) => setImmediate(resolve));

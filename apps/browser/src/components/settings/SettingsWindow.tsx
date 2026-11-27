@@ -21,7 +21,7 @@ import { ShortcutsPane } from "./panes/Shortcuts";
 import { TabsPane } from "./panes/Tabs";
 import { useSettingsSheet } from "../../state/settings/sheet";
 import { SettingsConsentSheet } from "../plugins/SettingsConsentSheet";
-import { claimSettingsOpenAt, forgetSettingsScroll, goToSettingsPane, SETTINGS_WINDOW_ID, settingsScrollFor, settingsBack, settingsForward, settingsPageKey, settingsPlaceKey, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
+import { claimSettingsOpenAt, forgetSettingsScroll, goToSettingsPane, reportShownSettings, SETTINGS_WINDOW_ID, settingsScrollFor, settingsBack, settingsForward, settingsPageKey, settingsPlaceKey, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
 import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
 import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
 import { showCreateProfileSheets } from "../profiles/CreateProfile";
@@ -177,6 +177,8 @@ export function SettingsWindow() {
     if (to) scroller.current?.scrollTo({ y: to.y, animated: false });
   };
   useEffect(() => forgetSettingsScroll, []);
+  useEffect(() => reportShownSettings(shown), [key]);
+  useEffect(() => () => reportShownSettings(null), []);
   useEffect(() => closeProfileIconPickerIn(SETTINGS_WINDOW_ID), [key]);
   const content = useRef<View>(null);
   const viewport = useRef(0);

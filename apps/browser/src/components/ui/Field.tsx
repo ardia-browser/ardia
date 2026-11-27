@@ -1,13 +1,12 @@
 import { OutsidePressArea, showMenu, type MenuItem } from "@ardia/shell";
 import { withIconNames } from "../../lib/activeLook";
 import { POP_UP_CHROME } from "../../lib/platformChrome";
-import { modifiersOf, type ClickModifiers } from "../../lib/keys";
 import { Symbol } from "./Symbol";
-import { useEffect, useRef, type Ref } from "react";
+import type { Ref } from "react";
 import { Animated, Pressable, StyleSheet, Text, TextInput, View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
-import { buttonMotion, curve, duration, usePressScaleMotion } from "./motion";
+import { buttonMotion, usePressScaleMotion } from "./motion";
 import { caretColor, useTheme, type FieldSurface } from "./theme";
-import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
+import { monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
 import { useControlLabel } from "./controlLabel";
@@ -153,7 +152,7 @@ export function TextField({
 }) {
   const theme = useTheme();
   const keyDownEvents = useKeyDownEvents(onEscape ? ESCAPE_KEY : undefined, extraKeys);
-  const label = useControlLabel(accessibilityLabel ?? placeholder);
+  const label = useControlLabel(accessibilityLabel) ?? placeholder;
   return (
     <OutsidePressArea style={[{ width, opacity: disabled ? opacity.disabled : 1 }, style]}>
       <View
@@ -237,7 +236,7 @@ export function PopUp<T extends string>({
   };
   return (
     <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
-      <Pressable disabled={disabled} onPress={open} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" {...labelled}>
+      <Pressable disabled={disabled} onPress={open} onAccessibilityTap={disabled ? undefined : open} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" {...labelled}>
         {({ pressed }) =>
           native ? (
             <View style={[PLAIN_POPUP, { backgroundColor: pressed ? theme.controlPressed : hovered ? theme.controlHover : undefined }]}>
@@ -289,123 +288,3 @@ const POP_UP_TITLE = POP_UP_CHROME.growsToItsTitle ? ({ flexGrow: 1, flexShrink:
 const CLEAR_GLYPH = { width: 16, height: 16 } as const;
 const PLAIN_POPUP = { height: 22, maxWidth: 260, borderRadius: radius.control, paddingLeft: space.s, paddingRight: space.xxs, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: space.xs } as const;
 const PLAIN_POPUP_GLYPH = { width: 10, height: 14 } as const;
-
-const CHECK_RING = { s: { box: 14, glyph: 8 }, m: { box: 18, glyph: 10 } } as const;
-const CHECK_RING_BORDER = 1.5;
-
-export function Checkbox({
-  value,
-  onChange,
-  label,
-  disabled,
-  mixed,
-  look = "form",
-  size = "m",
-}: {
-  value: boolean;
-  onChange?: (value: boolean, modifiers?: ClickModifiers) => void;
-  label?: string;
-  disabled?: boolean;
-  mixed?: boolean;
-  look?: "form" | "ring";
-  size?: keyof typeof CHECK_RING;
-}) {
-  const theme = useTheme();
-  const on = value || mixed;
-  const accessibilityLabel = useControlLabel(label);
-  const pressMotion = usePressScaleMotion(!!onChange && !disabled, buttonMotion.iconPressScale);
-  const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
-  if (look === "ring" && !onChange) return <RingCheck on={!!on} size={size} />;
-  if (look === "ring")
-    return (
-      <Pressable
-        disabled={disabled}
-        onPress={() => onChange?.(!value)}
-        onPressIn={pressMotion.onPressIn}
-        onPressOut={pressMotion.onPressOut}
-        accessibilityRole="checkbox"
-        accessibilityLabel={accessibilityLabel}
-        accessibilityState={{ checked: value, disabled }}
-        style={{ opacity: disabled ? opacity.disabled : 1 }}
-      >
-        <Animated.View style={[CHECK_RING_FRAME[size], scaleStyle]}>
-          <RingCheck on={!!on} size={size} />
-        </Animated.View>
-      </Pressable>
-    );
-  return (
-    <Pressable
-      disabled={disabled || !onChange}
-      accessibilityRole="checkbox"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ checked: value, disabled: disabled || !onChange }}
-      onPress={(e) => onChange?.(!value, modifiersOf(e))}
-      onPressIn={pressMotion.onPressIn}
-      onPressOut={pressMotion.onPressOut}
-      style={{ flexDirection: "row", alignItems: "center", gap: space.m, opacity: disabled ? opacity.disabled : 1 }}
-    >
-      <Animated.View style={[CHECK_BOX_FRAME, scaleStyle]}>
-        <View
-          style={{
-            width: 14,
-            height: 14,
-            borderRadius: radius.control,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: on ? theme.formAccent : theme.control,
-            borderWidth: on ? 0 : StyleSheet.hairlineWidth * 2,
-            borderColor: theme.controlBorder,
-          }}
-        >
-          {on && <Symbol name={mixed && !value ? "minus" : "checkmark"} size={9} weight="bold" color={theme.onAccent} style={{ width: 14, height: 14 }} />}
-        </View>
-      </Animated.View>
-      {label ? <Text style={{ ...typeScale.body, color: theme.textPrimary }}>{label}</Text> : null}
-    </Pressable>
-  );
-}
-
-const CHECK_BOX_FRAME = { width: 14, height: 14, alignItems: "center", justifyContent: "center" } as const;
-const CHECK_RING_FRAME = { s: { width: 14, height: 14 }, m: { width: 18, height: 18 } } as const;
-
-function RingCheck({ on, size = "m" }: { on: boolean; size?: keyof typeof CHECK_RING }) {
-  const theme = useTheme();
-  const { box, glyph } = CHECK_RING[size];
-  const t = useRef(new Animated.Value(on ? 1 : 0)).current;
-  useEffect(() => {
-    Animated.timing(t, { toValue: on ? 1 : 0, duration: duration.base, easing: curve.enter, useNativeDriver: true }).start();
-  }, [on]);
-  return (
-    <View
-      style={{
-        width: box,
-        height: box,
-        borderRadius: capsule(box),
-        backgroundColor: theme.ringRadioFill,
-        borderWidth: CHECK_RING_BORDER,
-        borderColor: theme.ringRadioBorder,
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-      }}
-    >
-      <Animated.View
-        style={{
-          position: "absolute",
-          left: -CHECK_RING_BORDER,
-          top: -CHECK_RING_BORDER,
-          width: box,
-          height: box,
-          borderRadius: capsule(box),
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: theme.ringRadioOn,
-          opacity: t,
-          transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
-        }}
-      >
-        <Symbol name="checkmark" size={glyph} weight="bold" color={theme.onPrimary} style={{ width: box, height: box }} />
-      </Animated.View>
-    </View>
-  );
-}

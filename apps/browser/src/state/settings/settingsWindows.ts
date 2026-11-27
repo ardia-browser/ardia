@@ -46,6 +46,14 @@ const stopOf = (s: SettingsStop): SettingsStop =>
     ? { pane: s.pane, profileId: s.profileId, detail: s.detail, visit: s.visit, shownProfile: shownOffset.shownProfile, scroll: shownOffset.y }
     : { pane: s.pane, profileId: s.profileId, detail: s.detail, visit: s.visit, shownProfile: s.shownProfile, scroll: s.scroll };
 
+export const useShownSettings = create<{ shown: SettingsPlace | null }>()(() => ({ shown: null }));
+
+export function reportShownSettings(place: SettingsPlace | null) {
+  const was = useShownSettings.getState().shown;
+  const same = was && place ? settingsPlaceKey(was) === settingsPlaceKey(place) : was === place;
+  if (!same) useShownSettings.setState({ shown: place && { pane: place.pane, profileId: place.profileId, detail: place.detail } });
+}
+
 export const useSettingsNav = create<Nav>()(() => ({ pane: "general", profileId: null, detail: null, scroll: 0, visit: newSettingsVisit(), shownProfile: null, back: [], forward: [] }));
 
 export function goToSettingsPane(pane: SettingsPane, profileId: string | null = null, detail: string | null = null) {

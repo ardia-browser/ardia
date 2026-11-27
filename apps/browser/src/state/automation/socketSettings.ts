@@ -3,12 +3,13 @@ import { isConfigSettingKey } from "../settings/configAllowlist";
 import { controllingSearchExtension, DEFAULT_SETTINGS, defaultSearchEngine, SETTING_KEYS, SETTING_SPECS, searchEngines, type SettingKey, type Settings } from "../settings/settings";
 import { chooseTabLayout } from "../settings/actions";
 import { tabLayoutOf } from "../browser/model";
-import type { MethodSpec } from "./socketCatalog";
+import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { checkedByRules, hasSocketRule, searchProblem } from "./socketSettingRules";
 import { id, ids, obj, oneOf, PROFILE, text } from "./socketSchema";
 import { expect, now, profileArg } from "./socketTargets";
 import { closeWindow, windowIds } from "../../platform/windows";
-import { openSettings, SETTINGS_PANES, SETTINGS_WINDOW_ID, useSettingsNav, type SettingsPane } from "../settings/settingsWindows";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { openSettings, SETTINGS_PANES, SETTINGS_WINDOW_ID, settingsPlaceKey, shownSettingsProfile, useSettingsNav, useShownSettings, type SettingsPane, type SettingsPlace } from "../settings/settingsWindows";
 import { OpError } from "./workspaceTargets";
 
 const OWN_METHOD: Partial<Record<SettingKey, string>> = {
@@ -146,36 +147,73 @@ function removeEngine(params: Record<string, unknown>) {
 const SETTINGS_WINDOW_WAIT_MS = 3000;
 const SETTINGS_WINDOW_POLL_MS = 50;
 
-const settingsWindowOpen = async () => (await windowIds().catch(() => [] as string[])).includes(SETTINGS_WINDOW_ID);
+function refuseWithoutSettingsWindowControl() {
+  if (!PLATFORM_FEATURES.settingsWindowControl) throw new OpError("refused", "Ardia can't show or drive its Settings window from the ardia command on this platform yet.");
+}
+
+async function settingsWindowOpen() {
+  const ids = await windowIds().catch(() => {
+    throw new OpError("failed", "Ardia couldn't list its windows.");
+  });
+  return ids.includes(SETTINGS_WINDOW_ID);
+}
+
+const placeRow = (open: boolean, place: SettingsPlace) => ({ open, pane: place.pane, profile: place.pane === "profiles" ? shownSettingsProfile(place) : place.profileId, detail: place.detail, panes: SETTINGS_PANES });
 
 async function settingsWindowRow() {
-  const { pane, profileId, detail } = useSettingsNav.getState();
-  return { open: await settingsWindowOpen(), pane, profile: profileId, detail, panes: SETTINGS_PANES };
+  refuseWithoutSettingsWindowControl();
+  const open = await settingsWindowOpen();
+  const shown = useShownSettings.getState().shown;
+  return placeRow(open, open && shown ? shown : useSettingsNav.getState());
 }
 
-async function untilSettingsWindow(open: boolean) {
+const shows = (place: SettingsPlace) => {
+  const shown = useShownSettings.getState().shown;
+  return !!shown && settingsPlaceKey(shown) === settingsPlaceKey(place);
+};
+
+async function waitFor(done: () => Promise<boolean>) {
   const deadline = Date.now() + SETTINGS_WINDOW_WAIT_MS;
-  while ((await settingsWindowOpen()) !== open && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, SETTINGS_WINDOW_POLL_MS));
+  while (!(await done()) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, SETTINGS_WINDOW_POLL_MS));
 }
 
-async function openSettingsWindow(params: Record<string, unknown>) {
-  const pane = (params.pane as SettingsPane | undefined) ?? useSettingsNav.getState().pane;
+let settingsWindowChange: Promise<unknown> = Promise.resolve();
+
+function oneSettingsChangeAtATime<T>(change: () => Promise<T>): Promise<T> {
+  const next = settingsWindowChange.catch(() => undefined).then(change);
+  settingsWindowChange = next;
+  return next;
+}
+
+function openSettingsWindow(params: Record<string, unknown>, call: SocketCall) {
+  refuseWithoutSettingsWindowControl();
+  const pane = params.pane as SettingsPane | undefined;
   if (params.profile !== undefined && pane !== "profiles") throw new OpError("bad_request", "Only the profiles pane takes a profile.");
-  const profile = pane === "profiles" ? profileArg(params.profile) : null;
-  openSettings(pane, profile);
-  await untilSettingsWindow(true);
-  const row = await settingsWindowRow();
-  expect(row.open, "the Settings window didn't open.");
-  expect(row.pane === pane && row.profile === profile, `Settings isn't showing ${pane}.`);
-  return row;
+  const profile = params.profile === undefined ? null : profileArg(params.profile);
+  return oneSettingsChangeAtATime(async () => {
+    call.stillServing();
+    if (pane) openSettings(pane, profile);
+    else openSettings();
+    const { pane: shownPane, profileId, detail } = useSettingsNav.getState();
+    const wanted = { pane: shownPane, profileId, detail };
+    await waitFor(async () => shows(wanted) && (await settingsWindowOpen()));
+    expect(await settingsWindowOpen(), "the Settings window didn't open.");
+    expect(shows(wanted), `Settings isn't showing ${wanted.pane}.`);
+    return placeRow(true, wanted);
+  });
 }
 
-async function closeSettingsWindow() {
-  if (await settingsWindowOpen()) await closeWindow(SETTINGS_WINDOW_ID);
-  await untilSettingsWindow(false);
-  const row = await settingsWindowRow();
-  expect(!row.open, "the Settings window is still open.");
-  return row;
+function closeSettingsWindow(_params: Record<string, unknown>, call: SocketCall) {
+  refuseWithoutSettingsWindowControl();
+  return oneSettingsChangeAtATime(async () => {
+    if (await settingsWindowOpen()) {
+      call.stillServing();
+      await closeWindow(SETTINGS_WINDOW_ID);
+    }
+    await waitFor(async () => !(await settingsWindowOpen()));
+    expect(!(await settingsWindowOpen()), "the Settings window is still open.");
+    return placeRow(false, useSettingsNav.getState());
+  });
 }
 
 const SETTINGS_WINDOW_RESULT = "{open, pane, profile, detail, panes}";
@@ -198,7 +236,7 @@ export const SETTINGS_METHODS: MethodSpec[] = [
   {
     name: "settings.open",
     mutates: true,
-    description: "Open the Settings window, or bring it forward, at a pane; the profiles pane at a profile",
+    description: "Open the Settings window, or bring it forward, at a pane (the profiles pane at a profile); answers once Settings shows it",
     params: obj({ pane: oneOf(SETTINGS_PANES, "The pane to show; the one it showed last when left out"), profile: PROFILE }),
     result: SETTINGS_WINDOW_RESULT,
     run: openSettingsWindow,

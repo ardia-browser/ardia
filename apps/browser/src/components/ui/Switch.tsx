@@ -56,6 +56,13 @@ function Switch({
 
   useEffect(() => (animateExternalChanges || Date.now() - pressedAt.current < USER_CHANGE_WINDOW_MS ? slideTo(value) : jumpTo(value)));
 
+  const flip = () => {
+    const next = !target.current;
+    pressedAt.current = Date.now();
+    if (!asksFirst) slideTo(next);
+    const settled = onChange(next);
+    if (settled instanceof Promise) void settled.finally(() => slideTo(shown.current));
+  };
   const travel = look.width - look.knob - look.inset * 2;
   const radius = look.height / 2;
   return (
@@ -65,13 +72,8 @@ function Switch({
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ checked: value, disabled: !!disabled }}
-      onPress={() => {
-        const next = !target.current;
-        pressedAt.current = Date.now();
-        if (!asksFirst) slideTo(next);
-        const settled = onChange(next);
-        if (settled instanceof Promise) void settled.finally(() => slideTo(shown.current));
-      }}
+      onPress={flip}
+      onAccessibilityTap={disabled ? undefined : flip}
       style={{ opacity: disabled ? opacity.disabled : 1 }}
     >
       <View pointerEvents="none" style={{ width: look.width, height: look.height, borderRadius: radius, backgroundColor: look.offColor, overflow: "hidden" }}>

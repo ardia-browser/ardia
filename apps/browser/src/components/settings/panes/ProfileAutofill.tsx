@@ -272,8 +272,8 @@ function CardSheet({ profile, saved, onChanged }: { profile: string; saved?: Sav
           </FormRow>
           <FormRow title="Expiration Date">
             <Box row gap="s">
-              <PopUp value={month} options={MONTHS} onChange={setMonth} minWidth={90} />
-              <PopUp value={year} options={yearOptions(saved?.expYear)} onChange={setYear} minWidth={90} />
+              <PopUp value={month} options={MONTHS} onChange={setMonth} minWidth={90} accessibilityLabel="Expiration Month" />
+              <PopUp value={year} options={yearOptions(saved?.expYear)} onChange={setYear} minWidth={90} accessibilityLabel="Expiration Year" />
             </Box>
           </FormRow>
         </Group>

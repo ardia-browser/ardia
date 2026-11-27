@@ -14,6 +14,7 @@ export function Row({ title, description, children, icon, onPress }: { title?: R
   const { hovered, hoverProps } = useHover();
   const native = useNativeForm();
   const label = typeof title === "string" ? title : undefined;
+  const hasControls = children !== undefined && children !== null && children !== false;
   const body = (
     <View
       style={{
@@ -37,14 +38,14 @@ export function Row({ title, description, children, icon, onPress }: { title?: R
           )
         ) : null}
       </View>
-      {children !== undefined && children !== null ? <ControlLabelContext.Provider value={label}>{children}</ControlLabelContext.Provider> : null}
+      {hasControls ? <ControlLabelContext.Provider value={label}>{children}</ControlLabelContext.Provider> : null}
       {onPress && <Symbol name="chevron.right" size={11} weight="semibold" color={theme.textTertiary} style={{ width: 12, height: 14 }} />}
     </View>
   );
   if (!onPress) return body;
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
+      <Pressable onPress={onPress} onAccessibilityTap={onPress} accessibilityLabel={label} {...(hasControls ? {} : { accessibilityRole: "button" as const })}>
         {body}
       </Pressable>
     </View>

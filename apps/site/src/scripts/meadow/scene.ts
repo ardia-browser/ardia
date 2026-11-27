@@ -2,7 +2,7 @@ import { GpuClock, Scaler } from "./budget";
 import { GrassBrush } from "./brush";
 import { ColorProbe, TextTones } from "./legibility";
 import { DAY_MOVE_MS, easeInOutSine, SUNRISE_HOLD_MS, sunriseElapsed, sunriseProgress } from "./clock";
-import { CYCLE_STOPS, cycleDelta, dayAt, MOON_RANGE, SUN_RANGE, SUNRISE_FROM, SUNRISE_TO, wrapCycle } from "./cycle";
+import { CYCLE_SECONDS, CYCLE_STOPS, cycleDelta, dayAt, MOON_RANGE, SUN_RANGE, SUNRISE_FROM, SUNRISE_TO, wrapCycle } from "./cycle";
 import { type Daylight, daylightAt } from "./daylight";
 import { bindTexture, createFramebuffer, createTexture, type Program, ProgramBatch } from "./gl";
 import {
@@ -53,7 +53,7 @@ interface Tier {
 type ProgramName = "bakeHeight" | "bakeAux" | "terrain" | "sky" | "grass" | "paint" | "final" | "probe" | "cells";
 type DeferredProgramName = "mob" | "particles";
 type Phase = "compile" | "bake" | "live" | "failed";
-type DayMode = "sunrise" | "drag" | "settle" | "rest";
+type DayMode = "sunrise" | "cycle" | "drag" | "settle" | "rest";
 type Body = "sun" | "moon";
 
 interface DragState {
@@ -138,6 +138,7 @@ const AMBIENT_FRAME_MS = 1000 / 30;
 const AMBIENT_EARLY_MS = 4;
 const MAX_HELD_FRAMES = 2;
 const ACTIVE_HOLD_MS = 700;
+const CYCLE_RAMP_SECONDS = 2.5;
 const DRAG_FOLLOW = 18;
 const BODY_HIT_PX = 46;
 const BODY_UP = degrees(-1.5);
@@ -202,7 +203,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
   const look = { x: 0, y: 0, settled: true };
   const [openFrom, openTo] = options.opening ?? [SUNRISE_FROM, SUNRISE_TO];
   const startCycle = reducedMotion ? openTo : openFrom;
-  const day = { c: startCycle, target: startCycle, mode: (reducedMotion ? "rest" : "sunrise") as DayMode, from: 0, to: 0, start: 0 };
+  const day = { c: startCycle, target: startCycle, mode: (reducedMotion ? "rest" : "sunrise") as DayMode, from: 0, to: 0, start: 0, ramp: 0 };
   const bodies = { sun: { x: -999, y: -999, up: false }, moon: { x: -999, y: -999, up: false }, radius: 40 };
   const projection: Mat4 = new Float32Array(16);
   const view: Mat4 = new Float32Array(16);
@@ -718,11 +719,13 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     needsRender = true;
   };
 
-  const stay = () => {
-    if (day.mode !== "rest") {
-      day.mode = "rest";
+  const resumeCycle = () => {
+    const next: DayMode = reducedMotion ? "rest" : "cycle";
+    if (day.mode !== next) {
+      day.mode = next;
       requestProbeNow();
     }
+    day.ramp = 0;
   };
 
   const dragSlopeY = (cycle: number, body: Body) => {
@@ -831,7 +834,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
       activeDrag = null;
       pointer.drag = null;
       clearGlobalDragStyles();
-      stay();
+      resumeCycle();
       setCursor(!pointer.touch && inHero(x, y) && !blockedTarget && hitBody(x, y) ? "grab" : "");
       markActive();
       return true;
@@ -885,13 +888,20 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     if (day.mode === "sunrise") {
       const elapsed = sunriseElapsed(now);
       day.c = day.target = mix(openFrom, openTo, sunriseProgress(elapsed));
-      if (elapsed > SUNRISE_HOLD_MS + DAY_MOVE_MS) stay();
+      if (elapsed > SUNRISE_HOLD_MS + DAY_MOVE_MS) resumeCycle();
       return;
     }
     if (day.mode === "settle") {
       const t = (now - day.start) / DAY_MOVE_MS;
       day.c = day.target = wrapCycle(mix(day.from, day.to, easeInOutSine(t)));
-      if (t >= 1) stay();
+      if (t >= 1) resumeCycle();
+      return;
+    }
+    if (day.mode === "cycle") {
+      day.ramp = Math.min(1, day.ramp + dt / CYCLE_RAMP_SECONDS);
+      const advance = (easeInOutSine(day.ramp) * dt) / CYCLE_SECONDS;
+      day.target = wrapCycle(day.target + advance);
+      day.c = wrapCycle(day.c + advance);
       return;
     }
     if (day.mode === "drag") {

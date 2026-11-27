@@ -441,6 +441,12 @@ function settleOpenLocal(result: unknown, count: OpenFailureCount) {
   return null;
 }
 
+const createChainInNewFolder = (host: ArdiaHost) => async (folder: string) => {
+  const info = await invoke(host, "folderInfo")(folder);
+  if (isRecord(info) && info.exists === true) throw Object.assign(new Error("A folder is already there"), { code: "ERR_SYNC_FOLDER_EXISTS" });
+  await invoke(host, "createChain")(folder);
+};
+
 export function syncModuleMethod(host: ArdiaHost, name: string, method: string): unknown {
   if (name !== "ArdiaSync") return undefined;
   if (method === "read" || method === "openLocal") {
@@ -450,6 +456,7 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
       return method === "read" ? settleRead(result, count) : settleOpenLocal(result, count);
     };
   }
+  if (method === "createChainInNewFolder") return createChainInNewFolder(host);
   if (method === "newDeviceId") return () => newSyncDeviceId();
   if (method === "deviceName") return syncDeviceName;
   if (method === "readPasswords") {

@@ -15,6 +15,7 @@
 #include "ardia/win/webui/desktop_platform_win.h"
 #include "ardia/win/webui/webui_documents.h"
 #include "ardia/win/webui/webui_frame.h"
+#include "ardia/win/webui/webui_page_evaluation.h"
 #include "ardia/win/webui/webui_telemetry.h"
 #include "ardia/win/webui/webui_window_policy.h"
 #include "base/callback_list.h"
@@ -51,6 +52,10 @@ class WindowTargeter;
 namespace content {
 class WebContents;
 class WebUI;
+}
+
+namespace ardiacore {
+class LinuxFind;
 }
 
 namespace views {
@@ -101,7 +106,12 @@ class PageBinding : public content::WebContentsObserver {
   content::WebContents* contents() const { return web_contents(); }
   void MoveTo(ShellHostView* owner);
 
-  std::string claim;
+  const std::string& claim() const { return claim_.value(); }
+  uint64_t claim_epoch() const { return claim_.epoch(); }
+  webui_page::PageEvaluationTicket EvaluationTicket() const;
+  void SetClaim(std::string value);
+  void ClearClaim();
+
   uint64_t renderer_generation = 0;
   uint64_t sequence = 1;
   uint64_t binding_generation = 1;
@@ -115,7 +125,9 @@ class PageBinding : public content::WebContentsObserver {
   base::DictValue NavigationEvent() const;
   base::DictValue Envelope(std::string_view type);
   void ReportNavigation();
+  void ReportFind(base::DictValue result);
   void ReportClosed();
+  ardiacore::LinuxFind* Find();
 
  private:
   void DidFinishNavigation(content::NavigationHandle* handle) override;
@@ -124,10 +136,13 @@ class PageBinding : public content::WebContentsObserver {
   void DidStopLoading() override;
   void WebContentsDestroyed() override;
 
+  bool CanReport() const;
+
   raw_ptr<ShellHostView> owner_;
   int id_ = 0;
   std::string key_;
   std::string profile_;
+  webui_window::ClaimBound<ardiacore::LinuxFind> claim_;
 };
 
 class ShellHostView : public views::View,
@@ -179,6 +194,9 @@ class ShellHostView : public views::View,
   bool BindsTab(const content::WebContents* contents) const;
   PageBinding* BindingForKey(std::string_view key) const;
   PageBinding* BindingForContents(const content::WebContents* contents) const;
+  bool EvaluationStillCurrent(int tab_id,
+                              const webui_page::PageEvaluationTicket& sent,
+                              const content::WeakDocumentPtr& document) const;
   std::unique_ptr<PageBinding> TakeBinding(int id);
 
   bool Trusted(content::WebUI* ui) const;

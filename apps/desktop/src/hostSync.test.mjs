@@ -203,6 +203,18 @@ test("the sync module keeps device ids local and sends every other call as a typ
   ]);
 });
 
+test("Recreate's exclusive create is served here: it refuses a folder that is there and otherwise makes the chain through the engine's createChain", async () => {
+  const host = fakeHost((method, args) => (method === "ArdiaSync.folderInfo" ? { exists: args.args[0] === "/there" } : null));
+  const create = resolveHostModule(host, "ArdiaSync", "createChainInNewFolder");
+  await create("/new");
+  await assert.rejects(create("/there"), { code: "ERR_SYNC_FOLDER_EXISTS" });
+  assert.deepEqual(host.calls, [
+    { method: "ArdiaSync.folderInfo", args: { args: ["/new"] } },
+    { method: "ArdiaSync.createChain", args: { args: ["/new"] } },
+    { method: "ArdiaSync.folderInfo", args: { args: ["/there"] } },
+  ]);
+});
+
 test("opening a keyring that was locked at launch resumes sync once from the stored key", async () => {
   const secret = (keyStoreStatus, lastKeyStatus) => ({ keyStore: "secretService", keyStoreStatus, lastKeyStatus, unlocked: false, unreadable: false, passwords: false });
   const replies = [secret("locked", "locked"), secret("ok", "locked"), secret("ok", "notFound")];

@@ -2,7 +2,9 @@
 
 #include <cassert>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -147,6 +149,58 @@ void TestClaims() {
   assert(CanReclaim("c1", "c1"));
   assert(!CanReclaim("c1", "c2"));
   assert(!CanReclaim("c1", ""));
+}
+
+struct PendingFind {
+  explicit PendingFind(std::vector<std::string>* reported, const std::string* claim)
+      : reported_(reported), claim_(claim) {}
+  ~PendingFind() { ++dropped; }
+  void Deliver() const { reported_->push_back(*claim_ + ":3 matches"); }
+
+  static int dropped;
+
+ private:
+  std::vector<std::string>* reported_;
+  const std::string* claim_;
+};
+
+int PendingFind::dropped = 0;
+
+void TestClaimBoundHelpers() {
+  std::vector<std::string> reported;
+  ClaimBound<PendingFind> binding;
+  assert(binding.empty() && !binding.helper());
+
+  assert(binding.epoch() == 0);
+  binding.Assign("c1");
+  assert(binding.epoch() == 1);
+  binding.Hold(std::make_unique<PendingFind>(&reported, &binding.value()));
+  binding.helper()->Deliver();
+  assert(reported.size() == 1 && reported.back() == "c1:3 matches");
+
+  binding.Clear();
+  assert(binding.empty() && !binding.helper() && PendingFind::dropped == 1 && binding.epoch() == 2);
+  binding.Assign("c2");
+  assert(binding.value() == "c2" && !binding.helper());
+  assert(reported.size() == 1);
+
+  binding.Hold(std::make_unique<PendingFind>(&reported, &binding.value()));
+  binding.Assign("c3");
+  assert(!binding.helper() && PendingFind::dropped == 2);
+
+  binding.Hold(std::make_unique<PendingFind>(&reported, &binding.value()));
+  const uint64_t before_same_claim = binding.epoch();
+  binding.Assign("c3");
+  assert(!binding.helper() && PendingFind::dropped == 3 && binding.epoch() == before_same_claim + 1);
+
+  binding.Hold(std::make_unique<PendingFind>(&reported, &binding.value()));
+  const uint64_t before_drop = binding.epoch();
+  binding.DropHelper();
+  assert(binding.value() == "c3" && !binding.helper() && PendingFind::dropped == 4 && binding.epoch() == before_drop);
+
+  binding.Hold(std::make_unique<PendingFind>(&reported, &binding.value()));
+  binding.helper()->Deliver();
+  assert(reported.size() == 2 && reported.back() == "c3:3 matches");
 }
 
 void TestUnclaimedTabs() {
@@ -469,6 +523,7 @@ int main() {
   TestPrivateHandOver();
   TestBindingGenerations();
   TestClaims();
+  TestClaimBoundHelpers();
   TestUnclaimedTabs();
   TestDocumentVerbs();
   TestRects();

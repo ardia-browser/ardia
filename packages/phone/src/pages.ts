@@ -103,6 +103,7 @@ type PagesNative = {
   nightShade(host?: string | null, isPrivate?: boolean): Promise<NightShade>;
   setNightShade(mode: NightShadeMode | null, host?: string | null, isPrivate?: boolean): Promise<void>;
   forgetNightShadeVerdicts?(since: number | null): Promise<void>;
+  setPageScheme?(scheme: "light" | "dark" | null): Promise<boolean>;
   opensLinksInApps(host: string): Promise<boolean>;
   setOpensLinksInApps(host: string, opens: boolean | null): Promise<void>;
   siteOpensLinksInApps?(host: string): Promise<boolean | null>;
@@ -217,6 +218,7 @@ export const pages = {
   forgetNightShadeVerdicts: async (since: number | null): Promise<void> => {
     await native().forgetNightShadeVerdicts?.(since);
   },
+  setPageScheme: async (scheme: "light" | "dark" | null): Promise<boolean | null> => (await native().setPageScheme?.(scheme)) ?? null,
   opensLinksInApps: (host: string) => native().opensLinksInApps(host),
   setOpensLinksInApps: (host: string, opens: boolean | null) => native().setOpensLinksInApps(host, opens),
   siteOpensLinksInApps: async (host: string): Promise<boolean | null> => (await native().siteOpensLinksInApps?.(host)) ?? null,

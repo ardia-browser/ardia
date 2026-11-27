@@ -6,9 +6,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace ardia_win::webui_window {
 
@@ -188,6 +190,30 @@ constexpr bool CanReclaim(std::string_view current_claim,
                           std::string_view previous_claim) {
   return current_claim.empty() || current_claim == previous_claim;
 }
+
+template <class Helper>
+class ClaimBound {
+ public:
+  const std::string& value() const { return claim_; }
+  bool empty() const { return claim_.empty(); }
+  uint64_t epoch() const { return epoch_; }
+
+  void Assign(std::string claim) {
+    helper_.reset();
+    claim_ = std::move(claim);
+    ++epoch_;
+  }
+  void Clear() { Assign(std::string()); }
+
+  Helper* helper() const { return helper_.get(); }
+  void Hold(std::unique_ptr<Helper> helper) { helper_ = std::move(helper); }
+  void DropHelper() { helper_.reset(); }
+
+ private:
+  std::string claim_;
+  uint64_t epoch_ = 0;
+  std::unique_ptr<Helper> helper_;
+};
 
 enum class UnclaimedStep { kWait, kPark, kDrop, kReport };
 

@@ -486,6 +486,8 @@ test("once JS has taken the press and the sheet is live, the first tap on the di
 });
 
 test("the first tap on a live sheet's dim closes it even when aborting the last suggestion fetch throws", async () => {
+  const realFetch = global.fetch;
+  global.fetch = jest.fn(() => new Promise<Response>(() => undefined)) as typeof fetch;
   const t = setUp();
   t.tap();
   t.flush();
@@ -503,6 +505,7 @@ test("the first tap on a live sheet's dim closes it even when aborting the last 
   const dim = t.layer().findAll((node) => node.props.accessibilityLabel === "Close Search" && typeof node.props.onPressIn === "function")[0]!;
   expect(() => act(() => dim.props.onPressIn())).toThrow("abort listener failed");
   aborts.mockRestore();
+  global.fetch = realFetch;
   expect(searchState().open).toBe(false);
   finish(t.root);
 });

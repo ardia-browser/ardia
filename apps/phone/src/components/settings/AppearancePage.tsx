@@ -119,9 +119,8 @@ export function ColorRow({ labelled = true, plainIcon = false, customAvailable =
   const look = useProfileLook();
   const choice = usePreferences((p) => p.colorChoice);
   const material = useDesign() === "material";
-  const picked = usePreferences((p) => selectedSwatch(p, look));
-  const selected = material ? choice ?? "plum" : picked;
-  const custom = !material && picked === "custom";
+  const selected = usePreferences((p) => selectedSwatch(p, look, material));
+  const custom = selected === "custom";
   const editedPreset = usePreferences((p) => (!material && p.colorChoice && p.colorChoice !== "custom" && p.presetThemes[p.colorChoice] ? p.colorChoice : null));
   return (
     <>

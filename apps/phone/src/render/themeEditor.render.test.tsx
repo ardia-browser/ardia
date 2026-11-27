@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { State } from "react-native-gesture-handler";
 import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
@@ -42,7 +42,7 @@ beforeEach(() => {
   overrides.length = 0;
   pageSchemes.length = 0;
   act(() => {
-    usePreferences.setState({ interfaceStyle: "matchMac", schemeChoice: "matchMac", colorChoice: null, customTheme: null, presetThemes: {} });
+    usePreferences.setState({ interfaceStyle: "matchMac", schemeChoice: "matchMac", colorChoice: null, customTheme: null, presetThemes: {}, materialYou: false, dynamicColors: null });
     useThemeDraft.setState({ draft: null });
     useSync.setState((state) => ({ ...state, status: status({ isEnabled: false, phase: "off" }), view: view({ profiles: [] }) }));
     setAppearanceDesign("redesigned");
@@ -272,6 +272,80 @@ onIos("on iPhone too, with stock Green on the Mac and an edited Green on the pho
   expect(iosSelectedSwatches(root)).toEqual([]);
   act(() => usePreferences.setState({ presetThemes: {} }));
   expect(iosSelectedSwatches(root)).toEqual(['"Green"']);
+  unmount(root);
+});
+
+test("a slider release still queued when sync turns on saves nothing: the lock is read when the edit commits, and the saved look stays as it was", () => {
+  act(() => usePreferences.setState({ colorChoice: null, presetThemes: {} }));
+  const editor = inDesign(<ThemePage />);
+  layOut(editor, "Noise", 226);
+  const track = getByGestureTestId("themeTrack:Noise");
+  act(() => {
+    fireGestureHandler(track, [
+      { state: State.BEGAN, x: 13, y: 10 },
+      { state: State.ACTIVE, x: 13, y: 10 },
+      { state: State.ACTIVE, x: 200, y: 10 },
+    ]);
+  });
+  matchMac({ color: "green", theme: null });
+  expect(textOf(editor)).toContain("Following your Mac");
+  act(() => {
+    fireGestureHandler(track, [
+      { state: State.ACTIVE, x: 200, y: 10 },
+      { state: State.END, x: 200, y: 10 },
+    ]);
+  });
+  flush();
+  expect(usePreferences.getState().colorChoice).toBeNull();
+  expect(usePreferences.getState().presetThemes).toEqual({});
+  expect(usePreferences.getState().customTheme).toBeNull();
+  expect(useThemeDraft.getState().draft).toBeNull();
+  unmount(editor);
+});
+
+test("Reset while the Mac is matched leaves the phone's saved preset alone", () => {
+  const phoneGreen = { ...blue, grain: 0.91 };
+  act(() => usePreferences.setState({ colorChoice: null, presetThemes: { green: phoneGreen } }));
+  matchMac({ color: "green", theme: null });
+  act(() => resetPresetTheme("green"));
+  expect(usePreferences.getState().presetThemes).toEqual({ green: phoneGreen });
+});
+
+test("the locked preview draws exactly what the app draws for the Mac's look, in the app's current light or dark", () => {
+  jest.spyOn(lookModule, "lookIsNative").mockImplementation(() => true);
+  const split = { colors: ["#5CD6D3", "#5C71D6"], darkColors: ["#5CD6D3"], mode: "light" as const, look: { ...blue, angle: 45, grain: 0.15 }, dark: { ...blue, angle: 300, grain: 0.85 } };
+  const legacy = { colors: ["#FF6A00", "#7A3CFF"], darkColors: null };
+  for (const scheme of ["dark", "light"] as const) {
+    for (const theme of [split, legacy]) {
+      act(() => usePreferences.setState({ colorChoice: null, schemeChoice: scheme }));
+      matchMac({ theme });
+      const root = inDesign(
+        <>
+          <ThemePage />
+          <View testID="appBackdrop">
+            <LookBackdrop themed />
+          </View>
+        </>,
+      );
+      const drawnIn = (testID: string) => {
+        const node = root.root.findAll((inner) => inner.props.testID === testID)[0]!.findAll((inner) => inner.type === lookModule.ProfileBackdrop)[0]!;
+        return { themeColors: node.props.themeColors, darkThemeColors: node.props.darkThemeColors, themeLook: node.props.themeLook, dark: node.props.dark };
+      };
+      const drawn = [drawnIn("themePreview"), drawnIn("appBackdrop")];
+      expect(`${scheme} ${theme === split ? "split" : "legacy"}: ${JSON.stringify(drawn[0])}`).toBe(`${scheme} ${theme === split ? "split" : "legacy"}: ${JSON.stringify(drawn[1])}`);
+      if (theme === split) expect(sliderValue(root, "Noise")).toBe(Math.round(drawn[1]!.themeLook.grain * 100));
+      unmount(root);
+    }
+  }
+});
+
+onAndroid("with Custom picked and Material You on without Dynamic Colors, the colour row selects Plum, the seed the palette uses", () => {
+  act(() => usePreferences.setState({ colorChoice: "custom", customTheme: blue, materialYou: true, dynamicColors: false }));
+  openSettings({ page: "appearance" });
+  const root = inDesign(<SettingsView />, "material");
+  const swatchNames = new Set(["Plum", "Blue", "Purple", "Pink", "Red", "Orange", "Yellow", "Green", "Neutral", "Custom"]);
+  const selected = root.root.findAll((node) => node.props.accessibilityRole === "radio" && node.props.accessibilityState?.selected === true && typeof node.props.onPress === "function" && swatchNames.has(node.props.accessibilityLabel)).map((node) => node.props.accessibilityLabel);
+  expect(selected).toEqual(["Plum"]);
   unmount(root);
 });
 

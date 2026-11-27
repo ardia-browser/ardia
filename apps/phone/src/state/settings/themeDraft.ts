@@ -3,6 +3,8 @@ import type { ProfileTheme } from "@ardia/core/src/theme.ts";
 import type { ProfileLook } from "../../lib/profileLook";
 import { PRESET_COLORS, type ColorChoice, type PresetColor, type Preferences } from "./preferences";
 import { currentPreferences, usePreferences } from "./store";
+import { syncData } from "../sync/store";
+import { materialPresetFor } from "../../lib/material/schemePick";
 
 export const useThemeDraft = create<{ draft: ProfileTheme | null }>()(() => ({ draft: null }));
 
@@ -22,7 +24,10 @@ export const currentCustomTheme = (): ProfileTheme | null => useThemeDraft.getSt
 
 export const isPresetColor = (key: string | null): key is PresetColor => PRESET_COLORS.includes(key as PresetColor);
 
-export function selectedSwatch({ colorChoice, presetThemes }: Pick<Preferences, "colorChoice" | "presetThemes">, look: ProfileLook): ColorChoice | null {
+export const themeLockedNow = () => currentPreferences().colorChoice === null && syncData().status.isEnabled;
+
+export function selectedSwatch({ colorChoice, presetThemes }: Pick<Preferences, "colorChoice" | "presetThemes">, look: ProfileLook, material = false): ColorChoice | null {
+  if (material) return materialPresetFor(colorChoice);
   if (colorChoice !== null) return colorChoice;
   if (look.custom || !isPresetColor(look.preset)) return null;
   return presetThemes[look.preset] ? null : look.preset;

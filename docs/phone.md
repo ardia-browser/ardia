@@ -4420,10 +4420,12 @@ Custom theme (the Mac's custom profile theme on the phone, 2026-11-22):
   preset's edits are kept per preset (`settings.presetThemes`, each sanitized on read like `customTheme`), its swatch
   shows them and is read as "Blue, edited", and "Reset to Blue" returns it, as the Mac's `presetThemes` and Reset do.
   With no colour chosen and sync off, an edit edits the preset Appearance shows (Plum by default). With Match My Mac
-  on, the Theme page shows the Mac's current look locked, under "Following your Mac's theme.", and nothing on it
-  writes; "Stop matching to edit" turns Match My Mac off the way its switch does and opens the editor on what was
-  showing. A swatch is selected only when it draws the look in use (`selectedSwatch`, both apps), so a phone-edited
-  Green isn't selected while the Mac shows stock Green. A drag the system cancels saves nothing. Material You
+  on, the Theme page shows the Mac's current look locked, under "Following your Mac's theme.", drawn with the app's
+  own resolver in the app's current light or dark, and nothing on it writes; "Stop matching to edit" turns Match My
+  Mac off the way its switch does and opens the editor on what was showing. Every save and Reset checks the lock when
+  it commits (`themeLockedNow`), so a release still queued when sync turns on saves nothing. A swatch is selected only
+  when it draws the look in use (`selectedSwatch`, both apps), so a phone-edited Green isn't selected while the Mac
+  shows stock Green, and under Material You it is the seed the palette uses (`materialPresetFor`). A drag the system cancels saves nothing. Material You
   ignores preset edits. `theme_edits` counts finished edits to Custom and to presets alike.
 - The Theme page (`components/settings/ThemePage.tsx`, `ThemeControls.tsx`, route `theme`) follows the Mac's
   `ThemeEditor.tsx` and the native port on d3fc4c02c. It has a preview of the shown look, the colour pad (hue around,

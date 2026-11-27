@@ -3,7 +3,7 @@ import { CUSTOM_CHOICE, type ProfileLook } from "../../lib/profileLook";
 import { countUsage } from "../telemetry/telemetry";
 import type { ColorChoice, PresetColor, PresetThemes } from "./preferences";
 import { currentPreferences, setPreference } from "./store";
-import { chosenOwnTheme, isPresetColor, useThemeDraft } from "./themeDraft";
+import { chosenOwnTheme, isPresetColor, themeLockedNow, useThemeDraft } from "./themeDraft";
 
 export function startingCustomTheme(look: ProfileLook): ProfileTheme {
   return chosenOwnTheme(currentPreferences()) ?? look.custom?.theme ?? startingTheme(look.swatch);
@@ -23,6 +23,10 @@ export function editedChoice(colorChoice: ColorChoice | null, look: ProfileLook)
 }
 
 export function editCustomTheme(theme: ProfileTheme, settle: boolean, target: ColorChoice = CUSTOM_CHOICE) {
+  if (themeLockedNow()) {
+    useThemeDraft.setState({ draft: null });
+    return;
+  }
   if (!settle) {
     useThemeDraft.setState({ draft: theme });
     return;
@@ -40,6 +44,7 @@ export function editCustomTheme(theme: ProfileTheme, settle: boolean, target: Co
 }
 
 export function resetPresetTheme(color: PresetColor) {
+  if (themeLockedNow()) return;
   const kept: PresetThemes = { ...currentPreferences().presetThemes };
   delete kept[color];
   setPreference("presetThemes", kept);

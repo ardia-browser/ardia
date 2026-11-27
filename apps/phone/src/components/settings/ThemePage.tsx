@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView, LegacyScrollView } from "react-native-gesture-handler";
 import { lookAngle, MAX_THEME_STOPS, THEME_TEXTURES, withAddedStop, withAngle, withoutStop, withTexture, type ProfileTheme, type ThemeMode, type ThemeTexture } from "@ardia/core/src/theme.ts";
-import { customLook } from "../../lib/profileLook";
+import { customLook, shownTheme, type ProfileLook } from "../../lib/profileLook";
 import { editedLook, keptReadable, TEXTURE_NAMES, THEME_MODES } from "../../lib/themeEditor";
 import { dropThemeDraft, editCustomTheme, editedChoice, startingCustomTheme } from "../../state/settings/customTheme";
 import { popSettings } from "../../state/settings/nav";
@@ -34,7 +34,13 @@ function useLiveTheme(stored: ProfileTheme, target: ColorChoice | null) {
     pending.current = null;
     dropThemeDraft();
   }, []);
-  useEffect(() => endDraft, [endDraft]);
+  useEffect(
+    () => () => {
+      showing.current = false;
+      endDraft();
+    },
+    [endDraft],
+  );
   useEffect(() => {
     showing.current = opened;
     if (opened) return;
@@ -76,24 +82,24 @@ export function ThemePage() {
   const target = matchingMac ? null : editedChoice(colorChoice, look);
   const saved = stored !== null;
   const fallback = useMemo(() => (saved ? null : startingCustomTheme(look)), [target, saved, look]);
-  return <ThemeEditor key={target ?? MATCHING_MAC} stored={stored ?? fallback!} target={target} onStopMatching={() => matchMyMac(false, look)} />;
+  return <ThemeEditor key={target ?? MATCHING_MAC} stored={stored ?? fallback!} target={target} look={look} onStopMatching={() => matchMyMac(false, look)} />;
 }
 
-function ThemeEditor({ stored, target, onStopMatching }: { stored: ProfileTheme; target: ColorChoice | null; onStopMatching: () => void }) {
+function ThemeEditor({ stored, target, look, onStopMatching }: { stored: ProfileTheme; target: ColorChoice | null; look: ProfileLook; onStopMatching: () => void }) {
   const ui = useTheme();
   const dark = ui.dark;
-  const { theme: editing, editsDark } = editedLook(stored, dark);
+  const locked = target === null;
+  const { theme: editing, editsDark } = locked && look.custom ? { theme: shownTheme(look.custom, dark), editsDark: null } : editedLook(stored, dark);
   const { theme, change, cancel } = useLiveTheme(editing, target);
   const [selected, setSelected] = useState(0);
   const index = Math.min(selected, theme.stops.length - 1);
   const scroll = useRef(null);
   const blocks = scroll as unknown as BlockedScroll;
   const hosted = useContext(SettingsHostedContext);
-  const preview = useMemo(() => customLook(theme, "own"), [theme]);
+  const preview = useMemo(() => (locked ? look : customLook(theme, "own")), [locked, look, theme]);
   const set = (patch: Partial<ProfileTheme>) => change({ ...theme, ...patch }, true);
   const live = (field: "intensity" | "translucency" | "grain") => (value: number, settle: boolean) => change({ ...theme, [field]: value }, settle);
   const kept = keptReadable(theme, dark);
-  const locked = target === null;
   const body = (
     <LegacyScrollView ref={scroll} bounces alwaysBounceVertical={false} overScrollMode="auto" style={styles.fill} contentContainerStyle={styles.content}>
       <Group footer={locked ? FOLLOWING_MAC : null}>

@@ -319,7 +319,7 @@ const CHECKS = {
   ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E12", "E13", "E15", "E34", "E35", "E36", "E37"]),
   ...savingChecks({ paired, sites }),
   ...codeChecks({ paired, sites }),
-  ...inChromium(codeChecks({ paired, sites, engine: "chromium" }), ["E25"]),
+  ...inChromium(codeChecks({ paired, sites, engine: "chromium" }), ["E25", "E26"]),
 };
 
 const names = wanted.length ? wanted : Object.keys(CHECKS);

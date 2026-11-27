@@ -29,6 +29,7 @@
 #include "content/public/browser/weak_document_ptr.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "third_party/blink/public/mojom/favicon/favicon_url.mojom.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/point.h"
@@ -128,6 +129,7 @@ class PageBinding : public content::WebContentsObserver {
   void Rebind(content::WebContents* contents);
   bool ReportOpenPrivateWindow(const GURL& url, const std::string& profile);
   base::DictValue NavigationEvent() const;
+  base::ListValue SnapshotEvents() const;
   base::DictValue Envelope(std::string_view type);
   void ReportNavigation();
   void ReportFind(base::DictValue result);
@@ -143,11 +145,16 @@ class PageBinding : public content::WebContentsObserver {
   void DidStopLoading() override;
   void DidToggleFullscreenModeForTab(bool entered,
                                      bool will_cause_resize) override;
+  void DidUpdateFaviconURL(
+      content::RenderFrameHost* frame,
+      const std::vector<blink::mojom::FaviconURLPtr>& candidates,
+      blink::mojom::FaviconUpdateReason reason) override;
   void WebContentsDestroyed() override;
 
   bool CanReport() const;
 
   raw_ptr<ShellHostView> owner_;
+  std::optional<base::DictValue> favicon_event_;
   int id_ = 0;
   std::string key_;
   std::string profile_;

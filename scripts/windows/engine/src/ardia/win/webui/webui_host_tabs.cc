@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "ardia/core/ac_launch_switches.h"
+#include "ardia/linux/ac_linux_favicons.h"
 #include "ardia/linux/ac_linux_find.h"
 #include "ardia/win/profiles.h"
 #include "ardia/win/webui/webui_bridge.h"
@@ -44,6 +45,7 @@
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/views/controls/webview/webview.h"
+#include "url/gurl.h"
 
 namespace ardia_win::webui {
 
@@ -100,12 +102,7 @@ base::DictValue ShellHostView::Identity(PageBinding* binding) const {
   lease.Set("documentEpoch", "1");
   base::DictValue snapshot;
   snapshot.Set("watermark", static_cast<double>(binding->sequence));
-  base::ListValue events;
-  events.Append(binding->NavigationEvent());
-  if (binding->contents() && binding->contents()->IsFullscreen()) {
-    events.Append(binding->FullscreenEvent(true));
-  }
-  snapshot.Set("events", std::move(events));
+  snapshot.Set("events", binding->SnapshotEvents());
   return base::DictValue()
       .Set("browserId", binding->id())
       .Set("chromeTabId", binding->id())
@@ -487,6 +484,23 @@ void ShellHostView::TabCommand(const base::DictValue& args, Done done) {
                          .Set("current", index == current));
     }
     return std::move(done).Run(true, base::Value(std::move(entries)));
+  }
+  if (command == "downloadFavicon") {
+    if (!values || values->empty() || !(*values)[0].is_string()) {
+      return std::move(done).Run(
+          false, base::Value("downloadFavicon requires an icon URL"));
+    }
+    ardiacore::DownloadLinuxFavicon(
+        contents, GURL((*values)[0].GetString()),
+        base::BindRepeating(
+            [](base::WeakPtr<content::WebContents> page) { return !!page; },
+            contents->GetWeakPtr()),
+        base::BindOnce(
+            [](Done done, base::Value image) {
+              std::move(done).Run(true, std::move(image));
+            },
+            std::move(done)));
+    return;
   }
   if (command == "executeExtensionAction") {
     const std::string shown = ExecuteExtensionAction(contents, values);

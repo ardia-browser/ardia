@@ -522,6 +522,45 @@ void PageBinding::ReportFullscreen(bool fullscreen) {
                base::Value(std::move(delivery)));
 }
 
+base::ListValue PageBinding::SnapshotEvents() const {
+  base::ListValue events;
+  events.Append(NavigationEvent());
+  if (contents() && contents()->IsFullscreen()) {
+    events.Append(FullscreenEvent(true));
+  }
+  if (favicon_event_) {
+    events.Append(favicon_event_->Clone());
+  }
+  return events;
+}
+
+void PageBinding::DidUpdateFaviconURL(
+    content::RenderFrameHost* frame,
+    const std::vector<blink::mojom::FaviconURLPtr>& candidates,
+    blink::mojom::FaviconUpdateReason reason) {
+  if (!web_contents() || frame != web_contents()->GetPrimaryMainFrame()) {
+    return;
+  }
+  base::ListValue urls;
+  for (const auto& candidate : candidates) {
+    urls.Append(candidate->icon_url.spec());
+  }
+  favicon_event_ =
+      base::DictValue().Set("name", "favicon").Set(
+          "data", base::DictValue()
+                      .Set("url", candidates.empty()
+                                      ? std::string()
+                                      : candidates.front()->icon_url.spec())
+                      .Set("urls", std::move(urls)));
+  if (!CanReport()) {
+    return;
+  }
+  base::DictValue delivery = Envelope("pageEvent");
+  delivery.Set("event", favicon_event_->Clone());
+  owner_->Emit("ArdiaWebView", base::NumberToString(id_),
+               base::Value(std::move(delivery)));
+}
+
 void PageBinding::ReportClosed() {
   if (!owner_ || claim_.empty()) {
     return;
@@ -590,6 +629,7 @@ void PageBinding::Rebind(content::WebContents* contents) {
     viewport->SetWebContents(nullptr);
   }
   Observe(contents);
+  favicon_event_.reset();
   id_ = TabId(contents);
 }
 
@@ -1861,8 +1901,7 @@ void ShellHostView::ReplaceTabContents(content::WebContents* old_contents,
     creation.Set("snapshot",
                  base::DictValue()
                      .Set("watermark", static_cast<double>(binding->sequence))
-                     .Set("events",
-                          base::ListValue().Append(binding->NavigationEvent())));
+                     .Set("events", binding->SnapshotEvents()));
     delivery.Set("action", "rebind");
     delivery.Set("creation", std::move(creation));
     Emit("ArdiaWebView", base::NumberToString(old_id),

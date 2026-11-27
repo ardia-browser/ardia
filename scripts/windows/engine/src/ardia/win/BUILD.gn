@@ -36,6 +36,8 @@ source_set("win") {
     "//ardia/linux/ac_linux_extension_views.h",
     "//ardia/linux/ac_linux_extensions.cc",
     "//ardia/linux/ac_linux_extensions.h",
+    "//ardia/linux/ac_linux_favicons.cc",
+    "//ardia/linux/ac_linux_favicons.h",
     "//ardia/linux/ac_linux_find.cc",
     "//ardia/linux/ac_linux_find.h",
     "//ardia/linux/ac_linux_page_evaluation.cc",

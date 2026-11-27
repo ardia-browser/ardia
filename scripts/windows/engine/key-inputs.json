@@ -31,6 +31,8 @@
     "engine/ardiacore-linux/src/ardia/linux/ac_linux_extension_views.h",
     "engine/ardiacore-linux/src/ardia/linux/ac_linux_extensions.cc",
     "engine/ardiacore-linux/src/ardia/linux/ac_linux_extensions.h",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_favicons.cc",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_favicons.h",
     "engine/ardiacore-linux/src/ardia/linux/ac_linux_find.cc",
     "engine/ardiacore-linux/src/ardia/linux/ac_linux_find.h",
     "engine/ardiacore-linux/src/ardia/linux/ac_linux_page_evaluation.cc",

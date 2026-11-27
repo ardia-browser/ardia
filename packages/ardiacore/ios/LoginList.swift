@@ -164,6 +164,7 @@ final class LoginList: NSObject {
     let logins = hits.map { next.logins[$0.index] }
     let quiet = next.field.trigger == .typing && notice == nil && logins.isEmpty && !next.connect
     guard !quiet, let window = target.loginListWindow else { return close(target) }
+    let opening = !isShown(for: target) || shown?.connect != next.connect
     var current = next
     current.logins = logins
     shown = current
@@ -171,7 +172,7 @@ final class LoginList: NSObject {
     if LaunchConfig.shared.background { NSLog("[logins] Login list: %ld logins, %ld rows", logins.count, rows.count) }
     dropdown.show(rows, under: next.field.screenRect, in: window)
     sync()
-    Self.count(next.connect ? "connectShown" : "shown")
+    if opening { Self.count(next.connect ? "connectShown" : "shown") }
   }
 
   func key(_ target: LoginListTarget, _ key: String) {
@@ -244,6 +245,7 @@ final class LoginList: NSObject {
   }
 
   private static func count(_ name: String) {
+    if LaunchConfig.shared.background { NSLog("[logins] Login list counted: %@", name) }
     ArdiaEvents.emit("passwords.loginListCounted", data: ArdiaConsentStamp.begin().onto(["name": name]))
   }
 

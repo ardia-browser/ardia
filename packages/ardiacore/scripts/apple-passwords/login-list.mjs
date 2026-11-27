@@ -12,6 +12,7 @@ export const CONNECT = "Connect Apple Passwords";
 export const NOT_NOW = "Not now";
 export const FILL_FAILED = "Apple Passwords didn't fill this login. Unlock the Passwords app and try again.";
 const OPENED_PASSWORDS = "[logins] Passwords app (background mode, not opened)";
+const COUNTED_SHOWN = "[logins] Login list counted: shown\n";
 
 const usersFor = (host) =>
   FIXTURES.logins
@@ -275,21 +276,29 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       return { engine: engineName, ...seen };
     },
     async E34() {
+      const { app } = await paired();
+      const shownCounts = () => app.output().split(COUNTED_SHOWN).length - 1;
       const tab = await open("filter.localhost", "/login-ready");
       try {
+        const before = shownCounts();
         await tab.click("#u");
         const all = await tab.waitRows();
         assert(q(titles(all.slice(0, -1))) === q(usersFor("filter.localhost")), "the click lists every login for the site", all);
         await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
         await typedRows(tab, "n", [...FILTERED, FOOTER], "the list for ann");
-        return { engine: engineName, an: FILTERED };
+        await sleep(300);
+        assert(shownCounts() - before === 1, "refiltering an open list counts one showing", shownCounts() - before);
+        return { engine: engineName, an: FILTERED, shownCounted: shownCounts() - before };
       } finally {
         await tab.close();
       }
     },
     async E35() {
+      const { app } = await paired();
+      const shownCounts = () => app.output().split(COUNTED_SHOWN).length - 1;
       const tab = await open("filter.localhost", "/login-ready");
       try {
+        const before = shownCounts();
         await tab.click("#u");
         await tab.waitRows();
         await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
@@ -299,7 +308,9 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         for (let i = 0; i < 3; i++) await tab.key("backspace");
         assert((await tab.value(`document.getElementById("u").value`)) === "an", "Backspace leaves an", null);
         await typedRows(tab, "", [...FILTERED, FOOTER], "the list back on an");
-        return { engine: engineName, back: FILTERED };
+        await sleep(300);
+        assert(shownCounts() - before === 2, "closing on no match and reopening on Backspace counts two showings", shownCounts() - before);
+        return { engine: engineName, back: FILTERED, shownCounted: shownCounts() - before };
       } finally {
         await tab.close();
       }

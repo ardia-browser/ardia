@@ -174,24 +174,60 @@ class PageProcessRecoveryTest {
     @Test
     fun commitOnAnotherSiteStartsAFreshRetryWindow() {
         val recovery = PageProcessRecovery()
-        recovery.pageCommitted(site = "a.com")
+        recovery.pageCommitted(host = "a.com")
         recovery.processEnded(shown = true, now = 0L)
         recovery.reloadStarted()
-        recovery.pageCommitted(site = "a.com")
+        recovery.pageCommitted(host = "a.com")
         recovery.loadFinished(now = 1_000L)
-        recovery.pageCommitted(site = "b.org")
+        recovery.pageCommitted(host = "b.org")
         assertEquals(PageProcessRecovery.Step.Reload, recovery.processEnded(shown = true, now = 2_000L))
     }
 
     @Test
     fun commitOnTheSameSiteKeepsTheRetryWindow() {
         val recovery = PageProcessRecovery()
-        recovery.pageCommitted(site = "a.com")
+        recovery.pageCommitted(host = "a.com")
         recovery.processEnded(shown = true, now = 0L)
         recovery.reloadStarted()
-        recovery.pageCommitted(site = "a.com")
+        recovery.pageCommitted(host = "a.com")
         recovery.loadFinished(now = 1_000L)
-        recovery.pageCommitted(site = "a.com")
+        recovery.pageCommitted(host = "a.com")
         assertEquals(PageProcessRecovery.Step.ShowFailure, recovery.processEnded(shown = true, now = 2_000L))
+    }
+
+    @Test
+    fun successfulTryAgainCountsAsTheRecovery() {
+        val recovery = PageProcessRecovery()
+        recovery.processEnded(shown = true, now = 0L)
+        recovery.reloadStarted()
+        assertEquals(PageProcessRecovery.Step.ShowFailure, recovery.processEnded(shown = true, now = 1_000L))
+        recovery.personReloaded()
+        recovery.reloadStarted()
+        assertTrue(recovery.isReloading)
+        assertEquals(PageProcessOutcome.Recovered, recovery.loadFinished(now = 2_000L))
+    }
+
+    @Test
+    fun openingANewAddressFromTheFailurePageIsNotARecovery() {
+        val recovery = PageProcessRecovery()
+        recovery.processEnded(shown = true, now = 0L)
+        recovery.reloadStarted()
+        recovery.processEnded(shown = true, now = 1_000L)
+        recovery.personOpened()
+        assertFalse(recovery.showsFailure)
+        recovery.reloadStarted()
+        assertNull(recovery.loadFinished(now = 2_000L))
+    }
+
+    @Test
+    fun commitOnAnotherHostStartsAFreshRetryWindow() {
+        val recovery = PageProcessRecovery()
+        recovery.pageCommitted(host = "www.a.com")
+        recovery.processEnded(shown = true, now = 0L)
+        recovery.reloadStarted()
+        recovery.pageCommitted(host = "www.a.com")
+        recovery.loadFinished(now = 1_000L)
+        recovery.pageCommitted(host = "news.a.com")
+        assertEquals(PageProcessRecovery.Step.Reload, recovery.processEnded(shown = true, now = 2_000L))
     }
 }

@@ -58,4 +58,48 @@ import WebKit
     let live = try #require(loaded.interactionState as? Data)
     #expect(PageSession.toSave(from: loaded, stored: Data([1, 2, 3])) == live)
   }
+
+  final class Commits: NSObject, WKNavigationDelegate {
+    var urls: [String] = []
+    var waiting: CheckedContinuation<Void, Never>?
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { urls.append(webView.url?.lastPathComponent ?? "") }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+      waiting?.resume()
+      waiting = nil
+    }
+  }
+
+  @Test func backOnABlankWebViewRestoresTheSavedHistoryWithoutLoadingTheDeadPage() async throws {
+    let delegate = Finished()
+    let loaded = WKWebView()
+    loaded.navigationDelegate = delegate
+    await load(loaded, "a", delegate: delegate)
+    await load(loaded, "b", delegate: delegate)
+    let saved = try #require(loaded.interactionState as? Data)
+
+    let commits = Commits()
+    let remounted = WKWebView()
+    remounted.navigationDelegate = commits
+    #expect(!remounted.canGoBack)
+    var went = false
+    await withCheckedContinuation { continuation in
+      commits.waiting = continuation
+      went = PageSession.restore(saved, into: remounted, goingBy: -1)
+    }
+    #expect(went)
+    #expect(remounted.url?.lastPathComponent == "a.html")
+    #expect(commits.urls == ["a.html"])
+    #expect(remounted.backForwardList.forwardList.map(\.url.lastPathComponent) == ["b.html"])
+    #expect(remounted.canGoForward)
+  }
+
+  @Test func forwardWithNothingAheadSaysSo() async throws {
+    let delegate = Finished()
+    let loaded = WKWebView()
+    loaded.navigationDelegate = delegate
+    await load(loaded, "a", delegate: delegate)
+    await load(loaded, "b", delegate: delegate)
+    let saved = try #require(loaded.interactionState as? Data)
+    #expect(!PageSession.restore(saved, into: WKWebView(), goingBy: 1))
+  }
 }

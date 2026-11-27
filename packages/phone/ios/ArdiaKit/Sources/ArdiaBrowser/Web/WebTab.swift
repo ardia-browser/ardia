@@ -98,6 +98,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   @ObservationIgnored private var lastCommit = Date.distantPast
   @ObservationIgnored private var processRecovery = PageProcessRecovery()
   @ObservationIgnored private var revivingForPerson = false
+  @ObservationIgnored private var historyAwaitsRestore = false
   @ObservationIgnored private var snapshotTask: Task<Void, Never>?
   @ObservationIgnored private var pendingURL: URL?
   @ObservationIgnored private var swipeSnapshots: [ObjectIdentifier: UIImage] = [:]
@@ -115,7 +116,8 @@ public final class WebTab: DiscardablePage, Identifiable {
 
   public func load(_ url: URL) {
     failure = nil
-    processRecovery.personReloaded()
+    historyAwaitsRestore = false
+    processRecovery.personOpened()
     guard let webView else {
       pendingURL = url
       self.url = url
@@ -175,16 +177,25 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   public func goBack() {
-    failure = nil
-    processRecovery.personReloaded()
-    guard let webView = webViewForNavigation(), webView.goBack() != nil else { return }
-    processRecovery.reloadStarted()
+    navigateHistory(by: -1)
   }
 
   public func goForward() {
+    navigateHistory(by: 1)
+  }
+
+  private func navigateHistory(by step: Int) {
     failure = nil
     processRecovery.personReloaded()
-    guard let webView = webViewForNavigation(), webView.goForward() != nil else { return }
+    guard let webView = webViewForNavigation() else { return }
+    let went: Bool
+    if historyAwaitsRestore, let session = engine?.tabs.tab(id)?.interactionState {
+      historyAwaitsRestore = false
+      went = PageSession.restore(session, into: webView, goingBy: step)
+    } else {
+      went = (step < 0 ? webView.goBack() : webView.goForward()) != nil
+    }
+    guard went else { return }
     processRecovery.reloadStarted()
   }
 
@@ -314,17 +325,20 @@ public final class WebTab: DiscardablePage, Identifiable {
     webView.isInspectable = engine.isInspectable
     engine.blocker.install(on: configuration.userContentController, counter: blockedResources)
     engine.installPageScripts(on: configuration.userContentController, host: host, isPrivate: isPrivate)
+    let loads = !isPopup && processRecovery.loadsWhenMadeLive(shown: engine.shownTabID == id || revivingForPerson)
+    historyAwaitsRestore = !isPopup && !loads && engine.tabs.tab(id)?.interactionState != nil
     self.webView = webView
     observe(webView)
     if let zoom = engine.preferences.settings(for: host, isPrivate: isPrivate).pageZoom {
       pageZoom = zoom
       webView.pageZoom = zoom
     }
-    guard !isPopup, processRecovery.loadsWhenMadeLive(shown: engine.shownTabID == id || revivingForPerson) else { return }
+    guard loads else { return }
     loadContent(into: webView)
   }
 
   private func loadContent(into webView: WKWebView) {
+    historyAwaitsRestore = false
     processRecovery.reloadStarted()
     if let pendingURL {
       self.pendingURL = nil
@@ -408,8 +422,8 @@ public final class WebTab: DiscardablePage, Identifiable {
         tab.persistThemeColor()
       }
     }
-    watch(\.canGoBack) { tab, view in if tab.canGoBack != view.canGoBack { tab.canGoBack = view.canGoBack } }
-    watch(\.canGoForward) { tab, view in if tab.canGoForward != view.canGoForward { tab.canGoForward = view.canGoForward } }
+    watch(\.canGoBack) { tab, view in if !tab.historyAwaitsRestore, tab.canGoBack != view.canGoBack { tab.canGoBack = view.canGoBack } }
+    watch(\.canGoForward) { tab, view in if !tab.historyAwaitsRestore, tab.canGoForward != view.canGoForward { tab.canGoForward = view.canGoForward } }
     watch(\.themeColor) { tab, view in tab.colorsChanged(theme: view.themeColor, underPage: view.underPageBackgroundColor) }
     watch(\.underPageBackgroundColor) { tab, view in tab.colorsChanged(theme: view.themeColor, underPage: view.underPageBackgroundColor) }
     watch(\.hasOnlySecureContent) { tab, view in tab.securityChanged(view) }
@@ -516,7 +530,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   fileprivate func didCommit() {
-    processRecovery.pageCommitted(site: webView?.url?.host().map(RegistrableDomain.of))
+    processRecovery.pageCommitted(host: PageHost.key(webView?.url))
     hasCommittedLoad = true
     committedDocuments += 1
     capturingOrigins = [:]

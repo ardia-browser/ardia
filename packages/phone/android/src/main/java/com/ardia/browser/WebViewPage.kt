@@ -195,7 +195,7 @@ internal class WebViewPage(
     override fun close() = engine.close(id)
 
     override fun load(url: String) {
-        processRecovery.personReloaded()
+        processRecovery.personOpened()
         failedUrl = null
         update { it.copy(failure = null) }
         val web = webView
@@ -776,7 +776,7 @@ internal class WebViewPage(
 
     internal fun historyUpdated(web: WebView, url: String, isReload: Boolean) {
         if (web !== webView) return
-        processRecovery.pageCommitted(BrowserUrl.host(url)?.let(com.ardia.blocking.PublicSuffixes.shared::registrableDomain))
+        processRecovery.pageCommitted(PageHost.key(url))
         viewMoved()
         val previous = lastCommittedUrl
         lastCommittedUrl = url
@@ -853,9 +853,14 @@ internal class WebViewPage(
             return
         }
         val shown = isShownNow()
+        val history = runCatching {
+            if (web.copyBackForwardList().size == 0) null else Triple(Bundle().also { saveInto(web, it) }, web.canGoBack(), web.canGoForward())
+        }.getOrNull()
         tearDown(web)
         if (released) return
-        update { it.copy(canGoBack = false, canGoForward = false) }
+        savedBundle = history?.first
+        scrollAtDiscard = null
+        update { it.copy(canGoBack = history?.second ?: false, canGoForward = history?.third ?: false) }
         Log.i(LOG_TAG, "renderer gone for $id, crashed $didCrash, shown $shown")
         mutableEvents.tryEmit(PageEvent.ProcessEnded(PageProcessOutcome.Gone))
         when (processRecovery.processEnded(shown, SystemClock.elapsedRealtime())) {

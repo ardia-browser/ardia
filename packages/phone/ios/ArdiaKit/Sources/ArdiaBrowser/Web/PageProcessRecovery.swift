@@ -19,7 +19,7 @@ public struct PageProcessRecovery: Equatable, Sendable {
   public private(set) var isReloading = false
   public private(set) var showsFailure = false
   private var recoveredAt: TimeInterval?
-  private var committedSite: String?
+  private var committedHost: String?
 
   public init() {}
 
@@ -53,12 +53,19 @@ public struct PageProcessRecovery: Equatable, Sendable {
 
   public mutating func personReloaded() {
     recoveredAt = nil
+    guard showsFailure else { return }
+    showsFailure = false
+    awaitsReload = true
+  }
+
+  public mutating func personOpened() {
+    recoveredAt = nil
     showsFailure = false
   }
 
-  public mutating func pageCommitted(site: String?) {
-    if site != committedSite { recoveredAt = nil }
-    committedSite = site
+  public mutating func pageCommitted(host: String?) {
+    if host != committedHost { recoveredAt = nil }
+    committedHost = host
   }
 
   public mutating func loadFinished(at now: TimeInterval) -> PageProcessOutcome? {

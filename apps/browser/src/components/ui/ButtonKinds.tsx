@@ -31,7 +31,7 @@ export function StepperButtonView({ icon, onPress, width = stepperSize.width, he
   const pressMotion = usePressScaleMotion();
   return (
     <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
-      <Pressable disabled={disabled} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} tooltip={tooltip}>
+      <Pressable disabled={disabled} onPress={onPress} onAccessibilityTap={disabled ? undefined : onPress} accessibilityRole="button" accessibilityLabel={tooltip} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} tooltip={tooltip}>
         {({ pressed }) => (
           <View
             style={{

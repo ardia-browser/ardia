@@ -54,6 +54,18 @@ test("settings.open answers only once the native window is there", async () => {
   assert.deepEqual([opened.result?.open, opened.result?.pane], [true, "advanced"]);
 });
 
+test("settings.open fails when the person moves Settings elsewhere while the window opens", async () => {
+  let finishOpen;
+  appWindows.openWindow = (id, options) => new Promise((resolve) => (finishOpen = () => resolve(openWindow(id, options))));
+  const reply = fire("settings.open", { pane: "advanced" });
+  for (let i = 0; i < 20 && !finishOpen; i++) await tick();
+  goToSettingsPane("appearance");
+  finishOpen();
+  const answer = await reply;
+  assert.equal(answer.error?.code, "failed", JSON.stringify(answer));
+  assert.match(answer.error.message, /moved away from advanced/);
+});
+
 test("settings.window follows a pane the person picks in the window", async () => {
   await ok("settings.open", { pane: "general" });
   goToSettingsPane("appearance");

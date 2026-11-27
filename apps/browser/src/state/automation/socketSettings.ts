@@ -191,10 +191,15 @@ function openSettingsWindow(params: Record<string, unknown>, call: SocketCall) {
     const profile = params.profile === undefined ? null : profileArg(params.profile);
     if (pane) openSettings(pane, profile);
     else openSettings();
-    const nav = useSettingsNav.getState();
-    expect(!pane || (nav.pane === pane && (!profile || nav.profileId === profile)), `Settings didn't go to ${pane}.`);
+    const { pane: wantedPane, profileId: wantedProfile, detail: wantedDetail } = useSettingsNav.getState();
+    const atPlace = () => {
+      const nav = useSettingsNav.getState();
+      return nav.pane === wantedPane && nav.profileId === wantedProfile && nav.detail === wantedDetail && (!pane || nav.pane === pane) && (!profile || nav.profileId === profile);
+    };
+    expect(atPlace(), `Settings didn't go to ${pane}.`);
     await waitFor(settingsWindowOpen);
     expect(await settingsWindowOpen(), "the Settings window didn't open.");
+    expect(atPlace(), `Settings moved away from ${wantedPane} while it opened.`);
     return settingsPlaceRow(true);
   });
 }
@@ -232,7 +237,7 @@ export const SETTINGS_METHODS: MethodSpec[] = [
   {
     name: "settings.open",
     mutates: true,
-    description: "Open the Settings window, or bring it forward, at a pane (the profiles pane at a profile); without a pane it comes back where it was. Answers once the window is open; the pane draws as soon as it has loaded",
+    description: "Open the Settings window, or bring it forward, at a pane (the profiles pane at a profile); without a pane it comes back where it was. Answers once the window is open and Settings is at that place; it doesn't wait for the pane to draw",
     params: obj({ pane: oneOf(SETTINGS_PANES, "The pane to show; the one it showed last when left out"), profile: PROFILE }),
     result: SETTINGS_WINDOW_RESULT,
     run: openSettingsWindow,

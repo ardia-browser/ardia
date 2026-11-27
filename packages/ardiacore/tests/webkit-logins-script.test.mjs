@@ -63,3 +63,25 @@ for (const { name, origin, fields, shown } of cases) {
     assert.equal(page({ origin, fields }).logins.formShown("https://bank.test", submitted), shown);
   });
 }
+
+const posted = (fields) => {
+  const { posted: messages, listeners } = page({ origin: "https://bank.test", fields });
+  listeners.submit({ target: null });
+  return messages.find((m) => m.kind === "loginSubmit")?.data;
+};
+
+test("a submitted change-password form offers its new password, and a sign-in form its only one", () => {
+  const changed = posted([
+    { type: "text", name: "user", value: "ada@example.test" },
+    { type: "password", name: "old", autocomplete: "current-password", value: "fixture-pw-old" },
+    { type: "password", name: "new", value: "fixture-pw-new" },
+    { type: "password", name: "again", value: "fixture-pw-new" },
+  ]);
+  assert.deepEqual([changed.password, changed.field.name], ["fixture-pw-new", "new"]);
+  const marked = posted([
+    { type: "password", name: "old", value: "fixture-pw-old" },
+    { type: "password", name: "new", autocomplete: "new-password", value: "fixture-pw-new" },
+  ]);
+  assert.equal(marked.password, "fixture-pw-new");
+  assert.equal(posted(loginForm).password, "s3cret");
+});

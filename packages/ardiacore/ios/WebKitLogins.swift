@@ -58,11 +58,14 @@ final class WebKitLogins: NSObject {
   };
   const NEW_PASSWORD = /(^|\s)new-password(\s|$)/i;
   const CURRENT_PASSWORD = /(^|\s)current-password(\s|$)/i;
-  const newPasswords = (password) => {
-    const all = Array.from((password.form || document).querySelectorAll("input[type=password]")).filter(visible);
+  const newPasswordsIn = (root) => {
+    const all = Array.from((root || document).querySelectorAll("input[type=password]")).filter(visible);
     const marked = all.filter((el) => NEW_PASSWORD.test(el.getAttribute("autocomplete") || ""));
     const unmarked = all.filter((el) => !CURRENT_PASSWORD.test(el.getAttribute("autocomplete") || ""));
-    const found = marked.length ? marked : unmarked.length < all.length ? unmarked : all.length === 2 ? all : all.length === 3 ? all.slice(1) : [];
+    return marked.length ? marked : unmarked.length < all.length ? unmarked : all.length === 2 ? all : all.length === 3 ? all.slice(1) : [];
+  };
+  const newPasswords = (password) => {
+    const found = newPasswordsIn(password.form);
     return found.includes(password) ? found : [];
   };
   const passwordRules = (fields, el) => {
@@ -139,8 +142,7 @@ final class WebKitLogins: NSObject {
   addEventListener("resize", hide);
   addEventListener("pagehide", hide);
   const submitted = (form) => {
-    const first = passwordIn(form);
-    const password = (first && newPasswords(first)[0]) || first;
+    const password = newPasswordsIn(form)[0] || passwordIn(form);
     if (!password || !password.value) return;
     const username = usernameFor(password);
     const field = { name: password.getAttribute("name") || "", id: password.id || "", autocomplete: password.getAttribute("autocomplete") || "" };

@@ -1,5 +1,5 @@
 import { FIXTURES } from "./fake.mjs";
-import { FOOTER } from "./login-list.mjs";
+import { CONNECT, FOOTER, NOT_NOW } from "./login-list.mjs";
 import { SAVE_TITLE, UPDATE_TITLE } from "./saving.mjs";
 import { PAGE_EVENTS } from "./sites.mjs";
 import { sleep } from "../../../../scripts/lib/instance.mjs";
@@ -59,7 +59,51 @@ export function strongPasswordChecks({ paired, sites, engine: engineName = "webk
     return first;
   };
 
+  const applePasswords = (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().state", { timeout: 20_000 });
+  const pairingStep = (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().pairing?.step ?? null", { timeout: 20_000 });
+  const listed = async (tab, expected, what) => {
+    let seen = null;
+    return waitFor(what, async () => {
+      seen = await tab.rows();
+      return seen && q(seen.map((r) => r.title)) === q(expected) ? seen : null;
+    }, 10_000).catch(() => {
+      throw new Error(`${what}: wanted ${q(expected)}, saw ${q(seen?.map((r) => r.title) ?? null)}`);
+    });
+  };
+
   return {
+    async E24notConnected() {
+      const { app, fake, tabs } = await session();
+      fake.endPairing();
+      await waitFor("Pairing ended", async () => ((await applePasswords(app)) === "notConnected" ? true : null), 10_000);
+      const seen = {};
+      const tab = await tabs.open(sites.url(SITE, "/signup"));
+      try {
+        await tab.click("#p");
+        seen.notConnected = (await listed(tab, [SUGGEST, CONNECT, NOT_NOW], "the strong row beside the Connect row")).map((r) => r.title);
+        await tab.pick(NOT_NOW);
+        assert(!(await tab.noList(800)), `${NOT_NOW} closes the list`, null);
+        await tab.click("#p");
+        seen.notNow = (await listed(tab, [SUGGEST, FOOTER], `the strong row after ${NOT_NOW}`)).map((r) => r.title);
+        const password = await pickSuggestion(tab, ["p", "c"]);
+        assert(shape(password).length >= 16, "the suggestion fills while Apple Passwords isn't connected", shape(password));
+      } finally {
+        await tab.close();
+      }
+      const other = await tabs.open(sites.url("other.localhost", "/signup"));
+      try {
+        await other.click("#p");
+        await listed(other, [SUGGEST, CONNECT, NOT_NOW], "another site's strong row beside the Connect row");
+        await other.pick(CONNECT);
+        await waitFor("the code step", async () => ((await pairingStep(app)) === "code" ? true : null), 20_000);
+        await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${q(FIXTURES.code)}).then(() => true);`, { timeout: 60_000 });
+        await waitFor("Paired again", async () => ((await applePasswords(app)) === "connected" ? true : null), 20_000);
+        seen.connected = (await listed(other, [SUGGEST, FOOTER], "the strong row once connected")).map((r) => r.title);
+      } finally {
+        await other.close();
+      }
+      return { engine: engineName, ...seen };
+    },
     async E24control() {
       const tab = await fresh(sites.url(SITE, "/signup"));
       await tab.click("#u");

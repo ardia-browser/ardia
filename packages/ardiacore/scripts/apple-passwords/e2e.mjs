@@ -28,7 +28,9 @@
 //       E24control proves that check sees one: on Ardia's own password manager, Chrome's popup shows there;
 //       E24change (and E24changechromium) on save.localhost's /change-password types the current password, picks
 //       "Suggest strong password" in the new-password field and submits: the prompt asks "Update in Apple Passwords?",
-//       whose Update keeps the suggested password in the fake for that account
+//       whose Update keeps the suggested password in the fake for that account; E24notConnected (both engines) ends
+//       Pairing: a new-password field lists Suggest strong password beside Connect and Not now, Not now leaves the strong
+//       row, and Connect on another site pairs there and leaves the strong row
 //   E25-E27 Verification codes on a code field (codes.mjs), in that instance, in a WebKit tab and (E25chromium…) a
 //       Chromium one: "Code for example.localhost" fills the fixture code, the account typed on the site's sign-in
 //       page comes first, and an http code field or one holding text gets nothing
@@ -424,7 +426,7 @@ const CHECKS = {
   ...savingChecks({ paired, sites }),
   ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E19", "E20", "E21", "E22", "E22garbled", "E23"]),
   ...strongPasswordChecks({ paired, sites, fresh: freshChromiumTab }),
-  ...inChromium(strongPasswordChecks({ paired, sites, engine: "chromium" }), ["E24", "E24change"]),
+  ...inChromium(strongPasswordChecks({ paired, sites, engine: "chromium" }), ["E24", "E24change", "E24notConnected"]),
   ...codeChecks({ paired, sites }),
   ...inChromium(codeChecks({ paired, sites, engine: "chromium" }), ["E25", "E26", "E27"]),
   E31: noSecretsInLogs,

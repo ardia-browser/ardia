@@ -105,6 +105,7 @@ final class LoginList: NSObject {
       guard scheme == "https" else { return close(target) }
       return showCodes(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked)
     }
+    if field.kind == .newPassword { return showStrong(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked) }
     if field.trigger == .typing, let cache = fetched, cache.target === target, cache.page == page, cache.host == host,
       Date().timeIntervalSince(cache.at) < Self.fetchedSeconds
     {
@@ -120,6 +121,21 @@ final class LoginList: NSObject {
     }
   }
 
+  private func showStrong(_ target: LoginListTarget, field: LoginListField, host: String, page: String, pageHost: String, asked: Int) {
+    let profile = target.loginListProfile
+    ApplePasswordsClient.shared.status { [weak self, weak target] state in
+      Self.domains(ApplePasswordsMatch.probes([host, pageHost]), profile: profile) { domains in
+        guard let self, let target, asked == self.ticket, Self.origin(of: target.loginListPage) == page else { return }
+        guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return self.close(target) }
+        var next = Shown(target: target, field: field, page: page, host: host, site: domains[pageHost] ?? pageHost, logins: [])
+        next.domains = domains
+        next.strong = true
+        next.connect = state == "notConnected" && !self.declined.contains(next.site)
+        self.present(next, notice: nil)
+      }
+    }
+  }
+
   private func listed(
     _ result: Result<[ApplePasswordsEntry], ApplePasswordsClient.Problem>, domains: [String: String], target: LoginListTarget, field: LoginListField, page: String,
     host: String, scheme: String, pageHost: String
@@ -129,10 +145,9 @@ final class LoginList: NSObject {
     if field.kind == .login, !field.typed.isEmpty { remember(field.typed, on: ApplePasswordsMatch.site(pageHost, domains: domains), in: target) }
     var next = Shown(target: target, field: field, page: page, host: host, site: site, logins: [])
     next.domains = domains
-    next.strong = field.kind == .newPassword
     switch result {
     case .success(let entries):
-      if !next.strong { next.logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains) }
+      next.logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains)
       present(next, notice: nil)
     case .failure(.notConnected): offerConnect(next)
     case .failure(let problem): present(next, notice: Self.notice(problem))
@@ -236,11 +251,12 @@ final class LoginList: NSObject {
     _ logins: [ApplePasswordsMatch.Login], bold: [NSRange] = [], notice: String?, connect: Bool = false, strong: Bool = false, codes: [ApplePasswordsCode] = [],
     codeSite: String = ""
   ) -> [WebKitAutofillDropdown.Row] {
-    if connect { return connectRows }
+    let strongRow = WebKitAutofillDropdown.Row(id: strongId, title: strongTitle, detail: "", symbol: "key.fill", appIcon: passwordsApp, iconLabel: iconLabel)
+    if connect { return (strong ? [strongRow] : []) + connectRows }
     var rows: [WebKitAutofillDropdown.Row] = []
     if let notice { rows.append(.init(id: "", title: notice, detail: "", symbol: "exclamationmark.circle", enabled: false)) }
     if strong {
-      rows.append(.init(id: strongId, title: strongTitle, detail: "", symbol: "key.fill", appIcon: passwordsApp, iconLabel: iconLabel))
+      rows.append(strongRow)
       rows.append(.init(id: footerId, title: footerTitle, detail: "", symbol: "arrow.up.forward.app"))
       return rows
     }

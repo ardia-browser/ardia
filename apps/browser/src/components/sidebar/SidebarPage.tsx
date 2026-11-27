@@ -138,7 +138,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
         scrollEdgeBelow.measure({ offset: page.scrollY });
         selectedRow.judge();
         if (!page.owns) return;
-        noteRowsScrolled(windowRef.current);
+        noteRowsScrolled(windowRef.current, profileId, page.scrollY);
         onScrollY(page.scrollY);
       },
     }),

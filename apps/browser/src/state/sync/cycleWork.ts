@@ -9,8 +9,20 @@ let reapplied = 0;
 let folderUnavailable = 0;
 let folderRecreated = 0;
 let folderRecreateFailed = 0;
+let chainGoneFor: string | null = null;
+let chainCounts = { missing: 0, returned: 0 };
 
-onConsentPeriodChange(() => ((work = NO_CYCLES), (reapplied = 0), (folderUnavailable = 0), (folderRecreated = 0), (folderRecreateFailed = 0)));
+onConsentPeriodChange(() => ((work = NO_CYCLES), (reapplied = 0), (chainGoneFor = null), (chainCounts = { missing: 0, returned: 0 }), (folderUnavailable = 0), (folderRecreated = 0), (folderRecreateFailed = 0)));
+
+export function noteChainStatus(token: ConsentToken | null, device: string, status: "ok" | "missing") {
+  if (token === null || !stillValid(token)) return status;
+  const returned = chainGoneFor === device && status === "ok";
+  const gone = chainGoneFor !== device && status === "missing";
+  chainGoneFor = status === "missing" ? device : null;
+  if (gone) chainCounts.missing++;
+  if (returned) chainCounts.returned++;
+  return status;
+}
 
 export function timedCycle(startedAt: number, cycle: Promise<void>): Promise<void> {
   const done = beginActivity("sync", startedAt);
@@ -68,11 +80,14 @@ export function takeSnapshotWrites() {
     folderUnavailable,
     folderRecreated,
     folderRecreateFailed,
+    chainMissing: chainCounts.missing,
+    chainReturned: chainCounts.returned,
   };
   snapshotWrites = { count: 0, bytes: 0 };
   reapplied = 0;
   folderUnavailable = 0;
   folderRecreated = 0;
   folderRecreateFailed = 0;
+  chainCounts = { missing: 0, returned: 0 };
   return taken;
 }

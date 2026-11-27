@@ -416,3 +416,4 @@ test("recreateSyncFolder creates nothing once the app is quitting, and puts the 
     setQuitting(false);
   }
 });
+

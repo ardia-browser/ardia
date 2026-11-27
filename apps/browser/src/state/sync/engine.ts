@@ -13,7 +13,7 @@ import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addLinkedProfile, appScopeOf, linkedProfileId, linkProfiles, readyToPair, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { noteCycle, noteFolderUnavailable, timedCycle } from "./cycleWork";
+import { noteChainStatus, noteCycle, noteFolderUnavailable, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
 import { recreateChainFolder, reseedPendingScopes, unavailableFolderError, type FolderRecreateResult } from "./folderRecovery";
@@ -108,6 +108,7 @@ async function runCycle({ retiring = false, forcePasswords = false }: CycleOptio
 }
 
 const clockFor = (device: string) => (editClock().device !== device && startEditClock(device, doc.clock), editClock());
+const CHAIN_MISSING_TEXT = `This device is out of sync. Sync may have been reset from another device, or the sync folder hasn’t finished syncing. Everything on this ${PLATFORM_TERMS.computer} is kept, and sync carries on once its data is back. To set sync up again, choose Stop Syncing.`;
 
 async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring, forcePasswords }: Required<CycleOptions>) {
   const consent = consentToken();
@@ -120,7 +121,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       if (useSync.getState().status !== "offline") noteFolderUnavailable(consent);
       return publishUi({ status: "offline", error: unavailableFolderError((await native.folderInfo?.(folder).catch(() => null)) ?? null) });
     }
-    if (status === "missing") return await resetFromElsewhere();
+    if (noteChainStatus(consent, device, status) === "missing") return publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT });
     const transport = folderTransport(native, folder), clock = clockFor(device);
     if (doc.reseedScopes?.length) await reseedPendingScopes({ native, doc, folder, device, clock, watchScope, persistJournal, save });
     const app = appScopeOf(doc);
@@ -165,7 +166,11 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     doc.lastSyncedAt = Date.now();
     publishUi({ status: "updated", error: null, pending });
   } catch (error) {
-    if ((error as { code?: unknown } | null)?.code === "ERR_SYNC_FOLDER_UNREADABLE") {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (code === "ERR_SYNC_CHAIN_MISSING") {
+      noteChainStatus(consent, device, "missing");
+      publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT });
+    } else if (code === "ERR_SYNC_FOLDER_UNREADABLE") {
       publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
     } else if (useSync.getState().status !== "locked") {
       warnFor(consent, "[sync] cycle failed", error);
@@ -189,13 +194,6 @@ async function loadSavedState() {
   startEditClock(doc.deviceId ?? "", doc.clock);
   settleSettingsFromSavedSync(doc.scopes[APP_SCOPE], installed && doc === loading && doc.enabled && !stopping && typeSyncedFor(doc.types, "settings", true));
   settleThemeAdoption(doc.profiles, doc.scopes[APP_SCOPE], false);
-}
-
-async function resetFromElsewhere() {
-  await SyncNative?.forget(doc.deviceId!);
-  doc = { ...emptyDoc(), folder: doc.folder, types: doc.types };
-  startOver();
-  publishUi({ status: "reset", error: "This device is out of sync. Sync may have been reset from another device." });
 }
 
 export const folderInfo = async (path?: string | null): Promise<FolderInfo | null> => (await SyncNative?.folderInfo(path ?? doc.folder ?? null)) ?? null;

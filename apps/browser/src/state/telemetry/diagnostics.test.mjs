@@ -605,6 +605,15 @@ const sent = async () => {
   return events("tab_presses").at(-1).properties;
 };
 
+test("an hour with only a blocked hover player still sends it", async () => {
+  const hoverCards = await import("./hoverCardCounts.ts");
+  const before = events("tab_presses").length;
+  hoverCards.noteTabHoverPlayerSkippedBeforePlayback(client.consentToken());
+  const props = await sent();
+  assert.equal(events("tab_presses").length, before + 1);
+  assert.deepEqual([props.tab_hover_players_skipped_before_playback, props.presses], [1, 0]);
+});
+
 test("a click endHeldTabPress drops is counted under the condition that dropped it, with no tab id", async () => {
   const held = await import("../sidebar/heldTabPress.ts");
   const hold = (tabId, start) => held.holdTabPress("win-a", tabId, touch(10, 10, start));

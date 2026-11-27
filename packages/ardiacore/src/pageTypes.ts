@@ -74,7 +74,7 @@ export type PageShare = {
 export type PageMenuItem = { id: PageMenuCommand; title: string };
 export type PageMenuCommand = "translatePage" | "showOriginal";
 export type PageCommand = {
-  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement" | PageMenuCommand;
+  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement" | "back" | "forward" | PageMenuCommand;
   text: string;
   point?: [number, number];
   modifiers?: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean };

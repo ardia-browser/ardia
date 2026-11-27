@@ -297,6 +297,7 @@ BOOL IsBlankAddress(NSString *url) {
     });
     return;
   }
+  [self forgetBlankLinkTab:tab];
   [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:nil linkWait:tries >= kNewTabLinkTries ? @"timedOut" : @"skipped"];
 }
 
@@ -344,9 +345,17 @@ BOOL IsBlankAddress(NSString *url) {
 - (nullable NSString *)takeBlankWindowNoteFor:(ArdiaCoreTab *)tab {
   NSNumber *opened = objc_getAssociatedObject(tab, &kBlankLinkTabKey);
   if (!opened) return nil;
-  objc_setAssociatedObject(tab, &kBlankLinkTabKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   const std::optional<std::string> url = _blankWindowNotes.Take(opened.unsignedLongLongValue, CACurrentMediaTime());
-  return url ? @(url->c_str()) : nil;
+  if (!url) return nil;
+  objc_setAssociatedObject(tab, &kBlankLinkTabKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  return @(url->c_str());
+}
+
+- (void)forgetBlankLinkTab:(ArdiaCoreTab *)tab {
+  NSNumber *opened = objc_getAssociatedObject(tab, &kBlankLinkTabKey);
+  if (!opened) return;
+  objc_setAssociatedObject(tab, &kBlankLinkTabKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  _blankWindowNotes.Forget(opened.unsignedLongLongValue);
 }
 
 - (void)emitOpenedTab:(ArdiaCoreTab *)tab

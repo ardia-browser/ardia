@@ -185,7 +185,7 @@ Each test is one red → green cycle, written and run one at a time in the order
 | S6 | 2 | When Pairing has ended, the status reads Not connected with a Connect button that asks for the code again | a dead status line | — |
 | E1 | 1 | In a hidden instance pointed at the fake helper, Pairing with the fixture code reads Connected | the client's framing, SRP and sealing against a peer that checks them | how Apple's helper differs from Yab's reading of it |
 | E2 | 1 | A fake helper that is killed at launch shows "Apple Passwords isn't available" | the refused path | — |
-| E3 | 1 | With no helper manifest, Settings shows how to install it | the missing path | — |
+| E3 | 1 | With no helper manifest, the Pairing sheet says how to get the helper back, and once the profile is on Apple Passwords, Settings' Apple Passwords row says the same | the missing path | — |
 | E44 | 1 | With Apple Passwords picked and no helper manifest, the Login list's failure row says the helper is missing and how to get it back, in the same words as Settings (both engines) | a dead end with no fix | — |
 | E43tooOld | 1 | With Apple Passwords picked on a Mac too old for the helper (Debug key `applePasswordsTooOld`), the Login list's first row says "Needs macOS 15.4 or later." and lists no logins (both engines) | a stored choice left with no reason in the list | the real macOS version check |
 | E45refused | 1 | With a helper macOS killed at launch, the Login list says "Apple Passwords isn't available on this Mac." (both engines) | a refused helper offered as Connect | — |
@@ -202,7 +202,7 @@ Each test is one red → green cycle, written and run one at a time in the order
 | E7 | 1 | ArrowDown opens the list, Down and Enter fill, Escape closes it (both engines) | keyboard handling | — |
 | E7up | 1 | Down, Down, Up and Enter fill the first login (both engines) | an Up key that does nothing or moves the wrong way | — |
 | E7tab | 1 | With a row moved onto, Tab closes the list, focus moves to the password field, nothing fills and Apple Passwords is never asked for a password (both engines) | a key that moves focus picking a row | — |
-| E41 | 1 | Switching to another tab closes an open Login list, and so does closing its tab (both engines) | a list left over another page | — |
+| E41 | 1 | Switching to another tab closes an open Login list, and closing its tab closes that very list even with no tab switch (the tab beside it in a split stays in view), and none comes back (both engines) | a list left over another page | — |
 | E41fetch | 1 | Closing another tab while a tab's Login list is still fetching leaves that list to open (both engines) | a list another tab's close cancels | — |
 | E28claim | 1 | A same-site frame on another origin that fakes its place in the page gets no Login list (both engines) | a list that can never fill | — |
 | E8 | 1 | On an Apple Passwords profile, Chrome's own password list never appears over a sign-in field | two lists at once | — |
@@ -215,7 +215,7 @@ Each test is one red → green cycle, written and run one at a time in the order
 | E12 | 1 | A page that navigates to another site between opening the list and picking a row receives nothing | a password delivered to the wrong site | — |
 | E13 | 1 | A login box inside another site's frame gets no Apple Passwords rows (both engines) | phishing frames | — |
 | E28frame | 1 | A sign-in form in a frame of the page's own origin lists the site's logins and the picked one fills the frame, with input and change events (both engines) | a login box in a same-origin frame left without the list | a same-site frame of another origin (no list in either engine) |
-| E28frameHide | 1 | Focusing the login field in a same-origin frame and then the page's own username field opens the page's Login list and keeps it open, and the pick fills the page, not the frame (both engines) | one frame's focus change closing the list another frame opened | — |
+| E28frameHide | 1 | Focusing the login field in a same-origin frame and then the page's own username field opens the page's Login list and keeps it open, counts the frame's ignored close, and the pick fills the page, not the frame (both engines) | one frame's focus change closing the list another frame opened | — |
 | E14 | 1 | An http page offers only http logins, each marked "Not secure", and never an https login | downgrade leaks | — |
 | E15 | 1 | When the fake ends Pairing, the next click shows "Connect Apple Passwords" first; Pairing there brings the rows back; "Not now" keeps it away on that site | re-Pairing in place | — |
 | E16 | 1 | A locked or refused password fetch shows a failure row and fills nothing | silent failure | — |
@@ -239,7 +239,9 @@ Each test is one red → green cycle, written and run one at a time in the order
 | E20 | 1 | Signing in with the password already saved shows no prompt and sends no save (both engines) | needless prompts | — |
 | E21 | 1 | A failed sign-in (the form comes back) shows no prompt and sends no save (both engines) | saving a mistyped password | — |
 | E22 | 1 | A fake that refuses the save makes Ardia say it wasn't saved (both engines) | a silent failure | — |
-| E22missing | 1 | With Apple Passwords picked and no helper, signing in with a new login says "Not saved to Apple Passwords" (both engines) | a save that silently goes nowhere | — |
+| E22missing | 1 | With Apple Passwords picked and no helper, signing in with a new login says "Not saved to Apple Passwords" and counts a helper-missing save failure (both engines) | a save that silently goes nowhere | — |
+| E22tooOld, E22notEntitled, E22refused | 1 | The same on a Mac too old for the helper (Debug key `applePasswordsTooOld`), on a build without the entitlement or its stand-in, and with a helper macOS killed at launch: "Not saved to Apple Passwords", a refused save failure, and no save sent (both engines) | a save that silently goes nowhere, or asks to Connect where Pairing can't work | the real macOS version and entitlement reads |
+| E18pairingRefused | 1 | Signing in while Apple Passwords isn't connected, pressing Connect, and Apple Passwords refusing during Pairing says "Not saved to Apple Passwords", sends nothing, and counts the save failure as refused (both engines, each its own instance) | a held login left waiting, or counted as not paired, after Pairing fails | a wrong code, which leaves Pairing open for a retry |
 | E22timedOut | 1 | A save the fake never answers (Debug key `applePasswordsSaveSeconds` shortens the 120 s deadline) counts as a timed-out save failure and Ardia shows nothing before or after it (both engines) | a "Not saved" claim while Apple's window may still be open | the real 120 s |
 | E23 | 1 | In a private window the list fills but no save prompt appears and no save is sent (both engines) | private browsing leaving logins behind | — |
 | E33 | 1 | A login from an http page is sent under its bare host, in one request (both engines) | the `http://` form the real helper never stored | how Apple's helper stores an http site |

@@ -274,10 +274,56 @@ class PageBlobsTest {
     fun theFrameListStaysBoundedButNeverDropsTheTopFrame() {
         Frame("https://top.example", main = true).hello()
         Frame("https://first.example").hello()
-        repeat(40) { Frame("https://f$it.example").hello() }
+        repeat(200) { Frame("https://f$it.example").hello() }
         assertNotNull(blobs.sourceFor("blob:https://top.example/1"))
         assertNull(blobs.sourceFor("blob:https://first.example/1"))
-        assertNotNull(blobs.sourceFor("blob:https://f39.example/1"))
+        assertNotNull(blobs.sourceFor("blob:https://f199.example/1"))
+    }
+
+    @Test
+    fun iframesThatLeaveWithoutByeDoNotPushOutALiveOne() {
+        Frame("https://old.example", main = true).hello()
+        Frame("https://reports.example").hello()
+        Frame("https://new.example", main = true).hello()
+        repeat(100) { Frame("https://gone$it.example").hello() }
+        assertNotNull(blobs.sourceFor("blob:https://reports.example/1"))
+        assertNotNull(blobs.sourceFor("blob:https://new.example/1"))
+    }
+
+    @Test
+    fun anOriginWithManyFramesGivesWayBeforeAnyOriginLosesItsLastFrame() {
+        Frame("https://top.example", main = true).hello()
+        Frame("https://reports.example").hello()
+        repeat(300) { Frame("https://ads.example").hello() }
+        assertNotNull(blobs.sourceFor("blob:https://top.example/1"))
+        assertNotNull(blobs.sourceFor("blob:https://reports.example/1"))
+        assertNotNull(blobs.sourceFor("blob:https://ads.example/1"))
+    }
+
+    @Test
+    fun aFrameHeardFromRecentlyOutlastsSilentOnesAtTheHardCap() {
+        Frame("https://top.example", main = true).hello()
+        val reports = Frame("https://reports.example").also { it.hello() }
+        repeat(100) { Frame("https://early$it.example").hello() }
+        reports.say("name ${encode("blob:https://reports.example/1")} report.pdf")
+        repeat(100) { Frame("https://late$it.example").hello() }
+        assertNotNull(blobs.sourceFor("blob:https://reports.example/1"))
+        assertNull(blobs.sourceFor("blob:https://early0.example/1"))
+        assertNotNull(blobs.sourceFor("blob:https://top.example/1"))
+    }
+
+    @Test
+    fun aLongTypeParameterStillLetsTheDownloadStart() {
+        val url = "blob:https://a.example/1"
+        val frame = Frame("https://a.example", answers = false).also { it.hello() }
+        val pending = openAsync(url)
+        val token = frame.next("fetch")[1]
+        val type = encode("text/plain; profile=\"" + "p".repeat(560) + "\"")
+        assertTrue(type.length > 512)
+        frame.say("start $token 2 $type notes.txt")
+        val response = pending.get(10, TimeUnit.SECONDS)
+        assertEquals("text/plain", response.header("content-type"))
+        assertEquals("notes.txt", DownloadRules.dispositionName(response.header("content-disposition")))
     }
 
     @Test

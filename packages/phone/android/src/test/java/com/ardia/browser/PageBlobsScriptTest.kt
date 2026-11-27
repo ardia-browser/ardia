@@ -119,6 +119,10 @@ const said = (start) => posted.filter((text) => text.startsWith("ardiaBlob:" + s
   const longField = decodeURIComponent((said("start gggg ")[0] || "").split(" ")[4] || "");
   seen.fittedFileNameLength = longField.length;
   seen.fittedFileNameKeepsExtension = longField.endsWith(".csv");
+  const profiled = context.URL.createObjectURL(new Blob(2, 'Text/Plain ; profile="' + "p".repeat(560) + '"'));
+  tell("fetch hhhh " + profiled);
+  await settle();
+  seen.typeSent = ((said("start hhhh ")[0] || "").split(" ")[3]) || "";
   const refs = (() => {
     const made = [];
     const urls = [];
@@ -192,6 +196,11 @@ const said = (start) => posted.filter((text) => text.startsWith("ardiaBlob:" + s
     fun evictedRevokedBlobsCanBeCollectedBeforeTheirTimersRun() {
         assertEquals(0, seen.getInt("evictedStillAlive"))
         assertEquals(8, seen.getInt("keptAlive"))
+    }
+
+    @Test
+    fun onlyTheTypeAndSubtypeAreSent() {
+        assertEquals("Text%2FPlain", seen.getString("typeSent"))
     }
 
     @Test

@@ -82,6 +82,7 @@ class PageBlobs(
                 BlobMessage.Hello -> remember(key, Frame(origin, isMainFrame, send))
                 BlobMessage.Bye -> frames.remove(key)
                 is BlobMessage.Name -> {
+                    heardFrom(key)
                     val fromItsOrigin = if (PageMadeDownloads.isBlob(message.key)) PageMadeDownloads.blobOrigin(message.key) == origin else isMainFrame
                     if (fromItsOrigin) {
                         names.remove(message.key)
@@ -90,6 +91,7 @@ class PageBlobs(
                     }
                 }
                 is BlobMessage.ForRequest -> {
+                    heardFrom(key)
                     val request = requests[message.token]
                     when {
                         request != null && request.origin == origin -> request.heard(message, key, send)
@@ -105,10 +107,19 @@ class PageBlobs(
         frames.remove(key)
         if (frame.isMain) frames.entries.removeAll { it.value.isMain }
         frames[key] = frame
-        while (frames.size > MAX_FRAMES) {
-            val oldest = frames.entries.firstOrNull { !it.value.isMain }?.key ?: break
-            frames.remove(oldest)
-        }
+        while (frames.size > MAX_FRAMES) frames.remove(evictable() ?: break)
+    }
+
+    private fun heardFrom(key: Any) {
+        val frame = frames.remove(key) ?: return
+        frames[key] = frame
+    }
+
+    private fun evictable(): Any? {
+        val counts = frames.values.groupingBy { it.origin }.eachCount()
+        val crowded = counts.filterValues { it > 1 }.maxByOrNull { it.value }?.key
+        val candidates = frames.entries.filter { !it.value.isMain }
+        return (candidates.firstOrNull { it.value.origin == crowded } ?: candidates.firstOrNull())?.key
     }
 
     fun announcedName(url: String): String? {
@@ -251,7 +262,7 @@ class PageBlobs(
         const val CHUNK_IDLE_MILLIS = 15_000L
         const val TOTAL_MILLIS = 10 * 60_000L
         const val NAME_KEEP_MILLIS = 30_000L
-        private const val MAX_FRAMES = 32
+        private const val MAX_FRAMES = 128
         private const val MAX_NAMES = 16
         private const val QUEUED_PIECES = 4
         private const val KEEP_AFTER_REVOKE_MILLIS = 60_000
@@ -382,7 +393,8 @@ class PageBlobs(
     if (!blob) { say("missing " + token); return; }
     hold(token, blob);
     const name = fit((typeof File !== "undefined" && blob instanceof File && blob.name) || named.get(url) || "");
-    say("start " + token + " " + blob.size + " " + encodeURIComponent(blob.type || "") + " " + encodeURIComponent(name));
+    const type = String(blob.type || "").split(";")[0].trim().slice(0, 255);
+    say("start " + token + " " + blob.size + " " + encodeURIComponent(type) + " " + encodeURIComponent(name));
   };
   const send = (token, index) => {
     const entry = sending.get(token);

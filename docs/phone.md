@@ -110,10 +110,13 @@ frame that answers `start` with the size, type and name is bound, and native pul
 (`next`/`chunk`), writing them through the same MediaStore entry as a web download. Every frame asked hears `cancel`
 when the request ends, a frame that answers an ended request is told `cancel` too, and the page drops a blob it was
 sending after 60 s idle; a revoked blob pushed out by the caps is let go at once, not when its timer fires. A new top
-frame replaces the old one, a frame says `bye` on `pagehide` and is forgotten (iframes are capped at 32, the top frame is
-never dropped), and a page restored from the back-forward cache says `hello` again. Names are trimmed by whole
-characters, keeping the extension, to what the bridge carries; a name native still can't read leaves the download
-nameless rather than stopping it. When the last private tab closes, the engine tells `SystemDownloads` before the
+frame replaces the old one, a frame says `bye` on `pagehide` and is forgotten, and since a frame can also vanish without
+`pagehide` (an iframe rewritten with `document.open()` and removed), the cache never relies on `bye`: it holds 128 frames,
+`fetch` goes to every known frame of the blob's origin, and when it is full the least recently heard-from frame of the
+origin with the most frames goes first, so no origin loses its last frame until 128 origins are known (the top frame
+is never dropped), and a page restored from the back-forward cache says `hello` again. Names are trimmed by whole
+characters, keeping the extension, to what the bridge carries, and the type is sent as `type/subtype` only; a name or
+type native still can't read leaves the download without it rather than stopping it. When the last private tab closes, the engine tells `SystemDownloads` before the
 session stops being live; `SystemDownloads` marks the session ended under the lock its final check and publish hold,
 so a private file is either published while its session lives or not at all. A blob no frame holds fails as
 `server`, frames that never answer (5 s), a page that stops sending (15 s), goes away (`pagehide`), a closed tab and a

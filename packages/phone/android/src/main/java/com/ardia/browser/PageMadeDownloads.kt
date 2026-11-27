@@ -29,7 +29,6 @@ object PageMadeDownloads {
     const val MAX_CHUNK_CHARS = CHUNK_BYTES / 3 * 4
     const val MAX_NAME_CHARS = 1024
     const val MAX_NAME_FIELD_CHARS = MAX_NAME_CHARS * 3
-    private const val MAX_SKIPPED_NAME_FIELD_CHARS = 16 * 1024
     const val MAX_KEY_CHARS = 2048
     const val DATA_KEY_EDGE = 64
     private const val TOKEN_BYTES = 16
@@ -37,12 +36,12 @@ object PageMadeDownloads {
     private const val MAX_INDEX_DIGITS = 7
     private const val MAX_VERB_CHARS = 7
     private const val TOKEN_CHARS = 32
-    private const val MAX_MIME_FIELD_CHARS = 512
+    private const val MAX_MIME_FIELD_CHARS = 4096
+    const val MAX_MESSAGE_CHARS = MAX_VERB_CHARS + 1 + TOKEN_CHARS + 1 + MAX_INDEX_DIGITS + 1 + MAX_CHUNK_CHARS
     private val TOKEN_FIELDS = intArrayOf(TOKEN_CHARS)
     private val NAME_FIELDS = intArrayOf(MAX_KEY_CHARS * 3, MAX_NAME_FIELD_CHARS)
-    private val START_FIELDS = intArrayOf(TOKEN_CHARS, MAX_SIZE_DIGITS, MAX_MIME_FIELD_CHARS, MAX_SKIPPED_NAME_FIELD_CHARS)
+    private val START_FIELDS = intArrayOf(TOKEN_CHARS, MAX_SIZE_DIGITS, MAX_MESSAGE_CHARS, MAX_MESSAGE_CHARS)
     private val CHUNK_FIELDS = intArrayOf(TOKEN_CHARS, MAX_INDEX_DIGITS, MAX_CHUNK_CHARS)
-    val MAX_MESSAGE_CHARS = listOf(TOKEN_FIELDS, NAME_FIELDS, START_FIELDS, CHUNK_FIELDS).maxOf { it.sum() + it.size } + MAX_VERB_CHARS
     private val tokenPattern = Regex("[0-9a-f]{32}")
     private val digits = Regex("[0-9]+")
     private val mimeToken = Regex("[a-z0-9][a-z0-9!#$&^_.+-]{0,126}")
@@ -96,6 +95,7 @@ object PageMadeDownloads {
     fun parse(text: String): BlobMessage? {
         if (text == "hello") return BlobMessage.Hello
         if (text == "bye") return BlobMessage.Bye
+        if (text.length > MAX_MESSAGE_CHARS) return null
         val space = text.indexOf(' ')
         if (space !in 1..MAX_VERB_CHARS) return null
         val verb = text.substring(0, space)
@@ -119,7 +119,7 @@ object PageMadeDownloads {
             "start" -> {
                 val token = token(parts[0]) ?: return null
                 val size = parts[1].takeIf { digits.matches(it) }?.toLongOrNull() ?: return null
-                val mimeType = cleanMimeType(decoded(parts[2]))
+                val mimeType = parts[2].takeIf { it.length <= MAX_MIME_FIELD_CHARS }?.let(::decoded)?.let(::cleanMimeType)
                 val name = parts[3].takeIf { it.length <= MAX_NAME_FIELD_CHARS }?.let(::decoded)?.takeIf { it.length <= MAX_NAME_CHARS }?.let(::cleanName)
                 BlobMessage.Start(token, size, mimeType, name)
             }

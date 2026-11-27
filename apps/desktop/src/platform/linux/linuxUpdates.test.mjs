@@ -83,6 +83,16 @@ test("a Flatpak's dialog says flatpak update can't update a bundle installed fro
   assert.match(ui.confirms[0].message, /install the new \.flatpak from its release page/);
 });
 
+test("a package install is sent back to the release page for the new .rpm or Arch source package, never to the AUR, which has no ardia-bin", async () => {
+  reset();
+  await linuxUpdaterFor(managedHost(PACKAGE_DATA)).methods.checkForUpdates();
+  await linuxUpdaterFor(managedHost(PACKAGE_DATA)).check(false);
+  const dialog = ui.confirms[0].message;
+  assert.equal(dialog, "You have Ardia 0.2.45, installed from a package on its release page. Install the new one the same way: the .rpm with dnf or zypper, or on Arch, unpack ardia-bin-0.2.46.src.tar.gz and run makepkg -si in it.");
+  assert.equal(ui.toasts.length, 1);
+  assert.equal(ui.toasts[0].message, "Install the new .rpm or Arch source package from its release page.");
+});
+
 test("from Settings with no regular window to open it in, Ardia says so and offers the link to copy, and counts no visit", async () => {
   reset();
   ui.settingsOpens = false;

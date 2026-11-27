@@ -1404,18 +1404,28 @@ internal object FrostSources {
 
     fun find(id: String?): FrostSourceView? = id?.let { synchronized(sources) { sources[it]?.get() } }
 
-    fun attach(view: FrostView) = synchronized(frosts) { frosts[view] = Unit }
+    fun attach(view: FrostView) {
+        synchronized(frosts) { frosts[view] = Unit }
+        find(view.source)?.syncObservers()
+    }
 
-    fun detach(view: FrostView) = synchronized(frosts) { frosts.remove(view) }
+    fun detach(view: FrostView) {
+        synchronized(frosts) { frosts.remove(view) }
+        find(view.source)?.syncObservers()
+    }
 
     fun frosts(): List<FrostView> = synchronized(frosts) { frosts.keys.toList() }
 
     fun allSources(): List<FrostSourceView> = synchronized(sources) { sources.values.mapNotNull { it.get() } }
 
-    fun anyFrostCanBlur(id: String?): Boolean = id != null && frosts().any { it.source == id && it.isAttachedToWindow && it.wantsSource() }
+    fun anyFrostCanBlur(id: String?): Boolean =
+        id != null && frosts().any { it.source == id && it.isAttachedToWindow && it.isShown && it.alpha > 0.01f && it.wantsSource() }
 
     fun sourceChanged(id: String?) {
-        find(id)?.invalidate()
+        find(id)?.let {
+            it.syncObservers()
+            it.invalidate()
+        }
     }
 
     fun redrawFrostsOf(source: FrostSourceView) {
@@ -1496,6 +1506,7 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
 
     private fun heldChanged() {
         recheckHold()
+        syncObservers()
         invalidate()
     }
 
@@ -1509,6 +1520,7 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
             field?.let { FrostSources.unregister(it, this) }
             field = value
             if (isAttachedToWindow) value?.let { FrostSources.register(it, this) }
+            syncObservers()
         }
 
     internal val hasContent: Boolean get() = recorder?.hasDisplayList() == true
@@ -1589,6 +1601,7 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
         val strip = strips.getOrPut(key) { FrostStrip(key) }
         if (strip.consumers.add(frost)) {
             strip.stale = true
+            syncObservers()
             FrostSources.consumersChanged()
         }
         strip.discardRetiredBefore(drawingTime)
@@ -1614,6 +1627,7 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
         }
         if (changed) {
             publishStats()
+            syncObservers()
             FrostSources.consumersChanged()
         }
     }
@@ -1702,16 +1716,44 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) = Unit
 
+    private var observing = false
+    private var idledReported = false
+
+    internal var onIdled: () -> Unit = PendingCounts.frostSourcesIdled(context.applicationContext ?: context)
+
+    internal val isObserving: Boolean get() = observing
+
+    internal fun syncObservers() {
+        val needed = isAttachedToWindow && (heldFill != null || heldDrawn != null || strips.isNotEmpty() || FrostSources.anyFrostCanBlur(sourceId))
+        if (needed == observing) return
+        if (needed) {
+            viewTreeObserver.addOnGlobalLayoutListener(laidOut)
+            viewTreeObserver.addOnPreDrawListener(beforeDraw)
+            observing = true
+            idledReported = false
+        } else {
+            viewTreeObserver.removeOnGlobalLayoutListener(laidOut)
+            viewTreeObserver.removeOnPreDrawListener(beforeDraw)
+            observing = false
+            if (isAttachedToWindow && !idledReported) {
+                idledReported = true
+                onIdled()
+            }
+        }
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         sourceId?.let { FrostSources.register(it, this) }
-        viewTreeObserver.addOnGlobalLayoutListener(laidOut)
-        viewTreeObserver.addOnPreDrawListener(beforeDraw)
+        syncObservers()
     }
 
     override fun onDetachedFromWindow() {
-        viewTreeObserver.removeOnGlobalLayoutListener(laidOut)
-        viewTreeObserver.removeOnPreDrawListener(beforeDraw)
+        if (observing) {
+            viewTreeObserver.removeOnGlobalLayoutListener(laidOut)
+            viewTreeObserver.removeOnPreDrawListener(beforeDraw)
+            observing = false
+        }
         sourceId?.let { FrostSources.unregister(it, this) }
         stopRecording()
         super.onDetachedFromWindow()
@@ -1721,9 +1763,11 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
         val wanted = canvas.isHardwareAccelerated && width > 0 && height > 0 && !LookSwitch.isOff(context) && FrostSources.anyFrostCanBlur(sourceId)
         if (!wanted) {
             if (recorder != null) stopRecording()
+            if (observing) syncObservers()
             super.dispatchDraw(canvas)
             return
         }
+        if (!observing) syncObservers()
         val fresh = recorder == null
         val node = recorder ?: RenderNode("ardiaFrostSource:${sourceId ?: "unnamed"}").also { recorder = it }
         LookActivity.sourceRecordings += 1

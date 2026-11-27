@@ -14,9 +14,17 @@ const assert = (ok, message, detail) => {
 const codesFor = (domain) => FIXTURES.codes.filter((c) => c.domain === domain);
 
 export function codeChecks({ paired, sites, engine: engineName = "webkit" }) {
-  const open = async (host, pathname = "/code") => {
+  const openUrl = async (url) => {
     const shared = await paired();
-    return (engineName === "chromium" ? shared.chromium : shared.tabs).open(sites.url(host, pathname));
+    return (engineName === "chromium" ? shared.chromium : shared.tabs).open(url);
+  };
+  const open = (host, pathname = "/code") => openUrl(sites.url(host, pathname));
+  const PICK_SETTLED_MS = 2000;
+  const codeRows = (rows) => (rows ?? []).filter((r) => r.title.startsWith(codeTitle("")));
+  const untouched = async (tab, value, what) => {
+    await new Promise((r) => setTimeout(r, PICK_SETTLED_MS));
+    const page = await codeField(tab);
+    assert(page.c === value && !page.events.length, what, { kept: page.c === value, events: page.events });
   };
   const codeField = (tab) => tab.value(`({ c: document.getElementById("c").value, events: ${PAGE_EVENTS}.filter((e) => e[0] !== "focusin").map((e) => e.join(":")) })`);
 
@@ -66,6 +74,53 @@ export function codeChecks({ paired, sites, engine: engineName = "webkit" }) {
       } finally {
         await tab.close();
       }
+    },
+    async E27() {
+      const seen = {};
+      const PLAIN = "plain.localhost";
+      const secure = await openUrl(sites.secureUrl(PLAIN, "/code"));
+      try {
+        await secure.click("#c");
+        const rows = await secure.waitRows();
+        assert(codeRows(rows).length === codesFor(PLAIN).length, `the https page lists ${codeTitle(PLAIN)} (control)`, rows);
+        seen.https = rows.map((r) => r.label);
+        await secure.key("escape");
+      } finally {
+        await secure.close();
+      }
+      const plain = await open(PLAIN);
+      try {
+        await plain.click("#c");
+        await waitFor("the code field focused", () => plain.value(`${PAGE_EVENTS}.some((e) => e[0] === "focusin" && e[1] === "c") || null`), 5000);
+        await plain.key("down");
+        const rows = await plain.noList(1500);
+        assert(!codeRows(rows).length, "an http code field shows no code row", rows);
+        seen.http = rows ? rows.map((r) => r.label) : "no list";
+      } finally {
+        await plain.close();
+      }
+      const holding = await open(SITE, "/code-filled");
+      try {
+        await holding.click("#c");
+        const rows = await holding.noList(1500);
+        if (codeRows(rows).length) await holding.pick(codeTitle(SITE));
+        await untouched(holding, "12", "a code field that already holds text is not overwritten");
+        seen.holding = codeRows(rows).length ? "row shown, nothing filled" : "no code row";
+      } finally {
+        await holding.close();
+      }
+      const typedSince = await open(SITE);
+      try {
+        await typedSince.click("#c");
+        await typedSince.waitRows();
+        await typedSince.value(`(document.getElementById("c").value = "34")`);
+        await typedSince.pick(codeTitle(SITE));
+        await untouched(typedSince, "34", "a code field that took text after the list opened is not overwritten");
+        seen.typedSince = "kept";
+      } finally {
+        await typedSince.close();
+      }
+      return { engine: engineName, ...seen };
     },
   };
 }

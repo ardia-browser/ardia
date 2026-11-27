@@ -205,6 +205,20 @@ test("the hosts advertise the routes in the order they always have: engine, tabs
   assert.deepEqual(linuxRoutes.at(-1).name, "permissions.removeExternalAppAllowance");
 });
 
+test("the Windows WebUI host opens DevTools for tab.command showDevTools and shows docked DevTools next to the page", () => {
+  const tabs = stripComments(read("scripts/windows/engine/src/ardia/win/webui/webui_host_tabs.cc"));
+  const view = stripComments(read("scripts/windows/engine/src/ardia/win/webui/webui_host_view.cc"));
+  const shell = stripComments(read("scripts/windows/engine/src/ardia/win/webui/webui_shell.cc"));
+  assert.match(tabs, /command == "showDevTools"/, "the Windows WebUI host handles tab.command showDevTools");
+  for (const panel of ["toggle", "inspect", "console"]) assert.ok(tabs.includes(`"${panel}"`), `showDevTools takes the ${panel} panel`);
+  assert.ok(tabs.includes("DevToolsWindow::AllowDevToolsFor("), "showDevTools honours the DevTools policy");
+  assert.ok(tabs.includes("ERR_PAGE_POLICY") && tabs.includes("ERR_PAGE_ARGUMENT"), "showDevTools refuses a disabled page and a malformed panel");
+  assert.ok(tabs.includes("DevToolsWindow::OpenDevToolsWindow("), "showDevTools opens Chromium's DevTools");
+  assert.match(shell, /g_ardia_devtools_dock_changed\s*=\s*&DevToolsDockChanged/, "the WebUI shell hears when a page's docked DevTools changes");
+  assert.ok(view.includes("DevToolsWindow::GetInTabWebContents(") && view.includes("ApplyDevToolsContentsResizingStrategy("), "docked DevTools share the page's viewport the way Chromium splits it");
+  assert.ok(view.includes("devtools_web_view()->SetWebContents(nullptr)"), "the hidden Chromium contents view gives the docked DevTools up");
+});
+
 test("the generated desktop routes are exactly each generated domain's desktop-routed calls, to the same service", () => {
   for (const [domain, entry] of domains) {
     const routed = linuxRoutes.filter((route) => route.name.startsWith(`${domain}.`)).sort((a, b) => a.name.localeCompare(b.name));

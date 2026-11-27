@@ -249,6 +249,14 @@ bool OffTheRecordNavigation(content::WebContents* source, const GURL& url) {
   return WindowRegistry::Get().OffTheRecordNavigation(source, url);
 }
 
+void DevToolsDockChanged(BrowserWindowInterface* browser,
+                         content::WebContents* inspected,
+                         content::WebContents* devtools) {
+  if (webui::ShellHostView* host = WindowRegistry::Get().HostOf(browser)) {
+    host->DevToolsDockChanged(inspected, devtools);
+  }
+}
+
 }
 
 void RegisterWebUIShell() {
@@ -268,6 +276,7 @@ void InstallWebUIShellHooks() {
   g_ardia_linux_window_tab_count = &WindowTabCount;
   g_ardia_linux_shell_passes_point = &ShellPassesPoint;
   g_ardia_linux_off_the_record_navigation = &OffTheRecordNavigation;
+  g_ardia_devtools_dock_changed = &DevToolsDockChanged;
 }
 
 void OpenWebUIShell() {

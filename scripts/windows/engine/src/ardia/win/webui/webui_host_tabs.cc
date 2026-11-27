@@ -23,6 +23,8 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
+#include "chrome/browser/devtools/devtools_toggle_action.h"
+#include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/navigator/browser_navigator.h"
@@ -75,6 +77,26 @@ std::optional<base::Value> ParseList(std::string_view json) {
 
 void Answer(ShellHostView::Done done, webui_page::PageReply reply) {
   std::move(done).Run(reply.ok, std::move(reply.value));
+}
+
+void ShowDevTools(content::WebContents* contents, std::string_view panel) {
+  if (panel == "toggle") {
+    DevToolsWindow* tools =
+        DevToolsWindow::GetInstanceForInspectedWebContents(contents);
+    if (tools && tools->IsDocked()) {
+      if (content::WebContents* docked =
+              DevToolsWindow::GetInTabWebContents(contents, nullptr)) {
+        docked->DispatchBeforeUnload(false);
+      }
+      return;
+    }
+  }
+  DevToolsWindow::OpenDevToolsWindow(
+      contents,
+      panel == "console"   ? DevToolsToggleAction::ShowConsolePanel()
+      : panel == "inspect" ? DevToolsToggleAction::Inspect()
+                           : DevToolsToggleAction::Show(),
+      DevToolsOpenedByAction::kMainMenuOrMainShortcut);
 }
 
 }
@@ -340,13 +362,16 @@ void ShellHostView::SetViewport(const base::DictValue& args, Done done) {
     binding->viewport->SetVisible(false);
   }
   if (visible && rect && !rect->IsEmpty()) {
-    binding->viewport->SetBoundsRect(*rect);
+    binding->bounds = *rect;
     binding->viewport->SetVisible(true);
     binding->visible = true;
   } else {
     binding->viewport->SetVisible(false);
     binding->viewport->SetWebContents(nullptr);
     binding->visible = false;
+  }
+  if (!binding->visible) {
+    LayoutPage(binding);
   }
   ReattachViewports();
   std::move(done).Run(true, base::Value());
@@ -369,6 +394,11 @@ void ShellHostView::SetPresentations(const base::DictValue& args, Done done) {
           false, base::Value("A claimed tab and boolean visibility are required"));
     }
     updates.emplace_back(binding, *visible);
+  }
+  for (const auto& [binding, visible] : updates) {
+    if (!visible) {
+      binding->NoteDevToolsFocus();
+    }
   }
   std::map<BrowserWindowInterface*, content::WebContents*> activate;
   for (const auto& [binding, visible] : updates) {
@@ -474,6 +504,34 @@ void ShellHostView::TabCommand(const base::DictValue& args, Done done) {
   if (command == "close") {
     std::move(done).Run(true, base::Value());
     return CloseContents(contents);
+  }
+  if (command == "showDevTools") {
+    if (args.Find("args") && !values) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_ARGUMENT",
+                         "showDevTools takes an optional panel"));
+    }
+    const bool has_panel = values && !values->empty();
+    if (has_panel && (values->size() > 1 || !(*values)[0].is_string())) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_ARGUMENT",
+                         "showDevTools takes an optional panel"));
+    }
+    const std::string panel = has_panel ? (*values)[0].GetString() : "";
+    if (has_panel && panel != "toggle" && panel != "inspect" &&
+        panel != "console") {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_ARGUMENT", "Unknown DevTools panel"));
+    }
+    if (!DevToolsWindow::AllowDevToolsFor(
+            Profile::FromBrowserContext(contents->GetBrowserContext()),
+            contents)) {
+      return std::move(done).Run(
+          false,
+          Failure("ERR_PAGE_POLICY", "DevTools is disabled for this page"));
+    }
+    ShowDevTools(contents, panel);
+    return std::move(done).Run(true, base::Value());
   }
   if (command == "navigationEntries") {
     base::ListValue entries;
@@ -593,6 +651,7 @@ void ShellHostView::ReleaseTab(const base::DictValue& args, Done done) {
     binding->viewport->SetVisible(false);
     binding->viewport->SetWebContents(nullptr);
   }
+  binding->HideDevTools();
   ApplyShellInput();
   std::move(done).Run(true, base::Value());
 }

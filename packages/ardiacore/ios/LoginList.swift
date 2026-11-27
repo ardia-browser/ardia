@@ -96,7 +96,10 @@ final class LoginList: NSObject {
     else { return close(target) }
     let profile = target.loginListProfile
     resume = nil
-    if field.kind == .code { return showCodes(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked) }
+    if field.kind == .code {
+      guard scheme == "https" else { return close(target) }
+      return showCodes(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked)
+    }
     ApplePasswordsClient.shared.logins(host: host) { [weak self, weak target] result in
       let entries = (try? result.get()) ?? []
       Self.domains(ApplePasswordsMatch.probes([host, pageHost] + ApplePasswordsMatch.siteHosts(entries)), profile: profile) { domains in
@@ -117,8 +120,10 @@ final class LoginList: NSObject {
     }
   }
 
+  static func isCode(_ value: String) -> Bool { value.range(of: "^[A-Za-z0-9]{4,10}$", options: .regularExpression) != nil }
+
   static func codePage(_ url: URL?) -> String? {
-    guard let url, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+    guard let url, url.scheme?.lowercased() == "https", var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
     parts.query = nil
     parts.fragment = nil
     return parts.string
@@ -319,7 +324,7 @@ final class LoginList: NSObject {
         let fresh = (try? result.get())?.first { found in
           found.user.lowercased() == code.user.lowercased() && !ApplePasswordsMatch.codes([found], host: current.host, domains: current.domains).isEmpty
         }
-        guard let value = fresh?.code, !value.isEmpty else {
+        guard let value = fresh?.code, Self.isCode(value) else {
           Self.count("codeFillFailed", engine: engine)
           guard asked == self.ticket else { return }
           if case .failure(.notConnected) = result { return self.offerConnect(current) }

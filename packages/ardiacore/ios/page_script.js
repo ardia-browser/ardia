@@ -1057,8 +1057,20 @@
       return usernameFor(password) === el ? { password, username: el } : null;
     };
     const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
+    const OTHER_AUTOCOMPLETE = /(^|\s)(username|email|current-password|new-password|tel|postal-code|cc-[a-z-]+)(\s|$)/i;
+    const CODE_HINT = /(^|[^a-z])(otp|totp|2fa|mfa)([^a-z]|$)|one.?time.?(pass)?code|verification.?code|verify.?code|security.?code|auth(entication)?.?code|passcode/i;
+    const CODE_SHAPE = /^[A-Za-z0-9]{4,10}$/;
+    const checkVisibility = Element.prototype.checkVisibility;
+    const getAttribute = Element.prototype.getAttribute;
+    const attribute = (el, name) => apply(getAttribute, el, [name]) || "";
+    const seen = (el) => visible(el) && (typeof checkVisibility !== "function" || apply(checkVisibility, el, [{ opacityProperty: true, visibilityProperty: true }]));
+    const asksForCode = (el) => {
+      const auto = attribute(el, "autocomplete");
+      if (ONE_TIME_CODE.test(auto)) return true;
+      return !OTHER_AUTOCOMPLETE.test(auto) && CODE_HINT.test([attribute(el, "name"), attribute(el, "id"), attribute(el, "placeholder"), attribute(el, "aria-label")].join(" "));
+    };
     const codeField = (el) =>
-      !!el && el.localName === "input" && visible(el) && /^(text|tel|number|)$/i.test(el.type || "text") && ONE_TIME_CODE.test(el.getAttribute("autocomplete") || "") ? { code: el } : null;
+      location.protocol === "https:" && !!el && el.localName === "input" && /^(text|tel|number|)$/i.test(attribute(el, "type")) && !el.value && seen(el) && asksForCode(el) ? { code: el } : null;
     const inTopViewport = (el) => {
       const r = el.getBoundingClientRect();
       let x = r.left, y = r.top;
@@ -1144,7 +1156,7 @@
       const ticket = message && typeof message.ticket === "string" ? message.ticket : "";
       if (!fillable(message)) return send("loginFilled", { ticket, filled: false });
       if (active.found.code) {
-        if (typeof message.code !== "string") return send("loginFilled", { ticket, filled: false });
+        if (typeof message.code !== "string" || !CODE_SHAPE.test(message.code) || !codeField(active.found.code)) return send("loginFilled", { ticket, filled: false });
         put(active.found.code, message.code);
         open = picking = false;
         return send("loginFilled", { ticket, filled: true });

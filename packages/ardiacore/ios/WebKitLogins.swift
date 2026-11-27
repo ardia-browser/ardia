@@ -57,7 +57,18 @@ final class WebKitLogins: NSObject {
     return username === el ? { password, username } : null;
   };
   const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
-  const codeField = (el) => !!el && el.tagName === "INPUT" && visible(el) && /^(text|tel|number|)$/i.test(el.type || "text") && ONE_TIME_CODE.test(el.getAttribute("autocomplete") || "");
+  const OTHER_AUTOCOMPLETE = /(^|\s)(username|email|current-password|new-password|tel|postal-code|cc-[a-z-]+)(\s|$)/i;
+  const CODE_HINT = /(^|[^a-z])(otp|totp|2fa|mfa)([^a-z]|$)|one.?time.?(pass)?code|verification.?code|verify.?code|security.?code|auth(entication)?.?code|passcode/i;
+  const CODE_SHAPE = /^[A-Za-z0-9]{4,10}$/;
+  const attribute = (el, name) => el.getAttribute(name) || "";
+  const seen = (el) => visible(el) && (typeof el.checkVisibility !== "function" || el.checkVisibility({ opacityProperty: true, visibilityProperty: true }));
+  const asksForCode = (el) => {
+    const auto = attribute(el, "autocomplete");
+    if (ONE_TIME_CODE.test(auto)) return true;
+    return !OTHER_AUTOCOMPLETE.test(auto) && CODE_HINT.test([attribute(el, "name"), attribute(el, "id"), attribute(el, "placeholder"), attribute(el, "aria-label")].join(" "));
+  };
+  const codeField = (el) =>
+    location.protocol === "https:" && !!el && el.tagName === "INPUT" && /^(text|tel|number|)$/i.test(attribute(el, "type")) && !el.value && seen(el) && asksForCode(el);
   let active = null;
   let open = false;
   let picking = false;
@@ -142,7 +153,7 @@ final class WebKitLogins: NSObject {
       return Array.from(document.querySelectorAll("input[type=password]")).some((el) => visible(el) && same(el));
     },
     fillCode(code, origin) {
-      if (location.origin !== origin || !active || !active.code || !active.el.isConnected) return false;
+      if (location.origin !== origin || !active || !active.code || !active.el.isConnected || typeof code !== "string" || !CODE_SHAPE.test(code) || !codeField(active.el)) return false;
       setValue(active.el, code);
       open = picking = false;
       return true;

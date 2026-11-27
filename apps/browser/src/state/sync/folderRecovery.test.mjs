@@ -19,6 +19,7 @@ let beforeWrite = null;
 let beforeRead = null;
 let onFolderInfo = null;
 let desktopWriteErrors = false;
+let beforeChainStatus = null;
 
 const chainOf = (folder) => folders.get(folder);
 const scopeOf = (folder, chain, scope) => {
@@ -50,6 +51,7 @@ const native = {
   }),
   chooseFolder: async () => null,
   chainStatus: async (folder) => {
+    beforeChainStatus?.(folder);
     const status = !folders.has(folder) ? "unavailable" : chainOf(folder).has(OURS) ? "ok" : "missing";
     afterChainStatus?.(folder);
     return status;
@@ -112,6 +114,7 @@ const reset = () => {
   beforeRead = null;
   onFolderInfo = null;
   desktopWriteErrors = false;
+  beforeChainStatus = null;
   heldDocSaves.on = false;
   heldDocSaves.queue.length = 0;
   shell.docs.clear();
@@ -715,3 +718,54 @@ test("a Linux or Windows write that fails because the whole folder went shows th
   assert.equal(state.dataMissing, false);
   assert.match(state.error ?? "", /sync folder is missing/i);
 });
+
+test("a folder that is back by the time a failed write is checked retries the cycle instead of reporting its data missing", async () => {
+  reset();
+  const telemetry = await import("../telemetry/client.ts");
+  const engine = await import("./engine.ts?folder-back-at-recheck");
+  telemetry.loadChoice();
+  telemetry.setSharing(true, "settings");
+  try {
+    engine.startSync();
+    assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+    await engine.syncNow();
+    engine.takeSnapshotWrites();
+    S().addBookmark({ profileId: "default", url: "https://blip.example/", title: "Blip" });
+    let held = null;
+    beforeWrite = (folder) => {
+      beforeWrite = null;
+      held = chainOf(folder);
+      folders.delete(folder);
+      beforeChainStatus = (back) => {
+        beforeChainStatus = null;
+        folders.set(back, held);
+      };
+    };
+    await engine.syncNow();
+    assert.ok(held, "the folder was gone at the write");
+    const after = engine.useSync.getState();
+    assert.equal(after.dataMissing, false, "a reconnect that is already over is not the waiting state");
+    assert.notEqual(after.status, "stalled");
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 0, "no missing stretch is recorded");
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().status, "updated");
+  } finally {
+    telemetry.setSharing(false, "settings");
+  }
+});
+
+for (const desktop of [false, true]) {
+  test(`a folder lost during Recreate's first upload shows the folder as unavailable, not a generic stall (${desktop ? "Linux and Windows" : "Mac"} errors)`, async () => {
+    reset();
+    desktopWriteErrors = desktop;
+    const engine = await brokenFolder(`lost-during-reseed-${desktop}`);
+    beforeWrite = (folder) => {
+      beforeWrite = null;
+      folders.delete(folder);
+    };
+    assert.equal((await engine.recreateSyncFolder()).error, "uploadFailed");
+    const state = engine.useSync.getState();
+    assert.equal(state.status, "offline");
+    assert.match(state.error ?? "", /sync folder is missing/i);
+  });
+}

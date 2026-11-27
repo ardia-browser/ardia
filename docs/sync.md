@@ -601,7 +601,9 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
     at its start, on a write or on a read, reports that state and never "updated": a whole folder gone is "Sync
     folder unavailable", this phrase's folder gone from a folder that is there is the waiting state below. A failed
     write is placed by asking for the folder's state (the Mac's `ERR_SYNC_CHAIN_MISSING` and the Linux and Windows
-    engine's `ERR_SYNC_FOLDER` alike). The Mac's read reports a missing chain itself. Linux and Windows read a missing
+    engine's `ERR_SYNC_FOLDER` alike), Recreate's first upload included; when the folder and chain are already back
+    by then (a drive that reconnected), the cycle runs again at once instead of reporting anything, and only a second
+    such failure in a row counts as missing. The Mac's read reports a missing chain itself. Linux and Windows read a missing
     chain as an empty folder, so an empty read of a scope whose files this computer knew checks the chain at once,
     and an empty read of a scope with no known files has the cycle check the chain once before "updated".
   - **Recreate Folder…** takes the place of Connect Another Device… only when the folder is missing ("Sync folder
@@ -613,8 +615,12 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
     if anything is at the folder's path when it gets there, empty or holding only Finder files included, it refuses
     and the waiting state shows. On the Mac the call builds the folder and this phrase's chain in a temporary folder on
     the same volume and renames it into place with `RENAME_EXCL`, so the pair appears at once or not at all. Where
-    the volume can't do that rename (ExFAT and FAT32 answer `ENOTSUP`), it makes the folder with an exclusive mkdir
-    and then the chain, and on a failure removes only those two folders, without recursing. A failed try leaves
+    the volume can't do that rename (ExFAT and FAT32 answer `ENOTSUP`; SMB and AFP shares take the same path and
+    haven't been tried live), it makes the folder with an exclusive mkdir, opens it (`O_DIRECTORY | O_NOFOLLOW`), and
+    goes on only if the open folder is the one at the path and empty. It makes the chain inside it with `mkdirat` and
+    reports success only if the path still leads to that folder and that chain. Any mismatch, or a chain already there,
+    answers that a folder is there, uploads nothing and removes nothing. The one cleanup is an `rmdir` of the folder
+    it made when its chain couldn't be made, and only while that folder is still the one at the path and empty. A failed try leaves
     nothing behind, so it never blocks the next. Linux and Windows serve the call in `hostSync.ts`: they refuse a
     folder that is there and otherwise use the engine's `createChain`, which keeps a short window and can leave an
     empty folder if its second mkdir fails, until their engines get the same call (#4638). Pairing stays off until a

@@ -44,6 +44,7 @@ export const currentSyncFolder = () => useSync.getState().folder;
 let doc: SyncDoc = emptyDoc();
 let cycle: Promise<void> | null = null;
 let again = false;
+let retriedAfterLoss = false;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let stateLoading: Promise<unknown> = Promise.resolve();
@@ -162,11 +163,14 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     delete doc.reseedCycleOwed;
     doc.lastSyncedAt = Date.now();
     noteChainStatus(consent, device, "ok");
+    retriedAfterLoss = false;
     publishUi({ status: "updated", error: null, pending, dataMissing: false });
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;
-    const lost = await folderLossAfter(native, folder, code);
-    if (lost) await gone(lost);
+    const lost = await folderLossAfter(native, folder, error, !retriedAfterLoss);
+    retriedAfterLoss = lost === "retry";
+    if (lost === "retry") again = true;
+    else if (lost) await gone(lost);
     else if (code === "ERR_SYNC_FOLDER_UNREADABLE") {
       publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
     } else if (useSync.getState().status !== "locked") {
@@ -242,7 +246,7 @@ export const recreateSyncFolder = (): Promise<FolderRecreateResult> => {
   return runFolderOp<FolderRecreateResult>(
     (native, folder) =>
       doc.deviceId
-        ? recreateChainFolder({ native, doc, folder, device: doc.deviceId, clock: clockFor(doc.deviceId), watchScope, persistJournal, save, saveNow: saveDocNow, consent, onUpdating: () => publishUi({ status: "updating", error: null }), onUploadError: (error) => publishUi({ status: "stalled", error }) })
+        ? recreateChainFolder({ native, doc, folder, device: doc.deviceId, clock: clockFor(doc.deviceId), watchScope, persistJournal, save, saveNow: saveDocNow, consent, onUpdating: () => publishUi({ status: "updating", error: null }), publish: publishUi })
         : Promise.resolve({ error: "busy" }),
     async (result) => {
       if ("ok" in result && doc.enabled && !stopping && useSync.getState().status !== "locked") await runCycle({ forcePasswords: true });

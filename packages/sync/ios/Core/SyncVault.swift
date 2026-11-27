@@ -47,19 +47,61 @@ public final class SyncVault {
     try createChainInPlace()
   }
 
+  var inPlaceStep: ((_ step: String) throws -> Void)?
+
   private func createChainInPlace() throws {
     do {
       try fileManager.createDirectory(at: folder, withIntermediateDirectories: false)
     } catch let error as CocoaError where error.code == .fileWriteFileExists {
       throw FolderExists()
     }
-    do {
-      try fileManager.createDirectory(at: chainURL, withIntermediateDirectories: false)
-    } catch {
-      _ = rmdir(chainURL.path)
-      _ = rmdir(folder.path)
-      throw error
+    try inPlaceStep?("made")
+    let fd = open(folder.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+    guard fd >= 0 else { throw FolderExists() }
+    defer { close(fd) }
+    guard let made = Identity(fd: fd), Identity(path: folder.path) == made, Self.isEmpty(fd) else { throw FolderExists() }
+    try inPlaceStep?("opened")
+    guard mkdirat(fd, keys.chainTag, 0o777) == 0 else {
+      let code = errno
+      if code == EEXIST { throw FolderExists() }
+      if Identity(path: folder.path) == made, Self.isEmpty(fd) { _ = rmdir(folder.path) }
+      throw POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)
     }
+    guard let chain = Identity(fd: fd, name: keys.chainTag), Identity(path: folder.path) == made, Identity(path: chainURL.path) == chain else {
+      throw FolderExists()
+    }
+  }
+
+  struct Identity: Equatable {
+    let device: dev_t
+    let inode: ino_t
+
+    init?(_ read: (inout stat) -> Int32) {
+      var info = stat()
+      guard read(&info) == 0 else { return nil }
+      device = info.st_dev
+      inode = info.st_ino
+    }
+
+    init?(path: String) { self.init { lstat(path, &$0) } }
+    init?(fd: Int32) { self.init { fstat(fd, &$0) } }
+    init?(fd: Int32, name: String) { self.init { fstatat(fd, name, &$0, AT_SYMLINK_NOFOLLOW) } }
+  }
+
+  static func isEmpty(_ fd: Int32) -> Bool {
+    let copy = dup(fd)
+    guard copy >= 0 else { return false }
+    guard let listing = fdopendir(copy) else {
+      close(copy)
+      return false
+    }
+    defer { closedir(listing) }
+    rewinddir(listing)
+    while let entry = readdir(listing) {
+      let name = withUnsafeBytes(of: entry.pointee.d_name) { String(decoding: $0.prefix(Int(entry.pointee.d_namlen)), as: UTF8.self) }
+      if name != "." && name != ".." { return false }
+    }
+    return true
   }
 
   @discardableResult

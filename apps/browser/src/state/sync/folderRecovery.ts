@@ -80,10 +80,14 @@ export function chainCheckedTransport(native: SyncNativeApi, folder: string): { 
   return { transport: { ...transport, read }, confirmChain };
 }
 
-export async function folderLossAfter(native: SyncNativeApi, folder: string, code: unknown): Promise<"unavailable" | "missing" | null> {
+export type FolderLoss = "unavailable" | "missing" | "retry" | null;
+
+export async function folderLossAfter(native: SyncNativeApi, folder: string, error: unknown, mayRetry: boolean): Promise<FolderLoss> {
+  const code = (error as { code?: unknown } | null)?.code;
   if (code !== "ERR_SYNC_CHAIN_MISSING" && code !== "ERR_SYNC_FOLDER") return null;
   const status = await native.chainStatus(folder).catch(() => null);
   if (status === "unavailable" || status === "missing") return status;
+  if (status === "ok" && mayRetry) return "retry";
   return code === "ERR_SYNC_CHAIN_MISSING" ? "missing" : null;
 }
 
@@ -153,9 +157,9 @@ export async function reseedPendingScopes({ native, doc, folder, device, clock, 
 }
 
 export async function recreateChainFolder(
-  ctx: ReseedContext & { saveNow: () => Promise<void>; consent: ConsentToken | null; onUpdating: () => void; onUploadError: (message: string) => void },
+  ctx: ReseedContext & { saveNow: () => Promise<void>; consent: ConsentToken | null; onUpdating: () => void; publish: (patch: Partial<SyncUi>) => void },
 ): Promise<FolderRecreateResult> {
-  const { native, doc, folder, consent, onUpdating, onUploadError } = ctx;
+  const { native, doc, folder, device, consent, onUpdating, publish } = ctx;
   let created = false;
   try {
     const chain = await native.chainStatus(folder);
@@ -212,7 +216,9 @@ export async function recreateChainFolder(
     noteFolderRecreate("failed", consent);
     if (created) {
       warnFor(consent, "[sync] recreating sync folder failed while uploading data", error);
-      onUploadError(message);
+      const lost = await folderLossAfter(native, folder, error, false);
+      if (lost === "unavailable" || lost === "missing") await publishChainGone(lost, { native, folder, device, consent, wasOffline: false, publish });
+      else publish({ status: "stalled", error: message });
       return { error: "uploadFailed", message };
     }
     return { error: "failed", message };

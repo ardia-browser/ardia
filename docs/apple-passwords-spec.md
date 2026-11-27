@@ -147,7 +147,10 @@ Separately, a profile can turn on "Use my Me card from Contacts". The Me card th
 - **Seam 1, fake Mac sources (new).** A hidden instance launched with an override that points the Apple Passwords client at a fake helper program and the Me card reader at a fixture card. The fake helper speaks the real framing and SRP, holds fixture logins and codes, and can be told to answer wrong code, locked, refused, die at launch, or end the pairing. An end-to-end check opens fixture sign-in, sign-up, code, cross-site frame and http pages in a Chromium tab and a WebKit tab and covers Pairing, the Login list, fill, save and update, strong passwords, codes, every failure row, private windows and Me card fills. Prior art: the hidden-instance checks run through `scripts/lib/instance.mjs`, and the import end-to-end check that uses a fake Chrome home.
 - **Seam 2, Settings against native fakes (existing).** `apps/browser` tests under the test loader cover the new Password manager option, its entitlement and platform gates, the Pairing flow in Settings, the status line, the Me card switch and its permission outcomes. Prior art: the existing settings and password-manager choice tests.
 - **Seam 3, page boundary (existing).** Every new page-to-native message gets a row in the boundary table and runs the shared hostile inputs through its guard. Prior art: the WebKit autofill and field-provider rows.
-- **Not automated.** The real Apple helper only runs under a build signed with Apple's entitlement, so one hand check on the owner's signed build confirms Pairing, fill, save and a code against real Apple Passwords.
+- **Not automated.** The real Apple helper only runs under a build signed with Apple's entitlement, so one hand check on the owner's signed build confirms, against real Apple Passwords:
+  - Pairing, a fill, a save and a Verification code.
+  - The http form: a login saved from an http page is sent as `http://host` (the form the Login list reads in `sites`); check Passwords shows it for that http site and the helper lists it back with the `http://` prefix. Yab sends a bare host for every page (`Sources/Fast/ApplePasswords.swift:758`), so nothing verified says the helper takes this form.
+  - Whether reading the kept password to decide between Save, Update and no prompt asks for Touch ID at sign-in.
 
 ### Test list
 
@@ -197,6 +200,7 @@ Each test is one red → green cycle, written and run one at a time in the order
 | E21 | 1 | A failed sign-in (the form comes back) shows no prompt | saving a mistyped password | — |
 | E22 | 1 | A fake that refuses the save makes the prompt say it wasn't saved | a false "saved" | — |
 | E23 | 1 | In a private window the list fills but no save prompt appears | private browsing leaving logins behind | — |
+| E33 | 1 | A login saved from an http page is offered on that http page, marked "Not secure", and not on its https sibling | save and list disagreeing on the http form | how Apple's helper stores an http site |
 | E24 | 1 | A sign-up form shows "Suggest strong password"; picking it fills both new-password fields, and the save prompt targets Apple Passwords (both engines) | WebKit missing the generator; two generator offers in Chromium | password strength (fixed by the generator's own rules) |
 
 **Slice 4: Verification codes**

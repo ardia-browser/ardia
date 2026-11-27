@@ -6,7 +6,7 @@ import { createServer as createHttpsServer } from "node:https";
 import path from "node:path";
 
 export const SECURE_HOSTS = ["example.localhost", "accounts.example.localhost", "other.localhost", "empty.localhost", "save.localhost"];
-export const PLAIN_HOSTS = ["plain.localhost"];
+export const PLAIN_HOSTS = ["plain.localhost", "plain-save.localhost"];
 export const PAGE_EVENTS = `JSON.parse(document.documentElement.dataset.events || "[]")`;
 
 const recorder = `
@@ -48,7 +48,7 @@ export async function fixtureSites(dir, pages = PAGES) {
   fs.mkdirSync(dir, { recursive: true });
   const key = path.join(dir, "key.pem");
   const cert = path.join(dir, "cert.pem");
-  const names = SECURE_HOSTS.map((h) => `DNS:${h}`).join(",");
+  const names = [...SECURE_HOSTS, ...PLAIN_HOSTS].map((h) => `DNS:${h}`).join(",");
   const stamp = path.join(dir, "names.txt");
   if (!fs.existsSync(cert) || !fs.existsSync(stamp) || fs.readFileSync(stamp, "utf8") !== names) {
     execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2", "-subj", `/CN=${SECURE_HOSTS[0]}`, "-addext", `subjectAltName=${names}`, "-keyout", key, "-out", cert], { stdio: "ignore" });
@@ -74,6 +74,7 @@ export async function fixtureSites(dir, pages = PAGES) {
     seen,
     switches: `--ignore-certificate-errors-spki-list=${spki}`,
     url,
+    secureUrl: (host, pathname = "/login") => `https://${host}:${ports.secure}${pathname}`,
     origin: (host) => new URL(url(host)).origin,
     close: () => Promise.all([secure, plain].map((s) => new Promise((r) => s.close(r)))),
   };

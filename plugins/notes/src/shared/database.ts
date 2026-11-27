@@ -143,6 +143,7 @@ export const TITLE = "title";
 
 export const schemaOf = (doc: Y.Doc) => doc.getMap<Y.Map<unknown>>("schema");
 export const viewsOf = (doc: Y.Doc) => doc.getArray<Y.Map<unknown>>("views");
+export const viewMapOf = (doc: Y.Doc) => doc.getMap<Y.Map<unknown>>("viewsById");
 export const settingsOf = (doc: Y.Doc) => doc.getMap<unknown>("settings");
 export const peopleOf = (doc: Y.Doc) => doc.getMap<unknown>("people");
 
@@ -664,6 +665,11 @@ export function formFieldsFor(view: View, schema: Property[]): FormField[] {
 export function readViews(doc: Y.Doc): View[] {
   const seen = new Set<string>();
   const out: View[] = [];
+  viewMapOf(doc).forEach((entry, id) => {
+    if (!(entry instanceof Y.Map) || entry.get("id") !== id) return;
+    seen.add(id);
+    out.push(readView(entry));
+  });
   viewsOf(doc).forEach((entry) => {
     if (!(entry instanceof Y.Map)) return;
     const view = readView(entry);
@@ -675,6 +681,8 @@ export function readViews(doc: Y.Doc): View[] {
 }
 
 function viewEntry(doc: Y.Doc, id: string): Y.Map<unknown> | null {
+  const keyed = viewMapOf(doc).get(id);
+  if (keyed instanceof Y.Map && keyed.get("id") === id) return keyed;
   let found: Y.Map<unknown> | null = null;
   viewsOf(doc).forEach((entry) => {
     if (!found && entry instanceof Y.Map && entry.get("id") === id) found = entry;
@@ -712,7 +720,7 @@ export function addView(doc: Y.Doc, type: ViewType, options: { id?: string; name
     entry.set("groups", new Y.Map());
     entry.set("subGroups", new Y.Map());
     for (const [k, v] of Object.entries({ ...defaultsForView(type, readSchema(doc)), ...(options.init ?? {}) })) entry.set(k, v);
-    viewsOf(doc).push([entry]);
+    viewMapOf(doc).set(id, entry);
   });
   return id;
 }
@@ -772,6 +780,7 @@ export function renameView(doc: Y.Doc, id: string, name: string) {
 
 export function deleteView(doc: Y.Doc, id: string) {
   doc.transact(() => {
+    viewMapOf(doc).delete(id);
     const array = viewsOf(doc);
     for (let i = array.length - 1; i >= 0; i--) {
       const entry = array.get(i);
@@ -807,7 +816,7 @@ export const DEFAULT_VIEW = "default";
 export const DEFAULT_TAGS = "tags";
 
 export function isInitialized(doc: Y.Doc) {
-  return settingsOf(doc).get("initialized") === true || viewsOf(doc).length > 0;
+  return settingsOf(doc).get("initialized") === true || viewsOf(doc).length > 0 || viewMapOf(doc).size > 0;
 }
 
 export function initDatabase(doc: Y.Doc, options: { view?: ViewType; title?: string } = {}) {

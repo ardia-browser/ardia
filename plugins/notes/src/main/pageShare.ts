@@ -23,30 +23,52 @@ export function parseWorkspaceJson(text: string | null): WorkspaceJson | null {
   return { id: v.id, name, root };
 }
 
-function scan(value: unknown, out: Set<string>, depth = 0) {
-  if (depth > 32) return;
-  if (typeof value === "string") {
-    for (const m of value.matchAll(FILE_REF)) out.add(m[1]!);
-  } else if (Array.isArray(value)) {
-    for (const item of value) scan(item, out, depth + 1);
-  } else if (value && typeof value === "object" && !(value instanceof Uint8Array)) {
-    for (const item of Object.values(value)) scan(item, out, depth + 1);
-  }
+const FILE_URL = /^file:([0-9a-f]{64})(?:\.[a-z0-9]{1,10})?$/;
+const URL_KEYS = new Set(["url", "icon", "cover", "src"]);
+
+export type Attachments = Map<string, string>;
+
+function note(out: Attachments, value: unknown, name: unknown) {
+  if (typeof value !== "string") return;
+  const sha = FILE_URL.exec(value)?.[1];
+  if (!sha) return;
+  if (!out.has(sha) || (typeof name === "string" && name && !out.get(sha))) out.set(sha, typeof name === "string" ? name.slice(0, 120) : "");
 }
 
-export function fileRefsOfState(state: Uint8Array, out = new Set<string>()): Set<string> {
-  for (const struct of Y.decodeUpdate(state).structs) {
-    const content = (struct as { content?: Record<string, unknown> }).content;
-    if (!content) continue;
-    scan(content.str, out);
-    scan(content.arr, out);
-    scan(content.value, out);
-    scan(content.embed, out);
+function scanValue(value: unknown, out: Attachments, depth = 0) {
+  if (depth > 8 || !value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) scanValue(item, out, depth + 1);
+    return;
   }
+  const record = value as Record<string, unknown>;
+  for (const key of URL_KEYS) note(out, record[key], record.name);
+  for (const item of Object.values(record)) if (item && typeof item === "object") scanValue(item, out, depth + 1);
+}
+
+export function attachmentsOfState(state: Uint8Array, out: Attachments = new Map()): Attachments {
+  const byParent = new Map<string, { urls: unknown[]; name: unknown }>();
+  for (const struct of Y.decodeUpdate(state).structs) {
+    const item = struct as { parent?: unknown; parentSub?: string | null; content?: { arr?: unknown[] }; id?: { client: number; clock: number } };
+    const key = item.parentSub;
+    const value = item.content?.arr?.[0];
+    if (!key || value === undefined) continue;
+    const parent = typeof item.parent === "string" ? item.parent : item.parent && typeof item.parent === "object" ? `${(item.parent as { client: number }).client}:${(item.parent as { clock: number }).clock}` : "";
+    const slot = byParent.get(parent) ?? { urls: [], name: undefined };
+    if (URL_KEYS.has(key)) slot.urls.push(value);
+    else if (key === "name") slot.name = value;
+    else if (value && typeof value === "object") scanValue(value, out);
+    byParent.set(parent, slot);
+  }
+  for (const slot of byParent.values()) for (const url of slot.urls) note(out, url, slot.name);
   return out;
 }
 
-export function fileRefsOfEntry(entry: Y.Map<unknown> | undefined, out = new Set<string>()): Set<string> {
-  if (entry) scan(entry.toJSON(), out);
+export function attachmentsOfEntry(entry: Y.Map<unknown> | undefined, out: Attachments = new Map()): Attachments {
+  if (!entry) return out;
+  note(out, entry.get("cover"), "cover");
+  note(out, entry.get("icon"), "icon");
+  const props = entry.get("props");
+  if (props instanceof Y.Map) scanValue(props.toJSON(), out);
   return out;
 }

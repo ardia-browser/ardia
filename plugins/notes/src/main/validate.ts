@@ -76,7 +76,7 @@ const SHAPES: Record<OpName | ExtraOpName, Shape> = {
   joinSharedWorkspace: {},
   shareWorkspace: { workspace },
   sharePage: { workspace, page },
-  stopSharingPage: { workspace },
+  stopSharingPage: { workspace, anyway: optional(bool) },
   renameWorkspace: { workspace, name: text(200), icon: optional(text(300)) },
   leaveWorkspace: { workspace },
   openUrl: { url: text(4096) },

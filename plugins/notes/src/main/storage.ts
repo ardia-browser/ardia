@@ -253,19 +253,25 @@ export class WorkspaceStore {
     return [...new Set([...this.placeholders.keys(), ...this.unread])].filter((path) => path.startsWith("docs/") && wanted.has(path.split("/")[1]!));
   }
 
-  async filesDownloading(shas: string[]): Promise<string[]> {
-    if (!shas.length) return [];
-    const wanted = new Set(shas);
-    const out: string[] = [];
+  async fileStates(shas: string[]): Promise<Map<string, "downloading" | "damaged" | "missing">> {
+    const out = new Map<string, "downloading" | "damaged" | "missing">(shas.map((sha) => [sha, "missing"]));
+    if (!shas.length) return out;
     for (const e of await this.fs.list("files")) {
       const base = e.path.slice(e.path.lastIndexOf("/") + 1);
       const sha = /^([0-9a-f]{64})\.[a-z0-9]+$/.exec(base)?.[1];
-      if (!sha || !wanted.has(sha)) continue;
-      out.push(sha);
+      if (!sha || !out.has(sha)) continue;
+      out.set(sha, e.placeholder ? "downloading" : "damaged");
       if (e.placeholder) void this.fs.read(`files/${base}`, { length: 1 }).catch(() => undefined);
+    }
+    for (const [sha, state] of out) {
+      if (state !== "damaged") continue;
+      const name = this.fileNames.get(sha);
+      const probe = name ? await this.fs.read(`files/${name}`, { length: 1 }).then(() => null, (error: unknown) => errorCode(error)) : null;
+      if (probe === "unavailable") out.set(sha, "downloading");
     }
     return out;
   }
+
 
   hasPending(): boolean {
     return [...this.entries.values()].some((e) => e.pending.length > 0 || e.needsCompaction);
@@ -374,12 +380,12 @@ export class WorkspaceStore {
   }
 
   async flushDurable(names: string[], timeoutMs = 30_000): Promise<boolean> {
-    const waits = names.map((name) => this.whenDurable(name, this.seqOf(name)));
-    await Promise.all(names.map((name) => this.flush(name)));
     let timer: unknown = null;
     const deadline = new Promise<boolean>((resolve) => (timer = this.timers.setTimeout(() => resolve(false), timeoutMs)));
+    const waits = names.map((name) => this.whenDurable(name, this.seqOf(name)));
+    const settled = Promise.all(names.map((name) => this.flush(name))).then(() => Promise.all(waits).then((oks) => oks.every(Boolean)));
     try {
-      return await Promise.race([Promise.all(waits).then((oks) => oks.every(Boolean)), deadline]);
+      return await Promise.race([settled, deadline]);
     } finally {
       this.timers.clearTimeout(timer);
     }

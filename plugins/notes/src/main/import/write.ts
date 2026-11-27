@@ -29,6 +29,7 @@ export type Plan = {
   stableKey?(node: ImportNode): string | null;
   prefetch?(paths: Iterable<string>): void;
   warnings?: number;
+  complete?: boolean;
 };
 
 export type PlanSync = { workspace: string; candidates: ImportRecord[] };
@@ -277,10 +278,15 @@ function writeDatabase(doc: Y.Doc, node: ImportNode, rows: ImportNode[], stable?
     if (isTags) id = DEFAULT_TAGS;
     else if (stable) {
       id = stable(`prop:${column.name}`);
-      const entry = schemaOf(doc).get(id);
+      let entry = schemaOf(doc).get(id);
+      const adopted = !entry ? readSchema(doc).find((p) => p.id !== TITLE && p.name.trim().toLowerCase() === name.trim().toLowerCase()) : undefined;
+      if (adopted) {
+        id = adopted.id;
+        entry = schemaOf(doc).get(id);
+      }
       if (entry?.get("deleted") === true) return;
       if (!entry) addProperty(doc, { type, name }, { id });
-      else if (entry.get("name") !== name || entry.get("type") !== type) updateProperty(doc, id, { name, type });
+      else if (!adopted && (entry.get("name") !== name || entry.get("type") !== type)) updateProperty(doc, id, { name, type });
     } else id = addProperty(doc, { type, name });
     const options = new Map<string, string>();
     if (type === "select" || type === "multi_select" || type === "status") {
@@ -383,7 +389,7 @@ function previousExport(candidates: ImportRecord[], ids: Set<string>): ImportRec
   return best;
 }
 
-export async function writePlan(plan: Plan, sink: Sink, root: { title: string; icon: string }, progress: (p: WriteProgress) => void, cancelled: () => boolean, now: number, options: { sync?: PlanSync; onRoot?: (id: string) => void } = {}): Promise<WriteResult> {
+export async function writePlan(plan: Plan, sink: Sink, root: { title: string; icon: string }, progress: (p: WriteProgress) => void, cancelled: () => boolean, now: number, options: { sync?: PlanSync; journal?: (ids: string[]) => Promise<void> } = {}): Promise<WriteResult> {
   const sync = options.sync;
   const nodes = plan.nodes.slice(0, IMPORT_LIMITS.pages);
   const byKey = new Map(nodes.map((n) => [n.key, n]));
@@ -421,8 +427,11 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
   const seededRoot = syncing ? pickPageId(pagesMap, (c) => taken.has(c), [(k) => syncedId(syncing.workspace, `root:${printOf(top.map(keyOf).sort().join("\n"))}${k ? `#${k}` : ""}`)]) : null;
   const rootCandidate = previousRoot && live(previousRoot) ? previousRoot : seededRoot;
   const reusedRoot = rootCandidate && live(rootCandidate) ? rootCandidate : null;
-  const rootId = reusedRoot ?? createPage(sink.tree, { ...(seededRoot ? { id: seededRoot } : {}), parent: "", kind: "page", title: root.title, icon: root.icon, by: sink.by, now });
-  if (!reusedRoot) options.onRoot?.(rootId);
+  const rootId = reusedRoot ?? seededRoot ?? newId();
+  const fresh = new Set(nodes.map((n) => ids.get(n.key)!).filter((id) => !live(id)));
+  const freshRoots = nodes.filter((n) => fresh.has(ids.get(n.key)!) && !(n.parent && byKey.has(n.parent) && n.parent !== n.key && fresh.has(ids.get(n.parent)!))).map((n) => ids.get(n.key)!);
+  await options.journal?.(reusedRoot ? freshRoots : [rootId]);
+  if (!reusedRoot) createPage(sink.tree, { id: rootId, parent: "", kind: "page", title: root.title, icon: root.icon, by: sink.by, now });
   if (reusedRoot) {
     const entry = live(reusedRoot)!;
     if (Number(entry.get("archivedAt") ?? 0) > 0) sink.tree.transact(() => entry.set("archivedAt", 0));
@@ -629,7 +638,7 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
   }
   if (top.length) writeBody(rootDoc, top.slice(0, 2000).map((n): Block => ({ type: "pageRef", target: `key:${n.key}`, props: { subpage: true } })), { page: (t) => ids.get(t.slice(4)) ?? null, asset: () => null }, !!reusedRoot, bodyTarget(rootId));
   const kept = new Set(ids.values());
-  const whole = plan.nodes.length <= IMPORT_LIMITS.pages;
+  const whole = plan.nodes.length <= IMPORT_LIMITS.pages && plan.complete !== false;
   const missing = (previous?.pages ?? []).filter((id) => !kept.has(id) && id !== rootId);
   const gone = whole ? missing : [];
   let archived = 0;

@@ -228,7 +228,7 @@ test("stopping a page share brings everything back into place, then leaves the f
   await view.client.ready;
   const live = await opened(view.client, share.id, `p:${plan}`);
   const res = await alice.notes.call("stopSharingPage", { workspace: share.id });
-  assert.deepEqual(res, { workspace: home.id, page: plan });
+  assert.deepEqual(res, { workspace: home.id, page: plan, stopped: true, missing: [] });
   assert.ok(!alice.notes.workspaces().some((w) => w.id === share.id), "the share is gone from this Mac");
   assert.deepEqual(await alice.folders.list(), [], "the folder grant is forgotten");
   assert.ok(existsSync(join(alice.files.roots.get(share.folderId), "workspace.json")), "the folder stays for the others");

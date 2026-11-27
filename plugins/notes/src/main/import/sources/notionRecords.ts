@@ -40,6 +40,7 @@ import { Sha256 } from "../../sha256";
 import { READ_AHEAD_COUNT, ReadAhead } from "../readAhead";
 import { isNotionUuid, knownPageIds, notionPageFamilies, pickPageId, recordsOnlyFamily } from "../notionIds";
 import { bodyPrint, EMPTY_BODY, Rebase, writeFirstBody } from "../rebase";
+import { mergeDatabase } from "../mergeDatabase";
 
 type Rec = Record<string, any>;
 type Seg = [string, any[]?];
@@ -50,7 +51,7 @@ export type RecordsReader = { read(path: string): Promise<Uint8Array>; size?(pat
 
 export type RecordsResult = { roots: string[]; pageIds: string[]; archived: number; pages: number; databases: number; attachments: number; skipped: number; conflicts: number; ids: Map<string, string>; files: Record<string, string> };
 
-export type RecordsOptions = { workspace?: string; progress?: (p: WriteProgress) => void; cancelled?: () => boolean; now?: number; onRoots?: (roots: string[]) => void; files?: Record<string, string> };
+export type RecordsOptions = { workspace?: string; progress?: (p: WriteProgress) => void; cancelled?: () => boolean; now?: number; journal?: (ids: string[]) => Promise<void>; files?: Record<string, string> };
 
 const yieldNow = () => new Promise<void>((resolve) => setTimeout(() => resolve(), 0));
 
@@ -1472,6 +1473,11 @@ export class NotionRecordsImport {
     }
     const existed = new Set<string>();
     const rebase = this.rebase;
+    const isFresh = (id: string) => {
+      const entry = pagesOf(tree).get(id);
+      return !entry || entry.get("deleted") === true;
+    };
+    await this.options.journal?.(nodes.filter((n) => isFresh(n.id) && !(n.parent && this.byId.has(n.parent) && isFresh(n.parent))).map((n) => n.id));
     for (let at = 0; at < nodes.length; at += 250) {
       this.check();
       tree.transact(() => {
@@ -1541,7 +1547,6 @@ export class NotionRecordsImport {
       });
       await yieldNow();
     }
-    this.options.onRoots?.(roots.filter((id) => !existed.has(id)));
     const docFor = async (id: string): Promise<Y.Doc> => (existed.has(id) && this.sink.doc ? await this.sink.doc(id) : this.sink.newDoc(id));
     let done = 0;
     const docs = new Map<string, Y.Doc>();
@@ -1553,12 +1558,7 @@ export class NotionRecordsImport {
       }
     for (const n of dbNodes) {
       this.check();
-      const doc = await docFor(n.id);
-      if (existed.has(n.id)) doc.transact(() => {
-        schemaOf(doc).clear();
-        viewsOf(doc).delete(0, viewsOf(doc).length);
-        settingsOf(doc).clear();
-      });
+      const doc = new Y.Doc();
       docs.set(n.id, doc);
       if (n.collection && !n.linked) this.buildSchema(n.collection, n.id, doc);
     }
@@ -1579,6 +1579,14 @@ export class NotionRecordsImport {
       });
       this.counts.databases++;
       this.progress(n.title, ++done, total);
+    }
+    for (const n of dbNodes) {
+      this.check();
+      const scratch = docs.get(n.id)!;
+      const doc = await docFor(n.id);
+      mergeDatabase(doc, scratch, tree, n.id, rebase);
+      docs.set(n.id, doc);
+      scratch.destroy();
     }
     for (const n of nodes) {
       if (n.kind !== "page") continue;
@@ -1674,7 +1682,7 @@ export class NotionRecordsImport {
         if (shielded.has(at)) return true;
         seen.add(at);
         const parent = String(pagesOf(tree).get(at)?.get("parent") ?? "");
-        if (at === id && partialDbs.has(parent)) return true;
+        if (partialDbs.has(parent)) return true;
         at = parent;
       }
       return false;

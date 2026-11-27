@@ -1,4 +1,4 @@
-import { Inflate, inflateSync } from "fflate";
+import { Inflate } from "fflate";
 import { crc32 } from "../../shared/bytes";
 import { ImportError } from "./limits";
 
@@ -134,18 +134,13 @@ export class ZipReader {
 
   async read(entry: ZipEntry, max: number): Promise<Uint8Array> {
     if (entry.size > max) throw new ImportError(`${entry.name} is too big to import.`);
-    const start = await this.dataStart(entry);
-    const packed = await this.source.read(start, entry.compressed);
-    if (entry.method === 0) return checked(entry, packed);
     const out = new Uint8Array(entry.size);
-    let produced: Uint8Array;
-    try {
-      produced = inflateSync(packed, { out });
-    } catch {
-      throw new ImportError(`${entry.name} couldn't be unpacked.`);
-    }
-    if (produced.length !== entry.size) throw new ImportError(`${entry.name} isn't the size the zip says.`);
-    return checked(entry, produced);
+    let at = 0;
+    await this.stream(entry, async (chunk) => {
+      out.set(chunk, at);
+      at += chunk.length;
+    });
+    return out;
   }
 
   async stream(entry: ZipEntry, sink: (chunk: Uint8Array) => Promise<void>, step = 4 * 1024 * 1024): Promise<void> {
@@ -190,11 +185,6 @@ export class ZipReader {
     if (produced !== entry.size) throw new ImportError(`${entry.name} isn't the size the zip says.`);
     if ((crc >>> 0) !== entry.crc >>> 0) throw new ImportError(`${entry.name} is damaged in the zip.`);
   }
-}
-
-function checked(entry: ZipEntry, data: Uint8Array): Uint8Array {
-  if (data.length !== entry.size || (crc32(data) >>> 0) !== entry.crc) throw new ImportError(`${entry.name} is damaged in the zip.`);
-  return data;
 }
 
 function utf8OrLatin(bytes: Uint8Array): string {

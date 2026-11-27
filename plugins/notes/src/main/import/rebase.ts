@@ -129,6 +129,10 @@ export class Rebase {
     this.born.add(page);
   }
 
+  knows(entry: Y.Map<unknown>, key: string): boolean {
+    return peekBase(entry, `f:${key}`) !== undefined;
+  }
+
   remember(entry: Y.Map<unknown>, key: string, value: unknown) {
     const print = valuePrint(value);
     if (peekBase(entry, `f:${key}`) !== print) baseOf(entry).set(`f:${key}`, print);

@@ -252,9 +252,9 @@ export function fileName(source: string, fallback: string): string {
 
 type FileRef = { source: string; table: "block" | "collection" | "collection_view"; recordId: string; name: string; version: string };
 
-const BUILT_IN_PATH = /^\/(icons|images)\/[A-Za-z0-9._~%+-]+(\/[A-Za-z0-9._~%+-]+)*$/;
+const BUILT_IN_PATH = /^\/(icons|images)\/[A-Za-z0-9._~+-]+(\/[A-Za-z0-9._~+-]+)*$/;
 
-const BUILT_IN_ASSET = /^\/(icons|images)\/[A-Za-z0-9._~%+-]+(\/[A-Za-z0-9._~%+-]+)*(\?[A-Za-z0-9=&._~%+-]*)?$/;
+const BUILT_IN_ASSET = /^\/(icons|images)\/[A-Za-z0-9._~+-]+(\/[A-Za-z0-9._~+-]+)*(\?[A-Za-z0-9=&._~%+-]*)?$/;
 
 const ENCODED_SEPARATOR = /%(2e|2f|5c)/i;
 const HTTPS_URL = /^https:\/\/([a-z0-9.-]+)(\/[^?#\s\\@]*)?(\?[^#\s]*)?$/i;

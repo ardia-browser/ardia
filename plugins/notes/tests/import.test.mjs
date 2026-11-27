@@ -461,7 +461,7 @@ test("hostile zips: a zip slip, a bomb, a huge entry and garbage import what's s
       break;
     }
   const liar = await M.ZipReader.open({ size: lying.length, read: async (o, l) => lying.subarray(o, o + l) });
-  await assert.rejects(liar.read(liar.entries[0], 1 << 20), /size the zip says|damaged|unpacked/, "an entry that inflates past its declared size fails");
+  await assert.rejects(liar.read(liar.entries[0], 1 << 20), /size the zip says|damaged|unpack/, "an entry that inflates past its declared size fails");
   const big = await M.ZipReader.open({ size: slip.length, read: async (o, l) => slip.subarray(o, o + l) });
   await assert.rejects(big.read(big.entries[0], 2), /too big/);
   await assert.rejects(M.ZipReader.open({ size: 100, read: async () => new Uint8Array(100) }), /isn't a zip/);
@@ -640,7 +640,7 @@ test("a running import keeps a record of its root until it ends, and the record 
   await until(() => d.storage.get("importRunning") === null, 5000, "cleared");
   assert.equal(seen[0].id, job);
   assert.equal(seen[0].root, null);
-  assert.ok(seen.some((r) => r && r.root === done.root), "the root is written down once it exists");
+  assert.ok(seen.some((r) => r && r.roots?.includes(done.root)), "the root is journaled before it is made");
   assert.equal(seen.at(-1), null);
 });
 

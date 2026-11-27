@@ -65,7 +65,7 @@ import { IMPORT_SEEDS, reconcileSeeds } from "./import/rebase";
 import { NotionLive, type SitesApi } from "./import/sources/notionLive";
 import { AgentDemos } from "./agentDemo";
 import { makeHandlers } from "./tools";
-import { WORKSPACE_JSON_MAX, fileRefsOfEntry, fileRefsOfState, parseWorkspaceJson } from "./pageShare";
+import { WORKSPACE_JSON_MAX, attachmentsOfEntry, attachmentsOfState, parseWorkspaceJson, type Attachments } from "./pageShare";
 
 export type Host = {
   files: FilesApi;
@@ -130,7 +130,6 @@ class View {
 
 const COLORS = ["#e03e3e", "#d9730d", "#dfab01", "#0f7b6c", "#0b6e99", "#6940a5", "#ad1a72", "#2f9e44", "#1c7ed6", "#e8590c", "#5f3dc4", "#c2255c"];
 const DEFAULT_NAME = "Someone";
-const IMPORT_QUIT_MS = 10_000;
 const IMPORT_DURABLE_MS = 5 * 60_000;
 const MAX_UPLOAD = 64 * 1024 * 1024;
 const MAX_UPLOADS_BYTES = 128 * 1024 * 1024;
@@ -371,9 +370,7 @@ export class Notes {
     if (this.stopped) return;
     this.stopped = true;
     for (const t of [this.lastPageTimer, this.workspacesTimer, this.presenceTimer, this.sweepTimer, this.pruneTimer]) if (t !== null) this.timers.clearTimeout(t);
-    let importDeadline: unknown = null;
-    await Promise.race([this.imports.stop(), new Promise<void>((resolve) => (importDeadline = this.timers.setTimeout(() => resolve(), IMPORT_QUIT_MS)))]);
-    this.timers.clearTimeout(importDeadline);
+    await this.imports.stop();
     await Promise.all(
       [...this.spaces.values()].map(async (space) => {
         for (const t of space.textTimers.values()) this.timers.clearTimeout(t);
@@ -1530,15 +1527,19 @@ export class Notes {
         throw error;
       }
     },
-    stopSharingPage: async ({ workspace }) => {
+    stopSharingPage: async ({ workspace, anyway }) => {
       const record = this.records.find((r) => r.id === workspace);
       if (!record?.root) throw new Error("That isn't a shared page.");
       if (!record.home || !this.spaces.has(record.home)) throw new Error("The private workspace it came from isn't on this Mac, so leave it instead.");
       const home = record.home;
       try {
-        const page = await this.withGates([workspace, home], () => this.stopSharingNow(workspace, home));
-        this.counts.bump("page_share_stops");
-        return { workspace: home, page };
+        const result = await this.withGates([workspace, home], () => this.stopSharingNow(workspace, home, anyway === true));
+        if (!result.stopped) {
+          this.counts.bump("page_share_blocked_missing");
+          return { workspace, page: result.page, stopped: false, missing: result.missing };
+        }
+        this.counts.bump(result.missing.length ? "page_share_stops_anyway" : "page_share_stops");
+        return { workspace: home, page: result.page, stopped: true, missing: result.missing };
       } catch (error) {
         this.counts.bump("page_share_failures");
         throw error;
@@ -1865,31 +1866,33 @@ export class Notes {
     }
   }
 
-  private async copyPageFiles(from: Space, to: Space, tree: Y.Doc, ids: string[], options: { complete?: boolean } = {}) {
-    const refs = new Set<string>();
+  private async copyPageFiles(from: Space, to: Space, tree: Y.Doc, ids: string[], options: { complete?: boolean } = {}): Promise<string[]> {
+    const refs: Attachments = new Map();
     for (const id of ids) {
-      fileRefsOfEntry(pagesOf(tree).get(id), refs);
-      fileRefsOfState(fullState(await this.docOf(from, `p-${id}`)), refs);
+      attachmentsOfEntry(pagesOf(tree).get(id), refs);
+      attachmentsOfState(fullState(await this.docOf(from, `p-${id}`)), refs);
     }
-    const missing: string[] = [];
+    const absent: string[] = [];
     const copies: { data: Uint8Array; ext: string }[] = [];
-    for (const sha of refs) {
+    for (const sha of refs.keys()) {
       if (await to.store.getFile(sha).catch(() => null)) continue;
       const found = await from.store.getFile(sha).catch(() => null);
       if (!found) {
-        missing.push(sha);
+        absent.push(sha);
         continue;
       }
       copies.push({ data: found.data, ext: found.name.slice(found.name.lastIndexOf(".") + 1) });
     }
-    if (options.complete && missing.length) {
-      const downloading = await from.store.filesDownloading(missing).catch(() => missing);
+    if (options.complete && absent.length) {
+      const state = await from.store.fileStates(absent).catch(() => null);
+      const downloading = state ? absent.filter((sha) => state.get(sha) === "downloading") : absent;
       if (downloading.length) throw new Error(`${downloading.length === 1 ? "An attachment" : `${downloading.length} attachments`} in the shared page ${downloading.length === 1 ? "is" : "are"} still downloading from iCloud, so sharing didn't stop. Try again once ${downloading.length === 1 ? "it's" : "they're"} down.`);
-      throw new Error(`${missing.length === 1 ? "An attachment" : `${missing.length} attachments`} in the shared page ${missing.length === 1 ? "isn't" : "aren't"} in its folder, so sharing didn't stop. Ask whoever added ${missing.length === 1 ? "it" : "them"} to open the page so ${missing.length === 1 ? "it" : "they"} upload again.`);
     }
-    for (const sha of missing) this.log("warn", `The attachment ${sha.slice(0, 12)} isn't here, so it didn't come along.`);
+    for (const sha of absent) this.log("warn", `The attachment ${sha.slice(0, 12)} isn't here, so it didn't come along.`);
     for (const copy of copies) await to.store.putFile(copy.data, copy.ext);
+    return absent.map((sha) => refs.get(sha) || `file ${sha.slice(0, 8)}`);
   }
+
 
   private async sharePageNow(workspace: string, page: string): Promise<string | null> {
     const folders = this.host.folders!;
@@ -1962,7 +1965,7 @@ export class Notes {
     }
   }
 
-  private async stopSharingNow(workspace: string, homeId: string): Promise<string> {
+  private async stopSharingNow(workspace: string, homeId: string, anyway: boolean): Promise<{ stopped: boolean; page: string; missing: string[] }> {
     const share = this.space(workspace);
     const home = this.space(homeId);
     const root = share.record.root!;
@@ -1987,7 +1990,8 @@ export class Notes {
     const rejected = new Set(share.store.rejected());
     if (ids.some((id) => rejected.has(`p-${id}`))) throw new Error("Part of the shared page couldn't be read, so sharing didn't stop.");
     if (share.store.waitingFor(["ws", ...ids.map((id) => `p-${id}`)]).length) throw new Error("Someone's latest edits to the shared page are still downloading from iCloud, so sharing didn't stop. Try again once they're down.");
-    await this.copyPageFiles(share, home, shareTree, ids, { complete: true });
+    const missing = await this.copyPageFiles(share, home, shareTree, ids, { complete: true });
+    if (missing.length && !anyway) return { stopped: false, page: root, missing };
     const incoming = new Map<string, Uint8Array>();
     for (const id of ids) {
       const shared = await this.docOf(share, `p-${id}`);
@@ -2017,7 +2021,7 @@ export class Notes {
     this.redirects.set(workspace, homeId);
     if (this.lastPage?.workspace === workspace) this.rememberPage(homeId, this.lastPage.page);
     await this.dropShare(share);
-    return root;
+    return { stopped: true, page: root, missing };
   }
 
   private async dropShare(space: Space) {

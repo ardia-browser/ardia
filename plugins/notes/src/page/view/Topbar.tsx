@@ -486,13 +486,20 @@ function PageShareBody({ workspace, page, onClose }: { workspace: WorkspaceInfo;
             onClick={async () => {
               if (!confirming) return setConfirming(true);
               onClose();
-              try {
-                const back = await app.client.call("stopSharingPage", { workspace: workspace.id });
-                toast(`“${displayTitle(root)}” is private again`);
-                if (app.route.kind === "page") app.openPage(app.route.page, { workspace: back.workspace, replace: true });
-              } catch (error) {
-                failed(error);
-              }
+              const stop = async (anyway: boolean) => {
+                try {
+                  const back = await app.client.call("stopSharingPage", { workspace: workspace.id, ...(anyway ? { anyway } : {}) });
+                  if (!back.stopped) {
+                    toast(`${back.missing.length === 1 ? "An attachment isn't" : `${back.missing.length} attachments aren't`} in the shared folder (${back.missing.slice(0, 3).join(", ")}${back.missing.length > 3 ? "…" : ""}), so sharing didn't stop.`, { label: "Stop sharing anyway", run: () => void stop(true) });
+                    return;
+                  }
+                  toast(back.missing.length ? `“${displayTitle(root)}” is private again, without ${back.missing.length === 1 ? "1 missing attachment" : `${back.missing.length} missing attachments`}` : `“${displayTitle(root)}” is private again`);
+                  if (app.route.kind === "page") app.openPage(app.route.page, { workspace: back.workspace, replace: true });
+                } catch (error) {
+                  failed(error);
+                }
+              };
+              await stop(false);
             }}
           >
             {confirming ? "Yes, stop sharing" : "Stop sharing"}

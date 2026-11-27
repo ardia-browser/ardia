@@ -5,6 +5,7 @@ import { parseMarkdown } from "../markdown";
 import { dirOf, joinPath, LinkIndex, stemOf } from "../resolve";
 import { decodeText, extOf, type Vfs } from "../vfs";
 import { parseDate, type Plan } from "../write";
+import { printOf } from "../rebase";
 import { parseCsv } from "./csv";
 
 const NOTION_ID = /\s+([0-9a-f]{32})$/i;
@@ -84,6 +85,7 @@ export async function notionPlan(vfs: Vfs): Promise<Plan> {
     return null;
   };
   let warnings = 0;
+  let complete = true;
   const dbColumns = new Map<string, string[]>();
   const dirsWithFiles = new Set<string>();
   for (const f of files) for (let d = dirOf(f.path); d; d = dirOf(d)) dirsWithFiles.add(d);
@@ -107,6 +109,7 @@ export async function notionPlan(vfs: Vfs): Promise<Plan> {
       rows = parseCsv(decodeText(await vfs.read(csv.path, IMPORT_LIMITS.textBytes)), IMPORT_LIMITS.rows + 1, IMPORT_LIMITS.columns);
     } catch {
       warnings++;
+      complete = false;
       continue;
     }
     const header = rows[0] ?? [];
@@ -125,14 +128,18 @@ export async function notionPlan(vfs: Vfs): Promise<Plan> {
     }
     const rowFiles = rowsDir === null ? [] : pages.filter((f) => dirOf(f.path) === rowsDir);
     const matched = matchRows(body.map((r) => (r[0] ?? "").trim() || "Untitled"), rowFiles.map((f) => f.path));
-    body.forEach((r, n) => {
-      const title = (r[0] ?? "").trim() || "Untitled";
-      const file = matched[n] ?? null;
-      const rowKey = file ? keyOf(file) : `${key}/#row${n}`;
+    const csvRows = body.map((r) => {
       const cells: Record<string, string> = {};
       names.forEach((name, i) => {
         if (i > 0) cells[name] = r[i] ?? "";
       });
+      return { title: (r[0] ?? "").trim() || "Untitled", cells };
+    });
+    const csvIds = rowIdentities(csvRows.map((row, n) => (matched[n] ? null : row)));
+    body.forEach((_r, n) => {
+      const { title, cells } = csvRows[n]!;
+      const file = matched[n] ?? null;
+      const rowKey = file ? keyOf(file) : `${key}/#row:${csvIds[n]}`;
       const row: ImportNode = { key: rowKey, parent: key, title, kind: "page", cells, path: file ?? csv.path, blocks: file ? undefined : [] };
       nodes.set(rowKey, row);
       if (file) index.addPage(row, [file, rowKey]);
@@ -153,6 +160,7 @@ export async function notionPlan(vfs: Vfs): Promise<Plan> {
     try {
       dom = parseDom(decodeText(await vfs.read(f.path, IMPORT_LIMITS.textBytes)));
     } catch {
+      complete = false;
       continue;
     }
     const table = find(dom, (n) => n.tag === "table" && (n.attrs.class ?? "").includes("collection-content"));
@@ -167,7 +175,7 @@ export async function notionPlan(vfs: Vfs): Promise<Plan> {
     db.blocks = undefined;
     nodes.set(key, db);
     index.addPage(db, [f.path, key]);
-    cellsOf.forEach((cells, n) => {
+    const htmlRows = cellsOf.map((cells) => {
       const first = cells[0];
       const link = first ? find(first, (x) => x.tag === "a") : null;
       let href = link?.attrs.href ?? "";
@@ -176,11 +184,16 @@ export async function notionPlan(vfs: Vfs): Promise<Plan> {
       } catch {}
       const file = href ? joinPath(dirOf(f.path), href) : null;
       const title = (first ? textContent(first).trim() : "") || "Untitled";
-      const rowKey = file && index.hasFile(file) ? keyOf(file) : `${key}/#row${n}`;
       const values: Record<string, string> = {};
       names.forEach((name, i) => {
         if (i > 0) values[name] = cells[i] ? textContent(cells[i]!).replace(/\s+/g, " ").trim() : "";
       });
+      return { file: file && index.hasFile(file) ? file : null, title, cells: values, link: file };
+    });
+    const htmlIds = rowIdentities(htmlRows.map((row) => (row.file ? null : row)));
+    htmlRows.forEach(({ file: linked, title, cells: values, link }, n) => {
+      const file = link;
+      const rowKey = linked ? keyOf(linked) : `${key}/#row:${htmlIds[n]}`;
       const row: ImportNode = { key: rowKey, parent: key, title, kind: "page", cells: values, path: file ?? f.path, blocks: rowKey.includes("/#row") ? [] : undefined };
       nodes.set(rowKey, row);
       if (file) index.addPage(row, [file, rowKey]);
@@ -223,6 +236,7 @@ export async function notionPlan(vfs: Vfs): Promise<Plan> {
     stableKey: (node) => notionStableKey(node.key),
     prefetch: vfs.prefetch ? (paths) => vfs.prefetch!(paths) : undefined,
     warnings,
+    complete,
   };
 }
 
@@ -230,12 +244,26 @@ const EXPORT_FOLDER = /^Export-[0-9a-f-]{8,}\//i;
 
 const exportRelative = (path: string) => path.replace(EXPORT_FOLDER, "");
 
+export function rowIdentities(rows: ({ title: string; cells: Record<string, string> } | null)[]): string[] {
+  const titles = new Map<string, number>();
+  for (const row of rows) if (row) titles.set(row.title, (titles.get(row.title) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return rows.map((row) => {
+    if (!row) return "";
+    if (titles.get(row.title) === 1) return `t-${printOf(row.title)}`;
+    const content = `c-${printOf(JSON.stringify([row.title, Object.entries(row.cells).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))]))}`;
+    const n = seen.get(content) ?? 0;
+    seen.set(content, n + 1);
+    return n ? `${content}-${n}` : content;
+  });
+}
+
 export function notionStableKey(key: string): string | null {
   if (key === "empty") return null;
-  const row = /^(.*)\/#row(\d+)$/.exec(key);
+  const row = /^(.*)\/#row(?::([a-z0-9-]+)|(\d+))$/.exec(key);
   if (row) {
     const table = notionStableKey(row[1]!);
-    return table ? `${table}:row${row[2]}` : null;
+    return table ? (row[2] ? `${table}:row:${row[2]}` : `${table}:row${row[3]}`) : null;
   }
   const id = NOTION_ID.exec(stemOf(key))?.[1];
   return id ? id.toLowerCase() : `path:${exportRelative(key)}`;

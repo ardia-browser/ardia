@@ -59,7 +59,7 @@ export type Ops = {
   joinSharedWorkspace: { args: Record<string, never>; value: WorkspaceInfo | null };
   shareWorkspace: { args: { workspace: WorkspaceId }; value: { ok: boolean } };
   sharePage: { args: { workspace: WorkspaceId; page: PageId }; value: { workspace: WorkspaceInfo; invited: boolean } | null };
-  stopSharingPage: { args: { workspace: WorkspaceId }; value: { workspace: WorkspaceId; page: PageId } };
+  stopSharingPage: { args: { workspace: WorkspaceId; anyway?: boolean }; value: { workspace: WorkspaceId; page: PageId; stopped: boolean; missing: string[] } };
   renameWorkspace: { args: { workspace: WorkspaceId; name: string; icon?: string }; value: null };
   leaveWorkspace: { args: { workspace: WorkspaceId }; value: null };
   openUrl: { args: { url: string }; value: null };

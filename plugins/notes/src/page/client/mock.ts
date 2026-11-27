@@ -707,7 +707,7 @@ export function createMockClient(options: MockOptions = {}): NotesClient & { int
       }
       setWorkspaces(workspaces.filter((w) => w.id !== workspace));
       counts.page_share_stops = (counts.page_share_stops ?? 0) + 1;
-      return { workspace: share.home, page: share.root };
+      return { workspace: share.home, page: share.root, stopped: true, missing: [] };
     },
     renameWorkspace: ({ workspace, name, icon }) => {
       metaOf(tree(workspace)).set("name", name);

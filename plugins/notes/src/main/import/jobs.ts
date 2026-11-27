@@ -208,13 +208,19 @@ export class Imports {
     const record = runningRecord(await this.deps.host.storage.get(RUNNING_IMPORT_KEY));
     if (!record) return;
     const now = this.deps.now();
+    let cleaned = true;
     const job: ImportJob = { id: record.id, source: record.source, workspace: record.workspace, state: "failed", files: 0, filesDone: 0, pages: 0, databases: 0, attachments: 0, skipped: 0, current: "", error: INTERRUPTED_IMPORT, startedAt: record.startedAt, finishedAt: now };
     try {
       const sink = await this.deps.target(record.workspace);
       const made = this.interruptedRoots(sink.tree, record);
       for (const root of made) archivePage(sink.tree, root, sink.by, now);
       if (made.length) {
-        await sink.flush();
+        try {
+          await sink.flush();
+        } catch (error) {
+          cleaned = false;
+          throw error;
+        }
         job.root = made[0];
       }
       this.deps.log("info", `import ${record.source}: an import that stopped with Notes was ${made.length ? "moved to the trash" : "marked failed"}`);
@@ -223,7 +229,7 @@ export class Imports {
         this.jobs.set(record.id, { job, cancelled: false });
         this.latest ??= record.id;
       }
-      await this.deps.host.storage.set(RUNNING_IMPORT_KEY, null);
+      if (cleaned) await this.deps.host.storage.set(RUNNING_IMPORT_KEY, null);
       await this.count(job).catch(() => undefined);
     }
   }
@@ -266,7 +272,6 @@ export class Imports {
       r.cancelled = true;
       r.quit = true;
     }
-    await Promise.all(active.map((r) => r.done?.catch(() => undefined)));
     await this.recordWrites;
   }
 
@@ -423,17 +428,17 @@ export class Imports {
   private async run(running: Running, input: Input, title: string) {
     const { job } = running;
     const spool = storeSpool(ardiaFileStore(this.deps.host.files, "data", "import-spool"), job.id);
-    let root: string | null = null;
     let roots: string[] = [];
     let sink: Sink | null = null;
     let keepRecovery = false;
-    const madeRoots = (made: string[]) => {
-      roots = made;
-      if (made.length) void this.remember({ id: job.id, source: job.source, workspace: job.workspace, root: null, roots: made, title: `${title} import`, startedAt: job.startedAt });
+    const journal = async (made: string[]) => {
+      roots = [...new Set([...roots, ...made])];
+      if (!made.length) return;
+      await this.remember({ id: job.id, source: job.source, workspace: job.workspace, root: null, roots, title: `${title} import`, startedAt: job.startedAt });
     };
     try {
       if (input.records || (job.source === "notion" && recordsFileIn(input.vfs) === RECORDS_FILE)) {
-        roots = await this.runRecords(running, input, (s) => (sink = s), madeRoots);
+        await this.runRecords(running, input, (s) => (sink = s), journal);
         return;
       }
       const vfs = await LayeredVfs.build(input.vfs, input.access, spool, (path) => {
@@ -447,7 +452,7 @@ export class Imports {
       if (recordsPath) {
         const base = recordsPath.slice(0, Math.max(0, recordsPath.length - RECORDS_FILE.length - 1));
         const text = new TextDecoder().decode(await vfs.read(recordsPath, IMPORT_LIMITS.jsonBytes));
-        roots = await this.runRecords(running, { ...input, records: { records: readRecordsJson(text), reader: vfsReader(vfs, base) } }, (s) => (sink = s), madeRoots);
+        await this.runRecords(running, { ...input, records: { records: readRecordsJson(text), reader: vfsReader(vfs, base) } }, (s) => (sink = s), journal);
         return;
       }
       const plan = input.notesApp ? await appleNotesPlan(input.notesApp) : await planFor(job.source, vfs);
@@ -473,10 +478,7 @@ export class Imports {
         this.deps.now(),
         {
           sync: job.source === "notion" ? { workspace: job.workspace, candidates: readImports(target.tree) } : undefined,
-          onRoot: (page) => {
-            root = page;
-            void this.remember({ id: job.id, source: job.source, workspace: job.workspace, root: page, title: `${title} import`, startedAt: job.startedAt });
-          },
+          journal,
         },
       );
       if (result.recordId) {
@@ -499,7 +501,7 @@ export class Imports {
         job.error = error instanceof ImportError ? error.message : `The import stopped: ${error instanceof Error ? error.message : String(error)}`.slice(0, 400);
         this.deps.log("warn", `import ${job.source}: ${String(error)}`);
       }
-      const made = roots.length ? roots : root ? [root] : [];
+      const made = roots;
       const target = sink as Sink | null;
       if (made.length && target && !running.quit) {
         try {
@@ -519,7 +521,7 @@ export class Imports {
     }
   }
 
-  private async runRecords(running: Running, input: Input, onSink: (sink: Sink) => void, onRoots: (roots: string[]) => void): Promise<string[]> {
+  private async runRecords(running: Running, input: Input, onSink: (sink: Sink) => void, journal: (ids: string[]) => Promise<void>): Promise<string[]> {
     const { job } = running;
     let records = input.records;
     if (!records) {
@@ -546,7 +548,7 @@ export class Imports {
         job.filesDone = p.done;
         job.files = p.total;
       },
-      onRoots,
+      journal,
     });
     recordImport(sink.tree, { id: recordId, source: job.source, at: this.deps.now(), roots: result.roots, pages: result.pageIds, by: sink.by, files: result.files });
     await sink.flush();

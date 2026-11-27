@@ -145,10 +145,14 @@ leave, but not move or trash the shared root. For a shared page the popover show
 (owner, confirmed inline) or **Leave**, and Copy link; the workspace move options stay below "Share this page" for
 private pages.
 
-**Stop sharing** (`stopSharingPage`, `stopSharingNow`) takes both locks, rescans and loads the whole share, and refuses
-when someone's latest document files or any attachment the pages use are still iCloud placeholders (the share and its
-grant stay, and the error says it's still downloading), when an attachment is missing from the folder, when part
-of it was set aside for size, when the private copy of a page has anything the shared one lacks (the merged result is
+**Stop sharing** (`stopSharingPage`, `stopSharingNow`) takes both locks, needs a rescan whose listing succeeds, loads
+the whole share, and refuses while someone's latest document files are unread: an iCloud placeholder, or a snapshot or
+log whose pointer reads but whose pieces don't yet (the store keeps these as unread until one whole read). Attachments
+come from structured fields only (`url`, `icon`, `cover`, `src` attributes and file properties, `pageShare.ts`), never
+text that looks like `file:<sha>`. One still downloading refuses with a "still downloading" error; one missing or
+damaged answers `{ stopped: false, missing: [names] }` with the share left in place, and the popover's toast offers
+**Stop sharing anyway** (`anyway: true`), which detaches with everything else and lists what didn't come back. It also
+refuses when part of it was set aside for size, when the private copy of a page has anything the shared one lacks (the merged result is
 compared before anything is applied), or when a page others added reuses the id of a live private page. It copies the
 attachments, applies the shared state to the private docs, waits until they're on disk and reads them back in a fresh
 store, then puts the tree entries back (the root where the link was, pages others added included, strays at the
@@ -221,11 +225,16 @@ Logseq, Bear, Evernote, Apple Notes exports, Roam, Google Keep, Joplin, Simpleno
 mentions, files through `putFile` (deduplicated by sha256), CSV databases with typed properties. Main yields between
 pages so the workspace stays responsive; a cancelled or failed import moves its root to the trash. An import reports
 done only once every page it wrote is on disk (`flushDurable` of the docs it touched, within `durableTimeoutMs`);
-otherwise it fails and keeps its recovery record. Quitting cancels a running import, waits for it (up to 10 s), keeps
-the record, and the next start moves what it made (every root, records imports included) to the trash. Notion also imports
+otherwise it fails and keeps its recovery record. The `flushDurable` deadline starts before its writes do. Before an
+import makes a page whose parent isn't new (its root on a first import, a new page under the kept root on a re-import),
+it writes that id into the recovery record (`importRunning.roots`) and waits for it; a failure or cancel trashes those,
+and the record is cleared only once that cleanup is on disk. Quitting cancels the import and returns at once (the
+plugin host gives a plugin 1 s in all); the next start trashes everything the record lists. Notion also imports
 straight from the account (`sources/notionLive.ts`, the `NotionDetail` panel in `page/import/NotionSource.tsx`) by
 reading the workspace's records, never through Notion's export (its export tasks only email a link, and its export API
-is admin-only). When `ardia.sites.available()` says Ardia lends Notes the user's sign-in (only for Ardia's own official
+is admin-only). When Ardia reports sites unavailable or `unsupported` (as it does for every plugin until the engine fix),
+the panel is the export flow with "Live import from Notion is coming soon — import a Notion export instead.", and Notes
+calls nothing more and doesn't retry. When `ardia.sites.available()` says Ardia lends Notes the user's sign-in (only for Ardia's own official
 plugins; otherwise the panel is the plain export-file flow) and the user is signed in to Notion in Ardia, every call
 of a crawl runs in one `ardia.sites.session()` on the origin `getSpaces` answered from (`app.notion.com`, then
 `www.notion.so`), which lists the account and its workspaces (guests and workspaces whose admins turned exporting off
@@ -251,19 +260,28 @@ record that holds it.
 **Importing Notion again.** A Notion page gets one id whatever the format: the zip id
 (`notion-export:<workspace>:<32-hex id>`, `src/main/import/notionIds.ts`), and an older records id
 (`notion:<workspace>:<dashed id>`) is recognised and kept, so a records import then a zip (or the reverse) updates one
-page. A zip's first import gets a root id from its top pages, and a new page's body is written as a Yjs update from a
-client id derived from the page and its exact content (`seedBody`), so two Macs importing the same export for the first
-time merge into one root and one body. Each imported page keeps, in its tree entry's `imported` map, prints of what the
+page. A zip's first import gets a root id from its top pages. A first body is written with the Mac's own Yjs client
+and recorded in the doc's `importSeeds` map (the new group's item id and its print); after a merge, untouched copies
+with the same print keep the lowest seed id and the rest are deleted (`reconcileSeeds`, run when a page loads and after
+every remote update), so two Macs importing the same version at once end with one body, and an edited copy is never
+dropped. Database views are stored by id in `viewsById` (the old `views` array is still read), so concurrent first
+imports can't make two entries for one view. Table rows without a Notion id are keyed by their title, or by their title
+and cells when titles repeat, never by position. Each imported page keeps, in its tree entry's `imported` map, prints of what the
 import last wrote: its body (`bodyPrint`, ignoring block ids, default attributes and trailing empty paragraphs), its
 title, icon, cover and other page settings, its place, its trash state and each row property (`src/main/import/rebase.ts`).
 On the next import a value the source didn't change is left as it is here; a source change applies when the value here
 is still what was imported, and when both changed the local value stays and the page counts as a conflict
 (`job.conflicts`, shown as "N pages kept your edits", counted as `<source>.conflicts` in `importStats`). A page whose
-file fails to read is skipped and keeps its body. Pages from an earlier import that hold no prints yet count as a
-conflict once if their body differs from the source, and keep theirs; their title and settings take the source, as before. Pages missing from an export are trashed only
-when the result is complete: not past the 20,000-page limit, and for a crawl not in a collection whose rows stopped
-early or under a record it skipped. Attachments are looked up by the path they resolve to, and a records file is
-reused without reading only when its `version` matches the last import. Tests: `tests/review6.test.mjs`.
+file fails to read is skipped and keeps its body, as does a page whose blocks a partial crawl didn't read. A body cleared
+here is a local edit like any other. A value with no print yet (a page from an earlier import, or a setting another
+format never wrote) keeps the local value when it differs and counts a conflict once, then records the source's print.
+A records database is rebuilt in a scratch doc and merged column by column, view by view and setting by setting with
+the same rule (`mergeDatabase.ts`): columns and views added here stay, and a column of the same name from the other
+format is adopted rather than duplicated. Pages missing from an export are trashed only when the result is complete:
+not past the 20,000-page limit, no table or page that failed to read, and for a crawl not under a row of a collection
+whose rows stopped early or under a record it skipped. Attachments are looked up by the path they resolve to, and a records file is
+reused without reading only when its `version` matches the last import. Tests: `tests/review6.test.mjs`,
+`tests/review8.test.mjs`.
 
 Tests: `tests/notionLive.test.mjs` (a fake
 Notion host: pagination, 429, cancel, the budget, both origins, the read-only allowlist). Fixtures and tests:

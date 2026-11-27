@@ -867,6 +867,8 @@ class Smoke {
     }
     const launcher = await readFile(join(stage, "usr/bin/ardia"), "utf8").catch(() => "");
     if (!launcher.includes('exec "/usr/lib/ardia/ardia-launch"')) problems.push(`the staged launcher does not exec /usr/lib/ardia/ardia-launch: ${JSON.stringify(launcher)}`);
+    const compatibility = await readlink(join(stage, "usr/lib/ardia/chrome")).catch(() => null);
+    if (compatibility !== "ardia") problems.push(`the staged usr/lib/ardia/chrome is not a link to ardia: ${JSON.stringify(compatibility)}`);
     for (const name of DESKTOP_ENTRIES) {
       const desktop = await readFile(join(stage, "usr/share/applications", name), "utf8").catch(() => "");
       if (!/^Exec=\/usr\/bin\/ardia /m.test(desktop)) problems.push(`the staged ${name} does not run /usr/bin/ardia`);

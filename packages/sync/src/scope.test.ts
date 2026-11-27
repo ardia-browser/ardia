@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Clock } from "./hlc.ts";
-import { compact, restoreJournal, syncScope } from "./scope.ts";
+import { compact, restoreJournal, startRebase, syncScope } from "./scope.ts";
 import { emptyScope, type Adapter, type Listing, type LogFile, type ScopeOptions, type ScopeState, type Transport } from "./scopeState.ts";
 
 type Entry = { payload: string; hiddenFrom: Set<string>; partialFor: Set<string>; at: number };
@@ -674,3 +674,119 @@ for (const arrival of ["in order", "shuffled"]) {
     assert.ok(scanned < 20 * count, `${scanned} list entries scanned`);
   });
 }
+
+test("a joining scope stays joining while a file from another device is still downloading, so its own choices don't write over what that file holds", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  await a.sync();
+  a.settings.set("set:theme", "dark");
+  await a.sync();
+  const later = [...folder.scope("s").keys()].at(-1)!;
+  const b = new Device("b", folder);
+  b.state.awaitRemote = true;
+  b.settings.set("set:theme", "light");
+  folder.scope("s").get(later)!.hiddenFrom.add("b");
+  await b.sync();
+  assert.equal(b.store.get("x:1"), "one", "what has arrived is applied");
+  assert.equal(b.state.joined, false, "the scope waits for the file still downloading");
+  assert.equal(b.state.pending, 1);
+  folder.scope("s").get(later)!.hiddenFrom.delete("b");
+  await b.sync();
+  assert.equal(b.state.joined, true);
+  assert.equal(b.settings.get("set:theme"), "dark", "joining takes the setting from the file that came in late");
+  await a.sync();
+  assert.equal(a.settings.get("set:theme"), "dark", "and the first device's setting doesn't drift to the joining one's");
+});
+
+test("a joining scope whose file never finishes downloading joins once that file stops holding anything back", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  await a.sync();
+  a.settings.set("set:theme", "dark");
+  await a.sync();
+  const later = [...folder.scope("s").keys()].at(-1)!;
+  folder.scope("s").get(later)!.hiddenFrom.add("b");
+  const b = new Device("b", folder);
+  b.state.awaitRemote = true;
+  await b.sync();
+  assert.equal(b.state.joined, false);
+  folder.now += 86_400_001;
+  await b.sync();
+  assert.equal(b.state.joined, true, "a download that never lands stops holding the join back after a day");
+});
+
+class SessionDevice extends Device {
+  override adapters(): Adapter[] {
+    return super.adapters().map((adapter) => (adapter.prefix === "x:" ? { ...adapter, sessionBacked: true } : adapter));
+  }
+}
+
+test("a rebase after the local data went back in time publishes no deletions, takes what's synced and still sends what's only here", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  a.store.set("x:2", "two");
+  a.store.set("x:3", "three");
+  a.store.set("x:5", "five");
+  await a.sync();
+  const b = new SessionDevice("b", folder);
+  await b.sync();
+  assert.deepEqual([...b.store.keys()].sort(), ["x:1", "x:2", "x:3", "x:5"]);
+  a.store.delete("x:5");
+  a.store.set("x:1", "one, renamed");
+  await a.sync();
+
+  b.store = new Map<string, unknown>([["x:1", "one"], ["x:5", "five"], ["x:4", "four"]]);
+  startRebase(b.state);
+  await b.sync();
+  assert.equal(b.state.rebase, undefined, "the rebase ends once the scope applied");
+  assert.deepEqual(Object.fromEntries([...b.store].sort()), { "x:1": "one, renamed", "x:2": "two", "x:3": "three", "x:4": "four" }, "the synced data comes back, a deletion made elsewhere still applies, and what's only here stays");
+
+  await a.sync();
+  assert.deepEqual(Object.fromEntries([...a.store].sort()), { "x:1": "one, renamed", "x:2": "two", "x:3": "three", "x:4": "four" }, "the other device loses nothing and gets the new item");
+
+  b.store.delete("x:2");
+  await b.sync();
+  await a.sync();
+  assert.equal(a.store.has("x:2"), false, "after the rebase a deletion made here goes out as before");
+});
+
+test("without a rebase the same stale local data would publish deletions, which is what the rebase prevents", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  a.store.set("x:2", "two");
+  await a.sync();
+  const b = new SessionDevice("b", folder);
+  await b.sync();
+  b.store = new Map();
+  await b.sync();
+  await a.sync();
+  assert.equal(a.store.size, 0, "a three-way sync reads the missing items as deleted here");
+});
+
+test("a rebase leaves adapters that don't read the session alone, and stays on for one that couldn't apply yet", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.settings.set("set:theme", "dark");
+  await a.sync();
+  let ready = false;
+  const b = new Device("b", folder);
+  const own = b.adapters();
+  b.adapters = () => [
+    { ...own[0]!, sessionBacked: true, apply: (visible, changed, base, records) => (ready ? own[0]!.apply(visible, changed, base, records) : false) },
+    own[1]!,
+  ];
+  await b.sync();
+  b.store.set("x:9", "nine");
+  startRebase(b.state);
+  await b.sync();
+  assert.deepEqual(b.state.rebase, [], "the session-backed adapter couldn't apply, so the rebase waits for it");
+  ready = true;
+  await b.sync();
+  assert.equal(b.state.rebase, undefined);
+  await a.sync();
+  assert.equal(a.store.get("x:9"), "nine");
+});

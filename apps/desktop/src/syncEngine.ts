@@ -369,7 +369,7 @@ function refreshSendTargets() {
 
 export const onTabsReceived = engine.onTabsReceived;
 export const takeSnapshotWrites = engine.takeSnapshotWrites;
-export const takeOpenTabSyncCounts = engine.takeOpenTabSyncCounts;
+export const takeSyncDataCounts = engine.takeSyncDataCounts;
 export { whenSyncCore } from "./hostSync.ts";
 
 export function sendTargets(profileId: string): SendTarget[] {

@@ -35,6 +35,7 @@ export type ScopeState = {
   seen: Record<string, number>;
   joined: boolean;
   awaitRemote?: boolean;
+  rebase?: string[];
   applyAs?: Record<string, "joined" | "joining">;
   applying?: ApplyBatch[];
   snapshotAt: number;
@@ -103,6 +104,7 @@ export interface Adapter {
   editedAt?(value: unknown): number | undefined;
   extractsOnlyFrom?(): object | undefined;
   adoptRemoteOnJoin?: boolean;
+  sessionBacked?: boolean;
   publishAfterPull?: boolean;
   extractUsesBase?: boolean;
   savesWhole?: boolean;

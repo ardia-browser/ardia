@@ -15,6 +15,8 @@ import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { removedRecordKeys } from "./profileRemoval";
 import { alsoDeleting, removedDeviceKeys } from "./deviceRemoval";
 
+const fromSession = (adapter: Adapter): Adapter => ({ ...adapter, sessionBacked: true });
+
 export const deviceName = () => SyncNative?.deviceName() ?? `This ${PLATFORM_TERMS.computerTitle}`;
 
 const passwordAdapters = new Map<string, (forced: boolean) => Adapter>();
@@ -53,12 +55,12 @@ export function appAdapters(doc: SyncDoc, retiring: boolean): Adapter[] {
   const enabledLinks = () => Object.fromEntries(Object.entries(doc.profiles).filter(([, l]) => l.enabled));
   const removed = () => removedRecordKeys(doc);
   return [
-    ...(doc.types.settings ? [inTodaysNames(settingsAdapter)] : []),
+    ...(doc.types.settings ? [fromSession(inTodaysNames(settingsAdapter))] : []),
     sharedDataAdapter(() => doc.profiles, removed),
-    profilesAdapter(withSharedOwners(doc, enabledLinks), removed, () => doc.scopes[APP_SCOPE]?.records, enabledLinks),
-    profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed),
-    profileTopAppsAdapter(enabledLinks, removed),
-    profileOpenTabsAdapter(enabledLinks, removed),
+    fromSession(profilesAdapter(withSharedOwners(doc, enabledLinks), removed, () => doc.scopes[APP_SCOPE]?.records, enabledLinks)),
+    fromSession(profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed)),
+    fromSession(profileTopAppsAdapter(enabledLinks, removed)),
+    fromSession(profileOpenTabsAdapter(enabledLinks, removed)),
     alsoDeleting(deviceAdapter(id, deviceName, false, () => syncedProfileOrder(enabledLinks())), () => removedDeviceKeys(doc)),
   ];
 }
@@ -95,7 +97,7 @@ export function profileAdapters(doc: SyncDoc, profileId: string, retiring: boole
   const mode = openTabsMode(doc, profileId);
   const openTabs = openTabsAdapters(profileId, state, mode, openTabCloses(doc, scope), flag);
   return [
-    ...(synced("pinned") ? pinnedAreaAdapters(profileId, openTabsPinPageWrites(profileId, state, mode, flag)) : []),
+    ...(synced("pinned") ? pinnedAreaAdapters(profileId, openTabsPinPageWrites(profileId, state, mode, flag)).map(fromSession) : []),
     ...openTabs,
     ...(synced("bookmarks") ? [inTodaysNames(bookmarksAdapter(profileId))] : []),
     ...(synced("history") ? [inTodaysNames(historyAdapter(profileId))] : []),

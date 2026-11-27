@@ -175,6 +175,8 @@ function assignPositions(existing                        )           {
 });
 __define("packages/sync/src/scope.ts", function (exports, __require) {
   __export(exports, "ingestSnapshot", () => ingestSnapshot);
+  __export(exports, "startRebase", () => startRebase);
+  __export(exports, "rebasing", () => rebasing);
   __export(exports, "flush", () => flush);
   __export(exports, "restoreJournal", () => restoreJournal);
   __export(exports, "writtenSeq", () => writtenSeq);
@@ -271,8 +273,20 @@ function noteExtracted(state            , adapter         , source              
   byPrefix.set(adapter.prefix, { source, baseWrites: baseWritesUnder(state, adapter.prefix), joined: state.joined });
 }
 
+const startRebase = (state            ) => void (state.rebase = []);
+
+const rebasing = (state            , adapter         ) => !!state.rebase && !!adapter.sessionBacked && !state.rebase.includes(adapter.prefix);
+
+function noteRebased(state            , adapter         , adapters           ) {
+  if (!rebasing(state, adapter)) return;
+  for (const key of baseKeysWith(state, adapter.prefix)) if (!(key in state.records)) dropBase(state, key);
+  state.rebase .push(adapter.prefix);
+  if (!adapters.some((a) => rebasing(state, a))) delete state.rebase;
+}
+
 async function changesOf(state            , adapter         , now        , options               = {}) {
   if (adapter.adoptRemoteOnJoin && !state.joined) return null;
+  const adopting = rebasing(state, adapter);
   const source = adapter.extractsOnlyFrom?.();
   if (unchangedSinceExtracted(state, adapter, source)) return { changes: [], settle: undefined, source: undefined };
   let pending                     = null;
@@ -289,10 +303,11 @@ async function changesOf(state            , adapter         , now        , optio
     if (value === null || value === undefined) throw new Error(`[sync] ${key}: a live value can't be null`);
     const json = knownJson?.(key, value) ?? canonical(value);
     if (unsettled?.get(key)?.has(json)) return;
+    if (adopting && key in state.records) return;
     if (state.base[key] === json && (!republish?.(key) || awaitsRecovery(state, key))) return;
     changes.push({ key, value, json });
   });
-  const keys = baseKeysWith(state, adapter.prefix);
+  const keys = adopting ? [] : baseKeysWith(state, adapter.prefix);
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i] ;
     if (!(key in state.base) || values.has(key) || ignore?.(key) || unsettled?.get(key)?.has("null")) continue;
@@ -496,6 +511,7 @@ async function syncScope(args
   const changed = await pull(state, transport, scope, clock, now(), options);
   const held = holdsBack(state, now(), options?.damagedGiveUp ?? DEFAULTS.damagedGiveUp);
   const keys = new Set([...state.unapplied, ...changed]);
+  for (const adapter of adapters) if (rebasing(state, adapter)) for (const key of Object.keys(state.records)) if (key.startsWith(adapter.prefix)) keys.add(key);
   const unapplied           = [];
   let heldApply = false;
   let journalFailed = false;
@@ -517,12 +533,13 @@ async function syncScope(args
     heldApply ||= !!ahead?.failed;
     const applied = !heldApply && !cancelled && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld, deferred));
     finishBatch(ahead?.batch ?? null, applied, options);
+    if (applied && !deferred.size) noteRebased(state, adapter, adapters);
     heldApply ||= applyHeld();
     if (!applied) for (const key of keys) if (key.startsWith(adapter.prefix)) unapplied.push(key);
     if (applied) for (const key of deferred) unapplied.push(key);
   }
   state.unapplied = [...unapplied, ...[...keys].filter((k) => !adapters.some((a) => k.startsWith(a.prefix)))];
-  if (!heldApply && (!state.awaitRemote || Object.keys(state.seen).some((d) => d !== device))) {
+  if (!heldApply && (!state.awaitRemote || (!held && Object.keys(state.seen).some((d) => d !== device)))) {
     state.joined = true;
     delete state.awaitRemote;
   }
@@ -1189,6 +1206,7 @@ __define("packages/sync/src/scopeState.ts", function (exports, __require) {
                                
                   
                         
+                    
                                                  
                           
                      
@@ -1257,6 +1275,7 @@ const emptyScope = ()             => ({
                                                 
                                           
                               
+                          
                              
                             
                        

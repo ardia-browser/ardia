@@ -195,7 +195,26 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   but gone locally is a local deletion. Remote changes are applied only over keys with no
   unpublished edits. Each adapter publishes and then applies, with no wait in between, so an
   edit made while files were being read wins and isn't overwritten (tested).
-- **Joining.** Local data is published before remote data is applied, so joining is a union: no
+- **Rebase when the session went back in time** (#1577). The base lives in `sync.json` and the data it
+  describes partly in `session.json` (pins, settings, profiles and their looks), so a session restored from
+  a backup, an older build's own session file or a fresh start leaves the base ahead of the store, and the
+  three-way rule would read every pin the session lacks as deleted here and delete it on every Mac. Each
+  launch writes a new mark to both files (`syncMark` in the session, `sessionMark` in `sync.json`); when
+  they differ at launch, every scope starts a rebase (`startRebase`). While an adapter that reads the
+  session (`sessionBacked`: the pinned area, settings and the profile, theme, Top Apps and All Open Tabs
+  records) rebases, it publishes only keys no device has a record of and no deletions, and the cycle applies
+  every record it has, tombstones included, so the store takes the synced state back. The rebase ends for an
+  adapter once it applied without deferring, and for the scope once every session-backed adapter has.
+  Bookmarks, history, passwords and extensions live in Chrome's own files and aren't affected; open tabs
+  already send only closes made here. A mark that differs only because a save didn't land before a crash
+  costs one rebase and loses nothing (tested in `packages/sync/src/scope.test.ts` and
+  `state/sync/syncDataLoss.test.mjs`).
+- **Joining.** A scope set to wait for the other devices (`awaitRemote`: the app scope of a Mac
+  that connected with a recovery phrase, and each profile scope it paired) joins once it has read
+  a file from another device and nothing in it is still downloading or damaged, or a day after
+  that held it back (#1945; before, the first file from another device was enough, so a Mac whose
+  iCloud Drive was still downloading published its own settings, colours and switches over the
+  ones still on their way). Local data is published before remote data is applied, so joining is a union: no
   local bookmark, visit or password is lost. Settings and profile names are the exception
   (`adoptRemoteOnJoin`): a joining Mac takes the synced values and doesn't publish its defaults
   until it has read another device's file (`awaitRemote`). Data that existed before sync was
@@ -278,10 +297,18 @@ Profiles).
     written its profiles yet, or while iCloud Drive was still downloading that file, used to pair with what it had
     read so far: Personal got an id of its own, received none of the other Mac's Personal data, and both Macs then
     offered the other's Personal as a new profile (#514). A day after joining it pairs with whatever it has, so a folder
-    whose other devices sync no profile doesn't keep it waiting. Until it pairs, no profile is offered to add. Known
-    residuals: once the default record is in, other profiles pair by name with what has arrived, even while a file
-    with a later profile is still downloading; and a Mac that paired early before this fix keeps its pairing, with two
-    default records left in the folder.
+    whose other devices sync no profile doesn't keep it waiting. Until it pairs, no profile is offered to add. Pairing
+    also waits while anything in the app scope is still downloading or damaged, even once the default record is in, so
+    a profile whose record is in a later file pairs by name instead of getting an id of its own and showing on the other
+    Mac as a second copy (#1945, tested in `state/sync/syncDataLoss.test.mjs`). A theme or preset picked on a profile
+    before it pairs is kept (`themesChosenWhileJoining`). Known residual: a Mac that paired early before these fixes
+    keeps its pairing, with two records left in the folder.
+- A profile missing from this Mac's session keeps its link (#1577): a build that reads an older or newer `session.json`
+  than the one sync last saw, or a session restored from a backup, can lack profiles `sync.json` still links. The link
+  stays, its scope is left alone, the profile is offered as Add to This Mac, and adding it gives it back its old id, so a
+  session that still has it lines up again. A link retires only when the profile is deleted on this Mac (the store's
+  `deleteProfile` tells the engine). Before, a missing profile was taken out of sync at once and came back under a new
+  sync id, a second copy on every Mac.
 - A synced profile this Mac lacks is offered as "Add to This Mac", with "Add All" when there are several.
 - Profiles that share another's data (Dia's "Share data with another profile") sync their tabs;
   the shared data syncs with the profile that owns it.

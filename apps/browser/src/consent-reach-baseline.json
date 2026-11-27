@@ -75,7 +75,6 @@
     "apps/browser/src/state/site/hiddenElements.ts": 1,
     "apps/browser/src/state/site/locationAccess.ts": 1,
     "apps/browser/src/state/site/siteControls.ts": 1,
-    "apps/browser/src/state/sync/engine.ts": 2,
     "apps/browser/src/state/tabs/manualSleep.ts": 1,
     "apps/browser/src/state/tabs/stripHover.ts": 1,
     "apps/browser/src/state/telemetry/defaultBrowserCounts.ts": 1,

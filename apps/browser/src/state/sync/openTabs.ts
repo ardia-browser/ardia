@@ -2,7 +2,7 @@ import { assignPositions, canonical, dropBase, putBase, recordsWith, type Adapte
 import { useBrowser, type BrowserState } from "../browser/store";
 import { pinKeyOf } from "../browser/model";
 import { fromSync } from "../pins/pinOrderChoices";
-import { noteOpenTabsPublished, noteOpenTabsWoke } from "../telemetry/openTabSyncCounts";
+import { noteOpenTabClosesSent, noteOpenTabsPublished, noteOpenTabsWoke } from "../telemetry/openTabSyncCounts";
 import { holdsOpenTabs, localOpenTabs, regularChain } from "./openTabsLocal";
 import { OPEN_GROUP, OPEN_TAB, OPEN_TABS, OPEN_TABS_ON, openGroupValue, openTabValue, openTabsOn, type OpenGroupValue, type OpenTabValue } from "./openTabRecords";
 import { applyOpenTabs } from "./openTabsApply";
@@ -137,7 +137,9 @@ function extractOpenTabs(profileId: string, state: ScopeState, closes: OpenTabCl
     published: (keys) => {
       const tabs = [...keys].filter((k) => k.startsWith(OPEN_TAB)).map((k) => k.slice(OPEN_TAB.length));
       noteOpenTabsPublished(tabs.length);
-      closes.settle(tabs.filter((key) => closed.has(key)));
+      const sent = tabs.filter((key) => closed.has(key));
+      noteOpenTabClosesSent(sent.length);
+      closes.settle(sent);
     },
   };
 }
@@ -148,7 +150,15 @@ function closesOnly(profileId: string, state: ScopeState, closes: OpenTabCloses,
   const closed = new Set(closes.keys());
   if (!closed.size) return null;
   const isClosed = (k: string) => k.startsWith(OPEN_TAB) && closed.has(k.slice(OPEN_TAB.length));
-  return { values: new Map(), ignore: (k) => !isClosed(k), published: (keys) => closes.settle([...keys].filter(isClosed).map((k) => k.slice(OPEN_TAB.length))) };
+  return {
+    values: new Map(),
+    ignore: (k) => !isClosed(k),
+    published: (keys) => {
+      const sent = [...keys].filter(isClosed).map((k) => k.slice(OPEN_TAB.length));
+      noteOpenTabClosesSent(sent.length);
+      closes.settle(sent);
+    },
+  };
 }
 
 function forget(state: ScopeState) {

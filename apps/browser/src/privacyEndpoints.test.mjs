@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { SYMBOL_NAMES } from "../../desktop/src/shims/web/symbols/data.ts";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const DOC = "docs/privacy.md";
@@ -48,6 +49,7 @@ const NOT_SHIPPED = [
 
 const RESERVED = /(^|\.)(example|test|invalid|localhost|local)$|^localhost$|^127(\.\d+){3}$|^0\.0\.0\.0$|^\[::1?\]$/i;
 const BUNDLE_IDS = new Set(["com.microsoft.edgemac.dev", "com.brave.browser.dev", "com.google.chrome.dev"]);
+const SYMBOLS = new Set(SYMBOL_NAMES);
 const URL_CANDIDATE = /\b(?:https?|wss?):\/\/[^\s"'`<>(){}\\|^]+/giu;
 const QUOTED_HOST = /["'`]((?:[a-z0-9-]+\.)+(?:com|net|org|dev|io|ai|so|tv|gov|edu|info|cloud|goog|app|xyz|site|online|tech|computer|services|network|systems|digital|blog|shop|biz|pro|cc|[a-z]{2}))["'`]/gi;
 const FILE_SUFFIX = /\.(js|db|gz|sh|nm|py|rb|ts|md|mm|cc|rs|xz|7z)$|^[^.]+\.app$/i;
@@ -99,7 +101,7 @@ function urlHost(text) {
 
 function hostsInText(text, native) {
   const fromUrls = [...text.matchAll(URL_CANDIDATE)].map((m) => urlHost(trimUrl(m[0]))).filter((host) => host !== null);
-  const quoted = native ? [...text.matchAll(QUOTED_HOST)].map((m) => m[1].toLowerCase()).filter((host) => !BUNDLE_IDS.has(host) && !FILE_SUFFIX.test(host)) : [];
+  const quoted = native ? [...text.matchAll(QUOTED_HOST)].map((m) => m[1].toLowerCase()).filter((host) => !BUNDLE_IDS.has(host) && !SYMBOLS.has(host) && !FILE_SUFFIX.test(host)) : [];
   return [...fromUrls, ...quoted].filter((host) => !RESERVED.test(host));
 }
 
@@ -184,6 +186,6 @@ test("the scan reads hosts the way URL does, brackets, encodings and native quot
     ['"https://intranet/x"', "intranet"],
   ];
   for (const [text, host] of cases) assert.deepEqual(hostsInText(text, false), [host], text);
-  assert.deepEqual(hostsInText('@"tracker.vendor.network" @"api.service.co.uk" @"Ardia.app" @"com.google.chrome.dev"', true), ["tracker.vendor.network", "api.service.co.uk"]);
+  assert.deepEqual(hostsInText('@"tracker.vendor.network" @"api.service.co.uk" @"Ardia.app" @"com.google.chrome.dev" symbol: "arrow.up.forward.app"', true), ["tracker.vendor.network", "api.service.co.uk"]);
   assert.deepEqual(hostsInText("`https://www.${input}.com` https://*.example.com https://127.0.0.1:8080/", false), []);
 });

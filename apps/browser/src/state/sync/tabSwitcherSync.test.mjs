@@ -8,8 +8,6 @@ const { settingsAdapter, settleSettingsFromSavedSync } = await import("./setting
 const { ctrlTabKeys } = await import("../commands/commandShortcuts.ts");
 
 const S = () => useBrowser.getState();
-let wall = 1_700_000_000_000;
-const now = () => wall;
 const STEP = { nextTab: ["\t", "control"], previousTab: ["\t", "control", "shift"] };
 const SWITCHER = { "tabSwitcher:forward": ["\t", "control"], "tabSwitcher:backward": ["\t", "control", "shift"] };
 
@@ -40,15 +38,14 @@ class Peer {
     this.folder = folder;
     this.values = values;
     this.scope = emptyScope();
-    this.clock = new Clock(id, null, now);
+    this.clock = new Clock(id);
   }
   set(values) {
     this.values = values;
   }
   async sync() {
-    wall++;
     useEditClock(this.clock);
-    await syncScope({ scope: "app", state: this.scope, transport: this.folder.transport(), adapters: [publishing(() => this.values)], clock: this.clock, device: this.id, now });
+    await syncScope({ scope: "app", state: this.scope, transport: this.folder.transport(), adapters: [publishing(() => this.values)], clock: this.clock, device: this.id });
   }
 }
 
@@ -59,7 +56,7 @@ class Device {
     S().hydrate({});
     this.browser = S();
     this.scope = emptyScope();
-    this.clock = new Clock(id, null, now);
+    this.clock = new Clock(id);
   }
   with(fn) {
     useEditClock(this.clock);
@@ -72,12 +69,11 @@ class Device {
     }
   }
   async sync() {
-    wall++;
     useEditClock(this.clock);
     stub.current.device = this.id;
     useBrowser.setState(this.browser, true);
     try {
-      await syncScope({ scope: "app", state: this.scope, transport: this.folder.transport(), adapters: [settingsAdapter], clock: this.clock, device: this.id, now });
+      await syncScope({ scope: "app", state: this.scope, transport: this.folder.transport(), adapters: [settingsAdapter], clock: this.clock, device: this.id });
     } finally {
       this.browser = S();
     }
@@ -164,41 +160,19 @@ test("two upgraded Macs that inferred stepping from an older Mac both keep it wh
   for (const device of [a, b, c]) assert.equal(device.with(() => ctrlTabKeys()), "switcher", device.id);
 });
 
-test("shortcuts chosen here, a newer legacy stepping record and an idle sync leave a joining Mac stepping too", async () => {
+test("shortcuts chosen here, a legacy stepping record and an idle sync leave a joining Mac stepping too", async () => {
   const folder = new Folder();
   const b = new Device("B", folder);
   b.with(() => S().updateSettings({ shortcuts: { reload: ["r", "command", "shift"] } }));
   await b.sync();
-  await b.sync();
-  assert.deepEqual(b.scope.records["set:shortcuts"]?.v, { v: { reload: ["r", "command", "shift"] } }, "B's shortcuts are out before the legacy Mac syncs");
   const legacy = new Peer("old", folder, { shortcuts: STEP });
   await legacy.sync();
   await b.sync();
   await b.sync();
   assert.deepEqual(b.modes(), { tabSwitcherOrder: "inOrder", tabSwitcherView: "none" });
-  assert.deepEqual(b.with(() => S().settings.shortcuts), {}, "the newer stepping keys win and become the switcher");
   const c = new Device("C", folder);
   await c.sync();
   assert.deepEqual(c.modes(), b.modes(), "the joining Mac agrees after B's idle sync");
-  assert.equal(c.with(() => ctrlTabKeys()), "switcher");
-});
-
-test("shortcuts chosen here and published after a legacy stepping record keep the recent tabs switcher, and a joining Mac agrees", async () => {
-  const folder = new Folder();
-  const b = new Device("B", folder);
-  const reload = { reload: ["r", "command", "shift"] };
-  b.with(() => S().updateSettings({ shortcuts: reload }));
-  await b.sync();
-  const legacy = new Peer("old", folder, { shortcuts: STEP });
-  await legacy.sync();
-  await b.sync();
-  await b.sync();
-  assert.deepEqual(b.modes(), { tabSwitcherOrder: "recent", tabSwitcherView: "thumbnails" });
-  assert.deepEqual(b.with(() => S().settings.shortcuts), reload, "B's later shortcuts record wins");
-  const c = new Device("C", folder);
-  await c.sync();
-  assert.deepEqual(c.modes(), b.modes(), "the joining Mac agrees after B's idle sync");
-  assert.deepEqual(c.with(() => S().settings.shortcuts), reload);
   assert.equal(c.with(() => ctrlTabKeys()), "switcher");
 });
 

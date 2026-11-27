@@ -462,7 +462,7 @@ BookmarksParse ParseNetscapeBookmarks(std::string_view bytes) {
         Node folder = std::move(*pending);
         pending.reset();
         open_folder(std::move(folder));
-      } else if (!saw_root_list && stack.size() == 1) {
+      } else if (!saw_root_list) {
         saw_root_list = true;
       } else {
         Node list;

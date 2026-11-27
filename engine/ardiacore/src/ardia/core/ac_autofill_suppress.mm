@@ -101,6 +101,11 @@ bool PasswordGenerationAllowed(
       frame ? content::WebContents::FromRenderFrameHost(frame) : nullptr);
 }
 
+bool PasswordSubmissionsPrompted(
+    const password_manager::PasswordManagerDriver* driver) {
+  return driver && !PasswordGenerationAllowed(driver);
+}
+
 }
 
 }
@@ -118,6 +123,8 @@ bool PasswordGenerationAllowed(
   g_ardia_password_filling_allowed = &ardiacore::PasswordFillingAllowed;
   password_manager::g_ardia_password_generation_allowed =
       &ardiacore::PasswordGenerationAllowed;
+  password_manager::g_ardia_password_submissions_prompted =
+      &ardiacore::PasswordSubmissionsPrompted;
   objc_setAssociatedObject(self, &ardiacore::kSuppressedAutofillKinds, kinds,
                            OBJC_ASSOCIATION_COPY_NONATOMIC);
 }

@@ -546,6 +546,23 @@ hook(["bool (*g_ardia_password_generation_allowed)(const PasswordManagerDriver*)
       "      !g_ardia_password_generation_allowed(driver_.get())) {\n"], edit, MAC_HOOKS)
 PY
 
+hook "$src/components/password_manager/core/browser/password_manager.cc" "PasswordManager submissions prompted" <<'PY'
+old_fn = "void PasswordManager::OnLoginSuccessful() {\n"
+decl = ("// Ardia: ArdiaCore (engine/ardiacore) has every submitted login offered through the prompt on a tab whose logins it\n"
+        "// claimed, so one Chrome's store already holds still reaches Apple Passwords and Chrome's store is left alone.\n"
+        "bool (*g_ardia_password_submissions_prompted)(const PasswordManagerDriver*) = nullptr;\n\n")
+old_check = "  if (ShouldPromptUserToSavePassword(*submitted_manager)) {\n"
+check = ("  // Ardia: ArdiaCore\n"
+         "  if (ShouldPromptUserToSavePassword(*submitted_manager) ||\n"
+         "      (g_ardia_password_submissions_prompted &&\n"
+         "       g_ardia_password_submissions_prompted(submitted_manager->GetDriver().get()))) {\n")
+def edit(s):
+    assert s.count(old_fn) == 1 and s.count(old_check) == 1
+    return s.replace(old_check, check).replace(old_fn, decl + old_fn)
+hook(["bool (*g_ardia_password_submissions_prompted)(const PasswordManagerDriver*) = nullptr;\n",
+      "       g_ardia_password_submissions_prompted(submitted_manager->GetDriver().get()))) {\n"], edit, MAC_HOOKS)
+PY
+
 hook "$src/content/browser/renderer_host/render_widget_host_view_base.cc" "RenderWidgetHostViewBase" <<'PY'
 old_fn = "void RenderWidgetHostViewBase::CopyBackgroundColorIfPresentFrom(\n"
 decl = ("// Ardia: ArdiaCore (engine/ardiacore) has a translucent page background.\n"

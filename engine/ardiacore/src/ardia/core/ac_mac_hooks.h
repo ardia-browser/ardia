@@ -26,6 +26,8 @@ extern bool (*g_ardia_password_filling_allowed)(content::WebContents* web_conten
 namespace password_manager {
 extern bool (*g_ardia_password_generation_allowed)(
     const PasswordManagerDriver* driver);
+extern bool (*g_ardia_password_submissions_prompted)(
+    const PasswordManagerDriver* driver);
 }
 
 #endif

@@ -9,6 +9,7 @@
 //   E4  a Release build ignores the fake-helper override: the fake never starts (needs --release)
 //   E8  on Apple Passwords, Chrome keeps its offer to save on but never shows its own password list over a sign-in field
 //   E8save on Apple Passwords, signing in in a Chromium tab still gives Chrome's pending save (the save prompt fires)
+//   E8kept the same with a login Ardia's own store already holds for the site: the prompt still offers Apple Passwords
 //   E5… the Login list in a WebKit tab (login-list.mjs), in one paired instance shared by those checks; E15 ends the
 //       fake's Pairing and pairs again from the Login list, leaving that instance paired; E34-E38 filter it as you type
 //       on filter.localhost's /login-ready (its Sign in button is enabled and submit is recorded, not sent), and E37
@@ -361,6 +362,24 @@ const CHECKS = {
     const prompt = await until(passwordPromptOf(tab.tabId), (v) => v?.state === "save", 20_000);
     assert(prompt.username === login.username, "Chrome holds the submitted login for the save prompt on an Apple Passwords profile", prompt);
     return { state: prompt.state };
+  },
+  async E8kept() {
+    const fake = fakeHelper(path.join(SCRATCH, "E8kept", "fake"));
+    await start("E8kept", { manifest: fake.manifest });
+    const origin = new URL(sites.url("example.localhost")).origin;
+    const seeded = await app.eval(
+      `return globalThis.expo.modules.ArdiaPasswords.save("", ${JSON.stringify(origin)}, ${JSON.stringify(CHROME_ONLY_LOGIN.username)}, ${JSON.stringify(CHROME_ONLY_LOGIN.password)}).then(() => true).catch((e) => ({ error: e.message }))`,
+    );
+    assert(seeded === true, "the login is in Ardia's own store", seeded);
+    await pairApplePasswords(fake);
+    const tab = await openSignIn("example.localhost");
+    await signInChromium(tab.tabId, tab.url, CHROME_ONLY_LOGIN.username, CHROME_ONLY_LOGIN.password);
+    const prompt = await until(passwordPromptOf(tab.tabId), (v) => v?.state === "save", 20_000);
+    assert(prompt.username === CHROME_ONLY_LOGIN.username, "a login Ardia's own store already holds is still offered to Apple Passwords", prompt);
+    await app.eval(`return ac.prompts.answerPasswordPrompt(${JSON.stringify(tab.tabId)}, "save")`);
+    const saved = await waitFor("the login in Apple Passwords", async () => fake.savedLogins().find((l) => l.user === CHROME_ONLY_LOGIN.username) ?? null, 20_000);
+    assert(saved.password === CHROME_ONLY_LOGIN.password, "Save puts it in Apple Passwords", { user: saved.user, sites: saved.sites });
+    return { state: prompt.state, sites: saved.sites };
   },
   async cardWebKit() {
     const fake = fakeHelper(path.join(SCRATCH, "cardWebKit", "fake"));

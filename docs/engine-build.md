@@ -208,7 +208,7 @@ declared once, in `//ardia/core`'s `ac_hooks.h` (hooks in `chrome/`) or `ac_cont
 layers include that header (ArdiaCore and `chrome/browser/ardia` through the header-only `//ardia/core:hooks` target), so
 a signature that drifts on either side is a compile error, not a crash at the first call.
 A hook only the Mac engine sets goes in `ac_mac_hooks.h` instead (Chrome's own password list, saved-login fill and
-generation on a tab that claimed them, `ac_autofill_suppress.mm`): Linux's `copies.tsv` and Windows' `key-inputs.json`
+generation on a tab that claimed them, and its quiet save of a submitted login its store already holds, which goes to the prompt there instead, `ac_autofill_suppress.mm`): Linux's `copies.tsv` and Windows' `key-inputs.json`
 copy the two shared headers, so a declaration added there moves both of their engine keys.
 (Some changes are direct instead: `ChromeMain` making ArdiaCore's main delegate, the PiP window factory, the `CHECK`s made tolerant of a Browser without a `BrowserView`.) ArdiaCore sets the patches' hooks as
 the browser process starts (`ACMainDelegate::PreSandboxStartup`), in `ardiacore::InstallChromeHooks` (`ac_seams.mm`: the

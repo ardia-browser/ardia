@@ -18,6 +18,9 @@
 #include "ardia/desktop/ac_desktop_webui_process_policy.h"
 #include "ardia/desktop/ac_desktop_window_state.h"
 #include "ardia/desktop/generated/ac_desktop_routes.h"
+#include "ardia/linux/ac_linux_extension_views.h"
+#include "ardia/linux/ac_linux_find.h"
+#include "ardia/win/hooks.h"
 #include "ardia/win/main.h"
 #include "ardia/win/private_sessions.h"
 #include "ardia/win/profiles.h"
@@ -444,7 +447,20 @@ PageBinding::~PageBinding() {
   viewport = nullptr;
 }
 
+webui_page::PageEvaluationTicket PageBinding::EvaluationTicket() const {
+  return {claim(), claim_epoch(), binding_generation};
+}
+
+void PageBinding::SetClaim(std::string value) {
+  claim_.Assign(std::move(value));
+}
+
+void PageBinding::ClearClaim() {
+  claim_.Clear();
+}
+
 void PageBinding::MoveTo(ShellHostView* owner) {
+  ClearClaim();
   if (viewport && owner_) {
     viewport->SetWebContents(nullptr);
     owner_->RemoveChildViewT(viewport.get());
@@ -454,7 +470,6 @@ void PageBinding::MoveTo(ShellHostView* owner) {
   visible = false;
   presented = false;
   transferable = false;
-  claim.clear();
 }
 
 base::DictValue PageBinding::NavigationEvent() const {
@@ -476,7 +491,7 @@ base::DictValue PageBinding::NavigationEvent() const {
 base::DictValue PageBinding::Envelope(std::string_view type) {
   return base::DictValue()
       .Set("type", type)
-      .Set("claim", claim)
+      .Set("claim", claim())
       .Set("rendererGeneration", base::NumberToString(renderer_generation))
       .Set("bindingGeneration", base::NumberToString(binding_generation))
       .Set("documentEpoch", "1")
@@ -484,7 +499,7 @@ base::DictValue PageBinding::Envelope(std::string_view type) {
 }
 
 void PageBinding::ReportNavigation() {
-  if (!owner_ || claim.empty() || !web_contents()) {
+  if (!owner_ || claim_.empty() || !web_contents()) {
     return;
   }
   base::DictValue delivery = Envelope("pageEvent");
@@ -494,7 +509,7 @@ void PageBinding::ReportNavigation() {
 }
 
 void PageBinding::ReportClosed() {
-  if (!owner_ || claim.empty()) {
+  if (!owner_ || claim_.empty()) {
     return;
   }
   base::DictValue delivery = Envelope("pageEvent");
@@ -505,9 +520,37 @@ void PageBinding::ReportClosed() {
                base::Value(std::move(delivery)));
 }
 
+bool PageBinding::CanReport() const {
+  return owner_ && !claim_.empty() && web_contents();
+}
+
+ardiacore::LinuxFind* PageBinding::Find() {
+  if (!claim_.helper() && web_contents()) {
+    claim_.Hold(std::make_unique<ardiacore::LinuxFind>(
+        web_contents(),
+        base::BindRepeating(&PageBinding::CanReport, base::Unretained(this)),
+        base::BindRepeating(&PageBinding::ReportFind, base::Unretained(this))));
+  }
+  return claim_.helper();
+}
+
+void PageBinding::ReportFind(base::DictValue result) {
+  const std::string* type = result.FindString("type");
+  base::DictValue* value = result.FindDict("value");
+  if (!CanReport() || !type || *type != "findResult" || !value) {
+    return;
+  }
+  base::DictValue delivery = Envelope("pageEvent");
+  delivery.Set("event", base::DictValue()
+                            .Set("name", "find")
+                            .Set("data", std::move(*value)));
+  owner_->Emit("ArdiaWebView", base::NumberToString(id_),
+               base::Value(std::move(delivery)));
+}
+
 bool PageBinding::ReportOpenPrivateWindow(const GURL& url,
                                           const std::string& profile) {
-  if (!owner_ || claim.empty() || !url.is_valid() ||
+  if (!owner_ || claim_.empty() || !url.is_valid() ||
       webui_window::PrivateLinkProfile(profile).empty()) {
     return false;
   }
@@ -527,6 +570,7 @@ bool PageBinding::ReportOpenPrivateWindow(const GURL& url,
 }
 
 void PageBinding::Rebind(content::WebContents* contents) {
+  claim_.DropHelper();
   if (viewport) {
     viewport->SetWebContents(nullptr);
   }
@@ -553,6 +597,7 @@ void PageBinding::DidStopLoading() {
 }
 
 void PageBinding::WebContentsDestroyed() {
+  claim_.DropHelper();
   ReportClosed();
   if (viewport) {
     viewport->SetWebContents(nullptr);
@@ -649,6 +694,7 @@ void ShellHostView::DetachBrowser() {
     return;
   }
   closing_ = true;
+  DropExtensionSurfaces();
   RetireRenderer();
   telemetry_.CancelAll();
   file_picker_.reset();
@@ -790,12 +836,19 @@ BrowserWindowInterface* ShellHostView::EnsureMember(Profile* profile) {
   WindowRegistry::Get().RegisterCompanion(created, this);
   companions_.push_back(created->GetWeakPtr());
   ObserveMember(created);
+  RegisterShortcuts(CompanionFocusManager(created));
   Note("companion window for another profile joined window " +
        config_.window_id);
   return created;
 }
 
 void ShellHostView::CompanionClosed(BrowserWindowInterface* companion) {
+  if (extension_surfaces_member_ == companion) {
+    DropExtensionSurfaces();
+  }
+  if (views::FocusManager* focus = CompanionFocusManager(companion)) {
+    focus->UnregisterAccelerators(this);
+  }
   companion->GetTabStripModel()->RemoveObserver(this);
   std::erase_if(companions_, [companion](const auto& weak) {
     return !weak || weak.get() == companion;
@@ -805,7 +858,54 @@ void ShellHostView::CompanionClosed(BrowserWindowInterface* companion) {
   }
 }
 
+views::FocusManager* ShellHostView::CompanionFocusManager(
+    BrowserWindowInterface* companion) const {
+  BrowserView* view =
+      companion ? BrowserView::GetBrowserViewForBrowser(companion) : nullptr;
+  views::FocusManager* focus = view ? view->GetFocusManager() : nullptr;
+  return focus == focus_manager_ ? nullptr : focus;
+}
+
+void ShellHostView::RegisterShortcuts(views::FocusManager* focus) {
+  if (!focus) {
+    return;
+  }
+  for (const auto& [accelerator, binding] : shortcuts_) {
+    focus->RegisterAccelerator(accelerator,
+                               ui::AcceleratorManager::kNormalPriority, this);
+  }
+}
+
+bool ShellHostView::ReservesShortcut(const views::FocusManager* focus,
+                                     const ui::Accelerator& accelerator) const {
+  if (!focus || !CanHandleAccelerators()) {
+    return false;
+  }
+  const auto found = shortcuts_.find(accelerator);
+  if (found == shortcuts_.end() ||
+      !webui_window::ShortcutReservedFromPages(Text(found->second, "command"))) {
+    return false;
+  }
+  return focus == focus_manager_ ||
+         std::ranges::any_of(companions_, [this, focus](const auto& companion) {
+           return CompanionFocusManager(companion.get()) == focus;
+         });
+}
+
+void ShellHostView::UnregisterShortcutsEverywhere() {
+  if (focus_manager_) {
+    focus_manager_->UnregisterAccelerators(this);
+  }
+  for (const auto& companion : companions_) {
+    if (views::FocusManager* focus = CompanionFocusManager(companion.get())) {
+      focus->UnregisterAccelerators(this);
+    }
+  }
+}
+
 void ShellHostView::CloseCompanions() {
+  DropExtensionSurfaces();
+  UnregisterShortcutsEverywhere();
   std::vector<base::WeakPtr<BrowserWindowInterface>> companions =
       std::move(companions_);
   companions_.clear();
@@ -967,6 +1067,9 @@ void ShellHostView::LayoutOverlay() {
   if (views::WebView* chrome_view = browser_view_->GetActiveContentsWebView()) {
     chrome_view->SetVisible(false);
   }
+  if (extension_surfaces_) {
+    extension_surfaces_->Relayout();
+  }
   Restack();
   ApplyShellInput();
 }
@@ -977,6 +1080,9 @@ void ShellHostView::Restack() {
   }
   browser_view_->ReorderChildView(this, browser_view_->children().size());
   ReorderChildView(shell_, children().size());
+  if (extension_surfaces_) {
+    extension_surfaces_->RaisePopups();
+  }
 }
 
 void ShellHostView::ReattachViewports() {
@@ -1111,12 +1217,13 @@ void ShellHostView::RetireRenderer() {
   handler_ = nullptr;
   renderer_document_ = content::WeakDocumentPtr();
   ++renderer_generation_;
+  RetireExtensionViews(renderer_generation_);
   if (!had_document) {
     return;
   }
   RetireDocuments();
   for (auto& [id, binding] : bindings_) {
-    binding->claim.clear();
+    binding->ClearClaim();
     binding->renderer_generation = 0;
     binding->transferable = false;
     binding->visible = false;
@@ -1134,9 +1241,7 @@ void ShellHostView::RetireRenderer() {
   unclaimed_listener_.reset();
   open_urls_listener_.reset();
   utility_ready_ = false;
-  if (focus_manager_) {
-    focus_manager_->UnregisterAccelerators(this);
-  }
+  UnregisterShortcutsEverywhere();
   shortcuts_.clear();
   Note("shell document retired in window " + config_.window_id +
        "; generation is now " + base::NumberToString(renderer_generation_));
@@ -1583,6 +1688,9 @@ bool ShellHostView::CommandFocusesShell(const std::string& command) {
 }
 
 bool ShellHostView::AcceleratorPressed(const ui::Accelerator& accelerator) {
+  if (g_ardia_win_priority_shortcut_pass) {
+    return false;
+  }
   auto found = shortcuts_.find(accelerator);
   if (found == shortcuts_.end()) {
     return false;
@@ -1716,7 +1824,7 @@ bool ShellHostView::RequestPrivateWindow(const GURL& url) {
   }
   PageBinding* chosen = nullptr;
   for (const auto& [id, binding] : bindings_) {
-    if (!binding->contents() || binding->claim.empty()) {
+    if (!binding->contents() || binding->claim().empty()) {
       continue;
     }
     if (binding->presented) {
@@ -1755,10 +1863,10 @@ void ShellHostView::ReplaceTabContents(content::WebContents* old_contents,
       webui_window::NextBindingGeneration(binding->binding_generation);
   if (!next) {
     binding->ReportClosed();
-    binding->claim.clear();
+    binding->ClearClaim();
     return;
   }
-  if (!binding->claim.empty()) {
+  if (!binding->claim().empty()) {
     base::DictValue delivery = binding->Envelope("pageLifecycle");
     binding->binding_generation = *next;
     base::DictValue creation =

@@ -274,8 +274,11 @@ export function createHeldLogins(io: HeldLoginsIo, limits: { maxLogins?: number;
         await store(next);
         return true;
       }),
-    holds: (profile: string, origin: string, username: string): Promise<boolean> =>
-      inTurn(async () => !!(await load())?.[profile]?.[loginKey(origin, username)]),
+    holds: (profile: string, origin: string, username: string, sealed?: string): Promise<boolean> =>
+      inTurn(async () => {
+        const login = (await load())?.[profile]?.[loginKey(origin, username)];
+        return !!login && (sealed === undefined || login.sealed === sealed);
+      }),
     dropProfiles: (profiles: string[]): Promise<void> =>
       inTurn(async () => {
         if (!profiles.length) return;
@@ -441,6 +444,12 @@ function settleOpenLocal(result: unknown, count: OpenFailureCount) {
   return null;
 }
 
+const createChainInNewFolder = (host: ArdiaHost) => async (folder: string) => {
+  const info = await invoke(host, "folderInfo")(folder);
+  if (isRecord(info) && info.exists === true) throw Object.assign(new Error("A folder is already there"), { code: "ERR_SYNC_FOLDER_EXISTS" });
+  await invoke(host, "createChain")(folder);
+};
+
 export function syncModuleMethod(host: ArdiaHost, name: string, method: string): unknown {
   if (name !== "ArdiaSync") return undefined;
   if (method === "read" || method === "openLocal") {
@@ -450,6 +459,7 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
       return method === "read" ? settleRead(result, count) : settleOpenLocal(result, count);
     };
   }
+  if (method === "createChainInNewFolder") return createChainInNewFolder(host);
   if (method === "newDeviceId") return () => newSyncDeviceId();
   if (method === "deviceName") return syncDeviceName;
   if (method === "readPasswords") {
@@ -461,16 +471,25 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
     };
   }
   if (method === "savePassword") {
-    return async (profile: string, origin: string, username: string, sealed: string, replacing: boolean) => {
+    return async (profile: string, origin: string, username: string, sealed: string, replaced: string) => {
       const store = heldLogins;
       const owner = hostProfile(profile, host);
-      const saved = await invoke(host, method)(owner, origin, username, sealed, replacing);
+      const engineHolds = async (): Promise<string | null | undefined> => {
+        const local = (await invoke(host, "readPasswords")(owner)) as SealedLogin[] | null;
+        return local ? (local.find((login) => login.origin === origin && login.username === username)?.sealed ?? null) : undefined;
+      };
+      let expected = replaced;
+      if (replaced && store && (await store.holds(profile, origin, username, replaced))) {
+        const holds = await engineHolds();
+        if (holds === undefined) return false;
+        expected = holds ?? "";
+      }
+      const saved = await invoke(host, method)(owner, origin, username, sealed, expected);
       if (saved === "skipped") {
         if (!store) return false;
-        const local = (await invoke(host, "readPasswords")(owner)) as SealedLogin[] | null;
-        if (!local) return false;
-        const replaced = local.find((login) => login.origin === origin && login.username === username)?.sealed ?? null;
-        return store.hold(profile, { origin, username, sealed, replaced });
+        const holds = await engineHolds();
+        if (holds === undefined) return false;
+        return store.hold(profile, { origin, username, sealed, replaced: holds });
       }
       if (saved === true) await store?.release(profile, origin, username);
       return saved === true;

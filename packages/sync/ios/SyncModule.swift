@@ -96,13 +96,19 @@ public class SyncModule: Module, SyncNative {
     try self.vault(folder).createChain()
   }
 
+  func createChainInNewFolder(_ folder: String) throws {
+    do { try self.vault(folder).createChainInNewFolder() } catch is SyncVault.FolderExists { throw Exception(name: "folderExists", description: "A folder is already there", code: "ERR_SYNC_FOLDER_EXISTS") }
+  }
+
+  private static func chainMissing() -> Exception { Exception(name: "chainMissing", description: "This device's data is gone from the sync folder", code: "ERR_SYNC_CHAIN_MISSING") }
+
   func write(_ folder: String, _ scope: String, _ payload: String) throws -> String {
     try self.ensureLocalStateReadable()
     let vault = try self.vault(folder)
     do {
       return try vault.write(scope: scope, payload: LegacyPasswords.restore(Data(payload.utf8), keys: vault.keys))
     } catch is SyncVault.ChainMissing {
-      throw Exception(name: "chainMissing", description: "This device's data is gone from the sync folder", code: "ERR_SYNC_CHAIN_MISSING")
+      throw Self.chainMissing()
     }
   }
 
@@ -112,8 +118,10 @@ public class SyncModule: Module, SyncNative {
     do {
       listing = try vault.read(scope: scope, skipping: Set(known))
     } catch {
+      guard vault.chainExists() else { throw Self.chainMissing() }
       throw Exception(name: "folderUnreadable", description: "The sync folder couldn't be read: \(error.localizedDescription)", code: "ERR_SYNC_FOLDER_UNREADABLE")
     }
+    guard vault.chainExists() else { throw Self.chainMissing() }
     var files: [[String: Any]] = []
     var damaged: [[String: Any]] = listing.damaged.map { ["id": $0.id, "age": $0.age * 1000] }
     for file in listing.files {
@@ -217,7 +225,7 @@ public class SyncModule: Module, SyncNative {
     }
   }
 
-  func savePassword(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replacing: Bool, _ promise: Promise) {
+  func savePassword(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replaced: String, _ promise: Promise) {
     guard let keys = self.state.keys, let password = try? keys.openPassword(sealed, origin: origin, username: username) else {
       NSLog("[sync] a synced password didn't open for its login; not saving it")
       return promise.resolve(false)
@@ -229,7 +237,7 @@ public class SyncModule: Module, SyncNative {
       }
     }
     DispatchQueue.main.async {
-      guard replacing else { return save() }
+      guard !replaced.isEmpty else { return save() }
       ArdiaServices.deletePassword(profile: engineProfile, origin: origin, username: username) { _, error in
         guard let error else { return save() }
         NSLog("[sync] replacing a saved password: \(error)")
@@ -269,6 +277,8 @@ public class SyncModule: Module, SyncNative {
     chainStatusFunction
 
     createChainFunction
+
+    createChainInNewFolderFunction
 
     writeFunction
 

@@ -13,6 +13,7 @@
 #include "ardia/desktop/ac_desktop_window_state.h"
 #include "ardia/desktop/generated/ac_desktop_routes.h"
 #include "ardia/linux/ac_linux_document_service.h"
+#include "ardia/linux/ac_linux_extension_views.h"
 #include "ardia/linux/ac_linux_documents.h"
 #include "ardia/win/ac_calls.h"
 #include "ardia/win/launch_guard.h"
@@ -97,6 +98,11 @@ constexpr std::string_view kBrowserWindowCapabilities[] = {
     "documents.unwatch",
     "documents.commit",
     "documents.flush",
+    "extensionView.create",
+    "extensionView.viewport",
+    "extensionView.place",
+    "extensionView.command",
+    "extensionView.release",
     ardia::desktop_window_state::kWindowButtonLayoutCall,
     ardia::desktop_window_state::kWindowStateCall,
 };
@@ -167,6 +173,9 @@ void ShellHostView::Invoke(const std::string& method,
   }
   if (method == "shell.inputRegions") {
     return SetInputRegions(args, std::move(done));
+  }
+  if (ardia::LinuxExtensionSurfaces::Handles(method)) {
+    return InvokeExtensionView(method, args, std::move(done));
   }
   if (method == "ArdiaTabs.unclaimedTabs") {
     return ListUnclaimedTabs(std::move(done));
@@ -620,14 +629,18 @@ void ShellHostView::SetKeyboardShortcuts(const base::ListValue* values,
         command.empty() || command.size() > 64) {
       return std::move(done).Run(false, base::Value("Invalid keyboard shortcut"));
     }
+    if (!webui_window::ShortcutRegisters(
+            binding.FindBool("suppressed").value_or(false))) {
+      continue;
+    }
     shortcuts.emplace(ui::Accelerator(static_cast<ui::KeyboardCode>(key), flags),
                       binding.Clone());
   }
-  focus_manager_->UnregisterAccelerators(this);
+  UnregisterShortcutsEverywhere();
   shortcuts_ = std::move(shortcuts);
-  for (const auto& [accelerator, binding] : shortcuts_) {
-    focus_manager_->RegisterAccelerator(
-        accelerator, ui::AcceleratorManager::kNormalPriority, this);
+  RegisterShortcuts(focus_manager_);
+  for (const auto& companion : companions_) {
+    RegisterShortcuts(CompanionFocusManager(companion.get()));
   }
   std::move(done).Run(true, base::Value());
 }
@@ -831,6 +844,9 @@ void ShellHostView::EngineCall(const std::string& name,
                               base::Value(base::WriteJson(state).value_or("{}")));
         },
         std::move(done)));
+  }
+  if (name == "extensions.actionStates") {
+    return ExtensionActionStates(profile, args, std::move(done));
   }
   if (const std::optional<webui_window::DocumentVerb> verb =
           webui_window::ParseDocumentVerb(name)) {

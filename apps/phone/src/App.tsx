@@ -51,6 +51,7 @@ import { useVoicePresented } from "./state/voice/store";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { closeSettings } from "./state/settings/nav";
 import { applyLaunchSettings, runLaunchScenario } from "./state/app/launch";
+import { rememberLaunchLookOnLeaving, useLaunchLook } from "./state/app/launchLook";
 import { frontSheet } from "./state/settings/settingsRules";
 import { inkLayer, lightStatusIcons } from "./lib/statusInk";
 import { whenIdle } from "./lib/whenIdle";
@@ -105,13 +106,17 @@ export default function App() {
   }, [drawnSomething]);
   const dark = useDarkScheme();
   const look = useLook(PROFILE_PRESETS, DEFAULT_PROFILE_COLOR);
+  useLaunchLook(PROFILE_PRESETS, DEFAULT_PROFILE_COLOR);
   useBaseSystemBars(dark);
   useEffect(() => {
     const back = BackHandler.addEventListener("hardwareBackPress", () => useBoot.getState().ready && handleSystemBack());
     const state = AppState.addEventListener("change", (next) => {
       if (!useBoot.getState().ready) return;
       if (next === "active") appBecameActive();
-      else appWillResignActive();
+      else {
+        appWillResignActive();
+        rememberLaunchLookOnLeaving();
+      }
     });
     return () => {
       back.remove();

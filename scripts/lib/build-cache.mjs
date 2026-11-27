@@ -570,7 +570,11 @@ function removeAtomically(root, dir) {
   } catch {
     return;
   }
-  fs.rmSync(trash, { recursive: true, force: true });
+  try {
+    fs.rmSync(trash, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  } catch (error) {
+    process.stderr.write(`build-cache: left ${trash} for the next sweep (${error.code ?? error.message})\n`);
+  }
 }
 
 export function evict(cacheRoot, opts) {

@@ -25,8 +25,8 @@ import { pageUi } from "../page/store";
 import { settingsNav } from "../settings/nav";
 import { refreshDefaultBrowser } from "../settings/defaultBrowser";
 import { forgetPosition, frontScrollCameToRest, saveTabPosition, watchFrontScroll } from "./positions";
-import { noteLocalChange, pickSpace } from "../sync/store";
-import { isSplit, spaceToShow, tabsInSpace } from "../tabs/spaces";
+import { noteLocalChange, pickSpace, syncData } from "../sync/store";
+import { isSplit, spaceToPick, tabsInSpace } from "../tabs/spaces";
 import { currentPreferences, loadPreferences, setPreference } from "../settings/store";
 import type { VisitTransition, Visit } from "../store/browserDatabase";
 import { enterTarget, rowTarget, resolve, type TrayRow } from "../search/omnibox";
@@ -228,7 +228,7 @@ function copyCalculation(value: string) {
 
 function pickSpaceOf(id: string) {
   const data = currentTabs();
-  const space = spaceToShow(data.spaces, findTab(data, id));
+  const space = spaceToPick(data.spaces, findTab(data, id), syncData().pickedProfileId);
   if (space) pickSpace(space);
 }
 

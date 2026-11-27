@@ -58,7 +58,9 @@ public final class SyncService {
   public private(set) var pendingDownloads = 0
   public private(set) var lastSynced: Date?
   public private(set) var isEnabled = false
-  public private(set) var hasReadCache = false
+  private var started = false
+  private var knowsSpaces = false
+  public var hasReadCache: Bool { isDemo || knowsSpaces || (started && !isEnabled) }
   public var isCycleRunning: Bool { running }
   public private(set) var folderName: String?
   public let isDemo: Bool
@@ -178,7 +180,6 @@ public final class SyncService {
     meta = SyncMeta(deviceName: "iPhone", enabled: true)
     deviceName = "iPhone"
     isDemo = true
-    hasReadCache = true
     self.snapshot = snapshot
     phase = .updated
     isEnabled = true
@@ -191,14 +192,12 @@ public final class SyncService {
   public func start() {
     guard !isDemo, engine == nil else { return }
     Self.active = self
-    guard let engine = openEngine() else {
-      hasReadCache = true
-      return
-    }
+    started = true
+    guard let engine = openEngine() else { return }
     set(\.phase, .starting)
     Task {
       if let cached = await engine.cachedSnapshot(), snapshot == .empty { snapshot = cached }
-      hasReadCache = true
+      knowsSpaces = true
       await runCycle()
     }
   }
@@ -260,6 +259,7 @@ public final class SyncService {
   public func connect(phrase: String, folder: URL) async -> ConnectResult {
     guard !isDemo else { return .connected }
     guard !stopping else { return .busy }
+    started = true
     foreground = true
     let entropy: Data
     do {
@@ -301,6 +301,7 @@ public final class SyncService {
       meta.chainSeen = false
       lastSynced = nil
       snapshot = .empty
+      knowsSpaces = false
     }
     meta.deviceId = deviceId
     meta.folder = prepared.location
@@ -689,6 +690,7 @@ public final class SyncService {
     case .ok:
       missingSince = nil
       if let fresh = outcome.snapshot, !Self.same(fresh, snapshot) { snapshot = fresh }
+      knowsSpaces = true
       set(\.pendingDownloads, outcome.pending)
       set(\.phase, .updated)
       lastSynced = now()

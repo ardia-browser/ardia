@@ -7,7 +7,7 @@ import { applyTabSpaces, setTabProfile } from "../tabs/store";
 import { tabSpacesFor } from "../tabs/spaces";
 import type { Design } from "../../lib/design";
 import { pinKey, pinsStillOnTheirWay } from "./spaces";
-import { pickAfterView, shownProfile, syncViewLoaded } from "./syncRules";
+import { pickAfterView, shownProfile, startupPatch, syncViewLoaded } from "./syncRules";
 
 export const notePinSent = (profileSyncId: string | null, url: string) =>
   useSync.setState((state) => ({ pinsOnTheirWay: [...state.pinsOnTheirWay, pinKey(profileSyncId, url)] }));
@@ -57,6 +57,7 @@ const LOCAL_CHANGE_DELAY_MS = 1000;
 
 let started = false;
 let fetched = false;
+const seen = { status: false, view: false };
 let localTimer: ReturnType<typeof setTimeout> | null = null;
 const inboxListeners = new Set<() => void>();
 
@@ -97,14 +98,18 @@ function publish(patch: Partial<SyncData>) {
 }
 
 function onEvent(event: SyncEvent) {
-  if (event.name === "sync.status") publish({ status: event.status });
-  else if (event.name === "sync.view")
+  if (event.name === "sync.status") {
+    seen.status = true;
+    publish({ status: event.status });
+  } else if (event.name === "sync.view") {
+    seen.view = true;
     publish({
       view: event.view,
       pinsOnTheirWay: pinsStillOnTheirWay(syncData().pinsOnTheirWay, event.view),
       pickedProfileId: pickAfterView(syncData().pickedProfileId, event.view),
-      loaded: fetched && syncViewLoaded(event.view),
+      loaded: fetched && syncViewLoaded(event.view, true),
     });
+  }
   else if (event.name === "sync.inbox" && event.count > 0) for (const listener of inboxListeners) listener();
 }
 
@@ -121,7 +126,8 @@ export function startSyncSources(onInbox: () => void) {
   useSync.setState({ available: true });
   void Promise.all([settled(() => sync.status(), null), settled(() => sync.view(), null)]).then(([status, view]) => {
     fetched = true;
-    publish({ ...(status ? { status } : {}), ...(view ? { view } : {}), loaded: syncViewLoaded(view ?? syncData().view) });
+    const patch = startupPatch(status, view, seen);
+    publish({ ...patch, loaded: syncViewLoaded(patch.view ?? syncData().view, seen.view || view !== null) });
     onInbox();
   });
 }

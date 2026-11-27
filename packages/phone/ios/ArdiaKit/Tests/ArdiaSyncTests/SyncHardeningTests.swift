@@ -89,6 +89,20 @@ import Testing
     await relaunched.stopSyncing()
   }
 
+  @Test func aLockedServiceNeverSaysItKnowsItsSpaces() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    await j.service.close()
+    FileKeyStore(directory: j.sandbox.keys).delete(account: j.device)
+
+    let relaunched = makeService(j.sandbox, source: j.source, clock: j.clock)
+    relaunched.start()
+    #expect(relaunched.phase == .locked)
+    #expect(relaunched.isEnabled)
+    #expect(!relaunched.hasReadCache)
+    #expect(relaunched.snapshot.profiles.isEmpty)
+  }
+
   @Test func aServiceWithNoCacheToReadHasReadItAtOnce() throws {
     let sandbox = try Sandbox()
     defer { sandbox.remove() }

@@ -22,6 +22,7 @@ import {
   syncBanner,
   inboxNotice,
   launchSpace,
+  startupPatch,
   pickAfterView,
   scanJudge,
   syncedEngineName,
@@ -259,10 +260,20 @@ test("a picked space is let go once sync's view shows it", () => {
   assert.equal(pickAfterView(null, view()), null);
 });
 
-test("sync's view counts as loaded only once native has read its cached spaces", () => {
-  assert.equal(syncViewLoaded(view({ profiles: [], selectedProfileId: null, cacheRead: false })), false);
-  assert.equal(syncViewLoaded(view({ cacheRead: true })), true);
-  assert.equal(syncViewLoaded(view()), true);
+test("sync's view counts as loaded only once a real view has come and native has read its cached spaces", () => {
+  assert.equal(syncViewLoaded(view({ profiles: [], selectedProfileId: null, cacheRead: false }), true), false);
+  assert.equal(syncViewLoaded(view({ cacheRead: true }), true), true);
+  assert.equal(syncViewLoaded(view(), true), true);
+  assert.equal(syncViewLoaded(view({ cacheRead: true }), false), false);
+});
+
+test("the startup fetch never replaces a status or view an event already brought", () => {
+  const fetchedView = view({ cacheRead: false, profiles: [] });
+  const fetchedStatus = status({ selectedProfileId: "personal" });
+  assert.deepEqual(startupPatch(fetchedStatus, fetchedView, { status: false, view: false }), { status: fetchedStatus, view: fetchedView });
+  assert.deepEqual(startupPatch(fetchedStatus, fetchedView, { status: true, view: true }), {});
+  assert.deepEqual(startupPatch(fetchedStatus, null, { status: false, view: false }), { status: fetchedStatus });
+  assert.deepEqual(startupPatch(null, fetchedView, { status: false, view: true }), {});
 });
 
 test("a synced group takes its Mac colour by name or hex", () => {

@@ -31,7 +31,7 @@
 //       byte for byte, with input and change events, through the card dropdown's Down and Enter (OS check granted)
 //   E31 last: quits the instances, then reads every log the run left (each instance's app.out.log, dev console,
 //       Chromium LOG files, telemetry, crash reports; the fake helper's requests.jsonl and started; the system log of
-//       each instance's process) and fails naming the file and which fixture password, Pairing code or Verification code
+//       each instance's process, kept in <scratch dir>/system.log) and fails naming the file and which fixture password, Pairing code or Verification code
 //       it found there (never the value); saved logins are read from each fake's fixtures.json, so strong passwords count
 //   E32 with a stand-in for the iCloud Passwords extension (its id, from icloud-extension.mjs), picking Apple Passwords
 //       turns it off and says so, "Turn it back on" turns it on, and switching to Ardia turns it on only if Ardia turned
@@ -264,14 +264,15 @@ async function noSecretsInLogs() {
   if (shared && !shared.app.exited) note("quit shared:", (await shared.app.quit()).how);
   shared = null;
   const secrets = loggedSecrets();
-  const system = systemLog({ since: RUN_STARTED, pids: launched.map((l) => l.pid) });
-  const { files, hits } = scanLogs({ dirs: [SCRATCH], secrets, extra: { "the system log of the run's instances": system.join("\n") } });
-  const unread = launched.filter((l) => !files.includes(l.log)).map((l) => l.name);
-  assert(!unread.length, "every instance's app log is read", unread);
-  assert(system.some((line) => line.includes("helper started")), "the system log holds the Apple Passwords client's own lines, so it was read", system.length);
+  const systemFile = path.join(SCRATCH, "system.log");
+  const system = systemLog({ since: RUN_STARTED, pids: launched.map((l) => l.pid), file: systemFile });
+  const { files, hits } = scanLogs({ dirs: [SCRATCH], secrets });
+  const unread = [...launched.map((l) => l.log), systemFile].filter((log) => !files.includes(log));
+  assert(!unread.length, "every instance's app log and the system log are read", unread);
+  assert(system.includes("helper started"), "the system log holds the Apple Passwords client's own lines, so it was read", system.length);
   const found = hits.map((h) => `${h.label} in ${path.relative(SCRATCH, h.file) || h.file} (${h.encoding} at byte ${h.at})`);
   assert(!found.length, "no fixture password or code in any log", found);
-  return { instances: launched.length, files: files.length, systemLines: system.length, secrets: secrets.length };
+  return { instances: launched.length, files: files.length, systemLogBytes: system.length, secrets: secrets.length };
 }
 
 const inChromium = (checks, names) => Object.fromEntries(names.map((name) => [`${name}chromium`, checks[name]]));

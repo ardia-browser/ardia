@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, sep } from "node:path";
 
 const LOG_NAME = /\.(log|jsonl|txt|out|ips|crash)$|^LOG(\.old)?$|^started$/i;
@@ -53,16 +53,15 @@ export function scanLogs({ dirs, secrets, extra = {} }) {
   return { files, hits };
 }
 
-export function systemLog({ since, pids }) {
-  if (!pids.length) return [];
+export function systemLog({ since, pids, file }) {
   const stamp = new Date(since).toLocaleString("sv-SE").replace("T", " ");
   const predicate = `processID IN {${pids.map(Number).join(", ")}}`;
-  const shown = spawnSync("/usr/bin/log", ["show", "--start", stamp, "--style", "ndjson", "--info", "--predicate", predicate], { encoding: "utf8", maxBuffer: 1 << 30, timeout: 120_000 });
-  if (shown.status !== 0) throw new Error(`log show failed: ${shown.stderr || shown.error}`);
-  return shown.stdout
-    .split("\n")
-    .filter((line) => line.startsWith("{"))
-    .map((line) => JSON.parse(line))
-    .filter((entry) => entry.eventType === "logEvent")
-    .map((entry) => `${entry.processID} ${entry.subsystem ?? ""} ${entry.eventMessage ?? ""}`);
+  const out = openSync(file, "w");
+  try {
+    const shown = pids.length ? spawnSync("/usr/bin/log", ["show", "--start", stamp, "--style", "compact", "--info", "--predicate", predicate], { stdio: ["ignore", out, "pipe"], timeout: 300_000 }) : { status: 0 };
+    if (shown.status !== 0) throw new Error(`log show failed: ${shown.stderr || shown.error}`);
+  } finally {
+    closeSync(out);
+  }
+  return readFileSync(file);
 }

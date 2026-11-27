@@ -3,6 +3,8 @@
 # base_unittests (proves the toolchain), then chrome. JOBS sets siso's local jobs, compiles and links alike (default 8).
 # Blink's bindings generators run first, at BINDINGS_JOBS (default 3): each runs a worker per core, and on a 24 GB
 # machine siso's default ran nine at once and swapped the machine. KEEP_GOING is -k (0: keep going past failures).
+# On Linux it first mounts the toolchain's case-insensitive view (ciopfs, which step 1's win_toolchain hook made) when a
+# reboot has dropped it.
 # Usage: scripts/windows/engine/05-build.sh --apply | --help (under the chromium lock)
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
@@ -10,6 +12,13 @@ source "$AC_MAC_BUILD_DIR/step-guard.sh" "$@"
 CHROMIUM_SRC="$CB/chromium_git/chromium/src" "$AC_MAC_BUILD_DIR/game-resource.sh" --apply
 cd "$CB/chromium_git/chromium/src"
 if [[ "$(uname -s)" == Linux ]]; then
+  toolchain="$PWD/third_party/depot_tools/win_toolchain"
+  if [[ -d "$toolchain/vs_files.ciopfs" ]] && ! mountpoint -q "$toolchain/vs_files"; then
+    mkdir -p "$toolchain/vs_files"
+    (ulimit -n "$(ulimit -Hn)" && build/ciopfs -o use_ino "$toolchain/vs_files.ciopfs" "$toolchain/vs_files") ||
+      { echo "05-build.sh: could not mount the toolchain at $toolchain/vs_files" >&2; exit 1; }
+    echo "05-build.sh: mounted the toolchain's case-insensitive view at $toolchain/vs_files" >&2
+  fi
   for mount in $(pgrep -u "$(id -u)" -f "ciopfs .*$CB/chromium_git/chromium/src/third_party/depot_tools/win_toolchain/" || true); do
     prlimit --pid "$mount" --nofile="$(ulimit -Hn)" || echo "05-build.sh: could not raise the open-file limit of ciopfs $mount" >&2
   done

@@ -34,6 +34,7 @@ public enum TabsLayout {
   public static let tileHeight: CGFloat = 52
   public static let tileRadius: CGFloat = 14
   public static let tileGap: CGFloat = 8
+  public static let tileTitleGap: CGFloat = 6
   public static let tileSide: CGFloat = 20
   public static let tileIcon: CGFloat = 20
   public static let tilesPerRow = 4

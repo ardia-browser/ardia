@@ -1,3 +1,4 @@
+import { VStack, ZStack } from "@expo/ui/swift-ui";
 import { Platform } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
@@ -111,6 +112,24 @@ onIos("a device with more than nine tabs shows eight and main's Show All, which 
   await act(async () => void button.props.onButtonPress({ nativeEvent: {} }));
   expect(titles()).toBe(12);
   expect(hosts(spacesSheet(root), (props) => props.title === "Nothing Here Yet")).toHaveLength(1);
+  unmount(root);
+});
+
+onIos("the page dots sit in a strip of their own under the pages, never layered over a space's last row such as Show All", async () => {
+  withProfiles([profile("work", "Work", [{ deviceId: "mac", deviceName: "MacBook Pro", kind: "mac", tabs: tabs(12) }]), profile("home", "Home")]);
+  const root = renderSurface(<Surfaces />);
+  await open();
+  const ancestors = (node: ReactTestInstance) => {
+    const found: ReactTestInstance[] = [];
+    for (let at = node.parent; at; at = at.parent) found.push(at);
+    return found;
+  };
+  const dots = spacesSheet(root).findAll((node) => node.props.count === 2 && Array.isArray(node.props.modifiers))[0]!;
+  const pages = pager(root);
+  const pagesAncestors = ancestors(pages);
+  const stack = ancestors(dots).find((ancestor) => pagesAncestors.includes(ancestor) && (ancestor.type === VStack || ancestor.type === ZStack))!;
+  expect(stack.type).toBe(VStack);
+  expect(stack.findAll((node) => node === pages || node === dots)).toEqual([pages, dots]);
   unmount(root);
 });
 

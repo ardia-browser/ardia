@@ -353,14 +353,14 @@ private struct PinnedTileButton: View {
           Button(tab.title.isEmpty ? (BrowserURL.host(of: tab.url) ?? tab.url) : tab.title) { open(tab.url, tab.title) }
         }
       } label: {
-        PinnedTileFace(tile: tile, isFolder: true)
+        TitledTileFace(tile: tile, isFolder: true)
       }
       .buttonStyle(.plain)
       .accessibilityLabel(PinnedTileFace.label(for: tile))
       .accessibilityHint("Shows the folder’s tabs.")
     } else {
       Button { open(tile.url, tile.title) } label: {
-        PinnedTileFace(tile: tile, isFolder: false)
+        TitledTileFace(tile: tile, isFolder: false)
       }
       .buttonStyle(PressableStyle())
       .accessibilityLabel(PinnedTileFace.label(for: tile))
@@ -369,6 +369,25 @@ private struct PinnedTileButton: View {
           Button("Copy Link") { UIPasteboard.general.url = link }
           ShareLink("Share", item: link)
         }
+      }
+    }
+  }
+}
+
+private struct TitledTileFace: View {
+  let tile: PinnedTile
+  let isFolder: Bool
+  @Environment(\.dynamicTypeSize) private var typeSize
+
+  var body: some View {
+    VStack(spacing: TabsLayout.tileTitleGap) {
+      PinnedTileFace(tile: tile, isFolder: isFolder)
+      if !typeSize.isAccessibilitySize {
+        Text(PinnedTileFace.label(for: tile))
+          .font(.caption.weight(.medium))
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .accessibilityHidden(true)
       }
     }
   }

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactElement } from "react";
 import { PlatformColor, StyleSheet } from "react-native";
-import { BottomSheet, Button, ContentUnavailableView, ContextMenu, DisclosureGroup, HStack, Host, Image, Label, List, Menu, Picker, Section, Spacer, TabView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
+import { BottomSheet, Button, ContentUnavailableView, ContextMenu, DisclosureGroup, HStack, Host, Image, Label, List, Menu, Picker, Section, Spacer, TabView, Text, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
   accessibilityElement,
@@ -45,7 +45,7 @@ import { actionWords, destinationWords, syncWords } from "../../lib/sharedWords"
 import { DoneButton } from "../settings/ExpoSettingsDone";
 import { ExpoSettingsAction } from "../settings/ExpoSettingsParts";
 import { LinkMenuItems, ListLoading, ListRow, opensPage } from "../library/listSheet";
-import { DEFAULT_PROFILE_COLOR, expoSpacesLayout as L, chromeSurface, contentMargins, minListRowHeight, modifierList, PinnedTiles, PROFILE_PRESETS, settingsUIAvailable, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, useIncreasedContrast, useReduceMotion, useTheme } from "../ui";
+import { DEFAULT_PROFILE_COLOR, expoSpacesLayout as L, chromeSurface, minListRowHeight, modifierList, PinnedTiles, PROFILE_PRESETS, settingsUIAvailable, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, useIncreasedContrast, useReduceMotion, useTheme } from "../ui";
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
@@ -111,16 +111,16 @@ function SpacesSheetContent() {
         </HStack>
       ) : null}
       {profile ? (
-        <ZStack alignment="bottom">
+        <VStack spacing={0}>
           <TabView selection={profile.syncId} onSelectionChange={(id) => switchTo(id, true)} modifiers={[tabViewStyle({ type: "page", indexDisplayMode: "never" })]}>
             {view.profiles.map((page) => (
               <TabView.Tab key={page.syncId} value={page.syncId}>
-                <SpacePage profile={page} dotsBelow={view.profiles.length > 1} />
+                <SpacePage profile={page} />
               </TabView.Tab>
             ))}
           </TabView>
           {view.profiles.length > 1 ? <SpacePageDots count={view.profiles.length} index={view.profiles.indexOf(profile)} modifiers={modifierList(padding({ horizontal: L.dotsPadding }), frame({ height: L.dotsHeight }), chromeSurface({ shape: "capsule", interactive: false }), padding({ top: L.tight }))} /> : null}
-        </ZStack>
+        </VStack>
       ) : (
         <SpacesFallback off={status.phase === "off"} waiting={status.phase !== "off" && !banner} />
       )}
@@ -170,7 +170,7 @@ function SpacesHeader({ profiles, current, onSelect }: { profiles: SyncedProfile
   );
 }
 
-function SpacePage({ profile, dotsBelow }: { profile: SyncedProfile; dotsBelow: boolean }) {
+function SpacePage({ profile }: { profile: SyncedProfile }) {
   const remembered = useSpaceOpenFor(profile.syncId);
   const open = useMemo(() => new Set(remembered.open), [remembered.open]);
   const expanded = useMemo(() => new Set(remembered.expanded), [remembered.expanded]);
@@ -178,7 +178,7 @@ function SpacePage({ profile, dotsBelow }: { profile: SyncedProfile; dotsBelow: 
   const pinnedEmpty = profile.pinned.tiles.length === 0 && profile.pinned.sections.length === 0;
   const go = (url: string, title: string, pinnedKey: string | null = null) => openRemote(url, title, profile.syncId, pinnedKey);
   return (
-    <List modifiers={modifierList(listStyle("plain"), scrollContentBackground("hidden"), minListRowHeight(L.rowHeight), refreshable(() => syncNow().then(() => undefined)), dotsBelow ? contentMargins({ edges: "bottom", length: L.dotsHeight + L.tight }) : null)}>
+    <List modifiers={modifierList(listStyle("plain"), scrollContentBackground("hidden"), minListRowHeight(L.rowHeight), refreshable(() => syncNow().then(() => undefined)))}>
       {profile.pinned.tiles.length ? <PinnedTileRows tiles={profile.pinned.tiles} open={go} /> : null}
       {profile.pinned.sections.map((section) => (
         <PinnedSectionRow key={section.tab?.key ?? section.group?.key} profileId={profile.syncId} section={section} openGroups={open} open={go} />

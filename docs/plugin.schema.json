@@ -170,10 +170,6 @@
             "type": "boolean",
             "description": "Keep secrets in the Keychain"
           },
-          "signIn": {
-            "type": "boolean",
-            "description": "Open sign-in pages in a tab and read the loopback address they send you back to (ardia.signIn), for OAuth sign-in"
-          },
           "network": {
             "anyOf": [
               {

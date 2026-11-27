@@ -3,7 +3,6 @@ import { activeTabId, isIncognitoProfile } from "../browser/model";
 import { isPeekTab } from "../peek/peek";
 import { INTERNAL_PAGES, internalPageOf } from "../pages/urls";
 import { pluginPageOf } from "../plugins/pageNames";
-import { isSignInTab } from "../plugins/signInTabs";
 import { groupOf } from "../pins/tabGrouping";
 import { focusedWindowOf } from "../windows/ui";
 import { ownValue } from "../../lib/decode";
@@ -21,12 +20,6 @@ export function eligibleKind(s: Pick<BrowserState, "windows">, windowId: string 
 }
 
 export function isEligibleTab(s: Pick<BrowserState, "windows" | "tabs" | "peeks">, tabId: string): boolean {
-  return !isSignInTab(tabId) && isEligiblePlace(s, tabId);
-}
-
-export const eligibleTabOr = (s: Pick<BrowserState, "windows" | "tabs" | "peeks">, tabId: string | null | undefined): string | null => (tabId && isEligibleTab(s, tabId) ? tabId : null);
-
-export function isEligiblePlace(s: Pick<BrowserState, "windows" | "tabs" | "peeks">, tabId: string): boolean {
   const t = ownValue(s.tabs, tabId);
   return !!t && eligibleKind(s, t.windowId) !== null && !isIncognitoProfile(t.profileId) && !isPeekTab(s, tabId);
 }

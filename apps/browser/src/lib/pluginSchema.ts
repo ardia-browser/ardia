@@ -36,7 +36,6 @@ const permissionKeys = closed({
   files: { type: "boolean", description: "Keep its own files: ardia.files over its data folder" },
   folders: { type: "boolean", description: "Read and write folders you choose, like a shared folder in iCloud Drive (ardia.folders)" },
   secrets: { type: "boolean", description: "Keep secrets in the Keychain" },
-  signIn: { type: "boolean", description: "Open sign-in pages in a tab and read the loopback address they send you back to (ardia.signIn), for OAuth sign-in" },
   network: { anyOf: [{ const: false }, { const: "*" }, { type: "array", minItems: 1, maxItems: LIMITS.allowedHosts, items: { type: "string", pattern: "^(\\*\\.)?[a-z0-9.-]{1,253}$" } }], description: "false, \"*\" or hosts like api.example.com and *.example.com" },
   sites: { type: "array", minItems: 1, maxItems: MAX_SIGN_IN_SITES, items: { type: "string", pattern: "^[a-z0-9-]{1,63}(\\.[a-z0-9-]{1,63})+$" }, description: "Exact hosts, like www.example.com, where the plugin may use your sign-in in Ardia (ardia.sites): its requests carry your cookies there, which it never sees" },
   siteHeaders: { type: "array", minItems: 1, maxItems: MAX_SITE_HEADERS, items: { type: "string", pattern: "^[a-z0-9]{1,30}(-[a-z0-9]{1,30}){1,6}$" }, description: "The sites' own request headers the plugin may send with ardia.sites, like x-example-client (needs sites)" },

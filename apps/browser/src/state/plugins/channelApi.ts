@@ -25,7 +25,6 @@ import { FILES_METHODS, filesMethod } from "./channelFiles";
 import { APP_METHODS, appMethod } from "./channelApp";
 import { APPLE_NOTES_METHODS, appleNotesMethod } from "./channelAppleNotes";
 import { FOLDERS_METHODS, foldersMethod } from "./channelFolders";
-import { SIGN_IN_METHODS, signInMethod } from "./channelSignIn";
 import { SITES_METHODS, sitesMethod } from "./channelSites";
 
 const CHANNEL_PROTOCOL = 2;
@@ -156,7 +155,6 @@ export function answerMethod(c: ChannelCaller, m: PluginManifest, method: string
   if ((APP_METHODS as readonly string[]).includes(method)) return appMethod(c, m, method, params);
   if ((APPLE_NOTES_METHODS as readonly string[]).includes(method)) return appleNotesMethod(c, m, method, params);
   if ((FOLDERS_METHODS as readonly string[]).includes(method)) return foldersMethod(c, m, method, params);
-  if ((SIGN_IN_METHODS as readonly string[]).includes(method)) return signInMethod(c, m, method, params);
   if ((SITES_METHODS as readonly string[]).includes(method)) return sitesMethod(c, m, method, params);
   return null;
 }

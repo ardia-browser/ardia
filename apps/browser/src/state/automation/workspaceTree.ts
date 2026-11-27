@@ -10,7 +10,7 @@ import { splitOf } from "../splits/splits";
 import { isAsleep, isLazy } from "../tabs/pageSession";
 import { isSleeping } from "../tabs/sleepingTabs";
 import { focusedWindowOf } from "../windows/ui";
-import { eligibleKind, eligibleTabOr, isEligibleTab, shownPage, type AutomationWindowKind } from "./automationWindows";
+import { eligibleKind, isEligibleTab, shownPage, type AutomationWindowKind } from "./automationWindows";
 import { ownValue } from "../../lib/decode";
 
 export type TabNode = {
@@ -132,7 +132,7 @@ function buildSpace(s: Snapshot, windowId: string, profileId: string, shown: boo
     profile: profileId,
     profileName: s.profiles[profileId]?.name ?? "",
     shown,
-    activeTab: eligibleTabOr(s, activeTabId(s as BrowserState, windowId, profileId)),
+    activeTab: activeTabId(s as BrowserState, windowId, profileId) ?? null,
     topApps: [],
     pinned: [],
     tabs: [],
@@ -169,7 +169,7 @@ export function workspace(s: Snapshot, filter: { window?: string | null; profile
       .filter((p) => !isIncognitoProfile(p) && (!filter.profile || filter.profile === p))
       .map((p) => buildSpace(s, id, p, p === w.profileId));
     if (filter.profile && !spaces.length) return [];
-    return [{ id, kind, focused: id === focused, profile: w.profileId, profileName: s.profiles[w.profileId]?.name ?? "", activeTab: eligibleTabOr(s, activeTabId(s as BrowserState, id)), spaces }];
+    return [{ id, kind, focused: id === focused, profile: w.profileId, profileName: s.profiles[w.profileId]?.name ?? "", activeTab: activeTabId(s as BrowserState, id) ?? null, spaces }];
   });
   return { profiles, windows };
 }

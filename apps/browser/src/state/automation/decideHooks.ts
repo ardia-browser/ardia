@@ -17,7 +17,6 @@ import { airTrafficHolds } from "../airTraffic/rules";
 import { currentAirTraffic, loadAirTraffic, noteLinkSource, useAirTraffic } from "../airTraffic/store";
 import { onPluginDecidersChanged, pluginsDeciding, runPluginDecideHook } from "../plugins/decideHooks";
 import { usePlugins } from "../plugins/store";
-import { isSignInTab } from "../plugins/signInTabs";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 
 const LINK_OPEN = new Set(["tab", "littleArdia", "window"]);
@@ -44,7 +43,6 @@ function pluginOpening(url: string, verdict: unknown): OpeningVerdict {
 }
 
 function openingWithPlugins(url: string, context: OpeningContext, consent: ConsentToken | null, signal?: AbortSignal): OpeningVerdict | Promise<OpeningVerdict> {
-  if (context.tabId && isSignInTab(context.tabId)) return null;
   const data = { url, via: context.via, windowId: context.windowId, tabId: context.tabId, profile: context.profileId };
   return afterHooks(decideOpening(url, context, signal), "tab.opening", pluginEligible(context.windowId, context.profileId, context.tabId), () =>
     runPluginDecideHook("tab.opening", data, consent, signal).then((found) => (found ? pluginOpening(url, found.verdict) : null)),
@@ -67,7 +65,6 @@ function linkWithPlugins(url: string, source: LinkSourceInfo, consent: ConsentTo
 }
 
 function permissionWithPlugins(request: PermissionAsk, signal?: AbortSignal): PermissionVerdict | Promise<PermissionVerdict> {
-  if (request.tabId && isSignInTab(request.tabId)) return "ask";
   const consent = consentToken();
   const declared = decidePermission(request, signal);
   const tab = request.tabId ? useBrowser.getState().tabs[request.tabId] : undefined;

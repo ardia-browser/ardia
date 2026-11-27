@@ -49,7 +49,6 @@
     appleNotesRequest: "appleNotes.request",
     appleNotesFolders: "appleNotes.folders",
     appleNotesNotes: "appleNotes.notes",
-    signInStart: "signIn.start",
     foldersList: "folders.list",
     foldersCreate: "folders.create",
     foldersPick: "folders.pick",
@@ -397,19 +396,6 @@
         return { ok: unwrap(await rpc.request(HOST_METHODS.foldersShare, { id }), "ok") === true };
       },
       forget: (id) => rpc.request(HOST_METHODS.foldersForget, { id }).then(() => void 0)
-    };
-  }
-
-  function signInApi(rpc) {
-    return {
-      async start(options) {
-        const params = { url: options.url, callback: options.callback, state: options.state };
-        if (options.timeoutMs !== void 0) params.timeoutMs = options.timeoutMs;
-        const answer = await rpc.request(HOST_METHODS.signInStart, params);
-        const url = answer && typeof answer === "object" ? answer.url : void 0;
-        if (typeof url !== "string") throw new PluginError("failed", "Ardia answered signIn.start without a URL.");
-        return { url };
-      }
     };
   }
 
@@ -790,7 +776,6 @@
           return { total: typeof res?.total === "number" ? res.total : 0, notes: Array.isArray(res?.notes) ? res.notes : [] };
         }
       },
-      signIn: signInApi(rpc),
       programs: {
         status: () => rpc.request(HOST_METHODS.programsStatus),
         relink: () => rpc.request(HOST_METHODS.programsRelink)

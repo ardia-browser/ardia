@@ -124,7 +124,6 @@ function permissionLines(m: PluginManifest): ConsentLine[] {
   if (p.files) lines.push({ icon: "folder", text: "Keeps its own files on this " + PLATFORM_TERMS.computer });
   if (p.folders) lines.push({ icon: "person.2", text: `Reads and writes folders you choose, like a shared folder in ${PLATFORM_TERMS.cloudDrive}` });
   if (p.secrets) lines.push({ icon: "key", text: "Keeps secrets, like sign-in tokens, in your Keychain" });
-  if (p.signIn) lines.push({ icon: "rectangle.portrait.and.arrow.forward", text: "Opens sign-in pages in a tab and reads the address they send you back to" });
   return lines;
 }
 

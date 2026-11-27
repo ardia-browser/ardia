@@ -1467,15 +1467,13 @@ protocol PluginsNative {
   static func filesTicket() -> Int
   static func pluginFolderCreate(_ parent: String, _ parentIdentity: [String: Any]?, _ name: String, _ grandparentIdentity: [String: Any]?, _ promise: Promise)
   static func pluginFolderInfo(_ path: String, _ promise: Promise)
-  static func signInListen(_ id: String, _ host: String, _ port: Int, _ path: String, _ state: String, _ deadlineMs: Int, _ promise: Promise)
-  static func signInStop(_ id: String)
 }
 
 extension PluginsNative {
   static var moduleName: String { "ArdiaPlugins" }
 
   static var eventsDefinition: AnyDefinition {
-    Events("onLine", "onExit", "onOfficialFetch", "onFilesChange", "onSignInCallback")
+    Events("onLine", "onExit", "onOfficialFetch", "onFilesChange")
   }
 
   static var folderFunction: AnyDefinition {
@@ -1617,14 +1615,6 @@ extension PluginsNative {
   static var pluginFolderInfoFunction: AnyDefinition {
     AsyncFunction("pluginFolderInfo") { (path: String, promise: Promise) in Self.pluginFolderInfo(path, promise) }
   }
-
-  static var signInListenFunction: AnyDefinition {
-    AsyncFunction("signInListen") { (id: String, host: String, port: Int, path: String, state: String, deadlineMs: Int, promise: Promise) in Self.signInListen(id, host, port, path, state, deadlineMs, promise) }
-  }
-
-  static var signInStopFunction: AnyDefinition {
-    Function("signInStop") { (id: String) in Self.signInStop(id) }
-  }
 }
 
 extension PluginsNative where Self: Module {
@@ -1632,7 +1622,6 @@ extension PluginsNative where Self: Module {
   func sendOnExit(_ payload: [String: Any?]) { sendEvent("onExit", payload) }
   func sendOnOfficialFetch(_ payload: [String: Any?]) { sendEvent("onOfficialFetch", payload) }
   func sendOnFilesChange(_ payload: [String: Any?]) { sendEvent("onFilesChange", payload) }
-  func sendOnSignInCallback(_ payload: [String: Any?]) { sendEvent("onSignInCallback", payload) }
 }
 
 protocol SystemSignalsNative {

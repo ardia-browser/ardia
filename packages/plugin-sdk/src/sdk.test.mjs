@@ -1851,22 +1851,6 @@ describe("files and folders", () => {
     assert.deepEqual(host.calls("appleNotes.notes").at(-1).params, { folder: "f1", offset: 4, limit: 2 });
   });
 
-  test("signIn.start sends url, callback, state and timeoutMs, resolves the redirect and rejects with Ardia's code", async () => {
-    const st = "Zq81_mNw-4Lp0aXc";
-    const { host, runtime } = await started({}, {
-      "signIn.start": (p) => {
-        if (p.url === "https://busy.example/") throw Object.assign(new Error("taken"), { code: "port_in_use" });
-        return p.url === "https://odd.example/" ? { url: 7 } : { url: `${p.callback}?code=x&state=${p.state}` };
-      },
-    });
-    assert.deepEqual(await runtime.ardia.signIn.start({ url: "https://accounts.example/o", callback: "http://127.0.0.1:53682/cb", state: st, timeoutMs: 60000 }), { url: `http://127.0.0.1:53682/cb?code=x&state=${st}` });
-    assert.deepEqual(host.calls("signIn.start").at(-1).params, { url: "https://accounts.example/o", callback: "http://127.0.0.1:53682/cb", state: st, timeoutMs: 60000 });
-    await runtime.ardia.signIn.start({ url: "https://accounts.example/o", callback: "http://localhost:8080/", state: st });
-    assert.deepEqual(host.calls("signIn.start").at(-1).params, { url: "https://accounts.example/o", callback: "http://localhost:8080/", state: st });
-    await assert.rejects(runtime.ardia.signIn.start({ url: "https://busy.example/", callback: "http://127.0.0.1:53682/cb", state: st }), (error) => error instanceof PluginError && error.code === "port_in_use");
-    await assert.rejects(runtime.ardia.signIn.start({ url: "https://odd.example/", callback: "http://127.0.0.1:53682/cb", state: st }), (error) => error instanceof PluginError && error.code === "failed");
-  });
-
   test("files.pick asks for one or many files and keeps only well-formed answers", async () => {
     const { host, runtime } = await started({}, { "files.pick": (p) => ({ files: p.multiple ? [{ id: "pabcdef0123", name: "a.zip", size: 3 }, { name: "bad" }, null] : [] }) });
     assert.deepEqual(await runtime.ardia.files.pick({ multiple: true }), [{ id: "pabcdef0123", name: "a.zip", size: 3 }]);

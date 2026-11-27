@@ -19,8 +19,6 @@ import {
   type PluginProgramsSpec,
   type PluginProgramRegistry,
   type PluginRemoveResult,
-  type PluginSignInCallback,
-  type PluginSignInListenResult,
   type PluginStartResult,
   type PluginStartSpec,
   type PluginStorageReadResult,
@@ -98,7 +96,3 @@ export const pluginFolderCreate = (parent: string, parentIdentity: PluginFolderI
 export const filesUnwatch = (id: string) => Plugins().filesUnwatch(id);
 export const pluginFolderInfo = (path: string) => Plugins().pluginFolderInfo(path);
 export const onPluginFilesChange = (listener: (e: { id: string; paths: string[]; gone?: boolean }) => void) => Plugins().addListener("onFilesChange", listener);
-export const signInListen = (id: string, host: string, port: number, path: string, state: string, deadlineMs: number): Promise<PluginSignInListenResult> =>
-  Plugins().signInListen?.(id, host, port, path, state, deadlineMs) ?? Promise.resolve({ ok: false, code: "failed", reason: "this build of Ardia can't listen for sign-ins" });
-export const signInStop = (id: string) => Plugins().signInStop?.(id);
-export const onSignInCallback = (listener: (e: PluginSignInCallback) => void) => Plugins().addListener("onSignInCallback", listener);

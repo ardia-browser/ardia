@@ -81,8 +81,6 @@ export type PluginFilesCode = "not_found" | "exists" | "too_large" | "bad_path" 
 export type PluginFilesResult =
   | { ok: true; found?: boolean; data?: string; size?: number; mtimeMs?: number; removed?: boolean; entries?: PluginFilesEntry[]; kind?: "file" | "dir" }
   | { ok: false; code: PluginFilesCode; message: string };
-export type PluginSignInListenResult = { ok: true } | { ok: false; code: "port_in_use" | "failed"; reason: string };
-export type PluginSignInCallback = { id: string; target: string };
 export type PluginFolderInfo = { exists: boolean; realPath: string; location: "icloud" | "other"; protected: boolean; device?: number; inode?: number };
 
 export type { PluginsNative };

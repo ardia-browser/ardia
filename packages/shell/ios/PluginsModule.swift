@@ -80,14 +80,6 @@ public class PluginsModule: Module, PluginsNative {
 
   static func pluginFolderInfo(_ path: String, _ promise: Promise) { DispatchQueue.global(qos: .userInitiated).async { promise.resolve(PluginFileCalls.folderInfo(path)) } }
 
-  static let signIns = PluginSignInListener { id, target in PluginHost.shared.emit("onSignInCallback", ["id": id, "target": target]) }
-
-  static func signInListen(_ id: String, _ host: String, _ port: Int, _ path: String, _ state: String, _ deadlineMs: Int, _ promise: Promise) {
-    signIns.listen(id: id, host: host, port: port, path: path, state: state, deadlineMs: deadlineMs) { promise.resolve($0.reply) }
-  }
-
-  static func signInStop(_ id: String) { signIns.stop(id) }
-
   public func definition() -> ModuleDefinition {
     Name(Self.moduleName)
 
@@ -167,10 +159,6 @@ public class PluginsModule: Module, PluginsNative {
 
     Self.pluginFolderInfoFunction
 
-    Self.signInListenFunction
-
-    Self.signInStopFunction
-
     View(PluginPageView.self) {
       Events("onLoaded", "onTitleChange", "onNavigationChange", "onMessage", "onNavigate")
       Prop("plugin") { (view: PluginPageView, value: String) in view.plugin = value }
@@ -187,7 +175,6 @@ public class PluginsModule: Module, PluginsNative {
     }
 
     OnDestroy {
-      Self.signIns.stopAll()
       PluginHost.shared.detach(self)
     }
   }

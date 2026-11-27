@@ -33,7 +33,6 @@ import {
 } from "./protocol";
 import { PluginError, unwrap, type Rpc } from "./rpc";
 import { filesApi, foldersApi } from "./files";
-import { signInApi } from "./signIn";
 import { sitesApi } from "./sites";
 import {
   addTo,
@@ -307,7 +306,6 @@ export function createArdia(rpc: Rpc, registry: Registry, state: ApiState) {
         return { total: typeof res?.total === "number" ? res.total : 0, notes: Array.isArray(res?.notes) ? res.notes : [] };
       },
     },
-    signIn: signInApi(rpc),
     programs: {
       status: () => rpc.request<ProgramsStatus>(M.programsStatus),
       relink: () => rpc.request<{ ok: boolean }>(M.programsRelink),

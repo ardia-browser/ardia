@@ -43,7 +43,6 @@ const { folderNameProblem } = await import("./state/plugins/folderGrants.ts");
 const { routePluginPage } = await import("./state/plugins/pages.ts");
 const { usePlugins } = await import("./state/plugins/store.ts");
 const { tabDestination } = await import("./state/pages/urls.ts");
-const { signInCallbackOf, signInRedirect, signInStateOf, signInUrlOf } = await import("./state/plugins/channelSignIn.ts");
 
 const S = () => useBrowser.getState();
 const show = (value) => {
@@ -1277,24 +1276,3 @@ test("a plugin page's navigate request only ever moves its tab to one of that pl
   assert.equal(routePluginPage(id, "other", JSON.stringify({ path: "/x" })), false, "another plugin can't move this tab");
 });
 
-test("a plugin's sign-in reaches a tab only as https with its state, listens only on loopback, and hands back only its own callback's address", () => {
-  const state = "Zq81_mNw-4Lp0aXc";
-  const callback = signInCallbackOf("http://127.0.0.1:53682/cb");
-  assert.equal("problem" in callback, false, "positive control: a plain callback passes");
-  assert.deepEqual(signInUrlOf(`https://accounts.example/o?state=${state}`, state), { url: `https://accounts.example/o?state=${state}` }, "positive control: a plain url passes");
-  assert.equal(signInRedirect(callback, state, `/cb?code=x&state=${state}`), `http://127.0.0.1:53682/cb?code=x&state=${state}`, "positive control: the real redirect passes");
-  const shapes = (v) => (typeof v === "string" ? [v, `https://a.example/${v}?state=${state}`, `http://127.0.0.1:53682/${v}`, `/cb?state=${state}&${v}`, `/cb${v}?state=${state}`] : [v]);
-  for (const { value } of HOSTILE_VALUES)
-    for (const shaped of shapes(value)) {
-      const url = signInUrlOf(shaped, state);
-      if ("url" in url) assert.match(url.url, /^https:\/\/[\x21-\x7e]+$/, show(shaped));
-      const cb = signInCallbackOf(shaped);
-      if (!("problem" in cb)) {
-        assert.ok(["127.0.0.1", "localhost", "::1"].includes(cb.host), show(shaped));
-        assert.match(cb.path, /^\/[A-Za-z0-9/_.~-]*$/, show(shaped));
-      }
-      const back = signInRedirect(callback, state, shaped);
-      if (back !== null) assert.match(back, /^http:\/\/127\.0\.0\.1:53682\/cb\?[\x21\x22\x24-\x7e]*$/, show(shaped));
-      if (signInStateOf(shaped) !== null) assert.match(shaped, /^[A-Za-z0-9_-]{16,256}$/);
-    }
-});

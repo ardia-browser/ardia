@@ -81,7 +81,7 @@ definePlugin({ views: { releases: Releases }, commands: { refresh: async () => a
 - **Hooks**: `useState`, `useReducer`, `useEffect`, `useLayoutEffect`, `useMemo`, `useCallback`, `useRef`,
   `useContext`, `useId`, and `useSurface` (which surface and window a view is in).
 - **`ardia`**: `tabs`, `workspace`, `navigation`, `downloads`, `state`, `activePage`, `commands`, `tools`, `storage`,
-  `secrets`, `net.fetch`, `signIn`, `programs`, `ui` (`toast`, `quickPick`, `inputBox`, `confirm`), `panels`, `toolbar`
+  `secrets`, `net.fetch`, `programs`, `ui` (`toast`, `quickPick`, `inputBox`, `confirm`), `panels`, `toolbar`
   (title, badge, icon updates), `omnibox`, `decide` and `pages`. State events and intents are
   [below](#state-events-and-intents).
   Each call is a request on the channel and is held to the manifest's permissions on Ardia's side; the SDK never
@@ -408,7 +408,6 @@ plugin that isn't needed yet costs nothing: no host process, no memory. The firs
 | `files` | `true` | Files of its own under `PluginData/<name>/files` through `ardia.files` ([files](#files)): read, write, append, list, remove and watch, at most 2 GiB in all. The consent sheet says "Keeps its own files on this Mac" |
 | `folders` | `true` | Folders you grant through `ardia.folders` ([folders](#folders)): one it makes in iCloud Drive › Ardia Shared or one you pick, which `ardia.files` then reaches by the grant's id (that needs `files` too). The consent sheet says "Reads and writes folders you choose, like a shared folder in iCloud Drive" |
 | `secrets` | `true` | Keychain items of its own (`ardia.plugin.<name>.<key>`, at most 64, 16 KB each; `plugin_secret_writes`). If the Keychain's list of them can't be read, Ardia keeps it, fails secret writes and deletes, and says removing the plugin left its secrets |
-| `signIn` | `true` | `ardia.signIn.start` ([signIn](#signin)): opens a sign-in page in a tab of your frontmost normal window and hands main the loopback address it sends you back to, for OAuth sign-in with the browser's own session and passkeys. The consent sheet says "Opens sign-in pages in a tab and reads the address they send you back to" |
 | `network` | `false`, `"*"`, or 1 to 32 host patterns | main's `fetch` reaches only these hosts (`*.example.com` included); a sidecar gets the network as in v1. A web view the plugin shows (its page, a `file` panel) goes online only with `"*"`: WebKit's traffic can't be held to a list of hosts, so with a list it stays offline and the plugin reaches its hosts through `net.fetch` |
 | `state` | `{"events"?, "intents"?}` or `false` | `events`: any of `tabs`, `workspace`, `navigation` (each needs `tabs`) and `downloads`, heard after Ardia commits them, redacted. `intents`: any of `tabs.group`, `tabs.ungroup`, `tabs.move`, `tabs.pin`, `tabs.unpin`, `tabs.mute`, `tabs.unmute`, `tabs.activate` and `groups.update` (needs `tabs: write`). See [State events and intents](#state-events-and-intents) |
 | `sites` | 1 to 8 exact hosts | Use your sign-in in Ardia on these hosts through `ardia.sites` ([sites](#sites)): requests carry your cookies there, which the plugin never sees. The consent sheet names every host and says the plugin can make changes ("Use your sign-in on app.notion.com, file.notion.com, file.notion.so and www.notion.so: Notes can read your Notion pages and make changes there as you. Never in private windows, and it never sees your password or cookies"), and Settings › Plugins shows that line with a switch that turns it off |
@@ -502,76 +501,6 @@ ardia.app.icon(path, { size? })  // an app's icon as a PNG data URL, or null: /A
 
 Neither changes anything. `openSettings` needs a normal window (`no_window`), opens at most once every 2 seconds a
 plugin (`refused` sooner) and takes no other pane (`bad_request`). Counted as `plugin_settings_opens`.
-
-### signIn
-
-A plugin signs you in to a service with OAuth through your own browser, so the sign-in page sees the session and
-passkeys you already have there, and main (which is offline and can't listen on a port) still gets the answer. It is the
-loopback redirect of RFC 8252 for installed apps, done by Ardia:
-
-```ts
-const state = randomState();
-const { url } = await ardia.signIn.start({
-  url: `https://accounts.google.com/o/oauth2/v2/auth?client_id=…&redirect_uri=http%3A%2F%2F127.0.0.1%3A53682%2Fcb&code_challenge=…&state=${state}`,
-  callback: "http://127.0.0.1:53682/cb",
-  state,
-  timeoutMs: 600_000,
-});
-// url is "http://127.0.0.1:53682/cb?code=…&state=…"
-```
-
-- `permissions.signIn` is needed. `state` is 16 to 256 letters, digits, `_` and `-`, fresh for each sign-in, and `url`
-  must carry exactly one `state` query parameter equal to it, counting names after percent-decoding (so
-  `st%61te=…&state=…` is two, and refused; a name that doesn't decode is refused too). `url` is one `https` address with a host, at most 8 KB,
-  read by the plugin URL rules of `open` (an ASCII host, no user name or password). `callback` is
-  `http://127.0.0.1:<port><path>`, `http://localhost:<port><path>` or `http://[::1]:<port><path>`, lowercase as written,
-  with an explicit port from 1024 to 65535 (no leading zero) and a path of letters, digits, `/`, `_`, `.`, `~` and `-`:
-  no `%` at all, no empty, `.` or `..` part, no query or fragment; no path is `/`. `timeoutMs` is optional: 15 minutes
-  by default, at least 1 second, and anything longer is held to 15 minutes.
-- **Bound first.** Ardia binds the callback's address and port before anything opens (both `127.0.0.1` and `::1` for
-  `localhost`; a Mac without IPv6 may skip `::1`), on loopback only. It first tries to connect there: anything that
-  answers (a program on that address or on all addresses, `0.0.0.0`) means the port is taken. It then binds with
-  `SO_REUSEADDR`, so a closed connection still in `TIME_WAIT` on that port doesn't block it, while a live bind of the
-  same address and port still fails. A port another program or another plugin's sign-in holds is `port_in_use` and no
-  tab opens: pick another port. Ardia never falls back to
-  watching the tab, since whatever holds the port would get the code.
-- Then it opens `url` in a new tab in front, in your frontmost normal window and that window's profile: never a private
-  window, an incognito profile, a Little Arc window or a Peek. The sign-in may hop between sites. **While it runs the
-  tab is hidden** from every plugin, the plugin that asked included, and from the `ardia` command: no tab events, no
-  row in `windows`, `workspace` or `apply` and never its id as a window's active tab, a group member or a split pane, no `tab.opening`, `permission.requested` or `onUrl` for it, so its address
-  (client id, state) can't leak through `fullUrls`. Its opening skips `tab.opening` rules, `hooks.json`'s included, and
-  so do the links it opens and the permissions it asks for: neither `hooks.json` nor a plugin's decide hook hears of
-  them, and the browser does what it would with no hooks (the link opens; the permission prompt shows).
-- **Kept out of History.** While a sign-in runs and for a minute after, no URL carrying its `state` reaches Ardia's
-  History, the address bar, history sync or `history.search`, and each one the engine records is deleted from its
-  history as it arrives; when the sign-in ends, Ardia deletes any it finds among the newest 2,000 pages. Its tab closes
-  without a closed-tab record, and if you closed it yourself, that record and any closed window holding it are
-  removed, so ⌘⇧T can't bring the address back.
-- **Why all of this.** The `state` nonce is what keeps another tab, a private window or a program on this Mac from
-  forging the redirect, and it protects only while it stays secret. So the tab is hidden and its addresses are kept out
-  of History while the sign-in runs. Once it ends the listener is gone and the old `state` is worth nothing.
-- **Caught before it loads** (`PluginCore/PluginSignInListener.swift`, `PluginSignInRequest.swift`). Only a `GET` of
-  the callback's exact path, with the callback's own `Host`, `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest:
-  document` when the browser sends them, and exactly one `state` (names percent-decoded, as above) equal to the
-  session's (compared in constant time) is the redirect. Ardia holds at most 16 sockets a sign-in, answered ones
-  included, drops one idle for 5 seconds, and closes an answered one when the browser does or after 1 second. It gets `204 No Content`, so the tab never leaves the page it was on and no error page shows; every
-  other open connection is dropped, the port closes, and Ardia brings back the tab that was in front before (normally
-  the plugin's page) when the sign-in tab is still in front, closes the sign-in tab and answers `{url}`: the callback's
-  address with the request's query. Anything else (no or wrong `state`, another path, a bad `Host`, a `fetch` from a
-  page) gets an empty 4xx and Ardia keeps listening, so another tab, a private window or a program on this Mac can't
-  end or forge the sign-in. A fragment never reaches a server, so a provider must answer in the query
-  (`response_mode=query`, the default for the code flow); its error redirects (`?error=…&state=…`) come back the same
-  way for the plugin to read.
-- **Ends.** Closing the sign-in tab (or it leaving for a private window) is `cancelled`; so is a second `start` from the
-  same plugin, which closes the first one's tab and replaces it (one sign-in a plugin at a time, one per endpoint
-  across plugins), and the plugin stopping, restarting or turning off, which leaves the tab open as a normal tab. Running
-  out of time is `timeout` and leaves the tab open. Native ends its listener by itself at the timeout plus 5 seconds,
-  and when the interface reloads. A bad `state`, `url` or `callback` or a plugin without the permission is `refused`, a
-  bad `timeoutMs` is `bad_request`, a taken port `port_in_use`, no normal window `no_window`, and Ardia failing to
-  listen (any error but a taken port) or to open the tab `failed`. Each rejects with a `PluginError` of that `code`.
-- Ardia never reads the page, the code or the token: it hands main the address and main exchanges the code itself
-  (`net.fetch`, with PKCE). Counted as `plugin_sign_in_started`, `_completed`, `_cancelled`, `_timeouts`, `_refused` and
-  `_port_in_use`.
 
 ### appleNotes
 
@@ -1439,7 +1368,6 @@ Requests from the helper (`{"id", "method", "params"}`):
 | `appleNotes.request`, `appleNotes.folders`, `appleNotes.notes` `{"folder", "offset"?, "limit"?}` | none (Ardia's sheet, then macOS's) | `{"granted"}`, `{"folders"}`, `{"total", "notes"}` ([appleNotes](#applenotes)) |
 | `app.openSettings` `{"pane"}` | none | `{"ok": true}`; pane is `plugins` or `advanced` ([app](#app)) |
 | `files.pick` `{"multiple"?}` | `files` | `{"files": [{"id", "name", "size"}]}` ([files](#files)) |
-| `signIn.start` `{"url", "callback", "state", "timeoutMs"?}` | `signIn` | `{"url"}`: the address the sign-in page sent the tab back to, once it does ([signIn](#signin)) |
 | `folders.list`, `folders.create` `{"name"}`, `folders.pick` `{"prompt"?}`, `folders.share` `{"id"}`, `folders.forget` `{"id"}` | `folders` | `{"folders"}`, `{"folder"}` (a grant or null), `{"ok"}` ([folders](#folders)) |
 | `result` `{"call", "result"? , "error"?}` | | `{"ok": true}`: the answer to a call (below) |
 
@@ -1734,7 +1662,7 @@ scripts/agent/plugin-instance quit /tmp/ardia-pi-notes
   activation (`activation.ts`), settings defaults (`defaults.ts`), the channel (`channel.ts`, `channelApi.ts`,
   `channelData.ts`, `channelUi.ts`), tools (`tools.ts`), commands (`commands.ts`), menus (`menus.ts`), toolbar
   (`toolbar.ts`), surfaces and panels (`surfaces.ts`, `panels.ts`), omnibox (`omnibox.ts`), themes (`themes.ts`),
-  decide hooks (`decideHooks.ts`), sign-ins (`channelSignIn.ts`, `signInTabs.ts`), storage and secrets (`storage.ts`, `secrets.ts`), page tabs (`pages.ts`,
+  decide hooks (`decideHooks.ts`), storage and secrets (`storage.ts`, `secrets.ts`), page tabs (`pages.ts`,
   `pageNames.ts`, `pageVisits.ts`; their back list in `state/tabs/appHistory.ts` and `appPageHistory.ts`), consent copy (`consent*.ts`), socket methods (`socketMethods.ts`).
 - Where the browser calls in: `App.tsx` (side panel and overlays), `components/toolbar/Toolbar.tsx` and
   `components/sidebar/AddressBar.tsx` (toolbar buttons), `components/sidebar/PageRows.tsx` (sidebar views),
@@ -1787,9 +1715,7 @@ in the local copy. Hourly `usage_counts`:
   `plugin_state_resyncs` (a plugin asked for everything again after the channel dropped events), `plugin_state_intents`
   (intents applied), `plugin_state_intent_refusals`, `plugin_file_reads`, `plugin_file_writes` (writes and appends), `plugin_file_refusals`
   (`bad_path`, `refused` or `too_large`), `plugin_folder_grants` (a create or pick that granted a folder), `plugin_file_picks` (files `files.pick` gave a plugin), `plugin_settings_opens` (`app.openSettings` that opened Settings), `plugin_apple_notes_asks`, `plugin_apple_notes_allowed`, `plugin_apple_notes_reads`,
-  `plugin_folder_shares`, and for sign-ins `plugin_sign_in_started`, `plugin_sign_in_completed`,
-  `plugin_sign_in_cancelled`, `plugin_sign_in_timeouts`, `plugin_sign_in_refused` and `plugin_sign_in_port_in_use` (the
-  callback's port was taken, so nothing opened). Watch `plugin_file_refusals` against `plugin_file_writes`: refusals climbing means a plugin
+  `plugin_folder_shares`. Watch `plugin_file_refusals` against `plugin_file_writes`: refusals climbing means a plugin
   is hitting a limit or a path rule.
 
 The daily settings snapshot has `plugins_installed`, `plugins_enabled` and, among those on, how many use each part:
@@ -1822,7 +1748,6 @@ refuses), `plugin_process_crashes` against `plugin_process_starts`, `plugin_acti
 zero; a rise in `reply_backlog` or `stalled` means a helper is falling behind its replies), `plugin_decide_timeouts` against `plugin_decide_calls` (a plugin slowing navigation),
 `plugin_state_flushes_slow` and `plugin_state_events_dropped` against `plugin_state_events` (state events costing
 the UI thread), `plugin_state_intent_refusals` against `plugin_state_intents`, `plugin_net_refusals` against
-`plugin_net_fetches`, `plugin_sign_in_completed` against `plugin_sign_in_started` (and
-`plugin_sign_in_port_in_use`: plugins picking a port something else holds), `plugin_url_refusals_open` and `plugin_url_refusals_group_create`
+`plugin_net_fetches`, `plugin_url_refusals_open` and `plugin_url_refusals_group_create`
 (a plugin trying addresses it may not open), `program_link_failures` against `program_links`, and `program_after_update_quit_kills` against
 `program_after_update_quit_exits` (afterUpdate commands that ignore TERM at quit).

@@ -6,7 +6,7 @@ import { stateAccessOf, stateGranted, stateMissing, type StateAccess } from "./p
 export const PLUGIN_PERMISSIONS = ["tabs", "fullUrls", "commands", "network", "control"] as const;
 export type PluginPermission = (typeof PLUGIN_PERMISSIONS)[number];
 
-export const PERMISSION_KEYS = ["tabs", "fullUrls", "activePage", "workspace", "commands", "storage", "files", "folders", "secrets", "signIn", "network", "sites", "siteHeaders", "control", "state"] as const;
+export const PERMISSION_KEYS = ["tabs", "fullUrls", "activePage", "workspace", "commands", "storage", "files", "folders", "secrets", "network", "sites", "siteHeaders", "control", "state"] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 export const TAB_ACCESS = ["read", "write"] as const;
 export type TabAccess = (typeof TAB_ACCESS)[number];
@@ -22,7 +22,6 @@ export type PluginPermissions = {
   files: boolean;
   folders: boolean;
   secrets: boolean;
-  signIn: boolean;
   network: NetworkAccess;
   sites: string[];
   siteHeaders: string[];
@@ -30,9 +29,9 @@ export type PluginPermissions = {
   state: StateAccess | false;
 };
 
-export const NO_PERMISSIONS: PluginPermissions = { tabs: false, fullUrls: false, activePage: false, workspace: false, commands: false, storage: false, files: false, folders: false, secrets: false, signIn: false, network: false, sites: [], siteHeaders: [], control: false, state: false };
+export const NO_PERMISSIONS: PluginPermissions = { tabs: false, fullUrls: false, activePage: false, workspace: false, commands: false, storage: false, files: false, folders: false, secrets: false, network: false, sites: [], siteHeaders: [], control: false, state: false };
 
-const BOOLEAN_KEYS = ["fullUrls", "activePage", "workspace", "commands", "storage", "files", "folders", "secrets", "signIn", "control"] as const;
+const BOOLEAN_KEYS = ["fullUrls", "activePage", "workspace", "commands", "storage", "files", "folders", "secrets", "control"] as const;
 
 export function legacyPermissions(given: unknown): unknown {
   if (!Array.isArray(given)) return given;

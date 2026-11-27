@@ -3,7 +3,6 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { focusedWindowOf } from "../windows/ui";
 import { eligibleKind, isEligibleTab, shownPage } from "./automationWindows";
-import { isSignInTab } from "../plugins/signInTabs";
 import type { AutomationEventName } from "./eventNames";
 
 type AutomationEventSink = (name: AutomationEventName, data: Record<string, unknown>) => void;
@@ -77,7 +76,6 @@ function releaseNavigations(tabId: string) {
 }
 
 function holdNavigation(tabId: string, url: string, sameDocument: boolean) {
-  if (isSignInTab(tabId)) return;
   const kept = (heldNavigations.get(tabId) ?? []).filter((held) => sameDocument || !held.sameDocument || held.url !== url);
   kept.push({ url, sameDocument, due: sameDocument ? Date.now() + SAME_DOCUMENT_HOLD_MS : 0 });
   heldNavigations.set(tabId, kept);

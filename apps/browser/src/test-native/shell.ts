@@ -968,19 +968,6 @@ async function filesCallFake(spec: PluginFilesSpecFake) {
   }
   return filesFail("refused", "that isn't a files call Ardia knows");
 }
-export const pluginSignIn = {
-  listens: [] as { id: string; host: string; port: number; path: string; state: string; deadlineMs: number }[],
-  stops: [] as string[],
-  listenResult: { ok: true } as { ok: true } | { ok: false; code: "port_in_use" | "failed"; reason: string },
-  listenGate: null as null | Promise<void>,
-  emitCallback: (id: string, target: string) => pluginEvents.emit("onSignInCallback", { id, target }),
-  reset() {
-    pluginSignIn.listens = [];
-    pluginSignIn.stops = [];
-    pluginSignIn.listenResult = { ok: true };
-    pluginSignIn.listenGate = null;
-  },
-};
 export const emitPluginLine = (line: { name: string; run: number; line: string }) => pluginEvents.emit("onLine", line);
 export const emitPluginExit = (exit: { name: string; run: number; status: number | null; signal: number | null; overMemory: boolean }) => pluginEvents.emit("onExit", exit);
 const plugins: Modules["ArdiaPlugins"] = {
@@ -1121,12 +1108,6 @@ const plugins: Modules["ArdiaPlugins"] = {
       protected: pluginFiles.protectedRoots.has(path),
       ...(pluginFiles.missingRoots.has(path) ? {} : (pluginFiles.identities[path] ?? {})),
     },
-  signInListen: async (id, host, port, path, state, deadlineMs) => {
-    pluginSignIn.listens.push({ id, host, port, path, state, deadlineMs });
-    await pluginSignIn.listenGate;
-    return pluginSignIn.listenResult;
-  },
-  signInStop: (id) => void pluginSignIn.stops.push(id),
   addListener: pluginEvents.addListener,
 };
 

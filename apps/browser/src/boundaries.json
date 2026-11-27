@@ -1305,30 +1305,6 @@
    "detected": false
   },
   {
-   "id": "plugin-method:signIn.*",
-   "source": "plugin",
-   "guard": "signIn.start needs the signIn permission; state is 16 to 256 of [A-Za-z0-9_-] and url must carry exactly one state query parameter equal to it (signInStateOf, signInUrlOf); url is one https address with an ASCII host and no credentials, at most 8 KB; callback is exactly http://127.0.0.1, localhost or [::1] with an explicit port 1024 to 65535 and a path of [A-Za-z0-9/_.~-] with no %, empty, . or .. segment (signInCallbackOf); timeoutMs is held to 1 s to 15 min; one session per plugin and per endpoint across plugins (port_in_use); the port is bound before the tab opens and a taken port opens nothing; the tab opens only in a normal window and is hidden from every plugin and the ardia command while the session runs (isSignInTab in isEligibleTab)",
-   "checks": [
-    "apps/browser/src/state/plugins/channelSignIn.ts#signInMethod",
-    "apps/browser/src/state/plugins/channelSignIn.ts#signInUrlOf",
-    "apps/browser/src/state/plugins/channelSignIn.ts#signInCallbackOf",
-    "apps/browser/src/state/plugins/channelSignIn.ts#signInStateOf",
-    "apps/browser/src/state/plugins/signInTabs.ts#isSignInTab"
-   ],
-   "detected": false
-  },
-  {
-   "id": "loopback:sign-in-redirect",
-   "source": "page",
-   "guard": "The redirect reaches the plugin only from its own session: a loopback listener (POSIX sockets, bound before the tab opens, no SO_REUSEADDR) takes a GET of the callback's exact path with the callback's own Host, Sec-Fetch-Mode navigate and Sec-Fetch-Dest document when sent, a printable-ASCII head of at most 16 KB and exactly one state query parameter equal to the session's (constant-time compare), answers it 204 so nothing loads, drops every other socket and stops; anything else gets an empty 4xx and it keeps listening (PluginSignInRequest.verdict); in JS, signInRedirect checks the target again: the exact path, a printable-ASCII query without # and the same state",
-   "checks": [
-    "packages/shell/ios/PluginCore/PluginSignInRequest.swift#verdict",
-    "packages/shell/ios/PluginCore/PluginSignInListener.swift#PluginSignInListener",
-    "apps/browser/src/state/plugins/channelSignIn.ts#signInRedirect"
-   ],
-   "detected": false
-  },
-  {
    "id": "socket-family:core",
    "source": "socket",
    "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",

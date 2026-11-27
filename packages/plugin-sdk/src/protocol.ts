@@ -262,8 +262,6 @@ export type ControlStatus = { command: boolean; control: boolean };
 export type ArdiaSettingsPane = "plugins" | "advanced";
 export type AppleNotesFolder = { id: string; name: string; account: string; parent: string; count: number };
 export type AppleNotesNote = { id: string; name: string; created: number; modified: number; locked: boolean; body: string };
-export type SignInOptions = { url: string; callback: string; state: string; timeoutMs?: number };
-export type SignInResult = { url: string };
 
 export type SiteRequest = { method?: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"; headers?: Record<string, string>; body?: string; timeoutMs?: number; session?: string };
 export type SiteResponseData = { ok: boolean; status: number; headers: Record<string, string>; body: string };
@@ -320,7 +318,6 @@ export const HOST_METHODS = {
   appleNotesRequest: "appleNotes.request",
   appleNotesFolders: "appleNotes.folders",
   appleNotesNotes: "appleNotes.notes",
-  signInStart: "signIn.start",
   foldersList: "folders.list",
   foldersCreate: "folders.create",
   foldersPick: "folders.pick",

@@ -1,7 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import type { SplitView } from "../browser/types";
 import { MAX_SPLIT_PANES, splitOf, splitTabIds } from "../splits/splits";
-import { eligibleKind, eligibleTabOr, isEligibleTab, shownPage } from "./automationWindows";
+import { eligibleKind, isEligibleTab, shownPage } from "./automationWindows";
 import type { MethodSpec } from "./socketCatalog";
 import { id, ids, obj, oneOf, TAB, text, WINDOW } from "./socketSchema";
 import { expect, now, tabOf, windowOf } from "./socketTargets";
@@ -16,8 +16,8 @@ function splitRow(s: BrowserState, v: SplitView) {
     id: v.id,
     window: v.windowId,
     orientation: v.orientation,
-    tabs: splitTabIds(v).filter((t) => isEligibleTab(s, t)),
-    panes: v.slots.map((slot) => ("tabId" in slot ? { size: slot.size, tab: eligibleTabOr(s, slot.tabId) } : { size: slot.size, stack: slot.stack.map((t) => eligibleTabOr(s, t)), stackSizes: slot.stackSizes })),
+    tabs: splitTabIds(v),
+    panes: v.slots.map((slot) => ("tabId" in slot ? { size: slot.size, tab: slot.tabId } : { size: slot.size, stack: slot.stack, stackSizes: slot.stackSizes })),
   };
 }
 

@@ -1049,13 +1049,6 @@
       const before = fields.filter((el) => el.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING);
       return before.pop() || fields.find((el) => /user|mail|login|account/i.test(el.name + el.id + el.autocomplete)) || null;
     };
-    const loginField = (el) => {
-      if (!el || el.localName !== "input" || !visible(el)) return null;
-      if (el.type === "password") return { password: el, username: usernameFor(el) };
-      const password = passwordIn(el.form || document);
-      if (!password) return null;
-      return usernameFor(password) === el ? { password, username: el } : null;
-    };
     const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
     const OTHER_AUTOCOMPLETE = /(^|\s)(username|email|current-password|new-password|tel|postal-code|cc-[a-z-]+)(\s|$)/i;
     const CODE_HINT = /(^|[^a-z])(otp|totp|2fa|mfa)([^a-z]|$)|one.?time.?(pass)?code|verification.?code|verify.?code|security.?code|auth(entication)?.?code|passcode/i;
@@ -1065,13 +1058,42 @@
     const attribute = (el, name) => apply(getAttribute, el, [name]) || "";
     const NEW_PASSWORD = /(^|\s)new-password(\s|$)/i;
     const CURRENT_PASSWORD = /(^|\s)current-password(\s|$)/i;
-    const newPasswords = (password) => {
-      if (!password || password.type !== "password") return [];
-      const all = Array.from((password.form || document).querySelectorAll("input[type=password]")).filter(visible);
+    const passwordsIn = (root) => Array.from(root.querySelectorAll("input[type=password]")).filter(visible);
+    const newPasswordsIn = (root) => {
+      const all = passwordsIn(root);
       const marked = all.filter((el) => NEW_PASSWORD.test(attribute(el, "autocomplete")));
       const unmarked = all.filter((el) => !CURRENT_PASSWORD.test(attribute(el, "autocomplete")));
-      const found = marked.length ? marked : unmarked.length < all.length ? unmarked : all.length === 2 ? all : all.length === 3 ? all.slice(1) : [];
+      return marked.length ? marked : unmarked.length < all.length ? unmarked : all.length === 2 ? all : all.length === 3 ? all.slice(1) : [];
+    };
+    const newPasswords = (password) => {
+      if (!password || password.type !== "password") return [];
+      const found = newPasswordsIn(password.form || document);
       return found.includes(password) ? found : [];
+    };
+    const signUpForm = (root) => {
+      const all = passwordsIn(root);
+      return all.length > 0 && newPasswordsIn(root).length === all.length;
+    };
+    const SIGN_IN_STEP = /^(next|continue|sign ?in|log ?in)\b/i;
+    const textInputs = (form) => Array.from(form.querySelectorAll("input")).filter((el) => visible(el) && /^(text|email|tel|)$/i.test(attribute(el, "type")));
+    const submitLabel = (form) => {
+      const button = form.querySelector("button[type=submit], button:not([type]), input[type=submit]");
+      if (!button) return "";
+      return String((button.localName === "input" ? button.value : button.textContent) || "").trim().slice(0, 40);
+    };
+    const identifierField = (el) => {
+      if (!/^(text|email|)$/i.test(attribute(el, "type"))) return false;
+      if (attribute(el, "autocomplete").toLowerCase().split(/\s+/).includes("username")) return true;
+      const inputs = el.form ? textInputs(el.form) : [];
+      return inputs.length === 1 && inputs[0] === el && SIGN_IN_STEP.test(submitLabel(el.form));
+    };
+    const loginField = (el) => {
+      if (!el || el.localName !== "input" || !visible(el)) return null;
+      if (el.type === "password") return { password: el, username: usernameFor(el) };
+      const password = passwordIn(el.form || document);
+      if (!password) return identifierField(el) ? { password: null, username: el } : null;
+      if (usernameFor(password) !== el || signUpForm(password.form || document)) return null;
+      return { password, username: el };
     };
     const passwordRules = (fields, el) => {
       const limits = fields.map((f) => f.maxLength).filter((n) => n > 0);
@@ -1110,10 +1132,10 @@
       if (!rect) return hide();
       if (!active || active.el !== el) active = { el, found, token: `${++tokens}` };
       const fresh = found.code ? [] : newPasswords(el);
-      const field = found.code ? "code" : fresh.length ? "newPassword" : el.type === "password" ? "password" : "username";
+      const field = found.code ? "code" : fresh.length ? "newPassword" : el.type === "password" ? "password" : found.password ? "username" : "identifier";
       const rules = fresh.length ? passwordRules(fresh, el) : {};
-      const signIn = field === "username" && !!found.password && !newPasswords(found.password).length;
-      send("loginField", { event, token: active.token, field, signIn, typed: field === "username" ? String(el.value || "").slice(0, TYPED_MAX) : "", ...rules, ...rect });
+      const named = field === "username" || field === "identifier";
+      send("loginField", { event, token: active.token, field, signIn: named, typed: named ? String(el.value || "").slice(0, TYPED_MAX) : "", ...rules, ...rect });
     };
     const listen = () => {
       if (listening) return;
@@ -1168,7 +1190,7 @@
     };
     const fillable = (message) =>
       on && !!message && !!active && message.token === active.token && message.origin === location.origin &&
-      active.el.isConnected && (active.found.code || active.found.password).isConnected && document.activeElement === active.el;
+      active.el.isConnected && (active.found.code || active.found.password || active.found.username).isConnected && document.activeElement === active.el;
     const fillCode = (message) => {
       const filled = typeof message.code === "string" && CODE_SHAPE.test(message.code) && !!codeField(active.found.code);
       if (filled) put(active.found.code, message.code);
@@ -1183,7 +1205,7 @@
     const fillLogin = (message) => {
       const { username, password } = active.found;
       if (username && typeof message.username === "string" && message.username) put(username, message.username);
-      if (typeof message.password === "string") put(password, message.password);
+      if (password && typeof message.password === "string" && message.password) put(password, message.password);
       return true;
     };
     const fill = (message) => {

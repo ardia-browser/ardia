@@ -2,7 +2,7 @@ import AppKit
 
 struct LoginListField {
   enum Trigger { case press, typing }
-  enum Kind { case login, code, newPassword }
+  enum Kind { case login, identifier, code, newPassword }
 
   static let lengthMax = 1024
 

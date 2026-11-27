@@ -127,14 +127,33 @@ enum WebKitAutofillScript {
     return kept;
   };
 
-  const hasPassword = (form) => Array.from((form || document).querySelectorAll("input[type=password]")).some(visible);
+  const NEW_PASSWORD = /(^|\s)new-password(\s|$)/i;
+  const CURRENT_PASSWORD = /(^|\s)current-password(\s|$)/i;
+  const passwordsIn = (form) => Array.from((form || document).querySelectorAll("input[type=password]")).filter(visible);
+  const signUpForm = (form) => {
+    const all = passwordsIn(form);
+    const marked = all.filter((el) => NEW_PASSWORD.test(el.getAttribute("autocomplete") || ""));
+    const unmarked = all.filter((el) => !CURRENT_PASSWORD.test(el.getAttribute("autocomplete") || ""));
+    const fresh = marked.length ? marked : unmarked.length < all.length ? unmarked : all.length === 2 ? all : all.length === 3 ? all.slice(1) : [];
+    return all.length > 0 && fresh.length === all.length;
+  };
+  const SIGN_IN_STEP = /^(next|continue|sign ?in|log ?in)\b/i;
+  const signInStep = (el) => {
+    const form = el.form;
+    if (!form || passwordsIn(form).length) return false;
+    const inputs = Array.from(form.querySelectorAll("input")).filter((i) => visible(i) && /^(text|email|tel|)$/i.test(i.getAttribute("type") || ""));
+    const button = form.querySelector("button[type=submit], button:not([type]), input[type=submit]");
+    const label = button ? String((button.tagName === "INPUT" ? button.value : button.textContent) || "").trim().slice(0, 40) : "";
+    return inputs.length === 1 && inputs[0] === el && SIGN_IN_STEP.test(label);
+  };
+  const signInField = (form) => passwordsIn(form).length > 0 && !signUpForm(form);
 
   const fieldFor = (el) => {
     if (!el || (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") || !eligible(el)) return null;
     const all = classifyAll(el.form);
     const field = all.find((f) => f.el === el);
     if (!field) return null;
-    if (field.kind === "address" && /^(email|tel|name|given-name|family-name)$/.test(field.type) && hasPassword(el.form)) return null;
+    if (field.kind === "address" && /^(email|tel|name|given-name|family-name)$/.test(field.type) && (signInField(el.form) || signInStep(el))) return null;
     const section = all.filter((f) => f.kind === field.kind && f.part === field.part);
     return { field, section };
   };

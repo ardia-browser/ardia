@@ -139,7 +139,7 @@ final class LoginList: NSObject {
   ) {
     guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return close(target) }
     let site = domains[pageHost] ?? pageHost
-    if field.kind == .login, !field.typed.isEmpty { remember(field.typed, on: ApplePasswordsMatch.site(pageHost, domains: domains), in: target) }
+    if field.kind == .login || field.kind == .identifier, !field.typed.isEmpty { remember(field.typed, on: ApplePasswordsMatch.site(pageHost, domains: domains), in: target) }
     var next = Shown(target: target, field: field, page: page, host: host, site: site, logins: [])
     next.domains = domains
     switch result {
@@ -338,6 +338,7 @@ final class LoginList: NSObject {
     if id == Self.strongId, current.strong { return pickedStrong(current, target) }
     if let code = current.codes.first(where: { Self.codeRowId($0) == id }) { return pickedCode(code, current, target) }
     guard let login = current.logins.first(where: { Self.rowId($0) == id }) else { return }
+    if current.field.kind == .identifier { return pickedIdentifier(login, current, target) }
     close(target)
     let asked = ticket
     let engine = target.loginListEngine
@@ -358,6 +359,16 @@ final class LoginList: NSObject {
           self.present(current, notice: Self.fillFailed)
         }
       }
+    }
+  }
+
+  private func pickedIdentifier(_ login: ApplePasswordsMatch.Login, _ current: Shown, _ target: LoginListTarget) {
+    close(target)
+    guard Self.origin(of: target.loginListPage) == current.page else { return }
+    let engine = target.loginListEngine
+    remember(login.user, on: ApplePasswordsMatch.site(current.host, domains: current.domains), in: target)
+    target.loginListFill(username: login.user, password: "", frameOrigin: current.field.frameOrigin) { filled in
+      Self.count(filled ? "filled" : "fillFailed", engine: engine)
     }
   }
 

@@ -79,7 +79,13 @@ const checkoutForm = () => `<form method="post" action="/signed-in">
 <input id="zip" name="zip" autocomplete="postal-code" style="top:280px">
 <button id="go" style="top:340px">Pay</button></form>`;
 
+const identifierForm = ({ autocomplete, button }) => `<form method="post" action="/signed-in">
+<input id="u" name="identifier" type="email"${autocomplete ? ` autocomplete="${autocomplete}"` : ""} style="top:40px">
+<button id="go" style="top:100px">${button}</button></form>`;
+
 export const PAGES = {
+  "/identifier": (host) => page(`Sign in to ${host}`, identifierForm({ autocomplete: "username webauthn", button: "Next" })),
+  "/identifier-next": (host) => page(`Sign in to ${host}`, identifierForm({ button: "Continue" })),
   "/login-email": (host) => page(`Sign in to ${host}`, emailSignInForm(), enableWhenFilled),
   "/signup-email": (host) => page(`Sign up on ${host}`, emailSignUpForm(), enableWhenFilled),
   "/checkout": (host) => page(`Check out on ${host}`, checkoutForm()),

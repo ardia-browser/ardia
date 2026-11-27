@@ -37,7 +37,8 @@ struct WebKitLoginsReport {
     let password = flag(data["password"])
     let code = flag(data["code"])
     let fresh = password && flag(data["newPassword"])
-    var report = WebKitLoginsReport(event: event, password: password, kind: code ? .code : fresh ? .newPassword : .login)
+    let identifier = !password && !code && flag(data["identifier"])
+    var report = WebKitLoginsReport(event: event, password: password, kind: code ? .code : fresh ? .newPassword : identifier ? .identifier : .login)
     report.typed = password || code ? "" : typed(data["value"])
     report.rect = NSRect(
       x: coordinate(data["x"]), y: coordinate(data["y"]), width: max(1, coordinate(data["width"])), height: max(1, coordinate(data["height"])))

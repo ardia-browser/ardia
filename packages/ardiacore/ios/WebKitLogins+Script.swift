@@ -17,21 +17,39 @@ extension WebKitLogins {
     const before = fields.filter((el) => el.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING);
     return before.pop() || fields.find((el) => /user|mail|login|account/i.test(el.name + el.id + el.autocomplete)) || null;
   };
+  const NEW_PASSWORD = /(^|\s)new-password(\s|$)/i;
+  const CURRENT_PASSWORD = /(^|\s)current-password(\s|$)/i;
+  const passwordsIn = (root) => Array.from((root || document).querySelectorAll("input[type=password]")).filter(visible);
+  const newPasswordsIn = (root) => {
+    const all = passwordsIn(root);
+    const marked = all.filter((el) => NEW_PASSWORD.test(el.getAttribute("autocomplete") || ""));
+    const unmarked = all.filter((el) => !CURRENT_PASSWORD.test(el.getAttribute("autocomplete") || ""));
+    return marked.length ? marked : unmarked.length < all.length ? unmarked : all.length === 2 ? all : all.length === 3 ? all.slice(1) : [];
+  };
+  const signUpForm = (root) => {
+    const all = passwordsIn(root);
+    return all.length > 0 && newPasswordsIn(root).length === all.length;
+  };
+  const SIGN_IN_STEP = /^(next|continue|sign ?in|log ?in)\b/i;
+  const textInputs = (form) => Array.from(form.querySelectorAll("input")).filter((el) => visible(el) && /^(text|email|tel|)$/i.test(el.getAttribute("type") || ""));
+  const submitLabel = (form) => {
+    const button = form.querySelector("button[type=submit], button:not([type]), input[type=submit]");
+    if (!button) return "";
+    return String((button.tagName === "INPUT" ? button.value : button.textContent) || "").trim().slice(0, 40);
+  };
+  const identifierField = (el) => {
+    if (!/^(text|email|)$/i.test(el.getAttribute("type") || "")) return false;
+    if ((el.getAttribute("autocomplete") || "").toLowerCase().split(/\s+/).includes("username")) return true;
+    const inputs = el.form ? textInputs(el.form) : [];
+    return inputs.length === 1 && inputs[0] === el && SIGN_IN_STEP.test(submitLabel(el.form));
+  };
   const loginField = (el) => {
     if (!el || el.tagName !== "INPUT" || !visible(el)) return null;
     if (el.type === "password") return { password: el, username: usernameFor(el) };
     const password = passwordIn(el.form || document);
-    if (!password) return null;
-    const username = usernameFor(password);
-    return username === el ? { password, username } : null;
-  };
-  const NEW_PASSWORD = /(^|\s)new-password(\s|$)/i;
-  const CURRENT_PASSWORD = /(^|\s)current-password(\s|$)/i;
-  const newPasswordsIn = (root) => {
-    const all = Array.from((root || document).querySelectorAll("input[type=password]")).filter(visible);
-    const marked = all.filter((el) => NEW_PASSWORD.test(el.getAttribute("autocomplete") || ""));
-    const unmarked = all.filter((el) => !CURRENT_PASSWORD.test(el.getAttribute("autocomplete") || ""));
-    return marked.length ? marked : unmarked.length < all.length ? unmarked : all.length === 2 ? all : all.length === 3 ? all.slice(1) : [];
+    if (!password) return identifierField(el) ? { password: null, username: el } : null;
+    if (usernameFor(password) !== el || signUpForm(password.form || document)) return null;
+    return { password, username: el };
   };
   const newPasswords = (password) => {
     const found = newPasswordsIn(password.form);
@@ -82,7 +100,7 @@ extension WebKitLogins {
     if (!r) return hide();
     active = { el, found, code, fresh };
     post("loginField", {
-      event, origin: location.origin, password: isPassword, code, newPassword: fresh.length > 0, ...(fresh.length ? passwordRules(fresh) : {}),
+      event, origin: location.origin, password: isPassword, code, newPassword: fresh.length > 0, identifier: !!found && !found.password, ...(fresh.length ? passwordRules(fresh) : {}),
       value: isPassword || code ? "" : String(el.value || "").slice(0, 200),
       x: r.x, y: r.y, width: r.width, height: r.height,
     });
@@ -168,9 +186,15 @@ extension WebKitLogins {
     },
     fill(username, password, origin) {
       if (location.origin !== origin) return false;
-      const target = active && active.found && active.el.isConnected && active.found.password.isConnected ? active.found : null;
+      const target = active && active.found && active.el.isConnected && (active.found.password || active.found.username).isConnected ? active.found : null;
+      if (target && !target.password) {
+        if (!username) return false;
+        setValue(target.username, username);
+        open = picking = false;
+        return true;
+      }
       const field = target ? target.password : passwordIn(document);
-      if (!field) return false;
+      if (!field || !password) return false;
       const user = target ? target.username : usernameFor(field);
       if (user && username) setValue(user, username);
       setValue(field, password);

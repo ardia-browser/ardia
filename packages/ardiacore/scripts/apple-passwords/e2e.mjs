@@ -243,6 +243,52 @@ async function noSecretsInLogs() {
   return { instances: launched.length, files: files.length, systemLogBytes: system.length, secrets: secrets.length };
 }
 
+const ENGINES = ["webkit", "chromium"];
+
+async function meCardInstance(name) {
+  const fake = fakeHelper(path.join(SCRATCH, name, "fake"));
+  const card = path.join(SCRATCH, name, "me-card.json");
+  fs.writeFileSync(card, JSON.stringify(ME_CARD));
+  await start(name, { manifest: fake.manifest, test: { meCard: card } });
+  await pairApplePasswords(fake);
+  const on = await app.eval(`return ac.meCard.setMeCardFor("", true).then(() => (ac.meCard.useMeCard.getState().entries[""] ?? []).length)`, { timeout: 20_000 });
+  assert(on === 1, "the Me card is on with its one entry", on);
+  return { fake };
+}
+
+async function listsOn(fields, then = async () => {}) {
+  const seen = {};
+  for (const engine of ENGINES) {
+    const tabs = engine === "webkit" ? webkitTabs(app, { log: note }) : chromiumTabs(app, { log: note });
+    for (const [pathname, selector] of fields) {
+      const tab = await tabs.open(sites.url("example.localhost", pathname));
+      try {
+        const devEvents = () => app.eval(`return ac.engine.call("tabs.devEvents", { tabId: ${JSON.stringify(tab.id)} })`);
+        const before = engine === "chromium" ? (await devEvents()).length : 0;
+        await tab.click(selector);
+        await sleep(2000);
+        const panels = await tab.lists();
+        const events = engine === "chromium" ? (await devEvents()).slice(before) : [];
+        const chromeAddresses = events.filter((e) => e.name === "autofillSuggestions").flatMap((e) => e.payload?.items ?? []).filter((i) => /Address/.test(i.type ?? ""));
+        const loginRows = panels.find((rows) => rows.some((r) => r.title === "Open Passwords app")) ?? null;
+        const addressList = chromeAddresses.length > 0 || panels.some((rows) => rows.some((r) => [ME_CARD.name, ME_CARD.emails[0], ME_CARD.addresses[0].street].some((text) => r.label.includes(text))));
+        seen[`${engine} ${pathname} ${selector}`] = { loginList: !!loginRows, addressList, strong: !!loginRows?.some((r) => r.title === "Suggest strong password") };
+        note("lists", engine, pathname, selector, JSON.stringify(panels.map((rows) => rows.map((r) => r.label))));
+        if (loginRows) await then(tab, engine, pathname, loginRows);
+      } finally {
+        await tab.close();
+      }
+    }
+  }
+  note("lists seen", JSON.stringify(seen));
+  return seen;
+}
+
+function expectLists(seen, engine, field, want) {
+  const got = seen[`${engine} ${field}`];
+  assert(got && got.loginList === want.loginList && got.addressList === want.addressList, `${engine} ${field} shows ${want.loginList ? "the Login list" : "no Login list"} and ${want.addressList ? "the address list" : "no address list"}`, seen);
+}
+
 const inChromium = (checks, names) => Object.fromEntries(names.map((name) => [`${name}chromium`, checks[name]]));
 
 const CHECKS = {
@@ -361,44 +407,39 @@ const CHECKS = {
     return seen;
   },
   async E40() {
-    const fake = fakeHelper(path.join(SCRATCH, "E40", "fake"));
-    const card = path.join(SCRATCH, "E40", "me-card.json");
-    fs.writeFileSync(card, JSON.stringify(ME_CARD));
-    await start("E40", { manifest: fake.manifest, test: { meCard: card } });
-    await pairApplePasswords(fake);
-    const on = await app.eval(`return ac.meCard.setMeCardFor("", true).then(() => (ac.meCard.useMeCard.getState().entries[""] ?? []).length)`, { timeout: 20_000 });
-    assert(on === 1, "the Me card is on with its one entry", on);
-    const seen = {};
-    for (const [engine, tabs] of [["webkit", webkitTabs(app, { log: note })], ["chromium", chromiumTabs(app, { log: note })]]) {
-      for (const pathname of ["/login-email", "/signup-email", "/checkout"]) {
-        const tab = await tabs.open(sites.url("example.localhost", pathname));
-        try {
-          const before = engine === "chromium" ? (await app.eval(`return ac.engine.call("tabs.devEvents", { tabId: ${JSON.stringify(tab.id)} })`)).length : 0;
-          const already = (await tab.lists()).length;
-          await tab.click("#u");
-          await sleep(2000);
-          const panels = await tab.lists();
-          note("E40", engine, pathname, "panels before the click", already, JSON.stringify(panels.map((rows) => rows.map((r) => r.label))));
-          const events = engine === "chromium" ? (await app.eval(`return ac.engine.call("tabs.devEvents", { tabId: ${JSON.stringify(tab.id)} })`)).slice(before) : [];
-          const chromeAddresses = events.filter((e) => e.name === "autofillSuggestions").flatMap((e) => e.payload?.items ?? []).filter((i) => /Address/.test(i.type ?? ""));
-          const loginList = panels.some((rows) => rows.some((r) => r.title === "Open Passwords app"));
-          const addressList = chromeAddresses.length > 0 || panels.some((rows) => rows.some((r) => [ME_CARD.name, ME_CARD.emails[0], ME_CARD.addresses[0].street].some((text) => r.label.includes(text))));
-          seen[`${engine} ${pathname}`] = { loginList, addressList };
-        } finally {
-          await tab.close();
-        }
-      }
+    await meCardInstance("E40");
+    const seen = await listsOn([["/login-email", "#u"], ["/checkout", "#u"]]);
+    for (const engine of ENGINES) {
+      expectLists(seen, engine, "/login-email #u", { loginList: true, addressList: false });
+      expectLists(seen, engine, "/checkout #u", { loginList: false, addressList: true });
     }
-    note("E40 lists", JSON.stringify(seen));
-    const want = (engine, pathname, loginList, addressList) => {
-      const got = seen[`${engine} ${pathname}`];
-      assert(got.loginList === loginList && got.addressList === addressList, `${engine} ${pathname} shows ${loginList ? "the Login list" : "no Login list"} and ${addressList ? "the address list" : "no address list"}`, seen);
-    };
-    for (const engine of ["webkit", "chromium"]) {
-      want(engine, "/login-email", true, false);
-      want(engine, "/checkout", false, true);
+    return seen;
+  },
+  async E42() {
+    await meCardInstance("E42");
+    const seen = await listsOn([["/signup-email", "#u"], ["/signup-email", "#p"]]);
+    for (const engine of ENGINES) {
+      expectLists(seen, engine, "/signup-email #u", { loginList: false, addressList: true });
+      expectLists(seen, engine, "/signup-email #p", { loginList: true, addressList: false });
+      assert(seen[`${engine} /signup-email #p`].strong, `${engine}: the new-password field offers Suggest strong password`, seen);
     }
-    want("chromium", "/signup-email", true, true);
+    return seen;
+  },
+  async E43() {
+    const { fake } = await meCardInstance("E43");
+    const user = FIXTURES.logins.find((l) => l.sites.includes("example.localhost")).user;
+    const seen = await listsOn([["/identifier", "#u"], ["/identifier-next", "#u"]], async (tab, engine, pathname, rows) => {
+      if (!rows.some((r) => r.title === user)) return;
+      const passwordsAsked = fake.requests().filter((r) => r.cmd === 5).length;
+      await tab.pick(user);
+      const filled = await waitFor(`${engine} ${pathname} filled`, async () => ((await tab.value(`document.getElementById("u").value`)) === user ? true : null), 10_000).catch(() => false);
+      assert(filled, `${engine} ${pathname}: picking a login fills the username`, await tab.value(`document.getElementById("u").value`));
+      assert(fake.requests().filter((r) => r.cmd === 5).length === passwordsAsked, `${engine} ${pathname}: filling only the username never asks Apple Passwords for the password`, null);
+    });
+    for (const engine of ENGINES) {
+      expectLists(seen, engine, "/identifier #u", { loginList: true, addressList: false });
+      expectLists(seen, engine, "/identifier-next #u", { loginList: true, addressList: false });
+    }
     return seen;
   },
   async cardWebKit() {

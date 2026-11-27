@@ -66,17 +66,18 @@ NSDictionary *ArdiaLoginListReport(id message) {
     NSString *key = Choice(d, @"key", @[ @"down", @"up", @"enter", @"escape", @"tab" ]);
     return key ? @{@"event" : event, @"token" : token, @"key" : key} : nil;
   }
-  NSString *field = Choice(d, @"field", @[ @"username", @"password", @"code", @"newPassword" ]);
+  NSString *field = Choice(d, @"field", @[ @"username", @"identifier", @"password", @"code", @"newPassword" ]);
+  const BOOL named = [field isEqualToString:@"username"] || [field isEqualToString:@"identifier"];
   if (!field) return nil;
   const NSRect rect = NSMakeRect(Coordinate(d, @"x"), Coordinate(d, @"y"), MAX(1, Coordinate(d, @"width")), MAX(1, Coordinate(d, @"height")));
   NSMutableDictionary *report = [@{
     @"event" : event,
     @"token" : token,
     @"field" : field,
-    @"typed" : [field isEqualToString:@"username"] ? Typed(d) : @"",
+    @"typed" : named ? Typed(d) : @"",
     @"rect" : [NSValue valueWithRect:rect],
   } mutableCopy];
-  if ([field isEqualToString:@"username"]) report[@"signIn"] = @(Flag(d, @"signIn"));
+  if (named) report[@"signIn"] = @(Flag(d, @"signIn"));
   if ([field isEqualToString:@"newPassword"]) {
     report[@"maxLength"] = Length(d, @"maxLength");
     report[@"minLength"] = Length(d, @"minLength");

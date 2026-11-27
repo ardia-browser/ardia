@@ -183,10 +183,7 @@ test("a new-password field reports its form's rules, and a strong password fills
     await page.mouse.click(30, y);
     return (await loginFields(run)).filter((r) => r.event !== "hide")[0];
   };
-  const username = await shown(25);
-  assert.equal(username.field, "username");
-  await fill({ ticket: "1", token: username.token, origin: "https://page.test", newPassword: "Abcd-Efgh-2345-Jkmn" });
-  assert.deepEqual(await fillReplies(run), [{ ticket: "1", filled: false }], "a strong password never fills from a username field");
+  assert.equal(await shown(25), undefined, "a sign-up form's username field opens no Login list");
   const report = await shown(75);
   assert.deepEqual([report.field, report.typed, report.maxLength, report.minLength, report.pattern], ["newPassword", "", 20, 10, "[A-Za-z0-9-]+"]);
   await fill({ ticket: "2", token: report.token, origin: OTHER_SITE, newPassword: "Abcd-Efgh-2345-Jkmn" });

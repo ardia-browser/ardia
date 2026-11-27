@@ -2824,6 +2824,41 @@
     "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateHandoff.kt#noteInstallRequest"
    ],
    "detected": false
+  },
+  {
+   "id": "control-socket:gpui-profile",
+   "source": "socket",
+   "guard": "GPUI app: profile is read-only and takes no params beyond an empty object (parse_request refuses anything else); it answers after the same admission as every method (peer UID, then the peer check and doorbell) and only with counts, timings and fixed span, frame and action names from the binary, never a URL, title, path or typed text; it is answered on the connection's thread so a hung main thread can still be read",
+   "checks": [
+    "crates/ardia-app/src/ipc.rs#profile_answers_numbers_off_the_main_thread_and_changes_nothing"
+   ],
+   "detected": false
+  },
+  {
+   "id": "apple-event:gpui-scripting",
+   "source": "other-app",
+   "guard": "GPUI app: AppleScript reaches the Ardia.sdef classes (ArdiaScriptWindow, ArdiaScriptTab, ArdiaScriptProfile, ArdiaScriptCreateCommand) only after macOS's Automation consent; property reads take a store snapshot and answer only for windows that have tabs; every change (make, set URL, set active tab index, close, reload, go back, go forward, focus, execute) is suspended and queued to the GPUI main thread, where scripting::run looks the tab, window or profile up again (an unknown or hostile id answers an error and changes nothing), refuses text with a NUL or over its size cap, and replies within 20 seconds; a URL that runs script, as typed or as resolved (javascript: through case, leading control characters and tab/CR/LF, links::runs_javascript), is refused with the old app's error 12 unless View > Developer > Allow JavaScript from Apple Events is on; when it is on, a new tab or window opens about:blank and runs the script there through the bookmarklet path, and set URL runs it in the tab's page; make new tab at a window the script names that no longer exists fails (no fallback to the front window, which could put a private window's page into a profile that keeps history and syncs)",
+   "checks": [
+    "crates/ardia-app/src/scripting.rs#hostile_ids_and_indexes_change_nothing",
+    "crates/ardia-app/src/scripting.rs#hostile_urls_never_reach_a_tab_as_script_or_with_a_nul",
+    "crates/ardia-app/src/scripting.rs#script_urls_are_refused_while_the_setting_is_off",
+    "crates/ardia-app/src/scripting.rs#a_script_url_for_a_new_tab_still_runs_nothing_while_off",
+    "crates/ardia-app/src/scripting.rs#a_tab_for_a_closed_private_window_never_lands_in_a_profile_window",
+    "crates/ardia-app/tests/applescript_main_thread.rs#suspends_then_resumes_on_the_main_thread",
+    "crates/ardia-app/src/links.rs#runs_javascript"
+   ],
+   "detected": false
+  },
+  {
+   "id": "evaluate-result:gpui-scripting-execute",
+   "source": "main-world",
+   "guard": "GPUI app: AppleScript execute runs only while allowJavaScriptFromAppleEvents is on (default off; error 12 with the old app's message otherwise); the code goes into the page as one JSON string literal with U+2028/2029 escaped (execute_body) and is evaluated through the engine's evaluate or WebKit's isolated-world call; the page's answer is read as data: only a JSON object's value or error is taken, an error has its control characters replaced and is cut to 2,000 characters, and anything else answers The page didn't answer; the text goes back only to the script that asked",
+   "checks": [
+    "crates/ardia-app/src/scripting.rs#execute_is_refused_while_off_and_runs_the_wrapped_code_when_on",
+    "crates/ardia-app/src/scripting.rs#hostile_code_stays_one_string_literal_in_the_wrapper",
+    "crates/ardia-app/src/scripting.rs#page_answers_are_read_as_data"
+   ],
+   "detected": false
   }
  ]
 }

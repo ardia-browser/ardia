@@ -1,0 +1,59 @@
+id: missing-notify
+language: rust
+severity: warning
+message: "[gpui-entities: Forgetting cx.notify()] this update writes state but never calls notify(), so the view will not redraw"
+note: "Call cx.notify() after the write (or cx.emit(..) when observers redraw). Closures that ignore their context (|state, _|) are skipped: those are keyed render state read in the same frame."
+metadata:
+  source: gpui-entities, gpui-actions and gpui-async SKILL.md, Common Mistakes (Forgetting cx.notify())
+ignores:
+  - third_party/**
+  - crates/**/tests/**
+  - crates/**/tests.rs
+rule:
+  all:
+    - kind: closure_expression
+    - has:
+        field: parameters
+        all:
+          - has:
+              nth: 1
+              kind: identifier
+          - has:
+              nth: 2
+              kind: identifier
+              regex: ^(cx|app|\w*_cx)$
+    - has:
+        field: body
+        has:
+          stopBy: end
+          kind: assignment_expression
+          has:
+            field: left
+            kind: field_expression
+    - not:
+        has:
+          field: body
+          has:
+            stopBy: end
+            any:
+              - pattern: $C.notify()
+              - pattern: $C.emit($$$)
+              - pattern: $C.refresh()
+              - pattern: $C.refresh_windows()
+    - inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: field_expression
+            all:
+              - has:
+                  field: field
+                  regex: ^(update|update_in)$
+              - not:
+                  has:
+                    field: value
+                    regex: ^(cx|app|window|\w+_cx)$
+    - not:
+        matches: in-test-code

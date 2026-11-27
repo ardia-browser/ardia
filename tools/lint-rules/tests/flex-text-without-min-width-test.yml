@@ -1,0 +1,9 @@
+id: flex-text-without-min-width
+valid:
+  - "fn row(t: &Tab) -> Div { div().flex_1().min_w_0().child(t.title.clone()) }"
+  - "fn row() -> Div { div().flex_1().child(\"Reader Text\") }"
+  - "fn row(t: &Tab) -> Div { div().flex_1().child(icon(t)) }"
+invalid:
+  - "fn row(t: &Tab) -> Div { div().flex_1().text_sm().child(t.title.clone()) }"
+  - "fn row(n: u32) -> Div { div().flex_1().child(format!(\"Zoom: {n}%\")) }"
+  - "fn row() -> Div { div().flex_1().child(\"Share anonymous usage so we can fix crashes sooner\") }"

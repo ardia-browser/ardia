@@ -1,0 +1,17 @@
+id: spine-inset_0
+language: rust
+rule:
+  kind: call_expression
+  any:
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: field
+          regex: ^inset_0$
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: value
+          matches: spine-inset_0

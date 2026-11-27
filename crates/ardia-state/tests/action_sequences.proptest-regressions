@@ -1,0 +1,11 @@
+cc 349c4bb3058f5c75b7071dfa8a1d95ebac1132b4766d25d4f4c60dc65fb28115
+cc 8b5184de15b0d98382e9d5f3109bb3c4eb911376206b3e6e6203c85632c88d62
+cc 375a190f8177bddc3195c077dd87cbc8894110dc7b3445d20a76d0d8baa3a48e
+cc b0f7accd8897bfd64cc6def86a2e4da0a8cf7af05a242c26230b9f0408031a2d
+cc 875537a8860d444b7073a884e72c92b8ce1e809cdfa277cd201f31a87eec6b25
+cc d6a73ea36701165bf2bf9bc146173c0a50caec1dc25c65a2e6a9b5b75cbd4aa1
+cc de88c79cf78bc6b24550e560be097c61ef875f0b58bd28ab758d92503ac1a7f8
+cc 533e042a35d209403b55ccf7b652299a897cd3be4baba1cbbba0414bd558fac2
+cc 4e683858686f0ef76848c101929038fde90980961b995a7e8b317a40f30f7b5f # shrinks to ops = [Activate(0), NewTab(0, false, None, false), Duplicate(0), Pin(3, 2), NewTab(0, false, None, false), NewTab(0, false, None, false), Duplicate(0), SplitPane(0, 0), OpenWindow(1, false), NewTab(2, false, None, false), OpenWindow(0, false), Split([99, 192, 35], false), Move(2, 11, 104), Pin(251, 1), SplitPane(53, 0), Split([15, 196, 70], false), Close([18], false), OpenWindow(1, false), Swap(0, 0), RemovePane(6), NewTab(11, false, None, false), NewTab(19, false, None, false), NewTab(19, false, None, false), Peek(82), Clear(70), Pin(111, 0)]
+cc d471637a0b787aa42a004a5589f00b01b041d8a711504807a26093d9e3648e29 # shrinks to ops = [CreateProfile, OpenWindow(0, true), NewTab(103, false, None, false), Close([3], false), NewTab(0, false, None, false), Pin(236, 1), Activate(4), Activate(89), SwitchProfile(8, 5), Pin(30, 0)]
+cc e08934a48bc52a7810fe738d14ef10de8a41ce095307fafba2aa2bed707f5602 # shrinks to ops = [OpenWindow(2, false), RemovePane(0), Pin(50, 1), Close([187, 158], false), OpenWindow(0, false), Close([89, 26], false), Peek(138), OpenWindow(0, false), CloseWindow(1), CloseWindow(61), TileFolder([80], 45, None)]

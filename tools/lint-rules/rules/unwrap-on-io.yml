@@ -1,0 +1,30 @@
+id: unwrap-on-io
+language: rust
+severity: warning
+message: "unwrap/expect on an IPC, file or parse result panics on bad input from outside"
+note: "Handle the error (?, if let, unwrap_or_default, log and skip). Tests, build scripts and examples are not flagged."
+files:
+  - crates/**/src/**/*.rs
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+  - crates/**/*_tests.rs
+  - crates/**/test_support.rs
+  - crates/**/src/bin/**
+  - third_party/**
+  - crates/**/build.rs
+rule:
+  all:
+    - any:
+        - pattern: $E.unwrap()
+        - pattern: $E.expect($M)
+    - has:
+        field: function
+        has:
+          field: value
+          any:
+            - kind: call_expression
+              regex: (std::fs::\w+|fs::\w+|File::(open|create)|serde_json::from_\w+|\.parse(::<[^>]*>)?|\bfrom_str|\bfrom_slice|\bfrom_utf8|\.recv|\.recv_timeout|read_to_string|read_to_end|\.connect|\.send|\.write_all|\.read_exact|Url::parse|\.metadata)\(
+            - kind: try_expression
+    - not:
+        matches: in-test-code

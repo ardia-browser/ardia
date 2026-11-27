@@ -1,0 +1,6 @@
+id: rc-refcell-view-state
+valid:
+  - "struct V { state: Entity<State>, offset: Rc<Cell<f32>> }"
+invalid:
+  - "struct V { slots: Rc<RefCell<HashMap<u64, f32>>> }"
+  - "struct V { shared: std::rc::Rc<std::cell::RefCell<State>> }"

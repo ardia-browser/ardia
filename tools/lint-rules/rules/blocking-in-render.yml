@@ -1,0 +1,20 @@
+id: blocking-in-render
+language: rust
+severity: error
+message: "[ardia perf] blocking call in a render body or window-open path stalls the frame on the main thread"
+note: "Read files, sockets, the keychain and engine replies off the main thread (background_spawn, then cx.notify) and render from cached state. Listener closures and spawned tasks are not flagged."
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+  - crates/**/*_tests.rs
+  - crates/**/test_support.rs
+  - crates/**/src/bin/**
+  - third_party/**
+rule:
+  all:
+    - matches: blocking-call
+    - matches: render-scope
+    - not:
+        matches: in-deferred-closure
+    - not:
+        matches: in-test-code

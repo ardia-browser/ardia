@@ -1,0 +1,42 @@
+id: spine-text
+language: rust
+utils:
+  text-field:
+    kind: field_expression
+    has:
+      field: field
+      regex: ^(label|title|text|description|detail|subtitle|message|body|name|summary|hint|caption)$
+  text-argument:
+    any:
+      - kind: string_literal
+        regex: ^"[^"]{28,}"$
+      - kind: macro_invocation
+        regex: ^format!
+      - matches: text-field
+      - kind: call_expression
+        has:
+          field: function
+          kind: field_expression
+          has:
+            field: value
+            matches: text-field
+rule:
+  kind: call_expression
+  any:
+    - all:
+        - has:
+            field: function
+            kind: field_expression
+            has:
+              field: field
+              regex: ^(child|children)$
+        - has:
+            field: arguments
+            has:
+              matches: text-argument
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: value
+          matches: spine-text

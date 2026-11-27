@@ -1,0 +1,13 @@
+id: main-thread-fn
+language: rust
+rule:
+  inside:
+    stopBy: end
+    kind: function_item
+    has:
+      field: parameters
+      has:
+        kind: parameter
+        has:
+          field: type
+          regex: ^&(mut )?(gpui::)?(App|Window|Context<.*>|AsyncApp|AsyncWindowContext|VisualTestContext)$

@@ -1,0 +1,33 @@
+id: clone-in-render
+valid:
+  - |
+    impl Render for V {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let count = self.state.read(cx).tabs.len();
+            let rows = div().children(self.rows.clone().map(row));
+            div().on_click({ let tabs = self.tabs.clone(); move |_, _, _| drop(tabs) })
+        }
+    }
+  - "fn helper(s: &State) -> Vec<Tab> { s.tabs.clone() }"
+invalid:
+  - |
+    impl Render for V {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let state = self.ui.read(cx).clone();
+            div()
+        }
+    }
+  - |
+    impl Render for V {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let tabs = self.state.tabs.clone();
+            div().children(tabs.into_iter().map(row))
+        }
+    }
+  - |
+    impl RenderOnce for V {
+        fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+            let all = self.snapshot.history.to_vec();
+            div()
+        }
+    }

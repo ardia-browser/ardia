@@ -1,0 +1,105 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/ardia-theme",
+  "crates/ardia-state",
+  "crates/ardia-engine",
+  "crates/ardia-ui",
+  "crates/ardia-app",
+  "crates/ardia-telemetry",
+  "crates/ardia-profile",
+  "crates/core/ardia-apple-ffi",
+  "crates/core/ardia-crypto",
+  "crates/core/ardia-ffi",
+  "crates/core/ardia-import-core",
+  "crates/core/ardia-import-ffi",
+  "crates/core/ardia-shell-migration",
+  "crates/core/ardia-sync-core",
+  "crates/core/ardia-sync-vectors",
+  "crates/core/ardia-update-core",
+  "crates/core/ardia-update-ffi",
+  "crates/core/ardia-update-verify",
+  "crates/plugins/host",
+  "crates/plugins/jail",
+  "crates/plugins/integration",
+  "third_party/gpui/gpui",
+  "third_party/gpui/gpui_macos",
+  "third_party/gpui/gpui_platform",
+  "third_party/gpui/gpui_windows",
+  "third_party/gpui/gpui_linux",
+]
+
+[workspace.package]
+version = "0.3.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("boringssl"))'] }
+
+[workspace.lints.clippy]
+perf = { level = "deny", priority = -1 }
+redundant_clone = "deny"
+needless_collect = "deny"
+large_enum_variant = "deny"
+inefficient_to_string = "deny"
+unnecessary_to_owned = "deny"
+manual_memcpy = "deny"
+large_stack_arrays = "deny"
+trivially_copy_pass_by_ref = "warn"
+let_underscore_future = "deny"
+
+[workspace.dependencies]
+ardia-theme = { path = "crates/ardia-theme" }
+ardia-state = { path = "crates/ardia-state" }
+ardia-engine = { path = "crates/ardia-engine" }
+ardia-ui = { path = "crates/ardia-ui" }
+ardia-telemetry = { path = "crates/ardia-telemetry" }
+ardia-profile = { path = "crates/ardia-profile" }
+ardia-crypto = { path = "crates/core/ardia-crypto", default-features = false }
+ardia-sync-core = { path = "crates/core/ardia-sync-core", default-features = false }
+ardia-import-core = { path = "crates/core/ardia-import-core" }
+ardia-update-core = { path = "crates/core/ardia-update-core", default-features = false }
+ardia-shell-migration = { path = "crates/core/ardia-shell-migration" }
+gpui = { path = "third_party/gpui/gpui" }
+gpui_macos = { path = "third_party/gpui/gpui_macos" }
+gpui_platform = { path = "third_party/gpui/gpui_platform" }
+aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc", "zeroize"] }
+aes = { version = "0.8", features = ["zeroize"] }
+hkdf = "0.12"
+hmac = "0.12"
+sha2 = { version = "0.10", default-features = false }
+ed25519-dalek = { version = "2", default-features = false }
+getrandom = "0.2"
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zeroize = { version = "1", features = ["zeroize_derive"] }
+anyhow = "1"
+thiserror = "2"
+log = "0.4"
+parking_lot = "0.12"
+uuid = { version = "1", features = ["v4", "serde"] }
+url = { version = "2.5", features = ["serde"] }
+smallvec = "1"
+futures = "0.3"
+objc2 = "0.6"
+cc = "1"
+
+[patch."https://github.com/zed-industries/zed"]
+gpui = { path = "third_party/gpui/gpui" }
+gpui_macos = { path = "third_party/gpui/gpui_macos" }
+gpui_platform = { path = "third_party/gpui/gpui_platform" }
+gpui_windows = { path = "third_party/gpui/gpui_windows" }
+gpui_linux = { path = "third_party/gpui/gpui_linux" }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

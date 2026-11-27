@@ -1,0 +1,7 @@
+id: nested-entity-update
+valid:
+  - "fn f(cx: &mut App) { a.update(cx, |a, cx| { b.update(cx, |b, _| b.n += 1); }); }"
+  - "fn f(cx: &mut App) { a.update(cx, |a, _| a.n += 1); a.update(cx, |a, _| a.n += 1); }"
+invalid:
+  - "fn f(cx: &mut App) { a.update(cx, |view, cx| { a.update(cx, |again, _| again.n += 1); }); }"
+  - "fn f(cx: &mut App) { self.ui.update(cx, |ui, cx| { if ui.open { self.ui.update(cx, |ui, _| ui.open = false); } }); }"

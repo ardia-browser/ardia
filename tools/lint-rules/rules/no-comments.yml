@@ -1,0 +1,14 @@
+id: no-comments
+language: rust
+severity: error
+message: "no comments in code (AGENTS.md hard rule); name things so the code says what it does and put the why in the commit message"
+note: "Tool directives stay: attributes such as #[allow(..., reason = ..)] and #[expect(..)] are not comments. Licence headers and SAFETY notes that clippy reads are accepted."
+ignores:
+  - third_party/**
+rule:
+  all:
+    - any:
+        - kind: line_comment
+        - kind: block_comment
+    - not:
+        regex: ^(//\s*(SAFETY|Safety|@generated|rustfmt::|clippy::|cbindgen:|SPDX-License-Identifier)|/\*\s*(SPDX|Copyright))

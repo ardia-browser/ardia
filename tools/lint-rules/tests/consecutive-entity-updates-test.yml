@@ -1,0 +1,6 @@
+id: consecutive-entity-updates
+valid:
+  - "fn f(cx: &mut App) { a.update(cx, |a, cx| { a.x = 1; a.y = 2; cx.notify(); }); }"
+  - "fn f(cx: &mut App) { a.update(cx, |a, _| a.x = 1); b.update(cx, |b, _| b.x = 1); }"
+invalid:
+  - "fn f(cx: &mut App) { self.input.update(cx, |i, cx| i.set_placeholder(h, cx)); self.input.update(cx, |i, cx| i.set_text(t, cx)); }"

@@ -1,0 +1,31 @@
+id: blocking-call
+language: rust
+rule:
+  any:
+    - pattern: std::fs::$F($$$)
+    - pattern: fs::$F($$$)
+    - pattern: File::open($$$)
+    - pattern: File::create($$$)
+    - pattern: std::net::$T::$F($$$)
+    - pattern: TcpStream::connect($$$)
+    - pattern: UnixStream::connect($$$)
+    - pattern: $R.recv()
+    - pattern: $R.recv_timeout($$$)
+    - pattern: block_on($$$)
+    - pattern: $E::block_on($$$)
+    - pattern: $X.block_on($$$)
+    - pattern: std::thread::sleep($$$)
+    - pattern: thread::sleep($$$)
+    - pattern: get_generic_password($$$)
+    - pattern: set_generic_password($$$)
+    - pattern: delete_generic_password($$$)
+    - pattern: SecretStore::keychain()
+    - pattern: $S.read_to_string($$$)
+    - pattern: std::process::Command::new($$$).output()
+    - pattern: std::process::Command::new($$$).status()
+    - pattern: Command::new($$$).output()
+    - pattern: Command::new($$$).status()
+    - kind: call_expression
+      has:
+        field: function
+        regex: ^(\w+::)*SecItem\w+$

@@ -1,0 +1,22 @@
+id: mutate-in-render
+language: rust
+severity: warning
+message: "render() writes view state; renders run whenever gpui asks, so state written here drifts with frame count"
+note: "Mutate in event handlers or an update method and call cx.notify() (gpui-code-quality: Keep Render Pure). Caching layout results or animation clocks in render is a deliberate pattern; check before changing."
+ignores:
+  - third_party/**
+rule:
+  all:
+    - any:
+        - pattern: self.$F += $V
+        - pattern: self.$F -= $V
+        - pattern: self.$F.push($$$)
+        - pattern: self.$F.insert($$$)
+    - inside:
+        stopBy: end
+        kind: function_item
+        has:
+          field: name
+          regex: ^render$
+    - not:
+        matches: in-deferred-closure

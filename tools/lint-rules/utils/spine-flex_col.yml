@@ -1,0 +1,17 @@
+id: spine-flex_col
+language: rust
+rule:
+  kind: call_expression
+  any:
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: field
+          regex: ^flex_col$
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: value
+          matches: spine-flex_col

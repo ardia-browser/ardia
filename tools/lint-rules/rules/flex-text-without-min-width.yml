@@ -1,0 +1,21 @@
+id: flex-text-without-min-width
+language: rust
+severity: warning
+message: "a flex_1 text column without min_w_0 grows to its text's width and pushes neighbours out"
+note: "Add .min_w_0() so the column can shrink and the text wraps or truncates (the consent card and settings overlap bugs). Heuristic: flags flex_1 chains that hold text directly."
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+  - crates/**/*_tests.rs
+  - crates/**/test_support.rs
+  - crates/**/src/bin/**
+  - third_party/**
+rule:
+  all:
+    - matches: chain-top
+    - matches: spine-flex_1
+    - matches: spine-text
+    - not:
+        matches: spine-min_w_0
+    - not:
+        matches: in-test-code

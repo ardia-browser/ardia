@@ -1,0 +1,16 @@
+id: nested-entity-update
+language: rust
+severity: error
+message: "updates $E again while it is already being updated, which panics (already mutably borrowed)"
+note: "Use the closure's own state argument, or finish the first update before starting the next (gpui-troubleshooting: Update While Updating Panic)."
+ignores:
+  - third_party/**
+rule:
+  pattern: $E.update($CX, $F)
+  has:
+    field: arguments
+    has:
+      kind: closure_expression
+      has:
+        stopBy: end
+        pattern: $E.update($$$)

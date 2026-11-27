@@ -1,0 +1,13 @@
+id: unwrap-on-io
+valid:
+  - "fn f(p: &Path) -> Option<String> { std::fs::read_to_string(p).ok() }"
+  - "fn f(o: Option<u8>) -> u8 { o.unwrap() }"
+  - "fn f(k: &[u8]) -> Hmac { Hmac::new_from_slice(k).expect(\"any length\") }"
+  - |
+    #[test]
+    fn reads() { let t = std::fs::read_to_string("x").unwrap(); }
+invalid:
+  - "fn f(p: &Path) -> String { std::fs::read_to_string(p).unwrap() }"
+  - "fn f(t: &str) -> Value { serde_json::from_str(t).expect(\"json\") }"
+  - "fn f(t: &str) -> u32 { t.parse::<u32>().unwrap() }"
+  - "fn f(r: Receiver<u8>) -> u8 { r.recv().unwrap() }"

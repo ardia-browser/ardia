@@ -1,0 +1,33 @@
+id: reach-call-site
+language: rust
+severity: hint
+message: "same-crate call"
+ignores:
+  - third_party/**
+  - crates/**/tests/**
+  - crates/**/tests.rs
+rule:
+  all:
+    - kind: call_expression
+    - has:
+        field: function
+        any:
+          - kind: identifier
+            pattern: $CALLEE
+          - kind: scoped_identifier
+            regex: ^(Self|self|super|crate)(::\w+)*::\w+$
+            has:
+              field: name
+              pattern: $CALLEE
+          - kind: field_expression
+            all:
+              - has:
+                  field: value
+                  kind: self
+              - has:
+                  field: field
+                  pattern: $CALLEE
+    - not:
+        matches: in-deferred-closure
+    - not:
+        matches: in-test-code

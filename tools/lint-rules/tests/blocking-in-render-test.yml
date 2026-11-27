@@ -1,0 +1,47 @@
+id: blocking-in-render
+valid:
+  - |
+    impl Render for V {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            div().on_click(|_, _, _| { let _ = std::fs::read("x"); })
+        }
+    }
+  - |
+    impl Render for V {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            cx.background_spawn(async move { std::fs::read("x") }).detach();
+            div()
+        }
+    }
+  - "fn load() -> Vec<u8> { std::fs::read(\"x\").unwrap_or_default() }"
+invalid:
+  - |
+    impl Render for V {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let text = std::fs::read_to_string("x").unwrap_or_default();
+            div().child(text)
+        }
+    }
+  - |
+    impl RenderOnce for V {
+        fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+            let answer = self.replies.recv();
+            div()
+        }
+    }
+  - |
+    fn render_root(&self, cx: &mut App) -> AnyElement {
+        let token = get_generic_password("svc", "acct");
+        div().into_any_element()
+    }
+  - |
+    fn open_settings_window(cx: &mut App) {
+        let state = futures::executor::block_on(engine.call("state", json));
+    }
+  - |
+    fn open(cx: &mut App) {
+        cx.open_window(options, |w, cx| {
+            let bytes = fs::read("theme.json");
+            cx.new(|_| View::new(bytes))
+        });
+    }

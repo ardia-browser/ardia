@@ -1,0 +1,20 @@
+id: collect-then-iterate
+language: rust
+severity: warning
+message: "collects into a Vec only to iterate it again"
+note: "Keep the iterator and chain on it, or use count(), next(), last() or any() instead of a Vec."
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+  - crates/**/*_tests.rs
+  - crates/**/test_support.rs
+  - crates/**/src/bin/**
+  - third_party/**
+rule:
+  any:
+    - pattern: $E.collect::<Vec<$T>>().into_iter()
+    - pattern: $E.collect::<Vec<$T>>().iter()
+    - pattern: $E.collect::<Vec<$T>>().len()
+    - pattern: $E.collect::<Vec<$T>>().is_empty()
+    - pattern: $E.collect::<Vec<$T>>().first()
+    - pattern: $E.collect::<Vec<$T>>().last()

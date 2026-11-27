@@ -1,0 +1,8 @@
+id: list-outside-virtual-list
+valid:
+  - "fn rows() -> AnyElement { virtual_list::list(\"rows\", items, render_row) }"
+  - "fn f() { let s = MyListState::new(); }"
+invalid:
+  - "fn rows() -> AnyElement { uniform_list(\"rows\", 10, |range, _, _| vec![]).into_any_element() }"
+  - "fn rows() { let s = ListState::new(0, ListAlignment::Top, px(400.)); }"
+  - "fn rows() { let s = gpui::ListState::new(0, ListAlignment::Top, px(400.)); }"

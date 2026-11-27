@@ -1,0 +1,243 @@
+#import "ACPiPHost.h"
+#import "ArdiaPiPThrowMath.h"
+#import "ArdiaPiPGestureLog.h"
+
+#include <vector>
+
+@interface NSWindow (ArdiaPreventsActivation)
+- (void)_setPreventsActivation:(BOOL)prevents;
+- (BOOL)_preventsActivation;
+- (NSInteger)_resizeDirectionForMouseLocation:(NSPoint)location;
+- (BOOL)_isNonactivatingPanel;
+@end
+
+namespace ardia_pip {
+
+constexpr CGFloat kPeek = 28;
+constexpr CGFloat kReturnMargin = 16;
+constexpr CGFloat kButtonMargin = 12, kButtonSize = 28;
+constexpr CFTimeInterval kCornerBendDuration = 0.2;
+constexpr CGFloat kRimAlpha = 0.17;
+
+}
+
+typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLeft = -1, ArdiaPiPEdgeRight = 1 };
+
+@interface ArdiaPiPHandle : NSView
+@property (nonatomic) BOOL hovered;
+@property (nonatomic) ArdiaPiPEdge edge;
+@end
+
+@interface ArdiaPiPOverlay : NSView
+@property (nonatomic, readonly) ArdiaPiPHandle *handle;
+@end
+
+@interface ArdiaPiPResizeCursor : NSObject
+@property (nonatomic, readonly) BOOL showing;
+@property (nonatomic) BOOL enabled;
+- (instancetype)initWithWindow:(NSWindow *)window view:(NSView *)view;
+- (void)detach;
+- (BOOL)follow:(NSPoint)pointInWindow;
+- (NSDictionary *)resizeStarted;
+- (NSDictionary *)probe;
+@end
+
+@interface ArdiaPiPController : NSObject
+@property (nonatomic, readonly) NSWindow *window;
+@property (nonatomic, weak) ACPiPSource *view;
+@property (nonatomic, copy) NSString *host;
+@property (nonatomic, readonly) ArdiaPiPOverlay *overlay;
+@property (nonatomic, readonly) ArdiaPiPResizeCursor *resizeCursor;
+@property (nonatomic, readonly) ArdiaPiPEdge stashedEdge;
+@property (nonatomic) BOOL keepOnTop;
++ (instancetype)forWindow:(NSWindow *)window;
+- (instancetype)initWithWindow:(NSWindow *)window;
+- (void)roundCorners;
+- (CGFloat)cornerRadius;
+- (void)backToTab;
+- (void)unstash;
+- (NSMenu *)menu;
+- (void)stopMotion;
+- (void)abandonSwipe;
+- (NSScreen *)gestureHome;
+- (NSDictionary *)throwInfo;
+@end
+
+@interface ArdiaPiPController () {
+  NSWindow *_window;
+  __weak ACPiPSource *_view;
+  NSString *_host;
+  ArdiaPiPOverlay *_overlay;
+  ArdiaPiPResizeCursor *_resizeCursor;
+  ArdiaPiPEdge _stashedEdge;
+  ArdiaPiPEdge _pulledFrom;
+  __weak NSScreen *_pulledFromScreen;
+  NSRect _pullStart;
+  BOOL _keepOnTop;
+  NSMutableArray *_observers;
+  id _spaceObserver;
+  NSTimer *_slide;
+  BOOL _animating;
+  BOOL _sawDrag;
+  BOOL _swiping;
+  NSPoint _swipeGrab;
+  NSPoint _swipeLastDelta;
+  NSPoint _swipePointer;
+  CFTimeInterval _swipeBeganAt;
+  NSTimeInterval _swipeLastAt;
+  BOOL _awaitingMomentum;
+  NSRect _swipePlaced;
+  NSRect _swipeStart;
+  BOOL _dragging;
+  BOOL _dragMoving;
+  NSPoint _dragGrab;
+  NSPoint _dragFrom;
+  NSTimeInterval _dragBeganAt;
+  ACPiPStamp *_dragStamp;
+  ACPiPStamp *_swipeStamp;
+  ACPiPStamp *_placementStamp;
+  NSInteger _dragOffCursor;
+  double _dragMaxOff;
+  double _dragSlowestMove;
+  NSMutableArray *_dragTrace;
+  std::vector<ardia_pip_throw::Sample> _dragSamples;
+  __weak NSScreen *_dragHome;
+  NSDictionary *_lastDrag;
+  NSDictionary *_lastRelease;
+  NSDictionary *_lastSkip;
+  NSInteger _skips;
+  NSDictionary *_lastSwipe;
+  NSMutableDictionary *_lastThrow;
+  NSDictionary *_lastScreenFit;
+  __weak NSScreen *_lastScreen;
+  __weak NSScreen *_swipeHome;
+  __weak NSScreen *_stashScreen;
+}
+- (void)detach;
+- (void)toggleKeepOnTop:(id)sender;
+- (void)backToTabFromMenu:(id)sender;
+- (void)windowMoved;
+- (void)fitCorners:(BOOL)animated;
+- (void)bendCornersTo:(CGFloat)radius animated:(BOOL)animated;
+- (void)screenChanged;
+- (NSScreen *)homeScreen;
+- (ArdiaPiPEdge)edgeBeyond;
+- (BOOL)throwFrom:(NSPoint)grab velocity:(NSPoint)velocity;
+- (void)throwTo:(NSRect)target velocity:(NSPoint)velocity corner:(int)corner;
+- (void)settle;
+- (void)rescueIfLost;
+- (NSRect)frameStashedAt:(ArdiaPiPEdge)edge;
+- (void)stashAt:(ArdiaPiPEdge)edge;
+- (void)animateTo:(NSRect)target;
+- (void)swipeBegan:(NSEvent *)event;
+- (void)moveBy:(ardia_pip_throw::Point)delta;
+- (void)swipeMoved:(NSEvent *)event;
+- (void)swipeEnded:(NSEvent *)event cancelled:(BOOL)cancelled;
+- (NSRect)leaveTuckIfPulledOut:(NSPoint)velocity;
+- (NSRect)leaveTuckAt:(ArdiaPiPEdge)edge on:(NSRect)visible velocity:(NSPoint)velocity;
+- (BOOL)settleIntoCornerPulledInto:(NSPoint)velocity;
+- (ArdiaPiPEdge)edgeFlickedPast:(NSPoint)velocity;
+- (void)reportRelease:(NSString *)outcome stamp:(ACPiPStamp *)stamp;
+- (void)swipeCoasted:(NSEvent *)event;
+- (void)endMomentumWait;
+- (ArdiaPiPEdge)edgeBeyondFor:(NSRect)frame;
+- (void)setStashedEdge:(ArdiaPiPEdge)edge;
+- (void)dragReleasedAt:(NSPoint)pointer velocity:(NSPoint)velocity;
+@end
+
+@interface ArdiaPiPController (Spaces)
+- (void)activeSpaceChanged;
+@end
+
+@interface ArdiaPiPController (Workspaces)
++ (void)installWorkspaceHooks;
+@end
+
+@interface ArdiaPiPController (Placement)
++ (void)installPlacementHooks;
+@end
+
+@interface ArdiaPiPController (ResizeCursor)
+- (void)resizeStarted;
+@end
+
+@interface ArdiaPiPController (Swipe)
++ (BOOL)handleSwipe:(NSEvent *)event;
++ (void)abandonSwipeOn:(NSWindow *)window;
+- (void)dragBegan:(NSEvent *)event;
+- (void)followPointer:(NSEvent *)event;
+- (void)dragMoved:(NSEvent *)event;
+- (void)dragEnded:(NSEvent *)event;
+- (void)unstashFromHandle;
+- (void)devSwipe:(NSArray<NSString *> *)args;
+- (void)devDrag:(NSArray<NSString *> *)args;
+@end
+
+@interface ArdiaPiPController (Skip)
+- (BOOL)skipBy:(double)seconds at:(NSPoint)point clickCount:(NSInteger)clickCount;
+- (BOOL)skipDraggedBy:(double)seconds at:(NSPoint)point clickCount:(NSInteger)clickCount;
+- (BOOL)skipBy:(double)seconds at:(NSPoint)point clickCount:(NSInteger)clickCount stamp:(ACPiPStamp *)stamp;
+- (NSDictionary *)skipInfo;
+@end
+
+@interface ArdiaPiPZoom : NSObject
++ (BOOL)zooms:(NSWindow *)window;
++ (instancetype)forWindow:(NSWindow *)window;
++ (BOOL)enabled;
++ (BOOL)beginEdgeResize:(NSWindow *)window event:(NSEvent *)event;
++ (BOOL)continueEdgeResize:(NSEvent *)event;
++ (BOOL)edgeResizing;
++ (void)devPinch:(NSWindow *)window args:(NSArray<NSString *> *)args;
++ (NSDictionary *)devPinchStats:(NSWindow *)window;
++ (NSString *)devStandInWindow:(NSWindow *)window;
+- (void)pinchBegan;
+- (void)pinchBy:(double)factor at:(NSPoint)pointer;
+- (void)pinchEnded;
+- (void)cancelStandIn;
+- (void)zoomBy:(double)factor at:(NSPoint)pointer ease:(BOOL)ease;
+- (NSInteger)standInNumber;
+- (NSInteger)pinchSession;
+- (NSRect)shownFrame;
+- (void)notePinchUnfocused:(BOOL)unfocused fromOtherApp:(BOOL)fromOtherApp;
+@end
+
+@interface ArdiaPiPZoom (Routing)
++ (BOOL)handle:(NSEvent *)event;
++ (BOOL)handleFromOtherApp:(NSEvent *)event;
++ (BOOL)anyZoomable;
++ (NSWindow *)windowUnder:(NSPoint)pointer;
++ (NSArray<NSDictionary *> *)devWindowsAt:(NSPoint)pointer;
++ (NSDictionary *)devLastPinch;
++ (void)yieldPinchOn:(NSWindow *)window;
++ (void)finishPendingPinch;
++ (void)dropStandInOn:(NSWindow *)window;
+@end
+
+namespace ardia_pip {
+
+extern NSString *const kZoomDefault;
+extern const void *const kZoomKey;
+BOOL IsChromeFloatingWindow(NSWindow *window);
+BOOL IsChromeVideoPictureInPicture(NSWindow *window);
+BOOL IsChromeDocumentPictureInPicture(NSWindow *window);
+BOOL JoinsFullScreenSpaces(NSWindow *window);
+void JoinFullScreenSpaces(NSWindow *window);
+void FloatOverActiveSpace(NSWindow *window);
+NSScreen *ScreenFor(NSRect frame);
+void PreventActivation(NSWindow *window);
+BOOL PreventsActivation(NSWindow *window);
+extern NSInteger gActivations;
+void MarkBackToTabActivation();
+BOOL ConsumeBackToTabActivation();
+BOOL ActivateApp(NSString *why);
+void ActivateWithOnlyPictureInPicture(ArdiaPiPController *controller, BOOL move);
+BOOL ActiveOnlyForPictureInPicture();
+BOOL ThrowEnabled();
+NSPoint PointerOf(NSEvent *event);
+void PinchFromOtherApp(NSEvent *event);
+BOOL FollowsPinchesFromOtherApps();
+ardia_pip_throw::Rect ThrowRect(NSRect r);
+int ScreenIndex(NSScreen *screen);
+std::vector<ardia_pip_throw::Screen> ThrowScreens();
+
+}

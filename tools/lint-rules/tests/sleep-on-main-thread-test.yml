@@ -1,0 +1,22 @@
+id: sleep-on-main-thread
+valid:
+  - "fn worker() { std::thread::sleep(Duration::from_millis(10)); }"
+  - |
+    fn start(cx: &mut App) {
+        std::thread::spawn(|| std::thread::sleep(Duration::from_millis(10)));
+        cx.background_spawn(async move { std::thread::sleep(Duration::from_millis(10)) }).detach();
+    }
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn wait(cx: &mut App) { std::thread::sleep(Duration::from_millis(8)); }
+    }
+invalid:
+  - "fn settle(window: &mut Window, cx: &mut App) { std::thread::sleep(Duration::from_millis(16)); }"
+  - |
+    impl Render for V {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            thread::sleep(Duration::from_millis(1));
+            div()
+        }
+    }

@@ -1,0 +1,10 @@
+id: dropped-task
+valid:
+  - "fn f(cx: &mut App) { cx.spawn(async move |cx| {}).detach(); }"
+  - "fn f(cx: &mut App) { self.task = Some(cx.background_spawn(async {})); }"
+  - "fn f() { let _ = std::thread::Builder::new().name(\"w\".into()).spawn(|| {}); }"
+  - "fn f() { let _ = std::process::Command::new(\"open\").spawn(); }"
+invalid:
+  - "fn f(cx: &mut App) { let _ = cx.spawn(async move |cx| {}); }"
+  - "fn f(cx: &mut App) { let _ = cx.background_executor().spawn(async {}); }"
+  - "fn f(window: &mut Window) { let _ = window.spawn(cx, async move |cx| {}); }"

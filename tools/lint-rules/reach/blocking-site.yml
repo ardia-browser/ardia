@@ -1,0 +1,15 @@
+id: reach-blocking-site
+language: rust
+severity: hint
+message: "blocking call"
+ignores:
+  - third_party/**
+  - crates/**/tests/**
+  - crates/**/tests.rs
+rule:
+  all:
+    - matches: blocking-call
+    - not:
+        matches: in-deferred-closure
+    - not:
+        matches: in-test-code

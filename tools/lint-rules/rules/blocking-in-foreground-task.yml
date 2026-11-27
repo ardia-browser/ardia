@@ -1,0 +1,43 @@
+id: blocking-in-foreground-task
+language: rust
+severity: error
+message: "[gpui-async: Blocking in spawn] cx.spawn runs on the main thread between awaits, so this blocking call freezes the UI"
+note: "Move the blocking work into cx.background_spawn(..) (or background_executor().spawn) and await its Task from the foreground task."
+metadata:
+  source: gpui-async SKILL.md, Common Mistakes (Blocking in spawn, Long-running foreground tasks)
+ignores:
+  - third_party/**
+  - crates/**/tests/**
+  - crates/**/tests.rs
+rule:
+  all:
+    - matches: blocking-call
+    - inside:
+        stopBy: end
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: field_expression
+            all:
+              - has:
+                  field: field
+                  regex: ^(spawn|spawn_in)$
+              - has:
+                  field: value
+                  regex: ^(cx|window|app|\w+\.foreground_executor\(\))$
+    - not:
+        inside:
+          stopBy: end
+          kind: arguments
+          inside:
+            kind: call_expression
+            has:
+              field: function
+              any:
+                - regex: background_spawn$
+                - regex: background_executor\(\)\s*\.spawn$
+                - regex: (^|::)thread::spawn$
+    - not:
+        matches: in-test-code

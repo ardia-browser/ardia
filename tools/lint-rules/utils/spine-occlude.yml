@@ -1,0 +1,17 @@
+id: spine-occlude
+language: rust
+rule:
+  kind: call_expression
+  any:
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: field
+          regex: ^occlude$
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: value
+          matches: spine-occlude

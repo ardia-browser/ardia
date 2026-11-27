@@ -1,0 +1,16 @@
+id: mutate-in-render
+valid:
+  - |
+    impl Render for V {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            div().on_click(cx.listener(|this, _, _, cx| { this.count += 1; cx.notify(); }))
+        }
+    }
+invalid:
+  - |
+    impl Render for V {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            self.render_count += 1;
+            div()
+        }
+    }

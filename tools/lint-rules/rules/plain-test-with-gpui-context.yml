@@ -1,0 +1,25 @@
+id: plain-test-with-gpui-context
+language: rust
+severity: error
+message: "[gpui-testing: Forgetting #[gpui::test]] a plain #[test] cannot be handed a TestAppContext"
+note: "Use #[gpui::test] so gpui builds the context, its executor and the deterministic scheduler."
+metadata:
+  source: gpui-testing SKILL.md, Common Mistakes (Forgetting #[gpui::test])
+ignores:
+  - third_party/**
+rule:
+  all:
+    - kind: function_item
+    - has:
+        field: parameters
+        has:
+          kind: parameter
+          has:
+            field: type
+            regex: (TestAppContext|VisualTestContext)
+    - follows:
+        stopBy:
+          not:
+            kind: attribute_item
+        kind: attribute_item
+        regex: ^#\[(tokio::)?test\]$

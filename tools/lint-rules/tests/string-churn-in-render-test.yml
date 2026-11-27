@@ -1,0 +1,22 @@
+id: string-churn-in-render
+valid:
+  - |
+    impl RenderOnce for Row {
+        fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+            div().child(self.title.clone()).child(format!("{} tabs", self.count))
+        }
+    }
+  - "fn label(t: &Tab) -> Div { div().child(t.title.to_string()) }"
+invalid:
+  - |
+    impl RenderOnce for Row {
+        fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+            div().child(self.title.to_string())
+        }
+    }
+  - |
+    impl Render for V {
+        fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            div().child(SharedString::from(self.name.clone()))
+        }
+    }

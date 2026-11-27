@@ -1,0 +1,6 @@
+id: plain-test-with-gpui-context
+valid:
+  - "#[gpui::test]\nfn opens(cx: &mut TestAppContext) {}"
+  - "#[test]\nfn parses() {}"
+invalid:
+  - "#[test]\nfn opens(cx: &mut TestAppContext) {}"

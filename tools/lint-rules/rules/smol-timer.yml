@@ -1,0 +1,13 @@
+id: smol-timer
+language: rust
+severity: error
+message: "smol timers are invisible to gpui's executor, so run_until_parked and the test scheduler miss them"
+note: "Use cx.background_executor().timer(duration) (gpui-code-quality: Use GPUI Timers in Tests)."
+ignores:
+  - third_party/**
+rule:
+  any:
+    - pattern: smol::Timer::after($$$)
+    - pattern: smol::Timer::interval($$$)
+    - pattern: Timer::after($$$)
+    - pattern: async_io::Timer::after($$$)

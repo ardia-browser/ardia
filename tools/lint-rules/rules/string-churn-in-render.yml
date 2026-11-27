@@ -1,0 +1,31 @@
+id: string-churn-in-render
+language: rust
+severity: warning
+message: "[gpui-elements: Not using SharedString] allocates a new String for text on every frame"
+note: "Keep the text as SharedString (cloning it is a refcount bump) and pass it straight to .child(..)."
+metadata:
+  source: gpui-elements and gpui-code-quality SKILL.md (Use SharedString for Text)
+ignores:
+  - third_party/**
+  - crates/**/tests/**
+  - crates/**/tests.rs
+rule:
+  all:
+    - any:
+        - pattern: $P.child($X.to_string())
+        - pattern: $P.child($X.to_owned())
+        - pattern: $P.child(String::from($X))
+        - pattern: $P.child(SharedString::from($X.to_string()))
+        - pattern: $P.child(SharedString::from($X.clone()))
+        - pattern: $P.child($X.to_string().into())
+    - not:
+        has:
+          field: arguments
+          has:
+            stopBy: end
+            kind: string_literal
+    - matches: render-scope
+    - not:
+        matches: in-deferred-closure
+    - not:
+        matches: in-test-code

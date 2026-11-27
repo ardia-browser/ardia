@@ -1,0 +1,91 @@
+[package]
+name = "ardia-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "ardia_app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ardia"
+path = "src/main.rs"
+
+[dependencies]
+ardia-theme.workspace = true
+ardia-state.workspace = true
+ardia-engine.workspace = true
+ardia-ui.workspace = true
+ardia-telemetry.workspace = true
+ardia-profile.workspace = true
+ardia-import-core.workspace = true
+gpui.workspace = true
+gpui_platform.workspace = true
+anyhow.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+futures.workspace = true
+uuid.workspace = true
+url.workspace = true
+base64 = { workspace = true, features = ["std"] }
+env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
+image = { version = "0.25", default-features = false, features = ["png", "ico", "bmp", "jpeg", "gif", "webp"] }
+resvg = { version = "0.49", default-features = false }
+http_client = { git = "https://github.com/zed-industries/zed", rev = "a3ce8d5e88e35697b2ba1cf9cb3c6816089b8281" }
+reqwest_client = { git = "https://github.com/zed-industries/zed", rev = "a3ce8d5e88e35697b2ba1cf9cb3c6816089b8281" }
+sha2.workspace = true
+zeroize = "1"
+flate2 = "1"
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+sha1 = "0.10"
+aes.workspace = true
+cbc = "0.1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-metal = "0.3.2"
+objc2.workspace = true
+security-framework = "3"
+block2 = "0.6"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSBitmapImageRep", "NSCell", "NSEvent", "NSImage", "NSImageRep", "NSMenu", "NSMenuItem", "NSResponder", "NSRunningApplication", "NSScreen", "libc", "NSView", "NSWorkspace", "objc2-uniform-type-identifiers"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSEnumerator", "NSDate", "NSHTTPCookie", "NSData", "NSDictionary", "NSError", "NSFileManager", "NSGeometry", "NSObject", "NSString", "NSURL", "NSURLRequest", "NSURLResponse", "NSValue", "NSArray", "NSBundle", "NSUUID", "NSRegularExpression", "NSRange", "NSObjCRuntime"] }
+objc2-uniform-type-identifiers = { version = "0.3.2", default-features = false, features = ["std", "UTType"] }
+raw-window-handle = "0.6"
+objc2-screen-capture-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "libc", "objc2-core-foundation", "objc2-core-graphics", "SCShareableContent", "SCScreenshotManager", "SCStream"] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGImage", "CGDataProvider", "CGColorSpace"] }
+objc2-av-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "objc2-core-media", "objc2-core-video", "AVAssetWriter", "AVAssetWriterInput", "AVMediaFormat", "AVVideoSettings"] }
+objc2-core-video = { version = "0.3.2", default-features = false, features = ["std", "CVBase", "CVPixelBuffer", "CVPixelBufferPool", "CVBuffer", "CVImageBuffer", "CVReturn", "CVPixelFormatDescription"] }
+objc2-core-media = { version = "0.3.2", default-features = false, features = ["std", "CMTime", "CMBase"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFString", "CFCGTypes"] }
+objc2-web-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "objc2-app-kit", "WKWebView", "WKWebViewConfiguration", "WKURLSchemeHandler", "WKURLSchemeTask", "WKUserContentController", "WKUserScript", "WKScriptMessage", "WKScriptMessageHandler", "WKWebsiteDataStore", "WKNavigationDelegate", "WKNavigationAction", "WKFrameInfo", "WKSecurityOrigin", "WKPreferences", "WKNavigation", "WKWebpagePreferences", "WKContentRuleList", "WKContentRuleListStore", "WKUIDelegate", "WKWindowFeatures", "WKBackForwardList", "WKBackForwardListItem", "WKFindConfiguration", "WKFindResult", "WKContentWorld", "WKNavigationResponse", "WKSnapshotConfiguration", "WKWebsiteDataRecord", "WKHTTPCookieStore", "WKPDFConfiguration", "WKScriptMessageHandlerWithReply", "objc2-core-foundation"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+gpui_macos = { workspace = true, features = ["font-kit"] }
+
+[[test]]
+name = "applescript_main_thread"
+path = "tests/applescript_main_thread.rs"
+harness = false
+
+[[test]]
+name = "hosted_input"
+path = "tests/hosted_input.rs"
+harness = false
+
+[[test]]
+name = "webkit_native"
+path = "tests/webkit_native.rs"
+harness = false
+
+[lints]
+workspace = true

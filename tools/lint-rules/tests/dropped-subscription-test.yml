@@ -1,0 +1,7 @@
+id: dropped-subscription
+valid:
+  - "fn f(cx: &mut Context<Self>) { self.subscriptions.push(cx.subscribe(&child, on_event)); }"
+  - "fn f(cx: &mut Context<Self>) { cx.observe(&child, on_change).detach(); }"
+invalid:
+  - "fn f(cx: &mut Context<Self>) { let _ = cx.subscribe(&child, on_event); }"
+  - "fn f(cx: &mut Context<Self>) { let _ = cx.observe_global::<Theme>(on_theme); }"

@@ -1,0 +1,39 @@
+id: full-cover-listener
+language: rust
+severity: error
+message: "a full-cover absolute layer with pointer listeners swallows clicks meant for the page beneath"
+note: "Attach the listeners only while a drag is live (.when(cx.has_active_drag(), ...)), or make the layer a deliberate blocker with .occlude() (modal scrims; a scrim inside an occluding or deferred overlay is accepted). This is the page-click regression class. Allowed: window/frozen_page.rs, a click-to-activate stand-in drawn instead of a frozen page, so there is no live page beneath it."
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+  - crates/**/*_tests.rs
+  - crates/**/test_support.rs
+  - crates/**/src/bin/**
+  - third_party/**
+  - crates/ardia-ui/src/window/frozen_page.rs
+rule:
+  all:
+    - matches: chain-top
+    - matches: spine-absolute
+    - matches: spine-inset_0
+    - matches: spine-pointer-listener
+    - not:
+        matches: spine-occlude
+    - not:
+        inside:
+          stopBy: end
+          any:
+            - matches: spine-occlude
+            - kind: call_expression
+              has:
+                field: function
+                regex: ^(gpui::)?deferred$
+    - not:
+        inside:
+          stopBy: end
+          kind: function_item
+          has:
+            stopBy: end
+            pattern: $C.has_active_drag()
+    - not:
+        matches: in-test-code

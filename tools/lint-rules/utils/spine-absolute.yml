@@ -1,0 +1,17 @@
+id: spine-absolute
+language: rust
+rule:
+  kind: call_expression
+  any:
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: field
+          regex: ^absolute$
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: value
+          matches: spine-absolute

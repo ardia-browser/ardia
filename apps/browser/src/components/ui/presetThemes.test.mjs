@@ -241,3 +241,22 @@ test("a preset's dark look scales its swatch to 75% RGB and resetting back to ei
     assert.ok(isUntouched(withStopAt(darkStart, 0, darkStart.stops[0].x, darkStart.stops[0].y), darkStart), `${color}: pad round-trip in dark mode`);
   }
 });
+
+test("editing one half of a light and dark pair keeps the other half as stored", () => {
+  const { resolveTheme, sameTheme, withEditedHalf } = look_;
+  for (const color of PROFILE_COLOR_NAMES.filter((c) => c !== "neutral")) {
+    const start = presetStartingTheme(PROFILE_COLORS[color].swatch);
+    assert.ok(start.dark, `${color}: an untouched preset carries its dark look`);
+    const darkEdit = withEditedHalf(start, true, { ...resolveTheme(start, true), intensity: 0.4 });
+    assert.deepEqual(resolveTheme(darkEdit, false), resolveTheme(start, false), `${color}: a dark-mode edit leaves the light look`);
+    assert.equal(resolveTheme(darkEdit, true).intensity, 0.4, `${color}: and changes the dark one`);
+    const lightEdit = withEditedHalf(start, false, { ...resolveTheme(start, false), grain: 0.5 });
+    assert.deepEqual(lightEdit.dark, start.dark, `${color}: a light-mode edit leaves the dark look`);
+    assert.equal(lightEdit.grain, 0.5);
+    for (const dark of [true, false]) assert.ok(sameTheme(withEditedHalf(start, dark, resolveTheme(start, dark)), start), `${color}: dragged back in ${dark ? "dark" : "light"} is untouched`);
+  }
+  const flat = { ...presetStartingTheme(PROFILE_COLORS.green.swatch), dark: undefined };
+  delete flat.dark;
+  const edited = { ...flat, intensity: 0.3 };
+  assert.deepEqual(withEditedHalf(flat, true, edited), edited, "a single look is replaced as before");
+});

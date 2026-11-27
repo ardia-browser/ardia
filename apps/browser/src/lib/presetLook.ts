@@ -15,6 +15,13 @@ export function presetStartingTheme(swatch: string): ProfileTheme {
   };
 }
 
+export function withEditedHalf(theme: ProfileTheme, editsDark: boolean, edited: ProfileTheme): ProfileTheme {
+  if (!theme.dark) return edited;
+  if (!editsDark) return { ...edited, dark: theme.dark };
+  const { mode, dark: _flattened, ...look } = edited;
+  return { ...theme, mode, dark: look };
+}
+
 const ownLooksOf = (profile: PresetLookFields): PresetThemes => profile.presetThemes ?? {};
 
 export function presetThemeOf(profile: PresetLookFields, color: ProfileColor): ProfileTheme | null {

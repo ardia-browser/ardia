@@ -2,7 +2,7 @@ import { holdThemedWindowsKeyLook, choosePresetColor, onPresetSelection, resetPr
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { flatColors, lookAngle, MAX_THEME_STOPS, requestedDarkFor, resolveTheme, shownLook, themeAccent, withAddedStop, withAngle, withoutStop, spaceLookSource, stopLightness, type PresetLookFields, type ShownLook } from "../../lib/profileLook";
-import { isUntouched, presetStartingTheme, presetThemeOf } from "../../lib/presetLook";
+import { presetStartingTheme, presetThemeOf, sameTheme, withEditedHalf } from "../../lib/presetLook";
 import { THEME_TEXTURES } from "@ardia/core";
 import { PROFILE_COLORS } from "../ui/theme";
 import { useAppDark, useProfile, useSettings, useWindow } from "../../state/browser/hooks";
@@ -64,7 +64,8 @@ export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme | n
   const start = original.dark ? resolveTheme(original, editsDark) : original;
   const shown = shownLook(look, appDark, source);
   const change = (next: ProfileTheme | null, settle = false) => {
-    const kept = next && isUntouched(next, start) ? null : next;
+    const whole = next ? withEditedHalf(look, editsDark, next) : null;
+    const kept = whole && sameTheme(whole, original) ? null : whole;
     if (kept && !stored) noteThemePreset("edited");
     live.change(kept, settle);
   };
@@ -92,7 +93,7 @@ export function ThemeSection({ profileId, anchor }: { profileId: string; anchor:
           anchor={anchor}
           description={
             stored?.dark
-              ? `Separate light and dark looks. Editing keeps the ${editsDark ? "dark" : "light"} one.`
+              ? `Separate light and dark looks. Editing changes the ${editsDark ? "dark" : "light"} one.`
               : presetLabel(profile.color, !!stored)
           }
         >

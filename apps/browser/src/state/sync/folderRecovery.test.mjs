@@ -451,7 +451,6 @@ test("a folder that is there but lost this device's data waits without offering 
   assert.equal(engine.useSync.getState().dataMissing, false);
 
   const chain = chainOf(SYNC_FOLDER).get(OURS);
-  plant(SYNC_FOLDER, "other-chain");
   chainOf(SYNC_FOLDER).delete(OURS);
   await engine.syncNow();
   const waiting = engine.useSync.getState();
@@ -462,7 +461,7 @@ test("a folder that is there but lost this device's data waits without offering 
   assert.equal(engine.useSync.getState().dataMissing, true, "a settings change while the data is missing keeps pairing off");
   engine.setTypeSynced("history", true);
   assert.equal(engine.useSync.getState().dataMissing, true);
-  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" }, "recreate never makes a chain in a folder that holds other data");
+  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" }, "recreate never makes a chain in a folder that is there");
   assert.equal(chainOf(SYNC_FOLDER).has(OURS), false);
 
   chainOf(SYNC_FOLDER).set(OURS, chain);
@@ -641,13 +640,23 @@ test("pairing stays off until the writes queued while the folder was gone have l
   assert.ok(Object.values(phone.records).some((r) => r.v?.t === "Made Offline"), "the offline edit reached the new folder before pairing opened");
 });
 
-test("a folder left empty by an earlier failed recreate offers Recreate again instead of answering exists forever", async () => {
+test("a folder that looks empty while sync waits for its data is never recreated, but one that appears empty while Recreate runs is used", async () => {
   reset();
-  const engine = await brokenFolder("vacant-left-over");
+  const engine = await brokenFolder("vacant-folder");
   folders.set(SYNC_FOLDER, new Map());
   await engine.syncNow();
-  assert.equal(engine.useSync.getState().dataMissing, true);
-  assert.deepEqual(await engine.recreateSyncFolder(), { ok: "recreated" });
+  assert.equal(engine.useSync.getState().dataMissing, true, "an empty folder that is there is the waiting state: its files may still be downloading");
+  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" });
+  assert.equal(chainOf(SYNC_FOLDER).size, 0);
+
+  folders.delete(SYNC_FOLDER);
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().status, "offline");
+  afterChainStatus = (folder) => {
+    afterChainStatus = null;
+    folders.set(folder, new Map());
+  };
+  assert.deepEqual(await engine.recreateSyncFolder(), { ok: "recreated" }, "a folder holding only Finder files that appears after the status check is taken over");
   assert.ok(chainOf(SYNC_FOLDER).has(OURS));
   assert.equal(engine.useSync.getState().status, "updated");
 });

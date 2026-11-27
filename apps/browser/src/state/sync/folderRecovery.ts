@@ -155,7 +155,7 @@ export async function recreateChainFolder(
       noteFolderRecreate("failed", consent);
       return { error: "cloudDriveOff" };
     }
-    if (chain === "missing" ? !info?.vacant : info?.exists && !info.vacant) {
+    if (chain === "missing" || (info?.exists && !info.vacant)) {
       noteFolderRecreate("failed", consent);
       return { error: "exists" };
     }

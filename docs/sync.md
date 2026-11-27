@@ -602,14 +602,15 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
     chain itself; on Linux and Windows, whose engine reads a missing chain as an empty folder, a read that comes back
     empty for a scope whose files this computer knew checks the chain before it is used): a whole folder gone is "Sync folder unavailable", this phrase's folder gone from a folder that is
     there is the waiting state below.
-  - **Recreate Folder…** takes the place of Connect Another Device… when the folder is missing, or when it is there but
-    vacant (empty, or holding only Finder metadata such as `.DS_Store`, as an earlier failed try can leave it)
-    (`folderRecovery.ts`). After a confirm it saves what this Mac owes the new folder to `sync.json` first (the scopes
+  - **Recreate Folder…** takes the place of Connect Another Device… only when the folder is missing ("Sync folder
+    unavailable"), never in the waiting state: a cloud folder can look empty, or hold only `.DS_Store`, while its files
+    are still downloading, and a new chain there would race the one arriving (`folderRecovery.ts`). After a confirm it saves what this Mac owes the new folder to `sync.json` first (the scopes
     whose snapshot is owed, and a mark that a whole cycle is owed), checks the folder again, stops if the app is
     quitting, and then calls `createChainInNewFolder`. On the Mac that builds the folder and this phrase's chain in a
     temporary folder on the same volume and renames it into place with `RENAME_EXCL`, so the pair appears at once or
-    not at all. A vacant folder loses its Finder metadata and is replaced by a plain rename, which only replaces an
-    empty folder. Anything else there, another phrase's chain included, is left alone and Recreate answers that a
+    not at all. A folder that appears while Recreate runs holding only Finder metadata (`.DS_Store`, `.localized`,
+    `Icon\r`, `._*`) loses that metadata and is replaced by a plain rename, which only replaces an empty folder; one
+    that was already there when Recreate checked the chain is refused. Anything else there, another phrase's chain included, is left alone and Recreate answers that a
     folder is there. A failed try leaves only its own temporary folder, which is removed. Linux and Windows serve the
     call in `hostSync.ts`: they refuse a folder that is there and otherwise use the engine's `createChain`, which keeps
     a short window and can leave an empty folder if its second mkdir fails, until their engines get the same call

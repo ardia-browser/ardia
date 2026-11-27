@@ -1,0 +1,440 @@
+import { at, b, bullet, bullets, callout, columns, database, db, divider, empty, h2, h3, i, mention, nums, p, page, quote, span, subpage, today, todo, todos, toggle, toggleHeading } from "../dsl";
+import type { TemplateSpec } from "../types";
+
+const weeklyPlanner: TemplateSpec = {
+  id: "weekly-planner",
+  title: "Weekly planner",
+  description: "Plan the week in ten minutes: three priorities, tasks laid out by day and by area of life, and a short review on Friday so next week starts better than this one.",
+  category: "planning",
+  tags: ["week", "weekly", "planner", "agenda", "tasks", "review", "schedule"],
+  root: page({
+    key: "home",
+    title: "This week",
+    icon: "🗓️",
+    cover: "gradient:2",
+    fullWidth: true,
+    blocks: [
+      p("Week starting ", today(0), ". Plan on Sunday or Monday morning, review on Friday."),
+      h2("Three priorities"),
+      callout("⭐", "If only three things get done this week, these are the ones.", "yellow"),
+      todo("Send the project proposal"),
+      todo("Run three times"),
+      todo("Call Grandma"),
+      h2("Today"),
+      database("tasks", "today"),
+      h2("The week"),
+      database("tasks", "week"),
+      divider(),
+      h2("Friday review"),
+      columns(
+        [h3("What went well"), empty()],
+        [h3("What got in the way"), empty()],
+        [h3("One change for next week"), empty()],
+      ),
+    ],
+    children: [
+      db({
+        key: "tasks",
+        title: "Week plan",
+        icon: "✅",
+        inline: true,
+        titleName: "Task",
+        properties: [
+          { key: "day", name: "Day", type: "date", dateFormat: "relative" },
+          { key: "done", name: "Done", type: "checkbox" },
+          { key: "area", name: "Area", type: "select", options: [{ name: "Work", color: "blue" }, { name: "Home", color: "orange" }, { name: "Health", color: "green" }, { name: "People", color: "pink" }, { name: "Learning", color: "purple" }] },
+          { key: "energy", name: "Energy", type: "select", options: [{ name: "Deep focus", color: "red" }, { name: "Light", color: "gray" }] },
+          { key: "mins", name: "Minutes", type: "number" },
+        ],
+        views: [
+          { key: "today", name: "Today", type: "list", filter: [{ prop: "day", cond: "relative", value: { relative: "today" } }], sorts: [{ prop: "done", dir: "asc" }], show: ["done", "area", "mins"] },
+          { key: "week", name: "By day", type: "board", group: { prop: "day", date: "day" }, sorts: [{ prop: "day", dir: "asc" }], show: ["area", "done"], cardPreview: "none" },
+          { key: "calendar", name: "Calendar", type: "calendar", date: "day", show: ["area"] },
+          { key: "areas", name: "By area", type: "board", group: { prop: "area" }, show: ["day", "done"], cardPreview: "none" },
+          { key: "table", name: "Everything", type: "table", sorts: [{ prop: "day", dir: "asc" }], calcs: { done: "percent_checked", mins: "sum" } },
+        ],
+        rows: [
+          { title: "Draft the project proposal", values: { day: at(0, "09:00"), done: false, area: "Work", energy: "Deep focus", mins: 90 } },
+          { title: "Morning run", values: { day: at(0, "07:00"), done: true, area: "Health", energy: "Light", mins: 30 } },
+          { title: "Reply to the school newsletter", values: { day: at(0), done: false, area: "Home", energy: "Light", mins: 10 } },
+          { title: "Review proposal with Priya", values: { day: at(1, "14:00"), done: false, area: "Work", energy: "Deep focus", mins: 45 } },
+          { title: "Book the dentist", values: { day: at(1), done: false, area: "Home", energy: "Light", mins: 5 } },
+          { title: "Call Grandma", values: { day: at(2, "18:30"), done: false, area: "People", energy: "Light", mins: 30 } },
+          { title: "Chapter 4 of the design course", values: { day: at(3), done: false, area: "Learning", energy: "Deep focus", mins: 60 } },
+          { title: "Send the proposal", values: { day: at(4, "11:00"), done: false, area: "Work", energy: "Light", mins: 15 } },
+          { title: "Long run", values: { day: at(5, "08:00"), done: false, area: "Health", energy: "Light", mins: 60 } },
+        ],
+      }),
+    ],
+  }),
+};
+
+const eisenhowerMatrix: TemplateSpec = {
+  id: "eisenhower-matrix",
+  title: "Eisenhower matrix",
+  description: "Sort tasks by urgent and important into four boxes: do it now, schedule it, delegate it, or drop it. Tick two boxes on a task and it moves to the right quadrant by itself.",
+  category: "planning",
+  tags: ["eisenhower", "priorities", "urgent", "important", "matrix", "decide", "productivity"],
+  root: page({
+    key: "home",
+    title: "Eisenhower matrix",
+    icon: "🧭",
+    cover: "gradient:4",
+    fullWidth: true,
+    blocks: [
+      callout("⚖️", ["Ask two questions of every task. ", b("Is it important?"), " Does it move a goal that matters? ", b("Is it urgent?"), " Does it need doing in the next day or two? Tick the answers and the task lands in its box."], "blue"),
+      columns(
+        [h3("🔥 Do now"), p(i("Urgent and important.")), database("tasks", "do")],
+        [h3("📅 Schedule"), p(i("Important, not urgent. Where the real progress lives.")), database("tasks", "schedule")],
+      ),
+      columns(
+        [h3("🤝 Delegate"), p(i("Urgent, not important. Hand it off or do it quickly.")), database("tasks", "delegate")],
+        [h3("🗑️ Drop"), p(i("Neither. Say no, or let it go.")), database("tasks", "drop")],
+      ),
+      divider(),
+      toggleHeading(3, "Every task, in one table", [database("tasks", "all")]),
+      quote("What is important is seldom urgent, and what is urgent is seldom important."),
+    ],
+    children: [
+      db({
+        key: "tasks",
+        title: "Tasks",
+        icon: "📋",
+        inline: true,
+        titleName: "Task",
+        properties: [
+          { key: "important", name: "Important", type: "checkbox" },
+          { key: "urgent", name: "Urgent", type: "checkbox" },
+          { key: "quadrant", name: "Quadrant", type: "formula", expression: 'ifs(prop("Urgent") and prop("Important"), "Do now", prop("Important"), "Schedule", prop("Urgent"), "Delegate", "Drop")' },
+          { key: "due", name: "Due", type: "date", dateFormat: "relative" },
+          { key: "who", name: "Who", type: "person" },
+          { key: "done", name: "Done", type: "checkbox" },
+        ],
+        views: [
+          { key: "do", name: "Do now", type: "list", filter: [{ prop: "urgent", cond: "checked" }, { prop: "important", cond: "checked" }], sorts: [{ prop: "due", dir: "asc" }], show: ["done", "due"] },
+          { key: "schedule", name: "Schedule", type: "list", filter: [{ prop: "urgent", cond: "unchecked" }, { prop: "important", cond: "checked" }], sorts: [{ prop: "due", dir: "asc" }], show: ["done", "due"] },
+          { key: "delegate", name: "Delegate", type: "list", filter: [{ prop: "urgent", cond: "checked" }, { prop: "important", cond: "unchecked" }], show: ["done", "who"] },
+          { key: "drop", name: "Drop", type: "list", filter: [{ prop: "urgent", cond: "unchecked" }, { prop: "important", cond: "unchecked" }], show: ["done"] },
+          { key: "all", name: "All tasks", type: "table", sorts: [{ prop: "due", dir: "asc" }], show: ["important", "urgent", "quadrant", "due", "who", "done"], calcs: { title: "count", done: "percent_checked" } },
+        ],
+        rows: [
+          { title: "Fix the broken checkout before the sale", values: { important: true, urgent: true, due: at(0), who: ["me"], done: false } },
+          { title: "Finish the tax return", values: { important: true, urgent: true, due: at(1), who: ["me"], done: false } },
+          { title: "Plan next quarter's goals", values: { important: true, urgent: false, due: at(10), who: ["me"], done: false } },
+          { title: "Start a weekly strength routine", values: { important: true, urgent: false, who: ["me"], done: false } },
+          { title: "Write the onboarding guide", values: { important: true, urgent: false, due: at(14), who: ["me"], done: false } },
+          { title: "Book the team offsite venue", values: { important: false, urgent: true, due: at(2), who: ["sam"], done: false } },
+          { title: "Answer the supplier's invoice question", values: { important: false, urgent: true, due: at(1), who: ["jordan"], done: true } },
+          { title: "Reorganise the shared drive folders", values: { important: false, urgent: false, done: false } },
+          { title: "Read every unread newsletter", values: { important: false, urgent: false, done: false } },
+        ],
+      }),
+    ],
+  }),
+};
+
+const cornellNote = (cues: string[], notes: Parameters<typeof bullet>[0][], summary: string) => [
+  columns([h3("Cues"), ...cues.map((cue) => bullet(cue))], [h3("Notes"), ...notes.map((note) => bullet(note))]),
+  divider(),
+  h3("Summary"),
+  callout("📝", summary, "yellow"),
+];
+
+const cornellNotes: TemplateSpec = {
+  id: "cornell-notes",
+  title: "Cornell notes",
+  description: "The Cornell method on every page: notes on the right, cue questions on the left, a short summary at the bottom. Cover the notes, answer the cues, and you've revised.",
+  category: "planning",
+  tags: ["cornell", "note taking", "study", "lectures", "method", "review", "school"],
+  root: page({
+    key: "home",
+    title: "Cornell notes",
+    icon: "🗒️",
+    cover: "gradient:10",
+    fullWidth: true,
+    blocks: [
+      callout("📐", ["Every new page is split into three parts. Take notes on the right during class. Afterwards, write a ", b("cue"), " on the left for each idea: a question the note answers. Then sum it all up at the bottom in two or three sentences."], "yellow"),
+      columns(
+        [h3("1. Notes"), p("During class. Short phrases, your own words, leave gaps.")],
+        [h3("2. Cues"), p("Within a day. Questions and keywords that point at each note.")],
+        [h3("3. Summary"), p("Last. The whole page in a few sentences, from memory.")],
+      ),
+      h3("To revise"),
+      p("Cover the notes column, read each cue and answer it out loud. Tick ", b("Reviewed"), " when you can answer them all."),
+      database("notes", "list"),
+    ],
+    children: [
+      db({
+        key: "notes",
+        title: "Notes",
+        icon: "📓",
+        inline: true,
+        titleName: "Topic",
+        properties: [
+          { key: "subject", name: "Subject", type: "select", options: [{ name: "Economics", color: "blue" }, { name: "Chemistry", color: "orange" }, { name: "Literature", color: "pink" }] },
+          { key: "date", name: "Date", type: "date" },
+          { key: "reviews", name: "Times reviewed", type: "number" },
+          { key: "reviewed", name: "Reviewed", type: "checkbox" },
+        ],
+        views: [
+          { key: "list", name: "All notes", type: "list", sorts: [{ prop: "date", dir: "desc" }], show: ["subject", "date", "reviewed"] },
+          { key: "review", name: "Needs review", type: "table", filter: [{ prop: "reviewed", cond: "unchecked" }], sorts: [{ prop: "date", dir: "asc" }] },
+          { key: "gallery", name: "By subject", type: "gallery", group: { prop: "subject" }, cardPreview: "content", show: ["date"] },
+        ],
+        rows: [
+          {
+            title: "Supply and demand",
+            values: { subject: "Economics", date: at(-3), reviews: 2, reviewed: true },
+            blocks: cornellNote(
+              ["What does the demand curve show?", "Why does supply slope upward?", "What sets the equilibrium price?", "What happens after a price ceiling?"],
+              ["Demand: quantity buyers want at each price, falls as price rises", "Supply: higher prices make it worth producing more", "Equilibrium where the curves cross, no surplus or shortage", "Ceiling below equilibrium means a shortage and queues"],
+              "Prices settle where what buyers want meets what sellers offer. Pushing the price away from that point, up or down, creates a surplus or a shortage.",
+            ),
+          },
+          {
+            title: "Acids and bases",
+            values: { subject: "Chemistry", date: at(-1), reviews: 0, reviewed: false },
+            blocks: cornellNote(
+              ["How do acids and bases differ?", "What does pH measure?", "What happens in neutralisation?"],
+              ["Acids give away H⁺ ions, bases accept them", "pH is a log scale of H⁺ concentration; 7 is neutral, lower is acidic", "Acid plus base gives salt plus water"],
+              "Acids donate protons and bases take them. The pH scale tracks how many free protons there are, and mixing the two cancels them out into salt and water.",
+            ),
+          },
+          {
+            title: "Unreliable narrators",
+            values: { subject: "Literature", date: at(0), reviews: 0, reviewed: false },
+            blocks: cornellNote(
+              ["What makes a narrator unreliable?", "Why would an author choose one?", "How do readers notice?"],
+              ["They mislead, on purpose or because they don't understand", "Creates suspense and makes the reader an investigator", "Gaps between what's said and what's shown; other characters react oddly"],
+              "An unreliable narrator makes the reader do detective work. The truth lives in the gap between what we're told and what we see.",
+            ),
+          },
+        ],
+        rowTemplates: [
+          {
+            title: "Cornell note",
+            icon: "🗒️",
+            isDefault: true,
+            values: { reviews: 0, reviewed: false },
+            blocks: [
+              columns([h3("Cues"), bullet(i("Add questions after class"))], [h3("Notes"), bullet(i("Take notes here during class"))]),
+              divider(),
+              h3("Summary"),
+              callout("📝", "Two or three sentences, from memory.", "yellow"),
+            ],
+          },
+        ],
+      }),
+    ],
+  }),
+};
+
+const zettelkasten: TemplateSpec = {
+  id: "zettelkasten",
+  title: "Zettelkasten",
+  description: "A slip box for ideas. Capture fleeting notes, turn reading into literature notes, and write permanent notes in your own words that link to each other and grow into a web.",
+  category: "planning",
+  tags: ["zettelkasten", "slip box", "notes", "knowledge", "linking", "ideas", "pkm"],
+  root: page({
+    key: "home",
+    title: "Zettelkasten",
+    icon: "🗃️",
+    cover: "gradient:9",
+    fullWidth: true,
+    blocks: [
+      callout("🕸️", ["The value isn't in any one note but in the links between them. Write each permanent note so it makes sense alone, then link it to the notes it argues with or builds on."], "purple"),
+      columns(
+        [h3("⚡ Fleeting"), p("Quick thoughts caught on the go. Process them within a day or two, then delete them.")],
+        [h3("📖 Literature"), p("What a source says, in your words, with where it came from.")],
+        [h3("💎 Permanent"), p("One idea per note, in your own words, linked to others.")],
+      ),
+      h2("Inbox"),
+      database("notes", "inbox"),
+      h2("Permanent notes"),
+      database("notes", "permanent"),
+      divider(),
+      toggleHeading(3, "The daily routine", [...nums("Empty your fleeting notes into literature or permanent notes.", "For each permanent note, ask: what does this connect to?", "Add at least one link, and say why in the note.", "Follow a link you haven't visited in a while.")]),
+      p("Start with ", mention("z-links"), " to see a note that links well."),
+    ],
+    children: [
+      db({
+        key: "notes",
+        title: "Slip box",
+        icon: "🗂️",
+        inline: true,
+        titleName: "Note",
+        properties: [
+          { key: "type", name: "Type", type: "select", options: [{ name: "Fleeting", color: "yellow" }, { name: "Literature", color: "blue" }, { name: "Permanent", color: "purple" }] },
+          { key: "links", name: "Links to", type: "relation", relation: "notes", twoWay: "Linked from" },
+          { key: "linkCount", name: "Link count", type: "rollup", rollup: { relation: "links", target: "title", fn: "count" } },
+          { key: "source", name: "Source", type: "text" },
+          { key: "tags", name: "Topics", type: "multi_select", options: [{ name: "Learning", color: "green" }, { name: "Writing", color: "pink" }, { name: "Thinking", color: "purple" }, { name: "Habits", color: "orange" }] },
+          { key: "created", name: "Captured", type: "date", dateFormat: "relative" },
+        ],
+        views: [
+          { key: "inbox", name: "Inbox", type: "list", filter: [{ prop: "type", cond: "is", value: ["Fleeting"] }], sorts: [{ prop: "created", dir: "desc" }], show: ["created"] },
+          { key: "permanent", name: "Permanent", type: "gallery", filter: [{ prop: "type", cond: "is", value: ["Permanent"] }], show: ["tags", "linkCount"], cardPreview: "content", cardSize: "medium" },
+          { key: "board", name: "By type", type: "board", group: { prop: "type" }, show: ["tags", "linkCount"], cardPreview: "none" },
+          { key: "table", name: "All notes", type: "table", sorts: [{ prop: "linkCount", dir: "desc" }], show: ["type", "links", "linkCount", "source", "tags", "created"], calcs: { title: "count", linkCount: "avg" } },
+        ],
+        rows: [
+          { key: "z-fleet1", title: "Rereading felt productive but I couldn't recall anything", values: { type: "Fleeting", created: at(0), tags: ["Learning"] }, blocks: [p("Noticed during revision. Is this the same as the fluency trap?")] },
+          { key: "z-fleet2", title: "Write the ending first?", values: { type: "Fleeting", created: at(-1), tags: ["Writing"] } },
+          { key: "z-lit1", title: "Testing beats rereading for recall a week later", values: { type: "Literature", source: "Roediger & Karpicke, 2006", created: at(-6), tags: ["Learning"], links: ["z-retrieval"] }, blocks: [p("Students who practised recall remembered more after a week than students who reread, even though they predicted the opposite.")] },
+          { key: "z-lit2", title: "Writing is thinking, not recording thought", values: { type: "Literature", source: "Lecture on academic writing", created: at(-9), tags: ["Writing", "Thinking"], links: ["z-writing"] } },
+          {
+            key: "z-retrieval",
+            title: "Remembering is a skill you train by retrieving",
+            values: { type: "Permanent", created: at(-5), tags: ["Learning"], links: ["z-fluency", "z-links"] },
+            blocks: [
+              p("Each time you pull an idea out of memory, it gets easier to pull out again. Putting it back in, by rereading, does much less."),
+              p(b("So: "), "study by asking yourself questions, not by looking at the answers."),
+              p("Builds on ", mention("z-lit1"), ". Explains ", mention("z-fluency"), "."),
+            ],
+          },
+          {
+            key: "z-fluency",
+            title: "Feeling fluent is not the same as knowing",
+            values: { type: "Permanent", created: at(-4), tags: ["Learning", "Thinking"], links: ["z-retrieval"] },
+            blocks: [p("Familiar text feels easy, and we mistake that ease for understanding. The cure is a test you could fail."), p("See ", mention("z-retrieval"), ".")],
+          },
+          {
+            key: "z-writing",
+            title: "Write to find out what you think",
+            values: { type: "Permanent", created: at(-8), tags: ["Writing", "Thinking"], links: ["z-links"] },
+            blocks: [p("Ideas that feel finished in your head fall apart on the page. That's the point: writing shows you the gaps while they're still cheap to fix.")],
+          },
+          {
+            key: "z-links",
+            title: "A note's value is in its links",
+            values: { type: "Permanent", created: at(-3), tags: ["Thinking", "Habits"], links: ["z-retrieval", "z-writing"] },
+            blocks: [
+              p("A note alone is a fact. Linked to others, it becomes part of an argument. When you add a link, write one line saying why the two belong together."),
+              quote("Don't ask where a note goes. Ask what it connects to."),
+              p("Connects to ", mention("z-retrieval"), " and ", mention("z-writing"), "."),
+            ],
+          },
+        ],
+        rowTemplates: [
+          { title: "Permanent note", icon: "💎", isDefault: true, values: { type: "Permanent" }, blocks: [p(i("One idea, in your own words, as if explaining it to a friend.")), empty(), h3("Why it links"), bullet(i("This builds on, contradicts or explains another note because..."))] },
+          { title: "Literature note", icon: "📖", values: { type: "Literature" }, blocks: [p(i("What the source says, in your words.")), h3("Where"), bullet(i("Author, year, page"))] },
+        ],
+      }),
+    ],
+  }),
+};
+
+const secondBrain: TemplateSpec = {
+  id: "second-brain",
+  title: "Second brain (PARA)",
+  description: "Organise everything by how actionable it is: Projects with a deadline, Areas you keep up, Resources for later, and an Archive. All three linked, so each area shows its work.",
+  category: "planning",
+  tags: ["para", "second brain", "projects", "areas", "resources", "archive", "organize", "pkm"],
+  root: page({
+    key: "home",
+    title: "Second brain",
+    icon: "🧠",
+    cover: "gradient:1",
+    fullWidth: true,
+    blocks: [
+      callout("🗂️", ["Sort by what you'll do with it, not by topic. ", b("Projects"), " have a goal and an end date. ", b("Areas"), " are ongoing responsibilities. ", b("Resources"), " are things you might use. The ", b("Archive"), " holds anything finished or paused."], "blue"),
+      columns(
+        [h3("🚀 Projects"), p("Short-term, with a finish line.")],
+        [h3("🌱 Areas"), p("Long-term standards to keep.")],
+        [h3("📚 Resources"), p("Topics and references.")],
+        [h3("📦 Archive"), p("Done, paused or no longer needed.")],
+      ),
+      h2("Active projects"),
+      database("projects", "active"),
+      h2("Areas of responsibility"),
+      database("areas", "gallery"),
+      h2("Resource library"),
+      database("resources", "library"),
+      h2("Archive"),
+      p(i("Archived projects and resources stay searchable. Untick Archived to bring one back.")),
+      database("projects", "archive"),
+      database("resources", "archive"),
+      divider(),
+      toggleHeading(3, "Weekly review", [...todos("Clear your inbox into projects, areas or resources", "Check each active project has a next step", "Archive anything finished", "Glance at each area: is anything slipping?")]),
+    ],
+    children: [
+      db({
+        key: "projects",
+        title: "Projects",
+        icon: "🚀",
+        inline: true,
+        titleName: "Project",
+        properties: [
+          { key: "status", name: "Status", type: "status", options: [{ name: "Not started", color: "gray", group: "todo" }, { name: "Active", color: "blue", group: "doing" }, { name: "Done", color: "green", group: "done" }] },
+          { key: "area", name: "Area", type: "relation", relation: "areas", twoWay: "Projects" },
+          { key: "resources", name: "Resources", type: "relation", relation: "resources", twoWay: "Projects" },
+          { key: "deadline", name: "Dates", type: "date" },
+          { key: "next", name: "Next step", type: "text" },
+          { key: "archived", name: "Archived", type: "checkbox" },
+          { key: "isActive", name: "In play", type: "formula", expression: 'prop("Status") != "Done" and !prop("Archived")' },
+        ],
+        views: [
+          { key: "active", name: "Active", type: "table", filter: [{ prop: "archived", cond: "unchecked" }], sorts: [{ prop: "deadline", dir: "asc" }], show: ["status", "area", "deadline", "next"], hide: ["isActive", "archived"] },
+          { key: "board", name: "Board", type: "board", group: { prop: "status" }, filter: [{ prop: "archived", cond: "unchecked" }], show: ["area", "deadline"], cardPreview: "none" },
+          { key: "timeline", name: "Timeline", type: "timeline", date: "deadline", zoom: "month", show: ["area"] },
+          { key: "archive", name: "Archived projects", type: "list", filter: [{ prop: "archived", cond: "checked" }], show: ["area", "deadline"] },
+        ],
+        rows: [
+          { key: "pr-half", title: "Run a half marathon", icon: "🏃", values: { status: "Active", area: ["ar-health"], resources: ["rs-plan"], deadline: span(-30, 40), next: "Long run of 14 km on Saturday", archived: false } },
+          { key: "pr-kitchen", title: "Repaint the kitchen", icon: "🎨", values: { status: "Not started", area: ["ar-home"], resources: ["rs-paint"], deadline: span(14, 21), next: "Pick two colour samples", archived: false } },
+          { key: "pr-talk", title: "Give a talk at the local meetup", icon: "🎤", values: { status: "Active", area: ["ar-career"], resources: ["rs-talks"], deadline: span(-10, 25), next: "Write the outline", archived: false }, blocks: [h3("Goal"), p("A 20-minute talk on what I learned moving our team to written updates."), h3("Steps"), ...todos("Pitch the organisers", "Outline", "Slides", "Two practice runs")] },
+          { key: "pr-budget", title: "Set up a monthly budget", icon: "💰", values: { status: "Done", area: ["ar-money"], deadline: span(-60, -35), next: "", archived: true } },
+        ],
+      }),
+      db({
+        key: "areas",
+        title: "Areas",
+        icon: "🌱",
+        inline: true,
+        titleName: "Area",
+        properties: [
+          { key: "standard", name: "Standard", type: "text", description: "What good looks like here" },
+          { key: "cadence", name: "Review", type: "select", options: [{ name: "Weekly", color: "blue" }, { name: "Monthly", color: "green" }, { name: "Quarterly", color: "purple" }] },
+          { key: "active", name: "Active projects", type: "rollup", rollup: { relation: "area~", target: "isActive", fn: "checked" } },
+          { key: "resourceCount", name: "Resource count", type: "rollup", rollup: { relation: "area2~", target: "title", fn: "count" } },
+        ],
+        views: [
+          { key: "gallery", name: "Areas", type: "gallery", show: ["standard", "active"], cardPreview: "none", cardSize: "small" },
+          { key: "table", name: "All areas", type: "table", show: ["standard", "cadence", "active", "resourceCount"], calcs: { active: "sum" } },
+        ],
+        rows: [
+          { key: "ar-health", title: "Health", icon: "💪", values: { standard: "Move most days, sleep seven hours.", cadence: "Weekly" } },
+          { key: "ar-home", title: "Home", icon: "🏡", values: { standard: "Nothing broken for more than a month.", cadence: "Monthly" } },
+          { key: "ar-career", title: "Career", icon: "💼", values: { standard: "Learn one new skill a quarter and share what I know.", cadence: "Monthly" } },
+          { key: "ar-money", title: "Money", icon: "💰", values: { standard: "Bills paid, three months saved.", cadence: "Monthly" } },
+        ],
+      }),
+      db({
+        key: "resources",
+        title: "Resources",
+        icon: "📚",
+        inline: true,
+        titleName: "Resource",
+        properties: [
+          { key: "area2", name: "Area", type: "relation", relation: "areas", twoWay: "Resources" },
+          { key: "kind", name: "Type", type: "select", options: [{ name: "Article", color: "blue" }, { name: "Book", color: "brown" }, { name: "Guide", color: "green" }, { name: "Notes", color: "yellow" }, { name: "Video", color: "red" }] },
+          { key: "link", name: "Link", type: "url" },
+          { key: "archived", name: "Archived", type: "checkbox" },
+        ],
+        views: [
+          { key: "library", name: "Library", type: "table", filter: [{ prop: "archived", cond: "unchecked" }], show: ["kind", "area2", "link"], hide: ["archived"] },
+          { key: "byType", name: "By type", type: "board", group: { prop: "kind" }, show: ["area2"], cardPreview: "none" },
+          { key: "archive", name: "Archived resources", type: "list", filter: [{ prop: "archived", cond: "checked" }], show: ["kind"] },
+        ],
+        rows: [
+          { key: "rs-plan", title: "16-week half marathon plan", values: { area2: ["ar-health"], kind: "Guide", archived: false }, blocks: [h3("Weekly shape"), ...bullets("Two easy runs", "One tempo or interval session", "One long run, adding 1 to 2 km a week", "One full rest day")] },
+          { key: "rs-paint", title: "Choosing paint for kitchens", values: { area2: ["ar-home"], kind: "Article", link: "https://example.com/kitchen-paint", archived: false } },
+          { key: "rs-talks", title: "Notes on giving good talks", values: { area2: ["ar-career"], kind: "Notes", archived: false }, blocks: [...bullets("One idea per talk", "Tell a story in the first minute", "Practise out loud, twice")] },
+          { key: "rs-tax", title: "Last year's tax checklist", values: { area2: ["ar-money"], kind: "Notes", archived: true } },
+        ],
+      }),
+    ],
+  }),
+};
+
+export const PLANNING: TemplateSpec[] = [weeklyPlanner, eisenhowerMatrix, cornellNotes, zettelkasten, secondBrain];

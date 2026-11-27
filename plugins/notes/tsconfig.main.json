@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "jsxImportSource": "@ardia/plugin-sdk",
+    "paths": {
+      "@ardia/plugin-sdk": ["../../packages/plugin-sdk/src/index.ts"],
+      "@ardia/plugin-sdk/jsx-runtime": ["../../packages/plugin-sdk/src/jsxRuntime.ts"],
+      "@ardia/plugin-sdk/jsx-dev-runtime": ["../../packages/plugin-sdk/src/jsxRuntime.ts"]
+    }
+  },
+  "include": ["src/main", "src/shared"],
+  "exclude": []
+}

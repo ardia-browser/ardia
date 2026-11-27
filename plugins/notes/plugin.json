@@ -1,0 +1,51 @@
+{
+  "manifest": 2,
+  "name": "notes",
+  "title": "Notes",
+  "description": "Pages, databases and docs you write and share, in Ardia.",
+  "version": "0.1.0",
+  "icon": "doc.richtext",
+  "main": "dist/index.js",
+  "memoryMB": 512,
+  "keywords": ["notes", "docs", "notion", "wiki", "database", "pages"],
+  "activationEvents": ["onStartupFinished"],
+  "permissions": { "storage": true, "files": true, "folders": true, "commands": true, "sites": ["app.notion.com", "file.notion.com", "file.notion.so", "www.notion.so", "images.unsplash.com"], "siteHeaders": ["x-notion-active-user-header"] },
+  "contributes": {
+    "commands": [
+      { "name": "open", "title": "Open Notes", "icon": "doc.richtext", "open": "tab", "keywords": ["notion", "docs"] },
+      { "name": "new-page", "title": "New Note", "icon": "square.and.pencil", "keywords": ["page", "doc"] },
+      { "name": "search", "title": "Search Notes", "icon": "magnifyingglass", "keywords": ["find"] }
+    ],
+    "panels": [{ "id": "default", "title": "Notes", "icon": "doc.richtext", "mode": "tab", "file": "page/index.html", "routes": true, "surface": "glass" }],
+    "omnibox": [
+      { "id": "notes", "title": "Notes", "global": true },
+      { "id": "n", "title": "Notes", "keyword": "n" }
+    ],
+    "tools": [
+      { "name": "describe", "title": "Describe Notes tools", "description": "Every Notes tool, action, field, block type, Markdown rule, property and view setting, as data. Start here." },
+      { "name": "workspaces", "title": "Workspaces", "description": "List, create, rename, share or leave workspaces." },
+      { "name": "me", "title": "Me", "description": "Read or change the name and colour others see." },
+      { "name": "settings", "title": "Settings", "description": "Read the plugin's settings rows." },
+      { "name": "pages", "title": "Pages", "description": "List, find, create, update, move, duplicate, trash, restore, delete and open pages.", "timeout": 60 },
+      { "name": "content", "title": "Page content", "description": "Read a page as Markdown or blocks; write it, append, or patch blocks by id, live in open pages.", "timeout": 120 },
+      { "name": "database", "title": "Databases", "description": "Get, list, create, link and configure databases.", "timeout": 60 },
+      { "name": "properties", "title": "Database properties", "description": "Add, change, retype, reorder and delete database properties and their options.", "timeout": 60 },
+      { "name": "views", "title": "Database views", "description": "Add and configure views: type, filters, sorts, grouping, visible properties, widths and layout.", "timeout": 60 },
+      { "name": "rows", "title": "Database rows", "description": "Query rows with filters and sorts; create, update, delete, restore, duplicate and move them in bulk.", "timeout": 120 },
+      { "name": "comments", "title": "Comments", "description": "List, add, reply to, edit, resolve and delete comment threads." },
+      { "name": "history", "title": "Version history", "description": "List, read and restore a page's earlier versions." },
+      { "name": "templates", "title": "Templates", "description": "List, make and use page and row templates.", "timeout": 60 },
+      { "name": "trash", "title": "Trash", "description": "List, restore, delete or empty the trash.", "timeout": 60 },
+      { "name": "search", "title": "Search", "description": "Full-text search over every page, the index the command bar uses." },
+      { "name": "files", "title": "Files", "description": "Upload, read and list images and attachments.", "timeout": 60 },
+      { "name": "export", "title": "Export", "description": "A page or a whole subtree as Markdown or HTML.", "timeout": 120 },
+      { "name": "import", "title": "Import", "description": "Make pages from Markdown, or import another app's export through Ardia's picker.", "timeout": 300 }
+    ],
+    "settings": {
+      "rows": [
+        { "key": "name", "title": "Your Name", "type": "text", "description": "Shown to people you share notes with.", "default": "" },
+        { "key": "searchEverywhere", "title": "Show Notes in the Command Bar", "type": "toggle", "default": true }
+      ]
+    }
+  }
+}

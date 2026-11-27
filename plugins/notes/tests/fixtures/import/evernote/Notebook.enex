@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-export SYSTEM "http://xml.evernote.com/pub/evernote-export4.dtd">
+<en-export export-date="20261124T120000Z" application="Evernote" version="10.0">
+<note><title>Trip &amp; plans</title><created>20261101T093000Z</created><updated>20261102T093000Z</updated><tag>travel</tag><tag>2026</tag><note-attributes><source-url>https://example.com/trip</source-url></note-attributes>
+<content><![CDATA[<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd"><en-note><div><b>Pack</b> list</div><div><en-todo checked="true"/>Passport</div><div><en-todo checked="false"/>Charger</div><ul><li>Socks</li><li>Hat</li></ul><en-media type="image/png" hash="2cd8bde463f5d82aae0f0cec061d6b8f"/><div><a href="evernote:///view/1/s1/abc/abc/">Second note</a></div><script>alert(1)</script></en-note>]]></content>
+<resource><data encoding="base64">
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==
+</data><mime>image/png</mime><resource-attributes><file-name>map.png</file-name></resource-attributes></resource>
+</note>
+<note><title>Second note</title><created>20261103T093000Z</created><content><![CDATA[<en-note><h1>Heading</h1><p>Plain text.</p><table><tr><td>a</td><td>b</td></tr></table></en-note>]]></content></note>
+</en-export>

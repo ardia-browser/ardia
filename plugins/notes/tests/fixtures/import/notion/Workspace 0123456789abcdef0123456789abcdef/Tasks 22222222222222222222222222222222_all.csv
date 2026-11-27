@@ -1,0 +1,4 @@
+﻿Name,Status,Tags,Due,Done,Points,Link,Assignee
+Write spec,In progress,"docs, urgent","November 24, 2026",Yes,3,https://example.com/spec,Ada Lovelace
+Ship it,Not started,docs,"December 1, 2026",No,5,,Grace Hopper
+Celebrate,Done,,,No,1,,

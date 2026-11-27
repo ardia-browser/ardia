@@ -1,0 +1,123 @@
+{
+  "5f1c8a7e-2b1d-4c6e-9a10-0c2f3d4e5f60": {
+    "notion_user": {
+      "5f1c8a7e-2b1d-4c6e-9a10-0c2f3d4e5f60": {
+        "value": {
+          "value": {
+            "id": "5f1c8a7e-2b1d-4c6e-9a10-0c2f3d4e5f60",
+            "version": 41,
+            "email": "ada@example.com",
+            "given_name": "Ada",
+            "family_name": "Lovelace",
+            "name": "Ada Lovelace",
+            "profile_photo": "https://s3-us-west-2.amazonaws.com/public.notion-static.com/x.png"
+          },
+          "role": "reader"
+        }
+      }
+    },
+    "user_root": {
+      "5f1c8a7e-2b1d-4c6e-9a10-0c2f3d4e5f60": {
+        "value": {
+          "value": {
+            "id": "5f1c8a7e-2b1d-4c6e-9a10-0c2f3d4e5f60",
+            "space_views": [
+              "a1"
+            ],
+            "space_view_pointers": []
+          },
+          "role": "editor"
+        }
+      }
+    },
+    "space_view": {
+      "a1": {
+        "value": {
+          "value": {
+            "id": "a1",
+            "space_id": "0b1d2c3e-4f50-4617-8899-aabbccddeeff",
+            "joined": true,
+            "private_pages": [
+              "a0000000-0000-4000-8000-000000000003"
+            ],
+            "joined_teams": [
+              "7e000000-0000-4000-8000-000000000001"
+            ],
+            "bookmarked_pages": [
+              "a0000000-0000-4000-8000-000000000007",
+              "a0000000-0000-4000-8000-000000000001"
+            ]
+          },
+          "role": "editor"
+        }
+      }
+    },
+    "space": {
+      "0b1d2c3e-4f50-4617-8899-aabbccddeeff": {
+        "value": {
+          "value": {
+            "id": "0b1d2c3e-4f50-4617-8899-aabbccddeeff",
+            "name": "Acme Inc",
+            "icon": "🚀",
+            "plan_type": "team",
+            "permissions": [
+              {
+                "role": "editor",
+                "type": "user_permission",
+                "user_id": "5f1c8a7e-2b1d-4c6e-9a10-0c2f3d4e5f60"
+              }
+            ],
+            "pages": [
+              "a0000000-0000-4000-8000-000000000001",
+              "a0000000-0000-4000-8000-000000000002",
+              "a0000000-0000-4000-8000-0000000000aa"
+            ]
+          },
+          "role": "editor"
+        }
+      },
+      "9e8d7c6b-5a49-4382-9170-605f4e3d2c1b": {
+        "value": {
+          "value": {
+            "id": "9e8d7c6b-5a49-4382-9170-605f4e3d2c1b",
+            "name": "Client wiki",
+            "icon": "https://s3.example/icon.png"
+          },
+          "role": "reader"
+        }
+      },
+      "11111111-2222-4333-8444-555555555555": {
+        "value": {
+          "value": {
+            "id": "11111111-2222-4333-8444-555555555555",
+            "name": "Locked down",
+            "disable_export": true
+          },
+          "role": "editor"
+        }
+      }
+    },
+    "space_user": {
+      "5f1c8a7e-2b1d-4c6e-9a10-0c2f3d4e5f60|0b1d2c3e-4f50-4617-8899-aabbccddeeff": {
+        "value": {
+          "value": {
+            "user_id": "5f1c8a7e-2b1d-4c6e-9a10-0c2f3d4e5f60",
+            "space_id": "0b1d2c3e-4f50-4617-8899-aabbccddeeff",
+            "membership_type": "owner"
+          },
+          "role": "editor"
+        }
+      },
+      "5f1c8a7e-2b1d-4c6e-9a10-0c2f3d4e5f60|9e8d7c6b-5a49-4382-9170-605f4e3d2c1b": {
+        "value": {
+          "value": {
+            "user_id": "5f1c8a7e-2b1d-4c6e-9a10-0c2f3d4e5f60",
+            "space_id": "9e8d7c6b-5a49-4382-9170-605f4e3d2c1b",
+            "membership_type": "page_guest"
+          },
+          "role": "reader"
+        }
+      }
+    }
+  }
+}

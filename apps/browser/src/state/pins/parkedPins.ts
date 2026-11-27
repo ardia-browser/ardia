@@ -4,16 +4,17 @@ import { isIncognitoProfile, isPinnedRow, makeTab, newId, pinHomeOf, pinKeyOf, s
 import { pendingRestore, restoreId } from "../tabs/adoptIds";
 import type { BrowserWindow, HistoryEntry, ParkedPins, Tab, TabGroup } from "../browser/types";
 import { samePage } from "../../lib/url";
+import { awayFromHome, reopensAtPinnedUrl, type ReopenChoice } from "./pinHomes";
 import { historyOf } from "../history/history";
 import { isRegularWindow } from "../windows/small";
 import { ASLEEP, withWake } from "../tabs/pageSession";
 import { mapSlotIds, normalized, slotTabIds, splitOf, splitTabIds } from "../splits/splits";
 
-type PinSource = Pick<BrowserState, "tabs" | "groups" | "history" | "profiles"> & Partial<Pick<BrowserState, "windows" | "splits">>;
+type PinSource = Pick<BrowserState, "tabs" | "groups" | "history" | "profiles"> & Partial<Pick<BrowserState, "windows" | "splits">> & { settings?: ReopenChoice };
 
-function atPin(t: Tab, history: HistoryEntry[]): Partial<Pick<Tab, "url" | "title" | "favicon">> {
+function atPin(t: Tab, history: HistoryEntry[], settings: ReopenChoice | undefined): Partial<Pick<Tab, "url" | "title" | "favicon">> {
   const home = t.pinnedUrl;
-  if (!home || !t.url || samePage(t.url, home)) return {};
+  if (!home || !awayFromHome(t) || !reopensAtPinnedUrl(settings, t)) return {};
   const entry = history.find((h) => samePage(h.url, home));
   return { url: home, title: entry?.title ?? t.title, favicon: entry?.favicon ?? t.favicon };
 }
@@ -47,7 +48,7 @@ export function parkWindowPins(parked: Record<string, ParkedPins>, w: BrowserWin
       if (ids.has(pinKeyOf(t))) continue;
       const g = t.pin ? undefined : groupOf.get(t.id);
       if (t.pin) {
-        const back = atPin(t, historyOf(s, profileId));
+        const back = atPin(t, historyOf(s, profileId), s.settings);
         const tile = { ...snapshotTab(t), ...back, ...pending(t, !!back.url), id: pinKeyOf(t), groupId: null };
         (isPinnedRow(t) ? rest : tiles).push(tile);
       } else if (g) {
@@ -57,7 +58,7 @@ export function parkWindowPins(parked: Record<string, ParkedPins>, w: BrowserWin
           const parent = chain[i - 1];
           groups.push({ id: pinKeyOf(x), name: x.name, icon: x.icon, color: x.color, collapsed: x.collapsed, ...(parent ? { parentId: pinKeyOf(parent) } : {}) });
         });
-        const back = atPin(t, historyOf(s, profileId));
+        const back = atPin(t, historyOf(s, profileId), s.settings);
         rest.push({ ...snapshotTab(t), ...back, ...pending(t, !!back.url), id: pinKeyOf(t), groupId: pinKeyOf(g) });
       }
     }

@@ -12,6 +12,7 @@ final class WebKitWebView: WKWebView {
   var onNavigate: ((WebKitPagePresses.Navigation) -> Void)?
   private var presses = WebKitPagePresses()
   var mediaFrames: [String: WKFrameInfo] = [:]
+  var fullscreenPlaceholders: [NSView] = []
   var scriptFrames: [String: WKFrameInfo] = [:]
   var playingFrames = Set<String>()
   let nowPlaying = ArdiaNowPlaying()

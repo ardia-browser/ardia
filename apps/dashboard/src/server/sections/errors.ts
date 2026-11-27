@@ -2,7 +2,8 @@ import { windowFor, type RangeKey } from "../../lib/range";
 import { UTC } from "../../lib/zone";
 import { num, query, str } from "../clickhouse";
 import { frameNames } from "../frame-symbols";
-import { frameLabel, frameName, imageUuids, nativeFrame, type FrameNames, type NativeFrame } from "../../lib/native-frames";
+import { frameName } from "../../lib/native-frames";
+import { frameLines, framesOf } from "./error-frames";
 import { classifyNoise } from "../noise";
 import { APP_SOURCE, SITE, prop, since } from "../sql";
 import { windowInfo } from "../series";
@@ -13,36 +14,6 @@ const WHERE = `multiIf(${SITE}, 'site', ${CLI}, 'cli', 'app')`;
 const TYPE = `if(event = 'cli_command', concat('exit ', properties['exit_code']), coalesce(nullIf(JSONExtractString(properties['$exception_types'], 1), ''), nullIf(JSONExtractString(properties['$exception_list'], 1, 'type'), ''), 'Error'))`;
 const MESSAGE = `if(event = 'cli_command', trimRight(concat('ardia ', properties['command'], ' ', properties['subcommand'])), substring(coalesce(nullIf(JSONExtractString(properties['$exception_values'], 1), ''), JSONExtractString(properties['$exception_list'], 1, 'value')), 1, 300))`;
 const FILTER = `((event = '$exception' AND (${SITE} OR ${APP_SOURCE} OR ${CLI})) OR ${CLI_FAILED})`;
-
-type Frame = { function?: string; filename?: string; module?: string; lineno?: number | null; colno?: number | null; image_offset?: string };
-type ShownFrame = { fn: string; where: string; native: NativeFrame | null };
-
-export function framesOf(list: string, imagesJson = ""): ShownFrame[] {
-  try {
-    const parsed = JSON.parse(list) as { stacktrace?: { frames?: Frame[] } }[];
-    const images = imageUuids(imagesJson);
-    return parsed
-      .flatMap((entry) => entry.stacktrace?.frames ?? [])
-      .reverse()
-      .slice(0, 40)
-      .map((frame) => {
-        const file = frame.filename || frame.module || "";
-        const line = frame.lineno ? `:${frame.lineno}${frame.colno ? `:${frame.colno}` : ""}` : "";
-        const fn = frame.function && frame.function !== "?" ? frame.function : "anonymous";
-        const native = frame.image_offset ? nativeFrame(frame, images) : null;
-        return { fn, where: file ? `${file}${line}` : "", native: native?.uuid ? native : null };
-      });
-  } catch {
-    return [];
-  }
-}
-
-export function frameLines(frames: ShownFrame[], names: FrameNames): string[] {
-  return frames.map((f) => {
-    const fn = f.native ? frameLabel(f.native, names) : f.fn;
-    return f.where ? `${fn}  ${f.where}` : fn;
-  });
-}
 
 type Where = "site" | "app" | "cli";
 

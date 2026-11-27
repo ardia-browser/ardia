@@ -1,6 +1,7 @@
 #import "ArdiaWebViewInternal.h"
 #import "ArdiaEarlyWindow.h"
 
+#import <objc/message.h>
 #import <objc/runtime.h>
 
 using namespace ardia_web_view;
@@ -9,12 +10,29 @@ namespace {
 
 const char kPageReportsKey = 0;
 const char kPopupTabKey = 0;
+const char kBlankLinkTabKey = 0;
 BOOL gLittleArdiaOpensNewTabLinks = NO;
 BOOL gPopupsOpenAsTabs = NO;
 const CFTimeInterval kNewTabLinkSeconds = 2;
 const NSUInteger kNewTabLinksKept = 4;
 const int kNewTabLinkTries = 8;
 const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
+
+BOOL IsWebAddress(NSString *url) {
+  if (![url isKindOfClass:NSString.class] || !url.length || url.length > 8192) return NO;
+  NSMutableCharacterSet *refused = [NSMutableCharacterSet whitespaceAndNewlineCharacterSet];
+  [refused formUnionWithCharacterSet:NSCharacterSet.controlCharacterSet];
+  [refused formUnionWithCharacterSet:NSCharacterSet.illegalCharacterSet];
+  if ([url rangeOfCharacterFromSet:refused].location != NSNotFound) return NO;
+  NSString *lower = url.lowercaseString;
+  if (![lower hasPrefix:@"http://"] && ![lower hasPrefix:@"https://"]) return NO;
+  NSURL *parsed = [NSURL URLWithString:url];
+  return parsed.host.length > 0 && !parsed.user && !parsed.password;
+}
+
+BOOL IsBlankAddress(NSString *url) {
+  return !url.length || [url isEqualToString:@"about:blank"];
+}
 }
 
 @interface ArdiaStashedPageReports : NSObject {
@@ -153,6 +171,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   [self finishStandIn];
   [self stopHolding];
   _standIn.lentTo = nil;
+  _standIn.lentSince = 0;
   _tab = nil;
   _life.detached();
   _focus.onActivate = NO;
@@ -233,6 +252,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
                     tries:(int)tries {
   if (tab.closed) return;
   NSString *url = tab.url;
+  if (link && tries == 0 && IsBlankAddress(url)) [self noteBlankLinkTab:tab];
   if ((!url.length || [url isEqualToString:@"about:blank"]) && tries < 20) {
     __weak ArdiaWebView *weakSelf = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 25 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
@@ -241,7 +261,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
     return;
   }
   if (link && _tab) return [self matchLinkTab:tab adoptId:adoptId disposition:disposition firstURL:url ?: @"" hidden:tries > 0 tries:0];
-  [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:NO linkWait:nil];
+  [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:nil linkWait:nil];
 }
 
 - (void)matchLinkTab:(ArdiaCoreTab *)tab
@@ -252,8 +272,8 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
                tries:(int)tries {
   if (tab.closed) return;
   NSString *clicked = _tab ? [self takeNewTabLinkFor:@[ firstURL, tab.url ?: @"" ]] : nil;
-  if (!clicked && hidden && _tab) clicked = [self takeNewTabLinkNoted:kHiddenNewTabLinkSeconds];
-  if (clicked && self.opensNewTabLinksInPlace) {
+  if (!clicked && hidden && _tab) clicked = [self takeBlankWindowNoteFor:tab] ?: [self takeNewTabLinkNoted:kHiddenNewTabLinkSeconds];
+  if (clicked && self.opensNewTabLinksInPlace && ([clicked isEqualToString:tab.url ?: @""] || IsBlankAddress(tab.url))) {
     if ([ArdiaTabRegistry takeOffered:adoptId] == tab) [tab close];
     [self emit:@"openWindow" payload:@{@"url" : clicked, @"disposition" : @"current", @"userGesture" : @YES, @"linkWait" : @"matched"}];
     return;
@@ -270,7 +290,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
       @"activated" : @(activated),
       @"tries" : @(tries)
     });
-  if (clicked) return [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:YES linkWait:@"matched"];
+  if (clicked) return [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:clicked linkWait:@"matched"];
   if (retry) {
     __weak ArdiaWebView *weakSelf = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 25 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
@@ -278,7 +298,8 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
     });
     return;
   }
-  [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:NO linkWait:tries >= kNewTabLinkTries ? @"timedOut" : @"skipped"];
+  [self forgetBlankLinkTab:tab];
+  [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:nil linkWait:tries >= kNewTabLinkTries ? @"timedOut" : @"skipped"];
 }
 
 - (void)dropStaleNewTabLinks {
@@ -288,8 +309,9 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
                 }]];
 }
 
-- (void)noteNewTabLink:(NSString *)url {
-  if (!url.length) return;
+- (void)noteNewTabLink:(NSString *)url blankWindow:(BOOL)blankWindow {
+  if (!IsWebAddress(url)) return;
+  if (blankWindow) return _blankWindowNotes.Noted(url.UTF8String, CACurrentMediaTime());
   [self dropStaleNewTabLinks];
   if (!_newTabLinks) _newTabLinks = [NSMutableArray array];
   [_newTabLinks addObject:@{@"url" : url, @"at" : @(CACurrentMediaTime())}];
@@ -315,19 +337,41 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   return newest[@"url"];
 }
 
+- (void)noteBlankLinkTab:(ArdiaCoreTab *)tab {
+  static std::uint64_t opened = 0;
+  objc_setAssociatedObject(tab, &kBlankLinkTabKey, @(++opened), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  _blankWindowNotes.OpenedBlank(opened, CACurrentMediaTime());
+}
+
+- (nullable NSString *)takeBlankWindowNoteFor:(ArdiaCoreTab *)tab {
+  NSNumber *opened = objc_getAssociatedObject(tab, &kBlankLinkTabKey);
+  if (!opened) return nil;
+  const std::optional<std::string> url = _blankWindowNotes.Take(opened.unsignedLongLongValue, CACurrentMediaTime());
+  if (!url) return nil;
+  objc_setAssociatedObject(tab, &kBlankLinkTabKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  return @(url->c_str());
+}
+
+- (void)forgetBlankLinkTab:(ArdiaCoreTab *)tab {
+  NSNumber *opened = objc_getAssociatedObject(tab, &kBlankLinkTabKey);
+  if (!opened) return;
+  objc_setAssociatedObject(tab, &kBlankLinkTabKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  _blankWindowNotes.Forget(opened.unsignedLongLongValue);
+}
+
 - (void)emitOpenedTab:(ArdiaCoreTab *)tab
               adoptId:(NSString *)adoptId
           disposition:(NSString *)disposition
-              clicked:(BOOL)clicked
+              clicked:(nullable NSString *)clicked
              linkWait:(nullable NSString *)linkWait {
-  NSString *url = tab.url;
+  NSString *url = IsWebAddress(clicked) && IsBlankAddress(tab.url) ? clicked : tab.url;
   NSMutableDictionary *payload = [@{
     @"url" : url ?: @"",
     @"disposition" : disposition,
     @"adoptId" : adoptId,
     @"userGesture" : @YES,
     @"postBody" : @NO,
-    @"fromClick" : @(clicked),
+    @"fromClick" : @(clicked != nil),
   } mutableCopy];
   if (tab.profile.offTheRecord) payload[@"profile"] = ardia_host::OriginalProfileNameOf(tab.profile);
   if (clicked) payload[@"point"] = RecentClickPoint(self);
@@ -413,6 +457,19 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
 - (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds {
   if (!_tab || _tab.closed || _tab.discarded) return @[ @-1 ];
   return [_tab sleepIfHiddenFor:seconds];
+}
+
+- (NSArray<NSNumber *> *)sleepIfUnusedFor:(NSTimeInterval)seconds {
+  if (!_tab || _tab.closed || _tab.discarded) return @[ @-1 ];
+  SEL unused = NSSelectorFromString(@"sleepIfUnusedFor:");
+  if (![_tab respondsToSelector:unused]) return [_tab sleepIfHiddenFor:seconds];
+  return ((NSArray<NSNumber *> * (*)(id, SEL, NSTimeInterval)) objc_msgSend)(_tab, unused, seconds);
+}
+
+- (BOOL)wakeIfSleeping {
+  if (!_tab || _tab.closed || !_tab.discarded) return NO;
+  [_tab loadIfNeeded];
+  return YES;
 }
 
 - (NSString *)keptFromUnloadingBy {

@@ -52,7 +52,7 @@ type Leaving = "close" | "keepPages";
 
 const swapIn = (ids: string[], a: string, b: string) => (ids.includes(a) || ids.includes(b) ? ids.map((x) => (x === a ? b : x === b ? a : x)) : ids);
 
-function swapPlaces(s: BrowserState, a: string, b: string): BrowserState {
+export function swapPlaces(s: BrowserState, a: string, b: string): BrowserState {
   const ta = s.tabs[a]!;
   const tb = s.tabs[b]!;
   const key = pinKeyOf(ta);
@@ -131,7 +131,7 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
   const reuse = (src: Tab): string => {
     const key = pinKeyOf(src);
     const same = (byKey.get(key) ?? []).filter((m) => !used.has(m.id));
-    const t = same.find(hasPage) ?? same[0];
+    const t = same.find(hasPage) ?? same.find((m) => m.url === src.url) ?? same[0];
     if (!t) {
       const copy = { ...copyOf(src, windowId, false), page: IDLE, lastActiveAt: src.lastActiveAt, ...(src.restoredAt ? { restoredAt: src.restoredAt } : {}) };
       tabs[copy.id] = copy;
@@ -152,9 +152,22 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
   });
 
   const out = mine.filter((t) => !used.has(t.id));
-  const demoted = new Set(leaving === "keepPages" ? out.filter(hasPage).map((t) => t.id) : []);
+  const keptByKey = new Map(placed.map((id) => [pinKeyOf(tabs[id]!), id]));
+  const demoted = new Set<string>();
+  if (leaving === "keepPages") {
+    for (const t of out) {
+      const wake = wakeOf(t);
+      if (hasPage(t)) demoted.add(t.id);
+      else if (wake) {
+        const keptId = keptByKey.get(pinKeyOf(t));
+        const kept = keptId ? tabs[keptId]! : undefined;
+        if (!kept || kept.url !== t.url) demoted.add(t.id);
+        else if (!hasPage(kept) && !wakeOf(kept)) tabs[kept.id] = { ...kept, page: withWake(kept.page, wake) };
+      }
+    }
+  }
   const gone = out.filter((t) => !demoted.has(t.id)).map((t) => t.id);
-  for (const id of demoted) tabs[id] = { ...tabs[id]!, pinKey: undefined };
+  for (const id of demoted) tabs[id] = { ...tabs[id]!, pinKey: keptByKey.has(id) ? newId("tab") : undefined };
   const section = new Set(mine.filter((t) => !demoted.has(t.id)).map((t) => t.id));
   const kept = new Set(placed);
   const followers = new Map<string | null, string[]>();
@@ -206,7 +219,7 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
   return removeTabs(keepShownProfile(next, windowId, gone), gone, false);
 }
 
-function keepShownProfile(s: BrowserState, windowId: string, gone: readonly string[]): BrowserState {
+export function keepShownProfile(s: BrowserState, windowId: string, gone: readonly string[]): BrowserState {
   const w = s.windows[windowId];
   if (!w || !w.tabIds.some((id) => gone.includes(id))) return s;
   const shownHere = w.tabIds.filter((id) => s.tabs[id]?.profileId === w.profileId && !gone.includes(id));
@@ -271,7 +284,8 @@ export function mirrorTabs(s: BrowserState, prev: BrowserState): BrowserState | 
     const before = turnedOn ? [] : ids.filter((id) => isRegularWindow(prev.windows[id]) && profilesOf(prev, prev.windows[id]!).has(profileId));
     const prevMember = listMember(prev);
     const prevGroups = listGroupsOf(prev);
-    const source = before.find((id) => signature(listSection(prev, id, profileId, prevMember, prevGroups)) !== sigs.get(id));
+    const changed = before.filter((id) => signature(listSection(prev, id, profileId, prevMember, prevGroups)) !== sigs.get(id));
+    const source = changed.length === 1 ? changed[0] : undefined;
     const merged = turnedOn ? [...ids].sort((x, y) => s.windowOrder.indexOf(x) - s.windowOrder.indexOf(y)) : [...before, ...ids.filter((id) => !before.includes(id))];
     const spec: Section = source ? sections.get(source)! : union(merged.map((id) => sections.get(id)!), false);
     const want = source ? sigs.get(source)! : null;

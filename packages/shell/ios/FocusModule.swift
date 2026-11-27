@@ -42,6 +42,10 @@ public class FocusModule: Module, FocusNative {
 
   static func discardKeyResponder(_ token: Int) { SavedKeyResponders.shared.discard(token) }
 
+  static func fieldBlurCause(_ fieldTag: Int) -> String { SavedKeyResponders.shared.fieldBlurCause(fieldTag) }
+
+  static func watchFieldBlurs(_ fieldTag: Int, _ watch: Bool) { SavedKeyResponders.shared.watchFieldBlurs(fieldTag, watch) }
+
   func setSwitcherCapture(_ active: Bool) {
     lifetime.run { self.applySwitcherCapture(active) }
   }
@@ -99,6 +103,8 @@ public class FocusModule: Module, FocusNative {
     claimFocusFunction
     Self.saveKeyResponderFunction
     Self.restoreKeyResponderFunction
+    Self.fieldBlurCauseFunction
+    Self.watchFieldBlursFunction
     Self.discardKeyResponderFunction
 
     setSwitcherCaptureFunction

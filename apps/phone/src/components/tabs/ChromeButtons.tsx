@@ -20,9 +20,9 @@ const CIRCLE_SYSTEM_NAMES: Partial<Record<SymbolName, string>> = {
 
 const CIRCLE_SYSTEM_GLYPH = 16;
 
-type PlusMenuItem = { label: string; icon: SymbolName; onPress: () => void };
+export const CLOSE_ALL_TABS = "Close All Tabs";
 
-export function plusMenuItems(incognito: boolean, canReopen: boolean): PlusMenuItem[] {
+export function plusMenuItems(incognito: boolean, canReopen: boolean, onCloseAll?: () => void): MenuItem[] {
   return [
     ...(incognito
       ? [
@@ -31,10 +31,11 @@ export function plusMenuItems(incognito: boolean, canReopen: boolean): PlusMenuI
         ]
       : [{ label: actionWords.newIncognitoTab, icon: "eyes" as const, onPress: newIncognitoTab }]),
     ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
+    ...(onCloseAll ? ["divider" as const, { label: CLOSE_ALL_TABS, icon: "xmark" as const, destructive: true, onPress: onCloseAll }] : []),
   ];
 }
 
-export const plusMenu = (incognito: boolean, canReopen: boolean): MenuItem[] => plusMenuItems(incognito, canReopen);
+export const plusMenu = (incognito: boolean, canReopen: boolean, onCloseAll?: () => void): MenuItem[] => plusMenuItems(incognito, canReopen, onCloseAll);
 
 type Look = { dark: boolean; incognito?: boolean };
 
@@ -74,14 +75,14 @@ export function GlassCircleButton({ icon, label, testID, diameter = controlSize.
 
 export const PLUS_HINT = "Touch and hold for more options.";
 
-export type PlusMenuButtonProps = Look & ChromeFade & { width: number; label: string; testID: string; place: ViewStyle; menusShown?: boolean; frost?: string | null; onMenu?: (open: boolean) => void };
+export type PlusMenuButtonProps = Look & ChromeFade & { width: number; label: string; testID: string; place: ViewStyle; menusShown?: boolean; frost?: string | null; onMenu?: (open: boolean) => void; onCloseAll?: () => void };
 
-export function PlusMenuButton({ width, label, testID, dark, incognito = false, place, menusShown = true, frost, onMenu, glassShown, glassShownMs, glyphFade }: PlusMenuButtonProps) {
+export function PlusMenuButton({ width, label, testID, dark, incognito = false, place, menusShown = true, frost, onMenu, onCloseAll, glassShown, glassShownMs, glyphFade }: PlusMenuButtonProps) {
   const tabIncognito = useIncognito();
   const canReopen = useCanReopen();
   const size = { width, height: controlSize.bar };
   return (
-    <MenuTrigger items={plusMenu(tabIncognito, canReopen)} trigger="longPress" haptic={menuOpenedHaptic} disabled={!menusShown} frost={frost} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} style={size}>
+    <MenuTrigger items={plusMenu(tabIncognito, canReopen, onCloseAll)} trigger="longPress" haptic={menuOpenedHaptic} disabled={!menusShown} frost={frost} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} style={size}>
       {({ onLongPress }) => (
         <PressInPlace label={label} hint={PLUS_HINT} onPress={newTab} onLongPress={onLongPress ?? noop} onPressIn={haptics.barPress} dims="glyph" style={size}>
           <ChromeSurface testID={testID} shape={width === size.height ? "circle" : "capsule"} cornerRadius={capsule(size.height)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>

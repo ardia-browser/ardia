@@ -62,6 +62,9 @@ export type SyncDoc = {
   tabCloses?: Record<string, string[]>;
   removing?: string[] | Record<string, ProfileRemoval>;
   removingDevices?: string[] | Record<string, HLC>;
+  sessionMark?: string;
+  themesChosenWhileJoining?: string[];
+  rebaseScopes?: Record<string, string>;
 };
 
 export type ProfileRemoval = { keys: Record<string, HLC>; returned?: boolean };
@@ -107,6 +110,7 @@ export type SyncUi = {
   types: Record<DataType, boolean>;
   profiles: Record<string, ProfileLink>;
   lastSyncedAt: number | null;
+  firstSync: boolean;
   error: string | null;
   pending: number;
   devices: SyncedDevice[];
@@ -124,6 +128,7 @@ export const emptyUi = (status: SyncStatus): SyncUi => ({
   types: defaultTypes(),
   profiles: {},
   lastSyncedAt: null,
+  firstSync: false,
   error: null,
   pending: 0,
   devices: [],

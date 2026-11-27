@@ -15,9 +15,10 @@ export type FolderRecreateResult =
   | { error: "cloudDriveOff" | "exists" | "busy" | "locked" }
   | { error: "failed" | "uploadFailed"; message: string };
 
-export function syncStatusLine(status: SyncStatus, lastSyncedAt: number | null, pending: number, formatAgo: (at: number) => string): string {
+export function syncStatusLine(status: SyncStatus, lastSyncedAt: number | null, pending: number, formatAgo: (at: number) => string, firstSync = false): string {
   const since = lastSyncedAt ? formatAgo(lastSyncedAt) : null;
   const line = (() => {
+    if (firstSync && (status === "starting" || status === "updating" || status === "updated")) return "First sync in progress";
     switch (status) {
       case "starting":
         return "Starting up";

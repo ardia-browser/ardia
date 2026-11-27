@@ -156,6 +156,7 @@ function SyncOn({ info, onReload }: { info: FolderInfo | null; onReload: () => P
   const devices = useSync((s) => s.devices);
   const remoteProfiles = useSync((s) => s.remoteProfiles);
   const joining = useSync((s) => s.joining);
+  const firstSync = useSync((s) => s.firstSync);
   const profiles = useProfiles();
   const [, tick] = useState(0);
   const [moved, setMoved] = useState<{ text: string; failed: boolean } | null>(null);
@@ -232,7 +233,7 @@ function SyncOn({ info, onReload }: { info: FolderInfo | null; onReload: () => P
     <>
       <SectionHeader title="Sync" />
       <Group>
-        <Row icon={<SyncIcon on={!locked} />} anchor="general.sync" description={syncStatusLine(status, lastSyncedAt, pending, ago)}>
+        <Row icon={<SyncIcon on={!locked} />} anchor="general.sync" description={syncStatusLine(status, lastSyncedAt, pending, ago, firstSync)}>
           {locked ? (
             <Button title="Enter Recovery Phrase…" kind="primary" onPress={() => showPhraseEntry(info)} />
           ) : offline && cloudDriveOff && PLATFORM_TERMS.cloudDriveSettingsUrl ? (
@@ -264,7 +265,7 @@ function SyncOn({ info, onReload }: { info: FolderInfo | null; onReload: () => P
         />
         <Row anchor="general.syncDevices" description={devices.length ? undefined : `Just this ${PLATFORM_TERMS.computer} so far. Other devices show here once they sync.`} />
         {devices.map((d) => (
-          <Row key={d.id} title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computerTitle})` : d.name} description={d.current ? syncStatusLine(status, lastSyncedAt, 0, ago) : deviceDetail(d, ago)}>
+          <Row key={d.id} title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computerTitle})` : d.name} description={d.current ? syncStatusLine(status, lastSyncedAt, 0, ago, firstSync) : deviceDetail(d, ago)}>
             {d.current ? null : <Button title="Remove…" onPress={() => void confirmRemoveDevice(d)} />}
           </Row>
         ))}

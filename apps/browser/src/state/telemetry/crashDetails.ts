@@ -1,3 +1,5 @@
+import { SOURCE_PLACE } from "./sanitize";
+
 const EXCEPTION_CODES = /^0x([0-9a-f]{1,16})(?:, 0x([0-9a-f]{1,16})(?:, 0x[0-9a-f]{1,16}){0,2})?$/;
 const MAX_CODE = 0xffffffff;
 const NULL_PAGE_END = 0x100000n;
@@ -35,6 +37,8 @@ type NativeCrashDetails = {
   exceptionCodes?: string;
   crashedThread?: string;
   crashedQueue?: string;
+  fatalAt?: string;
+  postedFrom?: string;
 };
 
 const smallCode = (value: number | undefined) =>
@@ -45,6 +49,8 @@ function indicatorKind(indicator: string | undefined) {
   const shown = indicator.replace(/:\s*\d+$/, "");
   return Object.hasOwn(INDICATORS, shown) ? INDICATORS[shown] : "other";
 }
+
+const sourcePlace = (place: string | undefined) => (typeof place === "string" && SOURCE_PLACE.test(place) ? place : null);
 
 function threadKind(name: string | undefined) {
   if (typeof name !== "string" || !name) return null;
@@ -73,5 +79,7 @@ export function nativeCrashDetails(report: NativeCrashDetails) {
     crash_fault_near_null: nearNull,
     crash_thread: threadKind(report.crashedThread),
     crash_queue: queueKind(report.crashedQueue),
+    crash_fatal_at: sourcePlace(report.fatalAt),
+    crash_posted_from: sourcePlace(report.postedFrom),
   };
 }

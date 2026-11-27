@@ -7,7 +7,12 @@
 
 @interface ArdiaPageCover : NSView
 @property(readonly, weak) ArdiaCoreTab *tab;
-+ (void)coverTabs:(NSArray<ArdiaCoreTab *> *)tabs then:(void (^)(NSArray<ArdiaPageCover *> *covers))then;
+@property(readonly) double stretch;
+@property(readonly) double crop;
++ (double)most:(double (^)(ArdiaPageCover *cover))measure ofCoversOver:(ArdiaCoreTab *)tab in:(NSView *)root;
++ (void)coverTabs:(NSArray<ArdiaCoreTab *> *)tabs
+    keepingShapeOf:(ArdiaCoreTab *)shaped
+              then:(void (^)(NSArray<ArdiaPageCover *> *covers))then;
 - (void)repicture;
 - (void)uncover:(BOOL)fade;
 @end

@@ -109,6 +109,8 @@ test("missing sync folder reports an actionable error instead of silent Offline,
   assert.equal(syncStatusLine("offline", null, 0, () => "2 days ago"), "Sync folder unavailable");
   assert.equal(syncStatusLine("offline", 1000, 0, () => "2 days ago"), "Sync folder unavailable · last synced 2 days ago");
   assert.equal(syncStatusLine("offline", 1000, 2, () => "2 days ago"), "Sync folder unavailable · last synced 2 days ago · waiting for 2 files to download");
+  assert.equal(syncStatusLine("updating", 1000, 0, () => "2 days ago", true), "First sync in progress");
+  assert.equal(syncStatusLine("offline", 1000, 0, () => "2 days ago", true), "Sync folder unavailable · last synced 2 days ago");
   assert.match(unavailableFolderError({ inICloud: true, iCloudAvailable: false, exists: false }), /iCloud Drive is off/);
   assert.match(unavailableFolderError({ inICloud: true, iCloudAvailable: true, exists: false }), /sync folder is missing/i);
   assert.match(unavailableFolderError(null), /sync folder isn’t available/i);

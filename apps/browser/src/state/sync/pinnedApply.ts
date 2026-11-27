@@ -5,6 +5,7 @@ import { makeTab, newId, pinKeyOf, ROW_PIN } from "../browser/model";
 import { noteRemotePinDeletion } from "../pins/clearedTabs";
 import { type PinSyncEntry } from "../pins/pinChoices";
 import { adoptParkedPins, parkWindowPins } from "../pins/parkedPins";
+import { keepsLastPage } from "../pins/pinHomes";
 import { arrangePinnedArea } from "../pins/pinnedArea";
 import { fromSync } from "../pins/pinOrderChoices";
 import { removeTabs } from "../tabs/tabs";
@@ -27,7 +28,7 @@ import {
   type PinValue,
 } from "./pinRecords";
 import { homeWindow, store, type Window } from "./pinnedSyncState";
-import { ASLEEP, hasPage, isAsleep } from "../tabs/pageSession";
+import { ASLEEP, hasPage, isAsleep, withWake } from "../tabs/pageSession";
 
 export type PinPageWrites = (written: Map<string, Set<string>>) => void;
 
@@ -257,7 +258,7 @@ export function applyPinned(
         pinnedUrl: group ? (pinnedMember.has(id) ? old.pinnedUrl || syncedHomeIn(base, pinKeyOf(old)) : syncedHomeIn(base, pinKeyOf(old)) || old.pinnedUrl) || v.u || null : v.u,
         customTitle: v.t,
         customIcon: v.i,
-        ...(isAsleep(old) ? { url: v.u, title: v.ti } : {}),
+        ...(isAsleep(old) && !keepsLastPage(s.settings, old) ? { url: v.u, title: v.ti, ...(old.url === v.u ? {} : { page: withWake(old.page, undefined) }) } : {}),
       };
       note(pinKeyOf(tabs[id]!), id);
       continue;
@@ -339,7 +340,7 @@ export function applyPinned(
   let { parkedPins } = s;
   const parkWindow = windows[PARK];
   if (parkWindow) {
-    parkedPins = parkWindowPins(parkedPins, parkWindow, { tabs, groups, history: s.history, profiles: s.profiles });
+    parkedPins = parkWindowPins(parkedPins, parkWindow, { tabs, groups, history: s.history, profiles: s.profiles, settings: s.settings });
     for (const id of parkWindow.tabIds) delete tabs[id];
     groups = Object.fromEntries(Object.entries(groups).filter(([, g]) => g.windowId !== PARK));
     delete windows[PARK];

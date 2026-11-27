@@ -73,14 +73,21 @@ async function recordEntries(profile: string, ids: string[] | null) {
   await saveRecord(entries);
 }
 
+const saveEntry = (profile: string, entry: AddressInput, id: string | undefined) =>
+  id ? saveAddress(profile, { ...entry, id }).catch(() => saveAddress(profile, entry)) : saveAddress(profile, entry);
+
 async function writeEntries(profile: string, wanted: AddressInput[], had: string[]) {
   const ids: string[] = [];
-  for (const [i, entry] of wanted.entries()) {
-    const id = had[i];
-    ids.push(id ? await saveAddress(profile, { ...entry, id }).catch(() => saveAddress(profile, entry)) : await saveAddress(profile, entry));
+  let removed = 0;
+  try {
+    for (const [i, entry] of wanted.entries()) ids.push(await saveEntry(profile, entry, had[i]));
+    for (const id of had.slice(wanted.length)) {
+      await deleteAddress(profile, id);
+      removed++;
+    }
+  } finally {
+    if (useMeCard.getState().entries[profile]) await recordEntries(profile, [...ids, ...had.slice(ids.length + removed)]);
   }
-  for (const id of had.slice(wanted.length)) await deleteAddress(profile, id);
-  return ids;
 }
 
 let lastWrite: Promise<unknown> = Promise.resolve();
@@ -95,8 +102,7 @@ const refresh = (profile: string) =>
     const had = useMeCard.getState().entries[profile];
     if (!had) return;
     const card = await readMeCard();
-    const ids = await writeEntries(profile, card ? meCardEntries(card) : [], had);
-    if (useMeCard.getState().entries[profile]) await recordEntries(profile, ids);
+    await writeEntries(profile, card ? meCardEntries(card) : [], had);
   });
 
 const removeEntries = (profile: string) =>

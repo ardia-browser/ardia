@@ -431,9 +431,11 @@ export const extensionAnswers = {
 const tabStripHost = () => testGlobals.acTestTabStrip!;
 let autofillIds = 0;
 export const addressStores = new Map<string, Map<string, SavedAddress>>();
+export const addressSaves = { made: 0, failOn: null as number | null };
 const addressStore = (profile: string) => addressStores.get(profile) ?? addressStores.set(profile, new Map()).get(profile)!;
 function saveFakeAddress(profile: string, address: Partial<SavedAddress>) {
   const store = addressStore(profile);
+  if (++addressSaves.made === addressSaves.failOn) throw new Error("the address store refused the save");
   if (address.id && !store.has(address.id)) throw new Error("No such address");
   const id = address.id ?? `address-${++autofillIds}`;
   const fields = Object.fromEntries(Object.entries(address).filter(([key, value]) => key !== "id" && typeof value === "string" && value.trim()));

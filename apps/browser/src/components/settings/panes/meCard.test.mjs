@@ -142,3 +142,25 @@ test("S9: entries from Contacts are listed as From Contacts and open read-only w
   assert.ok(elements(mount(() => editor.type(editor.props)).value).some((e) => e.type === TextField), "an address saved in Ardia still opens the editor");
   await row.turn(false);
 });
+
+test("S9: a save that fails part way through the Me card's addresses leaves no entry unrecorded, so a refresh makes no duplicates", async () => {
+  const { setMeCardFor, useMeCard } = await import("../../../state/site/meCard.ts");
+  S().hydrate({});
+  const profile = currentEngineProfile(S().settings.defaultProfileId);
+  native.addressStores.delete(profile);
+  native.contacts.status = "authorized";
+  native.contacts.card = { ...ADA, addresses: [ADA.addresses[0], { street: "1 Work Lane", city: "London", state: "", postalCode: "EC1A 1BB", country: "GB" }] };
+  native.addressSaves.made = 0;
+  native.addressSaves.failOn = 2;
+  await assert.rejects(setMeCardFor(profile, true), /refused the save/);
+  native.addressSaves.failOn = null;
+  const stored = () => [...(native.addressStores.get(profile)?.keys() ?? [])].sort();
+  assert.equal(stored().length, 1, "the first address was saved before the second failed");
+  assert.deepEqual([...(useMeCard.getState().entries[profile] ?? [])].sort(), stored(), "the saved address is recorded as from Contacts");
+  await setMeCardFor(profile, true);
+  assert.equal(stored().length, 2, "a refresh writes the card's two addresses, no duplicate");
+  assert.deepEqual([...useMeCard.getState().entries[profile]].sort(), stored());
+  await setMeCardFor(profile, false);
+  assert.deepEqual(stored(), [], "turning it off removes them all");
+  native.contacts.card = null;
+});

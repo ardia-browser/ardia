@@ -169,10 +169,13 @@ export function ThemeSwatches({
   size?: number;
   gap?: number;
 }) {
+  const appDark = useAppDark();
+  const source = useSettings((s) => spaceLookSource(s));
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap }} accessibilityRole="radiogroup" accessibilityLabel="Theme color">
       {COLORS.map((c) => {
-        const edited = edits ? presetThemeOf(edits, c) : null;
+        const stored = edits ? presetThemeOf(edits, c) : null;
+        const edited = stored ? shownLook(stored, appDark, source).look : null;
         const name = presetLabel(c, !!edited);
         return edited ? (
           <ColorButton key={c} name={name} ring={themeAccent(edited)} size={size} selected={color === c} onPress={() => onPreset(c)}>

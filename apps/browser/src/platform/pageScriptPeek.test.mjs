@@ -713,15 +713,52 @@ test("a named target or the page's <base target> counts; _self, _top, _parent an
   assert.deepEqual(newTabLinks(env), ["https://page.example/named", "https://page.example/based"]);
 });
 
-test("a modified, cancelled, untrusted or non-primary click isn't noted", () => {
+test("a modified, untrusted or non-primary click isn't noted", () => {
   const env = environment();
   const blank = (href) => env.link(href, { target: "_blank" });
   for (const keys of [{ meta: true }, { shift: true }, { alt: true }, { ctrl: true }, { meta: true, shift: true }]) env.gesture([blank("/mod")], keys);
   env.fire("click", [blank("/untrusted")], { trusted: false });
   env.fire("click", [blank("/middle")], { button: 1 });
-  env.gesture([blank("/cancelled")], {}, { page: (e) => e.preventDefault() });
   env.flush();
   assert.deepEqual(newTabLinks(env), []);
+});
+
+test("a new-tab link whose click the page cancels to open a blank window itself is noted, as Gmail's message links are (#4110)", () => {
+  const env = environment({ page: "https://mail.google.com" });
+  const wrapped = "https://www.google.com/url?q=https://other.example/&source=gmail";
+  const a = env.link("https://other.example/", { target: "_blank" });
+  env.gesture([a], {}, {
+    page: (e) => {
+      e.preventDefault();
+      a.setAttribute("href", wrapped);
+      env.activation.active = true;
+      env.window.open("", "_blank");
+    },
+  });
+  env.flush();
+  assert.deepEqual(newTabLinks(env), [wrapped]);
+  const stopped = env.link("https://other.example/stopped", { target: "_blank" });
+  env.gesture([stopped], {}, { page: (e) => (e.preventDefault(), e.stopPropagation()) });
+  env.flush();
+  assert.deepEqual(newTabLinks(env), [wrapped, "https://other.example/stopped"], "a stopped click is noted once dispatch is over");
+});
+
+test("a cancelled click whose page opened its own window with an address is noted once, by that address", () => {
+  const env = environment();
+  const a = env.link("https://other.example/shown", { target: "_blank" });
+  env.gesture([a], {}, {
+    page: (e) => {
+      e.preventDefault();
+      env.activation.active = true;
+      env.window.open("https://other.example/opened");
+    },
+  });
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/opened"]);
+  const same = env.link("/in-page");
+  env.gesture([same], {}, { page: (e) => e.preventDefault() });
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/opened"], "a cancelled link that replaces the page is never noted");
 });
 
 test("downloads, non-http(s) links and links in editable content aren't noted", () => {

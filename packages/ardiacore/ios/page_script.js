@@ -305,7 +305,11 @@
     if (e.isTrusted && !(e.type === "keydown" && (e.key === "Escape" || e.metaKey))) usedHere = true;
   };
   for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteUse, true);
-  const askedToPlay = () => usedHere || (!isTop && !!(navigator.userActivation && navigator.userActivation.isActive));
+  const INHERITED_ACTIVATION_MS = 5000;
+  const frameActivated = (active, sinceStart) => active && sinceStart >= INHERITED_ACTIVATION_MS;
+  const frameStartedAt = performance.now();
+  const askedToPlay = () =>
+    usedHere || (!isTop && frameActivated(!!(navigator.userActivation && navigator.userActivation.isActive), performance.now() - frameStartedAt));
   let pipTrace = false;
   let pipHandlerSet = null;
   const playingMedia = new Set();
@@ -1601,10 +1605,15 @@
       const scale = ratio(window);
       send("peek", { url, key: "site", origin: pageOrigin, x: clientX(e) * scale, y: clientY(e) * scale, moved: 0 });
     };
-    const noteNewTabLink = (e, link) => {
-      if (defaultPrevented(e) || replacesPage(link)) return;
+    let openingsNoted = 0;
+    const noteOpening = (url) => {
+      openingsNoted++;
+      send("newTabLink", { url });
+    };
+    const noteNewTabLink = (e, link, notedBefore) => {
+      if (replacesPage(link) || (defaultPrevented(e) && openingsNoted !== notedBefore)) return;
       const url = linkUrl(link);
-      if (url && apply(test, /^https?:/i, [url])) send("newTabLink", { url });
+      if (url && apply(test, /^https?:/i, [url])) noteOpening(url);
     };
     addEventListener(
       "click",
@@ -1617,12 +1626,13 @@
         const path = apply(composedPath, e, []);
         const forSite = !!site && timeStamp(e) === site.stamp && apply(includes, path, [site.link]);
         const link = forSite ? site.link : hit.link;
+        const notedBefore = openingsNoted;
         let decided = false;
         const decide = guard((ev) => {
           if (ev !== e || decided) return;
           decided = true;
           if (forSite && replacesPage(link)) return peekSiteLink(e, link);
-          noteNewTabLink(e, link);
+          noteNewTabLink(e, link, notedBefore);
         });
         apply(listen, window, ["click", decide]);
         apply(scheduleTimeout, window, [
@@ -1631,7 +1641,7 @@
             if (decided) return;
             decided = true;
             if (forSite && replacesPage(link)) return trace("the click never reached the window", {});
-            noteNewTabLink(e, link);
+            noteNewTabLink(e, link, notedBefore);
           }),
           0,
         ]);
@@ -1658,7 +1668,7 @@
           apply(unlisten, link, ["click", seen, true]);
           if (!dispatched || defaultPrevented(dispatched) || replacesPage(link)) return;
           const url = linkUrl(link);
-          if (peekable({ link, url, path: [link] })) send("newTabLink", { url });
+          if (peekable({ link, url, path: [link] })) noteOpening(url);
         });
       });
       const click = asNative(clickDescriptor.value, (target, self, args) => {
@@ -1678,7 +1688,7 @@
         const raw = `${args[0]}`;
         if (!raw) return;
         const url = new URLCtor(raw, baseURI(document)).href;
-        if (apply(test, /^https?:/i, [url])) send("newTabLink", { url });
+        if (apply(test, /^https?:/i, [url])) noteOpening(url);
       };
       const open = asNative(openDescriptor.value, (target, self, args) => {
         guard(openedByUser)(args);

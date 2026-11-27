@@ -15,6 +15,11 @@ const CFTimeInterval kNewTabLinkSeconds = 2;
 const NSUInteger kNewTabLinksKept = 4;
 const int kNewTabLinkTries = 8;
 const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
+
+BOOL IsWebAddress(NSString *url) {
+  NSString *scheme = url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil;
+  return [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"];
+}
 }
 
 @interface ArdiaStashedPageReports : NSObject {
@@ -242,7 +247,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
     return;
   }
   if (link && _tab) return [self matchLinkTab:tab adoptId:adoptId disposition:disposition firstURL:url ?: @"" hidden:tries > 0 tries:0];
-  [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:NO linkWait:nil];
+  [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:nil linkWait:nil];
 }
 
 - (void)matchLinkTab:(ArdiaCoreTab *)tab
@@ -271,7 +276,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
       @"activated" : @(activated),
       @"tries" : @(tries)
     });
-  if (clicked) return [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:YES linkWait:@"matched"];
+  if (clicked) return [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:clicked linkWait:@"matched"];
   if (retry) {
     __weak ArdiaWebView *weakSelf = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 25 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
@@ -279,7 +284,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
     });
     return;
   }
-  [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:NO linkWait:tries >= kNewTabLinkTries ? @"timedOut" : @"skipped"];
+  [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:nil linkWait:tries >= kNewTabLinkTries ? @"timedOut" : @"skipped"];
 }
 
 - (void)dropStaleNewTabLinks {
@@ -319,16 +324,16 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
 - (void)emitOpenedTab:(ArdiaCoreTab *)tab
               adoptId:(NSString *)adoptId
           disposition:(NSString *)disposition
-              clicked:(BOOL)clicked
+              clicked:(nullable NSString *)clicked
              linkWait:(nullable NSString *)linkWait {
-  NSString *url = tab.url;
+  NSString *url = clicked && !IsWebAddress(tab.url) ? clicked : tab.url;
   NSMutableDictionary *payload = [@{
     @"url" : url ?: @"",
     @"disposition" : disposition,
     @"adoptId" : adoptId,
     @"userGesture" : @YES,
     @"postBody" : @NO,
-    @"fromClick" : @(clicked),
+    @"fromClick" : @(clicked != nil),
   } mutableCopy];
   if (tab.profile.offTheRecord) payload[@"profile"] = ardia_host::OriginalProfileNameOf(tab.profile);
   if (clicked) payload[@"point"] = RecentClickPoint(self);

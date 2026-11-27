@@ -10,6 +10,19 @@ const playableSource = script.match(/const playableMedia = (\(all\) => .*);\n/)?
 assert.ok(playableSource, "page_script.js defines playableMedia");
 const playableMedia = new Function(`return ${playableSource}`)();
 
+const frameActivatedSource = script.match(/const frameActivated = (\(active, sinceStart\) => .*);\n/)?.[1];
+const lifespan = script.match(/const INHERITED_ACTIVATION_MS = (\d+);\n/)?.[1];
+assert.ok(frameActivatedSource && lifespan, "page_script.js defines frameActivated and INHERITED_ACTIVATION_MS");
+const frameActivated = new Function(`const INHERITED_ACTIVATION_MS = ${lifespan}; return ${frameActivatedSource}`)();
+
+test("an embedded player doesn't take the click that navigated its parent as a request to play (gong.bg's Vbox7, #3883)", () => {
+  assert.equal(frameActivated(true, 0), false, "Chrome hands a new frame the navigating click's activation");
+  assert.equal(frameActivated(true, 100), false);
+  assert.equal(frameActivated(true, 4999), false);
+  assert.equal(frameActivated(true, 5000), true, "past the 5 s activation lifespan the activation is a new one");
+  assert.equal(frameActivated(false, 60000), false);
+});
+
 const media = (playing) => ({ paused: !playing, pause() { this.paused = true; } });
 
 test("media playing before the config came is paused", () => {

@@ -777,3 +777,18 @@ test("appleNotes reads only after Ardia's own consent sheet, for that run, with 
   await settle();
   appleNotesFake.reset();
 });
+
+test("codex S2: a picked file is bound to the file itself, so another file put at its name can't be read through the pick", async () => {
+  await enable(DATA_ONLY);
+  S().createWindow({ url: "https://a.example/" });
+  const run = await activated("scratch");
+  files.folders["/Users/me/Downloads"] = { exists: true, realPath: "/Users/me/Downloads", location: "other", protected: false, device: 1, inode: 77 };
+  files.identities["/Users/me/Downloads"] = { device: 1, inode: 77 };
+  files.put("scratch", "/Users/me/Downloads", "export.zip", "picked");
+  dialog.fileAnswer = ["file:///Users/me/Downloads/export.zip"];
+  const [one] = (await askLong("scratch", "files.pick", {}, run)).result.files;
+  assert.equal(Buffer.from((await askLong("scratch", "files.read", { path: "export.zip", root: one.id }, run)).result.data, "base64").toString(), "picked", "positive control");
+  files.put("scratch", "/Users/me/Downloads", "export.zip", "swapped in later");
+  assert.equal((await askLong("scratch", "files.read", { path: "export.zip", root: one.id }, run)).error.code, "refused");
+  assert.ok(files.calls.at(-1).fileIdentity, "the read carries the picked file's identity");
+});

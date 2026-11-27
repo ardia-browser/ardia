@@ -406,7 +406,7 @@ struct PluginFileStore {
     }
   }
 
-  func read(_ path: String, offset: Int?, length: Int?) -> Result<[String: Any], PluginFileFailure> {
+  func read(_ path: String, offset: Int?, length: Int?, expecting: PluginFileIdentity? = nil) -> Result<[String: Any], PluginFileFailure> {
     let parts: [String]
     switch Self.segments(path, allowRoot: false) {
     case .failure(let failure): return .failure(failure)
@@ -443,6 +443,7 @@ struct PluginFileStore {
     if (info.st_mode & S_IFMT) == S_IFDIR { return .failure(PluginFileFailure(.badPath, "that's a folder, not a file")) }
     guard (info.st_mode & S_IFMT) == S_IFREG else { return .failure(PluginFileFailure(.refused, "that isn't a plain file")) }
     guard info.st_nlink <= 1 else { return .failure(Self.hardLinkRefusal) }
+    if let expecting, expecting != PluginFileIdentity(info) { return .failure(PluginFileFailure(.refused, "the file you picked was replaced by another one")) }
     if isDataless(info, path) {
       requestDownload(path)
       return .failure(PluginFileFailure(.unavailable, "the file isn't downloaded yet"))
@@ -466,7 +467,7 @@ struct PluginFileStore {
       got += step
     }
     data.count = got
-    return .success(["found": true, "data": data.base64EncodedString(), "size": size, "mtimeMs": Self.mtimeMs(info)])
+    return .success(["found": true, "data": data.base64EncodedString(), "size": size, "mtimeMs": Self.mtimeMs(info)].merging(PluginFileIdentity(info).reply) { $1 })
   }
 
   static func writeAll(_ fd: Int32, _ data: Data) -> Bool {
@@ -655,7 +656,7 @@ struct PluginFileStore {
     let outcome: Result<[String: Any], PluginFileFailure>
     switch spec["op"] as? String {
     case "read":
-      outcome = read(path, offset: Self.integer(spec["offset"]), length: Self.integer(spec["length"]))
+      outcome = read(path, offset: Self.integer(spec["offset"]), length: Self.integer(spec["length"]), expecting: PluginFileIdentity(spec: spec["fileIdentity"]))
     case "write", "append":
       guard let text = spec["data"] as? String, let data = Data(base64Encoded: text) else {
         return PluginFileFailure(.refused, "the data has to be base64").reply

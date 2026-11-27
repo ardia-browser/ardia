@@ -27,8 +27,8 @@ const UNSAFE_CHARACTER = /[\u0000-\u001f\u007f-\u009f؜‎‏‪-‮⁦-⁩﻿]/
 const ARDIA_TEMP_NAME = /^\..+\.ardia-/;
 
 type Caller = { name: string; run: number };
-type RootRef = { path: string | null; label: string; identity: PluginFolderIdentity | null; ticket: number; onlyFile?: string };
-type PickedFile = { name: string; run: number; dir: string; identity: PluginFolderIdentity; file: string };
+type RootRef = { path: string | null; label: string; identity: PluginFolderIdentity | null; ticket: number; onlyFile?: string; fileIdentity?: PluginFolderIdentity };
+type PickedFile = { name: string; run: number; dir: string; identity: PluginFolderIdentity; file: string; fileIdentity: PluginFolderIdentity };
 
 const PICK_ID = /^p[0-9a-f]{10}$/;
 const picked = new Map<string, Map<string, PickedFile>>();
@@ -95,7 +95,7 @@ export function rootFor(c: Caller, m: PluginManifest, raw: unknown): Root {
   if (isPickId(raw)) {
     const pick = picked.get(c.name)?.get(raw);
     if (!pick || pick.run !== c.run) return { ok: false, body: failure("refused", "That file isn't one you picked for this plugin, or the plugin restarted since.") };
-    return { ok: true, path: pick.dir, label: raw, identity: pick.identity, ticket: filesTicket(), onlyFile: pick.file };
+    return { ok: true, path: pick.dir, label: raw, identity: pick.identity, ticket: filesTicket(), onlyFile: pick.file, fileIdentity: pick.fileIdentity };
   }
   if (!m.permissions.folders) return { ok: false, body: failure("refused", "A folder root needs the folders permission.") };
   const grant = isGrantId(raw) ? grantOf(c.name, raw) : null;
@@ -120,7 +120,7 @@ async function learnedIdentity(name: string, id: string, path: string): Promise<
   return identity;
 }
 
-const rootSpec = (root: RootRef) => ({ root: root.path, ticket: root.ticket, ...(root.identity ? { rootIdentity: root.identity } : {}) });
+const rootSpec = (root: RootRef) => ({ root: root.path, ticket: root.ticket, ...(root.identity ? { rootIdentity: root.identity } : {}), ...(root.fileIdentity ? { fileIdentity: root.fileIdentity } : {}) });
 
 function refusalCounted(body: Body, consent: ConsentToken | null): Body {
   const code = "error" in body && typeof body.error === "object" && body.error !== null ? (body.error as { code?: unknown }).code : null;
@@ -291,11 +291,14 @@ async function pickedEntry(c: Caller, path: string): Promise<{ id: string; name:
   const identity = { device: info.device, inode: info.inode };
   const probe = await nativeCall({ op: "read", plugin: c.name, root: info.realPath, ticket: filesTicket(), rootIdentity: identity, path: file, offset: 0, length: 0 });
   if (!probe.ok || probe.value.found === false) return null;
+  const opened = probe.value as { device?: unknown; inode?: unknown };
+  if (!isIdentityPart(opened.device) || !isIdentityPart(opened.inode)) return null;
+  const fileIdentity = { device: opened.device, inode: opened.inode };
   let mine = picked.get(c.name);
   if (!mine) picked.set(c.name, (mine = new Map()));
   let id = `p${secureRandomHex(10)}`;
   while (mine.has(id)) id = `p${secureRandomHex(10)}`;
-  mine.set(id, { name: c.name, run: c.run, dir: info.realPath, identity, file });
+  mine.set(id, { name: c.name, run: c.run, dir: info.realPath, identity, file, fileIdentity });
   while (mine.size > FILES_LIMITS.picksKept) mine.delete(mine.keys().next().value!);
   return { id, name: file, size: sizeAndTime(probe.value).size };
 }

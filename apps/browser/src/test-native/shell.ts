@@ -786,7 +786,7 @@ export function officialPinnedFromPin(): { name: string; version: string; folder
 }
 const pinnedNow = () => (pluginHost.pinned === undefined ? officialPinnedFromPin() : pluginHost.pinned);
 const pluginEvents = nativeEvents();
-type PluginFilesSpecFake = { op: string; plugin: string; root: string | null; path: string; data?: string; offset?: number; length?: number; exclusive?: boolean; recursive?: boolean; rootIdentity?: { device: number; inode: number }; ticket?: number; stage?: string; first?: boolean; operation?: string };
+type PluginFilesSpecFake = { op: string; plugin: string; root: string | null; path: string; data?: string; offset?: number; length?: number; exclusive?: boolean; recursive?: boolean; rootIdentity?: { device: number; inode: number }; fileIdentity?: { device: number; inode: number }; ticket?: number; stage?: string; first?: boolean; operation?: string };
 type PluginFilesFailureFake = { ok: false; code: "not_found" | "exists" | "too_large" | "bad_path" | "refused" | "unavailable"; message: string };
 type PluginFileFake = { data: Uint8Array; mtimeMs: number; placeholder?: boolean };
 const FILES_MAX_DATA = 4 << 20;
@@ -889,6 +889,13 @@ function filesStageFake(spec: PluginFilesSpecFake) {
   at.files.set(path, { data, mtimeMs: ++pluginFiles.clock });
   return { ok: true as const, size: data.length, mtimeMs: pluginFiles.clock };
 }
+const fakeInodes = new WeakMap<object, number>();
+let nextFakeInode = 1000;
+const fakeInodeOf = (file: object) => {
+  let inode = fakeInodes.get(file);
+  if (inode === undefined) fakeInodes.set(file, (inode = ++nextFakeInode));
+  return inode;
+};
 async function filesCallFake(spec: PluginFilesSpecFake) {
   pluginFiles.calls.push({ ...spec });
   const ticket = spec.ticket;
@@ -921,10 +928,12 @@ async function filesCallFake(spec: PluginFilesSpecFake) {
       const file = at.files.get(path);
       if (!file) return isDir(path) ? filesFail("bad_path", "that's a folder, not a file") : { ok: true as const, found: false };
       if (file.placeholder) return filesFail("unavailable", "the file isn't downloaded yet");
+      const inode = fakeInodeOf(file);
+      if (spec.fileIdentity && (spec.fileIdentity.device !== 1 || spec.fileIdentity.inode !== inode)) return filesFail("refused", "the file you picked was replaced by another one");
       if (spec.offset === undefined && spec.length === undefined && file.data.length > FILES_MAX_DATA) return filesFail("too_large", "the file is over 4 MiB");
       const start = spec.offset ?? 0;
       const slice = file.data.subarray(start, start + Math.min(spec.length ?? FILES_MAX_DATA, FILES_MAX_DATA));
-      return { ok: true as const, found: true, data: filesToBase64(slice), size: file.data.length, mtimeMs: file.mtimeMs };
+      return { ok: true as const, found: true, data: filesToBase64(slice), size: file.data.length, mtimeMs: file.mtimeMs, device: 1, inode };
     }
     case "write":
     case "append": {

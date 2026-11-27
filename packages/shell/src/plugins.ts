@@ -71,6 +71,7 @@ export type PluginFilesSpec = {
   first?: boolean;
   operation?: string;
   rootIdentity?: PluginFolderIdentity;
+  fileIdentity?: PluginFolderIdentity;
   ticket: number;
 };
 export type PluginFolderIdentity = { device: number; inode: number };

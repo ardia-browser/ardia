@@ -229,6 +229,15 @@ final class PluginFileHardeningTests: XCTestCase {
     XCTAssertEqual(write("other.md", "x", on: gatedStore(access))["ok"] as? Bool, true, "other calls of the plugin go on")
   }
 
+  func testAReadBoundToAFileRefusesAnotherFilePutAtItsName() throws {
+    XCTAssertEqual(write("picked.zip", "one")["ok"] as? Bool, true)
+    let first = store.perform(["op": "read", "path": "picked.zip", "offset": 0, "length": 0])
+    let bound: [String: Any] = ["device": first["device"] as Any, "inode": first["inode"] as Any]
+    XCTAssertEqual(store.perform(["op": "read", "path": "picked.zip", "fileIdentity": bound])["found"] as? Bool, true, "positive control")
+    XCTAssertEqual(write("picked.zip", "two")["ok"] as? Bool, true)
+    XCTAssertEqual(code(store.perform(["op": "read", "path": "picked.zip", "fileIdentity": bound])), "refused")
+  }
+
   func testRecursiveListSkipsAFolderMovedOutMidway() throws {
     XCTAssertEqual(write("a/b/secret.md", "k")["ok"] as? Bool, true)
     PluginFileStore.commitPoint = { label in if label == "list:a" { try? FileManager.default.moveItem(atPath: "\(self.root)/a", toPath: "\(self.base)/outside-a") } }

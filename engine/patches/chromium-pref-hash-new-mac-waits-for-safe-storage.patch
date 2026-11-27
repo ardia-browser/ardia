@@ -18,7 +18,8 @@ never seen by the PrefService), off prefs.tracked_preferences_reset. A record mo
   verify drops it into prefs.tracked_preferences_reset.
 - verified: it passed, and carries this machine's HMAC. The next launch's first pass puts it back, after that pass's
   own checks and before anything is published, only where nothing has taken its place, with its encrypted hash and
-  an HMAC stamped through the transaction, so it loads like any installed extension.
+  an HMAC stamped through the transaction, so it loads like any installed extension. One whose HMAC no longer matches
+  (the profile moved again before it came back) goes back to pending, for the key to check again.
 - restored: the second pass of that launch checks the restored value against its encrypted hash again, strictly,
   with no HMAC fallback, and removes it and lists it if it doesn't verify. Then the record is gone.
 Nothing comes back in the session it was reset in: an extension entry the loader never registered breaks shutdown
@@ -182,7 +183,7 @@ there.
  
    // Perform the initial synchronous validation pass (without the encryptor).
    // This validates the super MAC and all individual preference MACs.
-@@ -374,10 +440,25 @@
+@@ -374,11 +440,26 @@
          prefs_altered = true;
        }
      }
@@ -194,20 +195,21 @@ there.
      if (hash_store_transaction->StampSuperHmac()) {
        prefs_altered = true;
      }
-+  }
-+
+   }
+ 
 +  if (did_reset && contents_before_checks) {
 +    SetAsideForSafeStorage(*contents_before_checks, pref_store_contents,
 +                           reset_paths);
-   }
++  }
 +  if (!awaiting_safe_storage_.empty()) {
 +    pref_store_contents.Set(kAwaitingSafeStorageKey,
 +                            awaiting_safe_storage_.Clone());
 +    prefs_altered = true;
 +  }
- 
++
    if (did_reset) {
      pref_store_contents.SetByDottedPath(
+         user_prefs::kPreferenceResetTime,
 @@ -395,6 +476,12 @@
    }
    reset_on_load_observer_.reset();
@@ -237,16 +239,16 @@ there.
    // Immediately call the callback with the original pref_store_contents to
    // allow startup to proceed without waiting for the encryptor.
    std::move(post_filter_on_load_callback)
-@@ -508,6 +586,8 @@
+@@ -507,6 +585,8 @@
+   if (pref_to_write == user_prefs::kPreferenceResetTime) {
      UpdateTrackedPreferencesResetListInPrefStore(pref_store_contents_at_load);
    }
- 
-+  VerifyAwaitingSafeStorage();
 +
++  VerifyAwaitingSafeStorage();
+ 
    // This is the final validation pass. Log metrics if we haven't already.
    MaybeRecordTrackedPreferenceResetCount(pref_store_contents_at_load);
- 
-@@ -541,9 +621,299 @@
+@@ -541,9 +621,309 @@
                             reset_list->Clone());
    } else {
      pref_service_->ClearPref(user_prefs::kTrackedPreferencesReset);
@@ -335,6 +337,7 @@ there.
 +    const std::string hash_path = base::StrCat({path, kEncryptedHashSuffix});
 +    const bool split = preference->GetType() == TrackedPreferenceType::SPLIT;
 +    std::vector<std::string> dropped;
++    std::vector<std::string> demoted;
 +    std::vector<std::pair<std::string, std::string>> restored;
 +    for (const auto [key, entry] : *entries) {
 +      const AwaitingFields fields = FieldsOf(entry);
@@ -343,11 +346,14 @@ there.
 +      }
 +      const std::string reported_path =
 +          split ? base::StrCat({path, ".", key}) : path;
-+      if (!fields.value || !fields.encrypted_hash || !fields.hmac ||
-+          pref_hash_store_->ComputeHmac(reported_path, fields.value) !=
-+              *fields.hmac) {
++      if (!fields.value || !fields.encrypted_hash || !fields.hmac) {
 +        dropped.push_back(key);
 +        list_reset(reported_path);
++        continue;
++      }
++      if (pref_hash_store_->ComputeHmac(reported_path, fields.value) !=
++          *fields.hmac) {
++        demoted.push_back(key);
 +        continue;
 +      }
 +      if (!split) {
@@ -393,13 +399,19 @@ there.
 +    for (const std::string& key : dropped) {
 +      entries->Remove(key);
 +    }
++    for (const std::string& key : demoted) {
++      base::DictValue* record = entries->FindDict(key);
++      record->Remove(kAwaitingStateKey);
++      record->Remove(kAwaitingHmacKey);
++    }
 +    for (const auto& [key, encrypted_hash] : restored) {
 +      entries->Set(key, RestoredRecord(encrypted_hash));
 +    }
 +    if (entries->empty()) {
 +      awaiting_safe_storage_.Remove(path);
 +    }
-+    changed = changed || !dropped.empty() || !restored.empty();
++    changed = changed || !dropped.empty() || !demoted.empty() ||
++              !restored.empty();
    }
 +  return changed;
  }

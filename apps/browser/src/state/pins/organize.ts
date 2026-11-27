@@ -37,8 +37,6 @@ export function selectedTabIds(s: BrowserState, windowId: string): string[] {
 
 export const awayFromPin = (t: Pick<Tab, "url" | "pinnedUrl">) => !!t.pinnedUrl && !!t.url && !samePage(t.url, t.pinnedUrl);
 
-export const reopensAtPinnedUrl = (s: Pick<BrowserState, "settings">, t: Pick<Tab, "reopenAtPinnedUrl">) => t.reopenAtPinnedUrl ?? s.settings.pinnedTabsReopenAtPinnedUrl;
-
 export type AwayTitle = { pinned: string | null; page: string; renamed?: true };
 
 type TitledTab = Pick<Tab, "url" | "pinnedUrl" | "customTitle" | "title">;

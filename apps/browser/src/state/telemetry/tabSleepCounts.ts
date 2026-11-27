@@ -116,9 +116,11 @@ export function noteTopAppsKeptRunning(count: number) {
   pending.topAppsKeptRunning += count;
 }
 
-export function notePinnedTabReopenChoice(backToPinnedUrl: boolean) {
-  if (backToPinnedUrl) pending.pinnedClosesBackToPinnedUrl++;
-  else pending.pinnedClosesKeptLastPage++;
+export function notePinnedTabReopenChoice(backToPinnedUrl: boolean, consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => {
+    if (backToPinnedUrl) pending.pinnedClosesBackToPinnedUrl++;
+    else pending.pinnedClosesKeptLastPage++;
+  });
 }
 
 export function notePinnedReopenChoiceChanged(consent?: ConsentToken | null) {

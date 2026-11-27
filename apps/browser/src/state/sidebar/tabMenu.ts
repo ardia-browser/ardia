@@ -4,7 +4,8 @@ import { closeTab, moveTabsToProfile, moveTabToWindow, toggleMute, toggleSiteMut
 import { muteState, muteSymbol, muteTitle, siteMuteTitle } from "../tabs/mute";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, bookmarkProfileId, inPinnedContainer, isIncognitoProfile, pinnedSectionTitle, pinSection, tabTitle, togglePinTitle, viewTabIds, tabLayoutOf } from "../browser/model";
-import { awayFromPin, reopensAtPinnedUrl, selectedTabIds } from "../pins/organize";
+import { awayFromPin, selectedTabIds } from "../pins/organize";
+import { reopensAtPinnedUrl } from "../pins/pinHomes";
 import { groupOf } from "../pins/tabGrouping";
 import { splitOf, splitRowPanes, splitViewAvailable } from "../splits/splits";
 import { closeSplitView, openSplitPane } from "../splits/actions";
@@ -179,7 +180,7 @@ function customizeItem(s: BrowserState, tab: Tab, f: Facts): MenuItem {
         ? [
             { id: "replacePin", title: "Replace Pinned URL with Current", symbol: "pin", enabled: awayFromPin(tab) },
             { id: "editPin", title: "Edit Pinned URL…", symbol: "link" },
-            { id: "reopenAtPin", title: "Reopen at Pinned URL", symbol: "arrow.uturn.backward", checked: reopensAtPinnedUrl(s, tab) },
+            { id: "reopenAtPin", title: "Reopen at Pinned URL", symbol: "arrow.uturn.backward", checked: reopensAtPinnedUrl(s.settings, tab) },
           ]
         : [],
       [...(engine ? [{ id: "engine", title: `Open in ${engine}`, symbol: "globe" }] : []), ...unreadItems(s, tab)],
@@ -288,7 +289,7 @@ function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Des
   else if (choice === "replacePin") s.setPinnedUrl(tab.id);
   else if (choice === "editPin") void editPinnedPage(windowId, tab.id);
   else if (choice === "reopenAtPin") {
-    s.updateTab(tab.id, { reopenAtPinnedUrl: !reopensAtPinnedUrl(s, tab) });
+    s.updateTab(tab.id, { reopenAtPinnedUrl: !reopensAtPinnedUrl(s.settings, tab) });
     notePinnedReopenChoiceChanged(consent);
   }
   else if (choice === "rename") void startRename(windowId, t);

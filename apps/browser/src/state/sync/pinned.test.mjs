@@ -421,3 +421,32 @@ test("a tile's letters survive a stay in a pinned group, even for a Mac that joi
     assert.equal(tab?.tileLetters, "MA", `${name} has the tile back with its letters`);
   }
 });
+
+test("with Reopen closed pinned tabs at their pinned URL off, another Mac's edit to an unrelated pin keeps a closed pin's last page", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([a, b]);
+  const away = "https://mail.example/inbox/42";
+  b.with(() => {
+    S().updateSettings({ pinnedTabsReopenAtPinnedUrl: false });
+    const mail = tabOf("mail");
+    S().activate(mail);
+    S().updateTab(mail, { url: away, title: "Message" });
+    S().closeTab(mail);
+    assert.equal(S().tabs[mail].url, away);
+    assert.equal(S().tabs[mail].page.kind, "asleep");
+  });
+  a.with(() => S().updateTab(tabOf("row"), { customTitle: "Renamed" }));
+  await syncAll([a, b]);
+  b.with(() => {
+    assert.equal(S().tabs[tabOf("row")].customTitle, "Renamed", "the edit arrived");
+    assert.equal(S().tabs[tabOf("mail")].url, away, "and the closed pin kept its last page");
+  });
+  b.with(() => S().updateSettings({ pinnedTabsReopenAtPinnedUrl: true }));
+  a.with(() => S().updateTab(tabOf("row"), { customTitle: "Renamed again" }));
+  await syncAll([a, b]);
+  b.with(() => assert.equal(S().tabs[tabOf("mail")].url, "https://mail.example/", "on again, the next edit sends it home"));
+});

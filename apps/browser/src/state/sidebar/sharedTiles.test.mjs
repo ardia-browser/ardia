@@ -67,3 +67,30 @@ test("a Playing now card shown on every profile's page stays put through a swipe
   assert.equal(at(lone.transform[0].translateX, 0.5), 0, "with no neighbour the card rides its page");
   assert.equal(at(lone.opacity, 0.5), 1);
 });
+
+test("a card raised by one page's docked New Tab row and a lower one on a short page meet halfway, so the handoff never jumps up or down", () => {
+  const width = 260;
+  const pos = new Animated.Value(0);
+  const page = (slot, p) => (p - slot) * -width;
+  const tall = { top: 600 };
+  const short = { top: 640 };
+  const overflowing = stationaryPlayerMotion(pos, 0, width, { before: false, after: true }, { before: 0, after: short.top - tall.top });
+  const shortPage = stationaryPlayerMotion(pos, 1, width, { before: true, after: false }, { before: tall.top - short.top, after: 0 });
+  const seen = (p) => {
+    const shown = at(overflowing.opacity, p) === 1 ? [overflowing, 0, tall] : [shortPage, 1, short];
+    const [motion, slot, own] = shown;
+    return { x: page(slot, p) + at(motion.transform[0].translateX, p), y: own.top + at(motion.transform[1].translateY, p) };
+  };
+  assert.deepEqual(seen(0), { x: 0, y: tall.top });
+  assert.deepEqual(seen(1), { x: 0, y: short.top });
+  let last = seen(0).y;
+  for (let p = 0.05; p <= 1.0001; p += 0.05) {
+    const { x, y } = seen(p);
+    assert.ok(Math.abs(x) < 1e-9, `the card holds its place across at ${p}`);
+    assert.ok(y - last >= 0 && y - last <= 2 + 1e-9, `it moves down at most 2 pt a twentieth of the swipe at ${p}, never a jump (from ${last} to ${y})`);
+    last = y;
+  }
+  const below = seen(0.4999).y;
+  const above = seen(0.5001).y;
+  assert.ok(Math.abs(above - below) < 0.1, `both cards sit at the same height at the handoff (${below} and ${above})`);
+});

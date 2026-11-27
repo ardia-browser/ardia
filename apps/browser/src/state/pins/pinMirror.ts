@@ -10,6 +10,7 @@ import type { BrowserWindow, SplitView, Tab, TabGroup } from "../browser/types";
 import { samePage } from "../../lib/url";
 import { isRegularWindow } from "../windows/small";
 import { tileFolderOf } from "./tileFolders";
+import { keepsLastPage } from "./pinHomes";
 
 export type Item = { tab: Tab; group: string | null };
 export type Section = { items: Item[]; groups: Map<string, { group: TabGroup; parent: string | null }>; own: TabGroup[]; duplicate?: boolean; splits?: PinnedSplit[] };
@@ -248,7 +249,8 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
       reopenAtPinnedUrl: src.reopenAtPinnedUrl,
     };
     patch.pinnedUrl = src.pinnedUrl || (tile ? src.url : null) || null;
-    if (tile && !hasPage(t) && !samePage(t.url, pinHomeOf(src))) Object.assign(patch, { url: pinHomeOf(src), title: src.title, favicon: src.favicon });
+    const keptPage = keepsLastPage(s.settings, { url: t.url, pinnedUrl: t.pinnedUrl, reopenAtPinnedUrl: src.reopenAtPinnedUrl });
+    if (tile && !hasPage(t) && !keptPage && !samePage(t.url, pinHomeOf(src))) Object.assign(patch, { url: pinHomeOf(src), title: src.title, favicon: src.favicon });
     tabs[t.id] = { ...t, ...patch };
     return t.id;
   };

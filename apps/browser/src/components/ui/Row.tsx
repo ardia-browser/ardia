@@ -28,7 +28,8 @@ export function Row({
   const { hovered, hoverProps } = useHover();
   const native = useNativeForm();
   const label = accessibilityLabel ?? (typeof title === "string" ? title : undefined);
-  const pressLabel = accessibilityLabel ?? ([label, typeof description === "string" ? description : null].filter(Boolean).join(", ") || undefined);
+  const plainText = typeof title === "string" && (description === undefined || description === null || typeof description === "string");
+  const pressLabel = accessibilityLabel ?? (plainText ? [title, description].filter(Boolean).join(", ") : undefined);
   const hasControls = children !== undefined && children !== null && children !== false;
   const body = (
     <View

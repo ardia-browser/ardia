@@ -14,8 +14,8 @@ import { newTabHome } from "../tabs/newTabHome";
 import { groupingOnto } from "../pins/placing";
 import type { CloseOptions } from "../tabs/tabs";
 import { isRegularWindow } from "../windows/small";
-import { noteSharedGroupUngroup } from "../telemetry/sharedGroupCounts";
-import { keepUngroupedTabs } from "./sharedUngroupSplits";
+import { noteSharedGroupUngroup, noteSharedGroupUnpin } from "../telemetry/sharedGroupCounts";
+import { keepUngroupedTabs, unpinsMirrors, withMirrorsUnpinned } from "./sharedUngroupSplits";
 
 export { ancestorIds, canNest, commonGroup, depthOf, depthsIn, descendantIds, groupPath, innermostGroupOf, nestGroups, reparent, rootOf, rootsIn, withParent } from "./groupNesting";
 
@@ -169,6 +169,7 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
   },
 
   updateGroup(id, patch) {
+    let mirrored = false;
     set((s) => {
       const g = s.groups[id];
       if (!g) return {};
@@ -178,9 +179,13 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
       const groups = withoutShownTabs({ ...s.groups, [id]: { ...g, ...patch } }, reset);
       const w = s.windows[g.windowId];
       if (patch.pinned === undefined || patch.pinned === g.pinned || !w) return { groups };
-      const window = { ...w, tabIds: orderSections(w.tabIds, s.tabs, groups) };
-      return { groups: syncGroupOrder(groups, window), windows: { ...s.windows, [w.id]: window } };
+      const nested = nestGroups(groups);
+      const window = { ...w, tabIds: orderSections(w.tabIds, s.tabs, nested) };
+      const local = { ...s, groups: syncGroupOrder(nested, window), windows: { ...s.windows, [w.id]: window } };
+      mirrored = unpinsMirrors(s, local, id);
+      return withMirrorsUnpinned(s, local, id);
     });
+    if (mirrored) noteSharedGroupUnpin();
   },
 
   addTabsToGroup(groupId, tabIds) {
@@ -300,7 +305,13 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
   },
 
   moveGroup(groupId, p) {
-    set((s) => movingGroup(s, groupId, p));
+    let mirrored = false;
+    set((s) => {
+      const moved = movingGroup(s, groupId, p);
+      mirrored = unpinsMirrors(s, { ...s, ...moved }, groupId);
+      return moved;
+    });
+    if (mirrored) noteSharedGroupUnpin();
   },
 
   duplicateGroup(groupId) {

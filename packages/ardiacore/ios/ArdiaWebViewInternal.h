@@ -3,6 +3,7 @@
 #import "ArdiaNowPlaying.h"
 #import "ArdiaTabLifecycle.h"
 #include "ArdiaAutoPictureInPictureHold.h"
+#include "ArdiaBlankWindowNotes.h"
 
 enum class ArdiaPageFocus { Unknown, Page, DevTools, Elsewhere };
 
@@ -181,8 +182,11 @@ struct ArdiaPageFocusState {
   BOOL _pinned;
   NSView *_devtoolsView;
   CFTimeInterval _linkDropAt;
+  CFTimeInterval _autoplayBlockedAt;
+  NSMutableDictionary<NSString *, NSNumber *> *_trustedInputAt;
   ArdiaElementPick _elementPick;
   NSMutableArray<NSDictionary<NSString *, id> *> *_newTabLinks;
+  ardia_blank_window_notes::Pairing _blankWindowNotes;
   id _sightObserver;
   id _interfaceScaleObserver;
 }
@@ -232,7 +236,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
               disposition:(NSString *)disposition
                      link:(BOOL)link
                     tries:(int)tries;
-- (void)noteNewTabLink:(nullable NSString *)url;
+- (void)noteNewTabLink:(nullable NSString *)url blankWindow:(BOOL)blankWindow;
 - (void)tabRemovedFromWindow:(ArdiaCoreWindow *)window;
 - (void)tabActivatedByChrome:(BOOL)chromes;
 - (void)devToolsChanged:(NSView *)devToolsView;
@@ -338,6 +342,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (BOOL)sameSiteFrame:(BOOL)main origin:(NSString *)origin;
 - (void)callFrame:(NSString *)frameId kind:(NSString *)kind json:(NSString *)json;
 - (void)resetPageMedia;
+- (nullable NSNumber *)trustedInputAgeMsForOrigin:(NSString *)origin;
 @end
 
 @interface ArdiaWebView (PeekInternal)

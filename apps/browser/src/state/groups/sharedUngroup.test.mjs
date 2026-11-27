@@ -350,7 +350,7 @@ function ownersKept(owners, familyOf, at) {
   }
 }
 
-test("across 200 generated layouts, ungrouping a shared folder never drops a tab that owns a page or takes another tab's address", () => {
+for (const action of ["ungrouping", "unpinning"]) test(`across 200 generated layouts, ${action} a shared folder never drops a tab that owns a page or takes another tab's address`, () => {
   for (let seed = 1; seed <= 200; seed++) {
     const { from, key, split } = generatedLayout(seed);
     const before = S();
@@ -359,20 +359,55 @@ test("across 200 generated layouts, ungrouping a shared folder never drops a tab
     for (const t of Object.values(before.tabs)) families.set(familyKeyOf(t), new Set([...(families.get(familyKeyOf(t)) ?? []), t.url]));
     const familyOf = Object.fromEntries(Object.values(before.tabs).map((t) => [t.id, familyKeyOf(t)]));
     const closed = before.closedTabs.length;
-    S().ungroup(from.id);
+    if (action === "ungrouping") S().ungroup(from.id);
+    else S().updateGroup(from.id, { pinned: false });
     const at = `seed ${seed}`;
     assert.equal(S().closedTabs.length, closed, `${at}: nothing goes to Recently Closed`);
-    ownersKept(owners, familyOf, `${at}: after ungroup`);
+    ownersKept(owners, familyOf, `${at}: after ${action}`);
     for (const t of Object.values(S().tabs)) if (familyOf[t.id]) assert.ok(families.get(familyOf[t.id]).has(t.url), `${at}: ${t.id} keeps an address of its own tab`);
     for (const t of Object.values(S().tabs)) if (before.tabs[t.id] && (hasOwnOrSharedPage(before.tabs[t.id]) || wakeOf(before.tabs[t.id]))) assert.equal(t.url, before.tabs[t.id].url, `${at}: ${t.id} keeps its own address`);
     assert.ok(!Object.values(S().groups).some((g) => g.pinned && pinKeyOf(g) === key), `${at}: no folder is left`);
     if (split) {
-      assert.ok(Object.values(S().splits).some((v) => v.windowId === from.windowId), `${at}: the split stays in the window it was ungrouped from`);
+      assert.ok(Object.values(S().splits).some((v) => v.windowId === from.windowId), `${at}: the split stays in the window it was ${action === "ungrouping" ? "ungrouped" : "unpinned"} from`);
       assert.ok(Object.values(S().splits).every((v) => v.windowId === from.windowId), `${at}: the split stays in one window`);
     }
     for (const v of Object.values(S().splits)) S().separateSplit(v.id);
     ownersKept(owners, familyOf, `${at}: once the split is separated`);
   }
+});
+
+for (const origin of ["original window", "mirror window"]) {
+  test(`unpinning a shared pinned folder from its ${origin} keeps its tabs in every window, as a regular folder`, () => {
+    const { a, b, all, one, two, group } = windows(true, 3);
+    const before = Object.fromEntries([one, two].map((id) => [id, S().tabs[id].page.nav]));
+    const key = pinKeyOf(S().groups[group]);
+    const closed = S().closedTabs.length;
+    S().updateGroup(groupIn(origin === "original window" ? b : a, key).id, { pinned: false });
+    for (const w of all) {
+      const folder = groupIn(w, key);
+      assert.ok(folder && !folder.pinned, "each window keeps the folder, unpinned");
+      for (const id of [one, two]) assert.equal(rows(w).filter((t) => pinKeyOf(t) === id).length, 1, "each tab listed once");
+    }
+    for (const id of [one, two]) assert.deepEqual(S().tabs[id].page.nav, before[id], "the live pages stay, without a reload");
+    assert.equal(S().closedTabs.length, closed);
+  });
+}
+
+test("unpinning a shared folder keeps an adopted copy in a third window", () => {
+  const { a, b, all, group } = windows(true, 3);
+  const key = pinKeyOf(S().groups[group]);
+  const third = all.find((w) => w !== a && w !== b);
+  const copy = groupIn(third, key).tabIds[0];
+  useBrowser.setState((st) => {
+    const tabs = { ...st.tabs };
+    for (const t of Object.values(st.tabs)) if (pinKeyOf(t) === pinKeyOf(st.tabs[copy]) && t.id !== copy) tabs[t.id] = { ...t, page: ASLEEP };
+    tabs[copy] = { ...st.tabs[copy], page: adoptedPage(`restore:old-${copy}`, navigationTo(st.tabs[copy].url)) };
+    return { tabs };
+  });
+  assert.equal(adoptOf(S().tabs[copy]), `restore:old-${copy}`, "the copy is the tab's only page, adopted after a relaunch");
+  S().updateGroup(groupIn(b, key).id, { pinned: false });
+  const kept = Object.values(S().tabs).some((t) => adoptOf(t) === `restore:old-${copy}` || pendingRestore(t) === `old-${copy}` || (t.id === copy && hasPage(t)));
+  assert.ok(kept, "the adopted page is still open");
 });
 
 test("without shared tabs, ungrouping a pinned folder keeps its tabs in the invoking window", () => {

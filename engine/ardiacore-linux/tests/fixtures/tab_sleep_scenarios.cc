@@ -74,17 +74,18 @@ void SleepsAnEligibleTab() {
   assert(w.discarding.reasons[0] == policies::DiscardEligibilityPolicy::DiscardReason::PROACTIVE);
 }
 
-void AnAsleepTabIsAlreadyDone() {
+void AnAsleepTabIsNeverAFreshSleep() {
   World w;
   assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)).empty());
   w.contents.discarded = true;
-  PerformanceManager::page = nullptr;
+  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)) == kUnavailable);
+  assert(Codes(SleepLinuxTabIfUnused(&w.contents, 3600, {})) == kUnavailable);
   w.eligibility.result = policies::CanDiscardResult::kProtected;
-  w.eligibility.reasons = {policies::CannotDiscardReason::kVisible};
-  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)).empty());
+  w.eligibility.reasons = {policies::CannotDiscardReason::kNotificationsEnabled};
+  assert(Codes(SleepLinuxTabIfUnused(&w.contents, 3600, {})) == kUnavailable);
   assert(w.discarding.discarded.size() == 1);
   PerformanceManager::available = false;
-  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)).empty());
+  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)) == kUnavailable);
 }
 
 void ReportsWhatKeptIt() {
@@ -128,13 +129,58 @@ void UnavailableWithoutChrome() {
   }
 }
 
+void HardKeepsRefuseEvenWhenChromeWouldSleep() {
+  World w;
+  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 60, {.posted_document = true, .before_unload = true, .download = true})) == (std::vector<int>{100, 101, 102}));
+  assert(Codes(SleepLinuxTabIfUnused(&w.contents, 60, {.download = true})) == (std::vector<int>{102}));
+  assert(w.discarding.discarded.empty());
+}
+
+void UnusedPassesOnlySoftKeeps() {
+  using R = policies::CannotDiscardReason;
+  {
+    World w;
+    w.eligibility.result = policies::CanDiscardResult::kProtected;
+    w.eligibility.reasons = {R::kNotificationsEnabled, R::kBackgroundActivity, R::kPinnedTab};
+    assert(Codes(SleepLinuxTabIfHidden(&w.contents, 60)) == (std::vector<int>{13, 25, 23}));
+    assert(w.discarding.discarded.empty());
+    assert(Codes(SleepLinuxTabIfUnused(&w.contents, 60, {})) == (std::vector<int>{kLinuxSleptPastSoftKeeps}));
+    assert(w.discarding.discarded.size() == 1 && w.discarding.reasons[0] == policies::DiscardEligibilityPolicy::DiscardReason::EXTERNAL);
+  }
+  {
+    World w;
+    w.eligibility.result = policies::CanDiscardResult::kProtected;
+    w.eligibility.reasons = {R::kNotificationsEnabled, R::kFormInteractions};
+    assert(Codes(SleepLinuxTabIfUnused(&w.contents, 60, {})) == (std::vector<int>{13, 26}));
+    w.eligibility.reasons = {R::kBackgroundActivity};
+    assert(Codes(SleepLinuxTabIfUnused(&w.contents, 60, {.before_unload = true})) == (std::vector<int>{101, 25}));
+    w.eligibility.reasons = {R::kVisible};
+    assert(Codes(SleepLinuxTabIfUnused(&w.contents, 60, {})) == (std::vector<int>{3}));
+    assert(w.discarding.discarded.empty());
+  }
+  {
+    World w;
+    w.eligibility.result = policies::CanDiscardResult::kProtected;
+    w.eligibility.reasons = {R::kNotificationsEnabled};
+    w.discarding.succeed = false;
+    assert(Codes(SleepLinuxTabIfUnused(&w.contents, 60, {})) == (std::vector<int>{13}));
+  }
+  {
+    World w;
+    assert(Codes(SleepLinuxTabIfUnused(&w.contents, 60, {})).empty());
+    assert(w.discarding.reasons[0] == policies::DiscardEligibilityPolicy::DiscardReason::PROACTIVE);
+  }
+}
+
 }
 
 int main() {
   ParsesHiddenTime();
   SleepsAnEligibleTab();
-  AnAsleepTabIsAlreadyDone();
+  AnAsleepTabIsNeverAFreshSleep();
   ReportsWhatKeptIt();
   UnavailableWithoutChrome();
+  HardKeepsRefuseEvenWhenChromeWouldSleep();
+  UnusedPassesOnlySoftKeeps();
   std::puts("tab sleep scenarios passed");
 }

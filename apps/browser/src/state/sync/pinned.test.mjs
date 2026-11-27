@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const folders = await import("../pins/tileFolders.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, startRebase, syncScope } = await import("@ardia/sync");
 const pinnedArea = await import("./pinned.ts");
 const previous = await import("./fixtures/pinned-v0.2.40.ts");
 
@@ -494,4 +494,44 @@ test("a synced pinned URL edit that only drops a trailing slash still drops the 
     assert.equal(mail.url, "https://mail.example/section");
     assert.equal(mail.page.wake, undefined);
   });
+});
+
+test("a rebase gives a pinned group tab the synced home back over the older one a restored session holds", async () => {
+  const folder = new Folder();
+  const sessionBacked = () => pinnedArea.pinnedAreaAdapters("default").map((adapter) => ({ ...adapter, sessionBacked: true }));
+  const a = new Device("devA", folder, sessionBacked);
+  const b = new Device("devB", folder, sessionBacked);
+  const m = seedGroup(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([a, b]);
+  assert.equal(memberOf(b, m)?.pinnedUrl, "https://start.example/");
+  const older = b.browser;
+  a.with(() => S().setPinnedUrl(m));
+  await syncAll([a, b]);
+  assert.equal(memberOf(b, m)?.pinnedUrl, "https://later.example/");
+
+  b.browser = older;
+  startRebase(b.scope);
+  await syncAll([b, a]);
+  assert.equal(memberOf(b, m)?.pinnedUrl, "https://later.example/", "the restored session takes the synced home");
+  assert.equal(memberOf(a, m)?.pinnedUrl, "https://later.example/", "and the older home never goes out");
+  await syncAll([b, a]);
+  assert.equal(memberOf(a, m)?.pinnedUrl, "https://later.example/", "not on the cycles after the rebase either");
+});
+
+test("a rebase keeps a tile turned into a row here and not sent yet, since its choice is newer than the synced tile", async () => {
+  const folder = new Folder();
+  const sessionBacked = () => pinnedArea.pinnedAreaAdapters("default").map((adapter) => ({ ...adapter, sessionBacked: true }));
+  const a = new Device("devA", folder, sessionBacked);
+  const b = new Device("devB", folder, sessionBacked);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([a, b]);
+  assert.ok(area(b).includes("mail:tile"));
+  b.with(() => S().placeTabs([tabOf("mail")], { pinned: true, row: true }));
+  assert.ok(area(b).includes("mail:row"));
+  startRebase(b.scope);
+  await syncAll([b, a]);
+  assert.ok(area(b).includes("mail:row"), "the rebase keeps the row chosen here");
+  assert.ok(area(a).includes("mail:row"), "and it reaches the other Mac");
 });

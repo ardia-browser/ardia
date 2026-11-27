@@ -1,14 +1,89 @@
 import type { BrowserState } from "../browser/store";
-import type { Tab } from "../browser/types";
+import type { Tab, TabGroup } from "../browser/types";
 import { inPinnedContainer, newId, pinKeyOf } from "../browser/model";
 import { adoptOf, hasPage, holderOfPage, wakeOf } from "../tabs/pageSession";
 import { splitTabIds } from "../splits/splits";
 import { isRegularWindow } from "../windows/small";
 import { keepShownProfile, swapPlaces } from "../tabs/tabShare";
 import { removeTabs } from "../tabs/tabs";
+import { nestGroups, orderSections, syncGroupOrder, withParent } from "./groups";
+import { movingGroupHere } from "../pins/tabGrouping";
 
 export const keepUngroupedTabs = (s: BrowserState, homeId: string, members: Set<string>): BrowserState =>
   keepSameTabRows(keepOwnAddresses(keepSplitsHome(s, homeId, members), homeId, members), members);
+
+function unpinnedMirrors(before: BrowserState, after: BrowserState, groupId: string) {
+  const g = before.groups[groupId];
+  const w = g && before.windows[g.windowId];
+  if (!g?.pinned || after.groups[groupId]?.pinned !== false || !before.settings.shareTabsAcrossWindows || !isRegularWindow(w)) return [];
+  return Object.values(before.groups).filter((x) => x.id !== groupId && x.pinned && x.profileId === g.profileId && pinKeyOf(x) === pinKeyOf(g) && isRegularWindow(before.windows[x.windowId]));
+}
+
+export const unpinsMirrors = (before: BrowserState, after: BrowserState, groupId: string) => unpinnedMirrors(before, after, groupId).length > 0;
+
+export function withMirrorsUnpinned(before: BrowserState, after: BrowserState, groupId: string): BrowserState {
+  const mirrors = unpinnedMirrors(before, after, groupId);
+  if (!mirrors.length) return after;
+  const g = after.groups[groupId]!;
+  const block = new Set(g.tabIds);
+  const ids = after.windows[g.windowId]?.tabIds ?? [];
+  const end = ids.reduce((last, id, i) => (block.has(id) ? i : last), -1);
+  const followers = ids.slice(end + 1).map((id) => after.tabs[id]).filter((t): t is Tab => !!t && t.profileId === g.profileId && !t.pin && !inPinnedContainer(after, t.id));
+  const parent = g.parentId ? after.groups[g.parentId] : undefined;
+  let next = after;
+  for (const m of mirrors) {
+    const own = next.groups[m.id];
+    if (!own) continue;
+    let parentId: string | null = null;
+    if (parent) [next, parentId] = withCounterpart(next, parent, m.windowId);
+    const there = (next.windows[m.windowId]?.tabIds ?? []).filter((id) => !own.tabIds.includes(id) && next.tabs[id]?.profileId === m.profileId);
+    const beforeId = followers.map((f) => there.find((id) => pinKeyOf(next.tabs[id]!) === pinKeyOf(f))).find(Boolean) ?? null;
+    const moved = [{ pinned: false, parentId, beforeId }, { pinned: false, parentId, beforeId: null }, { pinned: false, parentId: null, beforeId: null }]
+      .map((p) => movingGroupHere(next, m.id, p))
+      .find((x) => Object.keys(x).length);
+    next = moved ? { ...next, ...moved } : withUnpinnedInPlace(next, m.id);
+  }
+  const unused = Object.values(next.groups).filter((x) => !after.groups[x.id] && !x.tabIds.length);
+  if (unused.length) {
+    const groups = { ...next.groups };
+    for (const x of unused) delete groups[x.id];
+    next = { ...next, groups };
+  }
+  return keepUngroupedTabs(next, g.windowId, new Set([before.groups[groupId]!, ...mirrors].flatMap((x) => x.tabIds)));
+}
+
+function withCounterpart(s: BrowserState, group: TabGroup, windowId: string): [BrowserState, string | null] {
+  const found = Object.values(s.groups).find((x) => x.windowId === windowId && x.profileId === group.profileId && !x.pinned && pinKeyOf(x) === pinKeyOf(group));
+  if (found) return [s, found.id];
+  if (group.pinned || !s.windows[windowId]) return [s, null];
+  const outer = group.parentId ? s.groups[group.parentId] : undefined;
+  const [withOuter, outerId] = outer ? withCounterpart(s, outer, windowId) : [s, null];
+  const id = newId("g");
+  const created: TabGroup = {
+    id,
+    windowId,
+    profileId: group.profileId,
+    pinKey: pinKeyOf(group),
+    name: group.name,
+    icon: group.icon,
+    color: group.color,
+    collapsed: group.collapsed,
+    pinned: false,
+    tabIds: [],
+    createdAt: Date.now(),
+    ...(outerId ? { parentId: outerId } : {}),
+  };
+  return [{ ...withOuter, groups: { ...withOuter.groups, [id]: created } }, id];
+}
+
+function withUnpinnedInPlace(s: BrowserState, groupId: string): BrowserState {
+  const m = s.groups[groupId]!;
+  const groups = nestGroups({ ...s.groups, [groupId]: withParent({ ...m, pinned: false }, undefined) });
+  const win = s.windows[m.windowId];
+  if (!win) return { ...s, groups };
+  const window = { ...win, tabIds: orderSections(win.tabIds, s.tabs, groups) };
+  return { ...s, groups: syncGroupOrder(groups, window), windows: { ...s.windows, [win.id]: window } };
+}
 
 const ownsPage = (t: Tab) => hasPage(t) || !!wakeOf(t);
 

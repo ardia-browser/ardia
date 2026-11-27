@@ -47,6 +47,17 @@ test("shared-folder ungroup counts one action across its mirrors and respects co
   s().updateSettings({ shareTabsAcrossWindows: true });
   s().ungroup(s().groupTabs([s().windows[only].tabIds[0]], { pinned: true }));
   assert.equal(work.takeWorkCounts().shared_groups_ungrouped, 0, "a folder in one window is not counted");
+  s().hydrate({});
+  const c = s().createWindow({ url: "https://four.example/" });
+  const d = s().createWindow({ url: "https://five.example/" });
+  s().updateSettings({ shareTabsAcrossWindows: true });
+  const pinned = s().groupTabs([s().windows[c].tabIds[0]], { pinned: true });
+  const copy = Object.values(s().groups).find((g) => g.windowId === d && pinKeyOf(g) === pinKeyOf(s().groups[pinned]));
+  work.takeWorkCounts();
+  s().updateGroup(copy.id, { pinned: false });
+  const unpinned = work.takeWorkCounts();
+  assert.equal(unpinned.shared_groups_unpinned, 1, "unpinning a shared folder counts once across its mirrors");
+  assert.equal(unpinned.shared_groups_ungrouped, 0);
   noteSharedGroupUngroup();
   client.setSharing(false, "settings");
   assert.equal(work.takeWorkCounts().shared_groups_ungrouped, 0, "stopping sharing drops pending counts");

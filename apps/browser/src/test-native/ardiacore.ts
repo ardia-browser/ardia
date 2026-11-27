@@ -15,6 +15,7 @@ import type {
   EngineTask,
   EventData,
   EventName,
+  ExtensionsLoadHealth,
   HistoryChange,
   HistoryChangedBatch,
   InstalledExtension,
@@ -405,6 +406,9 @@ export const extensionAnswers = {
   sidePanelUrl: async (_tabId: string, _extensionId: string, _profile?: string): Promise<string | null> => null,
   change: async (_verb: string, _id: string): Promise<void> => {},
   resolveInstallPrompt: async (_requestId: string, _accepted: boolean, _profile?: string): Promise<null> => null,
+  loadHealth: async (_profile: string): Promise<ExtensionsLoadHealth> => {
+    throw Object.assign(new Error("no extension load health in this test"), { code: "ERR_ENGINE" });
+  },
 };
 
 const tabStripHost = () => testGlobals.acTestTabStrip!;
@@ -660,6 +664,7 @@ const fakeModules = {
     resolveInstallPrompt: ({ requestId, accepted, profile }) => extensionAnswers.resolveInstallPrompt(requestId, accepted, profile),
     actionStates: ({ tabId, ids, profile }) => extensionAnswers.actionStates(tabId, ids, profile),
     sidePanelUrl: ({ tabId, extensionId, profile }) => extensionAnswers.sidePanelUrl(tabId, extensionId, profile),
+    loadHealth: ({ profile }) => extensionAnswers.loadHealth(profile),
     watchActions: () => null,
     syncState: () => ({ ready: false, extensions: [], pending: [], settling: [], queued: [], intents: [] }),
     syncApply: () => ({ state: "pending" }),

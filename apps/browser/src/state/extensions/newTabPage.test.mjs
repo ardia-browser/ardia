@@ -9,6 +9,7 @@ const { useExtensions } = await import("./store.ts");
 const { extensionNewTabPage, setExtensionNewTabLists, LIST_WAIT_MS } = await import("./newTabPage.ts");
 const { takeNewTabPageCounts } = await import("../telemetry/newTabPageCounts.ts");
 const { setOpeningGate } = await import("../tabs/openingGate.ts");
+const { cancelLateNewTabOverride } = await import("../tabs/newTabHome.ts");
 const client = await import("../telemetry/client.ts");
 client.loadChoice();
 client.setSharing(true, "onboarding");
@@ -191,4 +192,19 @@ test("#1126: an older New Tab extension turned back on keeps its place in Chromi
   const unranked = reset({}, [extension(CADRAN, "cadran.html"), extension(SPEED_DIAL, "dial.html", { newTabRank: 0 })]);
   S().newTab(unranked, { newTabCommand: true });
   assert.equal(shownUrl(unranked), `chrome-extension://${CADRAN}/cadran.html`, "only an entry missing from Preferences counts as newest, so the Mac ranks every entry it lists, active or not");
+});
+
+test("#1126: typing in the New Tab page's search field cancels the late extension page, so the draft stays", async () => {
+  const w = reset({}, []);
+  const profile = engineProfile(S(), S().windows[w].profileId);
+  useExtensions.setState({ lists: {} });
+  const drafting = S().newTab(w, { newTabCommand: true });
+  const untouched = S().newTab(w, { newTabCommand: true, background: true });
+  cancelLateNewTabOverride(drafting);
+  useExtensions.setState({ lists: { [profile]: [extension(SPEED_DIAL, "dial.html")] } });
+  assert.equal(S().tabs[drafting].url, "", "the tab with a draft keeps the New Tab page");
+  assert.equal(S().tabs[untouched].url, `chrome-extension://${SPEED_DIAL}/dial.html`, "another waiting tab still gets the page");
+  const { readFileSync } = await import("node:fs");
+  const omnibox = readFileSync(new URL("../../components/omnibox/Omnibox.tsx", import.meta.url), "utf8");
+  assert.match(omnibox, /if \(change\.echo\) \{[\s\S]*?return;\s*\}\s*if \(hero\) cancelLateNewTabOverride\(tabId\);/, "the New Tab field cancels on a real edit, after inline-completion echoes are set aside");
 });

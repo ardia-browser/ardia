@@ -20,10 +20,19 @@ export function newTabPageChoice(s: BrowserState, windowId: string, profileId?: 
   return choice;
 }
 
+const overridableTabs = new Set<string>();
+const MAX_OVERRIDABLE_TABS = 32;
+
+export const cancelLateNewTabOverride = (tabId: string) => void overridableTabs.delete(tabId);
+
 export function settleWhenListed(windowId: string, tabId: string, get: () => BrowserState) {
   const waited = get().tabs[tabId]?.profileId;
   if (!waited) return;
+  overridableTabs.delete(tabId);
+  overridableTabs.add(tabId);
+  if (overridableTabs.size > MAX_OVERRIDABLE_TABS) overridableTabs.delete(overridableTabs.values().next().value!);
   whenExtensionListKnown(get(), windowId, waited, () => {
+    if (!overridableTabs.delete(tabId)) return;
     const s = get();
     const tab = s.tabs[tabId];
     if (!tab || tab.profileId !== waited || tab.url || navigationOf(tab) || openingSignal(`tab:${tabId}`) || s.windowUi[tab.windowId]?.panel.open) return;

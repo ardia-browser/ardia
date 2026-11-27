@@ -86,6 +86,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   const [exportStatus, setExportStatus] = useState("");
   const profile = currentEngineProfile(profileId);
   const unlocked = usePasswordsUnlocked(profile);
+  const onApple = useProfilePasswordManager(profileId) === "apple";
   const arrived = useRef(0);
 
   const load = () => {
@@ -134,7 +135,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
     <ProfileSubPage>
       <SectionHeader
         title="Passwords"
-        description={`Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${PLATFORM_TERMS.passwordKey}.`}
+        description={onApple ? APPLE_PASSWORDS_PICKED : `Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${PLATFORM_TERMS.passwordKey}.`}
       />
       <Group>
         <Row title="Import passwords" description={importStatus || "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…"}>
@@ -311,6 +312,7 @@ function PasswordSheet({ profile, saved, onChanged }: { profile: string; saved: 
   );
 }
 
+const APPLE_PASSWORDS_PICKED = "These aren't used while Apple Passwords is this profile's password manager. They're kept, and fill again if you switch back to Ardia.";
 const HELP_ICON = { width: 20, height: 20 } as const;
 const LOCKED = { alignItems: "center", marginTop: settingsLayout.emptyTop } as const;
 const LOCK_ICON = { width: 36, height: 36 } as const;

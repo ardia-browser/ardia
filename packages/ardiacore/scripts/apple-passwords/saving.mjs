@@ -72,6 +72,28 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         await tab.close();
       }
     },
+    async E39() {
+      const { app, fake, tabs } = await session();
+      const login = { user: `toggled-${Date.now()}@save.test`, password: "fixture-pw-toggled-4" };
+      const choose = (manager) => app.eval(`ac.passwordManager.choosePasswordManager(ac.store.getState().settings.defaultProfileId, ${q(manager)}); return true;`);
+      await choose("ardia");
+      await app.eval(`return ac.settingsData.setPasswordAutofillFor("", false).then(() => true)`, { timeout: 20_000 });
+      await choose("apple");
+      const tab = await tabs.open(sites.url(SITE));
+      try {
+        await signIn(tab, login.user, login.password);
+        const prompt = await promptShown(tab);
+        assert(prompt.state === "save" && prompt.copy.title === SAVE_TITLE, `with Save and fill passwords stored off, the prompt still asks ${SAVE_TITLE}`, prompt);
+        assert(await tab.answer("save"), "Save is pressed", null);
+        await waitFor("the login in Apple Passwords", async () => fake.savedLogins().find((l) => l.user === login.user) ?? null, 20_000);
+        return { engine: engineName, title: prompt.copy.title };
+      } finally {
+        await tab.close();
+        await choose("ardia");
+        await app.eval(`return ac.settingsData.setPasswordAutofillFor("", true).then(() => true)`, { timeout: 20_000 });
+        await choose("apple");
+      }
+    },
     async E19() {
       const { app, fake, tabs } = await session();
       const kept = fixture("changed@save.test");

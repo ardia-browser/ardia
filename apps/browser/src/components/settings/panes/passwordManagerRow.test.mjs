@@ -48,7 +48,7 @@ test("a stored plugin that was removed says it isn't installed, never to turn it
 
 test("offer to save stays Ardia's own on Apple Passwords, and is handed over for None and plugins", () => {
   assert.equal(offerToSaveHandedOver("ardia", [MANAGER]), null);
-  assert.equal(offerToSaveHandedOver("apple", [MANAGER]), null);
+  assert.match(offerToSaveHandedOver("apple", [MANAGER]), /^Apple Passwords handles saving/);
   assert.match(offerToSaveHandedOver("none", [MANAGER]), /extension handles logins/);
   assert.match(offerToSaveHandedOver("plugin:password-manager", [MANAGER]), /^Test Passwords handles logins/);
 });

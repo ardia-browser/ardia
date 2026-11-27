@@ -234,3 +234,31 @@ test("story 6: a profile from before the update stays on Ardia once Apple Passwo
   assert.equal(statusOf(profileId), null, "and shows no Apple Passwords status");
   assert.deepEqual(native.applePasswords.calls.filter((c) => c === "pair"), [], "nothing starts Pairing by itself");
 });
+
+const { PasswordsSection, PasswordsPage } = await import("./ProfilePasswords.tsx");
+
+function saveToggle(profileId) {
+  const [row] = find(render(mount(() => PasswordsSection({ profileId })).value), (n) => n.type === form.Row && n.props.anchor === "profiles.offerToSavePasswords");
+  const [toggle] = find(row, (n) => n.type === ui.Toggle);
+  return { note: row.props.description, value: toggle.props.value, disabled: !!toggle.props.disabled };
+}
+
+test("story 9: with Apple Passwords picked, Save and fill passwords is off and can't be changed, and says Apple Passwords handles saving", async () => {
+  const profileId = await settingsOn("connected");
+  assert.equal(saveToggle(profileId).disabled, false, "on Ardia the toggle is live");
+  S().updateProfile(profileId, { passwordManager: "apple" });
+  await flush();
+  const toggle = saveToggle(profileId);
+  assert.equal(toggle.disabled, true);
+  assert.equal(toggle.value, false);
+  assert.match(toggle.note, /^Apple Passwords handles saving/);
+});
+
+test("story 9: Ardia's saved-password list says its passwords aren't used while Apple Passwords is picked", async () => {
+  const profileId = await settingsOn("connected");
+  const texts = () => find(render(mount(() => PasswordsPage({ profileId })).value), (n) => n.type === form.SectionHeader).map((n) => n.props.description ?? "");
+  assert.ok(!texts().some((t) => /Apple Passwords/.test(t)), "no note on Ardia");
+  S().updateProfile(profileId, { passwordManager: "apple" });
+  await flush();
+  assert.ok(texts().some((t) => /aren't used while Apple Passwords is this profile's password manager/.test(t)), texts().join(" | "));
+});

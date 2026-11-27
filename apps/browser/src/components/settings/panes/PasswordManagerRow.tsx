@@ -76,6 +76,7 @@ function PasswordManagerChoiceRow({ profileId }: { profileId: string }) {
 }
 
 export function offerToSaveHandedOver(effective: PasswordManagerChoice, plugins: readonly ManagerPlugin[]): string | null {
+  if (effective === "apple") return "Apple Passwords handles saving and filling logins in this profile.";
   if (keepsOfferToSave(effective)) return null;
   if (effective === "none") return "Your password manager extension handles logins in this profile, so Ardia doesn't offer to save them.";
   const plugin = plugins.find((p) => `plugin:${p.name}` === effective);

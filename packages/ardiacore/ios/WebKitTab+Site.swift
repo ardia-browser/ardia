@@ -12,7 +12,7 @@ extension WebKitTab {
     if kind == "selection" { return noteSelection(data, main: frameInfo.isMainFrame) }
     guard let data else { return }
     switch kind {
-    case "loginField": WebKitHub.shared.logins.fieldPressed(self, data: data, frame: frameInfo)
+    case "loginField": if frameInfo.isMainFrame || ApplePasswordsProfiles.contains(profile) { WebKitHub.shared.logins.fieldPressed(self, data: data, frame: frameInfo) }
     case "loginSubmit": if frameInfo.isMainFrame { WebKitHub.shared.logins.submitted(self, data: data, origin: frameInfo.securityOrigin) }
     case "notification": if frameInfo.isMainFrame { WebKitHub.shared.notifications.received(data, from: self, sender: frameInfo.securityOrigin) }
     case "appBadge": if frameInfo.isMainFrame { noteAppBadge(data, origin: frameInfo.securityOrigin) }

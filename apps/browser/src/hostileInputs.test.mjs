@@ -31,6 +31,7 @@ const { parseIntent, INTENT_SPECS } = await import("./state/plugins/stateIntents
 const { pluginStateUrl, redactedTabs } = await import("./state/plugins/pluginEventRedaction.ts");
 const { copyLinkFromPageMenu } = await import("./state/site/pageLinkCopy.ts");
 const { extensionSitePattern } = await import("./state/extensions/sitePatterns.ts");
+const { extensionNewTabPage } = await import("./state/extensions/newTabPage.ts");
 const { cleanUrl } = await import("@ardia/core");
 const { drainPassages } = await import("./state/site/translateDrain.ts");
 const { translatePack } = await import("./state/site/translate.ts");
@@ -1014,4 +1015,70 @@ test("T3: whatever the page hands over as passages, the model only gets numbered
     assert.equal(untouched.nodeValue, "Nicht angeboten", id);
     for (const node of texts) assert.equal(typeof node.nodeValue, "string", id);
   }
+});
+
+test("N1: whatever an extension's manifest names as its New Tab page, a real new tab opens only a page inside that extension", async () => {
+  const { useExtensions } = await import("./state/extensions/store.ts");
+  const { engineProfile } = await import("./state/browser/model.ts");
+  const id = "imfeikbeimbfpmgfkkmjekabdehiiajc";
+  const prefix = `chrome-extension://${id}/`;
+  S().updateSettings({ newTabUrl: "", newTabOpens: "page", minimalismMode: false });
+  const w = S().createWindow({ url: "https://ardia-fixture.invalid/" });
+  const profile = engineProfile(S(), S().windows[w].profileId);
+  const openWith = (ext) => {
+    useExtensions.setState({ lists: { [profile]: [ext] } });
+    const tabId = S().newTab(w, { newTabCommand: true });
+    const url = S().tabs[tabId]?.url ?? "";
+    S().closeTab(tabId);
+    return url;
+  };
+  const corpus = [...HOSTILE_VALUES, ...HOSTILE_STRINGS.map(({ id: name, value }) => ({ id: `nested.${name}`, value: `app/${value}/page.html` }))];
+  let opened = 0;
+  for (const { id: name, value } of corpus) {
+    const url = openWith({ id, name: "Speed Dial", enabled: true, newTabPage: value });
+    if (!url) continue;
+    opened++;
+    assert.ok(url.startsWith(prefix) && new URL(url).host === id && new URL(url).href.startsWith(prefix), `${name}: ${url}`);
+    assert.doesNotMatch(url, /[\s\\\u0000-\u001f\u2028\u2029]/, name);
+  }
+  for (const { id: name, value } of HOSTILE_VALUES) assert.equal(openWith({ id: value, name: "Speed Dial", enabled: true, newTabPage: "dial.html" }), "", `hostile id ${name}`);
+  assert.equal(openWith({ id, name: "Speed Dial", enabled: true, newTabPage: "dial.html" }), `${prefix}dial.html`, "the positive control opens through the same path");
+  assert.ok(opened > 0, "some hostile names are plain file names inside the extension and open, so the sink check ran");
+  useExtensions.setState({ lists: {} });
+});
+
+test("a full-screen transition event with any hostile field is dropped before it reaches the counters, and a well-formed one still counts", async () => {
+  const client = await import("./state/telemetry/client.ts");
+  const placement = await import("./state/telemetry/windowPlacementCounts.ts");
+  const { fullScreenTransitionOf } = await import("../../../packages/ardiacore/src/pageEvents.ts");
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const epoch = client.consentEpoch();
+  const counts = () => {
+    const { page_full_screen_starts, page_full_screen_slow_starts } = placement.takeWindowPlacementCounts();
+    return [page_full_screen_starts, page_full_screen_slow_starts];
+  };
+  counts();
+  const expected = [0, 0];
+  for (const { value } of HOSTILE_VALUES) {
+    for (const payload of [value, { entering: value, waitedMs: 900, epoch }, { entering: true, waitedMs: value, epoch }, { entering: true, waitedMs: 900, epoch: value }, [value]]) {
+      const decoded = fullScreenTransitionOf(payload);
+      assert.ok(decoded === null || (decoded.entering === payload.entering && decoded.waitedMs === payload.waitedMs && decoded.epoch === payload.epoch), show(payload));
+      assert.ok(decoded === null || (typeof decoded.entering === "boolean" && Number.isFinite(decoded.waitedMs) && decoded.waitedMs >= 0 && typeof decoded.epoch === "string"), show(payload));
+      if (decoded?.entering && decoded.epoch === epoch) {
+        expected[0]++;
+        if (decoded.waitedMs >= placement.SLOW_PAGE_FULL_SCREEN_START_MS) expected[1]++;
+      }
+      placement.notePageFullScreenTransition(decoded);
+    }
+  }
+  assert.deepEqual(counts(), expected);
+  for (const bad of [{ entering: 1, waitedMs: 900, epoch }, { entering: "true", waitedMs: 900, epoch }, { entering: true, waitedMs: -1, epoch }, { entering: true, waitedMs: Infinity, epoch }, { entering: true, waitedMs: "900", epoch }, { entering: true, waitedMs: 900 }]) {
+    assert.equal(fullScreenTransitionOf(bad), null, show(bad));
+    placement.notePageFullScreenTransition(fullScreenTransitionOf(bad));
+  }
+  assert.deepEqual(counts(), [0, 0]);
+  placement.notePageFullScreenTransition(fullScreenTransitionOf({ entering: true, waitedMs: 900, epoch }));
+  assert.deepEqual(counts(), [1, 1]);
+  client.setSharing(false, "settings");
 });

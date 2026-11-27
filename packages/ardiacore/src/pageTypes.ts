@@ -3,6 +3,8 @@ import type { ExternalAppRequest } from "./permissions";
 import type { FaviconImage } from "./favicons";
 import type { ChromiumSiteDataReply, ChromiumSiteDataRequest, PageCookie, PageEngine } from "./webkit";
 
+export type FullScreenTransition = { entering: boolean; waitedMs: number; epoch: string };
+
 export type NavigationState = {
   url: string;
   title: string;
@@ -215,6 +217,7 @@ export type WebViewProps = ViewProps & {
   onPopupBlocked?: (popup: BlockedPopup) => void;
   onFindResult?: (result: FindResult) => void;
   onFullscreen?: (fullscreen: boolean) => void;
+  onFullScreenTransition?: (transition: FullScreenTransition | null) => void;
   onStatus?: (text: string, fromBottom: number | null) => void;
   onCrashed?: (info: CrashInfo) => void;
   onUnresponsive?: () => void;

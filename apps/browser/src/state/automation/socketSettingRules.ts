@@ -29,7 +29,7 @@ function websiteEngines(value: unknown): Checked {
 
 function newTabUrl(value: unknown): Checked {
   const url = (value as string).trim();
-  if (url && !customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: url })) return { problem: "newTabUrl: a New Tab page is an http or https address, about:blank or an Ardia page" };
+  if (url && !customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: url })) return { problem: "newTabUrl: a New Tab page is an http or https address, about:blank, an extension page or an Ardia page" };
   return { patch: { newTabUrl: url } };
 }
 

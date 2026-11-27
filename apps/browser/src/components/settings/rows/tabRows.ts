@@ -132,8 +132,10 @@ export const tabRows = {
         newTabUrl: {
           title: "Custom address",
           explained: true,
-          description: "A page to open instead of the New Tab page. Leave empty for the default.",
-          keywords: ["custom new tab", "new tab url", "home page", "homepage", "start page", "custom url", "cmd t", "new tab page address"],
+          description: PLATFORM_FEATURES.extensionNewTabOverride
+            ? "A page to open instead of the New Tab page: a web address or an extension's page. Leave empty for the default, or for the page a New Tab extension sets."
+            : "A page to open instead of the New Tab page: a web address or an extension's page. Leave empty for the default.",
+          keywords: ["custom new tab", "new tab url", "home page", "homepage", "start page", "custom url", "cmd t", "new tab page address", "extension", "chrome-extension", "speed dial"],
           shown: (s) => newTabOpensOf(s) === "page",
           needs: "Set New tab opens to New Tab page",
         },

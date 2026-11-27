@@ -6,6 +6,7 @@ import { StyleSheet } from "react-native";
 import { focus, switchToTab } from "../../state/browser/actions";
 import { notePictureInPictureActivated, notePictureInPictureBackToTab, notePictureInPictureClickSkip, notePictureInPictureDragged, notePictureInPictureHandleUnstash, notePictureInPictureReleased, notePictureInPictureResized, notePictureInPictureStandIn } from "../../state/telemetry/pictureInPictureCounts";
 import { noteRendererResponsive, noteRendererUnresponsive } from "../../state/telemetry/freezes";
+import { notePageFullScreenTransition } from "../../state/telemetry/windowPlacementCounts";
 import { noteFavicon } from "../../state/favicons/favicons";
 import { adoptIconPage, dropOutlivedFavicon, noteIconPage } from "../../state/favicons/iconPage";
 import { endThemeHold, heldThemeColor } from "../../state/windows/launchLook";
@@ -336,6 +337,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         patchPage(tabId, { unresponsive: false });
       }}
       onFullscreen={(fullscreen) => patchPage(tabId, { fullscreen })}
+      onFullScreenTransition={notePageFullScreenTransition}
       onMediaAccess={(mediaAccess) => patchPage(tabId, { mediaAccess: mediaAccess.camera || mediaAccess.microphone || mediaAccess.screen ? mediaAccess : null })}
       onSecurity={(security) => !prewarmOnly() && patchPage(tabId, { security })}
       onContentBlocked={({ count }) => patchPage(tabId, { blocked: count })}

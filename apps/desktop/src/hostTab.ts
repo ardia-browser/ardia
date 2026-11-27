@@ -2,7 +2,7 @@ import type { ArdiaHost } from "./host";
 import type { CornerRadii } from "./hostExtensionView";
 import { enqueueTab } from "./hostTabQueue.ts";
 import { queueTabPresentation } from "./hostTabPresentations.ts";
-import { hostProfile, hostSupports, invokeHost } from "./host.ts";
+import { hostProfile, hostSupports, invokeHost, reportHostError } from "./host.ts";
 import { consentToken, type ConsentToken } from "../../browser/src/state/telemetry/client";
 import { noteLinuxPageViewportRejected } from "../../browser/src/state/telemetry/windowPlacementCounts";
 import { errorFor } from "../../browser/src/state/telemetry/logs";
@@ -38,6 +38,11 @@ function nativeAdoptId(adoptId: string | undefined, host: ArdiaHost): string | u
   return ADOPTED_AS_COPIES.includes(kind) && hostSupports("tab.adoptCopies", host) ? adoptId : undefined;
 }
 const UNORDERED_COMMANDS = new Set(["downloadFavicon", "webStoreRequest"]);
+type HeldViewport = { promise: Promise<TabViewport | null>; settle(result: Promise<TabViewport | null> | null): void };
+class HeldWhileClosed {
+  promise: Promise<TabViewport | null>;
+  constructor(promise: Promise<TabViewport | null>) { this.promise = promise; }
+}
 
 export class HostTab {
   host: ArdiaHost;
@@ -51,6 +56,10 @@ export class HostTab {
   nextViewport: TabViewport | undefined;
   viewportSend: Promise<TabViewport | null> | undefined;
   releaseScheduled = false;
+  closed = false;
+  closeAttempt = 0;
+  heldViewport: HeldViewport | undefined;
+  wantedPresentation: boolean | undefined;
   page: HostPageReceiver | undefined;
 
   creating: { url: string; at: number } | null;
@@ -143,16 +152,21 @@ export class HostTab {
   }
 
   presentation(visible: boolean): Promise<void> {
-    return queueTabPresentation(this, visible, () => claims.get(this.host)?.get(this.key) === this);
+    this.wantedPresentation = visible;
+    return queueTabPresentation(this, visible, () => this.ownsPage());
   }
 
   viewport(viewport: TabViewport): Promise<TabViewport | null> {
     this.nextViewport = viewport;
-    return this.viewportSend ??= enqueueTab(this.host, this.key, async () => {
+    return this.viewportSend ??= enqueueTab(this.host, this.key, async (): Promise<TabViewport | null | HeldWhileClosed> => {
       this.viewportSend = undefined;
       const latest = this.nextViewport;
       this.nextViewport = undefined;
-      if (!latest || this.disposed || !this.identity || claims.get(this.host)?.get(this.key) !== this) return null;
+      if (latest && this.closed && !this.disposed && this.identity) {
+        this.nextViewport ??= latest;
+        return new HeldWhileClosed(this.holdViewport());
+      }
+      if (!latest || this.disposed || !this.identity || !this.ownsPage()) return null;
       const host = this.host;
       const effective: TabViewport = latest.contentRect && !hostSupports(VIEWPORT_CLIP_CAPABILITY, host)
         ? { rect: latest.rect, visible: latest.visible, ...(latest.radii ? { radii: latest.radii } : {}) }
@@ -168,7 +182,31 @@ export class HostTab {
         if (latest.visible) noteLinuxPageViewportRejected(consent);
         throw error;
       });
-    });
+    }).then((result) => (result instanceof HeldWhileClosed ? result.promise : result));
+  }
+
+  holdViewport(): Promise<TabViewport | null> {
+    if (this.heldViewport) return this.heldViewport.promise;
+    let settle!: HeldViewport["settle"];
+    const promise = new Promise<TabViewport | null>((resolve) => { settle = resolve; });
+    this.heldViewport = { promise, settle };
+    return promise;
+  }
+
+  close(): number {
+    this.closed = true;
+    return ++this.closeAttempt;
+  }
+
+  undoClose(attempt: number) {
+    if (this.disposed || !this.closed || attempt !== this.closeAttempt) return;
+    this.closed = false;
+    const held = this.heldViewport;
+    this.heldViewport = undefined;
+    const viewport = this.nextViewport;
+    held?.settle(viewport ? this.viewport(viewport) : null);
+    if (!held && viewport) void this.viewport(viewport).catch(reportHostError);
+    if (this.wantedPresentation !== undefined) void this.presentation(this.wantedPresentation).catch(reportHostError);
   }
 
   shownViewport(): TabViewport | undefined {
@@ -177,8 +215,12 @@ export class HostTab {
     return viewport.visible ? viewport : undefined;
   }
 
+  ownsPage() {
+    return !this.closed && claims.get(this.host)?.get(this.key) === this;
+  }
+
   presentsNow() {
-    return !this.disposed && !!this.identity && !this.viewportSend && claims.get(this.host)?.get(this.key) === this;
+    return !this.disposed && !!this.identity && !this.viewportSend && this.ownsPage();
   }
 
   detach() {
@@ -192,16 +234,25 @@ export class HostTab {
       if (owners.get(this.key) === this) owners.delete(this.key);
     }).catch((error) => {
       this.releaseScheduled = false;
-      errorFor(consent, "[ardia host] release failed", error);
+      if (!this.closed) errorFor(consent, "[ardia host] release failed", error);
     });
   }
 
   dispose() {
     this.disposed = true;
+    this.heldViewport?.settle(null);
+    this.heldViewport = undefined;
     this.page?.dispose();
     this.unsubscribe();
     this.detach();
   }
+}
+
+export function noteHostTabClosed(host: ArdiaHost, key: string): () => void {
+  const owner = claims.get(host)?.get(key);
+  if (!owner) return () => {};
+  const attempt = owner.close();
+  return () => owner.undoClose(attempt);
 }
 
 export function showInPlaceOf(from: HostTab, to: HostTab, accepted?: (shown: TabViewport) => void): boolean {

@@ -4919,13 +4919,34 @@ try {
       }, 8000).catch(async (e) => { throw new Error(`${e.message}; window ${JSON.stringify(await fsWindow(tab.id))}`); });
       const rgb = (hex) => [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
       const near = (c, ref, tol) => c.every((v, i) => Math.abs(v - ref[i]) <= tol);
+      const dark = (c) => Math.max(...c) < 40;
+      const withoutBars = (cells) => {
+        let rows = [0, 1, 2, 3, 4, 5].map((y) => cells.slice(y * 8, y * 8 + 8));
+        while (rows.length > 1 && rows[0].every(dark)) rows = rows.slice(1);
+        while (rows.length > 1 && rows.at(-1).every(dark)) rows = rows.slice(0, -1);
+        while (rows[0].length > 1 && rows.every((row) => dark(row[0]))) rows = rows.map((row) => row.slice(1));
+        while (rows[0].length > 1 && rows.every((row) => dark(row.at(-1)))) rows = rows.map((row) => row.slice(0, -1));
+        return rows;
+      };
       const kind = (f) => {
         if (!f.grid) return "none";
         const cells = f.grid.map(rgb);
         if (f.uniform >= 0.97 && cells.every((c) => Math.max(...c) < 32)) return "bare";
-        if (cells.filter((c) => near(c, [220, 30, 30], 45)).length >= 44) return "full";
-        if (cells.slice(0, 8).some((c) => c[2] > c[0] + 30) && cells.some((c) => c[0] > c[1] + 80)) return "windowed";
+        const rows = withoutBars(cells), shown = rows.flat();
+        const redOrRedOnBar = (c) => near(c, [220, 30, 30], 45) || (c[0] > c[1] + 60 && c[1] < 45 && c[2] < 45);
+        if (shown.length >= 24 && shown.filter(redOrRedOnBar).length >= shown.length * 0.9) return "full";
+        if (rows[0].some((c) => c[2] > c[0] + 30) && shown.some((c) => c[0] > c[1] + 80)) return "windowed";
         return "other";
+      };
+      const measured = (frames, field) => {
+        const values = frames.map((f) => f[field]);
+        return values.every((v) => typeof v === "number" && Number.isFinite(v)) ? Math.max(0, ...values) : NaN;
+      };
+      const shape = (f) => (f.page && f.page[3] > 0 ? f.page[2] / f.page[3] : null);
+      const pageShapeChange = (all, list) => {
+        const before = all.slice(0, all.indexOf(list[0])).filter(shape).at(-1);
+        const from = before && shape(before);
+        return from ? Math.round(Math.max(0, ...list.filter(shape).map((f) => Math.abs(shape(f) / from - 1))) * 1000) / 1000 : 0;
       };
       const run = async (cover) => {
         await act(`pageCover:${cover ? 1 : 0}`);
@@ -4949,7 +4970,10 @@ try {
           const kinds = laid.map(kind);
           return { frames: kinds.length, relayout: r.frames.length - laid.length, bare: kinds.filter((k) => k === "bare").length,
             stale: kinds.filter((k) => k !== want && k !== "bare").length, uncovered: laid.filter((f) => !f.cover).length,
-            kinds: [...new Set(kinds)], bareAtMs: laid.filter((f, i) => kinds[i] === "bare").map((f) => f.t - r.frames[0].t) };
+            stretch: measured(r.frames, "stretch"), crop: measured(r.frames, "crop"),
+            pageShapeChange: pageShapeChange(frames, r.frames),
+            kinds: [...new Set(kinds)], bareAtMs: laid.filter((f, i) => kinds[i] === "bare").map((f) => f.t - r.frames[0].t),
+            staleFrames: laid.filter((f, i) => kinds[i] !== want && kinds[i] !== "bare").slice(0, 2).map((f) => ({ atMs: f.t - r.frames[0].t, grid: f.grid })) };
         };
         const keyAt = frames[0]?.t ?? 0;
         const timing = (r) => {
@@ -4964,7 +4988,7 @@ try {
       if (off.in.bare < off.in.frames * 0.9 || off.out.bare < off.out.frames * 0.9)
         throw new Error(`without the page's picture the probe didn't see the bare background: ${JSON.stringify(off)}`);
       for (const [dir, r] of Object.entries({ in: on.in, out: on.out }))
-        if (r.bare || r.stale || r.uncovered || r.frames < 10 || r.relayout > 1) throw new Error(`the way ${dir}: ${JSON.stringify(r)}; all ${JSON.stringify(on)}`);
+        if (r.bare || r.stale || r.uncovered || r.frames < 10 || r.relayout > 1 || !(r.stretch <= 0.005) || !(r.crop <= 0.005)) throw new Error(`the way ${dir}: ${JSON.stringify(r)}; all ${JSON.stringify(on)}`);
       const other = await openTab(`${base}/fs-layout?pane`, "FS layout");
       let split;
       try {

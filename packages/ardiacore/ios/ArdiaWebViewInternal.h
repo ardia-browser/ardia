@@ -50,6 +50,8 @@ struct ArdiaStandIn {
   float opacity{};
   NSUInteger generation{};
   __weak ArdiaWebView *lentTo;
+  CFTimeInterval heldSince{};
+  CFTimeInterval lentSince{};
 };
 
 enum class ArdiaHeldPageEnd { Painted, Loaded, Pressed, TimedOut, Detached };

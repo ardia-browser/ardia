@@ -19,3 +19,5 @@ export async function systemLook(): Promise<{ reduceMotion: boolean; reduceTrans
 export { useSystemReduceMotion, useSystemReduceTransparency } from "@ardia/phone-native";
 
 export const overrideColorScheme = (scheme: "light" | "dark" | null) => Appearance.setColorScheme(scheme ?? "unspecified");
+
+export { rememberLaunchLook } from "@ardia/phone-native";

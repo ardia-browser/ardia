@@ -25,6 +25,16 @@ import Testing
     texture: .tweed
   )
 
+  private static func plain(_ color: String, forced dark: Bool? = nil) -> [String: Any] {
+    ["color": color, "themeColors": [String](), "themeLooks": ["light": ["dark": dark ?? false], "dark": ["dark": dark ?? true]]]
+  }
+
+  private static let themed: [String: Any] = [
+    "color": "#D95973",
+    "themeColors": ["#D95973", "#4073E6"],
+    "themeLooks": ["light": ["look": sunset.dictionary, "dark": false], "dark": ["look": night.dictionary, "dark": true]],
+  ]
+
   @Test func aFirstLaunchDrawsThePlumLookBothAppsDefaultTo() {
     withDefaults { defaults in
       let recalled = LaunchLook.recalled(from: defaults)
@@ -34,69 +44,64 @@ import Testing
     }
   }
 
-  @Test func theStartPagesLookComesBackOnTheNextLaunch() {
+  @Test func theCurrentSpaceSavedLastIsTheOneTheNextLaunchDraws() {
     withDefaults { defaults in
-      let space = LookColors(color: "blue", themeColors: ["#3366FF", "#8844CC"], darkThemeColors: ["#112244"])
-      LaunchLook.remember(space, drawnDark: false, appDark: false, in: defaults)
-      #expect(LaunchLook.recalled(from: defaults).colors == space)
-      let plain = LookColors(color: "green", themeColors: nil, darkThemeColors: nil)
-      LaunchLook.remember(plain, drawnDark: false, appDark: false, in: defaults)
-      #expect(LaunchLook.recalled(from: defaults).colors == LookColors(color: "green", themeColors: [], darkThemeColors: nil))
-      #expect(LaunchLook.recalled(from: defaults).drawn(appDark: false).colors.themeLook == nil)
+      LaunchLook.remember(LaunchLook.recalled(saved: Self.plain("blue")), in: defaults)
+      LaunchLook.remember(LaunchLook.recalled(saved: Self.plain("green")), in: defaults)
+      let recalled = LaunchLook.recalled(from: defaults)
+      #expect(recalled.colors == LookColors(color: "green", themeColors: [], darkThemeColors: nil))
+      #expect(recalled.drawn(appDark: false).dark == false && recalled.drawn(appDark: true).dark == true)
+    }
+  }
+
+  @Test func eachSystemAppearanceDrawsTheThemeAndModeTheAppDrawsInIt() {
+    withDefaults { defaults in
+      LaunchLook.remember(LaunchLook.recalled(saved: Self.themed), in: defaults)
+      let recalled = LaunchLook.recalled(from: defaults)
+      #expect(recalled.drawn(appDark: false).colors.themeLook == Self.sunset && recalled.drawn(appDark: false).dark == false)
+      #expect(recalled.drawn(appDark: true).colors.themeLook == Self.night && recalled.drawn(appDark: true).dark == true)
+    }
+  }
+
+  @Test func aForcedAppearanceIsDrawnEvenWithoutATheme() {
+    withDefaults { defaults in
+      LaunchLook.remember(LaunchLook.recalled(saved: Self.plain("blue", forced: true)), in: defaults)
+      let recalled = LaunchLook.recalled(from: defaults)
+      #expect(recalled.drawn(appDark: false).dark == true && recalled.drawn(appDark: false).colors.themeLook == nil)
     }
   }
 
   @Test func incognitoIsNeverRemembered() {
     withDefaults { defaults in
-      let space = LookColors(color: "orange", themeColors: ["#FF8800"], darkThemeColors: nil, themeLook: Self.sunset)
-      LaunchLook.remember(space, drawnDark: false, appDark: false, in: defaults)
-      LaunchLook.remember(LookColors(color: LookColors.incognito, themeLook: Self.night), drawnDark: true, appDark: true, in: defaults)
-      let recalled = LaunchLook.recalled(from: defaults)
-      #expect(recalled.colors == space.withoutThemeLook)
-      #expect(recalled.drawn(appDark: false).colors == space)
+      LaunchLook.remember(LaunchLook.recalled(saved: Self.plain("orange")), in: defaults)
+      #expect(!LaunchLook.remember(LaunchLook.recalled(saved: Self.plain(LookColors.incognito, forced: true)), in: defaults))
+      #expect(LaunchLook.recalled(from: defaults).colors.color == "orange")
     }
   }
 
-  @Test func aCustomThemeComesBackForEachModeItWasDrawnIn() {
+  @Test func theSameLookIsNotWrittenTwice() {
     withDefaults { defaults in
-      let colors = LookColors(color: "#D95973", themeColors: ["#D95973", "#4073E6"])
-      var light = colors
-      light.themeLook = Self.sunset
-      var dark = colors
-      dark.themeLook = Self.night
-      LaunchLook.remember(light, drawnDark: false, appDark: false, in: defaults)
-      LaunchLook.remember(dark, drawnDark: true, appDark: true, in: defaults)
-      let recalled = LaunchLook.recalled(from: defaults)
-      #expect(recalled.drawn(appDark: false).colors == light && recalled.drawn(appDark: false).dark == false)
-      #expect(recalled.drawn(appDark: true).colors == dark && recalled.drawn(appDark: true).dark == true)
+      #expect(LaunchLook.remember(LaunchLook.recalled(saved: Self.themed), in: defaults))
+      #expect(!LaunchLook.remember(LaunchLook.recalled(saved: Self.themed), in: defaults))
+      #expect(LaunchLook.remember(LaunchLook.recalled(saved: Self.plain("blue")), in: defaults))
     }
   }
 
-  @Test func aThemeSeenInOneModeIsDrawnInBothUntilTheOtherIsSeen() {
+  @Test func aSavedLookFromBeforeTheWriteRuleStillDraws() {
     withDefaults { defaults in
-      var forcedDark = LookColors(color: "#D95973", themeColors: ["#D95973", "#4073E6"])
-      forcedDark.themeLook = Self.night
-      LaunchLook.remember(forcedDark, drawnDark: true, appDark: false, in: defaults)
+      defaults.set(["color": "#D95973", "themeColors": ["#D95973"], "themeLooks": ["dark": ["look": Self.night.dictionary, "dark": true]]], forKey: LaunchLook.key)
       let recalled = LaunchLook.recalled(from: defaults)
-      #expect(recalled.drawn(appDark: true).colors == forcedDark && recalled.drawn(appDark: true).dark == true)
-      #expect(recalled.drawn(appDark: false).colors == forcedDark && recalled.drawn(appDark: false).dark == true)
+      #expect(recalled.drawn(appDark: false).colors.themeLook == Self.night && recalled.drawn(appDark: false).dark == true)
     }
   }
 
-  @Test func anotherSpaceOrNoThemeForgetsTheOldThemeLooks() {
-    withDefaults { defaults in
-      var themed = LookColors(color: "#D95973", themeColors: ["#D95973", "#4073E6"])
-      themed.themeLook = Self.sunset
-      LaunchLook.remember(themed, drawnDark: false, appDark: false, in: defaults)
-      var other = LookColors(color: "#3366FF", themeColors: ["#3366FF"])
-      other.themeLook = Self.night
-      LaunchLook.remember(other, drawnDark: true, appDark: true, in: defaults)
-      #expect(LaunchLook.recalled(from: defaults).lightThemeLook == nil)
-      #expect(LaunchLook.recalled(from: defaults).drawn(appDark: false).colors == other)
-      LaunchLook.remember(other.withoutThemeLook, drawnDark: true, appDark: true, in: defaults)
-      let recalled = LaunchLook.recalled(from: defaults)
-      #expect(recalled.lightThemeLook == nil && recalled.darkThemeLook == nil)
-      #expect(recalled.drawn(appDark: true).colors == other.withoutThemeLook)
-    }
+  @Test func anotherSpaceIsSeenAsStaleButTheSameSpaceIsNot() {
+    let blue = LaunchLook.recalled(saved: Self.plain("blue"))
+    #expect(blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.plain("blue"))))
+    #expect(!blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.plain("green"))))
+    #expect(!blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.plain("blue", forced: true))))
+    #expect(!blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.themed)))
+    let older = LaunchLook.Recalled(colors: LookColors(color: "blue", themeColors: [], darkThemeColors: nil))
+    #expect(older.drawsTheSameSpace(as: blue))
   }
 }

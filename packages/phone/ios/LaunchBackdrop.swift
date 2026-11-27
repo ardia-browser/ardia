@@ -30,7 +30,9 @@ public enum LaunchBackdrop {
     capTask = nil
     contentShown = false
     fading = false
-    let host = UIHostingController(rootView: AnyView(LaunchProfileBackdrop(recalled: LaunchLook.recalled()).ignoresSafeArea()))
+    let recalled = LaunchLook.recalled()
+    LaunchLookWrites.noteShown(recalled)
+    let host = UIHostingController(rootView: AnyView(LaunchProfileBackdrop(recalled: recalled).ignoresSafeArea()))
     host.view.backgroundColor = .clear
     host.view.frame = rootView.bounds
     host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]

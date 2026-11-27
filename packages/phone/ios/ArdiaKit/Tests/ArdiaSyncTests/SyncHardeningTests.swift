@@ -89,6 +89,27 @@ import Testing
     await relaunched.stopSyncing()
   }
 
+  @Test func theCachedSnapshotTellsAMissingCacheFromOneThatWontOpen() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let spaces = j.service.snapshot.profiles.map(\.syncId)
+    try #require(!spaces.isEmpty)
+    await j.service.close()
+    let (grant, _) = try SyncFolderAccess.grant(picked: j.sandbox.root)
+    let engine = try SyncEngine(directory: j.sandbox.state, deviceId: j.device, entropy: j.entropy, folder: grant)
+    let snapshotFile = j.sandbox.state.appendingPathComponent("sync-snapshot.nns")
+
+    guard case .read(let cached) = await engine.cachedSnapshot() else { Issue.record("the saved snapshot did not read"); return }
+    #expect(cached.profiles.map(\.syncId) == spaces)
+
+    try Data(repeating: 7, count: 512).write(to: snapshotFile)
+    #expect(await engine.cachedSnapshot() == .unreadable)
+
+    try FileManager.default.removeItem(at: snapshotFile)
+    #expect(await engine.cachedSnapshot() == .missing)
+    await engine.retire()
+  }
+
   @Test func aLockedServiceNeverSaysItKnowsItsSpaces() async throws {
     let j = try await joined()
     defer { j.sandbox.remove() }

@@ -196,8 +196,17 @@ public final class SyncService {
     guard let engine = openEngine() else { return }
     set(\.phase, .starting)
     Task {
-      if let cached = await engine.cachedSnapshot(), snapshot == .empty { snapshot = cached }
-      knowsSpaces = true
+      let cached = await engine.cachedSnapshot()
+      guard self.engine === engine else { return }
+      switch cached {
+      case .read(let saved):
+        if snapshot == .empty { snapshot = saved }
+        knowsSpaces = true
+      case .missing:
+        knowsSpaces = true
+      case .unreadable:
+        break
+      }
       await runCycle()
     }
   }

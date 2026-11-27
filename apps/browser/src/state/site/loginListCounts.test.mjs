@@ -9,7 +9,7 @@ after(() => client.setSharing(false, "settings"));
 const { takePasswordManagerCounts } = await import("../telemetry/passwordManagerCounts.ts");
 const { startLoginListCounts } = await import("./loginListCounts.ts");
 
-const listCounts = (counts) => Object.fromEntries(Object.entries(counts).filter(([field]) => /^apple_passwords_(login_list|fills)/.test(field)));
+const listCounts = (counts) => Object.fromEntries(Object.entries(counts).filter(([field]) => /^apple_passwords_(login_list|fills)/.test(field) && !/_(chromium|webkit)$/.test(field)));
 const counted = (name) => native.emitEvent("passwords.loginListCounted", { name, epoch: client.consentEpoch() });
 
 test("the Login list counts each time it is shown, each fill and each fill that failed, only while sharing is on", () => {
@@ -60,4 +60,22 @@ test("each login saved to Apple Passwords and each save it refused are counted, 
   client.setSharing(false, "settings");
   saved("saved");
   assert.deepEqual(saveCounts(takePasswordManagerCounts()), { apple_passwords_saves_saved: 0, apple_passwords_saves_failed: 0 });
+});
+
+test("each Login list count is also counted by the engine of the tab it was in, and an unknown engine counts only the total", () => {
+  const inEngine = (name, engine) => native.emitEvent("passwords.loginListCounted", { name, engine, epoch: client.consentEpoch() });
+  startLoginListCounts();
+  client.setSharing(true, "settings");
+  takePasswordManagerCounts();
+  for (const [name, engine] of [["shown", "chromium"], ["shown", "chromium"], ["filled", "chromium"], ["shown", "webkit"], ["fillFailed", "webkit"], ["shown", "gecko"], ["notNow", "chromium"]]) inEngine(name, engine);
+  const counts = takePasswordManagerCounts();
+  assert.equal(counts.apple_passwords_login_list_shown, 4);
+  assert.equal(counts.apple_passwords_login_list_shown_chromium, 2);
+  assert.equal(counts.apple_passwords_login_list_shown_webkit, 1);
+  assert.equal(counts.apple_passwords_login_list_filled_chromium, 1);
+  assert.equal(counts.apple_passwords_login_list_filled_webkit, 0);
+  assert.equal(counts.apple_passwords_fills_failed_webkit, 1);
+  assert.equal(counts.apple_passwords_login_list_not_now_chromium, 1);
+  assert.ok(!Object.keys(counts).some((field) => field.includes("gecko")), "no field for an engine Ardia doesn't have");
+  client.setSharing(false, "settings");
 });

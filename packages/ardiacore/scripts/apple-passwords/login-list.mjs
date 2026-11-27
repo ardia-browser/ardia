@@ -12,7 +12,6 @@ export const CONNECT = "Connect Apple Passwords";
 export const NOT_NOW = "Not now";
 export const FILL_FAILED = "Apple Passwords didn't fill this login. Unlock the Passwords app and try again.";
 const OPENED_PASSWORDS = "[logins] Passwords app (background mode, not opened)";
-const COUNTED_SHOWN = "[logins] Login list counted: shown\n";
 
 const usersFor = (host) =>
   FIXTURES.logins
@@ -27,6 +26,7 @@ const assert = (ok, message, detail) => {
 const titles = (rows) => rows.map((r) => r.title);
 
 export function loginListChecks({ paired, sites, engine: engineName = "webkit" }) {
+  const COUNTED_SHOWN = `[logins] Login list counted: shown in ${engineName}\n`;
   const applePasswords = async (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().state", { timeout: 20_000 });
   const pairingStep = async (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().pairing?.step ?? null", { timeout: 20_000 });
   const prompting = async (app, tabId) => app.eval(`return ac.pageState.getState().pages[${q(tabId)}]?.applePasswordsPairing === true`, { timeout: 20_000 });

@@ -252,6 +252,8 @@ Each test is one red → green cycle, written and run one at a time in the order
 | --- | --- | --- | --- | --- |
 | B1 | 3 | Every new page-to-native message has a boundary row and survives the shared hostile inputs | malformed page data reaching native | inputs outside the shared set |
 | B2 | 3 | A page message that names another site's origin has no effect on which logins are listed | a page pretending to be another site | — |
+| B3 | 3 | Every hostile value as a helper frame, login name, site, password, Verification code field or Pairing round is dropped or kept within the reply contract, a frame past 1 MB ends the helper, and an oversized Pairing number is refused before any arithmetic | another app posing as Apple's helper | the real helper's own limits |
+| B4 | 3 | Every hostile value anywhere in the Me card reaches the address store only as bounded text, at most 20 addresses | another app's Contacts edits | — |
 | E31 | 1 | After the whole end-to-end run, no fixture password or code appears in the app's or the engine's logs | secrets in logs | logs written outside the instance's data dir |
 | S10 | 2 | The new counts are recorded only while sharing is on, carry no site or text, and are listed in "What's Sent" | telemetry outside the consent model | — |
 | S11 | 2 | Onboarding offers Apple Passwords (entitled Macs only) and the Me card once each; a declined offer never returns; a failed or cancelled Pairing leaves the Apple Passwords offer open | a missing or nagging offer; an offer used up by a Pairing that never took | — |

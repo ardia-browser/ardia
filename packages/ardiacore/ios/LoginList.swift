@@ -7,19 +7,33 @@ protocol LoginListTarget: AnyObject {
   var loginListEngine: String { get }
   func loginListFill(username: String, password: String, frameOrigin: String, done: @escaping (Bool) -> Void)
   func loginListFillCode(_ code: String, frameOrigin: String, done: @escaping (Bool) -> Void)
+  func loginListFillNewPassword(_ password: String, frameOrigin: String, done: @escaping (Bool) -> Void)
   func loginListSync(open: Bool, picking: Bool)
   func loginListConnect()
 }
 
 struct LoginListField {
   enum Trigger { case press, typing }
-  enum Kind { case login, code }
+  enum Kind { case login, code, newPassword }
+
+  static let lengthMax = 1024
+  static let patternMax = 512
 
   let frameOrigin: String
   let screenRect: NSRect
   let trigger: Trigger
   let typed: String
   var kind: Kind = .login
+  var rules = StrongPassword.Rules()
+
+  static func rules(maxLength: Any?, minLength: Any?, pattern: Any?) -> StrongPassword.Rules {
+    let length = { (value: Any?) -> Int in
+      guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.isFinite else { return 0 }
+      return Int(max(0, min(Double(lengthMax), number.doubleValue.rounded(.down))))
+    }
+    let text = pattern as? String ?? ""
+    return StrongPassword.Rules(minLength: length(minLength), maxLength: length(maxLength), pattern: text.count <= patternMax ? text : "")
+  }
 }
 
 final class LoginList: NSObject {
@@ -37,6 +51,9 @@ final class LoginList: NSObject {
   static let notNowTitle = "Not now"
   static let codeFillFailed = "Apple Passwords didn't fill this code. Unlock the Passwords app and try again."
   static func codeTitle(_ site: String) -> String { "Code for \(site)" }
+  static let strongId = "suggestStrongPassword"
+  static let strongTitle = "Suggest strong password"
+  static let strongFailed = "Ardia couldn't make a strong password for this field."
 
   private struct Shown {
     weak var target: LoginListTarget?
@@ -46,6 +63,7 @@ final class LoginList: NSObject {
     let site: String
     var logins: [ApplePasswordsMatch.Login]
     var connect = false
+    var strong = false
     var codes: [ApplePasswordsCode] = []
     var codeSite = ""
     var codePage = ""
@@ -106,12 +124,13 @@ final class LoginList: NSObject {
         guard let self, let target, asked == self.ticket, Self.origin(of: target.loginListPage) == page else { return }
         guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return self.close(target) }
         let site = domains[pageHost] ?? pageHost
-        if !field.typed.isEmpty { self.remember(field.typed, on: ApplePasswordsMatch.site(pageHost, domains: domains), in: target) }
+        if field.kind == .login, !field.typed.isEmpty { self.remember(field.typed, on: ApplePasswordsMatch.site(pageHost, domains: domains), in: target) }
         var next = Shown(target: target, field: field, page: page, host: host, site: site, logins: [])
         next.domains = domains
+        next.strong = field.kind == .newPassword
         switch result {
         case .success:
-          next.logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains)
+          if !next.strong { next.logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains) }
           self.present(next, notice: nil)
         case .failure(.notConnected): self.offerConnect(next)
         case .failure(let problem): self.present(next, notice: Self.notice(problem))
@@ -211,11 +230,17 @@ final class LoginList: NSObject {
   ]
 
   static func rows(
-    _ logins: [ApplePasswordsMatch.Login], bold: [NSRange] = [], notice: String?, connect: Bool = false, codes: [ApplePasswordsCode] = [], codeSite: String = ""
+    _ logins: [ApplePasswordsMatch.Login], bold: [NSRange] = [], notice: String?, connect: Bool = false, strong: Bool = false, codes: [ApplePasswordsCode] = [],
+    codeSite: String = ""
   ) -> [WebKitAutofillDropdown.Row] {
     if connect { return connectRows }
     var rows: [WebKitAutofillDropdown.Row] = []
     if let notice { rows.append(.init(id: "", title: notice, detail: "", symbol: "exclamationmark.circle", enabled: false)) }
+    if strong {
+      rows.append(.init(id: strongId, title: strongTitle, detail: "", symbol: "key.fill", appIcon: passwordsApp, iconLabel: iconLabel))
+      rows.append(.init(id: footerId, title: footerTitle, detail: "", symbol: "arrow.up.forward.app"))
+      return rows
+    }
     rows += codes.map { code in
       .init(id: codeRowId(code), title: codeTitle(codeSite), detail: code.user, symbol: "key.fill", appIcon: passwordsApp, iconLabel: iconLabel)
     }
@@ -241,11 +266,11 @@ final class LoginList: NSObject {
     var current = next
     current.logins = logins
     shown = current
-    let rows = Self.rows(logins, bold: hits.map(\.bold), notice: notice, connect: next.connect, codes: next.codes, codeSite: next.codeSite)
+    let rows = Self.rows(logins, bold: hits.map(\.bold), notice: notice, connect: next.connect, strong: next.strong, codes: next.codes, codeSite: next.codeSite)
     if LaunchConfig.shared.background { NSLog("[logins] Login list: %ld logins, %ld rows", logins.count, rows.count) }
     dropdown.show(rows, under: next.field.screenRect, in: window)
     sync()
-    if opening, next.connect || next.field.kind == .login { Self.count(next.connect ? "connectShown" : "shown", in: target) }
+    if opening, next.connect || next.field.kind != .code { Self.count(next.connect ? "connectShown" : "shown", in: target) }
   }
 
   func key(_ target: LoginListTarget, _ key: String) {
@@ -289,6 +314,7 @@ final class LoginList: NSObject {
       declined.insert(current.site)
       return Self.count("notNow", in: target)
     }
+    if id == Self.strongId, current.strong { return pickedStrong(current, target) }
     if let code = current.codes.first(where: { Self.codeRowId($0) == id }) { return pickedCode(code, current, target) }
     guard let login = current.logins.first(where: { Self.rowId($0) == id }) else { return }
     close(target)
@@ -334,6 +360,16 @@ final class LoginList: NSObject {
           Self.count(filled ? "codeFilled" : "codeFillFailed", engine: engine)
         }
       }
+    }
+  }
+
+  private func pickedStrong(_ current: Shown, _ target: LoginListTarget) {
+    close(target)
+    guard Self.origin(of: target.loginListPage) == current.page else { return }
+    guard let password = StrongPassword.make(current.field.rules) else { return present(current, notice: Self.strongFailed) }
+    let engine = target.loginListEngine
+    target.loginListFillNewPassword(password, frameOrigin: current.field.frameOrigin) { filled in
+      if filled { Self.count("strongPasswordUsed", engine: engine) }
     }
   }
 

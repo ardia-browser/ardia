@@ -17,6 +17,11 @@ extension WebKitTab: LoginListTarget {
     WebKitLoginFill.runCode(in: webView, world: WebKitHub.world, code: code, origin: frameOrigin, done: done)
   }
 
+  func loginListFillNewPassword(_ password: String, frameOrigin: String, done: @escaping (Bool) -> Void) {
+    guard let webView, LoginList.origin(of: webView.url) == frameOrigin else { return done(false) }
+    WebKitLoginFill.runNewPassword(in: webView, world: WebKitHub.world, password: password, origin: frameOrigin, done: done)
+  }
+
   func loginListConnect() { emit("applePasswordsConnect") }
 
   func loginListSync(open: Bool, picking: Bool) {

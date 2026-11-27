@@ -16,6 +16,10 @@
 //   E5chromium… the same Login list checks in a Chromium tab of that instance
 //   E18… saving to Apple Passwords from a WebKit tab (saving.mjs), in the same paired instance; E33 saves on an http page
 //   E18chromium… the same saving checks in a Chromium tab, whose save hands Chrome's pending login to Apple Passwords
+//   E24 on save.localhost's /signup, a new-password field lists "Suggest strong password" (strong-password.mjs); picking it
+//       fills both new-password fields with one password Ardia makes (12 characters where maxlength is 12, on
+//       /signup-short), and signing up asks "Save to Apple Passwords?", whose Save keeps that password in the fake;
+//       E24chromium the same in a Chromium tab
 //   E25-E27 Verification codes on a code field (codes.mjs), in that instance, in a WebKit tab and (E25chromium…) a
 //       Chromium one: "Code for example.localhost" fills the fixture code, the account typed on the site's sign-in
 //       page comes first, and an http code field or one holding text gets nothing
@@ -37,6 +41,7 @@ import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-
 import { loginListChecks } from "./login-list.mjs";
 import { savingChecks } from "./saving.mjs";
 import { fixtureSites } from "./sites.mjs";
+import { strongPasswordChecks } from "./strong-password.mjs";
 import { chromiumTabs, webkitTabs } from "./webkit.mjs";
 
 const args = process.argv.slice(2);
@@ -323,6 +328,8 @@ const CHECKS = {
   ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E12", "E13", "E15", "E34", "E35", "E36", "E37"]),
   ...savingChecks({ paired, sites }),
   ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E19", "E20", "E21", "E22", "E23"]),
+  ...strongPasswordChecks({ paired, sites }),
+  ...inChromium(strongPasswordChecks({ paired, sites, engine: "chromium" }), ["E24"]),
   ...codeChecks({ paired, sites }),
   ...inChromium(codeChecks({ paired, sites, engine: "chromium" }), ["E25", "E26", "E27"]),
 };

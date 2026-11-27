@@ -56,6 +56,19 @@ final class WebKitLogins: NSObject {
     const username = usernameFor(password);
     return username === el ? { password, username } : null;
   };
+  const NEW_PASSWORD = /(^|\s)new-password(\s|$)/i;
+  const CURRENT_PASSWORD = /(^|\s)current-password(\s|$)/i;
+  const newPasswords = (password) => {
+    const all = Array.from((password.form || document).querySelectorAll("input[type=password]")).filter(visible);
+    const marked = all.filter((el) => NEW_PASSWORD.test(el.getAttribute("autocomplete") || ""));
+    const unmarked = all.filter((el) => !CURRENT_PASSWORD.test(el.getAttribute("autocomplete") || ""));
+    const found = marked.length ? marked : unmarked.length < all.length ? unmarked : all.length === 2 ? all : all.length === 3 ? all.slice(1) : [];
+    return found.includes(password) ? found : [];
+  };
+  const passwordRules = (fields, el) => {
+    const limits = fields.map((f) => f.maxLength).filter((n) => n > 0);
+    return { maxLength: limits.length ? Math.min(...limits) : 0, minLength: Math.max(0, ...fields.map((f) => f.minLength)), pattern: el.getAttribute("pattern") || "" };
+  };
   const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
   const OTHER_AUTOCOMPLETE = /(^|\s)(username|email|current-password|new-password|tel|postal-code|cc-[a-z-]+)(\s|$)/i;
   const CODE_HINT = /(^|[^a-z])(otp|totp|2fa|mfa)([^a-z]|$)|one.?time.?(pass)?code|verification.?code|verify.?code|security.?code|auth(entication)?.?code|passcode/i;
@@ -79,11 +92,13 @@ final class WebKitLogins: NSObject {
     const found = loginField(el);
     const code = !found && codeField(el);
     if (!found && !code) return hide();
-    active = { el, found, code };
-    const r = el.getBoundingClientRect();
     const isPassword = el.type === "password";
+    const fresh = isPassword ? newPasswords(el) : [];
+    active = { el, found, code, fresh };
+    const r = el.getBoundingClientRect();
     post("loginField", {
-      event, origin: location.origin, password: isPassword, code, value: isPassword || code ? "" : String(el.value || "").slice(0, 200),
+      event, origin: location.origin, password: isPassword, code, newPassword: fresh.length > 0, ...(fresh.length ? passwordRules(fresh, el) : {}),
+      value: isPassword || code ? "" : String(el.value || "").slice(0, 200),
       x: r.left, y: r.top, width: r.width, height: r.height,
     });
   };
@@ -124,7 +139,8 @@ final class WebKitLogins: NSObject {
   addEventListener("resize", hide);
   addEventListener("pagehide", hide);
   const submitted = (form) => {
-    const password = passwordIn(form);
+    const first = passwordIn(form);
+    const password = (first && newPasswords(first)[0]) || first;
     if (!password || !password.value) return;
     const username = usernameFor(password);
     const field = { name: password.getAttribute("name") || "", id: password.id || "", autocomplete: password.getAttribute("autocomplete") || "" };
@@ -155,6 +171,14 @@ final class WebKitLogins: NSObject {
     fillCode(code, origin) {
       if (location.origin !== origin || !active || !active.code || !active.el.isConnected || typeof code !== "string" || !CODE_SHAPE.test(code) || !codeField(active.el)) return false;
       setValue(active.el, code);
+      open = picking = false;
+      return true;
+    },
+    fillNewPassword(password, origin) {
+      if (location.origin !== origin || !active || !active.el.isConnected || typeof password !== "string" || !password) return false;
+      const fields = newPasswords(active.el);
+      if (!fields.length) return false;
+      for (const field of fields) setValue(field, password);
       open = picking = false;
       return true;
     },
@@ -310,9 +334,12 @@ final class WebKitLogins: NSObject {
     guard let view = tab.webView, let window = tab.window, Self.pageOrigin(tab) == origin else { return close(tab) }
     let password = data["password"] as? Bool ?? false
     let code = data["code"] as? Bool == true
-    let field = LoginListField(
+    let fresh = password && data["newPassword"] as? Bool == true
+    var field = LoginListField(
       frameOrigin: origin, screenRect: window.convertToScreen(tab.convert(Self.fieldRect(data, in: view), to: nil)),
-      trigger: data["event"] as? String == "input" ? .typing : .press, typed: password || code ? "" : data["value"] as? String ?? "", kind: code ? .code : .login)
+      trigger: data["event"] as? String == "input" ? .typing : .press, typed: password || code ? "" : data["value"] as? String ?? "",
+      kind: code ? .code : fresh ? .newPassword : .login)
+    if fresh { field.rules = LoginListField.rules(maxLength: data["maxLength"], minLength: data["minLength"], pattern: data["pattern"]) }
     LoginList.shared.show(tab, field: field)
   }
 

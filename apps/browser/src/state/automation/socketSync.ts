@@ -1,4 +1,4 @@
-import { addRemoteProfileAndWait, removeRemoteProfileAndWait, sendTab, sendTargets, setOpenTabsSynced, setProfileSynced, setTypeSynced, syncNow, syncWritesOpen, useSync } from "../sync/engine";
+import { addRemoteProfileAndWait, removeRemoteProfileAndWait, sendTab, SYNC_WRITES_CLOSED, sendTargets, setOpenTabsSynced, setProfileSynced, setTypeSynced, syncNow, syncWritesOpen, useSync } from "../sync/engine";
 import { confirmRemoveRemoteProfile } from "../sync/remoteProfileRemoval";
 import { DATA_TYPES, type DataType, type RemoteProfile } from "../sync/syncDoc";
 import { askWhereSeen, shownWindowId } from "./socketAsk";
@@ -102,7 +102,8 @@ function refuseUnremovable(profile: RemoteProfile) {
 function answered<T>(write: Promise<T>, outcome: string): Promise<T> {
   return write.catch((error: unknown) => {
     if (error instanceof OpError) throw error;
-    throw new OpError("failed", `${outcome}: ${error instanceof Error ? error.message : String(error)}`);
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new OpError(reason === SYNC_WRITES_CLOSED ? "refused" : "failed", `${outcome}: ${reason}`);
   });
 }
 

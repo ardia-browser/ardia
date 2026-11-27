@@ -237,6 +237,8 @@ test("sync writes are refused while sync is turning off, so a sent tab is never 
     assert.equal(sync.useSync.getState().enabled, true, "Settings still shows sync on while it winds down");
     assert.equal(await code("sync.setType", { type: "history", on: false }), "refused");
     assert.equal(await code("sync.now"), "refused");
+    await assert.rejects(sync.addRemoteProfileAndWait("any"), { message: sync.SYNC_WRITES_CLOSED }, "the window running sync refuses a forwarded add it would drop");
+    await assert.rejects(sync.removeRemoteProfileAndWait("any"), { message: sync.SYNC_WRITES_CLOSED }, "and a forwarded remove");
     release();
     await stopping;
   } finally {

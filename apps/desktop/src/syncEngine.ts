@@ -167,8 +167,8 @@ function remoteFor(host: ArdiaHost): SyncRemote {
     setTypeSynced: (type: DataType, enabled: boolean) => engine.setTypeSynced(type, enabled),
     setProfileSynced: (profileId: string, enabled: boolean) => engine.setProfileSynced(profileId, enabled),
     setOpenTabsSynced: (profileId: string, enabled: boolean) => engine.setOpenTabsSynced(profileId, enabled),
-    addRemoteProfile: (syncId: string) => engine.addRemoteProfile(syncId),
-    removeRemoteProfile: (syncId: string) => engine.removeRemoteProfile(syncId),
+    addRemoteProfile: (syncId: string) => engine.addRemoteProfileAndWait(syncId),
+    removeRemoteProfile: (syncId: string) => engine.removeRemoteProfileAndWait(syncId),
     removeSyncedDevice: (deviceId: string) => engine.removeSyncedDevice(deviceId),
     adoptProfileTheme: (profileId: string) => engine.adoptProfileTheme(profileId),
     retireProfile: (profileId: string) => whenProfileGone(useBrowser, profileId, () => engine.retireProfile(profileId)),
@@ -355,12 +355,12 @@ export function removeRemoteProfile(syncId: string): boolean {
 }
 
 export async function addRemoteProfileAndWait(syncId: string): Promise<string | null> {
-  if (leading()) return engine.addRemoteProfile(syncId);
+  if (leading()) return engine.addRemoteProfileAndWait(syncId);
   return forward<string | null>("addRemoteProfile", [syncId]);
 }
 
 export async function removeRemoteProfileAndWait(syncId: string): Promise<boolean> {
-  if (leading()) return engine.removeRemoteProfile(syncId);
+  if (leading()) return engine.removeRemoteProfileAndWait(syncId);
   return forward<boolean>("removeRemoteProfile", [syncId]);
 }
 
@@ -381,6 +381,7 @@ function refreshSendTargets() {
 }
 
 export const onTabsReceived = engine.onTabsReceived;
+export const SYNC_WRITES_CLOSED = engine.SYNC_WRITES_CLOSED;
 export const takeSnapshotWrites = engine.takeSnapshotWrites;
 export const takeSyncDataCounts = engine.takeSyncDataCounts;
 export { whenSyncCore } from "./hostSync.ts";

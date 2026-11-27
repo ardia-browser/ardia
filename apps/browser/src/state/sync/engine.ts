@@ -355,8 +355,10 @@ export function addRemoteProfile(syncId: string): string | null {
 }
 
 export const removeRemoteProfile = (syncId: string): boolean => markRemoved(doc, syncId) && (docChanged(), true);
-export const addRemoteProfileAndWait = async (syncId: string): Promise<string | null> => addRemoteProfile(syncId);
-export const removeRemoteProfileAndWait = async (syncId: string): Promise<boolean> => removeRemoteProfile(syncId);
+export const SYNC_WRITES_CLOSED = "Sync is starting, locked or turning off, so nothing was changed; try again once Settings › General shows it running.";
+const whileWritesOpen = <T>(write: () => T): Promise<T> => (syncWritesOpen() ? Promise.resolve(write()) : Promise.reject(new Error(SYNC_WRITES_CLOSED)));
+export const addRemoteProfileAndWait = (syncId: string): Promise<string | null> => whileWritesOpen(() => addRemoteProfile(syncId));
+export const removeRemoteProfileAndWait = (syncId: string): Promise<boolean> => whileWritesOpen(() => removeRemoteProfile(syncId));
 export const removeSyncedDevice = (id: string): boolean => markDeviceRemoved(doc, id) && (docChanged(), true);
 
 export function startSync() {

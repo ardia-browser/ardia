@@ -60,7 +60,7 @@ function nativeLease(ttl = 200) {
   };
 }
 
-function renderer(name, { candidate, lease, engines, channelName }) {
+function renderer(name, { candidate, lease, engines, channelName, answers = {} }) {
   const mirror = store({ status: "starting", error: null, folder: null });
   const log = [];
   const calls = [];
@@ -76,6 +76,7 @@ function renderer(name, { candidate, lease, engines, channelName }) {
         calls.push({ method, args });
         if (!lease.holds(name)) throw new Error("ERR_SYNC_NOT_AUTHORITY");
         if (method === "turnOnSync") real.setState({ ...real.getState(), status: "starting", folder: args[0] }, true);
+        if (method in answers) return answers[method](...args);
         return method === "turnOnSync" || method === "enterRecoveryPhrase" ? { ok: true } : null;
       }]));
       return { store: real, remote };
@@ -270,6 +271,31 @@ test("one renderer runs sync, the others mirror it and forward their actions, an
   await tick(60);
   await assert.rejects(settings.authority.call("syncNow", []), { message: NO_AUTHORITY_MESSAGE });
   settings.authority.stop();
+});
+
+test("adding or removing a profile from another device in a window that doesn't run sync answers with the sync window's own answer", async (t) => {
+  const channelName = `sync-${Math.random()}`;
+  const lease = nativeLease();
+  const engines = [];
+  const closed = "Sync is starting, locked or turning off, so nothing was changed; try again once Settings › General shows it running.";
+  const answers = {
+    addRemoteProfile: (syncId) => (syncId === "work" ? "p-work" : null),
+    removeRemoteProfile: (syncId) => {
+      if (syncId === "stopping") throw new Error(closed);
+      return syncId === "old";
+    },
+  };
+  const browser = renderer("browser", { candidate: true, lease, engines, channelName, answers });
+  const other = renderer("other", { candidate: false, lease, engines, channelName });
+  t.after(() => { browser.authority.stop(); other.authority.stop(); });
+  await tick(80);
+  assert.equal(other.authority.role(), "client");
+  assert.equal(await other.authority.call("addRemoteProfile", ["work"]), "p-work", "the new profile's id comes back");
+  assert.equal(await other.authority.call("addRemoteProfile", ["waiting"]), null, "and a no stays a no");
+  assert.equal(await other.authority.call("removeRemoteProfile", ["old"]), true);
+  assert.equal(await other.authority.call("removeRemoteProfile", ["shared"]), false);
+  await assert.rejects(other.authority.call("removeRemoteProfile", ["stopping"]), { message: closed }, "a refusal keeps its words, so the socket can say refused");
+  assert.deepEqual(other.calls, [], "only the sync window ran them");
 });
 
 test("a Settings window picks the sync folder itself and hands turning on, choosing and moving it to the sync window", async (t) => {

@@ -18,7 +18,7 @@ function scrolling(t) {
 
 const flick = (t, events, gap = 16) => {
   for (let i = 0; i < events; i++) {
-    hover.noteRowsScrolled(W);
+    hover.noteRowsScrolled(W, "default", 0);
     t.mock.timers.tick(gap);
   }
 };

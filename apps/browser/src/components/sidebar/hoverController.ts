@@ -3,7 +3,7 @@ import type { LayoutChangeEvent } from "react-native";
 import { markHoverProps } from "../../lib/hoverMarks";
 import { currentWindow } from "../../state/browser/current";
 import { PageProfileContext, useSettings, useWindow } from "../../state/browser/hooks";
-import { cardTargetFor, cardTargetNow } from "../../state/sidebar/cardTarget";
+import { cardTargetFor, cardTargetNow, noteSkippedHoverPlayer } from "../../state/sidebar/cardTarget";
 import {
   cardEntered,
   cardLaidOut,
@@ -20,7 +20,7 @@ import {
   type HoverPointerEvent,
 } from "../../state/sidebar/hover";
 import type { Target } from "../../state/sidebar/sidebarUi";
-import { useMedia, usePinnedWithMediaControls } from "../../state/media/media";
+import { useShowsMiniPlayer } from "../../state/media/media";
 
 export type AwaySource = { away: () => boolean; subscribe: (changed: () => void) => () => void };
 
@@ -51,12 +51,8 @@ export const cardHoverProps = {
 export function useCardTarget<T extends Target>(target: T | null): T | null {
   const cards = useSettings((s) => s.showTabHoverMenu);
   const playerTab = !cards && target?.kind === "tab" ? target.id : undefined;
-  const pinned = usePinnedWithMediaControls(playerTab);
-  const playing = useMedia((m) => {
-    const session = playerTab ? m.sessions[playerTab] : undefined;
-    return !!session && session.controllable && session.playbackState !== "none" && !!(session.title || session.artwork);
-  });
-  return cardTargetFor(target, cards, pinned && playing);
+  const player = useShowsMiniPlayer(playerTab);
+  return cardTargetFor(target, cards, player);
 }
 
 
@@ -117,6 +113,7 @@ export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
   latest.current = { windowId, rowTarget, page, away };
   const isAway = () => latest.current.away.away();
   const entered = useRef<Target | null>(null);
+  const pointed = useRef<Target | null>(null);
   const inside = useRef<HoverPointerEvent | null>(null);
   const [row] = useState(() => ({}));
   const onCurrentPage = () => {
@@ -128,12 +125,14 @@ export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
     const windowId = latest.current.windowId;
     const target = cardTargetNow(latest.current.rowTarget);
     entered.current = target;
+    pointed.current = latest.current.rowTarget;
     if (holdEnterWhileScrolling(windowId, row, () => inside.current && enterRow(inside.current))) return;
+    noteSkippedHoverPlayer(latest.current.rowTarget);
     watchCovered(windowId, refresh, true);
     const enter = () => {
       if (isAway()) return;
       setHovered(true);
-      rowShown(windowId, target);
+      rowShown(windowId, target, pointed.current);
     };
     rowEntered(windowId, target, event, enter, () => setHovered(true));
   });
@@ -149,7 +148,7 @@ export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
         if (dropHeldEnter(windowId, row)) return;
         setHovered(false);
         watchCovered(windowId, refresh, false);
-        rowLeft(windowId, entered.current, event, onCurrentPage());
+        rowLeft(windowId, entered.current, event, onCurrentPage(), pointed.current);
       },
     }),
   );
@@ -159,15 +158,17 @@ export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
       return;
     }
     const { windowId, rowTarget } = latest.current;
+    const target = rowTarget ?? pointed.current;
     setHovered(false);
     watchCovered(windowId, refresh, false);
-    if (rowTarget) releaseAnchor(windowId, rowTarget.id);
+    if (target) releaseAnchor(windowId, target.id);
   });
   useEffect(
     () => () => {
       const { windowId, rowTarget } = latest.current;
+      const target = rowTarget ?? pointed.current;
       watchCovered(windowId, refresh, false);
-      if (rowTarget) releaseAnchor(windowId, rowTarget.id);
+      if (target) releaseAnchor(windowId, target.id);
     },
     [],
   );

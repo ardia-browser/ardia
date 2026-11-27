@@ -44,6 +44,17 @@ class PageMessageTests(unittest.TestCase):
     def test_only_the_current_primary_main_document_drives_tab_state(self):
         self.run_case('senders')
 
+    def test_a_subframe_press_is_kept_per_origin_bounded_and_reset_with_the_page(self):
+        self.run_case('trusted-inputs')
+
+    def test_a_new_primary_page_forgets_presses_before_greeting_its_frames(self):
+        channel = (SOURCE / 'ardia/linux/ac_linux_page_channel.cc').read_text()
+        body = channel[channel.index('void LinuxPageChannel::PrimaryPageChanged('):]
+        body = body[:body.index('\n}\n')]
+        self.assertLess(body.index('trusted_inputs_.Reset();'), body.index('Greet(*frame)'))
+        hello = channel[channel.index('case LinuxPageMessageKind::kHello:'):channel.index('case LinuxPageMessageKind::kPeekHello:')]
+        self.assertIn('trusted_inputs_.Reset();', hello)
+
     def test_payloads_are_rebuilt_from_validated_fields(self):
         self.run_case('normalization')
 

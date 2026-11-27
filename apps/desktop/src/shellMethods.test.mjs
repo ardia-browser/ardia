@@ -582,6 +582,8 @@ test("window close animations, the drag preview, focus cancellation and haptics 
     assert.equal(await resolveHostModule(host, "ArdiaShell", name)(), undefined, name);
   }
   assert.equal(resolveHostModule(host, "ArdiaShell", "switcherPointerMoved")(), false);
+  assert.equal(resolveHostModule(host, "ArdiaShell", "fieldBlurCause")(7), "inWindow");
+  assert.equal(resolveHostModule(host, "ArdiaShell", "watchFieldBlurs")(7, true), undefined);
   for (const name of ["fetchBangList", "startDictation"]) {
     await assert.rejects(resolveHostModule(olderEngine("ArdiaShell.fetchBangList"), "ArdiaShell", name)(null), { code: "ERR_UNAVAILABLE" }, name);
   }

@@ -2028,8 +2028,9 @@ and appears over it. The phone reads the text from the live tab and processes it
     (`PageSummaryOutlineTests.whatIsShownWhileWritingNeverChanges` checks every prefix of several shapes). If the
     writer stops after lines have been shown, they stay visible with an incomplete-summary notice. If no lines have
     been shown, generation retries with half the text before falling back to key lines. Text with no line in it counts as nothing written.
-  - **Colours.** The stage is drawn in the open space's look (`PageSummaryLook`, from `LaunchLook.recalled()`, the look
-    the app last drew; Incognito's on a private page): its `ProfileBackdrop` with its theme, the look's deck blobs and
+  - **Colours.** The stage is drawn in the open space's look (`PageSummaryLook`, from the `summaryLook` the page's
+    `PageSurface` hands its `PageView`: the same look and dark mode the deck draws, never the launch look a Spaces
+    sheet or another space's backdrop last remembered, #4481; Incognito's on a private page): its `ProfileBackdrop` with its theme, the look's deck blobs and
     swatch as two blurred blooms turning once every 5 and 8 seconds while it waits and fading over 2 s once the
     summary is there, the swatch as the rows' discs, and light or dark text by the look's own contrast
     (`ProfileLook.inkIsLight`, or the custom theme's appearance).

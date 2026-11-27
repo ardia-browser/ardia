@@ -88,6 +88,8 @@ export type FocusNative = {
   saveKeyResponder(windowId: string): Promise<number>;
   restoreKeyResponder(token: number): Promise<boolean>;
   discardKeyResponder(token: number): Promise<void>;
+  fieldBlurCause?(fieldTag: number): "keyLoss" | "inWindow";
+  watchFieldBlurs?(fieldTag: number, watch: boolean): void;
   setSwitcherCapture(active: boolean): Promise<void>;
   setDragEscapeCapture(active: boolean): Promise<void>;
   takeHoverCounts?(): Record<string, Record<string, number>>;

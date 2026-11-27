@@ -1,4 +1,5 @@
 import ArdiaBrowser
+import ArdiaDesign
 import ExpoModulesCore
 import QuartzCore
 import UIKit
@@ -484,6 +485,11 @@ public final class PageViewModule: Module {
 
       Prop("pullToRefresh") { (view: PageView, pulls: Bool?) in
         view.pullToRefresh = pulls ?? true
+      }
+
+      Prop("summaryLook") { (view: PageView, look: [String: Any]?) in
+        view.summaryColors = LookColors(color: look?["color"] as? String, themeColors: look?["themeColors"] as? [String], darkThemeColors: look?["darkThemeColors"] as? [String], themeLook: ThemeLook(sanitizing: look?["themeLook"]))
+        view.summaryDark = look?["dark"] as? Bool
       }
 
       OnViewDidUpdateProps { (view: PageView) in

@@ -3,12 +3,12 @@
     { "issue": 3244, "rule": "structure",
       "steps": [["shareTabs",0,0,0,398],["createProfile",0,0,0,0],["newWindow",0,0,0,0],["select",0,3,0,0],["group",719,0,0,0],["switchProfile",1,225,0,0],["leaveGroup",615,0,0,0]] },
     { "issue": 3245, "rule": "pins",
-      "steps": [["openTab",1,66,902,38],["newWindow",1,838,993,639],["openTabInProfile",0,788,865,833],["newWindow",0,121,403,16],["group",0,1,788,583],["syncPatch",0,50,619,317],["openTab",680,0,450,329],["leaveGroup",1,0,273,545],["pin",852,629,0,156],["openTab",0,270,537,807],["openTab",0,89,786,282],["openTabInProfile",0,626,77,437],["shareTabs",0,976,441,262],["closeWindow",0,28,187,562],["select",0,562,72,846]] },
-    { "issue": 3246, "rule": "pins",
-      "steps": [["newWindow",0,710,498,37],["shareTabs",0,42,44,429],["group",458,1,524,28],["ungroup",573,0,239,834]] }
+      "steps": [["openTab",1,66,902,38],["newWindow",1,838,993,639],["openTabInProfile",0,788,865,833],["newWindow",0,121,403,16],["group",0,1,788,583],["syncPatch",0,50,619,317],["openTab",680,0,450,329],["leaveGroup",1,0,273,545],["pin",852,629,0,156],["openTab",0,270,537,807],["openTab",0,89,786,282],["openTabInProfile",0,626,77,437],["shareTabs",0,976,441,262],["closeWindow",0,28,187,562],["select",0,562,72,846]] }
   ],
   "holding": [
     { "issue": 2175,
-      "steps": [["shareTabs",0,204,419,362],["pin",0,443,666,294],["newWindow",0,897,158,592],["createProfile",0,934,393,697],["createProfile",0,620,518,84],["closeWindow",0,185,682,168],["newWindow",424,0,766,229],["closeWindow",0,979,945,289]] }
+      "steps": [["shareTabs",0,204,419,362],["pin",0,443,666,294],["newWindow",0,897,158,592],["createProfile",0,934,393,697],["createProfile",0,620,518,84],["closeWindow",0,185,682,168],["newWindow",424,0,766,229],["closeWindow",0,979,945,289]] },
+    { "issue": 3246,
+      "steps": [["newWindow",0,710,498,37],["shareTabs",0,42,44,429],["group",458,1,524,28],["ungroup",573,0,239,834]] }
   ]
 }

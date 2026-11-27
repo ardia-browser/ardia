@@ -95,7 +95,7 @@ export function PillButtonView(props: PillProps) {
               >
                 <HoverSwap shown={pressed || hovered} rest={rest.fill} color={look.fill} radius={capsule(chipHeight)} />
                 {icon ? <Symbol name={icon} size={10.5} weight="semibold" color={ink} style={{ width: 14, height: 14 }} /> : null}
-                <Text style={{ ...typeScale.small, fontWeight: weights.medium, color: ink }}>{title}</Text>
+                <Text ardiaCentersCapitals style={{ ...typeScale.small, fontWeight: weights.medium, color: ink }}>{title}</Text>
               </Animated.View>
             );
           }}
@@ -120,7 +120,7 @@ export function PillButtonView(props: PillProps) {
           return (
             <Animated.View style={[{ height, paddingHorizontal: space.l, alignItems: "center", justifyContent: "center" }, scaleStyle]}>
               <HoverSwap shown={!disabled && (pressed || hovered)} rest={pillLook(theme, "prompt", primary, false, false).fill} color={look.fill} radius={size ? capsule(height) : radii.tile} />
-              <Text numberOfLines={1} style={{ ...typeScale.body, fontWeight: weights.medium, color: look.text }}>
+              <Text numberOfLines={1} ardiaCentersCapitals style={{ ...typeScale.body, fontWeight: weights.medium, color: look.text }}>
                 {title}
               </Text>
             </Animated.View>

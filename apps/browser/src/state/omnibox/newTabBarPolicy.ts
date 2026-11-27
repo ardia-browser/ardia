@@ -5,10 +5,11 @@ import type { Tab } from "../browser/types";
 import { hasPage, isAsleep } from "../tabs/pageSession";
 import { keptWithTopApp } from "../tabs/tabs";
 import { newTabOpensOf } from "../settings/settings";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
 export const NEW_TAB_BAR_POLICY = {
   closeTabKeyOnlyDismissesBar: true,
-  dismissOnWindowDeactivation: true,
+  dismissOnWindowDeactivation: !PLATFORM_FEATURES.holdsBarOnKeyLoss,
   showOnceOverNewEmptyWindow: true,
   showOnLaunch: true,
   closingLastTabLeavesEmptyWindow: true,

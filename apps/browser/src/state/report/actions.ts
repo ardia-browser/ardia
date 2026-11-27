@@ -1,5 +1,5 @@
 import { APP_INGEST_KEY, INGEST_KEY_HEADER } from "@ardia/core";
-import { cancelUploads, fileSize, onReportEvent, postReportJson, removeReportFile, sendsReportFiles, uploadFile } from "../../platform/report";
+import { NO_UPLOADER, cancelUploads, fileSize, onReportEvent, postReportJson, removeReportFile, sendsReportFiles, uploadFile } from "../../platform/report";
 import { feedbackURLOverride } from "../../platform/launchConfig";
 import { confirm } from "../../platform/dialogs";
 import { readDocument, removeDocument, writeDocument } from "../../platform/documents";
@@ -28,7 +28,7 @@ import {
 import { discardRecording, discardTrace, lastRecordingStats, startRecording, stopRecording } from "./recording";
 import { SAVED_DRAFT_DOC, restoredDraft, savedDraftJson, savedDraftOf } from "./savedDraft";
 import { currentReport, initialReportState, patchDraft, patchReport, useReportSheet, type ReportSheetState } from "./store";
-import { isBusy, restartReason, sendReport, type RestartReason, type UploadDeps, type UploadState } from "./upload";
+import { NOT_SENT_STATUS, isBusy, restartReason, sendReport, type RestartReason, type UploadDeps, type UploadState } from "./upload";
 
 export const FEEDBACK_URL = "https://ardia.dev/api/feedback";
 const POST_TIMEOUT_MS = 30_000;
@@ -160,7 +160,10 @@ function listenProgress() {
 
 const deps: UploadDeps = {
   postJson,
-  putFile: async (id, url, headers, file) => (await uploadFile(id, url, "PUT", { ...headers, "Content-Type": file.type }, file.path)).status,
+  putFile: async (id, url, headers, file) => {
+    const reply = await uploadFile(id, url, "PUT", { ...headers, "Content-Type": file.type }, file.path);
+    return reply.error === NO_UPLOADER ? NOT_SENT_STATUS : reply.status;
+  },
   onProgress(handler) {
     listenProgress();
     progressHandlers.add(handler);

@@ -167,7 +167,7 @@ extension PageView {
 
   @MainActor
   var summaryLook: PageSummaryLook {
-    PageSummaryLook(isPrivate: page?.isPrivate ?? isPrivate, appDark: traitCollection.userInterfaceStyle == .dark)
+    PageSummaryLook(isPrivate: page?.isPrivate ?? isPrivate, colors: summaryColors, dark: summaryDark ?? (traitCollection.userInterfaceStyle == .dark))
   }
 
   @MainActor

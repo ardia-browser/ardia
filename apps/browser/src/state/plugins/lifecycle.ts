@@ -25,6 +25,7 @@ import { forgetPluginGestures } from "./gestures";
 import { sendValues } from "./channel";
 import { adoptLegacyInstalls, reconcilePrograms, removePrograms } from "./programs";
 import { isBundledRetiredRecord, noteRetiredRecords, RETIRED_OFFICIAL_PLUGINS } from "./retiredOfficial";
+import { passAfterEachRequest } from "./scanPasses";
 import { ownValue } from "../../lib/decode";
 
 const MAX_PLUGINS = 64;
@@ -151,44 +152,28 @@ function applyListings(given: PluginListing[], consent: ConsentToken | null, can
   void adoptLegacyInstalls(consent).then((adopted) => adopted && reconcilePlugins(consent));
 }
 
-let scanning: Promise<void> | null = null;
-let nextScan: { consent: ConsentToken | null } | null = null;
-
-export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
-  if (scanning) {
-    nextScan = { consent };
-    return scanning;
-  }
-  scanning = (async () => {
-    let scan: { consent: ConsentToken | null } | null = { consent };
-    while (scan) {
-      const asked = scan.consent;
-      nextScan = null;
-      const entries = await listPluginFolders().catch((error: unknown) => {
-        warnFor(asked, "[plugins] couldn't list the plugins folder", error);
-        return null;
-      });
-      if (entries && currentPlugins().pinned === null) {
-        const pinned = PLATFORM_FEATURES.plugins ? await officialPluginsPinned().catch(() => null) : null;
-        usePlugins.setState({ pinned: pinned ?? [] });
-      }
-      if (entries) {
-        const claims = await loadProgramClaims();
-        const listings = listingsOf(entries, claims).filter((l) => keptLegacy(l, currentPlugins().records));
-        const withdrawing = withdrawBefore({ listings: listingsByName(listings), records: currentPlugins().records }, asked);
-        if (withdrawing) await withdrawing;
-        applyListings(listings, asked, candidatesOf(entries, claims));
-        pluginsScanned(asked);
-      }
-      closeChangedConsent();
-      if (!currentPlugins().scanned) usePlugins.setState({ scanned: true });
-      scan = nextScan;
-    }
-  })().finally(() => {
-    scanning = null;
+async function scanOnce(asked: ConsentToken | null) {
+  const entries = await listPluginFolders().catch((error: unknown) => {
+    warnFor(asked, "[plugins] couldn't list the plugins folder", error);
+    return null;
   });
-  return scanning;
+  if (entries && currentPlugins().pinned === null) {
+    const pinned = PLATFORM_FEATURES.plugins ? await officialPluginsPinned().catch(() => null) : null;
+    usePlugins.setState({ pinned: pinned ?? [] });
+  }
+  if (entries) {
+    const claims = await loadProgramClaims();
+    const listings = listingsOf(entries, claims).filter((l) => keptLegacy(l, currentPlugins().records));
+    const withdrawing = withdrawBefore({ listings: listingsByName(listings), records: currentPlugins().records }, asked);
+    if (withdrawing) await withdrawing;
+    applyListings(listings, asked, candidatesOf(entries, claims));
+    pluginsScanned(asked);
+  }
+  closeChangedConsent();
+  if (!currentPlugins().scanned) usePlugins.setState({ scanned: true });
 }
+
+export const rescanPlugins = passAfterEachRequest(scanOnce);
 
 let lastConsentId = 0;
 
@@ -212,10 +197,12 @@ export function consentTarget(name: string, official = false): PluginListing | u
   return listing;
 }
 
-export function requestPluginConsent(name: string, official = false): boolean {
+export function requestPluginConsent(name: string, official = false, claim?: (id: number) => void): boolean {
   const target = consentTarget(name, official);
   if (currentPlugins().consent || !target?.manifest || !target.hash) return false;
-  usePlugins.setState({ consent: { id: ++lastConsentId, name, hash: target.hash }, unsaved: null });
+  const id = ++lastConsentId;
+  claim?.(id);
+  usePlugins.setState({ consent: { id, name, hash: target.hash }, unsaved: null });
   return true;
 }
 

@@ -384,7 +384,7 @@ try {
   await sync("C");
   const cAfter = await state("C");
   check("A's Delete My Sync Data empties the folder", execSync(`find ${FOLDER} -mindepth 1 | wc -l`).toString().trim() === "0");
-  check("C shows Dia's reset message and stops", cAfter.status === "reset" && /reset from another device/.test(cAfter.error ?? "") && !cAfter.enabled, text(cAfter.status));
+  check("C shows Dia's out of sync message and waits with its setup kept", cAfter.status === "stalled" && /reset from another device/.test(cAfter.error ?? "") && cAfter.enabled && cAfter.deviceId === cBefore.deviceId, text(cAfter.status));
   check("A and C keep all their data", same(a, await state("A")) && same(cBefore, cAfter));
 } catch (error) {
   check("the run finished", false, error.stack);

@@ -10,11 +10,11 @@
 </p>
 
 <h3 align="center">
-  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48 for Mac</a>
+  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.49/Ardia-0.2.49.dmg">Download Ardia 0.2.49 for Mac</a>
 </h3>
 
 <p align="center">
-  134 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
+  136 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
   Like your paint wet? <a href="https://ardia.dev/nightly">The nightly</a> has every fix the day it’s made, smudges and all.<br>
   Homebrew: <code>brew install ardia-browser/tap/ardia</code> · nightly: <code>brew install ardia-browser/tap/ardia@nightly</code><br>
   On your phone: <a href="https://testflight.apple.com/join/yXHasDmr">iPhone (TestFlight)</a> · <a href="https://github.com/ardia-browser/ardia/releases/download/android-v1.0.2/Ardia-1.0.2.apk">Android (APK)</a><br>
@@ -86,11 +86,11 @@ Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions a
 | Intel Macs | Apple Silicon only. | ✗ No |
 
 <h3 align="center">
-  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48</a>
+  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.49/Ardia-0.2.49.dmg">Download Ardia 0.2.49</a>
 </h3>
 
 <p align="center">
-  It’s 134 MB and one drag into Applications.<br>
+  It’s 136 MB and one drag into Applications.<br>
   Not on a Mac? Watch › Custom › Releases up top and GitHub tells you when it is.
 </p>
 

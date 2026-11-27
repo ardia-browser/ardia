@@ -31,6 +31,8 @@ final class PageView: ExpoView {
   var closesOnSwipeBack = false
   var reopensOnSwipeForward = false
   var pullToRefresh = true
+  var summaryColors = LookColors()
+  var summaryDark: Bool?
   private(set) var page: WebTab?
 
   weak var hostedWebView: WKWebView?

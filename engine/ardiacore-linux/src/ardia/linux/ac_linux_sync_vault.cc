@@ -250,6 +250,11 @@ VaultError Vault::CreateChain() const {
   return {};
 }
 
+VaultError Vault::MissingOr(std::string message) const {
+  if (!ChainExists()) return {"This device's data is gone from the sync folder", true};
+  return {std::move(message)};
+}
+
 VaultError Vault::Write(std::string_view scope, const Bytes& payload, std::string* id) const {
   *id = NewFileId();
   if (!IsTag(*id)) return {"Couldn't make a file name"};
@@ -265,26 +270,27 @@ VaultError Vault::WriteAs(std::string_view scope, const Bytes& payload, const st
   if (scope_tag.empty()) return {"The sync scope isn't valid"};
   auto sealed = keys_.Seal(payload, scope_tag, id);
   if (!sealed) return {"Couldn't seal the sync file"};
-  const Fd chain = OpenChild(folder, keys_.chain_tag(), true);
+  const Fd chain = OpenChild(folder, keys_.chain_tag(), false);
+  if (!chain.valid()) return {"This device's data is gone from the sync folder", true};
   const Fd directory = OpenChild(chain, scope_tag, true);
-  if (!directory.valid()) return {ErrorText("Couldn't open the sync data folder", errno)};
+  if (!directory.valid()) return MissingOr(ErrorText("Couldn't open the sync data folder", errno));
   RemoveStaleStaging(directory, NowSeconds());
   const std::string staging_id = NewFileId();
   if (staging_id.empty()) return {"Couldn't make a staging name"};
   const std::string staging = kStagingPrefix + staging_id;
   const std::string destination = id + kFileExtension;
   const int fd = openat(directory.get(), staging.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, kFileMode);
-  if (fd < 0) return {ErrorText("Couldn't write a sync file", errno)};
+  if (fd < 0) return MissingOr(ErrorText("Couldn't write a sync file", errno));
   const bool written = WriteAll(fd, *sealed) && fsync(fd) == 0;
   const int write_error = errno;
   const bool closed = close(fd) == 0;
   if (!written || !closed) {
     unlinkat(directory.get(), staging.c_str(), 0);
-    return {ErrorText("Couldn't write a sync file", written ? errno : write_error)};
+    return MissingOr(ErrorText("Couldn't write a sync file", written ? errno : write_error));
   }
   if (const int error = RenameNoReplaceAt(directory, staging, destination); error != 0) {
     unlinkat(directory.get(), staging.c_str(), 0);
-    return {ErrorText("Couldn't move a sync file into place", error)};
+    return MissingOr(ErrorText("Couldn't move a sync file into place", error));
   }
   SyncDirectory(directory);
   return {};

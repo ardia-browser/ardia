@@ -36,6 +36,7 @@ import {
 import { deleteDocument, readDocument, refreshDocument, saveDocument } from "./shims/shellBase";
 import { useBrowser } from "../../browser/src/state/browser/store";
 import { engineProfile } from "../../browser/src/state/browser/model";
+import { forwardProfileDeletions, whenProfileGone } from "./profileRetirement";
 import {
   INTERACTIVE_CALL_TIMEOUT_MS,
   SYNC_CHANNEL,
@@ -170,6 +171,7 @@ function remoteFor(host: ArdiaHost): SyncRemote {
     removeRemoteProfile: (syncId: string) => engine.removeRemoteProfile(syncId),
     removeSyncedDevice: (deviceId: string) => engine.removeSyncedDevice(deviceId),
     adoptProfileTheme: (profileId: string) => engine.adoptProfileTheme(profileId),
+    retireProfile: (profileId: string) => whenProfileGone(useBrowser, profileId, () => engine.retireProfile(profileId)),
     useFolder: (path: string) => engine.setSyncFolder(path),
     moveFolder: (path: string) => engine.moveSyncFolder(path),
     sendTargets: (profileIds: string[]) => Object.fromEntries(profileIds.map((profileId) => [profileId, engine.sendTargets(profileId)])),
@@ -223,6 +225,7 @@ export function startLinuxSync(options: { host?: ArdiaHost; candidate: boolean; 
     present: (state) => presentSyncState(state, keyStore),
   });
   authority = started;
+  forwardProfileDeletions(leading, (profileId) => forward("retireProfile", [profileId]), (profileId) => engine.retireProfile(profileId));
   const stopTargets = useSync.subscribe(refreshSendTargets);
   if (typeof addEventListener === "function")
     addEventListener("pagehide", () => {
@@ -369,7 +372,7 @@ function refreshSendTargets() {
 
 export const onTabsReceived = engine.onTabsReceived;
 export const takeSnapshotWrites = engine.takeSnapshotWrites;
-export const takeOpenTabSyncCounts = engine.takeOpenTabSyncCounts;
+export const takeSyncDataCounts = engine.takeSyncDataCounts;
 export { whenSyncCore } from "./hostSync.ts";
 
 export function sendTargets(profileId: string): SendTarget[] {

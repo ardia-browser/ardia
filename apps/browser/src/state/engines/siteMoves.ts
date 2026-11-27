@@ -18,16 +18,24 @@ const tabMoves = new Map<string, TabMoves>();
 const probingVideo = new Set<string>();
 let unwatch: (() => void) | null = null;
 
-function movesOf(tabId: string): TabMoves {
+function forgetClosedTabs() {
   unwatch ??= useBrowser.subscribeTo(["tabs"], (s) => {
     for (const [id, moves] of tabMoves) {
       if (s.tabs[id]) continue;
       if (moves.cooling) clearTimeout(moves.cooling);
       tabMoves.delete(id);
     }
+    if (tabMoves.size || !unwatch) return;
+    unwatch();
+    unwatch = null;
   });
+}
+
+function movesOf(tabId: string): TabMoves {
   let moves = tabMoves.get(tabId);
-  if (!moves) tabMoves.set(tabId, (moves = { lastMovedAt: 0, moving: false, pending: null, cooling: null, visit: 0 }));
+  if (moves) return moves;
+  tabMoves.set(tabId, (moves = { lastMovedAt: 0, moving: false, pending: null, cooling: null, visit: 0 }));
+  forgetClosedTabs();
   return moves;
 }
 
@@ -150,7 +158,8 @@ export function followSiteChoice(tabId: string, engine: PageEngine, url: string,
   if (!t) return;
   const consent = consentToken();
   dropMovesLeftBehind(tabId);
-  if (siteOf(url) !== siteOf(previousUrl)) movesOf(tabId).visit++;
+  const moves = tabMoves.get(tabId);
+  if (moves && siteOf(url) !== siteOf(previousUrl)) moves.visit++;
   const navigation = navigationNow(tabId);
   if (singleEngine(s)) {
     const forced = modeEngineFor(s, t, url);

@@ -20,8 +20,9 @@ test("the app still hands every page view its warm flag", () => {
 });
 
 test("a WebKit page shows only while it is the visible tab, so a warm neighbour never covers the page on screen", () => {
-  const hidden = [...tab.matchAll(/webView\?\.isHidden = (.+)$/gm)].map((m) => m[1].trim());
-  assert.deepEqual(hidden, ["!visible"]);
+  const hidden = [...tab.matchAll(/(?:webView\?|view)\.isHidden = (.+?)(?: \}|$)/gm)].map((m) => m[1].trim());
+  assert.deepEqual(hidden, ["WebKitFullscreenPage.hidesPage(view, in: self, visible: visible)"]);
+  assert.match(tab, /^\s*isHidden = !visible$/m);
   assert.doesNotMatch(tab, /\bwarm\b/);
 });
 

@@ -960,7 +960,12 @@ in `webui_frame.cc`: top-edge resize, `HTMAXBUTTON` over the shell's maximize bu
   closed again, and the watch reopens the session. Every browser window's `WM_CLOSE` goes through `RequestClose`, with
   or without companion tabs (`RoutesSystemClose`), so a window still waiting on its `beforeunload` counts as leaving and
   a second window closed meanwhile ends the session; a repeated `WM_CLOSE` while the session is ending is swallowed
-  (`SwallowsSystemClose`). Logging off still closes without the handshake.
+  (`SwallowsSystemClose`). Private windows stay outside the session, since their shell can't store it: they never
+  lead telemetry (`leadsTelemetry`), aren't offered `ArdiaShell.sessionEnded` or the launch-step calls
+  (`OfferedToPrivateWindow`), never count as keeping the session open and are never asked to end or resume it
+  (`KeepsSessionOpen`), and closing one never ends it. So closing the last regular window with a private one still
+  open ends the session there, and a regular window opened afterwards resumes it once it is listening. Logging off
+  still closes without the handshake.
 - Launch steps: `ArdiaShell.launchSteps` and `ArdiaShell.completeLaunchStep` keep one process-wide record in the
   registry (`webui_launch_steps.h`, whose step list a test keeps equal to Linux's `ac_linux_launch_steps.h`). A window that takes over telemetry leadership, or a
   reloaded one, finds the `telemetry` step done and continues the session instead of starting a fresh launch (a false

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { answerSessionEnds, SESSION_ENDED_METHOD } from "./sessionEndHandshake.ts";
 import { createResumeRule } from "./telemetrySettle.ts";
-import { continuesSession } from "./telemetryContinuation.ts";
+import { continuesSession, leadsTelemetry } from "./telemetryContinuation.ts";
 
 const REPO = fileURLToPath(new URL("../../../", import.meta.url));
 const bootstrap = readFileSync(join(REPO, "engine/ardiacore-linux/src/ardia/linux/bootstrap.js"), "utf8");
@@ -209,4 +209,43 @@ test("the Windows shell serves launch steps to every window from one process-wid
   const view = read("webui_host_view.cc");
   const intercept = view.slice(view.indexOf("bool ShellHostView::InterceptSystemClose()"), view.indexOf("bool ShellHostView::CompanionsHoldTabs()"));
   assert.match(intercept, /RoutesSystemClose\(is_utility\(\), CompanionsHoldTabs\(\)\)/, "every browser window's WM_CLOSE goes through RequestClose, so an overlapping close is tracked");
+});
+
+test("a private window never leads telemetry, so it never takes over a session it can't store, while regular windows do", () => {
+  const host = (bootstrap) => ({ bootstrap: { windowId: "w", profileId: "default", ...bootstrap } });
+  assert.equal(leadsTelemetry(host({}), false), true);
+  assert.equal(leadsTelemetry(host({}), true), false, "a utility window follows");
+  assert.equal(leadsTelemetry(host({ privateWindow: { window: { id: "p1" }, tabs: {} } }), false), false, "a private window follows");
+});
+
+test("with a private window left open, the last regular window ends the session, the private shell is never asked or offered the calls, and a new regular window resumes it", async () => {
+  const regular = nativeShell();
+  const steps = [];
+  answerSessionEnds({ host: regular.host, settle: async (endsSession, cause) => { steps.push(`end ${cause}`); return "end-7"; }, resume: async () => assert.fail("the closing window doesn't resume"), report: (error) => assert.fail(String(error)) });
+  const privateShell = nativeShell({ capabilities: [] });
+  answerSessionEnds({ host: privateShell.host, settle: async () => assert.fail("a private shell never ends the session"), resume: async () => assert.fail("a private shell never resumes it"), report: () => {} });
+  regular.emit("shell.sessionEnding", { token: "native-7" });
+  privateShell.emit("shell.sessionResumed", { token: "native-7" });
+  await settled();
+  assert.deepEqual(steps, ["end native-7"]);
+  assert.deepEqual(regular.sent, [{ method: SESSION_ENDED_METHOD, args: ["native-7"] }]);
+  assert.deepEqual(privateShell.sent, []);
+  const reopened = nativeShell();
+  const resumed = [];
+  answerSessionEnds({ host: reopened.host, settle: async () => assert.fail("nothing is closing"), resume: async (cause) => void resumed.push(cause), report: (error) => assert.fail(String(error)) });
+  reopened.emit("shell.sessionResumed", { token: "native-7" });
+  await settled();
+  assert.deepEqual(resumed, ["native-7"]);
+
+  const read = (file) => readFileSync(join(REPO, "scripts/windows/engine/src/ardia/win/webui", file), "utf8");
+  const windows = read("webui_windows.cc");
+  const counting = windows.slice(windows.indexOf("size_t WindowRegistry::OpenBrowserWindowsBesides("), windows.indexOf("ShellHostView* WindowRegistry::SessionEndListener("));
+  assert.match(counting, /KeepsSessionOpen\(host->is_utility\(\),\s*host->private_window\(\),\s*host->LeavingSession\(\)\)/, "a private window never counts as keeping the session open");
+  const listener = windows.slice(windows.indexOf("ShellHostView* WindowRegistry::SessionEndListener("), windows.indexOf("void WindowRegistry::EndSessionThen("));
+  assert.match(listener, /KeepsSessionOpen\(host->is_utility\(\),\s*host->private_window\(\), false\)/, "a private window is never asked to end the session");
+  const watch = windows.slice(windows.indexOf("void WindowRegistry::WatchForCancelledQuit()"), windows.indexOf("void WindowRegistry::ResetAllCompanionConfirmations()"));
+  assert.match(watch, /ListensForSessionEnd\(\)\)\s*\{\s*\+\+listening;/, "the session resumes only once a regular window can take it");
+  const view = read("webui_host_view.cc");
+  assert.match(view, /if \(is_utility\(\) \|\| private_window\(\) \|\|\s*!webui_window::ClosingEndsSession\(/, "closing a private window never ends the session");
+  assert.match(view, /if \(!private_window\(\) \|\|\s*webui_window::OfferedToPrivateWindow\(capability\)\)/, "a private shell isn't offered the session or launch-step calls the host refuses it");
 });

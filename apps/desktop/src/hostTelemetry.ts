@@ -192,7 +192,7 @@ export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolea
   setInterval(() => {
     if (!current.leading()) emitWindowUsage(consentNow());
   }, WINDOW_USAGE_MS);
-  if (!isLinuxUtility(host.bootstrap.windowId)) answerSessionEnds({ host, settle: settleHostTelemetry, resume: resumeHostTelemetry, report });
+  if (candidate) answerSessionEnds({ host, settle: settleHostTelemetry, resume: resumeHostTelemetry, report });
   if (isLinuxUtility(options.host.bootstrap.windowId)) setCountsRelayNow((consent) => {
     if (!current.leading()) emitWindowUsage(consent);
   });
@@ -215,7 +215,7 @@ async function reopenHostTelemetry(token: string) {
 }
 
 async function resumeHostTelemetry(cause: string) {
-  await leadership?.request("resume", END_TIMEOUT_MS, cause).catch(report);
+  await leadership?.request("resume", RESET_TIMEOUT_MS, cause).catch(report);
 }
 
 export const linuxTelemetryHooks = {

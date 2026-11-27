@@ -93,6 +93,32 @@ void TestOverlappingClosesHandTheEndToTheLastWindow() {
   assert(!ClosingEndsSession(first_cancelled ? 0 : 1));
 }
 
+void TestPrivateWindowsNeverKeepOrEndTheSession() {
+  assert(KeepsSessionOpen(false, false, false));
+  assert(!KeepsSessionOpen(false, true, false));
+  assert(!KeepsSessionOpen(true, false, false));
+  assert(!KeepsSessionOpen(false, false, true));
+  assert(!OfferedToPrivateWindow(kSessionEndedCall));
+  assert(!OfferedToPrivateWindow("ArdiaShell.launchSteps"));
+  assert(!OfferedToPrivateWindow("ArdiaShell.completeLaunchStep"));
+  assert(OfferedToPrivateWindow("ArdiaShell.quit"));
+}
+
+void TestTheLastRegularWindowEndsTheSessionWhileAPrivateOneStays() {
+  const bool private_window_counts = KeepsSessionOpen(false, true, false);
+  const size_t others_open = private_window_counts ? 1 : 0;
+  assert(ClosingEndsSession(others_open));
+  SessionEnd end;
+  assert(end.Begin("t1") == SessionEndStep::kAsk);
+  assert(end.Acknowledge("t1"));
+  const size_t listening_regular_windows = 0;
+  assert(end.Resume(false, listening_regular_windows).empty());
+  assert(end.ended());
+  const size_t after_a_new_regular_window = 1;
+  assert(end.Resume(false, after_a_new_regular_window) == "t1");
+  assert(!end.ended());
+}
+
 void TestOnlyTheCurrentValidTokenReleasesAClose() {
   SessionEnd end;
   assert(!end.Acknowledge("t1"));
@@ -188,6 +214,8 @@ int main(int argc, char** argv) {
   TestOnlyTheCurrentValidTokenReleasesAClose();
   TestEveryBrowserWindowCloseGoesThroughTheShell();
   TestOverlappingClosesHandTheEndToTheLastWindow();
+  TestPrivateWindowsNeverKeepOrEndTheSession();
+  TestTheLastRegularWindowEndsTheSessionWhileAPrivateOneStays();
   std::cout << "webui_session_end_policy_test: all assertions passed\n";
   return 0;
 }

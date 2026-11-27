@@ -53,6 +53,18 @@ constexpr bool SwallowsSystemClose(bool close_committed, bool close_started) {
   return close_committed && !close_started;
 }
 
+constexpr bool KeepsSessionOpen(bool utility,
+                                bool private_window,
+                                bool leaving) {
+  return !utility && !private_window && !leaving;
+}
+
+constexpr bool OfferedToPrivateWindow(std::string_view capability) {
+  return capability != kSessionEndedCall &&
+         capability != "ArdiaShell.launchSteps" &&
+         capability != "ArdiaShell.completeLaunchStep";
+}
+
 constexpr bool RoutesSystemClose(bool utility, bool companions_hold_tabs) {
   return !utility || companions_hold_tabs;
 }

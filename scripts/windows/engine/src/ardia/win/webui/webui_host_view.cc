@@ -1422,8 +1422,9 @@ void ShellHostView::CommitClose() {
   }
   close_committed_ = true;
   WindowRegistry& registry = WindowRegistry::Get();
-  if (is_utility() || !webui_window::ClosingEndsSession(
-                          registry.OpenBrowserWindowsBesides(this))) {
+  if (is_utility() || private_window() ||
+      !webui_window::ClosingEndsSession(
+          registry.OpenBrowserWindowsBesides(this))) {
     close_started_ = true;
     browser_->GetWindow()->Close();
     return;
@@ -1735,7 +1736,10 @@ std::string ShellHostView::BootstrapJson() const {
   }
   base::ListValue capabilities;
   for (std::string_view capability : HostCapabilities(is_utility())) {
-    capabilities.Append(capability);
+    if (!private_window() ||
+        webui_window::OfferedToPrivateWindow(capability)) {
+      capabilities.Append(capability);
+    }
   }
   for (const auto& calls :
        {std::span<const std::string_view>(kDefaultBrowserCalls),

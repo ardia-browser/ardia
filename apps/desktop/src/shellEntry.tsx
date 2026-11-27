@@ -95,6 +95,7 @@ import { linuxLiveHooks } from "./liveHooks";
 import { connectCalendar, refreshCalendar, setCalendarHidden, useCalendar } from "../../browser/src/state/live/calendar";
 import { useMeetingAlert } from "../../browser/src/state/live/alerts";
 import { linuxTelemetryHooks, reportRecoverableRender, reportUncaughtRender, startHostTelemetry, whenTelemetryLeads } from "./hostTelemetry";
+import { leadsTelemetry } from "./telemetryContinuation.ts";
 import { launchCommitted } from "../../browser/src/state/telemetry/journeys";
 import { markFirstWindow } from "../../browser/src/state/telemetry/track";
 import { probeKeyringAfterLaunch } from "./keyringProbe";
@@ -158,7 +159,7 @@ async function start() {
   followWindowMaximized(ardiaHost, windowId);
   followMaximizeButtonState(ardiaHost, windowId);
   startConfigFiles(colorRoles, launch);
-  startHostTelemetry({ host: ardiaHost, candidate: !utility, locks: navigator.locks as unknown as LeaderLocks });
+  startHostTelemetry({ host: ardiaHost, candidate: leadsTelemetry(ardiaHost, utility), locks: navigator.locks as unknown as LeaderLocks });
   setDownloadFlowOwner(linuxTelemetryHooks.leading);
   if (ardiaHost.bootstrap.openedFloating) noteWindowOpenedFloating(!utility, consentAtLaunch());
   if (ardiaHost.bootstrap.startup === true && stored && sessionRowLists(stored)) noteSessionFromOtherShell(consentAtLaunch());

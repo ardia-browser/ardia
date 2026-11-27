@@ -2,6 +2,8 @@ import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
 
 const TELEMETRY_STEP = "telemetry";
 
+export const leadsTelemetry = (host: ArdiaHost, utility: boolean) => !utility && !host.bootstrap.privateWindow;
+
 export async function continuesSession(host: ArdiaHost, report: (error: unknown) => void): Promise<boolean> {
   if (!hostSupports("ArdiaShell.launchSteps", host) || !hostSupports("ArdiaShell.completeLaunchStep", host)) return false;
   try {

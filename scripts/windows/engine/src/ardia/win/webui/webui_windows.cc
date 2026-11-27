@@ -849,7 +849,10 @@ size_t WindowRegistry::OpenBrowserWindowsBesides(
     const ShellHostView* closing) const {
   size_t open = 0;
   for (const auto& [session, host] : hosts_) {
-    if (host != closing && !host->is_utility() && !host->LeavingSession()) {
+    if (host != closing &&
+        webui_window::KeepsSessionOpen(host->is_utility(),
+                                       host->private_window(),
+                                       host->LeavingSession())) {
       ++open;
     }
   }
@@ -857,19 +860,23 @@ size_t WindowRegistry::OpenBrowserWindowsBesides(
 }
 
 ShellHostView* WindowRegistry::SessionEndListener(ShellHostView* asker) const {
-  if (asker && !asker->is_utility() && asker->ListensForSessionEnd()) {
+  const auto listens = [](const ShellHostView* host) {
+    return webui_window::KeepsSessionOpen(host->is_utility(),
+                                          host->private_window(), false) &&
+           host->ListensForSessionEnd();
+  };
+  if (asker && listens(asker)) {
     return asker;
   }
   for (auto it = activation_order_.rbegin(); it != activation_order_.rend();
        ++it) {
     const auto found = hosts_.find(*it);
-    if (found != hosts_.end() && !found->second->is_utility() &&
-        found->second->ListensForSessionEnd()) {
+    if (found != hosts_.end() && listens(found->second)) {
       return found->second;
     }
   }
   for (const auto& [session, host] : hosts_) {
-    if (!host->is_utility() && host->ListensForSessionEnd()) {
+    if (listens(host)) {
       return host;
     }
   }
@@ -932,8 +939,17 @@ void WindowRegistry::WatchForCancelledQuit() {
     quit_watch_.Stop();
     return;
   }
-  const std::string token = session_end_.Resume(
-      browser_shutdown::IsTryingToQuit(), OpenBrowserWindowsBesides(nullptr));
+  size_t listening = 0;
+  for (const auto& [session, host] : hosts_) {
+    if (webui_window::KeepsSessionOpen(host->is_utility(),
+                                       host->private_window(),
+                                       host->LeavingSession()) &&
+        host->ListensForSessionEnd()) {
+      ++listening;
+    }
+  }
+  const std::string token =
+      session_end_.Resume(browser_shutdown::IsTryingToQuit(), listening);
   if (token.empty()) {
     if (!session_end_.ended()) {
       quit_watch_.Stop();
@@ -942,7 +958,9 @@ void WindowRegistry::WatchForCancelledQuit() {
   }
   quit_watch_.Stop();
   for (const auto& [session, host] : hosts_) {
-    if (!host->is_utility() && host->browser()) {
+    if (webui_window::KeepsSessionOpen(host->is_utility(),
+                                       host->private_window(),
+                                       host->LeavingSession())) {
       host->EmitShellEvent(webui_window::kSessionResumedEvent,
                            base::DictValue().Set("token", token));
     }

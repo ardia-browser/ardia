@@ -24,7 +24,7 @@ extension WebKitTab {
     return !playingFrames.isEmpty || view.cameraCaptureState == .active || view.microphoneCaptureState == .active
   }
 
-  var playsForAutoPictureInPicture: Bool { autoPictureInPicture && playsMedia }
+  var playsForAutoPictureInPicture: Bool { autoPictureInPicture && playsMedia && !autoPictureInPictureRule.heldUntilBack }
 
   func watchSight() {
     stopWatchingSight()
@@ -58,7 +58,8 @@ extension WebKitTab {
       pageMedia.keptByWindowServer = true
       emit("autoPictureInPictureKept", ArdiaConsentStamp.begin().onto(["appSwitch": false]))
     }
-    switch autoPictureInPictureRule.sight(seen, inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia) {
+    let wasHeld = autoPictureInPictureRule.heldUntilBack
+    switch autoPictureInPictureRule.sight(seen, userIn: !ArdiaChromeWindowHost.userInAnotherApp(), inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia) {
     case .open:
       let stamp = ArdiaConsentStamp.begin()
       let request = autoPictureInPictureRule.openRequests
@@ -75,6 +76,7 @@ extension WebKitTab {
       ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "autoPictureInPictureFullscreenHold"]))
     case .none: break
     }
+    if wasHeld && !autoPictureInPictureRule.heldUntilBack { autoPictureInPictureInputsChanged() }
   }
 
   private func followPageFullScreen() {
@@ -84,6 +86,23 @@ extension WebKitTab {
   private func noteStayedOnAppSwitch() {
     guard !closed, visible, !autoPictureInPictureRule.reportedActive, seenByUser, playsForAutoPictureInPicture else { return }
     emit("autoPictureInPictureKept", ArdiaConsentStamp.begin().onto(["appSwitch": true]))
+  }
+
+  func notePictureInPicture(_ data: [String: Any]?, frame: String) {
+    let wasHeld = autoPictureInPictureRule.heldUntilBack
+    guard let (active, reported) = autoPictureInPictureRule.report(data, from: frame) else { return }
+    if reported.closeAgain { setPictureInPicture(false) { _ in } }
+    if reported.heldNow {
+      emit("autoPictureInPictureKept", ArdiaConsentStamp.begin().onto(["reason": "closedWhileAway"]))
+      autoPictureInPictureInputsChanged()
+    } else if wasHeld && !autoPictureInPictureRule.heldUntilBack {
+      autoPictureInPictureInputsChanged()
+    }
+    emit("pictureInPicture", ["kind": "video", "active": active])
+  }
+
+  func pictureInPicturePageGone() {
+    if autoPictureInPictureRule.pageGone() { emit("pictureInPicture", ["kind": "video", "active": false]) }
   }
 
   func autoPictureInPictureInputsChanged() {

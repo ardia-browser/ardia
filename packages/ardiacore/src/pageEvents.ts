@@ -191,7 +191,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onNotification: (e) => [e],
   onNotificationClose: (e) => [e.id],
   onPictureInPicture: (e) => [e],
-  onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" ? "nothingPlaying" : typeof e.reason === "string" && /^(missed[A-Z]|leftOnSpaceSwitch)/.test(e.reason) ? (e.reason as AutoPictureInPictureMiss) : e.appSwitch ? "appSwitch" : "onScreen", typeof e.epoch === "string" ? e.epoch : ""],
+  onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" || e.reason === "closedWhileAway" ? e.reason : typeof e.reason === "string" && /^(missed[A-Z]|leftOnSpaceSwitch)/.test(e.reason) ? (e.reason as AutoPictureInPictureMiss) : e.appSwitch ? "appSwitch" : "onScreen", typeof e.epoch === "string" ? e.epoch : ""],
   onPictureInPictureDragged: (e) => [{ offCursor: !!e.offCursor, slowMove: !!e.slowMove, epoch: e.epoch }],
   onPictureInPictureResized: (e) => [{ inside: !!e.inside, cursorShown: !!e.cursorShown, epoch: e.epoch }],
   onPictureInPictureSkip: (e) => [{ seconds: e.seconds, epoch: e.epoch }],

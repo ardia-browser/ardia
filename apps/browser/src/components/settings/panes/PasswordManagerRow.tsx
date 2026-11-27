@@ -63,13 +63,14 @@ function PasswordManagerChoiceRow({ profileId }: { profileId: string }) {
   useEffect(() => void loadApplePasswords(), []);
   const popUp = managerPopUp(plugins, stored, effective, storedPlugin, appleOffered);
   const description = [unavailable, sharedChoiceNote(sharing)].filter(Boolean).join(" ") || undefined;
+  const isApple = effective === "apple";
   return (
     <>
       <Row anchor="profiles.passwordManager" description={description}>
         <PopUp value={popUp.value} options={popUp.options} onChange={(manager) => pickPasswordManager(profileId, manager)} minWidth={210} />
       </Row>
-      {effective === "apple" ? <ApplePasswordsStatusRow /> : null}
-      {effective === "apple" ? <ICloudExtensionNoteRow profileId={profileId} /> : null}
+      {isApple ? <ApplePasswordsStatusRow /> : null}
+      {isApple ? <ICloudExtensionNoteRow profileId={profileId} /> : null}
     </>
   );
 }

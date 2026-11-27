@@ -8,8 +8,6 @@ import { noteExternalApp } from "../telemetry/externalAppCounts";
 import { noteExternalAppRequest } from "../telemetry/track";
 import { hostOrOrigin } from "../../lib/url";
 
-export { pairFromLoginList } from "./loginListPairing";
-
 async function shouldPromptForPopups(profile: string, origin: string): Promise<boolean> {
   try {
     const settings = await getSiteSettings(profile, origin);

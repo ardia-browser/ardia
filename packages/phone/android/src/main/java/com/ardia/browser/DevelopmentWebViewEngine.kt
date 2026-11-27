@@ -123,13 +123,24 @@ class DevelopmentWebViewEngine(
 
     override val livePageIds: List<String> get() = roster.liveIds
 
-    var shownPageId: String? = null
-        private set
+    private val shownPage = ShownPage()
+
+    fun isShown(id: String): Boolean = shownPage.isShown(id)
 
     fun show(id: String?) {
-        if (shownPageId == id) return
-        shownPageId = id
-        if (id != null && roster.page(id)?.awaitsProcessReload == true) roster.activate(id)
+        shownPage.show(id)?.let(::recoverIfWaiting)
+    }
+
+    fun enterFront() {
+        shownPage.enterFront()?.let(::recoverIfWaiting)
+    }
+
+    fun leaveFront() {
+        shownPage.leaveFront()
+    }
+
+    private fun recoverIfWaiting(id: String) {
+        if (roster.page(id)?.awaitsProcessReload == true) roster.activate(id)
     }
 
     init {

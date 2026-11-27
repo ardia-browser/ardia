@@ -3,11 +3,12 @@ export type ShownPageInputs = {
   surface: "start" | "browsing" | "deck";
   covered: boolean;
   voice: boolean;
+  sidebar: boolean;
   selectedId: string | null;
 };
 
-export const shownPageId = ({ appActive, surface, covered, voice, selectedId }: ShownPageInputs): string | null =>
-  appActive && surface === "browsing" && !covered && !voice ? selectedId : null;
+export const shownPageId = ({ appActive, surface, covered, voice, sidebar, selectedId }: ShownPageInputs): string | null =>
+  appActive && surface === "browsing" && !covered && !voice && !sidebar ? selectedId : null;
 
 type Subscribable = { subscribe: (listener: () => void) => () => void };
 

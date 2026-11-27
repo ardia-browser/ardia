@@ -13,15 +13,20 @@ public struct PageProcessRecovery: Equatable, Sendable {
     case showFailure
   }
 
+  public static let retryWindow: TimeInterval = 10
+
   public private(set) var awaitsReload = false
   public private(set) var isReloading = false
+  private var recoveredAt: TimeInterval?
 
   public init() {}
 
-  public mutating func processEnded(shown: Bool) -> Step {
-    if isReloading, shown {
+  public mutating func processEnded(shown: Bool, at now: TimeInterval) -> Step {
+    let diedRightAfterRecovery = recoveredAt.map { now - $0 < Self.retryWindow } ?? false
+    if shown, isReloading || diedRightAfterRecovery {
       isReloading = false
       awaitsReload = false
+      recoveredAt = nil
       return .showFailure
     }
     isReloading = false
@@ -33,15 +38,24 @@ public struct PageProcessRecovery: Equatable, Sendable {
     awaitsReload ? .reload : .wait
   }
 
+  public func loadsWhenMadeLive(shown: Bool) -> Bool {
+    !awaitsReload || shown
+  }
+
   public mutating func reloadStarted() {
     guard awaitsReload else { return }
     awaitsReload = false
     isReloading = true
   }
 
-  public mutating func loadFinished() -> PageProcessOutcome? {
+  public mutating func personReloaded() {
+    recoveredAt = nil
+  }
+
+  public mutating func loadFinished(at now: TimeInterval) -> PageProcessOutcome? {
     guard isReloading else { return nil }
     isReloading = false
+    recoveredAt = now
     return .recovered
   }
 

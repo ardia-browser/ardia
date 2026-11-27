@@ -8,13 +8,18 @@ function fakeStore() {
 }
 
 test("the page counts as shown only on the browsing surface, uncovered, with the app active and no voice overlay", () => {
-  const front = { appActive: true, surface: "browsing", covered: false, voice: false, selectedId: "a" } as const;
+  const front = { appActive: true, surface: "browsing", covered: false, voice: false, sidebar: false, selectedId: "a" } as const;
   assert.equal(shownPageId(front), "a");
   assert.equal(shownPageId({ ...front, voice: true }), null);
   assert.equal(shownPageId({ ...front, covered: true }), null);
   assert.equal(shownPageId({ ...front, surface: "deck" }), null);
   assert.equal(shownPageId({ ...front, appActive: false }), null);
   assert.equal(shownPageId({ ...front, selectedId: null }), null);
+});
+
+test("the Duo's sidebar over the card takes the page out of front", () => {
+  const front = { appActive: true, surface: "browsing", covered: false, voice: false, sidebar: false, selectedId: "a" } as const;
+  assert.equal(shownPageId({ ...front, sidebar: true }), null);
 });
 
 test("the shown page is pushed once at start and again only when it changes", () => {

@@ -126,6 +126,7 @@ object PhonePages {
         val attached = engine(activity)
         actAsOldWebView(attached, activity)
         attached.attach(activity)
+        attached.enterFront()
         blocking.refreshIfDue()
     }
 
@@ -133,8 +134,15 @@ object PhonePages {
         if (LaunchExtras.allowedInThisBuild && activity.intent?.getBooleanExtra(WITHOUT_PRIVATE_PAGES_EXTRA, false) == true) engine.multiProfileSupported = false
     }
 
+    fun leftForeground() {
+        shared?.leaveFront()
+    }
+
     fun detach(activity: Activity) {
-        if (host?.get() === activity) host = null
+        if (host?.get() === activity) {
+            host = null
+            shared?.leaveFront()
+        }
         if (drawWatched?.get() === activity.window.decorView) watchDraws(null)
         shared?.detach(activity)
         if (fullscreen.isShowing) fullscreen.hide("the activity detached")
@@ -190,7 +198,14 @@ object PhonePages {
 
     fun setShownPage(pageId: String?) {
         shownPageId = pageId
-        shared?.show(pageId)
+        val engine = shared ?: return
+        engine.show(pageId)
+        if (pageId != null && hostIsResumed()) engine.enterFront()
+    }
+
+    private fun hostIsResumed(): Boolean {
+        val activity = host?.get() as? androidx.lifecycle.LifecycleOwner ?: return false
+        return activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
     }
 
     fun activate(pageId: String) {

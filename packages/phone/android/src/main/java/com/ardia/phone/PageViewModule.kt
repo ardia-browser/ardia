@@ -90,6 +90,10 @@ class PageViewModule : Module() {
             main.post { PhonePages.permissionAsks.pump() }
         }
 
+        OnActivityEntersBackground {
+            PhonePages.leftForeground()
+        }
+
         OnActivityDestroys {
             PhonePages.permissionAsks.lost()
             appContext.currentActivity?.let(PhonePages::detach)

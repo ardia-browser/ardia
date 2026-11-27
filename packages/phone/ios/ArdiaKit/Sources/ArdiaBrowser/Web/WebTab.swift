@@ -97,6 +97,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   @ObservationIgnored private var lastVisit: Visit?
   @ObservationIgnored private var lastCommit = Date.distantPast
   @ObservationIgnored private var processRecovery = PageProcessRecovery()
+  @ObservationIgnored private var revivingForPerson = false
   @ObservationIgnored private var snapshotTask: Task<Void, Never>?
   @ObservationIgnored private var pendingURL: URL?
   @ObservationIgnored private var swipeSnapshots: [ObjectIdentifier: UIImage] = [:]
@@ -174,32 +175,45 @@ public final class WebTab: DiscardablePage, Identifiable {
 
   public func goBack() {
     failure = nil
+    processRecovery.personReloaded()
     guard let webView = webViewForNavigation(), webView.goBack() != nil else { return }
     processRecovery.reloadStarted()
   }
 
   public func goForward() {
     failure = nil
+    processRecovery.personReloaded()
     guard let webView = webViewForNavigation(), webView.goForward() != nil else { return }
     processRecovery.reloadStarted()
   }
 
   public func reload() {
     failure = nil
+    processRecovery.personReloaded()
     guard let webView else {
-      engine?.revive(self)
+      reviveForPerson()
       return
     }
     restartAfterProcessEnded(in: webView)
   }
 
   private func webViewForNavigation() -> WKWebView? {
-    if webView == nil { engine?.revive(self) }
+    if webView == nil { reviveForPerson() }
     return webView
+  }
+
+  private func reviveForPerson() {
+    revivingForPerson = true
+    defer { revivingForPerson = false }
+    engine?.revive(self)
   }
 
   private func restartAfterProcessEnded(in webView: WKWebView) {
     failure = nil
+    guard webView.backForwardList.currentItem != nil else {
+      loadContent(into: webView)
+      return
+    }
     processRecovery.reloadStarted()
     if webView.url == nil, let url { webView.load(URLRequest(url: url)) } else { webView.reload() }
   }
@@ -301,18 +315,20 @@ public final class WebTab: DiscardablePage, Identifiable {
     engine.installPageScripts(on: configuration.userContentController, host: host, isPrivate: isPrivate)
     self.webView = webView
     observe(webView)
-    if !isPopup { processRecovery.reloadStarted() }
-    let stored = engine.tabs.tab(id)
     if let zoom = engine.preferences.settings(for: host, isPrivate: isPrivate).pageZoom {
       pageZoom = zoom
       webView.pageZoom = zoom
     }
-    if isPopup {
-      return
-    } else if let pendingURL {
+    guard !isPopup, processRecovery.loadsWhenMadeLive(shown: engine.shownTabID == id || revivingForPerson) else { return }
+    loadContent(into: webView)
+  }
+
+  private func loadContent(into webView: WKWebView) {
+    processRecovery.reloadStarted()
+    if let pendingURL {
       self.pendingURL = nil
       webView.load(URLRequest(url: pendingURL))
-    } else if let state = stored?.interactionState {
+    } else if let state = engine?.tabs.tab(id)?.interactionState {
       restoringState = true
       webView.interactionState = state
     } else if let url, url.scheme != BrowserURL.browseScheme {
@@ -344,7 +360,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   func saveState() {
-    guard let webView, let engine else { return }
+    guard let webView, let engine, webView.backForwardList.currentItem != nil else { return }
     engine.tabs.saveInteractionState(webView.interactionState as? Data, for: id)
   }
 
@@ -533,7 +549,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   fileprivate func didFinish() {
-    if let outcome = processRecovery.loadFinished() { engine?.onPageProcess?(id, outcome, isPrivate) }
+    if let outcome = processRecovery.loadFinished(at: ProcessInfo.processInfo.systemUptime) { engine?.onPageProcess?(id, outcome, isPrivate) }
     if refreshesVisibleContentAfterLoad {
       refreshesVisibleContentAfterLoad = false
       Task { [weak self] in
@@ -564,7 +580,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     request = nil
     snapshotTask?.cancel()
     snapshotTask = nil
-    switch processRecovery.processEnded(shown: isShownToUser) {
+    switch processRecovery.processEnded(shown: isShownToUser, at: ProcessInfo.processInfo.systemUptime) {
     case .reload:
       if let webView { restartAfterProcessEnded(in: webView) }
     case .showFailure:

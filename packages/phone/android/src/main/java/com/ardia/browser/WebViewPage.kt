@@ -207,6 +207,7 @@ internal class WebViewPage(
     }
 
     override fun reload() {
+        processRecovery.personReloaded()
         failedUrl = null
         update { it.copy(failure = null) }
         val web = webView
@@ -235,7 +236,7 @@ internal class WebViewPage(
 
     internal val awaitsProcessReload: Boolean get() = processRecovery.awaitsReload
 
-    private fun isShownNow(): Boolean = engine.shownPageId == id
+    private fun isShownNow(): Boolean = engine.isShown(id)
 
     private fun revivedForNavigation(): WebView? {
         processRecovery.reloadStarted()
@@ -244,6 +245,7 @@ internal class WebViewPage(
     }
 
     private fun goBy(step: Int): Boolean {
+        processRecovery.personReloaded()
         val web = webView ?: revivedForNavigation() ?: return false
         if (!web.canGoBackOrForward(step)) return false
         failedUrl = null
@@ -739,7 +741,7 @@ internal class WebViewPage(
 
     internal fun pageFinished(web: WebView, url: String) {
         if (web !== webView) return
-        processRecovery.loadFinished()?.let { mutableEvents.tryEmit(PageEvent.ProcessEnded(it)) }
+        processRecovery.loadFinished(SystemClock.elapsedRealtime())?.let { mutableEvents.tryEmit(PageEvent.ProcessEnded(it)) }
         progressThrottle.reset()
         answeredSignIns.clear()
         if (isNavigatingHistory) {
@@ -854,7 +856,7 @@ internal class WebViewPage(
         update { it.copy(canGoBack = false, canGoForward = false) }
         Log.i(LOG_TAG, "renderer gone for $id, crashed $didCrash, shown $shown")
         mutableEvents.tryEmit(PageEvent.ProcessEnded(PageProcessOutcome.Gone))
-        when (processRecovery.processEnded(shown)) {
+        when (processRecovery.processEnded(shown, SystemClock.elapsedRealtime())) {
             PageProcessRecovery.Step.Reload -> engine.mainHandler.post { if (isShownNow()) makeLive() }
             PageProcessRecovery.Step.ShowFailure -> {
                 update { it.copy(failure = PageLoadFailure.Crashed) }

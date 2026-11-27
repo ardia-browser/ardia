@@ -87,6 +87,14 @@
    ]
   },
   {
+   "id": "chromium-page-message:loginField",
+   "source": "frame",
+   "guard": "Apple Passwords profiles only; the frame's origin is the engine's verified one, never the page's, and must be the top page's; trusted pointer or key; the Login list fills only after a native pick, into the frame and field token it was opened for",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+LoginList.mm#loginFieldFromPage"
+   ]
+  },
+  {
    "id": "chromium-page-message:fieldProviderHint",
    "source": "frame",
    "guard": "Same-site checked against the browser-verified origin",
@@ -264,7 +272,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 34,
+   "count": 37,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -323,6 +331,11 @@
    "id": "page-script-listener:input",
    "source": "page",
    "guard": "isTrusted checked before a field counts as typed by the user"
+  },
+  {
+   "id": "page-script-listener:pointerdown",
+   "source": "page",
+   "guard": "isTrusted checked before the Login list is asked to open"
   },
   {
    "id": "page-script-listener:keydown",
@@ -408,7 +421,7 @@
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 66,
+   "count": 73,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]

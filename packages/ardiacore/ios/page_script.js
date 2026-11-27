@@ -1031,6 +1031,113 @@
   handlers.fieldProvider = fieldProviders.configure;
   handlers.fieldFocusQuery = (message) => fieldProviders.focusQuery(message && message.query);
   handlers.fieldProviderHint = fieldProviders.hint;
+  const loginListKit = (env) => {
+    const { document, send, addEventListener } = env;
+    const KEYS = { ArrowDown: "down", ArrowUp: "up", Enter: "enter", Escape: "escape", Tab: "tab" };
+    const TYPED_MAX = 200;
+    let on = false;
+    let listening = false;
+    let active = null;
+    let open = false;
+    let picking = false;
+    let tokens = 0;
+    const visible = (el) => !!el && !el.disabled && !el.readOnly && el.getClientRects().length > 0;
+    const passwordIn = (root) => Array.from((root || document).querySelectorAll("input[type=password]")).find(visible) || null;
+    const usernameFor = (password) => {
+      const scope = password.form || document;
+      const fields = Array.from(scope.querySelectorAll("input")).filter((el) => visible(el) && /^(text|email|tel|)$/i.test(el.type || "text"));
+      const before = fields.filter((el) => el.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return before.pop() || fields.find((el) => /user|mail|login|account/i.test(el.name + el.id + el.autocomplete)) || null;
+    };
+    const loginField = (el) => {
+      if (!el || el.localName !== "input" || !visible(el)) return null;
+      if (el.type === "password") return { password: el, username: usernameFor(el) };
+      const password = passwordIn(el.form || document);
+      if (!password) return null;
+      return usernameFor(password) === el ? { password, username: el } : null;
+    };
+    const inTopViewport = (el) => {
+      const r = el.getBoundingClientRect();
+      let x = r.left, y = r.top;
+      for (let view = el.ownerDocument.defaultView; view && view !== view.top; view = view.parent) {
+        const host = view.frameElement;
+        if (!host) return null;
+        const at = host.getBoundingClientRect();
+        x += at.left + host.clientLeft;
+        y += at.top + host.clientTop;
+      }
+      return { x, y, width: r.width, height: r.height };
+    };
+    const hide = () => {
+      if (active) send("loginField", { event: "hide" });
+      active = null;
+      open = picking = false;
+    };
+    const report = (event, el) => {
+      if (!on) return;
+      const found = loginField(el);
+      if (!found) return hide();
+      const rect = inTopViewport(el);
+      if (!rect) return hide();
+      if (!active || active.el !== el) active = { el, found, token: `${++tokens}` };
+      const password = el.type === "password";
+      send("loginField", { event, token: active.token, field: password ? "password" : "username", typed: password ? "" : String(el.value || "").slice(0, TYPED_MAX), ...rect });
+    };
+    const listen = () => {
+      if (listening) return;
+      listening = true;
+      addEventListener("pointerdown", (e) => e.isTrusted && report("show", e.target), true);
+      addEventListener(
+        "input",
+        (e) => {
+          const el = e.target;
+          if (!e.isTrusted || !el || el.localName !== "input") return;
+          if (el.type === "password") return active && hide();
+          if (loginField(el)) report("input", el);
+        },
+        true,
+      );
+      addEventListener(
+        "keydown",
+        (e) => {
+          if (!on || !e.isTrusted || !active || e.target !== active.el) return;
+          const key = KEYS[e.key];
+          if (!key) return;
+          if (!open) {
+            if (key === "down") {
+              e.preventDefault();
+              report("show", e.target);
+            }
+            return;
+          }
+          if (key !== "tab" && (key !== "enter" || picking)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+          send("loginField", { event: "key", key, token: active.token });
+        },
+        true,
+      );
+      addEventListener("focusout", (e) => active && e.target === active.el && hide(), true);
+      addEventListener("scroll", () => active && hide(), true);
+      addEventListener("resize", () => active && hide());
+      addEventListener("pagehide", () => active && hide());
+    };
+    const configure = (state) => {
+      on = !!(state && state.on === true);
+      if (on) return listen();
+      active = null;
+      open = picking = false;
+    };
+    const state = (message) => {
+      open = !!(message && message.open === true);
+      picking = !!(message && message.picking === true);
+    };
+    return { configure, state };
+  };
+  const loginList = loginListKit({ document, send, addEventListener });
+  handlers.loginList = loginList.configure;
+  handlers.loginListState = loginList.state;
   const typedByUser = new WeakSet();
   let revealedField = null;
   let eyeField = null;
@@ -1895,6 +2002,7 @@
     if (config.fieldTiming) setFieldTiming(true);
     if (typeof config.selectionPopover === "boolean" && handlers.selectionPopover) handlers.selectionPopover(config.selectionPopover);
     if (config.fieldProvider !== undefined) handlers.fieldProvider(config.fieldProvider);
+    if (config.loginList !== undefined) handlers.loginList(config.loginList);
   };
   send("hello", { top: isTop, url: location.href });
   const tellExclusive = guard(() => send("exclusive", { held: !!(document.pointerLockElement || document.fullscreenElement) }));

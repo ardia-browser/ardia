@@ -17,6 +17,7 @@ using namespace ardia_web_view;
   if (!tab) return;
   const BOOL claims = [ApplePasswordsProfiles containsProfile:_profile ?: @""];
   const BOOL engineHasHook = [tab respondsToSelector:@selector(setSuppressedAutofillKinds:)];
+  [self pushLoginList];
   NoteEvent(ardia_host::BrowserId(tab), @"chromeLists", @{@"profile" : _profile ?: @"", @"claimed" : @(claims), @"engineHook" : @(engineHasHook)});
   if (!engineHasHook) return;
   NSSet<NSString *> *kinds = claims ? [NSSet setWithObject:@"login"] : [NSSet set];

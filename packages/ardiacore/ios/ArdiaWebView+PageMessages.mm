@@ -71,6 +71,7 @@ void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL m
     if (main && ArdiaFieldTimingEnabled()) config[@"fieldTiming"] = @YES;
     if (main) config[@"selectionPopover"] = @(gSelectionPopover);
     if (main || (sender.length && [sender isEqualToString:OriginOf(to.url)])) config[@"fieldProvider"] = FieldProviderFor(profile) ?: @NO;
+    if (main || (sender.length && [sender isEqualToString:OriginOf(to.url)])) config[@"loginList"] = LoginListConfig(profile);
     config[@"peek"] = gPeekModifier;
     config[@"split"] = SplitLinkModifier();
     config[@"peekOtherSites"] = @([ArdiaTabRegistry viewForTab:to].peeksLinksToOtherSites);
@@ -130,6 +131,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     if (main && !tab.discarded) [self resetPageMedia];
     if (main) _reports.exclusiveFrames = nil;
     if (main) [ArdiaWebView resetFieldProviderPage:tab];
+    if (main) [self endLoginField];
     if (main && ![(Text(dict, @"url", 8192) ?: @"about:") hasPrefix:@"about:"]) _requests.requestedURL = nil;
     [self noteScriptFrame:frameId main:main sameSite:[self sameSiteFrame:main origin:sender]];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
@@ -196,6 +198,8 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     double sequence;
     if (Finite(dict, @"generation", &generation) && Finite(dict, @"seq", &sequence))
       [ArdiaWebView noteFieldFocus:Text(dict, @"field", 16) sequence:sequence generation:generation query:Text(dict, @"query", 64) owner:tab];
+  } else if ([kind isEqualToString:@"loginField"] && dict) {
+    [self loginFieldFromPage:dict frame:frameId main:main origin:VerifiedOrigin(verifiedOrigin)];
   } else if ([kind isEqualToString:@"fieldProviderHint"] && dict) {
     NSString *state = Text(dict, @"state", 16);
     if ([@[ @"shown", @"dismissed" ] containsObject:state ?: @""] && [self sameSiteFrame:main origin:sender] && FieldProviderFor(_profile))
@@ -348,12 +352,13 @@ static NSMutableSet<NSString *> *SameSiteFramesOf(ArdiaCoreTab *tab) {
 }
 
 - (void)pushFieldProvider {
-  if (!_tab) return;
-  NSString *state = FieldProviderJSON(_profile);
+  if (_tab) [self callFramesWithSameSite:FieldProviderJSON(_profile) kind:@"fieldProvider" otherwise:@"false"];
+}
+
+- (void)callFramesWithSameSite:(NSString *)json kind:(NSString *)kind otherwise:(NSString *)other {
   NSSet<NSString *> *sameSite = [SameSiteFramesOf(_tab) copy];
-  [self callFrame:@"" kind:@"fieldProvider" json:state];
-  for (NSString *frameId in [ScriptFramesOf(_tab) copy])
-    [self callFrame:frameId kind:@"fieldProvider" json:[sameSite containsObject:frameId] ? state : @"false"];
+  [self callFrame:@"" kind:kind json:json];
+  for (NSString *frameId in [ScriptFramesOf(_tab) copy]) [self callFrame:frameId kind:kind json:[sameSite containsObject:frameId] ? json : other];
 }
 
 - (void)pushFieldProviderHint:(NSString *)json {

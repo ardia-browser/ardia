@@ -142,6 +142,12 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)applePasswordsProfilesChanged;
 @end
 
+@interface ArdiaWebView (LoginList)
+@property (nonatomic, readonly, nullable) NSURL *loginListPageURL;
+- (void)syncLoginListOpen:(BOOL)open picking:(BOOL)picking NS_SWIFT_NAME(syncLoginList(open:picking:));
+- (void)connectApplePasswordsFromLoginList;
+@end
+
 @interface ArdiaWebView (FieldProviders)
 @property(class, nonatomic, readonly) NSDictionary<NSString *, NSNumber *> *systemPanelAvailability;
 @property(class, nonatomic, readonly, nullable) NSString *otpauthHandlerName;

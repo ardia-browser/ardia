@@ -19,7 +19,7 @@ const pageScript = native("page_script.js");
 const pageMetrics = native("page_metrics.js");
 const messageReceivers = ["ArdiaWebView+PageMessages.mm", "ArdiaWebView+Peek.mm"].map(native);
 
-const WEBKIT_ONLY_EVENTS = new Set(["mediaFault", "focusRestore", "applePasswordsConnect"]);
+const WEBKIT_ONLY_EVENTS = new Set(["mediaFault", "focusRestore"]);
 const WINDOWS_ENGINE_ONLY_EVENTS = new Set(["autoplayBlocked"]);
 
 test("the Chromium view emits every page event in PAGE_EVENTS except the WebKit-only and Windows-engine-only ones, and nothing else", () => {

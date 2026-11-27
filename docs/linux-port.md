@@ -683,6 +683,10 @@ python3 scripts/linux/package.py \
   AppArmor profile) or at the `sysctl` that allows user namespaces for the reason it found. Only a user who passes
   `--no-sandbox` runs without it: the launcher adds `--ardia-sandbox-decision=Ardia was started with --no-sandbox`, and
   the shell says so once per launch and counts `launches_without_sandbox`.
+  In an AppImage the launcher leaves a detached watcher behind before it becomes `chrome`. The watcher inherits the
+  runtime's keepalive pipe and holds it until `chrome` and every process started from the image have exited, so the
+  image stays mounted for the crashpad handlers that outlive `chrome`; without it they died with SIGBUS on their next
+  page-in (#4420).
 - **`.deb`.** Installs under `/usr` (`/usr/bin/ardia` links the launcher), with `chrome-sandbox` setuid root, the
   polkit policy and the AppArmor profile; details under Debian package below.
 - **`.rpm`.** The `.deb`'s `/usr` tree with rpm's dependency generator; details under RPM package below.

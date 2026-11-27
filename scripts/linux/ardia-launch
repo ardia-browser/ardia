@@ -69,9 +69,37 @@ if [[ -z "${BREAKPAD_DUMP_LOCATION:-}" ]]; then
   done
 fi
 
+appimage_mount_in_use() {
+  [[ -n "$(find /proc -mindepth 2 -maxdepth 2 -name exe -lname "$here/*" -print -quit 2>/dev/null)" ]]
+}
+
+process_start_time() {
+  local stat
+  stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+  local -a fields=(${stat##*) })
+  [[ "${fields[0]}" != Z && -n "${fields[19]:-}" ]] && printf '%s' "${fields[19]}"
+}
+
+keep_appimage_mounted_until_done() {
+  local browser=$1 started=$2 polls=0
+  while [[ "$(process_start_time "$browser")" == "$started" ]] || appimage_mount_in_use; do
+    if ((polls < 20)); then sleep 0.1; else sleep 1; fi
+    polls=$((polls + 1))
+  done
+}
+
+run_browser() {
+  if [[ -n "${APPDIR:-}" ]]; then
+    local started
+    started=$(process_start_time $$) &&
+      (trap '' HUP INT QUIT; keep_appimage_mounted_until_done $$ "$started" </dev/null >/dev/null 2>&1 &)
+  fi
+  exec "$@"
+}
+
 for argument in "$@"; do
   if [[ "$argument" == --no-sandbox ]]; then
-    exec "$chrome" "--ardia-sandbox-decision=Ardia was started with --no-sandbox" "$@"
+    run_browser "$chrome" "--ardia-sandbox-decision=Ardia was started with --no-sandbox" "$@"
   fi
 done
 
@@ -80,7 +108,7 @@ if [[ -f /.flatpak-info && "${FLATPAK_ID:-}" == dev.ardia.Ardia ]]; then
 fi
 
 if userns_ready || setuid_ready; then
-  exec "$chrome" "$@"
+  run_browser "$chrome" "$@"
 fi
 
 installer=$(readlink -f -- "$here/../../install.sh" 2>/dev/null || true)

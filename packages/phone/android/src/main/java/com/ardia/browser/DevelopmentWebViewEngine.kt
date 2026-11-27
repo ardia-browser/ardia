@@ -123,6 +123,26 @@ class DevelopmentWebViewEngine(
 
     override val livePageIds: List<String> get() = roster.liveIds
 
+    private val shownPage = ShownPage()
+
+    fun isShown(id: String): Boolean = shownPage.isShown(id)
+
+    fun show(id: String?) {
+        shownPage.show(id)?.let(::recoverIfWaiting)
+    }
+
+    fun enterFront() {
+        shownPage.enterFront()?.let(::recoverIfWaiting)
+    }
+
+    fun leaveFront() {
+        shownPage.leaveFront()
+    }
+
+    private fun recoverIfWaiting(id: String) {
+        if (roster.page(id)?.revivesWhenShown == true) roster.activate(id)
+    }
+
     init {
         Executors.newSingleThreadExecutor().also { executor ->
             executor.execute { runCatching { scripts.preload() } }

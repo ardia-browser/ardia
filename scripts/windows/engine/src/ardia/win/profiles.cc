@@ -70,13 +70,17 @@ void Deliver(std::string name,
 
 }
 
-ProfileName ParseProfileName(std::string_view name) {
+ProfileName ParseProfileName(std::string_view name,
+                             std::string_view empty_original) {
   ProfileName parsed;
   size_t at = name.find('@');
   std::string_view original = name;
   if (at != std::string_view::npos) {
     parsed.off_the_record = true;
     original = name.substr(at + 1);
+  }
+  if (original.empty()) {
+    original = empty_original;
   }
   if (original.empty()) {
     return parsed;
@@ -105,8 +109,9 @@ base::FilePath ProfilePath(const ProfileName& name) {
 }
 
 void WithProfile(std::string_view name,
-                 base::OnceCallback<void(Profile*)> callback) {
-  ProfileName parsed = ParseProfileName(name);
+                 base::OnceCallback<void(Profile*)> callback,
+                 std::string_view empty_original) {
+  ProfileName parsed = ParseProfileName(name, empty_original);
   ProfileManager* manager = g_browser_process->profile_manager();
   base::FilePath path = ProfilePath(parsed);
   if (Profile* loaded = manager->GetProfileByPath(path)) {

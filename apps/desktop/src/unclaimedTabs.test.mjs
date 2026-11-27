@@ -144,3 +144,60 @@ test("a tab Chrome inserts for another engine profile joins the window in that p
   assert.equal(adoptUnclaimedTab(useBrowser, "main", { adoptId: "tab:43", url: "https://gone.test/", active: false, profile: "p-missing" }), undefined,
     "an offer for an engine profile no UI profile uses is left alone");
 });
+
+test("a tab the Windows engine offers under its own name for the default profile opens in the default profile", async () => {
+  freshWindow();
+  const work = S().createProfile({ name: "Work" });
+  const host = nativeHost();
+  const stop = watchUnclaimedTabs(host, useBrowser);
+  await tick();
+  host.emit("ArdiaTabs", "unclaimed", { adoptId: "tab:61", url: "https://default-link.test/", active: true, profile: "default" });
+  host.emit("ArdiaTabs", "unclaimed", { adoptId: "tab:62", url: "https://linux-link.test/", active: false, profile: "" });
+  host.emit("ArdiaTabs", "unclaimed", { adoptId: "tab:63", url: "https://work-link.test/", active: false, profile: work });
+  stop();
+  const [fromWindows] = tabsAt("https://default-link.test/");
+  assert.ok(fromWindows, "the engine's \"default\" names the default profile, as hostProfile sends it");
+  assert.equal(fromWindows.profileId, "default");
+  assert.equal(active(), fromWindows.id);
+  assert.equal(tabsAt("https://linux-link.test/")[0]?.profileId, "default");
+  assert.equal(tabsAt("https://work-link.test/")[0]?.profileId, work);
+});
+
+test("an offer no profile takes counts as dropped once, and the parked list counts with the consent from before it was asked", async () => {
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  const placement = await import("../../browser/src/state/telemetry/windowPlacementCounts.ts");
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  placement.takeWindowPlacementCounts();
+  const pendingList = () => {
+    let answer;
+    const host = nativeHost();
+    host.invoke = (method, args) => {
+      host.calls.push([method, structuredClone(args)]);
+      return new Promise((resolve) => { answer = resolve; });
+    };
+    return { host, answer: (tabs) => answer(tabs) };
+  };
+
+  freshWindow();
+  const first = pendingList();
+  const stopFirst = watchUnclaimedTabs(first.host, useBrowser);
+  const nobody = { adoptId: "tab:71", url: "https://nobody.test/", active: true, profile: "p-missing" };
+  first.host.emit("ArdiaTabs", "unclaimed", nobody);
+  first.answer([nobody, { adoptId: "tab:72", url: "https://kept.test/", active: false, profile: "default" }]);
+  await tick();
+  stopFirst();
+  const counted = placement.takeWindowPlacementCounts();
+  assert.deepEqual([counted.unclaimed_tabs_adopted, counted.unclaimed_tabs_dropped], [1, 1], "the tab the event and the list both delivered counts once");
+
+  freshWindow();
+  const second = pendingList();
+  const stopSecond = watchUnclaimedTabs(second.host, useBrowser);
+  client.setSharing(false, "settings");
+  client.setSharing(true, "settings");
+  second.answer([{ adoptId: "tab:73", url: "https://earlier.test/", active: false, profile: "p-missing" }]);
+  await tick();
+  stopSecond();
+  assert.equal(placement.takeWindowPlacementCounts().unclaimed_tabs_dropped, 0, "a list asked for in an earlier sharing period isn't counted");
+  client.setSharing(false, "settings");
+});

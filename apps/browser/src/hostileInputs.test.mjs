@@ -740,6 +740,44 @@ test("windows webui tab.command evaluate refuses every hostile script before the
   }
 });
 
+test("windows webui extension bridge keeps every hostile input away from the action-state parser, the view profile check and the popup geometry, and stale view ids never reach a live view", (t) => {
+  const { spawnSync } = process.getBuiltinModule("node:child_process");
+  const { mkdtempSync, rmSync, writeFileSync } = process.getBuiltinModule("node:fs");
+  const { tmpdir } = process.getBuiltinModule("node:os");
+  const { join } = process.getBuiltinModule("node:path");
+  const { fileURLToPath } = process.getBuiltinModule("node:url");
+  const repo = fileURLToPath(new URL("../../../", import.meta.url));
+  const compiler = ["c++", "clang++", "g++"].find((name) => spawnSync(name, ["--version"], { stdio: "ignore" }).status === 0);
+  if (!compiler) {
+    if (process.env.CI) assert.fail("no C++ compiler to build scripts/windows/engine/tests/webui_extension_policy_test.cc");
+    return t.skip("no C++ compiler");
+  }
+  const scratch = mkdtempSync(join(tmpdir(), "ardia-extension-policy-"));
+  try {
+    const binary = join(scratch, "webui_extension_policy_test");
+    const build = spawnSync(compiler, ["-std=c++20", "-I", join(repo, "scripts/windows/engine/src"), join(repo, "scripts/windows/engine/tests/webui_extension_policy_test.cc"), "-o", binary], { encoding: "utf8" });
+    assert.equal(build.status, 0, build.stderr);
+    const describe = (value) => {
+      if (typeof value === "number") return Number.isInteger(value) && Math.abs(value) <= 2 ** 31 - 1 ? `i:${value}` : `d:${value}`;
+      if (typeof value === "string") return `s:${Buffer.from(value, "utf8").toString("hex")}`;
+      return "o:";
+    };
+    const lines = HOSTILE_VALUES.map(({ value }) => describe(JSON.parse(JSON.stringify([value]))[0]));
+    const strings = lines.filter((line) => line.startsWith("s:")).length;
+    const numbers = lines.filter((line) => line.startsWith("i:") || line.startsWith("d:")).length;
+    assert.ok(strings >= HOSTILE_STRINGS.length);
+    const corpus = join(scratch, "hostile.txt");
+    writeFileSync(corpus, lines.join("\n") + "\n");
+    const run = spawnSync(binary, ["--hostile", corpus], { encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr || run.stdout);
+    assert.match(run.stdout, new RegExp(`hostile: ${HOSTILE_VALUES.length} values, ${strings} strings, ${numbers} numbers`));
+    const unit = spawnSync(binary, [], { encoding: "utf8" });
+    assert.equal(unit.status, 0, unit.stderr || unit.stdout);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
 test("#650: a clipboard another app filled reaches the address field only as one line of plain text, and a file address only as a file: URL", async (t) => {
   const { spawnSync } = process.getBuiltinModule("node:child_process");
   const { mkdtempSync, rmSync, writeFileSync } = process.getBuiltinModule("node:fs");

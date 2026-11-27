@@ -4,6 +4,7 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTi
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScreenLayout, type ScreenFold } from "../../state/app/screenLayout";
 import { useSystemBars } from "../../state/app/systemBars";
+import { setDuoSidebarShown } from "../../state/browse/duoSidebar";
 import { useSurface } from "../../state/browse/hooks";
 import { consumeDeckEntrance, deckEntered, leaveDeck, pageLaidOut, useBrowse } from "../../state/browse/store";
 import { closePageMenu } from "../../state/page/actions";
@@ -42,6 +43,8 @@ export function DuoBrowsing() {
   useSystemBars(theme.dark || incognito);
   const sidebar = useSidebar(reduceMotion);
   const { show } = sidebar;
+  useEffect(() => setDuoSidebarShown(sidebar.shown), [sidebar.shown]);
+  useEffect(() => () => setDuoSidebarShown(false), []);
   useEffect(() => {
     if (surface !== "deck") return;
     if (tab) {

@@ -246,7 +246,7 @@ remade Windows patch, a `take` that moves the ones after it) is refused with the
 `series_win.py rewind` reverses the recorded copies back to that entry, and apply goes on from there. A ledger from
 before the copies (names only) is kept when it is a prefix of the plan the tree still carries, and otherwise needs
 the files the series touches restored from a fresh `03-helium.py` run. `03-helium.py` doesn't touch the ledger, so
-remove `.series-win-applied` and `.series-win-applied.d` beside `src` too before applying again. `series_win_test.py` covers it. `series-win` today: eight skips, 24 takes and 23 Windows-only patches ([Windows-only patches](#windows-only-patches)).
+remove `.series-win-applied` and `.series-win-applied.d` beside `src` too before applying again. `series_win_test.py` covers it. `series-win` today: eight skips, 24 takes and 25 Windows-only patches ([Windows-only patches](#windows-only-patches)).
 A shared `chromium` line may end in a platform tag since the Linux port: untagged lines are for every platform, and
 Windows takes those and the `mac` ones (the set it started from), never `linux`. A tag can name several platforms
 joined by commas (`linux,win`); Windows takes a line whose platforms include `mac` or `win`. A `layer` line Windows would
@@ -288,7 +288,11 @@ The layers:
   (a tree copied in with `tar`, as on the MSI's WSL), that target schedules its whole closure (101,938 steps there on
   2026-11-24): stop it with SIGINT and check syntax instead, running each unit's `clang-cl` line from its target's
   `.ninja` file (`$:` unescaped, `/Fo` and the module flags dropped) with `-fsyntax-only`, which writes nothing under
-  `out/`.
+  `out/`. `scripts/windows/engine/syntax_check.py` does exactly that, with the checkout's `//ardia/win`, Linux and
+  desktop sources searched before the tree's copies, so it also checks a change on a tree whose series is behind the
+  checkout (one `04-series.sh` would refuse until a long rewind): `syntax_check.py ardia/win/webui/<file>.cc …`, and
+  `--as chrome/browser/…/<file>.cc <scratch copy>` for a Chromium file patched in a scratch copy (#4619: five units in
+  about 30 s).
 - `engine/ardiacore/apply.sh` doesn't run: it is Mac code. Only `ardia/core/ac_hooks.h` and `ac_content_hooks.h` are
   copied, because the hook patches include them (`// nogncheck`) and they are OS-neutral. With nothing setting the
   hooks, Chrome behaves as stock.
@@ -449,6 +453,7 @@ fails when a line has no row here, a row's Line doesn't match it, a Removable wh
 | `chromium-win-hosted-theme-change.patch` | chromium | A window the React Native path hosts skips the frame regeneration Chrome does on every theme change (`RegenerateFrameOnThemeChange`): `PerformDwmTransition` CHECKs a system-drawn frame, and hosted windows are custom drawn, so resetting or changing the theme killed the browser process | Chromium stops assuming a DWM frame on a theme change, or the WebUI host (#3686) is verified as the Windows default and the React Native Windows host paths are retired. Until then it serves the React Native path; the `--ardia-shell=webui` pilot never sets the hook |
 | `chromium-win-renderer-efficiency.patch` | chromium | The launcher hands each renderer priority it applies, on its own thread, to `//ardia/win` (`g_ardia_win_renderer_priority`, and `g_ardia_win_renderer_gone` when the launcher helper is destroyed, fast shutdown included; both atomic, since `//ardia/win` installs them after startup), which lowers a best-effort renderer's memory priority and ignores its timer resolution requests, then puts both back. Running there serializes its throttling writes with Chromium's own EcoQoS writes and follows loading and other boosts (#3840) | Chromium applies memory priority and timer throttling to background renderers itself |
 | `chromium-win-app-user-model-id.patch` | chromium | Every browser window, toast and profile shortcut uses the AppUserModelID `Ardia.Browser` (`ShellUtil::GetBrowserModelId`, with no per-user or per-profile suffix), the one the installer's Start Menu shortcut carries, so the taskbar groups the windows with it and notifications show as Ardia. Chromium's own Jump List is off (`JumpListFactory` builds none): on that shared ID, every profile and every separate data directory would overwrite one another's list, and its New incognito window task (`--incognito`) opens a regular window in the WebUI shell. Ardia can publish its own private-window-aware list later (#4206) | Never: Ardia's Windows identity |
+| `chromium-win-companion-fullscreen.patch` | chromium | A hidden companion browser (a window's tabs of another profile, `chromium-linux-companion-browsers.patch`) is full screen exactly when its owning window is (`BrowserView::IsFullscreen` asks `g_ardia_linux_companion_owner`), and its `ProcessFullscreen` puts the owning window in or out of full screen and then finishes the companion's own transition (`FullscreenController::WindowFullscreenStateChanged`) instead of dropping the request. Before it, a page in another profile entering full screen left its controller waiting for a window change that never came: Esc and the page's exit button did nothing and later requests on that tab were ignored (#4619). When the owning window leaves full screen any other way, `ShellHostView::ReleasePageFullScreen` tells each of the window's browsers still holding tab full screen, its own and its companions, from weak pointers it rechecks before each one | Never: companions are Ardia's |
 
 ## GN args
 

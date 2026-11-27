@@ -17,6 +17,7 @@
 #include "ardia/desktop/ac_desktop_webui_process_policy.h"
 #include "ardia/desktop/ac_desktop_window_state.h"
 #include "ardia/desktop/generated/ac_desktop_routes.h"
+#include "ardia/linux/ac_linux_extension_views.h"
 #include "ardia/linux/ac_linux_find.h"
 #include "ardia/win/hooks.h"
 #include "ardia/win/main.h"
@@ -42,6 +43,8 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/create_browser_window.h"
+#include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
+#include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -503,6 +506,22 @@ void PageBinding::ReportNavigation() {
                base::Value(std::move(delivery)));
 }
 
+base::DictValue PageBinding::FullscreenEvent(bool fullscreen) const {
+  return base::DictValue()
+      .Set("name", "fullscreen")
+      .Set("data", base::DictValue().Set("fullscreen", fullscreen));
+}
+
+void PageBinding::ReportFullscreen(bool fullscreen) {
+  if (!CanReport()) {
+    return;
+  }
+  base::DictValue delivery = Envelope("pageEvent");
+  delivery.Set("event", FullscreenEvent(fullscreen));
+  owner_->Emit("ArdiaWebView", base::NumberToString(id_),
+               base::Value(std::move(delivery)));
+}
+
 void PageBinding::ReportClosed() {
   if (!owner_ || claim_.empty()) {
     return;
@@ -557,8 +576,9 @@ bool PageBinding::ReportOpenPrivateWindow(const GURL& url,
                                     .Set("url", url.spec())
                                     .Set("disposition", "incognito")
                                     .Set("profile",
-                                         webui_window::PrivateLinkProfile(
-                                             profile))));
+                                         std::string(webui_window::ShellProfileName(
+                                             webui_window::PrivateLinkProfile(
+                                                 profile))))));
   owner_->Emit("ArdiaWebView", base::NumberToString(id_),
                base::Value(std::move(delivery)));
   return true;
@@ -589,6 +609,14 @@ void PageBinding::DidStartLoading() {
 
 void PageBinding::DidStopLoading() {
   ReportNavigation();
+}
+
+void PageBinding::DidToggleFullscreenModeForTab(bool entered,
+                                                bool will_cause_resize) {
+  ReportFullscreen(entered);
+  if (owner_) {
+    owner_->ReportWindowState();
+  }
 }
 
 void PageBinding::WebContentsDestroyed() {
@@ -689,6 +717,7 @@ void ShellHostView::DetachBrowser() {
     return;
   }
   closing_ = true;
+  DropExtensionSurfaces();
   RetireRenderer();
   telemetry_.CancelAll();
   file_picker_.reset();
@@ -837,6 +866,9 @@ BrowserWindowInterface* ShellHostView::EnsureMember(Profile* profile) {
 }
 
 void ShellHostView::CompanionClosed(BrowserWindowInterface* companion) {
+  if (extension_surfaces_member_ == companion) {
+    DropExtensionSurfaces();
+  }
   if (views::FocusManager* focus = CompanionFocusManager(companion)) {
     focus->UnregisterAccelerators(this);
   }
@@ -895,6 +927,7 @@ void ShellHostView::UnregisterShortcutsEverywhere() {
 }
 
 void ShellHostView::CloseCompanions() {
+  DropExtensionSurfaces();
   UnregisterShortcutsEverywhere();
   std::vector<base::WeakPtr<BrowserWindowInterface>> companions =
       std::move(companions_);
@@ -1057,6 +1090,9 @@ void ShellHostView::LayoutOverlay() {
   if (views::WebView* chrome_view = browser_view_->GetActiveContentsWebView()) {
     chrome_view->SetVisible(false);
   }
+  if (extension_surfaces_) {
+    extension_surfaces_->Relayout();
+  }
   Restack();
   ApplyShellInput();
 }
@@ -1067,6 +1103,9 @@ void ShellHostView::Restack() {
   }
   browser_view_->ReorderChildView(this, browser_view_->children().size());
   ReorderChildView(shell_, children().size());
+  if (extension_surfaces_) {
+    extension_surfaces_->RaisePopups();
+  }
 }
 
 void ShellHostView::ReattachViewports() {
@@ -1201,6 +1240,7 @@ void ShellHostView::RetireRenderer() {
   handler_ = nullptr;
   renderer_document_ = content::WeakDocumentPtr();
   ++renderer_generation_;
+  RetireExtensionViews(renderer_generation_);
   if (!had_document) {
     return;
   }
@@ -1315,7 +1355,48 @@ base::DictValue ShellHostView::WindowState() const {
       .Set("windowId", config_.window_id)
       .Set("maximized", frame && frame->IsMaximized())
       .Set("tiled", false)
-      .Set("fullScreen", frame && frame->IsFullscreen());
+      .Set("fullScreen",
+           webui_window::ReportsWindowFullScreen(
+               frame && frame->IsFullscreen(), PageHoldsFullScreen()));
+}
+
+bool ShellHostView::PageHoldsFullScreen() const {
+  for (BrowserWindowInterface* member : Members()) {
+    ExclusiveAccessManager* access = ExclusiveAccessManager::From(member);
+    const FullscreenController* controller =
+        access ? access->fullscreen_controller() : nullptr;
+    if (controller && controller->IsWindowFullscreenForTabOrPending() &&
+        controller->IsFullscreenCausedByTab()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void ShellHostView::ReleasePageFullScreen() {
+  std::vector<base::WeakPtr<BrowserWindowInterface>> members;
+  for (BrowserWindowInterface* member : Members()) {
+    members.push_back(member->GetWeakPtr());
+  }
+  const base::WeakPtr<ShellHostView> self = GetWeakPtr();
+  for (const base::WeakPtr<BrowserWindowInterface>& member : members) {
+    if (!self) {
+      return;
+    }
+    if (!member) {
+      continue;
+    }
+    views::Widget* frame = widget();
+    ExclusiveAccessManager* access = ExclusiveAccessManager::From(member.get());
+    FullscreenController* controller =
+        access ? access->fullscreen_controller() : nullptr;
+    if (controller &&
+        webui_window::ReleasesPageFullScreen(
+            frame && frame->IsFullscreen(),
+            controller->IsWindowFullscreenForTabOrPending())) {
+      controller->WindowFullscreenStateChanged();
+    }
+  }
 }
 
 base::ListValue ShellHostView::WindowFrame() const {
@@ -1334,7 +1415,13 @@ void ShellHostView::ReportWindowState() {
   if (!frame) {
     return;
   }
-  const bool full_screen = frame->IsFullscreen();
+  if (!frame->IsFullscreen()) {
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(&ShellHostView::ReleasePageFullScreen,
+                                  GetWeakPtr()));
+  }
+  const bool full_screen = webui_window::ReportsWindowFullScreen(
+      frame->IsFullscreen(), PageHoldsFullScreen());
   if (reported_full_screen_ != full_screen) {
     const bool announce = reported_full_screen_.has_value() || full_screen;
     reported_full_screen_ = full_screen;

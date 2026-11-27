@@ -1,0 +1,41 @@
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -3030,6 +3030,12 @@
+ }
+ 
+ bool BrowserView::IsFullscreen() const {
++  if (BrowserWindowInterface* owner =
++          g_ardia_linux_companion_owner
++              ? g_ardia_linux_companion_owner(browser_.get())
++              : nullptr) {
++    return owner->GetWindow() && owner->GetWindow()->IsFullscreen();
++  }
+   return browser_widget_->IsFullscreen();
+ }
+ 
+@@ -6471,6 +6477,25 @@
+ 
+ void BrowserView::ProcessFullscreen(bool fullscreen, const int64_t display_id) {
+   CHECK(!base::FeatureList::IsEnabled(features::kAsyncFullscreenWindowState));
++  if (BrowserWindowInterface* owner =
++          g_ardia_linux_companion_owner
++              ? g_ardia_linux_companion_owner(browser_.get())
++              : nullptr) {
++    base::WeakPtr<BrowserView> weak_this = GetAsWeakPtr();
++    views::Widget* owner_widget =
++        owner->GetWindow() ? views::Widget::GetWidgetForNativeWindow(
++                                 owner->GetWindow()->GetNativeWindow())
++                           : nullptr;
++    if (owner_widget) {
++      owner_widget->SetFullscreen(fullscreen, display_id);
++    }
++    if (weak_this) {
++      ExclusiveAccessManager::From(browser_)
++          ->fullscreen_controller()
++          ->WindowFullscreenStateChanged();
++    }
++    return;
++  }
+   if (g_ardia_linux_present_companion &&
+       g_ardia_linux_present_companion(browser_.get(), false)) {
+     return;

@@ -14,6 +14,7 @@
 #include "ardia/desktop/ac_desktop_webui_process_policy.h"
 #include "ardia/win/webui/desktop_platform_win.h"
 #include "ardia/win/webui/webui_documents.h"
+#include "ardia/win/webui/webui_extension_policy.h"
 #include "ardia/win/webui/webui_frame.h"
 #include "ardia/win/webui/webui_page_evaluation.h"
 #include "ardia/win/webui/webui_telemetry.h"
@@ -43,6 +44,10 @@ class BrowserView;
 class BrowserWindowInterface;
 class GURL;
 class Profile;
+
+namespace ardia {
+class LinuxExtensionSurfaces;
+}
 
 namespace aura {
 class Window;
@@ -127,6 +132,8 @@ class PageBinding : public content::WebContentsObserver {
   void ReportNavigation();
   void ReportFind(base::DictValue result);
   void ReportClosed();
+  base::DictValue FullscreenEvent(bool fullscreen) const;
+  void ReportFullscreen(bool fullscreen);
   ardiacore::LinuxFind* Find();
 
  private:
@@ -134,6 +141,8 @@ class PageBinding : public content::WebContentsObserver {
   void TitleWasSet(content::NavigationEntry* entry) override;
   void DidStartLoading() override;
   void DidStopLoading() override;
+  void DidToggleFullscreenModeForTab(bool entered,
+                                     bool will_cause_resize) override;
   void WebContentsDestroyed() override;
 
   bool CanReport() const;
@@ -181,6 +190,7 @@ class ShellHostView : public views::View,
   BrowserWindowInterface* browser() const { return browser_; }
   Profile* app_profile() const { return app_profile_; }
   Profile* page_profile() const;
+  std::string WindowProfileName(Profile* profile) const;
   content::WebContents* shell_contents() const;
   base::WeakPtr<ShellHostView> GetWeakPtr() {
     return weak_factory_.GetWeakPtr();
@@ -295,6 +305,8 @@ class ShellHostView : public views::View,
   base::DictValue WindowState() const;
   base::ListValue WindowFrame() const;
   void ReportWindowState();
+  bool PageHoldsFullScreen() const;
+  void ReleasePageFullScreen();
   void WatchSystemState();
   void NoteUnhandled(const std::string& method);
   views::Widget* widget() const;
@@ -308,6 +320,19 @@ class ShellHostView : public views::View,
   void UnregisterShortcutsEverywhere();
   void CloseCompanions();
   void SelectProfile(Profile* profile);
+  Profile* ActiveProfile() const;
+  BrowserWindowInterface* ActiveMember() const;
+
+  ardia::LinuxExtensionSurfaces* ExtensionSurfaces();
+  void DropExtensionSurfaces();
+  void RetireExtensionViews(uint64_t generation);
+  void EmitExtensionView(int internal, base::DictValue event);
+  void InvokeExtensionView(const std::string& method,
+                           const base::DictValue& args,
+                           Done done);
+  void ExtensionActionStates(const std::string& profile,
+                             const base::Value* args,
+                             Done done);
 
   PageBinding* ClaimedBinding(const base::DictValue& args) const;
   void CreateTab(const base::DictValue& args, Done done);
@@ -377,6 +402,9 @@ class ShellHostView : public views::View,
   bool painted_ = false;
   std::vector<base::WeakPtr<BrowserWindowInterface>> companions_;
   base::WeakPtr<Profile> active_profile_;
+  std::unique_ptr<ardia::LinuxExtensionSurfaces> extension_surfaces_;
+  raw_ptr<BrowserWindowInterface> extension_surfaces_member_ = nullptr;
+  webui_extension::ViewIds extension_view_ids_;
   webui_window::SelectionSequence selection_;
 
   raw_ptr<views::WebView> shell_ = nullptr;

@@ -90,6 +90,7 @@ type PagesNative = {
   evaluate(pageId: string, script: string): Promise<string | null>;
   discardBackgroundPages(keeping: string | null): Promise<void>;
   livePageIds(): Promise<string[]>;
+  setShownPage(pageId: string | null): Promise<void>;
   deleteSnapshots(pageId: string): Promise<void>;
   deleteSnapshotsFor?(pageIds: string[]): Promise<void>;
   snapshotIsCurrent?(pageId: string): boolean | null;
@@ -202,6 +203,7 @@ export const pages = {
   evaluate: (pageId: string, script: string) => native().evaluate(pageId, script),
   discardBackgroundPages: (keeping?: string | null) => native().discardBackgroundPages(keeping ?? null),
   livePageIds: () => native().livePageIds(),
+  setShownPage: (pageId: string | null) => native().setShownPage(pageId),
   deleteSnapshots: (pageId: string) => native().deleteSnapshots(pageId),
   deletesSnapshotsTogether: (): boolean => typeof native().deleteSnapshotsFor === "function",
   deleteSnapshotsFor: (pageIds: string[]) => native().deleteSnapshotsFor!(pageIds),

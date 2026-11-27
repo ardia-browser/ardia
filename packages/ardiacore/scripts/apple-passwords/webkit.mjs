@@ -58,7 +58,7 @@ export function webkitTabs(app, { log = () => {} } = {}) {
     await tab.loaded();
     if (await engine("tabs.devBrowserId", { tabId: id }).catch(() => null)) throw new Error(`${url} opened in Chromium`);
     if ((await tab.value("document.title")) === "Privacy error") {
-      const host = new URL(url).hostname;
+      const host = `${kind ?? "normal"} ${new URL(url).hostname}`;
       if (proceeded.has(host)) throw new Error(`${host} shows the certificate warning again`);
       await tab.click("#advanced");
       await waitFor("the certificate details", () => tab.value(`document.getElementById("details").classList.contains("open") || null`), 5000);

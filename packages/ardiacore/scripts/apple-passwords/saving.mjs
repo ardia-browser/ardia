@@ -127,5 +127,30 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         await tab.close();
       }
     },
+    async E23() {
+      const { fake, tabs } = await paired();
+      const kept = fixture("same@save.test");
+      const login = { user: `private-${Date.now()}@save.test`, password: "fixture-pw-private-13" };
+      const tab = await tabs.open(sites.url(SITE), { kind: "private" });
+      try {
+        await tab.click("#u");
+        const rows = await tab.waitRows();
+        assert(rows.some((r) => r.title === kept.user), "the Login list lists the site's Apple Passwords logins", rows);
+        await tab.pick(kept.user);
+        const filled = await waitFor("the filled login", async () => {
+          const page = await tab.value(`({ u: document.getElementById("u").value, p: document.getElementById("p").value })`);
+          return page?.p ? page : null;
+        });
+        assert(filled.u === kept.user && filled.p === kept.password, "the picked login fills in the private window", { u: filled.u, filled: !!filled.p });
+        await tab.value(`(document.getElementById("u").value = "", document.getElementById("p").value = "", true)`);
+        await signIn(tab, login.user, login.password);
+        const prompt = await noPrompt(tab);
+        assert(!prompt, "a new login in a private window shows no save prompt", prompt);
+        assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing reaches Apple Passwords", null);
+        return { engine: engineName, filled: filled.u, prompt: "none" };
+      } finally {
+        await tab.close();
+      }
+    },
   };
 }

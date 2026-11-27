@@ -1033,6 +1033,14 @@
    ]
   },
   {
+   "id": "sync-adapter:settingEdits.ts#withSettingEdits",
+   "source": "sync",
+   "guard": "Delegates extraction and every remote read to the wrapped settings adapter, whose SYNCED_SETTINGS and validSettingValue checks guard the records; keepLocal only compares the store's settingsMeta.chosenAt times with record stamps",
+   "checks": [
+    "apps/browser/src/state/sync/settingsAdapter.ts#settingsAdapter"
+   ]
+  },
+  {
    "id": "sync-adapter:settingsAdapter.ts#settingsAdapter",
    "source": "sync",
    "guard": "Only SYNCED_SETTINGS keys; validSettingValue against SETTING_SPECS before updateSettings, which checks again",

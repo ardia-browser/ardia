@@ -63,6 +63,7 @@ export type HydrateData = Partial<
     | "pinChoices"
     | "pinSync"
     | "topAppsMerged"
+    | "syncMark"
     | "closedGroups"
     | "deletedGroups"
     | "cleanedTabs"
@@ -158,6 +159,7 @@ const createdBrowser = create<BrowserState>()(actionsApart(transactions.middlewa
       pinChoices: Object.fromEntries(Object.entries(data.pinChoices ?? {}).filter(([p]) => Object.hasOwn(profiles, p))),
       pinSync: Object.fromEntries(Object.entries(data.pinSync ?? {}).filter(([p]) => Object.hasOwn(profiles, p))),
       topAppsMerged: data.topAppsMerged ?? "",
+      syncMark: data.syncMark ?? "",
       closedGroups: data.closedGroups ?? [],
       deletedGroups: keptDeletedGroups(data.deletedGroups ?? []),
       cleanedTabs: keptCleanedTabs((data.cleanedTabs ?? []).filter((c) => !isIncognitoProfile(c.tab.profileId))),

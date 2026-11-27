@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { closeSettings, followSettingsPath, offerBrowseForMePage, offerSyncPages, openSettings, pushSettings, settingsDestinationKeys, settingsNav, settingsPath, settingsRouteFromKey, settingsRouteKey, type SettingsRoute } from "./nav.ts";
+import { closeSettings, closeSettingsFrom, followSettingsPath, offerBrowseForMePage, offerSyncPages, openSettings, pushSettings, settingsDestinationKeys, settingsNav, settingsPath, settingsRouteFromKey, settingsRouteKey, type SettingsRoute } from "./nav.ts";
 
 test("every settings route turns into a path key and back, a filter list keeping its id", () => {
   const routes: SettingsRoute[] = [{ page: "appearance" }, { page: "siteSettings" }, { page: "filterList", id: "easylist:v2" }, { page: "syncConnect" }, { page: "whatsSent" }];
@@ -64,4 +64,20 @@ test("the pages a Settings screen links to are mounted before the tap, so a push
   offerSyncPages(() => false);
   assert.equal(settingsDestinationKeys([{ page: "root" }]).includes("sync"), false);
   offerSyncPages(() => true);
+});
+
+test("a late dismissal or path change from an earlier Settings sheet leaves a newer Settings as it is", () => {
+  openSettings({ page: "siteSettings" });
+  const earlier = settingsNav().generation;
+  openSettings({ page: "appearance" });
+  const newer = settingsNav().generation;
+  assert.notEqual(earlier, newer);
+  followSettingsPath(["filterLists"], earlier);
+  assert.deepEqual(settingsNav().stack, [{ page: "root" }, { page: "appearance" }]);
+  closeSettingsFrom(earlier);
+  assert.equal(settingsNav().open, true);
+  followSettingsPath([], newer);
+  assert.deepEqual(settingsNav().stack, [{ page: "root" }]);
+  closeSettingsFrom(newer);
+  assert.equal(settingsNav().open, false);
 });

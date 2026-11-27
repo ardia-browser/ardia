@@ -113,7 +113,7 @@ NSDictionary<NSString *, NSNumber *> *NewTabOverrideRanks(NSString *preferencesP
   NSMutableDictionary<NSString *, NSNumber *> *ranks = [NSMutableDictionary dictionary];
   NSUInteger rank = 0;
   for (NSDictionary *entry in entries) {
-    if (![entry isKindOfClass:NSDictionary.class] || ![entry[@"active"] isEqual:@YES] || ![entry[@"entry"] isKindOfClass:NSString.class]) continue;
+    if (![entry isKindOfClass:NSDictionary.class] || ![entry[@"entry"] isKindOfClass:NSString.class]) continue;
     NSString *host = [NSURL URLWithString:entry[@"entry"]].host.lowercaseString;
     if (!IsExtensionId(host) || ranks[host]) continue;
     ranks[host] = @(rank++);

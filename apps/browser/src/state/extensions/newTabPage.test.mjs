@@ -8,6 +8,7 @@ const { runCommand } = await import("../commands/commands.ts");
 const { useExtensions } = await import("./store.ts");
 const { extensionNewTabPage, setExtensionNewTabLists, LIST_WAIT_MS } = await import("./newTabPage.ts");
 const { takeNewTabPageCounts } = await import("../telemetry/newTabPageCounts.ts");
+const { setOpeningGate } = await import("../tabs/openingGate.ts");
 const client = await import("../telemetry/client.ts");
 client.loadChoice();
 client.setSharing(true, "onboarding");
@@ -139,4 +140,55 @@ test("#1126: with several New Tab extensions, Chromium's order wins: the newest 
   const fresh = reset({}, [extension(CADRAN, "cadran.html", { newTabRank: 0 }), extension(SPEED_DIAL, "dial.html")]);
   S().newTab(fresh, { newTabCommand: true });
   assert.equal(shownUrl(fresh), `chrome-extension://${SPEED_DIAL}/dial.html`, "an override Chromium hasn't written to Preferences yet is the newest install");
+});
+
+test("#1126: a ⌘T tab waiting for its profile's list gets its own profile's page, even after the window switched to another profile", () => {
+  const w = reset({}, []);
+  const home = S().windows[w].profileId;
+  const work = S().createProfile({ name: "Work" });
+  useExtensions.setState({ lists: {} });
+  const id = S().newTab(w, { newTabCommand: true });
+  assert.equal(S().tabs[id].profileId, home);
+  S().switchProfile(w, work);
+  useExtensions.setState({ lists: { [engineProfile(S(), home)]: [extension(SPEED_DIAL, "dial.html")], [engineProfile(S(), work)]: [extension(CADRAN, "cadran.html")] } });
+  assert.equal(S().tabs[id].url, `chrome-extension://${SPEED_DIAL}/dial.html`, "the Default tab opens Default's page, not Work's");
+});
+
+test("#1126: the late extension page leaves a tab alone while the command bar is open over it", () => {
+  const w = reset({}, []);
+  const profile = engineProfile(S(), S().windows[w].profileId);
+  useExtensions.setState({ lists: {} });
+  const id = S().newTab(w, { newTabCommand: true });
+  S().openPanel(w, "typing");
+  useExtensions.setState({ lists: { [profile]: [extension(SPEED_DIAL, "dial.html")] } });
+  assert.equal(S().tabs[id].url, "", "the command bar keeps what the user is typing");
+  S().closePanel(w);
+});
+
+test("#1126: the late extension page leaves a tab alone while its typed address waits on a tab.opening rule", () => {
+  const w = reset({}, []);
+  const profile = engineProfile(S(), S().windows[w].profileId);
+  useExtensions.setState({ lists: {} });
+  const id = S().newTab(w, { newTabCommand: true });
+  let answer;
+  setOpeningGate(() => new Promise((resolve) => (answer = resolve)));
+  try {
+    S().navigate(id, "https://typed.example/");
+    assert.equal(S().tabs[id].url, "", "the typed address is still waiting on the rule");
+    useExtensions.setState({ lists: { [profile]: [extension(SPEED_DIAL, "dial.html")] } });
+    assert.equal(S().tabs[id].url, "", "the extension page doesn't take the tab, or cancel the typed address");
+  } finally {
+    answer?.(null);
+    setOpeningGate(null);
+  }
+});
+
+test("#1126: an older New Tab extension turned back on keeps its place in Chromium's order instead of counting as the newest install", () => {
+  const reenabledOlder = extension(CADRAN, "cadran.html", { newTabRank: 1 });
+  const w = reset({}, [reenabledOlder, extension(SPEED_DIAL, "dial.html", { newTabRank: 0 })]);
+  S().newTab(w, { newTabCommand: true });
+  assert.equal(shownUrl(w), `chrome-extension://${SPEED_DIAL}/dial.html`, "Chromium's first entry still wins");
+  const unranked = reset({}, [extension(CADRAN, "cadran.html"), extension(SPEED_DIAL, "dial.html", { newTabRank: 0 })]);
+  S().newTab(unranked, { newTabCommand: true });
+  assert.equal(shownUrl(unranked), `chrome-extension://${CADRAN}/cadran.html`, "only an entry missing from Preferences counts as newest, so the Mac ranks every entry it lists, active or not");
 });

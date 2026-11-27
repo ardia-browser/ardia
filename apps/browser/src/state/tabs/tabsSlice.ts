@@ -107,7 +107,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
       next = joinedWithCurrent(next, [id], beside.openerId);
     }
     set(next);
-    if (home?.waits && id) settleWhenListed(windowId, options?.profileId, id, get);
+    if (home?.waits && id) settleWhenListed(windowId, id, get);
     return id;
   },
 

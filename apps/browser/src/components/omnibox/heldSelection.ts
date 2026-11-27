@@ -6,18 +6,20 @@ import { noteHeldRowsKeyMove } from "../../state/telemetry/inlineCompletionCount
 
 export type Held = { items: Suggestion[]; typed: string; scope: SearchScope | null; key: string | null };
 
+const rowIdentity = (row: Suggestion) => ("tabId" in row && row.tabId ? `tab:${row.tabId}` : suggestionKey(row));
+
 export function heldIndex(prev: Held | null, items: Suggestion[], typed: string, scope: SearchScope | null, selectedIndex: number): number {
   if (!prev?.key || prev.items === items || prev.typed !== typed || prev.scope !== scope) return selectedIndex;
   const current = items[selectedIndex];
-  if (current && suggestionKey(current) === prev.key) return selectedIndex;
-  const at = items.findIndex((s) => suggestionKey(s) === prev.key);
+  if (current && rowIdentity(current) === prev.key) return selectedIndex;
+  const at = items.findIndex((s) => rowIdentity(s) === prev.key);
   return at >= 0 ? at : selectedIndex;
 }
 
 export function heldKey(items: Suggestion[], selectedIndex: number, typed: string): string | null {
   const current = items[selectedIndex];
   if (!current) return null;
-  return selectedIndex === 0 && typed.trim() ? null : suggestionKey(current);
+  return selectedIndex === 0 && typed.trim() ? null : rowIdentity(current);
 }
 
 export const followedRow = (prev: Held | null, index: number): Held | null => (prev ? { ...prev, key: heldKey(prev.items, index, prev.typed) } : prev);
@@ -25,7 +27,9 @@ export const followedRow = (prev: Held | null, index: number): Held | null => (p
 export function useHeldSelection(items: Suggestion[], typed: string, scope: SearchScope | null, selectedIndex: number, dispatch: (e: BarEvent) => void, rows: { held: boolean; release: () => void }) {
   const held = useRef<Held | null>(null);
   const latestRows = useRef(rows);
-  latestRows.current = rows;
+  useLayoutEffect(() => {
+    latestRows.current = rows;
+  });
   useLayoutEffect(() => {
     const at = heldIndex(held.current, items, typed, scope, selectedIndex);
     if (at !== selectedIndex) return dispatch({ kind: "selected", index: at });

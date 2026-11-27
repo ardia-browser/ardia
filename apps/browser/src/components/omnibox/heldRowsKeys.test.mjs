@@ -99,3 +99,11 @@ test("in the sidebar bar's start list, the current page in the first row keeps i
   const held = followedRow({ items: [current, recent], typed: "", scope: null, key: null }, 0);
   assert.equal(heldIndex(held, [recent, current], "", null, 0), 1);
 });
+
+test("two open tabs on the same page are different rows, so the selection stays on the tab it moved to when the other sorts above it", () => {
+  const a = { kind: "page", url: "https://same.example/", title: "same", tabId: "a" };
+  const b = { kind: "page", url: "https://same.example/", title: "same", tabId: "b" };
+  const other = { kind: "page", url: "https://other.example/", title: "other", tabId: "c" };
+  const held = followedRow({ items: [other, a, b], typed: "", scope: null, key: null }, 2);
+  assert.equal(heldIndex(held, [b, other, a], "", null, 2), 0, "tab b is followed to the top, not swapped for tab a at its old place");
+});

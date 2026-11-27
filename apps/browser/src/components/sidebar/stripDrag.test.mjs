@@ -143,7 +143,8 @@ test("the hand-off carries the consent period of the press, not the one current 
   setConsentPeriod(false, null);
   const controller = slowController();
   controller.release();
-  const drag = stripDragHandoff("w", "t:a", () => {}, 5, () => controller);
+  const reveals = [];
+  const drag = stripDragHandoff("w", "t:a", (consent) => reveals.push(consent), 5, () => controller);
   drag.press();
   setConsentPeriod(true, "later-opt-in");
   drag.begin(20, 80);
@@ -152,6 +153,7 @@ test("the hand-off carries the consent period of the press, not the one current 
   setConsentPeriod(false, null);
   assert.equal(controller.calls[0][0], "begin");
   assert.equal(controller.calls[0][4], null, "the press began with sharing off");
+  assert.deepEqual(reveals, [null], "the reveal it counts as a peek carries the same press token");
 });
 
 test("a group grabbed from the strip is held by its header row, not the middle of its open members", async () => {

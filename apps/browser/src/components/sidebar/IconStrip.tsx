@@ -4,6 +4,7 @@ import { ActivitySpinner, clippedContinuousCorners, ink, radius, Symbol, useHove
 import { useTheme } from "../ui/theme";
 import { useGroup, useIsActiveTab, useProfile, useTab, useTabLive, useWindowProfileId } from "../../state/browser/hooks";
 import { useAnyShownTab, useIconStripCodes } from "../../state/sidebar/hooks";
+import { useSidebarRowsVersion } from "../../state/sidebar/rowGeometry";
 import { useMuteState } from "../../state/tabs/hooks";
 import { stripItemOf, type StripBar, type StripItem } from "../../state/sidebar/iconStrip";
 import { isIncognitoProfile } from "../../state/browser/model";
@@ -46,8 +47,9 @@ export function IconStrip({ windowId, right, top, bottom, actions, align }: { wi
   const codes = useIconStripCodes(windowId, profileId);
   const entries = useMemo(() => codes.map((code) => ({ code, key: keyOf(code), kind: code.slice(0, code.indexOf("\u0001")) })), [codes]);
   const aligned = useMemo(() => entries.filter((e) => ALIGNED.has(e.kind)).map((e) => e.key), [entries]);
-  const centers = useRowCenters(windowId, aligned, align.offset, align.paused, align.layoutKey);
-  const layout = useMemo(() => stripLayout(entries.map((e) => ({ key: ALIGNED.has(e.kind) ? e.key : `${e.kind}:${e.key}`, divider: e.kind === "divider" })), centers, top), [entries, centers, top]);
+  const rowsVersion = useSidebarRowsVersion(windowId);
+  const centers = useRowCenters(windowId, aligned, align.offset, align.paused, `${align.layoutKey}:${rowsVersion}`);
+  const layout = useMemo(() => stripLayout(entries.map((e) => ({ key: ALIGNED.has(e.kind) ? e.key : `${e.kind}:${e.key}`, divider: e.kind === "divider", aligned: ALIGNED.has(e.kind) })), centers, top), [entries, centers, top]);
   return (
     <View style={StyleSheet.absoluteFill}>
       <WindowDragRegion style={StyleSheet.absoluteFill} />

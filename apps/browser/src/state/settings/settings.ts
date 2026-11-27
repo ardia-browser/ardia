@@ -276,6 +276,8 @@ export function writableSettingsPatch(raw: Partial<Settings>): { patch: Partial<
 
 export const settingsWith = (settings: Settings, patch: Partial<Settings>): Settings => ({ ...settings, ...writableSettingsPatch(patch).patch });
 
+const pickedSettingsOf = (patch: Partial<Settings>) => Object.keys(patch).concat("autoHideTabs" in patch || "collapsedSidebar" in patch ? ["sidebarMode"] : []);
+
 export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch: Partial<Settings>, { inferring = false } = {}): Pick<BrowserState, "settings" | "settingsMeta"> {
   const { chosen, inferred } = s.settingsMeta;
   patch = settledPatch(s.settings, patch, SETTING_SPECS);
@@ -283,7 +285,7 @@ export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch
   const next = { ...s.settings, ...patch };
   const added = Object.keys(patch).filter((k) => !chosen.includes(k));
   const left = inferring ? [...new Set([...inferred, ...Object.keys(patch)])] : inferred.filter((k) => !(k in patch));
-  const chosenAt = inferring ? s.settingsMeta.chosenAt : { ...s.settingsMeta.chosenAt, ...Object.fromEntries(Object.keys(patch).map((key) => [key, Date.now()])) };
+  const chosenAt = inferring ? s.settingsMeta.chosenAt : { ...s.settingsMeta.chosenAt, ...Object.fromEntries(pickedSettingsOf(patch).map((key) => [key, Date.now()])) };
   const settingsMeta = { chosen: added.length ? [...chosen, ...added] : chosen, inferred: left, ...(chosenAt ? { chosenAt } : {}) };
   return { settings: next, settingsMeta };
 }

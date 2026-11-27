@@ -23,12 +23,12 @@ export const grabbedView = (item: Pick<Item, "kind" | "view" | "header">) => (bo
 
 let handoffs = 0;
 
-type Run = { id: number; phase: "waiting" | "handed" | "ended"; pointer: { x: number; y: number }; consent: ConsentToken | null; handed: Handoff | null; timer?: ReturnType<typeof setTimeout>; release: () => void };
+type Run = { id: number; phase: "waiting" | "handed" | "ended"; pointer: { x: number; y: number }; consent: ConsentToken | null; handed: Handoff | null; away: boolean; timer?: ReturnType<typeof setTimeout>; release: () => void };
 
 export function stripDragHandoff(
   windowId: string,
   key: string,
-  reveal: () => void,
+  reveal: (consent: ConsentToken | null) => void,
   settleMs: number,
   controllerOf: (windowId: string) => Handoff | null = sidebarDragOf,
   right = false,
@@ -50,7 +50,7 @@ export function stripDragHandoff(
     r.phase = "handed";
     r.handed = controller;
     const at = handoffPoint(frame, r.pointer, right);
-    await controller.begin(key, at.x, at.y, r.consent);
+    await controller.begin(key, at.x, at.y, r.consent, () => live(r) && !r.away);
     if (live(r) && r.handed === controller) controller.move(r.pointer.x, r.pointer.y);
   };
   const stopWaiting = (r: Run) => {
@@ -58,6 +58,10 @@ export function stripDragHandoff(
     run = null;
     pressed = null;
     stop(r);
+  };
+  const leave = (r: Run) => {
+    if (r.phase === "waiting") stopWaiting(r);
+    else r.away = true;
   };
   const cancel = () => {
     const r = run;
@@ -77,18 +81,18 @@ export function stripDragHandoff(
       cancel();
       const id = ++handoffs;
       const owner = `stripDrag:${windowId}:${id}`;
-      const r: Run = { id, phase: "waiting", pointer: { x, y }, consent, handed: null, release: () => {} };
+      const r: Run = { id, phase: "waiting", pointer: { x, y }, consent, handed: null, away: false, release: () => {} };
       run = r;
       captureEscape(owner, true);
-      const escape = onAppEvent((e) => e.type === "dragEscape" && stopWaiting(r));
-      const active = AppState.addEventListener("change", (state) => state !== "active" && stopWaiting(r));
+      const escape = onAppEvent((e) => (e.type === "dragEscape" ? stopWaiting(r) : e.type === "resignActive" && leave(r)));
+      const active = AppState.addEventListener("change", (state) => state !== "active" && leave(r));
       r.release = () => {
         clearTimeout(r.timer);
         escape.remove();
         active.remove();
         captureEscape(owner, false);
       };
-      reveal();
+      reveal(consent);
       r.timer = setTimeout(() => void start(r), settleMs);
     },
     move(x, y) {

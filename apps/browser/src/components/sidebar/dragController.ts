@@ -58,7 +58,7 @@ export class DragController extends DragTargeting {
     return !!this.session?.sources.length;
   }
 
-  async begin(key: string, x: number, y: number, consent?: ConsentToken | null) {
+  async begin(key: string, x: number, y: number, consent?: ConsentToken | null, keep: () => boolean = () => true) {
     const item = this.items.get(key);
     if (!item || item.kind === "tail") return;
     this.beforeMeasure?.();
@@ -72,7 +72,8 @@ export class DragController extends DragTargeting {
     suppressHover(true);
     session.escapable = true;
     captureEscape("sidebarDrag", true);
-    if (this.foldsPending() && !(await this.foldsSettled(() => this.session === session))) return;
+    const current = () => this.session === session && keep();
+    if (this.foldsPending() && !(await this.foldsSettled(current))) return this.abandonUnkept(session, keep, 0);
     const sources = (session.sources = this.sourcesOf(item, moving));
     const crossing = sources.every((i) => tabCell(i) && i.section !== "folder");
     session.home = crossing ? dragHomeOf([...new Set(sources.flatMap((i) => i.tabIds))]) : null;
@@ -81,7 +82,7 @@ export class DragController extends DragTargeting {
       const single = sources.length === 1 ? (item.tabIds[0] ?? null) : null;
       seq = beginTabDrag(single, [...new Set(sources.flatMap((i) => i.tabIds))]);
     }
-    if (!(await this.measureAll(session, () => this.session === session))) return;
+    if (!(await this.measureAll(session, current))) return this.abandonUnkept(session, keep, seq);
     const frame = item.frame ?? { x, y, w: 176, h: 33 };
     const grab = (session.grab = { x: x - frame.x, y: y - frame.y });
     const count = new Set(sources.flatMap((s) => s.tabIds)).size;
@@ -325,6 +326,14 @@ export class DragController extends DragTargeting {
     this.clearSplitHold();
     this.profiles.release();
     this.edges.release();
+  }
+
+  protected abandonUnkept(session: DragSession, keep: () => boolean, seq: number) {
+    if (this.session !== session || keep()) return;
+    if (seq) cancelTabDrag();
+    this.reset();
+    this.token = null;
+    this.setGhost(null);
   }
 
   protected reset() {

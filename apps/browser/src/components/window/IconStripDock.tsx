@@ -96,7 +96,7 @@ export function IconStripDock({ windowId, right, shown, moving, fullscreen, peek
         if (item.kind === "group") updateGroup(item.groupId, { collapsed: false });
         if (item.kind === "tileFolder") setTimeout(() => void toggleFolderPanel(windowId, item.folderId), SETTLE_MS);
       },
-      drag: (key: string) => drags.track(stripDragHandoff(windowId, key, () => showNow(consentToken()), SETTLE_MS, undefined, right)),
+      drag: (key: string) => drags.track(stripDragHandoff(windowId, key, showNow, SETTLE_MS, undefined, right)),
     };
   }, [windowId, peek, right, hover, drags]);
   if (!mounted) return null;

@@ -45,12 +45,12 @@ export function stripSquare(items: { key: string; divider: boolean }[], rowCente
   return Math.max(STRIP_MIN_SQUARE, Math.min(ICON_STRIP.square, Math.floor(tightest - STRIP_ROW_GAP)));
 }
 
-export function stripLayout(items: { key: string; divider: boolean }[], rowCenters: Readonly<Record<string, number>>, railTop: number): { slots: StripSlot[]; end: number; square: number } {
+export function stripLayout(items: { key: string; divider: boolean; aligned?: boolean }[], rowCenters: Readonly<Record<string, number>>, railTop: number): { slots: StripSlot[]; end: number; square: number } {
   const square = stripSquare(items, rowCenters);
   let next = railTop;
   let lastBottom = railTop;
   let fresh = true;
-  const slots = items.map(({ key, divider }) => {
+  const slots = items.map(({ key, divider, aligned }) => {
     if (divider) {
       const top = next;
       next = top + STRIP_DIVIDER_HEIGHT;
@@ -59,7 +59,7 @@ export function stripLayout(items: { key: string; divider: boolean }[], rowCente
     }
     const center = rowCenters[key];
     const floor = fresh ? next : center === undefined ? next : lastBottom + STRIP_ROW_GAP;
-    const size = center === undefined ? ICON_STRIP.square : square;
+    const size = center === undefined && !aligned ? ICON_STRIP.square : square;
     const top = Math.round(center === undefined ? floor : Math.max(floor, center - size / 2));
     const slot = { top, joinAbove: top - lastBottom };
     lastBottom = top + size;

@@ -84,6 +84,18 @@ async function joined() {
   return { a, b };
 }
 
+async function later() {
+  const from = Date.now();
+  while (Date.now() <= from + 1) await new Promise((resolve) => setTimeout(resolve, 0));
+}
+const asOlderBuild = (d, patch) =>
+  d.with(() => {
+    S().updateSettings(patch);
+    const { sidebarMode: _, ...chosenAt } = S().settingsMeta.chosenAt ?? {};
+    useBrowser.setState((s) => ({ settingsMeta: { ...s.settingsMeta, chosenAt } }));
+  });
+const writerOf = (d) => d.scope.records[MODE]?.o?.[0];
+
 const choice = (d) => d.with(() => [chosenSidebarMode(S().settings), S().settings.collapsedSidebar].join(" "));
 
 test("two Macs picking at once end on one Mac's whole choice, never Full from one and Hidden's style from the other", async () => {
@@ -92,6 +104,7 @@ test("two Macs picking at once end on one Mac's whole choice, never Full from on
   await a.sync();
   await b.sync();
   assert.equal(b.mode(), "icons");
+  await later();
   a.with(() => chooseSidebarMode("full"));
   await a.sync();
   b.with(() => chooseSidebarMode("hidden"));
@@ -108,6 +121,7 @@ test("a newer Full pick keeps the collapsed style both Macs remember, so the nex
   await a.sync();
   await b.sync();
   assert.equal(b.mode(), "icons");
+  await later();
   b.with(() => chooseSidebarMode("full"));
   await b.sync();
   await a.sync();
@@ -155,4 +169,70 @@ test("a batch without the sidebar records leaves a pick made since the last publ
   await settingsAdapter.apply(visible, new Set(["set:searchSuggestions"]), () => undefined, { stamp: () => undefined });
   assert.equal(chosenSidebarMode(S().settings), "full");
   assert.equal(S().settings.searchSuggestions, false);
+});
+
+
+test("an older Mac that had used Auto Hide upgrades onto another Mac's Icons pick and shows Icons, without publishing over it", async () => {
+  const folder = new Folder();
+  const a = new Device("A", folder);
+  const old = new Device("O", folder, legacyAdapter);
+  await a.sync();
+  await old.sync();
+  asOlderBuild(old, { autoHideTabs: true });
+  await old.sync();
+  await a.sync();
+  await later();
+  a.with(() => chooseSidebarMode("icons"));
+  await a.sync();
+  await old.sync();
+  assert.equal(old.mode(), "hidden", "the old build only knows collapsed");
+  old.adapter = settingsAdapter;
+  old.with(() => settleSettingsFromSavedSync(old.scope, true));
+  await old.sync();
+  await a.sync();
+  assert.deepEqual([a.mode(), old.mode()], ["icons", "icons"]);
+  assert.equal(writerOf(old), "A", "the upgrade published no sidebar mode of its own");
+});
+
+test("an idle sync never publishes Full over a later Hidden pick from another Mac", async () => {
+  const folder = new Folder();
+  const a = new Device("A", folder);
+  const b = new Device("B", folder);
+  const old = new Device("O", folder, legacyAdapter);
+  for (const d of [a, b, old]) await d.sync();
+  a.with(() => chooseSidebarMode("icons"));
+  await a.sync();
+  await b.sync();
+  await old.sync();
+  await later();
+  asOlderBuild(old, { autoHideTabs: false });
+  await old.sync();
+  await a.sync();
+  await b.sync();
+  assert.deepEqual([a.mode(), b.mode()], ["full", "full"]);
+  await later();
+  b.with(() => chooseSidebarMode("hidden"));
+  await b.sync();
+  await a.sync();
+  await b.sync();
+  assert.deepEqual([a.mode(), b.mode()], ["hidden", "hidden"]);
+  assert.equal(writerOf(a), "B");
+});
+
+test("a publish with no local pick of the mode never writes the sidebar mode record", async () => {
+  const folder = new Folder();
+  const a = new Device("A", folder);
+  await a.sync();
+  asOlderBuild(a, { autoHideTabs: true });
+  a.with(() => S().updateSettings({ searchSuggestions: false }));
+  await a.sync();
+  assert.equal(a.scope.records[MODE], undefined);
+  assert.equal(a.scope.records["set:autoHideTabs"]?.v?.v, true, "the auto-hide switch itself still syncs");
+  a.with(() => settleSettingsFromSavedSync(a.scope, true));
+  await a.sync();
+  assert.equal(a.scope.records[MODE], undefined, "nor does a launch reapply");
+  await later();
+  a.with(() => chooseSidebarMode("icons"));
+  await a.sync();
+  assert.deepEqual(a.scope.records[MODE]?.v?.v, { collapsed: true, style: "icons" });
 });

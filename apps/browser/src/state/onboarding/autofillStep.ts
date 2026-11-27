@@ -1,3 +1,4 @@
+import type { Secret } from "@ardia/core";
 import { create } from "zustand";
 import { cancelPairing, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords } from "../site/applePasswords";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
@@ -71,7 +72,7 @@ function finishPicked() {
   finish(offered, offerPicks(now().picks, offered));
 }
 
-export async function submitAutofillPairingCode(code: string): Promise<boolean> {
+export async function submitAutofillPairingCode(code: Secret<"pairingCode">): Promise<boolean> {
   if (now().phase !== "pairing" || !inStep()) return false;
   const paired = await submitApplePasswordsCode(code);
   if (paired && now().phase === "pairing") finishPicked();

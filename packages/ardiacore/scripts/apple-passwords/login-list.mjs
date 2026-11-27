@@ -37,7 +37,7 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
   };
   const pairAgain = async (app, fake) => {
     await waitFor("the code step", async () => ((await pairingStep(app)) === "code" ? true : null), 20_000);
-    await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${q(FIXTURES.code)}).then(() => true);`, { timeout: 60_000 });
+    await app.eval(`return ac.applePasswords.submitApplePasswordsCode(ac.applePasswords.pairingCodeSecret(${q(FIXTURES.code)})).then(() => true);`, { timeout: 60_000 });
     await waitFor("Paired again", async () => ((await applePasswords(app)) === "connected" ? true : null), 20_000);
   };
   const connectRows = async (tab) => {

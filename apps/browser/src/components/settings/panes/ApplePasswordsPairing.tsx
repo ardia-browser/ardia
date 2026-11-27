@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { cancelPairing, PAIRING_CODE_DIGITS, pairingCodeInput, pairingPrompt, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords, type ApplePasswordsState } from "../../../state/site/applePasswords";
+import { cancelPairing, PAIRING_CODE_DIGITS, pairingCodeInput, pairingCodeSecret, pairingPrompt, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords, type ApplePasswordsState } from "../../../state/site/applePasswords";
 import { turnICloudExtensionBackOn, useICloudExtensionNote } from "../../../state/site/iCloudPasswordsExtension";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { Box, Button, DialogActions, DialogTitle, Sheet, space, Text, TextField } from "../../ui";
@@ -58,7 +58,7 @@ function ApplePasswordsPairingSheet() {
   };
   const connect = async () => {
     if (code.length !== PAIRING_CODE_DIGITS) return;
-    if (await submitApplePasswordsCode(code)) closeSettingsSheet();
+    if (await submitApplePasswordsCode(pairingCodeSecret(code))) closeSettingsSheet();
   };
   const prompt = pairingPrompt(pairing.step);
   return (

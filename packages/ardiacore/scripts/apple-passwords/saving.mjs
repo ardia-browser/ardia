@@ -203,7 +203,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         await waitFor("the Pairing prompt over the page", async () => ((await prompting(app, tab.id)) ? true : null), 10_000);
         await waitFor("the code step", async () => ((await pairingStep(app)) === "code" ? true : null), 20_000);
         assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing is saved before Pairing", null);
-        await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${q(FIXTURES.code)}).then(() => true);`, { timeout: 60_000 });
+        await app.eval(`return ac.applePasswords.submitApplePasswordsCode(ac.applePasswords.pairingCodeSecret(${q(FIXTURES.code)})).then(() => true);`, { timeout: 60_000 });
         const saved = await waitFor("the login in Apple Passwords once paired", async () => fake.savedLogins().find((l) => l.user === login.user) ?? null, 20_000);
         assert(saved.password === login.password && saved.sites.includes(SITE), "Pairing there saves the held login", { sites: saved.sites });
         seen.paired = "saved";
@@ -229,7 +229,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       }
       await app.eval("return ac.applePasswords.startApplePasswordsPairing(null).then(() => true);", { timeout: 30_000 });
       await waitFor("the code step", async () => ((await pairingStep(app)) === "code" ? true : null), 20_000);
-      await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${q(FIXTURES.code)}).then(() => true);`, { timeout: 60_000 });
+      await app.eval(`return ac.applePasswords.submitApplePasswordsCode(ac.applePasswords.pairingCodeSecret(${q(FIXTURES.code)})).then(() => true);`, { timeout: 60_000 });
       await waitFor("Paired again", async () => ((await applePasswords(app)) === "connected" ? true : null), 20_000);
       return { engine: engineName, ...seen };
     },

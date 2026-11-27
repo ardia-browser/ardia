@@ -74,7 +74,7 @@ async function paired() {
   await start("paired", { manifest: fake.manifest });
   const shown = await pickApplePasswords();
   assert(shown.step === "code", "the code step opens", shown);
-  await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${JSON.stringify(fake.fixtures.code)}).then(() => true);`, { timeout: 60_000 });
+  await app.eval(`return ac.applePasswords.submitApplePasswordsCode(ac.applePasswords.pairingCodeSecret(${JSON.stringify(fake.fixtures.code)})).then(() => true);`, { timeout: 60_000 });
   const done = await until(pairingView, (v) => v.state === "connected" && v.choice === "apple");
   note("paired", JSON.stringify(done));
   shared = { app, fake, tabs: webkitTabs(app, { log: note }), chromium: chromiumTabs(app, { log: note }) };
@@ -109,7 +109,7 @@ const assert = (ok, message, detail) => {
 
 async function pairApplePasswords(fake) {
   await pickApplePasswords();
-  await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${JSON.stringify(fake.fixtures.code)}).then(() => true);`, { timeout: 60_000 });
+  await app.eval(`return ac.applePasswords.submitApplePasswordsCode(ac.applePasswords.pairingCodeSecret(${JSON.stringify(fake.fixtures.code)})).then(() => true);`, { timeout: 60_000 });
   return until(pairingView, (v) => v.state === "connected" && v.choice === "apple");
 }
 
@@ -247,7 +247,7 @@ const CHECKS = {
     await start("E1", { manifest: fake.manifest });
     const shown = await pickApplePasswords();
     assert(shown.step === "code" && shown.choice !== "apple", "the code step opens before anything is saved", shown);
-    await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${JSON.stringify(fake.fixtures.code)}).then(() => true);`, { timeout: 60_000 });
+    await app.eval(`return ac.applePasswords.submitApplePasswordsCode(ac.applePasswords.pairingCodeSecret(${JSON.stringify(fake.fixtures.code)})).then(() => true);`, { timeout: 60_000 });
     const done = await until(pairingView, (v) => v.state === "connected");
     assert(done.choice === "apple" && done.step === null, "paired and saved", done);
     assert(fake.launches() === 1, "one helper launch", fake.launches());
@@ -370,7 +370,7 @@ const CHECKS = {
     await until(extensionView, (v) => v.installed && v.enabled === true);
     const steps = {};
     await pickApplePasswords();
-    await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${JSON.stringify(fake.fixtures.code)}).then(() => true);`, { timeout: 60_000 });
+    await app.eval(`return ac.applePasswords.submitApplePasswordsCode(ac.applePasswords.pairingCodeSecret(${JSON.stringify(fake.fixtures.code)})).then(() => true);`, { timeout: 60_000 });
     steps.picked = await until(extensionView, (v) => v.choice === "apple" && v.enabled === false && !!v.note);
     assert(steps.picked.note.text === "Ardia now fills from Apple Passwords itself. You can remove the iCloud Passwords extension." && steps.picked.note.action === "Turn it back on", "Settings says so with Turn it back on", steps.picked);
     await app.eval(`return ac.iCloudPasswordsExtension.turnICloudExtensionBackOn(ac.store.getState().settings.defaultProfileId).then(() => true);`, { timeout: 30_000 });

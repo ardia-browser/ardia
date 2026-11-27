@@ -20,7 +20,7 @@ async function pairWith(...codes) {
   native.applePasswords.state = "notConnected";
   await ap.loadApplePasswords();
   await ap.startApplePasswordsPairing(S().settings.defaultProfileId);
-  for (const code of codes) await ap.submitApplePasswordsCode(code);
+  for (const code of codes) await ap.submitApplePasswordsCode(ap.pairingCodeSecret(code));
 }
 
 test("Pairing counts starts, Pairings and each kind of failure while sharing is on, and nothing while it is off", async () => {

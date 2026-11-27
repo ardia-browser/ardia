@@ -1,4 +1,4 @@
-export const SECRET_KINDS = ["password", "oauthToken", "oauthClientSecret", "apiToken", "pluginSecret", "syncPhrase", "devtoolsToken"] as const;
+export const SECRET_KINDS = ["password", "oauthToken", "oauthClientSecret", "apiToken", "pluginSecret", "syncPhrase", "devtoolsToken", "pairingCode"] as const;
 
 export type SecretKind = (typeof SECRET_KINDS)[number];
 

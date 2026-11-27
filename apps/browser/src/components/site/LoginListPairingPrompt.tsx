@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
-import { PAIRING_CODE_DIGITS, pairingCodeInput, pairingPrompt, submitApplePasswordsCode, useApplePasswords } from "../../state/site/applePasswords";
+import { PAIRING_CODE_DIGITS, pairingCodeInput, pairingCodeSecret, pairingPrompt, submitApplePasswordsCode, useApplePasswords } from "../../state/site/applePasswords";
 import { cancelLoginListPairing, loginListPairingDone } from "../../state/site/loginListPairing";
 import { Button, PanelCloseButton, Popover, POPOVER_WIDTH, Text, TextField } from "../ui";
 import { PromptBody } from "./Prompts";
@@ -17,7 +17,7 @@ export function LoginListPairingPrompt({ tabId, right, top }: { tabId: string; r
   if (!pairing) return null;
   const cancel = () => cancelLoginListPairing(tabId);
   const connect = () => {
-    if (code.length === PAIRING_CODE_DIGITS) void submitApplePasswordsCode(code);
+    if (code.length === PAIRING_CODE_DIGITS) void submitApplePasswordsCode(pairingCodeSecret(code));
   };
   const entering = pairing.step === "code" || pairing.step === "checking";
   return (

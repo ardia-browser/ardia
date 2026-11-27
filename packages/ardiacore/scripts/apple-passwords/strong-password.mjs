@@ -96,7 +96,7 @@ export function strongPasswordChecks({ paired, sites, engine: engineName = "webk
         await listed(other, [SUGGEST, CONNECT, NOT_NOW], "another site's strong row beside the Connect row");
         await other.pick(CONNECT);
         await waitFor("the code step", async () => ((await pairingStep(app)) === "code" ? true : null), 20_000);
-        await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${q(FIXTURES.code)}).then(() => true);`, { timeout: 60_000 });
+        await app.eval(`return ac.applePasswords.submitApplePasswordsCode(ac.applePasswords.pairingCodeSecret(${q(FIXTURES.code)})).then(() => true);`, { timeout: 60_000 });
         await waitFor("Paired again", async () => ((await applePasswords(app)) === "connected" ? true : null), 20_000);
         seen.connected = (await listed(other, [SUGGEST, FOOTER], "the strong row once connected")).map((r) => r.title);
       } finally {

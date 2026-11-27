@@ -1,3 +1,4 @@
+import { asSecret, type Secret } from "@ardia/core";
 import { create } from "zustand";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { applePasswordsStatus, cancelApplePasswordsPairing, finishApplePasswordsPairing, onApplePasswordsChanged, pairApplePasswords, type ApplePasswordsPairing, type ApplePasswordsState } from "../../platform/applePasswords";
@@ -53,6 +54,8 @@ export const pairingPrompt = (step: PairingStep): string | null =>
 
 export const pairingCodeInput = (text: string) => text.replace(/\D/g, "").slice(0, PAIRING_CODE_DIGITS);
 
+export const pairingCodeSecret = (code: string): Secret<"pairingCode"> => asSecret("pairingCode", code);
+
 const setPairing = (pairing: Pairing | null) => useApplePasswords.setState({ pairing });
 const current = (pairing: Pairing) => useApplePasswords.getState().pairing === pairing;
 
@@ -80,7 +83,7 @@ function paired(attempt: Pairing) {
   if (attempt.profileId) choosePasswordManager(attempt.profileId, "apple", attempt.consent);
 }
 
-export async function submitApplePasswordsCode(code: string): Promise<boolean> {
+export async function submitApplePasswordsCode(code: Secret<"pairingCode">): Promise<boolean> {
   const waiting = useApplePasswords.getState().pairing;
   if (!waiting || waiting.step !== "code") return false;
   const attempt: Pairing = { ...waiting, step: "checking", error: null, consent: consentToken() };

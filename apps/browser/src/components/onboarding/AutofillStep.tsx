@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
-import { PAIRING_CODE_DIGITS, pairingCodeInput, pairingPrompt, useApplePasswords, type Pairing } from "../../state/site/applePasswords";
+import { PAIRING_CODE_DIGITS, pairingCodeInput, pairingCodeSecret, pairingPrompt, useApplePasswords, type Pairing } from "../../state/site/applePasswords";
 import type { AutofillOffer } from "../../state/onboarding/autofillOffers";
 import { continueAutofillStep, finishAutofillPairing, skipAutofillStep, submitAutofillPairingCode, toggleAutofillOffer, useAutofillStep, useAutofillStepOffers } from "../../state/onboarding/autofillStep";
 import { Checkbox, Symbol, Text, TextField } from "../ui";
@@ -26,7 +26,7 @@ export function AutofillStep() {
   }, [pairing?.error]);
   const pairingShown = phase === "pairing" && !!pairing;
   const connect = () => {
-    if (code.length === PAIRING_CODE_DIGITS) void submitAutofillPairingCode(code);
+    if (code.length === PAIRING_CODE_DIGITS) void submitAutofillPairingCode(pairingCodeSecret(code));
   };
   const actions = pairingShown && pairing.step !== "failed" ? (
     <StepActions continueTitle="Connect" disabled={pairing.step !== "code" || code.length !== PAIRING_CODE_DIGITS} onContinue={connect} onSkip={skipAutofillStep} holdScroll />

@@ -20,6 +20,7 @@ const none = () => ({
   site_data_cookie_only_fallbacks: 0,
   site_data_failures: 0,
   site_data_untrusted_drops: 0,
+  site_data_never_shown_skips: 0,
   site_data_clear_wait_timeouts: 0,
   site_data_sites_unresolved: 0,
   site_data_storage_over_quota: 0,
@@ -68,6 +69,7 @@ const SKIP_FIELDS = {
   cookieOnlyFallback: "site_data_cookie_only_fallbacks",
   failure: "site_data_failures",
   untrustedDrops: "site_data_untrusted_drops",
+  neverShownInSource: "site_data_never_shown_skips",
   clearWaitTimeout: "site_data_clear_wait_timeouts",
   siteUnresolved: "site_data_sites_unresolved",
 } as const;

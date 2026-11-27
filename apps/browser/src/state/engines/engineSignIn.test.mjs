@@ -569,6 +569,52 @@ test("saved data WebKit dropped for a site not used in WebKit lately stays in Ch
   assert.deepEqual(page.jar.storage[ORIGIN], [["token", "t1"]]);
 });
 
+test("WebKit's copy of a site only Chromium has shown never goes back into Chromium, with or without a Chromium page, and a site WebKit showed still does", async () => {
+  const { touch } = await import("./siteDataLedger.ts");
+  const { book } = await import("./siteDataState.ts");
+  const { takeSiteDataCounts } = await import("../telemetry/siteDataCounts.ts");
+  const { setSharing, consentToken } = await import("../telemetry/client.ts");
+  const exported = [];
+  const realExport = webKitCalls.exportCookies;
+  webKitCalls.exportCookies = ({ keys }) => (exported.push(...(keys ?? [])), (keys ?? []).length);
+  await setSharing(true, "settings");
+  try {
+    for (const pageOpen of [true, false]) {
+      const { tabId } = setup();
+      const page = chromiumPage({ cookies: [{ ...signedIn, value: "s1", session: false, expires: Date.now() / 1000 + 28 * 86400 }], storage: { [ORIGIN]: [["token", "t1"]] } });
+      webviews.set(tabId, page);
+      touch(book(), "", "app.test", "chromium", Date.now(), ORIGIN);
+      await carrySite("", "app.test", "webkit", { origin: ORIGIN, consent: null });
+      assert.equal(webKit.cookies.length, 1);
+      page.jar.cookies = [{ ...page.jar.cookies[0], value: "s2" }];
+      webKit.cookies = webKit.cookies.map((c) => ({ ...c, expires: c.expires - 7 * 86400 }));
+      webKit.storage[ORIGIN] = [["token", "stale"]];
+      if (!pageOpen) {
+        webviews.clear();
+        S().updateTab(tabId, { url: "https://elsewhere.test/" });
+      }
+      const writes = page.writes.length;
+      takeSiteDataCounts();
+      await carrySite("", "app.test", "chromium", { consent: consentToken() });
+      assert.equal(page.writes.length, writes, `nothing written into Chromium with its page ${pageOpen ? "open" : "gone"}`);
+      assert.deepEqual(exported, [], "nothing exported from WebKit");
+      assert.equal(takeSiteDataCounts().site_data_never_shown_skips, 1);
+    }
+    const { tabId } = setup();
+    const page = chromiumPage({ cookies: [signedIn], storage: {} });
+    webviews.set(tabId, page);
+    touch(book(), "", "app.test", "chromium", Date.now() - 60_000, ORIGIN);
+    await carrySite("", "app.test", "webkit", { origin: ORIGIN, consent: null });
+    touch(book(), "", "app.test", "webkit", Date.now(), ORIGIN);
+    webKit.cookies = webKit.cookies.map((c) => ({ ...c, value: "signed-in-on-webkit" }));
+    await carrySite("", "app.test", "chromium", { consent: null });
+    assert.equal(page.jar.cookies.find((c) => c.name === "sid").value, "signed-in-on-webkit");
+  } finally {
+    webKitCalls.exportCookies = realExport;
+    await setSharing(false, "settings");
+  }
+});
+
 test("without the public suffix list a carry stays on the exact host, and with it sibling hosts of a private suffix stay apart", async () => {
   const alice = { ...signedIn, domain: "alice.github.io" };
   const bob = { ...signedIn, domain: "bob.github.io" };

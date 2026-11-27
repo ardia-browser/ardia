@@ -21,7 +21,7 @@ import {
 } from "./siteDataMerge";
 import { learnRegistrableDomains } from "./siteDataDomains";
 import { readChromium, readChromiumStorageWithoutPage, writeChromium, writeChromiumStorageWithoutPage, writeWebKit } from "./siteDataChromium";
-import { capBases, noteOrigin, needsCarry, profileOf, siteEntry, sourceIsNewer, touch } from "./siteDataLedger";
+import { capBases, noteOrigin, needsCarry, profileOf, siteEntry, sourceHoldsOnlyCopies, sourceIsNewer, touch } from "./siteDataLedger";
 import { book, clearCount, clearsSettled, commitCount, committedSince, hostOf, inCommitLane, noteCommit, pushTimers, saveNow, saveSoon } from "./siteDataState";
 import { noteSiteDataBlockedCookies, noteSiteDataCarry, noteSiteDataOverQuota, noteSiteDataSkip, type SiteDataCarry } from "../telemetry/siteDataCounts";
 import type { ConsentToken } from "../telemetry/client";
@@ -156,6 +156,7 @@ async function carryNow(profile: string, site: string, to: PageEngine, { origin,
   if (!stillCurrent()) return NOTHING;
   const entry = siteEntry(book(), profile, site);
   if (origin) noteOrigin(book(), profile, site, origin);
+  if (sourceHoldsOnlyCopies(entry, to, openIn(profile, site, otherEngine(to)))) return (noteSiteDataSkip("neverShownInSource", consent), NOTHING);
   const epoch = settingsEpoch;
   const plan = await blockPlan(profile, site, entry, origin);
   if (plan.stop) {

@@ -61,6 +61,8 @@ export function needsCarry(entry: SiteEntry | undefined, to: PageEngine, openInS
   return (entry.at[other(to)] ?? 0) > entry.carried[to];
 }
 
+export const sourceHoldsOnlyCopies = (entry: SiteEntry, to: PageEngine, openInSource: boolean) => !openInSource && !entry.at[other(to)] && !!entry.at[to];
+
 export function sourceIsNewer(entry: SiteEntry | undefined, to: PageEngine, openInSource: boolean, openInDest: boolean): boolean {
   if (openInSource !== openInDest) return openInSource;
   return (entry?.at[other(to)] ?? 0) >= (entry?.at[to] ?? 0);

@@ -12,6 +12,7 @@ import { storeNavigation, usePages, type PageState } from "../state/pages/store"
 import { useSearch } from "../state/search/store";
 import { setPreference } from "../state/settings/store";
 import { currentTabs } from "../state/tabs/store";
+import * as telemetry from "../state/telemetry/telemetry";
 import { renderSurface, unmount, updateSurface, withTabs, withMaterialYou } from "../../test/render/harness";
 
 withMaterialYou();
@@ -200,5 +201,57 @@ onAndroid("scrolling a page down folds the persistent Material bottom bar into a
   expect(shell.props.pointerEvents).toBe("auto");
   expect(shell.props.accessibilityElementsHidden).toBe(false);
 
+  unmount(root);
+});
+
+onAndroid("identical bar registrations skip redundant store writes without mutating state", () => {
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  const open = currentTabs().open;
+  const tab = open.find((item) => item.id === currentTabs().selectedId)!;
+  function Owner({ tick }: { tick: number }) {
+    useMaterialBarRegistration("page", {
+      tabId: tab.id,
+      blocked: false,
+      bar: {
+        isTabOverview: false,
+        scheme: SEEDED_SCHEMES.ardia.light,
+        tab,
+        order: open,
+        showsPlus: true,
+        onAddress: () => void tick,
+        onTabs: noop,
+        onTabsMenu: noop,
+        onStep: noop,
+        onPlus: noop,
+        onMore: noop,
+        onSiteSettings: noop,
+      },
+    });
+    return null;
+  }
+  const root = renderSurface(
+    <MaterialBarProvider enabled>
+      <Owner tick={0} />
+      <PersistentMaterialBar />
+    </MaterialBarProvider>,
+  );
+  const shell = hosts(root, "materialBottomBar")[0]!;
+  updateSurface(
+    root,
+    <MaterialBarProvider enabled>
+      <Owner tick={1} />
+      <PersistentMaterialBar />
+    </MaterialBarProvider>,
+  );
+  updateSurface(
+    root,
+    <MaterialBarProvider enabled>
+      <Owner tick={2} />
+      <PersistentMaterialBar />
+    </MaterialBarProvider>,
+  );
+  expect(hosts(root, "materialBottomBar")[0]).toBe(shell);
+  expect(counted).toHaveBeenCalledWith("material_bar_writes_skipped");
+  expect(counted.mock.calls.filter(([field]) => field === "material_bar_writes_skipped")).toHaveLength(1);
   unmount(root);
 });

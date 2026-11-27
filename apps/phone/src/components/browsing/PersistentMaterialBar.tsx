@@ -9,6 +9,7 @@ import { haptics } from "../../state/app/haptics";
 import { useSurface } from "../../state/browse/hooks";
 import { useSearchOpen } from "../../state/search/hooks";
 import { useSelectedTab } from "../../state/tabs/hooks";
+import { countUsage } from "../../state/telemetry/telemetry";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
 import type { MaterialScheme } from "../../lib/material/schemes";
 import type { BrowserTab } from "../../state/tabs/tabModels";
@@ -41,7 +42,7 @@ type Registration = {
   tabId?: string;
   measure?: () => void;
 };
-type Entry = Registration & { owner: object };
+type Entry = Registration & { owner: object; latest: { current: Registration } };
 type Slots = { page: Entry | null; deck: Entry | null; start: Entry | null };
 const makeStore = () => createStore<Slots & { searchVisible: boolean }>(() => ({ page: null, deck: null, start: null, searchVisible: false }));
 const BarContext = createContext<{ enabled: boolean; store: ReturnType<typeof makeStore> } | null>(null);
@@ -63,15 +64,60 @@ export function useMaterialSearchBarVisible() {
   }, [store]);
 }
 
+function sameObject(a: Record<string, unknown> | undefined, b: Record<string, unknown> | undefined) {
+  if (Object.is(a, b)) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    const va = a[key];
+    const vb = b[key];
+    if (typeof va === "function" && typeof vb === "function") continue;
+    if (!Object.is(va, vb)) return false;
+  }
+  return true;
+}
+
+function sameRegistration(current: Entry | null, next: Registration, owner: object) {
+  if (!current || current.owner !== owner) return false;
+  return (
+    current.hidden === next.hidden &&
+    current.blocked === next.blocked &&
+    current.tabId === next.tabId &&
+    current.gesture === next.gesture &&
+    current.siteSettingsSheet === next.siteSettingsSheet &&
+    current.collapse?.progress === next.collapse?.progress &&
+    current.collapse?.travel === next.collapse?.travel &&
+    current.fold?.progress === next.fold?.progress &&
+    current.fold?.collapsed === next.fold?.collapsed &&
+    sameObject(current.bar as Record<string, unknown>, next.bar as Record<string, unknown>)
+  );
+}
+
 export function useMaterialBarRegistration(slot: keyof Slots, registration: Registration | null) {
   const context = useContext(BarContext);
   const owner = useRef({}).current;
+  const latest = useRef<Registration | null>(registration);
+  const skippedReported = useRef(false);
+  latest.current = registration;
   const store = context?.store;
   const enabled = context?.enabled ?? false;
   useLayoutEffect(() => {
     if (!store) return;
-    if (enabled && registration) store.setState({ [slot]: { ...registration, owner } });
-    else if (store.getState()[slot]?.owner === owner) store.setState({ [slot]: null });
+    const current = store.getState()[slot];
+    if (enabled && registration) {
+      if (sameRegistration(current, registration, owner)) {
+        if (!skippedReported.current) {
+          skippedReported.current = true;
+          countUsage("material_bar_writes_skipped");
+        }
+        return;
+      }
+      store.setState({ [slot]: { ...registration, owner, latest: latest as { current: Registration } } });
+    } else if (current?.owner === owner) {
+      store.setState({ [slot]: null });
+    }
   });
   useLayoutEffect(() => () => {
     if (store?.getState()[slot]?.owner === owner) store.setState({ [slot]: null });
@@ -100,17 +146,18 @@ function MaterialBarHost({ store, enabled }: { store: ReturnType<typeof makeStor
   const isTabOverview = surface === "deck";
   const isStart = surface === "start";
   const entry = isTabOverview ? deck : isStart ? start : page;
-  const matches = isTabOverview || isStart || entry?.tabId === tab?.id;
+  const live = entry?.latest.current ?? entry;
+  const matches = isTabOverview || isStart || live?.tabId === tab?.id;
   const searchPresented = searching || searchVisible;
   const pageSearch = !isTabOverview && !isStart && searchPresented;
-  const hidden = !enabled || !entry || !matches || (searchPresented && !pageSearch) || entry.hidden;
-  const fold = !isTabOverview && !isStart && !searchPresented ? entry?.fold ?? null : null;
+  const hidden = !enabled || !live || !matches || (searchPresented && !pageSearch) || live.hidden;
+  const fold = !isTabOverview && !isStart && !searchPresented ? live?.fold ?? null : null;
   const folded = Boolean(fold?.collapsed);
-  const blocked = hidden || searchPresented || entry?.blocked || folded;
+  const blocked = hidden || searchPresented || live?.blocked || folded;
   const foldProgress = fold?.progress ?? null;
   const shrink = useMaterialFoldShrink();
-  const collapseProgress = entry?.collapse?.progress ?? null;
-  const collapseTravel = entry?.collapse?.travel ?? 0;
+  const collapseProgress = live?.collapse?.progress ?? null;
+  const collapseTravel = live?.collapse?.travel ?? 0;
   const hiddenValue = useSharedValue(0);
   const collapseActive = useSharedValue(0);
   const travelValue = useSharedValue(0);
@@ -134,7 +181,7 @@ function MaterialBarHost({ store, enabled }: { store: ReturnType<typeof makeStor
     collapseRevision.value += 1;
   }, [collapseProgress, foldProgress, collapseRevision]);
   const fallback: MaterialBottomBarProps = { isTabOverview: true, scheme, search: { input, text: "", focused: false, change: noop, focus: noop, blur: noop }, incognito: false, canReopen: false, menusShown: false, onMenu: noop };
-  const registeredBar = entry?.bar ?? fallback;
+  const registeredBar = live?.bar ?? fallback;
   const bar = pageSearch && !registeredBar.isStart && !registeredBar.isTabOverview
     ? { ...registeredBar, addressDocked: true, showsPlus: true }
     : registeredBar;
@@ -143,12 +190,12 @@ function MaterialBarHost({ store, enabled }: { store: ReturnType<typeof makeStor
     if (!enabled || !isTabOverview || hidden) noteDeckBarTop(null);
   }, [enabled, isTabOverview, hidden]);
   useLayoutEffect(() => {
-    if (!enabled || !isTabOverview || hidden || !entry?.measure) return;
-    const measure = entry.measure;
+    if (!enabled || !isTabOverview || hidden || !live?.measure) return;
+    const measure = live.measure;
     watchDeckBar(measure);
     measure();
     return () => watchDeckBar(null);
-  }, [enabled, isTabOverview, hidden, entry?.measure]);
+  }, [enabled, isTabOverview, hidden, live?.measure]);
   const barStyles = [
     styles.place,
     { bottom: insets.bottom + materialBottomBar.inset, left: Math.max(insets.left, insets.right) + materialBottomBar.edge, right: Math.max(insets.left, insets.right) + materialBottomBar.edge },
@@ -156,9 +203,10 @@ function MaterialBarHost({ store, enabled }: { store: ReturnType<typeof makeStor
     motionStyle,
     ...(hidden ? [styles.hidden] : []),
   ];
+  const siteSettingsSheet = (page?.latest.current ?? page)?.siteSettingsSheet;
   return (
     <>
-      <GestureDetector gesture={!blocked && !isTabOverview && !isStart && entry?.gesture ? entry.gesture : inertGesture}>
+      <GestureDetector gesture={!blocked && !isTabOverview && !isStart && live?.gesture ? live.gesture : inertGesture}>
         <MaterialBottomBar
           {...bar}
           container={{
@@ -183,9 +231,9 @@ function MaterialBarHost({ store, enabled }: { store: ReturnType<typeof makeStor
           <MaterialBarPill tab={bar.tab} scheme={scheme} onExpand={fold.expand} />
         </Animated.View>
       ) : null}
-      {enabled && surface === "browsing" && matches && page?.siteSettingsSheet ? (
+      {enabled && surface === "browsing" && matches && siteSettingsSheet ? (
         <View testID="siteSettingsLayer" pointerEvents="box-none" style={styles.siteSettingsLayer}>
-          {page.siteSettingsSheet}
+          {siteSettingsSheet}
         </View>
       ) : null}
     </>

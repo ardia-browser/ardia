@@ -64,6 +64,7 @@ final class LoginList: NSObject {
   static let accountSeconds: TimeInterval = 300
 
   private var shown: Shown?
+  private weak var asking: LoginListTarget?
   private var accounts: [Account] = []
   private var ticket = 0
   private var declined: Set<String> = []
@@ -94,6 +95,7 @@ final class LoginList: NSObject {
 
   func show(_ target: LoginListTarget, field: LoginListField) {
     ticket += 1
+    asking = target
     let asked = ticket
     guard let frame = URL(string: field.frameOrigin), let scheme = frame.scheme?.lowercased(), scheme == "https" || scheme == "http",
       let host = frame.host?.lowercased(), !host.isEmpty, let page = Self.origin(of: target.loginListPage), let pageHost = target.loginListPage?.host?.lowercased()
@@ -306,7 +308,7 @@ final class LoginList: NSObject {
   }
 
   func close(_ target: LoginListTarget) {
-    guard shown == nil || shown?.target === target else { return }
+    guard shown.map({ $0.target === target }) ?? (asking == nil || asking === target) else { return }
     ticket += 1
     dropdown.close()
     sync()

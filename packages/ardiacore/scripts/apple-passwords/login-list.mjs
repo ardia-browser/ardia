@@ -149,6 +149,27 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await other?.close();
       }
     },
+    async E41fetch() {
+      const { fake } = await paired();
+      const other = await open("other.localhost");
+      let tab = null;
+      try {
+        await other.click("#u");
+        await other.waitRows("the other tab's Login list");
+        tab = await open("example.localhost");
+        fake.setMode({ delay: { 4: 2500 } });
+        await tab.click("#u");
+        await sleep(400);
+        await other.close();
+        const rows = await tab.waitRows("the Login list still fetching when another tab closed", 8000);
+        assert(q(titles(rows.slice(0, -1))) === q(usersFor("example.localhost")), "the list a tab was fetching still opens after another tab closes", rows);
+        return { engine: engineName, rows: titles(rows) };
+      } finally {
+        fake.setMode({ delay: {} });
+        await other.close();
+        await tab?.close();
+      }
+    },
     async E9() {
       const tab = await open("accounts.example.localhost");
       try {

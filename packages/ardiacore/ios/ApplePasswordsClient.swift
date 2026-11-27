@@ -24,9 +24,11 @@ final class ApplePasswordsClient: @unchecked Sendable {
     let also: Int?
     let generation: UUID
     var done: ((Result<[String: Any], Error>) -> Void)?
+    var deadline: DispatchSourceTimer?
   }
 
   static let owedSeconds: TimeInterval = 30
+  private static let deadlineLeeway = DispatchTimeInterval.milliseconds(100)
   private static let lastRequestId = Int(Int32.max)
 
   private let queue = DispatchQueue(label: "ardia.apple-passwords", qos: .userInitiated)
@@ -178,6 +180,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
     pipe = nil
     let gone = awaiting.filter { $0.value.generation == id }
     awaiting = awaiting.filter { $0.value.generation != id }
+    gone.values.forEach { $0.deadline?.cancel() }
     gone.keys.sorted().forEach { gone[$0]?.done?(.failure(Failure.ended)) }
     drop(id, why: "exit")
   }
@@ -202,7 +205,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
     } else {
       request = awaiting.filter { accepts($0.value) }.keys.min()
     }
-    guard let request, let entry = awaiting.removeValue(forKey: request) else { return }
+    guard let request, let entry = settle(request) else { return }
     entry.done?(.success(message))
   }
 
@@ -223,7 +226,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
       sent["frameId"] = 0
     }
     awaiting[id] = Awaiting(cmd: cmd, also: also, generation: generation, done: done)
-    queue.asyncAfter(deadline: .now() + wait) { [weak self] in self?.expire(id, pipe: pipe, keepsHelper: keepsHelper) }
+    arm(id, after: wait) { [weak self] in self?.expire(id, pipe: pipe, keepsHelper: keepsHelper) }
     do {
       try pipe.write(sent)
     } catch {
@@ -231,20 +234,33 @@ final class ApplePasswordsClient: @unchecked Sendable {
     }
   }
 
+  private func arm(_ id: Int, after seconds: TimeInterval, _ fire: @escaping () -> Void) {
+    let timer = DispatchSource.makeTimerSource(queue: queue)
+    timer.schedule(deadline: .now() + seconds, leeway: Self.deadlineLeeway)
+    timer.setEventHandler(handler: fire)
+    awaiting[id]?.deadline?.cancel()
+    awaiting[id]?.deadline = timer
+    timer.resume()
+  }
+
+  private func settle(_ id: Int) -> Awaiting? {
+    let entry = awaiting.removeValue(forKey: id)
+    entry?.deadline?.cancel()
+    return entry
+  }
+
   private func expire(_ id: Int, pipe: ApplePasswordsPipe, keepsHelper: Bool) {
     guard let entry = awaiting[id], let done = entry.done else { return }
     guard keepsHelper else {
-      awaiting.removeValue(forKey: id)
+      _ = settle(id)
       pipe.stop()
       return done(.failure(Failure.timedOut))
     }
     if entry.cmd == Self.saveCmd {
-      awaiting.removeValue(forKey: id)
+      _ = settle(id)
     } else {
       awaiting[id]?.done = nil
-      queue.asyncAfter(deadline: .now() + Self.owedSeconds) { [weak self] in
-        if self?.awaiting[id]?.done == nil { self?.awaiting.removeValue(forKey: id) }
-      }
+      arm(id, after: Self.owedSeconds) { [weak self] in _ = self?.settle(id) }
     }
     Self.log.notice("no answer to cmd \(entry.cmd, privacy: .public) in time, helper kept")
     done(.failure(Failure.timedOut))

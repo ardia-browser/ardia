@@ -99,11 +99,12 @@ function refuseUnremovable(profile: RemoteProfile) {
   if (profile.sharedByOthers) throw new OpError("refused", `Other profiles share ${profile.name}'s data; remove them first.`);
 }
 
-function answered<T>(write: Promise<T>, outcome: string): Promise<T> {
+function answered<T>(write: Promise<T>, outcome: string, what: string): Promise<T> {
   return write.catch((error: unknown) => {
     if (error instanceof OpError) throw error;
     const reason = error instanceof Error ? error.message : String(error);
-    throw new OpError(reason === SYNC_WRITES_CLOSED ? "refused" : "failed", `${outcome}: ${reason}`);
+    if (reason === SYNC_WRITES_CLOSED) throw new OpError("refused", `${outcome}: ${reason}`);
+    throw new OpError("failed", `Ardia couldn't confirm ${what}: ${reason} It may still happen; sync.status shows whether it did.`);
   });
 }
 
@@ -118,7 +119,7 @@ async function addRemote(params: Record<string, unknown>, call: SocketCall) {
   const what = "adding a profile from your other devices";
   const profile = remoteProfileOf(params, what);
   refuseUnaddable(profile);
-  const added = await answered(addRemoteProfileAndWait(profile.syncId), `${profile.name} wasn't added`);
+  const added = await answered(addRemoteProfileAndWait(profile.syncId), `${profile.name} wasn't added`, `whether ${profile.name} was added`);
   if (!added) refuseAfterNo(call, what, profile.syncId, refuseUnaddable);
   expect(!!added, `${profile.name} wasn't added.`);
   await settles(() => !!now().profiles[added!] && !remoteRow(profile.syncId));
@@ -131,7 +132,7 @@ async function removeRemote(params: Record<string, unknown>, call: SocketCall) {
   refuseUnremovable(profile);
   const outcome = `${profile.name} wasn't removed from sync`;
   const stillRemovable = () => call.serving() && syncWritesOpen() && !!remoteRow(profile.syncId) && !remoteRow(profile.syncId)!.sharedByOthers;
-  const { confirmed, removed } = await answered(confirmRemoveRemoteProfile(profile, { windowId: shownWindowId(), ask: askWhereSeen(outcome, call), mayRemove: stillRemovable, remove: removeRemoteProfileAndWait }), outcome);
+  const { confirmed, removed } = await answered(confirmRemoveRemoteProfile(profile, { windowId: shownWindowId(), ask: askWhereSeen(outcome, call), mayRemove: stillRemovable, remove: removeRemoteProfileAndWait }), outcome, `whether ${profile.name} was removed from sync`);
   if (!confirmed) return { removed: false, remoteProfiles: useSync.getState().remoteProfiles };
   if (!removed) refuseAfterNo(call, what, profile.syncId, refuseUnremovable);
   expect(removed, `${profile.name} wasn't removed.`);

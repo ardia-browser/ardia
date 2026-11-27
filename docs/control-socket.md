@@ -457,7 +457,9 @@ does, its synced data is gone for good. It refuses one that other profiles share
 Settings disables that button. A `syncId` not on the list answers `no_window`. Both answer with what sync itself answered: on Linux
 a window that doesn't run sync forwards the write to the one that does and waits for its answer (`addRemoteProfileAndWait`
 and `removeRemoteProfileAndWait` in `state/sync/engine.ts` and `apps/desktop/src/syncEngine.ts`). That window checks
-again that sync takes writes, so one that is turning off answers `refused` instead of a change it would drop. After a
+again that sync takes writes, so one that is turning off answers `refused` instead of a change it would drop. When the
+sync window doesn't answer in time (30 seconds), the reply is `failed` and says the change may still happen, since the
+forwarded call can still reach it; `sync.status` shows whether it did. After a
 yes the reply waits up to 3 seconds for its own `sync.status` to show the change, and answers yes either way, so on a
 slow window the reply's `profiles` may not list the new profile yet. Linux asks the question as it asks `profiles.delete`'s, ignoring `onlyIfShown` (above). `sync.sendTab` takes an `http(s)` tab and a device from `sync.devices`, the list the
 tab menu's Send to Device shows. Turning sync on or off and the recovery phrase stay in Settings: they choose a

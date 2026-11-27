@@ -94,7 +94,7 @@ export const TabPane = memo(function TabPane({
   const own = useTabValue(tabId, paneTab, shallowEqual);
   const theme = useProfileTheme(own.profileId);
   const isNewTab = !own.url;
-  const emptyCard = isNewTab && newTabCard;
+  const emptyCard = isNewTab && newTabCard && !own.keptEmpty;
   const newTabShown = useStoreWhile(usePages, live, (s) => !!s.pages[tabId]?.newTabShown);
   const inSomeSplit = useBrowserWhile(!!warm, (s) => !!warm && !!splitOf(s, tabId));
   const inSplit = visible ? inActiveSplit : inSomeSplit;
@@ -195,4 +195,4 @@ export const TabPane = memo(function TabPane({
   );
 });
 
-const paneTab = (t: Tab | undefined) => ({ exists: !!t, url: t?.url ?? "", profileId: t?.profileId ?? "", appPage: !!t && isInternalTab(t) });
+const paneTab = (t: Tab | undefined) => ({ exists: !!t, url: t?.url ?? "", profileId: t?.profileId ?? "", appPage: !!t && isInternalTab(t), keptEmpty: !!t?.keptEmpty });

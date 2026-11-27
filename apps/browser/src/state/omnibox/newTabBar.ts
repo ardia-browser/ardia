@@ -105,7 +105,7 @@ export function showOnceOverEmptyCard(windowId: string, tabId: string) {
   if (!NEW_TAB_BAR_POLICY.showOnceOverNewEmptyWindow || shownOver.has(tabId)) return;
   const s = store();
   const tab = s.tabs[tabId];
-  if (!tab || hasPage(tab)) return;
+  if (!tab || hasPage(tab) || tab.keptEmpty) return;
   shownOver.add(tabId);
   if (launchTabs.has(tabId) && !NEW_TAB_BAR_POLICY.showOnLaunch) return;
   if (activeTabId(s, windowId) !== tabId || s.windowUi[windowId]?.panel.open || !showNewTabBar(windowId)) return;

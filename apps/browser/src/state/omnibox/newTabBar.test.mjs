@@ -295,3 +295,36 @@ test("Move out of Pinned: two tabs pinned one after the other, unpinned together
   togglePinnedRows(w);
   assert.deepEqual(list(w), ["https://a.com/", "https://b.com/", "https://c.com/", "https://d.com/"], "pinned in the other order");
 });
+
+test("a kept empty tab is listed, gets no bar over it, and ⌘T opens a new tab beside it; navigating makes it an ordinary tab", async () => {
+  const { sidebarEntries } = await import("../sidebar/entries.ts");
+  const { stripEntries } = await import("../tabs/topStrip.ts");
+  reset("commandBar");
+  const { w, ids: [a] } = windowWith("a", "b");
+  const card = S().newTab(w, { newTabCommand: true });
+  const kept = S().newTab(w, { newTabCommand: true, keptEmpty: true });
+  assert.equal(model.activeTabId(S(), w), kept, "the kept empty tab is selected");
+  assert.equal(S().tabs[kept].keptEmpty, true);
+  assert.equal(urlOf(kept), "");
+  const listed = (id) => [sidebarEntries(S(), w).list.includes(`t:${id}`), JSON.stringify(stripEntries(S(), w, S().windows[w].profileId)).includes(`"${id}"`)];
+  assert.deepEqual(listed(kept), [true, true], "listed in the sidebar and the strip");
+  assert.deepEqual(listed(card), [false, false], "an empty card stays hidden");
+  showOnceOverEmptyCard(w, kept);
+  assert.equal(panel(w).open, false, "no bar over it");
+  assert.equal(toggleNewTabBar(w), true);
+  assert.deepEqual(panel(w).newTab, { kind: "list" }, "⌘T targets a new tab, not into the kept one");
+  openFromNewTabBar(w, panel(w).newTab, "https://picked.com/");
+  const picked = model.activeTabId(S(), w);
+  assert.notEqual(picked, kept);
+  assert.equal(urlOf(picked), "https://picked.com/");
+  assert.equal(urlOf(kept), "", "the kept tab stays empty");
+  S().activate(a);
+  S().closeAbandonedNewTabs();
+  assert.ok(S().tabs[kept], "leaving the app keeps it open");
+  assert.equal(S().tabs[card], undefined, "while an abandoned empty card closes");
+  const copy = S().duplicateTab(kept);
+  assert.equal(S().tabs[copy].keptEmpty, true, "a duplicate is kept too");
+  S().navigate(kept, "https://typed.com/");
+  assert.equal(urlOf(kept), "https://typed.com/");
+  assert.equal("keptEmpty" in S().tabs[kept], false, "a page makes it an ordinary tab");
+});

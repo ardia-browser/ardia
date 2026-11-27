@@ -18,7 +18,7 @@ export const NEW_TAB_BAR_POLICY = {
 export const newTabOpensBar = (s: Pick<BrowserState, "settings">) => newTabOpensOf(s.settings) === "commandBar";
 
 export function isEmptyCardTab(s: Pick<BrowserState, "splits">, tab: Tab | undefined): tab is Tab {
-  return !!tab && !tab.pin && !tab.url && !hasPage(tab) && !splitOf(s as BrowserState, tab.id);
+  return !!tab && !tab.pin && !tab.keptEmpty && !tab.url && !hasPage(tab) && !splitOf(s as BrowserState, tab.id);
 }
 
 export const hiddenEmptyCard = (s: BrowserState, tab: Tab) => !tab.pin && newTabOpensBar(s) && isEmptyCardTab(s, tab);

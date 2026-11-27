@@ -4,6 +4,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { menuShortcut } from "../commands/commandShortcuts";
 import { bookmarksBarShownIn, bookmarksShown } from "../bookmarks/visibility";
 import { toggleNewTabBar } from "../omnibox/newTabBar";
+import { newTabOpensBar } from "../omnibox/newTabBarPolicy";
 import { openNewTabInSplit } from "../splits/actions";
 import { splitViewAvailable } from "../splits/splits";
 import { newGroupWithSelection } from "./actions";
@@ -11,6 +12,7 @@ import { closeAllTabs, closeDuplicateTabs } from "./clearTabs";
 import { hasDuplicateTabs } from "../pins/duplicateTabs";
 import { lastClosedEntry } from "../windows/reopenClosed";
 import { consentToken } from "../telemetry/client";
+import { noteNewEmptyTab } from "../telemetry/usage";
 import type { ConsentToken } from "../telemetry/choice";
 import { newLiveFolderMenuItem, runNewLiveFolder } from "./liveMenus";
 import { sections } from "./menuParts";
@@ -83,6 +85,7 @@ export function sidebarMenuItems(s: BrowserState, windowId: string): MenuItem[] 
   return sections(
     [
       { id: "newTab", title: "New Tab", symbol: "plus.app", ...menuShortcut("newTab", s) },
+      ...(newTabOpensBar(s) ? [{ id: "newEmptyTab", title: "New Empty Tab", symbol: "app" }] : []),
       ...(splitViewAvailable
         ? [{ id: "newTabInSplit", title: "New Tab in Split View", symbol: "rectangle.split.2x1", enabled: !!activeTabId(s, windowId), ...menuShortcut("openSplitPane", s) }]
         : []),
@@ -111,6 +114,8 @@ export async function openSidebarMenu(windowId: string) {
   const s = store();
   if (choice === "newTab") {
     if (!toggleNewTabBar(windowId)) s.newTab(windowId, { newTabCommand: true });
+  } else if (choice === "newEmptyTab") {
+    if (s.newTab(windowId, { newTabCommand: true, keptEmpty: true })) noteNewEmptyTab(consent);
   } else if (choice === "newTabInSplit") openNewTabInSplit(windowId);
   else if (choice === "reopen") s.reopenClosed(windowId);
   else if (choice === "newGroup") {

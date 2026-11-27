@@ -71,6 +71,7 @@ export type Tab = {
   pinKey?: string;
   engine?: PageEngine;
   chromeOpened?: true;
+  keptEmpty?: true;
   createdAt: number;
   lastActiveAt: number;
   restoredAt?: number;

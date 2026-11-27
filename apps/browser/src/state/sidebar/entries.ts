@@ -12,10 +12,10 @@ import { sameList } from "../../lib/lists";
 
 type SidebarEntries = { tiles: string[]; cells: string[]; pinned: string[]; list: string[] };
 
-export const ENTRY_TAB_FIELDS = ["pin", "liveItem", "profileId", "url", "page"] as const satisfies readonly (keyof Tab)[];
+export const ENTRY_TAB_FIELDS = ["pin", "liveItem", "profileId", "url", "page", "keptEmpty"] as const satisfies readonly (keyof Tab)[];
 
 const placesAlike = (a: Tab | undefined, b: Tab | undefined) =>
-  a === b || (!!a && !!b && a.pin === b.pin && a.liveItem === b.liveItem && a.profileId === b.profileId && !a.url === !b.url && hasPage(a) === hasPage(b));
+  a === b || (!!a && !!b && a.pin === b.pin && a.liveItem === b.liveItem && a.profileId === b.profileId && a.keptEmpty === b.keptEmpty && !a.url === !b.url && hasPage(a) === hasPage(b));
 
 function sameEntryTabs(tabs: BrowserState["tabs"], was: BrowserState["tabs"]): boolean {
   if (tabs === was) return true;

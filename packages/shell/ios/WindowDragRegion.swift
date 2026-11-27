@@ -6,6 +6,7 @@ import ExpoModulesCore
 final class WindowDragRegion: ExpoView {
   let onRegionDoubleClick = EventDispatcher()
   let onRegionClick = EventDispatcher()
+  let onRegionPress = EventDispatcher()
   var titleBarDoubleClick = true
   var clickable = false
   private static let dragDistance: CGFloat = 3
@@ -116,6 +117,7 @@ final class WindowDragRegion: ExpoView {
 
   private func press(_ event: NSEvent, _ place: PressPlace, releaseFollows: Bool) {
     guard let window else { return }
+    if place == .region { onRegionPress([:]) }
     let leavesWindowBehind = event.modifierFlags.contains(.command)
     var key = NSApp.keyWindow
     while let k = key, k !== window { key = k.parent }

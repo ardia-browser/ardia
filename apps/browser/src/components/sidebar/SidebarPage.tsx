@@ -31,6 +31,7 @@ import { PageRows } from "./PageRows";
 import { NewTabRow } from "./NewTabRow";
 import { SelectedRowPill, useSelectedRowAway } from "./SelectedRowPill";
 import { withOverscan, type ListViewport } from "./listViewport";
+import { pressPeekOutsideOnDragRegion } from "../../state/peek/outsidePresses";
 
 const NONE: string[] = [];
 const LIST_PAD = GLOW_ROOM + SCROLL_EDGE.inset;
@@ -249,7 +250,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                           />
                           <View key={`${docked ? "docked" : "inline"}${canDock ? "" : ":fixed"}${resting ? ":resting" : ""}`} style={{ flexGrow: 1, minHeight: !canDock && inlineNewTab ? 24 : 0 }}>
                             <ContextMenuArea style={{ flex: 1 }} onLayout={onSlack} onContextMenu={() => void openSidebarMenu(windowId)}>
-                              <WindowDragRegion style={{ flex: 1 }} titleBarDoubleClick={false} onRegionDoubleClick={() => toggleNewTabBar(windowId) || newTab(windowId, { newTabCommand: true })} />
+                              <WindowDragRegion style={{ flex: 1 }} titleBarDoubleClick={false} onRegionPress={() => pressPeekOutsideOnDragRegion(windowId)} onRegionDoubleClick={() => toggleNewTabBar(windowId) || newTab(windowId, { newTabCommand: true })} />
                             </ContextMenuArea>
                           </View>
                         </Animated.ScrollView>

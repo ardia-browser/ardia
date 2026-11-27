@@ -20,6 +20,7 @@ export type WindowDragRegionProps = ViewProps & {
   onRegionDoubleClick?: () => void;
   clickable?: boolean;
   onRegionClick?: () => void;
+  onRegionPress?: () => void;
 };
 
 export const WindowDragRegion = requireNativeViewManager<WindowDragRegionProps>("ArdiaAppWindows");

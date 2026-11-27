@@ -136,7 +136,7 @@ public class AppWindowsModule: Module, AppWindowsNative {
     Self.replyToTerminateFunction
 
     View(WindowDragRegion.self) {
-      Events("onRegionDoubleClick", "onRegionClick")
+      Events("onRegionDoubleClick", "onRegionClick", "onRegionPress")
       Prop("titleBarDoubleClick") { (view: WindowDragRegion, on: Bool) in view.titleBarDoubleClick = on }
       Prop("clickable") { (view: WindowDragRegion, on: Bool) in view.clickable = on }
     }

@@ -419,8 +419,9 @@ export function WindowDragRegion({
   clickable = false,
   onRegionClick,
   onRegionDoubleClick,
+  onRegionPress: _regionPress,
   ...props
-}: ViewProps & { titleBarDoubleClick?: boolean; clickable?: boolean; onRegionClick?: () => void; onRegionDoubleClick?: () => void }) {
+}: ViewProps & { titleBarDoubleClick?: boolean; clickable?: boolean; onRegionClick?: () => void; onRegionDoubleClick?: () => void; onRegionPress?: () => void }) {
   const node = useRef<HTMLElement | null>(null);
   const latest = useRef({ titleBarDoubleClick, clickable, onRegionClick, onRegionDoubleClick });
   latest.current = { titleBarDoubleClick, clickable, onRegionClick, onRegionDoubleClick };

@@ -43,6 +43,8 @@ import {
 import { WindowDropGlow } from "./WindowDropGlow";
 import { captionRoom } from "../../lib/windowChrome";
 import { stripCaptionRoom } from "./stripGroups";
+import { PeekOutsidePresses } from "../peek/PeekOutsidePresses";
+import { pressPeekOutsideOnDragRegion } from "../../state/peek/outsidePresses";
 
 export { TOP_STRIP_HEIGHT } from "./tokens";
 
@@ -69,26 +71,28 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
 
   return (
     <FloatingStrip.Provider value={floating}>
-      <StripDropArea style={{ height: TOP_STRIP_HEIGHT }}>
-        <ContextMenuArea style={StyleSheet.absoluteFill} onContextMenu={() => openTabStripMenu(windowId)}>
-          <WindowDragRegion style={StyleSheet.absoluteFill} />
-          <ClipView pointerEvents="box-none" style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8 + room), maxWidth: pageWidth + flare * 2, top: 0, bottom: 0, overflow: "hidden" }}>
-            {pages.map((page) => (
-              <StripPage key={page.id} profileId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />
-            ))}
-          </ClipView>
-        </ContextMenuArea>
-        {controls ? (
-          <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8 + room, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
-            <TintInk>
-              <ProfileIndicator room={PROFILE_ROOM} profileShown={!minimal} />
-              {minimal ? null : <DownloadsButton windowId={windowId} />}
-            </TintInk>
-          </View>
-        ) : null}
-        {swipe && <ProfileSwipeArea surface="strip" style={StyleSheet.absoluteFill} pageWidth={pageWidth + flare * 2} />}
-        {!floating && <StripDropHighlight left={left} right={right} />}
-      </StripDropArea>
+      <PeekOutsidePresses>
+        <StripDropArea style={{ height: TOP_STRIP_HEIGHT }}>
+          <ContextMenuArea style={StyleSheet.absoluteFill} onContextMenu={() => openTabStripMenu(windowId)}>
+            <WindowDragRegion style={StyleSheet.absoluteFill} onRegionPress={() => pressPeekOutsideOnDragRegion(windowId)} />
+            <ClipView pointerEvents="box-none" style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8 + room), maxWidth: pageWidth + flare * 2, top: 0, bottom: 0, overflow: "hidden" }}>
+              {pages.map((page) => (
+                <StripPage key={page.id} profileId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />
+              ))}
+            </ClipView>
+          </ContextMenuArea>
+          {controls ? (
+            <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8 + room, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
+              <TintInk>
+                <ProfileIndicator room={PROFILE_ROOM} profileShown={!minimal} />
+                {minimal ? null : <DownloadsButton windowId={windowId} />}
+              </TintInk>
+            </View>
+          ) : null}
+          {swipe && <ProfileSwipeArea surface="strip" style={StyleSheet.absoluteFill} pageWidth={pageWidth + flare * 2} />}
+          {!floating && <StripDropHighlight left={left} right={right} />}
+        </StripDropArea>
+      </PeekOutsidePresses>
       {!floating && <StripHoverCard windowId={windowId} stripBottom={TOP_STRIP_HEIGHT} windowWidth={width} />}
     </FloatingStrip.Provider>
   );

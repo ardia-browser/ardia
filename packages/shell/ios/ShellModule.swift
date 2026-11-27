@@ -53,6 +53,7 @@ public class ShellModule: Module, ShellNative {
       _ = installSubmenuAction
       _ = installHoverAfterWindowMoves
       _ = installInputSourceKeys
+      _ = BarWordBreaks.install
       _ = installScrollViewInsetFix
       _ = installStripWheel
       _ = installOutsidePressMonitor

@@ -114,6 +114,7 @@ export const LINUX_WORDING: readonly Wording[] = [
       ["How many times ⇧⌘C went to a focused Developer Tools", "How many times Ctrl+Shift+C went to a focused Developer Tools"],
       ["and how many use ⌥ without ⌘ or ⌃,", "and how many use Alt without Ctrl or Super,"],
       ["How many times ⌥↩ in the command bar", "How many times Alt+Enter in the command bar"],
+      ["      \"How many times ⌥⌫, ⌥⌦ or ⌥ with an arrow key deleted or moved by a word in the address bar, and how many of those stopped at a dot in a web address where they used to take the whole name, summed up once an hour. Never what was in the bar\",\n", ""],
       ["how often the ⌃Tab switcher opens", "how often the Ctrl+Tab switcher opens"],
       ["how many tabs were closed from it with ⌃W", "how many tabs were closed from it with Ctrl+W"],
       ["because the Touch ID or password request before it was declined", "because the system password request before it was declined"],

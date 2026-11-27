@@ -15,6 +15,7 @@ let package = Package(
     .library(name: "ArdiaControlPeerCore", targets: ["ArdiaControlPeerCore"]),
     .library(name: "ArdiaWheelSteerCore", targets: ["ArdiaWheelSteerCore"]),
     .library(name: "ArdiaFieldBlurCore", targets: ["ArdiaFieldBlurCore"]),
+    .library(name: "ArdiaTextCore", targets: ["ArdiaTextCore"]),
   ],
   targets: [
     .target(name: "ArdiaUpdaterCore", path: "ios/UpdaterCore"),
@@ -37,5 +38,7 @@ let package = Package(
     .testTarget(name: "ArdiaWheelSteerCoreTests", dependencies: ["ArdiaWheelSteerCore"], path: "wheelsteer-tests"),
     .target(name: "ArdiaFieldBlurCore", path: "ios/FieldBlurCore"),
     .testTarget(name: "ArdiaFieldBlurCoreTests", dependencies: ["ArdiaFieldBlurCore"], path: "fieldblur-tests"),
+    .target(name: "ArdiaTextCore", path: "ios/TextCore"),
+    .testTarget(name: "ArdiaTextCoreTests", dependencies: ["ArdiaTextCore"], path: "text-tests"),
   ]
 )

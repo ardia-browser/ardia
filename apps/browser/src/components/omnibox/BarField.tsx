@@ -10,6 +10,8 @@ import { useRevertRepair } from "./useRevertRepair";
 import { watchBarField } from "../../state/omnibox/barKeyLoss";
 import { BAR, BAR_TYPE } from "./tokens";
 
+const BAR_FIELD_ID = "ardia.barField";
+
 type InputProps = ComponentProps<typeof TextInput>;
 
 export function BarField({
@@ -54,6 +56,7 @@ export function BarField({
   return (
     <TextInput
       ref={inputRef}
+      nativeID={BAR_FIELD_ID}
       {...events}
       {...heldEscape.upProps}
       onKeyDown={(e) => heldEscape.down(e) || events.onKeyDown?.(e)}

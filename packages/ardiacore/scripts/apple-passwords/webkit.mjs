@@ -1,7 +1,7 @@
 import { sleep } from "../../../../scripts/lib/instance.mjs";
 
 const q = JSON.stringify;
-const KEYS = { down: ["", 125], up: ["", 126], enter: ["\r", 36], escape: ["\u001b", 53], tab: ["\t", 48] };
+const KEYS = { down: ["", 125], up: ["", 126], enter: ["\r", 36], escape: ["\u001b", 53], tab: ["\t", 48], backspace: ["\u007f", 51] };
 const ROW = { inset: 5, login: 36, notice: 62 };
 
 export async function waitFor(what, test, ms = 10_000) {

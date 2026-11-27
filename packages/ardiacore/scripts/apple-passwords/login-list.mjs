@@ -286,6 +286,23 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await tab.close();
       }
     },
+    async E35() {
+      const tab = await open("filter.localhost", "/login-ready");
+      try {
+        await tab.click("#u");
+        await tab.waitRows();
+        await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
+        await tab.type("zzz");
+        await waitFor("the list closed on zzz", async () => ((await tab.rows())?.length ? null : true), 5000);
+        assert(!(await tab.noList(800)), "a list that matches nothing stays closed", null);
+        for (let i = 0; i < 3; i++) await tab.key("backspace");
+        assert((await tab.value(`document.getElementById("u").value`)) === "an", "Backspace leaves an", null);
+        await typedRows(tab, "", [...FILTERED, FOOTER], "the list back on an");
+        return { engine: engineName, back: FILTERED };
+      } finally {
+        await tab.close();
+      }
+    },
     async E17() {
       const { app } = await paired();
       const ardiaOnly = "ardia-only@example.test";

@@ -3,32 +3,35 @@ const { useBrowser } = await import("../../browser/store.ts");
 const { startAutomation } = await import("../controlSocket.ts");
 const { registerPluginSocketMethods } = await import("../../plugins/start.ts");
 const stub = await import("../../../test-native/index.ts");
-const { reportShownSettings, useSettingsNav } = await import("../../settings/settingsWindows.ts");
+const { forgetShownSettings, newSettingsRoot, reportShownSettings, useSettingsNav } = await import("../../settings/settingsWindows.ts");
 const { shellNativeModules } = await import("../../../test-native/shell.ts");
 
-export const settingsUi = { delayMs: 0, shows: true };
+export const settingsUi = { delayMs: 0, unmountDelayMs: 0, shows: true };
 const appWindows = shellNativeModules.ArdiaAppWindows;
 const nativeOpenWindow = appWindows.openWindow;
 const nativeCloseWindow = appWindows.closeWindow;
+let settingsRoot = null;
 const shownPlace = () => {
   const { pane, profileId, detail } = useSettingsNav.getState();
   return { pane, profileId, detail };
 };
-const showSettingsSoon = () => setTimeout(() => settingsUi.shows && reportShownSettings(shownPlace()), settingsUi.delayMs);
+const showSettingsSoon = (root) => setTimeout(() => settingsUi.shows && root === settingsRoot && reportShownSettings(shownPlace(), root), settingsUi.delayMs);
 appWindows.openWindow = (id, options) => {
+  if (id === "settings" && settingsRoot === null) settingsRoot = newSettingsRoot();
   const opened = nativeOpenWindow(id, options);
-  if (id === "settings") showSettingsSoon();
+  if (id === "settings") showSettingsSoon(settingsRoot);
   return opened;
 };
 appWindows.closeWindow = (id) => {
-  if (id === "settings") reportShownSettings(null);
+  if (id === "settings" && settingsRoot !== null) {
+    const root = settingsRoot;
+    settingsRoot = null;
+    if (settingsUi.unmountDelayMs) setTimeout(() => forgetShownSettings(root), settingsUi.unmountDelayMs);
+    else forgetShownSettings(root);
+  }
   return nativeCloseWindow(id);
 };
-useSettingsNav.subscribe(() =>
-  void Promise.resolve(appWindows.windowIds())
-    .then((ids) => ids.includes("settings") && showSettingsSoon())
-    .catch(() => undefined),
-);
+useSettingsNav.subscribe(() => settingsRoot !== null && showSettingsSoon(settingsRoot));
 
 export const S = () => useBrowser.getState();
 export const tick = () => new Promise((resolve) => setImmediate(resolve));

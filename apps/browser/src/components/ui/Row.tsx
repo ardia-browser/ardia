@@ -9,11 +9,25 @@ import { HoverFill } from "./HoverFill";
 import { useNativeForm } from "./nativeForm";
 import { ControlLabelContext } from "./controlLabel";
 
-export function Row({ title, description, children, icon, onPress }: { title?: ReactNode; description?: ReactNode; children?: ReactNode; icon?: ReactNode; onPress?: () => void }) {
+export function Row({
+  title,
+  description,
+  children,
+  icon,
+  onPress,
+  accessibilityLabel,
+}: {
+  title?: ReactNode;
+  description?: ReactNode;
+  children?: ReactNode;
+  icon?: ReactNode;
+  onPress?: () => void;
+  accessibilityLabel?: string;
+}) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const native = useNativeForm();
-  const label = typeof title === "string" ? title : undefined;
+  const label = accessibilityLabel ?? (typeof title === "string" ? title : undefined);
   const hasControls = children !== undefined && children !== null && children !== false;
   const body = (
     <View
@@ -39,13 +53,17 @@ export function Row({ title, description, children, icon, onPress }: { title?: R
         ) : null}
       </View>
       {hasControls ? <ControlLabelContext.Provider value={label}>{children}</ControlLabelContext.Provider> : null}
-      {onPress && <Symbol name="chevron.right" size={11} weight="semibold" color={theme.textTertiary} style={{ width: 12, height: 14 }} />}
+      {onPress ? (
+        <View accessible={hasControls} accessibilityRole="button" accessibilityLabel={label} onAccessibilityTap={hasControls ? onPress : undefined}>
+          <Symbol name="chevron.right" size={11} weight="semibold" color={theme.textTertiary} style={{ width: 12, height: 14 }} />
+        </View>
+      ) : null}
     </View>
   );
   if (!onPress) return body;
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} onAccessibilityTap={onPress} accessibilityLabel={label} {...(hasControls ? {} : { accessibilityRole: "button" as const })}>
+      <Pressable onPress={onPress} {...(hasControls ? { accessible: false } : { accessibilityRole: "button" as const, accessibilityLabel: label, onAccessibilityTap: onPress })}>
         {body}
       </Pressable>
     </View>

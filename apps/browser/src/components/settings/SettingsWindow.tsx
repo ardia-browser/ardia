@@ -21,7 +21,7 @@ import { ShortcutsPane } from "./panes/Shortcuts";
 import { TabsPane } from "./panes/Tabs";
 import { useSettingsSheet } from "../../state/settings/sheet";
 import { SettingsConsentSheet } from "../plugins/SettingsConsentSheet";
-import { claimSettingsOpenAt, forgetSettingsScroll, goToSettingsPane, reportShownSettings, SETTINGS_WINDOW_ID, settingsScrollFor, settingsBack, settingsForward, settingsPageKey, settingsPlaceKey, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
+import { claimSettingsOpenAt, forgetSettingsScroll, forgetShownSettings, goToSettingsPane, newSettingsRoot, reportShownSettings, SETTINGS_WINDOW_ID, settingsScrollFor, settingsBack, settingsForward, settingsPageKey, settingsPlaceKey, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
 import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
 import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
 import { showCreateProfileSheets } from "../profiles/CreateProfile";
@@ -98,7 +98,9 @@ function PaneScrollView({
   viewport,
   scrollMemory,
   move,
+  root,
 }: {
+  root: number;
   layout: string;
   page: string;
   shown: ShownPane | null;
@@ -110,6 +112,11 @@ function PaneScrollView({
   move: (to: ScrollMove | null) => void;
 }) {
   const generation = useMemo(() => ++layoutGenerations, [layout]);
+  const laidOutPage = useRef<string | null>(null);
+  const placeKey = shown ? settingsPlaceKey(shown) : "";
+  useEffect(() => {
+    if (shown && laidOutPage.current === page) reportShownSettings(shown, root);
+  }, [placeKey, page]);
   useLayoutEffect(() => {
     if (shown) move(scrollMemory.begin(visit, settingsScrollFor(visit), shown, consentToken(), generation));
   }, [visit]);
@@ -131,6 +138,10 @@ function PaneScrollView({
         key={page}
         ref={content}
         collapsable={false}
+        onLayout={() => {
+          laidOutPage.current = page;
+          if (shown) reportShownSettings(shown, root);
+        }}
         style={PANE_COLUMN}>
         {shown ? (
           <NativeFormContext.Provider value>
@@ -177,8 +188,8 @@ export function SettingsWindow() {
     if (to) scroller.current?.scrollTo({ y: to.y, animated: false });
   };
   useEffect(() => forgetSettingsScroll, []);
-  useEffect(() => reportShownSettings(shown), [key]);
-  useEffect(() => () => reportShownSettings(null), []);
+  const [root] = useState(newSettingsRoot);
+  useEffect(() => () => forgetShownSettings(root), []);
   useEffect(() => closeProfileIconPickerIn(SETTINGS_WINDOW_ID), [key]);
   const content = useRef<View>(null);
   const viewport = useRef(0);
@@ -256,6 +267,7 @@ export function SettingsWindow() {
           viewport={viewport}
           scrollMemory={scrollMemory}
           move={move}
+          root={root}
         />
       </View>
       <ProfileIconPicker windowId={SETTINGS_WINDOW_ID} />

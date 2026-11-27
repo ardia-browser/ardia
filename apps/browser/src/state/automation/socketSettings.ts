@@ -9,7 +9,7 @@ import { id, ids, obj, oneOf, PROFILE, text } from "./socketSchema";
 import { expect, now, profileArg } from "./socketTargets";
 import { closeWindow, windowIds } from "../../platform/windows";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
-import { openSettings, SETTINGS_PANES, SETTINGS_WINDOW_ID, settingsPlaceKey, shownSettingsProfile, useSettingsNav, useShownSettings, type SettingsPane, type SettingsPlace } from "../settings/settingsWindows";
+import { latestSettingsRoot, openSettings, SETTINGS_PANES, SETTINGS_WINDOW_ID, settingsPlaceKey, shownSettingsProfile, useSettingsNav, useShownSettings, type SettingsPane, type SettingsPlace } from "../settings/settingsWindows";
 import { OpError } from "./workspaceTargets";
 
 const OWN_METHOD: Partial<Record<SettingKey, string>> = {
@@ -158,18 +158,23 @@ async function settingsWindowOpen() {
   return ids.includes(SETTINGS_WINDOW_ID);
 }
 
-const placeRow = (open: boolean, place: SettingsPlace) => ({ open, pane: place.pane, profile: place.pane === "profiles" ? shownSettingsProfile(place) : place.profileId, detail: place.detail, panes: SETTINGS_PANES });
+const placeRow = (open: boolean, place: SettingsPlace | null) => ({
+  open,
+  pane: place?.pane ?? null,
+  profile: place ? (place.pane === "profiles" ? shownSettingsProfile(place) : place.profileId) : null,
+  detail: place?.detail ?? null,
+  panes: SETTINGS_PANES,
+});
 
 async function settingsWindowRow() {
   refuseWithoutSettingsWindowControl();
   const open = await settingsWindowOpen();
-  const shown = useShownSettings.getState().shown;
-  return placeRow(open, open && shown ? shown : useSettingsNav.getState());
+  return placeRow(open, open ? useShownSettings.getState().shown : useSettingsNav.getState());
 }
 
-const shows = (place: SettingsPlace) => {
-  const shown = useShownSettings.getState().shown;
-  return !!shown && settingsPlaceKey(shown) === settingsPlaceKey(place);
+const shows = (place: SettingsPlace, newerThan: number) => {
+  const { shown, root } = useShownSettings.getState();
+  return root > newerThan && !!shown && settingsPlaceKey(shown) === settingsPlaceKey(place);
 };
 
 async function waitFor(done: () => Promise<boolean>) {
@@ -189,16 +194,19 @@ function openSettingsWindow(params: Record<string, unknown>, call: SocketCall) {
   refuseWithoutSettingsWindowControl();
   const pane = params.pane as SettingsPane | undefined;
   if (params.profile !== undefined && pane !== "profiles") throw new OpError("bad_request", "Only the profiles pane takes a profile.");
-  const profile = params.profile === undefined ? null : profileArg(params.profile);
+  if (params.profile !== undefined) profileArg(params.profile);
   return oneSettingsChangeAtATime(async () => {
+    const profile = params.profile === undefined ? null : profileArg(params.profile);
+    const newerThan = (await settingsWindowOpen()) ? 0 : latestSettingsRoot();
     call.stillServing();
     if (pane) openSettings(pane, profile);
     else openSettings();
     const { pane: shownPane, profileId, detail } = useSettingsNav.getState();
     const wanted = { pane: shownPane, profileId, detail };
-    await waitFor(async () => shows(wanted) && (await settingsWindowOpen()));
+    if (profile) expect(profileId === profile, `Settings isn't showing profile ${profile}.`);
+    await waitFor(async () => shows(wanted, newerThan) && (await settingsWindowOpen()));
     expect(await settingsWindowOpen(), "the Settings window didn't open.");
-    expect(shows(wanted), `Settings isn't showing ${wanted.pane}.`);
+    expect(shows(wanted, newerThan), `Settings isn't showing ${wanted.pane}.`);
     return placeRow(true, wanted);
   });
 }

@@ -131,6 +131,7 @@ export function Row({
   icon,
   onPress,
   anchor,
+  accessibilityLabel,
 }: {
   title?: ReactNode;
   description?: ReactNode;
@@ -138,10 +139,11 @@ export function Row({
   icon?: ReactNode;
   onPress?: () => void;
   anchor?: SettingId;
+  accessibilityLabel?: string;
 }) {
   const entry = anchor ? setting(anchor) : undefined;
   const row = (
-    <PlainRow title={title ?? entry?.title} description={description === undefined ? (entry?.explained ? entry.description : undefined) : description} icon={icon} onPress={onPress}>
+    <PlainRow title={title ?? entry?.title} description={description === undefined ? (entry?.explained ? entry.description : undefined) : description} icon={icon} onPress={onPress} accessibilityLabel={accessibilityLabel}>
       {children}
     </PlainRow>
   );

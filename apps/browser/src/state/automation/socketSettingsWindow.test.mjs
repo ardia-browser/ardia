@@ -13,12 +13,12 @@ const settingsOpen = async () => (await windowIds()).includes("settings");
 
 after(() => {
   appWindows.windowIds = windowIds;
-  Object.assign(settingsUi, { delayMs: 0, shows: true });
+  Object.assign(settingsUi, { delayMs: 0, unmountDelayMs: 0, shows: true });
   S().updateSettings({ cliControl: false });
 });
 
 beforeEach(async () => {
-  Object.assign(settingsUi, { delayMs: 0, shows: true });
+  Object.assign(settingsUi, { delayMs: 0, unmountDelayMs: 0, shows: true });
   appWindows.windowIds = windowIds;
   await freshWindow();
   await appWindows.closeWindow("settings");
@@ -57,6 +57,46 @@ test("settings.open answers only once the Settings window shows the pane, not wh
   assert.ok(Date.now() - started >= settingsUi.delayMs, "answered before the window showed the pane");
   assert.equal(opened.pane, "advanced");
   assert.equal(useShownSettings.getState().shown?.pane, "advanced");
+});
+
+test("a reopen right after a close waits for the new window, not the old one still unmounting", async () => {
+  await ok("settings.open", { pane: "advanced" });
+  const oldRoot = useShownSettings.getState().root;
+  settingsUi.unmountDelayMs = 200;
+  settingsUi.delayMs = 80;
+  await ok("settings.close");
+  const started = Date.now();
+  const reopened = await ok("settings.open", { pane: "advanced" });
+  assert.ok(Date.now() - started >= settingsUi.delayMs, "answered from the old window's report");
+  assert.equal(reopened.pane, "advanced");
+  assert.ok(useShownSettings.getState().root > oldRoot);
+  await until(() => Date.now() - started > settingsUi.unmountDelayMs + 20, 1000);
+  assert.equal((await ok("settings.window")).pane, "advanced", "the old window's late unmount didn't clear the new one");
+});
+
+test("settings.window names no pane while the window is open but hasn't shown one yet", async () => {
+  settingsUi.shows = false;
+  await slowCall("settings.open", { pane: "tabs" });
+  const row = await ok("settings.window");
+  assert.deepEqual([row.open, row.pane, row.profile], [true, null, null]);
+});
+
+test("settings.open checks its profile again when its turn comes, after an earlier change", async () => {
+  const work = S().createProfile({ name: "Work" });
+  await ok("settings.open", { pane: "general" });
+  settingsUi.unmountDelayMs = 0;
+  let release;
+  const held = new Promise((resolve) => (release = resolve));
+  appWindows.windowIds = () => held.then(() => windowIds());
+  const closing = fire("settings.close");
+  const opening = socketClient(64).fire("settings.open", { pane: "profiles", profile: work });
+  for (let i = 0; i < 5; i++) await tick();
+  S().deleteProfile(work);
+  release();
+  appWindows.windowIds = windowIds;
+  await closing;
+  const opened = await opening;
+  assert.equal(opened.error?.code, "no_window", JSON.stringify(opened));
 });
 
 test("settings.open fails when the window opens but never shows the pane", async () => {

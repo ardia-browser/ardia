@@ -27,6 +27,7 @@ export const REMOTE_METHODS = [
   "retireProfile",
   "useFolder",
   "moveFolder",
+  "recreateFolder",
   "sendTargets",
   "sendTab",
 ] as const;

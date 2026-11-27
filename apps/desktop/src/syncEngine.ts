@@ -4,6 +4,7 @@ import * as engine from "../../browser/src/state/sync/engine";
 import type { DataType, SendTarget, SyncUi } from "../../browser/src/state/sync/syncDoc";
 import type { FolderInfo, PhraseResult } from "../../browser/src/platform/sync";
 import { pickSyncFolder, type FolderMoveResult, type TurnOnFolder } from "../../browser/src/state/sync/folderMove";
+import type { FolderRecreateResult } from "../../browser/src/state/sync/folderRecovery";
 import { SyncNative } from "../../browser/src/platform/sync";
 import { ardiaHost, type ArdiaHost } from "./host";
 import { syncIdle, syncNowIfIdle, syncNowThrough } from "./syncForward";
@@ -174,6 +175,7 @@ function remoteFor(host: ArdiaHost): SyncRemote {
     retireProfile: (profileId: string) => whenProfileGone(useBrowser, profileId, () => engine.retireProfile(profileId)),
     useFolder: (path: string) => engine.setSyncFolder(path),
     moveFolder: (path: string) => engine.moveSyncFolder(path),
+    recreateFolder: () => engine.recreateSyncFolder(),
     sendTargets: (profileIds: string[]) => Object.fromEntries(profileIds.map((profileId) => [profileId, engine.sendTargets(profileId)])),
     sendTab: (tabId: string, deviceId: string) => engine.sendTab(tabId, deviceId),
   };
@@ -287,6 +289,11 @@ export async function moveSyncFolder(path: string): Promise<FolderMoveResult> {
   } catch (error) {
     return { error: "failed", message: error instanceof Error ? error.message : String(error) };
   }
+}
+
+export async function recreateSyncFolder(): Promise<FolderRecreateResult> {
+  if (leading()) return engine.recreateSyncFolder();
+  return forward<FolderRecreateResult>("recreateFolder", [], INTERACTIVE_CALL_TIMEOUT_MS).catch((error: unknown) => ({ error: "failed", message: error instanceof Error ? error.message : String(error) }));
 }
 
 const WRITES_CLOSED: readonly string[] = ["starting", "locked", "off", "unavailable"];

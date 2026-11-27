@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { belongsToSpace, isSplit, moveTargets, sameSpaces, spaceOf, spaceToShow, tabSpacesFor, tabsInSpace, UNSYNCED, type TabSpaces } from "./spaces.ts";
+import { belongsToSpace, isSplit, moveTargets, sameSpaces, spaceOf, spaceToPick, tabSpacesFor, tabsInSpace, UNSYNCED, type TabSpaces } from "./spaces.ts";
 import { closeAllTabs, closeTab, deckOrder, emptyTabs, moveToSpace, openTab, reopenLastClosed, runAutoArchive, selectTab, withSpaces, type TabsData } from "./tabsState.ts";
 
 const known = ["personal", "work"];
@@ -142,11 +142,21 @@ test("a private tab can't move, and the targets are every other space", () => {
 });
 
 test("opening a tab from another space shows that space; a private tab or one here shows nothing", () => {
-  assert.equal(spaceToShow(spaces("work"), { profileSyncId: null, isPrivate: false }), "personal");
-  assert.equal(spaceToShow(spaces("work"), { profileSyncId: "work", isPrivate: false }), null);
-  assert.equal(spaceToShow(spaces("work"), { profileSyncId: null, isPrivate: true }), null);
-  assert.equal(spaceToShow(UNSYNCED, { profileSyncId: "work", isPrivate: false }), null);
-  assert.equal(spaceToShow(spaces("work"), null), null);
+  assert.equal(spaceToPick(spaces("work"), { profileSyncId: null, isPrivate: false }, null), "personal");
+  assert.equal(spaceToPick(spaces("work"), { profileSyncId: "work", isPrivate: false }, null), null);
+  assert.equal(spaceToPick(spaces("work"), { profileSyncId: null, isPrivate: true }, null), null);
+  assert.equal(spaceToPick(UNSYNCED, { profileSyncId: "work", isPrivate: false }, null), null);
+  assert.equal(spaceToPick(spaces("work"), null, null), null);
+});
+
+test("the latest tab opened picks its space, even the one on screen while another space's pick is still pending", () => {
+  const work = { profileSyncId: "work", isPrivate: false };
+  assert.equal(spaceToPick(spaces("work"), work, "personal"), "work");
+  assert.equal(spaceToPick(spaces("work"), work, null), null);
+  assert.equal(spaceToPick(spaces("work"), work, "work"), null);
+  assert.equal(spaceToPick(spaces("work"), { profileSyncId: null, isPrivate: false }, null), "personal");
+  assert.equal(spaceToPick(spaces("work"), { profileSyncId: "work", isPrivate: true }, "personal"), null);
+  assert.equal(spaceToPick(UNSYNCED, work, "personal"), null);
 });
 
 test("a tab opened from another tab takes the opener's space", () => {

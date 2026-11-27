@@ -54,10 +54,10 @@ test("you turn control off, Ardia restarts, and it stays off: no launch turns it
 
 test("after Stop, the Settings switch turns control back on, and a relaunch keeps it on", async () => {
   const { stopProgramControl } = await import("../app/programControl.ts");
-  const { setControlFromSettings } = await import("../app/programControlSetting.ts");
+  const { setControlByUser } = await import("../app/programControlSetting.ts");
   stopProgramControl();
   assert.equal(S().settings.cliControl, false);
-  setControlFromSettings(true);
+  setControlByUser(true);
   assert.equal(S().settings.cliControl, true);
   lifecycle.reconcilePlugins();
   await settle();
@@ -65,5 +65,5 @@ test("after Stop, the Settings switch turns control back on, and a relaunch keep
   const { readFileSync } = await import("node:fs");
   const pane = readFileSync(new URL("../../components/settings/panes/Advanced.tsx", import.meta.url), "utf8");
   assert.match(pane, /function ProgramsRows\(\) \{[\s\S]*?<ProgramControlRow \/>/, "the macOS Programs section has the switch, not only the program list");
-  assert.match(pane, /anchor="advanced.programControl"[\s\S]*?onChange=\{setControlFromSettings\}/);
+  assert.match(pane, /anchor="advanced.programControl"[\s\S]*?onChange=\{setControlByUser\}/);
 });

@@ -89,10 +89,10 @@ ArdiaCoreTab *_Nullable PasswordPromptTab(ArdiaWebView *view, ArdiaCoreTab *_Nul
 }
 
 @interface ArdiaTabStrip (Engine)
-+ (void)changedInWindow:(ArdiaWindowController *)controller profile:(ArdiaCoreProfile *)profile;
-+ (void)changedInWindow:(ArdiaWindowController *)controller profile:(ArdiaCoreProfile *)profile cause:(nullable id)cause;
++ (void)changedInWindow:(ArdiaWindowController *)controller profile:(ArdiaCoreProfile *)profile trigger:(NSString *)trigger;
++ (void)changedInWindow:(ArdiaWindowController *)controller profile:(ArdiaCoreProfile *)profile cause:(nullable id)cause note:(NSDictionary *)note;
 + (void)windowClosed:(ArdiaWindowController *)controller;
-+ (void)activated:(ArdiaCoreTab *)tab inWindow:(ArdiaWindowController *)controller;
++ (NSDictionary *)activated:(ArdiaCoreTab *)tab inWindow:(ArdiaWindowController *)controller;
 + (nullable ArdiaCoreTab *)activeTabInWindow:(ArdiaWindowController *)controller profile:(ArdiaCoreProfile *)profile;
 + (void)removed:(ArdiaCoreTab *)tab fromWindow:(ArdiaWindowController *)controller;
 + (void)setPinned:(BOOL)pinned tab:(ArdiaCoreTab *)tab;

@@ -28,9 +28,9 @@ function useActiveCustomLook(): CustomLook | null {
   return useMemo(() => activeCustomLook(choice, theme, enabled, profile), [choice, theme, enabled, profile]);
 }
 
-function currentActiveCustomLook(): CustomLook | null {
+function currentActiveCustomLook(theme = currentCustomTheme()): CustomLook | null {
   const { status, view } = syncData();
-  return activeCustomLook(currentPreferences().colorChoice, currentCustomTheme(), status.isEnabled, shownProfile(view, status));
+  return activeCustomLook(currentPreferences().colorChoice, theme, status.isEnabled, shownProfile(view, status));
 }
 
 const schemeFor = (design: Design, preferred: PreferredScheme, custom: CustomLook | null): PreferredScheme => (design === "material" ? preferred : themedScheme(custom, preferred));
@@ -47,9 +47,10 @@ function currentChosenScheme(): PreferredScheme {
   return preferredScheme(useAppearanceDesign.getState().design, currentPreferences().schemeChoice, macLookOf(status.isEnabled, view.look));
 }
 
-function currentPreferredScheme(): PreferredScheme {
-  return schemeFor(useAppearanceDesign.getState().design, currentChosenScheme(), currentActiveCustomLook());
+function currentPreferredScheme(theme = currentCustomTheme()): PreferredScheme {
+  return schemeFor(useAppearanceDesign.getState().design, currentChosenScheme(), currentActiveCustomLook(theme));
 }
+
 
 export const themeFixesScheme = (): boolean => currentPreferredScheme() !== currentChosenScheme();
 

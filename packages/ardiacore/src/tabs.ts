@@ -29,11 +29,19 @@ export type StripState = {
   closed?: boolean;
 };
 
+export type StripTrigger = "activate" | "insert" | "remove" | "attach" | "observer" | "closed";
+
 export type TabStripTransaction = {
   rev: number;
   cmd: number | null;
   strips: StripState[];
   rejected?: boolean;
+  trigger?: StripTrigger;
+  activeFallback?: boolean;
+  deferred?: boolean;
+  deferredInferred?: boolean;
+  deferredCmd?: number;
+  consent?: string;
 };
 
 export type TabStripCommand =

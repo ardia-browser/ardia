@@ -268,4 +268,15 @@ struct AutoPictureInPictureRule {
     #expect(!rule.settlingFromFullScreen)
     #expect(rule.sight(false, inline: true, enabled: true, playing: true) == .open)
   }
+
+  @Test func `a Picture in Picture the person already has open is never taken for an automatic one, even when full screen follows`() {
+    var rule = WebKitAutoPictureInPicture()
+    rule.reported(active: true)
+    #expect(rule.sight(false, enabled: true, playing: true) == .none)
+    #expect(!rule.autoOpened)
+    rule.pageFullScreen(true, tab: 1)
+    #expect(rule.sight(false, enabled: true, playing: true) == .none)
+    #expect(rule.sight(false, enabled: true, playing: true) == .none)
+    #expect(rule.reportedActive)
+  }
 }

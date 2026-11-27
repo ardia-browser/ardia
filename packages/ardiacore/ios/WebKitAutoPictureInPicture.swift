@@ -64,7 +64,7 @@ struct WebKitAutoPictureInPicture {
     guard nowSeen != seen else { return .none }
     seen = nowSeen
     if !nowSeen {
-      guard enabled, playing else { return .none }
+      guard enabled, playing, !reportedActive else { return .none }
       autoOpened = true
       openRequests += 1
       return .open

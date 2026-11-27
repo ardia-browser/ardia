@@ -62,6 +62,7 @@ final class PhonePages {
     }
     engine = WebEngine(tabs: tabs, blocker: blocker, preferences: BrowsingPreferences(defaults: defaults, sitePermissions: permissions))
     engine.openExternalURL = { url in UIApplication.shared.open(url) }
+    engine.onPageDarkChange = { [weak self] dark in self?.pageSink?(["name": "pages.dark", "dark": dark]) }
     engine.openUniversalLink = { url in await UIApplication.shared.open(url, options: [.universalLinksOnly: true]) }
     engine.onVisit = { [weak self] tabID, visit in
       guard let self, let pageID = self.pageIDs[tabID] else { return }

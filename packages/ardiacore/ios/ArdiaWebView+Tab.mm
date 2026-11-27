@@ -1,6 +1,7 @@
 #import "ArdiaWebViewInternal.h"
 #import "ArdiaEarlyWindow.h"
 
+#import <objc/message.h>
 #import <objc/runtime.h>
 
 using namespace ardia_web_view;
@@ -456,6 +457,19 @@ BOOL IsBlankAddress(NSString *url) {
 - (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds {
   if (!_tab || _tab.closed || _tab.discarded) return @[ @-1 ];
   return [_tab sleepIfHiddenFor:seconds];
+}
+
+- (NSArray<NSNumber *> *)sleepIfUnusedFor:(NSTimeInterval)seconds {
+  if (!_tab || _tab.closed || _tab.discarded) return @[ @-1 ];
+  SEL unused = NSSelectorFromString(@"sleepIfUnusedFor:");
+  if (![_tab respondsToSelector:unused]) return [_tab sleepIfHiddenFor:seconds];
+  return ((NSArray<NSNumber *> * (*)(id, SEL, NSTimeInterval)) objc_msgSend)(_tab, unused, seconds);
+}
+
+- (BOOL)wakeIfSleeping {
+  if (!_tab || _tab.closed || !_tab.discarded) return NO;
+  [_tab loadIfNeeded];
+  return YES;
 }
 
 - (NSString *)keptFromUnloadingBy {

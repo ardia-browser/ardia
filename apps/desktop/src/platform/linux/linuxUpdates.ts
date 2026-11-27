@@ -1,6 +1,6 @@
 import { cleanUrl } from "@ardia/core";
 import type { ArdiaHost } from "../../host";
-import { AUR_UPDATE_COMMAND, linuxUpdater, scheduleUpdateChecks, updatesAvailable, type LinuxUpdater, type UpdateLocks } from "./hostUpdates.ts";
+import { linuxUpdater, scheduleUpdateChecks, updatesAvailable, type LinuxUpdater, type UpdateLocks } from "./hostUpdates.ts";
 import { isLinuxUtility } from "../../session.ts";
 import { refreshDocument } from "../../shims/shellBase";
 import { systemInfo } from "../../../../browser/src/platform/app";
@@ -82,17 +82,12 @@ export function linuxUpdaterFor(host: ArdiaHost): LinuxUpdater {
     managed: async (release, current, asked, manager) => {
       const flatpak = manager === "flatpak";
       if (!asked) {
-        toast(
-          windowId,
-          `Ardia ${release.version} is available`,
-          flatpak ? "Install the new .flatpak from its release page." : `Update it with your package manager, like ${AUR_UPDATE_COMMAND}, or install the new .rpm from its release page.`,
-          {
-            icon: UPDATE_ICON,
-            sticky: true,
-            action: { title: "View", run: () => void (open(release.url) && noteUpdatePageOpened()) },
-            secondary: { title: "Later", run: noteUpdateNoticeDismissed },
-          },
-        );
+        toast(windowId, `Ardia ${release.version} is available`, flatpak ? "Install the new .flatpak from its release page." : "Install the new .rpm or Arch source package from its release page.", {
+          icon: UPDATE_ICON,
+          sticky: true,
+          action: { title: "View", run: () => void (open(release.url) && noteUpdatePageOpened()) },
+          secondary: { title: "Later", run: noteUpdateNoticeDismissed },
+        });
         return;
       }
       const consent = consentToken();
@@ -100,7 +95,7 @@ export function linuxUpdaterFor(host: ArdiaHost): LinuxUpdater {
         title: `Ardia ${release.version} is available`,
         message: flatpak
           ? `You have Ardia ${current}. This Flatpak was installed from a .flatpak file, which flatpak update can't update: install the new .flatpak from its release page.`
-          : `You have Ardia ${current}. Your package manager installed Ardia, so update it there: for the AUR package, run ${AUR_UPDATE_COMMAND} or use your AUR helper; for the .rpm, install the new one from its release page with dnf or zypper.`,
+          : `You have Ardia ${current}, installed from a package on its release page. Install the new one the same way: the .rpm with dnf or zypper, or on Arch, unpack ardia-bin-${release.version}.src.tar.gz and run makepkg -si in it.`,
         confirmTitle: "Open Release Page",
         cancelTitle: "Later",
         windowId,

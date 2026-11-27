@@ -97,6 +97,8 @@ object PhonePages {
         made.filter = blocking.pageFilter(isPrivate = false)
         made.privateFilter = blocking.pageFilter(isPrivate = true)
         made.onPrivateBrowsingEnded = ::privateBrowsingEnded
+        made.onPageNightChange = { night -> pageSink?.invoke(mapOf("name" to "pages.dark", "dark" to night)) }
+        made.pageNight = sitePreferences.pageNight
         made.onNightShadeVerdict = { use -> scope.launch(Dispatchers.IO) { PendingCounts.add(context, PendingCounts.nightShadeField(use), UsageConsent.window(context)) } }
         if (PhoneLab.isOn) {
             made.desktopTrace = { pageId, line ->

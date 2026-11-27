@@ -44,7 +44,7 @@ export function pinnedHomesAdapter(profileId: string): Adapter {
         ignore: (k) => held.has(keyOf(k)) || (!known.has(keyOf(k)) && base(`${PIN_TAB}${keyOf(k)}`) === undefined && !unpinned(keyOf(k))),
       } satisfies Extraction;
     },
-    apply: (visible, changed, base) => {
+    apply: (visible, changed, base, records) => {
       const incoming = new Map<string, string>();
       for (const k of changed) {
         const home = syncedHome(visible.get(k));
@@ -55,7 +55,7 @@ export function pinnedHomesAdapter(profileId: string): Adapter {
         const home = incoming.get(key);
         if (!home || home === current) return undefined;
         const synced = syncedHomeIn(base, key);
-        return !current || synced === undefined || synced === current ? home : undefined;
+        return records?.rebasing || !current || synced === undefined || synced === current ? home : undefined;
       };
       const s = store();
       let tabs: Record<string, Tab> | null = null;

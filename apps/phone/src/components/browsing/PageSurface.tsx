@@ -11,11 +11,12 @@ import type { BrowserTab } from "../../state/tabs/tabModels";
 import { usePreferences } from "../../state/settings/hooks";
 import { pageSwipe } from "../../state/settings/settingsRules";
 import { nativeLookColors } from "../../lib/profileLook";
-import { PageView, useProfileLook, useTheme, type PageViewHandle } from "../ui";
+import { PageView, usePageTheme, useProfileLook, useTheme, type PageViewHandle } from "../ui";
 
 export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, topClearance, pinsSafeArea, testID }: { tab: BrowserTab; toneBottom: number; obscured?: { top: number; bottom: number }; summaryBottomInset?: number; topClearance?: number; pinsSafeArea?: boolean; testID?: string }) {
   const handle = useRef<PageViewHandle>(null);
   const theme = useTheme();
+  const pageTheme = usePageTheme();
   const look = useProfileLook();
   const summaryLook = useMemo(() => ({ ...nativeLookColors(look, theme.dark), dark: theme.dark }), [look, theme.dark]);
   const id = tab.id;
@@ -30,8 +31,8 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
   const tone = usePageTone(id);
   const failed = useNavigation(id, (n) => n?.failure != null);
   const pageTone = failed ? null : shownTone(tone, tab.themeColorHex);
-  const colorTop = pageTone?.top ?? theme.canvas;
-  const colorBottom = pageTone?.bottom ?? theme.canvas;
+  const colorTop = pageTone?.top ?? pageTheme.canvas;
+  const colorBottom = pageTone?.bottom ?? pageTheme.canvas;
   const covers = obscured !== undefined;
   const obscuredColors = useMemo(() => (covers ? { top: colorTop, bottom: colorBottom } : undefined), [covers, colorTop, colorBottom]);
   const obscuredTop = obscured?.top;
@@ -78,7 +79,7 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
       reopensOnSwipeForward={canReopen}
       onSwipedPastHistory={onSwipedPastHistory}
       pullToRefresh
-      surfaceColor={theme.canvas}
+      surfaceColor={pageTheme.canvas}
       onPageState={onPageState}
       onPageTone={onPageTone}
       onPageDrawn={onPageDrawn}

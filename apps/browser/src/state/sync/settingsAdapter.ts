@@ -9,7 +9,7 @@ import { CLEAN_UP_KEY, hoursFromMinutes, LEGACY_CLEAN_UP_KEY, minutesFromHours }
 
 const store = () => useBrowser.getState();
 const recordKey = (name: string) => `set:${name === CLEAN_UP_KEY ? LEGACY_CLEAN_UP_KEY : name}`;
-const settingOf = (key: string) => (key.slice(4) === LEGACY_CLEAN_UP_KEY ? CLEAN_UP_KEY : key.slice(4));
+export const settingOf = (key: string) => (key.slice(4) === LEGACY_CLEAN_UP_KEY ? CLEAN_UP_KEY : key.slice(4));
 const toRecord = (name: string, value: unknown) => (name === CLEAN_UP_KEY ? hoursFromMinutes(value as number | null) : value);
 const fromRecord = (name: string, value: unknown) => (name === CLEAN_UP_KEY ? minutesFromHours(value) : value);
 

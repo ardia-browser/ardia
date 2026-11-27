@@ -151,7 +151,7 @@ export type DisplayMediaSource = {
 export type DisplayMediaAudio = { tab: boolean; screen: boolean; window: "application" | "system" | null };
 export type DisplayMediaRequest = { id: string; origin: string; frameOrigin?: string; audio: DisplayMediaAudio | null; sources: DisplayMediaSource[]; controller?: boolean };
 
-export type ZoomState = { zoom: number; host: string; isDefault: boolean; pinchScale: number; user: boolean };
+export type ZoomState = { zoom: number; host: string; isDefault: boolean; pinchScale: number; user: boolean; scroll?: "" | "wheel" | "merged" };
 export type ContentBlockedState = { count: number; url: string };
 
 export type PasswordPrompt = {
@@ -314,6 +314,8 @@ export type WebViewHandle = {
   resolveUnresponsive(terminate: boolean): Promise<void>;
   discard(options?: { unload?: boolean }): Promise<DiscardOutcome>;
   sleepIfHidden(seconds: number): Promise<DiscardRefusal[]>;
+  sleepIfUnused?(seconds: number): Promise<DiscardRefusal[]>;
+  wakeIfSleeping?(): Promise<boolean>;
   setFrozen(frozen: boolean): Promise<void>;
 };
 

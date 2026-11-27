@@ -10,7 +10,7 @@ import { splitOf, splitTabIdsOf, withPinnedPanes } from "../splits/splits";
 import { inUse } from "./loadedTabBudget";
 import { hasLoadedPage } from "./pageSession";
 import { shownTabIds } from "./shownTabs";
-import { isSleeping } from "./sleepingTabs";
+import { isSleeping, noteSleptByHand } from "./sleepingTabs";
 
 function visibleWith(s: BrowserState, id: string): boolean {
   const shown = shownTabIds(s);
@@ -26,6 +26,12 @@ export function canSleep(s: BrowserState, id: string): boolean {
 type MenuSleep = { outcome: string; keptBy?: KeptAwakeReason; pastAutomatic?: boolean };
 
 export async function sleepAsked(id: string, stillWanted: () => boolean = () => true): Promise<MenuSleep> {
+  const result = await sleepAskedOnce(id, stillWanted);
+  if (result.outcome === "asleep") noteSleptByHand(id);
+  return result;
+}
+
+async function sleepAskedOnce(id: string, stillWanted: () => boolean): Promise<MenuSleep> {
   const s = useBrowser.getState();
   if (!s.tabs[id]) return { outcome: "gone" };
   if (visibleWith(s, id)) return { outcome: "shown" };
@@ -57,6 +63,7 @@ export async function sleepTab(id: string, { mayWrite }: { mayWrite?: () => bool
     return "asleep";
   }
   const outcome = view ? await view.discard().catch(() => "refused" as const) : "already";
+  if (outcome === "discarded") noteSleptByHand(id);
   return outcome === "discarded" ? "asleep" : outcome;
 }
 

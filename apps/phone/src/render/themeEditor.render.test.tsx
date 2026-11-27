@@ -16,7 +16,15 @@ import { renderSurface, textOf, unmount, withTabs } from "../../test/render/harn
 import { status, view } from "../../test/syncFixture";
 
 const overrides: ("light" | "dark" | null)[] = [];
-jest.mock("../platform/look", () => ({ ...jest.requireActual("../platform/look"), overrideColorScheme: (scheme: "light" | "dark" | null) => overrides.push(scheme) }));
+const pageSchemes: ("light" | "dark" | null)[] = [];
+jest.mock("../platform/look", () => ({
+  ...jest.requireActual("../platform/look"),
+  overrideColorScheme: (scheme: "light" | "dark" | null) => overrides.push(scheme),
+  overridePageScheme: (scheme: "light" | "dark" | null) => {
+    pageSchemes.push(scheme);
+    return Promise.resolve(null);
+  },
+}));
 
 const lookModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
 
@@ -30,6 +38,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   withTabs(1);
   overrides.length = 0;
+  pageSchemes.length = 0;
   act(() => {
     usePreferences.setState({ interfaceStyle: "matchMac", schemeChoice: "matchMac", colorChoice: null, customTheme: null });
     useThemeDraft.setState({ draft: null });
@@ -190,6 +199,18 @@ test("the custom theme's Light or Dark decides the app's, and Match System hands
   withCustom({ ...blue, mode: "auto" });
   expect(seenDark).toBe(false);
   expect(overrides).toEqual(["dark", null]);
+  unmount(root);
+});
+
+test("a custom theme's Light colours the app but pages keep the system's scheme, and the user's Dark reaches pages", () => {
+  const root = inDesign(<DarkProbe />);
+  withCustom({ ...blue, mode: "light" });
+  expect(overrides).toEqual(["light"]);
+  expect(pageSchemes.filter((scheme) => scheme !== null)).toEqual([]);
+  act(() => usePreferences.setState({ schemeChoice: "dark" }));
+  expect(pageSchemes.at(-1)).toBe("dark");
+  act(() => usePreferences.setState({ schemeChoice: "system" }));
+  expect(pageSchemes.at(-1)).toBeNull();
   unmount(root);
 });
 

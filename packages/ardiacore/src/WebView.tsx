@@ -87,6 +87,8 @@ export function webViewHandle(native: { readonly current: WebViewNativeHandle | 
     resolveUnresponsive: (terminate) => call(undefined, (n) => n.resolveUnresponsive(terminate)),
     discard: (options) => call<DiscardOutcome>("refused", (n) => n.discard(options?.unload ?? false)),
     sleepIfHidden: (seconds) => call<DiscardRefusal[]>([NO_PAGE_TO_DISCARD], (n) => n.sleepIfHidden(seconds)),
+    sleepIfUnused: (seconds) => call<DiscardRefusal[]>([NO_PAGE_TO_DISCARD], (n) => (typeof n.sleepIfUnused === "function" ? n.sleepIfUnused(seconds) : n.sleepIfHidden(seconds))),
+    wakeIfSleeping: () => call(false, (n) => (typeof n.wakeIfSleeping === "function" ? n.wakeIfSleeping() : Promise.resolve(false))),
     setFrozen: (frozen) => call(undefined, (n) => n.setFrozen(frozen)),
   };
 }

@@ -20,6 +20,8 @@ export const SWIPE_NAVIGATION = [
   { id: "disabled" as const, title: "Off" },
 ];
 
+export const SITE_DEFAULTS_FOOTER = "Change one site from Site Settings in its page menu.";
+
 export const NIGHT_SHADE = [
   { id: "disabled" as const, title: "Off" },
   { id: "automatic" as const, title: "Automatic" },
@@ -163,7 +165,7 @@ export function SiteSettingsGroups({ openRoute }: { openRoute: (route: SettingsR
         <NavRow title="Filter Lists" icon="line3HorizontalDecrease" tint={settingsTint.neutral} value={formatNumber(enabledLists)} divider onPress={() => openRoute({ page: "filterLists" })} />
         <NavRow title="Trusted Sites" icon="checkmarkShield" tint={settingsTint.green} value={trusted ? String(trusted) : "None"} onPress={() => openRoute({ page: "trustedSites" })} />
       </Group>
-      <Group footer="Change one site from its page menu.">
+      <Group footer={SITE_DEFAULTS_FOOTER}>
         <PickerRow title="Night Shade" icon="moonFill" tint={settingsTint.nightShade} options={NIGHT_SHADE} selected={nightShade} divider onSelect={setDefaultNightShade} />
         <PickerRow
           title="Swipe to Navigate"

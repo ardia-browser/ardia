@@ -214,6 +214,44 @@ test("a login deleted here while a held change was saving stays deleted when the
   assert.deepEqual(await held.merge("", native), []);
 });
 
+test("a login only sync held, deleted here while its next change was saving, stays deleted when the engine skips it", async () => {
+  const origin = "https://bank.example";
+  const held = createHeldLogins(heldIo());
+  const host = fakeHost(async (method) => {
+    if (method === "ArdiaSync.readPasswords") return [];
+    if (method !== "ArdiaSync.savePassword") return null;
+    await held.release("", origin, "alice");
+    return "skipped";
+  });
+  configureHeldLogins(held);
+  try {
+    assert.equal(await held.hold("", { origin, username: "alice", sealed: "LONG", replaced: null }), true);
+    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", origin, "alice", "LONGER", "LONG"), false);
+  } finally {
+    configureHeldLogins(null);
+  }
+  assert.deepEqual(await held.merge("", []), []);
+});
+
+test("a skipped login isn't held while a key reset has the held store suspended", async () => {
+  const origin = "https://bank.example";
+  const held = createHeldLogins(heldIo());
+  let reads = 0;
+  const host = fakeHost((method) => {
+    if (method === "ArdiaSync.readPasswords") return reads++, [];
+    return method === "ArdiaSync.savePassword" ? (held.suspend(), "skipped") : null;
+  });
+  configureHeldLogins(held);
+  try {
+    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", origin, "alice", "LONG", ""), false);
+    held.resume();
+  } finally {
+    configureHeldLogins(null);
+  }
+  assert.equal(reads, 0, "nothing is read from the engine for a hold that can't happen");
+  assert.deepEqual(await held.merge("", []), []);
+});
+
 test("a held login is sealed at rest and hides the local value it replaced across restarts until that value really changes", async () => {
   const io = heldIo();
   const v1 = { origin: "https://bank.example", username: "alice", sealed: "V1", created: 5 };

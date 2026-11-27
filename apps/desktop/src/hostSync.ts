@@ -264,8 +264,15 @@ export function createHeldLogins(io: HeldLoginsIo, limits: { maxLogins?: number;
         ];
       }),
     hold: (profile: string, login: HeldLogin): Promise<boolean> => inTurn(() => put(profile, login)),
-    holdIf: (profile: string, login: HeldLogin, stillCurrent: () => Promise<boolean>): Promise<boolean> =>
-      inTurn(async () => (await stillCurrent()) && put(profile, login)),
+    holdIf: (profile: string, login: HeldLogin, before: HeldLogin | null, stillCurrent: () => Promise<boolean>): Promise<boolean> =>
+      inTurn(async () => {
+        if (suspended) return false;
+        const current = await load();
+        if (!current) return false;
+        const now = current[profile]?.[loginKey(login.origin, login.username)] ?? null;
+        if (now?.sealed !== before?.sealed || now?.replaced !== before?.replaced) return false;
+        return (await stillCurrent()) && put(profile, login);
+      }),
     release: (profile: string, origin: string, username: string): Promise<boolean> =>
       inTurn(async () => {
         refused.delete(refusal(profile, origin, username));
@@ -475,7 +482,7 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
     return async (profile: string, origin: string, username: string, sealed: string, replaced: string) => {
       const store = heldLogins;
       const owner = hostProfile(profile, host);
-      const heldNow = replaced && store ? await store.heldFor(profile, origin, username) : null;
+      const heldNow = store ? await store.heldFor(profile, origin, username) : null;
       const engineHad = heldNow?.sealed === replaced ? heldNow.replaced : replaced || null;
       const saved = await invoke(host, method)(owner, origin, username, sealed, engineHad ?? "");
       if (saved !== "skipped") {
@@ -483,7 +490,7 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
         return saved === true;
       }
       if (!store) return false;
-      return store.holdIf(profile, { origin, username, sealed, replaced: engineHad }, async () => {
+      return store.holdIf(profile, { origin, username, sealed, replaced: engineHad }, heldNow, async () => {
         const local = (await invoke(host, "readPasswords")(owner)) as SealedLogin[] | null;
         return !!local && (local.find((login) => login.origin === origin && login.username === username)?.sealed ?? null) === engineHad;
       });

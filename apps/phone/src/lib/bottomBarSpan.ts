@@ -65,7 +65,8 @@ export function deckHeaderSides(insets: { left: number; right: number }, side: n
     const safe = Math.max(insets.left, insets.right) + side;
     return { left: safe, right: safe };
   }
-  return { left: (strip.side === "left" ? 0 : insets.left) + side, right: (strip.side === "right" ? 0 : insets.right) + side };
+  const beside = strip.inset + DUO_BAR.stripGap;
+  return strip.side === "left" ? { left: beside, right: insets.right + side } : { left: insets.left + side, right: beside };
 }
 
 export const deckStripSlots = (strip: DuoStrip) => (strip.ends ? { plus: strip.plus, incognito: strip.tabs } : { plus: strip.tabs, incognito: strip.plus });

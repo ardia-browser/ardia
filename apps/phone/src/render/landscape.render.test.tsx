@@ -176,7 +176,7 @@ for (const pose of DUO_POSES) {
 }
 
 for (const pose of DUO_POSES) {
-  test(`on the ${pose.name} Duo the deck's cards, header and grid keep clear of the strip, which starts ${pose.width - pose.insets.right} across`, () => {
+  test(`on the ${pose.name} Duo the deck's cards, header and grid keep clear of the strip and its camera, which starts ${pose.width - pose.insets.right} across`, () => {
     onDuo(pose);
     const strip = pose.width - pose.insets.right;
     act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
@@ -189,7 +189,7 @@ for (const pose of DUO_POSES) {
     expect(flat(clip)).toMatchObject({ left: 0, width: pose.width, overflow: "hidden" });
     expect(getAnimatedStyle(clip).transform).toEqual([{ translateX: strip - pose.width }]);
     const header = hosts(root, "deckHeader")[0]!;
-    expect(flat(header).paddingHorizontal).toBe(24);
+    expect(flat(header)).toMatchObject({ paddingLeft: 24, paddingRight: pose.insets.right + 12 });
     expect(flat(header).top).toBe(4);
     expect(holds(hosts(root, "deckHeaderTrail")[0]!, "deckHeaderMore")).toBe(true);
     expect(holds(hosts(root, "deckHeaderLead")[0]!, "deckHeaderMore")).toBe(false);
@@ -203,12 +203,12 @@ for (const pose of DUO_POSES) {
   });
 }
 
-test("with the strip on the leading side the deck mirrors: the header's ··· leads in the strip, and Incognito and + stack in the strip 48 from the left edge", () => {
+test("with the strip on the leading side the deck mirrors: the header's ··· leads beside the strip, and Incognito and + stack in the strip 48 from the left edge", () => {
   const [closed] = DUO_POSES;
   onDuo({ ...closed, insets: { top: 0, bottom: 34, left: 84, right: 0 } } as unknown as (typeof DUO_POSES)[number]);
   act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
   const root = redesigned(<TabDeck />);
-  expect(flat(hosts(root, "deckHeader")[0]!).paddingHorizontal).toBe(24);
+  expect(flat(hosts(root, "deckHeader")[0]!)).toMatchObject({ paddingLeft: 96, paddingRight: 24 });
   expect(holds(hosts(root, "deckHeaderLead")[0]!, "deckHeaderMore")).toBe(true);
   expect(holds(hosts(root, "deckHeaderTrail")[0]!, "deckHeaderMore")).toBe(false);
   expect(flat(hosts(root, "deckBottomBar")[0]!)).toMatchObject({ paddingLeft: 96, paddingRight: 24 });

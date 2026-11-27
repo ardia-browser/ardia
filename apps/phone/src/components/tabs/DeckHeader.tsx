@@ -89,7 +89,7 @@ export function DeckHeader({ safeTop, sides, stripSide = null, width, menusShown
   const padding = sides.left === sides.right ? { paddingHorizontal: sides.left } : { paddingLeft: sides.left, paddingRight: sides.right };
   const centred = stripSide !== null;
   const moreLeads = stripSide === "left";
-  const spacesLeft = centred ? Math.max((width - tabsLayout.menuWidth) / 2, sides.left) : sides.left;
+  const spacesLeft = centred ? Math.max((sides.left + width - sides.right - tabsLayout.menuWidth) / 2, sides.left) : sides.left;
   const more = (
     <DeckHitTarget control="more" live={hits} originY={rowTop}>
       <MenuTrigger opener={moreOpener} items={moreItems} {...menu} previewRadius={deckChromeLayout.headerCircle / 2} place={moreLeads ? { top: below, left: sides.left, width: tabsLayout.menuWidth } : { top: below, right: sides.right, width: tabsLayout.menuWidth }}>

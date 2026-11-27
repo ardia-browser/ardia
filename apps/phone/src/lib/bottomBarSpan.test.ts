@@ -138,10 +138,10 @@ test("the deck's cards keep clear of the Duo's strip on whichever side it is, an
 
 test("on a Duo the deck header takes the whole top bar, the strip's inset ignored there, and a plain iPhone keeps the wider inset plus 24 on both sides", () => {
   const strip = (width: number, insets: { left: number; right: number }, hinge: "none" | "closed" | "fullyOpen") => deckStripOf(bottomBarLayout(width, insets, hinge, 24), insets);
-  assert.deepEqual(deckHeaderSides({ left: 0, right: 84 }, 24, strip(466, { left: 0, right: 84 }, "closed")), { left: 24, right: 24 });
-  assert.deepEqual(deckHeaderSides({ left: 0, right: 84 }, 24, strip(951, { left: 0, right: 84 }, "fullyOpen")), { left: 24, right: 24 });
-  assert.deepEqual(deckHeaderSides({ left: 84, right: 0 }, 24, strip(466, { left: 84, right: 0 }, "closed")), { left: 24, right: 24 });
-  assert.deepEqual(deckHeaderSides({ left: 10, right: 84 }, 24, strip(466, { left: 10, right: 84 }, "closed")), { left: 34, right: 24 }, "only the strip's side drops its inset");
+  assert.deepEqual(deckHeaderSides({ left: 0, right: 84 }, 24, strip(466, { left: 0, right: 84 }, "closed")), { left: 24, right: 96 });
+  assert.deepEqual(deckHeaderSides({ left: 0, right: 84 }, 24, strip(951, { left: 0, right: 84 }, "fullyOpen")), { left: 24, right: 96 });
+  assert.deepEqual(deckHeaderSides({ left: 84, right: 0 }, 24, strip(466, { left: 84, right: 0 }, "closed")), { left: 96, right: 24 });
+  assert.deepEqual(deckHeaderSides({ left: 10, right: 84 }, 24, strip(466, { left: 10, right: 84 }, "closed")), { left: 34, right: 96 }, "the strip side stops 12 short of the strip, as the bar does");
   assert.deepEqual(deckHeaderSides({ left: 0, right: 0 }, 24, strip(402, { left: 0, right: 0 }, "none")), { left: 24, right: 24 });
   assert.deepEqual(deckHeaderSides({ left: 59, right: 59 }, 24, strip(852, { left: 59, right: 59 }, "none")), { left: 83, right: 83 });
   assert.deepEqual(deckHeaderSides({ left: 0, right: 20 }, 24, strip(466, { left: 0, right: 20 }, "closed")), { left: 44, right: 44 }, "a pose with no usable strip keeps the plain header");

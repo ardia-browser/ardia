@@ -294,7 +294,7 @@ function SidebarDock({
     () => peek.slide.interpolate({ inputRange: [0, 1], outputRange: [-12 * outward, width * outward] }),
     [peek.slide, width, outward],
   );
-  const stacked = useStackedLights(windowId, right, fullscreen, lights, peekAt.top);
+  const stacked = useStackedLights(windowId, right, fullscreen, lights, frame.inset);
   useSidebarLights(windowId, dock, peek.slide, { width, moving, peeking, fullscreen, lights, right, peekAt, stacked }, peek.sampleSlide);
   const edgeSide = right ? "right" : "left";
   const sidebar = useMemo(

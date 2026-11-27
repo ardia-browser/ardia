@@ -4,6 +4,7 @@ import { setTrafficLightsCenter, setTrafficLightsStack } from "../../state/windo
 import { dockMoving, lightsCenter, sidebarLightsCenter, stackedLightsCenter, stillOffWindow, TOP_STRIP_LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { useWindowSettings } from "../../state/browser/keyedWatch";
 import { collapsesToIconsIn } from "../../state/browser/model";
+import { cardTopInset } from "../../state/windows/layout";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { currentValue } from "../ui/motion";
 import { noteSidebarLightsLeftBehind } from "../../state/telemetry/dockCounts";
@@ -33,10 +34,11 @@ type SidebarLights = {
   stacked: readonly [number, number] | null;
 };
 
-export function useStackedLights(windowId: string, right: boolean, fullscreen: boolean, lights: readonly [number, number], peekTop: number): readonly [number, number] | null {
+export function useStackedLights(windowId: string, right: boolean, fullscreen: boolean, lights: readonly [number, number], frameInset: number): readonly [number, number] | null {
   const icons = useWindowSettings(windowId, (s) => collapsesToIconsIn(s, windowId));
+  const shift = useWindowSettings(windowId, (s) => cardTopInset(s, windowId, frameInset) - frameInset);
   const on = icons && !right && !fullscreen && PLATFORM_FEATURES.stacksTrafficLights;
-  return useMemo(() => (on ? stackedLightsCenter(lights, peekTop) : null), [on, lights, peekTop]);
+  return useMemo(() => (on ? stackedLightsCenter(lights, shift) : null), [on, lights, shift]);
 }
 
 export function useSidebarLights(windowId: string, dock: Animated.Value, slide: Animated.Value, o: SidebarLights, onSlide: (value: number) => void = () => {}) {

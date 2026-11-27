@@ -4,7 +4,7 @@ import { switchOn } from "../../platform/killSwitches";
 import { ARC_LIGHTS_CENTER, lightsCenter, sidebarLightsCenter, stackedLightsCenter, toolbarLightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
 import { frameCornerRadius, windowFrame, type LightsPlace } from "../../platform/windows";
 import { rootSizeOfFrame } from "../settings/interfaceScale";
-import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf, pageFrameOf } from "../../lib/windowLayout";
+import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { useSettings, useWindowId } from "../browser/hooks";
@@ -69,7 +69,7 @@ export function openingLightsCenter(s: BrowserState, windowId: string): LightsPl
     tabsHidden: autoHidesTabsIn(s, windowId),
   });
   const base = sidebarAddressChosen(s.settings) ? ARC_LIGHTS_CENTER : toolbarLightsCenter(s.settings.compactToolbar, frame);
-  if (openingLightsStack(s, windowId)) return stackedLightsCenter(base, pageFrameOf(frame, 0, 0).peek.top);
+  if (openingLightsStack(s, windowId)) return stackedLightsCenter(base, cardTopInset(s, windowId, frame) - frame);
   return sidebarLightsCenter(sidebarSideOf(s, w.id) === "right", width, open ? 0 : width, 0, base);
 }
 

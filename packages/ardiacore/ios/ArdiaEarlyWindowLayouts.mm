@@ -20,7 +20,7 @@ using namespace ardia_early_window;
 
 namespace {
 
-constexpr int kLayoutVersion = 7;
+constexpr int kLayoutVersion = 8;
 
 constexpr CGFloat kMinPage = 100;
 

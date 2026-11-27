@@ -526,8 +526,9 @@ test("a peek's light moves that stay wholly off the window at one height aren't 
 test("in Icons the window buttons stack in the strip's column: red stays put as the peek opens while the others slide into the row, and Full lays them out as before", async () => {
   const { slidingCenter, slidingStack } = await import("./useDockLights.ts");
   const { ICON_STRIP } = await import("../../lib/windowLayout.ts");
-  const stacked = dm.stackedLightsCenter(dm.LIGHTS_CENTER, DEFAULT_PEEK.top);
-  assert.deepEqual(stacked, [ICON_STRIP.width / 2, dm.LIGHTS_CENTER[1] + DEFAULT_PEEK.top], "centred in the 46 pt column");
+  const stacked = dm.stackedLightsCenter(dm.LIGHTS_CENTER);
+  assert.deepEqual(stacked, [ICON_STRIP.width / 2, dm.LIGHTS_CENTER[1]], "centred in the 46 pt column, red level with the toolbar's buttons");
+  assert.deepEqual(dm.stackedLightsCenter(dm.LIGHTS_CENTER, 6), [ICON_STRIP.width / 2, dm.LIGHTS_CENTER[1] + 6], "and with the card when its top moves");
   const o = (peeking, extra = {}) => ({ width: 227.5, moving: false, peeking, fullscreen: false, lights: dm.LIGHTS_CENTER, right: false, peekAt: DEFAULT_PEEK, stacked, ...extra });
   assert.deepEqual([slidingCenter(o(false), 0, 0), slidingStack(o(false), 0, 0)], [stacked, 1], "at rest: stacked in the strip");
   for (const slide of [0, 0.25, 0.5, 0.75, 1]) {
@@ -544,7 +545,7 @@ test("in Icons the window buttons stack in the strip's column: red stays put as 
 });
 
 test("the strip's icons start below the stacked green button, and nothing moves where the lights don't stack", () => {
-  const red = dm.stackedLightsCenter(dm.LIGHTS_CENTER, 0);
+  const red = dm.stackedLightsCenter(dm.LIGHTS_CENTER);
   const greenBottom = red[1] + 2 * dm.LIGHTS_PITCH + 7;
   assert.equal(dm.stackedLightsBottom(red), greenBottom);
   assert.equal(dm.belowStackedLights(20, dm.stackedLightsBottom(red)), Math.ceil(greenBottom) + dm.STACKED_LIGHTS_GAP);
@@ -577,14 +578,14 @@ test("the lights stack only where the platform has native window buttons to move
 
 test("an Icons window opens with its buttons already stacked where the strip puts them, so a launch never shows them off the window and back", async () => {
   const { openingLightsCenter, openingLightsStack } = await import("../../state/windows/layout.ts");
-  const { pageFrameOf, pageFrameInsetOf } = await import("../../lib/windowLayout.ts");
+  const { pageFrameInsetOf } = await import("../../lib/windowLayout.ts");
   S().hydrate({});
   const w = S().createWindow({ url: "https://example.com", frame: [0, 0, 1200, 800] });
   S().updateSettings({ autoHideTabs: true, collapsedSidebar: "icons" });
   const s = S();
   const frame = pageFrameInsetOf(s.settings.pageFrame, { borderlessMode: s.settings.borderlessMode, zeroInFullScreen: s.settings.pageFrameZeroInFullScreen, fullScreen: false, zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden, tabsHidden: true });
   assert.equal(openingLightsStack(s, w), 1);
-  assert.deepEqual(openingLightsCenter(s, w), dm.stackedLightsCenter(dm.toolbarLightsCenter(s.settings.compactToolbar, frame), pageFrameOf(frame, 0, 0).peek.top));
+  assert.deepEqual(openingLightsCenter(s, w), dm.stackedLightsCenter(dm.toolbarLightsCenter(s.settings.compactToolbar, frame)), "on the toolbar row from the first frame");
   S().updateSettings({ collapsedSidebar: "hidden" });
   assert.equal(openingLightsStack(S(), w), 0, "Hidden keeps them off the window");
   S().updateSettings({ collapsedSidebar: "icons", sidebarSide: "right" });

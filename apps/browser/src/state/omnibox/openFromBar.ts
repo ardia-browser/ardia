@@ -10,7 +10,7 @@ import { noteSplit } from "../telemetry/usage";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { originalProfile } from "../windows/small";
 import { navigateTyped, noteTypedOpen } from "../plugins/typedAddresses";
-import { pluginPageOf } from "../plugins/pageNames";
+import { pluginPageOf, pluginPagePath, showsPluginPage } from "../plugins/pageNames";
 import { notePlugin } from "../telemetry/pluginCounts";
 
 export type Disposition = "current" | "newTab" | "newWindow" | "split";
@@ -58,8 +58,10 @@ function openBesideOrBehind(tabId: string, url: string) {
 export function pluginRowTab(providerId: string, url: string, windowId: string, disposition: Disposition): string | null {
   if (providerId.startsWith("plugin:")) notePlugin("plugin_omnibox_picks");
   const s = useBrowser.getState();
-  if (disposition === "newTab" || !s.windows[windowId] || pluginPageOf(url) === null) return null;
-  return viewTabIds(s, windowId).find((id) => s.tabs[id]?.url === url) ?? null;
+  const name = pluginPageOf(url);
+  if (disposition === "newTab" || !s.windows[windowId] || name === null) return null;
+  const path = pluginPagePath(url);
+  return viewTabIds(s, windowId).find((id) => showsPluginPage(s.tabs[id]?.url, name, path)) ?? null;
 }
 
 export function shownTabOf(s: Suggestion, windowId: string, disposition: Disposition, opensTab: boolean): string | null {

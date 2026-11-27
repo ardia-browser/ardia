@@ -6,7 +6,7 @@ import { activeTabId, viewTabIds } from "../browser/model";
 import { openSplitPane } from "../splits/actions";
 import { notePlugin } from "../telemetry/pluginCounts";
 import type { ConsentToken } from "../telemetry/choice";
-import { isPagePath, pluginPageOf, pluginPagePath, pluginPageUrl } from "./pageNames";
+import { isPagePath, pluginPageOf, pluginPagePath, pluginPageUrl, showsPluginPage } from "./pageNames";
 import { activeManifest, currentPlugins, usePlugins, type PluginsStore } from "./store";
 import { eligibleKind, isEligibleTab } from "../automation/automationWindows";
 import { ensurePluginActivated, pluginReadyRun } from "./activation";
@@ -169,10 +169,7 @@ export function openPluginPage(windowId: string, name: string, how: { split?: bo
   if (!eligibleKind(s, windowId)) return null;
   const url = pluginPageUrl(name, path);
   const anchor = activeTabId(s, windowId);
-  const existing = viewTabIds(s, windowId).find((id) => {
-    const at = s.tabs[id]?.url ?? "";
-    return pluginPageOf(at) === name && pluginPagePath(at) === path;
-  }) ?? null;
+  const existing = viewTabIds(s, windowId).find((id) => showsPluginPage(s.tabs[id]?.url, name, path)) ?? null;
   const context = how.context ? contextOf(name, anchor ?? null) : null;
   let tabId: string | null;
   if (how.split && anchor && anchor !== existing) {

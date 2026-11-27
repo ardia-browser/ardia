@@ -14,6 +14,10 @@ export function pluginPagePath(url: string): string {
   return isPagePath(path) ? path : "";
 }
 
+export function showsPluginPage(at: string | null | undefined, name: string, path: string): boolean {
+  return !!at && pluginPageOf(at) === name && pluginPagePath(at) === path;
+}
+
 export function pluginPageOf(url: string | null | undefined): string | null {
   if (!url || !PLATFORM_FEATURES.plugins) return null;
   const name = PAGE_URL.exec(url)?.[1]?.toLowerCase();

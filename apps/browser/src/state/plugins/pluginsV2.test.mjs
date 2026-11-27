@@ -384,6 +384,9 @@ test("an omnibox provider may answer with its own ardia:// page addresses, never
   assert.equal(pluginRowTab("plugin:reader:notes", "ardia://reader/Page-0123456789ab", w, "newTab"), null, "⌘Return still opens a new tab");
   assert.equal(pluginRowTab("plugin:reader:notes", "ardia://reader/Other-0123456789ab", w, "current"), null);
   assert.equal(pluginRowTab("plugin:reader:notes", "https://a.example/", w, "current"), null, "a web row opens like any address");
+  const home = S().newTab(w, { url: "ardia://reader" });
+  assert.equal(pluginRowTab("plugin:reader:notes", "ardia://reader/", w, "current"), home, "codex S9: ardia://reader/ is the page ardia://reader shows");
+  assert.equal(pluginRowTab("plugin:reader:notes", "ARDIA://Reader", w, "current"), home, "codex S9: the scheme and name match without case");
   lifecycle.disablePlugin("reader", consentToken());
   await settle();
   assert.equal(ownPageUrl("reader", "ardia://reader/a"), null, "a plugin that's off has no page addresses");

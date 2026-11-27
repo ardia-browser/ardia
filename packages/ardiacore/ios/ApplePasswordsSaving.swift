@@ -32,7 +32,7 @@ final class ApplePasswordsSaving: NSObject {
       guard case .success(let entries) = result else { return DispatchQueue.main.async { done(nil) } }
       LoginList.domains(ApplePasswordsMatch.probes([host] + ApplePasswordsMatch.siteHosts(entries)), profile: profile) { domains in
         let kept = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains).contains { $0.user == username }
-        done(kept || remembered != nil ? nil : "save")
+        done(kept || remembered != nil ? "update" : "save")
       }
     }
   }

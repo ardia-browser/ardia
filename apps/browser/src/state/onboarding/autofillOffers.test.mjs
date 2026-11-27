@@ -13,6 +13,7 @@ const { activeSteps, questionsFor, startOnboarding, STEPS, useOnboarding } = awa
 const offers = await import("./autofillOffers.ts");
 const step = await import("./autofillStep.ts");
 const { forgetOnboardingProgress } = await import("./onboardingDocument.ts");
+const { currentEngineProfile: engine } = await import("../browser/current.ts");
 
 usePlugins.setState({ scanned: true });
 const S = () => useBrowser.getState();
@@ -89,10 +90,10 @@ test("S11: accepting the Me card asks for Contacts once, turns it on and moves o
   await step.continueAutofillStep();
   await flush();
   assert.equal(native.contacts.requests, 1);
-  assert.equal(useMeCard.getState().entries[profile]?.length, 1);
+  assert.equal(useMeCard.getState().entries[engine(profile)]?.length, 1);
   assert.equal(useOnboarding.getState().step, "home");
   assert.deepEqual(useOnboarding.getState().picked.autofill, ["Fills forms from your Me card"]);
-  await setMeCardFor(profile, false);
+  await setMeCardFor(engine(profile), false);
   const again = await onboardingOn({ fresh: false, apple: "notEntitled" });
   assert.deepEqual(offers.openAutofillOffers(again), [], "turning it off later doesn't bring the offer back");
   native.contacts.card = null;
@@ -129,5 +130,30 @@ test("S11: skipping while Pairing cancels it, leaves the Password manager as it 
   assert.equal(useOnboarding.getState().step, "home");
   const again = await onboardingOn({ fresh: false });
   assert.deepEqual(offers.openAutofillOffers(again), [], "the Me card offered beside it is declined too");
+  useOnboarding.setState({ windowId: null });
+});
+
+test("S11: the Me card accepted in onboarding on the default profile is the one Settings shows, and Settings turns it off", async () => {
+  const { useMeCardFor } = await import("../site/meCard.ts");
+  const { mount } = await import("../../test-hooks.mjs");
+  const browserProfile = await onboardingOn({ apple: "notEntitled" });
+  const profile = engine(browserProfile);
+  assert.equal(profile, "", "the default profile's engine profile");
+  native.addressStores.delete(profile);
+  native.contacts.card = { name: "Ada Lovelace", organization: "", emails: ["ada@example.test"], phones: [], addresses: [] };
+  step.toggleAutofillOffer("meCard");
+  await step.continueAutofillStep();
+  for (let i = 0; i < 5; i++) await flush();
+  const settingsSwitch = () => mount(() => useMeCardFor(profile)).value.on;
+  assert.equal(settingsSwitch(), true, "Settings' switch is on");
+  const saved = [...(native.addressStores.get(profile)?.keys() ?? [])];
+  assert.equal(saved.length, 1, "the Me card's entry is in the profile's address store");
+  assert.deepEqual(useMeCard.getState().entries[profile], saved, "and recorded as from Contacts under that profile");
+  assert.equal(useMeCard.getState().entries[browserProfile], undefined, "nothing recorded under the browser profile's id");
+  assert.deepEqual(offers.openAutofillOffers(browserProfile), [], "the offer is gone once it is on");
+  await setMeCardFor(profile, false);
+  assert.equal(settingsSwitch(), false);
+  assert.equal(native.addressStores.get(profile)?.size ?? 0, 0, "turning it off in Settings removes the entry");
+  native.contacts.card = null;
   useOnboarding.setState({ windowId: null });
 });

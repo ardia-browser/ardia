@@ -3,6 +3,7 @@ import { cancelPairing, startApplePasswordsPairing, submitApplePasswordsCode, us
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { noteOnboardingOffer } from "../telemetry/passwordManagerCounts";
 import { useBrowser } from "../browser/store";
+import { currentEngineProfile } from "../browser/current";
 import { setMeCardFor, useMeCard } from "../site/meCard";
 import { autofillStepOffers, holdAutofillOffers, offerPicks, recordAutofillAnswers, useHeldOffers, type AutofillOffer } from "./autofillOffers";
 import { confirmAnswer, onboardingProfile, skipStep, useOnboarding } from "./onboarding";
@@ -57,7 +58,7 @@ export async function continueAutofillStep() {
   const picked = offerPicks(now().picks, offered);
   holdAutofillOffers(offered);
   useAutofillStep.setState({ phase: "working", consent: consentToken() });
-  if (picked.includes("meCard")) await setMeCardFor(id, true);
+  if (picked.includes("meCard")) await setMeCardFor(currentEngineProfile(id), true);
   if (!inStep()) return;
   if (!picked.includes("applePasswords")) return finish(offered, picked);
   useAutofillStep.setState({ phase: "pairing" });

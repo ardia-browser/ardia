@@ -1,4 +1,5 @@
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { currentEngineProfile } from "../browser/current";
 import { applePasswordsOffered, useApplePasswords } from "../site/applePasswords";
 import { useMeCard } from "../site/meCard";
 import { currentPasswordManager } from "../site/passwordManager";
@@ -12,7 +13,7 @@ const ORDER: readonly AutofillOffer[] = ["applePasswords", "meCard"];
 
 const available: Record<AutofillOffer, (profileId: string) => boolean> = {
   applePasswords: (profileId) => applePasswordsOffered(useApplePasswords.getState().state) && currentPasswordManager(profileId) !== "apple",
-  meCard: (profileId) => PLATFORM_FEATURES.meCard && !useMeCard.getState().entries[profileId],
+  meCard: (profileId) => PLATFORM_FEATURES.meCard && !useMeCard.getState().entries[currentEngineProfile(profileId)],
 };
 
 export const answeredAutofillOffers = (): Partial<Record<AutofillOffer, AutofillOfferAnswer>> => readSaved()?.offers ?? {};

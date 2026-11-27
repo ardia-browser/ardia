@@ -9,6 +9,7 @@ import { webviewMount } from "../../platform/webviews";
 import type { TabPage } from "../browser/types";
 import { focusedWindowOf } from "../windows/ui";
 import { clickTab } from "./actions";
+import { notePressSwitchesShownPage } from "../peek/pressSwitches";
 import { dismissHover } from "./hover";
 import {
   notePressAnswered,
@@ -188,6 +189,7 @@ export function holdTabPress(windowId: string, tabId: string, press: GestureResp
     return previous;
   }
   settleUnansweredPressOut();
+  if (activeTabId(useBrowser.getState(), windowId) !== tabId) notePressSwitchesShownPage(windowId);
   noteRowPressIn(windowId);
   const nativePress = claimPress(tabId, startedAt);
   const wasShown = shownAndAwake(windowId, tabId);

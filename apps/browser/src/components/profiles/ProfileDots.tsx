@@ -20,6 +20,7 @@ import { useProfileHold, useProfileTarget } from "../sidebar/DragProvider";
 import { useSidebarTokens } from "../sidebar/tokens";
 import { useDotReorder } from "./useDotReorder";
 import { dotsRowLeftInset } from "./dotsRow";
+import { notePressSwitchesShownPage } from "../../state/peek/pressSwitches";
 
 export const PROFILE_DOTS_HEIGHT = profileSwitcher.height;
 const { band: BAND, dotTooltipLift, holdPlate } = profileSwitcher;
@@ -104,6 +105,7 @@ function Dot({ id, windowId, icon, page, pos, offset, pan, lifted, reordering }:
           onPressOut={pressMotion.onPressOut}
           onPress={() => {
             setPressed(true);
+            notePressSwitchesShownPage(windowId);
             noteSwitcherPress(windowId, id, !!icon);
             switchProfile(windowId, id, true);
           }}

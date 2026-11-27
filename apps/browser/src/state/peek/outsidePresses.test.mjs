@@ -11,7 +11,8 @@ const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
 const { forgetPeekStage, notePeekStageState } = await import("./gesturePresses.ts");
 const { shownPeek } = await import("./peek.ts");
-const { cancelPeekOutsidePress, endPeekOutsidePress, OUTSIDE_CLICK_SLOP, pressPeekOutsideOnDragRegion, startPeekOutsidePress } = await import("./outsidePresses.ts");
+const { cancelPeekOutsidePress, endPeekOutsidePress, movePeekOutsidePress, OUTSIDE_CLICK_SLOP, pressPeekOutsideOnDragRegion, startPeekOutsidePress } = await import("./outsidePresses.ts");
+const { notePressSwitchesShownPage } = await import("./pressSwitches.ts");
 after(() => client.setSharing(false, "settings"));
 const S = () => useBrowser.getState();
 const AT = { x: 40, y: 300 };
@@ -21,7 +22,7 @@ async function sentCloses() {
   await client.saveQueueNow();
   const queue = stub.docs.get("telemetry-queue.json");
   const events = queue ? JSON.parse(queue).events.filter((e) => e.event === "usage_counts").map((e) => e.properties) : [];
-  return events.reduce((sum, e) => sum + (e.peek_outside_press_closes ?? 0), 0);
+  return events.reduce((sum, e) => sum + (e.peek_outside_close_presses ?? 0), 0);
 }
 
 function windowWithTwoPeeks() {
@@ -63,16 +64,35 @@ test("a click that switches to another tab keeps the Peek with its tab and shows
   assert.equal((await sentCloses()) - before, 0);
 });
 
-test("a right-click, a drag past the click slop, or a cancelled press leaves the Peek open", () => {
+test("a right-click, a drag past the click slop, a drag that strays and comes back, or a cancelled press leaves the Peek open", () => {
   const { w, a, shown } = windowWithTwoPeeks();
   click(w, AT, 2);
   click(w, { x: AT.x, y: AT.y + OUTSIDE_CLICK_SLOP + 1 });
+  click(w, AT, 0, () => movePeekOutsidePress(w, { x: AT.x, y: AT.y + 60 }));
   startPeekOutsidePress(w, AT, 0);
   cancelPeekOutsidePress(w);
   endPeekOutsidePress(w, AT);
   assert.equal(S().peeks[a]?.tabId, shown);
   click(w, { x: AT.x + OUTSIDE_CLICK_SLOP, y: AT.y });
   assert.equal(S().peeks[a], undefined, "a click that moved within the slop still closes it");
+});
+
+test("a click on another tab whose switch lands later (a pinned page handed over from another window, a profile dot) keeps the Peek", async () => {
+  client.setSharing(true, "onboarding");
+  const before = await sentCloses();
+  const { w, a, shown } = windowWithTwoPeeks();
+  click(w, AT, 0, () => notePressSwitchesShownPage(w));
+  assert.equal(S().peeks[a]?.tabId, shown, "the store still shows the same Peek, but the press asked for another page");
+  assert.equal((await sentCloses()) - before, 0);
+  click(w);
+  assert.equal(S().peeks[a], undefined, "the switch mark lasts one press");
+});
+
+test("a switch mark left by a press outside the sidebar never blocks the next outside click", () => {
+  const { w, a } = windowWithTwoPeeks();
+  notePressSwitchesShownPage(w);
+  click(w);
+  assert.equal(S().peeks[a], undefined);
 });
 
 test("a press that started with no Peek shown doesn't close one that opened during it", () => {

@@ -63,8 +63,6 @@ import { useEmptyWindowPeek } from "./useEmptyWindowPeek";
 import { useSidebarLights, useTopStripLights } from "./useDockLights";
 import { useCardFrame } from "./cardFrame";
 import { forgetSidebarDock, noteSidebarDock } from "./sidebarDockCheck";
-import { PeekOutsidePresses } from "../peek/PeekOutsidePresses";
-import { pressPeekOutsideOnDragRegion } from "../../state/peek/outsidePresses";
 
 function useSidebarDock(open: boolean, animate: boolean, arc: boolean): { dock: Animated.Value; away: boolean } {
   const windowId = useWindowId();
@@ -163,7 +161,7 @@ export function DockedLayout({
               }
         }
       >
-        {!fullscreen && <WindowDragRegion style={StyleSheet.absoluteFill} onRegionPress={() => pressPeekOutsideOnDragRegion(windowId)} />}
+        {!fullscreen && <WindowDragRegion style={StyleSheet.absoluteFill} />}
         {children}
       </Animated.View>
       {topStrip &&
@@ -305,9 +303,7 @@ function SidebarDock({
   const sidebar = useMemo(
     () => (
       <ProfileSwipe>
-        <PeekOutsidePresses style={{ height: "100%" }}>
-          <Sidebar width={width} />
-        </PeekOutsidePresses>
+        <Sidebar width={width} />
       </ProfileSwipe>
     ),
     [width],

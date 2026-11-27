@@ -12,7 +12,7 @@ import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addSyncedProfile, appScopeOf, linkProfiles, readyToPair, retireDeletedProfile } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { markNewSync, settledAfterMark, settleLaunchMark } from "./sessionMarks";
+import { markNewSync, sessionMovedBeforeDurable, settleLaunchMark } from "./sessionMarks";
 import { noteChainStatus, noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
@@ -47,7 +47,7 @@ let again = false;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let stateLoading: Promise<unknown> = Promise.resolve();
-const { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
+const { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint } = syncFiles(() => doc, (scopes) => sessionMovedBeforeDurable(doc, scopes));
 
 function load() {
   const loaded = read();
@@ -141,7 +141,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
         options: { persist: persistJournal(APP_SCOPE), persistApplying: persistApplying(APP_SCOPE), holdApply: isQuitting },
       }));
     } finally {
-      await settledAfterMark(doc, { checkpoint, save }, app, appSettled);
+      await appSettled();
     }
     settleRemovals(doc, app);
     if (app.joined && readyToPair(doc, app) && !isQuitting()) linkProfiles(doc, app);
@@ -166,7 +166,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
           options: { expired: historyExpired, persist: persistJournal(scope), persistApplying: persistApplying(scope), holdApply: isQuitting },
         }));
       } finally {
-        await settledAfterMark(doc, { checkpoint, save }, state, settled);
+        await settled();
       }
       pending += state.pending;
       if (!retire && !isQuitting() && typeSynced(doc, "extensions", profileId) && profileOpened(engineProfile(useBrowser.getState(), profileId))) await extensionsOf(profileId).reconcile(visible(state, EXTENSION_PREFIX), Date.now(), isQuitting);
@@ -210,7 +210,7 @@ export const retireProfile = (profileId: string): void => void (doc.enabled && r
 async function loadSavedState(consent: ConsentToken | null = null) {
   const loading = doc;
   const installed = await loadState(loading);
-  if (installed && doc === loading && doc.enabled) await settleLaunchMark(doc, consent, { checkpoint, save });
+  if (installed && doc === loading && doc.enabled) (settleLaunchMark(doc, consent), save());
   startEditClock(doc.deviceId ?? "", doc.clock);
   settleSettingsFromSavedSync(doc.scopes[APP_SCOPE], installed && doc === loading && doc.enabled && !stopping && typeSyncedFor(doc.types, "settings", true));
   settleThemeAdoption(doc.profiles, doc.scopes[APP_SCOPE], false);
@@ -377,7 +377,7 @@ export function startSync() {
         publishUi({ status: "stalled", error: errorText(error) });
       });
   }
-  saveBeforeQuit(async () => void (await checkpoint()));
+  saveBeforeQuit(checkpoint);
   onProfileDeleted(retireProfile);
   watchSettingEdits(() => doc, () => void (cycle || save()));
   onProfilesOpened(() => {

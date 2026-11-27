@@ -91,7 +91,7 @@ function replayChanges(scopes: SyncDoc["scopes"], changes: Record<string, ScopeC
   }
 }
 
-export function syncFiles(current: () => SyncDoc) {
+export function syncFiles(current: () => SyncDoc, sessionMoved: (scopes: ScopeState[]) => boolean = () => false) {
   const docFile = { json: "", lasting: "", savedAt: 0 };
   const journal = { batches: {} as Journal, parts: null as number | null, bytes: 0, legacy: false, lastId: 0 };
   const state = { json: "", onDisk: false, loaded: false, savedAt: 0, wanted: false, clock: null as Clock | null, heldSince: undefined as number | undefined };
@@ -204,6 +204,7 @@ export function syncFiles(current: () => SyncDoc) {
       if (!fresh.length) return;
       for (const file of fresh) list.push(file);
       try {
+        markBeforeDurable([current().scopes[scope]]);
         await writePart({ journal: { [scope]: fresh } });
       } catch (error) {
         const failed = new Set(fresh);
@@ -228,6 +229,7 @@ export function syncFiles(current: () => SyncDoc) {
       const part = { device: current().deviceId, clock: clock.last, changes: { [scope]: change } };
       return serial(async () => {
         try {
+          markBeforeDurable([scoped]);
           await writePart(part);
           writtenRest.set(scope, rest);
         } catch (error) {
@@ -242,6 +244,7 @@ export function syncFiles(current: () => SyncDoc) {
     const device = current().deviceId;
     const parts = chunksOf(batch).map((chunk) => ({ device, applying: { [scope]: [chunk] } }));
     return serial(async () => {
+      markBeforeDurable([current().scopes[scope]]);
       for (const part of parts) await writePart(part);
     });
   };
@@ -260,6 +263,10 @@ export function syncFiles(current: () => SyncDoc) {
       else delete journal.batches[scope];
     }
     if (!Object.keys(journal.batches).length) clearJournal();
+  }
+
+  function markBeforeDurable(scopes: (ScopeState | undefined)[]) {
+    if (sessionMoved(scopes.filter((scoped): scoped is ScopeState => !!scoped))) saveDoc();
   }
 
   function saveDoc() {
@@ -282,15 +289,15 @@ export function syncFiles(current: () => SyncDoc) {
     return countedParts() >= JOURNAL_PARTS_LIMIT || journal.bytes >= JOURNAL_BYTES_LIMIT || Date.now() - state.savedAt >= STATE_EVERY_MS;
   }
 
-  async function saveState(): Promise<boolean> {
+  async function saveState() {
     const consent = consentToken();
     const doc = current();
     if (!doc.enabled) {
       if (state.onDisk || state.wanted) writeDocument(STATE, "");
       Object.assign(state, { json: "", onDisk: false, wanted: false });
-      return false;
+      return;
     }
-    if (!stateDue()) return false;
+    if (!stateDue()) return;
     state.wanted = false;
     state.loaded = true;
     const covers = journal.lastId;
@@ -300,18 +307,18 @@ export function syncFiles(current: () => SyncDoc) {
     if (state.clock) seen.observe(state.clock.last);
     if (json !== state.json) {
       try {
+        markBeforeDurable(Object.values(doc.scopes));
         const sealed = await SyncNative?.sealLocal(`{"covers":${covers},"clock":${JSON.stringify(seen.last)},"scopes":${json},"version":${CHECKPOINT_VERSION}}`);
-        if (!sealed) return false;
+        if (!sealed) return;
         await saveDocument(STATE, sealed);
       } catch (error) {
         warnFor(consent, "[sync] couldn't save the sync state", error);
-        return false;
+        return;
       }
       Object.assign(state, { json, onDisk: true });
     }
     state.savedAt = Date.now();
     dropCoveredBatches(seqs);
-    return true;
   }
 
   function save() {
@@ -328,11 +335,11 @@ export function syncFiles(current: () => SyncDoc) {
     });
   }
 
-  function checkpoint(): Promise<boolean> {
+  function checkpoint() {
     saveDoc();
     return serial(async () => {
       if (state.loaded && current().enabled) state.wanted = true;
-      return await saveState();
+      await saveState();
     });
   }
 

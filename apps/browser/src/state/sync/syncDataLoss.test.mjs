@@ -8,7 +8,7 @@ globalThis.__DEV__ = false;
 
 const folder = new Map();
 const downloading = new Set();
-const failing = { writes: 0, stateSeals: false };
+const failing = { writes: 0, stateSeals: false, onWrite: null };
 let ids = 0;
 globalThis.acTestNativeModules = {
   ArdiaSync: {
@@ -21,6 +21,7 @@ globalThis.acTestNativeModules = {
     forget: async () => {},
     chainStatus: async () => "ok",
     write: async (_folder, scope, payload) => {
+      failing.onWrite?.(payload);
       if (failing.writes > 0 && failing.writes--) throw new Error("The sync folder went away mid-write");
       const id = `f${folder.size + 1}`;
       folder.set(id, { scope, payload });
@@ -361,7 +362,7 @@ test("#1577: a backup from the same launch, older than the pins synced since, pu
   });
 });
 
-test("#1577: a rebase cut short by a quit or crash right after launch still runs on the next launch, though the marks then match", async () => {
+test("#1577: a rebase cut short by a quit or crash right after launch still runs on the next launch, as the launch leaves the marks apart", async () => {
   folder.clear();
   downloading.clear();
   const a = new Mac();
@@ -391,7 +392,7 @@ test("#1577: a rebase cut short by a quit or crash right after launch still runs
     engineA3.startSync();
     await settle();
   });
-  assert.equal(JSON.parse(a.docs.get("sync.json")).sessionMark, a.browser.syncMark, "the launch advanced both marks before any cycle ran");
+  assert.notEqual(JSON.parse(a.docs.get("sync.json")).sessionMark, a.browser.syncMark, "the launch doesn't make the marks match; only the rebase's own progress does");
 
   const engineA4 = await relaunch(a, "cutA4", a.browser);
   await a.with(async () => {
@@ -513,42 +514,96 @@ test("#1577: a cycle that fails after sending a pin still moves the mark on, so 
   });
 });
 
-test("#1577: while the rebase's checkpoint can't be saved, no cycle makes the marks match, so the next launch rebases again", async () => {
+test("#1577: a restart with the session saved before the rebase repaired it, and sync files saved after, rebases again", async () => {
   folder.clear();
   downloading.clear();
   const a = new Mac();
-  const engineA1 = await import("./engine.ts?sealA1");
+  const engineA1 = await import("./engine.ts?repairA1");
   await a.with(() => pin(["https://one.example/"]));
   await turnOn(a, engineA1);
   const older = a.browser;
-  const engineA2 = await relaunch(a, "sealA2");
+  const engineA2 = await relaunch(a, "repairA2");
   await a.with(async () => {
     pin(["https://two.example/"]);
     await engineA2.syncNow();
     await engineA2.syncNow();
   });
-  failing.stateSeals = true;
-  try {
-    const engineA3 = await relaunch(a, "sealA3", older);
-    await a.with(async () => {
-      await engineA3.syncNow();
-      pin(["https://three.example/"]);
-      await engineA3.syncNow();
-    });
-    const saved = JSON.parse(a.docs.get("sync.json"));
-    assert.equal(saved.rebaseUnsaved, true, "the rebase is still owed");
-    assert.notEqual(saved.sessionMark, a.browser.syncMark, "and the marks stay apart");
-  } finally {
-    failing.stateSeals = false;
-  }
+  a.browser = older;
+  const engineA3 = await import("./engine.ts?repairA3");
+  let unrepaired;
+  await a.with(async () => {
+    engineA3.startSync();
+    await settle();
+    unrepaired = S();
+    await engineA3.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://two.example/"], "the rebase repaired the session in memory");
+  });
+  assert.notEqual(JSON.parse(a.docs.get("sync.json")).sessionMark, unrepaired.syncMark, "the session saved before the repair can't match the sync files saved after it");
   const tombstonesBefore = published("pin:t:").filter((op) => op.v === null).length;
-  const engineA4 = await relaunch(a, "sealA4", older);
+  const engineA4 = await relaunch(a, "repairA4", unrepaired);
   await a.with(async () => {
     await engineA4.syncNow();
-    assert.ok(pinnedUrls().includes("https://two.example/"), "the next launch rebases again");
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://two.example/"]);
   });
-  assert.equal(published("pin:t:").filter((op) => op.v === null).length, tombstonesBefore, "and deletes nothing");
-  assert.equal(JSON.parse(a.docs.get("sync.json")).rebaseUnsaved, undefined, "the owed rebase clears once its checkpoint lands");
+  assert.equal(published("pin:t:").filter((op) => op.v === null).length, tombstonesBefore, "no pin is deleted");
+});
+
+test("#1577: a crash right after the outgoing batch reaches the journal still leaves the marks apart for a session without the pin", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?flushA1");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  const backup = a.browser;
+  let atCrash = null;
+  failing.onWrite = (payload) => {
+    if (!atCrash && payload.includes("https://two.example/")) atCrash = new Map(shell.docs);
+  };
+  try {
+    await a.with(async () => {
+      pin(["https://two.example/"]);
+      await engineA1.syncNow();
+    });
+  } finally {
+    failing.onWrite = null;
+  }
+  assert.ok(atCrash, "the batch with the pin was being written");
+  assert.ok([...atCrash.keys()].some((name) => /^sync-journal-\d+\.nns$/.test(name)), "its journal entry was already on disk");
+  assert.notEqual(JSON.parse(atCrash.get("sync.json")).sessionMark, backup.syncMark, "and sync.json had moved its mark on before it");
+  a.docs = atCrash;
+  const tombstonesBefore = published("pin:t:").filter((op) => op.v === null).length;
+  const engineA2 = await relaunch(a, "flushA2", backup);
+  await a.with(async () => {
+    await engineA2.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://two.example/"]);
+  });
+  assert.equal(published("pin:t:").filter((op) => op.v === null).length, tombstonesBefore, "no pin is deleted");
+});
+
+test("#1577: the first launch after upgrading, with a sync base but no mark yet, rebases a session restored without the newer pins", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?legacyA1");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  const older = { ...a.browser, syncMark: "" };
+  await a.with(async () => {
+    pin(["https://two.example/"]);
+    await engineA1.syncNow();
+    await engineA1.syncNow();
+  });
+  const legacy = JSON.parse(a.docs.get("sync.json"));
+  delete legacy.sessionMark;
+  a.docs.set("sync.json", JSON.stringify(legacy));
+  const tombstonesBefore = published("pin:t:").filter((op) => op.v === null).length;
+  const engineA2 = await relaunch(a, "legacyA2", older);
+  await a.with(async () => {
+    await engineA2.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://two.example/"], "the pin the older session lacked comes back");
+  });
+  assert.equal(published("pin:t:").filter((op) => op.v === null).length, tombstonesBefore, "no pin is deleted");
 });
 
 test("#1577: a pin still waiting to be sent when its profile went missing comes back with the profile and reaches the other Mac", async () => {

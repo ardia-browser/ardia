@@ -1,48 +1,41 @@
 import { startRebase, takeSessionBaseWrites, type ScopeState } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
 import { newId } from "../browser/model";
+import { foreignWriteHooks } from "../browser/foreignWriteHooks";
 import { isQuitting } from "../app/quit";
 import { noteMissingProfiles, noteSessionRebase } from "../telemetry/syncSafetyCounts";
 import { dormantLink } from "./profileLinks";
 import type { SyncDoc } from "./syncDoc";
 import type { ConsentToken } from "../telemetry/consentPeriod";
 
-type MarkFiles = { checkpoint: () => Promise<boolean>; save: () => void };
-
-function advanceSessionMark(doc: SyncDoc, save: () => void) {
-  const mark = newId("sm");
+function markSessionWith(doc: SyncDoc, mark: string) {
   doc.sessionMark = mark;
-  useBrowser.setState({ syncMark: mark });
-  save();
-}
-
-async function rebaseSaved(doc: SyncDoc, checkpoint: () => Promise<boolean>): Promise<boolean> {
-  if (!doc.rebaseUnsaved) return true;
-  if (!(await checkpoint())) return false;
-  delete doc.rebaseUnsaved;
-  return true;
+  foreignWriteHooks.around(() => useBrowser.setState({ syncMark: mark }));
 }
 
 export function markNewSync(doc: SyncDoc) {
-  const mark = useBrowser.getState().syncMark || newId("sm");
-  doc.sessionMark = mark;
-  useBrowser.setState({ syncMark: mark });
+  markSessionWith(doc, useBrowser.getState().syncMark || newId("sm"));
 }
 
-export async function settleLaunchMark(doc: SyncDoc, consent: ConsentToken | null, { checkpoint, save }: MarkFiles) {
+const holdsBase = (doc: SyncDoc) => Object.values(doc.scopes).some((scoped) => Object.keys(scoped.base).length > 0);
+
+export function settleLaunchMark(doc: SyncDoc, consent: ConsentToken | null) {
   noteMissingProfiles(consent, Object.keys(doc.profiles).filter((id) => dormantLink(doc, id)).length);
-  const stale = !!doc.rebaseUnsaved || (doc.sessionMark !== undefined && doc.sessionMark !== useBrowser.getState().syncMark);
-  if (!stale && doc.sessionMark !== undefined) return;
-  if (stale) {
-    for (const state of Object.values(doc.scopes)) startRebase(state);
-    noteSessionRebase(consent);
-    doc.rebaseUnsaved = true;
-    save();
+  const here = useBrowser.getState().syncMark;
+  const unmarked = doc.sessionMark === undefined;
+  if (unmarked ? !holdsBase(doc) : doc.sessionMark === here) {
+    if (unmarked) markSessionWith(doc, here || newId("sm"));
+    return;
   }
-  if (await rebaseSaved(doc, checkpoint)) advanceSessionMark(doc, save);
+  for (const state of Object.values(doc.scopes)) startRebase(state);
+  noteSessionRebase(consent);
+  if (unmarked) doc.sessionMark = newId("sm");
 }
 
-export async function settledAfterMark(doc: SyncDoc, files: MarkFiles, state: ScopeState, settle: () => Promise<void>) {
-  if (takeSessionBaseWrites(state) > 0 && !isQuitting() && (await rebaseSaved(doc, files.checkpoint))) advanceSessionMark(doc, files.save);
-  return settle();
+export function sessionMovedBeforeDurable(doc: SyncDoc, scopes: ScopeState[]): boolean {
+  let moved = 0;
+  for (const scoped of scopes) moved += takeSessionBaseWrites(scoped);
+  if (!moved || isQuitting()) return false;
+  markSessionWith(doc, newId("sm"));
+  return true;
 }

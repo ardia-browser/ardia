@@ -200,17 +200,17 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   a backup, an older build's own session file or a fresh start leaves the base ahead of the store, and the
   three-way rule would read every pin the session lacks as deleted here and delete it on every Mac. Both
   files carry a mark (`syncMark` in the session, `sessionMark` in `sync.json`). It is a revision, not a
-  launch id: a cycle that writes the base of a session-backed adapter (a pin applied or sent, a setting, a
-  profile look) moves it on, in `sync.json` before that cycle's base is journalled, and in the store, so the
-  session saved next carries it (not while quitting, so the session saved at quit still matches). It is counted
-  from the writes themselves, so a cycle that fails after changing the base (a batch whose write failed) moves it
-  on too. A backup or
-  an older build's file from earlier in the same launch therefore holds an older mark too. When the marks
-  differ at launch, every scope starts a rebase (`startRebase`), `rebaseUnsaved` is written to `sync.json`, the
-  sealed state holding the rebase flags is saved, and only once that save landed is the flag cleared and are the
-  marks made equal again; while the save keeps failing no cycle aligns them, and a launch that finds the flag
-  rebases again, and a rebase already under way when the app stops carries on from its saved flags, though
-  the marks then match. While an adapter that reads the
+  launch id. Before any write that makes sync's saved state reflect a change to a session-backed adapter (the outgoing
+  batch's journal entry, a journal part with the cycle's base, the sealed checkpoint), and before the one that records a
+  finished rebase, `sync.json` gets a new mark, written at once (`markBeforeDurable` in `syncFiles.ts`); the store takes
+  it too, so the session saved next carries it, and that save holds everything the write reflects. Equal marks
+  therefore always mean the session on disk covers the sync state on disk; a crash anywhere in between leaves them
+  apart. Not while quitting, so the session saved at quit still matches. A backup or an older build's file from
+  earlier in the same launch holds an older mark too. When the marks differ at launch, every scope starts a rebase
+  (`startRebase`), and the launch leaves the marks apart: only the rebase's own progress, journalled after its repair
+  reached the store, moves them on again, so a crash before the repaired session is saved rebases again on the next
+  launch, and a rebase already under way when the app stops carries on from its saved flags. A `sync.json` from before
+  the marks existed that already holds a base rebases once on the first launch that reads it. While an adapter that reads the
   session (`sessionBacked`: the pinned area, settings and the profile, theme, Top Apps and All Open Tabs
   records) rebases, it publishes only keys no device has a record of, and no deletions; the cycle applies
   every record it has, tombstones included, so the store takes the synced state back. The exception is a value

@@ -285,10 +285,13 @@ function sessionBaseWritesSinceStart(state            )         {
   return start ? start.prefixes.reduce((n, prefix, i) => n + baseWritesUnder(state, prefix) - start.before[i] , 0) : 0;
 }
 
+const rebasesFinished = new WeakMap                    ();
+
 function takeSessionBaseWrites(state            )         {
-  const writes = sessionBaseWritesSinceStart(state);
+  const writes = sessionBaseWritesSinceStart(state) + (rebasesFinished.get(state) ?? 0);
   const start = sessionWritesAtStart.get(state);
   if (start) start.before = start.prefixes.map((prefix) => baseWritesUnder(state, prefix));
+  rebasesFinished.delete(state);
   return writes;
 }
 
@@ -298,6 +301,7 @@ function noteRebased(state            , adapter         ) {
   if (!rebasing(state, adapter)) return;
   for (const key of baseKeysWith(state, adapter.prefix)) if (!(key in state.records)) dropBase(state, key);
   state.rebase .push(adapter.prefix);
+  rebasesFinished.set(state, (rebasesFinished.get(state) ?? 0) + 1);
 }
 
 async function changesOf(state            , adapter         , now        , options               = {}) {

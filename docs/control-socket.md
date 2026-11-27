@@ -454,8 +454,10 @@ instead of creating an empty one with the same name, and answers its new `profil
 seen, as `profiles.delete` does (`{removed: false}` on Cancel, `refused` when nobody can see it). Confirmed, it takes the
 profile off the list on every device; a device that still has the profile keeps it and lists it again, and when none
 does, its synced data is gone for good. It refuses one that other profiles share data with (`sharedByOthers`), as
-Settings disables that button. A `syncId` not on the list answers `no_window`. Both answer once the change shows in
-`sync.status`, so on Linux and Windows a window that forwards the write to the one running sync waits for it too. `sync.sendTab` takes an `http(s)` tab and a device from `sync.devices`, the list the
+Settings disables that button. A `syncId` not on the list answers `no_window`. Both answer with what sync itself answered: on Linux
+a window that doesn't run sync forwards the write to the one that does and waits for its answer (`addRemoteProfileAndWait`
+and `removeRemoteProfileAndWait` in `state/sync/engine.ts` and `apps/desktop/src/syncEngine.ts`), then for the change to
+show in its own `sync.status`. Linux asks the question as it asks `profiles.delete`'s, ignoring `onlyIfShown` (above). `sync.sendTab` takes an `http(s)` tab and a device from `sync.devices`, the list the
 tab menu's Send to Device shows. Turning sync on or off and the recovery phrase stay in Settings: they choose a
 folder and show or ask for the phrase, which is the user's to see.
 

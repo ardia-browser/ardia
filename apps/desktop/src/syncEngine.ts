@@ -354,6 +354,16 @@ export function removeRemoteProfile(syncId: string): boolean {
   return true;
 }
 
+export async function addRemoteProfileAndWait(syncId: string): Promise<string | null> {
+  if (leading()) return engine.addRemoteProfile(syncId);
+  return forward<string | null>("addRemoteProfile", [syncId]);
+}
+
+export async function removeRemoteProfileAndWait(syncId: string): Promise<boolean> {
+  if (leading()) return engine.removeRemoteProfile(syncId);
+  return forward<boolean>("removeRemoteProfile", [syncId]);
+}
+
 export function removeSyncedDevice(deviceId: string): boolean {
   if (leading()) return engine.removeSyncedDevice(deviceId);
   quietly(forward("removeSyncedDevice", [deviceId]));

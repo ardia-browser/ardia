@@ -355,6 +355,8 @@ export function addRemoteProfile(syncId: string): string | null {
 }
 
 export const removeRemoteProfile = (syncId: string): boolean => markRemoved(doc, syncId) && (docChanged(), true);
+export const addRemoteProfileAndWait = async (syncId: string): Promise<string | null> => addRemoteProfile(syncId);
+export const removeRemoteProfileAndWait = async (syncId: string): Promise<boolean> => removeRemoteProfile(syncId);
 export const removeSyncedDevice = (id: string): boolean => markDeviceRemoved(doc, id) && (docChanged(), true);
 
 export function startSync() {

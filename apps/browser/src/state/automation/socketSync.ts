@@ -1,4 +1,4 @@
-import { addRemoteProfile, sendTab, sendTargets, setOpenTabsSynced, setProfileSynced, setTypeSynced, syncNow, syncWritesOpen, useSync } from "../sync/engine";
+import { addRemoteProfileAndWait, removeRemoteProfileAndWait, sendTab, sendTargets, setOpenTabsSynced, setProfileSynced, setTypeSynced, syncNow, syncWritesOpen, useSync } from "../sync/engine";
 import { confirmRemoveRemoteProfile } from "../sync/remoteProfileRemoval";
 import { DATA_TYPES, type DataType, type RemoteProfile } from "../sync/syncDoc";
 import { askWhereSeen, shownWindowId } from "./socketAsk";
@@ -83,7 +83,6 @@ async function setOpenTabs(params: Record<string, unknown>) {
 }
 
 const remoteRow = (syncId: string) => useSync.getState().remoteProfiles.find((p) => p.syncId === syncId);
-const linkedTo = (syncId: string) => Object.keys(useSync.getState().profiles).find((id) => useSync.getState().profiles[id]!.syncId === syncId && now().profiles[id]);
 
 function remoteProfileOf(params: Record<string, unknown>, what: string) {
   writable(what);
@@ -100,33 +99,43 @@ function refuseUnremovable(profile: RemoteProfile) {
   if (profile.sharedByOthers) throw new OpError("refused", `Other profiles share ${profile.name}'s data; remove them first.`);
 }
 
-async function addRemote(params: Record<string, unknown>) {
-  const profile = remoteProfileOf(params, "adding a profile from your other devices");
+function answered<T>(write: Promise<T>, outcome: string): Promise<T> {
+  return write.catch((error: unknown) => {
+    if (error instanceof OpError) throw error;
+    throw new OpError("failed", `${outcome}: ${error instanceof Error ? error.message : String(error)}`);
+  });
+}
+
+function refuseAfterNo(call: SocketCall, what: string, syncId: string, refuse: (row: RemoteProfile) => void) {
+  call.stillServing();
+  writable(what);
+  const row = remoteRow(syncId);
+  if (row) refuse(row);
+}
+
+async function addRemote(params: Record<string, unknown>, call: SocketCall) {
+  const what = "adding a profile from your other devices";
+  const profile = remoteProfileOf(params, what);
   refuseUnaddable(profile);
-  addRemoteProfile(profile.syncId);
-  if (!(await settles(() => !!linkedTo(profile.syncId)))) {
-    const row = remoteRow(profile.syncId);
-    if (row) refuseUnaddable(row);
-    expect(false, `${profile.name} wasn't added.`);
-  }
-  return { profile: linkedTo(profile.syncId)!, ...summary() };
+  const added = await answered(addRemoteProfileAndWait(profile.syncId), `${profile.name} wasn't added`);
+  if (!added) refuseAfterNo(call, what, profile.syncId, refuseUnaddable);
+  expect(!!added, `${profile.name} wasn't added.`);
+  await settles(() => !!now().profiles[added!] && !remoteRow(profile.syncId));
+  return { profile: added, ...summary() };
 }
 
 async function removeRemote(params: Record<string, unknown>, call: SocketCall) {
-  const profile = remoteProfileOf(params, "removing a profile from sync");
+  const what = "removing a profile from sync";
+  const profile = remoteProfileOf(params, what);
   refuseUnremovable(profile);
   const outcome = `${profile.name} wasn't removed from sync`;
   const stillRemovable = () => call.serving() && syncWritesOpen() && !!remoteRow(profile.syncId) && !remoteRow(profile.syncId)!.sharedByOthers;
-  const { confirmed, removed } = await confirmRemoveRemoteProfile(profile, { windowId: shownWindowId(), ask: askWhereSeen(outcome, call), mayRemove: stillRemovable });
+  const { confirmed, removed } = await answered(confirmRemoveRemoteProfile(profile, { windowId: shownWindowId(), ask: askWhereSeen(outcome, call), mayRemove: stillRemovable, remove: removeRemoteProfileAndWait }), outcome);
   if (!confirmed) return { removed: false, remoteProfiles: useSync.getState().remoteProfiles };
-  if (!removed) {
-    call.stillServing();
-    writable("removing a profile from sync");
-    const row = remoteRow(profile.syncId);
-    if (row) refuseUnremovable(row);
-  }
-  expect(removed && (await settles(() => !remoteRow(profile.syncId))), `${profile.name} is still listed.`);
-  return { removed: true, remoteProfiles: useSync.getState().remoteProfiles };
+  if (!removed) refuseAfterNo(call, what, profile.syncId, refuseUnremovable);
+  expect(removed, `${profile.name} wasn't removed.`);
+  await settles(() => !remoteRow(profile.syncId));
+  return { removed: true, remoteProfiles: useSync.getState().remoteProfiles.filter((p) => p.syncId !== profile.syncId) };
 }
 
 function devicesFor(params: Record<string, unknown>) {

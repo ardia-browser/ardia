@@ -333,6 +333,31 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await tab.close();
       }
     },
+    async E16held() {
+      const { app, fake } = await paired();
+      const held = await open("example.localhost");
+      let other = null;
+      fake.setMode({ delay: { 5: 30_000 } });
+      try {
+        await held.click("#u");
+        await held.waitRows();
+        await held.pick(usersFor("example.localhost")[0]);
+        await sleep(500);
+        const asked = Date.now();
+        const state = await app.eval(`return ac.engine.call("passwords.applePasswordsStatus", {})`, { timeout: 3000 }).catch((e) => ({ error: String(e) }));
+        const statusMs = Date.now() - asked;
+        assert(state?.state === "connected" && statusMs < 2000, "status answers at once while a password waits", { state, statusMs });
+        other = await open("other.localhost");
+        await other.click("#u");
+        const rows = await other.waitRows("another tab's Login list while a password waits", 5000);
+        assert(q(titles(rows.slice(0, -1))) === q(usersFor("other.localhost")), "another tab lists its site's logins", rows);
+        return { engine: engineName, statusMs, other: titles(rows) };
+      } finally {
+        fake.setMode({ delay: {} });
+        await held.close();
+        await other?.close();
+      }
+    },
     async E34() {
       const { app } = await paired();
       const shownCounts = () => app.output().split(COUNTED_SHOWN).length - 1;

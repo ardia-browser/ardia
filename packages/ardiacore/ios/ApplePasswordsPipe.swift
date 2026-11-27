@@ -7,10 +7,9 @@ final class ApplePasswordsPipe: @unchecked Sendable {
   private let process = Process()
   private let input = Pipe()
   private let output = Pipe()
-  private let lock = NSCondition()
+  private let lock = NSLock()
   private let drainLock = NSLock()
   private var buffer = Data()
-  private var messages: [[String: Any]] = []
   private var ended = false
   private var stopped = false
   private var startedAt = Date()
@@ -58,21 +57,6 @@ final class ApplePasswordsPipe: @unchecked Sendable {
     try input.fileHandleForWriting.write(contentsOf: frame)
   }
 
-  func next(until deadline: Date) -> [String: Any]? {
-    lock.lock()
-    defer { lock.unlock() }
-    while messages.isEmpty && !ended {
-      if !lock.wait(until: deadline) { break }
-    }
-    return messages.isEmpty ? nil : messages.removeFirst()
-  }
-
-  func waitForExit(until deadline: Date) {
-    lock.lock()
-    defer { lock.unlock() }
-    while !ended && lock.wait(until: deadline) {}
-  }
-
   func stop() {
     lock.withLock { stopped = true }
     try? input.fileHandleForWriting.close()
@@ -109,8 +93,6 @@ final class ApplePasswordsPipe: @unchecked Sendable {
         buffer.removeSubrange(buffer.startIndex..<buffer.startIndex + 4 + length)
         if let message = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] { heard.append(message) }
       }
-      messages.append(contentsOf: heard)
-      lock.broadcast()
     }
     heard.forEach { onMessage?($0) }
   }
@@ -120,7 +102,6 @@ final class ApplePasswordsPipe: @unchecked Sendable {
       guard !ended else { return nil }
       ended = true
       killedByMacOS = killed
-      lock.broadcast()
       return onExit
     }
     output.fileHandleForReading.readabilityHandler = nil

@@ -14,7 +14,7 @@
 //       on filter.localhost's /login-ready (its Sign in button is enabled and submit is recorded, not sent), and E37
 //       ends Pairing and pairs again too
 //       E16dropped: the fake never answers one list fetch; that list says Apple Passwords didn't answer, the next lists the
-//       logins
+//       logins. E16held: the fake holds a password reply 30 s; meanwhile status answers at once and another tab lists logins
 //   E5chromium… the same Login list checks in a Chromium tab of that instance
 //   E18… saving to Apple Passwords from a WebKit tab (saving.mjs), in the same paired instance; E33 saves on an http page
 //   E18chromium… the same saving checks in a Chromium tab, whose save hands Chrome's pending login to Apple Passwords;

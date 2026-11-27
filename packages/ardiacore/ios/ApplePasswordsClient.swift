@@ -19,6 +19,16 @@ final class ApplePasswordsClient: @unchecked Sendable {
     case awaitingCode, paired, wrongCode, failed, refused, helperMissing, tooOld, notEntitled
   }
 
+  private struct Awaiting {
+    let cmd: Int
+    let also: Int?
+    let generation: UUID
+    var done: ((Result<[String: Any], Error>) -> Void)?
+  }
+
+  static let owedSeconds: TimeInterval = 30
+  private static let lastRequestId = Int(Int32.max)
+
   private let queue = DispatchQueue(label: "ardia.apple-passwords", qos: .userInitiated)
   private var pipe: ApplePasswordsPipe?
   private var generation = UUID()
@@ -28,9 +38,10 @@ final class ApplePasswordsClient: @unchecked Sendable {
   private var pending: (srp: ApplePasswordsSRP, reply: String, generation: UUID)?
   private var session: ApplePasswordsSRP?
   private var lastState: String?
-  private var owed: [Int: (count: Int, until: Date)] = [:]
+  private var awaiting: [Int: Awaiting] = [:]
   private var requestId = 0
-  static let owedSeconds: TimeInterval = 30
+  private var pairingSteps: [(@escaping () -> Void) -> Void] = []
+  private var pairingBusy = false
 
   static var fakeManifest: String? {
     #if DEBUG
@@ -80,27 +91,52 @@ final class ApplePasswordsClient: @unchecked Sendable {
   }
 
   func beginPairing(_ done: @escaping (Outcome) -> Void) {
-    queue.async {
-      let outcome = self.showCode()
-      self.announce()
-      done(outcome)
+    pairingStep { next in
+      self.showCode { outcome in
+        self.announce()
+        done(outcome)
+        next()
+      }
     }
   }
 
   func finishPairing(code: String, _ done: @escaping (Outcome) -> Void) {
-    queue.async {
-      var outcome = self.checkCode(code)
-      if outcome == .wrongCode, self.showCode() != .awaitingCode { outcome = .failed }
-      self.announce()
-      done(outcome)
+    pairingStep { next in
+      self.checkCode(code) { outcome in
+        let finish = { (outcome: Outcome) in
+          self.announce()
+          done(outcome)
+          next()
+        }
+        guard outcome == .wrongCode else { return finish(outcome) }
+        self.showCode { shown in finish(shown == .awaitingCode ? .wrongCode : .failed) }
+      }
     }
   }
 
   func cancelPairing(_ done: @escaping () -> Void) {
-    queue.async {
+    pairingStep { next in
       self.pending = nil
       try? self.pipe?.write(["cmd": 19])
       done()
+      next()
+    }
+  }
+
+  private func pairingStep(_ step: @escaping (_ next: @escaping () -> Void) -> Void) {
+    queue.async {
+      self.pairingSteps.append(step)
+      self.nextPairingStep()
+    }
+  }
+
+  private func nextPairingStep() {
+    guard !pairingBusy, !pairingSteps.isEmpty else { return }
+    pairingBusy = true
+    let step = pairingSteps.removeFirst()
+    step {
+      self.pairingBusy = false
+      self.nextPairingStep()
     }
   }
 
@@ -117,10 +153,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
     guard let program = Self.helper else { throw Failure.missing }
     let started = ApplePasswordsPipe(program: program, origin: Self.origin)
     let id = UUID()
-    started.onMessage = { [weak self] message in
-      guard let cmd = message["cmd"] as? Int, Self.endedPushes.contains(cmd) else { return }
-      self?.queue.async { self?.drop(id, why: "push \(cmd)") }
-    }
+    started.onMessage = { [weak self] message in self?.queue.async { self?.heard(message, from: id) } }
     started.onExit = { [weak self, weak started] in
       let killed = started?.killedByMacOS ?? false
       self?.queue.async { self?.ended(id, killedByMacOS: killed) }
@@ -134,12 +167,14 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   private func ended(_ id: UUID, killedByMacOS: Bool) {
     guard generation == id else { return }
-    owed = [:]
     if killedByMacOS {
       killed = true
       Self.log.error("helper killed by macOS at launch")
     }
     pipe = nil
+    let gone = awaiting.filter { $0.value.generation == id }
+    awaiting = awaiting.filter { $0.value.generation != id }
+    gone.keys.sorted().forEach { gone[$0]?.done?(.failure(Failure.ended)) }
     drop(id, why: "exit")
   }
 
@@ -153,90 +188,137 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   private enum Failure: Error { case missing, ended, timedOut, unexpected }
 
-  private func exchange(_ message: [String: Any], cmd: Int, also: Int? = nil, wait: TimeInterval, keepsHelper: Bool = false) throws -> [String: Any] {
-    let pipe = try running()
+  private func heard(_ message: [String: Any], from id: UUID) {
+    guard let got = message["cmd"] as? Int else { return }
+    if Self.endedPushes.contains(got) { return drop(id, why: "push \(got)") }
+    let accepts = { (entry: Awaiting) in entry.generation == id && (entry.cmd == got || entry.also == got) }
+    let request: Int?
+    if let tabId = message["tabId"] as? Int, tabId > 0 {
+      request = awaiting[tabId].flatMap { accepts($0) ? tabId : nil }
+    } else {
+      request = awaiting.filter { accepts($0.value) }.keys.min()
+    }
+    guard let request, let entry = awaiting.removeValue(forKey: request) else { return }
+    entry.done?(.success(message))
+  }
+
+  private func nextRequestId() -> Int {
+    repeat { requestId = requestId >= Self.lastRequestId ? 1 : requestId + 1 } while awaiting[requestId] != nil
+    return requestId
+  }
+
+  private func exchange(
+    _ message: [String: Any], cmd: Int, also: Int? = nil, wait: TimeInterval, keepsHelper: Bool = false, _ done: @escaping (Result<[String: Any], Error>) -> Void
+  ) {
+    let pipe: ApplePasswordsPipe
+    do { pipe = try running() } catch { return done(.failure(error)) }
+    let id = nextRequestId()
     var sent = message
-    var id = 0
     if sent["tabId"] != nil {
-      requestId = requestId >= Int(Int32.max) ? 1 : requestId + 1
-      id = requestId
       sent["tabId"] = id
+      sent["frameId"] = 0
     }
-    try pipe.write(sent)
-    let deadline = Date().addingTimeInterval(wait)
-    while let reply = pipe.next(until: deadline) {
-      guard let got = reply["cmd"] as? Int else { continue }
-      if let tabId = reply["tabId"] as? Int, tabId > 0 {
-        if tabId == id, got == cmd || got == also { return reply }
-        continue
-      }
-      owed = owed.filter { $0.value.until > Date() }
-      if let late = owed[got] {
-        owed[got] = late.count > 1 ? (late.count - 1, late.until) : nil
-        continue
-      }
-      if got == cmd || got == also { return reply }
+    awaiting[id] = Awaiting(cmd: cmd, also: also, generation: generation, done: done)
+    queue.asyncAfter(deadline: .now() + wait) { [weak self] in self?.expire(id, pipe: pipe, keepsHelper: keepsHelper) }
+    do {
+      try pipe.write(sent)
+    } catch {
+      Self.log.notice("cmd \(cmd, privacy: .public) not written; its exit or deadline answers it")
     }
-    if pipe.hasEnded { throw Failure.ended }
+  }
+
+  private func expire(_ id: Int, pipe: ApplePasswordsPipe, keepsHelper: Bool) {
+    guard let entry = awaiting[id], let done = entry.done else { return }
     guard keepsHelper else {
+      awaiting.removeValue(forKey: id)
       pipe.stop()
-      throw Failure.timedOut
+      return done(.failure(Failure.timedOut))
     }
-    if cmd != Self.saveCmd { owed[cmd] = ((owed[cmd]?.count ?? 0) + 1, Date().addingTimeInterval(Self.owedSeconds)) }
-    throw Failure.timedOut
+    if entry.cmd == Self.saveCmd {
+      awaiting.removeValue(forKey: id)
+    } else {
+      awaiting[id]?.done = nil
+      queue.asyncAfter(deadline: .now() + Self.owedSeconds) { [weak self] in
+        if self?.awaiting[id]?.done == nil { self?.awaiting.removeValue(forKey: id) }
+      }
+    }
+    Self.log.notice("no answer to cmd \(entry.cmd, privacy: .public) in time, helper kept")
+    done(.failure(Failure.timedOut))
   }
 
   private func failure(_ error: Error) -> Outcome {
     if case Failure.missing = error { return .helperMissing }
-    if let pipe {
-      pipe.waitForExit(until: Date().addingTimeInterval(Self.exitGraceSeconds))
-      if pipe.killedByMacOS { killed = true }
-    }
     return killed ? .refused : .failed
   }
 
-  private func showCode() -> Outcome {
-    if let barrier = barrier() { return barrier }
+  private func showCode(_ done: @escaping (Outcome) -> Void) {
+    if let barrier = barrier() { return done(barrier) }
     pending = nil
-    do {
-      let hello = try exchange(["cmd": 14], cmd: 14, wait: Self.helloSeconds)
-      let capabilities = hello["capabilities"] as? [String: Any]
-      base64 = capabilities?["shouldUseBase64"] as? Bool ?? true
-      fillsCodes = capabilities?["canFillOneTimeCodes"] as? Bool ?? false
-      let srp = ApplePasswordsSRP(base64: base64)
-      let m0 = try Self.text(["QID": "m0", "PAKE": srp.first, "HSTBRSR": Self.browserName])
-      let reply = try exchange(["cmd": 2, "msg": m0], cmd: 2, wait: Self.pairingSeconds)
-      guard let payload = reply["payload"] as? [String: Any], payload["QID"] as? String == "m0", let pake = payload["PAKE"] as? String else {
-        throw Failure.unexpected
+    exchange(["cmd": 14], cmd: 14, wait: Self.helloSeconds) { result in
+      let hello: [String: Any]
+      switch result {
+      case .success(let reply): hello = reply
+      case .failure(let error): return done(self.failure(error))
       }
-      pending = (srp, pake, generation)
-      Self.log.notice("code shown by Passwords")
-      return .awaitingCode
-    } catch {
-      return failure(error)
+      let capabilities = hello["capabilities"] as? [String: Any]
+      self.base64 = capabilities?["shouldUseBase64"] as? Bool ?? true
+      self.fillsCodes = capabilities?["canFillOneTimeCodes"] as? Bool ?? false
+      let srp = ApplePasswordsSRP(base64: self.base64)
+      guard let m0 = try? Self.text(["QID": "m0", "PAKE": srp.first, "HSTBRSR": Self.browserName]) else { return done(.failed) }
+      self.exchange(["cmd": 2, "msg": m0], cmd: 2, wait: Self.pairingSeconds) { result in
+        let reply: [String: Any]
+        switch result {
+        case .success(let answer): reply = answer
+        case .failure(let error): return done(self.failure(error))
+        }
+        guard let payload = reply["payload"] as? [String: Any], payload["QID"] as? String == "m0", let pake = payload["PAKE"] as? String else {
+          return done(self.failure(Failure.unexpected))
+        }
+        self.pending = (srp, pake, self.generation)
+        Self.log.notice("code shown by Passwords")
+        done(.awaitingCode)
+      }
     }
   }
 
-  private func checkCode(_ code: String) -> Outcome {
-    if let barrier = barrier() { return barrier }
-    guard let waiting = pending, waiting.generation == generation else { return .failed }
+  private func checkCode(_ code: String, _ done: @escaping (Outcome) -> Void) {
+    if let barrier = barrier() { return done(barrier) }
+    guard let waiting = pending, waiting.generation == generation else { return done(.failed) }
     pending = nil
     var srp = waiting.srp
+    let m2: String
     do {
-      let m2 = try srp.second(after: waiting.reply, code: code)
-      let reply = try exchange(["cmd": 2, "msg": try Self.text(["QID": "m2", "PAKE": m2])], cmd: 2, wait: Self.pairingSeconds)
-      guard waiting.generation == generation, let pake = (reply["payload"] as? [String: Any])?["PAKE"] as? String else { throw Failure.unexpected }
-      try srp.third(pake)
-      session = srp
-      Self.log.notice("paired")
-      return .paired
-    } catch ApplePasswordsSRP.Failure.wrongCode {
-      Self.log.notice("pairing code refused")
-      return .wrongCode
-    } catch ApplePasswordsSRP.Failure.refused {
-      return .refused
+      m2 = try Self.text(["QID": "m2", "PAKE": try srp.second(after: waiting.reply, code: code)])
     } catch {
-      return failure(error)
+      return done(Self.pairingOutcome(error) ?? failure(error))
+    }
+    exchange(["cmd": 2, "msg": m2], cmd: 2, wait: Self.pairingSeconds) { result in
+      let reply: [String: Any]
+      switch result {
+      case .success(let answer): reply = answer
+      case .failure(let error): return done(self.failure(error))
+      }
+      guard waiting.generation == self.generation, let pake = (reply["payload"] as? [String: Any])?["PAKE"] as? String else {
+        return done(self.failure(Failure.unexpected))
+      }
+      do {
+        try srp.third(pake)
+      } catch {
+        return done(Self.pairingOutcome(error) ?? self.failure(error))
+      }
+      self.session = srp
+      Self.log.notice("paired")
+      done(.paired)
+    }
+  }
+
+  private static func pairingOutcome(_ error: Error) -> Outcome? {
+    switch error {
+    case ApplePasswordsSRP.Failure.wrongCode:
+      log.notice("pairing code refused")
+      return .wrongCode
+    case ApplePasswordsSRP.Failure.refused: return .refused
+    default: return nil
     }
   }
 
@@ -259,26 +341,28 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   func logins(host: String, _ done: @escaping (Result<[ApplePasswordsEntry], Problem>) -> Void) {
     queue.async {
-      done(Result {
-        let answer = try self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds)
-        return Self.entries(answer).compactMap { entry in
-          guard let user = entry["USR"] as? String, user != Self.placeholderUser else { return nil }
-          return ApplePasswordsEntry(user: user, sites: entry["sites"] as? [String] ?? [])
-        }
-      }.mapError(Self.problem))
+      self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds) { result in
+        done(result.map { answer in
+          Self.entries(answer).compactMap { entry in
+            guard let user = entry["USR"] as? String, user != Self.placeholderUser else { return nil }
+            return ApplePasswordsEntry(user: user, sites: entry["sites"] as? [String] ?? [])
+          }
+        }.mapError(Self.problem))
+      }
     }
   }
 
   func password(host: String, user: String, _ done: @escaping (Result<String, Problem>) -> Void) {
     queue.async {
-      done(Result {
-        let answer = try self.sealed(5, qid: "CmdGetPassword4LoginName", url: host, ["ACT": 2, "URL": host, "USR": user], wait: Self.passwordSeconds)
-        let entries = Self.entries(answer)
-        let entry = entries.first { ($0["sites"] as? [String] ?? []).contains(host) && $0["USR"] as? String == user }
-          ?? entries.first { $0["USR"] as? String == user }
-        guard let password = entry?["PWD"] as? String, password != Self.noPassword else { throw Problem.failed }
-        return password
-      }.mapError(Self.problem))
+      self.sealed(5, qid: "CmdGetPassword4LoginName", url: host, ["ACT": 2, "URL": host, "USR": user], wait: Self.passwordSeconds) { result in
+        done(result.mapError(Self.problem).flatMap { answer in
+          let entries = Self.entries(answer)
+          let entry = entries.first { ($0["sites"] as? [String] ?? []).contains(host) && $0["USR"] as? String == user }
+            ?? entries.first { $0["USR"] as? String == user }
+          guard let password = entry?["PWD"] as? String, password != Self.noPassword else { return .failure(.failed) }
+          return .success(password)
+        })
+      }
     }
   }
 
@@ -287,21 +371,20 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   func codes(page: String, _ done: @escaping (Result<[ApplePasswordsCode], Problem>) -> Void) {
     queue.async {
-      done(Result {
-        if self.session != nil, !self.fillsCodes { return [] }
-        let answer = try self.sealed(16, qid: "CmdGetOneTimeCodes", url: nil, ["ACT": 5, "TYPE": "oneTimeCodes", "frameURLs": [page]], wait: Self.codesSeconds)
-        return Self.entries(answer).map(Self.code)
-      }.mapError(Self.problem))
+      if self.session != nil, !self.fillsCodes { return done(.success([])) }
+      self.sealed(16, qid: "CmdGetOneTimeCodes", url: nil, ["ACT": 5, "TYPE": "oneTimeCodes", "frameURLs": [page]], wait: Self.codesSeconds) { result in
+        done(result.map { Self.entries($0).map(Self.code) }.mapError(Self.problem))
+      }
     }
   }
 
   func code(page: String, user: String, _ done: @escaping (Result<[ApplePasswordsCode], Problem>) -> Void) {
     queue.async {
-      done(Result {
-        guard self.session == nil || self.fillsCodes else { throw Problem.failed }
-        let body: [String: Any] = ["ACT": 2, "TYPE": "oneTimeCodes", "frameURLs": [page], "username": user]
-        return Self.entries(try self.sealed(17, qid: "CmdDidFillOneTimeCode", url: nil, body, wait: Self.codeSeconds)).map(Self.code)
-      }.mapError(Self.problem))
+      guard self.session == nil || self.fillsCodes else { return done(.failure(.failed)) }
+      let body: [String: Any] = ["ACT": 2, "TYPE": "oneTimeCodes", "frameURLs": [page], "username": user]
+      self.sealed(17, qid: "CmdDidFillOneTimeCode", url: nil, body, wait: Self.codeSeconds) { result in
+        done(result.map { Self.entries($0).map(Self.code) }.mapError(Self.problem))
+      }
     }
   }
 
@@ -313,22 +396,20 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   func save(host: String, insecure: Bool, user: String, password: String, update: Bool, _ done: @escaping (Result<Void, Problem>) -> Void) {
     queue.async {
-      done(Result {
-        do {
-          _ = try self.sealed(
-            Self.saveCmd, qid: "CmdSetPassword4LoginName_URL", url: nil,
-            ["ACT": 4, "URL": "", "USR": "", "PWD": "", "NURL": Self.savedSite(host: host, insecure: insecure), "NUSR": user, "NPWD": password],
-            wait: Self.saveSeconds, also: 4, kept: [Self.alreadyKeptStatus])
-        } catch Failure.unexpected {
-          guard !update else {
-            Self.log.notice("update had no readable answer, not saved")
-            throw Problem.failed
-          }
-          Self.log.notice("save had no readable answer, reading the list")
-          let answer = try self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds)
-          guard Self.entries(answer).contains(where: { $0["USR"] as? String == user }) else { throw Problem.failed }
+      let body: [String: Any] = ["ACT": 4, "URL": "", "USR": "", "PWD": "", "NURL": Self.savedSite(host: host, insecure: insecure), "NUSR": user, "NPWD": password]
+      self.sealed(Self.saveCmd, qid: "CmdSetPassword4LoginName_URL", url: nil, body, wait: Self.saveSeconds, also: 4, kept: [Self.alreadyKeptStatus]) { result in
+        guard case .failure(Failure.unexpected) = result else { return done(result.map { _ in () }.mapError(Self.problem)) }
+        guard !update else {
+          Self.log.notice("update had no readable answer, not saved")
+          return done(.failure(.failed))
         }
-      }.mapError(Self.problem))
+        Self.log.notice("save had no readable answer, reading the list")
+        self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds) { listed in
+          done(listed.mapError(Self.problem).flatMap { answer in
+            Self.entries(answer).contains(where: { $0["USR"] as? String == user }) ? .success(()) : .failure(.failed)
+          })
+        }
+      }
     }
   }
 
@@ -340,33 +421,39 @@ final class ApplePasswordsClient: @unchecked Sendable {
   }
 
   private func sealed(
-    _ cmd: Int, qid: String, url: String?, _ body: [String: Any], wait: TimeInterval, also: Int? = nil, kept: Set<Int> = []
-  ) throws -> [String: Any] {
-    if let barrier = barrier() { throw Problem.unavailable(barrier) }
-    guard let session, pipe?.hasEnded == false else { throw Problem.notConnected }
+    _ cmd: Int, qid: String, url: String?, _ body: [String: Any], wait: TimeInterval, also: Int? = nil, kept: Set<Int> = [],
+    _ done: @escaping (Result<[String: Any], Error>) -> Void
+  ) {
+    if let barrier = barrier() { return done(.failure(Problem.unavailable(barrier))) }
+    guard let session, pipe?.hasEnded == false else { return done(.failure(Problem.notConnected)) }
     let id = generation
-    let smsg = try session.seal(body)
-    let payload = try Self.text(["QID": qid, "SMSG": smsg])
-    var message: [String: Any] = ["cmd": cmd, "tabId": 0, "frameId": 0, "payload": payload]
-    if let url { message["url"] = url }
-    let reply: [String: Any]
+    let message: [String: Any]
     do {
-      reply = try exchange(message, cmd: cmd, also: also, wait: wait, keepsHelper: true)
+      let payload = try Self.text(["QID": qid, "SMSG": try session.seal(body)])
+      message = ["cmd": cmd, "tabId": 0, "frameId": 0, "payload": payload].merging(url.map { ["url": $0] } ?? [:]) { first, _ in first }
     } catch {
-      if killed { throw Problem.unavailable(.refused) }
-      throw generation == id && self.session != nil ? Problem.failed : Problem.notConnected
+      return done(.failure(Problem.failed))
     }
-    guard let answer = session.open(ApplePasswordsSRP.object(reply["payload"])?["SMSG"]) else { throw Failure.unexpected }
-    let status = answer["STATUS"] as? Int ?? 1
-    if status == Self.sessionOverStatus {
-      drop(id, why: "status \(status)")
-      throw Problem.notConnected
+    exchange(message, cmd: cmd, also: also, wait: wait, keepsHelper: true) { result in
+      let reply: [String: Any]
+      switch result {
+      case .success(let answer): reply = answer
+      case .failure:
+        if self.killed { return done(.failure(Problem.unavailable(.refused))) }
+        return done(.failure(self.generation == id && self.session != nil ? Problem.failed : Problem.notConnected))
+      }
+      guard let answer = session.open(ApplePasswordsSRP.object(reply["payload"])?["SMSG"]) else { return done(.failure(Failure.unexpected)) }
+      let status = answer["STATUS"] as? Int ?? 1
+      if status == Self.sessionOverStatus {
+        self.drop(id, why: "status \(status)")
+        return done(.failure(Problem.notConnected))
+      }
+      guard Self.successStatuses.contains(status) || kept.contains(status) else {
+        Self.log.notice("request \(cmd, privacy: .public) refused with status \(status, privacy: .public)")
+        return done(.failure(Problem.refused))
+      }
+      done(.success(answer))
     }
-    guard Self.successStatuses.contains(status) || kept.contains(status) else {
-      Self.log.notice("request \(cmd, privacy: .public) refused with status \(status, privacy: .public)")
-      throw Problem.refused
-    }
-    return answer
   }
 
   private static func text(_ object: [String: Any]) throws -> String {

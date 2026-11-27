@@ -97,11 +97,38 @@ import Testing
 
   @Test func anotherSpaceIsSeenAsStaleButTheSameSpaceIsNot() {
     let blue = LaunchLook.recalled(saved: Self.plain("blue"))
-    #expect(blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.plain("blue"))))
-    #expect(!blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.plain("green"))))
-    #expect(!blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.plain("blue", forced: true))))
-    #expect(!blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.themed)))
+    for appDark in [false, true] {
+      #expect(blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.plain("blue")), appDark: appDark))
+      #expect(!blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.plain("green")), appDark: appDark))
+      #expect(!blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.themed), appDark: appDark))
+    }
+    #expect(!blue.drawsTheSameSpace(as: LaunchLook.recalled(saved: Self.plain("blue", forced: true)), appDark: false))
     let older = LaunchLook.Recalled(colors: LookColors(color: "blue", themeColors: [], darkThemeColors: nil))
-    #expect(older.drawsTheSameSpace(as: blue))
+    #expect(older.drawsTheSameSpace(as: blue, appDark: false) && older.drawsTheSameSpace(as: blue, appDark: true))
+  }
+
+  @Test func aThemeSurvivesTheRoundTripSoTheSameSpaceIsNeverStale() {
+    var odd = Self.sunset
+    odd.angle = 359.999_999_999_9
+    var saved = Self.themed
+    saved["themeLooks"] = ["light": ["look": odd.dictionary, "dark": false], "dark": ["look": Self.night.dictionary, "dark": true]]
+    let fromJS = LaunchLook.recalled(saved: saved)
+    let fromDisk = LaunchLook.recalled(saved: LaunchLook.saved(LaunchLook.normalized(fromJS)))
+    #expect(fromDisk.drawsTheSameSpace(as: fromJS, appDark: false))
+  }
+
+  @Test func aDarkLaunchIsNotStaleWhenOnlyTheLightSlotDiffers() {
+    let shown = LaunchLook.recalled(saved: Self.plain("blue"))
+    let forcedDark = LaunchLook.recalled(saved: Self.plain("blue", forced: true))
+    #expect(shown.drawsTheSameSpace(as: forcedDark, appDark: true))
+  }
+
+  @Test func aDifferentTextureWithTheSameStopsIsStale() {
+    var denim = Self.night
+    denim.texture = .denim
+    denim.grain = 0.8
+    var other = Self.themed
+    other["themeLooks"] = ["light": ["look": Self.sunset.dictionary, "dark": false], "dark": ["look": denim.dictionary, "dark": true]]
+    #expect(!LaunchLook.recalled(saved: Self.themed).drawsTheSameSpace(as: LaunchLook.recalled(saved: other), appDark: true))
   }
 }

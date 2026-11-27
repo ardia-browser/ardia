@@ -24,9 +24,9 @@ function useActiveCustomLook(): CustomLook | null {
   return useMemo(() => activeCustomLook(choice, theme, enabled, profile), [choice, theme, enabled, profile]);
 }
 
-function currentActiveCustomLook(): CustomLook | null {
+function currentActiveCustomLook(theme = currentCustomTheme()): CustomLook | null {
   const { status, view } = syncData();
-  return activeCustomLook(currentPreferences().colorChoice, currentCustomTheme(), status.isEnabled, shownProfile(view, status));
+  return activeCustomLook(currentPreferences().colorChoice, theme, status.isEnabled, shownProfile(view, status));
 }
 
 const schemeFor = (design: Design, preferred: PreferredScheme, custom: CustomLook | null): PreferredScheme => (design === "material" ? preferred : themedScheme(custom, preferred));
@@ -38,11 +38,13 @@ export function usePreferredScheme(): PreferredScheme {
   return schemeFor(design, preferredScheme(design, choice, useMacLook()), custom);
 }
 
-function currentPreferredScheme(): PreferredScheme {
+function currentPreferredScheme(theme = currentCustomTheme()): PreferredScheme {
   const { status, view } = syncData();
   const design = useAppearanceDesign.getState().design;
-  return schemeFor(design, preferredScheme(design, currentPreferences().schemeChoice, macLookOf(status.isEnabled, view.look)), currentActiveCustomLook());
+  return schemeFor(design, preferredScheme(design, currentPreferences().schemeChoice, macLookOf(status.isEnabled, view.look)), currentActiveCustomLook(theme));
 }
+
+export const savedPreferredScheme = (): PreferredScheme => currentPreferredScheme(currentPreferences().customTheme);
 
 export function currentDarkScheme(): boolean {
   return appliedDark(currentPreferredScheme(), Appearance.getColorScheme() === "dark");

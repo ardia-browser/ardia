@@ -26,24 +26,24 @@ enum LaunchLook {
       return (colors, slot.dark)
     }
 
-    func drawsTheSameSpace(as other: Recalled) -> Bool {
-      [false, true].allSatisfy { appDark in
-        let mine = drawn(appDark: appDark)
-        let theirs = other.drawn(appDark: appDark)
-        return mine.colors.withoutThemeLook == theirs.colors.withoutThemeLook
-          && (mine.colors.themeLook == nil) == (theirs.colors.themeLook == nil)
-          && (mine.dark ?? appDark) == (theirs.dark ?? appDark)
-      }
+    func drawsTheSameSpace(as other: Recalled, appDark: Bool) -> Bool {
+      let mine = LaunchLook.normalized(self).drawn(appDark: appDark)
+      let theirs = LaunchLook.normalized(other).drawn(appDark: appDark)
+      return mine.colors == theirs.colors && (mine.dark ?? appDark) == (theirs.dark ?? appDark)
     }
   }
 
   @discardableResult
   static func remember(_ next: Recalled, in defaults: UserDefaults = .standard) -> Bool {
     guard !next.colors.isIncognito else { return false }
-    let stored = recalled(saved: saved(next))
+    let stored = normalized(next)
     guard stored != recalled(from: defaults) || defaults.object(forKey: key) == nil else { return false }
     defaults.set(saved(stored), forKey: key)
     return true
+  }
+
+  static func normalized(_ recalled: Recalled) -> Recalled {
+    LaunchLook.recalled(saved: saved(recalled))
   }
 
   static func saved(_ recalled: Recalled) -> [String: Any] {

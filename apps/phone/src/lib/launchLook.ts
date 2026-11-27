@@ -21,23 +21,21 @@ export function launchLookFor(look: ProfileLook, preferred: PreferredScheme): Sa
   };
 }
 
-export type LaunchLookWriter = { settle: (saved: SavedLaunchLook) => void; leave: () => void };
+export type LaunchLookWriter = { settle: () => void; leave: () => void };
 
-export function launchLookWriter(write: (saved: SavedLaunchLook) => void): LaunchLookWriter {
-  let settled: SavedLaunchLook | null = null;
+export function launchLookWriter(read: () => SavedLaunchLook | null, write: (saved: SavedLaunchLook) => void): LaunchLookWriter {
   let written: string | null = null;
   const flush = (force: boolean) => {
-    if (!settled) return;
-    const key = JSON.stringify(settled);
+    const current = read();
+    if (!current) return;
+    const key = JSON.stringify(current);
     if (!force && key === written) return;
     written = key;
-    write(settled);
+    write(current);
   };
-  return {
-    settle: (saved) => {
-      settled = saved;
-      flush(false);
-    },
-    leave: () => flush(true),
-  };
+  return { settle: () => flush(false), leave: () => flush(true) };
 }
+
+export type LaunchLookSources = { ready: boolean; syncOffered: boolean; syncLoaded: boolean };
+
+export const launchLookSourcesLoaded = ({ ready, syncOffered, syncLoaded }: LaunchLookSources) => ready && (!syncOffered || syncLoaded);

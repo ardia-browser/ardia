@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { startingTheme } from "@ardia/core/src/theme.ts";
-import { launchLookFor, launchLookWriter, type SavedLaunchLook } from "./launchLook.ts";
+import { launchLookFor, launchLookSourcesLoaded, launchLookWriter, type SavedLaunchLook } from "./launchLook.ts";
 import { customLook, lookOf, nativeLookColors, presetLook, themeLookFor } from "./profileLook.ts";
 
 const presets = [
@@ -35,17 +35,46 @@ test("a custom theme saves the look it draws in each appearance", () => {
   assert.deepEqual(launchLookFor(look, "dark").themeLooks.light, { look: themeLookFor(look, true)!, dark: true });
 });
 
-test("the writer saves each settled change once and writes again when the app leaves", () => {
+test("the writer saves each change of the current sources once and again when the app leaves", () => {
   const writes: SavedLaunchLook[] = [];
-  const writer = launchLookWriter((saved) => writes.push(saved));
-  writer.leave();
-  assert.equal(writes.length, 0);
-  writer.settle(launchLookFor(plum, null));
-  writer.settle(launchLookFor(plum, null));
+  let current: SavedLaunchLook | null = launchLookFor(plum, null);
+  const writer = launchLookWriter(() => current, (saved) => writes.push(saved));
+  writer.settle();
+  writer.settle();
   assert.equal(writes.length, 1);
-  writer.settle(launchLookFor(blue, null));
+  current = launchLookFor(blue, null);
+  writer.settle();
   assert.equal(writes.at(-1)!.color, "blue");
   writer.leave();
   assert.equal(writes.length, 3);
   assert.equal(writes.at(-1)!.color, "blue");
+});
+
+test("nothing is saved before the current space is known, even when the app leaves", () => {
+  const writes: SavedLaunchLook[] = [];
+  let current: SavedLaunchLook | null = null;
+  const writer = launchLookWriter(() => current, (saved) => writes.push(saved));
+  writer.settle();
+  writer.leave();
+  assert.equal(writes.length, 0);
+  current = launchLookFor(macSpace, null);
+  writer.settle();
+  assert.deepEqual(writes, [launchLookFor(macSpace, null)]);
+});
+
+test("leaving saves the sources as they are now, not the last change the writer was told about", () => {
+  const writes: SavedLaunchLook[] = [];
+  let current: SavedLaunchLook | null = launchLookFor(plum, null);
+  const writer = launchLookWriter(() => current, (saved) => writes.push(saved));
+  writer.settle();
+  current = launchLookFor(blue, null);
+  writer.leave();
+  assert.equal(writes.at(-1)!.color, "blue");
+});
+
+test("the launch look waits for sync's first snapshot only where sync is offered", () => {
+  assert.equal(launchLookSourcesLoaded({ ready: true, syncOffered: true, syncLoaded: false }), false);
+  assert.equal(launchLookSourcesLoaded({ ready: true, syncOffered: true, syncLoaded: true }), true);
+  assert.equal(launchLookSourcesLoaded({ ready: true, syncOffered: false, syncLoaded: false }), true);
+  assert.equal(launchLookSourcesLoaded({ ready: false, syncOffered: false, syncLoaded: true }), false);
 });

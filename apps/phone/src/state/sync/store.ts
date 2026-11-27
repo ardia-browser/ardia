@@ -31,9 +31,9 @@ export const OFF_STATUS: SyncStatus = {
 
 export const EMPTY_VIEW: SyncedView = { devices: [], profiles: [], search: null, syncedAt: null, selectedProfileId: null, receivers: [] };
 
-type SyncData = { available: boolean; status: SyncStatus; view: SyncedView; revision: number; pinsOnTheirWay: string[] };
+type SyncData = { available: boolean; loaded: boolean; status: SyncStatus; view: SyncedView; revision: number; pinsOnTheirWay: string[] };
 
-export const useSync = create<SyncData>()(() => ({ available: false, status: OFF_STATUS, view: EMPTY_VIEW, revision: 0, pinsOnTheirWay: [] }));
+export const useSync = create<SyncData>()(() => ({ available: false, loaded: false, status: OFF_STATUS, view: EMPTY_VIEW, revision: 0, pinsOnTheirWay: [] }));
 
 export const syncData = () => useSync.getState();
 
@@ -89,11 +89,12 @@ export function startSyncSources(onInbox: () => void) {
   try {
     sync.addListener(onEvent);
   } catch {
+    useSync.setState({ loaded: true });
     return;
   }
   useSync.setState({ available: true });
   void Promise.all([settled(() => sync.status(), null), settled(() => sync.view(), null)]).then(([status, view]) => {
-    publish({ ...(status ? { status } : {}), ...(view ? { view } : {}) });
+    publish({ ...(status ? { status } : {}), ...(view ? { view } : {}), loaded: true });
     onInbox();
   });
 }

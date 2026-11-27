@@ -208,12 +208,12 @@ const PASSWORD_READ_INTERVAL = 30_000;
 
 type SealedPasswords = {
   read: (engineProfile: string) => Promise<SealedLogin[] | null | undefined>;
-  save: (engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean) => Promise<boolean>;
+  save: (engineProfile: string, origin: string, username: string, sealed: string, replaced: string) => Promise<boolean>;
 };
 
 const nativePasswords: SealedPasswords = {
   read: async (p) => SyncNative?.readPasswords(p),
-  save: async (p, origin, username, sealed, replacing) => !!(await SyncNative?.savePassword(p, origin, username, sealed, replacing)),
+  save: async (p, origin, username, sealed, replaced) => !!(await SyncNative?.savePassword(p, origin, username, sealed, replaced)),
 };
 
 export function passwordsAdapter(profileId: string, logins: SealedPasswords = nativePasswords): (forced: boolean) => Adapter {
@@ -263,7 +263,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
         if (have && known?.s !== have.s) continue;
         if (v) {
           if (have?.s === v.s) continue;
-          const saved = await logins.save(profile(), v.o, v.u, v.s, !!have).catch(orWarn(false));
+          const saved = await logins.save(profile(), v.o, v.u, v.s, have?.s ?? "").catch(orWarn(false));
           if (saved) records.landed(key);
           ok = saved && ok;
         } else if (have) {

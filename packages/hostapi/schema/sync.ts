@@ -38,7 +38,7 @@ export const sync = defineModuleDomain({
         copyRecoveryPhrase: { args: [], result: "boolean | null", async: true, promise: true, queue: "main", instance: "strong", deadline: 180000, mac: "custom", desktop: "adapted", windows: "custom" },
         revealFolder: { args: [["path", "string"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "adapted", windows: "custom" },
         readPasswords: { args: [["engineProfile", "string"]], result: "SealedLogin[] | null", async: true, promise: true, instance: "strong", mac: "custom", desktop: "adapted", windows: "custom" },
-        savePassword: { args: [["engineProfile", "string"], ["origin", "string"], ["username", "string"], ["sealed", "string"], ["replacing", "boolean"]], result: "boolean", async: true, promise: true, queue: "module", instance: "strong", mac: "custom", desktop: "adapted", windows: "custom" },
+        savePassword: { args: [["engineProfile", "string"], ["origin", "string"], ["username", "string"], ["sealed", "string"], ["replaced", "string"]], result: "boolean", async: true, promise: true, queue: "module", instance: "strong", mac: "custom", desktop: "adapted", windows: "custom" },
         takeFileCounts: { args: [], result: "{ placeholders: number; busy: number; hydrated: number }", async: false, optional: true, mac: "absent", desktop: "absent", windows: "custom" },
       },
       constants: {

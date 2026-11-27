@@ -104,13 +104,13 @@ test("saved passwords go only through the typed native path for the window's pro
   configureHeldLogins(createHeldLogins(heldIo()));
   try {
     assert.deepEqual(await read("work"), sealedList);
-    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", "https://bank.example", "alice", "AdGh", true), true);
+    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", "https://bank.example", "alice", "AdGh", "OldS"), true);
   } finally {
     configureHeldLogins(null);
   }
   assert.deepEqual(host.calls, [
     { method: "ArdiaSync.readPasswords", args: { args: ["work"] } },
-    { method: "ArdiaSync.savePassword", args: { args: ["default", "https://bank.example", "alice", "AdGh", true] } },
+    { method: "ArdiaSync.savePassword", args: { args: ["default", "https://bank.example", "alice", "AdGh", "OldS"] } },
   ]);
   assert.equal(syncModuleMethod(host, "ArdiaPasswords", "write"), undefined);
 });

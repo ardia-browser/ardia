@@ -29,7 +29,7 @@ protocol SyncNative {
   func copyRecoveryPhrase(_ promise: Promise)
   static func revealFolder(_ path: String)
   func readPasswords(_ engineProfile: String, _ promise: Promise)
-  func savePassword(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replacing: Bool, _ promise: Promise)
+  func savePassword(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replaced: String, _ promise: Promise)
 }
 
 extension SyncNative {
@@ -146,7 +146,7 @@ extension SyncNative where Self: Module {
   }
 
   var savePasswordFunction: AnyDefinition {
-    AsyncFunction("savePassword") { (engineProfile: String, origin: String, username: String, sealed: String, replacing: Bool, promise: Promise) in self.savePassword(engineProfile, origin, username, sealed, replacing, promise) }.runOnQueue(Self.queue)
+    AsyncFunction("savePassword") { (engineProfile: String, origin: String, username: String, sealed: String, replaced: String, promise: Promise) in self.savePassword(engineProfile, origin, username, sealed, replaced, promise) }.runOnQueue(Self.queue)
   }
 }
 

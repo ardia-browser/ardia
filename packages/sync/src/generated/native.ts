@@ -30,7 +30,7 @@ export type SyncNative = {
   copyRecoveryPhrase(): Promise<boolean | null>;
   revealFolder(path: string): Promise<void>;
   readPasswords(engineProfile: string): Promise<SealedLogin[] | null>;
-  savePassword(engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean): Promise<boolean>;
+  savePassword(engineProfile: string, origin: string, username: string, sealed: string, replaced: string): Promise<boolean>;
   takeFileCounts?(): { placeholders: number; busy: number; hydrated: number };
 };
 

@@ -461,10 +461,10 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
     };
   }
   if (method === "savePassword") {
-    return async (profile: string, origin: string, username: string, sealed: string, replacing: boolean) => {
+    return async (profile: string, origin: string, username: string, sealed: string, replaced: string) => {
       const store = heldLogins;
       const owner = hostProfile(profile, host);
-      const saved = await invoke(host, method)(owner, origin, username, sealed, replacing);
+      const saved = await invoke(host, method)(owner, origin, username, sealed, replaced);
       if (saved === "skipped") {
         if (!store) return false;
         const local = (await invoke(host, "readPasswords")(owner)) as SealedLogin[] | null;

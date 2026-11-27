@@ -10,6 +10,8 @@ extension ArdiaWebView: LoginListTarget {
     fillLoginList(["username": username, "password": password], origin: frameOrigin, completion: done)
   }
 
+  func loginListFillCode(_ code: String, frameOrigin: String, done: @escaping (Bool) -> Void) { done(false) }
+
   func loginListSync(open: Bool, picking: Bool) { syncLoginList(open: open, picking: picking) }
 
   func loginListConnect() { connectApplePasswordsFromLoginList() }

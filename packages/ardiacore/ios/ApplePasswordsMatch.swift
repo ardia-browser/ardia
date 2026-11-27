@@ -5,7 +5,16 @@ struct ApplePasswordsEntry: Equatable {
   let sites: [String]
 }
 
+struct ApplePasswordsCode: Equatable {
+  let user: String
+  let domain: String
+  let source: String
+  let code: String
+}
+
 enum ApplePasswordsMatch {
+  static let timeCodeSource = "totp"
+
   struct Login: Equatable {
     let user: String
     let insecure: Bool
@@ -69,5 +78,15 @@ enum ApplePasswordsMatch {
     }
     return found.compactMap { entry in seen.insert(entry.user).inserted ? Login(user: entry.user, insecure: insecurePage) : nil }
       .sorted { $0.user.localizedCaseInsensitiveCompare($1.user) == .orderedAscending }
+  }
+
+  static func codeHosts(_ codes: [ApplePasswordsCode]) -> [String] { codes.map { normalized($0.domain) }.filter { !$0.isEmpty } }
+
+  static func codes(_ codes: [ApplePasswordsCode], host: String, domains: [String: String]) -> [ApplePasswordsCode] {
+    let page = site(host, domains: domains)
+    var seen = Set<String>()
+    return codes.filter { code in
+      code.source == timeCodeSource && site(code.domain.isEmpty ? host : code.domain, domains: domains) == page && seen.insert(code.user.lowercased()).inserted
+    }
   }
 }

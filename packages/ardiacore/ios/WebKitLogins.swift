@@ -56,6 +56,8 @@ final class WebKitLogins: NSObject {
     const username = usernameFor(password);
     return username === el ? { password, username } : null;
   };
+  const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
+  const codeField = (el) => !!el && el.tagName === "INPUT" && visible(el) && /^(text|tel|number|)$/i.test(el.type || "text") && ONE_TIME_CODE.test(el.getAttribute("autocomplete") || "");
   let active = null;
   let open = false;
   let picking = false;
@@ -64,12 +66,13 @@ final class WebKitLogins: NSObject {
   };
   const report = (event, el) => {
     const found = loginField(el);
-    if (!found) return hide();
-    active = { el, found };
+    const code = !found && codeField(el);
+    if (!found && !code) return hide();
+    active = { el, found, code };
     const r = el.getBoundingClientRect();
     const isPassword = el.type === "password";
     post("loginField", {
-      event, origin: location.origin, password: isPassword, value: isPassword ? "" : String(el.value || "").slice(0, 200),
+      event, origin: location.origin, password: isPassword, code, value: isPassword || code ? "" : String(el.value || "").slice(0, 200),
       x: r.left, y: r.top, width: r.width, height: r.height,
     });
   };
@@ -84,6 +87,7 @@ final class WebKitLogins: NSObject {
       return;
     }
     if (loginField(el)) report("input", el);
+    else if (active && active.code && el === active.el) hide();
   }, true);
   addEventListener("keydown", (e) => {
     if (!e.isTrusted || !active || e.target !== active.el) return;
@@ -137,9 +141,15 @@ final class WebKitLogins: NSObject {
       const same = (el) => (el.getAttribute("name") || "") === field.name && (el.id || "") === field.id && (el.getAttribute("autocomplete") || "") === field.autocomplete;
       return Array.from(document.querySelectorAll("input[type=password]")).some((el) => visible(el) && same(el));
     },
+    fillCode(code, origin) {
+      if (location.origin !== origin || !active || !active.code || !active.el.isConnected) return false;
+      setValue(active.el, code);
+      open = picking = false;
+      return true;
+    },
     fill(username, password, origin) {
       if (location.origin !== origin) return false;
-      const target = active && active.el.isConnected && active.found.password.isConnected ? active.found : null;
+      const target = active && active.found && active.el.isConnected && active.found.password.isConnected ? active.found : null;
       const field = target ? target.password : passwordIn(document);
       if (!field) return false;
       const user = target ? target.username : usernameFor(field);
@@ -271,7 +281,7 @@ final class WebKitLogins: NSObject {
     Self.verdict(.fill, for: tab.profile) { [weak self, weak tab] verdict in
       guard let self, let tab, asked == self.ticket else { return }
       switch verdict {
-      case .ardia: self.showFilling(tab, data: data, origin: origin)
+      case .ardia where data["code"] as? Bool != true: self.showFilling(tab, data: data, origin: origin)
       case .applePasswords: self.showApplePasswords(tab, data: data, origin: origin)
       default: self.close(tab)
       }
@@ -288,9 +298,10 @@ final class WebKitLogins: NSObject {
   private func showApplePasswords(_ tab: WebKitTab, data: [String: Any], origin: String) {
     guard let view = tab.webView, let window = tab.window, Self.pageOrigin(tab) == origin else { return close(tab) }
     let password = data["password"] as? Bool ?? false
+    let code = data["code"] as? Bool == true
     let field = LoginListField(
       frameOrigin: origin, screenRect: window.convertToScreen(tab.convert(Self.fieldRect(data, in: view), to: nil)),
-      trigger: data["event"] as? String == "input" ? .typing : .press, typed: password ? "" : data["value"] as? String ?? "")
+      trigger: data["event"] as? String == "input" ? .typing : .press, typed: password || code ? "" : data["value"] as? String ?? "", kind: code ? .code : .login)
     LoginList.shared.show(tab, field: field)
   }
 

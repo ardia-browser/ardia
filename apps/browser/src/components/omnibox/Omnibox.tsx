@@ -16,6 +16,7 @@ import { createBangSubmitter, mayBeBang } from "../../state/omnibox/bangs";
 import { traceOmnibox, useOmniboxDriver } from "./devDriver";
 import { claimFocusTag, commandBarFocus, heroBarFocus } from "../../state/focus/focusClaims";
 import { registerHeroBar, saveNtpQuery, type BarDismissal, type BarSnapshot, type HeroBarFocus } from "../../state/omnibox/barState";
+import { cancelLateNewTabOverride } from "../../state/tabs/newTabHome";
 import { barSplitsFrom, openFromBar, otherOpenTabs, switchFromBar, type Disposition } from "../../state/omnibox/openFromBar";
 import { openFromNewTabBar } from "../../state/omnibox/newTabBar";
 import { isBookmarklet, runBookmarklet } from "../../state/bookmarks/bookmarklets";
@@ -213,7 +214,7 @@ export function Omnibox({
   };
 
   const onContextMenu = async () => {
-    const pick = await showFieldMenu(value, selection, shownUrl);
+    const pick = await showFieldMenu(value, selection, shownUrl, () => hero && cancelLateNewTabOverride(tabId));
     if (pick?.kind === "go") return go(pick.url);
     if (pick?.kind === "edit") {
       previewSelection.edited();

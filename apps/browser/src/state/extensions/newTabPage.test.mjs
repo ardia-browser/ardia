@@ -239,3 +239,37 @@ test("#1126: a right-click Paste, Cut or Delete in the New Tab search field, and
   assert.match(read("../../components/omnibox/useBarText.ts"), /useState\(\(\) => cancelsLateOverride\(hero, tabId, reduce\)\)/, "the bar's only dispatch is the one that cancels");
   assert.match(read("../../components/omnibox/Omnibox.tsx"), /if \(pick\?\.kind === "edit"\) \{\s*previewSelection\.edited\(\);\s*dispatch\(\{ kind: "edited"/, "the field menu's Paste, Cut and Delete go through that dispatch as an edited event");
 });
+
+test("#1126: picking Paste in the New Tab search field's menu cancels the late extension page before the clipboard read finishes", async () => {
+  const { shellNativeModules } = await import("../../test-native/index.ts");
+  const { showFieldMenu } = await import("../omnibox/paste.ts");
+  const shell = shellNativeModules.ArdiaShell;
+  const menus = shellNativeModules.ArdiaMenus;
+  const realRead = shell.readText;
+  const realMenu = menus.showMenu;
+  const w = reset({}, []);
+  const profile = engineProfile(S(), S().windows[w].profileId);
+  useExtensions.setState({ lists: {} });
+  const pasting = S().newTab(w, { newTabCommand: true });
+  const unguarded = S().newTab(w, { newTabCommand: true, background: true });
+  let reads = 0;
+  let finishRead;
+  let readStarted;
+  const started = new Promise((resolve) => (readStarted = resolve));
+  shell.readText = () => (++reads === 1 ? Promise.resolve("pasted words") : (readStarted(), new Promise((resolve) => (finishRead = resolve))));
+  menus.showMenu = () => Promise.resolve("paste");
+  try {
+    const picked = showFieldMenu("", { current: { start: 0, end: 0 } }, null, () => cancelLateNewTabOverride(pasting));
+    await started;
+    useExtensions.setState({ lists: { [profile]: [extension(SPEED_DIAL, "dial.html")] } });
+    finishRead("pasted words");
+    assert.deepEqual(await picked, { kind: "edit", text: "pasted words", caret: 12 });
+    assert.equal(S().tabs[pasting].url, "", "the list arrived during the clipboard read and left the pasting tab alone");
+    assert.equal(S().tabs[unguarded].url, `chrome-extension://${SPEED_DIAL}/dial.html`, "without the pick callback the late page would have taken the tab");
+  } finally {
+    shell.readText = realRead;
+    menus.showMenu = realMenu;
+  }
+  const { readFileSync } = await import("node:fs");
+  assert.match(readFileSync(new URL("../../components/omnibox/Omnibox.tsx", import.meta.url), "utf8"), /showFieldMenu\(value, selection, shownUrl, \(\) => hero && cancelLateNewTabOverride\(tabId\)\)/);
+});

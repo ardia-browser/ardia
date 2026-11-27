@@ -1,3 +1,4 @@
+import { formatUrl, webUrl } from "../../lib/urlParts";
 import { setContentBlockerEnabled, setFilterListEnabled, type ContentBlockerState, type FilterListCategory } from "../../platform/contentBlocker";
 
 const BLOCKED_PAGE = "chrome-extension://fajbdaomknpkicfjcpipdmcpoamdmilh/document-blocked.html";
@@ -28,24 +29,14 @@ const LIST_ADDRESS_LIMIT = 2048;
 
 export function filterListAddress(typed: string): string | null {
   const text = typed.trim();
-  if (!text || text.length > LIST_ADDRESS_LIMIT || /\s/.test(text)) return null;
-  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`;
-  try {
-    const url = new URL(withScheme);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    if (!url.hostname.includes(".") && url.hostname !== "localhost") return null;
-    return url.href;
-  } catch {
-    return null;
-  }
+  if (!text || text.length > LIST_ADDRESS_LIMIT) return null;
+  const parts = webUrl(/^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`);
+  if (!parts || (!parts.host.includes(".") && parts.host !== "localhost")) return null;
+  return formatUrl(parts);
 }
 
 export function filterListLabel(id: string, title: string): string {
   if (title && title !== id) return title;
-  try {
-    const url = new URL(id);
-    return `${url.hostname}${url.pathname === "/" ? "" : url.pathname}`;
-  } catch {
-    return id;
-  }
+  const parts = webUrl(id);
+  return parts ? `${parts.host}${parts.path === "/" ? "" : parts.path}` : id;
 }

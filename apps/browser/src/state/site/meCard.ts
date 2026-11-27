@@ -181,6 +181,11 @@ export async function setMeCardFor(profile: string, on: boolean) {
   await refresh(profile);
 }
 
+export function switchMeCard(profile: string, on: boolean) {
+  const consent = consentToken();
+  return setMeCardFor(profile, on).catch((e: unknown) => warnFor(consent, `[me card] turning it ${on ? "on" : "off"} failed`, e));
+}
+
 export const useMeCardFor = (profile: string) => ({
   on: useMeCard((s) => !!s.entries[profile]),
   hint: useMeCard((s) => s.hints[profile] ?? null),

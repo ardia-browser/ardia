@@ -44,7 +44,8 @@ public class ContactsModule: Module, ContactsNative {
 
   func meCard() throws -> [String: Any]? {
     if let path = Self.fixturePath { return Self.fixtureCard(path) }
-    guard Self.readable(Self.authorizationStatus()) else { return nil }
+    let status = Self.authorizationStatus()
+    guard Self.readable(status) else { throw Exception(name: "not_readable", description: "Contacts access is \(status)", code: "not_readable") }
     let keys: [CNKeyDescriptor] = [
       CNContactFormatter.descriptorForRequiredKeys(for: .fullName),
       CNContactOrganizationNameKey as CNKeyDescriptor,

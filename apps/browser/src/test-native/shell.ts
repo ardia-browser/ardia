@@ -448,7 +448,8 @@ const contactsModule: Modules["ArdiaContacts"] = {
   meCard: () => {
     contacts.reads++;
     if (contacts.readError) return Promise.reject(new Error(contacts.readError));
-    return Promise.resolve(contacts.status === "authorized" && contacts.card ? structuredClone(contacts.card) : null);
+    if (contacts.status !== "authorized" && contacts.status !== "limited") return Promise.reject(new Error(`Contacts access is ${contacts.status}`));
+    return Promise.resolve(contacts.card ? structuredClone(contacts.card) : null);
   },
   openMeCard: () => {
     contacts.opened++;

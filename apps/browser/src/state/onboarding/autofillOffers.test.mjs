@@ -210,3 +210,33 @@ test("S11: a Me card pick whose Contacts access is refused isn't an answer, and 
   assert.deepEqual(offers.openAutofillOffers(again), ["meCard"]);
   useOnboarding.setState({ windowId: null });
 });
+
+test("S11: accepting Apple Passwords while it's already connected picks it without asking for a new code", async () => {
+  const profile = await onboardingOn({ apple: "connected" });
+  assert.deepEqual(offers.openAutofillOffers(profile), ["applePasswords", "meCard"]);
+  step.toggleAutofillOffer("applePasswords");
+  await step.continueAutofillStep();
+  assert.deepEqual(native.applePasswords.calls, [], "no second Pairing starts over the live connection");
+  assert.equal(currentPasswordManager(profile), "apple");
+  assert.equal(useOnboarding.getState().step, "home");
+  assert.deepEqual(useOnboarding.getState().picked.autofill, ["Fills and saves logins with Apple Passwords"]);
+  useOnboarding.setState({ windowId: null });
+});
+
+test("S11: going back while the Me card is turning on leaves the step ready to use again", async () => {
+  const profile = await onboardingOn({ apple: "notEntitled" });
+  native.contacts.card = { name: "Ada Lovelace", organization: "", emails: ["ada@example.test"], phones: [], addresses: [] };
+  step.toggleAutofillOffer("meCard");
+  const working = step.continueAutofillStep();
+  assert.equal(step.useAutofillStep.getState().phase, "working");
+  step.skipAutofillStep();
+  assert.equal(useOnboarding.getState().step, "autofill", "Skip waits while the Me card is turning on");
+  useOnboarding.setState({ step: "pins" });
+  await working;
+  useOnboarding.setState({ step: "autofill" });
+  assert.equal(step.useAutofillStep.getState().phase, "offer", "Continue works again on return");
+  assert.deepEqual(offers.openAutofillOffers(profile), [], "the Me card turned on, so it isn't offered again");
+  await setMeCardFor(engine(profile), false);
+  native.contacts.card = null;
+  useOnboarding.setState({ windowId: null });
+});

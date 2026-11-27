@@ -5,7 +5,8 @@ import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { noteOnboardingOffer } from "../telemetry/passwordManagerCounts";
 import { useBrowser } from "../browser/store";
 import { currentEngineProfile } from "../browser/current";
-import { setMeCardFor, useMeCard } from "../site/meCard";
+import { switchMeCard, useMeCard } from "../site/meCard";
+import { choosePasswordManager } from "../site/passwordManager";
 import { autofillStepOffers, holdAutofillOffers, offerPicks, recordAutofillAnswers, useHeldOffers, type AutofillOffer } from "./autofillOffers";
 import { confirmAnswer, onboardingProfile, skipStep, useOnboarding } from "./onboarding";
 
@@ -59,12 +60,22 @@ export async function continueAutofillStep() {
   const picked = offerPicks(now().picks, offered);
   holdAutofillOffers(offered);
   useAutofillStep.setState({ phase: "working", consent: consentToken() });
-  if (picked.includes("meCard")) await setMeCardFor(currentEngineProfile(id), true);
-  if (!inStep()) return;
+  if (picked.includes("meCard")) await switchMeCard(currentEngineProfile(id), true);
+  if (!inStep()) return leftWhileWorking();
   if (!picked.includes("applePasswords")) return finishPicked(false);
+  if (applePasswordsConnected()) {
+    choosePasswordManager(id, "apple", now().consent);
+    return finishPicked(true);
+  }
   useAutofillStep.setState({ phase: "pairing" });
   await startApplePasswordsPairing(id);
   if (now().phase === "pairing" && inStep() && !useApplePasswords.getState().pairing) finishPicked(applePasswordsConnected());
+}
+
+function leftWhileWorking() {
+  if (now().phase !== "working") return;
+  holdAutofillOffers([]);
+  useAutofillStep.setState({ phase: "offer" });
 }
 
 const meCardOn = (id: string | null) => !!id && !!useMeCard.getState().entries[currentEngineProfile(id)];
@@ -97,7 +108,7 @@ export function finishAutofillPairing() {
 }
 
 export function skipAutofillStep() {
-  if (!inStep()) return;
+  if (!inStep() || now().phase === "working") return;
   const pairing = now().phase === "pairing";
   const { offered, accepted } = pairing ? answered(false) : { offered: autofillStepOffers(profile()), accepted: [] };
   if (pairing) cancelPairing();

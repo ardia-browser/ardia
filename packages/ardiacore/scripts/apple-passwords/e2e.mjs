@@ -529,7 +529,7 @@ const CHECKS = {
   ...loginListChecks({ paired, sites }),
   ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E41", "E41fetch", "E9", "E10", "E11", "E12", "E13", "E28frame", "E28claim", "E14", "E15", "E16", "E17", "E34", "E34fetches", "E34fresh", "E35", "E36", "E37", "E38"]),
   ...savingChecks({ paired, sites }),
-  ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E18notNow", "E18notConnected", "E39", "E19", "E20", "E20unread", "E21", "E22", "E22garbled", "E23", "E33"]),
+  ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E18notNow", "E18notConnected", "E18never", "E39", "E19", "E20", "E20unread", "E21", "E22", "E22garbled", "E23", "E33"]),
   ...strongPasswordChecks({ paired, sites, fresh: freshChromiumTab }),
   ...inChromium(strongPasswordChecks({ paired, sites, engine: "chromium" }), ["E24", "E24pattern", "E24change", "E24notConnected"]),
   ...codeChecks({ paired, sites }),

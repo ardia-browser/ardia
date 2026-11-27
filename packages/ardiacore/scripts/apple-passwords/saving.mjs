@@ -283,6 +283,34 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       await waitFor("Paired again", async () => ((await applePasswords(app)) === "connected" ? true : null), 20_000);
       return { engine: engineName, ...seen };
     },
+    async E18never() {
+      const { app, fake, tabs } = await session();
+      const site = `never-${engineName}.localhost`;
+      await unpaired(app, fake);
+      const first = { user: `never-${engineName}-${Date.now()}@save.test`, password: "fixture-pw-never-22" };
+      const tab = await tabs.open(sites.url(site));
+      try {
+        await signIn(tab, first.user, first.password);
+        const prompt = await promptShown(tab);
+        assert(prompt.state === "save" && prompt.copy.title === CONNECT_TITLE, `signing in while Apple Passwords isn't connected asks ${CONNECT_TITLE}`, prompt);
+        assert(await tab.answer("never"), "Never on This Site is pressed", null);
+        await app.eval("return ac.applePasswords.startApplePasswordsPairing(null).then(() => true);", { timeout: 30_000 });
+        await waitFor("the code step", async () => ((await pairingStep(app)) === "code" ? true : null), 20_000);
+        await app.eval(`return ac.applePasswords.submitApplePasswordsCode(ac.applePasswords.pairingCodeSecret(${q(FIXTURES.code)})).then(() => true);`, { timeout: 60_000 });
+        await waitFor("Paired again", async () => ((await applePasswords(app)) === "connected" ? true : null), 20_000);
+        const sent = savesSent(fake);
+        const later = { user: `never-again-${engineName}-${Date.now()}@save.test`, password: "fixture-pw-never-23" };
+        await tab.navigate(sites.url(site));
+        await signIn(tab, later.user, later.password);
+        const shown = await noPrompt(tab);
+        assert(!shown, "a site set to Never on This Site shows no prompt", shown);
+        assert(savesSent(fake) === sent, "and sends Apple Passwords no save", savesSent(fake) - sent);
+        assert(!fake.asked().some((a) => a.user === first.user || a.user === later.user), "Apple Passwords is never asked", null);
+        return { engine: engineName, prompt: "none", sent: 0 };
+      } finally {
+        await tab.close();
+      }
+    },
     async E33() {
       const { fake, tabs } = await session();
       const login = { user: `http-${engineName}-${Date.now()}@plain.test`, password: "fixture-pw-http-14" };

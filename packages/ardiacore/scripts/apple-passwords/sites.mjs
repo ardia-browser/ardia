@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import path from "node:path";
 
-export const SECURE_HOSTS = ["example.localhost", "accounts.example.localhost", "other.localhost", "empty.localhost", "save.localhost", "filter.localhost"];
+export const SECURE_HOSTS = ["example.localhost", "accounts.example.localhost", "other.localhost", "empty.localhost", "save.localhost", "filter.localhost", "never-webkit.localhost", "never-chromium.localhost"];
 export const PLAIN_HOSTS = ["plain.localhost", "plain-save.localhost"];
 export const PAGE_EVENTS = `JSON.parse(document.documentElement.dataset.events || "[]")`;
 

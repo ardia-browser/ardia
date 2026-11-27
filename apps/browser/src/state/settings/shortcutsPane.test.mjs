@@ -4,7 +4,7 @@ import { afterEach, test } from "node:test";
 globalThis.__DEV__ = false;
 const { shellNativeModules } = await import("../../test-native/shell.ts");
 const { mount } = await import("../../test-hooks.mjs");
-const { noteMenuShortcuts, preparePane, shortcutItems } = await import("./paneData.ts");
+const { noteMenuShortcuts, preparePane, readMenuShortcuts, shortcutItems } = await import("./paneData.ts");
 const { cached, load, useResource } = await import("./resources.ts");
 const { menuBarRevision, setMenuBarShortcuts } = await import("../commands/commandShortcuts.ts");
 
@@ -112,4 +112,43 @@ test("a Settings read that finishes after the menu sync stored a newer list chan
   assert.equal(menuBarRevision(), revision, `the stale read changed the menu bar: revision ${revision} -> ${menuBarRevision()}`);
   setMenuBarShortcuts(newer);
   assert.equal(menuBarRevision(), revision, "the menu bar still holds the newer list");
+});
+
+test("a menu sync whose read fails leaves the held list outdated, so opening the pane reads it again", async () => {
+  offer(menuList);
+  await load(shortcutItems, [], { fresh: true });
+  const held = cached(shortcutItems, []);
+
+  menus.menuShortcuts = () => Promise.reject(new Error("the menu walk failed"));
+  assert.equal(await readMenuShortcuts(Promise.resolve(), null), false);
+  assert.equal(cached(shortcutItems, []), held);
+
+  const added = { id: "openExtension:z", title: "Z", path: ["Extensions"], remappable: true };
+  const asked = offer(() => [...menuList(), added]);
+  const pane = mount(() => useResource(shortcutItems));
+  await settle();
+  assert.equal(asked.calls, 1, `menuShortcuts calls 0 -> ${asked.calls}`);
+  assert.deepEqual(pane.value[0].map((item) => item.id), ["newTab", "reload", "openExtension:z"]);
+  pane.unmount();
+
+  const again = mount(() => useResource(shortcutItems));
+  await settle();
+  assert.equal(asked.calls, 1, "the list read after the failed sync is current, so the next visit reuses it");
+  again.unmount();
+});
+
+test("a menu sync whose read succeeds leaves the list current, so opening the pane does not read again", async () => {
+  const asked = offer(menuList);
+  await load(shortcutItems, [], { fresh: true });
+  const extension = { id: "openExtension:w", title: "W", path: ["Extensions"], remappable: true };
+  const sync = offer(() => [...menuList(), extension]);
+  assert.equal(await readMenuShortcuts(Promise.resolve(), null), true);
+  assert.equal(sync.calls, 1);
+
+  const pane = mount(() => useResource(shortcutItems));
+  await settle();
+  assert.equal(sync.calls, 1, `menuShortcuts calls 1 -> ${sync.calls}`);
+  assert.deepEqual(pane.value[0].map((item) => item.id), ["newTab", "reload", "openExtension:w"]);
+  assert.equal(asked.calls, 1);
+  pane.unmount();
 });

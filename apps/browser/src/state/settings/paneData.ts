@@ -27,7 +27,7 @@ import { currentSettings } from "../browser/current";
 import { engineProfile } from "../browser/model";
 import { currentSyncFolder, folderInfo } from "../sync/engine";
 import { extensionsProfileId, refreshExtensions } from "../extensions/actions";
-import { cached, load, loadAll, need, resource, store, useAllLoaded, type Needed, type Resource } from "./resources";
+import { cached, load, loadAll, markOutdated, need, resource, store, useAllLoaded, type Needed, type Resource } from "./resources";
 import { onSettingsOpen, type SettingsPane } from "./settingsWindows";
 import { FOLLOW_EVERY_MS, FOLLOW_FOR_MS, FOLLOW_UPDATE_EVERY_MS, FOLLOW_UPDATE_FOR_MS, switchOutcome, updateUnderWay, updaterBusy } from "./updateStatus";
 import { noteUpdateChannelSwitch } from "../telemetry/usage";
@@ -87,7 +87,20 @@ export const shortcutItems: Resource<[], MenuShortcut[]> = resource(
 
 export function noteMenuShortcuts(items: readonly MenuShortcut[], consent: ConsentToken | null) {
   noteShortcutList("menuSync", consent);
+  setMenuBarShortcuts(items);
   store(shortcutItems, [], offered(items));
+}
+
+export function readMenuShortcuts(sent: Promise<unknown>, consent: ConsentToken | null): Promise<boolean> {
+  return sent
+    .then(() => {
+      markOutdated(shortcutItems, []);
+      return menuShortcuts();
+    })
+    .then(
+      (items) => (noteMenuShortcuts(items, consent), true),
+      () => false,
+    );
 }
 
 export const engineVersion = resource("engineInfo", () => engineInfo().catch(() => null));

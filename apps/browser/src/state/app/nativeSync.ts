@@ -9,7 +9,7 @@ import { setTrafficLightsCenter } from "../windows/nativeWindow";
 import { isDarkAppearance, onAppEvent, onOpenURLs, replyToTerminate } from "../../platform/app";
 import { startNativeSettings } from "../settings/nativeSettings";
 import { startInterfaceScaleRefresh } from "./interfaceScaleRefresh";
-import { menuShortcuts, onCommand, setMenuStateParts } from "../../platform/commands";
+import { onCommand, setMenuStateParts } from "../../platform/commands";
 import { Appearance } from "react-native";
 import { useBrowser } from "../browser/store";
 import { setLastTabKeepsWindow } from "../omnibox/newTabBarPolicy";
@@ -23,7 +23,7 @@ import { noteIncomingLinksRefused } from "../telemetry/externalAppCounts";
 import { startUnclaimedEscape } from "../windows/unclaimedEscape";
 import { SMALL_LIGHTS_CENTER } from "../windows/small";
 import { runCommand } from "../commands/commands";
-import { noteMenuShortcuts } from "../settings/paneData";
+import { readMenuShortcuts } from "../settings/paneData";
 import { finishAnimatedCloses } from "../windows/closeAnimated";
 import { followHandedBack, startKeyboardFollows } from "../focus/keyboardFollows";
 import { cancelAbandonedFocusMoves, settlingCommandFocus } from "../focus/focusHandoff";
@@ -154,10 +154,9 @@ export function startNativeSync() {
     if (menuItems === lastMenuItems) return void sent;
     lastMenuItems = menuItems;
     const consent = menuConsent;
-    void sent.then(menuShortcuts).then((items) => {
-      noteMenuShortcuts(items, consent);
-      menuTimer ??= setTimeout(syncMenu, 120);
-    }, () => {});
+    void readMenuShortcuts(sent, consent).then((read) => {
+      if (read) menuTimer ??= setTimeout(syncMenu, 120);
+    });
   };
 
   const syncMenuLater = () => {

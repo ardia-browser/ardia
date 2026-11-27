@@ -247,6 +247,25 @@ export class WorkspaceStore {
     return this.placeholders.size;
   }
 
+  waitingFor(names: string[]): string[] {
+    const wanted = new Set(names);
+    return [...this.placeholders.keys()].filter((path) => path.startsWith("docs/") && wanted.has(path.split("/")[1]!));
+  }
+
+  async filesDownloading(shas: string[]): Promise<string[]> {
+    if (!shas.length) return [];
+    const wanted = new Set(shas);
+    const out: string[] = [];
+    for (const e of await this.fs.list("files")) {
+      const base = e.path.slice(e.path.lastIndexOf("/") + 1);
+      const sha = /^([0-9a-f]{64})\.[a-z0-9]+$/.exec(base)?.[1];
+      if (!sha || !wanted.has(sha)) continue;
+      out.push(sha);
+      if (e.placeholder) void this.fs.read(`files/${base}`, { length: 1 }).catch(() => undefined);
+    }
+    return out;
+  }
+
   hasPending(): boolean {
     return [...this.entries.values()].some((e) => e.pending.length > 0 || e.needsCompaction);
   }

@@ -98,11 +98,11 @@ export function recordsFileIn(vfs: Vfs): string | null {
   return found?.path ?? null;
 }
 
-type Running = { job: ImportJob; cancelled: boolean };
+type Running = { job: ImportJob; cancelled: boolean; quit?: boolean; done?: Promise<void> };
 
 export const RUNNING_IMPORT_KEY = "importRunning";
 
-type RunningRecord = { id: string; source: ImportSourceId; workspace: string; root: string | null; title: string; startedAt: number };
+type RunningRecord = { id: string; source: ImportSourceId; workspace: string; root: string | null; roots?: string[]; title: string; startedAt: number };
 
 export const INTERRUPTED_IMPORT = "The import stopped when Notes did, so what it had made so far went to the trash. Start it again.";
 
@@ -116,6 +116,7 @@ function runningRecord(value: unknown): RunningRecord | null {
     source: r.source as ImportSourceId,
     workspace: r.workspace,
     root: typeof r.root === "string" ? r.root : null,
+    roots: Array.isArray(r.roots) ? r.roots.filter((x): x is string => typeof x === "string" && /^[0-9a-f]{12}$/.test(x)).slice(0, 2000) : [],
     title: typeof r.title === "string" ? r.title : "",
     startedAt: r.startedAt,
   };
@@ -210,13 +211,13 @@ export class Imports {
     const job: ImportJob = { id: record.id, source: record.source, workspace: record.workspace, state: "failed", files: 0, filesDone: 0, pages: 0, databases: 0, attachments: 0, skipped: 0, current: "", error: INTERRUPTED_IMPORT, startedAt: record.startedAt, finishedAt: now };
     try {
       const sink = await this.deps.target(record.workspace);
-      const root = this.interruptedRoot(sink.tree, record);
-      if (root) {
-        archivePage(sink.tree, root, sink.by, now);
+      const made = this.interruptedRoots(sink.tree, record);
+      for (const root of made) archivePage(sink.tree, root, sink.by, now);
+      if (made.length) {
         await sink.flush();
-        job.root = root;
+        job.root = made[0];
       }
-      this.deps.log("info", `import ${record.source}: an import that stopped with Notes was ${root ? "moved to the trash" : "marked failed"}`);
+      this.deps.log("info", `import ${record.source}: an import that stopped with Notes was ${made.length ? "moved to the trash" : "marked failed"}`);
     } finally {
       if (!this.jobs.has(record.id)) {
         this.jobs.set(record.id, { job, cancelled: false });
@@ -227,14 +228,16 @@ export class Imports {
     }
   }
 
-  private interruptedRoot(tree: Sink["tree"], record: RunningRecord): string | null {
-    if (record.root) {
-      const page = getPage(tree, record.root);
-      return page && !page.deleted && page.archivedAt === 0 ? page.id : null;
-    }
-    if (!record.title) return null;
+  private interruptedRoots(tree: Sink["tree"], record: RunningRecord): string[] {
+    const known = [...(record.root ? [record.root] : []), ...(record.roots ?? [])];
+    if (known.length)
+      return known.filter((id) => {
+        const page = getPage(tree, id);
+        return !!page && !page.deleted && page.archivedAt === 0;
+      });
+    if (!record.title) return [];
     const made = allPages(tree).filter((p) => p.parent === "" && !p.deleted && p.archivedAt === 0 && p.title === record.title && p.createdAt >= record.startedAt);
-    return made.length === 1 ? made[0]!.id : null;
+    return made.length === 1 ? [made[0]!.id] : [];
   }
 
   private remember(record: RunningRecord | null): Promise<void> {
@@ -252,6 +255,19 @@ export class Imports {
   cancel(id: string) {
     const running = this.jobs.get(id);
     if (running && (running.job.state === "reading" || running.job.state === "writing")) running.cancelled = true;
+  }
+
+  private stopping = false;
+
+  async stop(): Promise<void> {
+    this.stopping = true;
+    const active = [...this.jobs.values()].filter((r) => r.job.state === "reading" || r.job.state === "writing");
+    for (const r of active) {
+      r.cancelled = true;
+      r.quit = true;
+    }
+    await Promise.all(active.map((r) => r.done?.catch(() => undefined)));
+    await this.recordWrites;
   }
 
   private busy(): boolean {
@@ -388,6 +404,7 @@ export class Imports {
   async start(workspace: string, source: ImportSourceId, pick: ImportPick, uploadId?: string): Promise<{ job: string } | null> {
     const info = importSource(source);
     if (!info) throw new ImportError("Notes can't import from there.");
+    if (this.stopping) throw new ImportError("Notes is closing, so the import didn't start.");
     await this.recover();
     if (this.busy()) throw new ImportError("An import is already running. Wait for it to finish or cancel it.");
     const input = uploadId ? this.stagedInput(uploadId) : pick === "app" ? await this.appInput(source) : pick === "account" ? this.accountInput(source) : await this.input(pick);
@@ -399,7 +416,7 @@ export class Imports {
     this.latest = id;
     for (const [key, r] of this.jobs) if (key !== id && this.jobs.size > 8 && r.job.state !== "reading" && r.job.state !== "writing") this.jobs.delete(key);
     await this.remember({ id, source, workspace, root: null, title: `${info.title} import`, startedAt: job.startedAt });
-    void this.run(running, input, info.title).catch((error) => this.deps.log("warn", `import: ${String(error)}`));
+    running.done = this.run(running, input, info.title).catch((error) => this.deps.log("warn", `import: ${String(error)}`));
     return { job: id };
   }
 
@@ -409,9 +426,14 @@ export class Imports {
     let root: string | null = null;
     let roots: string[] = [];
     let sink: Sink | null = null;
+    let keepRecovery = false;
+    const madeRoots = (made: string[]) => {
+      roots = made;
+      if (made.length) void this.remember({ id: job.id, source: job.source, workspace: job.workspace, root: null, roots: made, title: `${title} import`, startedAt: job.startedAt });
+    };
     try {
       if (input.records || (job.source === "notion" && recordsFileIn(input.vfs) === RECORDS_FILE)) {
-        roots = await this.runRecords(running, input, (s) => (sink = s), (r) => (roots = r));
+        roots = await this.runRecords(running, input, (s) => (sink = s), madeRoots);
         return;
       }
       const vfs = await LayeredVfs.build(input.vfs, input.access, spool, (path) => {
@@ -425,7 +447,7 @@ export class Imports {
       if (recordsPath) {
         const base = recordsPath.slice(0, Math.max(0, recordsPath.length - RECORDS_FILE.length - 1));
         const text = new TextDecoder().decode(await vfs.read(recordsPath, IMPORT_LIMITS.jsonBytes));
-        roots = await this.runRecords(running, { ...input, records: { records: readRecordsJson(text), reader: vfsReader(vfs, base) } }, (s) => (sink = s), (r) => (roots = r));
+        roots = await this.runRecords(running, { ...input, records: { records: readRecordsJson(text), reader: vfsReader(vfs, base) } }, (s) => (sink = s), madeRoots);
         return;
       }
       const plan = input.notesApp ? await appleNotesPlan(input.notesApp) : await planFor(job.source, vfs);
@@ -462,11 +484,16 @@ export class Imports {
         await target.flush();
       }
       job.root = result.root;
+      job.conflicts = result.conflicts;
       job.state = "done";
       job.current = "";
       this.deps.opened(job.workspace, result.root);
     } catch (error) {
-      if (error instanceof ImportCancelled) job.state = "cancelled";
+      if (running.quit) {
+        job.state = "failed";
+        job.error = INTERRUPTED_IMPORT;
+        keepRecovery = true;
+      } else if (error instanceof ImportCancelled) job.state = "cancelled";
       else {
         job.state = "failed";
         job.error = error instanceof ImportError ? error.message : `The import stopped: ${error instanceof Error ? error.message : String(error)}`.slice(0, 400);
@@ -474,15 +501,18 @@ export class Imports {
       }
       const made = roots.length ? roots : root ? [root] : [];
       const target = sink as Sink | null;
-      if (made.length && target) {
+      if (made.length && target && !running.quit) {
         try {
           for (const id of made) archivePage(target.tree, id, target.by, this.deps.now());
           await target.flush();
-        } catch {}
+        } catch {
+          keepRecovery = true;
+        }
       }
     } finally {
       job.finishedAt = this.deps.now();
-      await this.remember(null);
+      await (sink as Sink | null)?.settle?.().catch(() => undefined);
+      if (!keepRecovery) await this.remember(null);
       await spool.clear().catch(() => undefined);
       await input.release().catch(() => undefined);
       await this.count(job).catch(() => undefined);
@@ -524,6 +554,7 @@ export class Imports {
     job.databases = result.databases;
     job.attachments = result.attachments;
     job.skipped = result.skipped;
+    job.conflicts = result.conflicts;
     if (result.roots[0]) job.root = result.roots[0];
     job.roots = result.roots;
     job.state = "done";
@@ -542,6 +573,7 @@ export class Imports {
     bump(`${job.source}.pages`, job.pages);
     bump(`${job.source}.databases`, job.databases);
     bump(`${job.source}.attachments`, job.attachments);
+    if (job.conflicts) bump(`${job.source}.conflicts`, job.conflicts);
     await storage.set("importStats", stats);
   }
 }

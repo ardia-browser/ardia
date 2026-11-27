@@ -38,6 +38,8 @@ import { IMPORT_LIMITS, ImportCancelled } from "../limits";
 import { readImports, type Sink, type WriteProgress } from "../write";
 import { Sha256 } from "../../sha256";
 import { READ_AHEAD_COUNT, ReadAhead } from "../readAhead";
+import { isNotionUuid, knownPageIds, notionPageFamilies, pickPageId, recordsOnlyFamily } from "../notionIds";
+import { bodyPrint, EMPTY_BODY, printOf, Rebase, seedBody } from "../rebase";
 
 type Rec = Record<string, any>;
 type Seg = [string, any[]?];
@@ -46,7 +48,7 @@ export const notionRecordId = (spaceId: string) => `notion-${(spaceId || "worksp
 
 export type RecordsReader = { read(path: string): Promise<Uint8Array>; size?(path: string): number };
 
-export type RecordsResult = { roots: string[]; pageIds: string[]; archived: number; pages: number; databases: number; attachments: number; skipped: number; ids: Map<string, string>; files: Record<string, string> };
+export type RecordsResult = { roots: string[]; pageIds: string[]; archived: number; pages: number; databases: number; attachments: number; skipped: number; conflicts: number; ids: Map<string, string>; files: Record<string, string> };
 
 export type RecordsOptions = { workspace?: string; progress?: (p: WriteProgress) => void; cancelled?: () => boolean; now?: number; onRoots?: (roots: string[]) => void; files?: Record<string, string> };
 
@@ -456,13 +458,8 @@ export class NotionRecordsImport {
   }
 
   private pageId(notion: string): string {
-    const pages = pagesOf(this.sink.tree);
-    for (let n = 0; n < 32; n++) {
-      const id = this.stableId(n ? `${notion}#${n}` : notion);
-      const entry = pages.get(id);
-      if (!this.byId.has(id) && (!entry || entry.get("deleted") !== true)) return id;
-    }
-    return newHex();
+    const families = isNotionUuid(notion) ? notionPageFamilies(this.workspace, notion) : recordsOnlyFamily(this.workspace, notion);
+    return pickPageId(pagesOf(this.sink.tree), (id) => this.byId.has(id), families) ?? newHex();
   }
 
   private addNode(notion: string, parent: string, kind: "page" | "database", title: string, extra: Partial<Node> = {}): Node {
@@ -607,9 +604,9 @@ export class NotionRecordsImport {
       try {
         if (entry.size > IMPORT_LIMITS.attachmentBytes) throw new Error("too big");
         const name = (entry.name || nameHint || entry.path.split("/").pop() || "file").slice(0, 255);
-        const mark = this.fileMark(raw, entry.size);
-        const known = this.options.files?.[mark];
-        if (known && /^[0-9a-f]{64}$/.test(known) && this.sink.hasFile && (await this.sink.hasFile(known, entry.size))) {
+        const mark = this.fileMark(raw, entry);
+        const known = mark ? this.options.files?.[mark] : undefined;
+        if (mark && known && /^[0-9a-f]{64}$/.test(known) && this.sink.hasFile && (await this.sink.hasFile(known, entry.size))) {
           this.fileMarks[mark] = known;
           this.counts.attachments++;
           return done({ url: `file:${known}`, name });
@@ -617,7 +614,7 @@ export class NotionRecordsImport {
         const bytes = await this.ahead.take(entry.path);
         const ext = (/\.([a-z0-9]{1,8})$/i.exec(name)?.[1] ?? sniffExt(bytes) ?? /\.([a-z0-9]{1,8})(?:$|\?)/i.exec(raw)?.[1] ?? /[?&]fm=([a-z0-9]{2,5})/i.exec(raw)?.[1] ?? "bin").toLowerCase();
         const sha = await this.sink.putFile(bytes, ext);
-        if (bytes.length === entry.size) this.fileMarks[mark] = sha;
+        if (mark && bytes.length === entry.size) this.fileMarks[mark] = sha;
         this.counts.attachments++;
         return done({ url: `file:${sha}`, name });
       } catch (error) {
@@ -648,8 +645,9 @@ export class NotionRecordsImport {
     return this.records.files[raw] ?? this.records.files[raw.split("?")[0]!] ?? this.fileBySuffix(raw);
   }
 
-  private fileMark(raw: string, size: number): string {
-    return this.stableId(`file:${raw.split("?")[0]}:${size}`);
+  private fileMark(raw: string, entry: { size: number; version?: unknown }): string | null {
+    const version = typeof entry.version === "string" && entry.version ? entry.version.slice(0, 200) : null;
+    return version ? this.stableId(`file:${raw.split("?")[0]}:${entry.size}:${version}`) : null;
   }
 
   private readAheadFrom(raw: string) {
@@ -661,7 +659,8 @@ export class NotionRecordsImport {
       if (i > at && this.assets.has(next)) continue;
       const entry = this.fileEntry(next);
       if (!entry || entry.size > IMPORT_LIMITS.attachmentBytes) continue;
-      if (this.options.files?.[this.fileMark(next, entry.size)]) continue;
+      const mark = this.fileMark(next, entry);
+      if (mark && this.options.files?.[mark]) continue;
       this.fileSizes.set(entry.path, entry.size);
       if (!paths.includes(entry.path)) paths.push(entry.path);
     }
@@ -826,7 +825,7 @@ export class NotionRecordsImport {
           const col = this.blocks.get(c)!;
           const kids = await this.children(col, depth, seen);
           const ratio = Number(col.format?.column_ratio);
-          columns.push({ id: blockIdOf(col.id), type: "column", props: { width: Number.isFinite(ratio) && ratio > 0 ? Math.max(0.05, Math.min(20, Math.round(ratio * ids.length * 1000) / 1000)) : 1 }, children: kids.filter((k) => k.type !== "columnList").length ? kids.flatMap((k) => (k.type === "columnList" ? k.children.flatMap((cc) => cc.children) : [k])) : [emptyParagraph()] });
+          columns.push({ id: blockIdOf(col.id), type: "column", props: { width: Number.isFinite(ratio) && ratio > 0 ? Math.max(0.05, Math.min(20, Math.round(ratio * ids.length * 1000) / 1000)) : 1 }, children: kids.filter((k) => k.type !== "columnList").length ? kids.flatMap((k) => (k.type === "columnList" ? k.children.flatMap((cc) => cc.children) : [k])) : [{ ...emptyParagraph(), id: blockIdOf(`${col.id}-empty`) }] });
         }
         if (columns.length >= 2) return [block("columnList", {}, undefined, columns)];
         return columns.flatMap((c) => c.children);
@@ -1471,6 +1470,7 @@ export class NotionRecordsImport {
       meta.set(n.notion, { icon, cover });
     }
     const existed = new Set<string>();
+    const rebase = this.rebase;
     for (let at = 0; at < nodes.length; at += 250) {
       this.check();
       tree.transact(() => {
@@ -1502,7 +1502,18 @@ export class NotionRecordsImport {
           if (m.cover && Number.isFinite(Number(f.page_cover_position))) fields.coverY = Math.max(0, Math.min(100, Math.round((1 - Number(f.page_cover_position)) * 100)));
           const dbProps: Record<string, unknown> = n.kind === "database" ? { importedFrom: "notion", ...(n.inline ? { inline: true } : {}), ...(n.linked ? { linkedSource: n.linked } : {}) } : {};
           if (old) {
-            for (const [k, v] of Object.entries(fields)) if (old.get(k) !== v) old.set(k, v);
+            for (const [k, v] of Object.entries(fields)) {
+              if (k === "parent" || k === "order") continue;
+              if (!MERGED_FIELDS.has(k)) {
+                if (old.get(k) !== v) old.set(k, v);
+                continue;
+              }
+              rebase.field(n.id, old, k, old.get(k) ?? null, v, () => old.set(k, v));
+            }
+            rebase.field(n.id, old, "place", [old.get("parent") ?? "", old.get("order") ?? ""], [n.parent, n.order], () => {
+              if (old.get("parent") !== n.parent) old.set("parent", n.parent);
+              if (old.get("order") !== n.order) old.set("order", n.order);
+            });
             let props = old.get("props");
             if (!(props instanceof Y.Map)) {
               props = new Y.Map<unknown>();
@@ -1521,6 +1532,8 @@ export class NotionRecordsImport {
             for (const [k, v] of Object.entries(dbProps)) props.set(k, v);
             entry.set("props", props);
             pagesOf(tree).set(n.id, entry);
+            for (const k of MERGED_FIELDS) rebase.remember(entry, k, fields[k] ?? null);
+            rebase.remember(entry, "place", [n.parent, n.order]);
           }
         }
       });
@@ -1580,33 +1593,84 @@ export class NotionRecordsImport {
       usedBlockIds = new Set();
       const blocks = rec ? await this.convertList(rec.content ?? [], 0, new Set([rec.id])) : [];
       const limited = capBlocks(blocks, IMPORT_LIMITS.blocksPerPage);
-      const fragment = blocksOf(doc);
-      if (existed.has(n.id)) {
-        const fresh = new Y.Doc();
-        if (limited.length) blocksOf(fresh).insert(0, [buildGroup(limited)]);
-        if (blocksOf(fresh).toString() !== fragment.toString()) doc.transact(() => {
-          if (fragment.length) fragment.delete(0, fragment.length);
-          if (limited.length) fragment.insert(0, [buildGroup(limited)]);
-        });
-      } else if (limited.length) doc.transact(() => fragment.insert(0, [buildGroup(limited)]));
+      this.writeBody(n.id, doc, limited, existed.has(n.id));
       this.counts.pages++;
       if (done % 25 === 0) await yieldNow();
     }
     const kept = new Set(nodes.map((n) => n.id));
     const previous = readImports(tree).find((r) => r.id === notionRecordId(this.records.spaceId));
-    const gone = (previous?.pages ?? []).filter((id) => !kept.has(id));
+    const missing = (previous?.pages ?? []).filter((id) => !kept.has(id));
+    const gone = this.provablyGone(missing, nodes);
+    const goneSet = new Set(gone);
+    const still = missing.filter((id) => !goneSet.has(id));
     if (gone.length) tree.transact(() => {
       for (const id of gone) {
         const entry = pagesOf(tree).get(id);
         if (!entry || entry.get("deleted") === true || Number(entry.get("archivedAt") ?? 0) > 0) continue;
         entry.set("archivedAt", this.now);
         entry.set("updatedBy", this.sink.by);
+        rebase.remember(entry, "archivedAt", this.now);
       }
     });
     this.ahead.drop();
     this.progress("", done, total);
     await this.sink.flush();
-    return { roots, pageIds: [...kept], archived: gone.length, ...this.counts, ids: new Map(nodes.map((n) => [n.notion, n.id])), files: { ...this.fileMarks } };
+    return { roots, pageIds: [...kept, ...still], archived: gone.length, ...this.counts, conflicts: rebase.conflicts.size, ids: new Map(nodes.map((n) => [n.notion, n.id])), files: { ...this.fileMarks } };
+  }
+
+  private readonly rebase = new Rebase();
+
+  private writeBody(page: string, doc: Y.Doc, blocks: Block[], existed: boolean) {
+    const fresh = new Y.Doc();
+    if (blocks.length) blocksOf(fresh).insert(0, [buildGroup(blocks)]);
+    const incoming = bodyPrint(blocksOf(fresh));
+    const exact = printOf(blocksOf(fresh).toString());
+    fresh.destroy();
+    const fragment = blocksOf(doc);
+    const current = fragment.length ? bodyPrint(fragment) : EMPTY_BODY;
+    const entry = pagesOf(this.sink.tree).get(page);
+    let write = false;
+    this.sink.tree.transact(() => (write = this.rebase.body(page, entry, current, incoming, existed)));
+    if (!write) return;
+    if (!fragment.length) {
+      if (blocks.length) seedBody(doc, page, exact, (scratch) => blocksOf(scratch).insert(0, [buildGroup(blocks)]));
+      return;
+    }
+    doc.transact(() => {
+      fragment.delete(0, fragment.length);
+      if (blocks.length) fragment.insert(0, [buildGroup(blocks)]);
+    });
+  }
+
+  private provablyGone(candidates: string[], nodes: Node[]): string[] {
+    if (!candidates.length) return candidates;
+    if (this.nodes.size >= IMPORT_LIMITS.pages) return [];
+    const partial = this.records.incomplete;
+    const unreadCollections = new Set(partial?.collections ?? []);
+    const unreadBlocks = partial?.blocks ?? [];
+    if (!unreadCollections.size && !unreadBlocks.length) return candidates;
+    const shielded = new Set<string>();
+    for (const id of unreadBlocks) for (const page of knownPageIds(this.workspace, id)) shielded.add(page);
+    const partialDbs = new Set<string>();
+    for (const n of nodes) {
+      if (n.kind !== "database") continue;
+      const rec = this.blocks.get(n.notion.split(":")[0]!);
+      const collection = n.collection ?? rec?.collection_id ?? rec?.format?.collection_pointer?.id;
+      if (collection && unreadCollections.has(collection)) partialDbs.add(n.id);
+    }
+    const tree = this.sink.tree;
+    const isShielded = (id: string) => {
+      const seen = new Set<string>();
+      for (let at: string = id, depth = 0; at && !seen.has(at) && depth < 64; depth++) {
+        if (shielded.has(at)) return true;
+        seen.add(at);
+        const parent = String(pagesOf(tree).get(at)?.get("parent") ?? "");
+        if (at === id && partialDbs.has(parent)) return true;
+        at = parent;
+      }
+      return false;
+    };
+    return candidates.filter((id) => !isShielded(id));
   }
 
   private async writeRow(n: Node, rec: Rec, c: Collection, dbDoc: Y.Doc) {
@@ -1630,12 +1694,21 @@ export class NotionRecordsImport {
     }
     const entry = pagesOf(this.sink.tree).get(n.id);
     const props = entry?.get("props");
-    if (props instanceof Y.Map) this.sink.tree.transact(() => {
-      for (const pid of c.props.values()) if (pid !== TITLE && !(pid in values) && props.has(pid)) props.delete(pid);
-      for (const [k, v] of Object.entries(values)) if (JSON.stringify(props.get(k)) !== JSON.stringify(v)) props.set(k, v);
+    if (props instanceof Y.Map && entry) this.sink.tree.transact(() => {
+      for (const pid of c.props.values()) {
+        if (pid === TITLE) continue;
+        const incoming = pid in values ? values[pid] : null;
+        const current = props.has(pid) ? props.get(pid) : null;
+        this.rebase.field(n.id, entry, `prop:${pid}`, current, incoming, () => {
+          if (incoming === null) props.delete(pid);
+          else if (JSON.stringify(current) !== JSON.stringify(incoming)) props.set(pid, incoming);
+        });
+      }
     });
   }
 }
+
+const MERGED_FIELDS = new Set(["title", "icon", "cover", "coverY", "fullWidth", "smallText", "font", "locked", "archivedAt"]);
 
 export function sniffExt(bytes: Uint8Array): string | null {
   const b = (i: number) => bytes[i] ?? -1;
@@ -1705,12 +1778,13 @@ function capBlocks(blocks: Block[], max: number): Block[] {
 let usedBlockIds = new Set<string>();
 
 function blockIdOf(raw: string): string {
-  const clean = raw.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
-  if (clean && !usedBlockIds.has(clean)) {
-    usedBlockIds.add(clean);
-    return clean;
+  const clean = raw.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 56) || "block";
+  for (let n = 0; ; n++) {
+    const id = n ? `${clean}-${n}` : clean;
+    if (usedBlockIds.has(id)) continue;
+    usedBlockIds.add(id);
+    return id;
   }
-  return globalThis.crypto.randomUUID();
 }
 
 function newHex(): string {
@@ -1741,5 +1815,15 @@ export function readRecordsJson(text: string): NotionRecords {
     users: (raw.users ?? {}) as Record<string, any>,
     rows: (raw.rows ?? {}) as Record<string, string[]>,
     files: (raw.files ?? {}) as NotionRecords["files"],
+    ...(incompleteOf(raw.incomplete) ? { incomplete: incompleteOf(raw.incomplete)! } : {}),
   };
+}
+
+function incompleteOf(raw: unknown): NotionRecords["incomplete"] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.length <= 64).slice(0, 100_000) : []);
+  const collections = ids(r.collections);
+  const blocks = ids(r.blocks);
+  return collections.length || blocks.length ? { collections, blocks } : null;
 }

@@ -249,16 +249,42 @@ export function fileName(source: string, fallback: string): string {
   return clean || "file";
 }
 
-type FileRef = { source: string; table: "block" | "collection" | "collection_view"; recordId: string; name: string };
+type FileRef = { source: string; table: "block" | "collection" | "collection_view"; recordId: string; name: string; version: string };
+
+const BUILT_IN_PATH = /^\/(icons|images)\/[A-Za-z0-9._~%+-]+(\/[A-Za-z0-9._~%+-]+)*$/;
 
 const BUILT_IN_ASSET = /^\/(icons|images)\/[A-Za-z0-9._~%+-]+(\/[A-Za-z0-9._~%+-]+)*(\?[A-Za-z0-9=&._~%+-]*)?$/;
 
+const ENCODED_SEPARATOR = /%(2e|2f|5c)/i;
+const HTTPS_URL = /^https:\/\/([a-z0-9.-]+)(\/[^?#\s\\@]*)?(\?[^#\s]*)?$/i;
+
+type HttpsUrl = { origin: string; host: string; path: string };
+
+function parseHttps(raw: string): HttpsUrl | null {
+  const found = HTTPS_URL.exec(raw);
+  if (!found) return null;
+  const path = found[2] ?? "/";
+  if (ENCODED_SEPARATOR.test(path) || path.split("/").some((part) => part === "." || part === "..")) return null;
+  const host = found[1]!.toLowerCase();
+  return { origin: `https://${host}`, host, path };
+}
+
 export function assetUrl(source: unknown, origin: string): string | null {
   if (typeof source !== "string" || source.length > 2048) return null;
-  if (BUILT_IN_ASSET.test(source) && !source.split(/[/?]/).some((part) => part === ".." || part === ".")) return `${origin}${source}`;
-  const found = /^https:\/\/([a-z0-9.-]+)\/[^\s#]*$/i.exec(source);
-  if (found && (NOTION_ASSET_HOSTS as readonly string[]).includes(found[1]!.toLowerCase())) return source;
-  return null;
+  if (BUILT_IN_ASSET.test(source)) {
+    const home = parseHttps(origin);
+    const url = home ? parseHttps(`${home.origin}${source}`) : null;
+    return home && url && BUILT_IN_PATH.test(url.path) ? `${home.origin}${source}` : null;
+  }
+  const url = parseHttps(source);
+  return url && (NOTION_ASSET_HOSTS as readonly string[]).includes(url.host) ? source : null;
+}
+
+export function downloadable(raw: string, origin: string): boolean {
+  const url = parseHttps(raw);
+  if (!url) return false;
+  if (url.origin === parseHttps(origin)?.origin) return BUILT_IN_PATH.test(url.path);
+  return fileHost(raw) !== null || (NOTION_ASSET_HOSTS as readonly string[]).includes(url.host);
 }
 
 const wantsFile = (source: unknown): source is string => needsSigning(source) || assetUrl(source, "https://app.notion.com") !== null;
@@ -275,8 +301,10 @@ export function fileRefsOf(record: Json, table: FileRef["table"] = "block"): Fil
   const out: FileRef[] = [];
   const id = record.id as string;
   const format = isObject(record.format) ? record.format : {};
+  const stamps = [record.version, record.last_edited_time].filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  const version = stamps.length ? `${table}:${id}:${stamps.join(":")}` : "";
   const add = (source: unknown, name: string) => {
-    if (wantsFile(source)) out.push({ source, table, recordId: id, name: fileName(source, name) });
+    if (wantsFile(source)) out.push({ source, table, recordId: id, name: fileName(source, name), version });
   };
   if (table === "collection") {
     add(record.icon, "icon");
@@ -358,6 +386,7 @@ class Gate {
 class Crawl {
   readonly tables: Tables = { blocks: {}, collections: {}, views: {}, users: {}, teams: {} };
   readonly rows: Record<string, string[]> = {};
+  readonly unread = { collections: new Set<string>(), blocks: new Set<string>() };
   readonly files: NotionRecords["files"] = {};
   readonly made: string[] = [];
   readonly dir: string;
@@ -564,6 +593,8 @@ class Crawl {
         return;
       }
       if (error instanceof TooLarge || error instanceof NotionHttpError) {
+        if (table === "block") for (const id of chunk) this.unread.blocks.add(id);
+        if (table === "collection") for (const id of chunk) this.unread.collections.add(id);
         this.job.skipped += chunk.length;
         this.deps.log("warn", `notion live: ${table} ×${chunk.length} skipped: ${error.message}`);
         return;
@@ -607,6 +638,7 @@ class Crawl {
           if (limit >= this.limits.queryMin) continue;
         }
         if (error instanceof TooLarge || error instanceof NotionHttpError) {
+          this.unread.collections.add(collection);
           this.job.skipped++;
           this.deps.log("warn", `notion live: rows of a database skipped: ${error.message}`);
           return;
@@ -625,6 +657,7 @@ class Crawl {
     this.rows[collection] = rows;
     for (const id of rows) this.wantBlock(id);
     if (!complete) {
+      this.unread.collections.add(collection);
       this.job.note = `Some databases have more rows than Notes read; it brought in the first ${rows.length.toLocaleString("en-US")} of each.`;
       this.deps.log("warn", `notion live: a database stopped at ${rows.length} rows`);
     }
@@ -824,7 +857,7 @@ class Crawl {
       try {
         const size = await this.downloadOne(url, path, Math.min(this.limits.fileBytes, room));
         room -= size;
-        this.files[ref.source] = { path, name: ref.name, size };
+        this.files[ref.source] = { path, name: ref.name, size, ...(ref.version ? { version: ref.version } : {}) };
         this.job.filesDone++;
       } catch (error) {
         if (error instanceof Stop || error instanceof ImportError) throw error;
@@ -841,6 +874,7 @@ class Crawl {
   }
 
   private async downloadOne(url: string, path: string, maxBytes: number): Promise<number> {
+    if (!downloadable(url, this.bound.origin)) throw Object.assign(new Error("That file's address isn't one Notes downloads from."), { code: "refused" });
     const started = await this.untilStopped(this.gate.run(() => this.check(), () => this.sites.download(url, { to: path, maxBytes, session: this.bound.session })));
     this.made.push(path);
     this.download = started;
@@ -875,7 +909,8 @@ class Crawl {
   }
 
   records(rootIds: string[]): NotionRecords {
-    return { spaceId: this.job.spaceId, rootIds, blocks: this.tables.blocks, collections: this.tables.collections, views: this.tables.views, users: this.tables.users, rows: this.rows, files: this.files };
+    const incomplete = this.unread.collections.size || this.unread.blocks.size ? { incomplete: { collections: [...this.unread.collections], blocks: [...this.unread.blocks] } } : {};
+    return { spaceId: this.job.spaceId, rootIds, blocks: this.tables.blocks, collections: this.tables.collections, views: this.tables.views, users: this.tables.users, rows: this.rows, files: this.files, ...incomplete };
   }
 }
 

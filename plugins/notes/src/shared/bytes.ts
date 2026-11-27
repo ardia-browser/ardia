@@ -188,9 +188,9 @@ const CRC_TABLES = (() => {
   return tables;
 })();
 
-export function crc32(bytes: Uint8Array): number {
+export function crc32(bytes: Uint8Array, previous = 0): number {
   const t = CRC_TABLES;
-  let c = -1;
+  let c = previous ^ -1;
   const n = bytes.length;
   let i = 0;
   for (const whole = n - (n & 3); i < whole; i += 4) {

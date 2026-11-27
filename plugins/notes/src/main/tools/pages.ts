@@ -499,8 +499,10 @@ function subtreeIds(tr: Y.Doc, root: string): string[] {
 
 function exportPath(tr: Y.Doc, root: string, id: string, format: string) {
   const parts: string[] = [];
+  const seen = new Set<string>();
   let cur = getPage(tr, id);
-  while (cur) {
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
     parts.unshift(displayTitle(cur).replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").slice(0, 80));
     if (cur.id === root) break;
     cur = cur.parent ? getPage(tr, cur.parent) : null;

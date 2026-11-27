@@ -279,7 +279,9 @@ test("rows page through queryCollection with a growing limit; an answer too larg
   await notion.start(ACME);
   assert.equal((await finished(notion)).stage, "ready");
   assert.deepEqual(n.state.queries, [1000, 4000]);
-  assert.equal(notion.takeRecords().records.rows[COLL].length, 2500);
+  const whole = notion.takeRecords().records;
+  assert.equal(whole.rows[COLL].length, 2500);
+  assert.equal(whole.incomplete, undefined, "a database read to its end isn't marked incomplete");
 
   const capped = fakeNotion(files, { rows: 800, queryTooLargeOver: 300 });
   const c = live(capped.sites, files);
@@ -287,7 +289,9 @@ test("rows page through queryCollection with a growing limit; an answer too larg
   const done = await finished(c.notion);
   assert.equal(done.stage, "ready", done.error);
   assert.deepEqual(capped.state.queries, [1000, 500, 250, 1000]);
-  assert.equal(c.notion.takeRecords().records.rows[COLL].length, 250);
+  const cut = c.notion.takeRecords().records;
+  assert.equal(cut.rows[COLL].length, 250);
+  assert.deepEqual(cut.incomplete?.collections, [COLL], "a database cut short is marked so its missing rows aren't trashed");
   assert.match(done.note, /first 250/);
 });
 

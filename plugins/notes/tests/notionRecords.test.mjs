@@ -163,7 +163,7 @@ function withFiles(records) {
   const put = (key, name, bytes) => {
     const path = `files/${name}`;
     writeFileSync(join(dir, path), bytes);
-    records.files[key] = { path, name, size: bytes.length };
+    records.files[key] = { path, name, size: bytes.length, version: `${name}:1` };
   };
   put("attachment:aaaaaaaa-0000-4000-8000-000000000001:pic.png", "pic.png", PNG);
   put("attachment:aaaaaaaa-0000-4000-8000-000000000002:a.m4a", "a.m4a", new Uint8Array([1, 2, 3]));

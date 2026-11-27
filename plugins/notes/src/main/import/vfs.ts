@@ -112,6 +112,7 @@ export class LayeredVfs implements Vfs {
   private readonly sizes = new Map<string, number>();
   refused = 0;
   private nested = 0;
+  private spooled = 0;
   private readonly ahead = new ReadAhead<string>(
     (path) => this.readNow(path, Math.max(IMPORT_LIMITS.attachmentBytes, IMPORT_LIMITS.textBytes)),
     (path) => this.sizes.get(path) ?? 0,
@@ -172,10 +173,9 @@ export class LayeredVfs implements Vfs {
     const { zip, entry } = source;
     if (!this.spool) return null;
     const file = await this.spool.create();
-    let written = 0;
     await zip.stream(entry, async (chunk) => {
-      written += chunk.length;
-      if (written > IMPORT_LIMITS.spoolBytes) throw new ImportError(`${path} is too big to unpack.`);
+      this.spooled += chunk.length;
+      if (this.spooled > IMPORT_LIMITS.spoolBytes) throw new ImportError(`${path} is too big to unpack: the archives inside this export add up to more than ${Math.round(IMPORT_LIMITS.spoolBytes / 1024 / 1024)} MB.`);
       await file.append(chunk);
     });
     return file.done();

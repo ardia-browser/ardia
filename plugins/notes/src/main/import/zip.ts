@@ -14,6 +14,8 @@ export const ZIP_LIMITS = {
   directoryBytes: 64 * 1024 * 1024,
 };
 
+const INFLATE_INPUT = 16 * 1024;
+
 const u16 = (b: Uint8Array, at: number) => b[at]! | (b[at + 1]! << 8);
 const u32 = (b: Uint8Array, at: number) => (b[at]! | (b[at + 1]! << 8) | (b[at + 2]! << 16) | (b[at + 3]! << 24)) >>> 0;
 const u64 = (b: Uint8Array, at: number) => u32(b, at) + u32(b, at + 4) * 0x1_0000_0000;
@@ -148,31 +150,45 @@ export class ZipReader {
 
   async stream(entry: ZipEntry, sink: (chunk: Uint8Array) => Promise<void>, step = 4 * 1024 * 1024): Promise<void> {
     const start = await this.dataStart(entry);
-    if (entry.method === 0) {
-      for (let at = 0; at < entry.compressed; at += step) await sink(await this.source.read(start + at, Math.min(step, entry.compressed - at)));
-      return;
-    }
+    let crc = 0;
     let produced = 0;
-    let pending: Uint8Array[] = [];
-    let failed = false;
-    const inflater = new Inflate((chunk) => {
-      produced += chunk.length;
-      if (produced > entry.size) failed = true;
-      else pending.push(chunk);
-    });
-    for (let at = 0; at < entry.compressed; at += step) {
-      const piece = await this.source.read(start + at, Math.min(step, entry.compressed - at));
-      try {
-        inflater.push(piece, at + piece.length >= entry.compressed);
-      } catch {
-        throw new ImportError(`${entry.name} couldn't be unpacked.`);
+    if (entry.method === 0) {
+      for (let at = 0; at < entry.compressed; at += step) {
+        const piece = await this.source.read(start + at, Math.min(step, entry.compressed - at));
+        crc = crc32(piece, crc);
+        produced += piece.length;
+        await sink(piece);
       }
-      if (failed) throw new ImportError(`${entry.name} unpacks to more than the zip says.`);
-      const ready = pending;
-      pending = [];
-      for (const c of ready) await sink(c);
+    } else {
+      let pending: Uint8Array[] = [];
+      let failed = false;
+      const inflater = new Inflate((chunk) => {
+        produced += chunk.length;
+        if (produced > entry.size) failed = true;
+        else {
+          crc = crc32(chunk, crc);
+          pending.push(chunk);
+        }
+      });
+      for (let at = 0; at < entry.compressed; at += step) {
+        const piece = await this.source.read(start + at, Math.min(step, entry.compressed - at));
+        const last = at + piece.length >= entry.compressed;
+        for (let from = 0; from < piece.length; from += INFLATE_INPUT) {
+          const to = Math.min(piece.length, from + INFLATE_INPUT);
+          try {
+            inflater.push(piece.subarray(from, to), last && to >= piece.length);
+          } catch {
+            throw new ImportError(`${entry.name} couldn't be unpacked.`);
+          }
+          if (failed) throw new ImportError(`${entry.name} unpacks to more than the zip says.`);
+          const ready = pending;
+          pending = [];
+          for (const c of ready) await sink(c);
+        }
+      }
     }
     if (produced !== entry.size) throw new ImportError(`${entry.name} isn't the size the zip says.`);
+    if ((crc >>> 0) !== entry.crc >>> 0) throw new ImportError(`${entry.name} is damaged in the zip.`);
   }
 }
 

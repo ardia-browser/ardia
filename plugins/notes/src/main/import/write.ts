@@ -1,9 +1,9 @@
 import * as Y from "yjs";
 import { addOption, addProperty, deleteProperty, DEFAULT_TAGS, initDatabase, readSchema, schemaOf, TITLE, updateProperty, type PropType } from "../../shared/database";
 import { blocksOf, childrenOf, createPage, newId, orderBetween } from "../../shared/model";
-import { hex } from "../../shared/bytes";
-import { Sha256 } from "../sha256";
 import { IMPORT_LIMITS, ImportCancelled } from "./limits";
+import { exportPageId, notionPageFamilies, pickPageId } from "./notionIds";
+import { bodyPrint, EMPTY_BODY, printOf, Rebase, seedBody } from "./rebase";
 import { safeUrl, textOf, type Block, type Column, type ImportNode, type Inline, type Marks } from "./ir";
 
 export type Sink = {
@@ -14,6 +14,7 @@ export type Sink = {
   putFile(bytes: Uint8Array, ext: string): Promise<string>;
   hasFile?(sha: string, size: number): Promise<boolean>;
   flush(): Promise<void>;
+  settle?(): Promise<void>;
   alive(): boolean;
 };
 
@@ -36,7 +37,7 @@ export const SYNCED_EXPORT_PREFIX = "notion-export-";
 
 export type WriteProgress = { pages: number; databases: number; attachments: number; skipped: number; current: string; done: number; total: number };
 
-export type WriteResult = { root: string; pages: number; databases: number; attachments: number; skipped: number; ids: Map<string, string>; pageIds: string[]; archived: number; files: Record<string, string>; recordId: string | null };
+export type WriteResult = { root: string; pages: number; databases: number; attachments: number; skipped: number; conflicts: number; ids: Map<string, string>; pageIds: string[]; archived: number; files: Record<string, string>; recordId: string | null };
 
 type Resolved = { page: (target: string) => string | null; asset: (src: string) => { url: string; name: string } | null };
 
@@ -337,12 +338,9 @@ function cellValue(raw: string, prop: { type: PropType; options: Map<string, str
   }
 }
 
-const STABLE_TRIES = 32;
 const DOCS_AHEAD = 3;
 
-export function syncedId(workspace: string, key: string): string {
-  return hex(new Sha256().update(new TextEncoder().encode(`notion-export:${workspace}:${key}`)).digest().subarray(0, 6));
-}
+export const syncedId = exportPageId;
 
 const sameValue = (a: unknown, b: unknown) => a === b || (typeof a === "object" && typeof b === "object" && JSON.stringify(a) === JSON.stringify(b));
 
@@ -351,16 +349,22 @@ function sequence(prefix: string): () => string {
   return () => `${prefix}-${(n++).toString(36)}`;
 }
 
-function writeOrReplaceBlocks(doc: Y.Doc, blocks: Block[], resolved: Resolved, existed: boolean, prefix: string | null) {
-  const ids = () => (prefix === null ? newId : sequence(prefix));
-  if (!existed) return writeImportedBlocks(doc, blocks, resolved, ids());
+type BodyTarget = { tree: Y.Doc; page: string; entry: Y.Map<unknown> | undefined; rebase: Rebase };
+
+function writeBody(doc: Y.Doc, blocks: Block[], resolved: Resolved, existed: boolean, target: BodyTarget | null) {
+  if (!target) return writeImportedBlocks(doc, blocks, resolved);
+  const ids = () => sequence(target.page);
   const fresh = new Y.Doc();
   writeImportedBlocks(fresh, blocks, resolved, ids());
+  const incoming = bodyPrint(blocksOf(fresh));
+  fresh.destroy();
   const fragment = blocksOf(doc);
-  if (blocksOf(fresh).toString() === fragment.toString()) return;
-  doc.transact(() => {
-    if (fragment.length) fragment.delete(0, fragment.length);
-  });
+  const current = fragment.length ? bodyPrint(fragment) : EMPTY_BODY;
+  let write = false;
+  target.tree.transact(() => (write = target.rebase.body(target.page, target.entry, current, incoming, existed)));
+  if (!write) return;
+  if (!fragment.length) return seedBody(doc, target.page, incoming, (scratch) => writeImportedBlocks(scratch, blocks, resolved, ids()));
+  doc.transact(() => fragment.delete(0, fragment.length));
   writeImportedBlocks(doc, blocks, resolved, ids());
 }
 
@@ -391,16 +395,10 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
     return entry instanceof Y.Map && entry.get("deleted") !== true ? entry : null;
   };
   const taken = new Set<string>();
+  const keyOf = (n: ImportNode) => plan.stableKey?.(n) ?? `key:${n.key}`;
   for (const n of nodes) {
     let id: string | null = null;
-    if (syncing) {
-      const key = plan.stableKey!(n) ?? `key:${n.key}`;
-      for (let i = 0; i < STABLE_TRIES && id === null; i++) {
-        const candidate = syncedId(syncing.workspace, i ? `${key}#${i}` : key);
-        const entry = pagesMap.get(candidate);
-        if (!taken.has(candidate) && (!entry || entry.get("deleted") !== true)) id = candidate;
-      }
-    }
+    if (syncing) id = pickPageId(pagesMap, (c) => taken.has(c), notionPageFamilies(syncing.workspace, keyOf(n)));
     id ??= newId();
     taken.add(id);
     ids.set(n.key, id);
@@ -419,8 +417,11 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
   const ordered = nodes.map((n, i) => ({ n, i, d: depthOf(n) })).sort((a, b) => a.d - b.d || a.i - b.i);
   const previous = syncing ? previousExport(syncing.candidates, taken) : null;
   const previousRoot = previous?.roots[0];
-  const reusedRoot = previousRoot && live(previousRoot) ? previousRoot : null;
-  const rootId = reusedRoot ?? createPage(sink.tree, { parent: "", kind: "page", title: root.title, icon: root.icon, by: sink.by, now });
+  const top = nodes.filter((n) => !n.parent || !byKey.has(n.parent));
+  const seededRoot = syncing ? pickPageId(pagesMap, (c) => taken.has(c), [(k) => syncedId(syncing.workspace, `root:${printOf(top.map(keyOf).sort().join("\n"))}${k ? `#${k}` : ""}`)]) : null;
+  const rootCandidate = previousRoot && live(previousRoot) ? previousRoot : seededRoot;
+  const reusedRoot = rootCandidate && live(rootCandidate) ? rootCandidate : null;
+  const rootId = reusedRoot ?? createPage(sink.tree, { ...(seededRoot ? { id: seededRoot } : {}), parent: "", kind: "page", title: root.title, icon: root.icon, by: sink.by, now });
   if (!reusedRoot) options.onRoot?.(rootId);
   if (reusedRoot) {
     const entry = live(reusedRoot)!;
@@ -437,6 +438,8 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
     return order;
   };
   const counts = { pages: 0, databases: 0, attachments: 0, skipped: plan.warnings ?? 0 };
+  const rebase = new Rebase();
+  const bodyTarget = (page: string): BodyTarget | null => (syncing ? { tree: sink.tree, page, entry: pagesMap.get(page), rebase } : null);
   const total = ordered.length;
   const parentOf = (n: ImportNode) => (n.parent && byKey.has(n.parent) && n.parent !== n.key ? ids.get(n.parent)! : rootId);
   for (let at = 0; at < ordered.length; at += 250) {
@@ -448,17 +451,20 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
         const title = n.title.slice(0, 2000);
         const entry = existed.has(id) ? live(id) : null;
         if (entry) {
-          const fields: Record<string, unknown> = { title, icon: n.icon ?? "", kind: n.kind, archivedAt: 0 };
-          if (entry.get("parent") !== parent) {
-            fields.parent = parent;
-            fields.order = orderAfter(parent);
-          }
           let changed = false;
-          for (const [k, v] of Object.entries(fields))
-            if (entry.get(k) !== v) {
-              entry.set(k, v);
-              changed = true;
-            }
+          const set = (k: string, v: unknown) => {
+            if (entry.get(k) === v) return;
+            entry.set(k, v);
+            changed = true;
+          };
+          set("kind", n.kind);
+          rebase.field(id, entry, "title", entry.get("title") ?? "", title, () => set("title", title));
+          rebase.field(id, entry, "icon", entry.get("icon") ?? "", n.icon ?? "", () => set("icon", n.icon ?? ""));
+          rebase.field(id, entry, "archivedAt", Number(entry.get("archivedAt") ?? 0), 0, () => set("archivedAt", 0));
+          rebase.field(id, entry, "parent", entry.get("parent") ?? "", parent, () => {
+            set("parent", parent);
+            set("order", orderAfter(parent));
+          });
           if (changed) {
             entry.set("updatedAt", now);
             entry.set("updatedBy", sink.by);
@@ -466,6 +472,8 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
           continue;
         }
         createPage(sink.tree, { id, parent, kind: n.kind, title, icon: n.icon, order: orderAfter(parent), by: sink.by, now: n.createdAt && Number.isFinite(n.createdAt) ? n.createdAt : now });
+        const made = syncing ? pagesMap.get(id) : undefined;
+        if (made) for (const [k, v] of [["title", title], ["icon", n.icon ?? ""], ["archivedAt", 0], ["parent", parent]] as const) rebase.remember(made, k, v);
       }
     });
     await yieldNow();
@@ -474,6 +482,10 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
   for (const n of nodes) if (n.parent && byKey.get(n.parent)?.kind === "database") (rowsOf.get(n.parent) ?? rowsOf.set(n.parent, []).get(n.parent)!).push(n);
   const schemas = new Map<string, Map<string, SchemaProp>>();
   const assetCache = new Map<string, { url: string; name: string } | null>();
+  const externalAsset = (src: string) => {
+    const external = safeUrl(src);
+    return external && /^https?:/i.test(external) ? { url: external, name: external.split("/").pop()?.split("?")[0] ?? "" } : null;
+  };
   const knownFiles = previous?.files ?? {};
   const fileMarks: Record<string, string> = {};
   let done = 0;
@@ -503,19 +515,24 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
       const schema = schemas.get(parent.key);
       const entry = pagesMap.get(id);
       const propsMap = entry?.get("props");
-      if (schema && propsMap instanceof Y.Map)
+      if (schema && propsMap instanceof Y.Map && entry)
         sink.tree.transact(() => {
           for (const [name, raw] of Object.entries(n.cells!)) {
             const prop = schema.get(name);
             if (!prop || prop.id === TITLE) continue;
             const value = cellValue(raw, prop);
-            if (value !== undefined && !(Array.isArray(value) && !value.length)) {
-              if (!sameValue(propsMap.get(prop.id), value)) propsMap.set(prop.id, value);
-            } else if (had && propsMap.has(prop.id)) propsMap.delete(prop.id);
+            const incoming = value !== undefined && !(Array.isArray(value) && !value.length) ? value : null;
+            const current = propsMap.has(prop.id) ? propsMap.get(prop.id) : null;
+            const apply = () => {
+              if (incoming === null) propsMap.delete(prop.id);
+              else if (!sameValue(current, incoming)) propsMap.set(prop.id, incoming);
+            };
+            if (syncing) rebase.field(id, entry, `prop:${prop.id}`, current, incoming, apply);
+            else if (incoming !== null || had) apply();
           }
         });
     }
-    let blocks: Block[] = [];
+    let blocks: Block[] | null = null;
     const before = { title: n.title, icon: n.icon };
     try {
       blocks = n.blocks ?? (n.load ? await n.load() : []);
@@ -524,41 +541,47 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
     }
     if (n.title !== before.title || n.icon !== before.icon) {
       const entry = pagesMap.get(id);
+      const title = n.title.slice(0, 2000);
+      const icon = (n.icon ?? "").slice(0, 16);
       if (entry)
         sink.tree.transact(() => {
-          if (n.title !== before.title && entry.get("title") !== n.title.slice(0, 2000)) entry.set("title", n.title.slice(0, 2000));
-          if (n.icon !== before.icon && entry.get("icon") !== (n.icon ?? "").slice(0, 16)) entry.set("icon", (n.icon ?? "").slice(0, 16));
+          if (n.title !== before.title) rebase.field(id, entry, "title", entry.get("title") ?? "", title, () => entry.set("title", title));
+          if (n.icon !== before.icon) rebase.field(id, entry, "icon", entry.get("icon") ?? "", icon, () => entry.set("icon", icon));
         });
+    }
+    if (blocks === null) {
+      done++;
+      continue;
     }
     const srcs = new Set<string>();
     collectSrcs(blocks, srcs);
     if (plan.prefetch && srcs.size) {
       const wanted: string[] = [];
       for (const src of srcs) {
-        if (assetCache.has(src) || (safeUrl(src) && /^https?:/i.test(safeUrl(src)!))) continue;
+        if (externalAsset(src)) continue;
         const path = plan.asset(src, n);
-        if (!path || assetCache.has(`path:${path}`)) continue;
+        if (!path || assetCache.has(path)) continue;
         const print = syncing ? plan.assetFingerprint?.(path) : null;
         if (print && knownFiles[syncedId(syncing!.workspace, `file:${print}`)]) continue;
         wanted.push(path);
       }
       plan.prefetch(wanted);
     }
+    const pageAssets = new Map<string, { url: string; name: string } | null>();
     for (const src of srcs) {
-      if (assetCache.has(src)) continue;
-      const external = safeUrl(src);
-      if (external && /^https?:/i.test(external)) {
-        assetCache.set(src, { url: external, name: external.split("/").pop()?.split("?")[0] ?? "" });
+      const external = externalAsset(src);
+      if (external) {
+        pageAssets.set(src, external);
         continue;
       }
       const path = plan.asset(src, n);
       if (!path) {
-        assetCache.set(src, null);
+        pageAssets.set(src, null);
         counts.skipped++;
         continue;
       }
-      if (assetCache.has(`path:${path}`)) {
-        assetCache.set(src, assetCache.get(`path:${path}`)!);
+      if (assetCache.has(path)) {
+        pageAssets.set(src, assetCache.get(path)!);
         continue;
       }
       try {
@@ -578,13 +601,13 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
         }
         if (mark) fileMarks[mark] = sha;
         const value = { url: `file:${sha}`, name: name.slice(0, 255) };
-        assetCache.set(src, value);
-        assetCache.set(`path:${path}`, value);
+        assetCache.set(path, value);
+        pageAssets.set(src, value);
         counts.attachments++;
       } catch (error) {
         if (error instanceof ImportCancelled) throw error;
-        assetCache.set(src, null);
-        assetCache.set(`path:${path}`, null);
+        assetCache.set(path, null);
+        pageAssets.set(src, null);
         counts.skipped++;
       }
     }
@@ -593,16 +616,17 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
         const key = plan.link(target, n);
         return key ? (ids.get(key) ?? null) : null;
       },
-      asset: (src) => assetCache.get(src) ?? null,
+      asset: (src) => pageAssets.get(src) ?? null,
     };
-    writeOrReplaceBlocks(doc, blocks, resolved, had, syncing ? id : null);
+    writeBody(doc, blocks, resolved, had, bodyTarget(id));
     done++;
     if (done % 25 === 0) await yieldNow();
   }
-  const top = nodes.filter((n) => !n.parent || !byKey.has(n.parent));
-  if (top.length) writeOrReplaceBlocks(rootDoc, top.slice(0, 2000).map((n): Block => ({ type: "pageRef", target: `key:${n.key}`, props: { subpage: true } })), { page: (t) => ids.get(t.slice(4)) ?? null, asset: () => null }, !!reusedRoot, syncing ? rootId : null);
+  if (top.length) writeBody(rootDoc, top.slice(0, 2000).map((n): Block => ({ type: "pageRef", target: `key:${n.key}`, props: { subpage: true } })), { page: (t) => ids.get(t.slice(4)) ?? null, asset: () => null }, !!reusedRoot, bodyTarget(rootId));
   const kept = new Set(ids.values());
-  const gone = (previous?.pages ?? []).filter((id) => !kept.has(id) && id !== rootId);
+  const whole = plan.nodes.length <= IMPORT_LIMITS.pages;
+  const missing = (previous?.pages ?? []).filter((id) => !kept.has(id) && id !== rootId);
+  const gone = whole ? missing : [];
   let archived = 0;
   if (gone.length)
     sink.tree.transact(() => {
@@ -611,12 +635,13 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
         if (!entry || Number(entry.get("archivedAt") ?? 0) > 0) continue;
         entry.set("archivedAt", now);
         entry.set("updatedBy", sink.by);
+        rebase.remember(entry, "archivedAt", now);
         archived++;
       }
     });
   report("");
   await sink.flush();
-  return { root: rootId, ...counts, ids, pageIds: [...kept], archived, files: fileMarks, recordId: syncing ? (previous?.id ?? `${SYNCED_EXPORT_PREFIX}${rootId}`) : null };
+  return { root: rootId, ...counts, conflicts: rebase.conflicts.size, ids, pageIds: whole ? [...kept] : [...kept, ...missing], archived, files: fileMarks, recordId: syncing ? (previous?.id ?? `${SYNCED_EXPORT_PREFIX}${rootId}`) : null };
 }
 
 export type ImportRecord = { id: string; source: string; at: number; roots: string[]; by: string; pages?: string[]; files?: Record<string, string> };

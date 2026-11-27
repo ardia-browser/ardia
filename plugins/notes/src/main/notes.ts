@@ -60,6 +60,7 @@ import { isBlankFragment } from "../shared/blocks";
 import { instantiateTemplate, templateById } from "../shared/templates";
 import { templateUseCount } from "../shared/templates/counts";
 import { Imports, type PickedFile } from "./import/jobs";
+import { ImportError } from "./import/limits";
 import { NotionLive, type SitesApi } from "./import/sources/notionLive";
 import { AgentDemos } from "./agentDemo";
 import { makeHandlers } from "./tools";
@@ -128,6 +129,8 @@ class View {
 
 const COLORS = ["#e03e3e", "#d9730d", "#dfab01", "#0f7b6c", "#0b6e99", "#6940a5", "#ad1a72", "#2f9e44", "#1c7ed6", "#e8590c", "#5f3dc4", "#c2255c"];
 const DEFAULT_NAME = "Someone";
+const IMPORT_QUIT_MS = 10_000;
+const IMPORT_DURABLE_MS = 5 * 60_000;
 const MAX_UPLOAD = 64 * 1024 * 1024;
 const MAX_UPLOADS_BYTES = 128 * 1024 * 1024;
 const MAX_UPLOADS_OPEN = 64;
@@ -290,17 +293,25 @@ export class Notes {
         const space = this.space(workspace);
         const tree = await this.tree(space);
         const files = new FileWriter((bytes, ext) => space.store.stageFile(bytes, ext));
+        const touched = new Set<string>(["ws"]);
         return {
           tree,
           by: this.deviceId,
-          newDoc: (page: string) => this.freshDoc(space, page),
-          doc: (page: string) => this.docOf(space, `p-${page}`),
+          newDoc: (page: string) => {
+            touched.add(`p-${page}`);
+            return this.freshDoc(space, page);
+          },
+          doc: (page: string) => {
+            touched.add(`p-${page}`);
+            return this.docOf(space, `p-${page}`);
+          },
           putFile: (bytes: Uint8Array, ext: string) => files.put(bytes, ext),
           hasFile: (sha: string, size: number) => space.store.hasFile(sha, size),
           flush: async () => {
             await files.drain();
-            await space.store.flush();
+            if (!(await space.store.flushDurable([...touched], this.host.durableTimeoutMs ?? IMPORT_DURABLE_MS))) throw new ImportError("Notes couldn't save the imported pages to disk, so the import stopped. Check there's room on this Mac and start it again.");
           },
+          settle: () => files.drain().catch(() => undefined),
           alive: () => !space.closed && this.spaces.get(space.record.id) === space,
         };
       },
@@ -359,6 +370,9 @@ export class Notes {
     if (this.stopped) return;
     this.stopped = true;
     for (const t of [this.lastPageTimer, this.workspacesTimer, this.presenceTimer, this.sweepTimer, this.pruneTimer]) if (t !== null) this.timers.clearTimeout(t);
+    let importDeadline: unknown = null;
+    await Promise.race([this.imports.stop(), new Promise<void>((resolve) => (importDeadline = this.timers.setTimeout(() => resolve(), IMPORT_QUIT_MS)))]);
+    this.timers.clearTimeout(importDeadline);
     await Promise.all(
       [...this.spaces.values()].map(async (space) => {
         for (const t of space.textTimers.values()) this.timers.clearTimeout(t);
@@ -1841,21 +1855,30 @@ export class Notes {
     }
   }
 
-  private async copyPageFiles(from: Space, to: Space, tree: Y.Doc, ids: string[]) {
+  private async copyPageFiles(from: Space, to: Space, tree: Y.Doc, ids: string[], options: { complete?: boolean } = {}) {
     const refs = new Set<string>();
     for (const id of ids) {
       fileRefsOfEntry(pagesOf(tree).get(id), refs);
       fileRefsOfState(fullState(await this.docOf(from, `p-${id}`)), refs);
     }
+    const missing: string[] = [];
+    const copies: { data: Uint8Array; ext: string }[] = [];
     for (const sha of refs) {
       if (await to.store.getFile(sha).catch(() => null)) continue;
       const found = await from.store.getFile(sha).catch(() => null);
       if (!found) {
-        this.log("warn", `The attachment ${sha.slice(0, 12)} isn't here, so it didn't come along.`);
+        missing.push(sha);
         continue;
       }
-      await to.store.putFile(found.data, found.name.slice(found.name.lastIndexOf(".") + 1));
+      copies.push({ data: found.data, ext: found.name.slice(found.name.lastIndexOf(".") + 1) });
     }
+    if (options.complete && missing.length) {
+      const downloading = await from.store.filesDownloading(missing).catch(() => missing);
+      if (downloading.length) throw new Error(`${downloading.length === 1 ? "An attachment" : `${downloading.length} attachments`} in the shared page ${downloading.length === 1 ? "is" : "are"} still downloading from iCloud, so sharing didn't stop. Try again once ${downloading.length === 1 ? "it's" : "they're"} down.`);
+      throw new Error(`${missing.length === 1 ? "An attachment" : `${missing.length} attachments`} in the shared page ${missing.length === 1 ? "isn't" : "aren't"} in its folder, so sharing didn't stop. Ask whoever added ${missing.length === 1 ? "it" : "them"} to open the page so ${missing.length === 1 ? "it" : "they"} upload again.`);
+    }
+    for (const sha of missing) this.log("warn", `The attachment ${sha.slice(0, 12)} isn't here, so it didn't come along.`);
+    for (const copy of copies) await to.store.putFile(copy.data, copy.ext);
   }
 
   private async sharePageNow(workspace: string, page: string): Promise<string | null> {
@@ -1937,6 +1960,7 @@ export class Notes {
     const homeTree = await this.tree(home);
     const link = getPage(homeTree, root);
     if (!link || !isShareLink(link) || link.sharedIn !== workspace) throw new Error("This shared page isn't linked from your private workspace any more.");
+    await share.store.rescan();
     await share.store.loadAll();
     await share.store.flush();
     if (share.store.hasPending()) throw new Error("Notes couldn't save everything before bringing the page back.");
@@ -1952,7 +1976,8 @@ export class Notes {
     if (clash) throw new Error("A page in the share has the same id as one of your private pages, so sharing didn't stop.");
     const rejected = new Set(share.store.rejected());
     if (ids.some((id) => rejected.has(`p-${id}`))) throw new Error("Part of the shared page couldn't be read, so sharing didn't stop.");
-    await this.copyPageFiles(share, home, shareTree, ids);
+    if (share.store.waitingFor(["ws", ...ids.map((id) => `p-${id}`)]).length) throw new Error("Someone's latest edits to the shared page are still downloading from iCloud, so sharing didn't stop. Try again once they're down.");
+    await this.copyPageFiles(share, home, shareTree, ids, { complete: true });
     const incoming = new Map<string, Uint8Array>();
     for (const id of ids) {
       const shared = await this.docOf(share, `p-${id}`);

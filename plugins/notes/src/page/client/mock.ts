@@ -421,7 +421,7 @@ export function createMockClient(options: MockOptions = {}): NotesClient & { int
   const subtree = (workspace: WorkspaceId, root: PageId): PageId[] => {
     const out = [root];
     const all = allPages(tree(workspace));
-    for (let i = 0; i < out.length; i++) for (const child of all.filter((p) => p.parent === out[i] && !p.deleted)) out.push(child.id);
+    for (let i = 0; i < out.length; i++) for (const child of all.filter((p) => p.parent === out[i] && !p.deleted && !out.includes(p.id))) out.push(child.id);
     return out;
   };
 

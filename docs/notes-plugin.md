@@ -145,7 +145,9 @@ leave, but not move or trash the shared root. For a shared page the popover show
 (owner, confirmed inline) or **Leave**, and Copy link; the workspace move options stay below "Share this page" for
 private pages.
 
-**Stop sharing** (`stopSharingPage`, `stopSharingNow`) takes both locks, loads the whole share, and refuses when part
+**Stop sharing** (`stopSharingPage`, `stopSharingNow`) takes both locks, rescans and loads the whole share, and refuses
+when someone's latest document files or any attachment the pages use are still iCloud placeholders (the share and its
+grant stay, and the error says it's still downloading), when an attachment is missing from the folder, when part
 of it was set aside for size, when the private copy of a page has anything the shared one lacks (the merged result is
 compared before anything is applied), or when a page others added reuses the id of a live private page. It copies the
 attachments, applies the shared state to the private docs, waits until they're on disk and reads them back in a fresh
@@ -217,7 +219,10 @@ are expanded with entry, size, ratio, CRC and path checks. `sources/*` turn it i
 Logseq, Bear, Evernote, Apple Notes exports, Roam, Google Keep, Joplin, Simplenote, Craft, Markdown/HTML/text), and
 `write.ts` writes them under a new top-level "<Source> import" page: BlockNote blocks straight into Yjs, page links as
 mentions, files through `putFile` (deduplicated by sha256), CSV databases with typed properties. Main yields between
-pages so the workspace stays responsive; a cancelled or failed import moves its root to the trash. Notion also imports
+pages so the workspace stays responsive; a cancelled or failed import moves its root to the trash. An import reports
+done only once every page it wrote is on disk (`flushDurable` of the docs it touched, within `durableTimeoutMs`);
+otherwise it fails and keeps its recovery record. Quitting cancels a running import, waits for it (up to 10 s), keeps
+the record, and the next start moves what it made (every root, records imports included) to the trash. Notion also imports
 straight from the account (`sources/notionLive.ts`, the `NotionDetail` panel in `page/import/NotionSource.tsx`) by
 reading the workspace's records, never through Notion's export (its export tasks only email a link, and its export API
 is admin-only). When `ardia.sites.available()` says Ardia lends Notes the user's sign-in (only for Ardia's own official
@@ -239,7 +244,28 @@ a doubling backoff and `Retry-After`; 401/403 end the crawl with a sign-in reaso
 clear one. Cancel stops at once and removes what was fetched. The result is a `NotionRecords`
 (`shared/notionRecords.ts`): `rootIds` are the sidebar's top-level pages in order, then pages whose parent wasn't
 readable. `takeRecords()` hands it to the `pick: "account"` import once, and its `release()` removes the files. Ops:
-`notionAccount`, `notionImport`, `notionImportStatus`, `notionImportCancel`. Tests: `tests/notionLive.test.mjs` (a fake
+`notionAccount`, `notionImport`, `notionImportStatus`, `notionImportCancel`. A crawl that couldn't read a collection's
+rows to the end, or skipped records, lists them in `incomplete`, and each downloaded file carries the `version` of the
+record that holds it.
+
+**Importing Notion again.** A Notion page gets one id whatever the format: the zip id
+(`notion-export:<workspace>:<32-hex id>`, `src/main/import/notionIds.ts`), and an older records id
+(`notion:<workspace>:<dashed id>`) is recognised and kept, so a records import then a zip (or the reverse) updates one
+page. A zip's first import gets a root id from its top pages, and a new page's body is written as a Yjs update from a
+client id derived from the page and its exact content (`seedBody`), so two Macs importing the same export for the first
+time merge into one root and one body. Each imported page keeps, in its tree entry's `imported` map, prints of what the
+import last wrote: its body (`bodyPrint`, ignoring block ids, default attributes and trailing empty paragraphs), its
+title, icon, cover and other page settings, its place, its trash state and each row property (`src/main/import/rebase.ts`).
+On the next import a value the source didn't change is left as it is here; a source change applies when the value here
+is still what was imported, and when both changed the local value stays and the page counts as a conflict
+(`job.conflicts`, shown as "N pages kept your edits", counted as `<source>.conflicts` in `importStats`). A page whose
+file fails to read is skipped and keeps its body. Pages from an earlier import that hold no prints yet count as a
+conflict once if their body differs from the source, and keep theirs; their title and settings take the source, as before. Pages missing from an export are trashed only
+when the result is complete: not past the 20,000-page limit, and for a crawl not in a collection whose rows stopped
+early or under a record it skipped. Attachments are looked up by the path they resolve to, and a records file is
+reused without reading only when its `version` matches the last import. Tests: `tests/review6.test.mjs`.
+
+Tests: `tests/notionLive.test.mjs` (a fake
 Notion host: pagination, 429, cancel, the budget, both origins, the read-only allowlist). Fixtures and tests:
 `tests/fixtures/import`, `tests/import.test.mjs`.
 

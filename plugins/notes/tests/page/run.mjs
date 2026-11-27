@@ -984,9 +984,10 @@ const scenarios = {
     await page.keyboard.type("nice to meet you");
     await page.keyboard.press("Enter");
     await page.keyboard.type("wow");
-    await page.keyboard.press(`${mod}+a`);
-    await page.keyboard.press(`${mod}+a`);
     const picked = page.locator(".n-page-column .bn-block-content.n-block-picked");
+    await page.keyboard.press(`${mod}+a`);
+    await expect(picked).toHaveCount(0);
+    await page.keyboard.press(`${mod}+a`);
     await expect(picked).toHaveCount(4);
     await expect(page.locator(".n-page-column .n-range-picked")).toHaveCount(1);
     const tint = await picked.first().evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -994,6 +995,28 @@ const scenarios = {
     await page.screenshot({ path: join(shots, `selectAllBlocks-${page.context().browser().browserType().name()}.png`) });
     await page.keyboard.press("ArrowDown");
     await expect(picked).toHaveCount(0);
+  },
+
+  async partialBlockDrag(page) {
+    await newPage(page, "Drag");
+    await page.keyboard.type("alpha beta gamma");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("delta epsilon zeta");
+    const first = await blocks(page, "paragraph").filter({ hasText: "alpha beta gamma" }).locator(".bn-inline-content").boundingBox();
+    const second = await blocks(page, "paragraph").filter({ hasText: "delta epsilon zeta" }).locator(".bn-inline-content").boundingBox();
+    await page.mouse.move(first.x + first.width * 0.4, first.y + first.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(second.x + second.width * 0.4, second.y + second.height / 2, { steps: 8 });
+    await page.mouse.up();
+    const selected = await page.evaluate(() => String(window.getSelection()));
+    expect(selected).toContain("gamma");
+    expect(selected).toContain("delta");
+    expect(selected).not.toContain("alpha");
+    await expect(page.locator(".n-page-column .bn-block-content.n-block-picked")).toHaveCount(0);
+    await expect(page.locator(".n-page-column .n-range-picked")).toHaveCount(0);
+    await page.keyboard.press(`${mod}+a`);
+    await page.keyboard.press(`${mod}+a`);
+    await expect(page.locator(".n-page-column .bn-block-content.n-block-picked")).toHaveCount(2);
   },
 
   async workspaceSwitch(page) {

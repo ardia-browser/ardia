@@ -1,6 +1,6 @@
 import { createExtension, type BlockNoteEditor } from "@blocknote/core";
 import { SuggestionMenu } from "@blocknote/core/extensions";
-import { NodeSelection, Plugin, PluginKey, TextSelection } from "prosemirror-state";
+import { AllSelection, NodeSelection, Plugin, PluginKey, TextSelection } from "prosemirror-state";
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view";
 import type { EditorState } from "prosemirror-state";
 import { TEXT_KINDS } from "./blockTypes";
@@ -47,7 +47,11 @@ function pickedBlockContents(state: EditorState): { from: number; to: number }[]
     }
     return true;
   });
-  return picked;
+  const first = picked[0];
+  const last = picked.at(-1);
+  if (!first || !last) return [];
+  const coversWholeBlocks = state.selection instanceof AllSelection || (from <= first.from + 1 && to >= last.to - 1);
+  return coversWholeBlocks ? picked : [];
 }
 
 function blockRangeSelection() {

@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 let loaded = null;
+let bundle = null;
+
+export const bundleFile = () => bundle;
 
 export function load() {
   loaded ??= (async () => {
@@ -21,6 +24,7 @@ export function load() {
       logLevel: "warning",
       alias: { "@ardia/plugin-sdk": fileURLToPath(new URL("../../../../packages/plugin-sdk/src/index.ts", import.meta.url)) },
     });
+    bundle = outfile;
     return import(pathToFileURL(outfile).href);
   })();
   return loaded;

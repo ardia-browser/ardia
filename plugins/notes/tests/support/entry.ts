@@ -34,7 +34,7 @@ export { md5Hex } from "../../src/main/import/md5";
 export { IMPORT_LIMITS } from "../../src/main/import/limits";
 export { IMPORT_SOURCES } from "../../src/shared/importSources";
 export * as fflate from "fflate";
-export { NotionLive, spacesFrom, rootsFrom, retryAfterMs, isReadEndpoint, needsSigning, assetUrl, fileName, fileRefsOf, notionReadUrl, unwrapRecord as crawlUnwrapRecord, NOTION_READ_ENDPOINTS } from "../../src/main/import/sources/notionLive";
+export { NotionLive, spacesFrom, rootsFrom, retryAfterMs, isReadEndpoint, needsSigning, assetUrl, downloadable, fileName, fileRefsOf, notionReadUrl, unwrapRecord as crawlUnwrapRecord, NOTION_READ_ENDPOINTS } from "../../src/main/import/sources/notionLive";
 export { importNotionRecords, NotionRecordsImport, unwrapRecord as unwrapNotionRecord, notionColor, notionIconEmoji, notionCoverFallback, codeLanguage, readRecordsJson, sniffExt, notionRecordId } from "../../src/main/import/sources/notionRecords";
 export { recordImport, readImports, undoImport } from "../../src/main/import/write";
 export { RECORDS_FILE } from "../../src/main/import/jobs";

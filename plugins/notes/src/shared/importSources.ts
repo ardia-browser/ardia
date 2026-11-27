@@ -45,6 +45,7 @@ export type ImportJob = {
   databases: number;
   attachments: number;
   skipped: number;
+  conflicts?: number;
   current: string;
   error?: string;
   root?: string;

@@ -1,4 +1,4 @@
-export type NotionRecordFile = { path: string; name: string; size: number }
+export type NotionRecordFile = { path: string; name: string; size: number; version?: string }
 
 export type NotionRecords = {
   spaceId: string
@@ -9,4 +9,5 @@ export type NotionRecords = {
   users: Record<string, any>
   rows: Record<string, string[]>
   files: Record<string, NotionRecordFile>
+  incomplete?: { collections: string[]; blocks: string[] }
 }

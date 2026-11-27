@@ -86,10 +86,51 @@ const indexes = new WeakMap<Y.Doc, PageIndex>();
 
 const byOrder = (a: PageMeta, b: PageMeta) => (a.order < b.order ? -1 : a.order > b.order ? 1 : a.id < b.id ? -1 : 1);
 
+function breakParentCycles(all: PageMeta[]): PageMeta[] {
+  const byId = new Map(all.map((p) => [p.id, p]));
+  const settled = new Set<string>();
+  for (const start of all) {
+    if (settled.has(start.id)) continue;
+    const path: PageMeta[] = [];
+    const onPath = new Map<string, number>();
+    let current: PageMeta | undefined = start;
+    while (current && !settled.has(current.id) && !onPath.has(current.id)) {
+      onPath.set(current.id, path.length);
+      path.push(current);
+      current = current.parent ? byId.get(current.parent) : undefined;
+    }
+    if (current && onPath.has(current.id)) {
+      const cycle = path.slice(onPath.get(current.id));
+      cycle.reduce((low, p) => (p.id < low.id ? p : low)).parent = "";
+    }
+    for (const p of path) settled.add(p.id);
+  }
+  return all;
+}
+
 function readAll(tree: Y.Doc): PageMeta[] {
   const out: PageMeta[] = [];
   pagesOf(tree).forEach((entry, id) => out.push(read(entry, id)));
-  return out;
+  return breakParentCycles(out);
+}
+
+function readOne(tree: Y.Doc, id: PageId): PageMeta | null {
+  const pages = pagesOf(tree);
+  const entry = pages.get(id);
+  if (!entry) return null;
+  const page = read(entry, id);
+  const path = [id];
+  for (let at = page.parent; at && path.length <= pages.size; ) {
+    const index = path.indexOf(at);
+    if (index >= 0) {
+      if (index === 0 && path.every((p) => p >= id)) page.parent = "";
+      break;
+    }
+    path.push(at);
+    const next = pages.get(at);
+    at = next ? String(next.get("parent") ?? "") : "";
+  }
+  return page;
 }
 
 function pageIndex(tree: Y.Doc): PageIndex | null {
@@ -120,8 +161,7 @@ function pageIndex(tree: Y.Doc): PageIndex | null {
 export function getPage(tree: Y.Doc, id: PageId): PageMeta | null {
   const index = pageIndex(tree);
   if (index) return index.byId.get(id) ?? null;
-  const entry = pagesOf(tree).get(id);
-  return entry ? read(entry, id) : null;
+  return readOne(tree, id);
 }
 
 export function allPages(tree: Y.Doc): PageMeta[] {
@@ -249,7 +289,15 @@ export function restorePage(tree: Y.Doc, id: PageId, by: string) {
 
 export function deletePage(tree: Y.Doc, id: PageId, by: string) {
   const doomed = [id];
-  for (let i = 0; i < doomed.length; i++) for (const child of allPages(tree).filter((p) => p.parent === doomed[i])) doomed.push(child.id);
+  const seen = new Set(doomed);
+  const children = new Map<string, string[]>();
+  for (const p of allPages(tree)) (children.get(p.parent) ?? children.set(p.parent, []).get(p.parent)!).push(p.id);
+  for (let i = 0; i < doomed.length; i++)
+    for (const child of children.get(doomed[i]!) ?? [])
+      if (!seen.has(child)) {
+        seen.add(child);
+        doomed.push(child);
+      }
   tree.transact(() => {
     for (const page of doomed) updatePage(tree, page, { deleted: true, title: "", icon: "", cover: "" }, by);
   });

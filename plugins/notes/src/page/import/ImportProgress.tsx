@@ -76,7 +76,7 @@ export function ImportProgress({
           <div className="n-imp-meta">
             <span className="n-imp-files">{job && job.files ? `${job.filesDone.toLocaleString()} of ${plural(job.files, "file")}` : run.phase === "done" ? "All files read" : "Counting files…"}</span>
             <span className="n-imp-current" title={job?.current ?? ""} data-testid="import-current">
-              {run.phase === "running" ? job?.current ?? "" : job && job.skipped ? `${plural(job.skipped, "file")} skipped` : ""}
+              {run.phase === "running" ? job?.current ?? "" : [job?.skipped ? `${plural(job.skipped, "file")} skipped` : "", job?.conflicts ? `${plural(job.conflicts, "page")} kept your edits` : ""].filter(Boolean).join(" · ")}
             </span>
           </div>
           <dl className="n-imp-counts">

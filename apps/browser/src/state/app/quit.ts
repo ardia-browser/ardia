@@ -17,7 +17,10 @@ export function setQuitting(on: boolean) {
 const quitSaves = new Set<() => Promise<void>>();
 const reportFailure = (error: unknown) => console.warn("[quit] a save before quitting failed", error);
 
-export const saveBeforeQuit = (save: () => Promise<void>) => void quitSaves.add(save);
+export function saveBeforeQuit(save: () => Promise<void>): () => void {
+  quitSaves.add(save);
+  return () => void quitSaves.delete(save);
+}
 
 export async function finishQuitSaves(deadlineMs: number) {
   let timer: ReturnType<typeof setTimeout> | undefined;

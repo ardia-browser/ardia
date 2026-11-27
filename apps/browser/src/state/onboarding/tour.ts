@@ -7,6 +7,7 @@ import { closeReleaseNotes } from "../releaseNotes/releaseNotes";
 import { splitOf } from "../splits/splits";
 import { useUrlAnchors } from "../windows/layout";
 import { keyText } from "../commands/keyText";
+import { shortcutHint } from "../commands/commandShortcuts";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
 export type TourAnchor = "commandBar" | "page" | "tabs" | "sidebarButton";
@@ -37,6 +38,9 @@ export type TourStop = {
   pad?: number;
 };
 
+export const sidebarStopBody = (keys: string | undefined) =>
+  `${keys ? `${keys} hides the sidebar` : "Hide Tabs hides the sidebar"}. Move the pointer to the window's left edge to peek at your tabs while it's hidden.`;
+
 const TOUR_STOPS: TourStop[] = [
   {
     id: "commandBar",
@@ -59,7 +63,7 @@ const TOUR_STOPS: TourStop[] = [
   {
     id: "sidebar",
     title: "Room to focus",
-    body: `${keyText("⌘S")} hides the sidebar. Move the pointer to the window's left edge to peek at your tabs while it's hidden.`,
+    body: sidebarStopBody(undefined),
     anchor: "sidebarButton",
     placement: "below",
     radius: 9,
@@ -98,9 +102,10 @@ export async function startToolTour(windowId?: string | null) {
   const session = useTour.getState().session + 1;
   useTour.setState({ windowId: null, stops: [], index: 0, session });
   closeReleaseNotes();
-  const found = await Promise.all(TOUR_STOPS.map((stop) => (stop.anchor ? locateAnchor(id, stop.anchor) : Promise.resolve(true))));
+  const stops = TOUR_STOPS.map((stop) => (stop.id === "sidebar" ? { ...stop, body: sidebarStopBody(shortcutHint("toggleSidebar")) } : stop));
+  const found = await Promise.all(stops.map((stop) => (stop.anchor ? locateAnchor(id, stop.anchor) : Promise.resolve(true))));
   if (useTour.getState().session !== session) return;
-  useTour.setState({ windowId: id, stops: TOUR_STOPS.filter((_, i) => !!found[i]) });
+  useTour.setState({ windowId: id, stops: stops.filter((_, i) => !!found[i]) });
 }
 
 export function endToolTour() {

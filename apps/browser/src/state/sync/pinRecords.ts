@@ -24,6 +24,8 @@ export const TILE = 0;
 
 export const PIN_HOME = "pgh:";
 
+export const PIN_LETTERS = "plet:";
+
 export const syncedHome = (value: unknown) => (typeof value === "string" && value ? value : undefined);
 export const syncedHomeIn = (base: (key: string) => unknown, key: string) => syncedHome(base(`${PIN_HOME}${key}`));
 

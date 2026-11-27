@@ -19,7 +19,8 @@ import {
   sunPath,
 } from "./layout";
 import { invert, lookFrom, type Mat4, multiply, perspective, transformPoint } from "./matrix";
-import { type KeepOut, MOB_CUBE, MOB_CUBE_VERTICES, MOB_FLOATS, MOB_PART_LIMIT, MOB_PX, Mobs } from "./mobs";
+import { CreeperCharge } from "./creeper";
+import { type KeepOut, MOB_CONTACTS, MOB_CUBE, MOB_CUBE_VERTICES, MOB_FLOATS, MOB_PART_LIMIT, MOB_PX, Mobs } from "./mobs";
 import { PARTICLE_STRIDE, Particles } from "./particles";
 import { SHADERS } from "./shaders";
 import { WetPaint } from "./smear";
@@ -30,6 +31,8 @@ export interface MeadowOptions {
   reducedMotion: boolean;
   onFirstFrame: () => void;
   opening?: [from: number, to: number];
+  creeperCharge?: boolean;
+  onCreeperBoom?: () => void;
 }
 
 export interface Meadow {
@@ -266,6 +269,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
   let savedRootCursor = "";
   let savedRootUserSelect = "";
   const mobs = new Mobs(reducedMotion);
+  const charge = options.creeperCharge && !reducedMotion ? new CreeperCharge(hero, () => options.onCreeperBoom?.()) : null;
   let mobBatch: ProgramBatch<DeferredProgramName> | null = null;
   let mobGpu: MobGpu | null = null;
   let particleProgram: Program | null = null;
@@ -899,6 +903,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
   };
 
   const isBusy = (now: number) => {
+    if (charge?.busy) return true;
     if (needsRender || paintReveal < 1 || (!mobGpu && !mobsOff) || terrainRead || day.mode === "sunrise" || day.mode === "drag" || day.mode === "settle") return true;
     if (Math.abs(cycleDelta(day.c, day.target)) > 1e-4) return true;
     if (Math.abs(tones.mist - titleMist) > 0.002) return true;
@@ -1011,8 +1016,15 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     }
 
     eye = [look.x * 0.22, CAMERA_HEIGHT + look.y * 0.05 + scroll * 0.85, -scroll * 0.6];
-    const yaw = framing.yaw - look.x * degrees(0.75);
-    const pitch = framing.pitch + look.y * degrees(0.45) - scroll * degrees(4);
+    let yaw = framing.yaw - look.x * degrees(0.75);
+    let pitch = framing.pitch + look.y * degrees(0.45) - scroll * degrees(4);
+    if (charge) {
+      const shake = charge.shakeAt(now);
+      eye[0] += shake.x;
+      eye[1] += shake.y;
+      yaw += shake.yaw;
+      pitch += shake.pitch;
+    }
     perspective(framing.verticalFov, aspect, 0.2, 40000, projection);
     viewProj = multiply(projection, lookFrom(eye, yaw, pitch, view), viewProjection);
     const inverseViewProj = invert(viewProj, inverseViewProjection);
@@ -1041,6 +1053,15 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
       }
       mobs.step(reducedMotion ? 0 : dt, light.night);
       mobParts = Math.min(MOB_PART_LIMIT, mobs.fill(light.keyDir, Math.max(light.keyColor[0], light.keyColor[1], light.keyColor[2])));
+    }
+    let creeperParts = 0;
+    if (charge) {
+      const chargeView = { eye, width: cssWidth, height: cssHeight, tanHalfWide: tanHalfV * aspect, project };
+      creeperParts = charge.update(now, chargeView, !!mobGpu, particles, light.night);
+      if (charge.contact && mobs.contactCount < MOB_CONTACTS) {
+        mobs.contacts.set(charge.contact, mobs.contactCount * 4);
+        mobs.contactCount++;
+      }
     }
     const grassEdge = project(0, 0, GRASS_FAR * 0.75);
     grassTopCss = grassEdge ? grassEdge.y : cssHeight * 0.7;
@@ -1178,6 +1199,22 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
       .float("uAspect", aspect);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.depthMask(true);
+    if (charge && mobGpu && creeperParts > 0) {
+      gl.depthFunc(gl.LESS);
+      if (charge.near) gl.clear(gl.DEPTH_BUFFER_BIT);
+      bindTexture(gl, 1, g.horizonTex);
+      bindTexture(gl, 2, g.heightTex);
+      applyShared(mobGpu.program.use(), light, skySpan)
+        .mat4("uViewProj", viewProj)
+        .int("uHorizonTex", 1)
+        .int("uHeightTex", 2)
+        .float("uHillScale", framing.hillScale)
+        .float("uPx", MOB_PX);
+      gl.bindVertexArray(mobGpu.vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mobGpu.buffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, charge.data, 0, creeperParts * MOB_FLOATS);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, MOB_CUBE_VERTICES, creeperParts);
+    }
     gl.disable(gl.DEPTH_TEST);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, t.paintFramebuffer);
@@ -1262,6 +1299,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     if (!firstFrameSent) {
       firstFrameSent = true;
       canvas.dataset.meadow = "ready";
+      charge?.begin(now);
       options.onFirstFrame();
     }
   };
@@ -1572,6 +1610,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     framesSinceFirst = 0;
     inFlight = null;
     heldFrames = 0;
+    charge?.abort(performance.now());
   };
   const onRestored = () => {
     lost = false;
@@ -1715,6 +1754,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
       document.removeEventListener("visibilitychange", onVisibility);
       for (const [target, type, listener] of listeners) target.removeEventListener(type, listener);
       delete hero.dataset.brushing;
+      charge?.dispose();
       tones.reset();
       releaseTargets();
       releaseCellTable();

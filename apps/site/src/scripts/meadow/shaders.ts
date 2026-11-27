@@ -719,6 +719,7 @@ out float vFlash;
 out float vSeed;
 out float vLit;
 out float vGround;
+out float vEmit;
 
 mat3 turnY(float a) {
   float c = cos(a);
@@ -758,6 +759,7 @@ void main() {
   vGlow = aExtra.x;
   vSeed = aExtra.y;
   vFlash = aExtra.z;
+  vEmit = aExtra.w;
   vGround = model.y * uPx;
   vLit = smoothstep(-0.014, 0.014, uKeyElev - shadowHorizon(texture(uHorizonTex, terrainUv(aRoot.xy))));
   gl_Position = clip;
@@ -776,6 +778,7 @@ in float vFlash;
 in float vSeed;
 in float vLit;
 in float vGround;
+in float vEmit;
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outFlow;
 
@@ -800,6 +803,7 @@ void main() {
   col += vColor * vGlow * mix(0.5, 1.8, uNight);
   col = mix(atmosphere(col, vWorld), col, smoothstep(150.0, 900.0, vWorld.z) * 0.6 * (1.0 - uNight * 0.5));
   col = mix(mistPaint(), col, smoothstep(0.0, 0.75, vFade));
+  col = mix(col, vec3(1.25), vEmit);
   outColor = vec4(encodeColor(col), 1.0);
   outFlow = encodeFlow(length(vStroke) > 1e-4 ? vStroke : vec2(0.0, 1.0), 0.08, CREATURE_REGION);
 }
@@ -1076,6 +1080,13 @@ void main() {
     return;
   }
   vec2 r = mat2(cos(vAngle), sin(vAngle), -sin(vAngle), cos(vAngle)) * q;
+  if (vKind > 1.5) {
+    float edge = max(abs(r.x), abs(r.y));
+    float puff = (1.0 - smoothstep(0.64, 0.7, edge)) * vColor.a;
+    float facet = r.y < -0.2 ? 1.08 : r.x > 0.2 ? 0.86 : 0.96;
+    outColor = vec4(vColor.rgb * facet * puff, puff);
+    return;
+  }
   float shape = length(vec2(r.x, r.y * 1.9 + r.x * r.x * 0.6));
   float alpha = (1.0 - smoothstep(0.78, 0.95, shape)) * vColor.a;
   float shade = 0.82 + 0.18 * r.y;

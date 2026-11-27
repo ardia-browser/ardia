@@ -40,7 +40,7 @@ Plugins, "On your PATH. It can control Ardia.", or why it isn't on PATH, with Tr
 the signed digest), and runs its after-update actions once per version (`ardia skills install --auto`,
 `ardia skills refresh`, `ardia computer refresh`). **Installed means control is on**: installing turns `cliControl` on
 (the sheet says so), and each launch turns it back on while Command Line is installed. The control pill's Stop turns
-it off until the next launch. An install you approved moves to the version this Ardia pins by itself when the new version asks
+it off until the next launch; its close button hides the pill without stopping control, and Settings › Advanced › Command line and automation › Show the control pill turns the pill off persistently. An install you approved moves to the version this Ardia pins by itself when the new version asks
 for nothing you hadn't approved (`docs/plugins.md` › Official plugins, #3868), and Command Line's page in Settings ›
 Plugins then says "Updated by itself" and lists what's new. Python 0.4.0 to Bun 0.6.0 is such a move, and so is any later
 pin with the same surface: the same control and `ardia` with the same after-update steps, plus a sandboxed, offline

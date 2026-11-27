@@ -1,0 +1,192 @@
+assert(is_mac)
+
+if (is_official_build) {
+  source_set("mac") {
+    sources = [
+      "ac_mac_hooks.h",
+      "ac_mac_webui.h",
+      "ac_mac_webui_release.mm",
+    ]
+  }
+} else {
+  config("webui_dev") {
+    defines = [ "ARDIA_MAC_WEBUI_DEV" ]
+  }
+
+  config("session_include") {
+    include_dirs = [ "shared" ]
+  }
+
+  config("session_dict_loops") {
+    cflags = [ "-Wno-range-loop-bind-reference" ]
+  }
+
+  source_set("session") {
+    sources = [
+      "shared/ac_linux_document_reducer.cc",
+      "shared/ac_linux_document_schema.cc",
+      "shared/ac_linux_document_service.cc",
+      "shared/ac_linux_documents.cc",
+      "shared/ac_linux_session.cc",
+      "shared/ardia/linux/ac_linux_document_reducer.h",
+      "shared/ardia/linux/ac_linux_document_service.h",
+      "shared/ardia/linux/ac_linux_documents.h",
+      "shared/ardia/linux/ac_linux_session.h",
+    ]
+    public_configs = [ ":session_include" ]
+    configs += [ ":session_dict_loops" ]
+    deps = [ "//base" ]
+  }
+
+  action("bootstrap") {
+    script = "generate_bootstrap.py"
+    sources = [ "bootstrap.js" ]
+    outputs = [ "$target_gen_dir/host_bootstrap.h" ]
+    args = [
+      "--input",
+      rebase_path(sources[0], root_build_dir),
+      "--output",
+      rebase_path(outputs[0], root_build_dir),
+    ]
+  }
+
+  source_set("mac") {
+    sources = [
+      "ac_mac_dialog.h",
+      "ac_mac_dialog.mm",
+      "ac_mac_dialog_policy.h",
+      "ac_mac_backdrop_theme.h",
+      "ac_mac_documents.h",
+      "ac_mac_documents.mm",
+      "ac_mac_extension_view.h",
+      "ac_mac_extension_view.mm",
+      "ac_mac_extension_view_policy.h",
+      "ac_mac_glass.h",
+      "ac_mac_glass.mm",
+      "ac_mac_glass_layout.h",
+      "ac_mac_hooks.h",
+      "ac_mac_link_gesture.h",
+      "ac_mac_link_gesture.mm",
+      "ac_mac_link_policy.h",
+      "ac_mac_menu.h",
+      "ac_mac_menu.mm",
+      "ac_mac_menu_model.h",
+      "ac_mac_menu_state.h",
+      "ac_mac_page_commands.h",
+      "ac_mac_page_commands.mm",
+      "ac_mac_page_delegate.h",
+      "ac_mac_page_delegate.mm",
+      "ac_mac_page_events.h",
+      "ac_mac_page_events.mm",
+      "ac_mac_page_policy.h",
+      "ac_mac_pip.h",
+      "ac_mac_pip.mm",
+      "ac_mac_pip_policy.h",
+      "ac_mac_popover.h",
+      "ac_mac_popover.mm",
+      "ac_mac_popover_policy.h",
+      "ac_mac_share.h",
+      "ac_mac_share.mm",
+      "ac_mac_share_policy.h",
+      "ac_mac_shared_folders.h",
+      "ac_mac_shared_folders.mm",
+      "ac_mac_shared_folders_policy.h",
+      "ac_mac_shell_bridge.cc",
+      "ac_mac_shell_bridge.h",
+      "ac_mac_shell_calls.mm",
+      "ac_mac_shell_host.h",
+      "ac_mac_shell_host.mm",
+      "ac_mac_shell_lifecycle.mm",
+      "ac_mac_shell_policy.h",
+      "ac_mac_system.h",
+      "ac_mac_system.mm",
+      "ac_mac_swipe.h",
+      "ac_mac_swipe.mm",
+      "ac_mac_swipe_policy.h",
+      "ac_mac_system_policy.h",
+      "ac_mac_webui.h",
+      "ac_mac_webui.mm",
+      "ac_mac_webui_policy.h",
+      "ac_mac_window.h",
+      "ac_mac_window.mm",
+      "ac_mac_window_events.h",
+      "ac_mac_window_events.mm",
+      "ac_mac_window_layout.h",
+      "ac_mac_window_policy.h",
+      "generated/ac_desktop_favicon_policy.h",
+      "shared/ac_linux_search_engines.cc",
+      "shared/ardia/desktop/ac_desktop_search_engine_policy.h",
+      "shared/ardia/linux/ac_linux_search_engines.h",
+      "generated/ac_desktop_routes.h",
+      "generated/ac_desktop_window_commands.h",
+      "generated/ac_linux_page_operations.h",
+    ]
+    sources += get_target_outputs(":bootstrap")
+    public_deps = [ ":session" ]
+    configs += [ ":webui_dev" ]
+    deps = [
+      ":bootstrap",
+      "//base",
+      "//cc",
+      "//chrome/browser",
+      "//chrome/browser/devtools",
+      "//chrome/browser/media/webrtc",
+      "//chrome/browser/performance_manager",
+      "//chrome/browser/picture_in_picture",
+      "//chrome/browser/printing",
+      "//chrome/browser/profiles:profile",
+      "//chrome/browser/renderer_host:history_swiping_control",
+      "//chrome/browser/resource_coordinator",
+      "//chrome/common",
+      "//components/blocked_content",
+      "//components/content_settings/core/browser",
+      "//components/content_settings/core/common",
+      "//components/download/content/public",
+      "//components/download/public/common:public",
+      "//components/find_in_page",
+      "//components/input",
+      "//components/lens:lens_mojo",
+      "//components/performance_manager",
+      "//components/permissions",
+      "//components/policy/core/common",
+      "//components/prefs",
+      "//components/renderer_context_menu",
+      "//components/search_engines",
+      "//components/security_state/content",
+      "//components/security_state/core",
+      "//components/sessions",
+      "//components/version_info",
+      "//components/viz/common",
+      "//components/web_modal",
+      "//components/zoom",
+      "//content/public/browser",
+      "//crypto",
+      "//extensions/browser",
+      "//extensions/common",
+      "//media",
+      "//mojo/public/cpp/bindings",
+      "//net",
+      "//printing/buildflags",
+      "//services/media_session/public/cpp",
+      "//services/media_session/public/mojom",
+      "//services/network/public/mojom",
+      "//skia",
+      "//third_party/blink/public/common",
+      "//ui/accelerated_widget_mac",
+      "//ui/base",
+      "//ui/compositor",
+      "//ui/display",
+      "//ui/events:events_base",
+      "//ui/gfx",
+      "//ui/views",
+      "//url",
+    ]
+    frameworks = [
+      "AppKit.framework",
+      "CoreServices.framework",
+      "QuartzCore.framework",
+      "ServiceManagement.framework",
+      "UniformTypeIdentifiers.framework",
+    ]
+  }
+}

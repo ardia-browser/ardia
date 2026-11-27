@@ -161,7 +161,7 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
   const visible = props.visible !== false;
   return (
     <View style={[props.style, { overflow: "hidden", backgroundColor: "#FFFFFF" }, !visible && { opacity: 0, pointerEvents: "none" }]}>
-      <div ref={frameHost} inert={!visible} style={{ position: "absolute", inset: 0, display: framedUrl ? "block" : "none" }} />
+      <div ref={frameHost} className="ardia-webview-host" inert={!visible} style={{ position: "absolute", inset: 0, display: framedUrl ? "block" : "none" }} />
       {page && !framedUrl ? <RefusedPage host={hostOf(page.url) || page.url} /> : null}
     </View>
   );

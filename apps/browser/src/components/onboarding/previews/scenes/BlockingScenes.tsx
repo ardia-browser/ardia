@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Animated, View } from "react-native";
-import { at, type Geo, hairline, sideCard, TOOLBAR_H } from "../geometry";
+import { at, type Geo, hairline, TOOLBAR_H } from "../geometry";
 import { type Look, pick } from "../look";
 import { tracker } from "../timeline";
 import { Glyph, Label, MockSurface } from "../Kit";
@@ -8,7 +8,7 @@ import { Page } from "../MockPages";
 import { mockInk, mockShadow, sceneMs } from "../tokens";
 import { font, radius, space } from "../../../ui/tokens";
 import type { Scene } from "../scene";
-import { Std } from "./SceneParts";
+import { cardOf, Rest } from "./SceneParts";
 
 function AdBox({ g, look, style, h, children }: { g: Geo; look: Look; style?: object; h: number; children?: ReactNode }) {
   return (
@@ -24,32 +24,34 @@ function AdBox({ g, look, style, h, children }: { g: Geo; look: Look; style?: ob
 export function block(on: boolean): Scene {
   return ({ g, look, p, opts }) => {
     const t = tracker(p, sceneMs.block);
-    const c = sideCard(g);
+    const c = cardOf(g, opts);
+    const back = 2500;
     const ad = (ms: number, gone: number) => ({
-      opacity: on ? t([[ms, 0], [ms + 200, 1], [gone, 1], [gone + 220, 0]]) : t.in(ms, 200),
-      transform: [{ scale: on ? t([[ms, 0.94], [ms + 260, 1], [gone, 1], [gone + 260, 0.86]]) : t([[ms, 0.94], [ms + 260, 1]]) }],
+      opacity: on ? t([[ms, 0], [ms + 200, 1], [gone, 1], [gone + 220, 0]]) : t.pulse(ms, back, 200, 240),
+      transform: [{ scale: on ? t([[ms, 0.94], [ms + 260, 1], [gone, 1], [gone + 260, 0.86]]) : t.trip(0.94, 1, ms, back, 260, 240) }],
     });
-    const field = opts.addressInSidebar;
-    const toolbarOpts = { ...opts, addressInSidebar: false };
+    const top = opts.addressInSidebar ? 0 : TOOLBAR_H;
     return (
-      <Std
+      <Rest
         g={g}
         look={look}
-        opts={field ? toolbarOpts : opts}
+        opts={opts}
         page={
-          <Page g={g} look={look} top={TOOLBAR_H}>
-            <AdBox g={g} look={look} h={64} style={ad(200, 900)} />
-          </Page>
+          <>
+            <Page g={g} look={look} top={TOOLBAR_H}>
+              <AdBox g={g} look={look} h={64} style={ad(300, 1000)} />
+            </Page>
+            <AdBox g={g} look={look} h={150} style={[at(g, c.w - 150, TOOLBAR_H + 80, 130, 150), ad(220, 920)]} />
+          </>
         }
         card={
           <>
-            <AdBox g={g} look={look} h={150} style={[at(g, c.w - 150, TOOLBAR_H + 80, 130, 150), ad(120, 820)]} />
             <Animated.View
               style={[
                 { position: "absolute", left: 20 * g.s, right: 20 * g.s, bottom: 18 * g.s },
                 {
-                  opacity: on ? t([[280, 0], [420, 1], [980, 1], [1220, 0]]) : t.in(280, 160),
-                  transform: [{ translateY: on ? t([[280, 40 * g.s], [580, 0], [980, 0], [1220, 40 * g.s]]) : t([[280, 40 * g.s], [580, 0]]) }],
+                  opacity: on ? t([[380, 0], [520, 1], [1080, 1], [1320, 0]]) : t.pulse(380, back, 160, 240),
+                  transform: [{ translateY: on ? t([[380, 40 * g.s], [680, 0], [1080, 0], [1320, 40 * g.s]]) : t.trip(40 * g.s, 0, 380, back, 300, 240) }],
                 },
               ]}
             >
@@ -67,7 +69,7 @@ export function block(on: boolean): Scene {
               </MockSurface>
             </Animated.View>
             {on ? (
-              <Animated.View style={[at(g, c.w - 64, 8, 52, 26), { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: space.xs * g.s, opacity: t.in(700, 200), transform: [{ scale: t([[700, 0.6], [960, 1]]) }] }]}>
+              <Animated.View style={[at(g, c.w - 64, top + 8, 52, 26), { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: space.xs * g.s, opacity: t.pulse(800, back, 200, 240), transform: [{ scale: t.trip(0.6, 1, 800, back, 260, 240) }] }]}>
                 <Glyph g={g} name="checkmark.shield.fill" size={14} color={look.t.accent} weight="medium" box={18} />
                 <Label g={g} size={font.caption.fontSize} color={look.t.textSecondary} weight="600">
                   3

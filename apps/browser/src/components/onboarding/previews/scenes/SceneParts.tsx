@@ -1,61 +1,83 @@
-import type { ReactNode } from "react";
-import { View } from "react-native";
-import { at, atRect, CARD, type Geo, hairline, LIGHTS_Y, type Rect, ROW, rowY, SIDEBAR_ICONS, sideCard, TOOLBAR_H } from "../geometry";
-import { type Article, NOTES, type Suggestion, tab, type Tab } from "../content";
+import { useMemo, type ReactNode } from "react";
+import { Animated, View } from "react-native";
+import { atRect, CARD, chipX, CHIP, CHIP_STEP, type Geo, hairline, fill, type Rect, restCard, restChipCount, restRowCount, ROW, rowY, TOOLBAR_H } from "../geometry";
+import { type Article, NEW_TAB, type Suggestion, tab, type Tab } from "../content";
 import { type Look, pick } from "../look";
 import { crumbSwap, type Stop, type Tracker } from "../timeline";
-import { Backdrop, Card, Crumb, Label, Lights, NavIcons, Rows, Selection, SidebarField, TabRow, Toolbar, WindowFrame } from "../Kit";
+import { Backdrop, Card, Crumb, Highlight, Label, type Lit, Lights, Selection, TabRow, Toolbar, WindowFrame, type Styles } from "../Kit";
 import { Page } from "../MockPages";
 import { Keycap, SuggestionRow } from "../Floating";
 import { mockInk } from "../tokens";
 import { font, space } from "../../../ui/tokens";
 import { SUGGESTION } from "../../../omnibox/tokens";
 import type { SceneOpts } from "../scene";
+import { SelectedChip, type SiteTint, type WindowSlots, WindowState } from "../WindowState";
 
-export const listTop = (opts: SceneOpts) => (opts.addressInSidebar ? ROW.topWithField : ROW.top);
+export function Rest({ g, look, opts, site, ...slots }: { g: Geo; look: Look; opts: SceneOpts; site?: SiteTint } & WindowSlots) {
+  const values = useMemo(
+    () => ({ lay: new Animated.Value(opts.top ? 1 : 0), addr: new Animated.Value(opts.addressInSidebar ? 1 : 0), site: new Animated.Value(opts.siteColor ? 1 : 0) }),
+    [opts.top, opts.addressInSidebar, opts.siteColor],
+  );
+  const tint = typeof site === "number" ? new Animated.Value(site) : site;
+  return <WindowState g={g} look={look} accent={opts.accent} custom={opts.custom} lay={values.lay} addr={values.addr} site={tint ?? values.site} frame={opts.frame} slots={slots} />;
+}
 
-export function Chrome({ g, look, opts, sel = 0, field }: { g: Geo; look: Look; opts: SceneOpts; sel?: number; field?: ReactNode }) {
+export const cardOf = (g: Geo, opts: SceneOpts) => restCard(g, opts.top, opts.frame);
+export const tabCount = (g: Geo, opts: SceneOpts) => (opts.top ? restChipCount(g) : restRowCount(g));
+export const pitchOf = (opts: SceneOpts) => (opts.top ? CHIP_STEP : ROW.pitch);
+export const along = (opts: SceneOpts, value: Animated.AnimatedInterpolation<number>) => (opts.top ? [{ translateX: value }] : [{ translateY: value }]);
+export const tabsSlot = (opts: SceneOpts, node: ReactNode): WindowSlots => (opts.top ? { chips: node } : { rows: node });
+
+export function ListItem({ g, look, opts, t, i, lit, selected, style }: { g: Geo; look: Look; opts: SceneOpts; t: Tab; i: number; lit?: Lit; selected?: boolean; style?: Styles }) {
+  if (opts.top) return <TabRow g={g} look={look} t={t} x={chipX(i)} y={CHIP.top - 1} w={CHIP.w} style={style} />;
+  return <TabRow g={g} look={look} t={t} y={rowY(i)} lit={lit} selected={selected} style={style} />;
+}
+
+export function Selected({ g, look, opts, i = 0, site, style }: { g: Geo; look: Look; opts: SceneOpts; i?: number; site?: SiteTint; style?: Styles }) {
+  if (opts.top) return <SelectedChip g={g} look={look} x={chipX(i)} site={site ?? (opts.siteColor ? 1 : 0)} style={style} />;
+  return <Highlight g={g} look={look} y={rowY(i)} style={style} />;
+}
+
+export function NewTabRow({ g, look, opts, i, style }: { g: Geo; look: Look; opts: SceneOpts; i: number; style?: Styles }) {
+  if (opts.top) return null;
+  return <TabRow g={g} look={look} t={NEW_TAB} y={rowY(i)} style={style} />;
+}
+
+export function RestList({ g, look, opts, lit, from = 0 }: { g: Geo; look: Look; opts: SceneOpts; lit?: (i: number) => Lit | undefined; from?: number }) {
+  const n = tabCount(g, opts);
   return (
     <>
-      <Backdrop look={look} />
-      <Lights g={g} y={opts.addressInSidebar ? LIGHTS_Y.field : LIGHTS_Y.toolbar} />
-      {opts.addressInSidebar ? (
-        <>
-          <NavIcons g={g} color={look.t.icon} xs={SIDEBAR_ICONS} y={LIGHTS_Y.field} names={["sidebar.left", "chevron.left", "chevron.right"]} />
-          <SidebarField g={g} look={look} t={tab(sel)}>
-            {field}
-          </SidebarField>
-        </>
-      ) : null}
+      {Array.from({ length: n }, (_, i) => (
+        <ListItem key={i} g={g} look={look} opts={opts} t={tab(from + i)} i={i} lit={lit?.(i)} />
+      ))}
+      <NewTabRow g={g} look={look} opts={opts} i={n} />
     </>
   );
 }
 
-export function Std({ g, look, opts, n = 4, sel = 0, rows, page, card, a = NOTES, site }: { g: Geo; look: Look; opts: SceneOpts; n?: number; sel?: number; rows?: ReactNode; page?: ReactNode; card?: ReactNode; a?: Article; site?: boolean }) {
-  const c = sideCard(g);
-  const field = opts.addressInSidebar;
+export function KeyPress({ g, t, label, ms, back }: { g: Geo; t: Tracker; label: string; ms: number; back: number }) {
+  return <Keycap g={g} x={g.W - 22} y={g.H - 50} label={label} style={{ opacity: t.pulse(ms, back, 160, 200), transform: [{ scale: t([[ms, 0.82], [ms + 260, 1], [back, 1], [back + 200, 0.92]]) }] }} />;
+}
+
+export function CrumbSwap({ g, look, t, a, b, ms, back }: { g: Geo; look: Look; t: Tracker; a: Tab; b: Tab; ms: number; back: number }) {
+  const { first, second } = crumbSwap(ms, back);
+  const shift = (stops: readonly Stop[]) => stops.map(([when, dx]) => [when, dx * g.s] as const);
   return (
     <>
-      <Chrome g={g} look={look} opts={opts} sel={sel} />
-      {rows ?? <Rows g={g} look={look} n={n} sel={sel} top={listTop(opts)} />}
-      <Card g={g} look={look} rect={c}>
-        {field ? null : <Toolbar g={g} look={look} w={c.w} t={tab(sel)} site={site} />}
-        {page ?? <Page g={g} look={look} a={a} top={field ? 0 : TOOLBAR_H} />}
-        {card}
-      </Card>
+      <Crumb g={g} look={look} t={a} style={[fill, { opacity: t(first.opacity), transform: [{ translateX: t(shift(first.x)) }] }]} />
+      <Crumb g={g} look={look} t={b} style={[fill, { opacity: t(second.opacity), transform: [{ translateX: t(shift(second.x)) }] }]} />
     </>
   );
 }
 
-export function KeyPress({ g, t, label, ms = 0 }: { g: Geo; t: Tracker; label: string; ms?: number }) {
+export function PageSwap({ g, look, t, ms, back, a, b }: { g: Geo; look: Look; t: Tracker; ms: number; back: number; a: Article; b: Article }) {
   return (
-    <Keycap
-      g={g}
-      x={g.W - 22}
-      y={g.H - 50}
-      label={label}
-      style={{ opacity: t.in(ms, 160), transform: [{ scale: t([[ms, 0.82], [ms + 260, 1]]) }] }}
-    />
+    <>
+      <Page g={g} look={look} a={a} top={TOOLBAR_H} />
+      <Animated.View style={[fill, { opacity: t.pulse(ms, back, 280) }]}>
+        <Page g={g} look={look} a={b} top={TOOLBAR_H} />
+      </Animated.View>
+    </>
   );
 }
 
@@ -83,11 +105,13 @@ export function SuggestionList({ g, look, t, rows, ms }: { g: Geo; look: Look; t
 
 export function SelectedUrl({ g, look }: { g: Geo; look: Look }) {
   return (
-    <Selection g={g} look={look}>
-      <Label g={g} size={font.title.fontSize} color={look.t.textPrimary}>
-        fieldnotes.blog/coast-trail
-      </Label>
-    </Selection>
+    <View style={{ flexShrink: 1, flexDirection: "row" }}>
+      <Selection g={g} look={look} style={{ flexShrink: 1 }}>
+        <Label g={g} size={font.title.fontSize} color={look.t.textPrimary}>
+          fieldnotes.blog/coast-trail
+        </Label>
+      </Selection>
+    </View>
   );
 }
 
@@ -97,43 +121,44 @@ export function Divider({ g, look }: { g: Geo; look: Look }) {
 
 export const PANEL_H = 52 + 3 * SUGGESTION.height + 14;
 
-export function centredFrame(g: Geo): Rect {
-  const c = sideCard(g);
+export function centredFrame(g: Geo, opts: SceneOpts): Rect {
+  const c = cardOf(g, opts);
   const content = c.w < 708 ? (c.w <= 636 ? c.w - 20 : 616) : 652;
   const w = Math.min(content, c.w - 28, 560);
   return { x: c.x + (c.w - w) / 2, y: c.y + Math.max(12, Math.round(c.h * 0.22)), w, h: PANEL_H };
 }
 
-export function grow(t: Tracker, g: Geo, from: Rect, to: Rect, ms: number, dur = 260) {
+export function growTrip(t: Tracker, g: Geo, from: Rect, to: Rect, ms: number, back: number, dur = 260) {
   const sx = from.w / to.w;
   const sy = from.h / to.h;
+  const dx = (from.x - to.x - (to.w * (1 - sx)) / 2) * g.s;
+  const dy = (from.y - to.y - (to.h * (1 - sy)) / 2) * g.s;
   return {
-    opacity: t([[ms, 0.4], [ms + 90, 1]]),
-    transform: [
-      { translateX: t([[ms, (from.x - to.x - (to.w * (1 - sx)) / 2) * g.s], [ms + dur, 0]]) },
-      { translateY: t([[ms, (from.y - to.y - (to.h * (1 - sy)) / 2) * g.s], [ms + dur, 0]]) },
-      { scaleX: t([[ms, sx], [ms + dur, 1]]) },
-      { scaleY: t([[ms, sy], [ms + dur, 1]]) },
-    ],
+    opacity: t([[ms, 0], [ms + 90, 1], [back + dur - 90, 1], [back + dur, 0]]),
+    transform: [{ translateX: t.trip(dx, 0, ms, back, dur) }, { translateY: t.trip(dy, 0, ms, back, dur) }, { scaleX: t.trip(sx, 1, ms, back, dur) }, { scaleY: t.trip(sy, 1, ms, back, dur) }],
   };
 }
 
-export const drop = (t: Tracker, g: Geo, ms: number) => ({ opacity: t.in(ms, 200), transform: [{ translateY: t([[ms, -10 * g.s], [ms + 300, 0]]) }, { scale: t([[ms, 0.97], [ms + 300, 1]]) }] });
-
-export function SwapCrumb({ g, look, t, a, b, ms, x, y }: { g: Geo; look: Look; t: Tracker; a: Tab; b: Tab; ms: number; x: number; y: number }) {
-  const { leaving, arriving } = crumbSwap(ms);
-  const shift = (stops: readonly Stop[]) => stops.map(([when, dx]) => [when, dx * g.s] as const);
-  return (
-    <>
-      <Crumb g={g} look={look} t={a} style={[at(g, x, y, 420, 18), { opacity: t(leaving.opacity), transform: [{ translateX: t(shift(leaving.x)) }] }]} />
-      <Crumb g={g} look={look} t={b} style={[at(g, x, y, 420, 18), { opacity: t(arriving.opacity), transform: [{ translateX: t(shift(arriving.x)) }] }]} />
-    </>
-  );
-}
+export const dropTrip = (t: Tracker, g: Geo, ms: number, back: number) => ({
+  opacity: t.pulse(ms, back, 200, 220),
+  transform: [{ translateY: t.trip(-10 * g.s, 0, ms, back, 300, 220) }, { scale: t.trip(0.97, 1, ms, back, 300, 220) }],
+});
 
 export function Desktop({ look }: { look: Look }) {
   const [a, b] = look.dark ? mockInk.desktop.dark : mockInk.desktop.light;
   return <Backdrop look={{ ...look, tint: [a, b] }} />;
+}
+
+export function AwayToDesktop({ g, look, opts, t, out, back, children }: { g: Geo; look: Look; opts: SceneOpts; t: Tracker; out: number; back: number; children: ReactNode }) {
+  return (
+    <>
+      <Desktop look={look} />
+      <Animated.View style={[fill, { opacity: t.trip(1, 0, out, back + 260, 240, 300), transform: [{ scale: t.trip(1, 0.96, out, back + 260, 240, 300) }] }]}>
+        <Rest g={g} look={look} opts={opts} />
+      </Animated.View>
+      <Animated.View style={[fill, { opacity: t.pulse(out + 200, back, 300, 240) }]}>{children}</Animated.View>
+    </>
+  );
 }
 
 export function Window({ g, look, rect, children }: { g: Geo; look: Look; rect: Rect; children: ReactNode }) {

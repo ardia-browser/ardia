@@ -3,6 +3,9 @@ import { base, pagePath } from "../data/site";
 import { Image } from "astro:assets";
 import icon from "../assets/app-icon.png";
 import DownloadButton from "./DownloadButton.astro";
+import Donate from "./Donate.astro";
+import { HEART_PATH } from "../data/icons";
+import { DONATE_POP_PICKER } from "../data/donate";
 import { STARS } from "../data/github";
 import { DISCORD, DMG, LINUX_NIGHTLY, LINUX_TARBALL, LINUX_VERSION, MIN_MACOS_MAJOR, REPO, VERSION, WINDOWS_SETUP } from "../data/release";
 
@@ -19,6 +22,7 @@ interface Props {
   current?: Page;
 }
 const { home = "", current } = Astro.props;
+const donateHref = `${pagePath("home")}#donate`;
 const pcDownloads = [
   { only: "windows-only x64-only", href: WINDOWS_SETUP.x64, platform: "windows", arch: "x64", version: "nightly" },
   { only: "windows-only arm-only", href: WINDOWS_SETUP.arm64, platform: "windows", arch: "arm64", version: "nightly" },
@@ -56,39 +60,48 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
       }
     </nav>
     <div class="actions">
-      <div class="social">
-        <a
-          class="icon-link"
-          href={REPO}
-          rel="noopener"
-          aria-label={STARS ? `GitHub, ${STARS} stars` : "GitHub"}
-          data-track="github_clicked"
-          data-track-link="source"
-          data-track-location="header"
-          ><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d={githubPath} /></svg>{
-            STARS && (
-              <span class="stars" aria-hidden="true">
-                <svg class="star-icon" viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-                  <path d={starPath} />
-                </svg>
-                <span>{STARS}</span>
-              </span>
-            )
-          }</a
-        >
-        <a
-          class="icon-link icon-only"
-          href={DISCORD}
-          rel="noopener"
-          aria-label="Discord"
-          data-track="discord_clicked"
-          data-track-location="header"
-          ><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d={discordPath} /></svg></a
-        >
-      </div>
+      <a
+        class="icon-link social"
+        href={REPO}
+        rel="noopener"
+        aria-label={STARS ? `GitHub, ${STARS} stars` : "GitHub"}
+        data-track="github_clicked"
+        data-track-link="source"
+        data-track-location="header"
+        ><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d={githubPath} /></svg>{
+          STARS && (
+            <span class="stars" aria-hidden="true">
+              <svg class="star-icon" viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+                <path d={starPath} />
+              </svg>
+              <span>{STARS}</span>
+            </span>
+          )
+        }</a
+      >
+      <a
+        class="icon-link social"
+        href={DISCORD}
+        rel="noopener"
+        aria-label="Discord"
+        data-track="discord_clicked"
+        data-track-location="header"
+        ><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d={discordPath} /></svg></a
+      >
       <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu" data-menu-btn>
         <span class="menu-glyph" aria-hidden="true"><i /><i /></span>
         <span data-menu-label>Menu</span>
+      </button>
+      <button
+        class="bar-cta donate-pill"
+        type="button"
+        popovertarget="donate-pop"
+        aria-label="Donate"
+        data-track="donate_clicked"
+        data-track-location="header"
+      >
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d={HEART_PATH} /></svg>
+        <span class="donate-pill-label">Donate</span>
       </button>
       <a
         class="bar-cta not-pc"
@@ -128,11 +141,14 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
             </a>
           ))
         }
+        <a href={donateHref} data-section="donate" data-track="donate_clicked" data-track-location="menu">
+          <span>Donate</span>
+        </a>
       </div>
       <div class="menu-social">
         <a
-          class="icon-link"
-          href={REPO}
+          class="icon-link social-link"
+        href={REPO}
           rel="noopener"
           aria-label={STARS ? `GitHub, ${STARS} stars` : undefined}
           data-track="github_clicked"
@@ -164,6 +180,9 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
       </div>
     </div>
   </nav>
+  <div id="donate-pop" class="donate-pop paint dark" data-paint="latenight" popover>
+    <Donate id={DONATE_POP_PICKER} location="header_popover" compact />
+  </div>
 </header>
 
 <style>
@@ -302,21 +321,14 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
     justify-self: end;
     display: flex;
     align-items: center;
-    gap: clamp(14px, 1.8vw, 24px);
+    gap: 14px;
   }
-  .social {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-  }
-  .social a {
+  a.social {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 7px;
+    gap: 6px;
     min-height: 44px;
-    padding: 0 10px;
-    border-radius: 8px;
     font-family: var(--sans);
     font-size: 0.84rem;
     font-weight: 540;
@@ -324,13 +336,7 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
     text-decoration: none;
     color: var(--ink-2);
     white-space: nowrap;
-    transition:
-      color 150ms var(--ease-out),
-      background-color 150ms var(--ease-out);
-  }
-  .social .icon-only {
-    min-width: 44px;
-    padding: 0;
+    transition: color 150ms var(--ease-out);
   }
   @media (hover: hover) {
     .links a:hover {
@@ -340,9 +346,8 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
       opacity: 0.32;
       transform: translateX(-50%) scaleX(0.68) rotate(-2deg);
     }
-    .social a:hover {
+    a.social:hover {
       color: var(--ink);
-      background-color: rgb(22 19 15 / 0.06);
     }
   }
   .stars {
@@ -375,7 +380,7 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
     align-items: center;
     justify-content: center;
     min-height: 36px;
-    padding: 0 18px;
+    padding: 0 16px;
     border-radius: 999px;
     font-family: var(--sans);
     font-weight: 600;
@@ -398,6 +403,40 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
   }
   .bar-cta:active {
     transform: scale(0.96);
+  }
+
+  .donate-pop {
+    position: fixed;
+    inset: 68px var(--gutter) auto auto;
+    width: min(440px, calc(100vw - 2 * var(--gutter)));
+    margin: 0;
+    padding: 24px;
+    border: 0;
+    border-radius: 20px;
+    box-shadow: 0 24px 60px rgb(5 8 18 / 0.4);
+  }
+  .donate-pill {
+    gap: 6px;
+    border: 0;
+    background: var(--sun);
+    color: var(--day-ink);
+    cursor: pointer;
+  }
+  a.social + a.social {
+    margin-left: -1px;
+  }
+  .donate-pill ~ .bar-cta {
+    margin-left: -5px;
+  }
+  .donate-pill svg {
+    display: block;
+    flex: none;
+    fill: #b4532a;
+  }
+  @media (hover: hover) {
+    .donate-pill:hover {
+      background: var(--sun-pale);
+    }
   }
 
   .menu-btn,
@@ -433,7 +472,7 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
       margin-right: auto;
     }
     .links,
-    .social {
+    a.social {
       display: none;
     }
     .actions {
@@ -494,6 +533,13 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
     .bar-cta {
       min-height: 44px;
       padding: 0 16px;
+    }
+    .donate-pill {
+      min-width: 44px;
+      padding: 0;
+    }
+    .donate-pill-label {
+      display: none;
     }
     :global(:root[data-device="phone"]) .menu-btn {
       padding: 0 8px;
@@ -658,7 +704,7 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
     .bar::after,
     .links a,
     .links a::after,
-    .social a,
+    a.social,
     .bar-cta,
     .menu-glyph i,
     .menu,

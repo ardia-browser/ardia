@@ -197,6 +197,33 @@ class AcceptTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn('chromium-helium-branding.patch', self.accepted()['accepted-patches.txt'].decode().split())
 
+    def test_a_linux_line_series_win_takes_reaches_windows_at_its_place(self):
+        self.edit('scripts/windows/engine/series-win', 'take chromium-linux-page-status.patch\n', '')
+        result = self.accept()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        without = self.accepted()['accepted-patches.txt'].decode().split()
+        self.assertNotIn('chromium-linux-page-status.patch', without)
+        self.edit('scripts/windows/engine/series-win', 'take chromium-linux-wheel-zoom.patch\n',
+                  'take chromium-linux-wheel-zoom.patch\ntake chromium-linux-page-status.patch\n')
+        result = self.accept()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        taken = self.accepted()['accepted-patches.txt'].decode().split()
+        self.assertEqual(taken.index('chromium-linux-page-status.patch') + 1, taken.index('chromium-linux-wheel-zoom.patch'))
+
+    def test_a_take_that_names_no_linux_line_is_refused(self):
+        for line, error in (('take chromium-linux-no-such.patch\n', 'names no `chromium` line'),
+                            ('take chromium-helium-branding.patch\n', 'Windows applies already'),
+                            ('take chromium-mac-secure-input-window-focus.patch\n', 'both taken and skipped')):
+            with self.subTest(line=line):
+                before = self.accepted()
+                self.edit('scripts/windows/engine/series-win', 'skip chromium-embedder-discard-veto.patch\n',
+                          'skip chromium-embedder-discard-veto.patch\n' + line)
+                result = self.accept()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(error, result.stdout)
+                self.assertEqual(self.accepted(), before)
+                self.edit('scripts/windows/engine/series-win', line, '')
+
     def test_a_series_layer_for_win_is_refused_until_windows_runs_series_layers(self):
         before = self.accepted()
         self.edit('engine/patches/series', 'layer engine/ardiacore-linux linux\n', 'layer engine/ardiacore-linux linux,win\n')

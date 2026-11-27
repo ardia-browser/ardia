@@ -64,6 +64,32 @@ test("Copy Diagnostics lists the engine's recent Picture in Picture closes, one 
   }
 });
 
+test("Copy Diagnostics prints the native Picture in Picture gesture log as an indented block, and leaves it out when the log is empty", async () => {
+  const info = { chromiumVersion: "150.0.0.0" };
+  try {
+    globalThis.acTestEngineInfo = () => ({ ...info, pictureInPictureGestures: "" });
+    assert.doesNotMatch(await diagnostics(), /Picture in Picture gestures/);
+
+    globalThis.acTestEngineInfo = () => ({
+      ...info,
+      pictureInPictureGestures: [
+        "14:02:11.204 press window=812 clicks=1 appActive=0 key=0 -> grab",
+        "14:02:11.205 activate with only PiP asked (press) window=812",
+        "14:02:12.940 pinch began fromOtherApp=1 appActive=0 eventWindow=0 monitor=1 -> window 812",
+      ].join("\n"),
+    });
+    const lines = (await diagnostics()).split("\n");
+    const at = lines.indexOf("Picture in Picture gestures:");
+    assert.ok(at > 0);
+    assert.equal(lines[at + 1], "  14:02:11.204 press window=812 clicks=1 appActive=0 key=0 -> grab");
+    assert.equal(lines[at + 2], "  14:02:11.205 activate with only PiP asked (press) window=812");
+    assert.match(lines[at + 3], /^ {2}14:02:12\.940 pinch began fromOtherApp=1 .* -> window 812$/);
+    assert.equal(lines.length, at + 4);
+  } finally {
+    delete globalThis.acTestEngineInfo;
+  }
+});
+
 test("closes while sharing is off are never counted, and a pending count is dropped when sharing changes", async () => {
   client.setSharing(false, "settings");
   setPictureInPictureState("h", { kind: "video", active: false, closedBy: "chrome", auto: true });

@@ -4,7 +4,7 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { experimentOn } from "../../platform/killSwitches";
 import { cancelOfficialPluginFetch, fetchOfficialPlugin, onOfficialFetchProgress, type OfficialFetchResult } from "../../platform/plugins";
-import { notePlugin, type PluginCount } from "../telemetry/pluginCounts";
+import { notePlugin, officialFetchCause, type PluginCount } from "../telemetry/pluginCounts";
 import { updateWithin, type UpdatePromptReason, type UpdateVerdict } from "./officialUpdate";
 import { MAX_UPDATE_LINES } from "./savedState";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
@@ -139,6 +139,7 @@ function watchProgress() {
 }
 
 const inFlight = new Map<string, Promise<InstallResult & { code?: string }>>();
+const cancelling = new Set<string>();
 
 function needsFetch(name: string): boolean {
   const s = currentPlugins();
@@ -148,9 +149,12 @@ function needsFetch(name: string): boolean {
   return officialListing(s, name)?.folderId !== pinned.folderId;
 }
 
-function fetchOfficialCandidate(name: string, consent: ConsentToken | null, quiet = false): Promise<InstallResult & { code?: string }> {
+const LEFT = { ok: false, reason: "Cancelled.", cancelled: true } as const;
+
+function fetchOfficialCandidate(name: string, consent: ConsentToken | null, quiet = false, alive?: () => boolean): Promise<InstallResult & { code?: string }> {
   if (!needsFetch(name)) return Promise.resolve({ ok: true });
   const running = inFlight.get(name);
+  if (running && cancelling.has(name)) return running.then(() => (alive && !alive() ? LEFT : fetchOfficialCandidate(name, consent, quiet, alive)));
   if (running) return running;
   watchProgress();
   if (!quiet) setOfficialFetch(name, { state: "fetching", received: 0, total: 0 });
@@ -160,6 +164,7 @@ function fetchOfficialCandidate(name: string, consent: ConsentToken | null, quie
     .then(async (result): Promise<InstallResult & { code?: string }> => {
       if (!result.ok) {
         notePlugin(result.code === "offline" ? "official_fetch_offline" : result.code === "verify" ? "official_verify_failures" : "official_fetch_failures", consent);
+        if (result.code !== "cancelled") notePlugin(officialFetchCause(result.cause), consent);
         warnFor(consent, `[plugins] ${name} wasn't downloaded (${result.code}): ${result.reason}`);
         const reason = FETCH_REASONS[result.code];
         if (!quiet) setOfficialFetch(name, result.code === "cancelled" ? null : { state: "failed", code: result.code, reason });
@@ -169,13 +174,18 @@ function fetchOfficialCandidate(name: string, consent: ConsentToken | null, quie
       if (!quiet) setOfficialFetch(name, null);
       return { ok: true };
     })
-    .finally(() => inFlight.delete(name));
+    .finally(() => {
+      inFlight.delete(name);
+      cancelling.delete(name);
+    });
   inFlight.set(name, task);
   return task;
 }
 
 export function cancelOfficialInstall(name: string) {
-  if (inFlight.has(name)) cancelOfficialPluginFetch(name);
+  if (!inFlight.has(name)) return;
+  cancelling.add(name);
+  cancelOfficialPluginFetch(name);
 }
 
 type InstallOptions = { showSheet?: boolean; onConsent?: (id: number) => void; alive?: () => boolean };
@@ -204,9 +214,9 @@ export function installOfficialPlugin(name: string, options: InstallOptions = {}
     });
   }
   if (!needsFetch(name)) return askToInstall(name, options);
-  return fetchOfficialCandidate(name, consentToken()).then((fetched) => {
+  return fetchOfficialCandidate(name, consentToken(), false, options.alive).then((fetched) => {
     if (!fetched.ok) return fetched;
-    if (options.alive && !options.alive()) return { ok: false, reason: "Cancelled.", cancelled: true };
+    if (options.alive && !options.alive()) return LEFT;
     return askToInstall(name, options);
   });
 }
@@ -219,8 +229,7 @@ function askToInstall(name: string, options: InstallOptions): Promise<InstallRes
     const listing = candidateOf(currentPlugins(), name) ?? currentPlugins().listings[name];
     return Promise.resolve({ ok: false, reason: listing?.problems[0] ?? "It can't load." });
   }
-  if (!requestPluginConsent(name, true)) return Promise.resolve({ ok: false, reason: "Can't install it right now." });
-  options.onConsent?.(currentPlugins().consent!.id);
+  if (!requestPluginConsent(name, true, options.onConsent)) return Promise.resolve({ ok: false, reason: "Can't install it right now." });
   const done = waitForInstall(name);
   if (options.showSheet !== false) openSettings("plugins", null, name);
   return done.then((result) => (result.ok ? linked(name) : result));
@@ -254,6 +263,7 @@ export function resetOfficialUpdatesForTests() {
   waitingNoted.clear();
   autoNoted.clear();
   inFlight.clear();
+  cancelling.clear();
 }
 
 const PROMPT_COUNTS: Record<UpdatePromptReason, PluginCount> = {

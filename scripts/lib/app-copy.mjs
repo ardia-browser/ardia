@@ -12,7 +12,14 @@ process.on("exit", () => {
   for (const copy of copiesToUnregister) spawnSync(LSREGISTER, ["-u", copy], { stdio: "ignore" });
 });
 
-export const signingIdentity = (app) => spawnSync("codesign", ["-dvv", app], { encoding: "utf8" }).stderr.match(/^Authority=(.+)$/m)?.[1] ?? "-";
+export const CODESIGN_TIMEOUT_MS = 120000;
+export const COPY_TIMEOUT_MS = 600000;
+export function identityFromCodesign(result, app = "the app") {
+  if (result.error) throw new Error(`codesign could not read ${app}'s signature: ${result.error.code ?? result.error.message}`);
+  if (result.status !== 0) throw new Error(`codesign -dvv ${app} exited ${result.status ?? result.signal}: ${String(result.stderr ?? "").trim()}`);
+  return String(result.stderr ?? "").match(/^Authority=(.+)$/m)?.[1] ?? "-";
+}
+export const signingIdentity = (app) => identityFromCodesign(spawnSync("codesign", ["-dvv", app], { encoding: "utf8", timeout: CODESIGN_TIMEOUT_MS }), app);
 
 const DEBUG_ENTITLEMENT = "com.apple.security.get-task-allow";
 
@@ -24,9 +31,9 @@ export function untouchedCopy({ source, bundle, granted, missing }) {
   return existsSync(shipped) && (realpathSync(bundle) === realpathSync(shipped) || readFileSync(bundle).equals(readFileSync(shipped)));
 }
 
-const sealIntact = (app) => spawnSync("codesign", ["--verify", "--strict", "--deep", app], { stdio: "ignore" }).status === 0;
+const sealIntact = (app) => spawnSync("codesign", ["--verify", "--strict", "--deep", app], { stdio: "ignore", timeout: CODESIGN_TIMEOUT_MS }).status === 0;
 
-const cdhashOf = (app) => spawnSync("codesign", ["-dvvv", app], { encoding: "utf8" }).stderr.match(/^CDHash=(\w+)$/m)?.[1] ?? null;
+const cdhashOf = (app) => spawnSync("codesign", ["-dvvv", app], { encoding: "utf8", timeout: CODESIGN_TIMEOUT_MS }).stderr.match(/^CDHash=(\w+)$/m)?.[1] ?? null;
 
 const SHIPPED_BUNDLE = "Contents/Resources/main.jsbundle";
 function sameBundle(copy, wanted) {
@@ -48,7 +55,7 @@ function reuseOrClone(source, dir, copy, bundle) {
   }
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  execFileSync("cp", ["-cR", source, copy]);
+  execFileSync("cp", ["-cR", source, copy], { timeout: COPY_TIMEOUT_MS });
   if (!sealIntact(copy)) throw resignNeeded(source);
   writeFileSync(stampFile, stamp);
   return copy;
@@ -60,12 +67,12 @@ export function prepareApp(app, dir, { bundle = null, entitlements: extra = [] }
   const source = realpathSync(resolve(app));
   if (installed(source)) throw new Error(`${app} is installed in /Applications: pass a build or a copy`);
   const copy = join(dir, "Ardia.app");
-  const granted = execFileSync("codesign", ["-d", "--entitlements", "-", "--xml", source], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const granted = execFileSync("codesign", ["-d", "--entitlements", "-", "--xml", source], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: CODESIGN_TIMEOUT_MS });
   const missing = extra.filter((key) => !granted.includes(`<key>${key}</key>`));
   if (untouchedCopy({ source, bundle, granted, missing })) return reuseOrClone(source, dir, copy, bundle);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  execFileSync("cp", ["-cR", source, copy]);
+  execFileSync("cp", ["-cR", source, copy], { timeout: COPY_TIMEOUT_MS });
   copiesToUnregister.add(copy);
   const shipped = join(copy, "Contents/Resources/main.jsbundle");
   const swapped = !!bundle && !(existsSync(shipped) && readFileSync(bundle).equals(readFileSync(shipped)));
@@ -73,6 +80,6 @@ export function prepareApp(app, dir, { bundle = null, entitlements: extra = [] }
   if (bundle) writeFileSync(join(copy, "Contents/Resources/ip.txt"), `${NO_METRO}\n`);
   const plist = join(dir, "entitlements.plist");
   writeFileSync(plist, granted.replace(/<\/dict>\s*<\/plist>\s*$/, `${missing.map((key) => `<key>${key}</key><true/>`).join("")}</dict></plist>`));
-  execFileSync("codesign", ["--force", "--sign", signingIdentity(source), "--timestamp=none", "--options", "runtime", "--entitlements", plist, copy], { stdio: "inherit" });
+  execFileSync("codesign", ["--force", "--sign", signingIdentity(source), "--timestamp=none", "--options", "runtime", "--entitlements", plist, copy], { stdio: "inherit", timeout: CODESIGN_TIMEOUT_MS });
   return copy;
 }

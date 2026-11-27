@@ -11,6 +11,8 @@ import { keyringMessage, presentSyncState, SYNC_KEY_NOT_SAVED } from "./syncKeyS
 import { consentToken } from "../../browser/src/state/telemetry/client";
 import { noteSyncOpenFailures } from "../../browser/src/state/telemetry/syncFileCounts";
 import { warnFor } from "../../browser/src/state/telemetry/logs";
+import { keyringObserver, noteSyncKeyStore } from "./syncKeyringCounts";
+import type { ConsentToken } from "../../browser/src/state/telemetry/choice";
 import {
   claimSyncAuthority,
   configureHeldLogins,
@@ -34,6 +36,7 @@ import {
 import { deleteDocument, readDocument, refreshDocument, saveDocument } from "./shims/shellBase";
 import { useBrowser } from "../../browser/src/state/browser/store";
 import { engineProfile } from "../../browser/src/state/browser/model";
+import { forwardProfileDeletions, whenProfileGone } from "./profileRetirement";
 import {
   INTERACTIVE_CALL_TIMEOUT_MS,
   SYNC_CHANNEL,
@@ -52,6 +55,14 @@ export const useSync = create<SyncUi>()(() => ({ ...engine.useSync.getState(), s
 
 let authority: SyncAuthority | null = null;
 let keyStore: SyncKeyStoreStatus | null = null;
+
+function readKeyStore(host: ArdiaHost, consent: ConsentToken | null): Promise<SyncKeyStoreStatus> {
+  return syncKeyStoreStatus(host).then((status) => {
+    noteSyncKeyStore(status, consent);
+    return status;
+  });
+}
+
 let heldLogins: ReturnType<typeof createHeldLogins> | null = null;
 
 function adoptHeldLogins() {
@@ -75,13 +86,15 @@ function stopKeyringWatch() {
 
 function resumeWhenKeyringOpens(host: ArdiaHost) {
   stopKeyringWatch();
+  const observed = keyringObserver(() => syncKeyStoreStatus(host), consentToken);
   const tick = keyringResumer({
     locked: () => {
       const state = engine.useSync.getState();
       return !!authority?.isAuthority() && state.enabled && state.status === "locked";
     },
-    status: () => syncKeyStoreStatus(host),
+    status: observed.status,
     seen: (status) => {
+      observed.note(status);
       const shown = keyringMessage(keyStore, false);
       keyStore = status;
       if (keyringMessage(status, false) !== shown) engine.useSync.setState({});
@@ -121,6 +134,7 @@ function remoteFor(host: ArdiaHost): SyncRemote {
     syncIdle: () => syncIdle(engine.syncNow),
     syncNowIfIdle: () => syncNowIfIdle(engine.syncNow),
     turnOnSync: async (folder: string, how?: TurnOnFolder) => {
+      const consent = consentToken();
       let result: Awaited<ReturnType<typeof engine.turnOnSync>>;
       try {
         result = await whileResettingHeldLogins(
@@ -133,7 +147,7 @@ function remoteFor(host: ArdiaHost): SyncRemote {
         throw error;
       }
       if ("error" in result && result.error === KEYCHAIN_ERROR) {
-        keyStore = await syncKeyStoreStatus(host).catch(() => keyStore);
+        keyStore = await readKeyStore(host, consent).catch(() => keyStore);
         return { error: keyringMessage(keyStore, true) ?? SYNC_KEY_NOT_SAVED };
       }
       return result;
@@ -157,6 +171,7 @@ function remoteFor(host: ArdiaHost): SyncRemote {
     removeRemoteProfile: (syncId: string) => engine.removeRemoteProfile(syncId),
     removeSyncedDevice: (deviceId: string) => engine.removeSyncedDevice(deviceId),
     adoptProfileTheme: (profileId: string) => engine.adoptProfileTheme(profileId),
+    retireProfile: (profileId: string) => whenProfileGone(useBrowser, profileId, () => engine.retireProfile(profileId)),
     useFolder: (path: string) => engine.setSyncFolder(path),
     moveFolder: (path: string) => engine.moveSyncFolder(path),
     sendTargets: (profileIds: string[]) => Object.fromEntries(profileIds.map((profileId) => [profileId, engine.sendTargets(profileId)])),
@@ -165,6 +180,7 @@ function remoteFor(host: ArdiaHost): SyncRemote {
 }
 
 async function becomeAuthority(host: ArdiaHost) {
+  const consent = consentToken();
   try {
     await refreshSyncDocuments({ refresh: refreshDocument, remove: deleteDocument });
   } catch (error) {
@@ -172,7 +188,7 @@ async function becomeAuthority(host: ArdiaHost) {
     throw error;
   }
   await loadSyncDeviceName(host);
-  keyStore = await syncKeyStoreStatus(host).catch(() => null);
+  keyStore = await readKeyStore(host, consent).catch(() => null);
   adoptHeldLogins();
   dropDeletedProfiles();
   engine.startSync();
@@ -209,6 +225,7 @@ export function startLinuxSync(options: { host?: ArdiaHost; candidate: boolean; 
     present: (state) => presentSyncState(state, keyStore),
   });
   authority = started;
+  forwardProfileDeletions(leading, (profileId) => forward("retireProfile", [profileId]), (profileId) => engine.retireProfile(profileId));
   const stopTargets = useSync.subscribe(refreshSendTargets);
   if (typeof addEventListener === "function")
     addEventListener("pagehide", () => {
@@ -355,7 +372,7 @@ function refreshSendTargets() {
 
 export const onTabsReceived = engine.onTabsReceived;
 export const takeSnapshotWrites = engine.takeSnapshotWrites;
-export const takeOpenTabSyncCounts = engine.takeOpenTabSyncCounts;
+export const takeSyncDataCounts = engine.takeSyncDataCounts;
 export { whenSyncCore } from "./hostSync.ts";
 
 export function sendTargets(profileId: string): SendTarget[] {

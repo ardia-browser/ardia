@@ -1,5 +1,11 @@
 import type { ConfirmOptions, DialogsNative, PromptOptions } from "../../../packages/shell/src/dialogs";
-import { ardiaHost, hostModuleMethod, invokeHost, type ArdiaHost } from "./host";
+import { ardiaHost, hostModuleMethod, hostSupports, invokeHost, type ArdiaHost } from "./host";
+
+export const NATIVE_DIALOG_CALL = "ArdiaShell.beginDialog";
+
+export type DialogRoute = "native" | "page" | "web";
+
+export const dialogRoute = (host: ArdiaHost | null | undefined): DialogRoute => !host ? "web" : hostSupports(NATIVE_DIALOG_CALL, host) ? "native" : "page";
 
 type Confirmation = Awaited<ReturnType<DialogsNative["confirm"]>>;
 type DialogResult = Confirmation | string | null;
@@ -119,7 +125,7 @@ export function createHostDialogs(host: ArdiaHost, newId = () => `dialog:${crypt
       await Promise.resolve();
       if (retired || pending.get(id) !== entry) return;
       entry.begun = true;
-      const reply = await host.invoke("ArdiaShell.beginDialog", { args: [request] });
+      const reply = await host.invoke(NATIVE_DIALOG_CALL, { args: [request] });
       if (retired || pending.get(id) !== entry) return;
       if (!reply || typeof reply !== "object" || !("accepted" in reply) || reply.accepted !== true) throw failure("The native dialog was not accepted");
       entry.accepted = true;

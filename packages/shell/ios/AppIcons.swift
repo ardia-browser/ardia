@@ -4,6 +4,7 @@ enum AppIcons {
   struct Variant {
     let id: String
     let name: String
+    var flat = false
   }
 
   static let defaultsKey = "ACAppIcon"
@@ -17,6 +18,13 @@ enum AppIcons {
     Variant(id: "ocean", name: "Ocean"),
     Variant(id: "mono", name: "Mono"),
     Variant(id: "noir", name: "Noir"),
+    Variant(id: "default-flat", name: "Default", flat: true),
+    Variant(id: "midnight-flat", name: "Midnight", flat: true),
+    Variant(id: "daylight-flat", name: "Daylight", flat: true),
+    Variant(id: "plum-flat", name: "Plum", flat: true),
+    Variant(id: "ocean-flat", name: "Ocean", flat: true),
+    Variant(id: "mono-flat", name: "Mono", flat: true),
+    Variant(id: "noir-flat", name: "Noir", flat: true),
   ]
 
   static var current: String {

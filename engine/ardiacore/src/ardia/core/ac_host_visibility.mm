@@ -4,11 +4,14 @@
 
 #include <string>
 
+#include "base/auto_reset.h"
 #include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
+#include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
 #include "chrome/browser/ui/tabs/public/tab_dialog_manager.h"
 #include "chrome/browser/ui/tabs/public/tab_features.h"
 #include "components/permissions/permission_request_manager.h"
@@ -27,8 +30,18 @@ namespace ardiacore {
 namespace {
 
 constexpr base::TimeDelta kHiddenPageWait = base::Milliseconds(400);
+constexpr base::TimeDelta kCallHiddenPageWait = base::Milliseconds(2000);
+
+bool InCall(content::WebContents* contents) {
+  return MediaCaptureDevicesDispatcher::GetInstance()
+      ->GetMediaStreamCaptureIndicator()
+      ->IsCapturingUserMedia(contents);
+}
+
+bool g_reading_for_tab_dialogs = false;
 
 void UpdateTabDialogs(content::WebContents* contents) {
+  base::AutoReset<bool> for_dialogs(&g_reading_for_tab_dialogs, true);
   if (auto* tab = tabs::TabInterface::MaybeGetFromContents(contents)) {
     if (auto* features = tab->GetTabFeatures()) {
       if (auto* dialogs = features->tab_dialog_manager()) {
@@ -44,7 +57,9 @@ class HostVisibility : public content::WebContentsUserData<HostVisibility>,
                        public content::WebContentsObserver {
  public:
   bool shown() const { return shown_; }
-  bool shown_until_page_hidden() const { return shown_ || awaiting_hidden_page_; }
+  bool shown_until_page_hidden() const {
+    return shown_ || (g_reading_for_tab_dialogs ? held_as_shown_ : awaiting_hidden_page_);
+  }
 
   void Note(bool shown) {
     shown_ = shown;
@@ -54,9 +69,11 @@ class HostVisibility : public content::WebContentsUserData<HostVisibility>,
       return;
     }
     awaiting_hidden_page_ = true;
+    held_as_shown_ = true;
+    hide_asked_at_ = base::TimeTicks::Now();
     hidden_page_wait_.Start(FROM_HERE, kHiddenPageWait,
-                            base::BindOnce(&HostVisibility::PageHiddenOrWaitedOut,
-                                           weak_factory_.GetWeakPtr(), "waited out"));
+                            base::BindOnce(&HostVisibility::HeldLongEnough,
+                                           weak_factory_.GetWeakPtr()));
   }
 
   void OnVisibilityChanged(content::Visibility visibility) override {
@@ -75,6 +92,24 @@ class HostVisibility : public content::WebContentsUserData<HostVisibility>,
   friend class content::WebContentsUserData<HostVisibility>;
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 
+  void HeldLongEnough() {
+    if (!awaiting_hidden_page_) {
+      return;
+    }
+    const base::TimeDelta call_left =
+        hide_asked_at_ + kCallHiddenPageWait - base::TimeTicks::Now();
+    if (!InCall(&GetWebContents()) || !call_left.is_positive()) {
+      return PageHiddenOrWaitedOut("waited out");
+    }
+    held_as_shown_ = false;
+    TraceAutoPictureInPictureInputs(&GetWebContents(),
+                                    "host hides tab, a call waits for its page to hide");
+    UpdateTabDialogs(&GetWebContents());
+    hidden_page_wait_.Start(FROM_HERE, call_left,
+                            base::BindOnce(&HostVisibility::PageHiddenOrWaitedOut,
+                                           weak_factory_.GetWeakPtr(), "call waited out"));
+  }
+
   void PageHiddenOrWaitedOut(const char* why) {
     if (!awaiting_hidden_page_) {
       return;
@@ -88,6 +123,7 @@ class HostVisibility : public content::WebContentsUserData<HostVisibility>,
 
   void StopAwaitingHiddenPage() {
     awaiting_hidden_page_ = false;
+    held_as_shown_ = false;
     hidden_page_wait_.Stop();
     weak_factory_.InvalidateWeakPtrs();
   }
@@ -98,6 +134,8 @@ class HostVisibility : public content::WebContentsUserData<HostVisibility>,
 
   bool shown_ = false;
   bool awaiting_hidden_page_ = false;
+  bool held_as_shown_ = false;
+  base::TimeTicks hide_asked_at_;
   base::OneShotTimer hidden_page_wait_;
   base::WeakPtrFactory<HostVisibility> weak_factory_{this};
 };

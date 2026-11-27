@@ -30,8 +30,8 @@ import { TabCardSummary } from "./TabCardSummary";
 import { useSidebarUi, type Anchor, type Hover } from "../../state/sidebar/sidebarUi";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
 import { TabIcon } from "./TabIcon";
-import { HoverPlayer, useShowsMiniPlayer } from "../media/HoverPlayer";
-import { useMedia, usePictureInPicture } from "../../state/media/media";
+import { HoverPlayer } from "../media/HoverPlayer";
+import { useMedia, usePictureInPicture, useShowsMiniPlayer } from "../../state/media/media";
 import { noteTabHoverCardPress } from "../../state/telemetry/hoverCardCounts";
 
 const WIDTH = 264;

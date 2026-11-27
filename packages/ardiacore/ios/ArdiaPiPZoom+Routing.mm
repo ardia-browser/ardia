@@ -16,6 +16,10 @@ static NSTimeInterval gLastPinchAt;
 static NSTimer *gPinchStall;
 static NSInteger gSeenEventWindow, gSeenRoutedTo, gSeenPinches;
 static BOOL gSeenFromOtherApp, gSeenConsumed;
+static BOOL gLoggedPinchOpen;
+static NSInteger gLoggedPinchSteps, gLoggedPinchRoutedTo, gLoggedScrollZoomSteps;
+static double gLoggedPinchMagnification;
+static NSTimeInterval gLoggedWheelZoomAt;
 
 + (BOOL)handle:(NSEvent *)event {
   return [self handle:event fromOtherApp:NO];
@@ -29,7 +33,10 @@ static BOOL gSeenFromOtherApp, gSeenConsumed;
   const BOOL pinch = event.type == NSEventTypeMagnify;
   if (pinch && event.timestamp > 0 && event.timestamp == gLastPinchAt) return YES;
   if (pinch) gLastPinchAt = event.timestamp;
+  const NSInteger seenBefore = gSeenPinches;
   BOOL handled = pinch ? [self routePinch:event fromOtherApp:fromOtherApp] : [self route:event];
+  if (pinch) [self logPinch:event handled:handled routedTo:gSeenPinches != seenBefore ? gSeenRoutedTo : 0 fromOtherApp:fromOtherApp];
+  else if (handled) [self logScrollZoom:event];
   static BOOL trace = [ArdiaLaunchConfig.shared traced:@"pipZoom"];
   if (trace)
     NSLog(@"[pip-zoom] type %lu window %ld (%@) other app %d pointer %@ cmd %d phase %lu/%lu dy %.2f precise %d mag %.3f -> %@ %@",
@@ -40,6 +47,60 @@ static BOOL gSeenFromOtherApp, gSeenConsumed;
           event.type == NSEventTypeScrollWheel ? event.hasPreciseScrollingDeltas : 0, pinch ? event.magnification : 0,
           handled ? @"zoomed" : @"passed", NSStringFromRect(event.window.frame));
   return handled;
+}
+
++ (void)logPinch:(NSEvent *)event handled:(BOOL)handled routedTo:(long)routedTo fromOtherApp:(BOOL)fromOtherApp {
+  const NSEventPhase phase = event.phase;
+  if (phase & (NSEventPhaseBegan | NSEventPhaseMayBegin)) {
+    if (gLoggedPinchOpen) NoteGesture(@"pinch unfinished steps=%ld magnification=%+.3f", (long)gLoggedPinchSteps, gLoggedPinchMagnification);
+    gLoggedPinchOpen = YES;
+    gLoggedPinchSteps = 0;
+    gLoggedPinchMagnification = event.magnification;
+    gLoggedPinchRoutedTo = routedTo;
+    NSString *outcome = routedTo ? [NSString stringWithFormat:@"window %ld", routedTo] : handled ? @"held" : [self enabled] ? @"passed" : @"zoom off";
+    NoteGesture(@"pinch began fromOtherApp=%d appActive=%d eventWindow=%ld monitor=%d -> %@", fromOtherApp, NSApp.isActive, (long)event.windowNumber,
+                FollowsPinchesFromOtherApps(), outcome);
+    return;
+  }
+  if (!gLoggedPinchOpen) {
+    if (phase & (NSEventPhaseEnded | NSEventPhaseCancelled)) {
+      NoteGesture(@"pinch %@ without a start fromOtherApp=%d appActive=%d window=%ld", (phase & NSEventPhaseCancelled) ? @"cancelled" : @"ended",
+                  fromOtherApp, NSApp.isActive, routedTo);
+      return;
+    }
+    gLoggedPinchOpen = YES;
+    gLoggedPinchSteps = 0;
+    gLoggedPinchMagnification = 0;
+    gLoggedPinchRoutedTo = routedTo;
+    NoteGesture(@"pinch seen without its start phase=%lu fromOtherApp=%d appActive=%d eventWindow=%ld monitor=%d -> %@", (unsigned long)phase,
+                fromOtherApp, NSApp.isActive, (long)event.windowNumber, FollowsPinchesFromOtherApps(),
+                routedTo ? [NSString stringWithFormat:@"window %ld", routedTo] : handled ? @"held" : [self enabled] ? @"passed" : @"zoom off");
+  }
+  gLoggedPinchSteps++;
+  gLoggedPinchMagnification += event.magnification;
+  if (routedTo) gLoggedPinchRoutedTo = routedTo;
+  if (!(phase & (NSEventPhaseEnded | NSEventPhaseCancelled))) return;
+  gLoggedPinchOpen = NO;
+  NoteGesture(@"pinch %@ fromOtherApp=%d window=%ld steps=%ld magnification=%+.3f", (phase & NSEventPhaseCancelled) ? @"cancelled" : @"ended", fromOtherApp,
+              gLoggedPinchRoutedTo, (long)gLoggedPinchSteps, gLoggedPinchMagnification);
+}
+
++ (void)logScrollZoom:(NSEvent *)event {
+  const NSEventPhase phase = event.phase, momentum = event.momentumPhase;
+  if (phase == NSEventPhaseNone && momentum == NSEventPhaseNone) {
+    if (event.timestamp - gLoggedWheelZoomAt > 1) NoteGesture(@"command-wheel zoom window=%ld appActive=%d", (long)event.windowNumber, NSApp.isActive);
+    gLoggedWheelZoomAt = event.timestamp;
+    return;
+  }
+  NSWindow *window = gZoomGesture;
+  if (phase & (NSEventPhaseBegan | NSEventPhaseMayBegin)) {
+    gLoggedScrollZoomSteps = 0;
+    NoteGesture(@"command-scroll zoom began window=%ld appActive=%d", (long)window.windowNumber, NSApp.isActive);
+    return;
+  }
+  gLoggedScrollZoomSteps++;
+  if (phase & (NSEventPhaseEnded | NSEventPhaseCancelled))
+    NoteGesture(@"command-scroll zoom ended window=%ld steps=%ld", (long)window.windowNumber, (long)gLoggedScrollZoomSteps);
 }
 
 + (BOOL)anyZoomable {

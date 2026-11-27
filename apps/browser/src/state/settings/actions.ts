@@ -41,6 +41,16 @@ export function chooseAfterClosingTab(afterClosingTab: Settings["afterClosingTab
   noteSettingsPick("afterClosingTab", ({ tabAbove: "above", tabBelow: "below", previouslyActive: "recent" } as const)[afterClosingTab]);
 }
 
+export function chooseTabSwitcherOrder(tabSwitcherOrder: Settings["tabSwitcherOrder"]) {
+  useBrowser.getState().updateSettings({ tabSwitcherOrder });
+  noteSettingsPick("tabSwitcherOrder", tabSwitcherOrder === "recent" ? "recent" : "in_order");
+}
+
+export function chooseTabSwitcherView(tabSwitcherView: Settings["tabSwitcherView"]) {
+  useBrowser.getState().updateSettings({ tabSwitcherView });
+  noteSettingsPick("tabSwitcherView", ({ thumbnails: "thumbnails", compactList: "compact_list", none: "none" } as const)[tabSwitcherView]);
+}
+
 export function setMouseShortcut(id: string, button: Shortcut | null) {
   const next = { ...useBrowser.getState().settings.mouseShortcuts };
   if (button) next[id] = [button.key, ...button.modifiers];

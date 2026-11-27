@@ -87,36 +87,6 @@ console.log(JSON.stringify({
 '''
 
 
-NODE_DRIVER = r'''
-import { createPublicKey, verify } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
-const [vectorsPath, manifestTsPath] = process.argv.slice(2);
-const vectors = JSON.parse(readFileSync(vectorsPath, "utf8"));
-const win = await import(pathToFileURL(manifestTsPath).href);
-const prefix = Buffer.from("302a300506032b6570032100", "hex");
-const results = vectors.windows.map((c) => {
-  const sig = Buffer.from(c.signature, "hex");
-  let sigOk = false;
-  if (sig.length === 64) {
-    try {
-      const key = createPublicKey({ key: Buffer.concat([prefix, Buffer.from(c.publicKey, "hex")]), format: "der", type: "spki" });
-      sigOk = verify(null, Buffer.from(c.manifest, "utf8"), key, sig);
-    } catch {
-      sigOk = false;
-    }
-  }
-  const parsed = win.readManifest(c.manifest, c.publishedUnder);
-  const inst = parsed ? (c.cpu === "x64" || c.cpu === "arm64" ? parsed.installers[c.cpu] ?? null : null) : null;
-  const parseOut = parsed
-    ? (inst ? { version: parsed.version, build: parsed.build, url: inst.url, sha256: inst.sha256, bytes: inst.bytes } : { error: "kind" })
-    : { error: c.manifest.length > 65536 ? "tooLarge" : "manifest" };
-  return { sigOk, parseOut };
-});
-console.log(JSON.stringify(results));
-'''
-
-
 class WindowsUpdateParityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -155,26 +125,6 @@ class WindowsUpdateParityTests(unittest.TestCase):
                     (f'ok {want["version"]} {want["build"]} {want["url"]} {want["sha256"]} {want["bytes"]}', 0),
                     case['name'],
                 )
-
-    def test_node_crypto_and_typescript_manifest_parser_agree_with_core_vectors(self):
-        node = shutil.which('node')
-        if node is None:
-            unavailable('node is unavailable')
-        stripping = subprocess.run([node, '--experimental-strip-types', '-e', '0'], capture_output=True, text=True)
-        flags = ['--experimental-strip-types', '--no-warnings'] if stripping.returncode == 0 else []
-        script = self.dir / 'node-driver.mjs'
-        script.write_text(NODE_DRIVER)
-        result = subprocess.run([node, *flags, str(script), str(HERE.parent / 'update-vectors.json'),
-                                 str(REPO / 'packages/expo-windows/src/updater/manifest.ts')],
-                                capture_output=True, text=True, timeout=120)
-        if result.returncode != 0 and ('ERR_UNKNOWN_FILE_EXTENSION' in result.stderr or 'strip-types' in result.stderr):
-            unavailable('this node cannot load TypeScript')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        got = json.loads(result.stdout)
-        self.assertEqual(len(got), len(WINDOWS))
-        for case, entry in zip(WINDOWS, got):
-            self.assertEqual(entry['sigOk'], case['signatureValid'], case['name'])
-            self.assertEqual(entry['parseOut'], case['parse'], case['name'])
 
     def test_no_hostile_string_passes_the_windows_verifier(self):
         node = shutil.which('node')

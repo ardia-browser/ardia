@@ -100,7 +100,7 @@ const openedId = () => {
   expect(typeof id).toBe("string");
   return id!;
 };
-const reportCover = (root: ReactTestRenderer, reason: "drawn" | "cap" = "drawn") => act(() => pageView(root)!.props.onPageEvent({ nativeEvent: { name: "coverHidden", reason, found: true } }));
+const reportCover = (root: ReactTestRenderer, reason: "drawn" | "cap" = "drawn") => act(() => pageView(root)!.props.onPageEvent({ nativeEvent: { name: "coverHidden", reason, found: true, cover: useBrowse.getState().openingCover ?? undefined, document: 1 } }));
 
 onAndroid("with ArdiaOpeningCard, the opening card mounts in the tap's own commit already growing, from the card's place in the deck to full screen, and ends square-cornered with its bar band shown", () => {
   const root = renderSurface(<Surfaces />);

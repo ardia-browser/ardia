@@ -28,6 +28,8 @@ export type AppEvent =
   | { type: "windowTitleRead"; epoch: string }
   | { type: "keyHoldReplay"; tag: number; count: number }
   | { type: "littleArdiaGlobalShortcut" }
+  | { type: "updateStep"; step: "downloadStarted" | "downloadFinished" | "installing"; epoch?: string }
+  | { type: "updateFailed"; stage: "download" | "install"; reason: string; epoch?: string }
   | { type: "littleArdiaGlobalShortcutBehind" }
   | { type: "windowDragLoop"; epoch: string }
   | { type: "windowDragNative"; epoch: string }

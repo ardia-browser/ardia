@@ -1,8 +1,10 @@
 import type { ShortcutModifier } from "@ardia-real/shell";
 import { useBrowser } from "../../browser/src/state/browser/store";
+import { consentEpoch } from "../../browser/src/state/telemetry/client";
 import { emitNativeEvent, provideNativeModuleProvider } from "./shims/expo-modules-core";
 import { ardiaHost, reportHostError, type ArdiaHost } from "./host";
-import { keyboardCombo, linuxBindings, linuxNativeBindings, recordableShortcut, utilityBindings, type Binding } from "./shortcuts";
+import { MODIFIER_FLAGS, MODIFIER_KEYS } from "@platform/shortcutKeys";
+import { composingKey, dispatchesKeyPress, keyboardCombo, linuxBindings, linuxNativeBindings, recordableShortcut, utilityBindings, type Binding } from "./shortcuts";
 
 let capturing = false;
 let holding = 0;
@@ -57,7 +59,7 @@ export async function startLinuxShortcuts(host: ArdiaHost) {
   };
   const bindingsFor = (encoded: string) => JSON.parse(encoded) as Binding[];
   const hold = (binding: Binding) => {
-    holding = [4, 16, 8].find((flag) => binding.modifiers & flag) ?? 0;
+    holding = [MODIFIER_FLAGS.command, MODIFIER_FLAGS.control, MODIFIER_FLAGS.option].find((flag) => binding.modifiers & flag) ?? 0;
     holdingCode = holding ? null : binding.keyCode;
   };
   provideNativeModuleProvider((module, method) => {
@@ -79,6 +81,7 @@ export async function startLinuxShortcuts(host: ArdiaHost) {
     if (!capturing) void host.invoke("ArdiaShell.restoreShortcutFocus", { args: [] }).catch(reportHostError);
   });
   window.addEventListener("keydown", (event) => {
+    if (composingKey(event)) return;
     const combo = keyboardCombo(event);
     if (recording) {
       event.preventDefault();
@@ -103,11 +106,13 @@ export async function startLinuxShortcuts(host: ArdiaHost) {
     if (binding.notInText && document.activeElement?.matches("input,textarea,[contenteditable]:not([contenteditable=false])")) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (!dispatchesKeyPress(binding, event)) return;
     if (binding.command === "tabSwitcher") hold(binding);
-    emitNativeEvent("ArdiaShell", "onCommand", { command: binding.command, arg: binding.arg, windowId: host.bootstrap.windowId });
+    emitNativeEvent("ArdiaShell", "onCommand", { command: binding.command, arg: binding.arg, windowId: host.bootstrap.windowId, epoch: consentEpoch() });
   }, true);
   window.addEventListener("keyup", (event) => {
-    const flag = event.key === "Control" ? 4 : event.key === "Meta" ? 16 : event.key === "Alt" ? 8 : event.key === "Shift" ? 2 : 0;
+    const modifier = MODIFIER_KEYS[event.key];
+    const flag = modifier ? MODIFIER_FLAGS[modifier] : 0;
     if (flag && holding & flag || holdingCode && keyboardCombo(event).keyCode === holdingCode) releaseSwitcher();
   }, true);
   window.addEventListener("blur", () => { releaseSwitcher(); void cancelShortcutRecording(); });

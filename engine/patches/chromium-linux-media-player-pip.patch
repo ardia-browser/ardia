@@ -4,7 +4,7 @@
  #include "third_party/blink/public/platform/web_fullscreen_video_status.h"
  #include "ui/gfx/geometry/size.h"
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +#include "ardia/linux/ac_linux_content_hooks.h"  // nogncheck
 +#include "content/public/browser/page.h"
 +#endif
@@ -16,17 +16,17 @@
    void set_has_video(bool has_video) { has_video_ = has_video; }
  
    void set_muted(bool muted) { muted_ = muted; }
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  bool muted() const { return muted_; }
 +#endif
  
    bool is_playing() const { return is_playing_; }
  
-@@ -910,4 +918,65 @@
+@@ -911,4 +919,65 @@
  
  DOCUMENT_USER_DATA_KEY_IMPL(AudibilityBypassTracker);
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +bool MediaWebContentsObserver::ArdiaLinuxInPrimaryPage(
 +    const MediaPlayerId& id) {
 +  RenderFrameHost* frame = RenderFrameHost::FromID(id.frame_routing_id);
@@ -103,18 +103,18 @@
  class Size;
  }  // namespace gfx
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +#include "ardia/linux/ac_linux_content_hooks.h"  // nogncheck
 +#endif
 +
  namespace content {
  
  class AudibleMetrics;
-@@ -155,6 +161,14 @@
+@@ -158,6 +164,14 @@
    // Returns whether or not the given player id is active.
    bool IsPlayerActive(const MediaPlayerId& player_id) const;
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  bool ArdiaLinuxInPrimaryPage(const MediaPlayerId& id);
 +  bool ArdiaLinuxPictureInPictureEligible(const MediaPlayerId& id);
 +  std::vector<ArdiaLinuxPictureInPictureCandidate>
@@ -139,7 +139,7 @@
    std::optional<media_session::MediaPosition> GetPosition(
        int player_id) const override;
    bool IsPictureInPictureAvailable(int player_id) const override;
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  bool ArdiaLinuxPictureInPictureAvailable() const {
 +    return is_picture_in_picture_available_;
 +  }
@@ -149,11 +149,11 @@
    bool HasAudio(int player_id) const override;
 --- a/content/browser/media/session/media_session_controllers_manager.cc
 +++ b/content/browser/media/session/media_session_controllers_manager.cc
-@@ -186,4 +186,13 @@
+@@ -196,4 +196,13 @@
    return it->second.get();
  }
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +bool MediaSessionControllersManager::ArdiaLinuxPictureInPictureAvailable(
 +    const MediaPlayerId& id) const {
 +  const auto it = controllers_map_.find(id);
@@ -173,11 +173,11 @@
  #include "content/common/content_export.h"
  #include "content/public/browser/web_contents_observer.h"  // For MediaPlayerId.
  #include "services/media_session/public/mojom/media_session.mojom.h"
-@@ -102,6 +103,10 @@
+@@ -103,6 +104,10 @@
    // Called when video frame availability for the player |id| has changed.
    void OnVideoFrameAvailabilityChanged(const MediaPlayerId& id, bool available);
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  bool ArdiaLinuxPictureInPictureAvailable(const MediaPlayerId& id) const;
 +#endif
 +

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, posix, relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -75,15 +76,23 @@ function filesUnder(dir, pick) {
 
 const REPO_PATH = /['"`](?:\.\.\/)*((?:apps|packages|engine|docs|infra|\.claude)\/[A-Za-z0-9_.@/-]+)['"`]/g;
 
-function repoPathsNamedIn(files) {
+function repoPathsNamedIn(files, root = REPO) {
   const named = new Set();
   for (const file of files) {
-    for (const [, path] of readFileSync(join(REPO, file), "utf8").matchAll(REPO_PATH)) {
+    for (const [, path] of readFileSync(join(root, file), "utf8").matchAll(REPO_PATH)) {
       const clean = path.replace(/\/+$/, "");
-      if (existsSync(join(REPO, clean))) named.add(statSync(join(REPO, clean)).isDirectory() ? `${clean}/` : clean);
+      if (clean.split("/").includes("node_modules")) continue;
+      if (existsSync(join(root, clean))) named.add(statSync(join(root, clean)).isDirectory() ? `${clean}/` : clean);
     }
   }
   return [...named].sort();
+}
+
+function assertRepoJobStartsOnNamedPaths(repo, files, root = REPO) {
+  for (const path of repoPathsNamedIn(files, root)) {
+    const probe = path.endsWith("/") ? `${path}any` : path;
+    assert.ok(matched(repo, probe), `a change to ${path}, which a root test names, runs the repository job`);
+  }
 }
 
 const IMPORT = /(?:from\s+|import\s*\(\s*)["'](\.{1,2}\/[^"']+)["']/g;
@@ -173,9 +182,21 @@ test("the repository job starts on every test test:root runs and every repositor
   });
   assert.ok(runs.length > 10, "test:root still finds its tests");
   for (const path of runs) assert.ok(matched(repo, path), `a change to ${path} runs the repository job`);
-  for (const path of repoPathsNamedIn(runs)) {
-    const probe = path.endsWith("/") ? `${path}any` : path;
-    assert.ok(matched(repo, probe), `a change to ${path}, which a root test names, runs the repository job`);
+  assertRepoJobStartsOnNamedPaths(repo, runs);
+});
+
+test("the repository job isn't asked to start on a folder an install adds under a path a root test names", () => {
+  const root = mkdtempSync(join(tmpdir(), "workflow-paths-"));
+  try {
+    mkdirSync(join(root, "apps/desktop/node_modules/real"), { recursive: true });
+    mkdirSync(join(root, "apps/desktop/scripts"), { recursive: true });
+    writeFileSync(join(root, "apps/desktop/scripts/host-tests.mjs"), "");
+    writeFileSync(join(root, "named.test.mjs"), 'const files = ["apps/desktop/node_modules", "apps/desktop/node_modules/real", "apps/desktop/scripts/host-tests.mjs"];\n');
+    const repo = changeFilters(workflow("checks.yml")).repo;
+    assertRepoJobStartsOnNamedPaths(repo, ["named.test.mjs"], root);
+    assert.deepEqual(repoPathsNamedIn(["named.test.mjs"], root), ["apps/desktop/scripts/host-tests.mjs"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -190,7 +211,7 @@ test("the repository job starts on the parity doc, the promises lock and every t
 test("Mac starts on the paths its jobs read, and its Swift tests run for the plugin sandbox, archive and import readers", () => {
   const text = workflow("mac.yml");
   const filters = changeFilters(text);
-  assert.deepEqual(Object.keys(filters).sort(), ["app", "swift"]);
+  assert.deepEqual(Object.keys(filters).sort(), ["app", "swift", "webui"]);
   assertTriggersMatchFilters(triggerPaths(text, "pull_request"), filters, ".github/workflows/mac.yml");
   assert.match(text, /^  push:\n    branches: \[main\]\n    paths: \*native$/m);
   for (const path of [
@@ -209,7 +230,7 @@ test("Mac starts on the paths its jobs read, and its Swift tests run for the plu
   }
   assert.ok(read.size >= 3, "the plugin tests still name the repository files they read");
   for (const path of read) assert.ok(matched(filters.swift, path), `a change to ${path}, which the plugin tests read, runs the Swift tests`);
-  for (const name of ["app", "swift"]) {
+  for (const name of ["app", "swift", "webui"]) {
     assert.ok(text.includes(`      ${name}: \${{ steps.filter.outcome != 'success' || steps.filter.outputs.${name} == 'true' }}`), `${name} falls back to running`);
     assert.match(text, new RegExp(`\\(needs\\.changes\\.result != 'success' \\|\\| needs\\.changes\\.outputs\\.${name} == 'true'\\)`), `${name} runs when the changes job failed`);
   }

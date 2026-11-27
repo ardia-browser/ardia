@@ -32,7 +32,7 @@ const MODULES = [
   { name: "sync", list: SYNC_WORDING, reword: rewordSync, plugin: syncWording, pick: whole, macos: /\bMacs?\b|iCloud Drive|iCloud Settings|in Finder|iPhone|Universal Clipboard|Keychain|x-apple\.|\bUsers\b|\{PLATFORM_TERMS\.\w+\}/, surfaces: ["components/settings/panes/SyncSection.tsx", "components/settings/panes/SyncSheets.tsx"], probe: "components/settings/panes/SyncSection.tsx" },
   {
     name: "linux", list: LINUX_WORDING, reword: rewordForLinux, plugin: linuxWording, pick: strings, macos: /\bMacs?\b|macOS|iCloud|Keychain|keychain|Tahoe|\{PLATFORM_TERMS\.\w+\}/, probe: "components/onboarding/LookStep.tsx",
-    surfaces: ["state/extensions/actions.ts", "components/onboarding/SourceStep.tsx", "components/onboarding/LookStep.tsx", "components/settings/panes/General.tsx", "state/telemetry/copy.ts", "components/import/steps/ChooseStep.tsx", "components/import/steps/SafariStep.tsx", "state/import/runImport.ts", "components/onboarding/previews/MockWindow.tsx", "components/onboarding/previews/scenes/LookScenes.tsx", "state/commands/appCommands.ts", "state/report/details.ts", "components/report/ReportPreview.tsx"],
+    surfaces: ["state/extensions/actions.ts", "components/onboarding/SourceStep.tsx", "components/onboarding/LookStep.tsx", "components/settings/panes/General.tsx", "state/telemetry/copy.ts", "components/import/steps/ChooseStep.tsx", "components/import/steps/SafariStep.tsx", "state/import/runImport.ts", "components/onboarding/previews/scenes/LookScenes.tsx", "state/commands/appCommands.ts", "state/report/details.ts", "components/report/ReportPreview.tsx"],
   },
 ];
 
@@ -59,12 +59,13 @@ const EXPECTED = [
   ["components/onboarding/LayoutSteps.tsx", ["title: `Shift-click`"], []],
   ["components/settings/rows/appearanceRows.ts", ["Below the toolbar. Ctrl+Shift+B toggles it.", "no toolbar. Ctrl+Super+M toggles it."], ["⇧⌘B", "⌃⌘M"]],
   ["components/settings/panes/Advanced.tsx", ["or in power saver mode"], ["${PLATFORM_TERMS.lowPowerMode}"]],
+  ["components/settings/rows/advancedRows.ts", ["title: `Zoom pages with Ctrl-scroll`", "description: `Sites that use Ctrl-scroll themselves, like maps, still get it.`"], ["${keyText(\"⌘\")}-scroll"]],
   ["components/downloads/Downloads.tsx", ["tooltip=\"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
   ["components/pages/DownloadsPage.tsx", ["title=\"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
   ["state/downloads/downloadMenu.ts", ["title: \"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
   ["state/bookmarks/exportHtml.ts", ["title: \"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
   ["state/browser/actions.ts", ["stay installed on this computer, turned off."], ["on this ${PLATFORM_TERMS.computer}"]],
-  ["state/onboarding/tour.ts", ["Ctrl+S hides the sidebar.", "press Super+Shift+=.", "Settings (Ctrl+,)."], ["menu bar", "⌘"]],
+  ["state/onboarding/tour.ts", ["Hide Tabs hides the sidebar", "press Super+Shift+=.", "Settings (Ctrl+,)."], ["menu bar", "⌘"]],
   ["state/presets/setupCode.ts", ["Appearance follows your desktop", "Ctrl+T opens the command bar"], ["your ${PLATFORM_TERMS.computer}", "⌘T"]],
   ["state/releaseNotes/releaseNotes.ts", ["from any page with Ctrl+L."], ["⌘L"]],
   ["state/sync/scopeAdapters.ts", ["`This Computer`"], ["This ${PLATFORM_TERMS.computerTitle}"]],
@@ -111,6 +112,13 @@ test("search rows describing reworded panes read as Linux too", () => {
   const profile = read("components/settings/rows/profileRows.ts");
   assert.match(section(profile, "section: \"Passwords and autofill\"", "savedCards: {"), /keychain|PLATFORM_TERMS\.deviceUnlock/);
   assert.doesNotMatch(section(linuxCopy("components/settings/rows/profileRows.ts"), "section: \"Passwords and autofill\"", "savedCards: {"), /Touch ID|keychain|Keychain|\bMac\b/);
+});
+
+test("Linux's What's Sent leaves out the Mac's crash report details, which its crash dump reader doesn't send", () => {
+  const copy = linuxCopy("state/telemetry/copy.ts");
+  assert.ok(read("state/telemetry/copy.ts").includes("near address zero"));
+  for (const said of ["near address zero", "which kind of thread crashed", "whether it was the main queue"]) assert.ok(!copy.includes(said), `Linux says ${said}`);
+  assert.equal(LINUX_FEATURES.crashReportDetails, false);
 });
 
 test("open-tab sync telemetry describes this computer on Linux", () => {

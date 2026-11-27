@@ -27,6 +27,11 @@ test("a toast's chip buttons are buttons to VoiceOver, named by their titles, an
   assert.match(toast, /title=\{action\} onPress=\{onAction\}/);
 });
 
+test("a toast's dock never takes the pointer itself, so the Linux input region over the page is the toast panel alone", () => {
+  const toast = readFileSync(new URL("./Toast.tsx", import.meta.url), "utf8");
+  assert.match(toast, /<View pointerEvents=\{\(action \|\| secondary\) && !closing \? "box-none" : "none"\}[^>]*style=\{DOCK\}/);
+});
+
 function shownToast(t, options) {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   useToasts.setState({ toasts: {} });

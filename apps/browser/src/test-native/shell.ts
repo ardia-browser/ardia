@@ -49,7 +49,7 @@ export const refusedSyncs = { on: false };
 export const linkedButUnsynced = { on: false };
 export const heldCopies = { on: false, queue: [] as (() => void)[] };
 export const heldSaves = { on: false, queue: [] as (() => void)[] };
-export const refusedSaves = { on: false };
+export const refusedSaves = { on: false, of: new Set<string>() };
 export const refusedWrites = { on: false, returnsFalse: false, landingFails: false };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
 export const appInfo: Partial<SystemInfo> = { appVersion: "1.0" };
@@ -79,6 +79,7 @@ export const windows = {
   open: new Map<string, FakeWindow>(),
   closed: [] as string[],
   focused: null as string | null,
+  shown: new Map<string, boolean>(),
   emit: (event: WindowEvent) => shellEvents.emit("onWindowEvent", event),
   geometry: windowGeometries,
 };
@@ -112,6 +113,10 @@ const windowsModule: Modules["ArdiaAppWindows"] & { requestClose(id: string): Pr
     windows.open.delete(id);
     windows.closed.push(id);
     if (windows.focused === id) windows.focused = null;
+    return Promise.resolve();
+  },
+  setWindowShown: (id, shown) => {
+    windows.shown.set(id, shown);
     return Promise.resolve();
   },
   focusWindow: (id) => {
@@ -155,6 +160,14 @@ export const focusHandoffCounts = {
   },
 };
 export const pressRepeated: { earlier: { landedOn: string; ms: number } | null } = { earlier: null };
+export const fieldBlurCauses = new Map<number, ("keyLoss" | "inWindow")[]>();
+export const watchedFieldBlurs = new Set<number>();
+const takeFieldBlur = (fieldTag: number) => {
+  const queued = fieldBlurCauses.get(fieldTag);
+  const cause = queued?.shift() ?? "inWindow";
+  if (queued && !queued.length) fieldBlurCauses.delete(fieldTag);
+  return cause;
+};
 
 const focus: Modules["ArdiaFocus"] = {
   setSwitcherCapture: () => Promise.resolve(),
@@ -162,6 +175,8 @@ const focus: Modules["ArdiaFocus"] = {
   saveKeyResponder: () => Promise.resolve(0),
   restoreKeyResponder: () => Promise.resolve(false),
   discardKeyResponder: () => Promise.resolve(),
+  fieldBlurCause: takeFieldBlur,
+  watchFieldBlurs: (fieldTag, watch) => void (watch ? watchedFieldBlurs.add(fieldTag) : watchedFieldBlurs.delete(fieldTag)),
   takeEditKeyAcks: () => editKeyAcks.take(),
   takeInputSourceKeys: () => inputSourceKeys.take(),
   switcherPointerMoved: () => true,
@@ -257,6 +272,7 @@ const documents: Modules["ArdiaDocuments"] = {
   },
   saveDocument: (name, contents) =>
     new Promise((resolve, reject) => {
+      if (refusedSaves.of.has(name)) return reject(new Error("save refused"));
       stagedDocs.set(name, contents);
       if (refusedSaves.on) return reject(new Error("save refused"));
       const land = () => {
@@ -445,6 +461,7 @@ const translate: Modules["ArdiaTranslate"] = {
 };
 
 const magnifyArea: Modules["ArdiaMagnifyArea"] = { devMagnify: () => unfaked("ArdiaMagnifyArea", "devMagnify") };
+const wheelArea: Modules["ArdiaWheelArea"] = { devWheel: () => unfaked("ArdiaWheelArea", "devWheel"), glideScroll: async () => {}, steerScroll: async () => {} };
 const fileDrop: Modules["ArdiaFileDrop"] = {
   devDrag: () => unfaked("ArdiaFileDrop", "devDrag"),
   devLastFileDrag: () => Promise.resolve([]),
@@ -683,7 +700,7 @@ export const pluginHost = {
   }[],
   pinned: undefined as undefined | null | { name: string; version: string; folderId: string }[],
   officialArtifacts: {} as Record<string, string>,
-  officialFetchResults: {} as Record<string, { ok: false; code: "offline" | "failed" | "verify" | "cancelled" | "unsupported"; reason: string }>,
+  officialFetchResults: {} as Record<string, { ok: false; code: "offline" | "failed" | "verify" | "cancelled" | "unsupported"; reason: string; cause?: string }>,
   officialFetchGate: null as null | Promise<void>,
   officialFetchLog: [] as string[],
   officialCancels: [] as string[],
@@ -856,6 +873,7 @@ export const shellNativeModules: Modules = {
   ArdiaInlineCompletion: { complete: () => Promise.resolve(0), copyFieldAs: () => Promise.resolve() },
   ArdiaTranslate: translate,
   ArdiaMagnifyArea: magnifyArea,
+  ArdiaWheelArea: wheelArea,
   ArdiaPeekStage: { devState: () => Promise.resolve([]), devPageFrames: () => Promise.resolve([]) },
   ArdiaFileDrop: fileDrop,
   ArdiaCli: cli,

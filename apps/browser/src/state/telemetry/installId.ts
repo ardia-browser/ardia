@@ -15,3 +15,7 @@ export function ensureInstallId(): string {
   const relay = telemetryRelay();
   return relay ? relay.installId() : adoptInstallId(uuidv4());
 }
+
+let upcoming: string | null = null;
+
+export const upcomingInstallId = () => savedChoice().installId ?? (upcoming ??= uuidv4());

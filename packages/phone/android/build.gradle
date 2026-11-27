@@ -161,7 +161,12 @@ android {
       test.systemProperty("ardia.syncFixtures", syncFixtures.absolutePath)
       test.inputs.dir(syncFixtures).withPropertyName("syncFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
       test.systemProperty("ardia.phoneSchema", phoneSchema.absolutePath)
-      findProperty('ardiaBlockingLists')?.with { test.systemProperty("ardia.blockingLists", it) }
+      test.inputs.file(phoneSchema).withPropertyName("phoneSchema").withPathSensitivity(PathSensitivity.RELATIVE)
+      test.inputs.dir(file("../ios/ArdiaKit/Sources/ArdiaBrowser/Web")).withPropertyName("iphonePageScripts").withPathSensitivity(PathSensitivity.RELATIVE)
+      findProperty('ardiaBlockingLists')?.with { lists ->
+        test.systemProperty("ardia.blockingLists", lists)
+        test.inputs.files(lists).withPropertyName("blockingLists").withPathSensitivity(PathSensitivity.RELATIVE)
+      }
       System.getenv('ARDIA_SYNC_VECTORS_WRITE')?.with { target ->
         test.environment('ARDIA_SYNC_VECTORS_WRITE', target)
         test.outputs.upToDateWhen { false }

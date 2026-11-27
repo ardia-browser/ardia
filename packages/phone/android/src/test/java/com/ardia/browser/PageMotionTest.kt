@@ -213,6 +213,18 @@ class PageMotionTest {
     }
 
     @Test
+    fun switchingToAnotherScrollerKeepsTheDirectionAndTurnsUpFromTheNewOffset() {
+        val tracker = ScrollDirectionTracker()
+        assertEquals(ScrollDirection.Down, tracker.offer(600.0, atEnd = false, nowMillis = 0))
+
+        tracker.moveAnchor(4_000.0)
+        assertEquals(ScrollDirection.Down, tracker.direction)
+        assertNull(tracker.offer(4_080.0, atEnd = false, nowMillis = 0))
+
+        assertEquals(ScrollDirection.Up, tracker.offer(4_040.0, atEnd = false, nowMillis = 0))
+    }
+
+    @Test
     fun zoomStepsThroughTheIphoneLevels() {
         assertEquals(1.15, PageZoom.next(1.0)!!, 0.0)
         assertEquals(0.85, PageZoom.previous(1.0)!!, 0.0)

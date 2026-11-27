@@ -150,6 +150,11 @@ const shortcuts = [
   ["⌃⇧=", K("+", 24, "control", "shift"), { command: "openSplitPane" }, "⌃⇧="],
   ["⌃⇧]", K("}", 30, "control", "shift"), { command: "focusNextPane" }, "⌃⇧]"],
   ["⌃⇧[", K("{", 33, "control", "shift"), { command: "focusPreviousPane" }, "⌃⇧["],
+  ["⌃⇧-", K("_", 27, "control", "shift"), { command: "openSplitPaneBelow" }, "ours"],
+  ["⌃⌥←", K(F(0xf702), 123, "control", "option", "function"), { command: "moveSplitPaneLeft" }, "ours"],
+  ["⌃⌥→", K(F(0xf703), 124, "control", "option", "function"), { command: "moveSplitPaneRight" }, "ours"],
+  ["⌃⌥↑", K(F(0xf700), 126, "control", "option", "function"), { command: "moveSplitPaneUp" }, "ours"],
+  ["⌃⌥↓", K(F(0xf701), 125, "control", "option", "function"), { command: "moveSplitPaneDown" }, "ours"],
   ["⇧⌘B", cmd("B", 11, "shift"), { command: "toggleBookmarksBar" }, "⇧⌘B"],
   ["⌘0", cmd("0", 29), { command: "zoomReset" }, "⌘0"],
   ["⌘+", cmd("+", 24, "shift"), { command: "zoomIn" }, "⌘+"],
@@ -178,8 +183,8 @@ const shortcuts = [
   ["⌃⇧⇟", K(F(0xf72d), 121, "control", "shift", "function"), { command: "moveTabDown" }, "(Chrome's)"],
   ["⌃⇧⇞", K(F(0xf72c), 116, "control", "shift", "function"), { command: "moveTabUp" }, "(Chrome's)"],
   ["⇧⌘A", cmd("A", 0, "shift"), { command: "searchTabs" }, "⇧⌘A"],
-  ["⌃Tab", K("\t", 48, "control"), { command: "nextTab" }, "⌃Tab"],
-  ["⌃⇧Tab", K("\u0019", 48, "control", "shift"), { command: "previousTab" }, "⌃⇧Tab"],
+  ["⌃Tab", K("\t", 48, "control"), { command: "tabSwitcher", arg: "forward" }, "⌃Tab"],
+  ["⌃⇧Tab", K("\u0019", 48, "control", "shift"), { command: "tabSwitcher", arg: "backward" }, "⌃⇧Tab"],
   ["⌘↩", cmd("\r", 36), { command: "returnToPinnedUrl" }, "⌘↩", "not-field"],
   ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => [`⌘${n}`, cmd(`${n}`, [18, 19, 20, 21, 23, 22, 26, 28][n - 1]), { command: "selectTab", arg: `${n}` }, `⌘${n} (Chromium)`]),
   ["⌘9", cmd("9", 25), { command: "selectLastTab" }, "⌘9 (Chromium)"],
@@ -693,6 +698,29 @@ for (const where of ["the find field", "the page"]) {
   await sleep(800);
   const after = await ac(`const s = ac.store.getState(), w = s.windows.w1, a = w.activeTabIds[w.profileId]; return { active: a, find: !!s.find[a]?.open };`);
   check("Esc closes only the find bar", after.active === "t3" && !after.find, JSON.stringify(after));
+}
+{
+  await resetToPageField("", [0, 0]);
+  const peekFind = () => ac(`const s = ac.store.getState(), w = s.windows.w1, a = w.activeTabIds[w.profileId], p = s.peeks[a];
+    return { active: a, peek: p?.tabId ?? null, find: p ? !!s.find[p.tabId]?.open : null };`);
+  await ac(`ac.store.getState().openPeek("t3", "${pages}/?peekfind", { x: 240, y: 260 }); return 1;`);
+  await sleep(1800);
+  const opened = await peekFind();
+  await postKeys([keyPress("f", 3), ...[..."hello"].map((c) => keyPress(c, 0, 30, []))]);
+  await sleep(800);
+  const finding = await peekFind();
+  await postKeys([keyPress("\u001b", 53, 0, [])]);
+  await sleep(800);
+  const after = await peekFind();
+  const responder = await ac(`return ac.shell.devKeyEquivalent("w1", { key: "x", keyCode: 7, modifiers: [], dry: true, wait: 0 });`);
+  const peekPage = await app.page("?peekfind");
+  const pageFocused = await peekPage.eval(`document.hasFocus()`).catch(() => null);
+  peekPage.close();
+  check("Esc in a Peek's find bar closes only the find bar: the same Peek stays open and its page has the keyboard",
+    !!opened.peek && finding.find === true && after.peek === opened.peek && after.find === false && after.active === "t3" && responder.firstResponder === "RenderWidgetHostViewCocoa" && pageFocused === true,
+    `opened ${JSON.stringify(opened)}, finding ${JSON.stringify(finding)}, after ${JSON.stringify(after)}, first responder ${responder.firstResponder}, Peek page focused ${pageFocused}`);
+  await ac(`const s = ac.store.getState(); if (s.peeks.t3) s.closePeek("t3"); return 1;`);
+  await sleep(500);
 }
 const FLAGS = { command: 0x100000, shift: 0x20000, control: 0x40000, option: 0x80000, function: 0x800000 };
 const w1Native = await ac(`const f = ac.store.getState().windows.w1.frame;

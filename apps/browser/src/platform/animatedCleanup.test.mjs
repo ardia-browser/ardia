@@ -10,10 +10,6 @@ test("the Mac app turns off React Native's microtask cleanup for animated props 
   assert.match(read("./animatedCleanup.ts"), /flags\.override\(\{ scheduleAnimatedCleanupInMicrotask: \(\) => false \}\)/);
 });
 
-test("Windows keeps React Native's own default", () => {
-  assert.equal(read("./animatedCleanup.windows.ts").trim(), "");
-});
-
 test("a cancellation caused by detaching runs its callback after the commit; other endings stay synchronous", async () => {
   const warn = console.warn;
   console.warn = () => {};

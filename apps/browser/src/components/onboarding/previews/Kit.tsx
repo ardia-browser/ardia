@@ -8,7 +8,7 @@ import type { ToolbarPalette } from "../../ui/toolbarColors";
 import { trafficLights } from "../tokens";
 import { trafficLightsDrawn } from "../../../lib/windowChrome";
 import { NEW_TAB, tab, type Tab } from "./content";
-import { at, atRect, CHIP, CRUMB_X, FIELD, fill, hairline, LIGHTS_Y, ROW, rowY, STRIP_H, TOOLBAR_H, TOOLBAR_ICONS, type Geo, type Rect } from "./geometry";
+import { at, atRect, CHIP, CRUMB_TRAILING, CRUMB_X, FIELD, fill, hairline, LIGHTS_Y, ROW, rowY, STRIP_H, TOOLBAR_H, TOOLBAR_ICONS, type Geo, type Rect } from "./geometry";
 import type { Look } from "./look";
 import { mix } from "../../../lib/color";
 import { mockInk, mockShadow, tabTints } from "./tokens";
@@ -78,16 +78,22 @@ export function Highlight({ g, look, x = ROW.x, y, w = ROW.w, h = ROW.h, style }
   );
 }
 
-export function TabRow({ g, look, t, x = ROW.x, y, w = ROW.w, selected, style, dim }: { g: Geo; look: Look; t: Tab; x?: number; y: number; w?: number; selected?: boolean; style?: Styles; dim?: boolean }) {
+export type Lit = Animated.AnimatedInterpolation<number> | Animated.Value;
+
+export function TabRow({ g, look, t, x = ROW.x, y, w = ROW.w, selected, lit, style, dim }: { g: Geo; look: Look; t: Tab; x?: number; y: number; w?: number; selected?: boolean; lit?: Lit; style?: Styles; dim?: boolean }) {
+  const label = (color: string) => (
+    <Label g={g} size={font.body.fontSize} color={color}>
+      {t.title}
+    </Label>
+  );
   return (
     <Animated.View style={[at(g, x, y, w, ROW.h), style as ViewStyle]}>
       {selected ? <Highlight g={g} look={look} x={0} y={0} w={w} /> : null}
       <View style={[fill, { flexDirection: "row", alignItems: "center", paddingLeft: TAB_ROW.contentLeft * g.s, paddingRight: TAB_ROW.trailing * g.s, gap: TAB_ROW.titleGap * g.s, opacity: dim ? 0.4 : 1 }]}>
         <Favicon g={g} t={t} />
-        <View style={{ flex: 1 }}>
-          <Label g={g} size={font.body.fontSize} color={t === NEW_TAB ? look.t.textSecondary : selected ? look.t.tabSelectedText : look.t.textTab}>
-            {t.title}
-          </Label>
+        <View style={{ flex: 1, justifyContent: "center" }}>
+          {label(t === NEW_TAB ? look.t.textSecondary : selected ? look.t.tabSelectedText : look.t.textTab)}
+          {lit ? <Animated.View style={[fill, { justifyContent: "center", opacity: lit }]}>{label(look.t.tabSelectedText)}</Animated.View> : null}
         </View>
       </View>
     </Animated.View>
@@ -138,7 +144,7 @@ export function Toolbar({ g, look, w, t, site, crumb = true, icons = TOOLBAR_ICO
   return (
     <ToolbarBand g={g} fill={palette.background ?? undefined} divider={site ? undefined : palette.divider} style={style}>
       <NavIcons g={g} color={palette.icon} xs={icons} y={21.2} names={icons.length === 3 ? ["chevron.left", "chevron.right", "arrow.clockwise"] : undefined} />
-      {crumb ? <Crumb g={g} look={look} t={t} palette={palette} style={at(g, crumbX, 12, w - crumbX - 20, 18)} /> : null}
+      {crumb ? <Crumb g={g} look={look} t={t} palette={palette} style={at(g, crumbX, 12, w - crumbX - CRUMB_TRAILING, 18)} /> : null}
     </ToolbarBand>
   );
 }

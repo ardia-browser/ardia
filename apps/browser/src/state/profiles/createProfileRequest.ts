@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
+import { noteSettingsProfiles } from "../telemetry/usage";
+import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 
 export type CreateProfilePreset = { name?: string; shareWith?: string };
-type CreateProfileRequest = { windowId: string | null; preset: CreateProfilePreset; resolve: (id: string | null) => void };
+type CreateProfileRequest = { windowId: string | null; preset: CreateProfilePreset; resolve: (id: string | null) => void; consent?: ConsentToken | null };
 
 export const useCreateProfileRequest = create<{ request: CreateProfileRequest | null; sheet: CreateProfileRequest | null }>()(() => ({
   request: null,
@@ -16,7 +18,9 @@ export function requestCreateProfile(windowId?: string, preset: CreateProfilePre
       useCreateProfileRequest.setState({ request: { windowId, preset, resolve } });
       return;
     }
-    useCreateProfileRequest.setState({ sheet: { windowId: null, preset, resolve } });
+    const consent = consentToken();
+    noteSettingsProfiles("createAsked", consent);
+    useCreateProfileRequest.setState({ sheet: { windowId: null, preset, resolve, consent } });
   });
 }
 

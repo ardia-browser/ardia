@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { offersDefaultBrowser } from "../settings/settingsRules";
 import { launchArguments } from "../app/launchFlags";
@@ -40,16 +41,29 @@ export const usePageRequest = (id: string | null) => usePages((s) => (id ? (s.re
 
 const NO_PAGE = { hasPage: false, url: null, canGoBack: false, canGoForward: false, isLoading: false, pageZoom: 1, isDesktopSite: false, blockedRequests: 0 } as const;
 
-export function useMenuModel(id: string): MenuModel {
+type MenuPage = { hasPage: boolean; url: string | null; canGoBack: boolean; canGoForward: boolean; isLoading: boolean; pageZoom: number; isDesktopSite: boolean; blockedRequests: number };
+
+type PageNavigation = ReturnType<typeof usePages.getState>["navigation"][string];
+
+const menuPageOf = (page: PageNavigation | undefined): MenuPage =>
+  page ? { hasPage: true, url: page.url, canGoBack: page.canGoBack, canGoForward: page.canGoForward, isLoading: page.isLoading, pageZoom: page.pageZoom, isDesktopSite: page.isDesktopSite, blockedRequests: page.blockedRequests } : NO_PAGE;
+
+export function closedMenuPage(fresh: MenuPage, held: MenuPage | null): MenuPage {
+  if (held === null) return fresh;
+  if (fresh.isLoading) return held;
+  return fresh.blockedRequests === held.blockedRequests ? fresh : { ...fresh, blockedRequests: held.blockedRequests };
+}
+
+export function useMenuModel(id: string, live = true): MenuModel {
   const dark = useDarkScheme();
+  const held = useRef<MenuPage | null>(null);
   const state = usePages(
-    useShallow((s) => {
-      const page = s.navigation[id];
-      return page
-        ? { hasPage: true, url: page.url, canGoBack: page.canGoBack, canGoForward: page.canGoForward, isLoading: page.isLoading, pageZoom: page.pageZoom, isDesktopSite: page.isDesktopSite, blockedRequests: page.blockedRequests }
-        : NO_PAGE;
+    useShallow((s): MenuPage => {
+      const fresh = menuPageOf(s.navigation[id]);
+      return live ? fresh : closedMenuPage(fresh, held.current);
     }),
   );
+  held.current = state;
   const tabUrl = useTabs((s) => s.open.find((t) => t.id === id)?.url ?? s.privates.find((t) => t.id === id)?.url ?? "");
   const isPrivate = useTabs((s) => s.privates.some((t) => t.id === id));
   const site = usePageUi((s) => s.menuSite);

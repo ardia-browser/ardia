@@ -90,6 +90,9 @@ class WindowHost : public TabStripModelObserver,
                          content::WebContents* contents);
   Browser* ExistingBrowserFor(Profile* profile) const;
   std::vector<Browser*> browsers() const;
+  bool HasTabAskingBeforeLeaving() const;
+  static bool AnyTabAskingBeforeLeaving();
+  static void ResumeClosesAfterLeaveAsk();
   void SetActiveProfile(Profile* profile);
   Profile* active_profile() const { return active_profile_; }
   void NoteHostActivated(Browser* browser);
@@ -165,6 +168,7 @@ class WindowHost : public TabStripModelObserver,
   raw_ptr<Profile> active_profile_ = nullptr;
   CloseState close_state_ = CloseState::kOpen;
   raw_ptr<Browser> asking_ = nullptr;
+  bool waiting_for_leave_ask_ = false;
   int close_attempt_ = 0;
   bool widget_close_allowed_ = false;
   bool internal_ = false;
@@ -258,6 +262,9 @@ class ACWebContentsDelegate : public BrowserWebContentsDelegate {
   void RendererResponsive(content::WebContents* source,
                           content::RenderWidgetHost* render_widget_host) override;
   void CloseContents(content::WebContents* source) override;
+  void BeforeUnloadFired(content::WebContents* source,
+                         bool proceed,
+                         bool* proceed_to_fire_unload) override;
   content::WebContents* AddNewContents(
       content::WebContents* source,
       std::unique_ptr<content::WebContents> new_contents,
@@ -325,6 +332,15 @@ class TabBridge : public content::WebContentsObserver,
   bool closing_after_unload() const {
     return close_step_ >= CloseStep::kAwaitingBeforeUnload;
   }
+  void AskBeforeLeaving(base::OnceCallback<void(bool)> answer);
+  bool TakeAnsweredLeaveAsk();
+  void AnswerLeaveAsk(bool leave);
+  bool asking_before_leaving() const { return !leave_answer_.is_null(); }
+  void CloseAfterLeaveAsk() { close_after_leave_ask_ = true; }
+  bool holds_leave_ask() const {
+    return asking_before_leaving() || close_after_leave_ask_;
+  }
+  void ForgetLeaveAsk();
   void SetTemporary(bool temporary);
   void SetTemporarySource(int32_t source_id);
   bool temporary() const { return temporary_id_ != 0; }
@@ -397,6 +413,11 @@ class TabBridge : public content::WebContentsObserver,
   base::WeakPtrFactory<TabBridge> weak_factory_{this};
   float pinch_scale_ = 1;
   CloseStep close_step_ = CloseStep::kOpen;
+  base::OnceCallback<void(bool)> leave_answer_;
+  bool leave_ask_answered_ = false;
+  base::TimeTicks leave_approved_until_;
+  int leave_ask_generation_ = 0;
+  bool close_after_leave_ask_ = false;
   int32_t temporary_id_ = 0;
   int32_t temporary_source_id_ = 0;
   bool made_ahead_ = false;

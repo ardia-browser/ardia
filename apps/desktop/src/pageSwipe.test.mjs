@@ -35,6 +35,7 @@ function target(seen, { back = true, forward = false, pager = false } = {}) {
     isPager: () => pager,
     pager: () => null,
     onSwipe: (event) => seen.push(event),
+    tabId: () => "t1",
   };
 }
 

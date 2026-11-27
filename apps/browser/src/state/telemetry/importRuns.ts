@@ -6,6 +6,8 @@ let kindsDone = 0;
 let kindsFailed = 0;
 let secretsLeft = 0;
 let untitledBookmarks = 0;
+let bookmarksAlreadyThere = 0;
+let bookmarkFoldersReused = 0;
 let secretStops = 0;
 let diaProfilesMatched = 0;
 let diaProfilesWithoutFolder = 0;
@@ -33,6 +35,14 @@ export function noteImportRun(run: { done: number; failed: number; secretsLeft: 
 export function noteUntitledBookmarks(count: number, consent?: ConsentToken | null) {
   countFor(consentOrNow(consent), () => {
     untitledBookmarks += count;
+  });
+}
+
+export function noteRepeatBookmarks(run: { skipped: number; foldersReused: number }, consent?: ConsentToken | null) {
+  if (!run.skipped && !run.foldersReused) return;
+  countFor(consentOrNow(consent), () => {
+    bookmarksAlreadyThere += run.skipped;
+    bookmarkFoldersReused += run.foldersReused;
   });
 }
 
@@ -108,6 +118,8 @@ export function takeImportRuns() {
     import_kinds_failed: kindsFailed,
     import_secrets_left: secretsLeft,
     import_untitled_bookmarks: untitledBookmarks,
+    import_bookmarks_already_there: bookmarksAlreadyThere,
+    import_bookmark_folders_reused: bookmarkFoldersReused,
     import_withheld: secretStops,
     import_dia_profiles_matched: diaProfilesMatched,
     import_dia_profiles_without_folder: diaProfilesWithoutFolder,
@@ -127,6 +139,8 @@ export function takeImportRuns() {
   kindsFailed = 0;
   secretsLeft = 0;
   untitledBookmarks = 0;
+  bookmarksAlreadyThere = 0;
+  bookmarkFoldersReused = 0;
   secretStops = 0;
   diaProfilesMatched = 0;
   diaProfilesWithoutFolder = 0;

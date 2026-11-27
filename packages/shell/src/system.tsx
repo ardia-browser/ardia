@@ -2,7 +2,7 @@ import { requireNativeViewManager } from "expo-modules-core";
 import { forwardRef, type Ref } from "react";
 import type { View, ViewProps } from "react-native";
 import { nativeModule } from "./nativeModules";
-import type { FileDropNative, MagnifyAreaNative, SystemNative } from "./generated/native";
+import type { FileDropNative, MagnifyAreaNative, SystemNative, WheelAreaNative } from "./generated/native";
 
 export type MenuShortcut = { id: string; title: string; path: string[] } & (
   | { remappable: true; mouseBindable?: boolean }
@@ -74,7 +74,7 @@ type MagnifyAreaProps = ViewProps & {
 export type NativeMagnifyAreaProps = Omit<MagnifyAreaProps, "onMagnify"> & { onMagnify?: (e: { nativeEvent: MagnifyUpdate }) => void };
 
 const NativeMagnifyArea = requireNativeViewManager<NativeMagnifyAreaProps>("ArdiaMagnifyArea");
-export type { MagnifyAreaNative };
+export type { MagnifyAreaNative, WheelAreaNative };
 
 const MagnifyModule = nativeModule("ArdiaMagnifyArea");
 

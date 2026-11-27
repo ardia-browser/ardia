@@ -660,3 +660,30 @@ test("after turning sharing off, renaming a folder both profiles had renames it 
   useBrowser.setState(folders.renameTileFolder(S(), w, folderId, "Mine"));
   assert.deepEqual([namesIn("default"), namesIn(work)], [["Mine"], ["Apps"]]);
 });
+
+test("a shared Top App's own letters, set or reset in one profile, show in the profile it shares with (#3609)", () => {
+  reset();
+  const { w, mail, work } = spaces();
+  const workMail = () => tileOf(w, work, "https://mail.com");
+  S().updateTab(mail, { tileLetters: "ML" });
+  assert.equal(S().tabs[workMail()].tileLetters, "ML", "set in Personal, shown in Work");
+  S().updateTab(workMail(), { tileLetters: undefined });
+  assert.equal(S().tabs[mail].tileLetters, undefined, "reset in Work, reset in Personal");
+  S().updateTab(workMail(), { tileLetters: "WK" });
+  assert.equal(S().tabs[mail].tileLetters, "WK");
+});
+
+test("a shared Top App's letters reach the other profile's parked copy while no window shows it", () => {
+  reset();
+  const { w, work } = spaces();
+  const w2 = S().createWindow({ url: "https://b.com" });
+  S().closeWindow(w);
+  const parked = () => (S().parkedPins[work]?.tabs ?? []).find((p) => (p.pinnedUrl || p.url) === "https://mail.com");
+  const mail = tileOf(w2, "default", "https://mail.com");
+  assert.ok(mail, "Personal's Top App in the window left");
+  S().updateTab(mail, { tileLetters: "ML" });
+  assert.ok(parked(), "Work's copy is parked");
+  assert.equal(parked().tileLetters, "ML");
+  S().updateTab(mail, { tileLetters: undefined });
+  assert.equal(parked().tileLetters, undefined);
+});

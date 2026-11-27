@@ -137,6 +137,34 @@ export function grainAlpha(texture: string): Uint8ClampedArray {
   return bytes;
 }
 
+export const FILM_GRAIN_SIDE = 128;
+export const FILM_GRAIN_POINTS = FILM_GRAIN_SIDE;
+
+const fract = (v: number) => v - Math.floor(v);
+
+export function filmGrainHash(x: number, y: number): number {
+  let p0 = fract(x * 0.1031);
+  let p1 = fract(y * 0.1031);
+  let p2 = fract(x * 0.1031);
+  const d = p0 * (p1 + 33.33) + p1 * (p2 + 33.33) + p2 * (p0 + 33.33);
+  p0 += d;
+  p1 += d;
+  p2 += d;
+  return fract((p0 + p1) * p2);
+}
+
+export function filmGrainAlpha(): Uint8ClampedArray {
+  const n = FILM_GRAIN_SIDE;
+  const bytes = new Uint8ClampedArray(n * n * 4);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) bytes[(y * n + x) * 4 + 3] = Math.round((1 - filmGrainHash(x, y)) * 255);
+  }
+  return bytes;
+}
+
+export const filmGrainOpacity = (grainOpacity: number | undefined) => Math.min(Math.max(Number.isFinite(grainOpacity) ? grainOpacity! : 0, 0), 1);
+export const filmGrainSize = (grainScale: number | undefined) => FILM_GRAIN_POINTS * Math.max(Number.isFinite(grainScale) ? grainScale! : 1, 0.25);
+
 const HUE_STOPS = [0, 60, 120, 180, 240, 300, 360];
 
 export function padLayers(lightness: number): { wheel: string; centre: string } {

@@ -5,6 +5,7 @@ import { consentOwner } from "../../state/plugins/consentSurface";
 import { useOfficialFetch, useOfficialPlugins, usePluginConsent, usePluginPrograms } from "../../state/plugins/hooks";
 import { usePlugins } from "../../state/plugins/store";
 import { useOnboarding } from "../../state/onboarding/onboarding";
+import { useSection } from "./sectionContext";
 import { PluginConsentSheet } from "../plugins/PluginConsentSheet";
 import { isOffered, officialTitle, officialView } from "../../state/plugins/officialView";
 import { offeredInOnboarding, pluginsCatalogueKnown } from "../../state/onboarding/pluginsOffer";
@@ -27,14 +28,16 @@ export function PluginsStep() {
   const shownPhase = asking ? "offer" : phase;
   const known = usePlugins(() => pluginsCatalogueKnown());
   const names = plugins.filter(isOffered).map((p) => p.name).join(" ");
+  const { active } = useSection();
   useEffect(() => {
-    notePluginsShown(names ? names.split(" ") : []);
-  }, [names]);
+    if (active) notePluginsShown(names ? names.split(" ") : []);
+  }, [active, names]);
   useEffect(() => {
-    if (known) passEmptyPluginsStep();
-  }, [known, names]);
-  useEffect(() => leavePluginsStep, []);
+    if (known && active) passEmptyPluginsStep();
+  }, [known, names, active]);
+  useEffect(() => (active ? leavePluginsStep : undefined), [active]);
   const nothingToDo = known && phase === "offer" && !plugins.some((p) => p.state === "available");
+  const settled = phase === "installed" || nothingToDo;
   const subject = plugins.find((p) => p.name === current) ?? plugins[0];
 
   return (
@@ -47,7 +50,8 @@ export function PluginsStep() {
           continueTitle={primaryTitle(plugins, { picks, phase: shownPhase })}
           disabled={phase === "working" || !known}
           onContinue={() => (phase === "offer" ? void installPickedPlugins(plugins) : finishPluginsStep(plugins))}
-          onSkip={phase === "installed" || nothingToDo ? undefined : () => skipPluginsStep(plugins)}
+          onSkip={settled ? undefined : () => skipPluginsStep(plugins)}
+          holdScroll={!settled}
         />
       }
       preview={<Terminal plugin={subject} />}

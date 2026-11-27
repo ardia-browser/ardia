@@ -1,0 +1,270 @@
+---
+import GreptileMark from "../assets/sponsors/greptile.svg";
+import BlacksmithWordmark from "../assets/sponsors/blacksmith.svg";
+import { COMPANY_SPONSORS } from "../data/sponsors";
+import { CONTRIBUTORS } from "../data/contributors";
+import { HEART_PATH } from "../data/icons";
+import { SPONSORS_PATH } from "../data/donors";
+import { base } from "../data/site";
+
+const followsContributors = CONTRIBUTORS.length > 0;
+---
+
+<section
+  class:list={["sponsors paint dark", { edge: !followsContributors, "after-contributors": followsContributors }]}
+  data-paint="latenight"
+  id="sponsors"
+  aria-labelledby="sponsors-title"
+  data-shot="sponsors"
+  data-sponsors-url={`${base}${SPONSORS_PATH}`}
+>
+  <div class="wrap">
+    <div class="body">
+      <header class="sponsors-head">
+        <p class="label kicker">Sponsors</p>
+        <h2 class="poster" id="sponsors-title" data-reveal>
+          Paid for by <br />a few more.
+        </h2>
+      </header>
+
+      <ul class="companies" role="list" data-reveal style="--i: 1">
+        {
+          COMPANY_SPONSORS.map((sponsor) => (
+            <li>
+              <a
+                class:list={["company", sponsor.key]}
+                href={sponsor.href}
+                rel="noopener"
+                data-track="sponsor_clicked"
+                data-track-sponsor={sponsor.key}
+                data-track-location="sponsors"
+              >
+                <span class="mark">
+                  {sponsor.key === "greptile" ? (
+                    <>
+                      <GreptileMark class="greptile-mark" aria-hidden="true" />
+                      <span class="greptile-name">{sponsor.name}</span>
+                    </>
+                  ) : (
+                    <BlacksmithWordmark class="blacksmith-wordmark" role="img" aria-label={sponsor.name} />
+                  )}
+                </span>
+                <span class="does">{sponsor.does}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+
+      <div class="donors" data-reveal style="--i: 2">
+        <p class="label">Monthly sponsors</p>
+        <ul class="names" role="list" aria-label="Monthly sponsors" data-private data-ac-no-capture data-donor-list hidden></ul>
+        <p class="empty" data-donor-empty>This spot is saving a seat for your name.</p>
+        <div class="become">
+          <button class="btn sun-btn" type="button" popovertarget="donate-pop" data-become-sponsor data-track="donate_clicked" data-track-location="sponsors">
+            <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d={HEART_PATH} /></svg>
+            Become a sponsor
+          </button>
+          <p class="fine">Give monthly and add a name at checkout. It shows up here within minutes.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { mountLiveDonors } from "../scripts/sponsors";
+  import { DONATE_POP_PICKER } from "../data/donate";
+
+  const section = document.getElementById("sponsors");
+  const list = section?.querySelector<HTMLUListElement>("[data-donor-list]");
+  const empty = section?.querySelector<HTMLElement>("[data-donor-empty]");
+  if (section && list && empty && section.dataset.sponsorsUrl) {
+    void mountLiveDonors({ page: window, list, empty, url: section.dataset.sponsorsUrl, doc: document });
+  }
+  section?.querySelector("[data-become-sponsor]")?.addEventListener("click", () => {
+    const monthly = document.querySelector<HTMLInputElement>(`#${DONATE_POP_PICKER} input[value="monthly"]`);
+    if (monthly) monthly.checked = true;
+  });
+</script>
+
+<style>
+  .sponsors {
+    padding: clamp(72px, 4rem + 5vw, 160px) 0 clamp(88px, 5rem + 5vw, 180px);
+  }
+  .sponsors.after-contributors {
+    --bg: #1d2b4c;
+    --wash: linear-gradient(#1d2b4c, #1d2b4c);
+    margin-top: -1px;
+    padding-top: 0;
+  }
+  .after-contributors .body {
+    padding-top: clamp(48px, 5vw, 80px);
+    border-top: 1px solid var(--night-rule);
+  }
+  .sponsors-head {
+    max-width: 40em;
+  }
+  h2 {
+    font-size: var(--t-h2);
+  }
+  .companies {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: 14px;
+    margin: clamp(40px, 4.5vw, 64px) 0 0;
+    padding: 0;
+    list-style: none;
+    max-width: 760px;
+  }
+  .company {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 18px;
+    height: 100%;
+    min-height: 132px;
+    padding: 24px 24px 20px;
+    border-radius: 18px;
+    background: rgb(239 232 220 / 0.05);
+    box-shadow: inset 0 0 0 1.5px rgb(239 232 220 / 0.16);
+    color: var(--ink);
+    text-decoration: none;
+    transition:
+      box-shadow 120ms var(--ease-out),
+      color 120ms var(--ease-out);
+  }
+  .company:hover,
+  .company:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--sun);
+  }
+  .company:active {
+    transform: scale(0.98);
+  }
+  .mark {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 36px;
+  }
+  .mark :global(svg) {
+    display: block;
+    flex: none;
+  }
+  .company :global(.greptile-mark) {
+    width: auto;
+    height: 34px;
+  }
+  .greptile-name {
+    font-family: var(--sans);
+    font-size: 1.6rem;
+    font-weight: 640;
+    letter-spacing: -0.03em;
+  }
+  .company :global(.blacksmith-wordmark) {
+    width: auto;
+    height: 20px;
+  }
+  .does {
+    font-size: var(--t-small);
+    color: var(--ink-2);
+  }
+  .company:hover .does,
+  .company:focus-visible .does {
+    color: var(--ink);
+  }
+  .donors {
+    margin-top: clamp(48px, 5vw, 72px);
+    max-width: 760px;
+  }
+  .donors > .label {
+    color: var(--ink-2);
+  }
+  .names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .names[hidden],
+  .empty[hidden] {
+    display: none;
+  }
+  .names :global(.name) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    max-width: 100%;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: rgb(239 232 220 / 0.07);
+    box-shadow: inset 0 0 0 1px var(--night-rule);
+    font-size: var(--t-small);
+    font-weight: 560;
+    overflow-wrap: anywhere;
+    unicode-bidi: isolate;
+  }
+  .names :global(.name.backer) {
+    font-size: 1.05rem;
+    min-height: 42px;
+    padding: 0 16px;
+  }
+  .names :global(.name.patron) {
+    min-height: 48px;
+    padding: 0 18px;
+    font-family: var(--poster);
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--sun);
+    box-shadow: inset 0 0 0 1.5px rgb(251 185 39 / 0.5);
+  }
+  .empty {
+    margin-top: 12px;
+    font-family: var(--poster);
+    font-size: var(--t-h3);
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--ink-3);
+  }
+  .become {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px 24px;
+    margin-top: clamp(28px, 3vw, 40px);
+  }
+  .become .btn {
+    border: 0;
+    cursor: pointer;
+  }
+  .become .btn svg {
+    fill: #b4532a;
+  }
+  .fine {
+    max-width: 30em;
+    font-size: var(--t-small);
+    color: var(--ink-3);
+  }
+  @media (max-width: 600px) {
+    .company {
+      min-height: 112px;
+      padding: 20px 20px 18px;
+    }
+    .greptile-name {
+      font-size: 1.4rem;
+    }
+    .company :global(.greptile-mark) {
+      height: 30px;
+    }
+    .company :global(.blacksmith-wordmark) {
+      height: 17px;
+    }
+    .become .btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+</style>

@@ -728,6 +728,41 @@ void LinkTabs() {
          "the waits are the Mac's");
 }
 
+void TrustedInputs() {
+  Expect(LinuxPageMessageKindOf("trustedInput") == LinuxPageMessageKind::kTrustedInput, "trusted input kind");
+  Expect(LinuxPageSenderAccepted(LinuxPageMessageKind::kTrustedInput, LinuxPageSender{false, true, true}), "a subframe's press is heard");
+  auto stamp = NormalizeLinuxPageMessage(LinuxPageMessageKind::kTrustedInput, Dict(base::DictValue().Set("at", 1).Set("origin", "https://forged.test")));
+  Expect(stamp && stamp->data.GetDict().empty(), "nothing the page sends is kept");
+  Expect(NormalizeLinuxPageMessage(LinuxPageMessageKind::kTrustedInput, base::Value()).has_value(), "the payload is ignored");
+
+  Expect(!NormalizeLinuxPageMessage(LinuxPageMessageKind::kNewTabLink, Dict(base::DictValue().Set("url", "https://a.test/x").Set("blankWindow", true))),
+         "a blank-window note never reaches Linux's unpaired link fallback");
+  Expect(NormalizeLinuxPageMessage(LinuxPageMessageKind::kNewTabLink, Dict(base::DictValue().Set("url", "https://a.test/x").Set("blankWindow", false))).has_value(),
+         "an ordinary new-tab link note still does");
+
+  LinuxTrustedInputs inputs;
+  inputs.Note("https://player.test", 10);
+  Expect(inputs.AgeMs("https://player.test", 10.25) == 250, "the age of the last press, in ms");
+  Expect(!inputs.AgeMs("https://other.test", 10.25), "only the frame's own origin hears of it");
+  Expect(!inputs.AgeMs("https://player.test", 15), "it expires after 5 s");
+  Expect(!inputs.AgeMs("https://player.test", 9), "a clock that went back gives nothing");
+  inputs.Note("https://player.test", 20);
+  Expect(inputs.AgeMs("https://player.test", 20.5) == 500 && inputs.size() == 1, "a later press restamps the same origin");
+  for (const char* origin : {"javascript:alert(1)", "null", "", "file:///etc", "chrome://settings"}) inputs.Note(origin, 21);
+  inputs.Note(std::string("https://nul.test\0", 17), 21);
+  inputs.Note("https://" + std::string(2000, 'a') + ".test", 21);
+  Expect(inputs.size() == 1, "only bounded http(s) origins are kept");
+  for (int i = 0; i < 40; i++) inputs.Note("https://o" + std::to_string(i) + ".test", 30);
+  Expect(inputs.size() <= LinuxTrustedInputs::kOriginsKept, "at most 16 origins per tab");
+  inputs.Reset();
+  Expect(inputs.size() == 0 && !inputs.AgeMs("https://o39.test", 30), "a new top document clears them");
+
+  LinuxPageOptions options;
+  Expect(options.PageConfig(false, true, false, 120).FindInt("embedInputAgeMs") == 120, "a subframe hears how recent the press was");
+  Expect(!options.PageConfig(true, true, false, 120).Find("embedInputAgeMs"), "the main frame never does");
+  Expect(!options.PageConfig(false, true).Find("embedInputAgeMs"), "no press, no field");
+}
+
 int main(int argc, char** argv) {
   if (argc != 2) return 2;
   const std::string name = argv[1];
@@ -746,6 +781,7 @@ int main(int argc, char** argv) {
   else if (name == "link-tabs") LinkTabs();
   else if (name == "status-geometry") StatusGeometry();
   else if (name == "commits") Commits();
+  else if (name == "trusted-inputs") TrustedInputs();
   else return 2;
   return 0;
 }

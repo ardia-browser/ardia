@@ -204,6 +204,8 @@ const PARAMS = (f) => ({
   "devtools.send": { session: 1, method: "Runtime.evaluate" },
   "devtools.batch": { session: 1, commands: [{ method: "Runtime.evaluate" }] },
   "tabs.click": { tab: f.one, x: 1, y: 1 },
+  "tabs.diagnostics": { tab: f.one, clear: true },
+  "tabs.input": { tab: f.one, action: "click", x: 1, y: 1 },
 });
 
 const stores = () => [S(), useLive.getState(), useAirTraffic.getState()];

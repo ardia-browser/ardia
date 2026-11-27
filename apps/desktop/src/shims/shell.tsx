@@ -1,7 +1,7 @@
 import type { CommandEvent, ConfirmOptions, PromptOptions } from "@ardia-real/shell";
 import { emitCommand as emitWebCommand, confirm as webConfirm, prompt as webPrompt } from "./shellBase";
 import { provideNativeModuleProvider } from "./expo-modules-core";
-import { linuxHostDialogs, type DialogSuspension } from "../hostDialogs";
+import { dialogRoute, linuxHostDialogs, type DialogSuspension } from "../hostDialogs";
 import { ardiaHost, hostModuleMethod, reportHostError } from "../host";
 import { flushLinuxSession, isLinuxUtility, linuxWindowDeparture } from "../session";
 import { takeHandedOverWindow } from "../hostWindowProfiles";
@@ -19,8 +19,11 @@ export { menuShown, showMenu, watchMenus } from "../menus";
 import { recordShortcut, cancelShortcutRecording } from "../shortcutsRuntime";
 export { recordShortcut, cancelShortcutRecording };
 
-export const confirm = (options: ConfirmOptions) => ardiaHost ? linuxHostDialogs().confirm(options) : webConfirm(options);
-export const prompt = (options: PromptOptions) => ardiaHost ? linuxHostDialogs().prompt(options) : webPrompt(options);
+const nativeDialogs = () => dialogRoute(ardiaHost) === "native";
+const pageConfirm = (options: ConfirmOptions) => ({ confirmed: window.confirm([options.title, options.message].filter(Boolean).join("\n\n")), suppressed: false });
+const pagePrompt = (options: PromptOptions) => window.prompt(options.message ? `${options.title}\n\n${options.message}` : options.title, options.value ?? "");
+export const confirm = (options: ConfirmOptions) => nativeDialogs() ? linuxHostDialogs().confirm(options) : dialogRoute(ardiaHost) === "page" ? Promise.resolve(pageConfirm(options)) : webConfirm(options);
+export const prompt = (options: PromptOptions) => nativeDialogs() ? linuxHostDialogs().prompt(options) : dialogRoute(ardiaHost) === "page" ? Promise.resolve(pagePrompt(options)) : webPrompt(options);
 provideNativeModuleProvider((name, method) => name === "ArdiaShell" && method === "confirm" ? confirm : name === "ArdiaShell" && method === "prompt" ? prompt : undefined);
 
 export const emitCommand = (event: CommandEvent) => emitWebCommand(ardiaHost
@@ -68,10 +71,12 @@ const closeCoordinator = createWindowCloseCoordinator({
   reject: (request) => hostModuleMethod("ArdiaShell", "rejectWindowClose")(request) as Promise<void>,
   barrier: closeBarrier,
   cancelled: closeBarrier.cancelled,
-  ...(ardiaHost ? {
+  ...(ardiaHost && nativeDialogs() ? {
     ask: (options: ConfirmOptions, signal: AbortSignal) => linuxHostDialogs().abortableConfirm(options, signal),
     suspendDialogs: () => linuxHostDialogs().suspend(),
     resumeDialogs: (suspension: DialogSuspension) => linuxHostDialogs().resume(suspension),
+  } : {}),
+  ...(ardiaHost ? {
     closeUtilities: closeLinuxUtilities,
     settleTelemetry,
     reopenTelemetry,

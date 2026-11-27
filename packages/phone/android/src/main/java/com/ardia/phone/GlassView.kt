@@ -236,12 +236,17 @@ class GlassView(context: Context, appContext: AppContext) : FrostView(context, a
         }
     }
 
+    internal fun hostedBy(host: GlassBackdropView) {
+        if (backdrop === host) return
+        backdrop?.release(this)
+        backdrop = host
+        host.host(this)
+        super.invalidate()
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        backdrop = GlassBackdropView.under(this)?.also {
-            it.host(this)
-            super.invalidate()
-        }
+        GlassBackdropView.under(this)?.let(::hostedBy)
         lastChoice?.let(unsourced::settled)
     }
 
@@ -344,6 +349,28 @@ class GlassView(context: Context, appContext: AppContext) : FrostView(context, a
     }
 }
 
+internal object GlassAttachment {
+    var backdrops = 0
+        private set
+    var hosted = 0
+        private set
+
+    fun backdrops(change: Int) {
+        backdrops += change
+        count("ardiaGlassBackdrops", backdrops)
+    }
+
+    fun hosted(change: Int) {
+        if (change == 0) return
+        hosted += change
+        count("ardiaGlassHosted", hosted)
+    }
+
+    private fun count(name: String, value: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && android.os.Trace.isEnabled()) android.os.Trace.setCounter(name, value.toLong())
+    }
+}
+
 class GlassBackdropView(context: Context, appContext: AppContext) : ExpoView(context, appContext), ReactPointerEventsView {
     override val pointerEvents: PointerEvents get() = PointerEvents.NONE
 
@@ -369,23 +396,42 @@ class GlassBackdropView(context: Context, appContext: AppContext) : ExpoView(con
         if (glass in hosted) return
         hosted += glass
         hosted.sortWith(GlassBackdropView::treeOrder)
+        GlassAttachment.hosted(1)
         invalidate()
     }
 
     internal fun release(glass: GlassView) {
         if (!hosted.remove(glass)) return
         drawn.remove(glass)
+        GlassAttachment.hosted(-1)
         invalidate()
     }
 
+    internal var placementsChecked = 0
+        private set
+
+    internal val parked: Boolean get() = drawn.isEmpty() && hosted.none { it.samplesNow }
+
     private val moved = ViewTreeObserver.OnPreDrawListener {
-        if (hosted.any { placement(it) != drawn[it] }) invalidate()
+        if (!parked && hosted.any { placement(it) != drawn[it] }) invalidate()
         true
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         viewTreeObserver.addOnPreDrawListener(moved)
+        GlassAttachment.backdrops(1)
+        adoptGlassesAfter()
+    }
+
+    private fun adoptGlassesAfter() {
+        val parent = parent as? android.view.ViewGroup ?: return
+        for (index in parent.indexOfChild(this) + 1 until parent.childCount) adoptIn(parent.getChildAt(index))
+    }
+
+    private fun adoptIn(view: View) {
+        if (view is GlassView && view.isAttachedToWindow && under(view) === this) view.hostedBy(this)
+        if (view is android.view.ViewGroup) for (index in 0 until view.childCount) adoptIn(view.getChildAt(index))
     }
 
     override fun onDetachedFromWindow() {
@@ -393,6 +439,8 @@ class GlassBackdropView(context: Context, appContext: AppContext) : ExpoView(con
         drawn.clear()
         val left = hosted.toList()
         hosted.clear()
+        GlassAttachment.hosted(-left.size)
+        GlassAttachment.backdrops(-1)
         left.forEach { it.backdropGone(this) }
         super.onDetachedFromWindow()
     }
@@ -403,6 +451,7 @@ class GlassBackdropView(context: Context, appContext: AppContext) : ExpoView(con
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) = Unit
 
     internal fun placement(glass: GlassView): Placement? {
+        placementsChecked += 1
         if (!glass.samplesNow || glass.width <= 0 || glass.height <= 0) return null
         val stop = parent
         var alpha = 1f

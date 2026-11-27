@@ -189,6 +189,15 @@ export const SYMBOLS = {
     { d: "M12 2.8L4.5 5.7v5.6c0 4.8 3.1 8.6 7.5 10z", fill: true },
   ],
   gearshape: [{ d: gear(12, 12, 9.6, 7.6, 8) + circle(12, 12, 3.1), stroke: 1.8 }],
+  gearshapeFill: [{ d: gear(12, 12, 10.2, 8, 8) + circle(12, 12, 3.4), fill: true, evenOdd: true }],
+  circleLefthalfFill: [
+    { d: circle(12, 12, 8.6), stroke: STROKE },
+    { d: "M12 3.4A8.6 8.6 0 0 0 12 20.6z", fill: true },
+  ],
+  squareOnSquareFill: [
+    { d: "M8 7.5V6.5A2.5 2.5 0 0 1 10.5 4h7A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H16.5V10A2.5 2.5 0 0 0 14 7.5z", fill: true },
+    { d: roundRect(3.5, 8.8, 12, 12, 2.6), fill: true },
+  ],
   docText: [{ d: DOCUMENT + DOCUMENT_FOLD + line(8.5, 13, 15.5, 13) + line(8.5, 16.5, 13.5, 16.5), stroke: STROKE }],
   code: [{ d: polyline(7.5, 7, 2.5, 12, 7.5, 17) + polyline(16.5, 7, 21.5, 12, 16.5, 17) + line(14, 4.5, 10, 19.5), stroke: STROKE }],
   handWave: [{ d: HAND + "M18.5 4.5c1.2.6 2 1.6 2.3 2.8M20 2.5c1.6.8 2.7 2.2 3 3.8", stroke: STROKE }],

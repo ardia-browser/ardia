@@ -4,6 +4,7 @@ import { typeFace } from "../ui/tokens";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { snappedToGrid } from "../../lib/interfaceScale";
 import { currentInterfaceScale } from "../../state/settings/interfaceScale";
+import { SYSTEM_FONT } from "./capFit";
 
 type LineMetrics = { ascender: number; capHeight: number };
 
@@ -21,8 +22,6 @@ function useLineMetrics(key: string) {
   return { metrics, onTextLayout };
 }
 
-const SYSTEM_FONT = { ascender: 0.9668, capHeight: 0.7046 } as const;
-
 const RETINA_PIXELS_PER_POINT = 2;
 
 const retinaSnapped = (points: number) => snappedToGrid(points, RETINA_PIXELS_PER_POINT * currentInterfaceScale());
@@ -38,6 +37,17 @@ export function inkCentered(box: number, shiftX: number, inkRise: number, metric
   };
 }
 
+export function inkCenteredOnGrid(box: number, shiftX: number, inkRise: number, metrics: LineMetrics, pixelsPerPoint: number): ViewStyle {
+  const top = box / 2 - Math.round(metrics.ascender) + inkRise;
+  return {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: box,
+    transform: [{ translateX: snappedToGrid(shiftX, pixelsPerPoint) }, { translateY: snappedToGrid(top, pixelsPerPoint) }],
+  };
+}
+
 export function InkHolder({ style, children }: { style: ViewStyle | null; children: ReactNode }) {
   return style ? <View style={style}>{children}</View> : <>{children}</>;
 }
@@ -49,6 +59,8 @@ export function CapCenteredLetter({
   color,
   tracking = 0,
   inset = 0,
+  lineShiftX = 0,
+  pixelsPerPoint,
   children,
 }: {
   box: number;
@@ -57,6 +69,8 @@ export function CapCenteredLetter({
   color: string;
   tracking?: number;
   inset?: number;
+  lineShiftX?: number;
+  pixelsPerPoint?: number;
   children: string;
 }) {
   const face = typeFace();
@@ -64,13 +78,14 @@ export function CapCenteredLetter({
   const snaps = PLATFORM_FEATURES.snapsTextBaselines;
   const metrics = line.metrics ?? { ascender: fontSize * SYSTEM_FONT.ascender, capHeight: fontSize * SYSTEM_FONT.capHeight };
   return (
-    <InkHolder style={snaps ? inkCentered(box, tracking / 2, metrics.capHeight / 2, metrics, inset) : null}>
+    <InkHolder style={!snaps ? null : pixelsPerPoint ? inkCenteredOnGrid(box, tracking / 2, metrics.capHeight / 2, metrics, pixelsPerPoint) : inkCentered(box, tracking / 2, metrics.capHeight / 2, metrics, inset)}>
       <Text
         numberOfLines={1}
         onTextLayout={snaps ? line.onTextLayout : undefined}
         style={{
           ...face,
           width: box,
+          paddingLeft: snaps ? 2 * lineShiftX : 0,
           textAlign: "center",
           fontSize,
           letterSpacing: tracking,

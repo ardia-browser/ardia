@@ -166,6 +166,7 @@ static __weak ArdiaPiPZoom *gEdgeResizing;
   [zoom edgeResizeTo:PointerOf(event)];
   if (event.type == NSEventTypeLeftMouseUp) {
     gEdgeResizing = nil;
+    NoteGesture(@"edge resize ended window=%ld size=%.0fx%.0f", (long)zoom->_window.windowNumber, NSWidth(zoom->_pinchTarget), NSHeight(zoom->_pinchTarget));
     [zoom pinchEnded];
   }
   return YES;

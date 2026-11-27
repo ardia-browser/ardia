@@ -16,6 +16,8 @@
 # files and Ardia.build.json, as the Windows workflow leaves them in its windows-release-* artifacts when it runs with a
 # version. They were built at --commit (default HEAD). A run id's source is packed here by engine-source.sh, from the
 # engine its commit pins; a release's is the archive it already carries.
+# Only the WebUI shell's installers are published: Ardia.build.json must name "shell": "webui" (assemble-webui.ps1
+# stamps it); a build without it is a retired React Native one.
 # The version and build come from Ardia.build.json, the identity the build carries. The build is the number of
 # commits in the built commit's history, so a release outranks every build before it. A build below the live
 # feed's is refused, and a build equal to the live feed's is refused unless the live feed's windows-update.json.sig
@@ -73,9 +75,12 @@ except (OSError, ValueError) as error:
     sys.exit(f"error: {sys.argv[1]}: {error}")
 version = stamped.get("version") if isinstance(stamped, dict) else None
 build = stamped.get("build") if isinstance(stamped, dict) else None
+shell = stamped.get("shell", "rnw") if isinstance(stamped, dict) else None
 if not isinstance(version, str) or not re.fullmatch(r"[0-9][0-9A-Za-z.+-]{0,63}", version) or type(build) is not int or build < 1:
     sys.exit(f"error: {sys.argv[1]} names no version and build")
-print(f"{version}\t{build}")
+if shell not in ("webui", "rnw"):
+    sys.exit(f"error: {sys.argv[1]} names no known shell")
+print(f"{version}\t{build}\t{shell}")
 PY
 }
 sha256_of() {
@@ -172,14 +177,16 @@ if [ -n "$run_id" ]; then
   git -C "$root" cat-file -e "$commit^{commit}" 2>/dev/null || git -C "$root" fetch -q origin "$commit" || die "commit $commit of run $run_id isn't in this checkout"
   echo "==> Download the installers of run $run_id ($commit)"
   for cpu in x64 arm64; do
-    gh run download "$run_id" -R "$repo" -n "Ardia-Setup-$cpu" -D "$stage/artifact-$cpu"
-    [ -f "$stage/artifact-$cpu/Ardia-Setup-$cpu.exe" ] || die "the Ardia-Setup-$cpu artifact holds no Ardia-Setup-$cpu.exe"
-    [ -f "$stage/artifact-$cpu/Ardia.build.json" ] || die "the Ardia-Setup-$cpu artifact holds no Ardia.build.json: run $run_id predates it, so publish a newer run"
+    artifact="Ardia-Setup-$cpu"
+    gh run download "$run_id" -R "$repo" -n "$artifact" -D "$stage/artifact-$cpu"
+    [ -f "$stage/artifact-$cpu/Ardia-Setup-$cpu.exe" ] || die "the $artifact artifact holds no Ardia-Setup-$cpu.exe"
+    [ -f "$stage/artifact-$cpu/Ardia.build.json" ] || die "the $artifact artifact holds no Ardia.build.json: run $run_id predates it, so publish a newer run"
     mv "$stage/artifact-$cpu/Ardia-Setup-$cpu.exe" "$stage/Ardia-Setup-$cpu.exe"
   done
   stamped="$(identity "$stage/artifact-x64/Ardia.build.json")"
   [ "$stamped" = "$(identity "$stage/artifact-arm64/Ardia.build.json")" ] || die "run $run_id's x64 and arm64 installers carry different builds"
-  IFS=$'\t' read -r version build <<<"$stamped"
+  IFS=$'\t' read -r version build stamped_shell <<<"$stamped"
+  [ "$stamped_shell" = webui ] || die "Ardia $version, build $build is the $stamped_shell shell's build: only the WebUI shell's installers are published"
   about="Ardia for Windows, alpha build $build ($version, commit $commit). For testing: expect rough edges."
   status="What works and what is known not to: https://github.com/$repo/blob/main/docs/windows.md"
 else
@@ -187,7 +194,8 @@ else
   commit="$(git -C "$root" rev-parse --verify "${commit_rev:-HEAD}^{commit}")" || die "no commit ${commit_rev:-HEAD} in this checkout"
   [ -f "$installers/Ardia.build.json" ] || die "$installers has no Ardia.build.json"
   stamped="$(identity "$installers/Ardia.build.json")"
-  IFS=$'\t' read -r version build <<<"$stamped"
+  IFS=$'\t' read -r version build stamped_shell <<<"$stamped"
+  [ "$stamped_shell" = webui ] || die "Ardia $version, build $build is the $stamped_shell shell's build: only the WebUI shell's installers are published"
   echo "==> Take the installers of Ardia $version, build $build, from $installers"
   for cpu in x64 arm64; do
     name="Ardia-$version-windows-$cpu-setup.exe"

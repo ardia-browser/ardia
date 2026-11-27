@@ -1,11 +1,12 @@
 import { curve, duration } from "../ui/motion";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
+import { NAVIGATION_GLYPH_WEIGHT } from "../../lib/platformChrome";
 
 export const GLYPH = 13;
 
 export const SYMBOL_BOX = 16;
 
-export const HISTORY_GLYPH = { size: GLYPH, weight: "medium" } as const;
+export const NAV_GLYPH = { size: GLYPH, weight: NAVIGATION_GLYPH_WEIGHT } as const;
 
 export const TOOLBAR_MOTION = { dim: duration.base, hide: duration.base, show: duration.base, settle: 0 } as const;
 
@@ -21,7 +22,6 @@ export const RELOAD_BUTTON_MOTION = {
 
 export const FIELD_LOAD = {
   floor: 0.1,
-  accentApartFromBand: 0.25,
   tail: 120,
   frontShareOfField: 0.4,
   tailFade: [1, 0.55, 0.38, 0.33, 0.3, 0],
@@ -29,6 +29,7 @@ export const FIELD_LOAD = {
   cap: 72,
   capFade: [1, 0.78, 0.59, 0.43, 0.3, 0.19, 0.11, 0.05, 0.01, 0],
   line: 1.5,
+  pulse: { wait: 1000, step: 0.025, period: 1800, low: 0.87 },
   glow: [
     [0, 0.08],
     [0.07, 0.13],

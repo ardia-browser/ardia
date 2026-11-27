@@ -64,8 +64,7 @@ Body:
 ## Nightlies
 
 A nightly's file is `docs/release-notes/<next stable>-nightly.<n>.md` (`0.2.37-nightly.1.md`); the version says it's a
-nightly, so the frontmatter is the same as a stable's. Keep it short: the headline and the one to three bullets for what the nightly fixed, in
-`## Fixed` or `## New`, written exactly like a stable item. No `## Faster` (nightlies aren't perf-gated). The site
+nightly, so the frontmatter and the items are the same as a stable's. No `## Faster` (nightlies aren't perf-gated). The site
 lists nightlies only in its "Nightlies too" view, tagged Nightly; `#<version>` links open that view. When the next
 stable ships, its notes cover everything since the previous stable, nightlies included, written fresh for people who
 never ran a nightly.

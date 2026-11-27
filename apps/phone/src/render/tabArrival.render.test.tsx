@@ -80,9 +80,9 @@ test("where the page reports its first draw, a landed swipe keeps the arriving t
   expect(cover.startsWith(browse.ARRIVAL_COVER_ID)).toBe(true);
   expect(arrival[0]!.props.nativeID).toBe(cover);
   expect(pageCoverId(root)).toBe(cover);
-  act(() => browse.pageCoverHidden(right, "drawn", `${browse.ARRIVAL_COVER_ID}-stale`));
+  act(() => browse.pageCoverHidden(right, "drawn", `${browse.ARRIVAL_COVER_ID}-stale`, true, 1));
   expect(browse.useBrowse.getState()).toMatchObject({ arriving: right, covered: right });
-  act(() => browse.pageCoverHidden(right, "drawn", cover));
+  act(() => browse.pageCoverHidden(right, "drawn", cover, true, 1));
   expect(browse.useBrowse.getState()).toMatchObject({ arriving: null, covered: null });
   expect(hosts(root, "pagerArrival")).toHaveLength(0);
   expect(pageCoverId(root)).toBeUndefined();
@@ -189,30 +189,28 @@ test("in a quick swipe there and back, the first arrival's late draw report can'
   const later = browse.useBrowse.getState().arrivalCover!;
   expect(later).not.toBe(earlier);
   const arrived = currentTabs().selectedId!;
-  act(() => browse.pageCoverHidden(arrived, "drawn", earlier));
+  act(() => browse.pageCoverHidden(arrived, "drawn", earlier, true, 1));
   expect(browse.useBrowse.getState().arriving).toBe(arrived);
-  act(() => browse.pageCoverHidden(arrived, "drawn", later));
+  act(() => browse.pageCoverHidden(arrived, "drawn", later, true, 1));
   expect(browse.useBrowse.getState().arriving).toBeNull();
   expect(first).toBeDefined();
   unmount(root);
 });
 
-test("on iPhone an arrival is only handed over by a report that names it and says its card was hidden; a report that came before the wait still counts", () => {
+test("on both phones an arrival is only handed over by a report that names it and says its card was hidden; a report that came before the wait still counts", () => {
   const right = neighbour().id;
   const root = renderSurface(<Page />);
   swipeToNeighbour(root);
   const cover = browse.useBrowse.getState().arrivalCover!;
-  act(() => browse.pageCoverHidden(right, "cap", cover, false));
-  if (Platform.OS === "ios") {
-    expect(browse.useBrowse.getState().arriving).toBe(right);
-    act(() => browse.pageCoverHidden(right, "drawn"));
-    expect(browse.useBrowse.getState().arriving).toBe(right);
-    act(() => browse.pageCoverHidden(right, "drawn", cover, true));
-  }
+  act(() => browse.pageCoverHidden(right, "cap", cover, false, 1));
+  expect(browse.useBrowse.getState().arriving).toBe(right);
+  act(() => browse.pageCoverHidden(right, "drawn"));
+  expect(browse.useBrowse.getState().arriving).toBe(right);
+  act(() => browse.pageCoverHidden(right, "drawn", cover, true, 1));
   expect(browse.useBrowse.getState().arriving).toBeNull();
   unmount(root);
   let finished: string | null = null;
-  browse.pageCoverHidden("early-page", "drawn", "openingCover-early", true);
+  browse.pageCoverHidden("early-page", "drawn", "openingCover-early", true, 1);
   browse.whenPageCoverHidden("early-page", 400, (reason) => (finished = reason), "openingCover-early");
   expect(finished).toBe("drawn");
 });

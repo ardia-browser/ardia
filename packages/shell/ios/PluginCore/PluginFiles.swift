@@ -12,6 +12,68 @@ struct OpenedFolder {
 
 struct FolderRefusal: Error {
   let reason: String
+  var cause: FailureCause = .other
+}
+
+enum FailureCause: String {
+  case permission
+  case disk
+  case folder
+  case mismatch
+  case unpack
+  case server
+  case network
+  case timeout
+  case io
+  case other
+
+  init(errno code: Int32) {
+    switch code {
+    case EACCES, EPERM: self = .permission
+    case ENOSPC, EDQUOT, EROFS: self = .disk
+    case EXDEV, ENOTDIR, ELOOP, EEXIST, ENOTEMPTY: self = .folder
+    default: self = .io
+    }
+  }
+
+  private static let transferFileCodes: Set<URLError.Code> = [
+    .cannotCreateFile, .cannotOpenFile, .cannotCloseFile, .cannotWriteToFile, .cannotRemoveFile, .cannotMoveFile, .fileDoesNotExist, .fileIsDirectory,
+    .noPermissionsToReadFile,
+  ]
+
+  init(file error: Error) {
+    let outer = error as NSError
+    let posix = [outer, outer.userInfo[NSUnderlyingErrorKey] as? NSError].compactMap { $0 }.first { $0.domain == NSPOSIXErrorDomain }
+    if let posix {
+      self.init(errno: Int32(posix.code))
+      return
+    }
+    switch (outer.domain, outer.code) {
+    case (NSCocoaErrorDomain, NSFileWriteNoPermissionError), (NSCocoaErrorDomain, NSFileReadNoPermissionError): self = .permission
+    case (NSCocoaErrorDomain, NSFileWriteOutOfSpaceError), (NSCocoaErrorDomain, NSFileWriteVolumeReadOnlyError): self = .disk
+    case (NSURLErrorDomain, URLError.noPermissionsToReadFile.rawValue): self = .permission
+    default: self = .io
+    }
+  }
+
+  static func urlCode(of error: Error) -> URLError.Code? {
+    let raw = error as NSError
+    return raw.domain == NSURLErrorDomain ? URLError.Code(rawValue: raw.code) : nil
+  }
+
+  init(transfer error: Error) {
+    guard let code = Self.urlCode(of: error) else {
+      self.init(file: error)
+      return
+    }
+    if code == .timedOut {
+      self = .timeout
+    } else if Self.transferFileCodes.contains(code) {
+      self.init(file: error)
+    } else {
+      self = .network
+    }
+  }
 }
 
 enum ManifestRead: Equatable {

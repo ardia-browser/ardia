@@ -18,11 +18,12 @@ import { onboardingType } from "../tokens";
 import { DEMOS } from "./demos";
 import type { SceneOpts } from "./scene";
 import { PREVIEW_IDS, type PreviewId } from "../../../state/onboarding/previewIds";
-import { geo } from "./geometry";
+import { CARD, geo } from "./geometry";
 import { lookFor } from "./look";
 import { useBasePaletteValue } from "../../../state/config/hooks";
 import { MockWindow } from "./MockWindow";
 import { mockInk } from "./tokens";
+import { phasePin } from "./timeline";
 import { devRegister } from "../../dev/devRegister";
 
 const FRAME_POINTS = [0.2, 0.4, 0.65, 1] as const;
@@ -70,7 +71,7 @@ function FixedFrame({ id, at, opts }: { id: PreviewId; at: number; opts: SceneOp
 function FramesPage({ index, addressInSidebar }: { index: number; addressInSidebar: boolean }) {
   const systemDark = useTheme().dark;
   const palette = useBasePaletteValue();
-  const opts = useMemo<SceneOpts>(() => ({ addressInSidebar, systemDark, accent: PLUM, palette }), [addressInSidebar, systemDark, palette]);
+  const opts = useMemo<SceneOpts>(() => ({ top: false, addressInSidebar, siteColor: true, frame: CARD, systemDark, accent: PLUM, palette, custom: null }), [addressInSidebar, systemDark, palette]);
   const ids = PREVIEW_IDS.slice(index * FRAMES_PER_PAGE, (index + 1) * FRAMES_PER_PAGE);
   return (
     <View style={{ gap: space.s }}>
@@ -133,6 +134,11 @@ function show(page: Parameters<typeof showGalleryPage>[0]) {
 }
 
 devRegister("acOnboardingPreviews", null, {
+  pinPhase: (at: number | null) => {
+    if (at === null) phasePin.value = null;
+    else if (phasePin.value) phasePin.value.setValue(at);
+    else phasePin.value = new Animated.Value(at);
+  },
   store: useGallery,
   pages: { frames: Math.ceil(PREVIEW_IDS.length / FRAMES_PER_PAGE), mock: MOCK_PAGES.length },
   show,

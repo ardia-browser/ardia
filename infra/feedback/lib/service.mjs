@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { UploadSizeError } from "./backends.mjs";
 import { APP_INGEST_KEY, CLI_INGEST_KEY, anonymousIdentity } from "./core.mjs";
+import { parseMonthlyDollars } from "./donate.mjs";
 import { HttpError, rateLimiter, readBody, readJson, sendJson } from "./http.mjs";
 import { newId, normalizeId } from "./ids.mjs";
 import { scrubForIssue } from "./scrub.mjs";
@@ -14,12 +15,19 @@ const COMPLETE_ROUTE = /^\/api\/feedback\/([^/]+)\/complete$/;
 const SERVICE_NAME = "ardia-feedback";
 const SERVICE_VERSION = "1.0.0";
 const RETRY_AFTER_SECONDS = 60;
+export const SPONSORS_TIMING = {
+  freshMs: 10 * 60 * 1000,
+  cooldownMs: 60 * 1000,
+  coldWaitMs: 3000,
+};
 export const EVENT_RETRY_MS = [30_000, 120_000, 600_000, 1_800_000, 3_600_000, 3_600_000, 3_600_000, 3_600_000];
 
 export const UPSTREAM_MESSAGES = {
   storage: "report storage is unavailable; try again in a minute",
   collector: "the event collector is unavailable; try again in a minute",
   issues: "GitHub is unavailable; try again in a minute",
+  donations: "Stripe is unavailable; try again in a minute",
+  sponsors: "the sponsor list is unavailable; try again in a minute",
 };
 
 export class BackendError extends Error {
@@ -126,10 +134,15 @@ export function feedbackEvent(report, { attachments, issue, completedAtMs }) {
 
 const laterTimer = (fn, ms) => setTimeout(fn, ms).unref();
 
-export function createService({ store: rawStore, events: rawEvents, issues: rawIssues, secret, publicUrl, dashboardUrl, rateLimits = true, now = Date.now, log = console.log, later = laterTimer }) {
+export function createService({ store: rawStore, events: rawEvents, issues: rawIssues, donations: rawDonations = null, sponsors: rawSponsors = null, donateReturnUrl = "https://ardia.dev", secret, publicUrl, dashboardUrl, rateLimits = true, now = Date.now, log = console.log, later = laterTimer }) {
   const store = blame("storage", rawStore);
   const events = blame("collector", rawEvents);
   const issues = blame("issues", rawIssues);
+  const donations = blame("donations", rawDonations);
+  const sponsors = blame("sponsors", rawSponsors);
+  let sponsorList = null;
+  let sponsorRefresh = null;
+  let sponsorFailedAt = null;
   const opened = new Map();
   const queuedEvents = new Set();
   const limits = {
@@ -137,6 +150,9 @@ export function createService({ store: rawStore, events: rawEvents, issues: rawI
     createGlobal: rateLimiter({ limit: 300, windowMs: 60 * 60 * 1000, now }),
     upload: rateLimiter({ limit: 120, windowMs: 10 * 60 * 1000, now }),
     complete: rateLimiter({ limit: 30, windowMs: 10 * 60 * 1000, now }),
+    donate: rateLimiter({ limit: 20, windowMs: 10 * 60 * 1000, now }),
+    donateGlobal: rateLimiter({ limit: 200, windowMs: 10 * 60 * 1000, now }),
+    sponsors: rateLimiter({ limit: 120, windowMs: 10 * 60 * 1000, now }),
   };
   const reserved = new Set();
   const completing = new Map();
@@ -316,6 +332,74 @@ export function createService({ store: rawStore, events: rawEvents, issues: rawI
     sendJson(res, 200, await pending);
   }
 
+  async function donateMonthly(req, res, ip) {
+    if (!donations) throw new HttpError(503, "donations_off", "monthly donations are not set up here");
+    if (req.headers.origin !== new URL(donateReturnUrl).origin) throw new HttpError(403, "cross_site", "donations start on the site");
+    const type = String(req.headers["content-type"] ?? "");
+    if (!/^application\/x-www-form-urlencoded\b/i.test(type)) throw new HttpError(415, "form_only", "send the donation form");
+    const dollars = parseMonthlyDollars(new URLSearchParams((await readBody(req, 1024)).toString("utf8")).get("amount"));
+    if (dollars === null) {
+      res.writeHead(303, { Location: `${donateReturnUrl}/#donate`, "Cache-Control": "no-store" });
+      return res.end();
+    }
+    limit("donate", ip);
+    limit("donateGlobal", "all");
+    const url = await donations.monthlyCheckoutUrl(dollars);
+    log(`[feedback] monthly donation checkout opened`);
+    res.writeHead(303, { Location: url, "Cache-Control": "no-store" });
+    res.end();
+  }
+
+  const freshSponsors = () => {
+    if (sponsorList && now() - sponsorList.at >= SPONSORS_TIMING.freshMs) sponsorList = null;
+    return sponsorList;
+  };
+
+  const refreshSponsors = () => {
+    if (sponsorRefresh) return sponsorRefresh;
+    if (sponsorFailedAt !== null && now() - sponsorFailedAt < SPONSORS_TIMING.cooldownMs) return null;
+    sponsorList = null;
+    const startedAt = now();
+    sponsorRefresh = sponsors
+      .list()
+      .then(
+        (body) => {
+          sponsorList = { at: startedAt, body };
+          sponsorFailedAt = null;
+        },
+        (error) => {
+          sponsorList = null;
+          sponsorFailedAt = now();
+          log(`[feedback] sponsors refresh failed: ${error.cause?.message ?? error.message}`);
+        },
+      )
+      .finally(() => (sponsorRefresh = null));
+    return sponsorRefresh;
+  };
+
+  async function listSponsors(res, ip) {
+    if (!sponsors) throw new HttpError(503, "sponsors_off", "the sponsor list is not set up here");
+    limit("sponsors", ip);
+    let list = freshSponsors();
+    if (!list) {
+      const pending = refreshSponsors();
+      if (pending) await Promise.race([pending, new Promise((resolve) => later(resolve, SPONSORS_TIMING.coldWaitMs))]);
+      list = freshSponsors();
+    }
+    if (!list) {
+      res.setHeader("Retry-After", String(SPONSORS_TIMING.cooldownMs / 1000));
+      throw new HttpError(503, "sponsors_unavailable", "the sponsor list isn't ready; try again in a minute");
+    }
+    const body = JSON.stringify(list.body);
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Length": Buffer.byteLength(body),
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    res.end(body);
+  }
+
   return async function handle(req, res) {
     const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "unknown");
     const path = new URL(req.url, "http://feedback").pathname;
@@ -325,6 +409,14 @@ export function createService({ store: rawStore, events: rawEvents, issues: rawI
       if (path === "/api/feedback") {
         if (req.method !== "POST") throw new HttpError(405, "method", "POST only");
         return await create(req, res, ip);
+      }
+      if (path === "/api/donate/monthly") {
+        if (req.method !== "POST") throw new HttpError(405, "method", "POST only");
+        return await donateMonthly(req, res, ip);
+      }
+      if (path === "/api/sponsors") {
+        if (req.method !== "GET" && req.method !== "HEAD") throw new HttpError(405, "method", "GET only");
+        return await listSponsors(res, ip);
       }
       if ((match = FILE_ROUTE.exec(path))) {
         if (req.method !== "PUT") throw new HttpError(405, "method", "PUT only");

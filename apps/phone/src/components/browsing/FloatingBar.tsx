@@ -1,8 +1,20 @@
-import { useEffect, useRef, type ComponentProps } from "react";
-import { Platform, StyleSheet, View, type ViewInstance } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ComponentProps, type RefObject } from "react";
+import { searchState } from "../../state/search/store";
+import { markShownFrame } from "../../platform/lab";
+import { Platform, StyleSheet, View, type GestureResponderEvent, type ViewInstance } from "react-native";
+import Animated, { runOnJS, useAnimatedProps, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { tabSwitchCuts } from "../../state/browse/tabSwitch";
+import { pageBarPreviewShown } from "../../state/browse/deckPull";
+import { canCutDeckFromTap, cutDeckFromTabsTap, tabsPressedOnPhone, useBrowse } from "../../state/browse/store";
+import { deckTurn } from "../../state/browse/deckTurn";
+import { focusForScreenReader } from "../ui/coverFocus";
+import { IDLE_PLUS_TOUCH, isTouchRelease, NO_EARLY_REVEAL, plusTouchDown, plusTouchUp, pressWithReveal, revealStandbyOnPress, useStandbyLayout, type EarlyReveal, type PlusTouch } from "../../state/search/standbyReveal";
+import { currentTabs } from "../../state/tabs/store";
 import { useBarReturn } from "./barReturn";
-import { AddressFace } from "./AddressFace";
+import { AddressFace, AddressLeaf, DestinationFallbackLeaf } from "./AddressFace";
+import { destination, destinationAddresses, destinationLeafShows, destinationStandsIn } from "../../state/browse/destination";
+import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 import { NotSecureLock } from "./NotSecureLock";
 import { haptics } from "../../state/app/haptics";
 import { TabsMenuTrigger } from "./tabsMenu";
@@ -28,6 +40,9 @@ import { pageWords } from "../../lib/sharedWords";
 
 type Props = {
   tab: BrowserTab;
+  preview?: BrowserTab | null;
+  standsIn?: boolean;
+  privateLook?: boolean;
   order: BrowserTab[];
   roles: ColorRoles;
   dark: boolean;
@@ -41,7 +56,131 @@ type Props = {
   onPlus: () => void;
   onMore: () => void;
   fold?: BarFoldLook | null;
+  swipe?: SwipeAddresses | null;
+  handover?: HandOverFocus;
 };
+
+export type HandOverFocus = { target: "address" | "pill" | null; pill: RefObject<ViewInstance | null> };
+
+export type SwipeAddresses = { offset: SharedValue<number>; from: SharedValue<string>; landed: SharedValue<string>; cursor: SharedValue<string>; span: number; left: BrowserTab | null; right: BrowserTab | null; spoken?: Record<string, string> };
+
+const NO_SPOKEN_LINE: Record<string, string> = {};
+
+export function landedSpoken(landed: string, table: Record<string, string>, otherwise: string): string {
+  "worklet";
+  return landed !== "" && table[landed] !== undefined ? table[landed] : otherwise;
+}
+
+export function landedSide(from: string, shownId: string, at: number, span: number): -1 | 0 | 1 {
+  "worklet";
+  return from === shownId && span > 0 && Math.abs(Math.abs(at) - span) < 1 ? (at > 0 ? -1 : 1) : 0;
+}
+
+export function hereShown(cursor: string, ownerId: string, leftId: string, rightId: string): boolean {
+  "worklet";
+  return cursor === "" || cursor === ownerId || (cursor !== leftId && cursor !== rightId);
+}
+
+export function landedLeafShown(cursor: string, leafId: string, ownerId: string): boolean {
+  "worklet";
+  return cursor !== "" && cursor === leafId && cursor !== ownerId;
+}
+
+export function landedBackHere(landed: string, cursor: string, ownerId: string): boolean {
+  "worklet";
+  return landed !== "" && landed === ownerId && cursor === ownerId;
+}
+
+function useHereAddress(swipe: SwipeAddresses | null, ownerId: string) {
+  const idle = useSharedValue("");
+  const cursor = swipe?.cursor ?? idle;
+  const leftId = swipe?.left?.id ?? "";
+  const rightId = swipe?.right?.id ?? "";
+  return useAnimatedStyle(() => {
+    const at = cursor.value;
+    return { opacity: hereShown(at, ownerId, leftId, rightId) ? 1 : 0 };
+  }, [ownerId, leftId, rightId]);
+}
+
+type LandedLeafProps = { tab: BrowserTab; side: -1 | 0 | 1; ownerId: string; cursor: SharedValue<string>; dark: boolean };
+
+function LandedLeaf({ tab, side, ownerId, cursor, dark }: LandedLeafProps) {
+  const shown = useAnimatedStyle(() => {
+    const at = cursor.value;
+    return { opacity: landedLeafShown(at, tab.id, ownerId) ? 1 : 0 };
+  }, [tab.id, ownerId]);
+  const marked = useAnimatedStyle(() => {
+    const at = cursor.value;
+    return { opacity: landedLeafShown(at, tab.id, ownerId) ? 1 : 0 };
+  }, [tab.id, ownerId]);
+  const named = side < 0 ? "Left" : side > 0 ? "Right" : "Self";
+  return (
+    <Animated.View testID={`floatingBarLanded${named}`} collapsable={false} pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={[StyleSheet.absoluteFill, styles.addressStack, shown]}>
+      <AddressLeaf address={barAddress(tab)} dark={dark} testIDPrefix={`floatingBar${named}`} style={styles.addressHit} />
+      {side !== 0 ? <UiFrameMark testID="landedBarMark" markWhenShown={`dest-bar:${tab.id}`} style={[uiFrameMarkStyle, marked]} /> : null}
+    </Animated.View>
+  );
+}
+
+function landedLeaves(swipe: SwipeAddresses, tab: BrowserTab): { tab: BrowserTab; side: -1 | 0 | 1 }[] {
+  const leaves: { tab: BrowserTab; side: -1 | 0 | 1 }[] = [];
+  if (swipe.left) leaves.push({ tab: swipe.left, side: -1 });
+  leaves.push({ tab, side: 0 });
+  if (swipe.right) leaves.push({ tab: swipe.right, side: 1 });
+  return leaves;
+}
+
+export function spokenDestination(side: -1 | 0 | 1, here: string, left: string, right: string, lifted: string, shownId: string, previewShown: number, table: Record<string, { spoken: string }>): string {
+  "worklet";
+  if (side < 0) return left;
+  if (side > 0) return right;
+  if (previewShown > 0 && lifted !== "" && lifted !== shownId && table[lifted]) return table[lifted].spoken;
+  return here;
+}
+
+type BarWords = { shownId: string; here: string; left: string; right: string; leftId: string; rightId: string; span: number; table: Record<string, string> };
+
+function useBarWords(swipe: SwipeAddresses | null, shownId: string, here: string) {
+  const left = swipe?.left ? spokenAddress(barAddress(swipe.left)) : "";
+  const right = swipe?.right ? spokenAddress(barAddress(swipe.right)) : "";
+  const leftId = swipe?.left?.id ?? "";
+  const rightId = swipe?.right?.id ?? "";
+  const span = swipe?.span ?? 0;
+  const table = swipe?.spoken ?? NO_SPOKEN_LINE;
+  const next: BarWords = { shownId, here, left, right, leftId, rightId, span, table };
+  const words = useSharedValue<BarWords>(next);
+  useLayoutEffect(() => {
+    words.value = { shownId, here, left, right, leftId, rightId, span, table };
+  }, [words, shownId, here, left, right, leftId, rightId, span, table]);
+  const idle = useSharedValue(0);
+  const nobody = useSharedValue("");
+  const notLanded = useSharedValue("");
+  const nowhere = useSharedValue("");
+  return { words, offset: swipe?.offset ?? idle, from: swipe?.from ?? nobody, landed: swipe?.landed ?? notLanded, cursor: swipe?.cursor ?? nowhere };
+}
+
+function useSpokenAddress(swipe: SwipeAddresses | null, shownId: string, here: string) {
+  const { words, offset, from, landed, cursor } = useBarWords(swipe, shownId, here);
+  const spoken = useAnimatedProps(() => {
+    const now = words.value;
+    const at = offset.value;
+    const started = from.value;
+    const onScreen = cursor.value;
+    const lifted = destination.id.value;
+    const previewShown = pageBarPreviewShown.value;
+    const table = destinationAddresses.value;
+    const side = landedSide(started, now.shownId, at, now.span);
+    return { accessibilityValue: { text: landedSpoken(onScreen !== now.shownId ? onScreen : "", now.table, spokenDestination(side, now.here, now.left, now.right, lifted, now.shownId, previewShown, table)) } };
+  });
+  const backShown = useAnimatedStyle(() => {
+    const arrived = landed.value;
+    const onScreen = cursor.value;
+    return { opacity: landedBackHere(arrived, onScreen, shownId) ? 1 : 0 };
+  }, [shownId]);
+  return { spoken, backShown };
+}
+
+const SPEAKS_LANDED_ADDRESS = Platform.OS === "android";
 
 export type DuoBar = { stripLeft: number; stripTop: number; squeeze: DuoSqueeze | null; progress: SharedValue<number>; collapsed: boolean };
 
@@ -74,9 +213,25 @@ export function barAddress(tab: BrowserTab): BarAddress {
   };
 }
 
-export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true, duo = null, fold = null, onTabs, onTabsMenu, onStep, onAddress, onPlus, onMore }: Props) {
+export function FloatingBar({ tab, preview = null, standsIn = false, privateLook, order, roles, dark, showsPlus, anchors = true, duo = null, fold = null, swipe = null, handover, onTabs, onTabsMenu, onStep, onAddress, onPlus, onMore }: Props) {
+  const previewId = preview?.id ?? null;
+  const previewHides = useAnimatedStyle(() => {
+    const lifted = destination.id.value;
+    const previewShown = pageBarPreviewShown.value;
+    return { opacity: destinationStandsIn(lifted, tab.id, previewShown) ? 0 : 1 };
+  }, [tab.id]);
+  const previewShows = useAnimatedStyle(() => {
+    const lifted = destination.id.value;
+    const previewShown = pageBarPreviewShown.value;
+    return { opacity: destinationLeafShows(lifted, tab.id, previewId, previewShown) ? 1 : 0 };
+  }, [tab.id, previewId]);
+  const looksPrivate = privateLook ?? tab.isPrivate;
+  const styledTab = looksPrivate === tab.isPrivate ? tab : { ...tab, isPrivate: looksPrivate };
+  useLayoutEffect(() => markShownFrame(`bar:${tab.id}`), [tab.id]);
+  const landedHere = useHereAddress(swipe, tab.id);
   const ink = dark ? chromeInk.dark : chromeInk.light;
   const address = barAddress(tab);
+  const { spoken, backShown } = useSpokenAddress(swipe, tab.id, spokenAddress(address));
   const menuButton = useRef<ViewInstance>(null);
   const returning = useBarReturn();
   const handed = useDeckOwnsBar();
@@ -85,6 +240,36 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
     if (wasHanded.current && !handed) barReturnedToPage();
     wasHanded.current = handed;
   });
+  const addressButton = useRef<ViewInstance>(null);
+  const shownTab = useRef(tab.id);
+  const focusOwed = useRef<string | null>(null);
+  if (shownTab.current !== tab.id) {
+    shownTab.current = tab.id;
+    focusOwed.current = tab.id;
+  }
+  const focusTarget = handover ? handover.target : "address";
+  const pill = handover?.pill;
+  useEffect(() => {
+    const destination = tab.id;
+    if (handed || focusOwed.current !== destination) return;
+    if (focusTarget === null) {
+      focusOwed.current = null;
+      return;
+    }
+    const within = focusTarget === "pill";
+    const cancel = focusForScreenReader(
+      () => {
+        focusOwed.current = null;
+        return within ? pill?.current : addressButton.current;
+      },
+      () => currentTabs().selectedId === destination && useBrowse.getState().surface === "browsing" && !deckPull.cut.value && !searchState().open,
+      { handover: { within } },
+    );
+    return () => {
+      cancel();
+      if (focusOwed.current === destination) focusOwed.current = null;
+    };
+  }, [tab.id, handed, focusTarget]);
   const swaps = handed || wasHanded.current;
   const handedBack = swaps ? { ...returning, centreGlass: { shown: returning.centreGlass.shown && !handed, shownMs: 0 }, sidesGlass: { shown: returning.sidesGlass.shown && !handed, shownMs: 0 } } : returning;
   const back = useFoldedGlass(handedBack, fold?.glass ?? true);
@@ -108,12 +293,12 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
   const lockFade = useAnimatedStyle(() => ({ opacity: shut(progress.value) }));
   const leading = (
     <Animated.View testID="floatingBarLeading" collapsable={false} style={back.leading} pointerEvents={back.sidesShown ? "box-none" : "none"} importantForAccessibility={back.sidesShown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!back.sidesShown}>
-      <FloatingTabsButton tab={tab} order={order} roles={roles} dark={dark} testID="floatingBarTabs" glass={back.sidesGlass} glyphs={back.leadingGlyphs} fold={fold} ghost={!handed} onTabs={onTabs} onTabsMenu={onTabsMenu} onStep={onStep} />
+      <FloatingTabsButton tab={styledTab} order={order} roles={roles} dark={dark} testID="floatingBarTabs" glass={back.sidesGlass} glyphs={back.leadingGlyphs} fold={fold} ghost={!handed} swipe={swipe} onTabs={onTabs} onTabsMenu={onTabsMenu} onStep={onStep} />
     </Animated.View>
   );
   const trailing = (
     <Animated.View testID="floatingBarTrailing" collapsable={false} style={[styles.circleHit, back.trailing]} pointerEvents={back.sidesShown ? "box-none" : "none"} importantForAccessibility={back.sidesShown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!back.sidesShown}>
-      {showsPlus ? <FloatingPlusButton tab={tab} dark={dark} testID="floatingBarPlus" glass={back.sidesGlass} glyphs={back.trailingGlyphs} fold={fold} ghost={!handed} onPlus={onPlus} /> : null}
+      <FloatingPlusButton tab={styledTab} dark={dark} testID="floatingBarPlus" glass={back.sidesGlass} glyphs={back.trailingGlyphs} fold={fold} ghost={!handed} swipe={swipe} hidden={!showsPlus} onPlus={onPlus} />
     </Animated.View>
   );
   return (
@@ -121,12 +306,21 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
     <View testID="floatingBar" style={styles.row} pointerEvents="box-none">
       {inStrip ? null : leading}
       <Animated.View testID="floatingBarCentre" nativeID={ids?.anchor} collapsable={false} style={[styles.addressSlot, centreSqueeze]} pointerEvents={back.centreShown ? "box-none" : "none"} importantForAccessibility={back.centreShown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!back.centreShown}>
-      <ChromeSurface testID="floatingBarAddress" shape="capsule" cornerRadius={capsule(floatingBarLayout.control)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={back.centreGlass.shown} shownMs={back.centreGlass.shownMs} style={[styles.address, squeeze ? styles.squeezes : null]}>
+      <ChromeSurface testID="floatingBarAddress" shape="capsule" cornerRadius={capsule(floatingBarLayout.control)} incognito={looksPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={back.centreGlass.shown} shownMs={back.centreGlass.shownMs} style={[styles.address, squeeze ? styles.squeezes : null]}>
         <Animated.View testID="floatingBarCentreGlyphs" nativeID={ids?.face} collapsable={false} style={[styles.addressRow, back.centreGlyphs]}>
         <Animated.View testID="floatingBarFoldGlyphs" collapsable={false} style={[styles.addressRow, centreFold]}>
         <PullGlyphs style={styles.addressRow}>
         <Animated.View testID="floatingBarAddressFade" collapsable={false} style={[styles.addressFade, addressFade]} pointerEvents={squeezed ? "none" : "box-none"} importantForAccessibility={squeezed ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={squeezed}>
-        <AddressFace address={address} dark={dark} testIDPrefix="floatingBar" style={styles.addressHit} onPress={onAddress} onPressIn={haptics.barPress} />
+        <Animated.View testID="floatingBarAddressStack" collapsable={false} style={[styles.addressStack, landedHere, previewHides]} pointerEvents="box-none">
+          <AddressFace address={address} dark={dark} testIDPrefix="floatingBar" style={styles.addressHit} onPress={onAddress} onPressIn={haptics.barPress} pressRef={addressButton} spoken={SPEAKS_LANDED_ADDRESS && tabSwitchCuts() ? spoken : undefined} />
+        </Animated.View>
+        {preview ? (
+          <Animated.View testID="floatingBarPreview" collapsable={false} pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={[StyleSheet.absoluteFill, styles.addressStack, previewShows]}>
+            <AddressLeaf address={barAddress(preview)} dark={dark} testIDPrefix="floatingBarPreview" style={styles.addressHit} />
+          </Animated.View>
+        ) : null}
+        {standsIn ? <DestinationFallbackLeaf shownId={tab.id} leafId={previewId} dark={dark} style={styles.addressHit} /> : null}
+        {swipe ? landedLeaves(swipe, tab).map((leaf) => <LandedLeaf key={leaf.tab.id} tab={leaf.tab} side={leaf.side} ownerId={tab.id} cursor={swipe.cursor} dark={dark} />) : null}
         </Animated.View>
         <PressInPlace ref={menuButton} label={squeezed ? `Page Menu, ${spokenAddress(address)}` : "Page Menu"} busy={squeezed ? squeezedBusy : undefined} onPress={() => openPageMenuFrom(() => menuButton.current, onMore)} onPressIn={haptics.barPress} style={styles.menu}>
           <Animated.View style={[styles.menuGlyph, dotsFade]}>
@@ -157,6 +351,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
       {inStrip ? null : trailing}
     </View>
     {fold ? <BarMotionCatchUp fold={fold} /> : null}
+    {swipe ? <UiFrameMark testID="landedBarMark" markWhenShown={`dest-bar:${tab.id}`} style={[uiFrameMarkStyle, backShown]} /> : null}
     {inStrip ? (
       <Animated.View testID="floatingBarStrip" pointerEvents="box-none" style={[styles.strip, { left: duo.stripLeft, top: duo.stripTop }]}>
         {trailing}
@@ -189,12 +384,60 @@ function useFoldedGlass<Back extends { centreGlass: { shown: boolean; shownMs: n
   return { ...back, centreGlass: fade(back.centreGlass), sidesGlass: fade(back.sidesGlass) };
 }
 
-export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, glyphs, fold = null, ghost = false, onTabs, onTabsMenu, onStep }: ButtonProps & { order: BrowserTab[]; roles: ColorRoles; onTabs: () => void; onTabsMenu: () => void; onStep: (delta: -1 | 1) => void }) {
+const TABS_LONG_PRESS_MS = 500;
+const TABS_TAP_OUTLASTS_HOLD_MS = 150;
+const TABS_PRESS_DRIFT = 24;
+
+export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, glyphs, fold = null, ghost = false, swipe = null, onTabs, onTabsMenu, onStep }: ButtonProps & { order: BrowserTab[]; roles: ColorRoles; swipe?: SwipeAddresses | null; onTabs: () => void; onTabsMenu: () => void; onStep: (delta: -1 | 1) => void }) {
   const count = order.length;
   const foldGlyphs = useFoldGlyphs(fold);
+  const tabsNow = useRef(onTabs);
+  tabsNow.current = onTabs;
+  const callTabs = useCallback((phone: number) => tabsPressedOnPhone(phone, () => tabsNow.current()), []);
+  const pressTabs = useCallback((event?: unknown) => {
+    if (tabSwitchCuts() && isTouchRelease(event)) return;
+    tabsNow.current();
+  }, []);
+  const holdNow = useRef<((event?: GestureResponderEvent) => void) | undefined>(undefined);
+  const holdTabs = useCallback((phone: number, pageX: number, pageY: number) => tabsPressedOnPhone(phone, () => holdNow.current?.({ nativeEvent: { pageX, pageY } } as GestureResponderEvent)), []);
+  const pressHeld = useCallback((event?: GestureResponderEvent) => {
+    if (tabSwitchCuts() && isTouchRelease(event)) return;
+    holdNow.current?.(event);
+  }, []);
+  const tabId = tab.id;
+  const swipeOffset = swipe?.offset ?? null;
+  const swipeFrom = swipe?.from ?? null;
+  const swipeSpan = swipe?.span ?? 0;
+  const tabsPress = useMemo(() => {
+    const hold = Gesture.LongPress()
+      .withTestId(`${testID}Hold`)
+      .minDuration(TABS_LONG_PRESS_MS)
+      .maxDistance(TABS_PRESS_DRIFT)
+      .shouldCancelWhenOutside(false)
+      .enabled(tabSwitchCuts())
+      .onStart((event) => {
+        runOnJS(holdTabs)(deckTurn.phone.value, event.absoluteX, event.absoluteY);
+      });
+    const tap = Gesture.Tap()
+      .withTestId(`${testID}Tap`)
+      .maxDuration(TABS_LONG_PRESS_MS + TABS_TAP_OUTLASTS_HOLD_MS)
+      .maxDistance(TABS_PRESS_DRIFT)
+      .shouldCancelWhenOutside(false)
+      .enabled(tabSwitchCuts())
+      .onEnd((_event, success) => {
+        if (!success) return;
+        const swipeLanded = swipeFrom !== null && swipeOffset !== null && swipeFrom.value === tabId && swipeSpan > 0 && Math.abs(Math.abs(swipeOffset.value) - swipeSpan) < 1;
+        if (!swipeLanded && canCutDeckFromTap(tabId)) cutDeckFromTabsTap(tabId);
+        else runOnJS(callTabs)(deckTurn.phone.value);
+      });
+    return Gesture.Race(hold, tap);
+  }, [tabId, testID, callTabs, holdTabs, swipeOffset, swipeFrom, swipeSpan]);
   return (
     <TabsMenuTrigger order={order} onTabsMenu={onTabsMenu}>
-      {({ onLongPress, screenReaderActions }) => (
+      {({ onLongPress, screenReaderActions }) => {
+        holdNow.current = onLongPress;
+        return (
+        <GestureDetector gesture={tabsPress}>
         <PressInPlace
           label="Tabs"
           value={`${count} ${count === 1 ? "tab" : "tabs"}`}
@@ -205,9 +448,9 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
             { name: "previousTab", label: "Previous Tab", run: () => onStep(-1) },
             { name: "nextTab", label: "Next Tab", run: () => onStep(1) },
           ]}
-          onPress={onTabs}
+          onPress={pressTabs}
           onPressIn={haptics.barPress}
-          onLongPress={onLongPress}
+          onLongPress={onLongPress ? pressHeld : undefined}
           dims="glyph"
           style={styles.circleHit}
         >
@@ -228,17 +471,60 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
             ) : null}
           </ChromeSurface>
         </PressInPlace>
-      )}
+        </GestureDetector>
+        );
+      }}
     </TabsMenuTrigger>
   );
 }
 
-export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, fold = null, ghost = false, onPlus }: ButtonProps & { onPlus: () => void }) {
+export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, fold = null, ghost = false, swipe = null, hidden = false, onPlus }: ButtonProps & { swipe?: SwipeAddresses | null; hidden?: boolean; onPlus: () => void }) {
   const ink = dark ? chromeInk.dark : chromeInk.light;
   const foldGlyphs = useFoldGlyphs(fold);
+  const plusNow = useRef(onPlus);
+  plusNow.current = onPlus;
+  const pressAccepted = useCallback((reveal: EarlyReveal) => pressWithReveal(reveal, () => plusNow.current()), []);
+  const pressFromButton = useCallback((event?: unknown) => {
+    if (tabSwitchCuts() && isTouchRelease(event)) return;
+    pressWithReveal(NO_EARLY_REVEAL, () => plusNow.current());
+  }, []);
+  const incognito = tab.isPrivate;
+  const tabId = tab.id;
+  const layout = useStandbyLayout();
+  const touch = useSharedValue<PlusTouch>(IDLE_PLUS_TOUCH);
+  const swipeOffset = swipe?.offset ?? null;
+  const plusTouch = useMemo(
+    () =>
+      Gesture.Manual()
+        .withTestId(`${testID}Touch`)
+        .enabled(tabSwitchCuts() && !hidden)
+        .onTouchesDown((event) => {
+          touch.value = plusTouchDown(touch.value, event.numberOfTouches);
+        })
+        .onTouchesUp((event, manager) => {
+          const lifted = event.changedTouches[0];
+          const step = plusTouchUp(touch.value, event.numberOfTouches, lifted?.x ?? -Infinity, lifted?.y ?? -Infinity, floatingBarLayout.control);
+          touch.value = step.touch;
+          if (event.numberOfTouches > 0) return;
+          manager.fail();
+          if (!step.accepted) return;
+          const settled = swipeOffset === null || Math.abs(swipeOffset.value) < 0.5;
+          runOnJS(pressAccepted)(settled ? revealStandbyOnPress(tabId, layout, incognito) : NO_EARLY_REVEAL);
+        })
+        .onTouchesCancelled((_event, manager) => {
+          touch.value = IDLE_PLUS_TOUCH;
+          manager.fail();
+        })
+        .onFinalize(() => {
+          touch.value = IDLE_PLUS_TOUCH;
+        }),
+    [incognito, tabId, layout, testID, touch, swipeOffset, pressAccepted, hidden],
+  );
   return (
-    <PressInPlace label={newTabLabel(tab.isPrivate)} onPress={onPlus} onPressIn={haptics.barPress} dims="glyph" style={styles.circleHit}>
-      <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(floatingBarLayout.control)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={glass?.shown} shownMs={glass?.shownMs} style={styles.circle}>
+    <View testID={`${testID}Slot`} collapsable={false} pointerEvents={hidden ? "none" : "box-none"} importantForAccessibility={hidden ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={hidden} style={[styles.circleHit, hidden ? styles.plusHidden : null]}>
+    <GestureDetector gesture={plusTouch}>
+    <PressInPlace label={newTabLabel(tab.isPrivate)} onPress={pressFromButton} onPressIn={haptics.barPress} dims="glyph" style={styles.circleHit}>
+      <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(floatingBarLayout.control)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={hidden ? false : glass?.shown} shownMs={glass?.shownMs} style={styles.circle}>
         <PullGlyphs>
           <Animated.View collapsable={false} style={foldGlyphs}>
             <PressedGlyph>
@@ -255,6 +541,8 @@ export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, fold = nu
         ) : null}
       </ChromeSurface>
     </PressInPlace>
+    </GestureDetector>
+    </View>
   );
 }
 
@@ -267,9 +555,11 @@ const styles = StyleSheet.create({
     height: floatingBarLayout.control,
   },
   circleHit: { width: floatingBarLayout.control, height: floatingBarLayout.control },
+  plusHidden: { opacity: 0 },
   strip: { position: "absolute", width: floatingBarLayout.control, gap: DUO_PLUS_ABOVE - floatingBarLayout.control },
   squeezes: { overflow: "hidden" },
   addressFade: { flex: 1, alignSelf: "stretch", flexDirection: "row" },
+  addressStack: { flex: 1, flexDirection: "row" },
   menuGlyph: { alignItems: "center", justifyContent: "center" },
   menuLock: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0 },
   circle: { width: floatingBarLayout.control, height: floatingBarLayout.control, alignItems: "center", justifyContent: "center" },

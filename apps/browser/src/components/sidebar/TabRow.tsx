@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, TextInput, View, type GestureResponderEvent, type Insets, type TextStyle } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
-import { hex, layout, useTheme } from "../ui/theme";
+import { caretColorOnRow, hex, layout, useTheme } from "../ui/theme";
+import { arcSelectedFill } from "../ui/tokens";
 import { useIsActiveTab, usePageProfileId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
 import { returnToPinnedUrl } from "../../state/pins/actions";
 import { useSplitRowPanes } from "../../state/sidebar/hooks";
@@ -9,7 +10,7 @@ import { useTabHasBadges } from "../../state/media/tabBadges";
 import { muteTitle } from "../../state/tabs/mute";
 import { usePictureInPicture } from "../../state/media/media";
 import { HoverSlot } from "../ui/HoverSlot";
-import { ActivitySpinner, FadeLabel, HoverSwap, ink, OutsidePressArea, radius, sidebarFont, sidebarLineHeight, space, Symbol, typeFace, useHover, withAlpha } from "../ui";
+import { ActivitySpinner, continuousCorners, FadeLabel, HoverSwap, ink, OutsidePressArea, radius, sidebarFont, sidebarLineHeight, space, Symbol, typeFace, useHover, withAlpha } from "../ui";
 import { isPinnedRow, tabTitle } from "../../state/browser/model";
 import { awayFromPin, rowAwayTitle } from "../../state/pins/organize";
 import { hidesRowIcon } from "../../state/pins/rowIcons";
@@ -178,6 +179,8 @@ export const TabRow = memo(function TabRow({
                 initial={tab.customTitle ?? tab.title}
                 placeholder={tab.title || "Tab name"}
                 color={active ? theme.rowSelectedText : theme.textPrimary}
+                surface={fill}
+                stockSurface={active && !quiet ? arcSelectedFill[theme.dark ? "dark" : "light"] : fill}
                 onDone={(text) => (text === null ? endRename({ kind: "tab", id: tabId }) : commitRename({ kind: "tab", id: tabId }, text))}
               />
             ) : away ? (
@@ -185,7 +188,7 @@ export const TabRow = memo(function TabRow({
             ) : (
               <SidebarRowLabel text={title} color={titleColor} compact={quiet} struck={struck && !resetting} />
             )}
-            <RowCloseSlot cell={cell} tabId={tab.id} renaming={renaming}>
+            <RowCloseSlot cell={cell} tabId={tab.id} renaming={renaming} radius={radius.chrome}>
               {loading || showsUnread ? (
                 <>
                   {loading && <ActivitySpinner style={{ width: 12, height: 12, marginRight: space.xxs }} />}
@@ -231,6 +234,8 @@ export function RenameField({
   initial,
   placeholder,
   color,
+  surface = ink.clear,
+  stockSurface = surface,
   fontSize = SIDEBAR_TYPE.title,
   weight,
   onDone,
@@ -238,6 +243,8 @@ export function RenameField({
   initial: string;
   placeholder: string;
   color: string;
+  surface?: string;
+  stockSurface?: string;
   fontSize?: number;
   weight?: TextStyle["fontWeight"];
   onDone(text: string | null): void;
@@ -264,6 +271,7 @@ export function RenameField({
         placeholder={placeholder}
         placeholderTextColor={theme.placeholder}
         selectionColor={theme.selection}
+        cursorColor={caretColorOnRow(theme, surface, stockSurface)}
         selectTextOnFocus
         enableFocusRing={false}
         onSubmitEditing={() => finish(text)}
@@ -358,7 +366,7 @@ function SplitPane({ tabId, windowId, rowActive }: { tabId: string; windowId: st
           <View
             style={{
               height: shape.height,
-              borderRadius: shape.corner,
+              ...continuousCorners(shape.corner),
               flexDirection: "row",
               alignItems: "center",
               paddingLeft: space.s,

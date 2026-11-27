@@ -50,7 +50,7 @@ test("an on the user turned on by hand stays on and still syncs", () => {
 
 test("an on only filled in for the user (chosen and inferred) turns off", () => {
   assert.deepEqual(load(doc(10, { ...DEFAULT_SETTINGS, [KEY]: true }, { chosen: [KEY, "tabLayout"], inferred: [KEY, "tabLayout"] })), { on: false, chosen: false, inferred: false });
-  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout"], inferred: ["tabLayout", "hideToolbarWhileScrolling:offByDefault"] });
+  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout"], inferred: ["tabLayout", "hideToolbarWhileScrolling:offByDefault", "cmdClickCreatesTabGroup:offByDefault", "tabSwitcherOrder:fromShortcuts"] });
 });
 
 test("an off the user chose stays off, and the migration runs once: a current session keeps its on", () => {

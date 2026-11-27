@@ -86,6 +86,7 @@ if [ "$part" != engine ]; then
   start linux-ubo-seed node --test scripts/linux/ubo-seed.test.mjs
   start linux-sign-update node --test scripts/linux/sign-update.test.mjs
   start linux-launcher node --test scripts/linux/ardia-launch.test.mjs
+  start linux-update-helper-kind node --test scripts/linux/ardia-update.test.mjs
   report
 fi
 

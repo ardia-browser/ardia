@@ -130,6 +130,10 @@ public final class SystemModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaPhoneSystem")
 
+    OnCreate {
+      PhoneExits.shared.follow(sharing: UsageConsent.state().sharing)
+    }
+
     Events("onSystemLink")
 
     OnStartObserving {
@@ -157,6 +161,7 @@ public final class SystemModule: Module {
 
     Function("setUsageConsent") { (sharing: Bool) in
       UsageConsent.set(sharing: sharing)
+      PhoneExits.shared.follow(sharing: sharing)
     }
 
     Function("takePendingCounts") { () -> [String: Int] in
@@ -165,6 +170,10 @@ public final class SystemModule: Module {
 
     Function("peekPendingCounts") { () -> [String: Int] in
       PendingCounts.peek()
+    }
+
+    Function("takeExits") { () -> [[String: Any]] in
+      PhoneExits.take()
     }
 
     Function("processStartedAt") { () -> Double? in

@@ -21,6 +21,8 @@ NSString *DomainOf(NSString *name) {
 
 }
 
+NSNotificationName const ArdiaConsentEpochDidChangeNotification = @"ArdiaConsentEpochDidChange";
+
 @implementation ArdiaEvents
 
 + (void)setSender:(void (^)(NSString *, NSDictionary *))sender forDomain:(NSString *)domain {
@@ -49,8 +51,13 @@ NSString *DomainOf(NSString *name) {
 + (void)setConsentEpoch:(NSString *)epoch {
   NSString *copied = [epoch copy] ?: @"";
   os_unfair_lock_lock(&gConsentEpochLock);
+  const BOOL changed = ![gConsentEpoch isEqualToString:copied];
   gConsentEpoch = copied;
   os_unfair_lock_unlock(&gConsentEpochLock);
+  if (!changed) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [NSNotificationCenter.defaultCenter postNotificationName:ArdiaConsentEpochDidChangeNotification object:nil];
+  });
 }
 
 @end

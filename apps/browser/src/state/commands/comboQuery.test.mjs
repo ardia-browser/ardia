@@ -3,15 +3,12 @@ import { test } from "node:test";
 import { bindsCombo, commandsBoundTo, parseCombo } from "./comboQuery.ts";
 import { formatShortcut, parseShortcut } from "./shortcuts.ts";
 import * as linuxWords from "./comboWords.desktop.ts";
-import * as windowsWords from "./comboWords.windows.ts";
-import { windowsModifiers } from "./windowsKeys.ts";
 
 const mac = (text) => {
   const combo = parseCombo(text);
   return combo && formatShortcut(combo);
 };
 const linux = { modifiers: linuxWords.COMBO_MODIFIER_WORDS, keys: linuxWords.COMBO_PLATFORM_KEYS, stored: (m) => [...m] };
-const windows = { modifiers: windowsWords.COMBO_MODIFIER_WORDS, keys: windowsWords.COMBO_PLATFORM_KEYS, stored: windowsModifiers };
 
 test("glyph notation reads as the same combo", () => {
   assert.equal(mac("⌥⌘N"), "⌥⌘N");
@@ -57,13 +54,6 @@ test("Linux reads Ctrl as the command key and Super as control", () => {
   assert.deepEqual(parseCombo("Ctrl+Alt+N", linux), { key: "n", modifiers: ["option", "command"] });
   assert.deepEqual(parseCombo("super+1", linux), { key: "1", modifiers: ["control"] });
   assert.deepEqual(parseCombo("ctrl+shift+delete", linux), { key: "", modifiers: ["shift", "command"] });
-});
-
-test("Windows reads Ctrl and ⌘ alike, as its stored control key", () => {
-  assert.deepEqual(parseCombo("Ctrl+Alt+N", windows), { key: "n", modifiers: ["control", "option"] });
-  assert.deepEqual(parseCombo("⌥⌘N", windows), { key: "n", modifiers: ["control", "option"] });
-  assert.equal(parseCombo("win+e", windows), null);
-  assert.equal(parseCombo("fn f5", windows), null);
 });
 
 test("a combo matches every binding a command holds, uppercase and Delete spellings included", () => {

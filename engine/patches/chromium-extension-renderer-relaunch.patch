@@ -1,0 +1,14 @@
+--- a/extensions/browser/renderer_startup_helper.cc
++++ b/extensions/browser/renderer_startup_helper.cc
+@@ -292,6 +292,11 @@
+         client->IsSameContext(browser_context_, host->GetBrowserContext())) {
+       RegisterProcess(host);
+     }
++#elif BUILDFLAG(IS_MAC)
++    if (GetRenderer(host) == nullptr && host->GetChannel() &&
++        client->IsSameContext(browser_context_, host->GetBrowserContext())) {
++      InitializeProcess(host);
++    }
+ #else
+     CHECK(GetRenderer(host) != nullptr ||
+           !client->IsSameContext(browser_context_, host->GetBrowserContext()));

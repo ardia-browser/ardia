@@ -15,7 +15,7 @@ import { refreshTabViewports, watchTabViewport, type TabViewport } from "../../h
 import { inputRegions } from "../../shellAbove";
 import type { InputRegionsRegistry } from "../../inputRegions";
 import type { CornerRadii } from "../../hostExtensionView";
-import { focusPageIfShellUnfocused, notePageFocusRequest, notingPageFocus } from "../../pageFocus";
+import { canYieldKeyboard, focusPageIfShellUnfocused, notePageFocusRequest, notingPageFocus } from "../../pageFocus";
 import { withPopupDismissal } from "../../popupDismissal";
 import { registerSwitchView } from "../../tabSwitchAhead";
 
@@ -51,11 +51,13 @@ const HostTabWebView = forwardRef<WebViewHandle, WebViewProps>(function HostTabW
     const host = ardiaHost!;
     const current = new HostTab(host, { key: key.current, temporary: !props.tabId, profile: props.profile, url: toEngineUrl(props.url ?? "about:blank"), ...(props.adoptId ? { adoptId: props.adoptId } : {}) }, receive, page);
     tab.current = current;
+    const stopYielding = canYieldKeyboard(current);
     void current.ready.catch((error) => {
       if (!current.disposed) latest.current.onLoadError?.({ url: latest.current.url ?? "", code: -2, text: String(error) });
       reportHostError(error);
     });
     return () => {
+      stopYielding();
       current.dispose();
       if (tab.current === current) tab.current = null;
       const tabId = latest.current.tabId;
@@ -119,11 +121,15 @@ const HostTabWebView = forwardRef<WebViewHandle, WebViewProps>(function HostTabW
   return <View style={[props.style, { backgroundColor: "transparent" }]}><div ref={element} data-ardia-native-tab={key.current} style={{ position: "absolute", inset: 0 }} /></View>;
 });
 
-export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegistry, visible: () => boolean, page: () => { identity?: unknown; disposed?: boolean; viewport(viewport: TabViewport): Promise<void> } | null, radii?: () => CornerRadii, covered?: () => void, cardRadii?: () => CornerRadii, clipToAncestors = true) {
+export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegistry, visible: () => boolean, page: () => { identity?: unknown; disposed?: boolean; viewport(viewport: TabViewport): Promise<TabViewport | null | void> } | null, radii?: () => CornerRadii, covered?: () => void, cardRadii?: () => CornerRadii, clipToAncestors = true) {
   let last = "";
   let shown = false;
   let revision = 0;
+  let acked = 0;
+  let stopped = false;
+  let wantedVisible = false;
   const stop = watchTabViewport(node, visible, (viewport, coveredByShell) => {
+    wantedVisible = viewport.visible;
     if (!viewport.visible) regions.setPage(node, false, radii, cardRadii);
     if (shown && coveredByShell) covered?.();
     shown = viewport.visible;
@@ -135,14 +141,20 @@ export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegi
     if (json === last) return;
     last = json;
     const mine = ++revision;
-    void current.viewport(sent).then(() => {
-      if (mine === revision && !current.disposed && viewport.visible) regions.setPage(node, true, radii, cardRadii);
+    void current.viewport(sent).then((applied) => {
+      if (stopped || current.disposed || mine <= acked) return;
+      if (applied !== undefined && applied !== sent) return;
+      acked = mine;
+      if (!viewport.visible) return;
+      regions.pageViewport(node, viewport.rect);
+      if (wantedVisible) regions.setPage(node, true, radii, cardRadii);
     }, (error) => {
       if (mine === revision) last = "";
       reportHostError(error);
     });
   }, regions, clipToAncestors);
   return () => {
+    stopped = true;
     revision++;
     stop();
     regions.dropPage(node);

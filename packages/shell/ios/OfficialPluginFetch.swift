@@ -21,6 +21,7 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
   struct Failure: Error {
     let code: String
     let reason: String
+    var cause: FailureCause = .other
   }
 
   private let lock = NSLock()
@@ -80,11 +81,11 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
 
   private func fail(_ name: String, _ failure: Failure) {
     NSLog("[plugins] %@ wasn't fetched (%@): %@", name, failure.code, failure.reason)
-    settle(name, ["ok": false, "code": failure.code, "reason": failure.reason])
+    settle(name, ["ok": false, "code": failure.code, "reason": failure.reason, "cause": failure.cause.rawValue])
   }
 
   private func run(_ name: String, generation mine: Int) {
-    guard let folders = PluginFolders.current() else { return fail(name, Failure(code: "failed", reason: "Ardia has no data folder")) }
+    guard let folders = PluginFolders.current() else { return fail(name, Failure(code: "failed", reason: "Ardia has no data folder", cause: .folder)) }
     guard let pin = PluginFolders.officialPin(), let entry = pin.entry(name) else {
       return fail(name, Failure(code: "unsupported", reason: "this Ardia doesn't pin an official \(name) plugin"))
     }
@@ -93,7 +94,7 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
     if let copy = store.copy(name, sha: entry.sha256), let text = PluginFolders.manifestText(copy.path).text {
       return settle(name, ["ok": true, "candidate": PluginFolders.candidate(text, folderId: copy.folderId, version: entry.version), "reused": true])
     }
-    guard let scratch = store.makeScratch(name, prefix: ".fetch-") else { return fail(name, Failure(code: "failed", reason: "its download folder couldn't be made")) }
+    guard let scratch = store.makeScratch(name, prefix: ".fetch-") else { return fail(name, Failure(code: "failed", reason: "its download folder couldn't be made", cause: .folder)) }
     let archive = URL(fileURLWithPath: (scratch as NSString).appendingPathComponent(entry.file))
     let fetched: Result<Void, Failure>
     if LaunchConfig.shared.isolated, let source = LaunchConfig.shared.instance(OfficialPin.sourceKey) {
@@ -112,7 +113,7 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
     let published = OfficialInstaller.verifyAndPublish(entry, archive: archive.path, scratch: scratch, store: store, registry: registry)
     PluginPrograms.discard(scratch)
     switch published {
-    case .failure(let failure): fail(name, Failure(code: failure.code, reason: failure.reason))
+    case .failure(let failure): fail(name, Failure(code: failure.code, reason: failure.reason, cause: failure.cause))
     case .success(let made): settle(name, ["ok": true, "candidate": PluginFolders.candidate(made.manifest, folderId: made.copy.folderId, version: entry.version)])
     }
   }
@@ -121,13 +122,13 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
     let folder = source.hasPrefix("file://") ? (URL(string: source)?.path ?? "") : source
     let path = (folder as NSString).appendingPathComponent(file)
     var info = stat()
-    guard lstat(path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { return .failure(Failure(code: "offline", reason: "\(file) isn't in \(folder)")) }
-    guard Int64(info.st_size) <= OfficialArchive.maxDownload else { return .failure(Failure(code: "verify", reason: "\(file) is over \(OfficialArchive.maxDownload >> 20) MB")) }
+    guard lstat(path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { return .failure(Failure(code: "offline", reason: "\(file) isn't in \(folder)", cause: .network)) }
+    guard Int64(info.st_size) <= OfficialArchive.maxDownload else { return .failure(Failure(code: "verify", reason: "\(file) is over \(OfficialArchive.maxDownload >> 20) MB", cause: .mismatch)) }
     do {
       try FileManager.default.copyItem(at: URL(fileURLWithPath: path), to: archive)
       return .success(())
     } catch {
-      return .failure(Failure(code: "failed", reason: "\(file) couldn't be copied (\(error.localizedDescription))"))
+      return .failure(Failure(code: "failed", reason: "\(file) couldn't be copied (\(error.localizedDescription))", cause: FailureCause(file: error)))
     }
   }
 
@@ -147,7 +148,7 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
         do {
           try FileManager.default.moveItem(at: temporary, to: archive)
         } catch {
-          outcome = .failure(Failure(code: "failed", reason: "the download couldn't be kept (\(error.localizedDescription))"))
+          outcome = .failure(Failure(code: "failed", reason: "the download couldn't be kept (\(error.localizedDescription))", cause: FailureCause(file: error)))
           finished.signal()
           return
         }
@@ -160,7 +161,7 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
     task.resume()
     if finished.wait(timeout: .now() + Self.deadline + 30) == .timedOut {
       task.cancel()
-      return .failure(Failure(code: "offline", reason: "the download took too long"))
+      return .failure(Failure(code: "offline", reason: "the download took too long", cause: .timeout))
     }
     return outcome.map { _ in () }
   }
@@ -184,14 +185,14 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
     guard let found = take(downloadTask) else { return }
     if let response = downloadTask.response as? HTTPURLResponse, response.statusCode != 200 {
-      return found.finish(.failure(Failure(code: "failed", reason: "the server answered \(response.statusCode)")))
+      return found.finish(.failure(Failure(code: "failed", reason: "the server answered \(response.statusCode)", cause: .server)))
     }
     let kept = location.deletingLastPathComponent().appendingPathComponent("ardia-official-\(UUID().uuidString)")
     do {
       try FileManager.default.moveItem(at: location, to: kept)
       found.finish(.success(kept))
     } catch {
-      found.finish(.failure(Failure(code: "failed", reason: "the download couldn't be kept")))
+      found.finish(.failure(Failure(code: "failed", reason: "the download couldn't be kept", cause: FailureCause(file: error))))
     }
   }
 
@@ -215,12 +216,12 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
 
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
     guard let error, let found = take(task) else { return }
-    let urlError = error as? URLError
-    if urlError?.code == .cancelled {
+    let code = FailureCause.urlCode(of: error)
+    if code == .cancelled {
       let tooBig = task.countOfBytesReceived > OfficialArchive.maxDownload || task.countOfBytesExpectedToReceive > OfficialArchive.maxDownload
-      return found.finish(.failure(tooBig ? Failure(code: "verify", reason: "the download is over \(OfficialArchive.maxDownload >> 20) MB") : Failure(code: "cancelled", reason: "Cancelled.")))
+      return found.finish(.failure(tooBig ? Failure(code: "verify", reason: "the download is over \(OfficialArchive.maxDownload >> 20) MB", cause: .mismatch) : Failure(code: "cancelled", reason: "Cancelled.")))
     }
-    let offline = urlError.map { Self.offlineCodes.contains($0.code) } ?? false
-    found.finish(.failure(Failure(code: offline ? "offline" : "failed", reason: error.localizedDescription)))
+    let offline = code.map { Self.offlineCodes.contains($0) } ?? false
+    found.finish(.failure(Failure(code: offline ? "offline" : "failed", reason: error.localizedDescription, cause: FailureCause(transfer: error))))
   }
 }

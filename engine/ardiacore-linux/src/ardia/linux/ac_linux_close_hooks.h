@@ -85,6 +85,7 @@ class LinuxCloseDispatchCompletion {
 };
 
 extern LinuxCloseHooks g_ardia_linux_close_hooks;
+bool LinuxCloseHooksActive();
 
 void SetLinuxQuitAsksAboutDownloads(bool asks);
 bool LinuxQuitAsksAboutDownloads();

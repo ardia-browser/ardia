@@ -28,6 +28,25 @@ bool Hex(char c) {
   return Digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
 
+bool Letter(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+char UpperLetter(char c) {
+  return c >= 'a' && c <= 'z' ? static_cast<char>(c - 'a' + 'A') : c;
+}
+
+bool AbsoluteRoot(std::string_view path, char separator) {
+  if (separator == '/') return !path.empty() && path.front() == '/';
+  return path.size() >= 3 && Letter(path[0]) && path[1] == ':' && path[2] == separator;
+}
+
+bool UnderRoot(std::string_view path, std::string_view drafts, char separator) {
+  if (separator == '/') return path.starts_with(drafts);
+  return path.size() >= drafts.size() && UpperLetter(path[0]) == UpperLetter(drafts[0]) &&
+         path.substr(1, drafts.size() - 1) == drafts.substr(1);
+}
+
 bool Numbered(std::string_view number) {
   if (number.empty() || number.size() > 2 || number[0] == '0') return false;
   return std::ranges::all_of(number, Digit);
@@ -115,23 +134,39 @@ size_t Utf8Prefix(std::string_view text, size_t limit) {
 
 }
 
-bool InsideDrafts(std::string_view drafts, std::string_view path) {
-  if (drafts.empty() || drafts.front() != '/' || drafts.back() == '/' || path.size() > kPathMaxBytes ||
-      path.size() <= drafts.size() + 1 || !path.starts_with(drafts) || path[drafts.size()] != '/' ||
-      path.find('\0') != std::string_view::npos || path.back() == '/') {
+bool InsideDrafts(std::string_view drafts, std::string_view path, char separator) {
+  if (!AbsoluteRoot(drafts, separator) || drafts.back() == separator || path.size() > kPathMaxBytes ||
+      path.size() <= drafts.size() + 1 || !UnderRoot(path, drafts, separator) || path[drafts.size()] != separator ||
+      path.find('\0') != std::string_view::npos || path.back() == separator) {
+    return false;
+  }
+  if (separator != '/' && (path.find('/') != std::string_view::npos || path.find(':', 2) != std::string_view::npos)) {
     return false;
   }
   std::string_view rest = path.substr(drafts.size() + 1);
   bool first = true;
   while (!rest.empty()) {
-    const size_t slash = rest.find('/');
+    const size_t slash = rest.find(separator);
     const std::string_view part = rest.substr(0, slash);
     if (part.empty() || part == "." || part == "..") return false;
+    if (separator != '/' && (part.back() == '.' || part.back() == ' ')) return false;
     if (first && !DraftFolderName(part)) return false;
     first = false;
     rest = slash == std::string_view::npos ? std::string_view() : rest.substr(slash + 1);
   }
   return true;
+}
+
+std::optional<std::string> DosFinalPath(std::string_view final_path) {
+  constexpr std::string_view kLongPrefix = "\\\\?\\";
+  if (final_path.starts_with(kLongPrefix)) final_path.remove_prefix(kLongPrefix.size());
+  if (final_path.size() < 3 || !Letter(final_path[0]) || final_path[1] != ':' || final_path[2] != '\\' ||
+      final_path.size() > kPathMaxBytes || final_path.find('\0') != std::string_view::npos) {
+    return std::nullopt;
+  }
+  std::string dos(final_path);
+  dos[0] = UpperLetter(dos[0]);
+  return dos;
 }
 
 bool DraftFolderName(std::string_view name) {

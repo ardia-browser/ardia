@@ -14,13 +14,6 @@ export const profiles = defineDomain({
       mac: "custom",
       windows: "absent",
     },
-    ctrlTabMru: {
-      args: "{}",
-      result: "{ profiles: Record<string, boolean> }",
-      desktop: "absent",
-      mac: "custom",
-      windows: "absent",
-    },
     release: {
       args: "Profile",
       result: "null",

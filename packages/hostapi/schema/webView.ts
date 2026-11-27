@@ -102,6 +102,13 @@ export const webView = defineDomain({
       mac: "custom",
       windows: "absent",
     },
+    takePageMetrics: {
+      args: "{}",
+      result: "Record<string, number>",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
     takeFirstPaintHolds: {
       args: "{}",
       result: "{ held: number; painted: number; loaded: number; pressed: number; timedOut: number; heldMs: number }",

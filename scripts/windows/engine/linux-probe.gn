@@ -1,5 +1,3 @@
-assert(is_win)
-
 import("//mojo/public/tools/bindings/mojom.gni")
 
 mojom("page_mojom") {

@@ -1,4 +1,4 @@
-export const DESKTOP_MODES = ["linux", "win"] as const;
+export const DESKTOP_MODES = ["linux", "win", "mac"] as const;
 
 export type DesktopMode = (typeof DESKTOP_MODES)[number];
 

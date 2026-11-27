@@ -95,6 +95,7 @@ test("Open as Tab from a grouped tab joins its group", () => {
 
 test("Open in Split View: the same tab joins a split with its source", () => {
   const { w, a } = windowWithTabs();
+  S().updateSettings({ cmdClickCreatesTabGroup: true });
   const id = S().openPeek(a, "https://peek.example/");
   const moved = S().peekToTab(w, { activate: false });
   assert.equal(S().windows[w].activeTabIds.default, a);

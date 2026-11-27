@@ -141,7 +141,7 @@ enum PluginProgramLinks {
       if !afterUpdate.isEmpty, PluginPrograms.shouldRunAfterUpdate(linked, plugin: name, places: places) {
         runAfterUpdate(name, version: linked.version, commands: afterUpdate, programs: programs, places: places, generation: generation, digest: copy?.payloadDigest)
       }
-      var reply: [String: Any] = ["ok": true, "linked": linked.linked, "refused": linked.refused, "binDir": places.binDir, "adopted": linked.adopted, "adoptBusy": linked.adoptBusy, "adoption": linked.adoption.rawValue]
+      var reply: [String: Any] = ["ok": true, "linked": linked.linked, "refused": linked.refused, "causes": linked.causes, "binDir": places.binDir, "adopted": linked.adopted, "adoptBusy": linked.adoptBusy, "adoption": linked.adoption.rawValue]
       if let kept = linked.kept, check == .trusted { reply["kept"] = kept }
       return reply
     }

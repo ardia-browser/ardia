@@ -5,6 +5,22 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:scrollViewStyle">@style/ArdiaScrollView</item>
+        <item name="android:horizontalScrollViewStyle">@style/ArdiaHorizontalScrollView</item>
+        <item name="android:listViewStyle">@style/ArdiaListView</item>
+        <item name="android:gridViewStyle">@style/ArdiaGridView</item>
+    </style>
+    <style name="ArdiaScrollView" parent="@android:style/Widget.Material.ScrollView">
+        <item name="android:overScrollMode">never</item>
+    </style>
+    <style name="ArdiaHorizontalScrollView" parent="@android:style/Widget.Material.HorizontalScrollView">
+        <item name="android:overScrollMode">never</item>
+    </style>
+    <style name="ArdiaListView" parent="@android:style/Widget.Material.ListView">
+        <item name="android:overScrollMode">never</item>
+    </style>
+    <style name="ArdiaGridView" parent="@android:style/Widget.Material.GridView">
+        <item name="android:overScrollMode">never</item>
     </style>
     <style name="ShareTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>

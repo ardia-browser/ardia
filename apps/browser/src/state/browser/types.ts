@@ -61,7 +61,9 @@ export type Tab = {
   zoom: number;
   customTitle: string | null;
   customIcon: string | null;
+  tileLetters?: string;
   pinnedUrl: string | null;
+  reopenAtPinnedUrl?: boolean;
   page: TabPage;
   openerId: string | null;
   linkOpenerId?: string;
@@ -153,7 +155,7 @@ export type TabSnapshot = Pick<
   Tab,
   "url" | "title" | "favicon" | "pin" | "muted" | "zoom" | "customTitle" | "customIcon" | "profileId"
 > &
-  Partial<Pick<Tab, "pinnedUrl" | "engine" | "lastActiveAt">>;
+  Partial<Pick<Tab, "pinnedUrl" | "reopenAtPinnedUrl" | "engine" | "lastActiveAt" | "tileLetters">>;
 
 export type ClosedTab = {
   kind: "tab";
@@ -164,6 +166,7 @@ export type ClosedTab = {
   closeBatch?: string;
   windowId: string;
   index: number;
+  profileIndex?: number;
   group: ClosedGroupInfo | null;
   parents?: ClosedGroupInfo[];
   closedAt: number;
@@ -201,6 +204,7 @@ export type ClosedGroup = {
   nested?: NestedGroupSnapshot[];
   windowId: string;
   index: number;
+  profileIndex?: number;
   closedAt: number;
 };
 

@@ -1,10 +1,10 @@
 --- a/chrome/browser/chrome_content_browser_client_receiver_bindings.cc
 +++ b/chrome/browser/chrome_content_browser_client_receiver_bindings.cc
-@@ -148,6 +148,12 @@
+@@ -149,6 +149,12 @@
  #include "chrome/browser/ui/search/search_tab_helper.h"
  #endif
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +void (*g_ardia_linux_page_host_binder)(
 +    content::RenderFrameHost& render_frame_host,
 +    blink::AssociatedInterfaceRegistry& associated_registry) = nullptr;
@@ -13,11 +13,11 @@
  namespace {
  
  #if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
-@@ -430,6 +436,11 @@
+@@ -431,6 +437,11 @@
      ep->ExposeInterfacesToRendererForRenderFrameHost(render_frame_host,
                                                       associated_registry);
    }
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  if (g_ardia_linux_page_host_binder) {
 +    g_ardia_linux_page_host_binder(render_frame_host, associated_registry);
 +  }
@@ -31,7 +31,7 @@
    // Isolated world ID for internal Chrome features.
    ISOLATED_WORLD_ID_CHROME_INTERNAL,
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  ISOLATED_WORLD_ID_ARDIA_PAGE,
 +#endif
 +
@@ -40,7 +40,7 @@
    ISOLATED_WORLD_ID_APPLESCRIPT,
 --- a/chrome/renderer/BUILD.gn
 +++ b/chrome/renderer/BUILD.gn
-@@ -246,6 +246,10 @@
+@@ -247,6 +247,10 @@
      deps += [ "//components/webapps/isolated_web_apps:scheme" ]
    }
  
@@ -64,7 +64,7 @@
  #include "chrome/common/buildflags.h"
  #include "chrome/common/channel_info.h"
  #include "chrome/common/chrome_content_client.h"
-@@ -655,6 +659,9 @@
+@@ -656,6 +660,9 @@
    service_manager::BinderRegistry* registry = render_frame_observer->registry();
  
    new prerender::NoStatePrefetchRenderFrameObserver(render_frame);
@@ -74,7 +74,7 @@
  
    auto content_settings_delegate =
        std::make_unique<ChromeContentSettingsAgentDelegate>(render_frame);
-@@ -1491,6 +1498,9 @@
+@@ -1488,6 +1495,9 @@
  
  void ChromeContentRendererClient::RunScriptsAtDocumentStart(
      content::RenderFrame* render_frame) {

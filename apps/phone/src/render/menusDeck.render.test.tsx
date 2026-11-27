@@ -13,6 +13,7 @@ const { haptics } = require("../state/app/haptics") as typeof import("../state/a
 const { useArchiveCard } = require("../state/browse/archiveCard") as typeof import("../state/browse/archiveCard");
 const { countDrawnMenuAction } = require("../state/browse/menuCounts") as typeof import("../state/browse/menuCounts");
 const browse = require("../state/browse/store") as typeof import("../state/browse/store");
+const library = require("../state/library/store") as typeof import("../state/library/store");
 const settingsNav = require("../state/settings/nav") as typeof import("../state/settings/nav");
 const syncActions = require("../state/sync/actions") as typeof import("../state/sync/actions");
 const syncHooks = require("../state/sync/hooks") as typeof import("../state/sync/hooks");
@@ -149,25 +150,42 @@ nativeTest("a pinned tab reads Pinned to Mac, disabled, and a tab that can't be 
   unmount(root);
 });
 
-nativeTest("the ··· menu is main's DeckMoreMenu on a tap, in fixed order, and Close All asks with the system's action sheet", async () => {
+nativeTest("the ··· menu is a tap menu in fixed order: Spaces, then History, Bookmarks and Downloads, then Settings, with no tab actions", () => {
   withSpaces([WORK]);
   jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
   const settings = jest.spyOn(settingsNav, "openSettings").mockImplementation(() => undefined);
-  const closeAll = jest.spyOn(browse, "closeAllFromDeck").mockImplementation(() => undefined);
   const root = deck();
   const more = menuAround(root, "More");
   expect(more.props.trigger).toBe("tap");
   expect(more.props.fixedOrder).toBe(true);
-  expect(titles(items(more))).toEqual(["Spaces", { "": ["New Incognito Tab", "Reopen Closed Tab", "Close All Tabs"] }, { "": ["Settings"] }]);
-  expect(itemOf(items(more), "Close All Tabs")!.destructive).toBe(true);
+  expect(titles(items(more))).toEqual(["Spaces", { "": ["History", "Bookmarks", "Downloads"] }, { "": ["Settings"] }]);
+  expect(["History", "Bookmarks", "Downloads"].map((title) => itemOf(items(more), title)!.systemImage)).toEqual(["clock.arrow.circlepath", "star", "arrow.down.circle"]);
   choose(more, "Settings");
   expect(settings).toHaveBeenCalledTimes(1);
-  mockNative.answer = "confirm";
-  choose(more, "Close All Tabs");
-  await act(async () => undefined);
-  expect(mockNative.sheets[0]).toMatchObject({ title: "Close 3 Tabs?", message: "They’ll stay in your Archive.", actions: [{ id: "confirm", title: "Close All Tabs", destructive: true }, { cancel: true }] });
-  expect(closeAll).toHaveBeenCalledTimes(1);
   unmount(root);
+});
+
+nativeTest("the ··· menu's History, Bookmarks and Downloads open that Library section and count each, but not from the Incognito deck", () => {
+  const count = telemetry.countUsage as jest.Mock;
+  const deckCounts = () => count.mock.calls.map(([field]) => field as string).filter((field) => field.startsWith("deck_menu_"));
+  const root = deck();
+  const opened = ["History", "Bookmarks", "Downloads"].map((title) => {
+    choose(menuAround(root, "More"), title);
+    const { open, section } = library.useLibrary.getState();
+    act(() => library.useLibrary.setState({ open: false }));
+    return open ? section : null;
+  });
+  expect(opened).toEqual(["history", "bookmarks", "downloads"]);
+  expect(deckCounts()).toEqual(["deck_menu_history_opened", "deck_menu_bookmarks_opened", "deck_menu_downloads_opened"]);
+  unmount(root);
+  count.mockClear();
+  act(() => tabStore.useTabs.setState((state) => ({ ...state, privates: someTabs(1, true), incognito: true })));
+  const incognito = deck();
+  choose(menuAround(incognito, "More"), "Downloads");
+  expect(library.useLibrary.getState()).toMatchObject({ open: true, section: "downloads" });
+  expect(deckCounts()).toEqual([]);
+  act(() => library.useLibrary.setState({ open: false }));
+  unmount(incognito);
 });
 
 nativeTest("the space switcher lists the spaces with a check on the current one and their symbols, and picking one switches", () => {
@@ -217,21 +235,36 @@ nativeTest("holding the Incognito switch offers Close Incognito Tabs, which asks
   unmount(root);
 });
 
-nativeTest("the plus keeps its tap and its long press is main's PlusButton menu", () => {
+nativeTest("the plus keeps its tap and its long press offers New Incognito Tab, Reopen Closed Tab and, set apart, Close All Tabs, which asks with the system's action sheet", async () => {
   jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
   const opened = jest.spyOn(browse, "newTab").mockImplementation(() => undefined);
   const incognito = jest.spyOn(browse, "newIncognitoTab").mockImplementation(() => undefined);
   const reopen = jest.spyOn(browse, "reopenLastClosed").mockImplementation(() => undefined);
+  const closeAll = jest.spyOn(browse, "closeAllFromDeck").mockImplementation(() => undefined);
   const root = deck();
   const plus = menuAround(root, "New Tab");
   expect(plus.props.trigger).toBe("longPress");
-  expect(titles(items(plus))).toEqual(["New Incognito Tab", "Reopen Closed Tab"]);
+  expect(titles(items(plus))).toEqual(["New Incognito Tab", "Reopen Closed Tab", { "": ["Close All Tabs"] }]);
+  expect(itemOf(items(plus), "Close All Tabs")).toMatchObject({ destructive: true, systemImage: "xmark" });
   act(() => plus.findAll((node) => node.props.accessibilityLabel === "New Tab" && typeof node.props.onPress === "function")[0]!.props.onPress());
   expect(opened).toHaveBeenCalledTimes(1);
   choose(plus, "New Incognito Tab");
   choose(plus, "Reopen Closed Tab");
   expect(incognito).toHaveBeenCalledTimes(1);
   expect(reopen).toHaveBeenCalledTimes(1);
+  mockNative.answer = "confirm";
+  choose(plus, "Close All Tabs");
+  await act(async () => undefined);
+  expect(mockNative.sheets[0]).toMatchObject({ title: "Close 3 Tabs?", message: "They’ll stay in your Archive.", actions: [{ id: "confirm", title: "Close All Tabs", destructive: true }, { cancel: true }] });
+  expect(closeAll).toHaveBeenCalledTimes(1);
+  unmount(root);
+});
+
+nativeTest("with no tabs the plus's long press has nothing to close, so it offers no Close All Tabs", () => {
+  jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
+  act(() => tabStore.useTabs.setState({ ...launchTabs([], 0), incognito: false, listing: 0 }));
+  const root = deck();
+  expect(titles(items(menuAround(root, "New Tab")))).toEqual(["New Incognito Tab", "Reopen Closed Tab"]);
   unmount(root);
 });
 
@@ -254,7 +287,7 @@ drawnTest("on Android the ··· menu's rows sit one after another at one row he
   jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(false);
   const root = deck();
   press(root, "More");
-  expect(menuitems(root)).toEqual(["New Incognito Tab", "Close All Tabs", "Settings"]);
+  expect(menuitems(root)).toEqual(["History", "Bookmarks", "Downloads", "Settings"]);
   expectEvenRows(root);
   unmount(root);
 });
@@ -286,14 +319,24 @@ drawnTest("on Android a deck card's long press opens main's CardMenu drawn at th
   unmount(root);
 });
 
-drawnTest("on Android the ··· menu is drawn with main's items, and Close All asks in the drawn action sheet before it closes anything", () => {
+drawnTest("on Android the ··· menu is drawn with Spaces, History, Bookmarks, Downloads and Settings, and its History opens the Library", () => {
   withSpaces([WORK]);
   jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
-  const closeAll = jest.spyOn(browse, "closeAllFromDeck").mockImplementation(() => undefined);
   const root = deck();
   press(root, "More");
-  expect(menuitems(root)).toEqual(["Spaces", "New Incognito Tab", "Reopen Closed Tab", "Close All Tabs", "Settings"]);
+  expect(menuitems(root)).toEqual(["Spaces", "History", "Bookmarks", "Downloads", "Settings"]);
   expectEvenRows(root);
+  pick(root, "History");
+  expect(library.useLibrary.getState()).toMatchObject({ open: true, section: "history" });
+  expect((telemetry.countUsage as jest.Mock).mock.calls.map(([field]) => field)).toContain("deck_menu_history_opened");
+  act(() => library.useLibrary.setState({ open: false }));
+  unmount(root);
+});
+
+drawnTest("on Android Close All Tabs from holding the plus asks in the drawn action sheet before it closes anything", () => {
+  const closeAll = jest.spyOn(browse, "closeAllFromDeck").mockImplementation(() => undefined);
+  const root = deck();
+  act(() => root.root.findAll((node) => node.props.accessibilityLabel === "New Tab" && typeof node.props.onLongPress === "function")[0]!.props.onLongPress({ nativeEvent: { pageX: 340, pageY: 820 } }));
   pick(root, "Close All Tabs");
   expect(mockNative.sheets).toHaveLength(0);
   expect(closeAll).not.toHaveBeenCalled();
@@ -375,7 +418,7 @@ drawnTest("on Android holding the plus opens main's PlusButton menu at the finge
   const menu = root.root.findAll((node) => node.type === FloatingMenu)[0]!;
   expect(menu.props.at).toEqual({ x: 340, y: 820 });
   expect(menu.props.dimmed).toBe(true);
-  expect((menu.props.items as { label: string }[]).map((item) => item.label)).toEqual(["New Incognito Tab", "Reopen Closed Tab"]);
+  expect((menu.props.items as ("divider" | { label: string })[]).map((item) => (item === "divider" ? "—" : item.label))).toEqual(["New Incognito Tab", "Reopen Closed Tab", "—", "Close All Tabs"]);
   unmount(root);
 });
 

@@ -221,6 +221,11 @@ export function hasPlayer(m: Pick<Store, "sessions" | "dismissed">, tabId: strin
   return !!session && session.controllable && !m.dismissed[tabId] && !!session.playedAt && session.playbackState !== "none";
 }
 
+export const isMiniPlayerCandidate = (session: Session | undefined): session is Session =>
+  !!session && session.controllable && session.playbackState !== "none" && !!(session.title || session.artwork);
+
+export const showsMiniPlayer = (session: Session | undefined): boolean => isMiniPlayerCandidate(session) && !!session.playedAt;
+
 function isHiddenPlayerTab(s: BrowserState, tabId: string): boolean {
   const tab = s.tabs[tabId];
   const w = tab && s.windows[tab.windowId];
@@ -358,4 +363,10 @@ export function usePinnedWithMediaControls(tabId: string | undefined): boolean {
   const byTab = useKeyed(watchTabRecord, tabId, read);
   const bySetting = useKeyed(watchSettings, tabId == null ? null : ALL, read);
   return byTab && bySetting;
+}
+
+export function useShowsMiniPlayer(tabId: string | undefined): boolean {
+  const pinned = usePinnedWithMediaControls(tabId);
+  const shows = useMedia((m) => showsMiniPlayer(tabId ? m.sessions[tabId] : undefined));
+  return pinned && shows;
 }

@@ -17,6 +17,7 @@ import { PanelBox } from "./PanelBox";
 import { BAR, PANEL_TEXT_LEFT } from "./tokens";
 import { cancelPanel, closePanelToHeroBar, type BarDismissal } from "../../state/omnibox/barState";
 import { closeBlankLittleArdiaOnEscape } from "../../state/littleArdia/actions";
+import { closeEmptySplitPaneOnEscape } from "../../state/splits/actions";
 import { insecureLevel, urlTextLeft } from "../toolbar/Toolbar";
 import { useToolbarRow } from "../toolbar/useToolbarRow";
 import { compactLift } from "../../lib/toolbarRow";
@@ -58,7 +59,7 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
   const room = (left: number, top: number, fallback: number) => (windowWidth > 0 ? windowWidth - left - trailingClearance(top, WINDOW_MARGIN, controlsBottom) : fallback);
   const onCancel = () => cancelPanel(windowId);
   const onDone = (reason?: BarDismissal) => {
-    if (reason !== "escape" || !closeBlankLittleArdiaOnEscape(windowId)) closePanelToHeroBar(windowId, activeId, reason);
+    if (reason !== "escape" || !(closeBlankLittleArdiaOnEscape(windowId) || closeEmptySplitPaneOnEscape(activeId))) closePanelToHeroBar(windowId, activeId, reason);
   };
   const surface = (radius: number) => panelSurface(theme, radius);
 

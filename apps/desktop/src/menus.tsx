@@ -23,7 +23,13 @@ let open: OpenMenu | null = null;
 export const menuShown = () => open !== null;
 export const shownMenu = () => open && { items: open.items, x: open.x, y: open.y };
 
-export const hasSymbolColumn = (items: readonly MenuItem[]) => items.some((item) => !("separator" in item) && !!item.symbol);
+export const hasSymbolColumn = (items: readonly MenuItem[]) => items.some((item) => !("separator" in item) && (!!item.symbol || !!item.swatch));
+const CLEAR_HEX = /^#(?:[0-9a-f]{3}0|[0-9a-f]{6}00)$/i;
+export function menuSwatch(item: MenuItem, dark: boolean): { fill: string | null } | null {
+  if ("separator" in item || !item.swatch) return null;
+  const color = dark && item.swatchDark ? item.swatchDark : item.swatch;
+  return { fill: CLEAR_HEX.test(color) || color === "transparent" ? null : color };
+}
 const watchers = new Set<() => void>();
 export const watchMenus = (watcher: () => void) => {
   watchers.add(watcher);
@@ -153,6 +159,7 @@ function MenuList({ items, anchor }: { items: MenuItem[]; anchor: MenuAnchor }) 
         const next = items[i + 1];
         if (item.alternate ? !alternateShown(items[i - 1], item, modifiers) : next && "id" in next && next.alternate && alternateShown(item, next, modifiers)) return null;
         const enabled = item.enabled !== false;
+        const swatch = item.symbol ? null : menuSwatch(item, dark);
         return (
           <div
             key={item.id + i}
@@ -161,8 +168,11 @@ function MenuList({ items, anchor }: { items: MenuItem[]; anchor: MenuAnchor }) 
             onClick={() => enabled && !item.children && pickMenuItem(item.id, item.keepOpen)}
           >
             <span className="ardia-menu-check">{item.checked ? "✓" : ""}</span>
-            {item.symbol ? <Symbol name={item.symbol} size={12} color="currentColor" style={{ width: 16, height: 16, marginRight: 6 }} /> : symbols && !item.swatch ? <span className="ardia-menu-symbol-gap" style={{ width: 16, marginRight: 6, flex: "none" }} /> : null}
-            {item.swatch ? <span className="ardia-menu-swatch" style={{ background: item.swatch }} /> : null}
+            {item.symbol ? <Symbol name={item.symbol} size={12} color="currentColor" style={{ width: 16, height: 16, marginRight: 6 }} /> : swatch ? (
+              <span className="ardia-menu-swatch-cell">
+                <span className={`ardia-menu-swatch${swatch.fill ? "" : " empty"}`} style={swatch.fill ? { background: swatch.fill } : undefined} />
+              </span>
+            ) : symbols ? <span className="ardia-menu-symbol-gap" style={{ width: 16, marginRight: 6, flex: "none" }} /> : null}
             <span className="ardia-menu-title">{item.title}</span>
             <span className="ardia-menu-key">{item.children ? "›" : item.key ? formatShortcut({ key: item.key, modifiers: item.modifiers ?? [] }) : ""}</span>
             {sub && sameItem(sub.item, item) && item.children ? <MenuList items={item.children} anchor={{ row: sub.row }} /> : null}
@@ -174,6 +184,15 @@ function MenuList({ items, anchor }: { items: MenuItem[]; anchor: MenuAnchor }) 
   );
 }
 
+export function claimMenuEscape(e: Pick<KeyboardEvent, "key" | "preventDefault" | "stopPropagation" | "stopImmediatePropagation">, closeMenu: () => void): boolean {
+  if (e.key !== "Escape") return false;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  e.stopPropagation();
+  closeMenu();
+  return true;
+}
+
 export function MenuHost() {
   const menu = useSyncExternalStore(
     watchMenus,
@@ -182,17 +201,12 @@ export function MenuHost() {
   useEffect(() => {
     if (!menu) return;
     const outside = () => close(null);
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      close(null);
-    };
+    const key = (e: KeyboardEvent) => claimMenuEscape(e, () => close(null));
     document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", key);
+    window.addEventListener("keydown", key, true);
     return () => {
       document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", key);
+      window.removeEventListener("keydown", key, true);
     };
   }, [menu]);
   return menu ? <MenuList items={menu.items} anchor={{ x: menu.x, y: menu.y }} /> : null;

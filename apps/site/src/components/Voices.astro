@@ -12,6 +12,7 @@ import mkbhd from "../assets/voices/mkbhd.jpg";
 import pablopunk from "../assets/voices/pablopunk.jpg";
 import sprice from "../assets/voices/sprice.jpg";
 import thaetos from "../assets/voices/thaetos.png";
+import theo from "../assets/voices/theo.jpg";
 
 const avatars: Record<string, ImageMetadata> = {
   andywang,
@@ -24,6 +25,7 @@ const avatars: Record<string, ImageMetadata> = {
   pablopunk,
   sprice,
   thaetos,
+  theo,
 };
 
 const initials = (name: string) =>
@@ -122,6 +124,10 @@ const groups = [
     gap: clamp(24px, 2.6vw, 34px) clamp(24px, 3vw, 36px);
     margin-top: clamp(32px, 3.6vw, 48px);
     align-items: stretch;
+  }
+
+  .rest .quote:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .quote {

@@ -1,5 +1,5 @@
 import { pagerState, selectPager, stepPager, switchPager, type NativePagerConfig, type PagerSnapshot, type PagerStateEvent, type SwipeEvent } from "../../platform/pager";
-import { notePagerRestSeenByWatch, notePagerSettle, notePagerSwitchAfterRest } from "../telemetry/pagerCounts";
+import { notePagerRestSeenByWatch, notePagerSettle, notePagerSettleFrames, notePagerSwitchAfterRest } from "../telemetry/pagerCounts";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { useEffect, useLayoutEffect, useMemo } from "react";
 import { Animated, unstable_batchedUpdates } from "react-native";
@@ -47,6 +47,8 @@ class ProfilePager {
   private holdWatch: ReturnType<typeof setInterval> | null = null;
   private idleOffTarget = 0;
   private holdConsent: ConsentToken | null = null;
+  private motionConsent = new Map<number, ConsentToken | null>();
+  private motionsStarted = 0;
 
   readonly windowId: string;
 
@@ -55,6 +57,23 @@ class ProfilePager {
     this.pos = new Animated.Value(Math.max(0, this.index()), { useNativeDriver: true });
     this.state.setState({ pages: this.warmPages() });
     this.unsubscribe = watchesWindow ? this.watchWindow(windowId) : () => {};
+  }
+
+  private noteMotionFrames(event: PagerStateEvent) {
+    const motion = event.motion;
+    if (typeof motion !== "number") return;
+    if (event.phase !== "settled") {
+      if (motion <= this.motionsStarted) return;
+      const previous = this.motionsStarted;
+      this.motionsStarted = motion;
+      for (const id of this.motionConsent.keys()) if (id !== previous) this.motionConsent.delete(id);
+      this.motionConsent.set(motion, consentToken());
+      return;
+    }
+    if (!this.motionConsent.has(motion)) return;
+    const consent = this.motionConsent.get(motion) ?? null;
+    this.motionConsent.delete(motion);
+    notePagerSettleFrames(event, consent);
   }
 
   private watchWindow(windowId: string) {
@@ -77,6 +96,7 @@ class ProfilePager {
   }
 
   readonly onNativeState = (event: PagerStateEvent) => {
+    this.noteMotionFrames(event);
     const snapshot = pagerState(this.windowId);
     this.noteMotion(snapshot ? !atRest(snapshot) : event.phase !== "settled");
     if (this.external) return;

@@ -12,9 +12,9 @@ type Temper = "villager" | "cow" | "sheep" | "chicken" | "zombie" | "skeleton" |
 type Act = "rest" | "graze" | "peck" | "flap" | "look" | "stare" | "blink" | "freeze";
 
 const STILL = 0;
-const HEAD = 1;
-const LEG_A = 2;
-const LEG_B = 3;
+export const HEAD = 1;
+export const LEG_A = 2;
+export const LEG_B = 3;
 const ARM_A = 4;
 const ARM_B = 5;
 const SPIDER_LEG = 6;
@@ -269,7 +269,7 @@ const SPIDER = kind({
   ],
 });
 
-const CREEPER = kind({
+export const CREEPER = kind({
   temper: "creeper",
   night: true,
   scale: 1,
@@ -400,7 +400,7 @@ function valueNoise(x: number, y: number) {
   return (a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy) * 2 - 1;
 }
 
-function meadowHeight(x: number, z: number) {
+export function meadowHeight(x: number, z: number) {
   const near = 0.16 * valueNoise(x * 0.09, z * 0.09) + 0.07 * valueNoise(x * 0.33 + 7, z * 0.33 + 7);
   const far = smooth(30, 360, z);
   return near + far * (6 + 8 * valueNoise(x * 0.004 + 3, z * 0.004 + 3) + 2.5 * valueNoise(x * 0.018 + 1.3, z * 0.018 + 1.3));

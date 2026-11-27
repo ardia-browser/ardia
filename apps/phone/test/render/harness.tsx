@@ -40,6 +40,12 @@ export function updateSurface(root: ReactTestRenderer, node: ReactNode) {
   act(() => root.update(surface(node)));
 }
 
+export function layOutDeckControls(root: ReactTestRenderer) {
+  const targets = root.root.findAll((node) => typeof node.type === "string" && typeof node.props.testID === "string" && node.props.testID.startsWith("deckHit-"));
+  targets.forEach((node, at) => act(() => node.props.onLayout({ nativeEvent: { layout: { x: 16 + at * 60, y: 0, width: 44, height: 44 } } })));
+  act(() => jest.advanceTimersByTime(16));
+}
+
 export function unmount(root: ReactTestRenderer) {
   act(() => root.unmount());
 }

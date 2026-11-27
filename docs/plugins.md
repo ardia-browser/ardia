@@ -138,7 +138,9 @@ is the only source of which version may be fetched.
     so Gatekeeper never asks to notarize them.
   - unpacks only after the SHA-256 matched, into a private folder (`.stage-*`, mode 0700) inside Ardia's data folder,
     then publishes it with a same-volume rename under a per-plugin lock as `OfficialPlugins/<name>/<sha256>/`, sealed
-    read-only (folders 0555, files 0555 or 0444), and keeps the download beside it as `<sha256>.tar.gz` (0444). Program
+    read-only (folders 0555, files 0555 or 0444) once it is there, and keeps the download beside it as `<sha256>.tar.gz`
+    (0444). It is sealed after the rename, not before: macOS 15 and macOS 26 up to 26.3 refuse to rename a folder you
+    can't write to (#3683), and nothing trusts the copy until its fresh check passes under the same lock. Program
     copies in `Programs/<name>/<version>/` are sealed the same way once they verify, except their top folder, where
     Ardia keeps its leases and after-update marks; removing either unseals it first.
 - **What makes a copy official.** A copy counts only while its download still has a SHA-256 the signed app vouches
@@ -758,9 +760,23 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   comes first on PATH.
 - **Whose link.** A name that's free is linked without replacing anything, so two Ardias racing for it can't both
   win; all of this happens under one lock for the bin folder (`Programs/.bin.lock`). Ardia replaces only a link that
-  already points into that plugin's store, or, for a registry legacy install's owner only, into that old home (below). A file, or a link to
+  already points into that plugin's store, or, for a registry legacy install's owner only, into that old home (below).
+  It also replaces a link it made itself that leads nowhere now (the target is missing, `ENOENT` or `ENOTDIR`; a target
+  it can't check isn't taken for gone): one into its own store in the exact shape it makes,
+  `<store>/<plugin>/current/<path>` with no `.`, `..` or empty parts, and the old installer's exact
+  `<old home>/current/bin/<program>` when that old home has nothing to adopt. A link that resolves, from the bin
+  folder, to the very file it would link (same device and inode) is reused too. A file, or a link to
   anywhere else, is left alone and the plugin's page says so ("~/.local/bin/ardia is someone else's; remove it to use
   this one"); a link into another plugin's store names that plugin. Two plugins that are on never share a command.
+- **A linked bin folder.** `~/.local/bin` may itself be a symlink (a dotfiles repo often makes it one). Ardia resolves
+  it one step at a time through open folders (`PluginCore/PluginBinFolder.swift`), splitting on the `/` byte so no
+  name can hide a folder from the check, and makes a missing folder of the path itself with `mkdirat` under one already
+  checked (never one a symlink points to): every folder it passes through must
+  be yours or root's and closed to other users (sticky folders like `/tmp` excepted), every symlink on the way yours or
+  root's, at most 32 of them, and the folder it ends in yours with no group or world write, sticky or not. The links
+  go into that folder through its open descriptor (`symlinkat`, `renameat`, `unlinkat`; closed on exec), so nothing
+  re-walks the path,
+  and the symlink stays as it was. Anything else is refused, never replaced.
 - **Leases.** A program that wants its version kept while it runs writes `<its version folder>/.leases/<pid>` at start
   and removes it at exit (the folder above `bin/`; the `ardia` command does). A lease counts
   while that process runs and started no later than the lease's modification time, so a reused process id pins
@@ -1256,7 +1272,9 @@ in the local copy. Hourly `usage_counts`:
 
 - v1: `plugin_enables`, `plugin_disables`, `plugin_process_starts`, `plugin_process_crashes`, `plugin_commands_run`,
   `plugin_tool_calls`, `plugin_tool_failures`, `plugin_page_opens`, `plugin_split_opens`, `program_links`,
-  `program_link_failures` (a link refused, a name taken or the copy failed), `program_unlinks`, `program_adoptions`
+  `program_link_failures` (a link refused, a name taken or the copy failed), each refused program also counted once by
+  why in `program_link_cause_<cause>` (`bin_folder`, `bin_shared`, `taken`, `other_plugin`, `shadowed`, `busy`, `io`,
+  `name`, or `other` for a whole-call failure), `program_unlinks`, `program_adoptions`
   (an old `ardia` install's home taken over), `plugin_adoptions`, `plugin_adoptions_waiting`,
   `program_after_update_quit_exits` and `program_after_update_quit_kills` (a built-in plugin's `afterUpdate` command
   still running at quit whose whole process group left on TERM, or was killed after the 1 s grace; tallied natively

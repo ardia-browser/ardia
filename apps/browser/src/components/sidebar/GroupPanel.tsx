@@ -7,7 +7,7 @@ import { useGroup } from "../../state/browser/hooks";
 import { sharedTabsForPanel } from "../../state/sidebar/current";
 import { useGroupPanelTabIds, useTabsById } from "../../state/sidebar/hooks";
 import type { Tab } from "../../state/browser/types";
-import { MenuRow, MenuSeparator, PANEL, PopoverSurface, SearchField, Text } from "../ui";
+import { MenuRow, MenuSeparator, PANEL, popoverFieldSurface, PopoverSurface, SearchField, Text } from "../ui";
 import { clickTab, returnFocusToPage } from "../../state/sidebar/actions";
 import { byRecentUse, matchingRows, type GroupPanelTab } from "../../state/sidebar/groupPanelRows";
 import { dismissHover, holdHover } from "../../state/sidebar/hover";
@@ -131,6 +131,7 @@ export function GroupPanel({ groupId, windowId, anchor, windowHeight }: { groupI
       <View style={SEARCH_FIELD_ROW}>
         <SearchField
           look="bare"
+          surface={popoverFieldSurface}
           inputRef={field}
           value={query}
           onChangeText={(text) => {

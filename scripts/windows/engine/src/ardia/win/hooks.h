@@ -39,6 +39,8 @@ class Origin;
 
 extern bool g_ardia_win_hosts_normal_windows;
 
+extern bool g_ardia_win_shell_frame;
+
 extern std::unique_ptr<BrowserFrameView> (*g_ardia_win_frame_view)(
     BrowserWidget* widget,
     BrowserView* browser_view);

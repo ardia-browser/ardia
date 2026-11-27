@@ -3,6 +3,7 @@ import type { ArdiaHost } from "./host";
 import { callHost, reportHostError } from "./host.ts";
 import { hostFiles } from "./hostFiles.ts";
 import { showToast } from "../../browser/src/state/app/toasts";
+import { seedRunningDownloads } from "../../browser/src/state/telemetry/downloadWork";
 
 const DOWNLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATES = new Set(["downloading", "finished", "failed", "cancelled"]);
@@ -107,6 +108,7 @@ export function startHostDownloads(host: ArdiaHost, store: DownloadStore) {
     .then((reply) => {
       const plan = planDownloadSnapshot(store.getState().downloads, JSON.parse(reply), removedWhileListing, DOWNLOAD_LIMIT, original !== null);
       if (plan.downloads) {
+        seedRunningDownloads(plan.added);
         for (const d of plan.added) expectFinished(d);
         const fresh = new Set(plan.added.map((d) => d.id));
         store.setState({ downloads: plan.downloads.map((d) => (fresh.has(d.id) ? { ...d, profile: SNAPSHOT_PROFILE } : d)) });

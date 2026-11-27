@@ -54,7 +54,7 @@ bool SleepsOrCanSleep(content::WebContents* contents, bool sleep) {
   namespace policies = performance_manager::policies;
   using performance_manager::PerformanceManager;
   ardiacore::TabBridge* bridge = ardiacore::TabBridge::FromWebContents(contents);
-  if (bridge && bridge->closing_after_unload()) {
+  if (bridge && (bridge->closing_after_unload() || bridge->holds_leave_ask())) {
     return false;
   }
   if (contents->WasDiscarded()) {

@@ -3,6 +3,7 @@ import {
   createSuggestFetcher,
   engineById,
   findBang,
+  hasKnownScheme,
   prepareSuggestions,
   suggestRequestUrl,
   type RemoteSite,
@@ -11,7 +12,8 @@ import {
   type SuggestionResult,
 } from "@ardia/core";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { noteLateSuggestionsBelow, noteSiteSuggestionShown } from "../../state/telemetry/inlineCompletionCounts";
+import { noteInlineChance, noteLateSuggestionsBelow, noteSiteSuggestionShown } from "../../state/telemetry/inlineCompletionCounts";
+import { inlineChance } from "../../state/omnibox/inlineMiss";
 import { bookmarksByUrl } from "../../state/bookmarks/bookmarks";
 import { useMenuBarRevision } from "../../state/commands/commandShortcuts";
 import { useSettings } from "../../state/browser/hooks";
@@ -27,6 +29,9 @@ import { historyHosts } from "../../state/omnibox/knownHosts";
 import { useProviderSections } from "./useProviderSections";
 import { barFieldMarks } from "../../state/omnibox/barMarks";
 import { browserSuggestFetch, remoteSuggestionsAllowed, suggestProfileKey } from "../../state/omnibox/suggestTransport";
+import { suggestStoreFor } from "../../state/omnibox/suggestStore";
+import { consentNow } from "../../state/telemetry/client";
+import { noteSearchSuggest } from "../../state/telemetry/track";
 import { during } from "../../state/app/jobActivity";
 import { addsRows, answered, askedKey, remoteListFor, remoteSitesFor, type Remote } from "./lateRemote";
 
@@ -112,7 +117,15 @@ export function useSuggestions({
   drawnRemote.current = remote;
   const suggestProfile = suggestProfileKey(profileId);
   const remoteAllowed = remoteSuggestionsAllowed(profileId);
-  const fetcher = useMemo(() => createSuggestFetcher({ fetch: browserSuggestFetch(suggestProfile) }), [suggestProfile]);
+  const fetcher = useMemo(
+    () =>
+      createSuggestFetcher({
+        fetch: browserSuggestFetch(suggestProfile),
+        store: suggestStoreFor(suggestProfile),
+        onThrottled: () => noteSearchSuggest("throttled", consentNow()),
+      }),
+    [suggestProfile],
+  );
   useEffect(() => {
     setRemote({ text: "", engine: "", list: [], sites: NO_SITES });
     return () => fetcher.cancel();
@@ -122,7 +135,7 @@ export function useSuggestions({
   const bangs = useBangs(active && !scope && query.includes("!"));
   const bang = useMemo(() => (bangs ? findBang(query, bangs) : null), [bangs, query]);
   const asked = query.replace(/^\?/, "").trim();
-  const remoteQuery = active && suggestionsOn && remoteAllowed && asked && !bang && !/^[a-z][a-z0-9+.-]*:\/\//i.test(asked) && scope?.kind !== "history" && scope?.kind !== "provider" && suggestRequestUrl(fromEngine, asked) ? asked : null;
+  const remoteQuery = active && suggestionsOn && remoteAllowed && asked && !bang && !hasKnownScheme(asked) && scope?.kind !== "history" && scope?.kind !== "provider" && suggestRequestUrl(fromEngine, asked) ? asked : null;
   const sitesShown = !scope;
   const asking = remoteQuery === null ? "" : `${suggestProfile}\n${sitesShown}\n${fromEngine.id}\n${query}`;
   if (attempts.current.asking !== asking) attempts.current = { asking, count: attempts.current.count + 1 };
@@ -133,8 +146,12 @@ export function useSuggestions({
       return;
     }
     const key = attempt;
-    const gaveUp = () => setRemote((r) => (r.gaveUp === key ? r : { ...r, gaveUp: key }));
-    const patience = setTimeout(gaveUp, REMOTE_PATIENCE_MS);
+    let patience: ReturnType<typeof setTimeout> | undefined;
+    const gaveUp = () => {
+      clearTimeout(patience);
+      setRemote((r) => (r.gaveUp === key ? r : { ...r, gaveUp: key }));
+    };
+    patience = setTimeout(gaveUp, REMOTE_PATIENCE_MS);
     fetcher.request(
       fromEngine,
       remoteQuery,
@@ -181,5 +198,9 @@ export function useSuggestions({
   useEffect(() => {
     if (siteListed) noteSiteSuggestionShown();
   }, [siteListed, query]);
+  const chance = active && !scope ? inlineChance(query, result.completion, source.history, !!preventInline) : "none";
+  useEffect(() => {
+    if (chance !== "none") noteInlineChance(chance === "missed");
+  }, [chance, query]);
   return result;
 }

@@ -2,7 +2,8 @@ import { copyText } from "@ardia/shell";
 import { activeTabId } from "../../browser/src/state/browser/model";
 import { useBrowser } from "../../browser/src/state/browser/store";
 import { webviews } from "../../browser/src/platform/webviews";
-import { reportHostError } from "./host";
+import { ardiaHost, reportHostError } from "./host";
+import { loadShareServices } from "./hostShare";
 import { setShareSurface } from "./linkShare";
 import { showMenu } from "./menus";
 
@@ -17,3 +18,4 @@ const openInActivePage = (url: string, windowId: string | null) => {
 };
 
 setShareSurface({ menu: (items, at) => showMenu(items, undefined, at), copy: copyText, openInActivePage });
+loadShareServices(ardiaHost);

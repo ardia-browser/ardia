@@ -18,6 +18,7 @@ protocol PageTab: NSView {
   var contentsBackgroundColor: NSColor? { get set }
   var shownURL: String? { get set }
   var autoPictureInPicture: Bool { get set }
+  var pageMenuItems: [[String: String]] { get set }
   var frozen: Bool { get set }
   var mediaCaptureSourceId: String? { get }
 
@@ -69,4 +70,6 @@ protocol PageTab: NSView {
   func resolveUnresponsive(terminate: Bool)
   func discard(unload: Bool) -> String
   func sleepIfHidden(for seconds: Double) -> [NSNumber]
+  func sleepIfUnused(for seconds: Double) -> [NSNumber]
+  func wakeIfSleeping() -> Bool
 }

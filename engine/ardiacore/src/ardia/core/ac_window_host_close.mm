@@ -12,9 +12,11 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/browser_window/public/desktop_browser_window_capabilities.h"
 #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/unload_controller.h"
 #include "ardia/core/ac_browser_internal.h"
 #include "ardia/core/ac_browser_window.h"
+#include "ardia/core/ac_lifetime.h"
 #import "ardia/core/ardiacore_internal.h"
 #include "ui/views/widget/widget.h"
 
@@ -31,6 +33,45 @@ void WindowHost::CloseRequestedByUser() {
     return;
   }
   Close();
+}
+
+bool WindowHost::HasTabAskingBeforeLeaving() const {
+  for (Browser* browser : browsers()) {
+    TabStripModel* tabs = browser->tab_strip_model();
+    for (int i = 0; i < tabs->count(); ++i) {
+      TabBridge* bridge = TabBridge::FromWebContents(tabs->GetWebContentsAt(i));
+      if (bridge && bridge->asking_before_leaving()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool WindowHost::AnyTabAskingBeforeLeaving() {
+  for (WindowHost* host : All()) {
+    if (host->HasTabAskingBeforeLeaving()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void WindowHost::ResumeClosesAfterLeaveAsk() {
+  if (browser_shutdown::IsTryingToQuit() || IsQuitting()) {
+    return;
+  }
+  std::vector<base::WeakPtr<WindowHost>> waiting;
+  for (WindowHost* host : All()) {
+    if (host->waiting_for_leave_ask_) {
+      waiting.push_back(host->GetWeakPtr());
+    }
+  }
+  for (const base::WeakPtr<WindowHost>& host : waiting) {
+    if (host && std::exchange(host->waiting_for_leave_ask_, false)) {
+      host->ContinueClose();
+    }
+  }
 }
 
 void WindowHost::Close() {
@@ -54,6 +95,10 @@ void WindowHost::ContinueClose() {
     return;
   }
   asking_ = nullptr;
+  if (HasTabAskingBeforeLeaving()) {
+    waiting_for_leave_ask_ = true;
+    return;
+  }
   for (Browser* browser : browsers()) {
     if (UnloadController::From(browser)->RunBeforeUnloadForShutdown(
             false,
@@ -98,6 +143,7 @@ void WindowHost::OnBeforeUnloadAnswered(bool proceed) {
 void WindowHost::CancelClose() {
   close_state_ = CloseState::kOpen;
   asking_ = nullptr;
+  waiting_for_leave_ask_ = false;
   ++close_attempt_;
   for (Browser* browser : browsers()) {
     UnloadController::From(browser)->ResetBeforeUnloadForShutdown();
@@ -270,6 +316,7 @@ void WindowHost::QuitCancelled() {
   if (close_state_ == CloseState::kAsking) {
     close_state_ = CloseState::kOpen;
     asking_ = nullptr;
+    waiting_for_leave_ask_ = false;
     ++close_attempt_;
     for (Browser* browser : browsers()) {
       UnloadController::From(browser)->ResetBeforeUnloadForShutdown();

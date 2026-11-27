@@ -128,6 +128,8 @@ test("a tab closed while its creating save is in flight stays closed after a pee
 
 test("a tab closed while its creating save is in flight stays closed after a peer update, when the close is flushed behind that save", () => withBrowserEvents(() => closeAfterPeerUpdate(true)));
 
+const row = (id) => ({ id, windowId: "w", profileId: "p", url: `https://${id}.test/` });
+
 function deferredHost() {
   const jobs = [];
   return { jobs, invoke: (_method, pair) => new Promise((resolve) => jobs.push({ pair: cloneSessionValue(pair), resolve })) };
@@ -135,17 +137,17 @@ function deferredHost() {
 
 test("a save queued behind an in-flight one is rebased when the reply shows a peer write it never saw", async () => {
   const host = deferredHost();
-  const B0 = { tabs: { x: { id: "x" } } };
+  const B0 = { tabs: { x: row("x") } };
   const writer = createSessionWriter(host, B0);
-  const S1 = { tabs: { x: { id: "x" }, T: { id: "T" } } };
+  const S1 = { tabs: { x: row("x"), T: row("T") } };
   writer.queue(S1);
   void writer.flush();
   await tick();
   assert.equal(host.jobs.length, 1);
-  const peer = { tabs: { x: { id: "x" }, y: { id: "y" } } };
+  const peer = { tabs: { x: row("x"), y: row("y") } };
   writer.acceptCanonical(peer);
-  writer.reconcile({ tabs: { x: { id: "x" }, y: { id: "y" }, T: { id: "T" } } }, true);
-  writer.queue({ tabs: { x: { id: "x" }, y: { id: "y" } } });
+  writer.reconcile({ tabs: { x: row("x"), y: row("y"), T: row("T") } }, true);
+  writer.queue({ tabs: { x: row("x"), y: row("y") } });
   const drained = writer.drain();
   let file = mergeSession(B0, S1, peer);
   host.jobs.shift().resolve(cloneSessionValue(file));
@@ -161,13 +163,13 @@ test("a save queued behind an in-flight one is rebased when the reply shows a pe
 
 test("a save queued behind an in-flight one is rebased on the reply when nothing reconciles it", async () => {
   const host = deferredHost();
-  const B0 = { tabs: { x: { id: "x" } } };
+  const B0 = { tabs: { x: row("x") } };
   const writer = createSessionWriter(host, B0);
-  const S1 = { tabs: { x: { id: "x" }, T: { id: "T" } } };
+  const S1 = { tabs: { x: row("x"), T: row("T") } };
   writer.queue(S1);
   void writer.flush();
   await tick();
-  writer.queue({ tabs: { x: { id: "x" } } });
+  writer.queue({ tabs: { x: row("x") } });
   const drained = writer.drain();
   let file = mergeSession(B0, S1, B0);
   host.jobs.shift().resolve(cloneSessionValue(file));
@@ -181,12 +183,12 @@ test("a save queued behind an in-flight one is rebased on the reply when nothing
 
 test("the final save sent while another is in flight is based on that save, so a tab closed just before quitting stays closed", async () => {
   const host = deferredHost();
-  const B0 = { tabs: { x: { id: "x" } } };
+  const B0 = { tabs: { x: row("x") } };
   const writer = createSessionWriter(host, B0);
-  writer.queue({ tabs: { x: { id: "x" }, T: { id: "T" } } });
+  writer.queue({ tabs: { x: row("x"), T: row("T") } });
   void writer.flush();
   await tick();
-  writer.queue({ tabs: { x: { id: "x" }, z: { id: "z" } } });
+  writer.queue({ tabs: { x: row("x"), z: row("z") } });
   void writer.flushFinal();
   assert.equal(host.jobs.length, 2);
   let file = cloneSessionValue(B0);

@@ -7,6 +7,7 @@ import {
   screenRecordingAllowed,
   shareableTabs,
   shareTab,
+  splitSharePreviews,
   startSharePreviews,
   type DisplayMediaAudio,
   type DisplayMediaSource,
@@ -138,8 +139,9 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
       const counted = previewsCounted.current.has(shown) ? null : startSharePreviews(ids.length);
       previewsCounted.current.add(shown);
       void getDisplayMediaThumbnails(ids, THUMB_WIDTH)
-        .then((found) => {
-          counted?.found(ids.filter((id) => !found[id]).length);
+        .then((answer) => {
+          const { thumbs: found, blank, black } = splitSharePreviews(answer);
+          counted?.found(ids.filter((id) => !found[id]).length, blank, black);
           if (live) setThumbs((current) => ({ ...current, ...found }));
         })
         .catch(() => counted?.failed());

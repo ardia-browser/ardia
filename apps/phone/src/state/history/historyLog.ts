@@ -2,8 +2,10 @@ import type { SqlDatabase } from "../../lib/sqlDatabase.ts";
 import { isSyncableUrl } from "../tabs/tabModels.ts";
 import {
   deleteVisitsBefore,
+  deleteVisitsEverywhere,
   deleteVisitsFor,
   deleteVisitsSince,
+  distinctVisitUrls,
   insertVisit,
   maxVisitId,
   newestVisits,
@@ -23,6 +25,7 @@ export type HistoryLog = {
   pruneBefore(cutoff: number): void;
   clear(since: number | null): void;
   removeVisits(urls: readonly string[], profileSyncId: string | null): void;
+  forget(matches: (url: string) => boolean): number;
 };
 
 export function createHistoryLog(db: SqlDatabase): HistoryLog {
@@ -74,6 +77,13 @@ export function createHistoryLog(db: SqlDatabase): HistoryLog {
       if (!urls.length) return;
       deleteVisitsFor(db, urls, profileSyncId);
       bump();
+    },
+    forget(matches) {
+      const urls = distinctVisitUrls(db).filter(matches);
+      if (!urls.length) return 0;
+      deleteVisitsEverywhere(db, urls);
+      bump();
+      return urls.length;
     },
   };
 }

@@ -15,6 +15,7 @@ type DownloadsDismissal = {
   onInsidePress: () => void;
   close: () => void;
   menuShown: () => boolean;
+  opensItsOwnMenu?: (event: Event) => boolean;
   watchPageFocus: (listener: () => void) => () => void;
   activeElement: () => Pick<Element, "matches"> | null;
   now?: () => number;
@@ -41,10 +42,10 @@ function swallowRestOfPress(target: Target, pointerId: number | undefined, now: 
   for (const type of SWALLOWED) target.addEventListener(type, swallow, CAPTURE);
 }
 
-export function startDownloadsDismissal({ target, inside, onInsidePress, close, menuShown, watchPageFocus, activeElement, now = () => performance.now() }: DownloadsDismissal) {
+export function startDownloadsDismissal({ target, inside, onInsidePress, close, menuShown, opensItsOwnMenu, watchPageFocus, activeElement, now = () => performance.now() }: DownloadsDismissal) {
   const down = (event: Event) => {
     if (inside(event.target)) return onInsidePress();
-    if (menuShown()) return;
+    if (menuShown() || opensItsOwnMenu?.(event)) return;
     stopEvent(event);
     swallowRestOfPress(target, (event as PointerEvent).pointerId, now);
     close();

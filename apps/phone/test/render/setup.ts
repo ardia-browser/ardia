@@ -71,3 +71,5 @@ jest.mock("../../src/platform/database", () => {
 const PHONE_WINDOW = { width: 393, height: 873, scale: 3, fontScale: 1 };
 require("react-native").Dimensions.set({ window: PHONE_WINDOW, screen: PHONE_WINDOW });
 
+
+require("../../src/state/browse/tabSwitch").cutTabSwitches(false);

@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { Animated, PanResponder, type View } from "react-native";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
-import { perLook, radius } from "../ui";
+import { continuousCorners, perLook, radius } from "../ui";
 import { useClipped, type ClipSource } from "./EntryMotion";
 import { LANDING, markNow, noDragMarks, SOURCE, SPLIT_LEFT, SPLIT_RIGHT, watchMarks, type SplitHalfMark } from "../../state/sidebar/dragMarks";
 import { useKeyed } from "../../state/browser/keyedWatch";
@@ -17,7 +17,7 @@ import { dragGesture } from "./dragGesture";
 import { FoldedAway } from "./hoverController";
 import { useWindowId } from "../../state/browser/hooks";
 
-const dropGlowPlace = perLook(() => ({ left: 5, right: 5, top: 44, bottom: 6, borderRadius: radius.chrome }));
+const dropGlowPlace = perLook(() => ({ left: 5, right: 5, top: 44, bottom: 6, ...continuousCorners(radius.chrome) }));
 
 const DragContext = createContext<DragController | null>(null);
 const DragItemsContext = createContext<DragItems | null>(null);

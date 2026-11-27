@@ -5,6 +5,8 @@ import { StyleSheet, View, type ViewInstance } from "react-native";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
 import type { FrostVariant } from "@ardia/phone-native";
 import { browseLayout, capsule, LookGlass, PressInPlace, Symbol, tabsLayout, usesGlass, useTheme, type SymbolName } from "../ui";
+import { NoticeDot, dotBesideGlyph, withUpdateWords } from "../settings/UpdateDot";
+import { useUpdateDot } from "../../state/appUpdate/store";
 
 export type DeckBarFrost = { source: string; variant: FrostVariant; incognito?: boolean };
 
@@ -31,6 +33,7 @@ function PlainPlate({ cornerRadius, fill, style, children }: PlateProps) {
 export function DeckBar({ leading, plusLabel, frost, onPlus, onPlusMenu, onSettings, covered = false }: Props) {
   const Plate = covered ? PlainPlate : LookGlass;
   const theme = useTheme();
+  const updateDot = useUpdateDot();
   const plus = tabsLayout.barPlus;
   const glass = usesGlass();
   const sideSize = (name: SymbolName) => (glass ? (GLASS_GLYPHS[name] ?? GLASS_GLYPHS.gearshape) : FROST_ICONS.side);
@@ -72,12 +75,13 @@ export function DeckBar({ leading, plusLabel, frost, onPlus, onPlusMenu, onSetti
         </Plate>
       </PressInPlace>
       <View style={[styles.side, styles.end]}>
-        <PressInPlace label={destinationWords.settings} onPress={onSettings} onPressIn={haptics.barPress} style={styles.hit}>
+        <PressInPlace label={withUpdateWords(destinationWords.settings, updateDot)} onPress={onSettings} onPressIn={haptics.barPress} style={styles.hit}>
           <Plate {...frost} shape="circle" cornerRadius={circleRadius} fill={theme.deckControl} style={[styles.circle, edge]}>
             <View pointerEvents="none">
               <Symbol name="gearshape" size={sideSize("gearshape")} color={theme.secondaryLabel} />
             </View>
           </Plate>
+          {updateDot ? <NoticeDot style={dotBesideGlyph(browseLayout.hitTarget)} /> : null}
         </PressInPlace>
       </View>
     </View>

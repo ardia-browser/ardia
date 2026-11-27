@@ -10,6 +10,8 @@ export type PreviewId =
   | "newtabpos-bottom"
   | "newtabpos-top"
   | "newtabpos-next"
+  | "ctrltab-step"
+  | "ctrltab-switcher"
   | "tidy-keep"
   | "tidy-auto"
   | "quit-restore"
@@ -40,6 +42,8 @@ export const PREVIEW_IDS: readonly PreviewId[] = [
   "newtabpos-bottom",
   "newtabpos-top",
   "newtabpos-next",
+  "ctrltab-step",
+  "ctrltab-switcher",
   "tidy-keep",
   "tidy-auto",
   "quit-restore",

@@ -6,6 +6,30 @@ import { isIncognitoProfile } from "../browser/model";
 import type { AdoptId, SplitSlot, SplitView, Tab, TabPage, TabPin, TileFolder } from "../browser/types";
 
 type SavedPage = Extract<TabPage, { kind: "idle" | "asleep" }>;
+export const SESSION_ROWS = ["windows", "tabs", "groups", "splits"] as const;
+export const isOwnId = (v: unknown): v is string => isString(v) && !(v in Object.prototype);
+const LISTED_FROM_TABLES = Symbol("listedFromTables");
+const ROWS_MISFILED = Symbol("rowsMisfiled");
+const filedUnder = (key: string, row: unknown) => isFields(row) && row.id === key;
+const misfiledTable = (table: SavedObject) => Object.entries(table).some(([key, row]) => isFields(row) && !filedUnder(key, row));
+export const tableRows = (table: SavedObject): unknown[] => {
+  const entries = Object.entries(table);
+  const filed = new Set(entries.filter(([key, row]) => filedUnder(key, row)).map(([key]) => key));
+  return entries.filter(([key, row]) => filedUnder(key, row) || !(isFields(row) && isString(row.id) && filed.has(row.id))).map(([, row]) => row);
+};
+export const sessionRowsMisfiled = (doc: SavedObject) =>
+  (doc as { [ROWS_MISFILED]?: true })[ROWS_MISFILED] === true || SESSION_ROWS.some((key) => isFields(doc[key]) && misfiledTable(doc[key] as SavedObject));
+export const sessionRowTables = (doc: SavedObject) => (doc as { [LISTED_FROM_TABLES]?: true })[LISTED_FROM_TABLES] === true || SESSION_ROWS.some((key) => isFields(doc[key]));
+export const sessionRowLists = (doc: SavedObject) => SESSION_ROWS.some((key) => Array.isArray(doc[key]));
+export const sessionWithListedRows = (doc: SavedObject): SavedObject =>
+  SESSION_ROWS.some((key) => isFields(doc[key]))
+    ? {
+        ...doc,
+        ...Object.fromEntries(SESSION_ROWS.filter((key) => isFields(doc[key])).map((key) => [key, tableRows(doc[key] as SavedObject)])),
+        [LISTED_FROM_TABLES]: true,
+        ...(sessionRowsMisfiled(doc) ? { [ROWS_MISFILED]: true } : {}),
+      }
+    : doc;
 const isRestoreId = (v: unknown): v is AdoptId => isString(v) && isAdoptKind(v, "restore");
 const LEGACY_PAGE_FIELDS = ["navigation", "adoptId", "pageIn", "unloaded", "wakeAdoptId"];
 export const sessionWithTabPages = (doc: SavedObject): SavedObject => ({

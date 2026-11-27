@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { nightShadeDefaultChanged } from "../page/actions";
 import type { InterfaceStyleChoice, SchemeChoice } from "../../lib/appearance";
 import { appVersion } from "../../platform/appInfo";
 import { haptics } from "../app/haptics";
@@ -89,7 +90,10 @@ export const setArchiveInterval = (interval: AutoArchiveInterval) => setAutoArch
 export function setDefaultNightShade(mode: NightShadeMode) {
   setPreference("nightShade", mode);
   useEngines.setState({ nightShade: mode });
-  quietly(() => pages.setNightShade(mode, null, false));
+  quietly(async () => {
+    await pages.setNightShade(mode, null, false);
+    nightShadeDefaultChanged();
+  });
 }
 
 const withBlocking = (call: () => Promise<unknown>) =>

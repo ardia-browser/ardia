@@ -17,6 +17,7 @@ struct OfficialStore {
   static let staleSeconds = 3600
 
   let root: String
+  var moveFolder: (String, String) -> Int32 = { renamex_np($0, $1, UInt32(RENAME_EXCL)) }
 
   func pluginFolder(_ name: String) -> String { (root as NSString).appendingPathComponent(name) }
 
@@ -68,7 +69,7 @@ struct OfficialStore {
   }
 
   func publish(_ name: String, staged: String, archive: OfficialArchive.Snapshot, sha: String) -> Result<OfficialCopy, FolderRefusal> {
-    guard OfficialPin.isSha(sha), archive.sha == sha else { return .failure(FolderRefusal(reason: "its digest isn't valid")) }
+    guard OfficialPin.isSha(sha), archive.sha == sha else { return .failure(FolderRefusal(reason: "its digest isn't valid", cause: .mismatch)) }
     let published = withLock(name) { () -> Result<OfficialCopy, FolderRefusal> in
       if let existing = copy(name, sha: sha) {
         PluginPrograms.discard(staged)
@@ -78,42 +79,48 @@ struct OfficialStore {
       unlink(archivePath(name, sha))
       guard let folder = PluginPrograms.realFolder(pluginFolder(name), creating: true) else {
         PluginPrograms.discard(staged)
-        return .failure(FolderRefusal(reason: "its folder isn't one you own"))
+        return .failure(FolderRefusal(reason: "its folder isn't one you own", cause: .folder))
       }
       let kept = (folder as NSString).appendingPathComponent(".download-\(getpid())-\(UInt32.random(in: 0...UInt32.max))")
       let keptFile = open(kept, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
       guard keptFile >= 0 else {
-        let reason = String(cString: strerror(errno))
+        let failed = errno
         PluginPrograms.discard(staged)
-        return .failure(FolderRefusal(reason: "its download couldn't be kept (\(reason))"))
+        return .failure(FolderRefusal(reason: "its download couldn't be kept (\(String(cString: strerror(failed))))", cause: FailureCause(errno: failed)))
       }
       let written = OfficialArchive.copyAll(from: archive.fd, to: keptFile) && fchmod(keptFile, 0o444) == 0
+      let writeError = errno
       close(keptFile)
-      guard written, PluginPrograms.seal(staged, keepingRootWritable: false) else {
+      guard written else {
         unlink(kept)
         PluginPrograms.discard(staged)
-        return .failure(FolderRefusal(reason: "its copy couldn't be made read-only"))
+        return .failure(FolderRefusal(reason: "its download couldn't be kept (\(String(cString: strerror(writeError))))", cause: FailureCause(errno: writeError)))
       }
       guard rename(kept, archivePath(name, sha)) == 0 else {
-        let reason = String(cString: strerror(errno))
+        let failed = errno
         unlink(kept)
         PluginPrograms.discard(staged)
-        return .failure(FolderRefusal(reason: "its download couldn't be kept (\(reason))"))
+        return .failure(FolderRefusal(reason: "its download couldn't be kept (\(String(cString: strerror(failed))))", cause: FailureCause(errno: failed)))
       }
-      guard renamex_np(staged, copyPath(name, sha), UInt32(RENAME_EXCL)) == 0 else {
-        let reason = String(cString: strerror(errno))
+      guard moveFolder(staged, copyPath(name, sha)) == 0 else {
+        let failed = errno
         unlink(archivePath(name, sha))
         PluginPrograms.discard(staged)
-        return .failure(FolderRefusal(reason: "its copy couldn't be put in place (\(reason))"))
+        return .failure(FolderRefusal(reason: "its copy couldn't be put in place (\(String(cString: strerror(failed))))", cause: FailureCause(errno: failed)))
+      }
+      guard PluginPrograms.seal(copyPath(name, sha), keepingRootWritable: false) else {
+        PluginPrograms.discard(copyPath(name, sha))
+        unlink(archivePath(name, sha))
+        return .failure(FolderRefusal(reason: "its copy couldn't be made read-only", cause: .permission))
       }
       guard let made = copy(name, sha: sha, fresh: true) else {
         PluginPrograms.discard(copyPath(name, sha))
         unlink(archivePath(name, sha))
-        return .failure(FolderRefusal(reason: "its copy doesn't match its download"))
+        return .failure(FolderRefusal(reason: "its copy doesn't match its download", cause: .mismatch))
       }
       return .success(made)
     }
-    return published ?? .failure(FolderRefusal(reason: "its folder couldn't be locked"))
+    return published ?? .failure(FolderRefusal(reason: "its folder couldn't be locked", cause: .folder))
   }
 
   func activate(_ name: String, sha: String) -> Bool {

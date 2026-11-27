@@ -12,7 +12,7 @@
  
  static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +extern std::unique_ptr<extensions::UninstallDialogDelegate> (
 +    *g_ardia_linux_store_uninstall)(
 +    extensions::ManagementUninstallFunctionBase* function,
@@ -30,7 +30,7 @@
      ManagementUninstallFunctionBase* function,
      const Extension* target_extension,
      bool show_programmatic_uninstall_ui) const {
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  if (g_ardia_linux_store_uninstall) {
 +    if (auto delegate =
 +            g_ardia_linux_store_uninstall(function, target_extension)) {

@@ -10,6 +10,7 @@ import { SearchTray } from "./components/search/SearchTray";
 import { StartScreen } from "./components/search/StartScreen";
 import { ArchiveView } from "./components/tabs/ArchiveView";
 import { TabDeck } from "./components/tabs/TabDeck";
+import { tabSwitchCuts } from "./state/browse/tabSwitch";
 import { OnboardingView } from "./components/onboarding/OnboardingView";
 import { ImportFailedView } from "./components/upgrade/ImportFailedView";
 import { ExpoSettingsSheet } from "./components/settings/ExpoSettingsStack";
@@ -66,6 +67,7 @@ import { useMaterialTheme } from "./components/ui/materialTheme";
 import type { Design } from "./lib/design";
 import { onMaterialBackSwiped } from "./components/ui/MaterialSurfaces";
 import { useTabs } from "./state/tabs/store";
+import { startUpdateChecks } from "./state/appUpdate/store";
 
 export default function App() {
   useState(() =>
@@ -91,6 +93,7 @@ export default function App() {
     const frame = requestAnimationFrame(() => {
       if (Platform.OS === "android") followDynamicScheme();
       void reportLaunch(Date.now());
+      startUpdateChecks();
     });
     return () => cancelAnimationFrame(frame);
   }, [ready]);
@@ -152,7 +155,8 @@ export function Surfaces() {
   const leaving = useLeavingTab();
   const design = useDesign();
   const material = design === "material";
-  const settingsOpen = useSettingsNav((s) => s.open);
+  const settings = useSettingsNav((s) => !s.open ? "closed" : s.stack.at(-1)?.page === "myFilters" ? "filters" : "open");
+  const settingsOpen = settings !== "closed";
   const onboarding = useOnboarding((s) => s.showing);
   const searching = useSearchOpen();
   const searchFromMenu = useSearchFromDockedMenu();
@@ -181,10 +185,11 @@ export function Surfaces() {
   useEffect(goBackToStartIfEmpty, [tabId, surface]);
   const duo = useScreenLayout((s) => s.layout.name === "wide" || s.layout.name === "split");
   const deckMounted = useDeckStandby(surface, surface === "browsing" && tabId !== null && opening === null && leaving === null && !searching && !voice && !onboarding && front === null, tabId);
-  const page = !duo && (surface === "browsing" || pageUnderDeck) && tabId ? <BrowsingScreen tabId={tabId} /> : null;
+  const keepsBar = tabSwitchCuts() && pageOverDeck && surface === "deck";
+  const page = !duo && (surface === "browsing" || pageUnderDeck || keepsBar) && tabId ? <BrowsingScreen tabId={tabId} /> : null;
   const deck = !duo && deckMounted ? <TabDeck key="deck" /> : null;
   const pageLayer = page && tabId ? (
-    <PageLayer key="page" away={surface === "deck"} unseen={pageOverDeck && surface === "deck" && tabId === opening && deckPullGrowing() !== tabId}>
+    <PageLayer key="page" away={surface === "deck" && !keepsBar} unseen={!keepsBar && pageOverDeck && surface === "deck" && tabId === opening && deckPullGrowing() !== tabId}>
       {page}
     </PageLayer>
   ) : null;
@@ -209,7 +214,7 @@ export function Surfaces() {
         </SheetBackground>
       </DesignProvider>
       <Layer covered={onboarding || voice}>
-        <FullSheet sheet={front} fullScreenSheet="settings" progress={sheetProgress} onDismiss={front === "settings" ? closeSettings : front === "library" ? closeLibrary : closeArchive}>
+        <FullSheet sheet={front} fullScreenSheet="settings" dragEnabled={settings !== "filters"} progress={sheetProgress} onDismiss={front === "settings" ? closeSettings : front === "library" ? closeLibrary : closeArchive}>
           {(shown) => (shown === "settings" ? <SettingsView /> : shown === "library" ? <LibraryView /> : shown === "archive" ? <ArchiveView /> : <SpacesView />)}
         </FullSheet>
       </Layer>

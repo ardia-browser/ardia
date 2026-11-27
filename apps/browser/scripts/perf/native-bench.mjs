@@ -175,7 +175,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
-import { appEnv, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, isAlive, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
 import { waitForUboEngine } from "./ubo-cache.mjs";
 import { launchedTree, listenerPid, quitTargets, signalIfSame, stopTree, survivors } from "./processes.mjs";
@@ -546,12 +546,7 @@ class Instance {
     }
   }
   alive() {
-    try {
-      process.kill(this.pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
+    return isAlive(this.pid);
   }
   async waitFile(name, timeout, accept = () => true) {
     const file = join(this.dataDir, name);

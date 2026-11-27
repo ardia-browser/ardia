@@ -8,7 +8,8 @@ import { readDocument, removeDocument, saveDocument } from "../../browser/src/pl
 import { afterFirstWindow } from "../../browser/src/lib/afterFirstWindow";
 import { diagnostics } from "../../browser/src/state/commands/appCommands";
 import { openReport } from "./reportProblem.ts";
-import { finishOnboarding, maybeStartOnboarding, onboardingCompletedAt, startOnboarding, useOnboarding } from "../../browser/src/state/onboarding/onboarding";
+import { PLATFORM_TERMS } from "../../browser/src/lib/platformTerms";
+import { finishOnboarding, maybeStartOnboarding, onboardingCompletedAt, redoOnboarding, useOnboarding } from "../../browser/src/state/onboarding/onboarding";
 import { offerDefaultBrowserAgain } from "../../browser/src/state/onboarding/defaultBrowserOffer";
 import { openVideoTour, startToolTour, videoTourUrl } from "../../browser/src/state/onboarding/tour";
 import { trackAppVersion } from "../../browser/src/state/releaseNotes/releaseNotes";
@@ -155,7 +156,7 @@ export async function runLaunchServices(options: {
   }
 }
 
-const unavailable = (windowId: string, feature: string) => showToast(windowId, "Not available on Linux yet", `${feature} isn't available in this Linux build.`);
+const unavailable = (windowId: string, feature: string) => showToast(windowId, `Not available on ${PLATFORM_TERMS.os} yet`, `${feature} isn't available in this ${PLATFORM_TERMS.os} build.`);
 
 let quitLinux: (() => Promise<QuitOutcome>) | undefined;
 const linuxQuit = () => quitLinux ??= ardiaHost
@@ -187,7 +188,7 @@ export function runAppCommand(windowId: string, command: CommandEvent["command"]
       void diagnostics().then(copyText, report);
       return true;
     case "showOnboarding":
-      startOnboarding(windowId);
+      redoOnboarding(windowId);
       return true;
     case "toolTour":
       void startToolTour(windowId).catch(report);

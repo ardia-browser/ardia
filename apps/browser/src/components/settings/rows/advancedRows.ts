@@ -1,6 +1,7 @@
 import { WEBKIT_LIMITS_KEYWORDS, type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import type { Settings } from "../../../state/settings/settings";
+import { keyText } from "../../../state/commands/keyText";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { keptSitesListed } from "../../../state/tabs/keptSites";
 
@@ -20,6 +21,13 @@ export const advancedRows = {
           description: "Instead of the site alone.",
           keywords: ["address", "url", "https"],
         },
+        commandScrollZoom: {
+          title: `Zoom pages with ${keyText("⌘")}-scroll`,
+          explained: true,
+          description: `Sites that use ${keyText("⌘")}-scroll themselves, like maps, still get it.`,
+          keywords: ["scroll wheel", "mouse wheel", "command scroll", "cmd scroll", "ctrl scroll", "mouse zoom", "wheel zoom", "accidental zoom", "page zoom", "pinch", "bettermouse"],
+          shown: () => PLATFORM_FEATURES.commandScrollZoom,
+        },
         chromeSettings: {
           title: "Chromium settings",
           explained: true,
@@ -36,6 +44,14 @@ export const advancedRows = {
           explained: true,
           description: "How hard Ardia works to free memory.",
           keywords: ["sleep", "sleeping tabs", "tab sleeping", "discard", "hibernate", "memory", "ram", "inactive tabs", "unload", "suspend", "performance", "moderate", "balanced", "maximum", "memory savings", "profiles", "launch", "extensions", "lazy", "defer", "load profiles when opened", "idle", "inactive", "timeout", "unload inactive profiles"],
+        },
+        sleepUnusedTabsAfter: {
+          title: "Sleep tabs unused for",
+          explained: true,
+          description: "Includes pinned tabs. A sleeping tab sends no notifications until you open it.",
+          keywords: ["sleep", "unload", "unused tabs", "inactive tabs", "pinned tabs", "idle tabs", "discard", "free memory", "ram", "timeout", "after", "hours", "suspend", "hibernate", "memory saver"],
+          shown: (s: Settings) => PLATFORM_FEATURES.sleepsUnusedTabs && s.memorySaver,
+          ...(PLATFORM_FEATURES.sleepsUnusedTabs ? { needs: "Turn on Memory Saver to use this" } : {}),
         },
         keepActiveSites: {
           title: "Keep these sites awake",
@@ -159,6 +175,13 @@ export const advancedRows = {
           title: "ardia command",
           keywords: ["cli", "command line", "terminal", "shell", "install", "the ardia command", "devtools", "automation", "remote debugging", "let the ardia command control ardia"],
           shown: () => PLATFORM_FEATURES.ardiaCommand && !PLATFORM_FEATURES.plugins,
+        },
+        showCliPill: {
+          title: "Show the control pill",
+          explained: true,
+          description: "Shows who is controlling Ardia at the bottom of the page with a Stop button. You can still stop programs above.",
+          keywords: ["cli", "control pill", "is controlling", "agent", "claude code", "codex", "hide", "dismiss", "turn off", "banner", "indicator", "stop"],
+          shown: () => PLATFORM_FEATURES.ardiaCommand,
         },
         compactCliPill: {
           title: "Show the control pill as an icon and Stop",

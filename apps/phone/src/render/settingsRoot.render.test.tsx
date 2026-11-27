@@ -22,11 +22,6 @@ function syncTileSide(root: ReturnType<typeof renderSurface>) {
   return styleOf(tile).width;
 }
 
-function shortcutsDirection(root: ReturnType<typeof renderSurface>) {
-  const shortcuts = root.root.findAll((node) => typeof node.type === "string" && node.props.testID === "settingsShortcuts")[0]!;
-  return styleOf(shortcuts).flexDirection;
-}
-
 const onAndroid = Platform.OS === "android" ? test : test.skip;
 
 beforeEach(() => {
@@ -40,18 +35,17 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-onAndroid("on the hand-built Settings Android keeps, at ordinary text sizes the sync card has a 56-point tile beside its text and the shortcuts sit side by side", () => {
+onAndroid("on the hand-built Settings Android keeps, at ordinary text sizes the sync card has a 56-point tile beside its text, and as on iPhone there are no Archive or Spaces shortcuts", () => {
   const root = renderSurface(<SettingsView />);
   expect(syncTileSide(root)).toBe(56);
-  expect(shortcutsDirection(root)).toBe("row");
+  expect(root.root.findAll((node) => node.props.testID === "settingsShortcuts")).toHaveLength(0);
   unmount(root);
 });
 
-onAndroid("on the hand-built Settings Android keeps, at accessibility text sizes the sync card stacks a 44-point tile above its text and the shortcuts stack", () => {
+onAndroid("on the hand-built Settings Android keeps, at accessibility text sizes the sync card stacks a 44-point tile above its text", () => {
   setFontScale(2);
   const root = renderSurface(<SettingsView />);
   expect(syncTileSide(root)).toBe(44);
-  expect(shortcutsDirection(root)).toBe("column");
   const card = root.root.findAll((node) => typeof node.type === "string" && node.props.testID === "syncCardContent")[0]!;
   expect(styleOf(card).flexDirection).toBe("column");
   unmount(root);
@@ -86,19 +80,27 @@ onAndroid("Back from About returns to where Settings was scrolled, whatever scro
   unmount(root);
 });
 
-onAndroid("Android's Settings groups its rows as iPhone's do, General, Search, Tabs, Privacy, Experimental and About, keeping Default Browser in General and Pinch to Summarize under Experimental", () => {
-  useDefaultBrowser.setState({ status: { isDefault: false, canAsk: true } });
-  const root = renderSurface(<SettingsView />);
-  const headers = root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "header" && node.type === "Text").map((node) => node.children.join(""));
-  const sections = headers.filter((title) => ["General", "Search", "Tabs", "Privacy", "Experimental", "About"].includes(title));
-  expect(sections.filter((title) => title !== "Experimental")).toEqual(["General", "Search", "Tabs", "Privacy", "About"]);
-  const text = textOf(root);
-  const order = ["Site Settings", "Default Browser", "Open App Links In", "Search Engine", "Search Suggestions", "Auto-Open Keyboard", "Archive Inactive Tabs", "Export Open Tabs", "Clear Browsing Data", PHONE_SHARING_COPY.whatsSent, "Show Onboarding", "About Ardia"];
-  const at = order.map((title) => text.indexOf(title));
+const inOrder = (text: string, titles: string[]) => {
+  const at = titles.map((title) => text.indexOf(title));
   expect(at.every((index) => index >= 0)).toBe(true);
   expect([...at].sort((a, b) => a - b)).toEqual(at);
-  expect(text.indexOf("General")).toBeLessThan(text.indexOf("Site Settings"));
-  expect(text.indexOf("Privacy")).toBeLessThan(text.indexOf("Clear Browsing Data"));
-  expect(text).not.toContain(PHONE_SHARING_COPY.summary);
+};
+
+onAndroid("Android's Settings lists iPhone's panes in iPhone's order, Sync first, and each pane holds iPhone's sections and rows in iPhone's words", () => {
+  useDefaultBrowser.setState({ status: { isDefault: false, canAsk: true } });
+  const root = renderSurface(<SettingsView />);
+  const text = textOf(root);
+  inOrder(text, ["Sync", "General", "Tabs", "Appearance", "Search", "Site settings"]);
+  expect(text).not.toContain("Clear browsing data");
   unmount(root);
+  const pane = (page: "general" | "tabs" | "search") => {
+    act(() => openSettings({ page }));
+    const shown = renderSurface(<SettingsView />);
+    const words = textOf(shown);
+    unmount(shown);
+    return words;
+  };
+  inOrder(pane("general"), ["Default browser", "Make Ardia your default browser.", "Links", "Open app links in", "Links to apps you have, like YouTube or Maps.", "Privacy", "Clear browsing data", "History, cookies and cached files.", PHONE_SHARING_COPY.toggle, PHONE_SHARING_COPY.whatsSent, "About", "Set up Ardia again", "Shows the welcome screens again.", "About Ardia"]);
+  inOrder(pane("tabs"), ["Tab view", "Stack", "Grid", "Clean up", "Archive inactive tabs", "Moves tabs you haven't used in this long to the Archive.", "Export", "Export open tabs", "Share a list of every open tab."]);
+  inOrder(pane("search"), ["Search engine", "Search suggestions", "Suggestions from your search engine as you type.", "New tabs", "Auto-open keyboard", "Start typing as soon as Ardia opens."]);
 });

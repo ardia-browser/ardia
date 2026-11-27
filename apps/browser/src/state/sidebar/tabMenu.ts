@@ -5,6 +5,7 @@ import { muteState, muteSymbol, muteTitle, siteMuteTitle } from "../tabs/mute";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, bookmarkProfileId, inPinnedContainer, isIncognitoProfile, pinnedSectionTitle, pinSection, tabTitle, togglePinTitle, viewTabIds, tabLayoutOf } from "../browser/model";
 import { awayFromPin, selectedTabIds } from "../pins/organize";
+import { reopensAtPinnedUrl } from "../pins/pinHomes";
 import { groupOf } from "../pins/tabGrouping";
 import { splitOf, splitRowPanes, splitViewAvailable } from "../splits/splits";
 import { closeSplitView, openSplitPane } from "../splits/actions";
@@ -27,13 +28,14 @@ import { tileFolderOf } from "../pins/tileFolders";
 import { sendTabFromMenu, sendTabMenuItem } from "../sync/menu";
 import { pageUnread } from "../tabs/unread";
 import { closeIntent, openPages } from "../tabs/tabs";
-import { noteTopAppUnloadedFromMenu } from "../telemetry/tabSleepCounts";
+import { notePinnedReopenChoiceChanged, noteTopAppUnloadedFromMenu } from "../telemetry/tabSleepCounts";
 import { canSleep, sleepTabsFromMenu } from "../tabs/manualSleep";
 import { isPluginMenuChoice, pluginMenuItems, runPluginMenuChoice, type PluginMenuContext } from "../plugins/menus";
 import { urlParts } from "../../lib/urlParts";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, showUnreadCounts, toggleSiteUnread, unreadSiteTitle } from "../tabs/unreadSites";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { userClose } from "../tabs/closeActivation";
+import { openTileLetters, setTileLetters, showsTileLetters } from "../pins/tileLetters";
 
 const store = () => useBrowser.getState();
 
@@ -171,11 +173,14 @@ function customizeItem(s: BrowserState, tab: Tab, f: Facts): MenuItem {
         ...(tab.customTitle ? [{ id: "resetName", title: "Reset Name", symbol: "arrow.counterclockwise" }] : []),
         { id: "icon", title: "Change Icon…", symbol: "photo" },
         ...(tab.customIcon ? [{ id: "resetIcon", title: "Reset Icon", symbol: "arrow.counterclockwise" }] : []),
+        ...(showsTileLetters(s, tab) ? [{ id: "letters", title: "Change Letters…", symbol: "textformat" }] : []),
+        ...(showsTileLetters(s, tab) && tab.tileLetters ? [{ id: "resetLetters", title: "Reset Letters", symbol: "arrow.counterclockwise" }] : []),
       ],
       f.housed
         ? [
             { id: "replacePin", title: "Replace Pinned URL with Current", symbol: "pin", enabled: awayFromPin(tab) },
             { id: "editPin", title: "Edit Pinned URL…", symbol: "link" },
+            { id: "reopenAtPin", title: "Reopen at Pinned URL", symbol: "arrow.uturn.backward", checked: reopensAtPinnedUrl(s.settings, tab) },
           ]
         : [],
       [...(engine ? [{ id: "engine", title: `Open in ${engine}`, symbol: "globe" }] : []), ...unreadItems(s, tab)],
@@ -283,10 +288,16 @@ function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Des
   else if (choice === "exitPip") exitPictureInPicture(tab.id);
   else if (choice === "replacePin") s.setPinnedUrl(tab.id);
   else if (choice === "editPin") void editPinnedPage(windowId, tab.id);
+  else if (choice === "reopenAtPin") {
+    s.updateTab(tab.id, { reopenAtPinnedUrl: !reopensAtPinnedUrl(s.settings, tab) });
+    notePinnedReopenChoiceChanged(consent);
+  }
   else if (choice === "rename") void startRename(windowId, t);
   else if (choice === "resetName") s.updateTab(tab.id, { customTitle: null });
   else if (choice === "icon") void openIconPicker(windowId, t);
   else if (choice === "resetIcon") s.updateTab(tab.id, { customIcon: null });
+  else if (choice === "letters") void openTileLetters(windowId, tab.id);
+  else if (choice === "resetLetters") setTileLetters(tab.id, null, consent);
   else if (choice === "pin") s.togglePin(tab.id);
   else if (choice === "unpinMember") s.placeTabs([tab.id], { pinned: false, groupId: null });
   else if (choice === "pinTile") s.pinTabs([tab.id], true, false);

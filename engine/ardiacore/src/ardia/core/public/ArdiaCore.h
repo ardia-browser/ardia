@@ -263,6 +263,8 @@ ARDIACORE_EXPORT
 - (void)tab:(ArdiaCoreTab*)tab didBlockRequests:(int)count lastURL:(NSString*)url;
 - (NSArray<NSDictionary<NSString*, NSString*>*>*)tab:(ArdiaCoreTab*)tab
                          contextMenuItemsForSelection:(NSString*)text;
+- (NSArray<NSDictionary<NSString*, NSString*>*>*)tab:(ArdiaCoreTab*)tab
+                              contextMenuItemsForPage:(NSString*)url;
 - (void)tab:(ArdiaCoreTab*)tab
     contextMenuCommand:(NSString*)itemId
                   text:(NSString*)selection
@@ -315,12 +317,15 @@ ARDIACORE_EXPORT
 @property(readonly) BOOL committedInitial;
 - (nullable id)suppressInput;
 - (void)closeNow;
+@property(readonly) BOOL asksBeforeLeaving;
+- (void)askBeforeLeaving:(void (^)(BOOL leave))answer;
 @property(nonatomic) BOOL temporary;
 - (void)setTemporarySource:(nullable ArdiaCoreTab*)source;
 - (void)deliverHeldPageMessages;
 @property(readonly) NSDictionary<NSString*, id>* securityInfo;
 - (BOOL)discard;
 - (NSArray<NSNumber*>*)sleepIfHiddenFor:(NSTimeInterval)seconds;
+- (NSArray<NSNumber*>*)sleepIfUnusedFor:(NSTimeInterval)seconds;
 @property(readonly) BOOL discarded;
 - (BOOL)unloadKeepingHistory;
 @property(readonly, nullable) NSString* discardReason;

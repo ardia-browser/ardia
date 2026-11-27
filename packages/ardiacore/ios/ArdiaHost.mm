@@ -3,6 +3,7 @@
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaServices.h"
 #import "ArdiaNavigationDownloads.h"
+#import "ArdiaPiPGestureLog.h"
 #import "ArdiaStartup.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
@@ -497,6 +498,26 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
   ardia_host::NotePointer(event, name);
 }
 
++ (void)reportHoverLossAtQuit {
+  ardia_host::ReportHoverEpisodeAtQuit();
+}
+
++ (BOOL)hoverLossReportedAtQuitIsOpen {
+  return ardia_host::HoverEpisodeReportedAtQuitOpen();
+}
+
++ (NSInteger)hoverLossReportedAtQuitSeconds {
+  return ardia_host::HoverEpisodeReportedAtQuitSeconds();
+}
+
++ (void)markHoverLossCommittedAtQuit {
+  ardia_host::MarkHoverEpisodeCommittedAtQuit();
+}
+
++ (void)cancelHoverLossAtQuit {
+  ardia_host::CancelHoverEpisodeAtQuit();
+}
+
 + (NSDictionary<NSString *, id> *)engineInfo {
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
   NSInteger chromeWindows = 0;
@@ -511,6 +532,7 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
     @"chromeWindows" : @(chromeWindows),
     @"keepAlive" : engine.keepAliveState ?: @"",
     @"pictureInPictureCloses" : engine.pictureInPictureCloses ?: @"",
+    @"pictureInPictureGestures" : ardia_pip::GestureLog(),
     @"lastUsedProfile" : engine.defaultProfile.name ?: @"",
     @"focus" : ardia_host::FocusState(),
   };

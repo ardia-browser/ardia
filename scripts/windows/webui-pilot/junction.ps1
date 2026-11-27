@@ -18,10 +18,17 @@ $realLocal = [Environment]::GetFolderPath('LocalApplicationData')
 $realBefore = @(Get-ChildItem -Force $realLocal -ErrorAction SilentlyContinue | ForEach-Object Name) -join '|'
 Log "run $run; LOCALAPPDATA and APPDATA for every launch point inside it"
 
-function Clear-WebUI {
+function Remove-WebUI {
   $item = Get-Item -LiteralPath $web -Force -ErrorAction SilentlyContinue
-  if (-not $item) { return }
-  if ($item.PSIsContainer) { cmd /c rmdir /s /q "$web" | Out-Null } else { Remove-Item -LiteralPath $web -Force }
+  if (-not $item) { return $true }
+  if ($item.PSIsContainer) { cmd /c rmdir /s /q "$web" 2>$null | Out-Null } else { Remove-Item -LiteralPath $web -Force -ErrorAction SilentlyContinue }
+  -not (Get-Item -LiteralPath $web -Force -ErrorAction SilentlyContinue)
+}
+function Clear-WebUI {
+  Wait-Until { ((Engine-Processes).Count -eq 0) -and ((App-Processes).Count -eq 0) } 30 'the last engine to exit and let go of Ardia WebUI' -NoThrow | Out-Null
+  $cleared = [bool](Wait-Until { Remove-WebUI } 30 'Ardia WebUI to be removed' -NoThrow)
+  if (-not $cleared) { Log "Ardia WebUI is still there after 30 s; still running from ${App}: $((App-Processes | ForEach-Object { "$($_.Name) $($_.ProcessId)" }) -join ', ')" }
+  $cleared
 }
 function Link([string]$kind, [string]$link, [string]$target) {
   $flag = @{ junction = '/J'; symlink = '/D'; file = '' }[$kind]
@@ -119,12 +126,12 @@ Refused 'junction-app-data-to-react-native' @('--ardia-shell=webui')
 foreach ($variant in @('--ARDIA-SHELL=webui', '-ardia-shell=webui', '/ardia-shell=webui', '--Ardia-Shell=webui', ' --ardia-shell=webui ', '--SINGLE-ARGUMENT --ardia-shell=webui')) {
   Refused "switch-spelling '$variant' with the junction" @($variant -split '(?<=\S) (?=--)')
 }
-Clear-WebUI
+Clear-WebUI | Out-Null
 
 New-Item -ItemType Directory $web | Out-Null
 Link junction (Join-Path $web 'Chromium') "$rn\User Data" | Out-Null
 Refused 'junction-profile-to-react-native' @('--ardia-shell=webui')
-Clear-WebUI
+Clear-WebUI | Out-Null
 
 $own = @(
   @{ name = 'junction at depth 1 to the React Native profile'; kind = 'junction'; link = 'Chromium\Default'; target = $rnDefault },
@@ -144,7 +151,7 @@ foreach ($case in $own) {
   } else {
     Check "own-tree link: $($case.name)" $false "the $($case.kind) fixture at $path could not be made"
   }
-  Clear-WebUI
+  Clear-WebUI | Out-Null
 }
 
 Refused 'user-data-dir-into-react-native' @('--ardia-shell=webui', "--user-data-dir=$rn\User Data")
@@ -167,7 +174,7 @@ Refused 'ardia-data-dir-at-react-native' @('--ardia-shell=webui') $rn
 Set-Content -LiteralPath $web 'not a folder'
 Log "fixture: $web is a file, so the WebUI profile can't be created"
 Refused 'uncreatable-webui-folder' @('--ardia-shell=webui')
-Clear-WebUI
+Clear-WebUI | Out-Null
 
 $before = Snapshot
 $p = Start-Pilot @('--ardia-shell=webui') '' '15000'
@@ -182,25 +189,29 @@ try { $h = Wait-Shell 60 } catch {}
 $opened = ($h -ne $null) -and ($h -ne [IntPtr]::Zero)
 Stop-Engine
 Check 'pin-alone-blocks-rename' ($p.ArgvOk -and $early.Count -eq 1 -and -not $chromeDll -and $profileRename -eq 'refused' -and $parentRename -eq 'refused' -and $opened -and ((Snapshot) -eq $before)) "paused right after the pin: $($early.Count) engine process, chrome.dll loaded $chromeDll; renaming Ardia WebUI\Chromium $profileRename, renaming Ardia WebUI $parentRename; window after the pause $opened"
-Clear-WebUI
+$webCleared = Clear-WebUI
 
 Rename-Item -LiteralPath "$rn\User Data" -NewName 'User Data moved'
 Move-Item -LiteralPath "$rn\User Data moved" -Destination (Join-Path $elsewhere 'profile')
-Link junction "$rn\User Data" (Join-Path $elsewhere 'profile') | Out-Null
-New-Item -ItemType Directory $web | Out-Null
-Link junction (Join-Path $web 'Chromium') (Join-Path $elsewhere 'profile') | Out-Null
-Refused 'relocated-react-native-profile' @('--ardia-shell=webui')
-Clear-WebUI
+$profileLinked = Link junction "$rn\User Data" (Join-Path $elsewhere 'profile')
+$webMade = $webCleared -and [bool](New-Item -ItemType Directory $web -ErrorAction SilentlyContinue)
+$webLinked = $webMade -and (Link junction (Join-Path $web 'Chromium') (Join-Path $elsewhere 'profile'))
+if ($profileLinked -and $webLinked) {
+  Refused 'relocated-react-native-profile' @('--ardia-shell=webui')
+} else {
+  Check 'relocated-react-native-profile' $false "fixture not built: Ardia WebUI cleared $webCleared, made $webMade, Chromium junction $webLinked, React Native profile junction $profileLinked"
+}
+Clear-WebUI | Out-Null
 
 Opens 'control-starts-in-webui-folder' @('--ardia-shell=webui')
-Clear-WebUI
+Clear-WebUI | Out-Null
 Opens 'control-switch-spelling-uppercase' @('--ARDIA-SHELL=webui')
-Clear-WebUI
+Clear-WebUI | Out-Null
 Opens 'control-switch-spelling-single-dash' @('-ardia-shell=webui')
 Shot "$Proof\junction-control.png"
-Clear-WebUI
+Clear-WebUI | Out-Null
 Opens 'control-user-data-dir-with-a-space' @('--ardia-shell=webui', "--user-data-dir=$web\Chromium")
-Clear-WebUI
+Clear-WebUI | Out-Null
 
 $webReal = Join-Path $run 'webui-real'
 New-Item -ItemType Directory -Force $webReal | Out-Null
@@ -228,7 +239,7 @@ if ($rootGuardWritten) {
 }
 $rootPresent = @('launch-guard.json', 'pilot-root-a.json', 'pilot-root-b.json' | Where-Object { Test-Path -LiteralPath (Join-Path $webReal $_) -PathType Leaf })
 Check 'documents-read-under-junction-app-data-root' ($rootLinked -and $rootPilot.ArgvOk -and $rootOpened -and $rootGuardWritten -and $rootGuardJson -and ($rootPresent.Count -eq 3) -and ($rootCount -eq 3) -and $rootStillLinked -and $rootDocsIntact) "Ardia WebUI is a junction to $webReal (made $rootLinked, still a junction $rootStillLinked); window $rootOpened; launch-guard written $rootGuardWritten (valid JSON $rootGuardJson); present [$($rootPresent -join ', ')]; bootstrap read $rootCount of 3 expected documents through the junction; seeded documents intact $rootDocsIntact"
-Clear-WebUI
+Clear-WebUI | Out-Null
 
 $assetUi = Join-Path $run 'asset-ui'
 $assetSecretDir = Join-Path $run 'asset-outside'

@@ -52,7 +52,6 @@ export function ProfilesPane({ profileId: chosen, detail }: SettingsPlace) {
 function ProfileOverview({ profileId }: { profileId: string }) {
   return (
     <View>
-      <AllProfilesSection />
       <Anchor id="profiles.profiles" keep shape="card">
         <ProfileBar selectedId={profileId} />
       </Anchor>
@@ -63,6 +62,7 @@ function ProfileOverview({ profileId }: { profileId: string }) {
         <ExtensionsSection profileId={profileId} />
         <DataSection profileId={profileId} />
       </View>
+      <AllProfilesSection />
     </View>
   );
 }

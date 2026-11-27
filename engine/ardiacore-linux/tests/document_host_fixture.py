@@ -393,6 +393,11 @@ struct ShellHostView {
   std::vector<base::OnceCallback<void(bool, base::Value)>> close_replies_;
   bool utility_ready_ = true;
   bool utility_close_pending_ = false;
+  struct ShellRecoveryProbe {
+    int resumes = 0;
+    void Resume() { ++resumes; }
+  };
+  std::unique_ptr<ShellRecoveryProbe> shell_recovery_ = std::make_unique<ShellRecoveryProbe>();
   std::string window_id_ = "settings";
   std::string kind_;
   bool is_utility() const { return !kind_.empty(); }

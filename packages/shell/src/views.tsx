@@ -72,6 +72,16 @@ export type FolderIconProps = ViewProps & {
 
 export const FolderIcon = requireNativeViewManager<FolderIconProps>("ArdiaFolderIcon");
 
+export type WheelStep = 1 | -1;
+export type WheelAreaProps = ViewProps & { onStep?: (direction: WheelStep) => void };
+export type NativeWheelAreaProps = Omit<WheelAreaProps, "onStep"> & { onStep?: (e: { nativeEvent: { direction: WheelStep } }) => void };
+
+const NativeWheelArea = requireNativeViewManager<NativeWheelAreaProps>("ArdiaWheelArea");
+
+export function WheelArea({ onStep, ...props }: WheelAreaProps) {
+  return <NativeWheelArea onStep={onStep && ((e) => onStep(e.nativeEvent.direction))} {...props} />;
+}
+
 export type ContextMenuAreaProps = ViewProps & {
   onContextMenu?: () => void;
   onMiddleClick?: (e: MiddleClickEvent) => void;

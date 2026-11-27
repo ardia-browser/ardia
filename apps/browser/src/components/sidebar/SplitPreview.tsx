@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { useTheme } from "../ui/theme";
-import { FadeLabel, radius, sidebarFont, sidebarLineHeight, space } from "../ui";
+import { continuousCorners, FadeLabel, radius, sidebarFont, sidebarLineHeight, space } from "../ui";
 import { previewSlots, SPLIT_MAX_PANES, SPLIT_PANE, splitPaneShape } from "./splitPaneGeometry";
 import { spring } from "../ui/motion";
 import { useTab } from "../../state/browser/hooks";
@@ -69,12 +69,12 @@ export function SplitPreview({ panes, values, rowActive }: { panes: string[]; va
     [panes.length, pitch, values.toLeft],
   );
   const empty = useMemo(() => Animated.multiply(Animated.add(1, Animated.multiply(values.toLeft, -1)), panes.length * pitch), [panes.length, pitch, values.toLeft]);
-  const pane = { position: "absolute", left: SPLIT_PANE.inset, top: SPLIT_PANE.inset, width: Math.max(0, slot), height: shape.height, borderRadius: shape.corner } as const;
+  const pane = { position: "absolute", left: SPLIT_PANE.inset, top: SPLIT_PANE.inset, width: Math.max(0, slot), height: shape.height, ...continuousCorners(shape.corner) } as const;
   return (
     <Animated.View pointerEvents="none" onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={[StyleSheet.absoluteFill, { opacity: width ? values.shown : 0 }]}>
       {width ? (
         <>
-          {rowActive ? null : <View style={[StyleSheet.absoluteFill, { borderRadius: radius.chrome, backgroundColor: theme.tabSelected }]} />}
+          {rowActive ? null : <View style={[StyleSheet.absoluteFill, continuousCorners(radius.chrome), { backgroundColor: theme.tabSelected }]} />}
           <Animated.View style={[pane, { backgroundColor: surfaces.emptySlot, transform: [{ translateX: empty }] }]} />
           {panes.map((id, i) => (
             <Animated.View key={id} style={[pane, PANE_ROW, { backgroundColor: surfaces.activePanes.rest, transform: [{ translateX: placed[i]! }] }]}>

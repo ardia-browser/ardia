@@ -87,7 +87,8 @@ float haloNoise(vec3 p) {
   vec3 x2 = x - i2 + 2.0 * G3;
   vec3 x3 = x - 0.5;
   vec4 w = max(0.6 - vec4(dot(x, x), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0);
-  w = pow(w, vec4(4.0));
+  vec4 w2 = w * w;
+  w = w2 * w2;
   vec4 d = vec4(dot(x, haloHash33(s)), dot(x1, haloHash33(s + i1)),
                 dot(x2, haloHash33(s + i2)), dot(x3, haloHash33(s + 1.0)));
   return dot(vec4(31.316), d * w);
@@ -153,7 +154,10 @@ float easeOutExpo(float t) {
 }
 
 float easeInOutQuart(float t) {
-  return (t < 0.5) ? 8.0 * t * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 4.0) * 0.5;
+  if (t < 0.5) return 8.0 * t * t * t * t;
+  float u = -2.0 * t + 2.0;
+  float u2 = u * u;
+  return 1.0 - u2 * u2 * 0.5;
 }
 
 float shiftCenter(float v, float o) {
@@ -165,7 +169,7 @@ vec3 oklabToLinearSRGB(vec3 lab) {
   vec3 lms = vec3(dot(lab, vec3(1.0, 0.396337777, 0.215803757)),
                   dot(lab, vec3(1.0, -0.105561346, -0.0638541728)),
                   dot(lab, vec3(1.0, -0.0894841775, -1.29148555)));
-  lms = pow(lms, vec3(3.0));
+  lms = lms * lms * lms;
   return vec3(dot(lms, vec3(4.0767417, -3.3077116, 0.230969936)),
               dot(lms, vec3(-1.26843798, 2.60975742, -0.341319382)),
               dot(lms, vec3(-0.00419608643, -0.703418612, 1.70761466)));
@@ -240,7 +244,9 @@ vec4 gradient(vec2 uv, int numberOfColors, float progress, int direction) {
     crossPos = uv.y; alongPos = uv.x;
   }
   float along = alongPos * 0.400000006;
-  float bend = (1.0 - pow(abs(crossPos - 0.5) + 0.5, 5.0)) * -0.0500000007;
+  float b = abs(crossPos - 0.5) + 0.5;
+  float b2 = b * b;
+  float bend = (1.0 - b2 * b2 * b) * -0.0500000007;
 
   int n1 = numberOfColors - 1;
   bool past = along > head;
@@ -252,7 +258,7 @@ vec4 gradient(vec2 uv, int numberOfColors, float progress, int direction) {
     vec4 trail = samplePalette(n1, max(bend + along, 0.0));
     trail.a *= p * 0.5;
     float edge = easeOutExpo(1.0 - p) * 0.0500000007;
-    col = mix(col, trail, clamp((along - head) / edge, 0.0, 1.0));
+    col = mix(col, trail, edge > 0.0 ? clamp((along - head) / edge, 0.0, 1.0) : 1.0);
   }
 
   vec3 lin = oklabToLinearSRGB(col.rgb);

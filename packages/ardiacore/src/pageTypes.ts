@@ -3,6 +3,8 @@ import type { ExternalAppRequest } from "./permissions";
 import type { FaviconImage } from "./favicons";
 import type { ChromiumSiteDataReply, ChromiumSiteDataRequest, PageCookie, PageEngine } from "./webkit";
 
+export type FullScreenTransition = { entering: boolean; waitedMs: number; epoch: string };
+
 export type NavigationState = {
   url: string;
   title: string;
@@ -71,8 +73,10 @@ export type PageShare = {
   text?: string;
   fileUrl?: string;
 };
+export type PageMenuItem = { id: PageMenuCommand; title: string };
+export type PageMenuCommand = "translatePage" | "showOriginal";
 export type PageCommand = {
-  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement";
+  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement" | "back" | "forward" | PageMenuCommand;
   text: string;
   point?: [number, number];
   modifiers?: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean };
@@ -129,7 +133,9 @@ type PictureInPictureReleaseOutcome = "corner" | "flickTuck" | "tuck" | "pullOut
 export type PictureInPictureRelease = { outcome: PictureInPictureReleaseOutcome; epoch: string };
 export type PictureInPictureActivation = { move: boolean; activated: boolean; epoch: string };
 export type PictureInPictureResize = { inside: boolean; cursorShown: boolean; epoch: string };
-type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying";
+export const AUTO_PICTURE_IN_PICTURE_MISSES = ["missedTabSwitch", "missedAppSwitch", "missedSpaceSwitch", "missedOther", "missedSiteAsked", "leftOnSpaceSwitch", "leftOnSpaceSwitchJoining"] as const;
+export type AutoPictureInPictureMiss = (typeof AUTO_PICTURE_IN_PICTURE_MISSES)[number];
+type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying" | "closedWhileAway" | AutoPictureInPictureMiss;
 export type MediaFault = { reason: string; muted?: boolean; blockerActive?: boolean };
 export type ControlPress = { clickAt: number; control: number };
 export type ActivateRequest = { reason: "pictureInPicture" | "page" | "window"; fromOtherApp?: boolean };
@@ -145,7 +151,7 @@ export type DisplayMediaSource = {
 export type DisplayMediaAudio = { tab: boolean; screen: boolean; window: "application" | "system" | null };
 export type DisplayMediaRequest = { id: string; origin: string; frameOrigin?: string; audio: DisplayMediaAudio | null; sources: DisplayMediaSource[]; controller?: boolean };
 
-export type ZoomState = { zoom: number; host: string; isDefault: boolean; pinchScale: number; user: boolean };
+export type ZoomState = { zoom: number; host: string; isDefault: boolean; pinchScale: number; user: boolean; scroll?: "" | "wheel" | "merged" };
 export type ContentBlockedState = { count: number; url: string };
 
 export type PasswordPrompt = {
@@ -200,6 +206,7 @@ export type WebViewProps = ViewProps & {
   pageColor?: string;
   shownUrl?: string;
   autoPictureInPicture?: boolean;
+  pageMenuItems?: PageMenuItem[];
   onNavigationChange?: (state: NavigationState) => void;
   onProgress?: (progress: number) => void;
   onFavicon?: (url: string, candidates: string[]) => void;
@@ -210,6 +217,7 @@ export type WebViewProps = ViewProps & {
   onPopupBlocked?: (popup: BlockedPopup) => void;
   onFindResult?: (result: FindResult) => void;
   onFullscreen?: (fullscreen: boolean) => void;
+  onFullScreenTransition?: (transition: FullScreenTransition | null) => void;
   onStatus?: (text: string, fromBottom: number | null) => void;
   onCrashed?: (info: CrashInfo) => void;
   onUnresponsive?: () => void;
@@ -306,6 +314,8 @@ export type WebViewHandle = {
   resolveUnresponsive(terminate: boolean): Promise<void>;
   discard(options?: { unload?: boolean }): Promise<DiscardOutcome>;
   sleepIfHidden(seconds: number): Promise<DiscardRefusal[]>;
+  sleepIfUnused?(seconds: number): Promise<DiscardRefusal[]>;
+  wakeIfSleeping?(): Promise<boolean>;
   setFrozen(frozen: boolean): Promise<void>;
 };
 

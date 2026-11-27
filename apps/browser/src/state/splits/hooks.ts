@@ -1,6 +1,12 @@
 import { useShallow } from "zustand/react/shallow";
-import { useBrowser } from "../browser/store";
-import { splitTabIds, splitTabIdsOf } from "./splits";
+import { keyedWatch, useKeyed } from "../browser/keyedWatch";
+import { useBrowser, type BrowserState } from "../browser/store";
+import { splitOf, splitTabIds, splitTabIdsOf } from "./splits";
+
+const watchSplits = keyedWatch<BrowserState>(() => useBrowser, (s, prev) => (s.splits !== prev.splits ? true : undefined));
+
+export const useSplitOrientation = (tabId: string | undefined) =>
+  useKeyed(watchSplits, tabId, () => splitOf(useBrowser.getState(), tabId)?.orientation ?? null);
 
 export const useDragFallbackPane = (dragging: string | null | undefined, panes: Record<string, unknown>, windowId: string) =>
   useBrowser((s) => {
@@ -25,3 +31,6 @@ export const useSplitSuggestions = (tabId: string) =>
         .map((t) => t.id);
     }),
   );
+
+export const useSplitPaneIds = (tabId: string) =>
+  useBrowser(useShallow((s) => splitTabIdsOf(Object.values(s.splits).find((v) => splitTabIds(v).includes(tabId))) ?? [tabId]));

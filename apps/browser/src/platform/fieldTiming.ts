@@ -1,6 +1,7 @@
 import { NativeModules } from "react-native";
 
 export type FieldTiming = {
+  pageMarks?: boolean;
   setEnabled(on: boolean): void;
   markFrame(key: string, kind: string): void;
   lastInput(): [at: number, kind: number];

@@ -91,7 +91,10 @@ const noGeometry = (): Promise<null> => Promise.resolve(null);
 
 const copyURL = (host?: ArdiaHost) => (address: string): Promise<unknown> => invokeHost("ArdiaShell.copyText", { args: [address] }, host);
 
-const HOST_SHELL_METHODS: Record<string, (host?: ArdiaHost) => ShellMethod> = { frameCornerRadius, copyURL };
+const startDictation = (host?: ArdiaHost) => (): Promise<unknown> =>
+  linuxCapabilities(host).dictation ? invokeHost("ArdiaShell.startDictation", { args: [] }, host) : Promise.reject(unavailableError("Dictation"));
+
+const HOST_SHELL_METHODS: Record<string, (host?: ArdiaHost) => ShellMethod> = { frameCornerRadius, copyURL, startDictation };
 
 const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   windowCornerRadius: () => LINUX_WINDOW_CORNER_RADIUS,
@@ -107,6 +110,8 @@ const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   takeInputSourceKeys: () => 0,
   restoreKeyResponder,
   discardKeyResponder,
+  fieldBlurCause: () => "inWindow" as const,
+  watchFieldBlurs: () => undefined,
   cancelFocusMove: resolved,
   switcherPointerMoved: () => false,
   takeHoverCounts: () => ({}),
@@ -123,7 +128,6 @@ const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   dragPreviewEnd: resolved,
   dragPreviewCancel: resolved,
   fetchBangList,
-  startDictation: unavailable("Dictation"),
   dictationAvailable: () => linuxCapabilities().dictation,
   pickFiles: unavailable("Choosing files to open"),
   openSurfaces: () => Promise.resolve([]),

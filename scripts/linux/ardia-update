@@ -11,7 +11,8 @@ usage='usage: ardia-update kind
 Installs a signed Ardia update for Linux.
 
   kind           prints how this Ardia is installed: deb, tarball, appimage,
-                 managed, or unsupported <reason>
+                 managed (rpm, pacman, another dpkg package or a Flatpak
+                 updates it), or unsupported <reason>
   install <dir>  verifies Ardia-<V>-linux-update.txt and its .sig in <dir>
                  against lib/ardia/linux-update.pem with lib/ardia/ardia-update-verify,
                  then installs the package for this kind of install when <V> is
@@ -155,6 +156,10 @@ policy_names_this_helper() {
 
 detect_kind() {
   local kind owner
+  if [[ -f /.flatpak-info && "${FLATPAK_ID:-}" == dev.ardia.Ardia ]]; then
+    printf 'managed'
+    return
+  fi
   if appimage=$(appimage_target); then
     kind=appimage
   elif owned_by_other_manager; then

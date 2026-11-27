@@ -12,7 +12,7 @@ import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { pages } from "../platform/pages";
 import { setDynamicScheme } from "../state/app/dynamicScheme";
 import * as browse from "../state/browse/store";
-import { closeLibrary, useLibrary } from "../state/library/store";
+import { closeLibrary } from "../state/library/store";
 import * as pageActions from "../state/page/actions";
 import { usePageUi } from "../state/page/store";
 import { storeFind, storeNavigation, usePages, type PageState } from "../state/pages/store";
@@ -139,6 +139,7 @@ onAndroid("search edits the address, Tabs opens the deck, add opens a new search
 
 onAndroid("the address button opens the compact page menu with the iOS actions and a Site Settings link", async () => {
   const tab = currentTabs().open[0]!;
+  act(() => useTabs.setState({ selectedId: tab.id }));
   act(() => storeNavigation(tab.id, { url: tab.url, title: tab.title } as PageState));
   jest.spyOn(pageActions, "canPrintPages").mockReturnValue(true);
   const root = screen();
@@ -148,8 +149,11 @@ onAndroid("the address button opens the compact page menu with the iOS actions a
   const sheet = node(root, "materialSheet")!;
   expect(flat(sheet).maxHeight).toBeCloseTo((windowHeight - 64) * 0.52 + 128);
   expect(node(root, "materialTopAppBar")).toBeUndefined();
-  for (const id of ["materialMenuAction:Reader", "materialMenuAction:Copy Link", "materialMenuAction:Share", "pageMenuRow:Find on Page", "pageMenuRow:Print", "pageMenuRow:History", "pageMenuRow:Bookmarks", "pageMenuRow:Downloads", "menuToggle:Night Shade", "menuZoom", "menuToggle:Desktop Site", "pageMenuRow:Translate", "menuToggle:Block Ads and Trackers", "pageMenuRow:Site Settings"]) {
+  for (const id of ["materialMenuAction:Reader", "materialMenuAction:Copy Link", "materialMenuAction:Share", "pageMenuRow:Find on Page", "pageMenuRow:Print", "pageMenuRow:Translate", "menuToggle:Block Ads and Trackers", "pageMenuRow:Site Settings"]) {
     expect(list.findAll((found) => typeof found.type === "string" && found.props.testID === id).length).toBeGreaterThan(0);
+  }
+  for (const id of ["pageMenuRow:History", "pageMenuRow:Bookmarks", "pageMenuRow:Downloads", "menuToggle:Night Shade", "menuZoom", "menuToggle:Desktop Site"]) {
+    expect(list.findAll((found) => found.props.testID === id)).toHaveLength(0);
   }
   expect(settingsNav().open).toBe(false);
   act(() => { expect(pageActions.handleSystemBack()).toBe(true); });
@@ -167,6 +171,7 @@ onAndroid("the address button opens the compact page menu with the iOS actions a
   const siteSettingsBar = node(root, "dockedPageMenuBar")!;
   expect(node(root, "materialSiteSettingsHeader")).toBeDefined();
   expect(node(root, "dockedPageMenuSiteSettings")).toBeDefined();
+  expect(node(root, "dockedPageMenuSiteSettings")!.findAll((found) => typeof found.type === "string" && ["siteSettingsZoom", "materialSettingsRow:Night Shade", "materialSettingsRow:Desktop Site"].includes(found.props.testID)).map((found) => found.props.testID)).toEqual(["materialSettingsRow:Night Shade", "siteSettingsZoom", "materialSettingsRow:Desktop Site", "materialSettingsRow:Night Shade"]);
   expect(node(root, "dockedPageMenuList")).toBeUndefined();
   expect(textOf(root)).toContain("Block Cookie Banners");
   expect(flat(node(root, "materialSettingsSegment")).backgroundColor).toBe(LIGHT.surfaceContainerHighest);
@@ -190,9 +195,12 @@ onAndroid("the address button opens the compact page menu with the iOS actions a
   await act(async () => { pressable(root, "pageMenuRow:Site Settings").props.onPress(); });
   act(() => pressable(root, "materialSettingsRow:Filter Lists").props.onPress());
   expect(usePageUi.getState().menuOpen).toBe(false);
-  expect(settingsNav().stack).toEqual([{ page: "filterLists" }]);
+  expect(settingsNav().stack).toEqual([{ page: "siteSettings" }, { page: "filterLists" }]);
+  act(() => { expect(pageActions.handleSystemBack()).toBe(true); });
+  expect(settingsNav()).toMatchObject({ open: true, stack: [{ page: "siteSettings" }] });
   act(() => { expect(pageActions.handleSystemBack()).toBe(true); });
   expect(settingsNav().open).toBe(false);
+  expect(usePageUi.getState().menuOpen).toBe(false);
   unmount(root);
 });
 
@@ -272,7 +280,7 @@ onAndroid("the page menu capsule docks with the iOS history controls, page title
   unmount(root);
 });
 
-onAndroid("the docked menu opens each library section and Find on Page uses the Material address capsule", async () => {
+onAndroid("the docked menu has no Library rows, and Find on Page uses the Material address capsule", async () => {
   withTabs(1);
   scrolled("up");
   const find = jest.spyOn(pages, "find").mockResolvedValue(undefined);
@@ -285,15 +293,8 @@ onAndroid("the docked menu opens each library section and Find on Page uses the 
     await act(async () => { await pressable(root, "materialBarSiteSettings").props.onPress(); });
     settle();
   };
-  for (const [label, section] of [["History", "history"], ["Bookmarks", "bookmarks"], ["Downloads", "downloads"]]) {
-    await openMenu();
-    act(() => pressable(root, `pageMenuRow:${label}`).props.onPress());
-    expect(useLibrary.getState()).toMatchObject({ open: true, section });
-    expect(usePageUi.getState().menuOpen).toBe(false);
-    settle();
-    act(() => closeLibrary());
-  }
   await openMenu();
+  for (const label of ["History", "Bookmarks", "Downloads"]) expect(root.root.findAll((found) => found.props.testID === `pageMenuRow:${label}`)).toHaveLength(0);
   act(() => pressable(root, "pageMenuRow:Find on Page").props.onPress());
   expect(usePageUi.getState().menuOpen).toBe(false);
   settle();

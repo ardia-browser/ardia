@@ -2,6 +2,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+extern NSNotificationName const ArdiaConsentEpochDidChangeNotification;
+
 @interface ArdiaEvents : NSObject
 
 + (void)setSender:(nullable void (^)(NSString *name, NSDictionary<NSString *, id> *data))sender

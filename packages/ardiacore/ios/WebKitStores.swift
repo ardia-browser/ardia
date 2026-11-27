@@ -14,23 +14,9 @@ final class WebKitStores {
     }
   }
 
-  struct SiteKey: Hashable {
-    let site: String
-    let kind: String
-  }
-
-  struct ExternalGrant {
-    let origin: String
-    let scheme: String
-    let app: String
-    let appPath: String
-  }
-
-  struct StoreState {
-    var remembered: [SiteKey: Bool] = [:]
-    var zoom: [String: Double] = [:]
-    var externalAllowances: [SiteKey: ExternalGrant] = [:]
-  }
+  typealias SiteKey = WebKitSiteChoices.Key
+  typealias ExternalGrant = WebKitSiteChoices.ExternalGrant
+  typealias StoreState = WebKitSiteChoices
 
   private struct PrivateSession {
     let store: WKWebsiteDataStore
@@ -127,11 +113,8 @@ final class WebKitStores {
     }
   }
 
-  func forgetSitePermissions(of profile: String) {
-    update(id(of: profile)) { state in
-      state.remembered = [:]
-      state.externalAllowances = [:]
-    }
+  func forgetSitePermissions(of profile: String, since: Date?) {
+    update(id(of: profile)) { $0.forgetSiteChoices(since: since) }
   }
 
   func endPrivateSession(_ name: String) -> (id: StoreID, store: WKWebsiteDataStore)? {

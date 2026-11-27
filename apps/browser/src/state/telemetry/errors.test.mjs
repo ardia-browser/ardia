@@ -192,6 +192,35 @@ test("a native crash names its exception and the app's images at the top level, 
   assert.equal(props.$geoip_disable, true);
 });
 
+test("a Mac crash sends how macOS ended the process, its exception codes and the crashed thread and queue", async () => {
+  stub.shellNativeModules.ArdiaApp.crashReports = async () => [
+    {
+      time: Date.now(),
+      fileTime: Date.now(),
+      process: "renderer",
+      engineVersion: "158.0.8127.36",
+      exceptionType: "EXC_BREAKPOINT",
+      signal: "SIGTRAP",
+      terminationNamespace: "SIGNAL",
+      terminationIndicator: "Trace/BPT trap: 5",
+      terminationCode: 5,
+      exceptionCodes: "0x0000000000000001, 0x00000001a055d604",
+      crashedThread: "CrRendererMain",
+      crashedQueue: "com.apple.main-thread",
+      frames: [{ image: "Chromium Framework", offset: 0x8a0b1c4 }],
+    },
+  ];
+  await reportNativeCrashes();
+  const props = queued().at(-1).properties;
+  assert.equal(props.crash_termination, "SIGNAL");
+  assert.equal(props.crash_termination_indicator, "trace_trap");
+  assert.equal(props.crash_termination_code, 5);
+  assert.equal(props.crash_exception_code, 1);
+  assert.equal(props.crash_fault_near_null, null);
+  assert.equal(props.crash_thread, "chrome_main");
+  assert.equal(props.crash_queue, "main");
+});
+
 test("a Linux crash keeps chrome's GNU build id and offsets, and names the signal without a Mach exception", async () => {
   stub.shellNativeModules.ArdiaApp.crashReports = async () => [
     {

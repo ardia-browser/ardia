@@ -7,12 +7,12 @@ import { isTabReady, pageOf, usePages } from "../tabs/pageState";
 import { isInternalTab } from "../pages/urls";
 import { errorText } from "../../lib/errors";
 import { focusedWindowOf } from "../windows/ui";
-import { noteCliPillShown } from "../telemetry/cliCounts";
+import { noteCliPillDismissed, noteCliPillShown } from "../telemetry/cliCounts";
 import { noteDragsEnded } from "../telemetry/stuckDrags";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import type { ControlCaller } from "./controlCaller";
 import { noteCliConnections } from "../automation/offscreen";
-import { compactControlPill, programControlOn, setProgramControl } from "./programControlSetting";
+import { compactControlPill, programControlOn, setProgramControl, showControlPill } from "./programControlSetting";
 import { startCommandInstall } from "./linuxCommandInstall";
 
 const INDICATOR_HOLD_MS = 3000;
@@ -28,12 +28,22 @@ let socketServing = false;
 let indicatorStep = 0;
 let callerStep = 0;
 let hiddenStep = 0;
+let logicalActive = false;
+let indicatorDismissed = false;
 
-function showIndicator(shown: boolean) {
-  if (!shown) hiddenStep = ++indicatorStep;
-  else noteCliPillShown(compactControlPill(useBrowser.getState()));
+const pillAllowed = () => !indicatorDismissed && showControlPill(useBrowser.getState());
+
+function setIndicatorShown(shown: boolean) {
+  if (useControlIndicator.getState().shown === shown) return;
+  if (shown) noteCliPillShown(compactControlPill(useBrowser.getState()));
   const caller = shown && callerStep < hiddenStep ? null : useControlIndicator.getState().caller;
   useControlIndicator.setState({ shown, caller });
+}
+
+function endLogicalSession() {
+  logicalActive = false;
+  hiddenStep = ++indicatorStep;
+  setIndicatorShown(false);
 }
 
 export function noteControlCaller(caller: ControlCaller) {
@@ -47,20 +57,60 @@ function updateIndicator({ server }: { server: ControlStatus | null }) {
   noteCliConnections(cdpOn ? server.connections : 0);
   const on = cdpOn || socketServing;
   const connected = on && (cdpOn ? server.connections : 0) + socketRuns > 0;
-  if (connected || !on) {
+  if (connected) {
     if (indicatorHide) clearTimeout(indicatorHide);
     indicatorHide = null;
-    if (useControlIndicator.getState().shown !== connected) showIndicator(connected);
+    logicalActive = true;
+    setIndicatorShown(pillAllowed());
     return;
   }
-  if (!useControlIndicator.getState().shown || indicatorHide) return;
+  if (!on) {
+    if (indicatorHide) clearTimeout(indicatorHide);
+    indicatorHide = null;
+    if (logicalActive || useControlIndicator.getState().shown) endLogicalSession();
+    return;
+  }
+  if ((!logicalActive && !useControlIndicator.getState().shown) || indicatorHide) return;
   indicatorHide = setTimeout(() => {
     indicatorHide = null;
-    showIndicator(false);
+    endLogicalSession();
   }, INDICATOR_HOLD_MS);
 }
 
 useControlServer.subscribe(updateIndicator);
+
+let lastCliControl = programControlOn(useBrowser.getState());
+let lastShowCliPill = showControlPill(useBrowser.getState());
+
+useBrowser.subscribeTo(["settings"], (state) => {
+  const cliOn = programControlOn(state);
+  const showPill = showControlPill(state);
+  if (!cliOn && lastCliControl) indicatorDismissed = false;
+  lastCliControl = cliOn;
+  if (showPill !== lastShowCliPill) {
+    lastShowCliPill = showPill;
+    if (!showPill) {
+      setIndicatorShown(false);
+    } else {
+      indicatorDismissed = false;
+      if (logicalActive) setIndicatorShown(true);
+      else updateIndicator(useControlServer.getState());
+    }
+  }
+});
+
+export function dismissControlPill() {
+  if (indicatorDismissed || !useControlIndicator.getState().shown) return;
+  indicatorDismissed = true;
+  if (indicatorHide) {
+    clearTimeout(indicatorHide);
+    indicatorHide = null;
+    logicalActive = false;
+    hiddenStep = ++indicatorStep;
+  }
+  setIndicatorShown(false);
+  noteCliPillDismissed();
+}
 
 export function noteSocketRun(delta: 1 | -1) {
   socketRuns = Math.max(0, socketRuns + delta);
@@ -146,4 +196,4 @@ export function startProgramControl() {
   startCommandInstall();
 }
 
-if (__DEV__) (globalThis as { acControl?: unknown }).acControl = { server: useControlServer, indicator: useControlIndicator };
+if (__DEV__) (globalThis as { acControl?: unknown }).acControl = { server: useControlServer, indicator: useControlIndicator, dismiss: dismissControlPill };

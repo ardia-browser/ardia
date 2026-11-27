@@ -3,6 +3,7 @@ import { advanceCrashCursor, capture, consentNow, consentToken, crashCursor, loa
 import { contextAt, contextProperties, recentWebuiPages, sessionStart } from "./diagnostics";
 import type { SavedContext } from "./savedContext";
 import { logConsent, recordLog } from "./logs";
+import { nativeCrashDetails } from "./crashDetails";
 import { errorCode, errorFrames, errorMessage, errorType, jsFatalKind, nativeCrashExceptions, nativeCrashTermination, type ExceptionFrame } from "./sanitize";
 
 type Mechanism = "onerror" | "onunhandledrejection" | "react" | "react_recovered" | "console" | "native_crash" | "helper_crash";
@@ -183,6 +184,7 @@ export async function reportNativeCrashes(contexts: (SavedContext | null)[] = []
         crash_signal: signal,
         crash_subtype: subtype,
         crash_termination: nativeCrashTermination(report.terminationNamespace),
+        ...nativeCrashDetails(report),
         objc_exception: name,
         crashed_minutes_ago: Math.round((Date.now() - report.time) / 60_000),
         crashed_version: browser ? optional(report.appVersion, VERSION) : null,

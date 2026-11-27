@@ -50,5 +50,6 @@ export async function diagnostics(): Promise<string> {
     freezeSummaryLine(localFreezes()),
     ...(engine?.focus ? [`Focus: ${engine.focus.replace(/\n/g, "\n  ")}`] : []),
     ...(engine?.pictureInPictureCloses ? [`Picture in Picture closes: ${engine.pictureInPictureCloses.replace(/ \| /g, "\n  ")}`] : []),
+    ...(engine?.pictureInPictureGestures ? [`Picture in Picture gestures:\n  ${engine.pictureInPictureGestures.replace(/\n/g, "\n  ")}`] : []),
   ].join("\n");
 }

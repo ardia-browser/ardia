@@ -282,6 +282,15 @@ The Linux package ships on the same GitHub release. The Release workflow's `linu
   as a Debian package (setuid sandbox helper, polkit policy, AppArmor profile, computed `Depends`) and as an AppImage.
   The `.deb` is installed and purged in Debian 13 and Ubuntu 24.04 containers first; one that fails is left out and
   the rest ships ([linux-ci.md](linux-ci.md) › Linux releases).
+- `Ardia-<version>-linux-x64.rpm` and its `.sha256`: the same build as an RPM package for dnf and zypper (setuid
+  sandbox helper, polkit policy without the self-update action, AppArmor profile, `Requires` from rpm's generator),
+  installed, upgraded and removed in Fedora 43, AlmaLinux 9 and openSUSE Tumbleweed containers first; one that fails to build,
+  fails the smoke gate or fails to install is left out and the rest ships.
+- `Ardia-<version>-linux-x64.flatpak` and its `.sha256`: the single-file Flatpak bundle of `dev.ardia.Ardia`, built
+  from that tarball on Flathub's runtime and Chromium base app and installed and run in Ubuntu 24.04 and Fedora 43
+  containers first; one that fails to build or install is left out. `scripts/linux/linux_formats.py flathub
+  --version <version> --sha256 <tarball sha256> --out <folder>` writes the manifest that points Flathub at the
+  published tarball.
 - `ardia-bin-<version>.src.tar.gz` and its `.sha256`: the Arch PKGBUILD and `.SRCINFO` pinned to that tarball, for
   `makepkg -si` without the AUR.
 
@@ -327,7 +336,7 @@ the engine if `engine/` changed (below).
   found" from a failed request, and a failed one stops the job instead of passing for "not published". So a dry run on a commit catches
   whatever would stop the real run on it.
 - **checks**: `pnpm typecheck`, `pnpm test`, `pnpm shaders:check`.
-- **build**, on the `xcode-27` runner (Xcode 27.1, the same build as here), with no secrets: fetches the engine for
+- **build**, on Blacksmith's `blacksmith-12vcpu-macos-27` runner (Xcode 27.1, the same build as here), with no secrets: fetches the engine for
   this exact `engine/` tree (`fetch-engine.sh`), installs (pnpm, Pods), runs
   `scripts/release.sh <version> --phase build` (the archive, signed ad hoc, and the official plugins pinned in
   `apps/browser/official-plugins.json`, fetched and SHA-256 checked by `scripts/release/official-plugins.py bundle`)
@@ -468,7 +477,13 @@ The same script uploads the engine's symbols: `ArdiaCore-<tree:12>-symbols.tar.x
 beside the framework in `out/Release_GN_arm64` (`Chromium Framework.dSYM` and the helpers'; function names only, as
 `symbol_level=0` builds no line tables), and `ArdiaCore-<tree:12>-uuids.txt`, a `<uuid> <arch> <DWARF file>` row per
 image. It copies them with the framework under the chromium lock and refuses a framework whose own dSYM doesn't carry its
-UUID. The framework itself is already stripped, so strip-engine.sh's copies in `symbols/` name almost nothing. A crash's
+UUID. After its upload it runs `scripts/lib/engine-symbols-published.sh` on the release and the packed framework: the
+release must carry both files, non-empty, the uuids file must name a DWARF file for each of the framework's UUIDs, and
+that file in the archive must be a dSYM with that UUID and the build's full symbol table (over 100,000 names; the
+stripped framework has a few thousand); otherwise it stops before the table line is written. The Release
+workflow runs the same check on the engine `fetch-engine.sh` picked (its `engine-match` `version=`) before it builds,
+so no app ships an engine whose crashes can't be named, as 0.2.45, 0.2.46 and the early 0.2.47 nightlies did (#2371).
+The framework itself is already stripped, so strip-engine.sh's copies in `symbols/` name almost nothing. A crash's
 "Chromium Framework + 0x2e2334" is named with `scripts/symbolicate-crash.sh <Chromium Framework UUID> 0x2e2334 …`: it
 finds the engine release whose rows hold that UUID, downloads that dSYM into `dist/engine-symbols` and runs
 `atos -arch arm64 -offset` on the offsets. `-offset` reads each one as relative to the image's `__TEXT` segment, which is

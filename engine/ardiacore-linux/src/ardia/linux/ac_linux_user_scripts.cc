@@ -8,6 +8,7 @@
 #include <set>
 #include <utility>
 
+#include "ardia/desktop/ac_desktop_paths.h"
 #include "ardia/linux/ac_linux_user_scripts_store.h"
 #include "base/containers/fixed_flat_set.h"
 #include "base/files/file_path_watcher.h"
@@ -150,7 +151,7 @@ class ScriptsWatcher {
     base::ScopedBlockingCall blocking(FROM_HERE, base::BlockingType::MAY_BLOCK);
     mkdir(store::ScriptsPath(data_directory_).c_str(), 0755);
     watcher_ = std::make_unique<base::FilePathWatcher>();
-    if (!watcher_->Watch(base::FilePath(store::ScriptsPath(data_directory_)),
+    if (!watcher_->Watch(ardia::desktop_paths::FromText<base::FilePath>(store::ScriptsPath(data_directory_)),
                          base::FilePathWatcher::Type::kNonRecursive,
                          base::BindRepeating(&ScriptsWatcher::Changed, weak_factory_.GetWeakPtr()))) {
       Later(&ScriptsWatcher::Rearm, kRewatch);
@@ -203,7 +204,7 @@ class UserScriptsService {
   }
 
   void Init(const base::FilePath& data_directory, LinuxModuleSink sink) {
-    data_directory_ = data_directory.value();
+    data_directory_ = ardia::desktop_paths::Text(data_directory);
     sink_ = std::move(sink);
   }
 

@@ -1,0 +1,69 @@
+The Ardia Linux host names the window class of the windows it opens for Little Ardia, Settings and Import
+(g_ardia_linux_window_class: the Wayland app id and the X11 WM_CLASS instance, ardia-little, ardia-settings and
+ardia-import), so a compositor rule and a desktop entry can tell them from a main window. It may also pin a window's
+size (g_ardia_linux_pins_window_size): the browser widget's minimum and maximum size are then the window's own size,
+so the window maps with a fixed size, which niri, sway and i3 float by default, and the host releases the pin once
+the window has been presented. Both hooks are null outside the Linux host.
+--- a/chrome/browser/ui/views/frame/browser_native_widget_aura_linux.cc
++++ b/chrome/browser/ui/views/frame/browser_native_widget_aura_linux.cc
+@@ -22,6 +22,20 @@
+ 
+ bool ArdiaLinuxFramelessApp(const BrowserWindowInterface* browser);
+ 
++const char* (*g_ardia_linux_window_class)(const BrowserWindowInterface*) =
++    nullptr;
++bool (*g_ardia_linux_pins_window_size)(const BrowserWindowInterface*) =
++    nullptr;
++
++namespace {
++
++bool ArdiaLinuxPinsWindowSize(const BrowserView* browser_view) {
++  return g_ardia_linux_pins_window_size && browser_view &&
++         g_ardia_linux_pins_window_size(browser_view->browser());
++}
++
++}
++
+ BrowserNativeWidgetAuraLinux::BrowserNativeWidgetAuraLinux(
+     BrowserWidget* browser_widget,
+     BrowserView* browser_view)
+@@ -106,6 +120,12 @@
+       }
+     }
+   }
++  if (const char* ardia_class = g_ardia_linux_window_class
++                                    ? g_ardia_linux_window_class(&browser)
++                                    : nullptr) {
++    window_class.wm_class_name = ardia_class;
++    window_class.wayland_app_id = ardia_class;
++  }
+   return window_class;
+ }
+ 
+@@ -187,3 +207,15 @@
+     BrowserView* browser_view) {
+   return new BrowserNativeWidgetAuraLinux(browser_widget, browser_view);
+ }
++
++gfx::Size BrowserWidget::GetMinimumSize() const {
++  return ArdiaLinuxPinsWindowSize(browser_view_.get())
++             ? GetWindowBoundsInScreen().size()
++             : views::Widget::GetMinimumSize();
++}
++
++gfx::Size BrowserWidget::GetMaximumSize() const {
++  return ArdiaLinuxPinsWindowSize(browser_view_.get())
++             ? GetWindowBoundsInScreen().size()
++             : views::Widget::GetMaximumSize();
++}
+--- a/chrome/browser/ui/views/frame/browser_widget.h
++++ b/chrome/browser/ui/views/frame/browser_widget.h
+@@ -74,6 +74,8 @@
+   void set_tiled_edges(const ui::WindowTiledEdges& edges) {
+     tiled_edges_ = edges;
+   }
++  gfx::Size GetMinimumSize() const override;
++  gfx::Size GetMaximumSize() const override;
+ #endif
+ 
+   // Initialize the frame (creates the underlying native window).

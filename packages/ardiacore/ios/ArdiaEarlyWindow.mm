@@ -469,6 +469,7 @@ ArdiaEarlyShown *ShownForWindow(NSWindow *window) {
   if (s.rootFillCleared && s.root != root) {
     [s.root setValue:s.rootFill forKey:@"backgroundColor"];
     s.root.alphaValue = 1;
+    ardia_host::KeepHitsWhileClear(s.root, false);
     s.rootFillCleared = NO;
     s.rootFill = nil;
   }

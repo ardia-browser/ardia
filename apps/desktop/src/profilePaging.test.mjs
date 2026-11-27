@@ -47,6 +47,49 @@ test("a short swipe springs back to the current profile", async () => {
   assert.equal(named.snapshot().selected, 0);
 });
 
+const pagerMarks = () => performance.getEntriesByType("mark").filter((m) => m.name.startsWith("ardia-pager-")).map((m) => m.name);
+
+test("a swipe marks pager motion once when it starts and once at rest", async () => {
+  performance.clearMarks();
+  const { named, area } = pager();
+  named.input(area, "began", 0, -1, 0);
+  named.input(area, "changed", 300, -1, 0.05);
+  assert.deepEqual(pagerMarks(), ["ardia-pager-moving"]);
+  named.input(area, "ended", 300, -1, 0.3);
+  assert.deepEqual(pagerMarks(), ["ardia-pager-moving"]);
+  await settled(named);
+  assert.deepEqual(pagerMarks(), ["ardia-pager-moving", "ardia-pager-rest"]);
+  const [moving, rest] = performance.getEntriesByType("mark").filter((m) => m.name.startsWith("ardia-pager-"));
+  assert.ok(rest.startTime >= moving.startTime);
+});
+
+test("a menu switch and an interrupted motion each close their motion with a rest mark", async () => {
+  performance.clearMarks();
+  const { named, area } = pager();
+  assert.equal(named.switchTo(1, ORDER), true);
+  await settled(named);
+  assert.deepEqual(pagerMarks(), ["ardia-pager-moving", "ardia-pager-rest"]);
+  performance.clearMarks();
+  named.input(area, "began", 0, -1, 0);
+  named.select("default", ORDER);
+  assert.deepEqual(pagerMarks(), ["ardia-pager-moving", "ardia-pager-rest"]);
+});
+
+test("pager marks stay bounded across many motions and the latest pair is always kept", async () => {
+  performance.clearMarks();
+  const { named } = pager();
+  for (let i = 0; i < 40; i++) {
+    assert.equal(named.switchTo(i % 2 ? 0 : 1, ORDER), true);
+    await settled(named);
+  }
+  const moving = performance.getEntriesByName("ardia-pager-moving", "mark");
+  const rest = performance.getEntriesByName("ardia-pager-rest", "mark");
+  assert.ok(moving.length >= 1 && moving.length <= 16, `${moving.length} moving marks`);
+  assert.ok(rest.length >= 1 && rest.length <= 16, `${rest.length} rest marks`);
+  assert.ok(rest.at(-1).startTime >= moving.at(-1).startTime);
+  assert.equal(named.snapshot().selected, 0);
+});
+
 test("menu and keyboard switches page to any profile", async () => {
   const { named } = pager();
   assert.equal(named.switchTo(1, ORDER), true);

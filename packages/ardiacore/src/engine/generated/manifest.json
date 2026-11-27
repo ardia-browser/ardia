@@ -247,6 +247,11 @@
           "windows": "custom",
           "routeField": "tasks"
         },
+        "nativeMessagingHosts": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
         "childProcessCpu": {
           "mac": "custom",
           "desktop": "custom",
@@ -943,11 +948,6 @@
           "desktop": "custom",
           "windows": "absent"
         },
-        "ctrlTabMru": {
-          "mac": "custom",
-          "desktop": "absent",
-          "windows": "absent"
-        },
         "release": {
           "mac": "custom",
           "desktop": "custom",
@@ -1105,6 +1105,16 @@
           "mac": "service",
           "desktop": "route",
           "windows": "service"
+        },
+        "diagnostics": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "input": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
         },
         "reportCommits": {
           "mac": "custom",
@@ -1397,6 +1407,11 @@
           "desktop": "absent",
           "windows": "absent"
         },
+        "takePageMetrics": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
         "takeFirstPaintHolds": {
           "mac": "custom",
           "desktop": "absent",
@@ -1495,8 +1510,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "25ce93a844a411ce16ac7fcd3c5e63ba6e9a859855d68bcc3bcd4cf187395fe0",
-        "swift": "b11487a0232b8f7ff070b0726b13e18a14dffe7bccf08736e9db4ce35fea6353"
+        "types": "06503bc68a8671906f150d0d1be7518834ce298287002970a5db2ae16b4eb4f3",
+        "swift": "1b0f1f7827a5f96df5bb21b9bb6725cc0e33419e7e003532f1c8d4492be92645"
       },
       "modules": {
         "ArdiaShell": {
@@ -1668,6 +1683,17 @@
               "mac": "custom",
               "desktop": "absent",
               "windows": "custom"
+            },
+            "setWindowShown": {
+              "args": [
+                "id",
+                "shown",
+                "burst"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
             },
             "restoreFullScreen": {
               "args": [
@@ -1921,6 +1947,25 @@
                 "token"
               ],
               "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "fieldBlurCause": {
+              "args": [
+                "fieldTag"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "watchFieldBlurs": {
+              "args": [
+                "fieldTag",
+                "watch"
+              ],
+              "async": false,
               "mac": "custom",
               "desktop": "absent",
               "windows": "absent"
@@ -3394,6 +3439,49 @@
           },
           "events": {}
         },
+        "ArdiaWheelArea": {
+          "native": "WheelAreaNative",
+          "functions": {
+            "devWheel": {
+              "args": [
+                "windowId",
+                "x",
+                "y",
+                "steps"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "glideScroll": {
+              "args": [
+                "tag",
+                "y",
+                "durationMs"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "steerScroll": {
+              "args": [
+                "tag",
+                "lo",
+                "hi",
+                "glideMs",
+                "canForward",
+                "canBack"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
         "ArdiaPeekStage": {
           "native": "PeekStageNative",
           "functions": {
@@ -4360,6 +4448,17 @@
                 "id",
                 "progress",
                 "still"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "pulse": {
+              "args": [
+                "id",
+                "period",
+                "low"
               ],
               "async": false,
               "mac": "custom",

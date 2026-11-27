@@ -71,7 +71,7 @@ export function windowButtonLayoutSnapshot(desktop: DesktopButtons = useDesktopB
 }
 
 export const appIconSetting = (icon: string | null): Record<string, string> =>
-  icon && /^[a-z]{1,16}$/.test(icon) ? { setting_app_icon: icon, default_app_icon: "default" } : {};
+  icon && /^[a-z]{1,16}(-flat)?$/.test(icon) ? { setting_app_icon: icon, default_app_icon: "default" } : {};
 
 export function customColorProfiles(profiles: Record<string, PresetLookFields>, defaultProfileId?: string): Record<string, string> {
   const all = Object.values(profiles);

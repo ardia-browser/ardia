@@ -44,6 +44,8 @@ test("Light or Dark: a fixed choice wins, System follows the device, Match My Ma
   assert.equal(preferredScheme("redesigned", "matchMac", glassLightMac), "light");
   assert.equal(preferredScheme("redesigned", "matchMac", autoMac), null);
   assert.equal(preferredScheme("redesigned", "matchMac", null), null);
+  assert.equal(preferredScheme("material", "dark", null), "dark");
+  assert.equal(preferredScheme("material", "light", classicDarkMac), "light");
   assert.equal(appliedDark(null, true), true);
   assert.equal(appliedDark(null, false), false);
   assert.equal(appliedDark("light", true), false);

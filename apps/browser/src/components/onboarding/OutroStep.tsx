@@ -5,38 +5,34 @@ import { PostageStamp, PostcardPaper } from "../ntp/PostageStamp";
 import { finishOnboarding, QUESTION_ORDER, useOnboarding } from "../../state/onboarding/onboarding";
 import { SecondaryButton } from "./Buttons";
 import { useOnboardingColors } from "./Parts";
-import { keyText } from "../../state/commands/keyText";
+import { useShortcutHints } from "../../state/commands/commandShortcuts";
+import { OUTRO_COMMANDS, outroShortcuts } from "../../state/onboarding/outroShortcuts";
 import { StepActions, StepLayout } from "./StepLayout";
 import { onboardingType } from "./tokens";
 
-const SHORTCUTS = [
-  ["⌘T", "Open a new tab"],
-  ["⌘L", "Go anywhere from the command bar"],
-  ["⌘S", "Hide the sidebar for more room"],
-] as const;
 
 export function OutroStep() {
   const colors = useOnboardingColors();
   const picked = useOnboarding((s) => s.picked);
   const redo = useOnboarding((s) => s.redo);
   const lines = QUESTION_ORDER.flatMap((q) => picked[q] ?? []);
+  const shortcuts = outroShortcuts(useShortcutHints(OUTRO_COMMANDS));
   return (
     <StepLayout
       title={"Welcome to your new\nhome on the internet"}
       subtitle="Everything you set up is saved. Change any of it later in Settings."
       actions={
         <>
-          <StepActions icon="arrow.right" continueTitle={redo ? "Done" : "Get Started"} onContinue={() => finishOnboarding()} />
+          <StepActions icon="arrow.right" continueTitle={redo ? "Done" : "Get Started"} onContinue={() => finishOnboarding()} holdScroll />
           {redo ? null : <SecondaryButton title="Take the Tour" onPress={() => finishOnboarding({ tour: true })} />}
         </>
       }
       preview={<Postcard lines={lines} />}
-      previewOptional
     >
       <View style={{ gap: space.ml }}>
-        {SHORTCUTS.map(([keys, label]) => (
-          <View key={keys} style={{ flexDirection: "row", alignItems: "center", gap: space.l }}>
-            <KeyCap keys={[keyText(keys)]} />
+        {shortcuts.map(({ command, keys, label }) => (
+          <View key={command} style={{ flexDirection: "row", alignItems: "center", gap: space.l }}>
+            <KeyCap keys={[keys]} />
             <Text color={colors.subtitle}>{label}</Text>
           </View>
         ))}

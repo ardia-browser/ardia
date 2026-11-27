@@ -6,6 +6,7 @@ import { StyleSheet } from "react-native";
 import { focus, switchToTab } from "../../state/browser/actions";
 import { notePictureInPictureActivated, notePictureInPictureBackToTab, notePictureInPictureClickSkip, notePictureInPictureDragged, notePictureInPictureHandleUnstash, notePictureInPictureReleased, notePictureInPictureResized, notePictureInPictureStandIn } from "../../state/telemetry/pictureInPictureCounts";
 import { noteRendererResponsive, noteRendererUnresponsive } from "../../state/telemetry/freezes";
+import { notePageFullScreenTransition } from "../../state/telemetry/windowPlacementCounts";
 import { noteFavicon } from "../../state/favicons/favicons";
 import { adoptIconPage, dropOutlivedFavicon, noteIconPage } from "../../state/favicons/iconPage";
 import { endThemeHold, heldThemeColor } from "../../state/windows/launchLook";
@@ -16,7 +17,8 @@ import { opaqueCard } from "../ui/opaqueCard";
 import { handOff, takeHandOff, wantsPage } from "../../state/tabs/tabPages";
 import { noteDiscarded, noteGone, noteReady } from "../../state/tabs/tabLifecycle";
 import { noteTabHidden, presentTab, trackPageArrival } from "../../state/tabs/busyTabWatch";
-import { noteWebKitPage, offerWebKit, persistEngine } from "../../state/engines/actions";
+import { forgetCommittedDocumentIfGone, notePageCommit, noteWebKitPage, persistEngine, refusedVideoSiteOf } from "../../state/engines/actions";
+import { offerWebKit } from "../../state/engines/siteMoves";
 import { heldBySwap, watchFirstPaint } from "../../state/engines/engineSwap";
 import { useRetiringEngine } from "../../state/engines/hooks";
 import { noteProtectedVideoRefusal } from "../../state/telemetry/protectedVideoCounts";
@@ -38,9 +40,10 @@ import { fieldProviderHint, fieldProviderOpened, verificationCodeFound, type Fie
 import { verificationCodeDocument, verificationCodeTabGone } from "../../state/site/verificationCodes";
 import { hoverStatus } from "../../state/tabs/hoverStatus";
 import { endPageDocument, forgetPageDocument, notePageDocument } from "../../state/plugins/pageBarDocuments";
-import { leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
+import { arrivedOnFirstPage, leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
 import { copyLinkToSelection, searchSelection, setPageSelection } from "../../state/site/selection";
 import { shareFromPage } from "../../state/site/share";
+import { navigateFromPage } from "../../state/tabs/pageCommands";
 import { useAutoPictureInPicture } from "../../state/media/pip";
 import { requestDisplayMedia } from "../../state/media/screenShare";
 import { setNowPlaying, setPictureInPictureState } from "../../state/media/media";
@@ -53,7 +56,8 @@ import { noteCommit } from "../../state/automation/automationEvents";
 import { notePluginStateCommit } from "../../state/plugins/stateCommits";
 import { forgetUnreadIfGone, noteAppBadge, noteUnreadFavicon, noteUnreadLoading, noteUnreadPageEnded } from "../../state/tabs/unread";
 import { trackPageProcessGone } from "../../state/telemetry/diagnostics";
-import { releaseTranslation, translateCrashContext } from "../../state/site/translate";
+import { defaultTarget, languageName, releaseTranslation, revertPage, translateCrashContext, translatePage, translation, useTranslatePageMenu } from "../../state/site/translate";
+import { translatePageMenuItems } from "../../state/site/translateMenu";
 import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
 import { noteWebKitFocusRestore } from "../../state/telemetry/pageFocusReturns";
 import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
@@ -102,6 +106,8 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
     return (handle: Parameters<typeof register>[0]) => (handle && peekOf !== undefined && promotedFromPeek(tabId) ? undefined : register(handle));
   }, [tabId]);
   const autoPictureInPicture = useAutoPictureInPicture(tabId, visible);
+  const translateMenu = useTranslatePageMenu(tabId);
+  const pageMenuItems = useMemo(() => (translation ? translatePageMenuItems(translateMenu, languageName(defaultTarget())) : []), [translateMenu]);
   useEffect(() => (visible ? presentTab(tabId) : noteTabHidden(tabId)), [tabId, visible]);
   const pageColor = useProfilesValue(profileId, (profiles) => (isIncognitoProfile(profileId) ? "incognito" : (profiles[profileId]?.color ?? "plum")));
   const theme = useProfileTheme(profileId);
@@ -143,6 +149,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
     persistEngine(tabId, engine);
     return () => {
       forgetPageDocument(tabId, documentReporter);
+      forgetCommittedDocumentIfGone(tabId);
       if (wentRetired.current) return;
       if (handedToTab()) return forgetPeekHandover(tabId);
       noteGone(tabId);
@@ -153,9 +160,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
     };
   }, []);
   const waitsOffScreen = engine === "webkit" && warm && !visible;
-  useEffect(() => {
-    if (waitsOffScreen) noteWebKitPageKeptHidden();
-  }, [waitsOffScreen]);
+  useEffect(() => { if (waitsOffScreen) noteWebKitPageKeptHidden(); }, [waitsOffScreen]);
   const mountedProfile = useRef(profileId);
   const wentRetired = useRef(false);
   useLayoutEffect(() => {
@@ -206,6 +211,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
       warm={warm}
       neighbour={neighbour}
       autoPictureInPicture={autoPictureInPicture}
+      pageMenuItems={pageMenuItems}
       pageColor={pageColor}
       contentsBackgroundColor={backdrop}
       shownUrl={shownUrl}
@@ -223,6 +229,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         noteCommit(tabId, committedUrl, committedAt, httpStatus);
         notePluginStateCommit(tabId, committedUrl, committedAt);
         verificationCodeDocument(tabId, committedAt);
+        if (!retired) notePageCommit(tabId, committedAt);
         notePageDocument(tabId, reported, committedUrl, committedAt, isIncognitoProfile(profileId), documentReporter);
         if (reopening.current && reported && !isBlankAddress(reported)) {
           reopening.current = false;
@@ -265,21 +272,20 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         pageArrived();
         dropOutlivedFavicon(tabId, url, isLoading);
         if (engine === "webkit") noteWebKitPage(tabId, { url, title, isLoading, committedUrl: committedUrl ?? "" });
-        if (lastPage.current !== null && withoutFragment(url) !== lastPage.current) leftPage(tabId, url, lastPage.current, engine, peekOf !== undefined);
+        if (lastPage.current !== null && withoutFragment(url) !== lastPage.current) leftPage(tabId, url, lastPage.current, engine);
+        else if (lastPage.current === null) arrivedOnFirstPage(tabId, url, engine);
         lastPage.current = withoutFragment(url);
         patchPage(tabId, { themeColorSource: themeColorSource ?? null });
       }}
-      onLoadError={() => {
-        pending.current = null;
-      }}
+      onLoadError={() => { pending.current = null; }}
       onDownloadNavigation={({ committedUrl, skipped }) => {
         pending.current = null;
         downloadNavigated(tabId, committedUrl, skipped);
       }}
       onProgress={(progress) => !prewarmOnly() && !heldBySwap(tabId, { progress }) && setPageProgress(tabId, progress)}
-      onZoom={({ zoom, user }) => {
+      onZoom={({ zoom, user, scroll }) => {
         updateTab(tabId, { zoom });
-        if (user) zoomChangedByUser(tabId);
+        if (user) zoomChangedByUser(tabId, scroll);
       }}
       onFindResult={({ count, active }) => setFind(tabId, { count, active })}
       onFavicon={(favicon) => {
@@ -331,6 +337,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         patchPage(tabId, { unresponsive: false });
       }}
       onFullscreen={(fullscreen) => patchPage(tabId, { fullscreen })}
+      onFullScreenTransition={notePageFullScreenTransition}
       onMediaAccess={(mediaAccess) => patchPage(tabId, { mediaAccess: mediaAccess.camera || mediaAccess.microphone || mediaAccess.screen ? mediaAccess : null })}
       onSecurity={(security) => !prewarmOnly() && patchPage(tabId, { security })}
       onContentBlocked={({ count }) => patchPage(tabId, { blocked: count })}
@@ -354,11 +361,14 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         else if (command === "copyLinkToHighlight") void copyLinkToSelection(tabId);
         else if (command === "escape") escapePressed(tabId, "page");
         else if (command === "hideElement" && point) void startHidingElement(tabId, point);
+        else if (command === "translatePage") void translatePage(tabId, defaultTarget(), "page_menu");
+        else if (command === "showOriginal") void revertPage(tabId);
+        else if (command === "back" || command === "forward") navigateFromPage(tabId, command);
       }}
       onSelection={(selection) => setPageSelection(tabId, selection)}
       onScroll={(state) => noteScroll(tabId, state)}
       onProtectedMedia={(request) => {
-        if (engine === "chromium") noteProtectedVideoRefusal(request, consentToken());
+        if (engine === "chromium") noteProtectedVideoRefusal(request, consentToken(), refusedVideoSiteOf(tabId));
         offerWebKit(tabId, request);
       }}
       onAutoplayBlocked={(count) => noteSiteControls("autoplayPlaysBlocked", count)}

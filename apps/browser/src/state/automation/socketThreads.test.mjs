@@ -6,7 +6,6 @@ const { methodsCatalog } = await import("./socketCatalog.ts");
 const { takeCliCounts } = await import("../telemetry/cliCounts.ts");
 const { withLivePage } = await import("../tabs/livePage.ts");
 const { isAbsoluteFolder } = await import("../../lib/absoluteFolder.ts");
-const windowsFolders = await import("../../lib/absoluteFolder.windows.ts");
 const stub = await import("../../test-native/index.ts");
 const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
 setConsentPeriod(true, "socket-threads-test");
@@ -73,10 +72,6 @@ test("extensions.reload and extensions.setPinned report a native failure instead
 test("download folders: absolute on each platform, relative refused everywhere", () => {
   assert.ok(isAbsoluteFolder("/Users/a/Downloads"));
   assert.ok(!isAbsoluteFolder("Downloads") && !isAbsoluteFolder("C:\\Users\\a\\Downloads"));
-  assert.ok(windowsFolders.isAbsoluteFolder("C:\\Users\\Alice\\Downloads"));
-  assert.ok(windowsFolders.isAbsoluteFolder("\\\\server\\share\\Downloads"));
-  assert.ok(windowsFolders.isAbsoluteFolder("D:/Downloads"));
-  assert.ok(!windowsFolders.isAbsoluteFolder("Downloads") && !windowsFolders.isAbsoluteFolder("C:Downloads") && !windowsFolders.isAbsoluteFolder("\\Downloads"));
 });
 
 test("splits.create takes two to the most panes a split holds, refused before the handler otherwise", async () => {

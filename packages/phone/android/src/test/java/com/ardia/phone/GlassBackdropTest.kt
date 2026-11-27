@@ -172,6 +172,31 @@ class GlassBackdropTest {
     }
 
     @Test
+    fun aBackdropWhoseGlassesAreAllHiddenIsParkedAndDoesNoPerFrameWork() {
+        val scene = bar()
+        live(scene)
+        (scene.glasses + scene.pill).forEach {
+            it.shownMs = 0f
+            it.shown = false
+        }
+        onHardware(scene.backdrop)
+        assertTrue("with nothing drawn and nothing sampled the backdrop is parked", scene.backdrop.parked)
+        val before = scene.backdrop.placementsChecked
+        repeat(3) {
+            scene.fold.translationY = it * 4f
+            scene.pillFold.scaleX = 1f + it * 0.1f
+            scene.backdrop.viewTreeObserver.dispatchOnPreDraw()
+        }
+        assertEquals("a parked backdrop places nothing per frame", before, scene.backdrop.placementsChecked)
+        assertFalse(scene.backdrop.isDirty)
+        scene.pill.shown = true
+        assertFalse("a glass shown again unparks it", scene.backdrop.parked)
+        assertTrue(scene.backdrop.isDirty)
+        onHardware(scene.backdrop)
+        assertTrue(scene.backdrop.placement(scene.pill) != null)
+    }
+
+    @Test
     fun aHostedGlassThatChangesSizeRedrawsTheBackdrop() {
         val scene = bar()
         live(scene)
@@ -243,5 +268,86 @@ class GlassBackdropTest {
         assertNull(glass.backdrop)
         assertFalse(glass in scene.backdrop.glasses)
         assertTrue("its redraw no longer reaches the backdrop's list", scene.backdrop.glasses.size == 2)
+    }
+
+    @Test
+    fun aBackdropMountedAfterItsGlassesHostsThem() {
+        val scene = bar()
+        live(scene)
+        scene.bar.removeView(scene.backdrop)
+        (scene.glasses + scene.pill).forEach { assertNull(it.backdrop) }
+        scene.bar.addView(scene.backdrop, 0)
+        (scene.glasses + scene.pill).forEach { assertSame("a backdrop that attaches after its glasses takes them back", scene.backdrop, it.backdrop) }
+        assertEquals(scene.glasses + scene.pill, scene.backdrop.glasses)
+        assertTrue(scene.backdrop.isDirty)
+        live(scene)
+        assertEquals("and draws them live again", FrostPage.Path.Live, scene.glasses[0].lastChoice?.path)
+    }
+
+    @Test
+    fun aBackdropAdoptsOnlyTheGlassesThatWouldFindIt() {
+        val scene = bar()
+        scene.bar.removeView(scene.backdrop)
+        val early = GlassView(activity, appContext).apply { source = "backdrop-test" }
+        scene.bar.addView(early, 0)
+        val pillBackdrop = GlassBackdropView(activity, appContext)
+        scene.pillFold.addView(pillBackdrop, 0)
+        assertSame("the pill's own backdrop takes the pill", pillBackdrop, scene.pill.backdrop)
+        scene.bar.addView(scene.backdrop, 1)
+        scene.glasses.forEach { assertSame(scene.backdrop, it.backdrop) }
+        assertSame("a glass with a nearer backdrop keeps it", pillBackdrop, scene.pill.backdrop)
+        assertNull("a glass before the backdrop is not its to host", early.backdrop)
+        assertEquals(scene.glasses, scene.backdrop.glasses)
+    }
+
+    @Test
+    fun aWholeBranchMountedAtOnceBindsItsGlass() {
+        val scene = bar()
+        val branch = FrameLayout(activity)
+        val backdrop = GlassBackdropView(activity, appContext)
+        val layer = FrameLayout(activity)
+        val glass = GlassView(activity, appContext).apply { source = "backdrop-test"; shape = "capsule" }
+        layer.addView(glass)
+        branch.addView(backdrop)
+        branch.addView(layer)
+        val backdropsBefore = GlassAttachment.backdrops
+        val hostedBefore = GlassAttachment.hosted
+        scene.bar.addView(branch)
+        assertSame(backdrop, glass.backdrop)
+        assertEquals(listOf(glass), backdrop.glasses)
+        assertEquals("the attached backdrops are counted for the trace", backdropsBefore + 1, GlassAttachment.backdrops)
+        assertEquals(hostedBefore + 1, GlassAttachment.hosted)
+        scene.bar.removeView(branch)
+        assertNull(glass.backdrop)
+        assertTrue(backdrop.glasses.isEmpty())
+        assertEquals("and a detached branch takes its counts with it", backdropsBefore, GlassAttachment.backdrops)
+        assertEquals(hostedBefore, GlassAttachment.hosted)
+    }
+
+    @Test
+    fun aSharedStripIsNamedForItsSourceAndTheRolesDrawingIt() {
+        val scene = bar()
+        scene.glasses[0].name = "floatingBarTabs"
+        scene.glasses[1].name = "floatingBarAddress"
+        scene.pill.name = "hostPill"
+        live(scene)
+        val strip = scene.source.stripsHeld.single()
+        assertEquals("backdrop-test:floatingBarAddress+floatingBarTabs+hostPill", strip.label)
+        val shared = strip.node
+        scene.pill.shownMs = 0f
+        scene.pill.shown = false
+        live(scene)
+        assertEquals("a role that stops sampling leaves the name", "backdrop-test:floatingBarAddress+floatingBarTabs", strip.label)
+        assertNotEquals("and the strip records into a newly named node", shared, strip.node)
+        scene.glasses.forEach { assertSame(strip.node, strip.nodeFor(it)) }
+        val renamed = strip.node
+        live(scene)
+        assertSame("an unchanged set of roles keeps its node", renamed, strip.node)
+    }
+
+    @Test
+    fun aStripWithAnUnnamedConsumerSaysSo() {
+        assertEquals("page:hostPill+unnamed", FrostStrip.label("page", listOf("unnamed", "hostPill", "hostPill")))
+        assertEquals("unnamed:deckGlass", FrostStrip.label(null, listOf("deckGlass")))
     }
 }

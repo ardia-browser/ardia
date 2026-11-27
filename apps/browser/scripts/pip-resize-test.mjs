@@ -617,6 +617,9 @@ try {
       const page = await instance.page(url, { timeout: 5000 });
       const play = (src) => page.eval(`(async () => { const v = document.getElementById("v"); v.src = ${JSON.stringify(src)}; await new Promise((r) => v.addEventListener("loadedmetadata", r, { once: true })); await v.play(); return v.videoWidth / v.videoHeight; })()`, { timeout: 15000 });
       const ratio = (s) => s.width / s.height;
+      await pip("pinch:1.5,24,120");
+      await until("the hand-off", async () => !(await pip("standIn")), 5000);
+      await sleep(400);
       const before = await state();
       try {
         const wide = await play("wide.mp4");

@@ -96,9 +96,18 @@ test("the Ardia, File, View and Help menus carry the Mac menu bar's entries in i
     "menu:Show Bookmarks Bar",
     "togglePinnedFold",
   ]);
-  assert.deepEqual(find(items, "menu:Split View").children.map((item) => item.id), ["openSplitPane", "focusNextPane", "focusPreviousPane"]);
+  assert.deepEqual(find(items, "menu:Split View").children.map((item) => item.id), [
+    "openSplitPane",
+    "openSplitPaneBelow",
+    "focusNextPane",
+    "focusPreviousPane",
+    "moveSplitPaneLeft",
+    "moveSplitPaneRight",
+    "moveSplitPaneUp",
+    "moveSplitPaneDown",
+  ]);
   assert.equal(find(items, "setTabLayout:sidebarRight").title, "Sidebar on Right");
-  assert.deepEqual(rows(items, "Help"), ["Report a Problem…", "Keyboard Shortcuts", "Tool Tour", "Video Tour", "Release Notes", "-", "Copy Diagnostics"]);
+  assert.deepEqual(rows(items, "Help"), ["Report a Problem…", "Keyboard Shortcuts", "Tool Tour", "Video Tour", "Release Notes", "-", "Copy Diagnostics", "-", "Show Onboarding"]);
 });
 
 test("sharing is disabled where the page can't be shared, tab layout shows its check, and disabled pinned fold hides", () => {
@@ -112,8 +121,10 @@ test("sharing is disabled where the page can't be shared, tab layout shows its c
 });
 
 test("leaving entries out never leaves a doubled or dangling separator", () => {
-  const items = appMenuItems(state(), new Map(), new Set(["videoTour", "releaseNotes", "copyDiagnostics"]));
+  const items = appMenuItems(state(), new Map(), new Set(["videoTour", "releaseNotes", "copyDiagnostics", "showOnboarding"]));
   assert.deepEqual(rows(items, "Help"), ["Report a Problem…", "Keyboard Shortcuts", "Tool Tour"]);
+  const kept = appMenuItems(state(), new Map(), new Set(["videoTour", "releaseNotes", "copyDiagnostics"]));
+  assert.deepEqual(rows(kept, "Help"), ["Report a Problem…", "Keyboard Shortcuts", "Tool Tour", "-", "Show Onboarding"]);
 });
 
 test("a command the host can't carry out is left out of the menu instead of doing nothing", () => {
@@ -178,4 +189,70 @@ test("Move to Profile lists the profiles only, and the Tabs and Extensions menus
   assert.deepEqual(find(items, "menu:Move to Profile").children.map((item) => item.title), ["Personal", "Work"]);
   assert.equal(find(items, "menu:Add Bookmark to Folder"), undefined);
   assert.deepEqual(rows(items, "Extensions"), ["uBlock", "-", "Manage Extensions…", "Add Extension…"]);
+});
+
+test("an Open Command Bar picked from the app menu carries the consent epoch it was picked under, so its dismissal counts only with sharing on", async () => {
+  globalThis.fetch ??= async () => ({ status: 503 });
+  const { appMenuCommandEvent } = await import("./appMenu.ts");
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  const { nativeConsent } = await import("../../browser/src/state/telemetry/nativeConsent.ts");
+  const { takeInlineCompletionCounts } = await import("../../browser/src/state/telemetry/inlineCompletionCounts.ts");
+  const { runCommand } = await import("../../browser/src/state/commands/commands.ts");
+  const { useBrowser } = await import("../../browser/src/state/browser/store.ts");
+  const S = () => useBrowser.getState();
+  const choice = appMenuChoice("focusCommandBar");
+  assert.equal(choice?.kind, "command");
+  const pick = (windowId) => {
+    const event = appMenuCommandEvent(choice, windowId, client.consentEpoch());
+    runCommand(event, { user: { consent: nativeConsent(event) } });
+    return event;
+  };
+  const dismissals = (sharing) => {
+    client.loadChoice();
+    client.setSharing(sharing, sharing ? "onboarding" : "settings");
+    takeInlineCompletionCounts();
+    S().hydrate({});
+    const w = S().createWindow({ url: "https://example.com/" });
+    const opened = pick(w);
+    assert.equal(S().windowUi[w].panel.open, true);
+    pick(w);
+    assert.equal(S().windowUi[w].panel.open, false, "the menu's second pick closes the bar");
+    return { epoch: opened.epoch, counted: takeInlineCompletionCounts().command_bar_key_dismissals };
+  };
+  const on = dismissals(true);
+  assert.ok(on.epoch, "the event carries the epoch");
+  assert.equal(on.counted, 1);
+  const off = dismissals(false);
+  assert.equal(off.epoch, "");
+  assert.equal(off.counted, 0);
+});
+
+test("on a Mac host, File › Share adds the system's sharing services and More… after Copy Link and Email Link", async () => {
+  const { setShareServices, MORE_SHARE_SERVICE } = await import("./linkShare.ts");
+  setShareServices([{ title: "AirDrop", menuTitle: "AirDrop" }, { title: "Messages", menuTitle: "Messages" }], () => {});
+  try {
+    const share = top(appMenuItems(state()), "File").children.find((item) => item.title === "Share");
+    assert.deepEqual(share.children.map((item) => ("separator" in item ? "-" : [item.id, item.title])), [
+      ["share:via:copy", "Copy Link"],
+      ["share:via:email", "Email Link"],
+      "-",
+      ["share:via:AirDrop", "AirDrop"],
+      ["share:via:Messages", "Messages"],
+      [`share:via:${MORE_SHARE_SERVICE}`, "More…"],
+    ]);
+  } finally {
+    setShareServices([], null);
+  }
+});
+
+test("File › Share keeps More… when macOS lists no sharing services, and leaves Linux with Copy Link and Email Link", async () => {
+  const { setShareServices, MORE_SHARE_SERVICE } = await import("./linkShare.ts");
+  const shareOf = () => top(appMenuItems(state()), "File").children.find((item) => item.title === "Share").children.map((item) => ("separator" in item ? "-" : item.id));
+  assert.deepEqual(shareOf(), ["share:via:copy", "share:via:email"]);
+  setShareServices([], () => {});
+  try {
+    assert.deepEqual(shareOf(), ["share:via:copy", "share:via:email", "-", `share:via:${MORE_SHARE_SERVICE}`]);
+  } finally {
+    setShareServices([], null);
+  }
 });

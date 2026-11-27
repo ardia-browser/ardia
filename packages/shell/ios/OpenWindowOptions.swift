@@ -14,5 +14,6 @@ struct OpenWindowOptions: Record {
   @Field var claim: String?
   @Field var pointer: CGPoint?
   @Field var returnTo: String?
+  @Field var cover: String?
   @Field var animated: Bool = false
 }

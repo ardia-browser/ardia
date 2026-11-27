@@ -52,3 +52,9 @@ test("a refused edit key and a late acknowledgement report the consent epoch the
   assert.match(handoff, /refuse\(\.staleEpoch, \[\.key\(event, up: nil\)\], since: consentAtArrival\(of: event\)\)/);
   assert.match(handoff, /private func consentAtArrival\(of event: NSEvent\) -> String \{\s*editKeyConsent\.object\(forKey: event\) as String\? \?\? ""\s*\}/);
 });
+
+test("every command is stamped where it is dispatched, from a key, a menu click or a mouse button, so its telemetry has the press's consent", () => {
+  const target = read("MenuTarget.swift");
+  assert.match(target, /ShellEvents\.send\(\.command, ArdiaConsentStamp\.begin\(\)\.onto\(/);
+  assert.equal((target.match(/ShellEvents\.send\(\.command,/g) ?? []).length, 1, "no command leaves unstamped");
+});

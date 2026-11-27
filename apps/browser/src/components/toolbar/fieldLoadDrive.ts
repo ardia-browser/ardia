@@ -1,7 +1,8 @@
+import { AccessibilityInfo } from "react-native";
 import { watchLastingLoad } from "../../state/tabs/lastingLoad";
 import { pageProgressOf, watchPageProgress } from "../../state/tabs/pageProgress";
 import { notePageOverlay } from "../../state/telemetry/usage";
-import { reduceMotion, type GradientStop } from "../ui";
+import { reduceMotion, reduceMotionKnown, type GradientStop } from "../ui";
 import { FIELD_LOAD } from "./tokens";
 
 export const lined = (glow: readonly GradientStop[], height: number): GradientStop[] => {
@@ -32,7 +33,7 @@ export function fieldLoadPlates(width: number, height: number): FieldLoadPlates 
   };
 }
 
-export type LoadSink = { show(): void; progress(progress: number, still: boolean): void; finish(still: boolean): void; reset(): void };
+export type LoadSink = { show(): void; progress(progress: number, still: boolean): void; pulse?(on: boolean): void; finish(still: boolean): void; reset(): void };
 export type Front = { width: number; tail: number };
 
 export const filledAt = (progress: number, { width, tail }: Front) => Math.max(FIELD_LOAD.floor, Math.min(progress, 1 - tail / width));
@@ -40,6 +41,27 @@ export const filledAt = (progress: number, { width, tail }: Front) => Math.max(F
 export function driveFieldLoad(tabId: string, sink: LoadSink): { refit: () => void; stop: () => void } {
   let shown = false;
   let stopped = false;
+  let anchor = 0;
+  let pulsing = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const pulse = (on: boolean) => {
+    if (on === pulsing) return;
+    pulsing = on;
+    sink.pulse?.(on);
+  };
+  const clearPulse = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    pulse(false);
+  };
+  const waitForProgress = () => {
+    clearPulse();
+    if (!shown || reduceMotion() !== false) return;
+    timer = setTimeout(() => {
+      timer = undefined;
+      if (shown && reduceMotion() === false) pulse(true);
+    }, FIELD_LOAD.pulse.wait);
+  };
   const refit = () => {
     if (stopped || !shown) return;
     sink.progress(pageProgressOf(tabId), !!reduceMotion());
@@ -49,19 +71,45 @@ export function driveFieldLoad(tabId: string, sink: LoadSink): { refit: () => vo
     shown = true;
     notePageOverlay("loadingField");
     sink.show();
+    anchor = pageProgressOf(tabId);
+    waitForProgress();
     refit();
   };
   const finish = () => {
     if (stopped) return;
     shown = false;
+    clearPulse();
     sink.finish(!!reduceMotion());
   };
   const stopLoad = watchLastingLoad(tabId, (lasting) => (lasting ? show() : finish()));
-  const stopProgress = watchPageProgress(tabId, refit);
+  const stopProgress = watchPageProgress(tabId, () => {
+    if (!shown || stopped) return;
+    const progress = pageProgressOf(tabId);
+    if (progress < anchor || progress - anchor >= FIELD_LOAD.pulse.step) {
+      anchor = progress;
+      waitForProgress();
+    }
+    refit();
+  });
+  const reduce = AccessibilityInfo.addEventListener("reduceMotionChanged", (still) => {
+    clearPulse();
+    if (shown && !still) {
+      anchor = pageProgressOf(tabId);
+      waitForProgress();
+    }
+  });
+  if (reduceMotion() === null) {
+    void reduceMotionKnown.then(() => {
+      if (shown && timer === undefined && !pulsing && reduceMotion() === false) waitForProgress();
+    });
+  }
   return {
     refit,
     stop: () => {
       stopped = true;
+      shown = false;
+      clearPulse();
+      reduce.remove();
       stopLoad();
       stopProgress();
       sink.reset();

@@ -113,6 +113,13 @@ export const builtInEngine = (s: Pick<BrowserState, "settings">, url: string | u
 export const chosenEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined =>
   modeEngine(s, url) ?? (webStorePage(url) ? "chromium" : undefined) ?? ruleFor(s, url) ?? builtInEngine(s, url);
 
+export type RefusedVideoSite = { listed: boolean; routedToWebKit: boolean };
+
+export const refusedVideoSite = (s: Pick<BrowserState, "settings">, url: string | undefined | null): RefusedVideoSite => ({
+  listed: protectedVideoSite(url),
+  routedToWebKit: chosenEngine(s, url) === "webkit",
+});
+
 export const recommendedEngineFor = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine => modeEngine(s, url) ?? builtInEngine(s, url) ?? defaultEngine(s);
 
 export const engineForUrl = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine => chosenEngine(s, url) ?? defaultEngine(s);
@@ -142,9 +149,12 @@ function engineOf(s: EngineState, t: Tab, depth: number): PageEngine {
   if (t.engine) return offered(t.engine);
   const adopted = fromAdoption(s, t, depth);
   if (adopted) return offered(adopted);
+  const url = navigationOf(t)?.url ?? t.url;
+  const chosen = chosenEngine(s, url);
+  if (chosen) return chosen;
   const opener = t.openerId ? s.tabs[t.openerId] : undefined;
   if (opener?.engine && (opener.url || navigationOf(opener))) return offered(opener.engine);
-  return engineForUrl(s, navigationOf(t)?.url ?? t.url);
+  return defaultEngine(s);
 }
 
 function livePopupOpener(s: EngineState, t: Tab): Tab | undefined {

@@ -250,12 +250,12 @@ function viaOf(items: readonly Suggestion[], via: ReadonlyMap<Suggestion, Sugges
 }
 
 function typedIsPage(t: PageText, q: string): boolean {
-  return q === t.shownLower || q === hostLowerOfPage(t);
+  return (!t.shownClipped && q === t.shownLower) || q === hostLowerOfPage(t);
 }
 
 function inlineMatch(t: PageText, q: string): boolean {
   if (hostLowerOfPage(t).startsWith(q) && originOfPage(t)) return true;
-  return q.includes("/") && !/[?#]/.test(t.shown) && t.shownLower.startsWith(q);
+  return !t.shownClipped && q.includes("/") && !/[?#]/.test(t.shown) && t.shownLower.startsWith(q);
 }
 
 function inlineTarget(q: string, c: Candidate): { text: string; url: string; favicon: string | null } {

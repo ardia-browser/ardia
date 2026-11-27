@@ -3,6 +3,7 @@ import CoreGraphics
 struct PeekGeometry: Equatable {
   var stage: CGSize
   var page: CGRect
+  var tab: CGRect
   var rest: CGRect
   var card: CGRect
   var source: CGRect
@@ -11,19 +12,26 @@ struct PeekGeometry: Equatable {
   var tabBottomRadius: Double
   var fullscreen: Bool
 
-  static let empty = PeekGeometry(stage: .zero, page: .zero, rest: .zero, card: .zero, source: .zero, restRadius: 0, tabTopRadius: 0, tabBottomRadius: 0, fullscreen: false)
+  static let empty = PeekGeometry(stage: .zero, page: .zero, tab: .zero, rest: .zero, card: .zero, source: .zero, restRadius: 0, tabTopRadius: 0, tabBottomRadius: 0, fullscreen: false)
 
   var valid: Bool {
-    let rects = [page, rest, card, source]
+    let rects = [page, tab, rest, card, source]
     let finite = rects.allSatisfy { $0.minX.isFinite && $0.minY.isFinite && $0.width.isFinite && $0.height.isFinite }
-    return finite && stage.width > 0 && stage.height > 0 && page.width > 0 && page.height > 0 && rest.width > 0 && card.width > 0 && card.height > 0
+    return finite && stage.width > 0 && stage.height > 0 && page.width > 0 && page.height > 0 && tab.width > 0 && tab.height > 0 && rest.width > 0 && card.width > 0 && card.height > 0
   }
 
   var restScale: Double { page.width > 0 ? rest.width / page.width : 1 }
 
-  init(stage: CGSize, page: CGRect, rest: CGRect, card: CGRect, source: CGRect, restRadius: Double, tabTopRadius: Double, tabBottomRadius: Double, fullscreen: Bool) {
+  func samePlacement(as other: PeekGeometry) -> Bool {
+    var moved = other
+    moved.page = page
+    return moved == self
+  }
+
+  init(stage: CGSize, page: CGRect, tab: CGRect, rest: CGRect, card: CGRect, source: CGRect, restRadius: Double, tabTopRadius: Double, tabBottomRadius: Double, fullscreen: Bool) {
     self.stage = stage
     self.page = page
+    self.tab = tab
     self.rest = rest
     self.card = card
     self.source = source
@@ -46,7 +54,7 @@ struct PeekGeometry: Equatable {
           let card = rect("card"), let source = rect("source")
     else { return nil }
     self.init(
-      stage: CGSize(width: width, height: height), page: page, rest: rest, card: card, source: source,
+      stage: CGSize(width: width, height: height), page: page, tab: rect("tab") ?? page, rest: rest, card: card, source: source,
       restRadius: number("restRadius") ?? 0, tabTopRadius: number("tabTopRadius") ?? 0, tabBottomRadius: number("tabBottomRadius") ?? 0,
       fullscreen: dict["fullscreen"] as? Bool ?? false)
     if !valid { return nil }

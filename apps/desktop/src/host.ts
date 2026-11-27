@@ -18,6 +18,7 @@ export type ArdiaHost = {
     pageProfile?: string;
     privateWindow?: { window: BrowserWindow; tabs: Record<string, Tab> };
     windowKind?: string;
+    openedFloating?: boolean;
     smallWindow?: unknown;
     typeaheadDeadline?: number;
     adoptTabs?: UnclaimedTab[];
@@ -25,6 +26,8 @@ export type ArdiaHost = {
     glassPanels?: boolean;
     sandboxDecision?: string;
     shellZoom?: number;
+    surface?: string;
+    popover?: { id?: unknown; route?: unknown; props?: unknown };
   };
   call(name: string, profile: string, args: string | null): Promise<string>;
   invoke(method: string, args: Record<string, unknown>): Promise<unknown>;

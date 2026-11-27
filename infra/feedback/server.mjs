@@ -5,6 +5,8 @@ import { createServer } from "node:http";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { githubIssues, localEvents, localIssues, localStore, otlpEvents, seaweedStore } from "./lib/backends.mjs";
+import { stripeDonations } from "./lib/donate.mjs";
+import { stripeSponsors } from "./lib/sponsors.mjs";
 import { createService } from "./lib/service.mjs";
 
 const USAGE = `ardia feedback service
@@ -27,6 +29,8 @@ production env:
   GITHUB_REPO             default ardia-browser/ardia
   DASHBOARD_URL           default https://dash.ardia.dev
   PUBLIC_URL              origin used in upload_urls, default https://ardia.dev
+  DONATE_STRIPE_KEY       Stripe restricted key with Checkout Sessions write, Subscriptions read and Prices read; without it monthly
+                          custom donations and the sponsor list are off, and without the reads the sponsor list stays unavailable
 `;
 
 const { values } = parseArgs({
@@ -91,6 +95,9 @@ if (values.local !== undefined) {
     secret,
     publicUrl: () => publicUrl,
     rateLimits: true,
+    donations: env.DONATE_STRIPE_KEY ? stripeDonations({ key: env.DONATE_STRIPE_KEY, returnUrl: publicUrl }) : null,
+    sponsors: env.DONATE_STRIPE_KEY ? stripeSponsors({ key: env.DONATE_STRIPE_KEY }) : null,
+    donateReturnUrl: publicUrl,
   };
 }
 
@@ -102,7 +109,7 @@ server.keepAliveTimeout = 65 * 1000;
 server.listen(port, config.host, () => {
   const { port: bound } = server.address();
   console.log(`[feedback] ${config.mode} on http://${config.host}:${bound}`);
-  console.log(`[feedback] storage: ${config.store.describe()}; events: ${config.events.describe()}; issues: ${config.issues ? config.issues.describe() : "off (no GITHUB_ISSUES_TOKEN)"}`);
+  console.log(`[feedback] storage: ${config.store.describe()}; events: ${config.events.describe()}; issues: ${config.issues ? config.issues.describe() : "off (no GITHUB_ISSUES_TOKEN)"}; donations: ${config.donations ? config.donations.describe() : "off (no DONATE_STRIPE_KEY)"}; sponsors: ${config.sponsors ? config.sponsors.describe() : "off (no DONATE_STRIPE_KEY)"}`);
 });
 const stop = () => server.close(() => process.exit(0));
 process.on("SIGTERM", stop);

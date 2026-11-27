@@ -13,13 +13,12 @@ import { PLUGIN_CHROME, usePluginChrome } from "../../state/plugins/chrome";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, useHover } from "../ui";
-import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
 import { setUrlAnchor, useSidebarCaptionRoom, useSidebarControlsRowIn, watchSidebarFieldPlace } from "../../state/windows/layout";
 import { useFullscreenTab } from "../../state/tabs/pageState";
 import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
 import { useWindowChrome } from "../../state/windows/windowButtons";
 import { useSidebarPart } from "../../state/sidebar/chrome";
-import { SIDEBAR_FIELD } from "./geometry";
+import { SIDEBAR_FIELD, sidebarFieldToolbarRow } from "./geometry";
 import { SIDEBAR_TYPE, TAB_ROW } from "./tokens";
 import { SidebarTextScope } from "./SidebarTextScope";
 import { noteEmptyTabSidebarExtensionPress } from "../../state/telemetry/usage";
@@ -157,7 +156,7 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
       style={{ position: "absolute", left: layout.sidebarInset, right: layout.sidebarInset, top, height: SIDEBAR_FIELD.height }}
     >
       <SidebarTextScope>
-        <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
+        <ToolbarRowContext.Provider value={sidebarFieldToolbarRow()}>
           {tab?.url ? (
             <PageField tab={tab} windowId={windowId} width={fieldWidth} />
           ) : (
@@ -190,12 +189,13 @@ function FieldExtensions({ tabId, windowId, width, palette, onActivate }: { tabI
   const pluginToolbar = usePluginChrome(PLUGIN_CHROME.toolbar);
   const [reportedPluginsWidth, setPluginsWidth] = useState(0);
   const pluginsWidth = pluginToolbar ? reportedPluginsWidth : 0;
-  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM - pluginsWidth);
+  const { extensionButton } = sidebarFieldToolbarRow();
+  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM - pluginsWidth, extensionButton);
   const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
   const total = extensionsWidth + pluginsWidth;
   if (!total && !pluginToolbar) return null;
   return (
-    <View style={{ width: total, height: total ? 28 : 0 }}>
+    <View style={{ width: total, height: total ? extensionButton : 0 }}>
       <ToolbarExtensions tabId={tabId} windowId={windowId} palette={palette} top={0} right={0} limit={limit} onActivate={onActivate} />
       {pluginToolbar ? <PluginToolbarItems windowId={windowId} palette={palette} top={0} right={extensionsWidth} onWidth={setPluginsWidth} /> : null}
     </View>

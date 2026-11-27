@@ -77,6 +77,15 @@ export function windowCornerRadii(rect: Rect, window: WindowSize, radius: number
   };
 }
 
+export function engineEnclosedRect({ x, y, width, height }: Rect, zoom = 1): Rect {
+  const scale = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  const left = Math.floor(x * scale + 1e-6) / scale;
+  const top = Math.floor(y * scale + 1e-6) / scale;
+  const right = Math.ceil((x + width) * scale - 1e-6) / scale;
+  const bottom = Math.ceil((y + height) * scale - 1e-6) / scale;
+  return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+}
+
 export function holeClipPath(box: { width: number; height: number }, holes: readonly Hole[], radius = PAGE_CORNER_RADIUS, pieces: readonly HolePiece[] = []) {
   if (!holes.length && !pieces.length) return "";
   const outer = `M0 0H${n(box.width)}V${n(box.height)}H0Z`;
@@ -203,9 +212,16 @@ const overlapping = (a: Element, b: Element) => {
   return !!intersection({ x: one.x, y: one.y, width: one.width, height: one.height }, { x: two.x, y: two.y, width: two.width, height: two.height });
 };
 
-export function createPageHoles(root: HTMLElement, zoom: () => number = () => 1, frame: () => CornerRadii = () => SQUARE_WINDOW) {
+export function pagesPaintedThrough(painter: Element, pages: readonly PageArea[], moving: (element: Element) => boolean): PageArea[] {
+  if (!moving(painter)) return [...pages];
+  return pages.filter((page) => !moving(page.slot));
+}
+
+export function createPageHoles(root: HTMLElement, zoom: () => number = () => 1, frame: () => CornerRadii = () => SQUARE_WINDOW, moving: (element: Element) => boolean = () => false) {
   const layers = new Set<HTMLElement>();
   const hosts = new Map<HTMLElement, string>();
+  let pageAreas: readonly PageArea[] = [];
+  let glassAreas: readonly PageArea[] = [];
   let pages: readonly PageArea[] = [];
   let floating: FloatingHole | null = null;
   let floatingHosts: readonly HTMLElement[] = [];
@@ -216,7 +232,7 @@ export function createPageHoles(root: HTMLElement, zoom: () => number = () => 1,
     if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name, value);
   };
 
-  const holesUnder = (element: HTMLElement) => holesOf(pagesAbove(element, pages, stackDom), shellViewport(root), zoom(), frame());
+  const holesUnder = (element: HTMLElement) => holesOf(pagesPaintedThrough(element, pagesAbove(element, pages, stackDom), moving), shellViewport(root), zoom(), frame());
 
   const paintLayer = (layer: HTMLElement) => {
     const clip = clipFor(layer, holesUnder(layer), pieces());
@@ -281,7 +297,14 @@ export function createPageHoles(root: HTMLElement, zoom: () => number = () => 1,
 
   return {
     pagesChanged(next: readonly PageArea[]) {
-      pages = next;
+      pageAreas = next.map((area) => ({ ...area, rect: engineEnclosedRect(area.rect, zoom()) }));
+      pages = [...pageAreas, ...glassAreas];
+      for (const layer of layers) paintLayer(layer);
+      syncHosts();
+    },
+    glassChanged(next: readonly { slot: Element; rect: Rect; radii: CornerRadii }[]) {
+      glassAreas = next.map(({ slot, rect, radii }) => ({ slot, rect, radii }));
+      pages = [...pageAreas, ...glassAreas];
       for (const layer of layers) paintLayer(layer);
       syncHosts();
     },

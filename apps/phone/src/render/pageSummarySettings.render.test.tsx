@@ -103,7 +103,7 @@ onAndroid("without the native choice, as on iPhone, there is no Pinch to Summari
 });
 
 onAndroid("Settings lists Pinch to Summarize under Experimental as Off until it's turned on, and its page offers only the switch while off", async () => {
-  act(() => openSettings());
+  act(() => openSettings({ page: "experimental" }));
   const root = renderSurface(<SettingsView />);
   await act(async () => undefined);
   expect(textOf(root)).toContain("Pinch to Summarize");
@@ -135,7 +135,7 @@ onAndroid("turning it on saves it, shows On This Phone chosen, and says what cho
   expect(textOf(page)).not.toContain("key lines");
   expect(summarized).not.toHaveBeenCalled();
   unmount(page);
-  act(() => openSettings());
+  act(() => openSettings({ page: "experimental" }));
   const root = renderSurface(<SettingsView />);
   await act(async () => undefined);
   expect(textOf(root)).toContain("On This Phone");

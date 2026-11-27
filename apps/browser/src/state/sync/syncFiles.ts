@@ -1,4 +1,4 @@
-import { readDocument, removeDocument, saveDocument, writeDocument } from "../../platform/documents";
+import { documentSaved, readDocument, removeDocument, saveDocument, writeDocument } from "../../platform/documents";
 import { Clock, emptyScope, restoreJournal, SyncNative, trackTouchedKeys, writtenSeq, type ApplyBatch, type LogFile, type ScopeState, type SyncRecord } from "../../platform/sync";
 import { parseSaved, unchanged, versionedJson, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { profileScope } from "./records";
@@ -320,7 +320,7 @@ export function syncFiles(current: () => SyncDoc) {
 
   async function saveDocNow() {
     saveDoc();
-    if (docFile.json) await saveDocument(DOC, docFile.json);
+    await documentSaved(DOC);
   }
 
   function startOver() {

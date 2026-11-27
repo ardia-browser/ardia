@@ -75,6 +75,11 @@ const native = {
 globalThis.acTestNativeModules = { ArdiaSync: native };
 
 const shell = await import("../../test-native/index.ts");
+const heldDocSaves = { on: false, queue: [] };
+globalThis.acTestNativeModules.ArdiaDocuments = {
+  ...shell.shellNativeModules.ArdiaDocuments,
+  documentSaved: (name) => (heldDocSaves.on ? new Promise((resolve) => heldDocSaves.queue.push(resolve)) : shell.shellNativeModules.ArdiaDocuments.documentSaved(name)),
+};
 const { useBrowser } = await import("../browser/store.ts");
 const S = () => useBrowser.getState();
 const SYNC_FOLDER = "/Users/test/Library/Mobile Documents/com~apple~CloudDocs/Ardia Sync";
@@ -87,8 +92,8 @@ const reset = () => {
   createChainError = null;
   onCreateChain = null;
   afterChainStatus = null;
-  shell.heldSaves.on = false;
-  shell.heldSaves.queue.length = 0;
+  heldDocSaves.on = false;
+  heldDocSaves.queue.length = 0;
   shell.docs.clear();
   useBrowser.setState({ bookmarks: { nodes: {} } });
   S().hydrate({});
@@ -319,12 +324,12 @@ test("recreateSyncFolder waits for the reseed queue to land on disk before creat
 
   let queuedWhenCreated = null;
   onCreateChain = () => (queuedWhenCreated = JSON.parse(shell.docs.get("sync.json")).reseedScopes ?? null);
-  shell.heldSaves.on = true;
+  heldDocSaves.on = true;
   const recreating = engine.recreateSyncFolder();
   for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(folders.has(SYNC_FOLDER), false, "the chain waits while the queue is still being written");
-  shell.heldSaves.on = false;
-  shell.heldSaves.queue.splice(0).forEach((land) => land());
+  assert.equal(folders.has(SYNC_FOLDER), false, "the chain waits until sync.json's staged write has landed");
+  heldDocSaves.on = false;
+  heldDocSaves.queue.splice(0).forEach((landed) => landed());
   assert.deepEqual(await recreating, { ok: "recreated" });
   assert.ok(queuedWhenCreated?.includes(scope), "the queue is on disk before the chain is created");
 
@@ -355,4 +360,25 @@ test("recreateSyncFolder refuses a folder that reappears after the status check"
   afterChainStatus = (folder) => plant(folder, "other-chain");
   assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" });
   assert.ok(!chainOf(SYNC_FOLDER).has(OURS), "nothing is written next to the chain that arrived");
+});
+
+test("recreateSyncFolder checks again after waiting for the save, and leaves a folder that came back meanwhile alone", async () => {
+  reset();
+  const engine = await import("./engine.ts?returns-during-save");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  S().addBookmark({ profileId: "default", url: "https://kept.example/", title: "Kept" });
+  await engine.syncNow();
+  folders.delete(SYNC_FOLDER);
+  await engine.syncNow();
+
+  heldDocSaves.on = true;
+  const recreating = engine.recreateSyncFolder();
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+  plant(SYNC_FOLDER, "other-chain");
+  heldDocSaves.on = false;
+  heldDocSaves.queue.splice(0).forEach((landed) => landed());
+  assert.deepEqual(await recreating, { error: "exists" });
+  assert.ok(!chainOf(SYNC_FOLDER).has(OURS), "nothing is created next to the chain that came back");
+  assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedScopes, undefined, "nothing is left owed to a folder that wasn't created");
 });

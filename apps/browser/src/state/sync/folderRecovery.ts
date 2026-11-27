@@ -129,6 +129,11 @@ export async function recreateChainFolder(
       return { error: "exists" };
     }
     const queued = doc.reseedScopes;
+    const putBack = () => {
+      if (queued) doc.reseedScopes = queued;
+      else delete doc.reseedScopes;
+      ctx.save();
+    };
     const scopes = Object.entries(doc.scopes)
       .filter(([, state]) => hasScopeData(state))
       .map(([scope]) => scope);
@@ -137,11 +142,14 @@ export async function recreateChainFolder(
         doc.reseedScopes = [...new Set([...(queued ?? []), ...scopes])];
         await ctx.saveNow();
       }
+      if ((await native.folderInfo?.(folder).catch(() => null))?.exists) {
+        putBack();
+        noteFolderRecreate("failed", consent);
+        return { error: "exists" };
+      }
       await native.createChain(folder);
     } catch (error) {
-      if (queued) doc.reseedScopes = queued;
-      else delete doc.reseedScopes;
-      ctx.save();
+      putBack();
       throw error;
     }
     created = true;

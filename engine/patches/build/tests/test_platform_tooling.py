@@ -481,8 +481,9 @@ class PackagingTests(unittest.TestCase):
                 self.assertEqual(oct((installed / 'lib/ardia/ardia-update').stat().st_mode & 0o777), oct(0o755))
                 self.assertEqual(oct((installed / 'lib/ardia/linux-update.pem').stat().st_mode & 0o777), oct(0o644))
                 self.assertEqual([path.name for path in (installed / 'lib').iterdir()], ['ardia'])
-                self.assertTrue((installed / 'lib/ardia/chrome').is_file())
-                self.assertTrue(os.access(installed / 'lib/ardia/chrome', os.X_OK))
+                self.assertTrue((installed / 'lib/ardia/ardia').is_file())
+                self.assertTrue(os.access(installed / 'lib/ardia/ardia', os.X_OK))
+                self.assertEqual(os.readlink(installed / 'lib/ardia/chrome'), 'ardia')
                 self.assertTrue((installed / 'lib/ardia/ardia-ui/index.html').is_file())
                 launcher = (installed / 'bin/ardia').read_text()
                 self.assertIn(f'exec "{prefix}/lib/ardia/ardia-launch" "$@"', launcher)
@@ -512,7 +513,7 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual({name: oct(mode) for name, mode in modes.items() if mode not in (0o644, 0o755)}, {})
             self.assertEqual(modes['ardia/lib/ardia/ardia-ui/index.html'], 0o644)
             self.assertEqual(modes['ardia/lib/ardia/ardia-ui'], 0o755)
-            self.assertEqual(modes['ardia/lib/ardia/chrome'], 0o755)
+            self.assertEqual(modes['ardia/lib/ardia/ardia'], 0o755)
             self.assertEqual(modes['ardia/install.sh'], 0o755)
 
     @unittest.skipUnless(shutil.which('fakeroot'), 'fakeroot is required')
@@ -526,7 +527,7 @@ class PackagingTests(unittest.TestCase):
                                     capture_output=True, text=True, timeout=120)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             owners = [line for line in result.stdout.splitlines() if line.strip()]
-            self.assertTrue(any(line.endswith('/usr/lib/ardia/chrome') for line in owners), owners)
+            self.assertTrue(any(line.endswith('/usr/lib/ardia/ardia') for line in owners), owners)
             self.assertEqual([line for line in owners if not line.startswith('0:0 ')], [])
 
     def test_package_ships_an_apparmor_profile_that_lets_the_sandbox_create_user_namespaces(self):
@@ -535,7 +536,7 @@ class PackagingTests(unittest.TestCase):
             _, package_root = self.fake_package(pathlib.Path(scratch))
             self.assertEqual((package_root / 'share/apparmor.d/ardia').read_text(), profile.read_text())
         text = profile.read_text()
-        self.assertIn('profile ardia /usr/lib/ardia/chrome flags=(unconfined) {\n', text)
+        self.assertIn('profile ardia /usr/lib/ardia/ardia flags=(unconfined) {\n', text)
         self.assertIn('  userns,\n', text)
         self.assertNotIn('#', text)
         parser = shutil.which('apparmor_parser')
@@ -577,8 +578,8 @@ class PackagingTests(unittest.TestCase):
         runtime.mkdir(parents=True)
         shutil.copyfile(REPO / 'scripts/linux/ardia-launch', runtime / 'ardia-launch')
         (runtime / 'ardia-launch').chmod(0o755)
-        (runtime / 'chrome').write_text(env.get('chrome', '#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n'))
-        (runtime / 'chrome').chmod(0o755)
+        (runtime / 'ardia').write_text(env.get('chrome', '#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n'))
+        (runtime / 'ardia').chmod(0o755)
         proc = root / 'proc'
         for name, value in env.get('proc', {}).items():
             (proc / name).parent.mkdir(parents=True, exist_ok=True)
@@ -587,7 +588,7 @@ class PackagingTests(unittest.TestCase):
         (runtime / 'ardia-launch').write_text(script)
         if env.get('profile'):
             (root / 'apparmor.d').mkdir()
-            (root / 'apparmor.d/ardia').write_text(env['profile'].replace('CHROME', str((runtime / 'chrome').resolve())))
+            (root / 'apparmor.d/ardia').write_text(env['profile'].replace('CHROME', str((runtime / 'ardia').resolve())))
         variables = {'PATH': os.environ['PATH'], **env.get('vars', {})}
         if 'APPIMAGE' in variables:
             variables.setdefault('APPDIR', str(root.resolve()))
@@ -654,7 +655,8 @@ class PackagingTests(unittest.TestCase):
             listing = subprocess.run(['dpkg-deb', '-c', str(deb)], capture_output=True, text=True, check=True).stdout
             entries = {line.split()[-1] if '->' not in line else line.split()[-3]: line.split()[:2] for line in listing.splitlines()}
             self.assertEqual(entries['./usr/lib/ardia/chrome-sandbox'], ['-rwsr-xr-x', 'root/root'])
-            self.assertEqual(entries['./usr/lib/ardia/chrome'], ['-rwxr-xr-x', 'root/root'])
+            self.assertEqual(entries['./usr/lib/ardia/ardia'], ['-rwxr-xr-x', 'root/root'])
+            self.assertIn('./usr/lib/ardia/chrome -> ardia', listing)
             self.assertIn('./usr/share/polkit-1/actions/dev.ardia.linux.policy', entries)
             self.assertIn('./usr/share/ardia/apparmor/ardia', entries)
             self.assertIn('./usr/bin/ardia -> ../lib/ardia/ardia-launch', listing)
@@ -684,7 +686,7 @@ class PackagingTests(unittest.TestCase):
             with gzip.open(unpacked / 'usr/share/doc/ardia/changelog.gz', 'rt') as changelog:
                 self.assertIn('ardia (0.2.47~nightly.3) stable', changelog.read())
             sums = dict(reversed(line.split('  ', 1)) for line in (scripts / 'md5sums').read_text().splitlines())
-            self.assertEqual(sums['usr/lib/ardia/chrome'], hashlib.md5((unpacked / 'usr/lib/ardia/chrome').read_bytes()).hexdigest())
+            self.assertEqual(sums['usr/lib/ardia/ardia'], hashlib.md5((unpacked / 'usr/lib/ardia/ardia').read_bytes()).hexdigest())
             self.assertIn('usr/share/doc/ardia/copyright', sums)
             self.assertFalse([name for name in sums if name.startswith('usr/bin/')])
 
@@ -715,6 +717,7 @@ class PackagingTests(unittest.TestCase):
             self.assertIn('Exec=AppRun %U', built['desktop'])
             self.assertNotIn('lib/ardia/chrome-sandbox', built['names'])
             self.assertNotIn('install.sh', built['names'])
+            self.assertIn('lib/ardia/ardia', built['names'])
             self.assertIn('lib/ardia/chrome', built['names'])
             image = (root / 'Ardia.AppImage').read_bytes()
             self.assertEqual(image[8:11], b'AI\x02')
@@ -736,7 +739,7 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((pkgdir / 'usr/share/polkit-1/actions/dev.ardia.linux.policy').is_file())
             self.assertTrue((pkgdir / 'usr/bin/ardia').is_file())
-            self.assertTrue((pkgdir / 'usr/lib/ardia/chrome').is_file())
+            self.assertTrue((pkgdir / 'usr/lib/ardia/ardia').is_file())
         if shutil.which('makepkg'):
             with tempfile.TemporaryDirectory() as scratch:
                 shutil.copy(REPO / 'scripts/linux/arch/PKGBUILD', scratch)

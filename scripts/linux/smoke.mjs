@@ -20,7 +20,7 @@ a temporary folder, launches ardia/bin/ardia headless (ozone headless, SwiftShad
 ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
 --ardia-ui-dir, and checks:
 
-  ldd               lib/ardia/chrome has no unresolved libraries
+  ldd               lib/ardia/ardia has no unresolved libraries
   shell-ui          chrome://ardia/ renders the bundled production UI from lib/ardia/ardia-ui
   bootstrap         the native bootstrap reports appBuild "linux-host"
   native-tab        a native tab loads a local HTTP fixture, visibly, without window.__ardiaHost
@@ -81,7 +81,7 @@ const DESKTOP_ENTRIES = ["ardia.desktop", ...WINDOW_DESKTOP_ENTRIES];
 const STAGED_FILES = [
   { path: "usr/bin/ardia", mode: 0o755 },
   ...DESKTOP_ENTRIES.map((name) => ({ path: `usr/share/applications/${name}`, mode: 0o644 })),
-  { path: "usr/lib/ardia/chrome", mode: 0o755 },
+  { path: "usr/lib/ardia/ardia", mode: 0o755 },
   { path: "usr/lib/ardia/ardia-ui/index.html", mode: 0o644 },
   { path: "usr/share/polkit-1/actions/dev.ardia.linux.policy", mode: 0o644 },
 ];
@@ -163,7 +163,8 @@ export function debLayoutProblems(listing, fields) {
     else if (!check(entry)) problems.push(`${path} ${message} (${entry.mode} ${entry.owner})`);
   };
   for (const [path, entry] of entries) if (entry.owner !== "root/root") problems.push(`${path} is owned by ${entry.owner}, not root`);
-  expect("./usr/lib/ardia/chrome", (e) => e.mode === "-rwxr-xr-x", "is not 0755");
+  expect("./usr/lib/ardia/ardia", (e) => e.mode === "-rwxr-xr-x", "is not 0755");
+  expect("./usr/lib/ardia/chrome", (e) => e.target === "ardia", "is not a link to ardia");
   expect("./usr/lib/ardia/ardia-launch", (e) => e.mode === "-rwxr-xr-x", "is not 0755");
   expect("./usr/bin/ardia", (e) => e.target === "../lib/ardia/ardia-launch", "is not a link to ../lib/ardia/ardia-launch");
   expect("./usr/share/polkit-1/actions/dev.ardia.linux.policy", (e) => e.mode === "-rw-r--r--", "is not 0644");
@@ -188,7 +189,8 @@ export function rpmLayoutProblems(listing, fields) {
     else if (!check(entry)) problems.push(`${path} ${message} (${entry.mode} ${entry.owner})`);
   };
   for (const [path, entry] of entries) if (entry.owner !== "root/root") problems.push(`${path} is owned by ${entry.owner}, not root`);
-  expect("/usr/lib/ardia/chrome", (e) => e.mode === "-rwxr-xr-x", "is not 0755");
+  expect("/usr/lib/ardia/ardia", (e) => e.mode === "-rwxr-xr-x", "is not 0755");
+  expect("/usr/lib/ardia/chrome", (e) => e.target === "ardia", "is not a link to ardia");
   expect("/usr/lib/ardia/ardia-launch", (e) => e.mode === "-rwxr-xr-x", "is not 0755");
   expect("/usr/lib/ardia/chrome-sandbox", (e) => e.mode === "-rwsr-xr-x", "is not setuid root 4755");
   expect("/usr/bin/ardia", (e) => e.target === "../lib/ardia/ardia-launch", "is not a link to ../lib/ardia/ardia-launch");
@@ -670,8 +672,8 @@ class Smoke {
     this.root = { tar: join(into, "ardia"), deb: join(into, "usr"), rpm: join(into, "usr"), appimage: join(into, "squashfs-root") }[this.format];
     this.launcher = { tar: join(this.root, "bin", "ardia"), deb: join(this.root, "bin", "ardia"), rpm: join(this.root, "bin", "ardia"), appimage: join(this.root, "AppRun") }[this.format];
     this.runtime = join(this.root, "lib", "ardia");
-    this.chrome = join(this.runtime, "chrome");
-    for (const path of [this.launcher, this.chrome, join(this.runtime, "ardia-launch"), join(this.runtime, "ardia-ui", "index.html"), ...(this.format === "tar" ? [join(this.root, "install.sh")] : [])]) {
+    this.browser = join(this.runtime, "ardia");
+    for (const path of [this.launcher, this.browser, join(this.runtime, "ardia-launch"), join(this.runtime, "ardia-ui", "index.html"), ...(this.format === "tar" ? [join(this.root, "install.sh")] : [])]) {
       if (!(await fileInfo(path))?.isFile) throw new Error(`the package has no ${path.slice(into.length + 1)}`);
     }
     this.profile = join(this.work, "profile");
@@ -682,7 +684,7 @@ class Smoke {
   }
 
   async ldd() {
-    const result = await run("ldd", [this.chrome], { timeout: 30000 });
+    const result = await run("ldd", [this.browser], { timeout: 30000 });
     if (result.code !== 0) throw new Error(`ldd exited ${result.code}: ${(result.stderr || result.stdout).slice(-400)}`);
     const missing = lddMissing(result.stdout);
     if (missing.length) throw Object.assign(new Error(`unresolved libraries: ${missing.join("; ")}`), { detail: { missing } });
@@ -872,9 +874,9 @@ class Smoke {
     const policy = await readFile(join(stage, "usr/share/polkit-1/actions/dev.ardia.linux.policy")).catch(() => null);
     const packaged = await readFile(join(this.root, "share/polkit-1/actions/dev.ardia.linux.policy")).catch(() => null);
     if (!policy || !packaged || !policy.equals(packaged)) problems.push("the staged polkit policy differs from the package's");
-    const chrome = await fileInfo(join(stage, "usr/lib/ardia/chrome"));
-    const original = await fileInfo(this.chrome);
-    if (chrome && original && chrome.size !== original.size) problems.push("the staged chrome differs in size from the package's");
+    const browser = await fileInfo(join(stage, "usr/lib/ardia/ardia"));
+    const original = await fileInfo(this.browser);
+    if (browser && original && browser.size !== original.size) problems.push("the staged ardia differs in size from the package's");
     const stray = (await readdir(stage)).filter((name) => name !== "usr");
     if (stray.length) problems.push(`install.sh staged outside usr/: ${stray.join(", ")}`);
     if (problems.length) throw Object.assign(new Error(problems.join("; ")), { detail: entries });

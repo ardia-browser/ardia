@@ -126,10 +126,10 @@ appimage_target() {
 }
 
 owned_by_other_manager() {
-  if command -v pacman >/dev/null 2>&1 && pacman -Qqo -- "$libdir/chrome" >/dev/null 2>&1; then
+  if command -v pacman >/dev/null 2>&1 && pacman -Qqo -- "$libdir/ardia" >/dev/null 2>&1; then
     return 0
   fi
-  if command -v rpm >/dev/null 2>&1 && rpm -qf -- "$libdir/chrome" >/dev/null 2>&1; then
+  if command -v rpm >/dev/null 2>&1 && rpm -qf -- "$libdir/ardia" >/dev/null 2>&1; then
     return 0
   fi
   return 1
@@ -138,7 +138,7 @@ owned_by_other_manager() {
 dpkg_owner() {
   command -v dpkg-query >/dev/null 2>&1 || return 1
   local owner
-  owner=$(dpkg-query -S -- "$libdir/chrome" 2>/dev/null | sed -n 1p) || return 1
+  owner=$(dpkg-query -S -- "$libdir/ardia" 2>/dev/null | sed -n 1p) || return 1
   [[ -n "$owner" ]] || return 1
   printf '%s' "${owner%%: *}"
 }

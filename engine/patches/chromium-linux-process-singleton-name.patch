@@ -1,0 +1,33 @@
+--- a/chrome/browser/process_singleton_posix.cc
++++ b/chrome/browser/process_singleton_posix.cc
+@@ -381,14 +381,27 @@
+ #endif
+ }
+ 
++base::FilePath::StringType ExecutableName(const base::FilePath& path) {
++  constexpr std::string_view kReplacedSuffix = " (deleted)";
++  base::FilePath::StringType name = path.BaseName().value();
++  if (name.ends_with(kReplacedSuffix))
++    name.resize(name.size() - kReplacedSuffix.size());
++  return name;
++}
++
+ bool IsChromeProcess(pid_t pid) {
+   if (g_skip_is_chrome_process_check)
+     return true;
+ 
+   base::FilePath other_chrome_path(base::GetProcessExecutablePath(pid));
+-  return (!other_chrome_path.empty() &&
+-          other_chrome_path.BaseName() ==
+-              base::FilePath(chrome::kBrowserProcessExecutableName));
++  if (other_chrome_path.empty())
++    return false;
++  const base::FilePath::StringType other_name =
++      ExecutableName(other_chrome_path);
++  base::FilePath own_path;
++  return other_name == chrome::kBrowserProcessExecutableName ||
++         (base::PathService::Get(base::FILE_EXE, &own_path) &&
++          other_name == ExecutableName(own_path));
+ }
+ 
+ // A helper class to hold onto a socket.

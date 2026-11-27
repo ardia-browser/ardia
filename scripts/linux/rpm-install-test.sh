@@ -4,7 +4,7 @@ usage='usage: scripts/linux/rpm-install-test.sh <Ardia-<version>-linux-x64.rpm> 
 
 Installs the .rpm in fresh containers (docker or podman) with the distribution'"'"'s
 own package manager, dnf on Fedora and AlmaLinux and zypper on openSUSE, and checks that its
-dependencies resolve, every library chrome needs is found, ardia --version
+dependencies resolve, every library the browser needs is found, ardia --version
 runs, chrome-sandbox is setuid root, the desktop entries validate and run
 /usr/bin/ardia, the icon and the polkit policy are there without the self-update
 action, ardia-update leaves updates to the package manager (kind: managed),
@@ -138,7 +138,7 @@ expected=$(rpm -qp --qf "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}" /pkg/new.rpm 2>/
 echo "ok   $older upgrades to $expected"
 rpm --verify ardia >/tmp/verify.log 2>&1 || { cat /tmp/verify.log; fail "rpm --verify ardia"; }
 echo "ok   rpm --verify"
-missing=$(ldd /usr/lib/ardia/chrome /usr/lib/ardia/chrome_crashpad_handler | grep "not found" || true)
+missing=$(ldd /usr/lib/ardia/ardia /usr/lib/ardia/chrome_crashpad_handler | grep "not found" || true)
 [ -z "$missing" ] || fail "unresolved libraries: $missing"
 echo "ok   libraries resolve"
 [ "$(stat -c "%a %U" /usr/lib/ardia/chrome-sandbox)" = "4755 root" ] || fail "chrome-sandbox is not setuid root"
@@ -163,7 +163,7 @@ kind=$(/usr/lib/ardia/ardia-update kind) || fail "ardia-update kind exited $?"
 [ "$kind" = managed ] || fail "ardia-update kind says $kind, not managed"
 echo "ok   updates are left to $family (ardia-update kind: managed)"
 if [ -e /etc/apparmor.d/abi/4.0 ]; then
-  grep -q "profile ardia /usr/lib/ardia/chrome " /etc/apparmor.d/ardia || fail "no AppArmor profile for /usr/lib/ardia/chrome"
+  grep -q "profile ardia /usr/lib/ardia/ardia " /etc/apparmor.d/ardia || fail "no AppArmor profile for /usr/lib/ardia/ardia"
   echo "ok   AppArmor profile installed"
 else
   test ! -e /etc/apparmor.d/ardia || fail "an AppArmor profile without the 4.0 ABI"

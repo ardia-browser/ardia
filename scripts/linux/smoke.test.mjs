@@ -125,7 +125,8 @@ test("a .deb is root-owned with a setuid root helper, the launcher link, the pol
   const line = (mode, path, extra = "") => `${mode} root/root 10 2026-11-15 10:00 ${path}${extra}`;
   const good = [
     line("drwxr-xr-x", "./usr/lib/ardia/"),
-    line("-rwxr-xr-x", "./usr/lib/ardia/chrome"),
+    line("-rwxr-xr-x", "./usr/lib/ardia/ardia"),
+    line("lrwxrwxrwx", "./usr/lib/ardia/chrome", " -> ardia"),
     line("-rwxr-xr-x", "./usr/lib/ardia/ardia-launch"),
     line("-rwsr-xr-x", "./usr/lib/ardia/chrome-sandbox"),
     line("lrwxrwxrwx", "./usr/bin/ardia", " -> ../lib/ardia/ardia-launch"),
@@ -150,7 +151,8 @@ test("an .rpm is root-owned with a setuid root helper, the launcher link, the po
   const line = (mode, path, extra = "", owner = "root     root") => `${mode}    1 ${owner}                   10 Nov 23 10:00 ${path}${extra}`;
   const good = [
     line("drwxr-xr-x", "/usr/lib/ardia"),
-    line("-rwxr-xr-x", "/usr/lib/ardia/chrome"),
+    line("-rwxr-xr-x", "/usr/lib/ardia/ardia"),
+    line("lrwxrwxrwx", "/usr/lib/ardia/chrome", " -> ardia"),
     line("-rwxr-xr-x", "/usr/lib/ardia/ardia-launch"),
     line("-rwsr-xr-x", "/usr/lib/ardia/chrome-sandbox"),
     line("lrwxrwxrwx", "/usr/bin/ardia", " -> ../lib/ardia/ardia-launch"),

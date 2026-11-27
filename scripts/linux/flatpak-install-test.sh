@@ -121,10 +121,10 @@ curl -fsS -X PUT "http://127.0.0.1:9333/json/new?data:text/html,ardia" >/dev/nul
 sleep 3
 curl -fsS http://127.0.0.1:9333/json/list | grep -q "\"type\": \"page\"" || fail "no page target"
 processes=$(ps -eo args)
-renderers=$(grep -c "^/app/lib/ardia/chrome --type=renderer" <<<"$processes" || true)
+renderers=$(grep -c "^/app/lib/ardia/ardia --type=renderer" <<<"$processes" || true)
 [ "$renderers" -gt 0 ] || { tail -40 /tmp/run.log; fail "no renderer process"; }
-! grep "^/app/lib/ardia/chrome" <<<"$processes" | grep -q -- "--no-sandbox" || fail "a Chromium process runs with --no-sandbox"
-grep -q "/app/bin/zypak-helper child .*/app/lib/ardia/chrome --type=zygote" <<<"$processes" || { grep -E "zypak|ardia/chrome" <<<"$processes" | cut -c1-200; fail "Chromium'"'"'s zygote does not run in zypak'"'"'s sandbox"; }
+! grep "^/app/lib/ardia/ardia" <<<"$processes" | grep -q -- "--no-sandbox" || fail "a Chromium process runs with --no-sandbox"
+grep -q "/app/bin/zypak-helper child .*/app/lib/ardia/ardia --type=zygote" <<<"$processes" || { grep -E "zypak|ardia/ardia" <<<"$processes" | cut -c1-200; fail "Chromium'"'"'s zygote does not run in zypak'"'"'s sandbox"; }
 echo "ok   starts headless with the zygote in zypak'"'"'s sandbox, $renderers renderers, none with --no-sandbox, a page over DevTools"
 flatpak kill "$app" 2>/dev/null || true
 for _ in $(seq 1 20); do flatpak ps --columns=application | grep -q "$app" || break; sleep 1; done

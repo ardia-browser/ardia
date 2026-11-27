@@ -55,7 +55,7 @@ if [[ -z "$destdir" && "$(id -u)" != 0 ]]; then
 fi
 
 source_root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-for required in lib/ardia/chrome share/polkit-1/actions/dev.ardia.linux.policy share/applications/ardia.desktop share/apparmor.d/ardia; do
+for required in lib/ardia/ardia share/polkit-1/actions/dev.ardia.linux.policy share/applications/ardia.desktop share/apparmor.d/ardia; do
   if [[ ! -e "$source_root/$required" ]]; then
     echo "install.sh: $source_root is not an extracted Ardia package (missing $required)" >&2
     exit 1
@@ -156,7 +156,7 @@ fi
 install -D -m 0644 "$launcher" "$destdir/usr/share/polkit-1/actions/dev.ardia.linux.policy"
 
 if [[ -z "$destdir" && -e /etc/apparmor.d/abi/4.0 ]]; then
-  sed "s|/usr/lib/ardia/chrome|$prefix/lib/ardia/chrome|" "$source_root/share/apparmor.d/ardia" > "$launcher"
+  sed "s|/usr/lib/ardia/ardia |$prefix/lib/ardia/ardia |" "$source_root/share/apparmor.d/ardia" > "$launcher"
   install -m 0644 "$launcher" /etc/apparmor.d/ardia
   if command -v apparmor_parser >/dev/null && [[ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null)" == Y ]]; then
     apparmor_parser -r /etc/apparmor.d/ardia

@@ -49,7 +49,7 @@ class DebDependsTests(unittest.TestCase):
     def runtime(self, scratch, needed):
         runtime = pathlib.Path(scratch) / 'usr/lib/ardia'
         runtime.mkdir(parents=True)
-        shutil.copyfile(ELF, runtime / 'chrome')
+        shutil.copyfile(ELF, runtime / 'ardia')
         shutil.copyfile(ELF, runtime / 'libqt6_shim.so')
         shutil.copyfile(ELF, runtime / 'libEGL.so')
         self.needed = needed
@@ -64,7 +64,7 @@ class DebDependsTests(unittest.TestCase):
 
     def test_sonames_map_to_packages_once_and_bundled_or_optional_ones_are_skipped(self):
         with tempfile.TemporaryDirectory() as scratch:
-            runtime = self.runtime(scratch, {'chrome': ['libc.so.6', 'libnss3.so', 'libsmime3.so', 'libEGL.so', 'libgio-2.0.so.0', 'libglib-2.0.so.0']})
+            runtime = self.runtime(scratch, {'ardia': ['libc.so.6', 'libnss3.so', 'libsmime3.so', 'libEGL.so', 'libgio-2.0.so.0', 'libglib-2.0.so.0']})
             packages = formats.deb_depends(runtime)
         self.assertRegex(packages[0], r'^libc6 \(>= 2\.[0-9]+\)$')
         self.assertEqual(packages.count('libnss3'), 1)
@@ -77,7 +77,7 @@ class DebDependsTests(unittest.TestCase):
 
     def test_an_unknown_soname_fails_the_build(self):
         with tempfile.TemporaryDirectory() as scratch:
-            runtime = self.runtime(scratch, {'chrome': ['libc.so.6', 'libnew.so.1']})
+            runtime = self.runtime(scratch, {'ardia': ['libc.so.6', 'libnew.so.1']})
             with self.assertRaisesRegex(ValueError, 'libnew.so.1'):
                 formats.deb_depends(runtime)
 
@@ -199,9 +199,10 @@ class RpmTests(unittest.TestCase):
             root = pathlib.Path(scratch) / 'ardia'
             runtime = root / 'lib/ardia'
             runtime.mkdir(parents=True)
-            for name in ('chrome', 'libEGL.so', 'chrome-sandbox'):
+            for name in ('ardia', 'libEGL.so', 'chrome-sandbox'):
                 shutil.copyfile(ELF, runtime / name)
                 (runtime / name).chmod(0o755)
+            (runtime / 'chrome').symlink_to('ardia')
             (runtime / 'ardia-launch').write_text('#!/usr/bin/env bash\n')
             (root / 'share/applications').mkdir(parents=True)
             for name, entry in formats.desktop_entries().items():
@@ -220,6 +221,7 @@ class RpmTests(unittest.TestCase):
         self.assertIn('libsecret-1.so.0()(64bit)', requires)
         self.assertRegex(listing, r'-rwsr-xr-x\s+1 root\s+root .* /usr/lib/ardia/chrome-sandbox\n')
         self.assertRegex(listing, r'/usr/bin/ardia -> \.\./lib/ardia/ardia-launch\n')
+        self.assertRegex(listing, r'/usr/lib/ardia/chrome -> ardia\n')
         self.assertNotRegex(listing, r'(?m)^\S+\s+\d+ (?!root\s+root)')
         for name in formats.desktop_entries():
             self.assertRegex(listing, rf'-rw-r--r--\s+1 root\s+root .* /usr/share/applications/{re.escape(name)}\n')
@@ -276,9 +278,9 @@ class FlatpakTests(unittest.TestCase):
         for folder in folders:
             self.assertTrue(any(folder == grant or folder.startswith(grant + '/') for grant in grants), f'import reads {folder}, which the Flatpak cannot see')
 
-    def test_cobalt_starts_ardias_chrome_through_zypak(self):
+    def test_cobalt_starts_ardias_browser_through_zypak(self):
         ini = formats.COBALT_INI
-        self.assertIn('EntryPoint=/app/lib/ardia/chrome\n', ini)
+        self.assertIn('EntryPoint=/app/lib/ardia/ardia\n', ini)
         self.assertIn('WrapperScript=/app/bin/ardia\n', ini)
         self.assertIn('[Zypak]\nEnabled=true\nSandboxFilename=chrome-sandbox\n', ini)
 

@@ -422,7 +422,7 @@ swap_key
 expect "install.sh --prefix /usr names /usr/lib/ardia/ardia-update" "1" "$(grep -c '>/usr/lib/ardia/ardia-update<' /usr/share/polkit-1/actions/dev.ardia.linux.policy)"
 expect "tarball kind again" tarball "$(kind_of "$helper")"
 refusals tarball
-/usr/lib/ardia/chrome 600 &
+/usr/lib/ardia/ardia 600 &
 holder=$!
 exec 7</usr/lib/ardia/VERSION
 stage valid

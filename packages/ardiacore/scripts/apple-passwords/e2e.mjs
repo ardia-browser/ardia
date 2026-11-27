@@ -316,6 +316,19 @@ function expectLists(seen, engine, field, want) {
   assert(got && got.loginList === want.loginList && got.addressList === want.addressList, `${engine} ${field} shows ${want.loginList ? "the Login list" : "no Login list"} and ${want.addressList ? "the address list" : "no address list"}`, seen);
 }
 
+async function settingsRow(title) {
+  await app.eval(`ac.openSettings("profiles", ac.store.getState().settings.defaultProfileId); return true;`);
+  const anyWindow = (await app.eval(`return ac.engine.call("windows.list")`))[0].window;
+  const dev = (window, action) => app.eval(`return ac.engine.call("windows.dev", { window: ${window}, action: ${JSON.stringify(action)} })`);
+  const texts = await waitFor("the Settings window", async () => {
+    const settings = JSON.parse((await dev(anyWindow, "subroles")) || "[]").find((w) => w.title === "Settings");
+    if (!settings) return null;
+    const found = String((await dev(settings.number, "ax")) ?? "").split("\n").map((l) => l.trim().match(/^AX(?:TextArea|StaticText): (.*)$/)?.[1]).filter((t) => t !== undefined);
+    return found.includes(title) ? found : null;
+  }, 15_000);
+  return texts.slice(texts.lastIndexOf(title) + 1)[0] ?? null;
+}
+
 const UNAVAILABLE_SAVES = {
   E22missing: { state: "helperMissing", kind: "helperMissing", launch: (name) => ({ manifest: path.join(SCRATCH, name, "no-such-manifest.json") }) },
   E22tooOld: { state: "tooOld", kind: "refused", fake: true, launch: (name, fake) => ({ manifest: fake.manifest, test: { applePasswordsTooOld: true } }) },
@@ -431,7 +444,12 @@ const CHECKS = {
     const shown = await pickApplePasswords();
     assert(shown.step === "failed" && /Software Update/.test(shown.error ?? ""), "the sheet says how to get the helper back", shown);
     assert(shown.state === "helperMissing" && shown.choice !== "apple", "nothing is saved", shown);
-    return { state: shown.state };
+    await app.eval("ac.applePasswords.cancelPairing(); return true;");
+    await choose("apple");
+    await until(pairingView, (v) => v.choice === "apple" && v.state === "helperMissing");
+    const row = await settingsRow("Apple Passwords");
+    assert(row === HELPER_MISSING, "Settings' Apple Passwords row says the helper is missing and how to get it back", row);
+    return { state: shown.state, settings: row };
   },
   async E4() {
     if (!releaseApp) throw new Error("E4 needs --release <Release Ardia.app>");

@@ -186,6 +186,7 @@
     "apps/browser/src/state/windows/card.ts": 1,
     "apps/browser/src/state/windows/closeAnimated.ts": 1,
     "apps/browser/src/state/windows/windowClose.ts": 1,
+    "apps/desktop/src/hostPageEvents.ts": 1,
     "apps/desktop/src/hostSession.ts": 1,
     "apps/desktop/src/liveDocumentClient.ts": 1,
     "apps/desktop/src/syncEngine.ts": 1

@@ -955,6 +955,15 @@ in `webui_frame.cc`: top-edge resize, `HTMAXBUTTON` over the shell's maximize bu
   shell of the private window sharing its session, or else the front regular window, as `openWindow` requests, so the
   shell opens real private windows for them (`HandOverPrivateWindow`). A page no shell takes within 5 s moves into the
   same-session private window as an unclaimed tab; the empty Chromium window then closes.
+- Profile names on the wire follow Linux (#4619): everything the host reports to the shell (unclaimed tab offers,
+  `profiles.loaded`, a page's `openWindow` for a private link) names the default profile `""`, and everything it takes
+  (`tab.create`, `setActiveProfile`, `openWindow`) reads `""` and `"default"` as the same profile
+  (`ShellProfileName`, `RegularProfileName`, `SameRegularProfile` in `webui_window_policy.h`). Before it, links that open
+  a new tab, the page menu's search and View Source opened hidden tabs the shell never showed, in the default profile only.
+- Page full screen: each claimed page sends the `fullscreen` page event (`PageBinding::DidToggleFullscreenModeForTab`,
+  and its current state when a tab is claimed), the window's own `fullScreen` report leaves out full screen a page
+  caused, as Linux's does (`ReportsWindowFullScreen`), and a companion's page full screen moves the owning window
+  (`chromium-win-companion-fullscreen.patch`; `ReleasePageFullScreen` when the window leaves full screen another way, F11 included, for its own tabs too).
 - Host calls served there: `tab.create` (with `adoptId`, `previousClaim` and transfers between windows after
   `ArdiaTabs.prepareTransfer`), `tab.viewport`, `tab.presentations`, `tab.command` (`loadUrl`, `goBack`,
   `goForward`, `goToOffset`, `reload`, `forceReload`, `stopLoading`, `focus`, `blur`, `zoomStep`, `setMuted`,

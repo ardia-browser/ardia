@@ -2237,6 +2237,27 @@
    "detected": false
   },
   {
+   "id": "windows-webui-extensions:surfaces",
+   "source": "frame",
+   "guard": "Windows WebUI host (--ardia-shell=webui): extensionView.create, viewport, place, command and release, tab.command executeExtensionAction and engine.call extensions.actionStates run only for the live trusted chrome://ardia/ shell document of a browser window (utility windows get ERR_UNKNOWN_CALL); extensions.actionStates must be JSON text of 1 byte to 64 KiB with no NUL (ActionStatesRequestFits), checked before base::JSONReader parses it in RFC mode to depth 8, then needs a tab key of at most 256 bytes bound to this window and this profile and at most 64 extension ids of 32 letters a-p; executeExtensionAction takes exactly one valid extension id enabled in the tab's profile (and allowed in private profiles) and is run only when that extension has an ExtensionAction, else it answers none; extensionView.create needs a profile equal to this window's own name (ViewProfileMatches against WindowProfileName of the requesting window, checked by InvokeExtensionView before the shared code runs: a private window's configured incognito:<window>@<profile> name, never the private@ engine name, and a private profile no window owns matches nothing); every viewport rect number and every place anchor, room, radius and decoratedScale number must be finite and within +-100000 DIPs (ViewCoordinateInRange) before the shared Linux geometry scales it to ints; view ids the page sees come from ViewIds, which never reuses an id across a profile switch, a registry rebuild or a renderer swap, so a late release or place from a retired registry or document maps to id 0 and reaches nothing; the shared Linux SurfaceBook then holds at most 4 surfaces per window owned by the current renderer generation",
+   "checks": [
+    "scripts/windows/engine/src/ardia/win/webui/webui_extension_policy.h#ActionStatesRequestFits",
+    "scripts/windows/engine/src/ardia/win/webui/webui_extension_policy.h#ViewCoordinateInRange",
+    "scripts/windows/engine/src/ardia/win/webui/webui_extension_policy.h#ViewProfileMatches",
+    "scripts/windows/engine/src/ardia/win/webui/webui_extension_policy.h#class ViewIds",
+    "scripts/windows/engine/src/ardia/win/webui/webui_extensions.cc#ViewGeometryInRange",
+    "scripts/windows/engine/src/ardia/win/webui/webui_extensions.cc#InvokeExtensionView",
+    "scripts/windows/engine/src/ardia/win/webui/webui_extensions.cc#ShellHostView::WindowProfileName",
+    "scripts/windows/engine/src/ardia/win/webui/webui_extensions.cc#ExecuteExtensionAction",
+    "scripts/windows/engine/src/ardia/win/webui/webui_extensions.cc#ExtensionActionStates",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_extensions.cc#SurfaceBook::Owns",
+    "scripts/windows/engine/tests/webui_extension_policy_test.cc#TestViewIdsSurviveRegistryChanges",
+    "scripts/windows/engine/tests/webui_extension_policy_test.cc#RunHostileCorpus",
+    "apps/browser/src/hostileInputs.test.mjs#windows webui extension bridge keeps every hostile input away"
+   ],
+   "detected": false
+  },
+  {
    "id": "windows-webui-files:pickersAndClipboard",
    "source": "frame",
    "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaShell.pickFolder takes at most a current folder and a button title, each a string or null; the title is used only when PickerPromptUsable accepts it (1-200 bytes of valid UTF-8 with no control characters) and the start folder only when absolute; pickFiles takes no arguments; one dialog per window at a time (ERR_PICKER_OPEN), refused when policy disables file choosers, and a background test instance answers null or [] without showing a dialog; ArdiaShell.copyText takes exactly one string that CopyTextFits (valid UTF-8 of at most 1 MiB), and readText returns the clipboard text cut to 1 MiB of UTF-8 bytes at a character boundary (TruncateUtf8), never UTF-16 units; scripts/windows/engine/tests/webui_window_policy_test.cc runs a hostile corpus (NULs, control characters, overlong and surrogate UTF-8, bidi overrides, path traversal, foreign schemes, oversized values) through each of these rules",

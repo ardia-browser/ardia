@@ -4,6 +4,7 @@ export type {
   NightShadeMode,
   PageEngineEvent,
   PageNavigationState,
+  PageProcessOutcome,
   PageRequest,
   PageRequestAnswer,
   PageScrollPosition,

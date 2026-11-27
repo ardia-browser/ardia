@@ -38,11 +38,11 @@ final class LivePageRoster<Page: DiscardablePage> {
     if let page = pages.removeValue(forKey: id), page.isLive { page.discard() }
   }
 
-  func discardAll(except kept: UUID?) {
-    for id in recency where id != kept {
+  func discardAll(keeping kept: Set<UUID>) {
+    for id in recency where !kept.contains(id) {
       if let page = pages[id], page.isLive { page.discard() }
     }
-    recency = (kept.map { [$0] } ?? []).filter { pages[$0]?.isLive == true }
+    recency = recency.filter { kept.contains($0) && pages[$0]?.isLive == true }
   }
 
   private func trim(keeping kept: UUID) {

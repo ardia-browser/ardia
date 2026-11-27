@@ -687,7 +687,7 @@ test("#1577: a crash after the app scope moved the mark on, before a profile sco
   assert.ok(atCrash, "the profile scope was about to pull");
   const saved = JSON.parse(atCrash.get("sync.json"));
   assert.equal(saved.sessionMark, sessionAtCrash.syncMark, "the app scope had already made the marks match");
-  assert.ok(saved.rebaseScopes?.some((name) => name.startsWith("p:")), "but the profile's rebase was owed in sync.json");
+  assert.ok(Object.keys(saved.rebaseScopes ?? {}).some((name) => name.startsWith("p:")), "but the profile's rebase was owed in sync.json");
   a.docs = atCrash;
   const before = tombstones();
   const engineA4 = await relaunch(a, "scopesA4", sessionAtCrash);
@@ -755,4 +755,63 @@ test("#1577: when sync.json can't be saved, the batch that would need its new ma
     assert.equal(engineA1.useSync.getState().status, "updated");
   });
   assert.ok(published("pin:t:").some((op) => op.v?.u === "https://two.example/"), "once sync.json saves, the pin goes out");
+});
+
+test("#1577: a second recovery doesn't take the first one's finished rebase for its own, even when the marks match after a crash", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?secondA1");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  const first = a.browser;
+  const engineA2 = await relaunch(a, "secondA2");
+  await a.with(async () => {
+    pin(["https://two.example/"]);
+    await engineA2.syncNow();
+    await engineA2.syncNow();
+  });
+  const engineA3 = await relaunch(a, "secondA3", first);
+  await a.with(async () => {
+    await engineA3.syncNow();
+    await engineA3.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://two.example/"], "the first recovery finished");
+  });
+  assert.equal(JSON.parse(a.docs.get("sync.json")).rebaseScopes, undefined, "and owes nothing");
+  const second = a.browser;
+  await a.with(async () => {
+    pin(["https://three.example/"]);
+    await engineA3.syncNow();
+    await engineA3.syncNow();
+  });
+  a.browser = second;
+  const engineA4 = await import("./engine.ts?secondA4");
+  let atCrash = null;
+  let sessionAtCrash = null;
+  await a.with(async () => {
+    engineA4.startSync();
+    await settle();
+    failing.onRead = (scope) => {
+      if (!atCrash && scope.startsWith("p:")) {
+        atCrash = new Map(shell.docs);
+        sessionAtCrash = S();
+      }
+    };
+    try {
+      await engineA4.syncNow();
+    } finally {
+      failing.onRead = null;
+    }
+  });
+  assert.ok(atCrash);
+  const saved = JSON.parse(atCrash.get("sync.json"));
+  assert.ok(Object.keys(saved.rebaseScopes ?? {}).some((name) => name.startsWith("p:")), "the profile's part of the second recovery is owed");
+  a.docs = atCrash;
+  const before = tombstones();
+  const engineA5 = await relaunch(a, "secondA5", { ...sessionAtCrash, syncMark: saved.sessionMark });
+  await a.with(async () => {
+    await engineA5.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://three.example/", "https://two.example/"], "the profile rebases for the second recovery");
+  });
+  assert.equal(tombstones(), before, "and deletes no pin");
 });

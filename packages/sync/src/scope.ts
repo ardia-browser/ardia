@@ -85,7 +85,11 @@ function noteExtracted(state: ScopeState, adapter: Adapter, source: object | und
   byPrefix.set(adapter.prefix, { source, baseWrites: baseWritesUnder(state, adapter.prefix), joined: state.joined });
 }
 
-export const startRebase = (state: ScopeState) => void (state.rebase = []);
+export function startRebase(state: ScopeState, id?: string) {
+  state.rebase = [];
+  if (id === undefined) delete state.rebaseId;
+  else state.rebaseId = id;
+}
 
 export const rebasing = (state: ScopeState, adapter: Adapter) => !!state.rebase && !!adapter.sessionBacked && !state.rebase.includes(adapter.prefix);
 

@@ -228,7 +228,7 @@ export function startLinuxSync(options: { host?: ArdiaHost; candidate: boolean; 
   });
   authority = started;
   forwardProfileDeletions(leading, (profileId) => forward("retireProfile", [profileId]), (profileId) => engine.retireProfile(profileId));
-  forwardSettingChoices(leading, (names) => forward("noteSettingsChosen", [names]));
+  forwardSettingChoices(leading, (names) => forward("noteSettingsChosen", [names]), (names) => engine.noteSettingsChosen(names));
   const stopTargets = useSync.subscribe(refreshSendTargets);
   if (typeof addEventListener === "function")
     addEventListener("pagehide", () => {

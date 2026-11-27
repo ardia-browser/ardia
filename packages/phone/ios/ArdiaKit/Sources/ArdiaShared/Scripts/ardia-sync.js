@@ -274,7 +274,11 @@ function noteExtracted(state            , adapter         , source              
   byPrefix.set(adapter.prefix, { source, baseWrites: baseWritesUnder(state, adapter.prefix), joined: state.joined });
 }
 
-const startRebase = (state            ) => void (state.rebase = []);
+function startRebase(state            , id         ) {
+  state.rebase = [];
+  if (id === undefined) delete state.rebaseId;
+  else state.rebaseId = id;
+}
 
 const rebasing = (state            , adapter         ) => !!state.rebase && !!adapter.sessionBacked && !state.rebase.includes(adapter.prefix);
 
@@ -1236,6 +1240,7 @@ __define("packages/sync/src/scopeState.ts", function (exports, __require) {
                   
                         
                       
+                    
                     
                                                  
                           

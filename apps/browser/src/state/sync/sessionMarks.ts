@@ -26,16 +26,17 @@ export function settleLaunchMark(doc: SyncDoc, consent: ConsentToken | null) {
   const unmarked = doc.sessionMark === undefined;
   const stale = unmarked ? holdsBase(doc) : doc.sessionMark !== here;
   if (stale) {
-    for (const state of Object.values(doc.scopes)) startRebase(state);
-    doc.rebaseScopes = [...new Set([...(doc.rebaseScopes ?? []), ...Object.keys(doc.scopes)])];
+    const recovery = newId("rb");
+    for (const state of Object.values(doc.scopes)) startRebase(state, recovery);
+    doc.rebaseScopes = { ...doc.rebaseScopes, ...Object.fromEntries(Object.keys(doc.scopes).map((name) => [name, recovery])) };
     noteSessionRebase(consent);
     if (unmarked) doc.sessionMark = newId("sm");
   } else if (unmarked) {
     markSessionWith(doc, here || newId("sm"));
   }
-  for (const name of doc.rebaseScopes ?? []) {
+  for (const [name, recovery] of Object.entries(doc.rebaseScopes ?? {})) {
     const scoped = doc.scopes[name];
-    if (scoped && !scoped.rebase) startRebase(scoped);
+    if (scoped && scoped.rebaseId !== recovery) startRebase(scoped, recovery);
   }
 }
 
@@ -49,8 +50,9 @@ function sessionMovedBeforeDurable(doc: SyncDoc, scopes: ScopeState[]): boolean 
 
 function rebaseRecorded(doc: SyncDoc, names: string[]) {
   if (!doc.rebaseScopes) return;
-  const left = doc.rebaseScopes.filter((name) => !names.includes(name) && doc.scopes[name]);
-  if (left.length) doc.rebaseScopes = left;
+  const recorded = (name: string, recovery: string) => !doc.scopes[name] || (names.includes(name) && doc.scopes[name]!.rebaseId === recovery);
+  const left = Object.entries(doc.rebaseScopes).filter(([name, recovery]) => !recorded(name, recovery));
+  if (left.length) doc.rebaseScopes = Object.fromEntries(left);
   else delete doc.rebaseScopes;
 }
 

@@ -10,15 +10,20 @@ type Timers = { set: (done: () => void, ms: number) => unknown; clear: (handle: 
 
 const realTimers: Timers = { set: (done, ms) => setTimeout(done, ms), clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) };
 
-export function forwardProfileDeletions(leading: () => boolean, send: (profileId: string) => Promise<unknown>, retireHere: (profileId: string) => void, timers = realTimers): () => void {
-  const attempt = (profileId: string, left: number) => {
-    if (leading()) return retireHere(profileId);
-    send(profileId).catch(() => {
-      if (left > 1) timers.set(() => attempt(profileId, left - 1), FORWARD_RETRY_MS);
+export function deliverToAuthority<T>(leading: () => boolean, send: (value: T) => Promise<unknown>, here: (value: T) => void, timers = realTimers): (value: T) => void {
+  const attempt = (value: T, left: number) => {
+    if (leading()) return here(value);
+    send(value).catch(() => {
+      if (left > 1) timers.set(() => attempt(value, left - 1), FORWARD_RETRY_MS);
     });
   };
+  return (value) => attempt(value, FORWARD_TRIES);
+}
+
+export function forwardProfileDeletions(leading: () => boolean, send: (profileId: string) => Promise<unknown>, retireHere: (profileId: string) => void, timers = realTimers): () => void {
+  const deliver = deliverToAuthority(leading, send, retireHere, timers);
   return onProfileDeleted((profileId) => {
-    if (!leading()) attempt(profileId, FORWARD_TRIES);
+    if (!leading()) deliver(profileId);
   });
 }
 

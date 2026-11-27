@@ -186,10 +186,14 @@ test("a setting chosen in a window that isn't the sync authority reaches the aut
   await engine.syncNow();
   let leading = false;
   const sent = [];
-  const stop = forwardSettingChoices(() => leading, async (names) => {
-    sent.push(names);
-    engine.noteSettingsChosen(names);
-  });
+  const stop = forwardSettingChoices(
+    () => leading,
+    async (names) => {
+      sent.push(names);
+      engine.noteSettingsChosen(names);
+    },
+    () => assert.fail("recorded through the authority, not here"),
+  );
   try {
     S().updateSettings({ pageFrame: 12 });
     assert.deepEqual(sent, [["pageFrame"]], "the choice is forwarded");
@@ -202,4 +206,43 @@ test("a setting chosen in a window that isn't the sync authority reaches the aut
   }
   engine.noteSettingsChosen(["sidebarSide"]);
   assert.ok(JSON.parse(shell.docs.get("sync.json")).settingEdits?.sidebarSide, "a forwarded choice is stamped into the authority's ledger, though its own store never saw the choice");
+});
+
+test("a setting choice the authority dropped during a handoff is retried, or recorded here once this window leads", async () => {
+  const { forwardSettingChoices } = await import("./settingChoices.ts");
+  S().hydrate({});
+  let leading = false;
+  let answering = false;
+  const pending = [];
+  const timers = { set: (done) => (pending.push(done), pending.length), clear: () => {} };
+  const delivered = [];
+  const recordedHere = [];
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+  const stop = forwardSettingChoices(
+    () => leading,
+    async (names) => {
+      if (!answering) throw new Error("the authority went away mid-call");
+      delivered.push(names);
+    },
+    (names) => recordedHere.push(names),
+    timers,
+  );
+  try {
+    S().updateSettings({ pageFrame: 10 });
+    await tick();
+    assert.deepEqual(delivered, []);
+    assert.equal(pending.length, 1, "a retry is scheduled");
+    answering = true;
+    pending.shift()();
+    await tick();
+    assert.deepEqual(delivered, [["pageFrame"]], "the retry reaches the new authority");
+    answering = false;
+    S().updateSettings({ sidebarSide: S().settings.sidebarSide === "left" ? "right" : "left" });
+    await tick();
+    leading = true;
+    pending.shift()();
+    assert.deepEqual(recordedHere, [["sidebarSide"]], "a window that became the authority records it itself");
+  } finally {
+    stop();
+  }
 });

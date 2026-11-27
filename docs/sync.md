@@ -209,8 +209,9 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   crash anywhere in between leaves them apart. While quitting, `sync.json` still moves on but the store doesn't (the
   session has saved for the quit), so a write that lands during the quit leaves the marks apart and the next launch
   rebases. A backup or an older build's file from earlier in the same launch holds an older mark too. When the marks
-  differ at launch, every scope starts a rebase (`startRebase`), and `sync.json` lists each scope that owes one
-  (`rebaseScopes`); a scope leaves the list only once its own saved state, holding its rebase flags, is on disk. The
+  differ at launch, every scope starts a rebase (`startRebase`) under a new recovery id, and `sync.json` maps each scope
+  that owes one to that id (`rebaseScopes`); a scope leaves the map only once its own saved state, holding rebase flags
+  with that id (`rebaseId`), is on disk, and flags left from an earlier recovery never count for a later one. The
   launch leaves the marks apart: only the rebase's own progress, journalled after its repair reached the store, moves
   them on again. So a crash before the repaired session is saved rebases again on the next launch; a rebase already
   under way when the app stops carries on from its saved flags; and a scope that hadn't saved anything yet when another
@@ -223,7 +224,8 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   sync clock into `settingEdits` in `sync.json` at once, and dropped when its batch is on disk) or a pin placement
   still in `pinChoices`, including a tile turned into a row or back; those go out instead (`keepLocal`). On Linux and
   Windows a setting chosen in a window that isn't the sync authority is forwarded to it (`noteSettingsChosen`) and
-  stamped there. A rebasing adapter publishes after the cycle's pull,
+  stamped there; a forward that fails, as during a handoff between windows, is tried again, and a window that has
+  become the authority meanwhile stamps it itself. A rebasing adapter publishes after the cycle's pull,
   and while anything in the scope is still downloading or damaged it neither publishes nor applies anything (its keys wait for the next cycle), so a
   record on its way can't be outrun by an older session value. An adapter told it's rebasing takes the synced
   value even where it would otherwise keep a local one that differs from its base (a pinned group tab's home). The rebase ends for an adapter once it applied

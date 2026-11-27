@@ -64,7 +64,7 @@ export type SyncDoc = {
   sessionMark?: string;
   themesChosenWhileJoining?: string[];
   settingEdits?: Record<string, HLC>;
-  rebaseScopes?: string[];
+  rebaseScopes?: Record<string, string>;
 };
 
 export type ProfileRemoval = { keys: Record<string, HLC>; returned?: boolean };

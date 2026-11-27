@@ -6,6 +6,7 @@ import { StyleSheet } from "react-native";
 import { focus, switchToTab } from "../../state/browser/actions";
 import { notePictureInPictureActivated, notePictureInPictureBackToTab, notePictureInPictureClickSkip, notePictureInPictureDragged, notePictureInPictureHandleUnstash, notePictureInPictureReleased, notePictureInPictureResized, notePictureInPictureStandIn } from "../../state/telemetry/pictureInPictureCounts";
 import { noteRendererResponsive, noteRendererUnresponsive } from "../../state/telemetry/freezes";
+import { notePageFullScreenTransition } from "../../state/telemetry/windowPlacementCounts";
 import { noteFavicon } from "../../state/favicons/favicons";
 import { adoptIconPage, dropOutlivedFavicon, noteIconPage } from "../../state/favicons/iconPage";
 import { endThemeHold, heldThemeColor } from "../../state/windows/launchLook";
@@ -59,7 +60,7 @@ import { defaultTarget, languageName, releaseTranslation, revertPage, translateC
 import { translatePageMenuItems } from "../../state/site/translateMenu";
 import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
 import { noteWebKitFocusRestore } from "../../state/telemetry/pageFocusReturns";
-import { noteAutoPictureInPictureKept, notePageFullScreenTransition, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
+import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
 import { noteWebKitMediaFault } from "../../state/telemetry/webkitMediaFaults";
 import { isAdoptKind } from "../../state/tabs/adoptIds";
 import { firstPagePending, isBlankAddress, noteFirstPagePending, reportedAddress, reportedTitle } from "../../state/tabs/pendingAddress";
@@ -335,7 +336,8 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         noteRendererResponsive(tabId, false);
         patchPage(tabId, { unresponsive: false });
       }}
-      onFullscreen={(fullscreen) => patchPage(tabId, { fullscreen })} onFullScreenTransition={notePageFullScreenTransition}
+      onFullscreen={(fullscreen) => patchPage(tabId, { fullscreen })}
+      onFullScreenTransition={notePageFullScreenTransition}
       onMediaAccess={(mediaAccess) => patchPage(tabId, { mediaAccess: mediaAccess.camera || mediaAccess.microphone || mediaAccess.screen ? mediaAccess : null })}
       onSecurity={(security) => !prewarmOnly() && patchPage(tabId, { security })}
       onContentBlocked={({ count }) => patchPage(tabId, { blocked: count })}

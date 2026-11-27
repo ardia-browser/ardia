@@ -77,16 +77,37 @@ static const NSTimeInterval kPageCoverLimit = 4;
 
 - (void)updateLayer {
   self.layer.contents = (__bridge id)_picture;
-  self.layer.contentsGravity = _keepsShape ? kCAGravityResizeAspectFill : kCAGravityResize;
-  self.layer.masksToBounds = _keepsShape;
+  self.layer.contentsGravity = _keepsShape ? kCAGravityResizeAspect : kCAGravityResize;
+  self.layer.backgroundColor = _keepsShape ? NSColor.blackColor.CGColor : nil;
+}
+
+- (double)shownShapeOverPictureShape {
+  const NSSize shown = self.bounds.size;
+  if (!_picture || shown.width < 1 || shown.height < 1) return 1;
+  const double pictureShape = (double)CGImageGetWidth(_picture) / MAX(1, CGImageGetHeight(_picture));
+  return shown.width / shown.height / pictureShape;
 }
 
 - (double)stretch {
-  const NSSize shown = self.bounds.size;
-  if (!_picture || shown.width < 1 || shown.height < 1) return 0;
-  const double pictureShape = (double)CGImageGetWidth(_picture) / MAX(1, CGImageGetHeight(_picture));
-  const double shownShape = shown.width / shown.height;
-  return [self.layer.contentsGravity isEqualToString:kCAGravityResize] ? fabs(shownShape / pictureShape - 1) : 0;
+  NSString *gravity = self.layer.contentsGravity;
+  return [gravity isEqualToString:kCAGravityResize] ? fabs(self.shownShapeOverPictureShape - 1) : 0;
+}
+
+- (double)crop {
+  const double ratio = self.shownShapeOverPictureShape;
+  return [self.layer.contentsGravity isEqualToString:kCAGravityResizeAspectFill] ? 1 - MIN(ratio, 1 / ratio) : 0;
+}
+
++ (double)most:(double (^)(ArdiaPageCover *cover))measure ofCoversOver:(ArdiaCoreTab *)tab in:(NSView *)root {
+  double most = 0;
+  NSMutableArray<NSView *> *views = [NSMutableArray arrayWithObject:root ?: [NSView new]];
+  while (views.count) {
+    NSView *view = views.lastObject;
+    [views removeLastObject];
+    if ([view isKindOfClass:ArdiaPageCover.class] && ((ArdiaPageCover *)view).tab == tab) most = MAX(most, measure((ArdiaPageCover *)view));
+    [views addObjectsFromArray:view.subviews];
+  }
+  return most;
 }
 
 - (NSView *)hitTest:(NSPoint)point {

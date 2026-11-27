@@ -791,6 +791,17 @@
    "guard": "App lifecycle events from AppKit"
   },
   {
+   "id": "native-page-event:fullScreenTransition",
+   "source": "native",
+   "guard": "The window's report of a page full-screen transition it started: fullScreenTransitionOf passes only a boolean entering, a finite non-negative waitedMs and a string consent epoch and drops anything else as null; notePageFullScreenTransition counts only a way in whose epoch is the current sharing period, so a transition begun with sharing off or in an earlier period is never counted",
+   "checks": [
+    "packages/ardiacore/src/pageEvents.ts#fullScreenTransitionOf",
+    "apps/browser/src/state/telemetry/windowPlacementCounts.ts#notePageFullScreenTransition",
+    "apps/browser/src/hostileInputs.test.mjs"
+   ],
+   "detected": false
+  },
+  {
    "id": "native-channel:notificationResponse",
    "source": "other-app",
    "guard": "A click on a notification the browser showed; routed by the browser's own notification id"

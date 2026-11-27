@@ -132,7 +132,7 @@ test("Little Ardia and utility windows opened floating are counted apart, sent w
   placement.noteWindowOpenedFloating(true, consent());
   client.setSharing(true, "settings");
   placement.noteWindowOpenedFloating(true, before);
-  assert.deepEqual(placement.takeWindowPlacementCounts(), { window_centered_resizes: 0, windows_reopened_maximized: 0, window_titles_read: 0, window_drag_loops: 0, window_drags_native: 0, window_drag_takeovers: 0, window_close_pins_kept: 0, window_close_pin_ids_renewed: 0, little_ardia_opened_floating: 0, utility_windows_opened_floating: 0, linux_windows_app_decorated: 0, linux_windows_compositor_decorated: 0, linux_decoration_answers_none: 0, linux_decoration_answers_client: 0, linux_decoration_answers_server: 0, linux_page_viewports_rejected: 0 });
+  assert.deepEqual(placement.takeWindowPlacementCounts(), { window_centered_resizes: 0, windows_reopened_maximized: 0, window_titles_read: 0, window_drag_loops: 0, window_drags_native: 0, window_drag_takeovers: 0, window_close_pins_kept: 0, window_close_pin_ids_renewed: 0, little_ardia_opened_floating: 0, utility_windows_opened_floating: 0, page_full_screen_starts: 0, page_full_screen_slow_starts: 0, linux_windows_app_decorated: 0, linux_windows_compositor_decorated: 0, linux_decoration_answers_none: 0, linux_decoration_answers_client: 0, linux_decoration_answers_server: 0, linux_page_viewports_rejected: 0 });
 });
 
 test("floating windows counted in one consent period are dropped when the period changes, not reported in the next", async () => {

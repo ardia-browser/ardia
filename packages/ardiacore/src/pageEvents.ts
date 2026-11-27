@@ -42,7 +42,7 @@ import type {
   WebViewProps,
   ZoomState,
 } from "./pageTypes";
-import type { AutoPictureInPictureMiss } from "./pageTypes";
+import type { AutoPictureInPictureMiss, FullScreenTransition } from "./pageTypes";
 
 type NativeEvents = {
   onNavigationChange: NavigationState;
@@ -55,7 +55,7 @@ type NativeEvents = {
   onPopupBlocked: BlockedPopup;
   onFindResult: FindResult;
   onFullscreen: { fullscreen: boolean };
-  onFullScreenTransition: { entering?: boolean; waitedMs?: number };
+  onFullScreenTransition: unknown;
   onStatus: { text: string; fromBottom?: number };
   onCrashed: CrashInfo;
   onUnresponsive: object;
@@ -178,7 +178,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onPopupBlocked: (e) => [{ ...e, url: toAppUrl(e.url) }],
   onFindResult: (e) => [e],
   onFullscreen: (e) => [e.fullscreen],
-  onFullScreenTransition: (e) => [{ entering: !!e.entering, waitedMs: typeof e.waitedMs === "number" && Number.isFinite(e.waitedMs) ? Math.max(0, e.waitedMs) : 0 }],
+  onFullScreenTransition: (e) => [fullScreenTransitionOf(e)],
   onStatus: (e) => [e.text, typeof e.fromBottom === "number" ? e.fromBottom : null],
   onCrashed: (e) => [e],
   onUnresponsive: () => [],
@@ -230,6 +230,13 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onFieldProviderHint: (e) => [{ state: e.state === "dismissed" ? "dismissed" : "shown" } as FieldProviderHint],
   onVerificationCodeFound: (e) => [{ token: String(e.token), app: String(e.app ?? ""), main: e.main === true }],
 };
+
+export function fullScreenTransitionOf(e: unknown): FullScreenTransition | null {
+  if (!e || typeof e !== "object") return null;
+  const { entering, waitedMs, epoch } = e as Record<string, unknown>;
+  if (typeof entering !== "boolean" || typeof waitedMs !== "number" || !Number.isFinite(waitedMs) || waitedMs < 0 || typeof epoch !== "string") return null;
+  return { entering, waitedMs, epoch };
+}
 
 export const isPageEventProp = (key: string): key is Handlers => key in unwrap;
 

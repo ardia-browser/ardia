@@ -1046,3 +1046,39 @@ test("N1: whatever an extension's manifest names as its New Tab page, a real new
   assert.ok(opened > 0, "some hostile names are plain file names inside the extension and open, so the sink check ran");
   useExtensions.setState({ lists: {} });
 });
+
+test("a full-screen transition event with any hostile field is dropped before it reaches the counters, and a well-formed one still counts", async () => {
+  const client = await import("./state/telemetry/client.ts");
+  const placement = await import("./state/telemetry/windowPlacementCounts.ts");
+  const { fullScreenTransitionOf } = await import("../../../packages/ardiacore/src/pageEvents.ts");
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const epoch = client.consentEpoch();
+  const counts = () => {
+    const { page_full_screen_starts, page_full_screen_slow_starts } = placement.takeWindowPlacementCounts();
+    return [page_full_screen_starts, page_full_screen_slow_starts];
+  };
+  counts();
+  const expected = [0, 0];
+  for (const { value } of HOSTILE_VALUES) {
+    for (const payload of [value, { entering: value, waitedMs: 900, epoch }, { entering: true, waitedMs: value, epoch }, { entering: true, waitedMs: 900, epoch: value }, [value]]) {
+      const decoded = fullScreenTransitionOf(payload);
+      assert.ok(decoded === null || (decoded.entering === payload.entering && decoded.waitedMs === payload.waitedMs && decoded.epoch === payload.epoch), show(payload));
+      assert.ok(decoded === null || (typeof decoded.entering === "boolean" && Number.isFinite(decoded.waitedMs) && decoded.waitedMs >= 0 && typeof decoded.epoch === "string"), show(payload));
+      if (decoded?.entering && decoded.epoch === epoch) {
+        expected[0]++;
+        if (decoded.waitedMs >= placement.SLOW_PAGE_FULL_SCREEN_START_MS) expected[1]++;
+      }
+      placement.notePageFullScreenTransition(decoded);
+    }
+  }
+  assert.deepEqual(counts(), expected);
+  for (const bad of [{ entering: 1, waitedMs: 900, epoch }, { entering: "true", waitedMs: 900, epoch }, { entering: true, waitedMs: -1, epoch }, { entering: true, waitedMs: Infinity, epoch }, { entering: true, waitedMs: "900", epoch }, { entering: true, waitedMs: 900 }]) {
+    assert.equal(fullScreenTransitionOf(bad), null, show(bad));
+    placement.notePageFullScreenTransition(fullScreenTransitionOf(bad));
+  }
+  assert.deepEqual(counts(), [0, 0]);
+  placement.notePageFullScreenTransition(fullScreenTransitionOf({ entering: true, waitedMs: 900, epoch }));
+  assert.deepEqual(counts(), [1, 1]);
+  client.setSharing(false, "settings");
+});

@@ -1,4 +1,5 @@
 #import "ArdiaChromeWindowInternal.h"
+#import "ArdiaEvents.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaWebView.h"
 #import "ArdiaWebViewInternal.h"
@@ -203,6 +204,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   BOOL _watchingWindowServer;
   BOOL _leftApp;
   CFTimeInterval _pageAskedAt;
+  ArdiaConsentStamp *_pageAskedStamp;
 }
 
 + (instancetype)ofWindow:(ArdiaCoreWindow *)coreWindow create:(BOOL)create {
@@ -364,6 +366,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
 - (void)tab:(ArdiaCoreTab *)tab fullScreen:(BOOL)fullScreen tell:(void (^)(void))tell {
   const NSUInteger change = [FullScreenChanges() objectForKey:tab].unsignedIntegerValue;
   _pageAskedAt = CACurrentMediaTime();
+  _pageAskedStamp = ArdiaConsentStamp.begin;
   _waitingFor = 0;
   _coverTurn++;
   _picturing = NO;
@@ -463,7 +466,8 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   [CATransaction flush];
   ToggleWindowFullScreen(coreWindow);
   const double waitedMs = _pageAskedAt > 0 ? round((CACurrentMediaTime() - _pageAskedAt) * 1000) : 0;
-  [[ArdiaTabRegistry viewForTab:page] emit:@"fullScreenTransition" payload:@{@"entering" : @(entering), @"waitedMs" : @(waitedMs)}];
+  ArdiaConsentStamp *stamp = _pageAskedStamp ?: ArdiaConsentStamp.begin;
+  [[ArdiaTabRegistry viewForTab:page] emit:@"fullScreenTransition" payload:[stamp onto:@{@"entering" : @(entering), @"waitedMs" : @(waitedMs)}]];
   NSArray *covers = _covers;
   if (!covers.count) return;
   __weak ArdiaWindowFullScreen *weakSelf = self;
@@ -491,19 +495,6 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
 
 - (BOOL)covered {
   return self.covers > 0;
-}
-
-- (double)pageCoverStretch {
-  double most = 0;
-  ArdiaCoreTab *page = self.probedTab;
-  NSMutableArray<NSView *> *views = [NSMutableArray arrayWithObject:_coreWindow.window.contentView ?: [NSView new]];
-  while (views.count) {
-    NSView *view = views.lastObject;
-    [views removeLastObject];
-    if ([view isKindOfClass:ArdiaPageCover.class] && ((ArdiaPageCover *)view).tab == page) most = MAX(most, ((ArdiaPageCover *)view).stretch);
-    [views addObjectsFromArray:view.subviews];
-  }
-  return most;
 }
 
 - (BOOL)transitioning {

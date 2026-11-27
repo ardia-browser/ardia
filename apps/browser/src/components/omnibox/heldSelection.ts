@@ -14,12 +14,14 @@ export function heldIndex(prev: Held | null, items: Suggestion[], typed: string,
   return at >= 0 ? at : selectedIndex;
 }
 
-export function heldKey(items: Suggestion[], selectedIndex: number): string | null {
-  const current = selectedIndex > 0 ? items[selectedIndex] : undefined;
-  return current ? suggestionKey(current) : null;
+export function heldKey(items: Suggestion[], selectedIndex: number, typed: string): string | null {
+  const current = items[selectedIndex];
+  if (!current) return null;
+  const openTabRow = !typed.trim() && "tabId" in current && !!current.tabId;
+  return selectedIndex === 0 && !openTabRow ? null : suggestionKey(current);
 }
 
-export const followedRow = (prev: Held | null, index: number): Held | null => (prev ? { ...prev, key: heldKey(prev.items, index) } : prev);
+export const followedRow = (prev: Held | null, index: number): Held | null => (prev ? { ...prev, key: heldKey(prev.items, index, prev.typed) } : prev);
 
 export function useHeldSelection(items: Suggestion[], typed: string, scope: SearchScope | null, selectedIndex: number, dispatch: (e: BarEvent) => void, rows: { held: boolean; release: () => void }) {
   const held = useRef<Held | null>(null);
@@ -28,7 +30,7 @@ export function useHeldSelection(items: Suggestion[], typed: string, scope: Sear
   useLayoutEffect(() => {
     const at = heldIndex(held.current, items, typed, scope, selectedIndex);
     if (at !== selectedIndex) return dispatch({ kind: "selected", index: at });
-    held.current = { items, typed, scope, key: heldKey(items, selectedIndex) };
+    held.current = { items, typed, scope, key: heldKey(items, selectedIndex, typed) };
   });
   const [releaseTo] = useState(() => (followIndex?: number) => {
     if (followIndex !== undefined && latestRows.current.held) {

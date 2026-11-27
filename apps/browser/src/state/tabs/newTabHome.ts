@@ -1,6 +1,6 @@
 import type { BrowserState } from "../browser/store";
 import { customNewTabUrl } from "../settings/settings";
-import { extensionNewTabUrl } from "../extensions/newTabPage";
+import { newTabChoice, whenExtensionListKnown, type NewTabChoice } from "../extensions/newTabPage";
 import { noteExtensionNewTab } from "../telemetry/newTabPageCounts";
 import { navigationOf } from "./pageSession";
 import { gateOpening, isGatedUrl, settleOpening } from "./openingGate";
@@ -14,19 +14,28 @@ type NewTabHome = {
 
 const settled = () => {};
 
-export function newTabPageUrl(s: BrowserState, windowId: string, profileId?: string | null): string | undefined {
-  const custom = customNewTabUrl(s.settings);
-  if (custom) {
-    if (custom.startsWith("chrome-extension://")) noteExtensionNewTab("address");
-    return custom;
-  }
-  const page = extensionNewTabUrl(s, windowId, profileId);
-  if (page) noteExtensionNewTab("override");
-  return page;
+export function newTabPageChoice(s: BrowserState, windowId: string, profileId?: string | null): NewTabChoice {
+  const choice = newTabChoice(s, windowId, profileId, customNewTabUrl(s.settings));
+  if (choice.via) noteExtensionNewTab(choice.via);
+  return choice;
+}
+
+export function settleWhenListed(windowId: string, profileId: string | null | undefined, tabId: string, get: () => BrowserState) {
+  whenExtensionListKnown(get(), windowId, profileId, () => {
+    const s = get();
+    const tab = s.tabs[tabId];
+    if (!tab || tab.url || navigationOf(tab)) return;
+    const choice = newTabChoice(s, windowId, profileId, customNewTabUrl(s.settings));
+    if (!choice.url || isGatedUrl(choice.url)) return;
+    if (choice.via) noteExtensionNewTab(choice.via);
+    s.navigate(tabId, choice.url, { userInitiated: true });
+  });
 }
 
 export function newTabHome(s: BrowserState, windowId: string, profileId: string | null): NewTabHome {
-  const url = newTabPageUrl(s, windowId, profileId);
+  const choice = newTabPageChoice(s, windowId, profileId);
+  const url = choice.url;
+  if (!url && choice.waits) return { url, replaced: false, cancelled: false, settle: (tabId, get) => settleWhenListed(windowId, profileId, tabId, get) };
   if (!url || !isGatedUrl(url)) return { url, replaced: false, cancelled: false, settle: settled };
   const gated = gateOpening(url, { tabId: null, windowId, profileId, via: "newTab" }, null);
   if ("verdict" in gated) {

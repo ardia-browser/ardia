@@ -73,3 +73,22 @@ test("a press to the first row follows the first row, which is always the typed 
   const held = followedRow({ items: [typedRow, github], typed: "exa", scope: null, key: null }, 0);
   assert.equal(heldIndex(held, [typedRow, late, github], "exa", null, 0), 0);
 });
+
+test("in the idle command bar, ↓ wrapping from the last open tab to the first keeps that tab when a late tab arrives above it", () => {
+  const tab = (id) => ({ kind: "page", url: `https://${id}.example/`, title: id, tabId: id });
+  const shown = [tab("a"), tab("b"), tab("c")];
+  const { context, dispatched, released } = bar({ items: shown, selectedIndex: 2, rowsHeld: true });
+  context.bar.typed = "";
+  context.input = "";
+  press("ArrowDown", context);
+  assert.deepEqual(dispatched, [{ kind: "selected", index: 0 }]);
+  assert.deepEqual(released, [0]);
+  const held = followedRow({ items: shown, typed: "", scope: null, key: null }, 0);
+  assert.equal(heldIndex(held, [tab("late"), ...shown], "", null, 0), 1, "the selection stays on tab a, not on the tab that arrived");
+});
+
+test("with text typed, the first row stays the first row, whatever arrives", () => {
+  const tabRow = { kind: "page", url: "https://exa.example/", title: "exa", tabId: "t1" };
+  const held = followedRow({ items: [tabRow, github], typed: "exa", scope: null, key: null }, 0);
+  assert.equal(heldIndex(held, [late, tabRow, github], "exa", null, 0), 0);
+});

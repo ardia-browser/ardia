@@ -7,7 +7,7 @@ import { engineProfile, incognitoOriginal, isIncognitoProfile, privateSession } 
 import { shownPageId } from "../peek/peek";
 import { isTabReady } from "../tabs/pageState";
 import type { ToolbarDrag } from "./toolbarOrder";
-import { noteExtensionLists } from "./newTabPage";
+import { setExtensionNewTabLists } from "./newTabPage";
 
 export type { ActionState, InstalledExtension } from "../../platform/extensions";
 
@@ -50,7 +50,7 @@ export type SidePanelCard = SidePanel & { owners: string[] };
 
 export const useExtensions = create<ExtensionsStore>()(() => ({ lists: {}, actions: {}, popup: null, install: null, pinDialog: null, sidePanels: {}, sidePanelCards: {}, sidePanelLookups: {}, toolbarDrag: null }));
 useExtensions.subscribe((e, prev) => {
-  if (e.lists !== prev.lists) noteExtensionLists(e.lists);
+  if (e.lists !== prev.lists) setExtensionNewTabLists(e.lists);
 });
 
 const EMPTY: InstalledExtension[] = [];

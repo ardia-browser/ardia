@@ -1017,17 +1017,32 @@ test("T3: whatever the page hands over as passages, the model only gets numbered
   }
 });
 
-test("N1: whatever an extension's manifest names as its New Tab page, a new tab opens only a page inside that extension", () => {
+test("N1: whatever an extension's manifest names as its New Tab page, a real new tab opens only a page inside that extension", async () => {
+  const { useExtensions } = await import("./state/extensions/store.ts");
+  const { engineProfile } = await import("./state/browser/model.ts");
   const id = "imfeikbeimbfpmgfkkmjekabdehiiajc";
   const prefix = `chrome-extension://${id}/`;
+  S().updateSettings({ newTabUrl: "", newTabOpens: "page", minimalismMode: false });
+  const w = S().createWindow({ url: "https://ardia-fixture.invalid/" });
+  const profile = engineProfile(S(), S().windows[w].profileId);
+  const openWith = (ext) => {
+    useExtensions.setState({ lists: { [profile]: [ext] } });
+    const tabId = S().newTab(w, { newTabCommand: true });
+    const url = S().tabs[tabId]?.url ?? "";
+    S().closeTab(tabId);
+    return url;
+  };
+  const corpus = [...HOSTILE_VALUES, ...HOSTILE_STRINGS.map(({ id: name, value }) => ({ id: `nested.${name}`, value: `app/${value}/page.html` }))];
   let opened = 0;
-  for (const { id: name, value } of [...HOSTILE_VALUES, ...HOSTILE_STRINGS.map(({ id: name, value }) => ({ id: `nested.${name}`, value: `app/${value}/page.html` }))]) {
-    const url = extensionNewTabPage({ id, enabled: true, newTabPage: value });
-    if (url === undefined) continue;
+  for (const { id: name, value } of corpus) {
+    const url = openWith({ id, name: "Speed Dial", enabled: true, newTabPage: value });
+    if (!url) continue;
     opened++;
-    assert.ok(url.startsWith(prefix) && new URL(url).host === id && new URL(url).href.startsWith(prefix), name);
+    assert.ok(url.startsWith(prefix) && new URL(url).host === id && new URL(url).href.startsWith(prefix), `${name}: ${url}`);
     assert.doesNotMatch(url, /[\s\\\u0000-\u001f\u2028\u2029]/, name);
   }
-  assert.equal(extensionNewTabPage({ id, enabled: true, newTabPage: "dial.html" }), `${prefix}dial.html`, "the positive control opens");
-  assert.ok(opened > 0, "some hostile names are plain file names inside the extension and do open, so the sink check ran");
+  for (const { id: name, value } of HOSTILE_VALUES) assert.equal(openWith({ id: value, name: "Speed Dial", enabled: true, newTabPage: "dial.html" }), "", `hostile id ${name}`);
+  assert.equal(openWith({ id, name: "Speed Dial", enabled: true, newTabPage: "dial.html" }), `${prefix}dial.html`, "the positive control opens through the same path");
+  assert.ok(opened > 0, "some hostile names are plain file names inside the extension and open, so the sink check ran");
+  useExtensions.setState({ lists: {} });
 });

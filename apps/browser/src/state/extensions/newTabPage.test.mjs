@@ -6,7 +6,7 @@ const { activeTabId, engineProfile } = await import("../browser/model.ts");
 const { customNewTabUrl } = await import("../settings/settings.ts");
 const { runCommand } = await import("../commands/commands.ts");
 const { useExtensions } = await import("./store.ts");
-const { extensionNewTabPage } = await import("./newTabPage.ts");
+const { extensionNewTabPage, setExtensionNewTabLists, LIST_WAIT_MS } = await import("./newTabPage.ts");
 const { takeNewTabPageCounts } = await import("../telemetry/newTabPageCounts.ts");
 const client = await import("../telemetry/client.ts");
 client.loadChoice();
@@ -33,7 +33,7 @@ test("#1126: an extension's page is a custom New Tab address, so Cadran's page o
   const url = `chrome-extension://${CADRAN}/app/app.html`;
   assert.equal(customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: url }), url);
   assert.equal(customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: url.replace("chrome-extension", "CHROME-EXTENSION") }), url);
-  const w = reset({ newTabUrl: url });
+  const w = reset({ newTabUrl: url }, [extension(CADRAN, null)]);
   runCommand({ command: "newTab", arg: null, windowId: w });
   assert.equal(shownUrl(w), url);
   assert.deepEqual(takeNewTabPageCounts(), { new_tab_extension_overrides: 0, new_tab_extension_addresses: 1 });
@@ -90,4 +90,53 @@ test("#1126: the override path stays inside its extension, and hostile manifest 
   const w = reset({}, refused.map((value, i) => extension(CADRAN.slice(0, 31) + "abcdefghijklmnop"[i % 16], value)));
   S().newTab(w, { newTabCommand: true });
   assert.equal(shownUrl(w), "", "the sink: no new tab opens a hostile override");
+});
+
+test("#1126: a custom extension address opens only while that extension is installed and enabled in the profile, and never in a private window", () => {
+  const url = `chrome-extension://${CADRAN}/app/app.html`;
+  const disabled = reset({ newTabUrl: url }, [extension(CADRAN, null, { enabled: false })]);
+  S().newTab(disabled, { newTabCommand: true });
+  assert.equal(shownUrl(disabled), "", "disabled");
+  const uninstalled = reset({ newTabUrl: url }, [extension(SPEED_DIAL, "dial.html")]);
+  S().newTab(uninstalled, { newTabCommand: true });
+  assert.equal(shownUrl(uninstalled), "", "uninstalled: its address falls back to the New Tab page, not to another extension's page");
+  reset({ newTabUrl: url }, [extension(CADRAN, null)]);
+  const dark = S().createWindow({ kind: "private" });
+  assert.equal(shownUrl(dark), "", "a private window's first tab");
+  S().newTab(dark, { newTabCommand: true });
+  assert.equal(shownUrl(dark), "", "⌘T in a private window");
+  reset({ newTabUrl: "https://home.example/" }, []);
+  assert.equal(shownUrl(S().createWindow({ kind: "private" })), "https://home.example/", "a web address still opens in private windows, as before");
+});
+
+test("#1126: a profile's first window, opened before its extension list has loaded, shows the extension's page once the list arrives", () => {
+  const w = reset({}, []);
+  const profile = engineProfile(S(), S().windows[w].profileId);
+  useExtensions.setState({ lists: {} });
+  const first = S().createWindow();
+  assert.equal(shownUrl(first), "", "no list yet: the New Tab page");
+  const typed = S().createWindow();
+  S().navigate(activeTabId(S(), typed), "https://typed.example/");
+  useExtensions.setState({ lists: { [profile]: [extension(SPEED_DIAL, "dial.html")] } });
+  assert.equal(shownUrl(first), `chrome-extension://${SPEED_DIAL}/dial.html`, "the untouched first tab moves to the extension's page");
+  assert.equal(shownUrl(typed), "https://typed.example/", "a first tab the user already navigated is left alone");
+  assert.equal(takeNewTabPageCounts().new_tab_extension_overrides, 1);
+});
+
+test("#1126: a list that arrives long after the window opened leaves its first tab on the New Tab page", () => {
+  const w = reset({}, []);
+  const profile = engineProfile(S(), S().windows[w].profileId);
+  useExtensions.setState({ lists: {} });
+  const late = S().createWindow();
+  setExtensionNewTabLists({ [profile]: [extension(SPEED_DIAL, "dial.html")] }, Date.now() + LIST_WAIT_MS + 1);
+  assert.equal(shownUrl(late), "");
+});
+
+test("#1126: with several New Tab extensions, Chromium's order wins: the newest not yet in its preferences, then its first active entry, not the name", () => {
+  const w = reset({}, [extension(CADRAN, "cadran.html", { newTabRank: 1 }), extension(SPEED_DIAL, "dial.html", { newTabRank: 0 })]);
+  S().newTab(w, { newTabCommand: true });
+  assert.equal(shownUrl(w), `chrome-extension://${SPEED_DIAL}/dial.html`, "rank 0 beats the alphabetically first");
+  const fresh = reset({}, [extension(CADRAN, "cadran.html", { newTabRank: 0 }), extension(SPEED_DIAL, "dial.html")]);
+  S().newTab(fresh, { newTabCommand: true });
+  assert.equal(shownUrl(fresh), `chrome-extension://${SPEED_DIAL}/dial.html`, "an override Chromium hasn't written to Preferences yet is the newest install");
 });

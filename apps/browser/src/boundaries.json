@@ -1520,10 +1520,11 @@
   {
    "id": "extension-manifest:newTabPage",
    "source": "extension",
-   "guard": "chrome_url_overrides.newtab opens only as a path inside its own extension: a 32-letter a-p id, no scheme, whitespace, backslash, control or separator characters, no empty, . or .. segments, at most 1024 characters, only while the extension is enabled, and never in a private window",
+   "guard": "chrome_url_overrides.newtab opens only as a path inside its own extension: a 32-letter a-p id, no scheme, whitespace, backslash, control or separator characters, no empty, . or .. segments, at most 1024 characters, only while the extension is enabled, and never in a private window; the Preferences rank is a finite number used only to order enabled overrides",
    "checks": [
     "apps/browser/src/state/extensions/newTabPage.ts#extensionNewTabPage",
-    "packages/ardiacore/ios/ArdiaExtensionPackage.mm#ReadManifest"
+    "packages/ardiacore/ios/ArdiaExtensionPackage.mm#ReadManifest",
+    "packages/ardiacore/ios/ArdiaExtensionPackage.mm#NewTabOverrideRanks"
    ],
    "detected": false
   },

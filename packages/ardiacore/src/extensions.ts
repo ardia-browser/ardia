@@ -37,6 +37,7 @@ export type InstalledExtension = {
   actionIcon?: string | null;
   sidePanel?: string | null;
   newTabPage?: string | null;
+  newTabRank?: number;
 };
 
 export type ExtensionPackage = {

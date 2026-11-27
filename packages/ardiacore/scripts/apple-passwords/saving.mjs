@@ -5,6 +5,7 @@ const q = JSON.stringify;
 export const SAVE_TITLE = "Save to Apple Passwords?";
 export const UPDATE_TITLE = "Update in Apple Passwords?";
 const SITE = "save.localhost";
+const SETTLED_MS = 6000;
 
 const assert = (ok, message, detail) => {
   if (!ok) throw new Error(`${message}: ${q(detail)}`);
@@ -19,11 +20,21 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
     await tab.click("#p");
     await tab.type(password);
     await waitFor("the Sign in button enabled", () => tab.value(`!document.getElementById("go").disabled || null`), 5000);
+    await tab.value(`(document.documentElement.dataset.signingIn = "yes")`);
     await tab.click("#go");
-    await waitFor("the page after signing in", async () => ((await tab.value("location.pathname")) === landing && (await tab.value("document.readyState")) === "complete" ? true : null), 20_000);
+    await waitFor("the page after signing in", () => tab.value(`!document.documentElement.dataset.signingIn && location.pathname === ${q(landing)} && document.readyState === "complete" || null`), 20_000);
   }
 
   const promptShown = (tab, what = "the save prompt") => waitFor(what, () => tab.prompt(), 20_000);
+  const noPrompt = async (tab, ms = SETTLED_MS) => {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+      const prompt = await tab.prompt();
+      if (prompt) return prompt;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return null;
+  };
   const fixture = (user) => FIXTURES.logins.find((l) => l.user === user);
 
   return {
@@ -62,6 +73,34 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         const copies = fake.savedLogins().filter((l) => l.user === kept.user);
         assert(copies.length === 1, "the login is changed, not added again", copies.length);
         return { engine: engineName, title: prompt.copy.title };
+      } finally {
+        await tab.close();
+      }
+    },
+    async E20() {
+      const { tabs } = await paired();
+      const kept = fixture("same@save.test");
+      const tab = await tabs.open(sites.url(SITE));
+      try {
+        await signIn(tab, kept.user, kept.password);
+        const prompt = await noPrompt(tab);
+        assert(!prompt, "signing in with the saved password shows no prompt", prompt);
+        return { engine: engineName, prompt: "none" };
+      } finally {
+        await tab.close();
+      }
+    },
+    async E21() {
+      const { fake, tabs } = await paired();
+      const login = { user: `typo-${Date.now()}@save.test`, password: "fixture-pw-typo-11" };
+      const tab = await tabs.open(sites.url(SITE, "/login-fails"));
+      try {
+        await signIn(tab, login.user, login.password, "/login-fails");
+        await waitFor("the sign-in form back", () => tab.value(`!!document.getElementById("p") || null`), 10_000);
+        const prompt = await noPrompt(tab);
+        assert(!prompt, "a sign-in whose form comes back shows no prompt", prompt);
+        assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing reaches Apple Passwords", null);
+        return { engine: engineName, prompt: "none" };
       } finally {
         await tab.close();
       }

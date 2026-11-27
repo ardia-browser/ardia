@@ -5,12 +5,13 @@ public final class SyncVault {
 
   public let folder: URL
   let keys: SyncKeys
-  let fileManager = FileManager.default
+  let fileManager: FileManager
   public var coordination: SyncCoordination?
 
-  public init(folder: URL, keys: SyncKeys) {
+  public init(folder: URL, keys: SyncKeys, fileManager: FileManager = .default) {
     self.folder = folder
     self.keys = keys
+    self.fileManager = fileManager
   }
 
   public var chainURL: URL { folder.appendingPathComponent(keys.chainTag, isDirectory: true) }
@@ -20,6 +21,25 @@ public final class SyncVault {
 
   public func createChain() throws {
     try fileManager.createDirectory(at: chainURL, withIntermediateDirectories: true)
+  }
+
+  public struct FolderExists: Error {
+    public init() {}
+  }
+
+  public func createChainInNewFolder() throws {
+    try fileManager.createDirectory(at: folder.deletingLastPathComponent(), withIntermediateDirectories: true)
+    do {
+      try fileManager.createDirectory(at: folder, withIntermediateDirectories: false)
+    } catch where fileManager.fileExists(atPath: folder.path) {
+      throw FolderExists()
+    }
+    do {
+      try fileManager.createDirectory(at: chainURL, withIntermediateDirectories: false)
+    } catch {
+      _ = rmdir(folder.path)
+      throw error
+    }
   }
 
   @discardableResult

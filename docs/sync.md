@@ -594,9 +594,23 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
     "Looking for the profiles on your other devices…", with the files still downloading.
   - It also shows the folder the phrase is checked against, with Change….
 - **On.**
-  - The status line uses Dia's words: "starting up", "updating", "updated just now", "not
-    syncing · last synced %@" and "offline" (the folder isn't there: a drive is unplugged, or
-    iCloud Drive is off). Downloads still to come add "· waiting for N files to download".
+  - The status line uses Dia's words: "starting up", "updating", "updated just now" and "not
+    syncing · last synced %@", plus "Sync folder unavailable" when the folder itself isn't there (a drive is
+    unplugged, iCloud Drive is off, or the folder was deleted), with the reason under the row. Downloads still to come
+    add "· waiting for N files to download". A cycle that finds the folder or this phrase's data gone at any point,
+    at its start, on a write or a read, or in its last check before "updated", reports that state and never
+    "updated": a whole folder gone is "Sync folder unavailable", this phrase's folder gone from a folder that is
+    there is the waiting state below.
+  - **Recreate Folder…** takes the place of Connect Another Device… when the folder is missing (`folderRecovery.ts`).
+    After a confirm it saves what this Mac owes the new folder (the app scope and every scope with data) to
+    `sync.json` first, checks the folder is still missing, stops if the app is quitting, and then creates the folder
+    and this phrase's chain in one native call that fails if anything is already there (`createChainInNewFolder`,
+    Mac only; it leaves no folder behind if the chain can't be made, so a failed try never blocks the next).
+    A folder that comes back at any point, another phrase's included, is left alone and Recreate answers that a
+    folder is there. Hosts without that call (Linux, Windows) use `createChain` after the check, which leaves a
+    short window and can leave an empty folder if the second mkdir fails; their engines need the same call. Pairing
+    stays off until a whole cycle has uploaded this Mac's data into the new folder, also when nothing had been saved
+    to reseed, and the owed list clears only then.
   - **Connect Another Device…** shows the steps for the other Mac and a QR code of the phrase: the
     iPhone app scans it (Sync With Mac), or the iPhone's camera copies it to paste on another Mac with Universal
     Clipboard. It also has Show

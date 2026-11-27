@@ -4,9 +4,9 @@ import { isQuitting } from "../app/quit";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import type { ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
-import { noteFolderRecreate } from "./cycleWork";
+import { noteChainStatus, noteFolderRecreate, noteFolderUnavailable } from "./cycleWork";
 import { historyExpired } from "./historyAdapter";
-import { APP_SCOPE, type SyncDoc, type SyncStatus } from "./syncDoc";
+import { APP_SCOPE, type SyncDoc, type SyncStatus, type SyncUi } from "./syncDoc";
 
 type SyncNativeApi = NonNullable<typeof SyncNative>;
 
@@ -45,6 +45,29 @@ export function unavailableFolderError(info: Pick<FolderInfo, "inICloud" | "iClo
   }
   return "The sync folder isn’t available. Check that it’s still there and that Ardia can open it.";
 }
+
+export const CHAIN_MISSING_TEXT = `This device is out of sync. Sync may have been reset from another device, or the sync folder hasn’t finished syncing. Everything on this ${PLATFORM_TERMS.computer} is kept, and sync carries on once its data is back. To set sync up again, choose Stop Syncing.`;
+
+type ChainGoneContext = { native: SyncNativeApi; folder: string; device: string; consent: ConsentToken | null; wasOffline: boolean; publish: (patch: Partial<SyncUi>) => void };
+
+export async function publishChainGone(status: string, { native, folder, device, consent, wasOffline, publish }: ChainGoneContext): Promise<boolean> {
+  if (status === "unavailable") {
+    if (!wasOffline) noteFolderUnavailable(consent);
+    publish({ status: "offline", error: unavailableFolderError((await native.folderInfo?.(folder).catch(() => null)) ?? null), dataMissing: false });
+    return true;
+  }
+  if (status !== "missing") return false;
+  noteChainStatus(consent, device, "missing");
+  publish({ status: "stalled", error: CHAIN_MISSING_TEXT, dataMissing: true });
+  return true;
+}
+
+export const chainStatusAfterMissingWrite = (native: SyncNativeApi, folder: string) =>
+  native.chainStatus(folder).then((status) => (status === "unavailable" ? status : "missing"), () => "missing");
+
+const createInNewFolder = (native: SyncNativeApi, folder: string) => (native.createChainInNewFolder ? native.createChainInNewFolder(folder) : native.createChain(folder));
+
+const folderExistsError = (error: unknown) => (error as { code?: unknown } | null)?.code === "ERR_SYNC_FOLDER_EXISTS";
 
 export function folderRecreateMessage(result: FolderRecreateResult, label: string): string | null {
   if ("ok" in result) return null;
@@ -102,6 +125,7 @@ export async function reseedPendingScopes({ native, doc, folder, device, clock, 
         await settled();
       }
     }
+    if (!state || !hasScopeData(state)) continue;
     const left = (doc.reseedScopes ?? []).filter((entry) => entry !== scope);
     if (left.length) doc.reseedScopes = left;
     else delete doc.reseedScopes;
@@ -140,23 +164,23 @@ export async function recreateChainFolder(
       .filter(([, state]) => hasScopeData(state))
       .map(([scope]) => scope);
     try {
-      if (scopes.length) {
-        doc.reseedScopes = [...new Set([...(queued ?? []), ...scopes])];
-        await ctx.saveNow();
-      }
-      if (isQuitting()) {
-        await putBack();
-        return { error: "busy" };
-      }
+      doc.reseedScopes = [...new Set([...(queued ?? []), APP_SCOPE, ...scopes])];
+      await ctx.saveNow();
       if ((await native.folderInfo?.(folder).catch(() => null))?.exists) {
         await putBack();
         noteFolderRecreate("failed", consent);
         return { error: "exists" };
       }
-      await native.createChain(folder);
+      if (isQuitting()) {
+        await putBack();
+        return { error: "busy" };
+      }
+      await createInNewFolder(native, folder);
     } catch (error) {
       await putBack();
-      throw error;
+      if (!folderExistsError(error)) throw error;
+      noteFolderRecreate("failed", consent);
+      return { error: "exists" };
     }
     created = true;
     onUpdating();

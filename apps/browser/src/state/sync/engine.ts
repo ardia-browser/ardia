@@ -13,10 +13,10 @@ import { editClock, startEditClock } from "./editClock";
 import { addSyncedProfile, appScopeOf, linkProfiles, readyToPair, retireDeletedProfile } from "./profileLinks";
 import { summarize } from "./syncSummary";
 import { markNewSync, sessionMarkHooks, settleLaunchMark } from "./sessionMarks";
-import { noteChainStatus, noteCycle, noteFolderUnavailable, timedCycle } from "./cycleWork";
+import { noteChainStatus, noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
-import { recreateChainFolder, reseedPendingScopes, unavailableFolderError, type FolderRecreateResult } from "./folderRecovery";
+import { chainStatusAfterMissingWrite, publishChainGone, recreateChainFolder, reseedPendingScopes, type FolderRecreateResult } from "./folderRecovery";
 import { freezeRemovals, markDeviceRemoved, markRemoved, settleRemovals } from "./profileRemoval";
 import { profileScope } from "./records";
 import { queueSend, sendTargetsIn } from "./sentTabs";
@@ -105,22 +105,17 @@ async function runCycle({ retiring = false, forcePasswords = false }: CycleOptio
 }
 
 const clockFor = (device: string) => (editClock().device !== device && startEditClock(device, doc.clock), editClock());
-const CHAIN_MISSING_TEXT = `This device is out of sync. Sync may have been reset from another device, or the sync folder hasn’t finished syncing. Everything on this ${PLATFORM_TERMS.computer} is kept, and sync carries on once its data is back. To set sync up again, choose Stop Syncing.`;
 
 async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring, forcePasswords }: Required<CycleOptions>) {
   const consent = consentToken();
+  const gone = (status: string) => publishChainGone(status, { native, folder, device, consent, wasOffline: useSync.getState().status === "offline", publish: publishUi });
   await stateLoading;
   if (useSync.getState().status === "locked") return;
   clearTimeout(timer);
   const slow = setTimeout(() => useSync.getState().status === "updated" && publishUi({ status: "updating" }), 1000);
   try {
     watchExtensions();
-    const status = await native.chainStatus(folder);
-    if (status === "unavailable") {
-      if (useSync.getState().status !== "offline") noteFolderUnavailable(consent);
-      return publishUi({ status: "offline", error: unavailableFolderError((await native.folderInfo?.(folder).catch(() => null)) ?? null), dataMissing: false });
-    }
-    if (status === "missing") return (noteChainStatus(consent, device, status), publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT, dataMissing: true }));
+    if (await gone(await native.chainStatus(folder))) return;
     const transport = folderTransport(native, folder), clock = clockFor(device);
     if (doc.reseedScopes?.length) await reseedPendingScopes({ native, doc, folder, device, clock, watchScope, persistJournal, save });
     const app = appScopeOf(doc, consent);
@@ -162,15 +157,15 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       }
     }
     doc.clock = clock.last;
+    if (await gone(await native.chainStatus(folder))) return;
+    delete doc.reseedScopes;
     doc.lastSyncedAt = Date.now();
     noteChainStatus(consent, device, "ok");
     publishUi({ status: "updated", error: null, pending, dataMissing: false });
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;
-    if (code === "ERR_SYNC_CHAIN_MISSING") {
-      noteChainStatus(consent, device, "missing");
-      publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT, dataMissing: true });
-    } else if (code === "ERR_SYNC_FOLDER_UNREADABLE") {
+    if (code === "ERR_SYNC_CHAIN_MISSING") await gone(await chainStatusAfterMissingWrite(native, folder));
+    else if (code === "ERR_SYNC_FOLDER_UNREADABLE") {
       publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
     } else if (useSync.getState().status !== "locked") {
       warnFor(consent, "[sync] cycle failed", error);

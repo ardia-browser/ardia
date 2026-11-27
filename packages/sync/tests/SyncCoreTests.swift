@@ -266,4 +266,48 @@ final class SyncVaultTests: XCTestCase {
       XCTAssertEqual((error as? SyncVault.RemoveFailed)?.ids, [kept])
     }
   }
+
+  func testChainInNewFolderMakesTheFolderAndItsChain() throws {
+    let fresh = SyncVault(folder: folder.appendingPathComponent("drive/Ardia Sync", isDirectory: true), keys: SyncKeys(entropy: entropy))
+    try fresh.createChainInNewFolder()
+    XCTAssertTrue(fresh.chainExists())
+    try fresh.write(scope: "app", payload: Data("mine".utf8))
+    XCTAssertEqual(try fresh.read(scope: "app", skipping: []).files.count, 1)
+  }
+
+  func testChainInNewFolderNeverWritesIntoAFolderThatIsThere() throws {
+    let other = SyncVault(folder: folder, keys: SyncKeys(entropy: RecoveryPhrase.generateEntropy()))
+    try other.createChain()
+    XCTAssertThrowsError(try vault.createChainInNewFolder()) { XCTAssertTrue($0 is SyncVault.FolderExists) }
+    XCTAssertFalse(vault.chainExists())
+    let empty = SyncVault(folder: folder.appendingPathComponent("empty", isDirectory: true), keys: SyncKeys(entropy: entropy))
+    try FileManager.default.createDirectory(at: empty.folder, withIntermediateDirectories: false)
+    XCTAssertThrowsError(try empty.createChainInNewFolder()) { XCTAssertTrue($0 is SyncVault.FolderExists) }
+    XCTAssertFalse(empty.chainExists())
+  }
+
+  func testChainInNewFolderLeavesNoFolderWhenTheChainCantBeMade() throws {
+    let target = folder.appendingPathComponent("Ardia Sync", isDirectory: true)
+    let keys = SyncKeys(entropy: entropy)
+    let refusing = ChainRefusingFileManager(refused: target.appendingPathComponent(keys.chainTag, isDirectory: true))
+    XCTAssertThrowsError(try SyncVault(folder: target, keys: keys, fileManager: refusing).createChainInNewFolder()) { XCTAssertFalse($0 is SyncVault.FolderExists) }
+    XCTAssertFalse(FileManager.default.fileExists(atPath: target.path), "a failed create leaves no empty folder behind to block the next try")
+    let retried = SyncVault(folder: target, keys: keys)
+    try retried.createChainInNewFolder()
+    XCTAssertTrue(retried.chainExists())
+  }
+}
+
+final class ChainRefusingFileManager: FileManager {
+  let refused: URL
+
+  init(refused: URL) {
+    self.refused = refused
+    super.init()
+  }
+
+  override func createDirectory(at url: URL, withIntermediateDirectories createIntermediates: Bool, attributes: [FileAttributeKey: Any]? = nil) throws {
+    if url.standardizedFileURL.path == refused.standardizedFileURL.path { throw CocoaError(.fileWriteOutOfSpace) }
+    try super.createDirectory(at: url, withIntermediateDirectories: createIntermediates, attributes: attributes)
+  }
 }

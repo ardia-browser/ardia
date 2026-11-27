@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "ardia/win/webui/webui_launch_steps.h"
 #include "ardia/win/webui/webui_session_end_policy.h"
 #include "ardia/win/webui/webui_window_policy.h"
 #include "base/functional/callback.h"
@@ -108,7 +109,7 @@ class WindowRegistry : public BrowserCollectionObserver {
   std::optional<webui_window::Placement> SavedPlacement() const;
 
   size_t OpenBrowserWindowsBesides(const ShellHostView* closing) const;
-  bool SessionEnded() const { return session_end_.ended(); }
+  webui_window::LaunchSteps& launch_steps() { return launch_steps_; }
   void EndSessionThen(ShellHostView* asker, base::OnceClosure then);
   void SessionEndAcknowledged(const std::string& token);
 
@@ -158,6 +159,7 @@ class WindowRegistry : public BrowserCollectionObserver {
   bool placement_loading_ = false;
   int next_window_ = 1;
   webui_window::SessionEnd session_end_;
+  webui_window::LaunchSteps launch_steps_;
   std::vector<base::OnceClosure> after_session_end_;
   base::OneShotTimer session_end_deadline_;
   base::RepeatingTimer quit_watch_;

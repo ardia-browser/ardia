@@ -75,6 +75,24 @@ void TestTheSystemCloseWaitsWhileTheSessionEnds() {
   assert(!SwallowsSystemClose(false, true));
 }
 
+void TestEveryBrowserWindowCloseGoesThroughTheShell() {
+  assert(RoutesSystemClose(false, false));
+  assert(RoutesSystemClose(false, true));
+  assert(RoutesSystemClose(true, true));
+  assert(!RoutesSystemClose(true, false));
+}
+
+void TestOverlappingClosesHandTheEndToTheLastWindow() {
+  const bool first_leaving = CloseStillInFlight(false, true, true, true, false);
+  assert(first_leaving);
+  const size_t others_open_for_second = first_leaving ? 0 : 1;
+  assert(ClosingEndsSession(others_open_for_second));
+  const bool first_cancelled =
+      CloseStillInFlight(false, true, true, false, false);
+  assert(!first_cancelled);
+  assert(!ClosingEndsSession(first_cancelled ? 0 : 1));
+}
+
 void TestOnlyTheCurrentValidTokenReleasesAClose() {
   SessionEnd end;
   assert(!end.Acknowledge("t1"));
@@ -168,6 +186,8 @@ int main(int argc, char** argv) {
   TestAClosingWindowStaysLeavingUntilItsCloseEndsOrIsCancelled();
   TestTheSystemCloseWaitsWhileTheSessionEnds();
   TestOnlyTheCurrentValidTokenReleasesAClose();
+  TestEveryBrowserWindowCloseGoesThroughTheShell();
+  TestOverlappingClosesHandTheEndToTheLastWindow();
   std::cout << "webui_session_end_policy_test: all assertions passed\n";
   return 0;
 }

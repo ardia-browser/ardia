@@ -105,6 +105,7 @@ source_set("win") {
     "webui/webui_host_tabs.cc",
     "webui/webui_host_view.cc",
     "webui/webui_host_view.h",
+    "webui/webui_launch_steps.h",
     "webui/webui_mode.cc",
     "webui/webui_mode.h",
     "webui/webui_page_evaluation.h",

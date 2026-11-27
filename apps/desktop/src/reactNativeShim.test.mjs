@@ -52,6 +52,23 @@ export function reactNativeMembers(path, text) {
   }
   const used = [];
   const destructured = new Map();
+  const bindingKey = (element) => {
+    const key = element.propertyName ?? element.name;
+    return ts.isIdentifier(key) ? key.text : literalKey(key);
+  };
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!declaration.initializer || !ts.isObjectBindingPattern(declaration.name) || !ts.isIdentifier(declaration.initializer) || !namespaces.has(declaration.initializer.text)) continue;
+      for (const element of declaration.name.elements) {
+        const api = element.dotDotDotToken ? null : bindingKey(element);
+        if (api && ts.isIdentifier(element.name)) {
+          locals.set(element.name.text, api);
+          destructured.set(element.name.text, { api, member: null, optional: !!element.initializer });
+        }
+      }
+    }
+  }
   const at = (node) => `${path}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
   const isNamespace = (node) => ts.isIdentifier(node) && namespaces.has(node.text);
   const apiOf = (expression) => {
@@ -69,22 +86,31 @@ export function reactNativeMembers(path, text) {
       }
     }
     if (ts.isVariableDeclaration(node) && node.initializer && ts.isObjectBindingPattern(node.name)) {
-      const api = apiOf(node.initializer);
-      if (api) {
+      if (isNamespace(node.initializer)) {
         for (const element of node.name.elements) {
-          if (element.dotDotDotToken) continue;
-          const key = element.propertyName ?? element.name;
-          const member = ts.isIdentifier(key) ? key.text : literalKey(key);
-          if (!member) continue;
-          const optional = !!element.initializer;
-          used.push({ api, member, kind: "read", optional, at: at(element) });
-          if (ts.isIdentifier(element.name)) destructured.set(element.name.text, { api, member, optional });
+          const api = element.dotDotDotToken ? null : bindingKey(element);
+          if (api) used.push({ api, member: null, kind: "read", optional: !!element.initializer, at: at(element) });
+        }
+      } else {
+        const api = apiOf(node.initializer);
+        if (api) {
+          for (const element of node.name.elements) {
+            if (element.dotDotDotToken) continue;
+            const member = bindingKey(element);
+            if (!member) continue;
+            const optional = !!element.initializer;
+            used.push({ api, member, kind: "read", optional, at: at(element) });
+            if (ts.isIdentifier(element.name)) destructured.set(element.name.text, { api, member, optional });
+          }
         }
       }
     }
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && destructured.has(node.expression.text)) {
-      const { api, member, optional } = destructured.get(node.expression.text);
-      used.push({ api, member, kind: "call", optional: optional || !!node.questionDotToken, at: at(node) });
+    if (ts.isIdentifier(node) && destructured.has(node.text) && !ts.isBindingElement(node.parent)) {
+      const use = useOf(node);
+      if (use.kind === "call") {
+        const { api, member, optional } = destructured.get(node.text);
+        used.push({ api, member, kind: "call", optional: optional || use.optional, at: at(node) });
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -130,6 +156,8 @@ test("the scan reads value uses of a react-native import and skips type position
     "isScreenReaderEnabled(); lookUp(); rest.anything();",
     "RN.Keyboard.dismiss(); RN.Linking.openURL?.(''); RN.Dimensions; RN.Vibration();",
     "A11y.setAccessibilityFocus?.(1); (A11y.isReduceMotionEnabled)(); (A11y.addEventListener as never)(); A11y.optional?.deep;",
+    "const { isHighContrastEnabled: check } = A11y; (check!)(); (check as never)?.();",
+    "const { Share, Clipboard: Board = null } = RN; Share(); Share.share(); Board?.();",
   ].join("\n");
   const shape = ({ api, member, kind, optional }) => `${api}${member === null ? "" : `.${member}`}:${kind}${optional ? "?" : ""}`;
   assert.deepEqual(reactNativeMembers("demo.ts", text).map(shape), [
@@ -150,6 +178,14 @@ test("the scan reads value uses of a react-native import and skips type position
     "AccessibilityInfo.isReduceMotionEnabled:call",
     "AccessibilityInfo.addEventListener:call",
     "AccessibilityInfo.optional:read?",
+    "AccessibilityInfo.isHighContrastEnabled:read",
+    "AccessibilityInfo.isHighContrastEnabled:call",
+    "AccessibilityInfo.isHighContrastEnabled:call?",
+    "Share:read",
+    "Clipboard:read?",
+    "Share:call",
+    "Share.share:call",
+    "Clipboard:call?",
   ]);
 });
 
@@ -164,6 +200,18 @@ test("a member is missing when a call finds no function (an optional call only w
     use("A", "value"), use("A", "truthy"), use("A", "truthy", "call", true), use("A", "nothing", "read"), use("A", "gone"),
     use("B", "any"), use("C", null, "read"), use("O", null), use("A", "flag", "call", true),
   ], new Set()), ["A.value() (x.ts:1)", "A.truthy() (x.ts:1)", "A.nothing (x.ts:1)", "A.gone() (x.ts:1)", "B (x.ts:1)", "C (x.ts:1)", "O() (x.ts:1)", "A.flag() (x.ts:1)"]);
+});
+
+test("calls through destructured and namespace-destructured bindings are checked like any call, so a value that isn't a function fails", () => {
+  const text = [
+    'import { AccessibilityInfo as A11y } from "react-native";',
+    'import * as RN from "react-native";',
+    "const { notAFunction: check } = A11y; (check!)();",
+    "const { Flag } = RN; Flag();",
+  ].join("\n");
+  const shim = { AccessibilityInfo: { notAFunction: true }, Flag: false };
+  assert.deepEqual(missingFromShim(shim, reactNativeMembers("demo.ts", text), new Set()), ["AccessibilityInfo.notAFunction() (demo.ts:3)", "Flag() (demo.ts:4)"]);
+  assert.deepEqual(missingFromShim({ AccessibilityInfo: { notAFunction: () => {} }, Flag: () => {} }, reactNativeMembers("demo.ts", text), new Set()), []);
 });
 
 test("every react-native API member the shared UI uses at run time exists in the desktop react-native shim with a value of the kind it is used as", async () => {

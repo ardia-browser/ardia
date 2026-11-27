@@ -1492,11 +1492,7 @@ bool ShellHostView::InterceptSystemClose() {
       browser_shutdown::IsTryingToQuit()) {
     return false;
   }
-  const WindowRegistry& registry = WindowRegistry::Get();
-  const bool ends_session = !is_utility() && !registry.SessionEnded() &&
-                            webui_window::ClosingEndsSession(
-                                registry.OpenBrowserWindowsBesides(this));
-  if (!CompanionsHoldTabs() && !ends_session) {
+  if (!webui_window::RoutesSystemClose(is_utility(), CompanionsHoldTabs())) {
     return false;
   }
   base::SequencedTaskRunner::GetCurrentDefault()->PostTask(

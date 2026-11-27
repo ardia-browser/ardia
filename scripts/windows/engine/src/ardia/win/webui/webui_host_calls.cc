@@ -60,6 +60,8 @@ constexpr size_t kCopyTextLimit = 1024 * 1024;
 constexpr size_t kTitleLimit = 512;
 
 constexpr std::string_view kWindowCapabilities[] = {
+    "ArdiaShell.launchSteps",
+    "ArdiaShell.completeLaunchStep",
     "ArdiaShell.startWindowMove",
     "ArdiaShell.captionDoubleClick",
     "ArdiaShell.windowIdentity",
@@ -80,6 +82,8 @@ constexpr std::string_view kWindowCapabilities[] = {
 };
 
 constexpr std::string_view kBrowserWindowCapabilities[] = {
+    "ArdiaShell.launchSteps",
+    "ArdiaShell.completeLaunchStep",
     "ArdiaShell.startWindowMove",
     "ArdiaShell.captionDoubleClick",
     "ArdiaShell.windowIdentity",
@@ -387,6 +391,30 @@ void ShellHostView::Invoke(const std::string& method,
     std::move(done).Run(true, base::Value());
     WindowRegistry::Get().EndSessionThen(this, base::BindOnce(&QuitEverything));
     return;
+  }
+  if (method == "ArdiaShell.launchSteps" ||
+      method == "ArdiaShell.completeLaunchStep") {
+    if (private_window()) {
+      return std::move(done).Run(
+          false, base::Value("Launch steps need the regular profile"));
+    }
+    webui_window::LaunchSteps& steps =
+        WindowRegistry::Get().launch_steps();
+    if (method == "ArdiaShell.launchSteps") {
+      base::ListValue list;
+      for (const std::string& step : steps.List()) {
+        list.Append(step);
+      }
+      return std::move(done).Run(true, base::Value(std::move(list)));
+    }
+    const std::string step = values && values->size() == 1 &&
+                                     (*values)[0].is_string()
+                                 ? (*values)[0].GetString()
+                                 : std::string();
+    if (!webui_window::ValidLaunchStep(step)) {
+      return std::move(done).Run(false, base::Value("Unknown launch step"));
+    }
+    return std::move(done).Run(true, base::Value(steps.Complete(step)));
   }
   if (method == webui_window::kSessionEndedCall) {
     const std::string token = values && !values->empty() &&

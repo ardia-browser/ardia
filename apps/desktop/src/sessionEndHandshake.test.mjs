@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { answerSessionEnds, SESSION_ENDED_METHOD } from "./sessionEndHandshake.ts";
 import { createResumeRule } from "./telemetrySettle.ts";
+import { continuesSession } from "./telemetryContinuation.ts";
 
 const REPO = fileURLToPath(new URL("../../../", import.meta.url));
 const bootstrap = readFileSync(join(REPO, "engine/ardiacore-linux/src/ardia/linux/bootstrap.js"), "utf8");
@@ -139,4 +140,55 @@ test("the Windows shell advertises the acknowledgement, routes it through the to
   const requestClose = view.slice(view.indexOf("void ShellHostView::RequestClose()"), view.indexOf("bool ShellHostView::InterceptSystemClose()"));
   assert.doesNotMatch(requestClose.slice(0, requestClose.indexOf("void ShellHostView::CommitClose()")), /GetWindow\(\)->Close\(\)/, "RequestClose closes only through CommitClose");
   assert.match(requestClose, /ClosingEndsSession\([\s\S]{0,80}OpenBrowserWindowsBesides\(this\)\)[\s\S]{0,400}EndSessionThen\(/);
+});
+
+function windowsProcess() {
+  const steps = new Set();
+  const STEPS = ["version", "versionUpdated", "onboarding", "releaseNotes", "defaultBrowserOffer", "telemetry"];
+  return (windowId, capabilities = ["ArdiaShell.launchSteps", "ArdiaShell.completeLaunchStep"]) => ({
+    bootstrap: { windowId, profileId: "default", capabilities },
+    call: async () => "null",
+    onEvent: () => () => {},
+    invoke: async (method, { args }) => {
+      if (method === "ArdiaShell.launchSteps") return [...steps];
+      if (method === "ArdiaShell.completeLaunchStep") {
+        if (args.length !== 1 || !STEPS.includes(args[0])) throw new Error("Unknown launch step");
+        const added = !steps.has(args[0]);
+        steps.add(args[0]);
+        return added;
+      }
+      throw new Error(`unexpected ${method}`);
+    },
+  });
+}
+
+test("on Windows the telemetry session continues across a leader handoff and a reloaded leader, because the shell keeps the launch steps for the whole process", async () => {
+  const windowOf = windowsProcess();
+  const report = (error) => assert.fail(String(error));
+  assert.equal(await continuesSession(windowOf("main"), report), false, "the first leader of a launch starts the session");
+  assert.equal(await continuesSession(windowOf("w2"), report), true, "a window that takes over the lead continues it");
+  assert.equal(await continuesSession(windowOf("main"), report), true, "a reloaded leader continues it");
+  assert.equal(await continuesSession(windowsProcess()("main", []), report), false, "an engine without launch steps can't tell, so each lead starts one");
+});
+
+test("the Windows shell serves launch steps to every window from one process-wide record, refuses private windows and unknown steps, and knows exactly the Linux host's steps", () => {
+  const read = (file) => readFileSync(join(REPO, "scripts/windows/engine/src/ardia/win/webui", file), "utf8");
+  const calls = read("webui_host_calls.cc");
+  for (const list of ["kWindowCapabilities[] = {", "kBrowserWindowCapabilities[] = {"]) {
+    const body = calls.slice(calls.indexOf(list), calls.indexOf("};", calls.indexOf(list)));
+    assert.match(body, /"ArdiaShell\.launchSteps",\s*"ArdiaShell\.completeLaunchStep",/, list);
+  }
+  assert.match(calls, /method == "ArdiaShell\.completeLaunchStep"\) \{\s*if \(private_window\(\)\)[\s\S]{0,300}WindowRegistry::Get\(\)\.launch_steps\(\)[\s\S]{0,700}ValidLaunchStep\(step\)[\s\S]{0,200}steps\.Complete\(step\)/);
+  assert.match(read("webui_windows.h"), /webui_window::LaunchSteps launch_steps_;/);
+  const stepsOf = (source, list) => {
+    const from = source.indexOf(`${list}[] = {`);
+    return [...source.slice(from, source.indexOf("};", from)).matchAll(/"([A-Za-z]+)"/g)].map((match) => match[1]);
+  };
+  const windowsSteps = stepsOf(read("webui_launch_steps.h"), "kLaunchSteps");
+  const linuxSteps = stepsOf(readFileSync(join(REPO, "engine/ardiacore-linux/src/ardia/linux/ac_linux_launch_steps.h"), "utf8"), "kSteps");
+  assert.ok(windowsSteps.includes("telemetry"), "the telemetry step the session handoff needs is a known step");
+  assert.deepEqual(windowsSteps, linuxSteps, "Windows keeps the Linux host's launch steps, so a shared-UI step can't be known on one desktop host only");
+  const view = read("webui_host_view.cc");
+  const intercept = view.slice(view.indexOf("bool ShellHostView::InterceptSystemClose()"), view.indexOf("bool ShellHostView::CompanionsHoldTabs()"));
+  assert.match(intercept, /RoutesSystemClose\(is_utility\(\), CompanionsHoldTabs\(\)\)/, "every browser window's WM_CLOSE goes through RequestClose, so an overlapping close is tracked");
 });

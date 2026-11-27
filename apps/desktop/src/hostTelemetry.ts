@@ -23,10 +23,10 @@ import { TELEMETRY_DOCUMENTS, TELEMETRY_STATE_DOC as STATE_DOC } from "./telemet
 import { createEndLedger, createResumeRule, setTelemetrySettle } from "./telemetrySettle.ts";
 import { parseChoiceChange, shownAfter } from "./telemetryChoice.ts";
 import { answerSessionEnds } from "./sessionEndHandshake.ts";
+import { continuesSession } from "./telemetryContinuation.ts";
 import { applyChoiceDurably, followerChoiceSaved } from "./telemetryChoiceApply.ts";
 
 const TELEMETRY_POST = "ArdiaTelemetry.post";
-const TELEMETRY_STEP = "telemetry";
 const END_TIMEOUT_MS = 2_000;
 const RESET_TIMEOUT_MS = 10_000;
 const WINDOW_USAGE_MS = 60 * 60 * 1000;
@@ -39,18 +39,6 @@ function hostTelemetrySend(host: ArdiaHost) {
     const status = reply?.status;
     return typeof status === "number" && Number.isSafeInteger(status) ? status : 0;
   };
-}
-
-async function continuesSession(host: ArdiaHost): Promise<boolean> {
-  if (!hostSupports("ArdiaShell.launchSteps", host) || !hostSupports("ArdiaShell.completeLaunchStep", host)) return false;
-  try {
-    const steps = await invokeHost<unknown>("ArdiaShell.launchSteps", { args: [] }, host);
-    if (Array.isArray(steps) && steps.includes(TELEMETRY_STEP)) return true;
-    await invokeHost("ArdiaShell.completeLaunchStep", { args: [TELEMETRY_STEP] }, host);
-  } catch (error) {
-    report(error);
-  }
-  return false;
 }
 
 type ErrorTarget = { addEventListener(type: "error" | "unhandledrejection", listener: (event: { error?: unknown; message?: unknown; reason?: unknown }) => void): void };
@@ -180,7 +168,7 @@ export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolea
     handle: handleTelemetryOp,
     lead: async () => {
       await Promise.all(TELEMETRY_DOCUMENTS.map((name) => refreshDocument(name).catch(report)));
-      const continuing = await continuesSession(host);
+      const continuing = await continuesSession(host, report);
       reloadChoice();
       sessionEnded = continuing && !savedChoice().sessionOpen;
       startTelemetry({ continuing });

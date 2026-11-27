@@ -2032,7 +2032,7 @@
   {
    "id": "windows-webui-session:sessionEnded",
    "source": "frame",
-   "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaShell.sessionEnded, the shell's answer to shell.sessionEnding, is advertised only to browser windows and taken only from a live trusted shell document through the same bridge as every host call; its one argument must be a string token of 1-64 [A-Za-z0-9-] (ValidSessionToken), anything else is ERR_SESSION_TOKEN; a token releases the held close or quit only when it is the one the host itself generated for the session end now pending (SessionEnd::Acknowledge), so a stale token from an earlier end, a guessed one or a repeat never releases a close early, and the host closes anyway after its own 3 s deadline (kSessionEndDeadlineMs) so a silent or hostile shell can't hold a window open; a repeated WM_CLOSE while the end is pending is swallowed (SwallowsSystemClose) rather than tearing the bridge down; scripts/windows/engine/tests/webui_session_end_policy_test.cc unit-tests the state machine, and apps/browser/src/hostileInputs.test.mjs compiles it and sends the whole shared hostile list as tokens against a pending end, asserting none releases it while the real token, as the control, does",
+   "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaShell.sessionEnded, the shell's answer to shell.sessionEnding, is advertised only to browser windows and taken only from a live trusted shell document through the same bridge as every host call; its one argument must be a string token of 1-64 [A-Za-z0-9-] (ValidSessionToken), anything else is ERR_SESSION_TOKEN; a token releases the held close or quit only when it is the one the host itself generated for the session end now pending (SessionEnd::Acknowledge), so a stale token from an earlier end, a guessed one or a repeat never releases a close early, and the host closes anyway after its own 3 s deadline (kSessionEndDeadlineMs) so a silent or hostile shell can't hold a window open; a repeated WM_CLOSE while the end is pending is swallowed (SwallowsSystemClose) rather than tearing the bridge down; ArdiaShell.launchSteps and ArdiaShell.completeLaunchStep read and add to one process-wide record (WindowRegistry::launch_steps), refuse private windows, and add only a step the list names (ValidLaunchStep, kept equal to the Linux host's by sessionEndHandshake.test.mjs), so a page can't mark a step it invents; scripts/windows/engine/tests/webui_session_end_policy_test.cc unit-tests the state machine, and apps/browser/src/hostileInputs.test.mjs compiles it and sends the whole shared hostile list as tokens against a pending end, asserting none releases it while the real token, as the control, does",
    "checks": [
     "scripts/windows/engine/src/ardia/win/webui/webui_host_calls.cc#kSessionEndedCall",
     "scripts/windows/engine/src/ardia/win/webui/webui_session_end_policy.h#ValidSessionToken",
@@ -2041,7 +2041,9 @@
     "scripts/windows/engine/src/ardia/win/webui/webui_windows.cc#WindowRegistry::SessionEndAcknowledged",
     "scripts/windows/engine/tests/webui_session_end_policy_test.cc#RunHostileCorpus",
     "scripts/windows/engine/tests/webui_session_end_policy_test.cc#TestOnlyTheCurrentValidTokenReleasesAClose",
-    "apps/browser/src/hostileInputs.test.mjs#windows webui session end: no hostile or stale ArdiaShell.sessionEnded token releases"
+    "apps/browser/src/hostileInputs.test.mjs#windows webui session end: no hostile or stale ArdiaShell.sessionEnded token releases",
+    "scripts/windows/engine/src/ardia/win/webui/webui_host_calls.cc#ArdiaShell.completeLaunchStep",
+    "scripts/windows/engine/src/ardia/win/webui/webui_launch_steps.h#ValidLaunchStep"
    ],
    "detected": false
   },

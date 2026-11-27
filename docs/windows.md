@@ -957,9 +957,14 @@ in `webui_frame.cc`: top-edge resize, `HTMAXBUTTON` over the shell's maximize bu
   in flight (`LeavingSession`, `CloseStillInFlight`): the handshake is pending, Chromium's `UnloadController` is still
   attempting the close, or a modal dialog the window owns is open, since Chromium 158 asks about downloads in progress
   before the controller leaves idle. A close its own tabs or that dialog cancel makes it an open window again: it can be
-  closed again, and the watch reopens the session. `WM_CLOSE` on the last browser window is taken even without companion
-  tabs, so the system's close goes through the same path, and a repeated `WM_CLOSE` while the session is ending is
-  swallowed (`SwallowsSystemClose`). Logging off still closes without the handshake.
+  closed again, and the watch reopens the session. Every browser window's `WM_CLOSE` goes through `RequestClose`, with
+  or without companion tabs (`RoutesSystemClose`), so a window still waiting on its `beforeunload` counts as leaving and
+  a second window closed meanwhile ends the session; a repeated `WM_CLOSE` while the session is ending is swallowed
+  (`SwallowsSystemClose`). Logging off still closes without the handshake.
+- Launch steps: `ArdiaShell.launchSteps` and `ArdiaShell.completeLaunchStep` keep one process-wide record in the
+  registry (`webui_launch_steps.h`, whose step list a test keeps equal to Linux's `ac_linux_launch_steps.h`). A window that takes over telemetry leadership, or a
+  reloaded one, finds the `telemetry` step done and continues the session instead of starting a fresh launch (a false
+  unclean launch and a second `perf_launch`), and once-per-launch steps like onboarding and release notes run once.
 - A `session.write` broadcasts `ArdiaHost` `session` (`base`, `session`, `sourceWindowId`) to every non-private
   window, the writer getting its own base back, so Settings changes reach open windows at once. Entering and leaving
   full screen sends `ArdiaShell` `onWindowEvent` `{type: "fullScreen", id, on}`, and `minimizeWindow` takes a target

@@ -2,6 +2,7 @@ import { openWindow, switchToTab } from "../browser/actions";
 import { useBrowser } from "../browser/store";
 import { activeTabId, viewTabIds } from "../browser/model";
 import type { Tab } from "../browser/types";
+import type { Suggestion } from "@ardia/core";
 import { openSplitPane } from "../splits/actions";
 import { splitViewAvailable } from "../splits/splits";
 import { gateOpening, settleOpening } from "../tabs/openingGate";
@@ -9,6 +10,8 @@ import { noteSplit } from "../telemetry/usage";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { originalProfile } from "../windows/small";
 import { navigateTyped, noteTypedOpen } from "../plugins/typedAddresses";
+import { pluginPageOf } from "../plugins/pageNames";
+import { notePlugin } from "../telemetry/pluginCounts";
 
 export type Disposition = "current" | "newTab" | "newWindow" | "split";
 
@@ -50,6 +53,24 @@ function openBesideOrBehind(tabId: string, url: string) {
   const beside = openSplitPane(tab.windowId, { anchorTabId: tabId, url, side: "right" });
   if (!beside) s.newTab(tab.windowId, { url, profileId: tab.profileId, background: true, gated: true });
   noteSplit(beside ? "barSplitOpens" : "barSplitFullTabs");
+}
+
+export function pluginRowTab(providerId: string, url: string, windowId: string, disposition: Disposition): string | null {
+  if (providerId.startsWith("plugin:")) notePlugin("plugin_omnibox_picks");
+  const s = useBrowser.getState();
+  if (disposition === "newTab" || !s.windows[windowId] || pluginPageOf(url) === null) return null;
+  return viewTabIds(s, windowId).find((id) => s.tabs[id]?.url === url) ?? null;
+}
+
+export function shownTabOf(s: Suggestion, windowId: string, disposition: Disposition, opensTab: boolean): string | null {
+  const shown = s.kind === "page" ? (s.tabId ?? null) : s.kind === "provider" ? pluginRowTab(s.providerId, s.url, windowId, disposition) : null;
+  return opensTab && disposition === "newTab" ? null : shown;
+}
+
+export function switchedFromBar(targetTabId: string | null, url: string, barTabId: string, disposition: Disposition): boolean {
+  if (!targetTabId) return false;
+  switchFromBar(targetTabId, url, barTabId, disposition);
+  return true;
 }
 
 export function switchFromBar(targetTabId: string, url: string, barTabId: string, disposition: Disposition) {

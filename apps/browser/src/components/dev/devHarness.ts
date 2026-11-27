@@ -26,6 +26,7 @@ export function devPluginSeams(): (typeof import("../../state/plugins/store") &
   typeof import("../../state/plugins/process") &
   typeof import("../../state/plugins/official") & {
     snapshotPage: typeof import("../../platform/plugins").devSnapshotPluginPage;
+    pageEval: typeof import("../../platform/plugins").devEvalPluginPage;
     startNative: typeof import("../../platform/plugins").startPluginProcess;
   }) | null {
   if (!__DEV__) return null;
@@ -39,6 +40,7 @@ export function devPluginSeams(): (typeof import("../../state/plugins/store") &
     ...require("../../state/plugins/process"),
     ...require("../../state/plugins/official"),
     snapshotPage: require("../../platform/plugins").devSnapshotPluginPage,
+    pageEval: require("../../platform/plugins").devEvalPluginPage,
     startNative: require("../../platform/plugins").startPluginProcess,
   };
 }

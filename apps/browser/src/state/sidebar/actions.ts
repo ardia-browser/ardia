@@ -4,7 +4,7 @@ import { copyLink } from "../../platform/clipboard";
 import { prompt } from "../../platform/dialogs";
 import { updateFolder } from "../live/store";
 import { useBrowser } from "../browser/store";
-import { webviews } from "../../platform/webviews";
+import { focusTabPage } from "../plugins/pageFocus";
 import { focusHeroBar } from "../omnibox/barState";
 import { ancestorIds } from "../groups/groups";
 import { activeTabId, bookmarkProfileId, familyKeyOf, inPinnedContainer, ownTabTitle, pinSection, tabLayoutOf, tabsShownIn, tabTitle } from "../browser/model";
@@ -44,7 +44,7 @@ export function returnFocusToPage(windowId: string) {
   const s = store();
   const active = activeTabId(s, windowId);
   if (!active) return;
-  if (s.tabs[active]?.url) void webviews.get(active)?.focus();
+  if (s.tabs[active]?.url) void focusTabPage(active);
   else focusHeroBar(windowId, active);
 }
 

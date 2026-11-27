@@ -10,6 +10,7 @@ type PluginFileViewProps = {
   themed?: boolean;
   style?: StyleProp<ViewStyle>;
   onMessage?: (message: unknown) => void;
+  route?: { tabId: string; routes: boolean; path: string; onNavigate: (body: string) => void; onTitle: (title: string) => void };
 };
 
 const parsedMessage = (body: string): { ok: true; value: unknown } | { ok: false } => {
@@ -20,7 +21,7 @@ const parsedMessage = (body: string): { ok: true; value: unknown } | { ok: false
   }
 };
 
-export function PluginFileView({ plugin, url, context = "", themed = true, style, onMessage }: PluginFileViewProps) {
+export function PluginFileView({ plugin, url, context = "", themed = true, style, onMessage, route }: PluginFileViewProps) {
   const network = usePluginNetwork(plugin);
   const folderId = usePluginFolderId(plugin);
   const run = usePluginPageRun(plugin);
@@ -37,6 +38,11 @@ export function PluginFileView({ plugin, url, context = "", themed = true, style
       run={run}
       context={context}
       themeCss={themed ? themeCss : undefined}
+      routes={route?.routes}
+      routePath={route?.path}
+      tabId={route?.tabId}
+      onNavigate={route ? (e) => route.onNavigate(e.nativeEvent.body) : undefined}
+      onTitleChange={route ? (e) => route.onTitle(e.nativeEvent.title) : undefined}
       onMessage={
         onMessage
           ? (e) => {

@@ -127,6 +127,10 @@ public class SystemModule: Module, SystemNative {
 
     Self.runningAppIconFunction
 
+    Self.appleNotesFoldersFunction
+
+    Self.appleNotesNotesFunction
+
     Self.hapticTickFunction
 
     Self.setThinScrollBarsFunction

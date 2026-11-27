@@ -6,6 +6,7 @@ import { holderOfPage } from "../tabs/pageSession";
 import { liveReachOf, onLiveChange, shownLiveOf } from "../tabs/tabLive";
 import { focusedWindowOf } from "../windows/ui";
 import { eligibleKind, isEligibleTab, shownPage } from "./automationWindows";
+import { isSignInTab } from "../plugins/signInTabs";
 import type { AutomationEventName } from "./eventNames";
 import { LIBRARY_EVENTS, startLibraryEvents } from "./libraryEvents";
 
@@ -21,7 +22,7 @@ function tabData(s: BrowserState, tabId: string) {
 function peekData(s: BrowserState, sourceId: string) {
   const peek = s.peeks[sourceId]!;
   const t = s.tabs[peek.tabId];
-  if (!t || !eligibleKind(s, t.windowId) || isIncognitoProfile(t.profileId)) return null;
+  if (!t || !eligibleKind(s, t.windowId) || isIncognitoProfile(t.profileId) || isSignInTab(peek.sourceId)) return null;
   return { windowId: t.windowId, tabId: peek.tabId, profile: t.profileId, sourceTabId: peek.sourceId, ...shownPage(t) };
 }
 

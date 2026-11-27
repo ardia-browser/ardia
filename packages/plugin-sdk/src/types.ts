@@ -1,5 +1,5 @@
 import type { Component } from "./element";
-import type { CallKind, OmniboxSuggestion, SurfaceKind } from "./protocol";
+import type { CallKind, FilesChange, OmniboxSuggestion, SiteDownloadProgress, SurfaceKind } from "./protocol";
 
 export type Awaitable<T> = T | Promise<T>;
 
@@ -33,6 +33,10 @@ export type PageMessageListener = (message: unknown, view: string) => void;
 
 export type SettingsListener = (values: Readonly<Record<string, unknown>>) => void;
 
+export type FilesListener = (change: FilesChange) => void;
+
+export type SiteDownloads = { listeners: Map<string, (progress: SiteDownloadProgress) => void>; early: Map<string, SiteDownloadProgress[]> };
+
 export type ViewProps<C extends Record<string, unknown> = Record<string, unknown>> = {
   surfaceId: string;
   viewId: string;
@@ -65,7 +69,11 @@ export type Registry = {
   state: Map<string, Set<StateListener<any>>>;
   pages: Set<PageMessageListener>;
   settings: Set<SettingsListener>;
+  files: FileWatches;
+  sites: SiteDownloads;
 };
+
+export type FileWatches = { listeners: Map<string, FilesListener>; pending: number; early: Map<string, FilesChange[]> };
 
 export function createRegistry(): Registry {
   return {
@@ -78,6 +86,8 @@ export function createRegistry(): Registry {
     state: new Map(),
     pages: new Set(),
     settings: new Set(),
+    files: { listeners: new Map(), pending: 0, early: new Map() },
+    sites: { listeners: new Map(), early: new Map() },
   };
 }
 

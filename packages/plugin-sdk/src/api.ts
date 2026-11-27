@@ -4,6 +4,10 @@ import {
   type ConfirmOptions,
   type DownloadsChange,
   type FetchRequest,
+  type ControlStatus,
+  type ArdiaSettingsPane,
+  type AppleNotesFolder,
+  type AppleNotesNote,
   type FetchResponseData,
   type GroupLook,
   type NavigationCommit,
@@ -27,7 +31,10 @@ import {
   type WorkspaceOp,
   type WorkspaceSnapshotOptions,
 } from "./protocol";
-import { PluginError, type Rpc } from "./rpc";
+import { PluginError, unwrap, type Rpc } from "./rpc";
+import { filesApi, foldersApi } from "./files";
+import { signInApi } from "./signIn";
+import { sitesApi } from "./sites";
 import {
   addTo,
   registerIn,
@@ -55,11 +62,6 @@ export type ApiState = {
   listenerAdded(topic: string): void;
   report(error: unknown): void;
 };
-
-function unwrap(result: unknown, key: string): unknown {
-  if (typeof result === "object" && result !== null && !Array.isArray(result) && key in result) return (result as Record<string, unknown>)[key];
-  return result;
-}
 
 function pickedIds(result: unknown): string[] {
   const picked = unwrap(result, "picked");
@@ -270,12 +272,42 @@ export function createArdia(rpc: Rpc, registry: Registry, state: ApiState) {
       delete: (key: string) => rpc.request(M.secretDelete, { key }).then(() => undefined),
     },
     settings,
+    files: filesApi(rpc, registry, state.report),
+    folders: foldersApi(rpc),
+    sites: sitesApi(rpc, registry, state.report),
     pages: {
       open: (options: { path?: string; split?: boolean; side?: "left" | "right" | "top" | "bottom"; context?: boolean } = {}) =>
         rpc.request<{ tabId: string; windowId: string }>(M.pageOpen, options),
       post: (view: string, message: unknown) => rpc.request(M.pagePost, { view, message }).then(() => undefined),
       onMessage: (listener: PageMessageListener): Disposable => addTo(registry.pages, listener),
     },
+    app: {
+      async controlStatus(): Promise<ControlStatus> {
+        const res = await rpc.request<Partial<ControlStatus>>(M.appControlStatus);
+        return { command: res?.command === true, control: res?.control === true };
+      },
+      async openSettings(pane: ArdiaSettingsPane): Promise<boolean> {
+        return unwrap(await rpc.request(M.appOpenSettings, { pane }), "ok") === true;
+      },
+      async icon(path: string, options: { size?: number } = {}): Promise<string | null> {
+        const icon = unwrap(await rpc.request(M.appIcon, { path, ...(options.size !== undefined ? { size: options.size } : {}) }), "icon");
+        return typeof icon === "string" ? icon : null;
+      },
+    },
+    appleNotes: {
+      async request(): Promise<boolean> {
+        return unwrap(await rpc.request(M.appleNotesRequest), "granted") === true;
+      },
+      async folders(): Promise<AppleNotesFolder[]> {
+        const folders = unwrap(await rpc.request(M.appleNotesFolders), "folders");
+        return Array.isArray(folders) ? (folders as AppleNotesFolder[]) : [];
+      },
+      async notes(folder: string, options: { offset?: number; limit?: number } = {}): Promise<{ total: number; notes: AppleNotesNote[] }> {
+        const res = await rpc.request<{ total?: number; notes?: AppleNotesNote[] }>(M.appleNotesNotes, { folder, ...options });
+        return { total: typeof res?.total === "number" ? res.total : 0, notes: Array.isArray(res?.notes) ? res.notes : [] };
+      },
+    },
+    signIn: signInApi(rpc),
     programs: {
       status: () => rpc.request<ProgramsStatus>(M.programsStatus),
       relink: () => rpc.request<{ ok: boolean }>(M.programsRelink),

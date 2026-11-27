@@ -13,6 +13,8 @@ enum PluginPageMessages {
   static let maxFromPage = 64 << 10
   static let maxToPage = 256 << 10
   static let perSecond = 100
+  static let pageBurst = 100
+  static let nativeBurst = 200
 
   static func line(_ object: [String: Any]) -> Data {
     var data = (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .fragmentsAllowed])) ?? Data()
@@ -58,16 +60,23 @@ enum PluginPageMessages {
   }
 
   final class Limit {
-    private var windowStart: TimeInterval = -.infinity
-    private var count = 0
+    private let burst: Double
+    private let perSecond: Double
+    private var tokens: Double
+    private var last: TimeInterval?
+
+    init(burst: Int = PluginPageMessages.nativeBurst, perSecond: Int = PluginPageMessages.perSecond) {
+      self.burst = Double(burst)
+      self.perSecond = Double(perSecond)
+      tokens = Double(burst)
+    }
 
     func allow(now: TimeInterval) -> Bool {
-      if now - windowStart >= 1 {
-        windowStart = now
-        count = 0
-      }
-      count += 1
-      return count <= PluginPageMessages.perSecond
+      if let last, now > last { tokens = min(burst, tokens + (now - last) * perSecond) }
+      last = max(last ?? now, now)
+      guard tokens >= 1 else { return false }
+      tokens -= 1
+      return true
     }
   }
 }

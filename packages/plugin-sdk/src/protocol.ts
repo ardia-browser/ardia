@@ -251,6 +251,25 @@ export type ReadyParams = {
 
 export const PLUGIN_PROTOCOL = 2;
 
+export type FilesRootOption = { root?: string };
+export type FileReadResult = { found: false } | { found: true; data: string; size: number; mtimeMs: number };
+export type FileWriteResult = { size: number; mtimeMs: number };
+export type FileEntry = { path: string; kind: "file" | "dir"; size: number; mtimeMs: number; placeholder: boolean };
+export type FilesChange = { root: string; paths: string[]; gone?: true };
+export type FolderGrant = { id: string; name: string; location: "icloud" | "other"; available: boolean };
+export type PickedFile = { id: string; name: string; size: number };
+export type ControlStatus = { command: boolean; control: boolean };
+export type ArdiaSettingsPane = "plugins" | "advanced";
+export type AppleNotesFolder = { id: string; name: string; account: string; parent: string; count: number };
+export type AppleNotesNote = { id: string; name: string; created: number; modified: number; locked: boolean; body: string };
+export type SignInOptions = { url: string; callback: string; state: string; timeoutMs?: number };
+export type SignInResult = { url: string };
+
+export type SiteRequest = { method?: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"; headers?: Record<string, string>; body?: string; timeoutMs?: number; session?: string };
+export type SiteResponseData = { ok: boolean; status: number; headers: Record<string, string>; body: string };
+export type SiteDownloadState = "running" | "done" | "failed" | "cancelled";
+export type SiteDownloadProgress = { download: string; state: SiteDownloadState; received: number; total?: number; size?: number; code?: string; error?: string };
+
 export type ProgramsStatus = { state: "none" | "linking" | "linked" | "failed"; linked: string[]; failed: { name: string; reason: string }[]; binDir: string | null };
 
 export const HOST_METHODS = {
@@ -287,6 +306,32 @@ export const HOST_METHODS = {
   programsRelink: "programs.relink",
   stateSubscribe: "state.subscribe",
   stateIntent: "state.intent",
+  filesRead: "files.read",
+  filesWrite: "files.write",
+  filesAppend: "files.append",
+  filesList: "files.list",
+  filesRemove: "files.remove",
+  filesWatch: "files.watch",
+  filesUnwatch: "files.unwatch",
+  filesPick: "files.pick",
+  appControlStatus: "app.controlStatus",
+  appOpenSettings: "app.openSettings",
+  appIcon: "app.icon",
+  appleNotesRequest: "appleNotes.request",
+  appleNotesFolders: "appleNotes.folders",
+  appleNotesNotes: "appleNotes.notes",
+  signInStart: "signIn.start",
+  foldersList: "folders.list",
+  foldersCreate: "folders.create",
+  foldersPick: "folders.pick",
+  foldersShare: "folders.share",
+  foldersForget: "folders.forget",
+  sitesFetch: "sites.fetch",
+  sitesDownload: "sites.download",
+  sitesCancel: "sites.cancel",
+  sitesStatus: "sites.status",
+  sitesAvailable: "sites.available",
+  sitesSession: "sites.session",
   surfaceRender: "surface.render",
   surfaceClose: "surface.close",
 } as const;

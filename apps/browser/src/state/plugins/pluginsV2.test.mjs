@@ -42,6 +42,8 @@ const { consentLines } = await import("./consent.ts");
 const { pluginThemes, loadPluginTheme } = await import("./themes.ts");
 const { pluginToolbarItems } = await import("./toolbar.ts");
 const { useRegisteredProviders } = await import("../omnibox/providers.ts");
+const { ownPageUrl } = await import("./omnibox.ts");
+const { pluginRowTab } = await import("../omnibox/openFromBar.ts");
 const { webviews } = await import("../../platform/webviews.ts");
 const { useToasts } = await import("../app/toasts.ts");
 const { takePluginCounts } = await import("../telemetry/pluginCounts.ts");
@@ -345,6 +347,46 @@ test("omnibox providers register for active plugins and only return safe rows", 
   lifecycle.disablePlugin("reader", consentToken());
   await settle();
   assert.equal(useRegisteredProviders.getState().list.some((p) => p.id === "plugin:reader:notes"), false, "turning it off unregisters it");
+});
+
+test("an omnibox provider may answer with its own ardia:// page addresses, never another plugin's or Ardia's", async () => {
+  await enable(READER);
+  const provider = useRegisteredProviders.getState().list.find((p) => p.id === "plugin:reader:notes");
+  assert.equal(provider.pageOrigin, "ardia://reader");
+  const run = await activated();
+  const rows = provider.query("x", new AbortController().signal);
+  await settle();
+  const call = lines().findLast((e) => e.kind === "omnibox");
+  const urls = [
+    "ardia://reader/Page-0123456789ab",
+    "ardia://reader",
+    "ardia://reader?q=1",
+    "ardia://other/x",
+    "ardia://settings",
+    "ardia://readerx/a",
+    "ardia://reader/a#frag",
+    "ardia://reader/../x",
+    "ARDIA://reader/a",
+    "javascript:alert(1)",
+    "file:///etc/passwd",
+    "ardia-plugin://reader/page/index.html",
+    "https://ok.example/",
+  ];
+  await ask("reader", "result", { call: call.call, result: urls.map((url, i) => ({ title: `Row ${i}`, url })) }, run);
+  assert.deepEqual((await rows).map((r) => r.url), ["ardia://reader/Page-0123456789ab", "ardia://reader", "ardia://reader?q=1", "https://ok.example/"]);
+  takePluginCounts();
+  pluginRowTab("plugin:reader:notes", "ardia://reader/Page-0123456789ab", "no-window", "current");
+  pluginRowTab("config:linear", "https://linear.app/", "no-window", "current");
+  assert.equal(takePluginCounts().plugin_omnibox_picks, 1, "only a plugin provider's row counts as a pick");
+  const w = S().createWindow({ url: "https://a.example/" });
+  const shown = S().newTab(w, { url: "ardia://reader/Page-0123456789ab" });
+  assert.equal(pluginRowTab("plugin:reader:notes", "ardia://reader/Page-0123456789ab", w, "current"), shown, "a pick switches to the tab already showing that page");
+  assert.equal(pluginRowTab("plugin:reader:notes", "ardia://reader/Page-0123456789ab", w, "newTab"), null, "⌘Return still opens a new tab");
+  assert.equal(pluginRowTab("plugin:reader:notes", "ardia://reader/Other-0123456789ab", w, "current"), null);
+  assert.equal(pluginRowTab("plugin:reader:notes", "https://a.example/", w, "current"), null, "a web row opens like any address");
+  lifecycle.disablePlugin("reader", consentToken());
+  await settle();
+  assert.equal(ownPageUrl("reader", "ardia://reader/a"), null, "a plugin that's off has no page addresses");
 });
 
 test("decide hooks start the plugin eagerly and answer within 250 ms, with URLs cut to the plugin's permissions", async () => {

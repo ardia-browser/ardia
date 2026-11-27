@@ -38,7 +38,7 @@ const permissionsSame: Rule<PluginPermissions> = (a, b) => {
 
 const MAIN_USES = PERMISSION_KEYS.filter((key) => key !== "control");
 
-const grantsMainNothing = (p: PluginPermissions) => MAIN_USES.every((key) => p[key] === false);
+const grantsMainNothing = (p: PluginPermissions) => MAIN_USES.every((key) => p[key] === false || (Array.isArray(p[key]) && (p[key] as unknown[]).length === 0));
 
 const firstMain = ({ approved, next }: Both) => approved.main === null && next.main !== null;
 

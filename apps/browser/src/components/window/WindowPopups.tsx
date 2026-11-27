@@ -7,6 +7,7 @@ import { useCreateProfileRequest } from "../../state/profiles/createProfileReque
 import { useExtensions } from "../../state/extensions/actions";
 import { DownloadMagnet, DownloadsPopover, useDownloadFlight } from "../downloads/Downloads";
 import { ExtensionOverlays } from "../extensions/ExtensionOverlays";
+import { PluginSiteContexts } from "../plugins/PluginSiteContexts";
 import { BookmarkDialog } from "../bookmarks/BookmarkDialog";
 import { EditBookmarkDialog } from "../bookmarks/EditBookmarkDialog";
 import { CreateProfileHost } from "../profiles/CreateProfile";
@@ -25,6 +26,7 @@ export function WindowPopups({ plugins }: { plugins: ReactNode }) {
       {downloads ? <DownloadsPopover /> : null}
       {extension ? <ExtensionOverlays /> : null}
       {plugins}
+      <PluginSiteContexts />
       {flight ? <DownloadMagnet key={flight.id} flight={flight} onLanded={landed} /> : null}
       {bookmark ? <BookmarkDialog /> : null}
       {editor ? <EditBookmarkDialog /> : null}

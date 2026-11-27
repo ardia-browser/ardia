@@ -34,6 +34,7 @@ import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugi
 import { useControlTurnedOff } from "../../../state/app/programControlSetting";
 import { useNeverChosenCount } from "../../../state/site/passwordManager";
 import { PasswordManagerDetails } from "./PasswordManagerPlugin";
+import { PluginSignInRow } from "./PluginSignInRow";
 import { autoUpdateNote } from "../../../state/plugins/officialView";
 
 export function PluginsPane({ detail }: SettingsPlace) {
@@ -273,9 +274,13 @@ function PluginPage({ name }: { name: string }) {
         <>
           <SectionHeader title="What it gets" />
           <Group>
-            {consentLines(m, { controlOff, official: !!listing.official && !active, movesProfiles, installed: active }).map((line) => (
-              <Row key={line.text} title={line.text} icon={<Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />} />
-            ))}
+            {consentLines(m, { controlOff, official: !!listing.official && !active, movesProfiles, installed: active }).map((line) =>
+              line.sites && active ? (
+                <PluginSignInRow key={line.text} name={name} title={m.title} text={line.text} icon={line.icon} />
+              ) : (
+                <Row key={line.text} title={line.text} icon={<Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />} />
+              ),
+            )}
           </Group>
         </>
       ) : (

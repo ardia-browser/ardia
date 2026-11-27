@@ -14,6 +14,8 @@ import { valuesFor } from "./values";
 import { dropHiddenRetainedSidePanels } from "./surfaces";
 import { answerMethod } from "./channelApi";
 import { dropStateSubscriptions } from "./stateEvents";
+import { startFileWatches } from "./channelFiles";
+import { startSiteChannels } from "./channelSites";
 
 export { pluginWebUrl } from "../../lib/pluginWebUrl";
 
@@ -135,6 +137,8 @@ export function startChannels() {
   onProcessStopped(dropCalls);
   onProcessStopped(dropHiddenRetainedSidePanels);
   onProcessStopped(dropStateSubscriptions);
+  startFileWatches();
+  startSiteChannels();
   setFeedConsumer("plugins", { subscriptions: () => [...connections.values()].flatMap((c) => (c.sub ? [c.sub] : [])), deliver });
 }
 

@@ -8,11 +8,19 @@ const NONE = {
   plugin_disables: 0,
   plugin_process_starts: 0,
   plugin_process_crashes: 0,
+  plugin_channel_retired_line_too_long: 0,
+  plugin_channel_retired_too_many_requests: 0,
+  plugin_channel_retired_reply_backlog: 0,
+  plugin_channel_retired_send_backlog: 0,
+  plugin_channel_retired_line_deadline: 0,
+  plugin_channel_retired_stalled: 0,
   plugin_commands_run: 0,
   plugin_tool_calls: 0,
   plugin_tool_failures: 0,
   plugin_page_opens: 0,
   plugin_split_opens: 0,
+  plugin_page_navigations: 0,
+  plugin_page_navigation_refusals: 0,
   program_links: 0,
   program_link_failures: 0,
   program_link_cause_name: 0,
@@ -68,6 +76,7 @@ const NONE = {
   plugin_menu_runs: 0,
   plugin_action_shortcuts: 0,
   plugin_omnibox_queries: 0,
+  plugin_omnibox_picks: 0,
   plugin_ui_prompts: 0,
   plugin_net_fetches: 0,
   plugin_net_refusals: 0,
@@ -76,6 +85,29 @@ const NONE = {
   plugin_storage_writes: 0,
   plugin_storage_cancels: 0,
   plugin_secret_writes: 0,
+  plugin_file_reads: 0,
+  plugin_file_writes: 0,
+  plugin_file_refusals: 0,
+  plugin_folder_grants: 0,
+  plugin_file_picks: 0,
+  plugin_settings_opens: 0,
+  plugin_apple_notes_asks: 0,
+  plugin_apple_notes_allowed: 0,
+  plugin_apple_notes_reads: 0,
+  plugin_sign_in_started: 0,
+  plugin_sign_in_completed: 0,
+  plugin_sign_in_cancelled: 0,
+  plugin_sign_in_timeouts: 0,
+  plugin_sign_in_refused: 0,
+  plugin_sign_in_port_in_use: 0,
+  plugin_folder_shares: 0,
+  plugin_site_fetches: 0,
+  plugin_site_fetch_failures: 0,
+  plugin_site_refusals: 0,
+  plugin_site_downloads: 0,
+  plugin_site_download_failures: 0,
+  plugin_site_download_cancels: 0,
+  plugin_site_signin_revokes: 0,
   plugin_page_reads: 0,
   plugin_decide_calls: 0,
   plugin_decide_timeouts: 0,
@@ -98,6 +130,13 @@ export const officialFetchCause = (cause: unknown): PluginCount =>
 
 export const programLinkCause = (cause: unknown): PluginCount =>
   `program_link_cause_${typeof cause === "string" && LINK_CAUSES.has(cause) ? cause : "other"}` as PluginCount;
+
+export const CHANNEL_RETIRE_REASONS = ["line_too_long", "too_many_requests", "reply_backlog", "send_backlog", "line_deadline", "stalled"] as const;
+
+export function notePluginChannelRetired(reason: unknown, consent?: ConsentToken | null) {
+  const known = CHANNEL_RETIRE_REASONS.find((r) => r === reason);
+  if (known) notePlugin(`plugin_channel_retired_${known}`, consent);
+}
 
 let counts = { ...NONE };
 

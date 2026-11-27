@@ -644,9 +644,10 @@
   {
    "id": "webkit-script-handler:shell/ios/PluginPageView.swift",
    "source": "plugin",
-   "guard": "Own view, main frame, plugin scheme and host, a live binding and a rate limit",
+   "guard": "Own view, main frame, plugin scheme and host, a live binding and a rate limit; ardiaNavigate: own view, main frame, plugin scheme and host, 4 KB, 20 a second, then routePluginPage takes only a page path of that plugin's routes page",
    "checks": [
-    "packages/shell/ios/PluginPageView.swift#userContentController"
+    "packages/shell/ios/PluginPageView.swift#userContentController",
+    "apps/browser/src/state/plugins/pages.ts#routePluginPage"
    ]
   },
   {
@@ -656,6 +657,17 @@
    "count": 1,
    "checks": [
     "apps/browser/src/components/extensions/ActionPopup.tsx"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/plugins/siteContexts.ts",
+   "source": "main-world",
+   "guard": "The hidden sign-in page of a site a plugin declared (a plain-text robots.txt of that exact origin): the probe needs location.origin to match and a non-HTML document; answers are parsed as JSON once and every field is type-checked in channelSites (status a number, body text under the cap, headers filtered to a fixed list, chunk data strict base64 counted toward the cap)",
+   "count": 2,
+   "checks": [
+    "apps/browser/src/state/plugins/siteContexts.ts",
+    "apps/browser/src/state/plugins/siteRules.ts#cleanHeaders",
+    "apps/browser/src/state/plugins/siteScripts.ts#FETCH_SCRIPT"
    ]
   },
   {
@@ -1084,6 +1096,16 @@
    ]
   },
   {
+   "id": "plugin-call:omnibox",
+   "source": "plugin",
+   "guard": "Each row's url is pluginWebUrl (http or https) or ownPageUrl (ardia://<that plugin> plus an isPagePath path, only while it has a page); titles and subtitles lose control and bidi characters; the bar keeps only http(s) or the section's own pageOrigin (providerPageUrl)",
+   "checks": [
+    "apps/browser/src/state/plugins/omnibox.ts#pluginOmniboxRows",
+    "packages/core/src/providerRows.ts#providerPageUrl"
+   ],
+   "detected": false
+  },
+  {
    "id": "plugin-method:open",
    "source": "plugin",
    "guard": "pluginWebUrl on every URL: http(s) only, no credentials, no control characters (D4)",
@@ -1204,6 +1226,107 @@
    "findings": [
     "D4"
    ]
+  },
+  {
+   "id": "plugin-method:files.*",
+   "source": "plugin",
+   "guard": "Needs files (and folders plus a live grant for a folder root); pathProblem refuses absolute paths, empty, . and .. parts, control and direction characters, lone surrogates, Ardia's temp names and paths over 1,024 bytes or parts over 255; base64Problem takes strict padded base64 only; data, length and offset capped at 4 MiB and whole numbers before native, which walks the root by real path with O_NOFOLLOW again; files.pick is the user's own choice in the open panel, needs only files, keeps a picked file as its folder's identity and its one name (pathProblem), refuses files in Ardia's own folders or right in the home folder, and answers files.read for that name alone, for that run",
+   "checks": [
+    "apps/browser/src/state/plugins/channelFiles.ts#rootFor",
+    "apps/browser/src/state/plugins/channelFiles.ts#pathProblem",
+    "apps/browser/src/state/plugins/channelFiles.ts#base64Problem",
+    "apps/browser/src/state/plugins/channelFiles.ts#filesMethod",
+    "apps/browser/src/state/plugins/channelFiles.ts#isPickId"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-event:files.changed",
+   "source": "native",
+   "guard": "Delivered only to the run that made the watch while it is live, has files and still holds the grant; only paths that pass pathProblem go out, at most 1,000 an event",
+   "checks": [
+    "apps/browser/src/state/plugins/channelFiles.ts#startFileWatches"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:sites.*",
+   "source": "plugin",
+   "guard": "Needs permissions.sites (1 to 8 exact public hosts, siteHostProblem) and sign-in left on in Settings › Plugins (record sitesOff); siteTarget takes only https on a declared host and its own port, no credentials (pluginWebUrl); siteHeadersOf allows standard content headers plus only the custom ones the manifest lists in permissions.siteHeaders (siteHeaderNameProblem), never Authorization, Cookie, Origin, Referer, Host, sec-, proxy-, forwarding or CSRF headers, one line of at most 1 KB, 20 at most; 5 a second (burst 20, kept across restarts) and 4 at once a plugin, downloads included; every operation is bound to a generation that a stop, a restart or the switch ends, and to its hidden page, and is checked again before a reply or a finished file is handed over; only from the last focused regular window's profile, never a private one; the request runs as a same-origin fetch with redirect: manual in a hidden page of that exact origin, which refuses every redirect; answers keep only listed response headers and at most 768 KiB of text; download needs files too, creates a new file (never one already there) at a pathProblem path in the plugin's own data folder, one at a time, counts decoded bytes against maxBytes (at most 4 GiB), and removes only the file it created when it fails, is cancelled or the plugin stops",
+   "checks": [
+    "apps/browser/src/state/plugins/channelSites.ts#sitesMethod",
+    "apps/browser/src/state/plugins/siteRules.ts#siteTarget",
+    "apps/browser/src/state/plugins/siteRules.ts#siteHeadersOf",
+    "apps/browser/src/lib/pluginPermissions.ts#siteHostProblem",
+    "apps/browser/src/lib/pluginPermissions.ts#siteHeaderNameProblem"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-event:sites.download",
+   "source": "main-world",
+   "guard": "Progress goes only to the run that started the download, as numbers and Ardia's own state and error words; chunk data from the page must be strict base64 and counts toward the cap before it is written",
+   "checks": [
+    "apps/browser/src/state/plugins/channelSites.ts#runDownload"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:folders.*",
+   "source": "plugin",
+   "guard": "Needs folders; create's name passes folderNameProblem (1 to 100 characters, no /, :, control or direction characters, no leading dot) and an Ardia-drawn confirm in a normal window; pick is the user's own choice in the open panel, refused inside or around Ardia's config and plugins folders; ids must be the plugin's own grants; at most 32 grants",
+   "checks": [
+    "apps/browser/src/state/plugins/channelFolders.ts#foldersMethod",
+    "apps/browser/src/state/plugins/channelFolders.ts#isArdiaOwnFolder",
+    "apps/browser/src/state/plugins/folderGrants.ts#folderNameProblem"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:app.*",
+   "source": "plugin",
+   "guard": "controlStatus answers two booleans and nothing else; openSettings takes only pane plugins or advanced (anything else is bad_request), needs a normal window and opens Settings at most once every 2 s a plugin; neither changes a setting; icon takes only a path matching APP_ICON_PATH (an .app at most two folders inside /Applications or /System/Applications, no . or .. parts) and answers a PNG data URL or null",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApp.ts#appMethod",
+    "apps/browser/src/state/plugins/channelApp.ts#OPENABLE_SETTINGS",
+    "apps/browser/src/state/plugins/channelApp.ts#appIconPathProblem"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:appleNotes.*",
+   "source": "plugin",
+   "guard": "Nothing is read until Ardia's own sheet ('<Plugin> wants to read your Apple Notes') is allowed, for that run only, and macOS's Automation consent follows; native runs two fixed JXA scripts (the folder id goes in as a JSON string literal, offset and limit as integers, at most 200 notes a call) and never in a background test instance; whatever Notes answers is parsed once and cleaned (cleanFolders, cleanNotes: strings capped, locked notes' bodies dropped)",
+   "checks": [
+    "apps/browser/src/state/plugins/channelAppleNotes.ts#appleNotesMethod",
+    "apps/browser/src/state/plugins/channelAppleNotes.ts#cleanNotes",
+    "packages/shell/ios/AppleNotesScripting.swift#notesSource"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-method:signIn.*",
+   "source": "plugin",
+   "guard": "signIn.start needs the signIn permission; state is 16 to 256 of [A-Za-z0-9_-] and url must carry exactly one state query parameter equal to it (signInStateOf, signInUrlOf); url is one https address with an ASCII host and no credentials, at most 8 KB; callback is exactly http://127.0.0.1, localhost or [::1] with an explicit port 1024 to 65535 and a path of [A-Za-z0-9/_.~-] with no %, empty, . or .. segment (signInCallbackOf); timeoutMs is held to 1 s to 15 min; one session per plugin and per endpoint across plugins (port_in_use); the port is bound before the tab opens and a taken port opens nothing; the tab opens only in a normal window and is hidden from every plugin and the ardia command while the session runs (isSignInTab in isEligibleTab)",
+   "checks": [
+    "apps/browser/src/state/plugins/channelSignIn.ts#signInMethod",
+    "apps/browser/src/state/plugins/channelSignIn.ts#signInUrlOf",
+    "apps/browser/src/state/plugins/channelSignIn.ts#signInCallbackOf",
+    "apps/browser/src/state/plugins/channelSignIn.ts#signInStateOf",
+    "apps/browser/src/state/plugins/signInTabs.ts#isSignInTab"
+   ],
+   "detected": false
+  },
+  {
+   "id": "loopback:sign-in-redirect",
+   "source": "page",
+   "guard": "The redirect reaches the plugin only from its own session: a loopback listener (POSIX sockets, bound before the tab opens, no SO_REUSEADDR) takes a GET of the callback's exact path with the callback's own Host, Sec-Fetch-Mode navigate and Sec-Fetch-Dest document when sent, a printable-ASCII head of at most 16 KB and exactly one state query parameter equal to the session's (constant-time compare), answers it 204 so nothing loads, drops every other socket and stops; anything else gets an empty 4xx and it keeps listening (PluginSignInRequest.verdict); in JS, signInRedirect checks the target again: the exact path, a printable-ASCII query without # and the same state",
+   "checks": [
+    "packages/shell/ios/PluginCore/PluginSignInRequest.swift#verdict",
+    "packages/shell/ios/PluginCore/PluginSignInListener.swift#PluginSignInListener",
+    "apps/browser/src/state/plugins/channelSignIn.ts#signInRedirect"
+   ],
+   "detected": false
   },
   {
    "id": "socket-family:core",
@@ -2099,6 +2222,16 @@
     "packages/core-rs/crates/ardia-shell-migration/tests/hostile.rs",
     "apps/browser/src/state/telemetry/shellMigration.ts",
     "apps/browser/src/state/telemetry/shellMigration.test.mjs"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-scheme:__symbols",
+   "source": "plugin",
+   "guard": "Only the plugin's own ardia-plugin host; a symbol name of lowercase letters, digits and dots (no leading, trailing or doubled dot, at most 64 bytes), a known weight, size 4 to 64 points and scale 1 to 3; drawn by NSImage(systemSymbolName:) into at most 1024 by 1024 pixels and cached by those four values",
+   "checks": [
+    "packages/shell/ios/PluginSchemeHandler.swift#isSymbolName",
+    "packages/shell/ios/PluginSchemeHandler.swift#request(of url"
    ],
    "detected": false
   },

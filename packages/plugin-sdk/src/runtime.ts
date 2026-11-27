@@ -1,4 +1,6 @@
 import { createArdia, type ApiState, type Ardia } from "./api";
+import { deliverFilesChange } from "./files";
+import { deliverSiteDownload } from "./sites";
 import { enqueueMicrotask } from "./reconciler";
 import {
   HOST_METHODS as M,
@@ -273,6 +275,8 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
       const time = typeof record.time === "number" ? record.time : undefined;
       if (record.event === "plugin.values") return deliverEvent(record.event, data, time);
       if (record.event === "plugin.stopping") return void stop().catch(report);
+      if (record.event === "files.changed") return deliverFilesChange(registry, data, report);
+      if (record.event === "sites.download") return deliverSiteDownload(registry, data, report);
       return whenActive(() => deliverEvent(record.event as string, data, time));
     }
   }

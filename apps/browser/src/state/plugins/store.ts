@@ -48,8 +48,14 @@ export type PluginRecord = {
   installed?: boolean;
   previous?: string;
   sites?: SiteSwitchValues;
+  folders?: PluginFolderGrants;
+  sitesOff?: true;
   updated?: OfficialAutoUpdate;
 };
+
+export type PluginFolderGrant = { name: string; path: string; location: "icloud" | "other"; addedAt: number; device?: number; inode?: number };
+
+export type PluginFolderGrants = Record<string, PluginFolderGrant>;
 
 export type OfficialAutoUpdate = { from: string | null; to: string | null; added: string[]; runtime?: true };
 

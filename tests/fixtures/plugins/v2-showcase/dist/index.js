@@ -35,6 +35,32 @@
     programsRelink: "programs.relink",
     stateSubscribe: "state.subscribe",
     stateIntent: "state.intent",
+    filesRead: "files.read",
+    filesWrite: "files.write",
+    filesAppend: "files.append",
+    filesList: "files.list",
+    filesRemove: "files.remove",
+    filesWatch: "files.watch",
+    filesUnwatch: "files.unwatch",
+    filesPick: "files.pick",
+    appControlStatus: "app.controlStatus",
+    appOpenSettings: "app.openSettings",
+    appIcon: "app.icon",
+    appleNotesRequest: "appleNotes.request",
+    appleNotesFolders: "appleNotes.folders",
+    appleNotesNotes: "appleNotes.notes",
+    signInStart: "signIn.start",
+    foldersList: "folders.list",
+    foldersCreate: "folders.create",
+    foldersPick: "folders.pick",
+    foldersShare: "folders.share",
+    foldersForget: "folders.forget",
+    sitesFetch: "sites.fetch",
+    sitesDownload: "sites.download",
+    sitesCancel: "sites.cancel",
+    sitesStatus: "sites.status",
+    sitesAvailable: "sites.available",
+    sitesSession: "sites.session",
     surfaceRender: "surface.render",
     surfaceClose: "surface.close"
   };
@@ -52,6 +78,10 @@
       this.code = code;
     }
   };
+  function unwrap(result, key) {
+    if (typeof result === "object" && result !== null && !Array.isArray(result) && key in result) return result[key];
+    return result;
+  }
   function errorMessage(error) {
     if (error instanceof Error) return error.message;
     if (typeof error === "string") return error;
@@ -72,14 +102,46 @@
     const message = typeof error?.message === "string" ? error.message : "The host refused the request.";
     return new PluginError(code, message);
   }
+  var MAX_IN_FLIGHT = 16;
+  var MAX_IN_FLIGHT_BYTES = 12 << 20;
+  var SMALL_REPLY_BYTES = 4096;
+  var MAX_READ_BYTES = 4 << 20;
+  var readReplyBytes = (length) => {
+    const wanted = typeof length === "number" && Number.isFinite(length) && length >= 0 ? Math.min(length, MAX_READ_BYTES) : MAX_READ_BYTES;
+    return Math.ceil(wanted / 3) * 4 + 512;
+  };
+  var replyCost = (options) => typeof options.replyBytes === "number" && Number.isFinite(options.replyBytes) && options.replyBytes > 0 ? Math.ceil(options.replyBytes) : SMALL_REPLY_BYTES;
   function createRpc(transport) {
     const waiting = new Map();
     let next = 0;
     let closedBy = null;
     const send = (message) => transport.send(JSON.stringify(message));
+    const queued = [];
+    const costs = new Map();
+    let inFlightBytes = 0;
+    const settle = (id) => {
+      inFlightBytes -= costs.get(id) ?? 0;
+      costs.delete(id);
+      waiting.delete(id);
+    };
+    const fits = (cost) => waiting.size === 0 || waiting.size < MAX_IN_FLIGHT && inFlightBytes + cost <= MAX_IN_FLIGHT_BYTES;
+    const pump = () => {
+      while (queued.length && !closedBy && fits(queued[0].cost)) {
+        const { id, line, cost, waiter } = queued.shift();
+        waiting.set(id, waiter);
+        costs.set(id, cost);
+        inFlightBytes += cost;
+        try {
+          transport.send(line);
+        } catch (error) {
+          settle(id);
+          waiter.reject(error);
+        }
+      }
+    };
     return {
       send,
-      request(method, params = {}) {
+      request(method, params = {}, options = {}) {
         if (closedBy) return Promise.reject(closedBy);
         const id = ++next;
         let line;
@@ -89,13 +151,8 @@
           return Promise.reject(new LocalEncodingError("unencodable", `The ${method} request couldn't be encoded: ${errorMessage(error)}`));
         }
         return new Promise((resolve, reject) => {
-          waiting.set(id, { resolve, reject });
-          try {
-            transport.send(line);
-          } catch (error) {
-            waiting.delete(id);
-            reject(error);
-          }
+          queued.push({ id, line, cost: line.length + replyCost(options), waiter: { resolve, reject } });
+          pump();
         });
       },
       takeReply(message) {
@@ -104,19 +161,372 @@
         const id = message.id;
         const waiter = typeof id === "number" ? waiting.get(id) : void 0;
         if (!waiter) return true;
-        waiting.delete(id);
+        settle(id);
         const reply = message;
         if (reply.error !== void 0 && reply.error !== null) waiter.reject(replyError(reply.error));
         else waiter.resolve(reply.result);
+        pump();
         return true;
       },
-      pendingCount: () => waiting.size,
+      pendingCount: () => waiting.size + queued.length,
+      inFlightBytes: () => inFlightBytes,
       close(reason) {
         if (closedBy) return;
         closedBy = reason;
-        const waiters = [...waiting.values()];
+        const waiters = [...waiting.values(), ...queued.splice(0).map((q) => q.waiter)];
         waiting.clear();
+        costs.clear();
+        inFlightBytes = 0;
         for (const waiter of waiters) waiter.reject(reason);
+      }
+    };
+  }
+
+  var ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var VALUES = new Int16Array(128).fill(-1);
+  for (let i = 0; i < ALPHABET.length; i++) VALUES[ALPHABET.charCodeAt(i)] = i;
+  function bytesToBase64(bytes) {
+    const parts = [];
+    let chunk = "";
+    const whole = bytes.length - bytes.length % 3;
+    for (let i = 0; i < whole; i += 3) {
+      const n = bytes[i] << 16 | bytes[i + 1] << 8 | bytes[i + 2];
+      chunk += ALPHABET[n >> 18] + ALPHABET[n >> 12 & 63] + ALPHABET[n >> 6 & 63] + ALPHABET[n & 63];
+      if (chunk.length >= 8192) {
+        parts.push(chunk);
+        chunk = "";
+      }
+    }
+    const left = bytes.length - whole;
+    if (left === 1) {
+      const n = bytes[whole] << 16;
+      chunk += ALPHABET[n >> 18] + ALPHABET[n >> 12 & 63] + "==";
+    } else if (left === 2) {
+      const n = bytes[whole] << 16 | bytes[whole + 1] << 8;
+      chunk += ALPHABET[n >> 18] + ALPHABET[n >> 12 & 63] + ALPHABET[n >> 6 & 63] + "=";
+    }
+    parts.push(chunk);
+    return parts.join("");
+  }
+  var sextet = (text, at) => {
+    const code = text.charCodeAt(at);
+    const value = code < 128 ? VALUES[code] : -1;
+    if (value < 0) throw new TypeError("That isn't base64.");
+    return value;
+  };
+  function base64ToBytes(text) {
+    if (text.length % 4 !== 0) throw new TypeError("That isn't base64.");
+    const padding = text.endsWith("==") ? 2 : text.endsWith("=") ? 1 : 0;
+    const out = new Uint8Array(text.length / 4 * 3 - padding);
+    let o = 0;
+    for (let i = 0; i < text.length; i += 4) {
+      const last = i + 4 === text.length;
+      const c = last && padding === 2 ? 0 : sextet(text, i + 2);
+      const d = last && padding >= 1 ? 0 : sextet(text, i + 3);
+      const n = sextet(text, i) << 18 | sextet(text, i + 1) << 12 | c << 6 | d;
+      out[o++] = n >> 16;
+      if (o < out.length) out[o++] = n >> 8 & 255;
+      if (o < out.length) out[o++] = n & 255;
+    }
+    return out;
+  }
+  function utf8Encode(text) {
+    const out = [];
+    for (let i = 0; i < text.length; i++) {
+      let c = text.charCodeAt(i);
+      if (c >= 55296 && c <= 56319 && i + 1 < text.length) {
+        const next = text.charCodeAt(i + 1);
+        if (next >= 56320 && next <= 57343) {
+          c = 65536 + (c - 55296 << 10) + (next - 56320);
+          i++;
+        }
+      }
+      if (c >= 55296 && c <= 57343) c = 65533;
+      if (c < 128) out.push(c);
+      else if (c < 2048) out.push(192 | c >> 6, 128 | c & 63);
+      else if (c < 65536) out.push(224 | c >> 12, 128 | c >> 6 & 63, 128 | c & 63);
+      else out.push(240 | c >> 18, 128 | c >> 12 & 63, 128 | c >> 6 & 63, 128 | c & 63);
+    }
+    return Uint8Array.from(out);
+  }
+  var REPLACEMENT = 65533;
+  function utf8Decode(bytes) {
+    const codes = [];
+    const parts = [];
+    const flush = () => {
+      parts.push(String.fromCodePoint(...codes));
+      codes.length = 0;
+    };
+    let i = 0;
+    if (bytes[0] === 239 && bytes[1] === 187 && bytes[2] === 191) i = 3;
+    while (i < bytes.length) {
+      const b = bytes[i];
+      const need = b < 128 ? 0 : b >= 194 && b <= 223 ? 1 : b >= 224 && b <= 239 ? 2 : b >= 240 && b <= 244 ? 3 : -1;
+      if (need < 0) {
+        codes.push(REPLACEMENT);
+        i++;
+      } else if (need === 0) {
+        codes.push(b);
+        i++;
+      } else {
+        let cp = b & 63 >> need;
+        let lower = b === 224 ? 160 : b === 240 ? 144 : 128;
+        let upper = b === 237 ? 159 : b === 244 ? 143 : 191;
+        let read = 1;
+        for (; read <= need; read++) {
+          const next = bytes[i + read];
+          if (next === void 0 || next < lower || next > upper) break;
+          cp = cp << 6 | next & 63;
+          lower = 128;
+          upper = 191;
+        }
+        if (read > need) {
+          codes.push(cp);
+          i += need + 1;
+        } else {
+          codes.push(REPLACEMENT);
+          i += read;
+        }
+      }
+      if (codes.length >= 8192) flush();
+    }
+    flush();
+    return parts.join("");
+  }
+
+  var rootOf = (options) => options.root !== void 0 ? { root: options.root } : {};
+  var EARLY_CHANGES_KEPT = 64;
+  function deliverFilesChange(registry, data, report) {
+    const { watch, root, paths, gone } = data;
+    if (typeof watch !== "string") return;
+    const rootName = typeof root === "string" ? root : "data";
+    const change = gone === true ? { root: rootName, paths: [], gone: true } : { root: rootName, paths: Array.isArray(paths) ? paths.filter((p) => typeof p === "string") : [] };
+    const listener = registry.files.listeners.get(watch);
+    if (listener && gone === true) registry.files.listeners.delete(watch);
+    if (!listener) {
+      if (registry.files.pending <= 0) return;
+      const early = registry.files.early.get(watch) ?? [];
+      if (early.length < EARLY_CHANGES_KEPT) early.push(change);
+      registry.files.early.set(watch, early);
+      return;
+    }
+    try {
+      listener(change);
+    } catch (error) {
+      report(error);
+    }
+  }
+  function filesApi(rpc, registry, report) {
+    const watches = registry.files;
+    const read = async (path, options = {}) => {
+      const res = await rpc.request(
+        HOST_METHODS.filesRead,
+        {
+          path,
+          ...rootOf(options),
+          ...options.offset !== void 0 ? { offset: options.offset } : {},
+          ...options.length !== void 0 ? { length: options.length } : {}
+        },
+        { replyBytes: readReplyBytes(options.length) }
+      );
+      return res && res.found === true ? { found: true, data: res.data, size: res.size, mtimeMs: res.mtimeMs } : { found: false };
+    };
+    const write = (path, data, options = {}) => rpc.request(HOST_METHODS.filesWrite, { path, data, ...rootOf(options), ...options.exclusive ? { exclusive: true } : {} });
+    const watch = (listener, options = {}) => {
+      let id = null;
+      let disposed = false;
+      watches.pending++;
+      void rpc.request(HOST_METHODS.filesWatch, rootOf(options)).then((res) => {
+        const given = unwrap(res, "watch");
+        if (typeof given !== "string") throw new PluginError("failed", "files.watch didn't answer a watch id.");
+        if (disposed) return void rpc.request(HOST_METHODS.filesUnwatch, { watch: given }).catch(report);
+        id = given;
+        watches.listeners.set(id, listener);
+        const early = watches.early.get(id) ?? [];
+        watches.early.delete(id);
+        for (const change of early) deliverFilesChange(registry, { watch: id, ...change }, report);
+      }).catch(report).finally(() => {
+        watches.pending--;
+        if (watches.pending === 0) watches.early.clear();
+      });
+      return {
+        dispose() {
+          if (disposed) return;
+          disposed = true;
+          if (id === null || !watches.listeners.delete(id)) return;
+          void rpc.request(HOST_METHODS.filesUnwatch, { watch: id }).catch(report);
+        }
+      };
+    };
+    return {
+      read,
+      async readText(path, options = {}) {
+        const res = await read(path, rootOf(options));
+        return res.found ? utf8Decode(base64ToBytes(res.data)) : null;
+      },
+      write,
+      writeText: (path, text, options = {}) => write(path, bytesToBase64(utf8Encode(text)), options),
+      append: (path, data, options = {}) => rpc.request(HOST_METHODS.filesAppend, { path, data, ...rootOf(options) }),
+      async list(dir = "", options = {}) {
+        const entries = unwrap(await rpc.request(HOST_METHODS.filesList, { dir, ...rootOf(options), ...options.recursive ? { recursive: true } : {} }), "entries");
+        return Array.isArray(entries) ? entries : [];
+      },
+      async remove(path, options = {}) {
+        return unwrap(await rpc.request(HOST_METHODS.filesRemove, { path, ...rootOf(options) }), "removed") === true;
+      },
+      watch,
+      async pick(options = {}) {
+        const files = unwrap(await rpc.request(HOST_METHODS.filesPick, options.multiple ? { multiple: true } : {}), "files");
+        return Array.isArray(files) ? files.filter((f) => typeof f?.id === "string" && typeof f.name === "string") : [];
+      }
+    };
+  }
+  function foldersApi(rpc) {
+    const folder = (res) => {
+      const given = unwrap(res, "folder");
+      return typeof given === "object" && given !== null && typeof given.id === "string" ? given : null;
+    };
+    return {
+      async list() {
+        const folders = unwrap(await rpc.request(HOST_METHODS.foldersList), "folders");
+        return Array.isArray(folders) ? folders : [];
+      },
+      create: async (name) => folder(await rpc.request(HOST_METHODS.foldersCreate, { name })),
+      pick: async (options = {}) => folder(await rpc.request(HOST_METHODS.foldersPick, options.prompt !== void 0 ? { prompt: options.prompt } : {})),
+      async share(id) {
+        return { ok: unwrap(await rpc.request(HOST_METHODS.foldersShare, { id }), "ok") === true };
+      },
+      forget: (id) => rpc.request(HOST_METHODS.foldersForget, { id }).then(() => void 0)
+    };
+  }
+
+  function signInApi(rpc) {
+    return {
+      async start(options) {
+        const params = { url: options.url, callback: options.callback, state: options.state };
+        if (options.timeoutMs !== void 0) params.timeoutMs = options.timeoutMs;
+        const answer = await rpc.request(HOST_METHODS.signInStart, params);
+        const url = answer && typeof answer === "object" ? answer.url : void 0;
+        if (typeof url !== "string") throw new PluginError("failed", "Ardia answered signIn.start without a URL.");
+        return { url };
+      }
+    };
+  }
+
+  var EARLY_DOWNLOAD_EVENTS = 16;
+  function deliverSiteDownload(registry, data, report) {
+    const id = data.download;
+    if (typeof id !== "string" || typeof data.state !== "string") return;
+    const progress = {
+      download: id,
+      state: data.state,
+      received: typeof data.received === "number" ? data.received : 0,
+      ...typeof data.total === "number" ? { total: data.total } : {},
+      ...typeof data.size === "number" ? { size: data.size } : {},
+      ...typeof data.code === "string" ? { code: data.code } : {},
+      ...typeof data.error === "string" ? { error: data.error } : {}
+    };
+    const listener = registry.sites.listeners.get(id);
+    if (!listener) {
+      const early = registry.sites.early.get(id) ?? [];
+      if (early.length < EARLY_DOWNLOAD_EVENTS) early.push(progress);
+      registry.sites.early.set(id, early);
+      if (registry.sites.early.size > 32) registry.sites.early.delete(registry.sites.early.keys().next().value);
+      return;
+    }
+    try {
+      listener(progress);
+    } catch (error) {
+      report(error);
+    }
+  }
+  var STATUS_POLL_MS = 5e3;
+  var timers = () => globalThis;
+  var progressOf = (data) => {
+    if (typeof data !== "object" || data === null) return null;
+    const d = data;
+    if (typeof d.download !== "string" || !["running", "done", "failed", "cancelled"].includes(d.state)) return null;
+    return {
+      download: d.download,
+      state: d.state,
+      received: typeof d.received === "number" ? d.received : 0,
+      ...typeof d.total === "number" ? { total: d.total } : {},
+      ...typeof d.size === "number" ? { size: d.size } : {},
+      ...typeof d.code === "string" ? { code: d.code } : {},
+      ...typeof d.error === "string" ? { error: d.error } : {}
+    };
+  };
+  function sitesApi(rpc, registry, report = () => {
+  }) {
+    return {
+      async available() {
+        return unwrap(await rpc.request(HOST_METHODS.sitesAvailable, {}), "available") === true;
+      },
+      async session() {
+        const id = unwrap(await rpc.request(HOST_METHODS.sitesSession, {}), "session");
+        if (typeof id !== "string") throw new PluginError("failed", "sites.session didn't answer a session id.");
+        return id;
+      },
+      async fetch(url, init = {}) {
+        const data = await rpc.request(HOST_METHODS.sitesFetch, { url, ...init });
+        if (!data || typeof data.status !== "number" || typeof data.body !== "string") throw new PluginError("failed", "The site request failed.");
+        return { ...data, text: () => data.body, json: () => JSON.parse(data.body) };
+      },
+      async download(url, options) {
+        const res = await rpc.request(HOST_METHODS.sitesDownload, {
+          url,
+          to: options.to,
+          ...options.maxBytes !== void 0 ? { maxBytes: options.maxBytes } : {},
+          ...options.headers ? { headers: options.headers } : {},
+          ...options.session !== void 0 ? { session: options.session } : {}
+        });
+        const id = unwrap(res, "download");
+        if (typeof id !== "string") throw new PluginError("failed", "sites.download didn't answer a download id.");
+        let poll = null;
+        const done = new Promise((resolve, reject) => {
+          let settled = false;
+          const settle = (progress) => {
+            if (settled || progress.state === "running") return;
+            settled = true;
+            if (poll !== null) timers().clearTimeout?.(poll);
+            registry.sites.listeners.delete(id);
+            if (progress.state === "done") resolve({ size: progress.size ?? progress.received });
+            else reject(new PluginError(progress.state === "cancelled" ? "cancelled" : progress.code ?? "failed", progress.error ?? (progress.state === "cancelled" ? "The download was cancelled." : "The download failed.")));
+          };
+          const listener = (progress) => {
+            settle(progress);
+            try {
+              options.onProgress?.(progress);
+            } catch (error) {
+              report(error);
+            }
+          };
+          const check = () => {
+            const start = timers().setTimeout;
+            if (!start) return;
+            poll = start(() => {
+              if (settled) return;
+              rpc.request(HOST_METHODS.sitesStatus, { download: id }).then(
+                (answer) => {
+                  const progress = progressOf(answer);
+                  if (progress) listener(progress);
+                  if (!settled) check();
+                },
+                (error) => {
+                  if (error?.code === "not_found") settle({ download: id, state: "failed", received: 0, code: "failed", error: "Ardia lost track of the download." });
+                  else if (!settled) check();
+                }
+              );
+            }, STATUS_POLL_MS);
+          };
+          registry.sites.listeners.set(id, listener);
+          const early = registry.sites.early.get(id) ?? [];
+          registry.sites.early.delete(id);
+          for (const progress of early) listener(progress);
+          if (!settled) check();
+        });
+        done.catch(() => void 0);
+        return { id, done, cancel: () => rpc.request(HOST_METHODS.sitesCancel, { download: id }).then(() => void 0) };
       }
     };
   }
@@ -131,7 +541,9 @@
       events: new Map(),
       state: new Map(),
       pages: new Set(),
-      settings: new Set()
+      settings: new Set(),
+      files: { listeners: new Map(), pending: 0, early: new Map() },
+      sites: { listeners: new Map(), early: new Map() }
     };
   }
   function disposable(dispose) {
@@ -156,10 +568,6 @@
     return disposable(() => set.delete(value));
   }
 
-  function unwrap(result, key) {
-    if (typeof result === "object" && result !== null && !Array.isArray(result) && key in result) return result[key];
-    return result;
-  }
   function pickedIds(result) {
     const picked = unwrap(result, "picked");
     if (typeof picked === "string") return [picked];
@@ -348,11 +756,41 @@
         delete: (key) => rpc.request(HOST_METHODS.secretDelete, { key }).then(() => void 0)
       },
       settings,
+      files: filesApi(rpc, registry, state.report),
+      folders: foldersApi(rpc),
+      sites: sitesApi(rpc, registry, state.report),
       pages: {
         open: (options = {}) => rpc.request(HOST_METHODS.pageOpen, options),
         post: (view, message) => rpc.request(HOST_METHODS.pagePost, { view, message }).then(() => void 0),
         onMessage: (listener) => addTo(registry.pages, listener)
       },
+      app: {
+        async controlStatus() {
+          const res = await rpc.request(HOST_METHODS.appControlStatus);
+          return { command: res?.command === true, control: res?.control === true };
+        },
+        async openSettings(pane) {
+          return unwrap(await rpc.request(HOST_METHODS.appOpenSettings, { pane }), "ok") === true;
+        },
+        async icon(path, options = {}) {
+          const icon = unwrap(await rpc.request(HOST_METHODS.appIcon, { path, ...options.size !== void 0 ? { size: options.size } : {} }), "icon");
+          return typeof icon === "string" ? icon : null;
+        }
+      },
+      appleNotes: {
+        async request() {
+          return unwrap(await rpc.request(HOST_METHODS.appleNotesRequest), "granted") === true;
+        },
+        async folders() {
+          const folders = unwrap(await rpc.request(HOST_METHODS.appleNotesFolders), "folders");
+          return Array.isArray(folders) ? folders : [];
+        },
+        async notes(folder, options = {}) {
+          const res = await rpc.request(HOST_METHODS.appleNotesNotes, { folder, ...options });
+          return { total: typeof res?.total === "number" ? res.total : 0, notes: Array.isArray(res?.notes) ? res.notes : [] };
+        }
+      },
+      signIn: signInApi(rpc),
       programs: {
         status: () => rpc.request(HOST_METHODS.programsStatus),
         relink: () => rpc.request(HOST_METHODS.programsRelink)
@@ -1277,6 +1715,8 @@
         const time = typeof record.time === "number" ? record.time : void 0;
         if (record.event === "plugin.values") return deliverEvent(record.event, data, time);
         if (record.event === "plugin.stopping") return void stop().catch(report);
+        if (record.event === "files.changed") return deliverFilesChange(registry, data, report);
+        if (record.event === "sites.download") return deliverSiteDownload(registry, data, report);
         return whenActive(() => deliverEvent(record.event, data, time));
       }
     }

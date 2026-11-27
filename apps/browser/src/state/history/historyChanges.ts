@@ -1,6 +1,6 @@
 import type { HistoryChange } from "../../platform/history";
 import type { HistoryEntry } from "../browser/types";
-import { isWebPageUrl } from "../../lib/url";
+import { isHistoryUrl } from "../../lib/url";
 import { MAX_HISTORY, MAX_VISIT_TIMES } from "./historyLimits";
 
 export type ListChange = Exclude<HistoryChange, { kind: "deleted"; all: true }>;
@@ -71,7 +71,7 @@ function applyToTouched(changes: readonly ListChange[], touched: Map<string, Tou
   for (const change of changes) {
     switch (change.kind) {
       case "visit": {
-        if (!isWebPageUrl(change.url)) break;
+        if (!isHistoryUrl(change.url)) break;
         const state = stateOf(change.url);
         const old = state.entry;
         if (old?.visitTimes?.includes(change.at)) break;
@@ -94,7 +94,7 @@ function applyToTouched(changes: readonly ListChange[], touched: Map<string, Tou
         for (const row of new Map(change.rows.map((r) => [r.url, r])).values()) {
           const state = touched.get(row.url);
           const h = state?.entry;
-          if (!h && isWebPageUrl(row.url)) note?.("modified-unknown");
+          if (!h && isHistoryUrl(row.url)) note?.("modified-unknown");
           if (!state || !h || ((row.title === h.title || !row.title) && row.visits === h.visits)) continue;
           state.entry = { ...h, title: row.title || h.title, visits: row.visits };
           dirty = true;

@@ -229,10 +229,10 @@ enum WebKitDisplayCapture {
   }
 }
 
-enum WebKitFileTypes {
+public enum WebKitFileTypes {
   private static let groups: [String: UTType] = ["image/*": .image, "audio/*": .audio, "video/*": .movie, "text/*": .text]
 
-  static func accepted(by parameters: WKOpenPanelParameters) -> [UTType] {
+  public static func accepted(by parameters: WKOpenPanelParameters) -> [UTType] {
     let list = { (key: String) -> [String] in
       guard parameters.responds(to: NSSelectorFromString(key)) else { return [] }
       return parameters.value(forKey: key) as? [String] ?? []
@@ -259,7 +259,7 @@ enum WebKitFileTypes {
 
   private static var chooserKey: UInt8 = 0
 
-  static func offer(_ types: [UTType], in panel: NSOpenPanel) {
+  public static func offer(_ types: [UTType], in panel: NSOpenPanel) {
     panel.allowedContentTypes = types
     panel.allowsOtherFileTypes = true
     let chooser = Chooser(panel: panel, types: types)

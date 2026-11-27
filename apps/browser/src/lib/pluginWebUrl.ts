@@ -16,9 +16,11 @@ function withCanonicalHost(raw: string, authority: string): string | null {
   return `${found[1]}[${canonical}]${authority.slice(close + 1)}${found[3]}`;
 }
 
-export function pluginWebUrl(raw: unknown): PluginWebUrl {
+export const pluginWebUrl = (raw: unknown): PluginWebUrl => pluginWebUrlWithin(raw, MAX_OPEN_URL_LENGTH);
+
+export function pluginWebUrlWithin(raw: unknown, maxLength: number): PluginWebUrl {
   if (typeof raw !== "string") return { problem: "isn't text" };
-  if (raw.length > MAX_OPEN_URL_LENGTH) return { problem: `is over ${MAX_OPEN_URL_LENGTH} characters` };
+  if (raw.length > maxLength) return { problem: `is over ${maxLength} characters` };
   if (/[\u0000-\u001f\u007f-\u009f]/.test(raw)) return { problem: "has a control character" };
   if (/\s/u.test(raw)) return { problem: "has a space; percent-encode it as %20" };
   if (raw.includes("\\")) return { problem: "has a backslash" };

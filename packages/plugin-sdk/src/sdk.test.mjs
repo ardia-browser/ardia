@@ -1799,3 +1799,164 @@ test("a rejected promise returned by an async effect reaches the surface error h
   assert.equal(errors.length, 1);
   assert.equal(errors[0].message, "initialization failed");
 });
+
+describe("files and folders", () => {
+  const b64 = (text) => Buffer.from(text, "utf8").toString("base64");
+
+  test("files calls send the channel's params and unwrap its replies", async () => {
+    const { host, runtime } = await started(
+      {},
+      {
+        "files.read": (p) => (p.path === "missing" ? { found: false } : { found: true, data: b64("héllo 🌍"), size: 11, mtimeMs: 5 }),
+        "files.write": (p) => ({ size: Buffer.from(p.data, "base64").length, mtimeMs: 7 }),
+        "files.append": { size: 3, mtimeMs: 8 },
+        "files.list": { entries: [{ path: "a/b.txt", kind: "file", size: 1, mtimeMs: 2, placeholder: false }] },
+        "files.remove": { removed: true },
+      },
+    );
+    const { files } = runtime.ardia;
+    assert.deepEqual(await files.read("missing"), { found: false });
+    assert.deepEqual(await files.read("x", { root: "fabc", offset: 4, length: 2 }), { found: true, data: b64("héllo 🌍"), size: 11, mtimeMs: 5 });
+    assert.deepEqual(host.calls("files.read").at(-1).params, { path: "x", root: "fabc", offset: 4, length: 2 });
+    assert.equal(await files.readText("x"), "héllo 🌍");
+    assert.equal(await files.readText("missing"), null);
+    assert.deepEqual(await files.writeText("n.txt", "héllo 🌍", { exclusive: true }), { size: 11, mtimeMs: 7 });
+    assert.deepEqual(host.calls("files.write").at(-1).params, { path: "n.txt", data: b64("héllo 🌍"), exclusive: true });
+    await files.write("w", "AAE=", { root: "data" });
+    assert.deepEqual(host.calls("files.write").at(-1).params, { path: "w", data: "AAE=", root: "data" });
+    assert.deepEqual(await files.append("log", "AAE="), { size: 3, mtimeMs: 8 });
+    assert.equal((await files.list()).length, 1);
+    assert.deepEqual(host.calls("files.list").at(-1).params, { dir: "" });
+    await files.list("a", { recursive: true, root: "fabc" });
+    assert.deepEqual(host.calls("files.list").at(-1).params, { dir: "a", root: "fabc", recursive: true });
+    assert.equal(await files.remove("a/b.txt"), true);
+  });
+
+  test("app.controlStatus and app.openSettings send the channel's params and read only booleans", async () => {
+    const { host, runtime } = await started({}, { "app.controlStatus": { command: true, control: "yes" }, "app.openSettings": (p) => ({ ok: p.pane === "advanced" }) });
+    assert.deepEqual(await runtime.ardia.app.controlStatus(), { command: true, control: false });
+    assert.equal(await runtime.ardia.app.openSettings("advanced"), true);
+    assert.deepEqual(host.calls("app.openSettings").at(-1).params, { pane: "advanced" });
+    assert.equal(await runtime.ardia.app.openSettings("plugins"), false);
+  });
+
+  test("app.icon and appleNotes calls send the channel's params and keep well-formed answers", async () => {
+    const { host, runtime } = await started({}, { "app.icon": (p) => ({ icon: p.path.endsWith("Notes.app") ? "data:image/png;base64,AA==" : 3 }), "appleNotes.request": { granted: true }, "appleNotes.folders": { folders: [{ id: "f1" }] }, "appleNotes.notes": (p) => ({ total: 9, notes: [{ id: `${p.folder}-${p.offset}` }] }) });
+    assert.equal(await runtime.ardia.app.icon("/System/Applications/Notes.app", { size: 64 }), "data:image/png;base64,AA==");
+    assert.deepEqual(host.calls("app.icon").at(-1).params, { path: "/System/Applications/Notes.app", size: 64 });
+    assert.equal(await runtime.ardia.app.icon("/Applications/X.app"), null);
+    assert.equal(await runtime.ardia.appleNotes.request(), true);
+    assert.deepEqual(await runtime.ardia.appleNotes.folders(), [{ id: "f1" }]);
+    assert.deepEqual(await runtime.ardia.appleNotes.notes("f1", { offset: 4, limit: 2 }), { total: 9, notes: [{ id: "f1-4" }] });
+    assert.deepEqual(host.calls("appleNotes.notes").at(-1).params, { folder: "f1", offset: 4, limit: 2 });
+  });
+
+  test("signIn.start sends url, callback, state and timeoutMs, resolves the redirect and rejects with Ardia's code", async () => {
+    const st = "Zq81_mNw-4Lp0aXc";
+    const { host, runtime } = await started({}, {
+      "signIn.start": (p) => {
+        if (p.url === "https://busy.example/") throw Object.assign(new Error("taken"), { code: "port_in_use" });
+        return p.url === "https://odd.example/" ? { url: 7 } : { url: `${p.callback}?code=x&state=${p.state}` };
+      },
+    });
+    assert.deepEqual(await runtime.ardia.signIn.start({ url: "https://accounts.example/o", callback: "http://127.0.0.1:53682/cb", state: st, timeoutMs: 60000 }), { url: `http://127.0.0.1:53682/cb?code=x&state=${st}` });
+    assert.deepEqual(host.calls("signIn.start").at(-1).params, { url: "https://accounts.example/o", callback: "http://127.0.0.1:53682/cb", state: st, timeoutMs: 60000 });
+    await runtime.ardia.signIn.start({ url: "https://accounts.example/o", callback: "http://localhost:8080/", state: st });
+    assert.deepEqual(host.calls("signIn.start").at(-1).params, { url: "https://accounts.example/o", callback: "http://localhost:8080/", state: st });
+    await assert.rejects(runtime.ardia.signIn.start({ url: "https://busy.example/", callback: "http://127.0.0.1:53682/cb", state: st }), (error) => error instanceof PluginError && error.code === "port_in_use");
+    await assert.rejects(runtime.ardia.signIn.start({ url: "https://odd.example/", callback: "http://127.0.0.1:53682/cb", state: st }), (error) => error instanceof PluginError && error.code === "failed");
+  });
+
+  test("files.pick asks for one or many files and keeps only well-formed answers", async () => {
+    const { host, runtime } = await started({}, { "files.pick": (p) => ({ files: p.multiple ? [{ id: "pabcdef0123", name: "a.zip", size: 3 }, { name: "bad" }, null] : [] }) });
+    assert.deepEqual(await runtime.ardia.files.pick({ multiple: true }), [{ id: "pabcdef0123", name: "a.zip", size: 3 }]);
+    assert.deepEqual(host.calls("files.pick").at(-1).params, { multiple: true });
+    assert.deepEqual(await runtime.ardia.files.pick(), []);
+    assert.deepEqual(host.calls("files.pick").at(-1).params, {});
+  });
+
+  test("writeText and readText round-trip every byte length and odd text", async () => {
+    const stored = new Map();
+    const { runtime } = await started(
+      {},
+      {
+        "files.write": (p) => (stored.set(p.path, p.data), { size: 0, mtimeMs: 0 }),
+        "files.read": (p) => ({ found: true, data: stored.get(p.path), size: 0, mtimeMs: 0 }),
+      },
+    );
+    for (const text of ["", "a", "ab", "abc", "abcd", "ünï", "𝄞 and \u0000 and ﻿", "x".repeat(70000)]) {
+      await runtime.ardia.files.writeText("t", text);
+      assert.equal(stored.get("t"), b64(text));
+      assert.equal(await runtime.ardia.files.readText("t"), text.startsWith("﻿") ? text.slice(1) : text);
+    }
+  });
+
+  test("a watch delivers files.changed by its id, even one sent before the reply is read, and dispose unwatches", async () => {
+    let n = 0;
+    const { host, runtime } = await started({}, { "files.watch": () => ({ watch: `w${++n}` }), "files.unwatch": { ok: true } });
+    const seen = [];
+    const one = runtime.ardia.files.watch((e) => seen.push(["one", e.root, e.paths]), { root: "fabc" });
+    const two = runtime.ardia.files.watch((e) => seen.push(["two", e.root, e.paths]));
+    assert.deepEqual(host.calls("files.watch").map((c) => c.params), [{ root: "fabc" }, {}]);
+    host.push({ event: "files.changed", time: 1, data: { watch: "w1", root: "fabc", paths: ["early"] } });
+    await settle();
+    host.push({ event: "files.changed", time: 2, data: { watch: "w2", root: "data", paths: ["a", 3] } });
+    host.push({ event: "files.changed", time: 3, data: { watch: "nobody", root: "data", paths: ["x"] } });
+    await settle();
+    assert.deepEqual(seen, [["one", "fabc", ["early"]], ["two", "data", ["a"]]]);
+    one.dispose();
+    one.dispose();
+    await settle();
+    assert.deepEqual(host.calls("files.unwatch").map((c) => c.params), [{ watch: "w1" }]);
+    host.push({ event: "files.changed", data: { watch: "w1", root: "fabc", paths: ["late"] } });
+    await settle();
+    assert.equal(seen.length, 2);
+    two.dispose();
+    const quick = runtime.ardia.files.watch(() => seen.push("quick"));
+    quick.dispose();
+    await settle();
+    assert.deepEqual(host.calls("files.unwatch").map((c) => c.params.watch), ["w1", "w2", "w3"], "a watch disposed before its id came back is unwatched once it does");
+  });
+
+  test("a watch whose root went away hears gone once, then nothing, and disposing it sends nothing", async () => {
+    const { host, runtime } = await started({}, { "files.watch": { watch: "w1" }, "files.unwatch": { ok: true } });
+    const seen = [];
+    const watch = runtime.ardia.files.watch((e) => seen.push(e), { root: "fabc" });
+    await settle();
+    host.push({ event: "files.changed", data: { watch: "w1", root: "fabc", paths: [], gone: true } });
+    host.push({ event: "files.changed", data: { watch: "w1", root: "fabc", paths: ["late"] } });
+    await settle();
+    assert.deepEqual(seen, [{ root: "fabc", paths: [], gone: true }]);
+    watch.dispose();
+    await settle();
+    assert.equal(host.calls("files.unwatch").length, 0, "the host already ended it");
+  });
+
+  test("a refused files call rejects with the host's code", async () => {
+    const { runtime } = await started({}, { "files.read": () => { throw Object.assign(new Error("needs files"), { code: "refused" }); } });
+    await assert.rejects(runtime.ardia.files.read("a"), (e) => e instanceof PluginError && e.code === "refused");
+  });
+
+  test("folders calls unwrap folder, folders and ok", async () => {
+    const grant = { id: "f0123456789", name: "Team", location: "icloud", available: true };
+    const { host, runtime } = await started(
+      {},
+      {
+        "folders.list": { folders: [grant] },
+        "folders.create": (p) => ({ folder: p.name === "no" ? null : grant }),
+        "folders.pick": { folder: null },
+        "folders.share": { ok: false },
+        "folders.forget": { ok: true },
+      },
+    );
+    const { folders } = runtime.ardia;
+    assert.deepEqual(await folders.list(), [grant]);
+    assert.deepEqual(await folders.create("Team"), grant);
+    assert.equal(await folders.create("no"), null);
+    assert.equal(await folders.pick({ prompt: "Join" }), null);
+    assert.deepEqual(host.calls("folders.pick").at(-1).params, { prompt: "Join" });
+    assert.deepEqual(await folders.share(grant.id), { ok: false });
+    assert.equal(await folders.forget(grant.id), undefined);
+    assert.deepEqual(host.calls("folders.forget").at(-1).params, { id: grant.id });
+  });
+});

@@ -42,14 +42,32 @@ final class PluginPageMessageBridge: NSObject, WKScriptMessageHandler {
   }
 }
 
+final class PluginPageNavigateHandler: NSObject, WKScriptMessageHandler {
+  static let maxBody = 4096
+  weak var page: PluginPageView?
+  private let limit = PluginPageMessages.Limit(burst: 20, perSecond: 20)
+
+  func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+    let origin = message.frameInfo.securityOrigin
+    guard let page, let web = page.webView, message.webView === web, message.frameInfo.isMainFrame, origin.protocol == PluginSchemeHandler.scheme,
+      origin.host == page.plugin, let body = message.body as? String, body.utf8.count <= Self.maxBody, limit.allow(now: ProcessInfo.processInfo.systemUptime)
+    else { return }
+    page.onNavigate(["body": body])
+  }
+}
+
 final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
   static let live = WeakLookup<PluginPageView>()
+  static let liveByTab = WeakLookup<PluginPageView>()
+
+  static func shown(_ target: String) -> PluginPageView? { liveByTab[target] ?? live[target] }
   private var bridge: PluginPageMessageBridge?
 
   let onLoaded = EventDispatcher()
   let onTitleChange = EventDispatcher()
   let onNavigationChange = EventDispatcher()
   let onMessage = EventDispatcher()
+  let onNavigate = EventDispatcher()
 
   var plugin = "" { didSet { if plugin != oldValue { rebuild() } } }
   var url = "" { didSet { if url != oldValue { gate.wantsLoad() } } }
@@ -59,6 +77,11 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
   var run = 0 { didSet { if run != oldValue { rebuild() } } }
   var context = "" { didSet { if context != oldValue { handOver() } } }
   var themeCss = "" { didSet { if themeCss != oldValue { applyTheme() } } }
+  var routes = false
+  var routePath = "" { didSet { if routePath != oldValue { routeMoved() } } }
+  var tabId = "" { didSet { if tabId != oldValue, !tabId.isEmpty { Self.liveByTab[tabId] = self } } }
+  var webView: WKWebView? { web }
+  private let navigateHandler = PluginPageNavigateHandler()
 
   static let themeWorld = WKContentWorld.world(name: "ardia-theme")
   private var observations: [NSKeyValueObservation] = []
@@ -131,13 +154,15 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
       PluginSchemeHandler(plugin: plugin, folderId: folderId, approved: approved, policy: network ? nil : Self.offlinePolicy), forURLScheme: PluginSchemeHandler.scheme)
     configuration.userContentController.addUserScript(pageScript())
     configuration.userContentController.addUserScript(themeScript())
+    navigateHandler.page = self
+    configuration.userContentController.add(navigateHandler, contentWorld: .page, name: "ardiaNavigate")
     configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
     if !network && !PluginPageOffline.hold(preferences: configuration.preferences, configuration: configuration) {
       NSLog("[plugins] %@'s page isn't shown: this macOS can't hold a page without network offline", plugin)
       return
     }
     configuration.mediaTypesRequiringUserActionForPlayback = .all
-    let view = WKWebView(frame: bounds, configuration: configuration)
+    let view = PluginWebView(frame: bounds, configuration: configuration)
     if !network && !PluginPageOffline.isHeld(preferences: view.configuration.preferences, configuration: view.configuration) {
       NSLog("[plugins] %@'s page isn't shown: its web view didn't keep the offline settings", plugin)
       return
@@ -146,10 +171,12 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     view.uiDelegate = self
     view.autoresizingMask = [.width, .height]
     view.setValue(false, forKey: "drawsBackground")
+    if LaunchConfig.shared.testInstance { view.isInspectable = true }
     addSubview(view)
     web = view
     observe(view)
     Self.live[plugin] = self
+    if !tabId.isEmpty { Self.liveByTab[tabId] = self }
     gate.pageCreated(inWindow: window != nil)
     gate.wantsLoad()
   }
@@ -180,7 +207,14 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
   private func pageScript() -> WKUserScript {
     let source = """
       (() => { const ardia = new EventTarget(); ardia.context = \(contextLiteral); \
-      ardia.send = (message) => window.webkit.messageHandlers.ardia.postMessage(JSON.stringify(message)); \
+      const bucket = { tokens: \(PluginPageMessages.pageBurst), at: performance.now() }; \
+      ardia.send = (message) => { let text; try { text = JSON.stringify(message); } catch { return false; } \
+      if (typeof text !== "string" || new TextEncoder().encode(text).length > \(PluginPageMessages.maxFromPage)) return false; \
+      const handler = \(run > 0) && window.webkit && window.webkit.messageHandlers ? window.webkit.messageHandlers.ardia : null; if (!handler) return false; \
+      const now = performance.now(); bucket.tokens = Math.min(\(PluginPageMessages.pageBurst), bucket.tokens + (now - bucket.at) * \(PluginPageMessages.perSecond) / 1000); bucket.at = now; \
+      if (bucket.tokens < 1) return false; bucket.tokens -= 1; handler.postMessage(text); return true; }; \
+      ardia.path = \(Self.jsString(routePath)); \
+      ardia.navigate = (path, options) => window.webkit.messageHandlers.ardiaNavigate.postMessage(JSON.stringify({ path: String(path), replace: !!(options && options.replace) })); \
       Object.defineProperty(window, "ardia", { value: ardia, writable: false, configurable: false }); })();
       """
     return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page)
@@ -242,6 +276,38 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     onNavigationChange(state)
   }
 
+  private func routeMoved() {
+    guard let web else { return }
+    reinstallScripts(on: web)
+    guard routes else { return }
+    let update = "if (window.ardia) { window.ardia.path = \(Self.jsString(routePath)); window.ardia.dispatchEvent(new Event(\"navigate\")); }"
+    web.evaluateJavaScript(update, completionHandler: nil)
+  }
+
+  static func focusPage(_ tabId: String) -> Bool {
+    guard let view = liveByTab[tabId], let web = view.web, let window = web.window else { return false }
+    return window.makeFirstResponder(web)
+  }
+
+  static func devEvaluate(_ target: String, _ body: String, done: @escaping (String) -> Void) {
+    guard LaunchConfig.shared.testInstance else { return done("{\"error\":\"test instances only\"}") }
+    guard let view = shown(target) else { return done("{\"error\":\"no live page\"}") }
+    view.evaluate(body, done: done)
+  }
+
+  private func evaluate(_ body: String, done: @escaping (String) -> Void) {
+    guard let web else { return done("{\"error\":\"no page\"}") }
+    let wrapped = "const value = await (async () => { \(body)\n })(); return JSON.stringify({ result: value === undefined ? null : value });"
+    web.callAsyncJavaScript(wrapped, arguments: [:], in: nil, in: .page) { result in
+      switch result {
+      case .success(let value): done(value as? String ?? "{\"result\":null}")
+      case .failure(let error):
+        let message = (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription
+        done("{\"error\":\(Self.jsString(message))}")
+      }
+    }
+  }
+
   private func handOver() {
     guard let web else { return }
     reinstallScripts(on: web)
@@ -283,6 +349,18 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     decisionHandler: @escaping (WKPermissionDecision) -> Void
   ) {
     decisionHandler(.deny)
+  }
+
+  func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo,
+               completionHandler: @escaping ([URL]?) -> Void) {
+    guard webView === web, let window = webView.window else { return completionHandler(nil) }
+    let panel = NSOpenPanel()
+    panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+    panel.canChooseDirectories = parameters.allowsDirectories
+    panel.canChooseFiles = true
+    let accepted = WebKitFileTypes.accepted(by: parameters)
+    if !accepted.isEmpty { WebKitFileTypes.offer(accepted, in: panel) }
+    panel.beginSheetModal(for: window) { completionHandler($0 == .OK ? panel.urls : nil) }
   }
 
   func snapshot(to path: String, done: @escaping (Bool) -> Void) {

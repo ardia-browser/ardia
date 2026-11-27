@@ -9,7 +9,7 @@ import { isFields } from "../../lib/decode";
 const PROTOCOL = 4;
 const MIN_CLIENT_PROTOCOL = 4;
 
-export type ErrorCode = "bad_request" | "unknown_method" | "unknown_command" | "refused" | "no_window" | "failed" | "password_manager_plugin" | "unsupported_protocol";
+export type ErrorCode = "bad_request" | "unknown_method" | "unknown_command" | "refused" | "no_window" | "failed" | "password_manager_plugin" | "unsupported_protocol" | "not_found" | "exists" | "too_large" | "bad_path" | "unavailable" | "cancelled" | "timeout" | "port_in_use";
 export type MethodError = { code: ErrorCode; message: string };
 export type RequestId = number | string | null;
 type ParsedRequest = { id: RequestId; method: string; params: Record<string, unknown> };

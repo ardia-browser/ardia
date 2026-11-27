@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { BUILT_IN_ENGINES } from "./engines.ts";
 import { isProviderEntryList, isRemoteEndpoint, providerConfigs, readProviderEntries } from "./providerConfig.ts";
 import { isPublicHost, providerApprovalKey, remoteRequestAllowed, sha256Hex } from "./providerNetwork.ts";
-import { globalProviderRows, matchProviderRows, parseProviderReply, PROVIDER_LIMITS, providerIcon, providerText, providerUrl, safeProviderRows } from "./providerRows.ts";
+import { globalProviderRows, matchProviderRows, parseProviderReply, PROVIDER_LIMITS, providerIcon, providerPageUrl, providerText, providerUrl, safeProviderRows } from "./providerRows.ts";
 import { findScope, offeredSiteSearch, scopedSearchUrl, type SearchScope } from "./siteSearch.ts";
 import { buildSuggestions } from "./suggest.ts";
 
@@ -30,6 +30,33 @@ test("provider rows keep only http(s) URLs", () => {
   for (const url of ["https://linear.app/a?b=1#c", "http://example.com:8080/x", "https://[2001:db8::1]/"]) assert.equal(providerUrl(url), url);
   const rows = safeProviderRows({ id: "p", title: "P" }, [{ title: "evil", url: "javascript:alert(1)" }, { title: "ok", url: "https://ok.com/" }, null, 3, { title: "no url" }]);
   assert.deepEqual(rows.map((r) => r.url), ["https://ok.com/"]);
+});
+
+test("a section with a page origin also keeps that origin's own ardia:// addresses, and no other", () => {
+  const own = ["ardia://notes", "ardia://notes/", "ardia://notes/Some-page-0123456789ab", "ardia://notes?q=1", "ardia://notes/a/b?x=1"];
+  for (const url of own) assert.equal(providerPageUrl(url, "ardia://notes"), url, url);
+  const bad = ["ardia://notesx/a", "ardia://notes2", "ardia://other/a", "ardia://settings", "ardia://notes/a#frag", "ardia://notes/a b", "ARDIA://notes/a", "javascript:alert(1)", "file:///etc/passwd", "ardia://notes/‮x", `ardia://notes/${"a".repeat(5000)}`];
+  for (const url of bad) assert.equal(providerPageUrl(url, "ardia://notes"), null, url);
+  assert.equal(providerPageUrl("ardia://notes/a", undefined), null, "no origin, no ardia:// address");
+  assert.equal(providerPageUrl("ardia://notes/a", "ardia://notes/../x"), null, "the origin itself must be a plain ardia://name");
+  const rows = safeProviderRows({ id: "plugin:notes:notes", title: "Notes", pageOrigin: "ardia://notes" }, [
+    { title: "Page", url: "ardia://notes/Page-0123456789ab" },
+    { title: "Other", url: "ardia://other/x" },
+    { title: "Web", url: "https://example.com/" },
+  ]);
+  assert.deepEqual(rows.map((r) => r.url), ["ardia://notes/Page-0123456789ab", "https://example.com/"]);
+  assert.deepEqual(safeProviderRows({ id: "x", title: "X" }, [{ title: "Page", url: "ardia://notes/a" }]), []);
+});
+
+test("own page rows from a global section rank like any provider row and drop a page already listed", () => {
+  const pages = { id: "plugin:notes:notes", title: "Notes", pageOrigin: "ardia://notes", rows: [{ title: "git notes", url: "ardia://notes/git-0123456789ab" }, { title: "Open", url: "ardia://notes/open-0123456789ab" }] };
+  const result = buildSuggestions("git", source, { now, providers: [pages] });
+  const kinds = result.items.map((s) => s.kind);
+  assert.notEqual(kinds[0], "provider");
+  assert.equal(result.items.slice(0, kinds.indexOf("provider")).filter((s) => s.kind === "page").length, 3);
+  assert.deepEqual(result.items.filter((s) => s.kind === "provider").map((s) => s.url), ["ardia://notes/git-0123456789ab", "ardia://notes/open-0123456789ab"]);
+  const shown = globalProviderRows([pages], [{ kind: "page", url: "ardia://notes/open-0123456789ab", title: "Open", favicon: null, tabId: "t1" }]);
+  assert.deepEqual(shown.map((r) => r.url), ["ardia://notes/git-0123456789ab"]);
 });
 
 test("provider titles and subtitles are capped and lose control and bidi characters", () => {

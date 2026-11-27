@@ -48,7 +48,7 @@ export type PluginStartSpec = {
   entry?: string;
 };
 export type PluginStartResult = { ok: true; run: number; pid: number } | { ok: false; reason: string };
-export type PluginExit = { name: string; run: number; status: number | null; signal: number | null; overMemory: boolean };
+export type PluginExit = { name: string; run: number; status: number | null; signal: number | null; overMemory: boolean; channelRetired?: string | null };
 export type PluginLine = { name: string; run: number; launch: number; line: string };
 export type PluginRemoveResult = { ok: true } | { ok: false; reason: string };
 export type PluginFetchSpec = { url: string; method: string; headers: Record<string, string>; body?: string; timeoutMs: number; allowedHosts: string[] };
@@ -57,6 +57,33 @@ export type PluginFetchResult =
   | { ok: false; reason: string };
 export type PluginFileReadResult = { ok: true; text: string } | { ok: false; reason: string };
 export type PluginStorageReadResult = { status: "ok"; text: string } | { status: "missing" } | { status: "error"; reason: string };
+export type PluginFilesSpec = {
+  op: "read" | "write" | "append" | "list" | "remove" | "stat" | "stage" | "publish" | "discard";
+  plugin: string;
+  root: string | null;
+  path: string;
+  data?: string;
+  offset?: number;
+  length?: number;
+  exclusive?: boolean;
+  recursive?: boolean;
+  stage?: string;
+  first?: boolean;
+  rootIdentity?: PluginFolderIdentity;
+  ticket: number;
+};
+export type PluginFolderIdentity = { device: number; inode: number };
+export type PluginFolderCreateResult =
+  | { ok: true; path: string; realPath: string; device: number; inode: number; location: "icloud" | "other" }
+  | { ok: false; code: PluginFilesCode; message: string };
+export type PluginFilesEntry = { path: string; kind: "file" | "dir"; size: number; mtimeMs: number; placeholder: boolean };
+export type PluginFilesCode = "not_found" | "exists" | "too_large" | "bad_path" | "refused" | "unavailable";
+export type PluginFilesResult =
+  | { ok: true; found?: boolean; data?: string; size?: number; mtimeMs?: number; removed?: boolean; entries?: PluginFilesEntry[]; kind?: "file" | "dir" }
+  | { ok: false; code: PluginFilesCode; message: string };
+export type PluginSignInListenResult = { ok: true } | { ok: false; code: "port_in_use" | "failed"; reason: string };
+export type PluginSignInCallback = { id: string; target: string };
+export type PluginFolderInfo = { exists: boolean; realPath: string; location: "icloud" | "other"; protected: boolean; device?: number; inode?: number };
 
 export type { PluginsNative };
 
@@ -71,6 +98,10 @@ export type PluginPageProps = ViewProps & {
   run: number;
   context: string;
   themeCss?: string;
+  routes?: boolean;
+  routePath?: string;
+  tabId?: string;
+  onNavigate?: (e: PluginPageEvent<{ body: string }>) => void;
   onLoaded?: (e: PluginPageEvent<{ url: string; title: string }>) => void;
   onTitleChange?: (e: PluginPageEvent<{ title: string }>) => void;
   onNavigationChange?: (e: PluginPageEvent<{ url: string; title: string; canGoBack: boolean; canGoForward: boolean }>) => void;

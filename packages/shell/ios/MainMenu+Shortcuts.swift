@@ -58,7 +58,7 @@ extension MainMenu {
   }
 
   static func editsText(_ responder: NSResponder?) -> Bool {
-    if responder is NSText { return true }
+    if responder is NSText || responder is PluginWebView { return true }
     let textInputType = NSSelectorFromString("textInputType")
     guard let page = responder, FocusHandoff.isPage(page), page.responds(to: textInputType) else { return false }
     typealias Getter = @convention(c) (AnyObject, Selector) -> Int32

@@ -3,7 +3,7 @@ import { create } from "zustand";
 
 export type ProviderRow = { title: string; url: string; subtitle?: string; icon?: string | null; badge?: string };
 
-export type OmniboxProvider = { id: string; title: string; keyword?: string; query(text: string, signal: AbortSignal): Promise<ProviderRow[]> };
+export type OmniboxProvider = { id: string; title: string; keyword?: string; pageOrigin?: string; query(text: string, signal: AbortSignal): Promise<ProviderRow[]> };
 
 export const useRegisteredProviders = create<{ list: readonly OmniboxProvider[] }>()(() => ({ list: [] }));
 

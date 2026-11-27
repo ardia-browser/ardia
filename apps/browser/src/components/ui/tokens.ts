@@ -381,3 +381,11 @@ export type SheetSize = keyof typeof sheetWidth;
 export const toastLayout = { bottom: space.xxxl, edge: space.l, maxWidth: 420, twoActionMaxWidth: 600 } as const;
 
 export const POPOVER_WIDTH = { s: 300, m: 340, l: 360 } as const;
+
+export const webGlass = {
+  blur: 30,
+  saturation: 1.8,
+  rim: { dark: "rgba(255,255,255,0.08)", light: "rgba(255,255,255,0.6)" },
+  panel: { dark: "rgba(255,255,255,0.05)", light: "rgba(255,255,255,0.42)" },
+  panelEdge: { dark: "rgba(255,255,255,0.1)", light: "rgba(255,255,255,0.75)" },
+} as const;

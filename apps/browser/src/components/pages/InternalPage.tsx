@@ -9,25 +9,23 @@ import { BookmarksPage } from "./BookmarksPage";
 import { DownloadsPage } from "./DownloadsPage";
 import { HistoryPage } from "./HistoryPage";
 import { INTERNAL_PAGES, internalPageOf, internalQuery, pluginPageOf, tabDestination } from "../../state/pages/urls";
-import { usePluginPageSpec } from "../../state/plugins/hooks";
 import { PluginPage } from "../plugins/PluginPage";
 
 export function InternalPage({ contentAreaOf: tabId }: { contentAreaOf: string }) {
   const url = useTab(tabId, (t) => (t ? tabDestination(t) : ""));
   const page = internalPageOf(url);
   const plugin = page ? null : pluginPageOf(url);
-  const pluginTitle = usePluginPageSpec(plugin ?? "")?.title ?? plugin ?? "";
   const profileId = useTab(tabId, (t) => t?.profileId ?? "");
   const bookmarkProfile = useTabBookmarkProfileId(tabId);
 
   useEffect(() => {
     if (!page && !plugin) return;
     const t = currentTab(tabId);
-    const title = page ? INTERNAL_PAGES[page].title : pluginTitle;
-    if (t && (t.url !== url || t.title !== title)) updateTab(tabId, { url, title, favicon: null });
+    const title = page ? INTERNAL_PAGES[page].title : (t?.title ?? "");
+    if (t && (t.url !== url || t.title !== title || t.favicon)) updateTab(tabId, { url, title, favicon: null });
     updateLive(tabId, { isLoading: false, canGoBack: false, canGoForward: false });
     setPageProgress(tabId, 0);
-  }, [page, plugin, pluginTitle, url]);
+  }, [page, plugin, url]);
 
   if (plugin) return <PluginPage tabId={tabId} name={plugin} />;
   if (!page) return null;

@@ -446,7 +446,7 @@ final class PluginSandboxEscapeTests: XCTestCase {
       """
     let ran = try Self.run("/usr/bin/python3", ["-I", "-c", launcher] + (try box.arguments()) + [host, "--entry", "main.js"], in: plugin)
     XCTAssertTrue(ran.output.contains("\"method\":\"hello\""), "the host started and spoke on descriptor 3: \(ran.output)")
-    XCTAssertTrue(ran.output.contains("exit 0"), "it left when its channel closed: \(ran.output)")
+    XCTAssertTrue(ran.output.contains("exit 3"), "it left when its channel closed, with the status that says so: \(ran.output)")
   }
 
   func testTheControlTokenIsUnreadableFromInside() throws {

@@ -1,5 +1,5 @@
 import type { HydrateData } from "../browser/store";
-import type { BrowserWindow, ClosedWindow, ParkedPins, Profile, SplitView, Tab } from "../browser/types";
+import type { BrowserWindow, ClosedGroup, ClosedTab, ClosedWindow, ParkedPins, Profile, SplitView, Tab } from "../browser/types";
 import { parseSaved, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { sessionWithCleanUpMinutes } from "../settings/cleanUpAfter";
 import { parseSettingsMeta, sessionWithNewTabLinksInLittleArdia, sessionWithSettingsMeta, sessionWithUnreadCountsOffByDefault } from "../settings/settings";
@@ -10,6 +10,7 @@ import { isOwnId, pageFromDisk, pinFromDisk, sessionRowsMisfiled, splitsChecked,
 import { profilesKeepingLegacyDots } from "../profiles/switcherMark";
 import { profilesWithOwnLooks } from "../../lib/presetLook";
 import { layoutDrops } from "../browser/hydratedLayout";
+import { appHistoryFromDisk } from "../tabs/appHistory";
 
 export const SESSION_VERSION = 11;
 const onListedRows = (migrations: Migrations): Migrations =>
@@ -58,6 +59,16 @@ function windowsAgainstAutoHideTabs(settings: HydrateData["settings"], windows: 
   return windows.filter((w) => typeof w.autoHideTabs !== "boolean" && typeof w.sidebarOpen === "boolean" && w.sidebarOpen === hidden).length;
 }
 
+function withAppHistoryFromDisk<T extends { appHistory?: unknown }>(t: T): T {
+  if (t.appHistory === undefined) return t;
+  const appHistory = appHistoryFromDisk(t.appHistory);
+  const { appHistory: _, ...rest } = t;
+  return (appHistory ? { ...rest, appHistory } : rest) as T;
+}
+
+const withCheckedTab = <T extends { tab: { appHistory?: unknown } }>(c: T): T => ({ ...c, tab: withAppHistoryFromDisk(c.tab) });
+const withCheckedTabs = <T extends { tabs: { appHistory?: unknown }[] }>(c: T): T => ({ ...c, tabs: c.tabs.map(withAppHistoryFromDisk) });
+
 const notInherited = (id: string) => !(id in Object.prototype);
 const ownId = (value: unknown) => (isString(value) && notInherited(value) ? value : null);
 
@@ -81,18 +92,18 @@ export function sessionFromSaved(saved: SavedObject): SavedSession {
     windowOrder: strings(raw.windowOrder).filter(notInherited),
     focusedWindowId: ownId(raw.focusedWindowId),
     lastProfileId: ownId(raw.lastProfileId),
-    tabs: byId(rows<Tab>(raw.tabs, tabOk).map((t) => ({ ...t, page: pageFromDisk(t.page), pin: pinFromDisk(t.pin) }))),
+    tabs: byId(rows<Tab>(raw.tabs, tabOk).map((t) => withAppHistoryFromDisk({ ...t, page: pageFromDisk(t.page), pin: pinFromDisk(t.pin) }))),
     groups: byId(rows(raw.groups, groupOk)),
     splits: byId(rows<SplitView>(raw.splits, splitOk).map((v) => ({ ...v, slots: slotsFromDisk(v.slots)! }))),
-    closedTabs: rows(raw.closedTabs, closedTabOk),
-    closedWindows: rows<ClosedWindow>(raw.closedWindows, tabListOk).map(splitsChecked).map(withoutSavedTabsShown),
-    parkedPins: Object.fromEntries(Object.entries(byProfile<ParkedPins>(raw.parkedPins, parkedOk)).map(([p, park]) => [p, splitsChecked(park)])),
+    closedTabs: rows<ClosedTab>(raw.closedTabs, closedTabOk).map(withCheckedTab),
+    closedWindows: rows<ClosedWindow>(raw.closedWindows, tabListOk).map(splitsChecked).map(withoutSavedTabsShown).map(withCheckedTabs),
+    parkedPins: Object.fromEntries(Object.entries(byProfile<ParkedPins>(raw.parkedPins, parkedOk)).map(([p, park]) => [p, withCheckedTabs(splitsChecked(park))])),
     pinChoices: pinChoicesFromDisk(raw.pinChoices),
     pinSync: byProfile(raw.pinSync),
     topAppsMerged: typeof raw.topAppsMerged === "string" ? raw.topAppsMerged : undefined,
-    closedGroups: rows(raw.closedGroups, tabListOk),
-    deletedGroups: rows(raw.deletedGroups, tabListOk),
-    cleanedTabs: rows(raw.cleanedTabs, closedTabOk),
+    closedGroups: rows<ClosedGroup>(raw.closedGroups, tabListOk).map(withCheckedTabs),
+    deletedGroups: rows<ClosedGroup>(raw.deletedGroups, tabListOk).map(withCheckedTabs),
+    cleanedTabs: rows<ClosedTab>(raw.cleanedTabs, closedTabOk).map(withCheckedTab),
   };
 }
 

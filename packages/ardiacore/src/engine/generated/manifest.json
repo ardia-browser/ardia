@@ -1510,8 +1510,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "06503bc68a8671906f150d0d1be7518834ce298287002970a5db2ae16b4eb4f3",
-        "swift": "1b0f1f7827a5f96df5bb21b9bb6725cc0e33419e7e003532f1c8d4492be92645"
+        "types": "e41390e34daada7afc3edf174d63948deee91c19055c543d73da0afbe5ae4561",
+        "swift": "faa23c4cbd3568101e028b46fe51138f6e475133520e8308cb32184e10cf5189"
       },
       "modules": {
         "ArdiaShell": {
@@ -3115,6 +3115,24 @@
               "desktop": "custom",
               "windows": "custom"
             },
+            "appleNotesFolders": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "appleNotesNotes": {
+              "args": [
+                "folder",
+                "offset",
+                "limit"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
             "hapticTick": {
               "args": [],
               "async": false,
@@ -4095,6 +4113,116 @@
               "mac": "custom",
               "desktop": "custom",
               "windows": "absent"
+            },
+            "devEvalPage": {
+              "args": [
+                "target",
+                "body"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "focusPage": {
+              "args": [
+                "tabId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "filesCall": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "filesWatch": {
+              "args": [
+                "id",
+                "plugin",
+                "root",
+                "rootIdentity"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "filesUnwatch": {
+              "args": [
+                "id"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "filesRevoke": {
+              "args": [
+                "plugin",
+                "root"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "filesTicket": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "pluginFolderCreate": {
+              "args": [
+                "parent",
+                "parentIdentity",
+                "name",
+                "grandparentIdentity"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "pluginFolderInfo": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "signInListen": {
+              "args": [
+                "id",
+                "host",
+                "port",
+                "path",
+                "state",
+                "deadlineMs"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "signInStop": {
+              "args": [
+                "id"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
             }
           },
           "events": {
@@ -4109,6 +4237,16 @@
               "windows": "absent"
             },
             "onOfficialFetch": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "onFilesChange": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "onSignInCallback": {
               "mac": "custom",
               "desktop": "absent",
               "windows": "absent"

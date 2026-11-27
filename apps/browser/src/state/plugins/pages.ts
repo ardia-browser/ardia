@@ -10,8 +10,11 @@ import { isPagePath, pluginPageOf, pluginPagePath, pluginPageUrl } from "./pageN
 import { activeManifest, currentPlugins, usePlugins, type PluginsStore } from "./store";
 import { eligibleKind, isEligibleTab } from "../automation/automationWindows";
 import { ensurePluginActivated, pluginReadyRun } from "./activation";
+import { routeAppPage } from "../tabs/appPageHistory";
+import { replacePluginPageVisit } from "./pageVisits";
+import { isFields, ownValue } from "../../lib/decode";
 
-export { isPagePath, pluginPageOf, pluginPagePath };
+export { isPagePath, pluginPageOf, pluginPagePath, pluginPageUrl };
 
 type PageContext = { tabId: string; url: string; title: string };
 type HandedContext = { plugin: string; approved: string; pageUrl: string; context: PageContext };
@@ -76,6 +79,57 @@ function pagePanelAt(m: PluginManifest, path: string): PanelSpec | null {
 
 function pageFileOf(m: PluginManifest, path: string): string | null {
   return pagePanelAt(m, path)?.file ?? null;
+}
+
+export const PLUGIN_PAGE_SYMBOL = "puzzlepiece.extension";
+
+export function pluginPageSymbol(s: Pick<PluginsStore, "listings">, url: string | null | undefined): string | null {
+  const name = pluginPageOf(url);
+  if (!name) return null;
+  const m = ownValue(s.listings, name)?.manifest;
+  if (!m) return PLUGIN_PAGE_SYMBOL;
+  const path = pluginPagePath(url ?? "");
+  return pagePanelAt(m, path)?.icon || m.icon || PLUGIN_PAGE_SYMBOL;
+}
+
+export function pluginPageSurface(s: Pick<PluginsStore, "listings">, url: string | null | undefined): "card" | "glass" {
+  const name = pluginPageOf(url);
+  const m = name ? ownValue(s.listings, name)?.manifest : null;
+  return m && pagePanelAt(m, pluginPagePath(url ?? ""))?.surface === "glass" ? "glass" : "card";
+}
+
+export function pageRoutes(s: Pick<PluginsStore, "listings" | "records">, name: string, path = ""): boolean {
+  const m = activeManifest(s, name);
+  return !!m && isPagePath(path) && !!pagePanelAt(m, path)?.routes;
+}
+
+function routeRequest(body: string): { path: string; replace: boolean } | null {
+  let request: unknown = null;
+  try {
+    request = JSON.parse(body);
+  } catch {}
+  return isFields(request) && typeof request.path === "string" ? { path: request.path, replace: request.replace === true } : null;
+}
+
+export function routePluginPage(tabId: string, name: string, body: string): boolean {
+  const s = useBrowser.getState();
+  const tab = s.tabs[tabId];
+  const request = routeRequest(body);
+  const shown = tab ? (tab.page.kind === "loaded" || tab.page.kind === "adopted" ? (tab.page.nav?.url ?? tab.url) : tab.url) : "";
+  const shownPath = pluginPagePath(shown);
+  const allowed =
+    !!tab && !!request && pluginPageOf(shown) === name && eligibleKind(s, tab.windowId) !== null && isPagePath(request.path) &&
+    pageRoutes(currentPlugins(), name, shownPath) && panelOfPath(request.path) === panelOfPath(shownPath);
+  if (!allowed) {
+    notePlugin("plugin_page_navigation_refusals");
+    return false;
+  }
+  const target = pluginPageUrl(name, request.path);
+  if (routeAppPage(tabId, target, request.replace)) {
+    notePlugin("plugin_page_navigations");
+    if (request.replace) replacePluginPageVisit(tabId, pluginPageUrl(name, shownPath), target);
+  }
+  return true;
 }
 
 export function wakeForFilePage(name: string, path = "") {

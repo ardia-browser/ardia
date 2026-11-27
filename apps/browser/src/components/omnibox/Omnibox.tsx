@@ -18,7 +18,7 @@ import { traceOmnibox, useOmniboxDriver } from "./devDriver";
 import { claimFocusTag, commandBarFocus, heroBarFocus } from "../../state/focus/focusClaims";
 import { registerHeroBar, saveNtpQuery, type BarDismissal, type BarSnapshot, type HeroBarFocus } from "../../state/omnibox/barState";
 import { cancelLateNewTabOverride } from "../../state/tabs/newTabHome";
-import { barSplitsFrom, openFromBar, otherOpenTabs, switchFromBar, type Disposition } from "../../state/omnibox/openFromBar";
+import { barSplitsFrom, openFromBar, otherOpenTabs, shownTabOf, switchedFromBar, switchFromBar, type Disposition } from "../../state/omnibox/openFromBar";
 import { openFromNewTabBar } from "../../state/omnibox/newTabBar";
 import { isBookmarklet, runBookmarklet } from "../../state/bookmarks/bookmarklets";
 import type { NewTabTarget } from "../../state/browser/types";
@@ -175,8 +175,8 @@ export function Omnibox({
     }
     switch (s.kind) {
       case "page":
-        if (s.tabId && !(opensTab && disposition === "newTab")) {
-          switchFromBar(s.tabId, s.url, tabId, disposition);
+      case "provider":
+        if (switchedFromBar(shownTabOf(s, windowId, disposition, !!opensTab), s.url, tabId, disposition)) {
           if (hero && disposition === "current") reset();
           return;
         }
@@ -187,7 +187,6 @@ export function Omnibox({
         return go(s.url, disposition);
       case "search":
       case "create":
-      case "provider":
         return go(s.url, disposition);
       case "calc":
         if (disposition !== "current") return go(s.url, disposition);

@@ -1,4 +1,5 @@
 import { appUrlOrigin, breadcrumb, displayHost, hostOf, urlForDisplay } from "@ardia/core";
+import { isPluginPageAddress } from "./pluginNames";
 
 export const withoutFragment = (url: string) => url.replace(/#.*$/, "");
 
@@ -13,6 +14,8 @@ const fragmentOf = (url: string) => /#(.*)$/.exec(url)?.[1] ?? "";
 export const sameAddress = (a: string, b: string) => samePage(a, b) && fragmentOf(a) === fragmentOf(b);
 
 export const isWebPageUrl = (url: string) => /^(https?|file):/i.test(url);
+
+export const isHistoryUrl = (url: string) => isWebPageUrl(url) || isPluginPageAddress(url);
 
 export const displayHostOf = (url: string) => displayHost(hostOf(url));
 

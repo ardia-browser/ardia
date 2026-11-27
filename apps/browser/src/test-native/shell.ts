@@ -407,6 +407,26 @@ const dev: Modules["ArdiaDev"] = {
   devURLDelivery: () => Promise.resolve({}),
 };
 
+export const appleNotesFake = {
+  folders: [] as { id: string; name: string; account: string; parent: string; count: number }[],
+  notes: {} as Record<string, { id: string; name: string; created: number; modified: number; locked: boolean; body: string }[]>,
+  failCode: 0,
+  raw: null as string | null,
+  calls: [] as string[],
+  answer(call: string, json: () => string) {
+    appleNotesFake.calls.push(call);
+    if (appleNotesFake.failCode) return Promise.resolve({ ok: false, error: "refused", code: appleNotesFake.failCode });
+    return Promise.resolve({ ok: true, json: appleNotesFake.raw ?? json() });
+  },
+  reset() {
+    appleNotesFake.folders = [];
+    appleNotesFake.notes = {};
+    appleNotesFake.failCode = 0;
+    appleNotesFake.raw = null;
+    appleNotesFake.calls = [];
+  },
+};
+
 const system: Modules["ArdiaSystem"] = {
   isDefaultBrowser: () => Promise.resolve(false),
   setAsDefaultBrowser: () => Promise.resolve(false),
@@ -416,7 +436,13 @@ const system: Modules["ArdiaSystem"] = {
   openFile: () => Promise.resolve(false),
   revealFile: () => Promise.resolve(false),
   moveToTrash: () => Promise.resolve(false),
-  fileIcon: () => Promise.resolve(null),
+  fileIcon: (path: string) => Promise.resolve(path.endsWith(".app") ? "data:image/png;base64,iVBORw0KGgo=" : null),
+  appleNotesFolders: () => appleNotesFake.answer("folders", () => JSON.stringify(appleNotesFake.folders)),
+  appleNotesNotes: (folder: string, offset: number, limit: number) =>
+    appleNotesFake.answer(`notes ${folder} ${offset} ${limit}`, () => {
+      const all = appleNotesFake.notes[folder] ?? [];
+      return JSON.stringify({ total: all.length, notes: all.slice(offset, offset + limit) });
+    }),
   runningAppIcon: () => Promise.resolve(null),
   hapticTick: () => {},
   setThinScrollBars: () => Promise.resolve(),
@@ -760,6 +786,201 @@ export function officialPinnedFromPin(): { name: string; version: string; folder
 }
 const pinnedNow = () => (pluginHost.pinned === undefined ? officialPinnedFromPin() : pluginHost.pinned);
 const pluginEvents = nativeEvents();
+type PluginFilesSpecFake = { op: string; plugin: string; root: string | null; path: string; data?: string; offset?: number; length?: number; exclusive?: boolean; recursive?: boolean; rootIdentity?: { device: number; inode: number }; ticket?: number; stage?: string; first?: boolean };
+type PluginFilesFailureFake = { ok: false; code: "not_found" | "exists" | "too_large" | "bad_path" | "refused" | "unavailable"; message: string };
+type PluginFileFake = { data: Uint8Array; mtimeMs: number; placeholder?: boolean };
+const FILES_MAX_DATA = 4 << 20;
+const filesFail = (code: PluginFilesFailureFake["code"], message: string): PluginFilesFailureFake => ({ ok: false, code, message });
+const filesFromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+const filesToBase64 = (bytes: Uint8Array) => btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""));
+export const pluginFiles = {
+  staged: new Map<string, Uint8Array>(),
+  quotaBytes: Infinity,
+  roots: {} as Record<string, { files: Map<string, PluginFileFake>; dirs: Set<string> }>,
+  calls: [] as PluginFilesSpecFake[],
+  watches: new Map<string, { plugin: string; root: string | null; rootIdentity: { device: number; inode: number } | null }>(),
+  revokes: [] as { plugin: string; root: string | null }[],
+  identities: {} as Record<string, { device: number; inode: number }>,
+  generation: 0,
+  revokedAt: {} as Record<string, number>,
+  folderCreates: [] as { parent: string; parentIdentity: { device: number; inode: number } | null; name: string; grandparentIdentity?: { device: number; inode: number } }[],
+  nextInode: 1000,
+  folders: {} as Record<string, { exists: boolean; realPath: string; location: "icloud" | "other"; protected: boolean; device?: number; inode?: number }>,
+  failNext: null as null | PluginFilesFailureFake,
+  missingRoots: new Set<string>(),
+  protectedRoots: new Set<string>(),
+  autoEmit: true,
+  clock: 1_700_000_000_000,
+  rootKey: (plugin: string, root: string | null) => (root === null ? `data:${plugin}` : root),
+  root(plugin: string, root: string | null) {
+    const key = pluginFiles.rootKey(plugin, root);
+    return (pluginFiles.roots[key] ??= { files: new Map(), dirs: new Set() });
+  },
+  put(plugin: string, root: string | null, path: string, text: string, placeholder = false) {
+    const at = pluginFiles.root(plugin, root);
+    at.files.set(path, { data: new TextEncoder().encode(text), mtimeMs: ++pluginFiles.clock, placeholder });
+    const parts = path.split("/");
+    for (let i = 1; i < parts.length; i++) at.dirs.add(parts.slice(0, i).join("/"));
+  },
+  text(plugin: string, root: string | null, path: string) {
+    const file = pluginFiles.roots[pluginFiles.rootKey(plugin, root)]?.files.get(path);
+    return file ? new TextDecoder().decode(file.data) : undefined;
+  },
+  emitChange: (id: string, paths: string[]) => pluginEvents.emit("onFilesChange", { id, paths }),
+  emitGone: (id: string) => pluginEvents.emit("onFilesChange", { id, paths: [], gone: true }),
+  reset() {
+    pluginFiles.roots = {};
+    pluginFiles.calls = [];
+    pluginFiles.watches.clear();
+    pluginFiles.revokes = [];
+    pluginFiles.identities = {};
+    pluginFiles.generation = 0;
+    pluginFiles.revokedAt = {};
+    pluginFiles.folderCreates = [];
+    pluginFiles.folders = {};
+    pluginFiles.failNext = null;
+    pluginFiles.missingRoots.clear();
+    pluginFiles.protectedRoots.clear();
+    pluginFiles.autoEmit = true;
+    pluginFiles.staged.clear();
+    pluginFiles.quotaBytes = Infinity;
+  },
+};
+function filesPathParts(path: string, allowRoot: boolean): string[] | PluginFilesFailureFake {
+  if (path === "") return allowRoot ? [] : filesFail("bad_path", "the path is empty");
+  if (new TextEncoder().encode(path).length > 1024) return filesFail("bad_path", "the path is over 1024 bytes");
+  if (path.startsWith("/")) return filesFail("bad_path", "the path has to be relative");
+  const parts = path.split("/");
+  for (const part of parts) {
+    if (!part || part === "." || part === "..") return filesFail("bad_path", "the path has an empty part, . or ..");
+    if (new TextEncoder().encode(part).length > 255) return filesFail("bad_path", "a part of the path is over 255 bytes");
+    if (/[\u0000-\u001f\u007f]/.test(part)) return filesFail("bad_path", "the path has a control character");
+  }
+  return parts;
+}
+function filesChanged(plugin: string, root: string | null, paths: string[]) {
+  if (!pluginFiles.autoEmit) return;
+  for (const [id, watch] of pluginFiles.watches) {
+    if (watch.plugin === plugin && watch.root === root) queueMicrotask(() => pluginFiles.emitChange(id, paths));
+  }
+}
+const STAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function filesStageFake(spec: PluginFilesSpecFake) {
+  const parts = filesPathParts(spec.path, false);
+  if (!Array.isArray(parts)) return parts;
+  if (typeof spec.stage !== "string" || !STAGE_ID.test(spec.stage)) return filesFail("bad_path", "the staging id isn't one Ardia made");
+  const key = `${pluginFiles.rootKey(spec.plugin, spec.root)}\u0000${parts.join("/")}\u0000${spec.stage}`;
+  if (spec.op === "discard") return { ok: true as const, removed: pluginFiles.staged.delete(key) };
+  if (spec.op === "stage") {
+    if (spec.first ? pluginFiles.staged.has(key) : !pluginFiles.staged.has(key)) return filesFail("unavailable", "the download couldn't be written");
+    const bytes = filesFromBase64(spec.data ?? "");
+    const before = pluginFiles.staged.get(key) ?? new Uint8Array(0);
+    if (before.length + bytes.length > pluginFiles.quotaBytes) return { ok: false, code: "quota", message: "the plugin's files would pass the quota" } as unknown as PluginFilesFailureFake;
+    pluginFiles.staged.set(key, new Uint8Array([...before, ...bytes]));
+    return { ok: true as const, size: before.length + bytes.length };
+  }
+  const data = pluginFiles.staged.get(key);
+  if (!data) return filesFail("unavailable", "the download's file is gone");
+  const at = pluginFiles.root(spec.plugin, spec.root);
+  const path = parts.join("/");
+  if (at.files.has(path)) return filesFail("exists", "a file is already at that path");
+  pluginFiles.staged.delete(key);
+  for (let i = 1; i < parts.length; i++) at.dirs.add(parts.slice(0, i).join("/"));
+  at.files.set(path, { data, mtimeMs: ++pluginFiles.clock });
+  return { ok: true as const, size: data.length, mtimeMs: pluginFiles.clock };
+}
+async function filesCallFake(spec: PluginFilesSpecFake) {
+  pluginFiles.calls.push({ ...spec });
+  const ticket = spec.ticket;
+  const revokedSince = (key: string) => (pluginFiles.revokedAt[key] ?? 0) > (ticket ?? -1);
+  if (typeof ticket !== "number" || ticket < 0 || revokedSince(spec.plugin) || (spec.root !== null && revokedSince(`${spec.plugin}\u0000${spec.root}`)))
+    return filesFail("refused", "the plugin's access ended");
+  if (pluginFiles.failNext) {
+    const failure = pluginFiles.failNext;
+    pluginFiles.failNext = null;
+    return failure;
+  }
+  if (spec.root !== null && pluginFiles.protectedRoots.has(spec.root)) return filesFail("refused", "that folder holds Ardia's own data or the system's");
+  const known = spec.root === null ? undefined : pluginFiles.identities[spec.root];
+  if (known && spec.rootIdentity && (known.device !== spec.rootIdentity.device || known.inode !== spec.rootIdentity.inode)) return filesFail("unavailable", "the folder isn't the one you chose any more");
+  if (spec.root !== null && pluginFiles.missingRoots.has(spec.root)) return spec.op === "stat" ? { ok: true as const, found: false } : filesFail("unavailable", "the folder is missing");
+  if (spec.op === "stage" || spec.op === "publish" || spec.op === "discard") return filesStageFake(spec);
+  const parts = filesPathParts(spec.path, spec.op === "list" || spec.op === "stat");
+  if (!Array.isArray(parts)) return parts;
+  const path = parts.join("/");
+  const at = pluginFiles.root(spec.plugin, spec.root);
+  const isDir = (p: string) => p === "" || at.dirs.has(p);
+  switch (spec.op) {
+    case "read": {
+      const file = at.files.get(path);
+      if (!file) return isDir(path) ? filesFail("bad_path", "that's a folder, not a file") : { ok: true as const, found: false };
+      if (file.placeholder) return filesFail("unavailable", "the file isn't downloaded yet");
+      if (spec.offset === undefined && spec.length === undefined && file.data.length > FILES_MAX_DATA) return filesFail("too_large", "the file is over 4 MiB");
+      const start = spec.offset ?? 0;
+      const slice = file.data.subarray(start, start + Math.min(spec.length ?? FILES_MAX_DATA, FILES_MAX_DATA));
+      return { ok: true as const, found: true, data: filesToBase64(slice), size: file.data.length, mtimeMs: file.mtimeMs };
+    }
+    case "write":
+    case "append": {
+      if (typeof spec.data !== "string") return filesFail("refused", "the data has to be base64");
+      const bytes = filesFromBase64(spec.data);
+      if (bytes.length > FILES_MAX_DATA) return filesFail("too_large", `a ${spec.op} carries at most 4 MiB`);
+      if (isDir(path)) return filesFail("refused", "that's a folder, not a file");
+      if (parts.slice(0, -1).some((_, i) => at.files.has(parts.slice(0, i + 1).join("/")))) return filesFail("bad_path", "a part of the path isn't a folder");
+      const existing = at.files.get(path);
+      if (spec.op === "write" && spec.exclusive && existing) return filesFail("exists", "the file already exists");
+      const data = spec.op === "append" && existing ? new Uint8Array([...existing.data, ...bytes]) : bytes;
+      for (let i = 1; i < parts.length; i++) at.dirs.add(parts.slice(0, i).join("/"));
+      const file = { data, mtimeMs: ++pluginFiles.clock };
+      at.files.set(path, file);
+      filesChanged(spec.plugin, spec.root, [path]);
+      return { ok: true as const, size: data.length, mtimeMs: file.mtimeMs };
+    }
+    case "list": {
+      if (!isDir(path)) return at.files.has(path) ? filesFail("bad_path", "that isn't a folder") : filesFail("not_found", "there's no such folder");
+      const prefix = path ? `${path}/` : "";
+      const under = (p: string) => p.startsWith(prefix) && (spec.recursive || !p.slice(prefix.length).includes("/"));
+      const entries = [
+        ...[...at.dirs].filter(under).map((p) => ({ path: p, kind: "dir" as const, size: 0, mtimeMs: pluginFiles.clock, placeholder: false })),
+        ...[...at.files].filter(([p]) => under(p)).map(([p, f]) => ({ path: p, kind: "file" as const, size: f.data.length, mtimeMs: f.mtimeMs, placeholder: !!f.placeholder })),
+      ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+      if (entries.length > 10_000) return filesFail("too_large", "the folder holds over 10000 entries");
+      return { ok: true as const, entries };
+    }
+    case "remove": {
+      if (at.files.delete(path)) {
+        filesChanged(spec.plugin, spec.root, [path]);
+        return { ok: true as const, removed: true };
+      }
+      if (!at.dirs.has(path)) return { ok: true as const, removed: false };
+      const inside = (p: string) => p.startsWith(`${path}/`);
+      if ([...at.dirs].some(inside) || [...at.files.keys()].some(inside)) return filesFail("refused", "the folder isn't empty");
+      at.dirs.delete(path);
+      filesChanged(spec.plugin, spec.root, [path]);
+      return { ok: true as const, removed: true };
+    }
+    case "stat": {
+      const file = at.files.get(path);
+      if (file) return { ok: true as const, found: true, kind: "file" as const, size: file.data.length, mtimeMs: file.mtimeMs };
+      if (isDir(path)) return { ok: true as const, found: true, kind: "dir" as const, size: 0, mtimeMs: pluginFiles.clock };
+      return { ok: true as const, found: false };
+    }
+  }
+  return filesFail("refused", "that isn't a files call Ardia knows");
+}
+export const pluginSignIn = {
+  listens: [] as { id: string; host: string; port: number; path: string; state: string; deadlineMs: number }[],
+  stops: [] as string[],
+  listenResult: { ok: true } as { ok: true } | { ok: false; code: "port_in_use" | "failed"; reason: string },
+  listenGate: null as null | Promise<void>,
+  emitCallback: (id: string, target: string) => pluginEvents.emit("onSignInCallback", { id, target }),
+  reset() {
+    pluginSignIn.listens = [];
+    pluginSignIn.stops = [];
+    pluginSignIn.listenResult = { ok: true };
+    pluginSignIn.listenGate = null;
+  },
+};
 export const emitPluginLine = (line: { name: string; run: number; line: string }) => pluginEvents.emit("onLine", line);
 export const emitPluginExit = (exit: { name: string; run: number; status: number | null; signal: number | null; overMemory: boolean }) => pluginEvents.emit("onExit", exit);
 const plugins: Modules["ArdiaPlugins"] = {
@@ -799,6 +1020,8 @@ const plugins: Modules["ArdiaPlugins"] = {
   revealLog: () => {},
   revealFolder: () => {},
   devSnapshotPage: async () => false,
+  devEvalPage: async () => JSON.stringify({ error: "no live page" }),
+  focusPage: async () => false,
   officialPlugins: async () => pinnedNow(),
   fetchOfficial: async (name) => {
     pluginHost.officialFetchLog.push(name);
@@ -848,6 +1071,62 @@ const plugins: Modules["ArdiaPlugins"] = {
     const text = pluginHost.files[`${name}/${path}`];
     return text === undefined ? { ok: false, reason: "the file wasn't found" } : { ok: true, text };
   },
+  filesCall: (spec) => filesCallFake(spec),
+  filesWatch: (id, plugin, root, rootIdentity) => {
+    if (root !== null && (pluginFiles.missingRoots.has(root) || pluginFiles.protectedRoots.has(root))) return false;
+    const known = root === null ? undefined : pluginFiles.identities[root];
+    if (known && rootIdentity && (known.device !== rootIdentity.device || known.inode !== rootIdentity.inode)) return false;
+    pluginFiles.watches.set(id, { plugin, root, rootIdentity });
+    return true;
+  },
+  filesTicket: () => pluginFiles.generation,
+  pluginFolderCreate: async (parent, parentIdentity, name, grandparentIdentity) => {
+    pluginFiles.folderCreates.push(grandparentIdentity ? { parent, parentIdentity, name, grandparentIdentity } : { parent, parentIdentity, name });
+    const sameAs = (path: string, identity: { device: number; inode: number }) => {
+      const known = pluginFiles.identities[path];
+      return !known || (known.device === identity.device && known.inode === identity.inode);
+    };
+    if (!!parentIdentity === !!grandparentIdentity) return filesFail("refused", "a folder is made only in a parent, or under a grandparent, that was checked first");
+    if (parentIdentity && !sameAs(parent, parentIdentity)) return filesFail("unavailable", "the parent folder isn't the one that was checked");
+    if (pluginFiles.protectedRoots.has(parent)) return filesFail("refused", "that folder would sit in Ardia's own data or the system's");
+    if (grandparentIdentity) {
+      const grandparent = parent.slice(0, parent.lastIndexOf("/")) || "/";
+      if (!sameAs(grandparent, grandparentIdentity)) return filesFail("unavailable", "the enclosing folder isn't the one that was checked");
+      if (pluginFiles.identities[parent] || (pluginFiles.folders[parent]?.exists ?? !pluginFiles.missingRoots.has(parent)))
+        return filesFail("unavailable", "the folder changed: it appeared while you were deciding");
+      pluginFiles.missingRoots.delete(parent);
+      pluginFiles.identities[parent] = { device: 1, inode: ++pluginFiles.nextInode };
+    }
+    let candidate = name;
+    for (let n = 2; pluginFiles.folders[`${parent}/${candidate}`]?.exists || pluginFiles.identities[`${parent}/${candidate}`]; n++) candidate = `${name} ${n}`;
+    const path = `${parent}/${candidate}`;
+    const identity = { device: 1, inode: ++pluginFiles.nextInode };
+    const location = path.includes("/Library/Mobile Documents/") ? ("icloud" as const) : ("other" as const);
+    pluginFiles.identities[path] = identity;
+    pluginFiles.folders[path] = { exists: true, realPath: path, location, protected: false, ...identity };
+    return { ok: true as const, path, realPath: path, location, ...identity };
+  },
+  filesRevoke: (plugin, root) => {
+    pluginFiles.revokes.push({ plugin, root });
+    pluginFiles.generation += 1;
+    pluginFiles.revokedAt[root === null ? plugin : `${plugin}\u0000${root}`] = pluginFiles.generation;
+    for (const [id, watch] of pluginFiles.watches) if (watch.plugin === plugin && (root === null || watch.root === root)) pluginFiles.watches.delete(id);
+  },
+  filesUnwatch: (id) => void pluginFiles.watches.delete(id),
+  pluginFolderInfo: async (path) =>
+    pluginFiles.folders[path] ?? {
+      exists: !pluginFiles.missingRoots.has(path),
+      realPath: path,
+      location: path.includes("/Library/Mobile Documents/") ? "icloud" : "other",
+      protected: pluginFiles.protectedRoots.has(path),
+      ...(pluginFiles.missingRoots.has(path) ? {} : (pluginFiles.identities[path] ?? {})),
+    },
+  signInListen: async (id, host, port, path, state, deadlineMs) => {
+    pluginSignIn.listens.push({ id, host, port, path, state, deadlineMs });
+    await pluginSignIn.listenGate;
+    return pluginSignIn.listenResult;
+  },
+  signInStop: (id) => void pluginSignIn.stops.push(id),
   addListener: pluginEvents.addListener,
 };
 

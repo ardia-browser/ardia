@@ -1,1 +1,1 @@
-export { fileExists, openFile, revealFile, moveToTrash, fileIcon, runningAppIcon } from "@ardia/shell";
+export { fileExists, openFile, revealFile, moveToTrash, fileIcon, runningAppIcon, appleNotesFolders, appleNotesNotes } from "@ardia/shell";

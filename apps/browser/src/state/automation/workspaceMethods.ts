@@ -4,7 +4,8 @@ import { activeTabId, isIncognitoProfile } from "../browser/model";
 import { noteCliEdits } from "../telemetry/usage";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { failure, type ErrorCode, type MethodError } from "./automationMethods";
-import { eligibleKind, isEligibleTab } from "./automationWindows";
+import { eligibleKind, eligibleTabOr, isEligibleTab } from "./automationWindows";
+import { withoutSignInTabs } from "../plugins/signInTabs";
 import { parseOps, type Op, type UrlRule } from "./workspaceOps";
 import { runOp } from "./workspaceApply";
 import { takeLateResults } from "./tabCalls";
@@ -27,9 +28,9 @@ export function workspaceMethod(params: Record<string, unknown>): Body | Promise
   const s = useBrowser.getState();
   if (window && !eligibleKind(s, window)) return failure("no_window", `There's no window ${window} the ardia command can use.`);
   if (profile && (!ownValue(s.profiles, profile) || isIncognitoProfile(profile))) return failure("no_window", `There's no profile ${profile}.`);
-  if (!params.usage) return { result: workspace(s, { window, profile }) };
+  if (!params.usage) return { result: withoutSignInTabs(workspace(s, { window, profile })) };
   return sampleTabUsage().then(
-    (usage) => ({ result: workspaceWithUsage(workspace(useBrowser.getState(), { window, profile }), usage) }),
+    (usage) => ({ result: withoutSignInTabs(workspaceWithUsage(workspace(useBrowser.getState(), { window, profile }), usage)) }),
     (error) => failure("failed", `Ardia couldn't read its processes: ${errorText(error)}`),
   );
 }
@@ -53,8 +54,8 @@ function settledState(ops: Op[], results: OpResult[]): Pick<ApplyResult, "tabs" 
   for (const op of ops) if (typeof op.window === "string" && eligibleKind(s, op.window)) windowIds.add(op.window);
   return {
     tabs: tabIds.map((id) => tabNode(s, id)),
-    groups: groupIds.map((id) => ({ ...groupFields(s, s.groups[id]!), tabs: [...s.groups[id]!.tabIds] })),
-    windows: [...windowIds].map((id) => ({ id, activeTab: activeTabId(s, id) ?? null })),
+    groups: groupIds.map((id) => ({ ...groupFields(s, s.groups[id]!), tabs: s.groups[id]!.tabIds.filter((t) => isEligibleTab(s, t)) })),
+    windows: [...windowIds].map((id) => ({ id, activeTab: eligibleTabOr(s, activeTabId(s, id)) })),
   };
 }
 
@@ -101,5 +102,5 @@ export function applyMethod(params: Record<string, unknown>, stillOn: () => bool
   const consent = consentToken();
   const run = chain.then(() => runAll(ops, stillOn, consent, connection));
   chain = run.catch(() => {});
-  return run.then((result) => ({ result }));
+  return run.then((result) => ({ result: withoutSignInTabs(result) }));
 }

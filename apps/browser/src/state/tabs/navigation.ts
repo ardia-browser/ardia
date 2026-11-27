@@ -17,6 +17,10 @@ import { adoptedPage, IDLE } from "./pageSession";
 import { isPeekTab } from "../peek/peek";
 import { dismissPeek } from "../peek/actions";
 import { liveOf } from "./tabLive";
+import { appStep, goToAppEntry, noteWebTraversal, showsAppPage, watchAppPageHistory } from "./appPageHistory";
+import { appHistoryStep } from "./appHistory";
+
+watchAppPageHistory();
 
 const store = () => useBrowser.getState();
 
@@ -32,12 +36,14 @@ function backClosesTab(s: BrowserState, tabId: string): boolean {
 
 export function canGoBack(tabId: string, live: Pick<TabLive, "canGoBack">, s: BrowserState = store()): boolean {
   const page = pageOf(tabId);
-  return !page.newTabShown && (live.canGoBack || page.backToNewTab || !!page.engineBack || backClosesTab(s, tabId));
+  return !page.newTabShown && (live.canGoBack || appHistoryStep(s.tabs[tabId]?.appHistory, -1) !== null || page.backToNewTab || !!page.engineBack || backClosesTab(s, tabId));
 }
 
-export function canGoForward(tabId: string, live: Pick<TabLive, "canGoForward">): boolean {
-  return !!pageOf(tabId).newTabShown || live.canGoForward;
+export function canGoForward(tabId: string, live: Pick<TabLive, "canGoForward">, s: BrowserState = store()): boolean {
+  return !!pageOf(tabId).newTabShown || live.canGoForward || appHistoryStep(s.tabs[tabId]?.appHistory, 1) !== null;
 }
+
+const appMoves = (t: { appHistory?: Parameters<typeof appHistoryStep>[0] } | undefined) => (appHistoryStep(t?.appHistory, -1) !== null ? 1 : 0) | (appHistoryStep(t?.appHistory, 1) !== null ? 2 : 0);
 
 export function useHistoryAvailability(tabId: string) {
   const moves = useTabLive(tabId, (l) => (l.canGoBack ? 1 : 0) | (l.canGoForward ? 2 : 0));
@@ -46,8 +52,10 @@ export function useHistoryAvailability(tabId: string) {
   const shown = usePage(tabId, (p) => !!p.newTabShown);
   const backToNewTab = usePage(tabId, (p) => p.backToNewTab || !!p.engineBack);
   const opened = useTab(tabId, (t) => !!t?.openerId);
+  const app = useTab(tabId, appMoves);
+  const appBack = !!(app & 1);
   const closes = useBrowserWhile(opened, (s) => opened && backClosesTab(s, tabId));
-  return { back: !shown && (back || backToNewTab || closes), forward: shown || forward, backCloses: !shown && !back && !backToNewTab && closes };
+  return { back: !shown && (back || appBack || backToNewTab || closes), forward: shown || forward || !!(app & 2), backCloses: !shown && !back && !appBack && !backToNewTab && closes };
 }
 
 export function goBack(tabId: string, mayAct: () => boolean = () => true): void {
@@ -61,13 +69,19 @@ export async function goBackAsking(tabId: string, mayAct: () => boolean = () => 
     return acted ? went : false;
   }
   if (pageOf(tabId).newTabShown) return true;
-  if (pageOf(tabId).engineBack && !liveOf(tabId).canGoBack) return goBackAcrossEngines(tabId, mayAct, ask);
+  if (pageOf(tabId).engineBack && !liveOf(tabId).canGoBack && !showsAppPage(store().tabs[tabId])) return goBackAcrossEngines(tabId, mayAct, ask);
   goBackHere(tabId);
   return true;
 }
 
 function goBackHere(tabId: string) {
-  if (liveOf(tabId).canGoBack) return void webviews.get(tabId)?.goBack();
+  const tab = store().tabs[tabId];
+  if (liveOf(tabId).canGoBack && !showsAppPage(tab)) {
+    if (tab?.appHistory) noteWebTraversal(tabId);
+    return void webviews.get(tabId)?.goBack();
+  }
+  const step = appStep(tab, liveOf(tabId), -1);
+  if (step !== null) return void goToAppEntry(tabId, step);
   if (pageOf(tabId).backToNewTab) return showNewTab(tabId);
   if (backClosesTab(store(), tabId)) {
     noteBackCloseToOpener();
@@ -98,8 +112,12 @@ function goForwardHere(tabId: string): boolean {
     hideNewTab(tabId);
     return true;
   }
+  const tab = store().tabs[tabId];
+  const step = appStep(tab, liveOf(tabId), 1);
+  if (step !== null) return goToAppEntry(tabId, step);
   const page = webviews.get(tabId);
-  if (!page) return false;
+  if (!page || showsAppPage(tab)) return false;
+  if (tab?.appHistory) noteWebTraversal(tabId);
   void page.goForward();
   return true;
 }
@@ -139,13 +157,25 @@ export type HistoryItem = {
   key: string;
   title: string;
   url: string;
-  offset: number | "newTab";
+  offset: number | "newTab" | { app: number };
 };
+
+function appItems(tabId: string, direction: -1 | 1, max: number): HistoryItem[] {
+  const h = store().tabs[tabId]?.appHistory;
+  const items: HistoryItem[] = [];
+  if (!h) return items;
+  for (let i = h.index + direction; i >= 0 && i < h.entries.length && items.length < max; i += direction) {
+    const e = h.entries[i]!;
+    items.push({ key: `app:${i}`, title: e.title || e.url, url: e.url, offset: { app: i } });
+  }
+  return items;
+}
 
 export async function historyItems(asked: string, direction: -1 | 1, max = 15): Promise<HistoryItem[]> {
   const tabId = livePageId(asked);
   const page = pageOf(tabId);
-  const list = (await webviews.get(tabId)?.navigationEntries()) ?? [];
+  const onApp = showsAppPage(store().tabs[tabId]);
+  const list = (onApp ? null : await webviews.get(tabId)?.navigationEntries()) ?? [];
   const current = list.findIndex((e) => e.current);
   if (page.newTabShown) {
     if (direction < 0) return [];
@@ -164,6 +194,7 @@ export async function historyItems(asked: string, direction: -1 | 1, max = 15): 
       items.push({ key: String(i), title: e.title || e.url, url: e.url, offset: i - current });
     }
   }
+  items.push(...appItems(tabId, direction, max - items.length));
   if (direction < 0 && page.backToNewTab && items.length < max) items.push({ key: "newTab", title: "New Tab", url: "", offset: "newTab" });
   return items;
 }
@@ -171,7 +202,17 @@ export async function historyItems(asked: string, direction: -1 | 1, max = 15): 
 export async function goToHistoryItem(tabId: string, item: HistoryItem): Promise<void> {
   if (livePageId(tabId) !== tabId) return void (await withLivePage(tabId, (_, id) => void goToHistoryItem(id, item)));
   const page = pageOf(tabId);
+  if (typeof item.offset === "object") {
+    if (page.newTabShown) hideNewTab(tabId);
+    return void goToAppEntry(tabId, item.offset.app);
+  }
   if (item.offset === "newTab") {
+    const shown = store().tabs[tabId];
+    const first = shown?.appHistory?.entries[0];
+    if (showsAppPage(shown) && first && shown!.appHistory!.index > 0) {
+      goToAppEntry(tabId, 0);
+      return showNewTab(tabId, first);
+    }
     const list = (await webviews.get(tabId)?.navigationEntries()) ?? [];
     const current = list.findIndex((e) => e.current);
     if (current <= 0 || !list[0]) return goBack(tabId);

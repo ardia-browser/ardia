@@ -3,6 +3,7 @@ import { isFields, type Fields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
 import { KEY_PATTERN, NAME_PATTERN, VERSION_PATTERN } from "../../lib/pluginManifest";
 import type { OfficialAutoUpdate, PluginRecord, SiteSwitchValues } from "./store";
+import { folderGrantsOf } from "./folderGrants";
 import { switchOrigin } from "../../lib/pluginPageBar";
 import { warnFor } from "../telemetry/consoleConsent";
 import type { ConsentToken } from "../telemetry/choice";
@@ -59,6 +60,9 @@ export function parsePluginRecords(json: string | null): Record<string, PluginRe
     out[name] = { enabled: raw.enabled === true && approved !== null, approved, values: valuesOf(raw.values), applied: appliedOf(raw.applied), ...(raw.controlGranted === true ? { controlGranted: true } : {}), ...(raw.installed === true ? { installed: true } : {}), ...(typeof raw.previous === "string" && HASH.test(raw.previous) ? { previous: raw.previous } : {}) };
     const sites = sitesOf(raw.sites);
     if (sites) out[name]!.sites = sites;
+    const folders = folderGrantsOf(raw.folders);
+    if (folders) out[name]!.folders = folders;
+    if (raw.sitesOff === true) out[name]!.sitesOff = true;
     const updated = updatedOf(raw.updated);
     if (updated) out[name]!.updated = updated;
   }

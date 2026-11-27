@@ -27,4 +27,4 @@ const chromiumPath = findChromium();
 
 export const CHROMIUM_MISSING = chromiumPath === null && !process.env.CI && "no Chromium for Playwright (install Playwright's or set ARDIA_TEST_CHROMIUM)";
 
-export const launchChromium = () => chromium.launch({ executablePath: chromiumPath, headless: true });
+export const launchChromium = (options = {}) => chromium.launch({ executablePath: chromiumPath, headless: true, ...options });

@@ -28,10 +28,29 @@ final class PluginPageMessagesTests: XCTestCase {
     XCTAssertEqual(PluginPageMessages.toPage(["message": String(repeating: "a", count: PluginPageMessages.maxToPage)]), .failure(.init(reason: "a message to a page can be at most 256 KB")))
   }
 
-  func testAPageCanSendAtMostAHundredMessagesASecond() {
-    let limit = PluginPageMessages.Limit()
-    XCTAssertEqual((0..<150).filter { _ in limit.allow(now: 10) }.count, 100)
-    XCTAssertTrue(limit.allow(now: 11.01))
+  func testAPageSendsABurstOfAHundredThenAHundredASecond() {
+    let page = PluginPageMessages.Limit(burst: PluginPageMessages.pageBurst, perSecond: PluginPageMessages.perSecond)
+    XCTAssertEqual((0..<150).filter { _ in page.allow(now: 10) }.count, 100)
+    XCTAssertFalse(page.allow(now: 10))
+    XCTAssertEqual((0..<150).filter { _ in page.allow(now: 10.5) }.count, 50)
+    XCTAssertEqual((0..<150).filter { _ in page.allow(now: 20) }.count, 100, "a bucket never holds more than its burst")
+  }
+
+  func testArdiaAcceptsEverythingThePageMirrorAllowsWithHeadroomForDeliveryJitter() {
+    let page = PluginPageMessages.Limit(burst: PluginPageMessages.pageBurst, perSecond: PluginPageMessages.perSecond)
+    let native = PluginPageMessages.Limit()
+    var sent = 0
+    var taken = 0
+    for step in 0..<400 {
+      let at = 10 + Double(step) * 0.002
+      for _ in 0..<3 where page.allow(now: at) {
+        sent += 1
+        if native.allow(now: 10 + Double(step / 50) * 0.1) { taken += 1 }
+      }
+    }
+    XCTAssertGreaterThan(sent, 100)
+    XCTAssertEqual(taken, sent)
+    XCTAssertEqual((0..<1000).filter { _ in native.allow(now: 100) }.count, PluginPageMessages.nativeBurst)
   }
 }
 

@@ -236,7 +236,7 @@ function providerScopeSuggestions(query: string, scope: SearchScope, sections: r
   if (typedUrl) items.push({ kind: "provider", providerId: id, provider: scope.name, title: query, url: typedUrl, icon: null });
   const section = sections.find((x) => x.id === id);
   const seen = new Set(items.map((x) => x.url));
-  if (section) for (const row of safeProviderRows({ id, title: scope.name }, section.rows, limit)) if (!seen.has(row.url) && items.length < limit) items.push(row);
+  if (section) for (const row of safeProviderRows({ id, title: scope.name, pageOrigin: section.pageOrigin }, section.rows, limit)) if (!seen.has(row.url) && items.length < limit) items.push(row);
   return { items, completion: "" };
 }
 

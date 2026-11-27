@@ -143,7 +143,7 @@
 		<true/>
 	</dict>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Ardia asks Dia for its profiles, open tabs and pinned tabs when you import them. It only reads them and changes nothing in Dia.</string>
+	<string>Ardia asks Dia for its profiles, open tabs and pinned tabs when you import them, and asks Notes for your notes when you import them into a plugin you allowed. It only reads them and changes nothing in Dia or Notes.</string>
 	<key>NSAppleScriptEnabled</key>
 	<true/>
 	<key>NSAudioCaptureUsageDescription</key>

@@ -49,6 +49,45 @@ public class PluginsModule: Module, PluginsNative {
 
   static func devSnapshotPage(_ name: String, _ path: String, _ promise: Promise) { Self.snapshot(name, path, promise) }
 
+  static func devEvalPage(_ target: String, _ body: String, _ promise: Promise) {
+    PluginPageView.devEvaluate(target, body) { promise.resolve($0) }
+  }
+
+  static func focusPage(_ tabId: String, _ promise: Promise) { promise.resolve(PluginPageView.focusPage(tabId)) }
+
+  static func filesCall(_ spec: [String: Any], _ promise: Promise) { PluginFileCalls.call(spec) { promise.resolve($0) } }
+
+  static func filesWatch(_ id: String, _ plugin: String, _ root: String?, _ rootIdentity: [String: Any]?) -> Bool {
+    PluginFileCalls.watch(id, plugin: plugin, root: root, identity: PluginFileIdentity(spec: rootIdentity)) { id, paths, gone in
+      PluginHost.shared.emit("onFilesChange", gone ? ["id": id, "paths": paths, "gone": true] : ["id": id, "paths": paths])
+    }
+  }
+
+  static func filesUnwatch(_ id: String) { PluginFileCalls.unwatch(id) }
+
+  static func filesRevoke(_ plugin: String, _ root: String?) { PluginFileCalls.revoke(plugin, root: root) }
+
+  static func filesTicket() -> Int { PluginFileCalls.access.ticket() }
+
+  static func pluginFolderCreate(_ parent: String, _ parentIdentity: [String: Any]?, _ name: String, _ grandparentIdentity: [String: Any]?, _ promise: Promise) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      promise.resolve(
+        PluginFileStore.createFolder(
+          in: parent, identity: PluginFileIdentity(spec: parentIdentity), named: name, grandparentIdentity: PluginFileIdentity(spec: grandparentIdentity),
+          guarding: PluginFileCalls.guardedFolders()))
+    }
+  }
+
+  static func pluginFolderInfo(_ path: String, _ promise: Promise) { DispatchQueue.global(qos: .userInitiated).async { promise.resolve(PluginFileCalls.folderInfo(path)) } }
+
+  static let signIns = PluginSignInListener { id, target in PluginHost.shared.emit("onSignInCallback", ["id": id, "target": target]) }
+
+  static func signInListen(_ id: String, _ host: String, _ port: Int, _ path: String, _ state: String, _ deadlineMs: Int, _ promise: Promise) {
+    signIns.listen(id: id, host: host, port: port, path: path, state: state, deadlineMs: deadlineMs) { promise.resolve($0.reply) }
+  }
+
+  static func signInStop(_ id: String) { signIns.stop(id) }
+
   public func definition() -> ModuleDefinition {
     Name(Self.moduleName)
 
@@ -110,8 +149,30 @@ public class PluginsModule: Module, PluginsNative {
 
     Self.devSnapshotPageFunction
 
+    Self.devEvalPageFunction
+
+    Self.focusPageFunction
+
+    Self.filesCallFunction
+
+    Self.filesWatchFunction
+
+    Self.filesUnwatchFunction
+
+    Self.filesRevokeFunction
+
+    Self.filesTicketFunction
+
+    Self.pluginFolderCreateFunction
+
+    Self.pluginFolderInfoFunction
+
+    Self.signInListenFunction
+
+    Self.signInStopFunction
+
     View(PluginPageView.self) {
-      Events("onLoaded", "onTitleChange", "onNavigationChange", "onMessage")
+      Events("onLoaded", "onTitleChange", "onNavigationChange", "onMessage", "onNavigate")
       Prop("plugin") { (view: PluginPageView, value: String) in view.plugin = value }
       Prop("url") { (view: PluginPageView, value: String) in view.url = value }
       Prop("network") { (view: PluginPageView, value: Bool) in view.network = value }
@@ -120,9 +181,13 @@ public class PluginsModule: Module, PluginsNative {
       Prop("run") { (view: PluginPageView, value: Int) in view.run = value }
       Prop("context") { (view: PluginPageView, value: String) in view.context = value }
       Prop("themeCss") { (view: PluginPageView, value: String?) in view.themeCss = value ?? "" }
+      Prop("routes") { (view: PluginPageView, value: Bool?) in view.routes = value ?? false }
+      Prop("routePath") { (view: PluginPageView, value: String?) in view.routePath = value ?? "" }
+      Prop("tabId") { (view: PluginPageView, value: String?) in view.tabId = value ?? "" }
     }
 
     OnDestroy {
+      Self.signIns.stopAll()
       PluginHost.shared.detach(self)
     }
   }
@@ -185,6 +250,7 @@ public class PluginsModule: Module, PluginsNative {
 
   private static func remove(_ name: String, official: Bool, folderId: String?, _ promise: Promise) {
     PluginHost.shared.remove(name, official: official, folderId: folderId) { problem in
+      if !official { PluginFileCalls.forget(name) }
       if let problem { return promise.resolve(["ok": false, "reason": problem]) }
       if official { return promise.resolve(["ok": true]) }
       PluginPageView.removeData(name) { promise.resolve(["ok": true]) }
@@ -208,7 +274,7 @@ public class PluginsModule: Module, PluginsNative {
   }
 
   private static func snapshot(_ name: String, _ path: String, _ promise: Promise) {
-    guard let view = PluginPageView.live[name] else {
+    guard let view = PluginPageView.shown(name) else {
       promise.resolve(false)
       return
     }

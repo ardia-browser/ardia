@@ -6,6 +6,7 @@ import { groupKeptOpen } from "../groups/closeGuard";
 import type { TabPlacement } from "../pins/placing";
 import { splitOf, splitRowPanes, withSplitRows } from "../splits/splits";
 import { eligibleKind, isEligibleTab } from "./automationWindows";
+import { isSignInTab } from "../plugins/signInTabs";
 import { OpError, store, type Anchor, type Changed, type Destination, type Space } from "./workspaceTargets";
 import { ownValue } from "../../lib/decode";
 
@@ -34,7 +35,7 @@ export function closedGroupFor(s: BrowserState, g: TabGroup): TabGroup {
 
 export function withPanes(s: BrowserState, ids: string[]): string[] {
   const all = withSplitRows(s, ids);
-  for (const id of all) if (!isEligibleTab(s, id)) throw new OpError("no_window", `Tab ${id}, in a split with the tabs named, isn't one the ardia command can use.`);
+  for (const id of all) if (!isEligibleTab(s, id)) throw new OpError("no_window", isSignInTab(id) ? "A tab in a split with the tabs named is one the ardia command can't use." : `Tab ${id}, in a split with the tabs named, isn't one the ardia command can use.`);
   return all;
 }
 

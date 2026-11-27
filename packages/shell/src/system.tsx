@@ -29,6 +29,10 @@ export const revealFile = (path: string) => System.revealFile(path);
 export const moveToTrash = (path: string) => System.moveToTrash(path);
 export const fileIcon = (path: string, size = 32) => System.fileIcon(path, size);
 export const runningAppIcon = (pid: number, size = 32) => System.runningAppIcon(pid, size);
+export type AppleNotesAnswer = { ok: boolean; json?: string; error?: string; code?: number };
+export const appleNotesFolders = (): Promise<AppleNotesAnswer> => (System.appleNotesFolders ? System.appleNotesFolders() : Promise.resolve({ ok: false, error: "This Ardia can't read Notes.", code: 0 }));
+export const appleNotesNotes = (folder: string, offset: number, limit: number): Promise<AppleNotesAnswer> =>
+  System.appleNotesNotes ? System.appleNotesNotes(folder, offset, limit) : Promise.resolve({ ok: false, error: "This Ardia can't read Notes.", code: 0 });
 export const hapticTick = () => System.hapticTick();
 export const setThinScrollBars = (thin: boolean) => System.setThinScrollBars(thin);
 

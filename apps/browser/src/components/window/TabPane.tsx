@@ -28,6 +28,8 @@ import { DeveloperBar } from "../toolbar/DeveloperBar";
 import { useDeveloperMode } from "../../state/site/developerMode";
 import { PluginPageBar } from "../plugins/PluginPageBar";
 import type { PageBarMatch } from "../../state/plugins/pageBar";
+import { usePlugins } from "../../state/plugins/store";
+import { pluginPageSurface } from "../../state/plugins/pages";
 import { PageOverlays } from "./PageOverlays";
 import { useProfileTheme } from "./ThemeScope";
 import { markNewTabPane } from "../../state/omnibox/newTabMarks";
@@ -96,6 +98,7 @@ export const TabPane = memo(function TabPane({
   const isNewTab = !own.url;
   const emptyCard = isNewTab && newTabCard;
   const newTabShown = useStoreWhile(usePages, live, (s) => !!s.pages[tabId]?.newTabShown);
+  const onGlass = usePlugins((s) => own.appPage && pluginPageSurface(s, own.url) === "glass");
   const inSomeSplit = useBrowserWhile(!!warm, (s) => !!warm && !!splitOf(s, tabId));
   const inSplit = visible ? inActiveSplit : inSomeSplit;
   const frame = rect ?? warm ?? { x: 0, y: 0, width: fullWidth, height: fullHeight };
@@ -148,7 +151,7 @@ export const TabPane = memo(function TabPane({
         overflow: "hidden",
         opacity: covered ? 0 : 1,
         zIndex: lingering ? -1 : undefined,
-        backgroundColor: visible && !fullscreen && !seeThrough ? theme.card : undefined,
+        backgroundColor: visible && !fullscreen && !seeThrough && !onGlass ? theme.card : undefined,
       }}
     >
       {bar.kind === "toolbar" && <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} />}

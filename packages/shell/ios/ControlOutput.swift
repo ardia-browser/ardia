@@ -19,6 +19,9 @@ struct ControlOutput {
     var ticket = 0
   }
 
+  let lineLimit: Int
+  let eventLimit: Int
+  let ceiling: Int
   private var chunks: [Chunk] = []
   private var headStarted = false
   private var offset = 0
@@ -30,6 +33,12 @@ struct ControlOutput {
   private(set) var dropped = 0
   private var finished: [Int] = []
 
+  init(lineLimit: Int = ControlOutput.maxLine, ceiling: Int = ControlOutput.maxBytes) {
+    self.lineLimit = lineLimit
+    eventLimit = max(Self.maxEventBytes, 2 * lineLimit)
+    self.ceiling = max(Self.maxBytes, ceiling)
+  }
+
   var isEmpty: Bool { chunks.isEmpty }
   var midLine: Bool { headStarted && headWritten > 0 }
   var waitingTickets: [Int] { chunks.map(\.ticket).filter { $0 > 0 } }
@@ -40,20 +49,20 @@ struct ControlOutput {
   }
 
   mutating func addReply(_ data: Data, ticket: Int) -> Bool {
-    addKept(Chunk(data: Self.fittedReply(data), kind: .reply, ticket: ticket))
+    addKept(Chunk(data: Self.fittedReply(data, limit: lineLimit), kind: .reply, ticket: ticket))
   }
 
   mutating func addKept(_ data: Data) -> Bool {
-    guard data.count <= Self.maxLine else { return true }
+    guard data.count <= lineLimit else { return true }
     return addKept(Chunk(data: data, kind: .kept))
   }
 
   mutating func addEvent(_ data: Data) -> Bool {
-    guard data.count <= Self.maxLine else {
+    guard data.count <= lineLimit else {
       dropped += 1
       return true
     }
-    while waitingEvents >= Self.maxWaitingEvents || eventBytes + data.count > Self.maxEventBytes || !hasRoom(data.count) {
+    while waitingEvents >= Self.maxWaitingEvents || eventBytes + data.count > eventLimit || !hasRoom(data.count) {
       guard dropOldestEvent() else {
         dropped += 1
         return true
@@ -139,7 +148,10 @@ struct ControlOutput {
 
   private mutating func addKept(_ chunk: Chunk) -> Bool {
     while !hasRoom(chunk.data.count) {
-      guard dropOldestEvent() else { return false }
+      guard dropOldestEvent() else {
+        guard bytes + chunk.data.count + Self.markerRoom <= ceiling else { return false }
+        break
+      }
     }
     bytes += chunk.data.count
     chunks.append(chunk)
@@ -168,7 +180,7 @@ struct ControlOutput {
     guard chunks[0].kind == .event, dropped > 0 else { return }
     let marked = Self.marking(chunks[0].data, dropped: dropped)
     let grown = marked.count - chunks[0].data.count
-    guard grown > 0, grown <= Self.markerRoom, marked.count <= Self.maxLine else { return }
+    guard grown > 0, grown <= Self.markerRoom, marked.count <= lineLimit else { return }
     bytes += grown
     eventBytes += grown
     chunks[0].data = marked
@@ -210,9 +222,9 @@ struct ControlOutput {
     return marked
   }
 
-  static func fittedReply(_ data: Data) -> Data {
-    guard data.count > maxLine else { return data }
-    let message = "The reply would be over 1 MiB, the most a line can carry; ask for less."
+  static func fittedReply(_ data: Data, limit: Int = maxLine) -> Data {
+    guard data.count > limit else { return data }
+    let message = "The reply would be over \(limit >> 20) MiB, the most a line can carry; ask for less."
     let parsed = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? [String: Any]
     let reply: [String: Any] = ["id": echoedId(parsed?["id"]), "error": ["code": "failed", "message": message]]
     var line = (try? JSONSerialization.data(withJSONObject: reply)) ?? Data("{\"id\":null,\"error\":{\"code\":\"failed\",\"message\":\"\(message)\"}}".utf8)

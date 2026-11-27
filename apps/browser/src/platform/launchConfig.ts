@@ -14,6 +14,8 @@ export const switchOverride = (name: string): boolean | undefined => current().s
 
 const testValue = (key: string): string | null => current().test[key] ?? null;
 
+export const testInstanceValue = (key: string): string | null => (current().testInstance ? testValue(key) : null);
+
 export const introStartDelayMs = (): number => {
   const asked = Number(testValue("introStartDelayMs"));
   return Number.isFinite(asked) && asked > 0 ? asked : 0;

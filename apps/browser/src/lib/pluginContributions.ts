@@ -15,7 +15,11 @@ export type MenuContribution = { command: string; title?: string; icon?: string;
 export type MenuContributions = Record<MenuSlot, MenuContribution[]>;
 export type ToolbarItem = { id: string; title: string; icon: string; command?: string; view?: string; tooltip?: string };
 export type SidebarView = { id: string; title: string; icon: string };
-export type PanelSpec = { id: string; title: string; icon: string; mode: PanelMode; file?: string; view?: string; retainContext: boolean; side?: PageSide };
+export type PanelSurface = "card" | "glass";
+
+export const PANEL_SURFACES: readonly PanelSurface[] = ["card", "glass"];
+
+export type PanelSpec = { id: string; title: string; icon: string; mode: PanelMode; file?: string; view?: string; retainContext: boolean; side?: PageSide; routes?: true; surface?: "glass" };
 export type OmniboxSpec = { id: string; title: string; keyword?: string; global: boolean };
 export type ThemeSpec = { id: string; title: string; file: string };
 
@@ -96,7 +100,7 @@ function sidebarView(c: Check, path: string, value: unknown): SidebarView | null
 function panel(c: Check, path: string, value: unknown): PanelSpec | null {
   const doc = object(c, path, value);
   if (!doc) return null;
-  only(c, path, doc, ["id", "title", "icon", "mode", "file", "view", "retainContext", "side", "served"]);
+  only(c, path, doc, ["id", "title", "icon", "mode", "file", "view", "retainContext", "side", "routes", "surface", "served"]);
   if (doc.served !== undefined) {
     c.problems.push(`${path}.served is gone: a page is static files from the plugin's folder (page.file), and it talks to its helper with window.ardia.send`);
     return null;
@@ -115,8 +119,13 @@ function panel(c: Check, path: string, value: unknown): PanelSpec | null {
   const view = doc.view === undefined ? null : matching(c, `${path}.view`, doc.view, KEY, KEY_RULE);
   if (doc.side !== undefined && mode !== "split") c.problems.push(`${path}.side only goes with mode split`);
   const side = doc.side === undefined ? undefined : (SPLIT_SIDES as readonly unknown[]).includes(doc.side) ? (doc.side as PageSide) : (c.problems.push(`${path}.side must be left, right, top or bottom`), undefined);
+  const routes = flag(c, `${path}.routes`, doc.routes);
+  if (routes && (mode === "sidecar" || doc.file === undefined)) c.problems.push(`${path}.routes only goes with a file page in mode tab or split`);
+  const surface = doc.surface === undefined ? "card" : (PANEL_SURFACES as readonly unknown[]).includes(doc.surface) ? (doc.surface as PanelSurface) : (c.problems.push(`${path}.surface must be card or glass`), "card");
+  const glass = surface === "glass" && doc.file !== undefined && mode !== "sidecar";
+  if (surface === "glass" && !glass) c.problems.push(`${path}.surface glass only goes with a file page in mode tab or split`);
   if (!id || !title || !mode || (!file && !view)) return null;
-  return { id, title, icon, mode, ...(file ? { file } : {}), ...(view ? { view } : {}), retainContext, ...(side ? { side } : {}) };
+  return { id, title, icon, mode, ...(file ? { file } : {}), ...(view ? { view } : {}), retainContext, ...(side ? { side } : {}), ...(routes && file && mode !== "sidecar" ? { routes: true as const } : {}), ...(glass && file ? { surface: "glass" as const } : {}) };
 }
 
 function omnibox(c: Check, path: string, value: unknown): OmniboxSpec | null {

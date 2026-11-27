@@ -4,6 +4,7 @@ import Foundation
 
 final class PluginProcess: PluginRun {
   static let channelFd: Int32 = 3
+  static let channelLineLimit = 8 << 20
   static let memoryCheckInterval: TimeInterval = 10
   static let familySampleInterval: TimeInterval = 1
 
@@ -26,6 +27,7 @@ final class PluginProcess: PluginRun {
   var onPagePost: ((PluginProcess, PagePost) -> String?)?
   private var family: PluginFamily?
   private var log: Int32
+  private(set) var channelRetired: String?
 
   struct Spec {
     let name: String
@@ -215,7 +217,8 @@ final class PluginProcess: PluginRun {
         guard let self, !self.answeredPageLine(line) else { return }
         onLine(self, line)
       },
-      onClose: { _ in }, onWritten: { _ in })
+      onClose: { _ in }, onWritten: { _ in }, lineLimit: Self.channelLineLimit, paced: true,
+      onRetire: { [weak self] connection, reason in self?.retired(connection, reason) })
     self.connection = connection
     connection.open()
     let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: queue)
@@ -231,6 +234,15 @@ final class PluginProcess: PluginRun {
     family.start()
     self.family = family
     queue.async { [weak self] in self?.reapIfGone(onExit) }
+  }
+
+  private func retired(_ connection: ControlConnection, _ reason: ControlConnection.RetireReason) {
+    guard reason != .closed else { return }
+    channelRetired = reason.rawValue
+    let text = "[ardia] Ardia closed its channel to this plugin because \(reason.explanation) (\(reason.rawValue), \(connection.queuedBytes) bytes waiting)\n"
+    NSLog("[plugins] %@: closed its channel because %@ (%@)", name, reason.explanation, reason.rawValue)
+    guard log >= 0 else { return }
+    _ = text.withCString { Darwin.write(log, $0, strlen($0)) }
   }
 
   private func answeredPageLine(_ line: String) -> Bool {

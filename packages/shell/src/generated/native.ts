@@ -13,7 +13,7 @@ import type { LocationPermission } from "../location";
 import type { MenuBookmarkKey, MenuItem, MenuPickEvent, MenuState, OpenSurface, SurfaceEvent, SurfaceItem } from "../menus";
 import type { NotificationOptions, NotificationPermission, NotificationPostResult, NotificationResponse } from "../notifications";
 import type { PeekRect } from "../peekStage";
-import type { OfficialFetchProgress, OfficialFetchResult, OfficialPinned, PluginAfterUpdateQuitStops, PluginExit, PluginFetchResult, PluginFetchSpec, PluginFileReadResult, PluginFolderEntry, PluginLine, PluginProgramRegistry, PluginProgramsResult, PluginProgramsSpec, PluginRemoveResult, PluginStartResult, PluginStartSpec, PluginStorageReadResult } from "../plugins";
+import type { OfficialFetchProgress, OfficialFetchResult, OfficialPinned, PluginAfterUpdateQuitStops, PluginExit, PluginFetchResult, PluginFetchSpec, PluginFileReadResult, PluginFilesResult, PluginFilesSpec, PluginFolderCreateResult, PluginFolderEntry, PluginFolderIdentity, PluginFolderInfo, PluginLine, PluginProgramRegistry, PluginProgramsResult, PluginProgramsSpec, PluginRemoveResult, PluginSignInCallback, PluginSignInListenResult, PluginStartResult, PluginStartSpec, PluginStorageReadResult } from "../plugins";
 import type { ReportEvent, UploadReply } from "../report";
 import type { ScriptCommand, ScriptState } from "../scripting";
 import type { DevDragAction, DevDragPayload, LaunchAtLoginStatus, MagnifyUpdate, MenuShortcut, ShortcutModifier } from "../system";
@@ -259,6 +259,8 @@ export type SystemNative = {
   moveToTrash(path: string): Promise<boolean>;
   fileIcon(path: string, size: number): Promise<string | null>;
   runningAppIcon(pid: number, size: number): Promise<string | null>;
+  appleNotesFolders?(): Promise<{ ok: boolean; json?: string; error?: string; code?: number }>;
+  appleNotesNotes?(folder: string, offset: number, limit: number): Promise<{ ok: boolean; json?: string; error?: string; code?: number }>;
   hapticTick(): void | Promise<void>;
   setThinScrollBars(thin: boolean): Promise<void>;
 };
@@ -427,15 +429,30 @@ export type PluginsNative = {
   revealLog(name: string): void;
   revealFolder(): void;
   devSnapshotPage(name: string, path: string): Promise<boolean>;
+  devEvalPage(target: string, body: string): Promise<string>;
+  focusPage(tabId: string): Promise<boolean>;
+  filesCall(spec: PluginFilesSpec): Promise<PluginFilesResult>;
+  filesWatch(id: string, plugin: string, root: string | null, rootIdentity: PluginFolderIdentity | null): boolean;
+  filesUnwatch(id: string): void;
+  filesRevoke(plugin: string, root: string | null): void;
+  filesTicket(): number;
+  pluginFolderCreate(parent: string, parentIdentity: PluginFolderIdentity | null, name: string, grandparentIdentity: PluginFolderIdentity | null): Promise<PluginFolderCreateResult>;
+  pluginFolderInfo(path: string): Promise<PluginFolderInfo>;
+  signInListen?(id: string, host: string, port: number, path: string, state: string, deadlineMs: number): Promise<PluginSignInListenResult>;
+  signInStop?(id: string): void;
   addListener(name: "onLine", listener: (event: PluginsNativeEvents["onLine"]) => void): { remove(): void };
   addListener(name: "onExit", listener: (event: PluginsNativeEvents["onExit"]) => void): { remove(): void };
   addListener(name: "onOfficialFetch", listener: (event: PluginsNativeEvents["onOfficialFetch"]) => void): { remove(): void };
+  addListener(name: "onFilesChange", listener: (event: PluginsNativeEvents["onFilesChange"]) => void): { remove(): void };
+  addListener(name: "onSignInCallback", listener: (event: PluginsNativeEvents["onSignInCallback"]) => void): { remove(): void };
 };
 
 export type PluginsNativeEvents = {
   onLine: PluginLine;
   onExit: PluginExit;
   onOfficialFetch: OfficialFetchProgress;
+  onFilesChange: { id: string; paths: string[]; gone?: boolean };
+  onSignInCallback: PluginSignInCallback;
 };
 
 export type SystemSignalsNative = {

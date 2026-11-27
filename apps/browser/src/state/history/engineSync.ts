@@ -7,7 +7,7 @@ import { MAX_HISTORY, MAX_VISIT_TIMES } from "./history";
 import { applyHistoryChanges, historyBatchUsesIndex, historyListIndexed, indexHistoryList, isListChange, type HistoryGap, type ListChange, type NoteGap } from "./historyChanges";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import type { HistoryEntry } from "../browser/types";
-import { isWebPageUrl } from "../../lib/url";
+import { isHistoryUrl } from "../../lib/url";
 import { engineProfiles } from "../profiles/engineProfiles";
 import { onProfilesOpened, onProfilesUnloaded, openedEngineProfiles } from "../profiles/profileLoading";
 import { migrateLegacyFile } from "../app/legacyFiles";
@@ -158,7 +158,7 @@ function load(engine: string): Promise<void> {
         const read = await queryHistory(engine, MAX_HISTORY, MAX_VISIT_TIMES);
         if (readEpoch(engine) !== epoch) return;
         const floor = read.length >= MAX_HISTORY ? read.reduce((oldest, e) => Math.min(oldest, e.visitTimes.at(-1) ?? 0), Infinity) : -Infinity;
-        let list = read.filter((e) => isWebPageUrl(e.url)).map(toEntry).sort(byLastVisit);
+        let list = read.filter((e) => isHistoryUrl(e.url)).map(toEntry).sort(byLastVisit);
         const replayed = state.queued.filter(isListChange);
         list = applyHistoryChanges(list, replayed, gapNoter(engine));
         if (state.queued.some((c) => c.kind === "deleted" && c.all)) state.again = true;

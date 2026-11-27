@@ -1,6 +1,6 @@
 import { onAppEvent } from "../../platform/app";
 import { onWindowEvent } from "../../platform/windows";
-import { webviews } from "../../platform/webviews";
+import { focusTabPage } from "../plugins/pageFocus";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isEmptyCardTab, NEW_TAB_BAR_POLICY, newTabOpensBar } from "./newTabBarPolicy";
@@ -72,7 +72,7 @@ export function closeNewTabBar(windowId: string) {
   if (!s.windowUi[windowId]?.panel.open) return;
   s.closePanel(windowId);
   const active = activeTabId(store(), windowId);
-  if (active && store().tabs[active]?.url) void webviews.get(active)?.focus();
+  if (active && store().tabs[active]?.url) void focusTabPage(active);
 }
 
 export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: string) {

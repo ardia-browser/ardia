@@ -8,12 +8,19 @@ import {
   type PluginFetchResult,
   type PluginFetchSpec,
   type PluginFileReadResult,
+  type PluginFilesResult,
+  type PluginFilesSpec,
   type PluginFolderEntry,
+  type PluginFolderCreateResult,
+  type PluginFolderIdentity,
+  type PluginFolderInfo,
   type PluginLine,
   type PluginProgramsResult,
   type PluginProgramsSpec,
   type PluginProgramRegistry,
   type PluginRemoveResult,
+  type PluginSignInCallback,
+  type PluginSignInListenResult,
   type PluginStartResult,
   type PluginStartSpec,
   type PluginStorageReadResult,
@@ -28,7 +35,12 @@ export type {
   PluginFetchResult,
   PluginFetchSpec,
   PluginFileReadResult,
+  PluginFilesResult,
+  PluginFilesSpec,
   PluginFolderEntry,
+  PluginFolderCreateResult,
+  PluginFolderIdentity,
+  PluginFolderInfo,
   PluginLine,
   PluginProgramsResult,
   PluginProgramsSpec,
@@ -59,7 +71,13 @@ export const legacyProgramsInstalled = () => Plugins().legacyProgramsInstalled()
 export const programRegistry = () => Plugins().programRegistry();
 export const revealPluginLog = (name: string) => Plugins().revealLog(name);
 export const revealPluginsFolder = () => Plugins().revealFolder();
+export const focusPluginPage = (tabId: string) => Plugins().focusPage(tabId);
 export const devSnapshotPluginPage = (name: string, path: string) => Plugins().devSnapshotPage(name, path);
+export async function devEvalPluginPage(target: string, body: string): Promise<unknown> {
+  const answer = JSON.parse(await Plugins().devEvalPage(target, body)) as { result?: unknown; error?: string };
+  if (answer.error !== undefined) throw new Error(answer.error.replace(/^Error: /, ""));
+  return answer.result ?? null;
+}
 export const officialPluginsPinned = () => Plugins().officialPlugins();
 export const fetchOfficialPlugin = (name: string) => Plugins().fetchOfficial(name);
 export const cancelOfficialPluginFetch = (name: string) => Plugins().cancelOfficialFetch(name);
@@ -71,3 +89,16 @@ export const writePluginStorage = (name: string, text: string) => Plugins().stor
 export const readPluginFile = (name: string, folderId: string, approved: string, path: string) => Plugins().readPluginFile(name, folderId, approved, path);
 export const onPluginLine = (listener: (e: PluginLine) => void) => Plugins().addListener("onLine", listener);
 export const onPluginExit = (listener: (e: PluginExit) => void) => Plugins().addListener("onExit", listener);
+export const filesCall = (spec: PluginFilesSpec) => Plugins().filesCall(spec);
+export const filesWatch = (id: string, plugin: string, root: string | null, rootIdentity: PluginFolderIdentity | null = null) => Plugins().filesWatch(id, plugin, root, rootIdentity);
+export const filesRevoke = (plugin: string, root: string | null) => Plugins().filesRevoke(plugin, root);
+export const filesTicket = () => Plugins().filesTicket();
+export const pluginFolderCreate = (parent: string, parentIdentity: PluginFolderIdentity | null, name: string, grandparentIdentity: PluginFolderIdentity | null = null) =>
+  Plugins().pluginFolderCreate(parent, parentIdentity, name, grandparentIdentity);
+export const filesUnwatch = (id: string) => Plugins().filesUnwatch(id);
+export const pluginFolderInfo = (path: string) => Plugins().pluginFolderInfo(path);
+export const onPluginFilesChange = (listener: (e: { id: string; paths: string[]; gone?: boolean }) => void) => Plugins().addListener("onFilesChange", listener);
+export const signInListen = (id: string, host: string, port: number, path: string, state: string, deadlineMs: number): Promise<PluginSignInListenResult> =>
+  Plugins().signInListen?.(id, host, port, path, state, deadlineMs) ?? Promise.resolve({ ok: false, code: "failed", reason: "this build of Ardia can't listen for sign-ins" });
+export const signInStop = (id: string) => Plugins().signInStop?.(id);
+export const onSignInCallback = (listener: (e: PluginSignInCallback) => void) => Plugins().addListener("onSignInCallback", listener);

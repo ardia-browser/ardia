@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { surfaceKey, usePluginSurfaces, type PluginSurfacesStore, type SidePanel } from "./surfaces";
 import { pluginToolbarItems } from "./toolbar";
 import { activeManifest, activeNames, consentListing, currentPlugins, needsReview, recordOf, usePlugins, webViewsOnline, type PluginsStore } from "./store";
-import { pageContextOf, pageViewUrl, shownContext, usePluginPages } from "./pages";
+import { pageContextOf, pageViewUrl, pluginPageSymbol, shownContext, usePluginPages } from "./pages";
 import { useBrowser } from "../browser/store";
 import { useKeyed, watchWindowRecord } from "../browser/keyedWatch";
 import { eligibleKind } from "../automation/automationWindows";
@@ -13,6 +13,7 @@ import { fullControlLine } from "./consent";
 import { ownValue } from "../../lib/decode";
 
 export const usePluginOrder = () => usePlugins((s) => s.order);
+export const usePluginPageSymbol = (url: string) => usePlugins((s) => pluginPageSymbol(s, url));
 export { useOfficialPlugins } from "./official";
 export const usePluginListing = (name: string) => usePlugins((s) => s.listings[name]);
 export const usePluginFullControl = (name: string) =>

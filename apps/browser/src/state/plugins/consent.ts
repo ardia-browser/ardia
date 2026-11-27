@@ -5,7 +5,7 @@ import { pageBarConsent } from "../../lib/pluginPageBar";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { contributionLines } from "./consentContributions";
 
-type ConsentLine = { icon: string; text: string };
+type ConsentLine = { icon: string; text: string; sites?: true };
 
 const FIELD_WORDS: Record<PasswordField, string> = { login: "login", oneTimeCode: "verification code" };
 
@@ -90,9 +90,29 @@ function stateLines(p: PluginPermissions): ConsentLine[] {
   return lines;
 }
 
+const TWO_PART_SUFFIX = /^(co|com|net|org|gov|edu|ac|ne|or)\.[a-z]{2}$/;
+
+export function siteDomain(host: string): string {
+  const parts = host.split(".");
+  const keep = parts.length > 2 && TWO_PART_SUFFIX.test(parts.slice(-2).join(".")) ? 3 : 2;
+  return parts.slice(-keep).join(".");
+}
+
+const brandOf = (domain: string) => domain.charAt(0).toUpperCase() + domain.slice(1, domain.indexOf("."));
+
+export function signInLine(m: PluginManifest): ConsentLine | null {
+  if (!m.permissions.sites.length) return null;
+  const hosts = m.permissions.sites;
+  const list = hosts.length === 1 ? hosts[0] : `${hosts.slice(0, -1).join(", ")} and ${hosts.at(-1)}`;
+  const brands = [...new Set(hosts.map(siteDomain).map(brandOf))].join(" and ");
+  return { icon: "person.badge.key", sites: true, text: `Use your sign-in on ${list}: ${m.title} can read your ${brands} pages and make changes there as you. Never in private windows, and it never sees your password or cookies` };
+}
+
 function permissionLines(m: PluginManifest): ConsentLine[] {
   const p = m.permissions;
   const lines: ConsentLine[] = [];
+  const sites = signInLine(m);
+  if (sites) lines.push(sites);
   lines.push(...networkLines(m));
   if (p.tabs) lines.push({ icon: "square.on.square", text: `${p.fullUrls ? "Sees the full address and title of your tabs" : "Sees the address (without what follows ? or #) and title of your tabs"}${p.tabs === "write" ? ", and can open, close and switch tabs" : ""}` });
   if (p.workspace) lines.push({ icon: "square.grid.2x2", text: "Sees and rearranges every window, tab and group: it can move, close and group your tabs" });
@@ -101,7 +121,10 @@ function permissionLines(m: PluginManifest): ConsentLine[] {
   lines.push(...stateLines(p));
   if (p.commands) lines.push({ icon: "command", text: "Runs Ardia commands, like opening and closing tabs" });
   if (p.storage) lines.push({ icon: "internaldrive", text: "Keeps its own data on this " + PLATFORM_TERMS.computer });
+  if (p.files) lines.push({ icon: "folder", text: "Keeps its own files on this " + PLATFORM_TERMS.computer });
+  if (p.folders) lines.push({ icon: "person.2", text: `Reads and writes folders you choose, like a shared folder in ${PLATFORM_TERMS.cloudDrive}` });
   if (p.secrets) lines.push({ icon: "key", text: "Keeps secrets, like sign-in tokens, in your Keychain" });
+  if (p.signIn) lines.push({ icon: "rectangle.portrait.and.arrow.forward", text: "Opens sign-in pages in a tab and reads the address they send you back to" });
   return lines;
 }
 

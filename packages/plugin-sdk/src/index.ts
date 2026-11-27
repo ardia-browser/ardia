@@ -11,6 +11,7 @@ export { createRpc, PluginError, type Rpc, type Transport } from "./rpc";
 export { useSurface, type SurfaceInfo } from "./surfaces";
 export { joinGroupPages, type GroupPages } from "./stateMirror";
 export type { Ardia, PluginInfo, PluginResponse } from "./api";
+export type { SiteDownload, SiteResponse } from "./sites";
 export type {
   Awaitable,
   CallContext,
@@ -19,6 +20,7 @@ export type {
   DecideHandler,
   Disposable,
   EventListener,
+  FilesListener,
   OmniboxProvider,
   PageMessageListener,
   PluginDefinition,

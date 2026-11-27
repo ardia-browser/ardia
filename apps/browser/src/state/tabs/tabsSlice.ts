@@ -24,6 +24,7 @@ import { hasPage, loadedPage, navigationOf, renavigated, wakeOf, withWake } from
 import { cancelOpening, gateOpening, isGatedUrl, settleOpening } from "./openingGate";
 import { drainLive, setLive, stageLive } from "./tabLive";
 import { steppedTabId } from "./switchOrder";
+import { takenKept } from "./appHistory";
 
 
 export type TabsSlice = {
@@ -233,7 +234,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const [next, copy] = withNewTab(s, w.id, {
       url: source.url || undefined,
       profileId: source.profileId,
-      snapshot: { ...snapshotTab(source), pin: null, lastActiveAt: undefined },
+      snapshot: { ...snapshotTab(source), pin: null, lastActiveAt: undefined, ...(source.appHistory ? { appHistory: takenKept(source.appHistory) } : {}) },
       index: w.tabIds.indexOf(id) + 1,
       adoptId: source.url ? cloneId(id) : undefined,
     });

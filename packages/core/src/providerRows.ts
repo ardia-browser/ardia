@@ -3,7 +3,7 @@ import type { Suggestion } from "./suggestion.ts";
 
 export type ProviderRowInput = { title: string; url: string; subtitle?: string; icon?: string | null; badge?: string };
 
-export type ProviderSection = { id: string; title: string; rows: readonly ProviderRowInput[] };
+export type ProviderSection = { id: string; title: string; rows: readonly ProviderRowInput[]; pageOrigin?: string };
 
 export type ProviderSuggestion = Extract<Suggestion, { kind: "provider" }>;
 
@@ -41,13 +41,20 @@ export function providerUrl(value: unknown): string | null {
   return authority && AUTHORITY.test(authority) ? url : null;
 }
 
+export function providerPageUrl(value: unknown, pageOrigin: string | undefined): string | null {
+  if (!pageOrigin || typeof value !== "string" || value.length > PROVIDER_LIMITS.url || UNSAFE_IN_URL.test(value) || value.includes("#")) return null;
+  if (!/^ardia:\/\/[a-z0-9][a-z0-9-]*$/.test(pageOrigin) || !value.startsWith(pageOrigin)) return null;
+  const rest = value.slice(pageOrigin.length);
+  return rest === "" || rest[0] === "/" || rest[0] === "?" ? value : null;
+}
+
 export function providerIcon(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   if (/^data:/i.test(value)) return value.length <= PROVIDER_LIMITS.iconBytes && IMAGE_DATA_URL.test(value) ? value : null;
   return /^https?:\/\//i.test(value) ? providerUrl(value) : null;
 }
 
-export function safeProviderRows(section: { id: string; title: string }, rows: unknown, limit: number = PROVIDER_LIMITS.rowsPerProvider): ProviderSuggestion[] {
+export function safeProviderRows(section: { id: string; title: string; pageOrigin?: string }, rows: unknown, limit: number = PROVIDER_LIMITS.rowsPerProvider): ProviderSuggestion[] {
   if (!Array.isArray(rows)) return [];
   const out: ProviderSuggestion[] = [];
   const seen = new Set<string>();
@@ -56,7 +63,7 @@ export function safeProviderRows(section: { id: string; title: string }, rows: u
     if (out.length >= limit) break;
     if (!row || typeof row !== "object") continue;
     const r = row as Record<string, unknown>;
-    const url = providerUrl(r.url);
+    const url = providerUrl(r.url) ?? providerPageUrl(r.url, section.pageOrigin);
     if (!url) continue;
     const key = pageKey(url);
     if (seen.has(key)) continue;

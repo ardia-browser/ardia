@@ -13,7 +13,7 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { noteCliTabsHeld } from "../telemetry/tabSleepCounts";
 import { controlConsoleDelta } from "../../platform/control";
 import { recentlyClosedIn } from "../windows/recentlyClosedList";
-import { eligibleKind, isEligibleTab, shownPage, windowTabIds } from "./automationWindows";
+import { eligibleKind, eligibleTabOr, isEligibleTab, shownPage, windowTabIds } from "./automationWindows";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { cliHoldsPushed } from "./cliHoldsEngine";
 import { askWhereSeen } from "./socketAsk";
@@ -45,7 +45,7 @@ function tabRow(s: BrowserState, tabId: string) {
     playingAudio: live.playingAudio,
     canGoBack: live.canGoBack,
     canGoForward: live.canGoForward,
-    opener: t.openerId,
+    opener: eligibleTabOr(s, t.openerId),
     createdAt: t.createdAt,
     lastActiveAt: t.lastActiveAt,
   };

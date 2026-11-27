@@ -205,6 +205,18 @@ test("a crashing helper restarts with backoff, then stays stopped", async () => 
   lifecycle.disablePlugin("example");
 });
 
+test("a helper whose channel Ardia closed restarts, and the reason is counted by name only", async () => {
+  const run = await enabled();
+  processExited({ name: "example", run, status: 3, signal: null, overMemory: false, channelRetired: "reply_backlog" }, 0);
+  assert.equal(P().processes.example.state, "waiting", "the non-zero exit counts as a crash and restarts");
+  processExited({ name: "example", run: run + 1, status: 3, signal: null, overMemory: false, channelRetired: "some_new_reason" }, 0);
+  const counts = takePluginCounts();
+  assert.equal(counts.plugin_channel_retired_reply_backlog, 1);
+  assert.equal(counts.plugin_process_crashes, 1);
+  assert.ok(!Object.keys(counts).some((k) => k.includes("some_new_reason")), "an unknown reason isn't sent");
+  lifecycle.disablePlugin("example");
+});
+
 test("a clean exit isn't restarted, and an old run's exit is ignored", async () => {
   const run = await enabled();
   processExited({ name: "example", run: run - 1, status: 1, signal: null, overMemory: false });

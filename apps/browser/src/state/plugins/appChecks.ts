@@ -29,7 +29,7 @@ export const manifestHash = (text: string, folderId = "") => hexOf(sha256(`${tex
 const LEGACY_OFFICIAL = "bundled";
 const OFFICIAL_FOLDER = /^official-[0-9a-f]{64}$/;
 
-const isOfficialFolder = (folderId: string) => folderId === LEGACY_OFFICIAL || OFFICIAL_FOLDER.test(folderId);
+export const isOfficialFolder = (folderId: string) => folderId === LEGACY_OFFICIAL || OFFICIAL_FOLDER.test(folderId);
 
 export function appProblems(m: PluginManifest, settings: Settings, appVersion: string, folderId = "", registry: ProgramClaims = NO_CLAIMS): string[] {
   const problems: string[] = [];

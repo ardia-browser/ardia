@@ -36,6 +36,14 @@ const { cleanUrl } = await import("@ardia/core");
 const { drainPassages } = await import("./state/site/translateDrain.ts");
 const { translatePack } = await import("./state/site/translate.ts");
 const { FakeElement, FakeText, fakePage: fakeTranslatorPage } = await import("./state/site/fixtures/translatorPage.mjs");
+const { providerPageUrl } = await import("@ardia/core");
+const { ownPageUrl } = await import("./state/plugins/omnibox.ts");
+const { filesMethod, pathProblem } = await import("./state/plugins/channelFiles.ts");
+const { folderNameProblem } = await import("./state/plugins/folderGrants.ts");
+const { routePluginPage } = await import("./state/plugins/pages.ts");
+const { usePlugins } = await import("./state/plugins/store.ts");
+const { tabDestination } = await import("./state/pages/urls.ts");
+const { signInCallbackOf, signInRedirect, signInStateOf, signInUrlOf } = await import("./state/plugins/channelSignIn.ts");
 
 const S = () => useBrowser.getState();
 const show = (value) => {
@@ -201,6 +209,23 @@ test("D4: a plugin's URL, through open, apply and group.create, is only ever htt
         const parsed = parseOps([op], pluginUrlRule);
         if (!Array.isArray(parsed)) continue;
         for (const u of parsed[0].urls) assert.match(u, /^https?:\/\//i, show(op));
+      }
+    }
+  }
+});
+
+test("a plugin's omnibox rows are only http(s) or that plugin's own ardia:// page, at the row and again in the bar", () => {
+  for (const { value } of HOSTILE_VALUES) {
+    for (const url of typeof value === "string" ? [value, `ardia://notes/${value}`, `ardia://notes${value}`, `${value}ardia://notes/a`] : [value]) {
+      const own = ownPageUrl("notes", url);
+      if (own !== null) {
+        assert.match(own, /^ardia:\/\/notes(?:[/?]|$)/, show(url));
+        assert.doesNotMatch(own, /[\u0000-\u001f\u007f-\u009f\s\\#]|\/\.\.(?:[/?]|$)/u, show(url));
+      }
+      const page = providerPageUrl(url, "ardia://notes");
+      if (page !== null) {
+        assert.match(page, /^ardia:\/\/notes(?:[/?]|$)/, show(url));
+        assert.doesNotMatch(page, /[\s#]/u, show(url));
       }
     }
   }
@@ -1191,4 +1216,85 @@ test("a trustedInput message is only a same-origin stamp, and the age native han
     assert.ok(Number.isFinite(age) && age >= 0 && age < 5000, `${id}: ${show(value)}`);
   }
   for (const value of [5000, -1, NaN, Infinity, "10", [10], { valueOf: () => 10 }, true]) assert.equal(embedInputAge(value), null, show(value));
+});
+
+const SAFE_FILE_PATH = /^(?!\/)(?:(?!\.{1,2}(?:\/|$))[^/\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]{1,255}(?:\/|$))+$/u;
+
+test("a plugin's file path reaches the file service only as a relative path inside its root, whatever it sends", async () => {
+  const files = stub.pluginFiles;
+  files.reset();
+  const caller = { name: "hostile-files", run: 1 };
+  const m = { permissions: { files: true, folders: true } };
+  const shapes = (v) => (typeof v === "string" ? [v, `a/${v}`, `${v}/b`, `a/${v}/b`, `${v}${v}`] : [v]);
+  for (const { value } of HOSTILE_VALUES)
+    for (const path of shapes(value)) {
+      await filesMethod(caller, m, "files.read", { path });
+      await filesMethod(caller, m, "files.write", { path, data: "AAE=" });
+      await filesMethod(caller, m, "files.list", { dir: path });
+      await filesMethod(caller, m, "files.remove", { path });
+      await filesMethod(caller, m, "files.read", { path: "a", root: path });
+      await filesMethod(caller, m, "files.read", { path: "a", root: typeof path === "string" ? `p${path}` : path });
+      await filesMethod(caller, m, "files.pick", { multiple: path });
+      if (pathProblem(path) === null) assert.match(path, SAFE_FILE_PATH, show(path));
+    }
+  assert.ok(files.calls.length > 0, "positive control: plain names still reach the service");
+  for (const spec of files.calls) {
+    assert.equal(spec.root, null, `${show(spec)}: a hostile root never names a folder`);
+    if (spec.path !== "" || spec.op !== "list") assert.match(spec.path, SAFE_FILE_PATH, show(spec));
+    assert.ok(new TextEncoder().encode(spec.path).length <= 1024, show(spec));
+  }
+  files.reset();
+});
+
+test("a folder name a plugin asks for is one plain name, never a path, a dot file or control text", () => {
+  for (const { value } of HOSTILE_VALUES)
+    for (const name of typeof value === "string" ? [value, `Team ${value}`, `${value} Team`] : [value]) {
+      if (folderNameProblem(name) !== null) continue;
+      assert.equal(typeof name, "string");
+      assert.doesNotMatch(name, /[/:\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]|^\./u, show(name));
+      assert.ok([...name].length <= 100 && name.trim().length > 0, show(name));
+    }
+  assert.equal(folderNameProblem("Team Notes"), null, "positive control");
+});
+
+test("a plugin page's navigate request only ever moves its tab to one of that plugin's own page addresses", () => {
+  const manifest = readManifest(JSON.stringify({ manifest: 2, name: "rt", title: "Routes", contributes: { panels: [{ id: "default", title: "Routes", mode: "tab", file: "page/index.html", routes: true }] } })).manifest;
+  usePlugins.setState({ loaded: true, listings: { rt: { name: "rt", manifest, problems: [], hash: "h1", folderId: "" } }, records: { rt: { enabled: true, approved: "h1", values: {}, applied: {} } } });
+  S().hydrate({});
+  const w = S().createWindow({ url: "ardia://rt/start" });
+  const id = S().windows[w].tabIds[0];
+  const PAGE_ADDRESS = /^ardia:\/\/rt(\/[A-Za-z0-9._~!$&'()*+,;=:@%-]*)*(\?[^#\s]*)?$/;
+  assert.equal(routePluginPage(id, "rt", JSON.stringify({ path: "/ok" })), true, "a plain path moves the tab");
+  assert.equal(tabDestination(S().tabs[id]), "ardia://rt/ok");
+  for (const { value } of HOSTILE_VALUES) {
+    for (const body of [JSON.stringify({ path: value }), JSON.stringify({ path: typeof value === "string" ? `/${value}` : value }), JSON.stringify({ path: value, replace: value }), typeof value === "string" ? value : "{}"]) {
+      routePluginPage(id, "rt", body);
+      const at = tabDestination(S().tabs[id]);
+      assert.match(at, PAGE_ADDRESS, show(body));
+      assert.equal(S().tabs[id].appHistory.entries.every((e) => PAGE_ADDRESS.test(e.url)), true, show(body));
+    }
+  }
+  assert.equal(routePluginPage(id, "other", JSON.stringify({ path: "/x" })), false, "another plugin can't move this tab");
+});
+
+test("a plugin's sign-in reaches a tab only as https with its state, listens only on loopback, and hands back only its own callback's address", () => {
+  const state = "Zq81_mNw-4Lp0aXc";
+  const callback = signInCallbackOf("http://127.0.0.1:53682/cb");
+  assert.equal("problem" in callback, false, "positive control: a plain callback passes");
+  assert.deepEqual(signInUrlOf(`https://accounts.example/o?state=${state}`, state), { url: `https://accounts.example/o?state=${state}` }, "positive control: a plain url passes");
+  assert.equal(signInRedirect(callback, state, `/cb?code=x&state=${state}`), `http://127.0.0.1:53682/cb?code=x&state=${state}`, "positive control: the real redirect passes");
+  const shapes = (v) => (typeof v === "string" ? [v, `https://a.example/${v}?state=${state}`, `http://127.0.0.1:53682/${v}`, `/cb?state=${state}&${v}`, `/cb${v}?state=${state}`] : [v]);
+  for (const { value } of HOSTILE_VALUES)
+    for (const shaped of shapes(value)) {
+      const url = signInUrlOf(shaped, state);
+      if ("url" in url) assert.match(url.url, /^https:\/\/[\x21-\x7e]+$/, show(shaped));
+      const cb = signInCallbackOf(shaped);
+      if (!("problem" in cb)) {
+        assert.ok(["127.0.0.1", "localhost", "::1"].includes(cb.host), show(shaped));
+        assert.match(cb.path, /^\/[A-Za-z0-9/_.~-]*$/, show(shaped));
+      }
+      const back = signInRedirect(callback, state, shaped);
+      if (back !== null) assert.match(back, /^http:\/\/127\.0\.0\.1:53682\/cb\?[\x21\x22\x24-\x7e]*$/, show(shaped));
+      if (signInStateOf(shaped) !== null) assert.match(shaped, /^[A-Za-z0-9_-]{16,256}$/);
+    }
 });

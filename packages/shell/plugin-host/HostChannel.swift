@@ -3,15 +3,16 @@ import Foundation
 
 final class HostChannel {
   static let maxIncomingLine = 32 << 20
-  static let maxOutgoingLine = (1 << 20) - 1
-  static let maxPendingOutput = 16 << 20
+  static let maxOutgoingLine = 8 << 20
+  static let maxPendingOutput = 32 << 20
+  static let closedStatus: Int32 = 3
 
   private let fd: Int32
   private let queue: DispatchQueue
   private var readSource: DispatchSourceRead?
   private var writeSource: DispatchSourceWrite?
   private var writeSuspended = true
-  private var incoming = Data()
+  private var incoming: [UInt8] = []
   private var outgoing = Data()
   private let onLine: (String) -> Void
   private let onClose: () -> Void
@@ -44,8 +45,10 @@ final class HostChannel {
     while true {
       let count = buffer.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
       if count > 0 {
+        let scanFrom = incoming.count
         incoming.append(contentsOf: buffer[0..<count])
-        deliverLines()
+        deliverLines(scanningFrom: scanFrom)
+        guard readSource != nil else { return }
         continue
       }
       if count < 0 && errno == EINTR { continue }
@@ -54,12 +57,16 @@ final class HostChannel {
     }
   }
 
-  private func deliverLines() {
-    while let newline = incoming.firstIndex(of: 10) {
-      let line = incoming[incoming.startIndex..<newline]
-      incoming = Data(incoming[incoming.index(after: newline)...])
-      if !line.isEmpty { onLine(String(decoding: line, as: UTF8.self)) }
+  private func deliverLines(scanningFrom scanFrom: Int) {
+    var lineStart = 0
+    var index = scanFrom
+    while let newline = incoming[index...].firstIndex(of: 10) {
+      if newline > lineStart { onLine(String(decoding: incoming[lineStart..<newline], as: UTF8.self)) }
+      lineStart = newline + 1
+      index = lineStart
+      guard readSource != nil else { return }
     }
+    if lineStart > 0 { incoming.removeFirst(lineStart) }
     if incoming.count > Self.maxIncomingLine {
       FileHandle.standardError.write(Data("[ardia] a line from Ardia was over \(Self.maxIncomingLine >> 20) MB, so the channel closed\n".utf8))
       close()
@@ -70,7 +77,7 @@ final class HostChannel {
     case tooLong, hasNewline, backedUp, closed
     var message: String {
       switch self {
-      case .tooLong: return "a line to Ardia is at most 1 MB"
+      case .tooLong: return "a line to Ardia is at most 8 MiB"
       case .hasNewline: return "a line to Ardia can't contain a newline"
       case .backedUp: return "Ardia isn't reading, so the line was dropped"
       case .closed: return "the channel to Ardia is closed"

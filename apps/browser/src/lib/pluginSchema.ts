@@ -3,8 +3,8 @@ import { RESERVED_PAGE_NAMES } from "./pluginNames";
 import { DEFAULT_MAIN_MB, KEYWORD_PATTERN, LIMITS, VERSION_PATTERN } from "./pluginChecks";
 import { SPLIT_SIDES } from "./pluginCommands";
 import { MENU_SLOTS, PANEL_MODES } from "./pluginContributions";
-import { TAB_ACCESS } from "./pluginPermissions";
 import { STATE_INTENTS, STATE_TOPICS, TOPICS_NEEDING_TABS } from "./pluginState";
+import { MAX_SIGN_IN_SITES, MAX_SITE_HEADERS, TAB_ACCESS } from "./pluginPermissions";
 import { MAX_WHEN_LENGTH } from "./pluginWhen";
 import { BUTTON_DIVIDER, HOST_ACTION_NAMES, PAGE_BAR_LIMITS, PAGE_BAR_LOOKS } from "./pluginPageBar";
 import { builtInFlags, closed, commandBase, key, name, openCommandProperties, passwordManagerSchema, pluginPath, processSchema, programsSchemaV2, rowSchema, symbol, textOf, toolsSchema } from "./pluginSchemaParts";
@@ -33,8 +33,13 @@ const permissionKeys = closed({
   workspace: { type: "boolean", description: "See and rearrange every window, tab and group (needs tabs: write and fullUrls)" },
   commands: { type: "boolean", description: "Run Ardia commands" },
   storage: { type: "boolean", description: "Keep its own data" },
+  files: { type: "boolean", description: "Keep its own files: ardia.files over its data folder" },
+  folders: { type: "boolean", description: "Read and write folders you choose, like a shared folder in iCloud Drive (ardia.folders)" },
   secrets: { type: "boolean", description: "Keep secrets in the Keychain" },
+  signIn: { type: "boolean", description: "Open sign-in pages in a tab and read the loopback address they send you back to (ardia.signIn), for OAuth sign-in" },
   network: { anyOf: [{ const: false }, { const: "*" }, { type: "array", minItems: 1, maxItems: LIMITS.allowedHosts, items: { type: "string", pattern: "^(\\*\\.)?[a-z0-9.-]{1,253}$" } }], description: "false, \"*\" or hosts like api.example.com and *.example.com" },
+  sites: { type: "array", minItems: 1, maxItems: MAX_SIGN_IN_SITES, items: { type: "string", pattern: "^[a-z0-9-]{1,63}(\\.[a-z0-9-]{1,63})+$" }, description: "Exact hosts, like www.example.com, where the plugin may use your sign-in in Ardia (ardia.sites): its requests carry your cookies there, which it never sees" },
+  siteHeaders: { type: "array", minItems: 1, maxItems: MAX_SITE_HEADERS, items: { type: "string", pattern: "^[a-z0-9]{1,30}(-[a-z0-9]{1,30}){1,6}$" }, description: "The sites' own request headers the plugin may send with ardia.sites, like x-example-client (needs sites)" },
   control: { type: "boolean", description: "Let programs you run fully control Ardia, including your signed-in sites" },
   state: {
     anyOf: [
@@ -78,7 +83,7 @@ function contributes(hookNames: readonly string[]): JsonSchema {
     sidebarViews: list(LIMITS.sidebarViews, closed({ id: key, title: textOf(LIMITS.pageTitle), icon: symbol }, ["id", "title"])),
     panels: list(
       LIMITS.panels,
-      closed({ id: key, title: textOf(LIMITS.pageTitle), icon: symbol, mode: { enum: [...PANEL_MODES] }, file: pluginPath("A page in the plugin's folder"), view: key, retainContext: { type: "boolean" }, side: { enum: [...SPLIT_SIDES] } }, ["id", "title", "mode"]),
+      closed({ id: key, title: textOf(LIMITS.pageTitle), icon: symbol, mode: { enum: [...PANEL_MODES] }, file: pluginPath("A page in the plugin's folder"), view: key, retainContext: { type: "boolean" }, side: { enum: [...SPLIT_SIDES] }, routes: { type: "boolean", description: "Every ardia://<name>/<path> address is this one page (tab and split file pages)" }, surface: { enum: ["card", "glass"], description: "What Ardia draws under a transparent page: its content card (card, the default) or the window's own glass (glass; tab and split file pages)" } }, ["id", "title", "mode"]),
     ),
     omnibox: list(LIMITS.omnibox, closed({ id: key, title: textOf(LIMITS.title), keyword: { type: "string", pattern: KEYWORD_PATTERN }, global: { type: "boolean", description: "Shows in every search; takes no keyword" } }, ["id", "title"])),
     themes: list(LIMITS.themes, closed({ id: key, title: textOf(LIMITS.title), file: { ...pluginPath("A theme file in the plugin's folder"), pattern: "^[^/\\\\][^\\\\]*\\.json$" } }, ["id", "title", "file"])),

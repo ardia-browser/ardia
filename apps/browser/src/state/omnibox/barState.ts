@@ -4,6 +4,7 @@ import { activeTabId } from "../browser/model";
 import { shownPeek } from "../peek/peek";
 import { expectFocus, heroBarFocus } from "../focus/focusClaims";
 import { webviews } from "../../platform/webviews";
+import { focusTabPage, showsPluginPage } from "../plugins/pageFocus";
 import { clickBarPlacement } from "./barPlacement";
 import { notePageFocusReturnAfterBar } from "../telemetry/pageFocusReturns";
 import { consentToken, type ConsentToken } from "../telemetry/client";
@@ -66,6 +67,7 @@ export function cancelPanel(windowId: string) {
     const now = useBrowser.getState();
     const active = activeTabId(now, windowId);
     if (!active || !now.tabs[active]?.url || now.windowUi[windowId]?.panel.open || shownPeek(now, windowId)) return;
+    if (showsPluginPage(active)) return void focusTabPage(active);
     void webviews.get(active)?.focusIfUnfocused().then((focused) => {
       if (focused) notePageFocusReturnAfterBar(consent);
     });
@@ -82,5 +84,5 @@ export function closePanelToHeroBar(windowId: string, tabId: string, reason?: Ba
   const now = useBrowser.getState();
   if (activeTabId(now, windowId) !== tabId) return;
   if (!now.tabs[tabId]?.url) focusHeroBar(windowId, tabId);
-  else if (reason && now.tabs[tabId]?.windowId === windowId) void webviews.get(tabId)?.focus();
+  else if (reason && now.tabs[tabId]?.windowId === windowId) void focusTabPage(tabId);
 }

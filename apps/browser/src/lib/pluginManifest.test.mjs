@@ -266,7 +266,7 @@ test("a v1 manifest migrates into v2's shape: process is the sidecar, page the d
   const { manifest } = readManifest(FIXTURE);
   assert.equal(manifest.manifest, 2);
   assert.equal(manifest.declaredManifest, 1);
-  assert.deepEqual(manifest.permissions, { tabs: "read", fullUrls: false, activePage: false, workspace: false, commands: true, storage: false, secrets: false, network: false, control: false, state: false });
+  assert.deepEqual(manifest.permissions, { tabs: "read", fullUrls: false, activePage: false, workspace: false, commands: true, storage: false, files: false, folders: false, secrets: false, signIn: false, network: false, sites: [], siteHeaders: [], control: false, state: false });
   assert.equal(manifest.sidecar, manifest.process);
   assert.equal(manifest.commands, manifest.contributes.commands);
   assert.equal(manifest.main, null);
@@ -491,4 +491,55 @@ test("manifest 2 adds keywords, a telemetry disclosure, and a program's example 
   assert.ok(schema.then.properties.keywords && schema.then.properties.telemetry);
   assert.ok(schema.then.properties.contributes.properties.programs.items.properties.claim);
   assert.equal(schema.else.properties.programs.items.properties.claim, undefined, "manifest 1's schema keeps its old programs");
+});
+
+test("routes: a tab or split file page serves every path; a view or sidecar panel can't take it", () => {
+  const withPanels = (panels) => (m) => ({ ...m, contributes: { ...m.contributes, panels: [...panels, m.contributes.panels[1]] } });
+  const read = (panels) => readManifest(JSON.stringify(withPanels(panels)(V2())));
+  const page = read([{ id: "default", title: "Reader", mode: "tab", file: "page/index.html", routes: true }]);
+  assert.deepEqual(page.problems, []);
+  assert.equal(page.manifest.contributes.panels[0].routes, true);
+  assert.equal(Object.hasOwn(read([{ id: "default", title: "Reader", mode: "split", file: "page/index.html", routes: false }]).manifest.contributes.panels[0], "routes"), false);
+  assert.deepEqual(read([{ id: "default", title: "Reader", mode: "split", file: "page/index.html", routes: true }]).problems, []);
+  assert.ok(read([{ id: "aside", title: "Side", mode: "sidecar", file: "page/side.html", routes: true }]).problems.some((p) => p.includes("routes only goes with a file page")));
+  assert.ok(read([{ id: "v", title: "View", mode: "tab", view: "notes", routes: true }]).problems.some((p) => p.includes("routes only goes with a file page")));
+  assert.ok(read([{ id: "default", title: "Reader", mode: "tab", file: "page/index.html", routes: "yes" }]).problems.some((p) => p.includes("routes must be true or false")));
+});
+
+test("surface: a tab or split file page can sit on the window's glass; card is the default and the rest refuse glass", () => {
+  const withPanels = (panels) => (m) => ({ ...m, contributes: { ...m.contributes, panels: [...panels, m.contributes.panels[1]] } });
+  const read = (panels) => readManifest(JSON.stringify(withPanels(panels)(V2())));
+  const glass = read([{ id: "default", title: "Notes", mode: "tab", file: "page/index.html", surface: "glass" }]);
+  assert.deepEqual(glass.problems, []);
+  assert.equal(glass.manifest.contributes.panels[0].surface, "glass");
+  assert.deepEqual(read([{ id: "default", title: "Notes", mode: "split", file: "page/index.html", surface: "glass" }]).problems, []);
+  const card = read([{ id: "default", title: "Notes", mode: "tab", file: "page/index.html", surface: "card" }]);
+  assert.deepEqual(card.problems, []);
+  assert.equal(Object.hasOwn(card.manifest.contributes.panels[0], "surface"), false);
+  assert.ok(read([{ id: "aside", title: "Side", mode: "sidecar", file: "page/side.html", surface: "glass" }]).problems.some((p) => p.includes("surface glass only goes with a file page")));
+  assert.ok(read([{ id: "v", title: "View", mode: "tab", view: "notes", surface: "glass" }]).problems.some((p) => p.includes("surface glass only goes with a file page")));
+  assert.ok(read([{ id: "default", title: "Notes", mode: "tab", file: "page/index.html", surface: "frosted" }]).problems.some((p) => p.includes("surface must be card or glass")));
+  const panel = pluginSchema([], { untabbedEvents: [], approvedSettings: [] }).then.properties.contributes.properties.panels.items.properties;
+  assert.deepEqual(panel.surface.enum, ["card", "glass"]);
+});
+
+test("files and folders are booleans, from the object form and the v1 list alike, and a tool caller needs them too", () => {
+  const read = (permissions) => readManifest(JSON.stringify({ ...V2(), permissions }));
+  const both = read({ storage: true, secrets: true, files: true, folders: true });
+  assert.deepEqual(both.problems, []);
+  assert.equal(both.manifest.permissions.files, true);
+  assert.equal(both.manifest.permissions.folders, true);
+  assert.equal(read({ secrets: true }).manifest.permissions.files, false);
+  assert.ok(read({ files: "yes" }).problems.some((p) => /permissions\.files must be true or false/.test(p)));
+  assert.ok(read({ folders: 1 }).problems.some((p) => /permissions\.folders must be true or false/.test(p)));
+  const v1 = readManifest(JSON.stringify({ manifest: 1, name: "old", title: "Old", version: "1.0.0", permissions: ["files", "folders"] }));
+  assert.equal(v1.manifest?.permissions.files, true);
+  assert.equal(v1.manifest?.permissions.folders, true);
+  const p = (extra) => ({ ...NO_PERMISSIONS, ...extra });
+  assert.deepEqual(missingPermissions(p({}), p({ files: true, folders: true })), ["files", "folders"]);
+  assert.deepEqual(missingPermissions(p({ files: true, folders: true }), p({ files: true })), []);
+  const schema = pluginSchema(["tab.opened"], { untabbedEvents: [], approvedSettings: [] });
+  const permissions = JSON.stringify(schema);
+  assert.match(permissions, /"files":\{"type":"boolean"/);
+  assert.match(permissions, /"folders":\{"type":"boolean"/);
 });

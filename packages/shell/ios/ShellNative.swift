@@ -933,6 +933,8 @@ protocol SystemNative {
   static func moveToTrash(_ path: String) -> Bool
   static func fileIcon(_ path: String, _ size: Double) -> String?
   static func runningAppIcon(_ pid: Int, _ size: Double) -> String?
+  static func appleNotesFolders(_ promise: Promise)
+  static func appleNotesNotes(_ folder: String, _ offset: Int, _ limit: Int, _ promise: Promise)
   static func hapticTick()
   static func setThinScrollBars(_ thin: Bool)
 }
@@ -982,6 +984,14 @@ extension SystemNative {
 
   static var runningAppIconFunction: AnyDefinition {
     AsyncFunction("runningAppIcon") { (pid: Int, size: Double) -> String? in Self.runningAppIcon(pid, size) }.runOnQueue(.main)
+  }
+
+  static var appleNotesFoldersFunction: AnyDefinition {
+    AsyncFunction("appleNotesFolders") { (promise: Promise) in Self.appleNotesFolders(promise) }
+  }
+
+  static var appleNotesNotesFunction: AnyDefinition {
+    AsyncFunction("appleNotesNotes") { (folder: String, offset: Int, limit: Int, promise: Promise) in Self.appleNotesNotes(folder, offset, limit, promise) }
   }
 
   static var hapticTickFunction: AnyDefinition {
@@ -1448,13 +1458,24 @@ protocol PluginsNative {
   static func revealLog(_ name: String)
   static func revealFolder()
   static func devSnapshotPage(_ name: String, _ path: String, _ promise: Promise)
+  static func devEvalPage(_ target: String, _ body: String, _ promise: Promise)
+  static func focusPage(_ tabId: String, _ promise: Promise)
+  static func filesCall(_ spec: [String: Any], _ promise: Promise)
+  static func filesWatch(_ id: String, _ plugin: String, _ root: String?, _ rootIdentity: [String: Any]?) -> Bool
+  static func filesUnwatch(_ id: String)
+  static func filesRevoke(_ plugin: String, _ root: String?)
+  static func filesTicket() -> Int
+  static func pluginFolderCreate(_ parent: String, _ parentIdentity: [String: Any]?, _ name: String, _ grandparentIdentity: [String: Any]?, _ promise: Promise)
+  static func pluginFolderInfo(_ path: String, _ promise: Promise)
+  static func signInListen(_ id: String, _ host: String, _ port: Int, _ path: String, _ state: String, _ deadlineMs: Int, _ promise: Promise)
+  static func signInStop(_ id: String)
 }
 
 extension PluginsNative {
   static var moduleName: String { "ArdiaPlugins" }
 
   static var eventsDefinition: AnyDefinition {
-    Events("onLine", "onExit", "onOfficialFetch")
+    Events("onLine", "onExit", "onOfficialFetch", "onFilesChange", "onSignInCallback")
   }
 
   static var folderFunction: AnyDefinition {
@@ -1560,12 +1581,58 @@ extension PluginsNative {
   static var devSnapshotPageFunction: AnyDefinition {
     AsyncFunction("devSnapshotPage") { (name: String, path: String, promise: Promise) in Self.devSnapshotPage(name, path, promise) }.runOnQueue(.main)
   }
+
+  static var devEvalPageFunction: AnyDefinition {
+    AsyncFunction("devEvalPage") { (target: String, body: String, promise: Promise) in Self.devEvalPage(target, body, promise) }.runOnQueue(.main)
+  }
+
+  static var focusPageFunction: AnyDefinition {
+    AsyncFunction("focusPage") { (tabId: String, promise: Promise) in Self.focusPage(tabId, promise) }.runOnQueue(.main)
+  }
+
+  static var filesCallFunction: AnyDefinition {
+    AsyncFunction("filesCall") { (spec: [String: Any], promise: Promise) in Self.filesCall(spec, promise) }
+  }
+
+  static var filesWatchFunction: AnyDefinition {
+    Function("filesWatch") { (id: String, plugin: String, root: String?, rootIdentity: [String: Any]?) -> Bool in Self.filesWatch(id, plugin, root, rootIdentity) }
+  }
+
+  static var filesUnwatchFunction: AnyDefinition {
+    Function("filesUnwatch") { (id: String) in Self.filesUnwatch(id) }
+  }
+
+  static var filesRevokeFunction: AnyDefinition {
+    Function("filesRevoke") { (plugin: String, root: String?) in Self.filesRevoke(plugin, root) }
+  }
+
+  static var filesTicketFunction: AnyDefinition {
+    Function("filesTicket") { () -> Int in Self.filesTicket() }
+  }
+
+  static var pluginFolderCreateFunction: AnyDefinition {
+    AsyncFunction("pluginFolderCreate") { (parent: String, parentIdentity: [String: Any]?, name: String, grandparentIdentity: [String: Any]?, promise: Promise) in Self.pluginFolderCreate(parent, parentIdentity, name, grandparentIdentity, promise) }
+  }
+
+  static var pluginFolderInfoFunction: AnyDefinition {
+    AsyncFunction("pluginFolderInfo") { (path: String, promise: Promise) in Self.pluginFolderInfo(path, promise) }
+  }
+
+  static var signInListenFunction: AnyDefinition {
+    AsyncFunction("signInListen") { (id: String, host: String, port: Int, path: String, state: String, deadlineMs: Int, promise: Promise) in Self.signInListen(id, host, port, path, state, deadlineMs, promise) }
+  }
+
+  static var signInStopFunction: AnyDefinition {
+    Function("signInStop") { (id: String) in Self.signInStop(id) }
+  }
 }
 
 extension PluginsNative where Self: Module {
   func sendOnLine(_ payload: [String: Any?]) { sendEvent("onLine", payload) }
   func sendOnExit(_ payload: [String: Any?]) { sendEvent("onExit", payload) }
   func sendOnOfficialFetch(_ payload: [String: Any?]) { sendEvent("onOfficialFetch", payload) }
+  func sendOnFilesChange(_ payload: [String: Any?]) { sendEvent("onFilesChange", payload) }
+  func sendOnSignInCallback(_ payload: [String: Any?]) { sendEvent("onSignInCallback", payload) }
 }
 
 protocol SystemSignalsNative {

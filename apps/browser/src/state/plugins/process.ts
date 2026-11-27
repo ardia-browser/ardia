@@ -1,6 +1,6 @@
 import type { PluginManifest } from "../../lib/pluginManifest";
 import { sendToPlugin, startPluginProcess, stopPluginProcess, type PluginExit, type PluginStartSpec } from "../../platform/plugins";
-import { notePlugin } from "../telemetry/pluginCounts";
+import { notePlugin, notePluginChannelRetired } from "../telemetry/pluginCounts";
 import { consentNow, consentToken, type ConsentToken } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
 import { isQuitting } from "../app/quit";
@@ -159,6 +159,7 @@ export function restartProcess(name: string) {
 
 export function processExited(exit: PluginExit, now = Date.now()) {
   const consent = consentToken();
+  if (exit.channelRetired) notePluginChannelRetired(exit.channelRetired, consent);
   const entry = supervised.get(exit.name);
   const state = usePlugins.getState().processes[exit.name];
   if (!entry || state?.state !== "running" || state.run !== exit.run) return;

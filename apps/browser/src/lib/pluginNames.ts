@@ -16,6 +16,13 @@ export const RESERVED_PAGE_NAMES: readonly string[] = [
 const PAGE_PATH = /^(\/[A-Za-z0-9._~!$&'()*+,;=:@%-]*)*(\?[^#\s]*)?$/;
 export const MAX_PAGE_PATH = 512;
 
+const PLUGIN_ADDRESS = /^ardia:\/\/([a-z0-9][a-z0-9-]{0,39})(?:[/?#]|$)/i;
+
+export function isPluginPageAddress(url: string): boolean {
+  const name = PLUGIN_ADDRESS.exec(url)?.[1]?.toLowerCase();
+  return !!name && !RESERVED_PAGE_NAMES.includes(name) && url.length <= MAX_PAGE_PATH + 64;
+}
+
 export function isWellFormed(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     const unit = text.charCodeAt(i);

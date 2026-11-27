@@ -240,7 +240,7 @@ export function enablePlugin(name: string, hash: string): boolean {
   const builtIn = keepsInstalledFlag(listing) ? { installed: true, ...(before.controlGranted ? { controlGranted: true } : {}) } : {};
   const current = currentPlugins().listings[name];
   const previous = candidate && recordApproves(current, before) ? (approvalMatches(current, before.approved) ? before.approved : before.previous) : undefined;
-  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn, ...(previous ? { previous } : {}), ...(before.sites ? { sites: before.sites } : {}) } }, consent)) {
+  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn, ...(previous ? { previous } : {}), ...(before.sites ? { sites: before.sites } : {}), ...(before.folders ? { folders: before.folders } : {}), ...(before.sitesOff ? { sitesOff: true as const } : {}) } }, consent)) {
     usePlugins.setState({ consent: null, unsaved: name });
     settleInstall(name, { ok: false, reason: UNSAVED });
     return false;

@@ -1,6 +1,7 @@
 import { isFields } from "../../lib/decode";
 import type { OmniboxSpec } from "../../lib/pluginManifest";
-import { pluginWebUrl } from "../../lib/pluginWebUrl";
+import { isPagePath } from "../../lib/pluginNames";
+import { MAX_OPEN_URL_LENGTH, pluginWebUrl } from "../../lib/pluginWebUrl";
 import { registerOmniboxProvider, type OmniboxProvider, type ProviderRow } from "../omnibox/providers";
 import { notePlugin } from "../telemetry/pluginCounts";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
@@ -18,16 +19,34 @@ const pluginProviderId = (plugin: string, id: string) => `plugin:${plugin}:${id}
 
 const cleanText = (value: unknown, max: number) => (typeof value === "string" ? value.replace(UNSAFE, "").trim().slice(0, max) : "");
 
-function sanitizedRows(result: unknown): ProviderRow[] {
+export const pluginPageOrigin = (plugin: string) => `ardia://${plugin}`;
+
+const hasPage = (plugin: string) => !!activeManifest(currentPlugins(), plugin)?.contributes.panels.some((p) => p.mode === "tab" || p.mode === "split");
+
+export function ownPageUrl(plugin: string, raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length > MAX_OPEN_URL_LENGTH) return null;
+  const origin = pluginPageOrigin(plugin);
+  if (!raw.startsWith(origin)) return null;
+  const path = raw.slice(origin.length);
+  if (path !== "" && path[0] !== "/" && path[0] !== "?") return null;
+  return isPagePath(path) && hasPage(plugin) ? raw : null;
+}
+
+function rowUrl(plugin: string, raw: unknown): string | null {
+  const checked = pluginWebUrl(raw);
+  return "problem" in checked ? ownPageUrl(plugin, raw) : checked.url;
+}
+
+export function pluginOmniboxRows(plugin: string, result: unknown): ProviderRow[] {
   const raw = Array.isArray(result) ? result : isFields(result) && Array.isArray(result.suggestions) ? result.suggestions : [];
   const rows: ProviderRow[] = [];
   for (const value of raw) {
     if (rows.length >= OMNIBOX_LIMITS.rows) break;
     if (!isFields(value)) continue;
     const title = cleanText(value.title, OMNIBOX_LIMITS.title);
-    const checked = pluginWebUrl(value.url);
-    if (!title || "problem" in checked) continue;
-    const row: ProviderRow = { title, url: checked.url };
+    const url = rowUrl(plugin, value.url);
+    if (!title || !url) continue;
+    const row: ProviderRow = { title, url };
     const subtitle = cleanText(value.subtitle, OMNIBOX_LIMITS.subtitle);
     const badge = cleanText(value.badge, OMNIBOX_LIMITS.badge);
     if (subtitle) row.subtitle = subtitle;
@@ -45,12 +64,13 @@ function providerFor(plugin: string, spec: OmniboxSpec): OmniboxProvider & { glo
     ...(spec.keyword ? { keyword: spec.keyword } : {}),
     global: spec.global,
     plugin,
+    pageOrigin: pluginPageOrigin(plugin),
     async query(text, signal) {
       if (signal.aborted || !activeManifest(currentPlugins(), plugin)) return [];
       notePlugin("plugin_omnibox_queries");
       const outcome = await invokePluginCall(plugin, { kind: "omnibox", provider: spec.id, query: text.slice(0, OMNIBOX_LIMITS.query) }, { kind: "host" }, OMNIBOX_TIMEOUT_MS, { signal });
       if (signal.aborted || !outcome.ok) return [];
-      return sanitizedRows(outcome.result);
+      return pluginOmniboxRows(plugin, outcome.result);
     },
   };
 }

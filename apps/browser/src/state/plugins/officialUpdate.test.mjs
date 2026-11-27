@@ -246,3 +246,12 @@ test("a different name or a manifest not marked official never passes", () => {
 test("every prompt reason has a name the telemetry counts use", () => {
   assert.deepEqual([...UPDATE_PROMPT_REASONS].sort(), ["activation", "baseline", "contributions", "hooks", "network", "permissions", "programs", "runtime", "settings", "unknown"]);
 });
+
+test("an official update that adds files or folders waits for review as a permissions change", () => {
+  const base = v2("0.7.0");
+  const withFiles = v2("0.7.1", { permissions: { control: true, files: true } });
+  const withFolders = v2("0.7.1", { permissions: { control: true, folders: true } });
+  assert.deepEqual(updateWithin(parse(base), parse(withFiles)), { ok: false, reason: "permissions" });
+  assert.deepEqual(updateWithin(parse(base), parse(withFolders)), { ok: false, reason: "permissions" });
+  assert.equal(updateWithin(parse(withFiles), parse(v2("0.7.2", { permissions: { control: true, files: true } }))).ok, true, "the same files permission passes");
+});

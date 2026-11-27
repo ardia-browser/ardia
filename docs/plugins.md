@@ -81,8 +81,8 @@ definePlugin({ views: { releases: Releases }, commands: { refresh: async () => a
 - **Hooks**: `useState`, `useReducer`, `useEffect`, `useLayoutEffect`, `useMemo`, `useCallback`, `useRef`,
   `useContext`, `useId`, and `useSurface` (which surface and window a view is in).
 - **`ardia`**: `tabs`, `workspace`, `navigation`, `downloads`, `state`, `activePage`, `commands`, `tools`, `storage`,
-  `secrets`, `net.fetch`, `programs`, `ui` (`toast`, `quickPick`, `inputBox`, `confirm`), `panels`, `toolbar` (title,
-  badge, icon updates), `omnibox`, `decide` and `pages`. State events and intents are
+  `secrets`, `net.fetch`, `signIn`, `programs`, `ui` (`toast`, `quickPick`, `inputBox`, `confirm`), `panels`, `toolbar`
+  (title, badge, icon updates), `omnibox`, `decide` and `pages`. State events and intents are
   [below](#state-events-and-intents).
   Each call is a request on the channel and is held to the manifest's permissions on Ardia's side; the SDK never
   decides what a plugin may do.
@@ -405,14 +405,327 @@ plugin that isn't needed yet costs nothing: no host process, no memory. The firs
 | `workspace` | `true` | See and arrange every tab, group and folder (needs `tabs: write` and `fullUrls`) |
 | `commands` | `true` | Run Ardia's commands, the same ones with the same refusals as the `ardia` command (`docs/automation.md` › Which commands) |
 | `storage` | `true` | A private key-value store in `PluginData/<name>/storage.json`, at most 2 MB in all and 256 KB a value (`plugin_storage_writes`). `storage.get` answers `{found: true, value}` or `{found: false}`. A file Ardia can't read or parse, an empty one included, fails every call; Ardia never overwrites it with an empty store |
+| `files` | `true` | Files of its own under `PluginData/<name>/files` through `ardia.files` ([files](#files)): read, write, append, list, remove and watch, at most 2 GiB in all. The consent sheet says "Keeps its own files on this Mac" |
+| `folders` | `true` | Folders you grant through `ardia.folders` ([folders](#folders)): one it makes in iCloud Drive › Ardia Shared or one you pick, which `ardia.files` then reaches by the grant's id (that needs `files` too). The consent sheet says "Reads and writes folders you choose, like a shared folder in iCloud Drive" |
 | `secrets` | `true` | Keychain items of its own (`ardia.plugin.<name>.<key>`, at most 64, 16 KB each; `plugin_secret_writes`). If the Keychain's list of them can't be read, Ardia keeps it, fails secret writes and deletes, and says removing the plugin left its secrets |
+| `signIn` | `true` | `ardia.signIn.start` ([signIn](#signin)): opens a sign-in page in a tab of your frontmost normal window and hands main the loopback address it sends you back to, for OAuth sign-in with the browser's own session and passkeys. The consent sheet says "Opens sign-in pages in a tab and reads the address they send you back to" |
 | `network` | `false`, `"*"`, or 1 to 32 host patterns | main's `fetch` reaches only these hosts (`*.example.com` included); a sidecar gets the network as in v1. A web view the plugin shows (its page, a `file` panel) goes online only with `"*"`: WebKit's traffic can't be held to a list of hosts, so with a list it stays offline and the plugin reaches its hosts through `net.fetch` |
 | `state` | `{"events"?, "intents"?}` or `false` | `events`: any of `tabs`, `workspace`, `navigation` (each needs `tabs`) and `downloads`, heard after Ardia commits them, redacted. `intents`: any of `tabs.group`, `tabs.ungroup`, `tabs.move`, `tabs.pin`, `tabs.unpin`, `tabs.mute`, `tabs.unmute`, `tabs.activate` and `groups.update` (needs `tabs: write`). See [State events and intents](#state-events-and-intents) |
+| `sites` | 1 to 8 exact hosts | Use your sign-in in Ardia on these hosts through `ardia.sites` ([sites](#sites)): requests carry your cookies there, which the plugin never sees. The consent sheet names every host and says the plugin can make changes ("Use your sign-in on app.notion.com, file.notion.com, file.notion.so and www.notion.so: Notes can read your Notion pages and make changes there as you. Never in private windows, and it never sees your password or cookies"), and Settings › Plugins shows that line with a switch that turns it off |
+| `siteHeaders` | 1 to 16 header names | The sites' own request headers the plugin may send with `ardia.sites` (like `x-notion-active-user-header`); needs `sites`. Never `Authorization`, `Cookie`, CSRF, `sec-*`, `proxy-*` or forwarding headers |
 | `control` | `true` | Turning it on turns on `cliControl`, unless you turned control off yourself: an Off you chose wins, and the consent sheet points to the switch, Settings › Advanced › Let programs control Ardia. While control is on, any program you run has the `ardia` command's reach: the control socket and the engine's token connection, a full DevTools client of the browser (every tab and page, signed-in sites and their cookies, downloads and uploads; `docs/cli.md`). So the consent sheet and the plugin's page in Settings › Plugins put that first ("Turns on control in Settings › Advanced. While it's on, any program you run can fully control Ardia: every tab and page, your signed-in sites and their cookies, and uploads and downloads of any file on this Mac"; "While control is on …" when you turned control off yourself, and naming the commands Ardia runs for it after updates when it has any), and its row in the list, the official ones' included (also while an update has failed), says "Can fully control Ardia" (`fullControlLine`, `FULL_CONTROL_SUMMARY` in `state/plugins/consent.ts`) |
 
 The old list form (`["tabs", "network"]`) still reads, as above. Contributions grant their own reach and are shown on
 the consent sheet too: a toolbar button, a sidebar view, a context-menu item, a theme, a decide hook, site switches in
 Site Controls and a page bar with the actions it names.
+
+### files
+
+`permissions.files` gives the plugin a folder of its own, `PluginData/<name>/files`, made on first use. Every call
+takes a `root`: `"data"` (the default) is that folder, a grant's id from `ardia.folders` is that folder (it needs
+`folders` too, and a grant the plugin still holds).
+
+```ts
+ardia.files.read(path, { root?, offset?, length? })   // { found: false } | { found: true, data /*base64*/, size, mtimeMs }
+ardia.files.readText(path, { root? })                 // UTF-8, null when there's no file
+ardia.files.write(path, base64, { root?, exclusive? }) // { size, mtimeMs }; exclusive: fails with exists if it's there
+ardia.files.writeText(path, text, { root?, exclusive? })
+ardia.files.append(path, base64, { root? })           // { size, mtimeMs }
+ardia.files.list(dir?, { root?, recursive? })         // [{ path, kind: "file" | "dir", size, mtimeMs, placeholder }]
+ardia.files.remove(path, { root? })                   // true, or false when nothing was there
+ardia.files.watch((e) => {}, { root? })               // Disposable; e is { root, paths }
+ardia.files.pick({ multiple? })                      // the open panel; [{ id, name, size }], [] when you cancel
+```
+
+A path is relative to the root, `/`-separated, without a leading `/`, empty, `.` or `..` parts, control or direction
+characters or Ardia's temporary names (`.<name>.ardia-…`), at most 1,024 UTF-8 bytes with each part 1 to 255; anything
+else is `bad_path` before it reaches the disk. `list()` and `list("")` are the root; its paths are relative to the root
+(not to `dir`), sorted. `remove` takes a file or an empty folder, never a full one. `read` past the end answers
+`{found: true, data: ""}`.
+
+Limits: 4 MiB of decoded data a call (`length` defaults to and is capped at 4 MiB; a whole-file `read` of a bigger file
+is `too_large`, so read it in windows with `offset` and `length`, and write a bigger one as a `write` then `append`s);
+2 GiB in the data root (a write or append past it is `too_large`); `list` answers at most 10,000 entries (more is
+`too_large`) and recurses at most 32 levels; at most 8 watches a run. Data is strict padded base64 (`bad_request`
+otherwise). Errors reject with a `PluginError` whose `code` is `not_found`, `exists`, `too_large`, `bad_path`, `refused`
+(no permission, an unknown grant, a link on the way, a full folder) or `unavailable` (a grant whose folder is gone, an
+iCloud file not downloaded yet), or the channel's `bad_request` and `failed`.
+
+A watch reports changes under its root, coalesced, as `{root, paths}`; it ends when you dispose it, when the run ends
+(the plugin stops, restarts or turns off) and when its grant is forgotten. When its root goes away (the folder moved
+or deleted) the listener hears `{root, paths: [], gone: true}` once and the watch is over: it no longer counts against
+the 8, and disposing it does nothing.
+
+How Ardia writes them: every call runs off the main thread on a queue of the plugin's own, so one plugin's calls land
+in order. Ardia opens the root by its real path and walks the path one part at a time with `openat` and `O_NOFOLLOW`; a
+link anywhere (the root itself, a folder on the way, the file) is `refused`, and a grant whose folder is gone is
+`unavailable`, as is one whose folder is no longer the same folder (device and inode, checked on every call). The
+folder each call ends in is checked again just before the change lands, so a folder moved out of the root in between is
+`refused`; so is a file with other hard links, a path over 32 folders deep or a raw `.<name>.icloud` name, and a
+grant whose real path is, holds or sits in Ardia's own data, config or Programs, `/`, the home folder or `~/Library`
+(iCloud Drive and `~/Library/CloudStorage` aside), compared by folder identity so a `/System/Volumes/Data` alias
+counts too. `filesRevoke` ends a plugin's (or one grant's) access: every call carries a `filesTicket()` taken before any async
+work, and one taken before the revoke answers `refused`. A watch runs on the folder it opened and checks on every batch
+that the path still names that folder; when it doesn't, the watch stops with one `{id, paths: [], gone: true}`.
+`pluginFolderCreate` makes a grant's folder with `mkdirat` in the parent it opened and checked (identity and protected
+places), never by path. When Ardia Shared doesn't exist yet, Ardia checks the folder that will hold it before asking,
+then makes Ardia Shared there exclusively and the new folder inside the one it just made; an Ardia Shared that appeared
+in the meantime is `unavailable` and nothing is granted. A write goes to `.<name>.ardia-<uuid>` beside the file, is synced, then renamed over it (`exclusive`
+renames with `RENAME_EXCL`, so a file already there is `exists`); an append opens with `O_APPEND` and syncs. Missing
+folders are made, `0700` in the plugin's own files (`PluginData/<name>/files`) and `0755` in a grant. Inside iCloud
+Drive writes, appends and removes go through `NSFileCoordinator` (20 s, then `unavailable`). `list` skips links, sockets
+and Ardia's temporary files, shows an iCloud placeholder (`.<name>.icloud`) or a file not downloaded yet as `<name>`
+with `placeholder: true` and asks for it to download; reading one is `unavailable` until it arrives. `remove` deletes a
+file or an empty folder, never a full one (`refused`). Watches use FSEvents with file-level events, coalesced for
+150 ms, with paths relative to the root and Ardia's temporary files left out. Removing a plugin that isn't official
+deletes its `files` with the rest of `PluginData/<name>`; an official plugin keeps them.
+
+A picked file: `files.pick` shows the open panel and answers one `{id, name, size}` per file you chose (one unless
+`multiple`, at most 64). It needs `files`, not `folders`, and gives read access to that one file and nothing beside
+it: `ardia.files.read(name, { root: id, offset?, length? })` reads it (in 4 MiB windows like any file), and any other
+call or path with that root is `refused`. Ardia opens the folder that holds the file by its identity and reads the
+file with `O_NOFOLLOW`, as for a grant, so a file that is a link, one in Ardia's own data or right in your home
+folder (not in a folder inside it) or one that went away is left out (`refused` when none is left). Picks last for
+the plugin's run: they aren't saved in `plugins.json`, and a restart, turning off or removing the plugin ends them.
+At most 64 are kept a plugin (the oldest goes first), one panel at a time (`failed` while one is open), only with a
+normal window open (`no_window`).
+
+### app
+
+Any plugin may ask two things of Ardia itself, so it can point you to a switch without reaching it:
+
+```ts
+ardia.app.controlStatus()        // { command, control }: the Command Line plugin is on; Let programs control Ardia is on
+ardia.app.openSettings(pane)     // "plugins" | "advanced": opens Settings at that pane; true when it opened
+ardia.app.icon(path, { size? })  // an app's icon as a PNG data URL, or null: /Applications or /System/Applications only
+```
+
+Neither changes anything. `openSettings` needs a normal window (`no_window`), opens at most once every 2 seconds a
+plugin (`refused` sooner) and takes no other pane (`bad_request`). Counted as `plugin_settings_opens`.
+
+### signIn
+
+A plugin signs you in to a service with OAuth through your own browser, so the sign-in page sees the session and
+passkeys you already have there, and main (which is offline and can't listen on a port) still gets the answer. It is the
+loopback redirect of RFC 8252 for installed apps, done by Ardia:
+
+```ts
+const state = randomState();
+const { url } = await ardia.signIn.start({
+  url: `https://accounts.google.com/o/oauth2/v2/auth?client_id=…&redirect_uri=http%3A%2F%2F127.0.0.1%3A53682%2Fcb&code_challenge=…&state=${state}`,
+  callback: "http://127.0.0.1:53682/cb",
+  state,
+  timeoutMs: 600_000,
+});
+// url is "http://127.0.0.1:53682/cb?code=…&state=…"
+```
+
+- `permissions.signIn` is needed. `state` is 16 to 256 letters, digits, `_` and `-`, fresh for each sign-in, and `url`
+  must carry exactly one `state` query parameter equal to it, counting names after percent-decoding (so
+  `st%61te=…&state=…` is two, and refused; a name that doesn't decode is refused too). `url` is one `https` address with a host, at most 8 KB,
+  read by the plugin URL rules of `open` (an ASCII host, no user name or password). `callback` is
+  `http://127.0.0.1:<port><path>`, `http://localhost:<port><path>` or `http://[::1]:<port><path>`, lowercase as written,
+  with an explicit port from 1024 to 65535 (no leading zero) and a path of letters, digits, `/`, `_`, `.`, `~` and `-`:
+  no `%` at all, no empty, `.` or `..` part, no query or fragment; no path is `/`. `timeoutMs` is optional: 15 minutes
+  by default, at least 1 second, and anything longer is held to 15 minutes.
+- **Bound first.** Ardia binds the callback's address and port before anything opens (both `127.0.0.1` and `::1` for
+  `localhost`; a Mac without IPv6 may skip `::1`), on loopback only. It first tries to connect there: anything that
+  answers (a program on that address or on all addresses, `0.0.0.0`) means the port is taken. It then binds with
+  `SO_REUSEADDR`, so a closed connection still in `TIME_WAIT` on that port doesn't block it, while a live bind of the
+  same address and port still fails. A port another program or another plugin's sign-in holds is `port_in_use` and no
+  tab opens: pick another port. Ardia never falls back to
+  watching the tab, since whatever holds the port would get the code.
+- Then it opens `url` in a new tab in front, in your frontmost normal window and that window's profile: never a private
+  window, an incognito profile, a Little Arc window or a Peek. The sign-in may hop between sites. **While it runs the
+  tab is hidden** from every plugin, the plugin that asked included, and from the `ardia` command: no tab events, no
+  row in `windows`, `workspace` or `apply` and never its id as a window's active tab, a group member or a split pane, no `tab.opening`, `permission.requested` or `onUrl` for it, so its address
+  (client id, state) can't leak through `fullUrls`. Its opening skips `tab.opening` rules, `hooks.json`'s included, and
+  so do the links it opens and the permissions it asks for: neither `hooks.json` nor a plugin's decide hook hears of
+  them, and the browser does what it would with no hooks (the link opens; the permission prompt shows).
+- **Kept out of History.** While a sign-in runs and for a minute after, no URL carrying its `state` reaches Ardia's
+  History, the address bar, history sync or `history.search`, and each one the engine records is deleted from its
+  history as it arrives; when the sign-in ends, Ardia deletes any it finds among the newest 2,000 pages. Its tab closes
+  without a closed-tab record, and if you closed it yourself, that record and any closed window holding it are
+  removed, so ⌘⇧T can't bring the address back.
+- **Why all of this.** The `state` nonce is what keeps another tab, a private window or a program on this Mac from
+  forging the redirect, and it protects only while it stays secret. So the tab is hidden and its addresses are kept out
+  of History while the sign-in runs. Once it ends the listener is gone and the old `state` is worth nothing.
+- **Caught before it loads** (`PluginCore/PluginSignInListener.swift`, `PluginSignInRequest.swift`). Only a `GET` of
+  the callback's exact path, with the callback's own `Host`, `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest:
+  document` when the browser sends them, and exactly one `state` (names percent-decoded, as above) equal to the
+  session's (compared in constant time) is the redirect. Ardia holds at most 16 sockets a sign-in, answered ones
+  included, drops one idle for 5 seconds, and closes an answered one when the browser does or after 1 second. It gets `204 No Content`, so the tab never leaves the page it was on and no error page shows; every
+  other open connection is dropped, the port closes, and Ardia brings back the tab that was in front before (normally
+  the plugin's page) when the sign-in tab is still in front, closes the sign-in tab and answers `{url}`: the callback's
+  address with the request's query. Anything else (no or wrong `state`, another path, a bad `Host`, a `fetch` from a
+  page) gets an empty 4xx and Ardia keeps listening, so another tab, a private window or a program on this Mac can't
+  end or forge the sign-in. A fragment never reaches a server, so a provider must answer in the query
+  (`response_mode=query`, the default for the code flow); its error redirects (`?error=…&state=…`) come back the same
+  way for the plugin to read.
+- **Ends.** Closing the sign-in tab (or it leaving for a private window) is `cancelled`; so is a second `start` from the
+  same plugin, which closes the first one's tab and replaces it (one sign-in a plugin at a time, one per endpoint
+  across plugins), and the plugin stopping, restarting or turning off, which leaves the tab open as a normal tab. Running
+  out of time is `timeout` and leaves the tab open. Native ends its listener by itself at the timeout plus 5 seconds,
+  and when the interface reloads. A bad `state`, `url` or `callback` or a plugin without the permission is `refused`, a
+  bad `timeoutMs` is `bad_request`, a taken port `port_in_use`, no normal window `no_window`, and Ardia failing to
+  listen (any error but a taken port) or to open the tab `failed`. Each rejects with a `PluginError` of that `code`.
+- Ardia never reads the page, the code or the token: it hands main the address and main exchanges the code itself
+  (`net.fetch`, with PKCE). Counted as `plugin_sign_in_started`, `_completed`, `_cancelled`, `_timeouts`, `_refused` and
+  `_port_in_use`.
+
+### appleNotes
+
+A plugin can read the person's Apple Notes, with two consents first, so an importer needs no exporter:
+
+```ts
+ardia.appleNotes.request()                          // Ardia's sheet; true once allowed (for this run of the plugin)
+ardia.appleNotes.folders()                          // [{ id, name, account, parent, count }]
+ardia.appleNotes.notes(folder, { offset?, limit? }) // { total, notes: [{ id, name, created, modified, locked, body }] }
+```
+
+`request` shows Ardia's sheet in a normal window: "<Plugin> wants to read your Apple Notes. It copies your notes'
+titles, text, pictures, folders and dates into <Plugin>, in Ardia on this Mac. Nothing is sent anywhere, Apple Notes
+isn't changed, and locked notes are skipped. Next, macOS asks you to let Ardia control the Notes app." (Allow / Cancel). Allowed, it lasts until the
+plugin's run ends. The first read then sends Notes an Apple Event, and macOS shows its own Automation prompt, once
+per Mac ("“Ardia” wants access to control “Notes”"), with Ardia's purpose string; refused there (or later in System
+Settings › Privacy & Security › Automation) every read is `refused` and says where to turn it on. Ardia runs only its
+own two JavaScript for Automation scripts, reading names, ids, dates, the locked flag and each unlocked note's HTML
+body (pictures in it are `data:` URLs); `limit` is 1 to 200. Nothing is read from Notes' database directly. A
+background test instance never sends the event. Counted as `plugin_apple_notes_asks`, `_allowed` and `_reads`.
+
+### sites
+
+`permissions.sites` lets a plugin act on a site as you, with the sign-in you already have in Ardia, so it can read
+your own data there (the Notes plugin imports a whole Notion workspace this way). For now only Ardia's own built-in
+official plugins (installed in an official folder, the check `appChecks` makes for `claim`; `official: true` in a
+manifest isn't enough) get it: every other plugin's calls fail with `unavailable` and `ardia.sites.available()`
+answers false. The transport they use is interim, described below, until the engine request in
+[Sign-in requests in the engine](#sign-in-requests-in-the-engine) ships. Each entry is an exact host
+(`app.notion.com`, never `*.notion.com`, an IP address or a port), at most 8.
+
+```ts
+const res = await ardia.sites.fetch("https://app.notion.com/api/v3/getSpaces", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+res.status; res.headers; res.json();                     // { ok, status, headers, body }
+await ardia.sites.available();                           // false: use another way (Notes shows its export-file flow)
+const session = await ardia.sites.session();             // pins the profile and window a long job runs in
+const dl = await ardia.sites.download(url, { to: "exports/x.zip", session, maxBytes: 2 ** 31, onProgress: ({ received, total }) => {} });
+await dl.done;                                           // { size }; rejects with code too_large, exists, refused, cancelled or failed
+await dl.cancel();                                       // ends it at once, even mid-chunk
+```
+
+- **Where it runs (interim).** Ardia opens a hidden page of that exact origin (`https://<host>/robots.txt`, which must be a plain
+  text document of that origin) in the profile of the last regular window you used, and runs each request there as a
+  same-origin `fetch` (`credentials: "include"`, `redirect: "manual"`) with Chrome's own network stack, after checking
+  again, before every request and every download step, that the page is still a plain-text document of that origin
+  (otherwise the page closes and the call fails). One page per plugin, origin, profile and window: the browser's cookies, user agent and TLS, and cookies the site
+  sets are kept as in a tab. Never in a private window or profile: with no regular window the call is `no_window`. The
+  page closes after a minute unused, when the plugin stops or when you turn its sign-in off. It isn't a tab: it has no
+  place in the tab strip and no window of its own.
+- **What a plugin can't do.** Only `https` on a declared host and its default port; every redirect is refused
+  (`redirect: "manual"`, the call fails with `refused`), and a same-origin request mode means nothing goes to another
+  origin. Request headers: `accept`, `accept-language`, `content-type`, `cache-control`, `if-*`, `range` and the ones
+  the manifest lists in `permissions.siteHeaders`, at most 20, one line of at most 1 KB each; never `Authorization`,
+  `Cookie`, `Origin`, `Referer`, `Host`, `User-Agent`, `x-csrf-token`, `x-xsrf-token`, `sec-*`, `proxy-*` or forwarding
+  headers. It's a list of header names: a site's CSRF token under another name is a custom header the manifest has to
+  list, and the consent sheet's "make changes there as you" covers it. The answer keeps `content-type`, `content-length`, `content-disposition`, `content-language`, `etag`,
+  `last-modified`, `retry-after`, `cache-control`, `date`, `expires` and `x-ratelimit-*`; the body is text, at most
+  768 KiB of UTF-8 (`too_large` over it). A plugin never sees a cookie or the password. 5 requests a second (a burst of
+  20) and 4 at once a plugin, downloads included; the bucket survives the plugin restarting, not Ardia relaunching. Every request and download belongs to the
+  run that made it and to a generation that stopping the plugin or flipping its switch ends: an answer that arrives
+  after that is refused, a download is cancelled and its file removed. A session (`ardia.sites.session()`) keeps a
+  long job on the profile and window it started in; it fails with `no_window` if that window closes or changes
+  profile, and it ends with the run.
+- **Downloads** need `files` too. Ardia reads 2 MiB at a time from the site's page and writes each part natively into
+  a staging file beside `to` that the plugin can't name or list (`.name.ardia-<uuid>`), so a file of gigabytes never
+  crosses the plugin channel; only once the last part is in, and only while the plugin is still allowed, does it move
+  the staging file to `to` with an exclusive rename (a file already there fails the download with `exists` and is
+  left alone). Failing, cancelling or stopping discards the staging file, never anything at `to`. It counts the bytes
+  it decodes, never the size the page reports. A cancel reaches the page's request even before its headers arrive,
+  and the download's slot is freed only once that abort and the cleanup are done. One at a time a plugin, `maxBytes`
+  at most 2 GiB, the plugin's whole file quota (a full quota fails with `quota`); progress arrives as `sites.download`
+  events (`{download, state: running | done | failed | cancelled, received, total}`), and `sites.status {download}`
+  answers the last state (kept for the plugin's last 16 downloads), which the SDK asks every 5 s so `done` settles even
+  if an event is lost. A failed, cancelled or capped download removes the file it created, and so does the plugin
+  stopping or the window closing.
+- **What the interim transport can't promise.** The hidden page is an ordinary navigation: a redirect of
+  `https://<host>/robots.txt` reaches its target with the profile's cookies before Ardia can check the page (no
+  navigation hook can stop it from JS; the check before every request is the guard), and requests run in the page's
+  main world, where a site that serves script there, or a service worker, can change what the page reports. A
+  redirect from the site is refused, never followed, because a page can't read where it points. That's why it's
+  limited to Ardia's own plugins, which ask only for sites Ardia ships with, and why the engine request replaces it.
+- **Off switch.** Settings › Plugins › the plugin › What it gets has a switch on the sign-in line; off, every call is
+  `refused` and the hidden pages close. It is kept in `plugins.json` (`sitesOff: true`).
+- Counts: `plugin_site_fetches`, `plugin_site_fetch_failures`, `plugin_site_refusals`, `plugin_site_downloads`,
+  `plugin_site_download_failures`, `plugin_site_download_cancels`, `plugin_site_signin_revokes`. Tests:
+  `state/plugins/pluginSites.test.mjs` (the gate, the switch, private windows, downloads) and
+  `state/plugins/siteScripts.test.mjs` (the page scripts in headless Chromium against a local HTTPS site: cookies sent
+  and never shown, redirects refused before the other site sees anything, chunks put back together exactly).
+
+### Sign-in requests in the engine
+
+The planned engine half of `ardia.sites` replaces the hidden page. New code in `//chrome/browser/ardia`
+(`engine/chromium/src/chrome/browser/ardia/ac_sites.cc`, listed in `BUILD.gn` and `ac_engine.exports`), with a `sites`
+domain call for each in `packages/hostapi/schema/sites.ts` and `packages/ardiacore/ios/SitesCalls.swift`:
+
+- `ac_sites_fetch` (`AC_PROFILE_CALL`, `OffTheRecord::kRefuse`): `{url, method, headers, body?, timeoutMs, maxBytes}`.
+  A `network::ResourceRequest` with `credentials_mode = kInclude`, `site_for_cookies = SiteForCookies::FromUrl(url)`,
+  `request_initiator = url::Origin::Create(url)`, `LOAD_DISABLE_CACHE`, headers checked again against the same deny
+  list, through the profile's `GetURLLoaderFactoryForBrowserProcess()` (no renderer, no service worker), a
+  `SimpleURLLoader` whose `SetOnRedirectCallback` cancels the load and answers `{error: "redirect"}` before any
+  request leaves for the new URL, `SetTimeoutDuration`, `DownloadToString(maxBytes)`. Answers `{status, headers}` with
+  only the kept response headers, and `body`.
+- `ac_sites_download`: the same request, `DownloadToFile` into a path the app passes (a new file it made with
+  `O_EXCL` in the plugin's own folder), `SetOnDownloadProgressCallback` kept for `ac_sites_download_status {id}`
+  (`{received, total, state}`), `ac_sites_cancel {id}` resetting the loader, and the cap enforced by the loader's max
+  size. A profile that goes away cancels everything it holds (`ProfileState::Release`).
+- A network traffic annotation like `ac_search_suggest`'s (`cookies_allowed: YES`, `cookies_store: "user"`, setting
+  Settings › Plugins).
+
+Lessons the interim transport taught, for that design:
+
+- Cancel synchronously inside `SetOnRedirectCallback`: `SimpleURLLoader` follows the redirect when the callback
+  returns if the loader still exists, so the callback deletes (or cancels) the loader before returning. Tests check
+  that neither a same-origin nor a cross-origin redirect target receives a request.
+- Cookies come from the profile's own storage partition: test that two profiles never see each other's cookies, and
+  that a private profile is refused.
+- `DownloadToFile` opens the path itself, so `O_EXCL` on a path doesn't pin the file: stream into a descriptor the
+  engine owns and publish with an exclusive rename, as the staging file does now.
+- `ac_sites_fetch` answers non-2xx responses (401, 403, 429 and their bodies and `Retry-After`) instead of failing:
+  Notes reads them.
+
+It changes the Mac engine key, so it ships with a new published engine; until then, official plugins keep the hidden
+page.
+
+### folders
+
+`permissions.folders` lets a plugin use folders you grant it, normally a shared folder in iCloud Drive that macOS
+Collaborate shares with people. A grant is `{id, name, location: "icloud" | "other", available}`.
+
+```ts
+ardia.folders.list()                  // the plugin's grants; available is whether the folder is there now
+ardia.folders.create(name)            // asks you, makes it, grants it; null when you say no
+ardia.folders.pick({ prompt? })       // the open panel, starting in Ardia Shared; null when you cancel
+ardia.folders.share(id)               // macOS share sheet for the folder: { ok }
+ardia.folders.forget(id)              // drops the grant and its watches; the folder stays
+```
+
+`create(name)` takes 1 to 100 characters, without `/`, `:`, control characters or a leading dot. Ardia asks first in
+its own dialog: "<Plugin> wants to create a shared folder", "It makes “<name>” in iCloud Drive › Ardia Shared, which
+you can then share with people. Ardia never deletes it." With iCloud Drive off it offers Choose Folder… instead and
+makes it in the folder you pick. Ardia reads the parent's identity before it asks (or right after you pick it) and
+makes the folder only in that same directory, never through a link: a parent that is a link, or was swapped while you
+were deciding, gets nothing made in it (`refused` or `unavailable`). A name already taken gets ` 2`, ` 3`…; the grant's `name` is the folder's. `pick`
+grants the folder you choose (its real path); picking one already granted answers that grant. A folder that is, holds or
+sits inside Ardia's own data, config or plugins folders, your home or `~/Library` (iCloud Drive and cloud storage
+folders aside) is `refused`. `share` answers `{ok: false}` when there's no window or the folder is gone. The dialogs
+open only in a normal window, never a private one (`no_window` when there's none). At most 32 grants a plugin.
+
+Grants live on the plugin's record in `plugins.json` (`folders: {id: {name, path, location, addedAt, device, inode}}`),
+survive relaunches, turning off and re-approval, and go when you remove the plugin. Ardia never deletes a granted folder.
+A grant is to the folder itself, not its path: every call and watch carries its device and inode, so a different folder
+put at the same path is `unavailable` and lists as `available: false` until you pick it again, which moves the grant to
+it. A grant saved without them takes them from the folder at its path on first use. Forgetting a grant, and the run
+ending (the plugin stops, restarts, turns off or is removed), drops its watches and refuses its file calls still queued.
 
 ### settings
 
@@ -484,7 +797,13 @@ from the plugin's folder):
 - `sidecar`: a panel beside the page on the window's right, like Arc's and Dia's sidebars. `retainContext: true` keeps
   it mounted, state and scroll included, when it is hidden, so a chat survives switching away (`plugin_panel_opens`).
   Closing a window drops its panels.
-- `tab` and `split`: the page tab at `ardia://<name>` ([The page](#the-page)); `side` goes with `split`.
+- `tab` and `split`: the page tab at `ardia://<name>` ([The page](#the-page)); `side` goes with `split`. With a
+  `file`, `routes: true` makes that one page serve every `ardia://<name>/<path>` address, moving between them without
+  a reload ([Routes](#routes)); it is refused on a `view` or `sidecar` panel.
+  `surface` says what Ardia draws under the page's transparent web view: `card` (the default) is the content card a
+  web page sits on; `glass` drops the card so the page sits on the window's own glass, the same wallpaper-tinted
+  material as the sidebar, and the page paints its own panels ([Theme tokens on web pages](#theme-tokens-on-web-pages)).
+  It is refused on a `view` or `sidecar` panel.
 
 A popover is a toolbar button's `view`, not a panel mode. Panels, popovers, command views and the surfaces in them
 never open in a private window.
@@ -494,6 +813,18 @@ never open in a private window.
 `contributes.omnibox`: result providers for the command bar. With a `keyword` (`gh`), typing it then a space hands the
 rest of the query to main; with `global: true` main is asked for every query, within the omnibox's deadline. A
 provider has one or the other, not both. Queries in private windows never reach a plugin (`plugin_omnibox_queries`).
+
+A provider answers at most 8 rows (`title`, `url`, `subtitle`, `badge`, an SF Symbol `icon`) within 1500 ms; a late
+answer is dropped. A row's `url` is an `http` or `https` address (as `open` reads it) or one of the plugin's own page
+addresses, `ardia://<name>` plus a page path (`""`, or starting with `/` or `?`, as `page.open` takes it; no fragment)
+when the plugin has a page. Anything else (another plugin's page, `ardia://settings`, `javascript:`, `file:`,
+`ardia-plugin:`) drops the row. A global provider's rows show in every command bar, the New Tab page's included: at
+most 3 rows a provider and 6 in all, below the top hit, the search row, typed-address and action rows and the leading
+page matches, above the search engine's suggestions and the rest of history, and never as the top hit or the inline
+completion; a row for a page already listed (an open tab, a history row) is dropped. Each answer merges in as it comes,
+keeping the row that's selected selected. A keyword provider's rows fill the list after its keyword. Picking a row
+opens it as any address (⌘Return in a new tab, ⌥Return in Split View); a page address shown in a tab of that window
+switches to that tab instead (`plugin_omnibox_picks`).
 
 ### themes
 
@@ -1069,7 +1400,16 @@ opened in a split or a new window, from a frozen pinned copy, or in a new tab a 
 
 Descriptor 3 is a Unix stream socket to Ardia speaking the control socket's protocol (`docs/automation.md` ›
 Protocol: newline-delimited JSON, the same limits), private to this helper: nothing else can connect to it, and it
-works whether or not "Let the ardia command control Ardia" is on. A helper should exit when it closes. A helper that
+works whether or not "Let the ardia command control Ardia" is on. A line in either direction is at most 8 MiB here (the control socket stays at
+1 MiB), so a 4 MiB `files.write` fits as base64. Ardia paces the channel instead of closing it: once 32 requests
+wait for replies, or 17 MiB of replies and messages wait for the helper to read them, it stops reading the helper's
+requests until it has caught up, and replies may go past the queue's 34 MiB up to 66 MiB. It closes the channel only
+for a line over 8 MiB, a line left unfinished for 30 s, more than 66 MiB waiting, or 30 s paused with no reply
+written and nothing read; it then writes one `[ardia] Ardia closed its channel to this plugin because …` line, with the
+reason's name, to the plugin's log, and `plugin_channel_retired_<reason>` counts it. The SDK keeps a helper inside
+those limits: at most 16 requests in flight and 12 MiB of request lines and expected replies (a `files.read` counts as
+the base64 of the bytes it asks for). The JavaScript host exits with status 3 when its channel closes, so Ardia
+restarts it as it would a crash. A helper should exit when it closes. A helper that
 closes descriptor 3 itself but keeps running is still the plugin's running helper: it gets no calls, events or page
 messages, its callers' tool calls fail at their deadline, and Restart (or exiting) starts it over.
 
@@ -1089,6 +1429,18 @@ Requests from the helper (`{"id", "method", "params"}`):
 | `page.post` `{"message", "view"?}` | a `page` | `{"ok": true}`, or `overloaded`: a message to the plugin's page views ([Pages and their helper](#pages-and-their-helper)); `refused` for a plugin with no page, however the method name is spelled in JSON |
 | `page.open` `{"path"?, "split"?, "side"?, "context"?}` | a `page`; `context` needs `tabs` | `{"tabId", "windowId"}`: opens the plugin's page at that path in the last focused window, as a tab or in Split View beside the current tab |
 | `tools.call` `{"plugin", "tool", "input"?}` | every permission the other plugin has | the tool's result, or its error; the plugin must be on and running. A plugin can't reach through another plugin's tools to what it wasn't granted itself |
+| `files.read` `{"path", "root"?, "offset"?, "length"?}` | `files` (and `folders` for a grant root) | `{"found": false}` or `{"found": true, "data", "size", "mtimeMs"}` ([files](#files)) |
+| `files.write` `{"path", "data", "root"?, "exclusive"?}`, `files.append` `{"path", "data", "root"?}` | `files` | `{"size", "mtimeMs"}` |
+| `files.list` `{"dir"?, "root"?, "recursive"?}` | `files` | `{"entries"}` |
+| `files.remove` `{"path", "root"?}` | `files` | `{"removed"}` |
+| `files.watch` `{"root"?}`, `files.unwatch` `{"watch"}` | `files` | `{"watch": id}`, then `{"event": "files.changed", "time", "data": {"watch", "root", "paths"}}` lines to that run, and one with `"paths": [], "gone": true` if its root goes away, which ends it; `{"ok": true}` |
+| `app.controlStatus` | none | `{"command", "control"}`: the Command Line plugin is on; Settings › Advanced › Let programs control Ardia is on ([app](#app)) |
+| `app.icon` `{"path", "size"?}` | none | `{"icon"}`: a PNG data URL or null ([app](#app)) |
+| `appleNotes.request`, `appleNotes.folders`, `appleNotes.notes` `{"folder", "offset"?, "limit"?}` | none (Ardia's sheet, then macOS's) | `{"granted"}`, `{"folders"}`, `{"total", "notes"}` ([appleNotes](#applenotes)) |
+| `app.openSettings` `{"pane"}` | none | `{"ok": true}`; pane is `plugins` or `advanced` ([app](#app)) |
+| `files.pick` `{"multiple"?}` | `files` | `{"files": [{"id", "name", "size"}]}` ([files](#files)) |
+| `signIn.start` `{"url", "callback", "state", "timeoutMs"?}` | `signIn` | `{"url"}`: the address the sign-in page sent the tab back to, once it does ([signIn](#signin)) |
+| `folders.list`, `folders.create` `{"name"}`, `folders.pick` `{"prompt"?}`, `folders.share` `{"id"}`, `folders.forget` `{"id"}` | `folders` | `{"folders"}`, `{"folder"}` (a grant or null), `{"ok"}` ([folders](#folders)) |
 | `result` `{"call", "result"? , "error"?}` | | `{"ok": true}`: the answer to a call (below) |
 
 A method the manifest doesn't allow is `refused`. Page messages arrive as `{"pageMessage", "view"}`. Events from Ardia: `plugin.values` (`{"values"}`) when you change a
@@ -1105,8 +1457,11 @@ A plugin's page and its helper talk through Ardia, never over a port:
 
 - **Page to helper.** `window.ardia.send(value)` sends any JSON value; the helper gets a line
   `{"pageMessage": value, "view": "v3"}`, where `view` names that page tab's view. Only the main frame of the
-  plugin's own `ardia-plugin://<name>/` documents can send. At most 64 KB per message and 100 messages a second per
-  view; more is dropped.
+  plugin's own `ardia-plugin://<name>/` documents can send. A message is at most 64 KB of JSON (UTF-8), and a page
+  sends from a bucket of 100 that refills at 100 a second (a burst of 100, then one every 10 ms). `send` answers
+  `true` when the message was queued and `false` when it wasn't: too big, not JSON, over the rate, or no helper
+  running; nothing is queued for a `false`, so a page can pace on it and send again. Ardia enforces the same limit
+  natively, with room for delivery jitter (a bucket of 200 at 100 a second per view).
 - **Helper to page.** `page.post {"message": value, "view"?: "v3"}` (at most 256 KB) fires a `message` event on
   `window.ardia` in that view, or in every view of the plugin when `view` is left out; the value is `event.data`.
   Each view holds at most 64 messages or 1 MB waiting, delivered in order a few at a time; past that `page.post`
@@ -1189,6 +1544,77 @@ whichever profile the tab's window shows:
   (every request needs its own `id`, echoed in the reply). A
   plugin without `commands` can't open tabs.
 
+### What a page can do
+
+A page is a secure context (`window.isSecureContext`, `crypto.subtle`), so a rich offline editor (React,
+ProseMirror) runs as it would on the web. Each was checked from a test page in a hidden instance:
+
+- **Storage.** `localStorage` and IndexedDB live in the plugin's own data store and survive a reload, the page
+  unloading while its tab is hidden, and relaunching Ardia. Removing the plugin deletes them.
+- **Clipboard.** ⌘C, ⌘X and ⌘V (and Edit › Copy, Cut, Paste) fire the page's `copy`, `cut` and `paste` events, so
+  `clipboardData` carries `text/plain`, `text/html` and files: an image copied from Safari arrives as an
+  `image/png` file, a file copied in Finder as that file. `document.execCommand("copy")` in a click works.
+  `navigator.clipboard.writeText` and `write` (with `ClipboardItem`s of `text/plain` and `text/html`) work on a user
+  gesture; `readText` and `read` of what the page itself wrote work, and of anything else WebKit first shows its own
+  Paste button, as Safari does.
+- **Files.** Files dragged in from Finder reach `drop` with `dataTransfer.files`, readable with `FileReader` or
+  `file.text()`. `<input type=file>` (with `multiple` and `accept`) opens a file panel as a sheet on the window, its
+  Format menu offering the accepted types or All Files.
+- **Editing.** `contenteditable` with spellcheck, input methods (IME) and macOS text services. ⌘Z and ⌘⇧Z reach the
+  page's keydown first; one it doesn't take runs WebKit's own undo, which fires `beforeinput` `historyUndo` and
+  `historyRedo`. While a page has focus, ⌘Z never reopens a closed tab.
+- **Focus.** A click into the page focuses it; closing the command bar with Escape gives focus back to the page tab
+  it was opened over.
+- **Keys.** A focused page gets every key a page in a normal tab gets, before Ardia's menu: `keydown` sees it, and
+  `preventDefault()` keeps it from the menu; a key the page leaves alone runs the menu command. Editors get ⌘B ⌘I ⌘U
+  ⌘K ⌘E ⌘D ⌘P ⌘⇧P ⌘F ⌘G ⌘J ⌘/ ⌘⇧7 ⌘⇧8 ⌘Return ⌘[ ⌘] ⌘↑ ⌘↓ ⌘⇧L ⌘⇧H ⌘1–9 ⌘A ⌘C ⌘X ⌘V ⌘Z ⌘⇧Z and the rest.
+  Ardia keeps, before the page sees them, the keys it keeps from every page: ⌘T, ⌘N, ⌘⇧N, ⌘W, ⌘⇧W, ⌘⇧T, ⌘Q,
+  ⌘⇧C (Copy URL), ⌘⇧A (Search Tabs), ⌘⇧] and ⌘⇧[ (and ⌃Tab, ⌃⇧Tab, ⌃Page Down, ⌃Page Up, ⌥⌘↓, ⌥⌘↑), ⌥⌘→ and ⌥⌘←
+  (profiles), ⌥⌘I and F12 (developer tools), ⌘S pressed twice in a row (the sidebar), and in full screen ⌃⌘F. A key
+  rebound in Settings › Shortcuts moves with its command. Ardia's find bar doesn't search a plugin page, so a page
+  that wants ⌘F should handle it.
+
+### Routes
+
+A page tab shows one address, `ardia://<name><path>`, where the path (at most 512 characters) is `""` or starts with
+`/`, and may carry a `?query`; a fragment isn't part of it. Without `routes` each address loads the page anew, with
+`?ardiaPath=<path>` on its `ardia-plugin://` URL. A panel with `"routes": true` is a single-page app:
+
+- **`window.ardia.path`** is the tab's path (`""` for the root, else like `/a/b?x=1`). The first load also gets
+  `?ardiaPath=`.
+- **`window.ardia.navigate(path, { replace })`** moves the tab to another of the plugin's addresses: a new entry in
+  the tab's back list, or the current one swapped with `replace: true`. Only the main frame of the plugin's own
+  documents can call it (a separate `ardiaNavigate` message handler, 4 KB a request, 20 a second); Ardia takes only a
+  valid page path for a page of the same panel, and silently refuses anything else, and every call on a page without
+  `routes`.
+- **`navigate` event**: when the tab's address changes to another of the plugin's paths without a reload (back,
+  forward, the history menu, a typed or picked address, a command's `path`, `navigate()` itself), Ardia sets
+  `window.ardia.path` and fires a plain `navigate` Event on `window.ardia`. The page renders that path; it is never
+  reloaded for it.
+
+```js
+const show = () => render(window.ardia.path);
+window.ardia.addEventListener("navigate", show);
+link.onclick = (event) => { event.preventDefault(); window.ardia.navigate(`/page/${id}`); };
+show();
+```
+
+Every page tab, with or without `routes`, is a real stop in its tab's history, as Ardia's own History, Bookmarks and
+Downloads pages now are:
+
+- **Back and forward** (the buttons, ⌘[ ⌘], a swipe and the long-press history menu) walk a tab's app-page entries
+  together with its web pages: web page → `ardia://notes/a` → `/b` → back → `/a` → back lands on the web page with its
+  own back list intact (Ardia keeps the web view's history when the tab leaves it and asks for it back), and forward
+  again. A new address drops what was ahead, as in a browser. A tab keeps at most 50 such entries.
+- **Title**: the tab's title is the page's `document.title`, or the panel's title while it has none.
+- **History**: each address is a visit in Ardia's History (and the address bar's history suggestions) as
+  `ardia://<name><path>` with that title. A private window never shows plugin pages, so it records none.
+- **Restore**: relaunching, reopening a closed tab (⌘⇧T) and reopening a closed window bring back the exact address
+  and the tab's back and forward list.
+- **Address bar**: typing `ardia://<name>/<path>` opens it in the current tab, as for any address; a page tab of that
+  plugin already there moves to it without a reload. `openPluginPage` and a command's `open` still switch to a tab
+  already showing exactly that address.
+
 
 ### Theme tokens on web pages
 
@@ -1199,6 +1625,40 @@ updates live whenever the theme, appearance or profile tint changes (`lib/plugin
 `--ardia-text`, `--ardia-accent`, `--ardia-selection`, …), with `color-scheme` set; values pass a strict filter (no
 `url()`, `var()`, `image()` or `expression()`), so a theme file can't load anything into a page. A page styled with
 `var(--ardia-background, Canvas)` matches Ardia in light, dark and every theme with no message passing.
+`--ardia-background` is the card's colour and may be translucent (it lets the window's tint through);
+`--ardia-background-solid` is the same card already composited over the window tint, opaque, for a page that paints
+its own surfaces (sticky headers, frozen columns) and must not stack translucent layers. A page that should read as
+part of Ardia leaves its canvas transparent (the tab's web view draws no background, so Ardia's card shows through)
+and paints `--ardia-background-solid` only where something has to cover scrolled content. Popovers use
+`--ardia-popover-tint` over that solid card with `--ardia-popover-border`; rows use `--ardia-row-hover`,
+`--ardia-row-selected` and `--ardia-popover-row-pressed`; controls `--ardia-control`, `--ardia-control-border`,
+`--ardia-field`, `--ardia-switch-off` and `--ardia-form-accent`. The active look's sizes come as lengths too:
+`--ardia-radius-control`, `-toolbar`, `-tile`, `-row`, `-panel`, `-sheet` and `-hero`, `--ardia-text-caption`, `-small`, `-body`,
+`-title` and `-large`, and `--ardia-weight-medium` and `-semibold`, so a theme that changes Ardia's radii or type scale
+changes the page with it. A page on `surface: "glass"` also gets `--ardia-glass-panel` and `--ardia-glass-panel-edge`
+(a frosted panel and its rim over the window's glass) and `--ardia-window-tint-top` and `--ardia-window-tint-bottom`
+(the window's tint, opaque, for frosted sheets and for anything that must cover content); every page gets them. When the
+theme changes, its `<style>` can land after the page's own styles, so a page overriding `html` or `body` uses a more
+specific selector (`:root`, `:root body`). Floating surfaces are glass the way Ardia's popovers are (a `menu` material under
+`--ardia-popover-tint`): `backdrop-filter: blur(var(--ardia-glass-blur)) saturate(var(--ardia-glass-saturation))`, a
+0.5 px `--ardia-popover-border` rim and a 0.5 px inner top highlight in `--ardia-glass-rim`, with the solid tint-over-card
+fill for `prefers-reduced-transparency` and engines without `backdrop-filter`.
+
+### Fonts and symbols on web pages
+
+The active look's faces come as `--ardia-font` (set only when the look names a family; without it the page uses the
+system face, as Ardia does) and `--ardia-font-mono`; the base style already uses them for `body` and for `code`, `kbd`,
+`pre` and `samp`, and they change live with the look, like the type sizes.
+
+A page draws Ardia's own icons, SF Symbols, from `ardia-plugin://<name>/__symbols/<symbol>.png?size=<points>&weight=<weight>&scale=<1-3>`:
+a template image (black, on transparent) drawn by the system, so a page uses it as a CSS mask and the icon takes the
+text colour (`mask: url(…) center / contain no-repeat; background: currentColor`). `<symbol>` is an SF Symbol name
+(lowercase letters, digits and dots, at most 64 bytes), `weight` one of `ultralight`, `thin`, `light`, `regular`
+(the default), `medium`, `semibold`, `bold`, `heavy` and `black`, `size` 4 to 64 points (default 13) and `scale` 1 to 3
+(default 2). A bad request answers 400, a name the system doesn't know 404; answers are cached by those four values.
+It is the page's own host only, needs no permission, and is Mac only: elsewhere a page keeps its own fallback icon.
+Ardia's sizes: toolbar 15 pt in a 30 pt button, page toolbar 12 to 13 pt, menu and popover rows 13 pt in a 20 pt slot,
+sidebar rows 12 pt in a 16 pt box, small buttons 9 to 11 pt.
 
 ## The ardia command
 
@@ -1234,6 +1694,35 @@ The control socket's protocol 4 adds `plugins`, `plugins.enable` (`{"waiting": t
 `plugins.disable`, `plugins.remove` and `plugins.call` (`{"plugin", "tool", "input"?}`).
 
 
+## Testing
+
+A plugin under development runs in a hidden test instance, never in your own Ardia:
+
+```
+scripts/agent/plugin-instance launch plugins/notes --fresh --open /      # build the plugin first
+scripts/agent/plugin-instance eval /tmp/ardia-pi-notes 'return document.title'
+scripts/agent/plugin-instance shot /tmp/ardia-pi-notes /tmp/notes.png
+scripts/agent/plugin-instance quit /tmp/ardia-pi-notes
+```
+
+- `launch` copies the folder (less `node_modules` and `.git`; `--link` symlinks it, so a rebuild shows on the next
+  reload) to `<data>/config/plugins/<name>`, starts a hidden instance (`scripts/agent/ac`, Debug build in
+  `apps/browser/build-home` unless `--app`) with `ARDIA_INSTANCE sharedFolders=<data>-shared` and `ARDIA_TEST
+  pluginApprove=<name>`, `appDialog` and `appMenu`, waits until the plugin is on and prints the pid, DevTools port, data
+  dir and shared folder. `install` copies it in again, `open` opens `ardia://<name><path>`, `app` runs a dev-harness
+  body (as `ac eval`), `state` prints the plugin's record, process and folder grants.
+- **`ARDIA_TEST pluginApprove=<name>[,<name>…]`** (test instances only): after each scan, a local plugin of that name
+  whose manifest has no problems is approved and turned on without the consent sheet, again whenever its `plugin.json`
+  changes (`state/plugins/testApproval.ts`). Official plugins and built-ins are never approved this way.
+- **In the page** (Debug builds, test instances only): `ac.plugins.pageEval(target, body)` runs `body` as an async
+  function body in the live page (`target` is a tab id or the plugin's name, a tab's page first) and resolves its
+  JSON result, or rejects with the page's error; `ac.plugins.snapshotPage(target, file)` writes a PNG of it.
+  `plugin-instance eval` and `shot` use them. Plugin page web views are `isInspectable` in test instances, so Safari's
+  Develop menu reaches them.
+- Prompts: `folders.create`'s confirm answers from `<data>/dialog.json.pick` (`confirm`, anything else declines), folder
+  and file panels from `<data>/file-chooser.txt`, menus from `menu.json.pick`; the macOS share picker is logged to
+  `activation.log`.
+
 ## Code
 
 - `lib/pluginManifest.ts`: parsing and checks, with `pluginContributions.ts`, `pluginCommands.ts`, `pluginRows.ts`,
@@ -1245,8 +1734,8 @@ The control socket's protocol 4 adds `plugins`, `plugins.enable` (`{"waiting": t
   activation (`activation.ts`), settings defaults (`defaults.ts`), the channel (`channel.ts`, `channelApi.ts`,
   `channelData.ts`, `channelUi.ts`), tools (`tools.ts`), commands (`commands.ts`), menus (`menus.ts`), toolbar
   (`toolbar.ts`), surfaces and panels (`surfaces.ts`, `panels.ts`), omnibox (`omnibox.ts`), themes (`themes.ts`),
-  decide hooks (`decideHooks.ts`), storage and secrets (`storage.ts`, `secrets.ts`), page tabs (`pages.ts`,
-  `pageNames.ts`), consent copy (`consent*.ts`), socket methods (`socketMethods.ts`).
+  decide hooks (`decideHooks.ts`), sign-ins (`channelSignIn.ts`, `signInTabs.ts`), storage and secrets (`storage.ts`, `secrets.ts`), page tabs (`pages.ts`,
+  `pageNames.ts`, `pageVisits.ts`; their back list in `state/tabs/appHistory.ts` and `appPageHistory.ts`), consent copy (`consent*.ts`), socket methods (`socketMethods.ts`).
 - Where the browser calls in: `App.tsx` (side panel and overlays), `components/toolbar/Toolbar.tsx` and
   `components/sidebar/AddressBar.tsx` (toolbar buttons), `components/sidebar/PageRows.tsx` (sidebar views),
   `state/sidebar/tabMenu.ts` (the tab menu), `state/config/configFiles.ts` (plugin themes),
@@ -1270,8 +1759,12 @@ Counts only, never plugin names, titles, URLs, row values, secrets, tool input o
 contents, each tied to the consent period the activity began in, so a count that finishes after sharing changed stays
 in the local copy. Hourly `usage_counts`:
 
-- v1: `plugin_enables`, `plugin_disables`, `plugin_process_starts`, `plugin_process_crashes`, `plugin_commands_run`,
-  `plugin_tool_calls`, `plugin_tool_failures`, `plugin_page_opens`, `plugin_split_opens`, `program_links`,
+- v1: `plugin_enables`, `plugin_disables`, `plugin_process_starts`, `plugin_process_crashes`,
+  `plugin_channel_retired_<line_too_long|too_many_requests|reply_backlog|send_backlog|line_deadline|stalled>` (Ardia
+  closed a helper's channel, by why), `plugin_commands_run`,
+  `plugin_tool_calls`, `plugin_tool_failures`, `plugin_page_opens`, `plugin_split_opens`, `plugin_page_navigations`
+  (a page's `navigate` moved its tab), `plugin_page_navigation_refusals` (one Ardia refused: a bad path, another
+  panel's path or a page without `routes`), `program_links`,
   `program_link_failures` (a link refused, a name taken or the copy failed), each refused program also counted once by
   why in `program_link_cause_<cause>` (`bin_folder`, `bin_shared`, `taken`, `other_plugin`, `shadowed`, `busy`, `io`,
   `name`, or `other` for a whole-call failure), `program_unlinks`, `program_adoptions`
@@ -1282,7 +1775,7 @@ in the local copy. Hourly `usage_counts`:
   same period).
 - v2: `plugin_activations` (main started by an activation event), `plugin_activation_failures`,
   `plugin_surface_renders` (a native view committed), `plugin_panel_opens`, `plugin_toolbar_runs`,
-  `plugin_menu_runs`, `plugin_action_shortcuts` (an action run by its declared shortcut), `plugin_omnibox_queries`,
+  `plugin_menu_runs`, `plugin_action_shortcuts` (an action run by its declared shortcut), `plugin_omnibox_queries`, `plugin_omnibox_picks` (a plugin provider's row chosen),
   `plugin_ui_prompts` (a quick pick, input box or confirm shown),
   `plugin_net_fetches`, `plugin_net_refusals` (a fetch outside `permissions.network` or to a private address),
   `plugin_url_refusals_open`, `plugin_url_refusals_group_create` (an `apply` batch refused for an address outside the
@@ -1292,7 +1785,12 @@ in the local copy. Hourly `usage_counts`:
   `plugin_decide_timeouts`, `plugin_state_events` (state events sent; a navigation part counts only in the sharing period of a commit inside it, so one holding only commits made while sharing was off isn't counted), `plugin_state_events_dropped` (too big, or the
   send failed), `plugin_state_flushes_slow` (building them took over 16 ms), `plugin_state_subscribe_refusals`,
   `plugin_state_resyncs` (a plugin asked for everything again after the channel dropped events), `plugin_state_intents`
-  (intents applied) and `plugin_state_intent_refusals`.
+  (intents applied), `plugin_state_intent_refusals`, `plugin_file_reads`, `plugin_file_writes` (writes and appends), `plugin_file_refusals`
+  (`bad_path`, `refused` or `too_large`), `plugin_folder_grants` (a create or pick that granted a folder), `plugin_file_picks` (files `files.pick` gave a plugin), `plugin_settings_opens` (`app.openSettings` that opened Settings), `plugin_apple_notes_asks`, `plugin_apple_notes_allowed`, `plugin_apple_notes_reads`,
+  `plugin_folder_shares`, and for sign-ins `plugin_sign_in_started`, `plugin_sign_in_completed`,
+  `plugin_sign_in_cancelled`, `plugin_sign_in_timeouts`, `plugin_sign_in_refused` and `plugin_sign_in_port_in_use` (the
+  callback's port was taken, so nothing opened). Watch `plugin_file_refusals` against `plugin_file_writes`: refusals climbing means a plugin
+  is hitting a limit or a path rule.
 
 The daily settings snapshot has `plugins_installed`, `plugins_enabled` and, among those on, how many use each part:
 `plugins_with_settings`, `plugins_with_commands`, `plugins_with_page`, `plugins_with_process`,
@@ -1318,10 +1816,13 @@ and each refusal's reason
 `password_manager_offer_to_save_restore_failures` (the pref couldn't be turned on), and the daily
 `password_manager_profiles_<ardia|none|plugin>`.
 
-Dashboard: watch `plugin_process_crashes` against `plugin_process_starts`, `plugin_activation_failures` against
-`plugin_activations`, `plugin_decide_timeouts` against `plugin_decide_calls` (a plugin slowing navigation),
+Dashboard: watch `plugin_page_navigation_refusals` against `plugin_page_navigations` (a page whose links Ardia
+refuses), `plugin_process_crashes` against `plugin_process_starts`, `plugin_activation_failures` against
+`plugin_activations`, the `plugin_channel_retired_*` counts against `plugin_process_starts` (they should stay near
+zero; a rise in `reply_backlog` or `stalled` means a helper is falling behind its replies), `plugin_decide_timeouts` against `plugin_decide_calls` (a plugin slowing navigation),
 `plugin_state_flushes_slow` and `plugin_state_events_dropped` against `plugin_state_events` (state events costing
 the UI thread), `plugin_state_intent_refusals` against `plugin_state_intents`, `plugin_net_refusals` against
-`plugin_net_fetches`, `plugin_url_refusals_open` and `plugin_url_refusals_group_create`
+`plugin_net_fetches`, `plugin_sign_in_completed` against `plugin_sign_in_started` (and
+`plugin_sign_in_port_in_use`: plugins picking a port something else holds), `plugin_url_refusals_open` and `plugin_url_refusals_group_create`
 (a plugin trying addresses it may not open), `program_link_failures` against `program_links`, and `program_after_update_quit_kills` against
 `program_after_update_quit_exits` (afterUpdate commands that ignore TERM at quit).

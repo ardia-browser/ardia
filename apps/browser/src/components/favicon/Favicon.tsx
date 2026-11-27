@@ -9,6 +9,7 @@ import { useDevicePixelsPerRootPoint } from "../../state/settings/interfaceScale
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { initialGlyph } from "./initialGlyph";
 import { bundledSiteIcon } from "./siteIcons";
+import { usePluginPageSymbol } from "../../state/plugins/hooks";
 
 export const Favicon = memo(function Favicon({
   url,
@@ -62,6 +63,8 @@ export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, o
   const theme = useTheme();
   const glyph = color ?? theme.textSecondary;
   const pixelsPerPoint = useDevicePixelsPerRootPoint();
+  const pageSymbol = usePluginPageSymbol(url);
+  if (pageSymbol) return drawnSymbol({ name: pageSymbol, size: size - 2, color: color ?? theme.icon, style: { width: size, height: size, opacity } });
   const bundled = bundledSiteIcon(url, theme.dark);
   if (bundled !== undefined) return <Image source={bundled} style={{ width: size, height: size, borderRadius: size > 18 ? radius.control : radius.hair, opacity }} />;
   const initial = hostInitial(url);

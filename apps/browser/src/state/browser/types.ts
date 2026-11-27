@@ -75,7 +75,12 @@ export type Tab = {
   lastActiveAt: number;
   restoredAt?: number;
   unseen?: true;
+  appHistory?: AppHistory;
 };
+
+export type AppHistoryEntry = { url: string; title: string };
+
+export type AppHistory = { entries: AppHistoryEntry[]; index: number; kept?: { index: number; key: string } };
 
 export type AdoptKind = "restore" | "clone" | "tab" | "ardiacore" | "webkit" | "link";
 export type AdoptId = `${AdoptKind}:${string}`;
@@ -155,7 +160,7 @@ export type TabSnapshot = Pick<
   Tab,
   "url" | "title" | "favicon" | "pin" | "muted" | "zoom" | "customTitle" | "customIcon" | "profileId"
 > &
-  Partial<Pick<Tab, "pinnedUrl" | "reopenAtPinnedUrl" | "engine" | "lastActiveAt" | "tileLetters">>;
+  Partial<Pick<Tab, "pinnedUrl" | "reopenAtPinnedUrl" | "engine" | "lastActiveAt" | "tileLetters" | "appHistory">>;
 
 export type ClosedTab = {
   kind: "tab";

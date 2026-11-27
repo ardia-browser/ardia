@@ -15,6 +15,7 @@ let package = Package(
     .library(name: "ArdiaControlPeerCore", targets: ["ArdiaControlPeerCore"]),
     .library(name: "ArdiaWheelSteerCore", targets: ["ArdiaWheelSteerCore"]),
     .library(name: "ArdiaFieldBlurCore", targets: ["ArdiaFieldBlurCore"]),
+    .library(name: "ArdiaPluginChannel", targets: ["ArdiaPluginChannel"]),
   ],
   targets: [
     .target(name: "ArdiaUpdaterCore", path: "ios/UpdaterCore"),
@@ -26,7 +27,8 @@ let package = Package(
     .target(name: "ArdiaNotificationCore", path: "ios/NotificationCore"),
     .testTarget(name: "ArdiaNotificationCoreTests", dependencies: ["ArdiaNotificationCore"], path: "notification-tests"),
     .target(name: "ArdiaPluginCore", path: "ios/PluginCore"),
-    .testTarget(name: "ArdiaPluginCoreTests", dependencies: ["ArdiaPluginCore"], path: "plugin-tests", exclude: ["vectors"]),
+    .testTarget(name: "ArdiaPluginCoreTests", dependencies: ["ArdiaPluginCore", "ArdiaPluginChannel"], path: "plugin-tests", exclude: ["vectors"]),
+    .target(name: "ArdiaPluginChannel", path: "channel"),
     .target(name: "ArdiaFieldGlowCore", path: "ios/FieldGlowCore"),
     .testTarget(name: "ArdiaFieldGlowCoreTests", dependencies: ["ArdiaFieldGlowCore"], path: "fieldglow-tests"),
     .target(name: "ArdiaInlineKeepCore", path: "ios/InlineKeepCore"),

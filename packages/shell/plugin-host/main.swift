@@ -41,7 +41,7 @@ context.exceptionHandler = { _, exception in
 }
 
 let globals = HostGlobals(context: context, queue: .main)
-let channel = HostChannel(fd: channelFd, queue: .main, onLine: { line in globals.deliver(line) }, onClose: { exit(0) })
+let channel = HostChannel(fd: channelFd, queue: .main, onLine: { line in globals.deliver(line) }, onClose: { exit(HostChannel.closedStatus) })
 globals.attach(channel)
 evaluatingEntry = true
 let install = context.evaluateScript(HostPrelude.source, withSourceURL: URL(string: "ardia://plugin-host/prelude.js"))

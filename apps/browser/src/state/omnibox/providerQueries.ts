@@ -46,7 +46,7 @@ export function createProviderQueries(deadlineMs: number = PROVIDER_DEADLINE_MS)
         }
         Promise.race([answer, deadline])
           .then((rows) => {
-            if (!run.signal.aborted && !signal.aborted && Array.isArray(rows)) onSection({ id: provider.id, title: provider.title, rows });
+            if (!run.signal.aborted && !signal.aborted && Array.isArray(rows)) onSection({ id: provider.id, title: provider.title, rows, ...(provider.pageOrigin ? { pageOrigin: provider.pageOrigin } : {}) });
           })
           .catch(() => {})
           .finally(done);

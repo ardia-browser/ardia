@@ -10,6 +10,7 @@ import { watchPluginOmnibox } from "./omnibox";
 import { watchSurfaceRemounts } from "./surfaces";
 import { watchOfficialUpdates } from "./official";
 import { watchPageBarCommits } from "./pageBarCommits";
+import { watchTestApprovals } from "./testApproval";
 
 let started = false;
 
@@ -27,6 +28,7 @@ export function startPlugins() {
   watchPluginFolder();
   watchOfficialUpdates();
   watchPageBarCommits();
+  watchTestApprovals();
   void rescanPlugins(consentToken());
   watchPluginOmnibox();
 }

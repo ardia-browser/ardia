@@ -7,6 +7,8 @@ import { currentEngineProfile, currentTab } from "../browser/current";
 import { noteExternalApp } from "../telemetry/externalAppCounts";
 import { noteExternalAppRequest } from "../telemetry/track";
 
+export { pairFromLoginList } from "./loginListPairing";
+
 async function shouldPromptForPopups(profile: string, origin: string): Promise<boolean> {
   try {
     const settings = await getSiteSettings(profile, origin);

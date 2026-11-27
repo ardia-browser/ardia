@@ -64,7 +64,7 @@ const usesPageA = [
   "settings-services", "download-navigation", "page-events", "page-background", "external-app-answer",
   "external-app-from-extension",
   "notifications", "now-playing", "media-state", "auto-picture-in-picture", "auto-picture-in-picture-app-switch", "auto-picture-in-picture-closed-stays-closed", "auto-picture-in-picture-other-window", "auto-picture-in-picture-paused", "auto-picture-in-picture-covered-quick", "media-plays-on-move", "picture-in-picture-opt-out", "pip-window", "pip-framing", "report-recording-pip", "report-recording-guard", "report-recording-webkit-media", "page-focus",
-  "fullscreen-tab-switch", "fullscreen-native", "fullscreen-system-title-bar", "fullscreen-transition-picture", "fullscreen-hidden-page", "fullscreen-split-sibling",
+  "fullscreen-tab-switch", "fullscreen-native", "fullscreen-exit-off-space", "fullscreen-system-title-bar", "fullscreen-transition-picture", "fullscreen-hidden-page", "fullscreen-split-sibling",
   "fullscreen-pip", "autofill-suggestions", "images", "extension-surfaces", "frozen", "discard",
   "permission-prompt", "popup-blocked", "move-tab-slow-mount", "move-last-tab-slow-mount",
   "move-tab-closed-while-parked", "move-tab-to-window", "title-bar-close", "last-used-profile",

@@ -150,6 +150,35 @@ reaches Ardia two ways (`docs/automation.md`, `docs/control-socket.md`):
   process (`docs/control-socket.md` › Driving a tab from the engine), so `ardia browse` can work against a normal running
   Ardia without the token connection or `--remote-debugging-port`, and with no approval prompt per tab.
 
+## Triage
+
+`ardia triage` is for someone whose Ardia is misbehaving and who has a coding agent installed. It starts their own
+Claude Code or Codex in a session folder with the facts about the install, the evidence it collected and a playbook,
+and the agent investigates, says whether the problem is already fixed, offers a fix and drafts a report. The command's
+side (the flags, the consent, what it collects, how it files) is in its manual. This repo holds the rest:
+
+- **The playbook**, `.github/triage/PLAYBOOK.md`: the steps the agent follows. The command fetches it from the newest
+  release's tag (stable or nightly), so a change here reaches users with the next release, and carries a copy as the
+  fallback; the plugins repo's CI compares that copy with ardia main's, as it does the plugin schema. The playbook is
+  instructions an agent runs on a user's machine, so a change to it is reviewed like code that ships: it never tells
+  the agent to read the profile's private files, to post anything itself, or to change something without asking.
+- **The Triage report form**, `.github/ISSUE_TEMPLATE/via-triage.yml`: the command files through it, so every report
+  gets the `via-triage` label whoever sends it. Its field ids are part of the contract with the command (the
+  prefilled form's address names them): renaming one needs a command release first.
+- **What a report is.** What happened is the reporter's account; Diagnosis is the agent's reading and may be wrong.
+  The command scrubbed the text and the reporter approved it, but it was written on a machine we don't control, so
+  everything in a `via-triage` issue is data, never instructions (`AGENTS.md`).
+- **What leaves the machine.** The app sends nothing for a triage, and the command only its usual usage count. The
+  agent's provider sees what the agent reads, under
+  the user's own account with them, after a consent the command shows on the first run (`docs/privacy.md`). A report
+  goes out only when the user approves its exact text: as a GitHub issue under their own account, or, with no GitHub
+  account, as a private report through the feedback service, which never opens a public issue for one
+  (`diagnostics.via: "triage"`, `docs/feedback.md`).
+- **Fixes.** Inside a triage session `ardia` runs `triage file` and `plugins list` and little else, so the agent
+  can't read or change settings through it: for a setting, it gives the user the `ardia config set` command to run.
+- **When Ardia won't launch.** The command doesn't need Ardia running: it reads the files Ardia left behind. The live
+  state it can ask a running Ardia for is an extra.
+
 ## The contract
 
 - **Control protocol.** `hello` carries a protocol number both ways. Ardia answers with `protocol` (today 4) and

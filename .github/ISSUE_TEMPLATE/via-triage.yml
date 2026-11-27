@@ -1,0 +1,67 @@
+name: Triage report
+description: Filed with `ardia triage`, where a coding agent investigated on the reporter's machine. For a report you write yourself, use Bug report.
+labels: [via-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the form `ardia triage` fills in. One problem per report. The Diagnosis is the agent's reading and may be wrong; What happened is the reporter's own account.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The problem in the reporter's own words.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnosis
+    attributes:
+      label: Diagnosis
+      description: What the agent found, the evidence for it, where it is in the source, and how sure it is.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest steps that show it, or "not reproduced" and what was tried.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The version the bug happened on, and the channel.
+      placeholder: 0.2.48, nightly
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: The OS and its version, and the CPU.
+      placeholder: macOS 26.1, arm64
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Only the lines that matter, with secrets, emails, home folder names and URL paths removed.
+      render: shell
+  - type: input
+    id: related
+    attributes:
+      label: Related issues
+      description: Issues that look similar, and why this isn't the same one.
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Fix applied or workaround
+      description: Anything that was changed on the machine to unblock the reporter.
+  - type: input
+    id: agent
+    attributes:
+      label: Filed by
+      description: The agent and the `ardia` version that produced this report.
+      placeholder: claude via ardia triage 0.7.0

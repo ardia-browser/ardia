@@ -106,6 +106,17 @@ test("local mode: create, upload, complete, and complete again", async () => {
   assert.equal(late.status, 409);
 });
 
+test("a report sent through ardia triage never opens an issue", async () => {
+  const { url, dir } = await localService();
+  const created = await post(`${url}/api/feedback`, report({ source: "cli", cli_version: "0.7.0", contact: undefined, watch_days: 0, attachments: [], diagnostics: { via: "triage" } }), { key: CLI_INGEST_KEY });
+  assert.equal(created.status, 201);
+  const answer = await created.json();
+  const done = await (await post(`${url}/api/feedback/${answer.id}/complete`, "", { key: CLI_INGEST_KEY, token: answer.upload_token, type: null })).json();
+  assert.equal(done.issue_url, null);
+  await assert.rejects(stat(join(dir, "feedback", answer.id, "issue.md")));
+  assert.equal(JSON.parse(await readFile(join(dir, "feedback", answer.id, "report.json"), "utf8")).diagnostics.via, "triage");
+});
+
 test("keys: missing, site and mismatched keys are refused", async () => {
   const { url } = await localService();
   assert.equal((await post(`${url}/api/feedback`, report(), { key: null })).status, 403);

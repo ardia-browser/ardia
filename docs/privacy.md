@@ -80,6 +80,38 @@ Sync makes no network request: it writes sealed files to a folder you pick and t
 - A normal window drawing an icon with no profile given (the command bar, history menus) may ask any regular profile's
   local icon store. Chromium then marks that icon used in the profile that answered.
 
+### `ardia triage` and your coding agent
+
+`ardia triage` (`docs/cli.md` › Triage) is the one place a tool we ship hands data about your install to a company
+other than us, so it is listed here although Ardia itself contacts nothing for it.
+
+- **Who sees what.** The command starts your own Claude Code or Codex. What the agent reads goes to that agent's
+  provider under your account with them, on their terms, whether or not "Share anonymous crash reports and usage
+  stats" is on. Ardia and ardia.dev receive none of it unless you later send a report.
+- **What it reads.** Ardia's version and channel, `config.json`, recent crash reports on macOS, and the 7-day local
+  usage log (`docs/feedback.md` › Local copy: counts, timings, enums and flags, never a URL or a title). The command
+  copies these into a session folder and removes secrets, emails, home folder names and the paths and queries of URLs
+  first, as far as patterns can find them: it is a best effort, not a proof. A site's name stays where your settings name one (a search provider, a rule for a site). Linux crash dumps
+  hold the crashed process's memory, so they are listed, never copied.
+- **What it doesn't.** Cookies, saved passwords, history, bookmarks, open tabs, page content and site storage. The
+  command collects none of them and tells the agent that Ardia's own folders (its data, settings and logs) are off
+  limits. It starts Claude Code with rules that refuse to read those folders, and for that session it refuses every
+  `ardia` command that would show pages, tabs, cookies or settings.
+- **Guard rails, not a lock.** The agent runs as you, with a shell. The rules above stop accidents; they can't stop an
+  agent that ignores its instructions. The consent says so before anything is collected. The agent is started in its
+  ask-first mode, and Claude Code is told to ask you before it runs the command that posts a report, or `gh`, even
+  if your own settings allow those without asking.
+- **Consent.** The first run shows all of this and asks. Only a typed yes agrees, and it is remembered;
+  `ardia triage --reset-consent` asks again. Nothing is collected before the yes. The command's own usage count
+  (that `ardia triage` ran, and whether you said no) follows "Share anonymous crash reports and usage stats" like
+  every other `ardia` command's.
+- **What the command itself contacts.** `api.github.com` and `raw.githubusercontent.com`, once, for the current
+  playbook (no cookies, no account, no redirects followed), and `github.com` or `ardia.dev/api/feedback` only to
+  file a report. A report sent to `ardia.dev` this way stays private: the feedback service never opens a public
+  issue for it. Like any `ardia feedback` it carries Ardia's and the command's versions, the OS and CPU, which
+  agent ran the command and the names and exit codes of the last few `ardia` commands run, and the evidence files
+  only if you say yes to those.
+
 ## Hosts named in the source that Ardia doesn't contact
 
 Pages, links and patterns: Ardia opens these only as pages you navigate to, or matches them as text.

@@ -272,9 +272,11 @@ export function createService({ store: rawStore, events: rawEvents, issues: rawI
     }
   }
 
+  const staysPrivate = (report) => report.diagnostics?.via === "triage";
+
   async function openIssue(report) {
     const saved = (await store.readJson(report.id, "issue.json")) ?? opened.get(report.id);
-    if (saved || !issues) return saved ?? null;
+    if (saved || !issues || staysPrivate(report)) return saved ?? null;
     let issue;
     try {
       issue = await issues.create(report.id, issueFor(report, dashboardUrl));

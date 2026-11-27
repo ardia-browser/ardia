@@ -29,7 +29,6 @@ import {
 } from "./pinRecords";
 import { homeWindow, store, type Window } from "./pinnedSyncState";
 import { ASLEEP, hasPage, isAsleep, withWake } from "../tabs/pageSession";
-import { sameAddress } from "../../lib/url";
 
 export type PinPageWrites = (written: Map<string, Set<string>>) => void;
 
@@ -259,7 +258,7 @@ export function applyPinned(
         pinnedUrl: group ? (pinnedMember.has(id) ? old.pinnedUrl || syncedHomeIn(base, pinKeyOf(old)) : syncedHomeIn(base, pinKeyOf(old)) || old.pinnedUrl) || v.u || null : v.u,
         customTitle: v.t,
         customIcon: v.i,
-        ...(isAsleep(old) && !keepsLastPage(s.settings, old) ? { url: v.u, title: v.ti, ...(sameAddress(old.url, v.u) ? {} : { page: withWake(old.page, undefined) }) } : {}),
+        ...(isAsleep(old) && !keepsLastPage(s.settings, old) ? { url: v.u, title: v.ti, ...(old.url === v.u ? {} : { page: withWake(old.page, undefined) }) } : {}),
       };
       note(pinKeyOf(tabs[id]!), id);
       continue;

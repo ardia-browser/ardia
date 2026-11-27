@@ -473,3 +473,25 @@ test("a hash-only pinned URL edit synced from another Mac moves a sleeping pin t
     assert.equal(mail.page.wake, undefined, "the old entry isn't restored over the new route");
   });
 });
+
+test("a synced pinned URL edit that only drops a trailing slash still drops the sleeping pin's old history", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  a.with(() => S().setPinnedUrl(tabOf("mail"), "https://mail.example/section/"));
+  await syncAll([a, b]);
+  b.with(() => {
+    const mail = tabOf("mail");
+    assert.equal(S().tabs[mail].url, "https://mail.example/section/");
+    S().updateTab(mail, { page: { kind: "asleep", wake: `restore:${mail}` } });
+  });
+  a.with(() => S().setPinnedUrl(tabOf("mail"), "https://mail.example/section"));
+  await syncAll([a, b]);
+  b.with(() => {
+    const mail = S().tabs[tabOf("mail")];
+    assert.equal(mail.url, "https://mail.example/section");
+    assert.equal(mail.page.wake, undefined);
+  });
+});

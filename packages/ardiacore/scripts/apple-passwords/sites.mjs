@@ -90,6 +90,10 @@ export const PAGES = {
   "/signup-email": (host) => page(`Sign up on ${host}`, emailSignUpForm(), enableWhenFilled),
   "/checkout": (host) => page(`Check out on ${host}`, checkoutForm()),
   "/login": (host) => page(`Sign in to ${host}`, loginForm(), enableWhenFilled),
+  "/login-claims-parent": (host) =>
+    page(`Sign in to ${host}`, loginForm(), `${enableWhenFilled}
+const fake = { getBoundingClientRect: () => ({ left: 20, top: 20, width: 420, height: 240 }), clientLeft: 0, clientTop: 0 };
+Object.defineProperty(window, "frameElement", { get: () => fake, configurable: true });`),
   "/login-ready": (host) => page(`Sign in to ${host}`, loginForm("/signed-in", { ready: true }), holdSubmit),
   "/login-fails": (host) => page(`Sign in to ${host}`, loginForm("/login-fails"), enableWhenFilled),
   "/signup": (host) => page(`Sign up on ${host}`, signUpForm(), enableWhenFilled),
@@ -122,6 +126,7 @@ export async function fixtureSites(dir, pages = PAGES) {
   }
   const seen = [];
   const ports = {};
+  const otherPortUrl = (host, pathname = "/login") => `https://${host}:${ports.otherSecure}${pathname}`;
   const url = (host, pathname = "/login") => `${PLAIN_HOSTS.includes(host) ? "http" : "https"}://${host}:${PLAIN_HOSTS.includes(host) ? ports.plain : ports.secure}${pathname}`;
   const answer = (req, res) => {
     const host = (req.headers.host ?? "").replace(/:\d+$/, "");
@@ -129,12 +134,15 @@ export async function fixtureSites(dir, pages = PAGES) {
     const route = pages[asked.pathname];
     seen.push({ host, url: req.url, method: req.method });
     res.writeHead(route ? 200 : 404, { "content-type": "text/html; charset=utf-8" });
-    res.end(route ? route(host, { frame: url(asked.searchParams.get("frame") ?? "other.localhost", "/login") }) : "not found");
+    const framePath = asked.searchParams.get("framePath") ?? "/login";
+    const frameHost = asked.searchParams.get("frame") ?? "other.localhost";
+    res.end(route ? route(host, { frame: asked.searchParams.get("framePort") === "other" ? otherPortUrl(frameHost, framePath) : url(frameHost, framePath) }) : "not found");
   };
   const pem = fs.readFileSync(cert);
   const secure = createHttpsServer({ key: fs.readFileSync(key), cert: pem }, answer);
   const plain = createServer(answer);
-  [ports.secure, ports.plain] = [await listen(secure), await listen(plain)];
+  const otherSecure = createHttpsServer({ key: fs.readFileSync(key), cert: pem }, answer);
+  [ports.secure, ports.plain, ports.otherSecure] = [await listen(secure), await listen(plain), await listen(otherSecure)];
   const spki = createHash("sha256").update(new X509Certificate(pem).publicKey.export({ type: "spki", format: "der" })).digest("base64");
   return {
     seen,
@@ -142,6 +150,7 @@ export async function fixtureSites(dir, pages = PAGES) {
     url,
     secureUrl: (host, pathname = "/login") => `https://${host}:${ports.secure}${pathname}`,
     origin: (host) => new URL(url(host)).origin,
-    close: () => Promise.all([secure, plain].map((s) => new Promise((r) => s.close(r)))),
+    otherPortUrl,
+    close: () => Promise.all([secure, plain, otherSecure].map((s) => new Promise((r) => s.close(r)))),
   };
 }

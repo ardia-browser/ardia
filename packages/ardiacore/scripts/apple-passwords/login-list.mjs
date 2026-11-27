@@ -274,6 +274,24 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       }
       return { engine: engineName, ...seen };
     },
+    async E28claim() {
+      const shared = await paired();
+      await (await (engineName === "chromium" ? shared.chromium : shared.tabs).open(sites.otherPortUrl("example.localhost"))).close();
+      const tab = await open("example.localhost", "/framed?frame=example.localhost&framePort=other&framePath=/login-claims-parent");
+      try {
+        const frame = await waitFor("the frame", () => tab.value(`(() => { const r = document.getElementById("frame").getBoundingClientRect(); return { x: r.x, y: r.y } })()`), 5000);
+        await waitFor("the framed sign-in page", async () => {
+          await tab.clickAt(frame.x + 190, frame.y + 55);
+          return tab.value(`${PAGE_EVENTS}.some((e) => e[0] === "framed" && e[1] === "focusin" && e[2] === "u") || null`);
+        }, 10_000);
+        await tab.key("down");
+        const rows = await tab.noList(2000);
+        assert(!rows, "a same-site frame on another origin (another port) that fakes its place in the page gets no Login list it could never fill", rows);
+        return { engine: engineName, list: "none" };
+      } finally {
+        await tab.close();
+      }
+    },
     async E14() {
       const tab = await open("plain.localhost");
       try {

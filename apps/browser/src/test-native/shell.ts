@@ -47,6 +47,7 @@ export const copiedDocs: [string, string][] = [];
 export const refusedCopies = { on: false, of: new Set<string>() };
 export const takenNames = new Set<string>();
 export const syncedDocs: string[] = [];
+export const savedDocNames: string[] = [];
 export const refusedSyncs = { on: false };
 export const linkedButUnsynced = { on: false };
 export const heldCopies = { on: false, queue: [] as (() => void)[] };
@@ -264,6 +265,7 @@ const documents: Modules["ArdiaDocuments"] = {
   },
   saveDocument: (name, contents) =>
     new Promise((resolve, reject) => {
+      savedDocNames.push(name);
       stagedDocs.set(name, contents);
       if (refusedSaves.on) return reject(new Error("save refused"));
       const land = () => {
@@ -430,7 +432,9 @@ export const contacts = {
   requests: 0,
   card: null as MeCard | null,
   opened: 0,
+  reads: 0,
   changed: (epoch?: string) => contactsEvents.emit("onContactsChanged", { epoch }),
+  listeners: () => contactsEvents.count("onContactsChanged"),
 };
 const contactsModule: Modules["ArdiaContacts"] = {
   addListener: contactsEvents.addListener,
@@ -440,7 +444,10 @@ const contactsModule: Modules["ArdiaContacts"] = {
     if (contacts.status === "notDetermined") contacts.status = contacts.answer;
     return Promise.resolve({ granted: contacts.status === "authorized", status: contacts.status, error: null });
   },
-  meCard: () => Promise.resolve(contacts.status === "authorized" && contacts.card ? structuredClone(contacts.card) : null),
+  meCard: () => {
+    contacts.reads++;
+    return Promise.resolve(contacts.status === "authorized" && contacts.card ? structuredClone(contacts.card) : null);
+  },
   openMeCard: () => {
     contacts.opened++;
     return Promise.resolve();

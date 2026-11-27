@@ -96,7 +96,9 @@ async function recordEntries(profile: string, ids: string[] | null) {
 const saveEntry = (profile: string, entry: AddressInput, id: string | undefined) =>
   id ? saveAddress(profile, { ...entry, id }).catch(() => saveAddress(profile, entry)) : saveAddress(profile, entry);
 
-async function writeEntries(profile: string, wanted: AddressInput[], had: string[]) {
+const sameIds = (a: readonly string[] | undefined, b: readonly string[]) => !!a && a.length === b.length && a.every((id, i) => id === b[i]);
+
+async function writeEntries(profile: string, wanted: AddressInput[], had: string[]): Promise<string[]> {
   const ids: string[] = [];
   let removed = 0;
   try {
@@ -105,10 +107,15 @@ async function writeEntries(profile: string, wanted: AddressInput[], had: string
       await deleteAddress(profile, id);
       removed++;
     }
+    return ids;
   } finally {
-    if (useMeCard.getState().entries[profile]) await recordEntries(profile, [...ids, ...had.slice(ids.length + removed)]);
+    const recorded = useMeCard.getState().entries[profile];
+    const kept = [...ids, ...had.slice(ids.length + removed)];
+    if (recorded && !sameIds(recorded, kept)) await recordEntries(profile, kept);
   }
 }
+
+const lastWritten = new Map<string, { card: string; ids: string[] }>();
 
 let lastWrite: Promise<unknown> = Promise.resolve();
 const serially = <T>(work: () => Promise<T>): Promise<T> => {
@@ -117,16 +124,31 @@ const serially = <T>(work: () => Promise<T>): Promise<T> => {
   return run;
 };
 
-const refresh = (profile: string) =>
-  serially(async () => {
+const unstartedRefreshes = new Map<string, Promise<void>>();
+
+const refresh = (profile: string): Promise<void> => {
+  const unstarted = unstartedRefreshes.get(profile);
+  if (unstarted) return unstarted;
+  const run = serially(async () => {
+    unstartedRefreshes.delete(profile);
     const had = useMeCard.getState().entries[profile];
     if (!had) return;
     const card = await readMeCard();
-    await writeEntries(profile, card ? meCardEntries(card) : [], had);
+    const wanted = card ? meCardEntries(card) : [];
+    const key = JSON.stringify(wanted);
+    const last = lastWritten.get(profile);
+    if (last && last.card === key && sameIds(last.ids, had)) return;
+    lastWritten.delete(profile);
+    const ids = await writeEntries(profile, wanted, had);
+    lastWritten.set(profile, { card: key, ids });
   });
+  unstartedRefreshes.set(profile, run);
+  return run;
+};
 
 const removeEntries = (profile: string) =>
   serially(async () => {
+    lastWritten.delete(profile);
     for (const id of useMeCard.getState().entries[profile] ?? []) await deleteAddress(profile, id).catch(() => undefined);
     await recordEntries(profile, null);
   });
@@ -166,11 +188,22 @@ function refreshAll(consent: ConsentToken | null) {
 }
 
 let started = false;
+let contactsListener: { remove(): void } | null = null;
+
+function holdContactsListener(entries: Record<string, string[]>) {
+  const wanted = Object.keys(entries).length > 0;
+  if (wanted === !!contactsListener) return;
+  if (contactsListener) {
+    contactsListener.remove();
+    contactsListener = null;
+  } else contactsListener = onContactsChanged((change) => void refreshAll(nativeConsent(change)));
+}
 
 export function startMeCard() {
   if (started || !PLATFORM_FEATURES.meCard) return;
   started = true;
-  onContactsChanged((change) => void refreshAll(nativeConsent(change)));
+  holdContactsListener(useMeCard.getState().entries);
+  useMeCard.subscribe((s) => holdContactsListener(s.entries));
   onWebKitCount((count) => {
     if (count.name !== "autofillAddressFill" || !count.entry) return;
     if (fromMeCard(count.entry)) noteWebKitAutofillCount("autofillMeCardFill", nativeConsent(count));

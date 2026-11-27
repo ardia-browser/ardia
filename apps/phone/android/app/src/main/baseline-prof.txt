@@ -1,0 +1,12 @@
+HSPLcom/ardia/browser/android/**;->**(**)**
+HSPLcom/ardia/phone/**;->**(**)**
+HSPLcom/ardia/blocking/**;->**(**)**
+HSPLcom/ardia/design/**;->**(**)**
+HSPLcom/facebook/react/ReactActivity**;->**(**)**
+HSPLcom/facebook/react/ReactDelegate**;->**(**)**
+HSPLcom/facebook/react/fabric/**;->**(**)**
+HSPLcom/facebook/react/uimanager/**;->**(**)**
+HSPLcom/facebook/react/views/view/**;->**(**)**
+HSPLcom/facebook/react/bridge/**;->**(**)**
+HSPLcom/swmansion/reanimated/**;->**(**)**
+HSPLexpo/modules/**;->**(**)**

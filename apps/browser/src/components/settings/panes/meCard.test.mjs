@@ -164,3 +164,17 @@ test("S9: a save that fails part way through the Me card's addresses leaves no e
   assert.deepEqual(stored(), [], "turning it off removes them all");
   native.contacts.card = null;
 });
+
+test("story 56: each Me card entry carries the card's first email and first phone, in the order set in Contacts", async () => {
+  const { meCardEntries } = await import("../../../state/site/meCard.ts");
+  const HOME = { street: "1 Home Road", city: "Bath", state: "", postalCode: "BA1 1AA", country: "GB" };
+  const WORK = { street: "12 St James's Square", city: "London", state: "", postalCode: "SW1Y 4JH", country: "GB" };
+  const card = { name: "Ada Lovelace", organization: "", emails: ["ada.work@example.com", "ada@example.com"], phones: ["+44 20 7946 0177", "+44 20 7946 0000"], addresses: [HOME, WORK] };
+  assert.deepEqual(
+    meCardEntries(card).map((e) => [e.street, e.email, e.phone]),
+    [
+      ["1 Home Road", "ada.work@example.com", "+44 20 7946 0177"],
+      ["12 St James's Square", "ada.work@example.com", "+44 20 7946 0177"],
+    ],
+  );
+});

@@ -114,6 +114,7 @@ export const SITE_BRAND_COLORS: Readonly<Record<string, string>> = {
   "duckduckgo.com": "#DE5833",
   "perplexity.ai": "#20808D",
   "chatgpt.com": "#10A37F",
+  "claude.ai": "#D97757",
   "ecosia.org": "#36ACB8",
   "search.brave.com": "#FB542B",
   "kagi.com": "#FFB319",

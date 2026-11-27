@@ -3,7 +3,9 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, View, type NativeScr
 import { useShallow } from "zustand/react/shallow";
 import { haptics } from "../../state/app/haptics";
 import { hideArchiveCard } from "../../state/browse/archiveCard";
-import { closeAllFromDeck, closeTabFromDeck, newIncognitoTab, newTab, openArchive, openSpaces, openTab, reopenLastClosed } from "../../state/browse/store";
+import { closeAllFromDeck, closeTabFromDeck, newTab, openArchive, openSpaces, openTab } from "../../state/browse/store";
+import { libraryMenuItems } from "../tabs/DeckHeader";
+import { PLUS_HINT, plusMenuItems } from "../tabs/ChromeButtons";
 import { menuOpenedHaptic, tabTitle } from "../../state/browse/tabMenus";
 import { editPageQuery } from "../../state/page/actions";
 import { openSettings } from "../../state/settings/hooks";
@@ -93,7 +95,7 @@ export function DuoSidebar({ variant, onClose }: Props) {
             </Text>
           )}
         </View>
-        <MoreMenu dark={dark} hasTabs={order.length > 0} syncEnabled={status.isEnabled} onCloseAll={confirmCloseAll} />
+        <MoreMenu dark={dark} syncEnabled={status.isEnabled} />
         {variant === "overlay" ? (
           <Tappable kind="icon" label="Hide Sidebar" onPress={onClose} style={styles.headerButton}>
             <Symbol name={iconRoles.sidebar} size={DUO.sidebarGlyph} color={rolesFor(dark).foregroundPrimary} />
@@ -103,7 +105,7 @@ export function DuoSidebar({ variant, onClose }: Props) {
       <View style={styles.fieldRow}>
         <AddressField dark={dark} onClose={onClose} />
       </View>
-      <SpacePages spaces={spaces} current={current} showsTiles={variant === "overlay"} dark={dark} onChoose={choose} onClose={onClose} />
+      <SpacePages spaces={spaces} current={current} showsTiles={variant === "overlay"} dark={dark} onChoose={choose} onClose={onClose} onCloseAll={order.length > 0 ? confirmCloseAll : undefined} />
       {confirmation ? <ConfirmSheet confirmation={confirmation} onClose={() => setConfirmation(null)} /> : null}
     </View>
   );
@@ -111,16 +113,13 @@ export function DuoSidebar({ variant, onClose }: Props) {
 
 const noop = () => undefined;
 
-function MoreMenu({ dark, hasTabs, syncEnabled, onCloseAll }: { dark: boolean; hasTabs: boolean; syncEnabled: boolean; onCloseAll: () => void }) {
-  const canReopen = useCanReopen();
+function MoreMenu({ dark, syncEnabled }: { dark: boolean; syncEnabled: boolean }) {
   const updateDot = useUpdateDot();
   const items: MenuItem[] = [
     { label: destinationWords.archive, icon: "archivebox", onPress: openArchive },
     ...(syncEnabled ? [{ label: destinationWords.spaces, icon: "macAndPhone" as const, onPress: openSpaces }] : []),
     "divider",
-    { label: actionWords.newIncognitoTab, icon: "eyes", onPress: newIncognitoTab },
-    ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
-    ...(hasTabs ? [{ label: "Close All Tabs", icon: "xmark" as const, destructive: true, onPress: onCloseAll }] : []),
+    ...libraryMenuItems(),
     "divider",
     { label: destinationWords.settings, icon: "gearshape", dot: updateDot, onPress: () => openSettings() },
   ];
@@ -146,7 +145,7 @@ function AddressField({ dark, onClose }: { dark: boolean; onClose: () => void })
   return <DuoAddressField layout="sidebar" tab={tab} dark={dark} onPress={edit} />;
 }
 
-function SpacePages({ spaces, current, showsTiles, dark, onChoose, onClose }: { spaces: SyncedProfile[]; current: SyncedProfile | null; showsTiles: boolean; dark: boolean; onChoose: (id: string) => void; onClose: () => void }) {
+function SpacePages({ spaces, current, showsTiles, dark, onChoose, onClose, onCloseAll }: { spaces: SyncedProfile[]; current: SyncedProfile | null; showsTiles: boolean; dark: boolean; onChoose: (id: string) => void; onClose: () => void; onCloseAll?: () => void }) {
   const [width, setWidth] = useState(0);
   const pager = useRef<FlatList<SyncedProfile>>(null);
   const index = Math.max(0, spaces.findIndex((space) => space.syncId === current?.syncId));
@@ -164,7 +163,7 @@ function SpacePages({ spaces, current, showsTiles, dark, onChoose, onClose }: { 
     shownIndex.current = at;
     onChoose(page.syncId);
   };
-  if (spaces.length <= 1) return <SpaceList space={spaces[0] ?? null} isCurrent showsTiles={showsTiles} dark={dark} onClose={onClose} />;
+  if (spaces.length <= 1) return <SpaceList space={spaces[0] ?? null} isCurrent showsTiles={showsTiles} dark={dark} onClose={onClose} onCloseAll={onCloseAll} />;
   return (
     <>
       <View style={styles.pages} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
@@ -186,7 +185,7 @@ function SpacePages({ spaces, current, showsTiles, dark, onChoose, onClose }: { 
               const isCurrent = item.syncId === current?.syncId;
               return (
                 <View style={{ width }} accessibilityElementsHidden={!isCurrent} importantForAccessibility={isCurrent ? "auto" : "no-hide-descendants"}>
-                  <SpaceList space={item} isCurrent={isCurrent} showsTiles={showsTiles} dark={dark} onClose={onClose} />
+                  <SpaceList space={item} isCurrent={isCurrent} showsTiles={showsTiles} dark={dark} onClose={onClose} onCloseAll={onCloseAll} />
                 </View>
               );
             }}
@@ -206,7 +205,7 @@ function useSpaceTabs(space: SyncedProfile | null, isCurrent: boolean, deckOrder
   }, [isCurrent, space, deckOrder, open, spaces]);
 }
 
-function SpaceList({ space, isCurrent, showsTiles, dark, onClose }: { space: SyncedProfile | null; isCurrent: boolean; showsTiles: boolean; dark: boolean; onClose: () => void }) {
+function SpaceList({ space, isCurrent, showsTiles, dark, onClose, onCloseAll }: { space: SyncedProfile | null; isCurrent: boolean; showsTiles: boolean; dark: boolean; onClose: () => void; onCloseAll?: () => void }) {
   const roles = rolesFor(dark);
   const order = useDeckOrder();
   const tabs = useSpaceTabs(space, isCurrent, order);
@@ -231,22 +230,37 @@ function SpaceList({ space, isCurrent, showsTiles, dark, onClose }: { space: Syn
           onCloseTab={() => closeTabFromDeck(tab.id)}
         />
       ))}
-      <Tappable
-        testID="duoSidebarNewTab"
-        kind="row"
-        label={actionWords.newTab}
-        onPress={() => {
-          onClose();
-          newTab();
-        }}
-        style={styles.newTab}
-      >
-        <View style={styles.rowIcon}>
-          <Symbol name={iconRoles.newTab} size={DUO.sidebarPlusGlyph} color={roles.secondaryLabel} />
-        </View>
-        <Text style={[font.body, { color: roles.secondaryLabel }]}>{actionWords.newTab}</Text>
-      </Tappable>
+      <NewTabRow dark={dark} onClose={onClose} onCloseAll={onCloseAll} />
     </ScrollView>
+  );
+}
+
+function NewTabRow({ dark, onClose, onCloseAll }: { dark: boolean; onClose: () => void; onCloseAll?: () => void }) {
+  const roles = rolesFor(dark);
+  const incognito = useIncognito();
+  const canReopen = useCanReopen();
+  return (
+    <MenuTrigger frost={null} items={plusMenuItems(incognito, canReopen, onCloseAll)} trigger="longPress" haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }}>
+      {({ onLongPress }) => (
+        <Tappable
+          testID="duoSidebarNewTab"
+          kind="row"
+          label={actionWords.newTab}
+          hint={PLUS_HINT}
+          onPress={() => {
+            onClose();
+            newTab();
+          }}
+          onLongPress={onLongPress}
+          style={styles.newTab}
+        >
+          <View style={styles.rowIcon}>
+            <Symbol name={iconRoles.newTab} size={DUO.sidebarPlusGlyph} color={roles.secondaryLabel} />
+          </View>
+          <Text style={[font.body, { color: roles.secondaryLabel }]}>{actionWords.newTab}</Text>
+        </Tappable>
+      )}
+    </MenuTrigger>
   );
 }
 

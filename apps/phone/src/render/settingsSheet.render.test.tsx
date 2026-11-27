@@ -37,7 +37,10 @@ onIos("on iPhone Settings opens in the system's own sheet with main's defaults, 
   expect(handBuilt(root)).toHaveLength(0);
   await act(async () => pushSettings({ page: "appearance" }));
   expect(stackPath(root)).toEqual(["appearance"]);
-  await act(async () => systemSheet(root)!.props.onIsPresentedChange({ nativeEvent: { isPresented: false } }));
+  const shown = settingsNav().generation;
+  await act(async () => systemSheet(root)!.props.onIsPresentedChange({ nativeEvent: { isPresented: false, token: shown - 1 } }));
+  expect(settingsNav().open).toBe(true);
+  await act(async () => systemSheet(root)!.props.onIsPresentedChange({ nativeEvent: { isPresented: false, token: shown } }));
   expect(settingsNav().open).toBe(false);
   expect(systemSheet(root)!.props.isPresented).toBe(false);
   expect(stackPath(root)).toEqual(["appearance"]);

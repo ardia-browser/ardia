@@ -90,6 +90,7 @@ export function sessionFromSaved(saved: SavedObject): SavedSession {
     pinChoices: pinChoicesFromDisk(raw.pinChoices),
     pinSync: byProfile(raw.pinSync),
     topAppsMerged: typeof raw.topAppsMerged === "string" ? raw.topAppsMerged : undefined,
+    syncMark: typeof raw.syncMark === "string" ? raw.syncMark : undefined,
     closedGroups: rows(raw.closedGroups, tabListOk),
     deletedGroups: rows(raw.deletedGroups, tabListOk),
     cleanedTabs: rows(raw.cleanedTabs, closedTabOk),

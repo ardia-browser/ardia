@@ -34,7 +34,7 @@
   {
    "id": "chromium-page-message:commandWheel",
    "source": "frame",
-   "guard": "Spends only native wheel credits the browser recorded; a page can at most stop a zoom",
+   "guard": "Spends only native wheel credits the browser recorded, each once: a reply takes the oldest credit plus those that arrived before the previous reply (inferred as the wheels Chromium merged into the event it answers, since Chromium sends the next wheel only after the page handled the last) and zooms by their signed sum; the reply's dy must be finite but moves nothing, so a page can at most stop a zoom",
    "checks": [
     "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
    ]
@@ -1030,6 +1030,14 @@
    "guard": "sendRecord decoder; sendableUrl lets only http(s) open",
    "checks": [
     "apps/browser/src/state/sync/sentTabsAdapter.ts#sentTabsAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:settingEdits.ts#withSettingEdits",
+   "source": "sync",
+   "guard": "Delegates extraction and every remote read to the wrapped settings adapter, whose SYNCED_SETTINGS and validSettingValue checks guard the records; keepLocal only compares the store's settingsMeta.chosenAt times with record stamps",
+   "checks": [
+    "apps/browser/src/state/sync/settingsAdapter.ts#settingsAdapter"
    ]
   },
   {

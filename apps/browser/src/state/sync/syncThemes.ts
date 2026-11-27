@@ -3,7 +3,7 @@ import { useBrowser } from "../browser/store";
 import type { Profile } from "../browser/types";
 import { legacyThemeOf, themeAngleKey, themeFromRecord, type ProfileRecord } from "./profileAdapters";
 import { PROFILE, PROFILE_THEME, profileRecord } from "./records";
-import type { ProfileLink } from "./syncDoc";
+import type { ProfileLink, SyncDoc } from "./syncDoc";
 import { withSyncedColor } from "../../lib/presetLook";
 
 function pairedTheme(app: ScopeState, syncId: string): Pick<Profile, "theme"> | null {
@@ -28,7 +28,12 @@ export function pairTheme(app: ScopeState | undefined, profileId: string, link: 
   else link.themeAdopting = true;
 }
 
-export function themeChosenHere(link: ProfileLink | undefined): boolean {
+export function themeChosenHere(doc: SyncDoc, profileId: string): boolean {
+  if (doc.enabled && doc.joining && !doc.profiles[profileId]) {
+    doc.themesChosenWhileJoining = [...new Set([...(doc.themesChosenWhileJoining ?? []), profileId])];
+    return true;
+  }
+  const link = doc.profiles[profileId];
   if (!link?.themeAdopting) return false;
   delete link.themeAdopting;
   return true;

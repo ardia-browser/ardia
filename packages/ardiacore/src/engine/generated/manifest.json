@@ -4838,8 +4838,8 @@
       "types": "packages/import/src/generated/native.ts",
       "swift": "packages/import/ios/ImportNative.swift",
       "sha256": {
-        "types": "df0b66cc3a7976ffefa9ff5c99e525639d8a46f2b041c4584d11ffd9e847bffe",
-        "swift": "6874f3fa2b959284e86da09be93e11bc9b2dd773d12e8194c1affe72978a6023"
+        "types": "d6a0e489bd0a01b010223ce4c4e1f4a72b7af7497fe7c92f2317ef9d4ce18a0c",
+        "swift": "0a57d7720cc971fb37a3955ef65ca5c2308b424b39a8ab47ef01a86cbc79e242"
       },
       "modules": {
         "ArdiaImport": {
@@ -4910,6 +4910,18 @@
               "mac": "custom",
               "desktop": "host",
               "windows": "custom"
+            },
+            "writeImportedJob": {
+              "args": [
+                "jobId",
+                "token",
+                "profile",
+                "kinds"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
             },
             "discardImported": {
               "args": [

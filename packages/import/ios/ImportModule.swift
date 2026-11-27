@@ -74,6 +74,15 @@ public class ImportModule: Module, ImportNative {
     }
   }
 
+  func writeImportedJob(_ jobId: String, _ token: String, _ profile: String, _ kinds: [ImportKind], _ promise: Promise) {
+    guard let entry = self.vault.take(token) else { return promise.reject("notFound", "Nothing to write; import again") }
+    let cancellation = self.jobs.start(jobId)
+    Task { @MainActor in
+      promise.resolve(await ImportWriter.write(entry, profile: profile, kinds: Set(kinds), cancellation: cancellation))
+      self.jobs.finish(jobId)
+    }
+  }
+
   func discardImported(_ token: String) { self.vault.discard(token) }
 
   func listExtensions(_ browserId: String, _ profileId: String, _ promise: Promise) {
@@ -158,6 +167,8 @@ public class ImportModule: Module, ImportNative {
 
     writeImportedFunction
 
+    writeImportedJobFunction
+
     discardImportedFunction
 
     listExtensionsFunction
@@ -216,18 +227,4 @@ public class ImportModule: Module, ImportNative {
   static func json<T: Encodable>(_ value: T) throws -> String {
     String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
   }
-}
-
-final class ImportJobs: @unchecked Sendable {
-  private let lock = NSLock()
-  private var running: [String: Cancellation] = [:]
-
-  func start(_ id: String) -> Cancellation {
-    let c = Cancellation()
-    lock.withLock { running[id] = c }
-    return c
-  }
-
-  func cancel(_ id: String) { lock.withLock { running[id] }?.cancel() }
-  func finish(_ id: String) { lock.withLock { running[id] = nil } }
 }

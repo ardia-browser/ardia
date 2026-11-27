@@ -8,9 +8,11 @@ const DAY = 86_400_000;
 let reads = {};
 let readCalls = [];
 let discarded = [];
+let cancelledJobs = [];
+let writeJobs = [];
 let unlocked = true;
 let duringRead = () => {};
-const native = { listBrowsers: async () => "[]", importSafariExport: async () => "{}", importSafariDirect: async () => "{}", unlockBrowser: async () => null, chooseImportFile: async () => null, onWrite: () => {} };
+const native = { listBrowsers: async () => "[]", importSafariExport: async () => "{}", importSafariDirect: async () => "{}", unlockBrowser: async () => null, chooseImportFile: async () => null, onWrite: () => {}, writeReply: {} };
 const deferred = () => {
   let resolve;
   const promise = new Promise((r) => (resolve = r));
@@ -20,15 +22,16 @@ const deferred = () => {
 globalThis.acTestNativeModules = {
   ArdiaImport: {
     addListener: () => ({ remove() {} }),
-    cancelImport() {},
+    cancelImport: (jobId) => cancelledJobs.push(jobId),
+    writeImportedJob: async (jobId) => {
+      writeJobs.push(jobId);
+      await native.onWrite(jobId);
+      return JSON.stringify({ cookies: 0, addresses: 0, cards: 0, ...native.writeReply });
+    },
     forgetUnlockedKeys() {},
     unlockBrowser: (...args) => native.unlockBrowser(...args),
     isBrowserUnlocked: () => unlocked,
     safariHasFullDiskAccess: () => false,
-    writeImported: async () => {
-      await native.onWrite();
-      return JSON.stringify({ cookies: 0, addresses: 0, cards: 0 });
-    },
     discardImported: (token) => discarded.push(token),
     listBrowsers: () => native.listBrowsers(),
     chooseImportFile: (kind) => native.chooseImportFile(kind),
@@ -88,6 +91,9 @@ async function until(name) {
 beforeEach(() => {
   readCalls = [];
   discarded = [];
+  cancelledJobs = [];
+  writeJobs = [];
+  native.writeReply = {};
   unlocked = true;
   duringRead = () => {};
   native.chooseImportFile = async () => null;
@@ -618,4 +624,77 @@ test("two Ardia profiles that share one password store are one account for confl
   assert.equal(conflicts.conflicts.length, 1);
   assert.deepEqual(conflicts.conflicts[0].profileIds, ["default", "work"]);
   assert.deepEqual(storedLogins(), []);
+});
+
+test("a cancelled import answers its pending \"Import as new profile?\" question without making a profile", async () => {
+  const { shellNativeModules } = await import("../../test-native/shell.ts");
+  const dialogs = shellNativeModules.ArdiaDialogs;
+  const original = dialogs.confirm;
+  const asked = deferred();
+  let answer;
+  dialogs.confirm = () => {
+    asked.resolve();
+    return new Promise((resolve) => (answer = resolve));
+  };
+  try {
+    useBrowser.setState((s) => ({ profiles: { ...s.profiles, work: { ...s.profiles.default, id: "work", name: "Work", dataId: undefined } }, profileOrder: [...s.profileOrder, "work"] }));
+    const before = S().profileOrder.length;
+    reads = { chrome: { bookmarks: [], tabs: [], credentials: [] } };
+    const two = { ...chromium("chrome", "Chrome"), profiles: [chromium("chrome", "Chrome").profiles[0], { id: "Work", name: "Work", path: "w", isDefault: false, available: ["bookmarks"] }] };
+    pick([two], ["chrome"]);
+    continueImport("choose", turnNow());
+    flow.toggleSourceProfile("Work", true, turnNow());
+    continueImport("profiles", turnNow());
+    await asked.promise;
+    flow.startImport(0);
+    answer({ confirmed: true, suppressed: false });
+    await settle();
+    assert.equal(S().profileOrder.length, before);
+  } finally {
+    dialogs.confirm = original;
+  }
+});
+
+test("a native cookie and card write is told to stop when its import is cancelled, and the stop is counted", async () => {
+  const chrome = chromium("chrome", "Chrome");
+  chrome.profiles[0].available.push("cookies");
+  reads = { chrome: { bookmarks: [], tabs: [], credentials: [], vaultToken: "vault-write" } };
+  const writing = deferred();
+  const released = deferred();
+  native.onWrite = async (jobId) => {
+    writing.resolve(jobId);
+    await released.promise;
+  };
+  native.writeReply = { cancelled: 1 };
+  takeImportRuns();
+  pick([chrome], ["chrome"]);
+  continueImport("choose", turnNow());
+  const jobId = await writing.promise;
+  flow.startImport(0);
+  assert.deepEqual(cancelledJobs.filter((id) => id === jobId), [jobId]);
+  released.resolve();
+  await settle();
+  assert.equal(takeImportRuns().import_writes_cancelled, 1);
+});
+
+test("a write asked for after its import was cancelled never reaches native and gives its token back", async () => {
+  const { importModule } = await import("../../platform/importModule.ts");
+  const cancelled = new AbortController();
+  cancelled.abort();
+  await assert.rejects(importModule().writeImported("vault-early", "", ["cookies"], { signal: cancelled.signal }), { code: "cancelled" });
+  assert.deepEqual(writeJobs, []);
+  assert.deepEqual(discarded, ["vault-early"]);
+});
+
+test("a cancel that lands before native has picked up the queued write still names that write", async () => {
+  const { importModule } = await import("../../platform/importModule.ts");
+  const released = deferred();
+  native.onWrite = () => released.promise;
+  native.writeReply = { cancelled: 1 };
+  const cancel = new AbortController();
+  const writing = importModule().writeImported("vault-queued", "", ["cookies"], { signal: cancel.signal });
+  cancel.abort();
+  assert.deepEqual(cancelledJobs, writeJobs, "the cancel names the job the write was queued under, before it runs");
+  released.resolve();
+  assert.equal((await writing).cancelled, 1);
 });

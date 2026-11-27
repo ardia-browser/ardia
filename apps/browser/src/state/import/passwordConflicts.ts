@@ -23,16 +23,53 @@ const DEFAULT_PORTS: Readonly<Record<string, number>> = { http: 80, https: 443, 
 const ORIGIN_PARTS = /^([a-z][a-z0-9+.-]*):\/\/(\[[^\]]*\]|[^:/?#]*)(?::(\d+))?(?=$|[/?#])/i;
 
 const asciiLabel = (label: string) => (/^[\x00-\x7f]*$/.test(label) ? label : `xn--${punycodeEncode(label)}`);
-const IDEOGRAPHIC_DOTS = /[\u3002\uff0e\uff61]/g;
-const asciiHost = (host: string) => host.normalize("NFKC").toLowerCase().replace(IDEOGRAPHIC_DOTS, ".").split(".").map(asciiLabel).join(".");
+const DOT_VARIANT = /^[。．｡]$/;
+const IGNORED = /[­͏᠋-᠏​⁠⁤︀-️﻿]/g;
+const FORBIDDEN_IN_DOMAIN = /[\u0000- #%/:<>?@[\\\]^|\u007f�]/;
+const ESCAPED_RUN = /(?:%[0-9a-f]{2})+/gi;
+
+const utf8Length = (lead: number) => (lead < 0x80 ? 1 : lead >= 0xc2 && lead < 0xe0 ? 2 : lead >= 0xe0 && lead < 0xf0 ? 3 : lead >= 0xf0 && lead < 0xf5 ? 4 : 0);
+
+function decodedRun(run: string): string {
+  const count = run.length / 3;
+  let out = "";
+  for (let i = 0; i < count; ) {
+    const length = utf8Length(parseInt(run.slice(i * 3 + 1, i * 3 + 3), 16));
+    let decoded: string | null = null;
+    if (length && i + length <= count) {
+      try {
+        decoded = decodeURIComponent(run.slice(i * 3, (i + length) * 3));
+      } catch {
+        decoded = null;
+      }
+    }
+    out += decoded ?? "�";
+    i += decoded === null ? 1 : length;
+  }
+  return out;
+}
+
+function domainKey(host: string): string | null {
+  let dotted = "";
+  for (const char of host.replace(ESCAPED_RUN, decodedRun)) {
+    if (DOT_VARIANT.test(char)) dotted += ".";
+    else if (char !== "." && char.normalize("NFKC").includes(".")) return null;
+    else dotted += char;
+  }
+  const mapped = Array.from(dotted.replace(IGNORED, "").normalize("NFKC"), (char) => char.toLowerCase()).join("");
+  if (FORBIDDEN_IN_DOMAIN.test(mapped)) return null;
+  return mapped.split(".").map(asciiLabel).join(".");
+}
 
 export function sameOriginKey(origin: string): string {
-  const found = ORIGIN_PARTS.exec(origin.trim());
-  if (!found) return origin.trim().toLowerCase();
+  const written = origin.trim();
+  const found = ORIGIN_PARTS.exec(written);
+  if (!found) return written.toLowerCase();
   const scheme = found[1]!.toLowerCase();
   const rawHost = found[2]!;
   const inner = rawHost.slice(1, -1).toLowerCase();
-  const host = rawHost.startsWith("[") ? `[${canonicalIpv6(inner) ?? inner}]` : asciiHost(rawHost);
+  const host = rawHost.startsWith("[") ? `[${canonicalIpv6(inner) ?? inner}]` : domainKey(rawHost);
+  if (host === null) return written;
   const port = found[3] === undefined ? null : Number(found[3]);
   const shown = port === null || port === DEFAULT_PORTS[scheme] ? "" : `:${port}`;
   return `${scheme}://${host}${shown}`;

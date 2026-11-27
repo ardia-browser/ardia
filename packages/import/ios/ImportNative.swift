@@ -8,6 +8,7 @@ protocol ImportNative {
   func isBrowserUnlocked(_ browserId: String) -> Bool
   func forgetUnlockedKeys()
   func writeImported(_ token: String, _ profile: String, _ kinds: [ImportKind], _ promise: Promise)
+  func writeImportedJob(_ jobId: String, _ token: String, _ profile: String, _ kinds: [ImportKind], _ promise: Promise)
   func discardImported(_ token: String)
   func listExtensions(_ browserId: String, _ profileId: String, _ promise: Promise)
   func importSafariExport(_ jobId: String, _ path: String, _ promise: Promise)
@@ -69,6 +70,10 @@ extension ImportNative where Self: Module {
 
   var writeImportedFunction: AnyDefinition {
     AsyncFunction("writeImported") { (token: String, profile: String, kinds: [ImportKind], promise: Promise) in self.writeImported(token, profile, kinds, promise) }
+  }
+
+  var writeImportedJobFunction: AnyDefinition {
+    AsyncFunction("writeImportedJob") { (jobId: String, token: String, profile: String, kinds: [ImportKind], promise: Promise) in self.writeImportedJob(jobId, token, profile, kinds, promise) }
   }
 
   var discardImportedFunction: AnyDefinition {

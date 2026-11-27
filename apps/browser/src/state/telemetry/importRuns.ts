@@ -95,7 +95,14 @@ const multiCounts = {
   import_conflicts_browser: 0,
   import_conflicts_custom: 0,
   import_conflict_rows_changed: 0,
+  import_writes_cancelled: 0,
 };
+
+export function noteImportWriteCancelled(consent: ConsentToken | null) {
+  countFor(consent, () => {
+    multiCounts.import_writes_cancelled += 1;
+  });
+}
 
 export function noteMultiImport(run: { browsers: number; skipped: number; merged: number; conflicts: number }, consent: ConsentToken | null) {
   countFor(consent, () => {

@@ -43,50 +43,10 @@ final class ImportVault: @unchecked Sendable {
 }
 
 enum ImportWriter {
-  static let cookieBatch = 500
-  static let autofillBatch = 500
-
   @MainActor
-  static func write(_ entry: ImportVault.Entry, profile: String, kinds: Set<ImportKind>) async -> String {
-    var out: [String: Int] = ["cookies": 0, "cookiesRejected": 0, "cookiesExisting": 0, "addresses": 0, "cards": 0]
-    var error: String?
-    func add(_ key: String, _ reply: [String: Any], _ field: String) {
-      out[key, default: 0] += (reply[field] as? NSNumber)?.intValue ?? 0
-    }
-    if kinds.contains(.cookies), !entry.cookies.isEmpty {
-      let wire = CookieWire.batches(entry.cookies, size: cookieBatch)
-      out["cookiesRejected"] = wire.dropped
-      for batch in wire.batches {
-        let reply = await engine("ac_cookies_import", profile: profile, args: batch)
-        if let message = reply["error"] as? String {
-          error = message
-          out["cookiesFailed"] = 1
-          break
-        }
-        add("cookies", reply, "imported")
-        add("cookiesRejected", reply, "rejected")
-        add("cookiesExisting", reply, "existing")
-      }
-      wire.batches.forEach { $0.wipe() }
-    }
-    if kinds.contains(.autofill) {
-      var start = 0
-      while start < max(entry.addresses.count, entry.cards.count) {
-        let addresses = Array(entry.addresses[min(start, entry.addresses.count)..<min(start + autofillBatch, entry.addresses.count)])
-        let cards = Array(entry.cards[min(start, entry.cards.count)..<min(start + autofillBatch, entry.cards.count)])
-        start += autofillBatch
-        let reply = await engine("ac_autofill_import", profile: profile, args: AutofillWire.batch(addresses: addresses, cards: cards))
-        if let message = reply["error"] as? String {
-          error = error ?? message
-          out["autofillFailed"] = 1
-          break
-        }
-        add("addresses", reply, "addresses")
-        add("cards", reply, "cards")
-      }
-    }
-    var body: [String: Any] = out
-    if let error { body["error"] = error }
+  static func write(_ entry: ImportVault.Entry, profile: String, kinds: Set<ImportKind>, cancellation: Cancellation? = nil) async -> String {
+    let body = await ImportBatchWriter.write(cookies: entry.cookies, addresses: entry.addresses, cards: entry.cards, kinds: kinds,
+                                             cancellation: cancellation) { call, args in await engine(call, profile: profile, args: args) }
     let data = (try? JSONSerialization.data(withJSONObject: body)) ?? Data("{}".utf8)
     return String(decoding: data, as: UTF8.self)
   }

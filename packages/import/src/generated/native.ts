@@ -8,6 +8,7 @@ export type ImportNative = {
   isBrowserUnlocked(browserId: string): boolean;
   forgetUnlockedKeys(): void | Promise<void>;
   writeImported(token: string, profile: string, kinds: ("cookies" | "autofill")[]): Promise<string>;
+  writeImportedJob(jobId: string, token: string, profile: string, kinds: ("cookies" | "autofill")[]): Promise<string>;
   discardImported(token: string): void | Promise<void>;
   listExtensions(browserId: string, profileId: string): Promise<string>;
   importSafariExport(jobId: string, path: string): Promise<string>;

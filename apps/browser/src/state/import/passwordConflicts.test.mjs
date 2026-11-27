@@ -179,3 +179,85 @@ test("logins for two Ardia profiles on one password store group together, and th
   assert.deepEqual([plan.clean.length, plan.merged], [1, 1]);
   assert.equal(conflictRows(plan.conflicts)[0].showsProfile, true);
 });
+
+test("a percent-encoded host is the same origin as its decoded form, and invalid escapes stay as they are", async () => {
+  const { sameOriginKey } = await import("./passwordConflicts.ts");
+  const ascii = "https://xn--bcher-kva.example";
+  assert.equal(sameOriginKey("https://b%C3%BCcher.example"), ascii);
+  assert.equal(sameOriginKey("https://b%c3%bccher.example/sign-in"), ascii);
+  assert.equal(sameOriginKey("https://%65xample.com"), "https://example.com");
+  assert.equal(sameOriginKey("https://b%C3cher.example"), "https://b%C3cher.example");
+  const plan = planLogins([login("chrome", "p", "https://b%C3%BCcher.example/", "me", "1"), login("arc", "p", "https://bücher.example/", "me", "2")], ORDER);
+  assert.equal(plan.conflicts.length, 1);
+});
+
+test("an escape that decodes to anything but host text keeps the host as written, so it never meets a valid origin", async () => {
+  const { sameOriginKey } = await import("./passwordConflicts.ts");
+  assert.equal(sameOriginKey("https://example.com%3A8443"), "https://example.com%3A8443");
+  assert.notEqual(sameOriginKey("https://example.com%3A8443"), sameOriginKey("https://example.com:8443"));
+  assert.equal(sameOriginKey("https://example.com%2Fpath"), "https://example.com%2Fpath");
+  assert.equal(sameOriginKey("https://exa%00mple.com"), "https://exa%00mple.com");
+  assert.equal(sameOriginKey("https://example%2Ecom"), "https://example.com");
+  assert.equal(sameOriginKey("https://ex%25ample.com"), "https://ex%25ample.com");
+  assert.ok(!sameOriginKey("https://exa%00mple.com").includes("\u0000"));
+  const plan = planLogins([login("chrome", "p", "https://example.com%3A8443/", "me", "same"), login("arc", "p", "https://example.com:8443/", "me", "same")], ORDER);
+  assert.deepEqual(plan.clean.map((l) => l.origin).sort(), ["https://example.com%3A8443", "https://example.com:8443"]);
+});
+
+const VECTORS = [
+  "https://a.example",
+  "https://A.EXAMPLE",
+  "https://a%E3%80%82example",
+  "https://a\u3002example",
+  "https://a_b.example",
+  "https://a%5Fb.example",
+  "https://A_B.example",
+  "https://a1.example.com",
+  "https://a%E2%92%88example.com",
+  "https://a\u2488example.com",
+  "https://example.com",
+  "https://EXAMPLE.com:443",
+  "https://example.com:0443",
+  "https://example%2Ecom",
+  "https://\uff25\uff38\uff21\uff2d\uff30\uff2c\uff25.com",
+  "https://example\uff0ecom",
+  "https://example.com.",
+  "https://example.com:8443",
+  "https://example.com%3A8443",
+  "https://example.com%2Fpath",
+  "https://exa%00mple.com",
+  "https://ex%25ample.com",
+  "https://bücher.example",
+  "https://b%C3%BCcher.example",
+  "https://BÜCHER.example",
+  "https://xn--bcher-kva.example",
+  "https://b%C3cher.example",
+  "https://ab.example",
+  "https://a%C2%ADb.example",
+  "https://a\u200bb.example",
+  "https://%CE%9F%CE%A3.1example",
+  "https://\u039f\u03a3.1example",
+  "https://\u03bf\u03c3.1example",
+  "https://\u03bf\u03c2.1example",
+  "http://[::1]",
+  "http://[0:0:0:0:0:0:0:1]",
+  "http://[::1]:80",
+  "http://[::1]:8080",
+];
+
+const nodeOrigin = (url) => {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+};
+
+test("two origins share a key exactly when a WHATWG URL parser gives them the same origin", async () => {
+  const { sameOriginKey } = await import("./passwordConflicts.ts");
+  for (const a of VECTORS)
+    for (const b of VECTORS) {
+      const same = nodeOrigin(a) !== null && nodeOrigin(a) === nodeOrigin(b);
+      assert.equal(sameOriginKey(a) === sameOriginKey(b), same || a === b, `${a} vs ${b}`);
+    }
+});

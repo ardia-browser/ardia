@@ -14,7 +14,7 @@ import {
 } from "../../platform/importModule";
 import { passwordImportTally, type PasswordSaveResult } from "../telemetry/passwordSaves";
 import { withPresetChosen } from "../../lib/presetLook";
-import { noteHistoryImport, noteRepeatBookmarks } from "../telemetry/importRuns";
+import { noteHistoryImport, noteImportWriteCancelled, noteRepeatBookmarks } from "../telemetry/importRuns";
 import { reloadEngineHistory } from "../history/engineSync";
 import type { ConsentToken } from "../telemetry/choice";
 import { bookmarkRoots } from "../bookmarks/bookmarks";
@@ -125,6 +125,7 @@ async function importNative(
   kinds: ("cookies" | "autofill")[],
   onFailed?: (kind: ImportKind) => void,
   signal?: AbortSignal,
+  consent?: ConsentToken | null,
 ): Promise<Pick<ImportCounts, "cookies" | "addresses" | "cards">> {
   const none = { cookies: 0, addresses: 0, cards: 0 };
   if (!token) return none;
@@ -134,11 +135,16 @@ async function importNative(
     return none;
   }
   try {
-    const w = await api.writeImported(token, engineProfile(useBrowser.getState(), profileId), kinds);
+    const w = await api.writeImported(token, engineProfile(useBrowser.getState(), profileId), kinds, { signal });
+    if (w.cancelled) noteImportWriteCancelled(consent ?? null);
     if (w.cookiesFailed) onFailed?.("cookies");
     if (w.autofillFailed) onFailed?.("autofill");
     return { cookies: w.cookies, addresses: w.addresses, cards: w.cards };
   } catch {
+    if (signal?.aborted) {
+      api.discardImported(token);
+      return none;
+    }
     kinds.forEach((k) => onFailed?.(k));
     return none;
   }
@@ -184,7 +190,7 @@ export async function applyResult(
   importFavicons(profileId, result.favicons, [...result.favorites.map((t) => t.url), ...(result.spaces.length ? [] : result.tabs.map((t) => t.url)), ...linksOf(toolbar)]);
   counts.bookmarks += await importBookmarks(profileId, result.bookmarks, browserName, consent, onFailed, signal);
   if (result.history.length && !signal?.aborted) counts.history += await importHistory(profileId, result.history, onFailed, consent, signal);
-  Object.assign(counts, await importNative(profileId, result.vaultToken, native, onFailed, signal));
+  Object.assign(counts, await importNative(profileId, result.vaultToken, native, onFailed, signal, consent));
   if (signal?.aborted) return counts;
   if (result.tabs.length && !result.spaces.length) counts.tabs += importTabs(profileId, result.tabs, "Imported");
   if (result.favorites.length) counts.tabs += importTabs(profileId, result.favorites.map((t) => ({ ...t, pinned: true })), null, "tiles");
@@ -204,7 +210,7 @@ export async function applySafari(
   if (!signal?.aborted) counts.bookmarks = await importBookmarks(profileId, data.bookmarks, "Safari", consent, onFailed, signal);
   const history = data.profiles.find((p) => !p.name)?.history ?? data.profiles[0]?.history ?? [];
   if (!signal?.aborted) counts.history = await importHistory(profileId, history, onFailed, consent, signal);
-  Object.assign(counts, await importNative(profileId, data.vaultToken, cookies ? ["cookies", "autofill"] : ["autofill"], onFailed, signal));
+  Object.assign(counts, await importNative(profileId, data.vaultToken, cookies ? ["cookies", "autofill"] : ["autofill"], onFailed, signal, consent));
   if (signal?.aborted) return counts;
   if (data.tabs.length) counts.tabs += importTabs(profileId, data.tabs, "Imported");
   counts.passwords = await importPasswords(profileId, data.credentials, consent ?? null, signal);

@@ -3,7 +3,7 @@ import { engineProfile, isIncognitoProfile } from "../../browser/src/state/brows
 import { useBrowser } from "../../browser/src/state/browser/store.ts";
 import type { ImportKind, ImportResult } from "../../browser/src/platform/importModule.ts";
 import type { ConsentToken } from "../../browser/src/state/telemetry/choice.ts";
-import type { PendingPasswords, WrittenPasswords } from "./hostImport.ts";
+import { heldTokens, type PendingPasswords, type WrittenPasswords } from "./hostImport.ts";
 
 export * from "../../browser/src/state/import/apply.ts";
 
@@ -68,6 +68,6 @@ export async function applyResult(
 
 export function discardImportedResult(result: Pick<ImportResult, "vaultToken">) {
   sharedDiscardImportedResult(result);
-  const pending = sink?.pending(result);
-  if (pending) sink?.discard(pending.token);
+  const { passwords } = heldTokens(result);
+  if (passwords) sink?.discard(passwords);
 }

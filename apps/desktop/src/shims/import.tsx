@@ -15,7 +15,7 @@ export const importData: typeof real.importData = linux ? linux.importData : rea
 export const unlockBrowser: typeof real.unlockBrowser = linux ? linux.unlockBrowser : real.unlockBrowser;
 export const isBrowserUnlocked: typeof real.isBrowserUnlocked = linux ? linux.isBrowserUnlocked : real.isBrowserUnlocked;
 export const forgetUnlockedKeys: typeof real.forgetUnlockedKeys = linux ? linux.forgetUnlockedKeys : real.forgetUnlockedKeys;
-export const writeImported: typeof real.writeImported = linux ? linux.writeImported : real.writeImported;
+export const writeImported: typeof real.writeImported = linux ? linux.writeImported : (token, profile, kinds) => real.writeImported(token, profile, kinds);
 export const discardImported: typeof real.discardImported = linux ? linux.discardImported : real.discardImported;
 export const listExtensions: typeof real.listExtensions = linux ? linux.listExtensions : real.listExtensions;
 export const importSafariExport: typeof real.importSafariExport = linux ? linux.importSafariExport : real.importSafariExport;

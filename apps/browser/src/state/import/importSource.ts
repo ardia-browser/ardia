@@ -19,8 +19,11 @@ import { importModule } from "./importApi";
 import type { HeldLogins } from "./importOutcome";
 import type { ExtensionGroup } from "./extensionListing";
 
-async function destination(target: string, index: number, name: string, color?: string, emoji?: string, shareWith?: string | null, shareTopApps?: boolean): Promise<string> {
+type Destination = { name: string; color?: string; emoji?: string; shareWith?: string | null; shareTopApps?: boolean };
+
+async function destination(target: string, index: number, signal: AbortSignal, { name, color, emoji, shareWith, shareTopApps }: Destination): Promise<string> {
   if (index === 0) return target;
+  if (signal.aborted) return "";
   const clash = profileNamed(name);
   if (clash) {
     const { confirmed } = await confirm({
@@ -30,6 +33,7 @@ async function destination(target: string, index: number, name: string, color?: 
       confirmTitle: "Import as new profile",
       cancelTitle: "Replace this profile",
     });
+    if (signal.aborted) return "";
     if (!confirmed) return clash;
   }
   return createProfile({ name, color: profileColorFor(color), icon: emoji ?? null, shareWith, shareTopApps });
@@ -141,7 +145,7 @@ export async function runImportJob({ source, wanted, withoutKey, consent, signal
   let destinationIndex = 0;
   const arc = { homes: new Map<string, string>(), home: "", glyphs: 0, cachedIcons: 0, routing: undefined as ImportResult["arcRouting"], archive: undefined as ImportResult["arcArchive"] };
   const nextDestination = (name: string, color?: string, emoji?: string, shareWith?: string | null, shareTopApps?: boolean) =>
-    destination(target, destinationIndex++, name, color, emoji, shareWith, shareTopApps);
+    destination(target, destinationIndex++, signal, { name, color, emoji, shareWith, shareTopApps });
   const found = new Map<string, ImportedExtension>();
   const engines: { profile: BrowserProfile; engine?: ImportedSearchEngine }[] = [];
   const left: string[] = [];

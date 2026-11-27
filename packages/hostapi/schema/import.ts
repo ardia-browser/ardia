@@ -17,6 +17,7 @@ export const importModules = defineModuleDomain({
         isBrowserUnlocked: { args: [["browserId", "string"]], result: "boolean", async: false, instance: "strong", mac: "custom", desktop: "absent", windows: "custom" },
         forgetUnlockedKeys: { args: [], result: "void | Promise<void>", swiftResult: "Void", async: false, instance: "strong", mac: "custom", desktop: "host", windows: "custom" },
         writeImported: { args: [["token", "string"], ["profile", "string"], ["kinds", "(\"cookies\" | \"autofill\")[]", "[ImportKind]"]], result: "string", async: true, promise: true, instance: "strong", mac: "custom", desktop: "host", windows: "custom" },
+        writeImportedJob: { args: [["jobId", "string"], ["token", "string"], ["profile", "string"], ["kinds", "(\"cookies\" | \"autofill\")[]", "[ImportKind]"]], result: "string", async: true, promise: true, instance: "strong", mac: "custom", desktop: "absent", windows: "absent" },
         discardImported: { args: [["token", "string"]], result: "void | Promise<void>", swiftResult: "Void", async: false, instance: "strong", mac: "custom", desktop: "host", windows: "custom" },
         listExtensions: { args: [["browserId", "string"], ["profileId", "string"]], result: "string", async: true, promise: true, instance: "strong", mac: "custom", desktop: "host", windows: "custom" },
         importSafariExport: { args: [["jobId", "string"], ["path", "string"]], result: "string", async: true, promise: true, instance: "strong", mac: "custom", desktop: "absent", windows: "custom" },

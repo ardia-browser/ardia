@@ -36,7 +36,8 @@ export function movePeekOutsidePress(windowId: string, at: Point) {
   if (press && strays(press.at, at)) press.strayed = true;
 }
 
-export function endPeekOutsidePress(windowId: string, at: Point) {
+export function endPeekOutsidePress(windowId: string, at: Point, button: number | undefined) {
+  if ((button ?? PRIMARY_BUTTON) !== PRIMARY_BUTTON) return;
   const press = held.get(windowId);
   held.delete(windowId);
   const kept = pressKeptPeek(windowId);
@@ -58,7 +59,7 @@ export function notePressSwitchesProfile(windowId: string, profileId: string) {
   if (current && current !== profileId) notePressKeepsPeek(windowId);
 }
 
-export function noteTabDragKeepsPeek(tabId: string) {
+export function peekKeeperForTab(tabId: string) {
   const windowId = useBrowser.getState().tabs[tabId]?.windowId;
-  if (windowId) notePressKeepsPeek(windowId);
+  return () => void (windowId && notePressKeepsPeek(windowId));
 }

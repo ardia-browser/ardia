@@ -16,7 +16,7 @@ export function PeekOutsidePresses({ style, children }: { style?: StyleProp<View
         return false;
       }}
       onTouchMove={(press) => movePeekOutsidePress(windowId, pointOf(press))}
-      onTouchEnd={(press) => endPeekOutsidePress(windowId, pointOf(press))}
+      onTouchEnd={(press) => endPeekOutsidePress(windowId, pointOf(press), buttonOf(press))}
       onTouchCancel={() => cancelPeekOutsidePress(windowId)}
     >
       {children}

@@ -11,7 +11,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
 const { forgetPeekStage, notePeekStageState } = await import("./gesturePresses.ts");
 const { shownPeek } = await import("./peek.ts");
-const { cancelPeekOutsidePress, endPeekOutsidePress, movePeekOutsidePress, notePressSwitchesProfile, noteTabDragKeepsPeek, OUTSIDE_CLICK_SLOP, pressPeekOutsideOnDragRegion, startPeekOutsidePress } = await import("./outsidePresses.ts");
+const { cancelPeekOutsidePress, endPeekOutsidePress, movePeekOutsidePress, notePressSwitchesProfile, peekKeeperForTab, OUTSIDE_CLICK_SLOP, pressPeekOutsideOnDragRegion, startPeekOutsidePress } = await import("./outsidePresses.ts");
 const { notePressKeepsPeek } = await import("./keptPresses.ts");
 const { clickTab } = await import("../sidebar/actions.ts");
 after(() => client.setSharing(false, "settings"));
@@ -40,7 +40,7 @@ function windowWithTwoPeeks() {
 const click = (w, at = AT, button = 0, during = () => {}) => {
   startPeekOutsidePress(w, AT, button);
   during();
-  endPeekOutsidePress(w, at);
+  endPeekOutsidePress(w, at, button);
 };
 
 test("a click in the sidebar that leaves the same tab shown closes its Peek, and is counted", async () => {
@@ -72,7 +72,7 @@ test("a right-click, a drag past the click slop, a drag that strays and comes ba
   click(w, AT, 0, () => movePeekOutsidePress(w, { x: AT.x, y: AT.y + 60 }));
   startPeekOutsidePress(w, AT, 0);
   cancelPeekOutsidePress(w);
-  endPeekOutsidePress(w, AT);
+  endPeekOutsidePress(w, AT, 0);
   assert.equal(S().peeks[a]?.tabId, shown);
   click(w, { x: AT.x + OUTSIDE_CLICK_SLOP, y: AT.y });
   assert.equal(S().peeks[a], undefined, "a click that moved within the slop still closes it");
@@ -100,11 +100,14 @@ test("a click on another tab that asks for it keeps the Peek even while the stor
   assert.equal(S().peeks[a], undefined, "so it was a click outside");
 });
 
-test("a tab strip drag that dropped within the click slop (pinning the first tab) keeps the Peek; an ended drag of a gone tab marks nothing", () => {
-  const { w, a, shown } = windowWithTwoPeeks();
-  click(w, { x: AT.x - 7, y: AT.y }, 0, () => noteTabDragKeepsPeek(a));
+test("a tab strip drag that dropped within the click slop (pinning the first tab, or into another window) keeps the Peek; an ended drag of a gone tab marks nothing", () => {
+  const { w, a, b, shown } = windowWithTwoPeeks();
+  click(w, { x: AT.x - 7, y: AT.y }, 0, () => peekKeeperForTab(a)());
   assert.equal(S().peeks[a]?.tabId, shown);
-  click(w, AT, 0, () => noteTabDragKeepsPeek("gone"));
+  const keep = peekKeeperForTab(b);
+  click(w, { x: AT.x, y: AT.y - 7 }, 0, () => (S().closeTab(b), keep()));
+  assert.equal(S().peeks[a]?.tabId, shown, "the keeper holds the window the tab was dragged from, read before the drop moved it away");
+  click(w, AT, 0, () => peekKeeperForTab("gone")());
   assert.equal(S().peeks[a], undefined);
 });
 

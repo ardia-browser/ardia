@@ -14,15 +14,20 @@ extension ArdiaWebView: LoginListTarget {
     fillLoginList(["code": code], origin: frameOrigin, completion: done)
   }
 
-  func loginListFillNewPassword(_ password: String, frameOrigin: String, done: @escaping (Bool) -> Void) { done(false) }
+  func loginListFillNewPassword(_ password: String, frameOrigin: String, done: @escaping (Bool) -> Void) {
+    fillLoginList(["newPassword": password], origin: frameOrigin, completion: done)
+  }
 
   func loginListSync(open: Bool, picking: Bool) { syncLoginList(open: open, picking: picking) }
 
   func loginListConnect() { connectApplePasswordsFromLoginList() }
 
-  @objc(showLoginListFrom:screenRect:typing:typed:code:)
-  func showLoginList(from origin: String, screenRect: NSRect, typing: Bool, typed: String, code: Bool) {
-    LoginList.shared.show(self, field: LoginListField(frameOrigin: origin, screenRect: screenRect, trigger: typing ? .typing : .press, typed: typed, kind: code ? .code : .login))
+  @objc(showLoginListFrom:screenRect:typing:typed:field:rules:)
+  func showLoginList(from origin: String, screenRect: NSRect, typing: Bool, typed: String, field kind: String, rules: [String: Any]) {
+    var field = LoginListField(
+      frameOrigin: origin, screenRect: screenRect, trigger: typing ? .typing : .press, typed: typed, kind: kind == "code" ? .code : kind == "newPassword" ? .newPassword : .login)
+    if field.kind == .newPassword { field.rules = LoginListField.rules(maxLength: rules["maxLength"], minLength: rules["minLength"], pattern: rules["pattern"]) }
+    LoginList.shared.show(self, field: field)
   }
 
   @objc(keyLoginList:)

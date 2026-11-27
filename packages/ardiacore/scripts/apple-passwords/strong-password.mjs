@@ -2,6 +2,7 @@ import { FIXTURES } from "./fake.mjs";
 import { FOOTER } from "./login-list.mjs";
 import { SAVE_TITLE } from "./saving.mjs";
 import { PAGE_EVENTS } from "./sites.mjs";
+import { sleep } from "../../../../scripts/lib/instance.mjs";
 import { waitFor } from "./webkit.mjs";
 
 const q = JSON.stringify;
@@ -9,6 +10,7 @@ export const SUGGEST = "Suggest strong password";
 const SITE = "save.localhost";
 const ALPHABET = /^[A-Za-z0-9-]+$/;
 const LOOK_ALIKES = /[0O1lI]/;
+const CHROME_POPUP_MS = 2500;
 
 const assert = (ok, message, detail) => {
   if (!ok) throw new Error(`${message}: ${q(detail)}`);
@@ -23,7 +25,7 @@ const shape = (password) => ({
   lower: /[a-z]/.test(password),
 });
 
-export function strongPasswordChecks({ paired, sites, engine: engineName = "webkit" }) {
+export function strongPasswordChecks({ paired, sites, engine: engineName = "webkit", fresh }) {
   const session = async () => {
     const shared = await paired();
     return { ...shared, tabs: engineName === "chromium" ? shared.chromium : shared.tabs };
@@ -35,6 +37,11 @@ export function strongPasswordChecks({ paired, sites, engine: engineName = "webk
     assert(rows[0]?.title === SUGGEST && !rows[0].notice, `the list starts with ${SUGGEST}`, rows);
     assert(rows.at(-1)?.title === FOOTER, `the list ends in ${FOOTER}`, rows);
     assert(!rows.some((r) => FIXTURES.logins.some((l) => l.user === r.title)), "a new-password field lists no logins", rows);
+    if (engineName === "chromium") {
+      await sleep(CHROME_POPUP_MS);
+      const popups = await tab.chromePopups();
+      assert(!popups.length, "Chrome shows no generation popup of its own beside it", popups);
+    }
     return rows;
   };
 
@@ -52,6 +59,13 @@ export function strongPasswordChecks({ paired, sites, engine: engineName = "webk
   };
 
   return {
+    async E24control() {
+      const tab = await fresh(sites.url(SITE, "/signup"));
+      await tab.click("#u");
+      await tab.click("#p");
+      const popups = await waitFor("Chrome's generation popup", async () => ((await tab.chromePopups()).length ? tab.chromePopups() : null), 10_000);
+      return { engine: "chromium", manager: "ardia", chromePopups: popups.length };
+    },
     async E24() {
       const { fake, tabs } = await session();
       const short = await tabs.open(sites.url(SITE, "/signup-short"));

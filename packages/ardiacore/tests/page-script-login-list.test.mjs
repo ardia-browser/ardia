@@ -160,3 +160,45 @@ ${box("mail", 'name="otp" autocomplete="email"', 210)}
   }
   assert.deepEqual(kinds, { named: "code", otp: "code", zip: null, search: null, mail: null });
 });
+
+const SIGN_UP_FIXTURE = `<!doctype html><body style="margin:0">
+<form><input id="u" autocomplete="username" style="position:absolute;left:10px;top:10px;width:300px;height:30px">
+<input id="p" type="password" autocomplete="new-password" maxlength="24" minlength="10" pattern="[A-Za-z0-9-]+" style="position:absolute;left:10px;top:60px;width:300px;height:30px">
+<input id="c" type="password" autocomplete="new-password" maxlength="20" style="position:absolute;left:10px;top:110px;width:300px;height:30px"></form>
+<form><input id="cu" autocomplete="username" style="position:absolute;left:10px;top:200px;width:300px;height:30px">
+<input id="old" type="password" autocomplete="current-password" style="position:absolute;left:10px;top:250px;width:300px;height:30px">
+<input id="new" type="password" style="position:absolute;left:10px;top:300px;width:300px;height:30px">
+<input id="again" type="password" style="position:absolute;left:10px;top:350px;width:300px;height:30px"></form>
+<script>
+const events = (window.__events = []);
+for (const type of ["input", "change"]) document.addEventListener(type, (e) => events.push(type + ":" + e.target.id), true);
+</script></body>`;
+
+test("a new-password field reports its form's rules, and a strong password fills every new-password field of that form only", { skip: CHROMIUM_MISSING, timeout: 30_000 }, async (t) => {
+  const browser = await launchChromium();
+  t.after(() => browser.close());
+  const { page, run, fill } = await openCodeFixture(browser, "https://page.test", SIGN_UP_FIXTURE);
+  const values = () => run(() => Object.fromEntries(["u", "p", "c", "old", "new", "again"].map((id) => [id, document.getElementById(id).value])));
+  const shown = async (y) => {
+    await page.mouse.click(30, y);
+    return (await loginFields(run)).filter((r) => r.event !== "hide")[0];
+  };
+  const username = await shown(25);
+  assert.equal(username.field, "username");
+  await fill({ ticket: "1", token: username.token, origin: "https://page.test", newPassword: "Abcd-Efgh-2345-Jkmn" });
+  assert.deepEqual(await fillReplies(run), [{ ticket: "1", filled: false }], "a strong password never fills from a username field");
+  const report = await shown(75);
+  assert.deepEqual([report.field, report.typed, report.maxLength, report.minLength, report.pattern], ["newPassword", "", 20, 10, "[A-Za-z0-9-]+"]);
+  await fill({ ticket: "2", token: report.token, origin: OTHER_SITE, newPassword: "Abcd-Efgh-2345-Jkmn" });
+  await fill({ ticket: "3", token: report.token, origin: "https://page.test", newPassword: "" });
+  await fill({ ticket: "4", token: report.token, origin: "https://page.test", newPassword: "Abcd-Efgh-2345-Jkmn" });
+  assert.deepEqual(await fillReplies(run), ["2", "3", "4"].map((ticket) => ({ ticket, filled: ticket === "4" })));
+  assert.deepEqual(await values(), { u: "", p: "Abcd-Efgh-2345-Jkmn", c: "Abcd-Efgh-2345-Jkmn", old: "", new: "", again: "" });
+  const current = await shown(265);
+  assert.equal(current.field, "password", "a change-password form's current password is a sign-in field");
+  const changed = await shown(315);
+  assert.equal(changed.field, "newPassword", "its other two password fields are new ones");
+  await fill({ ticket: "5", token: changed.token, origin: "https://page.test", newPassword: "Pqrs-Tuvw-6789-Xyza" });
+  assert.deepEqual(await fillReplies(run), [{ ticket: "5", filled: true }]);
+  assert.deepEqual(await values(), { u: "", p: "Abcd-Efgh-2345-Jkmn", c: "Abcd-Efgh-2345-Jkmn", old: "", new: "Pqrs-Tuvw-6789-Xyza", again: "Pqrs-Tuvw-6789-Xyza" });
+});

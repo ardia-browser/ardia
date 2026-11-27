@@ -138,6 +138,10 @@ export function engineTabs(app, { log = () => {}, engine: engineName = "webkit" 
         if (!shown) return null;
         return parseRows(await act(shown.number, "ax:bold"));
       },
+      async chromePopups() {
+        const children = JSON.parse((await act(await windowNumber(), "children")) || "[]");
+        return children.filter((c) => c.visible && c.class === "NativeWidgetMacNSWindow");
+      },
       async waitRows(what = "the Login list", ms = 10_000) {
         return waitFor(what, async () => {
           const rows = await tab.rows();

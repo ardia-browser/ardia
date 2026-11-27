@@ -5,6 +5,8 @@
 namespace {
 
 const NSUInteger kTypedMax = 200;
+const NSUInteger kPatternMax = 512;
+const double kLengthMax = 1024;
 const NSUInteger kTokenMax = 16;
 const double kCoordinateMax = 1e6;
 
@@ -18,6 +20,18 @@ double Coordinate(NSDictionary *d, NSString *key) {
   if (![value isKindOfClass:NSNumber.class] || CFGetTypeID((__bridge CFTypeRef)value) == CFBooleanGetTypeID()) return 0;
   const double number = [value doubleValue];
   return std::isfinite(number) ? MAX(-kCoordinateMax, MIN(kCoordinateMax, number)) : 0;
+}
+
+NSNumber *Length(NSDictionary *d, NSString *key) {
+  id value = d[key];
+  if (![value isKindOfClass:NSNumber.class] || CFGetTypeID((__bridge CFTypeRef)value) == CFBooleanGetTypeID()) return @0;
+  const double number = [value doubleValue];
+  return std::isfinite(number) ? @((NSInteger)MAX(0, MIN(kLengthMax, std::floor(number)))) : @0;
+}
+
+NSString *FieldPattern(NSDictionary *d) {
+  id value = d[@"pattern"];
+  return [value isKindOfClass:NSString.class] && [value length] <= kPatternMax ? value : @"";
 }
 
 NSString *Typed(NSDictionary *d) {
@@ -53,14 +67,20 @@ NSDictionary *ArdiaLoginListReport(id message) {
     NSString *key = Choice(d, @"key", @[ @"down", @"up", @"enter", @"escape", @"tab" ]);
     return key ? @{@"event" : event, @"token" : token, @"key" : key} : nil;
   }
-  NSString *field = Choice(d, @"field", @[ @"username", @"password", @"code" ]);
+  NSString *field = Choice(d, @"field", @[ @"username", @"password", @"code", @"newPassword" ]);
   if (!field) return nil;
   const NSRect rect = NSMakeRect(Coordinate(d, @"x"), Coordinate(d, @"y"), MAX(1, Coordinate(d, @"width")), MAX(1, Coordinate(d, @"height")));
-  return @{
+  NSMutableDictionary *report = [@{
     @"event" : event,
     @"token" : token,
     @"field" : field,
     @"typed" : [field isEqualToString:@"username"] ? Typed(d) : @"",
     @"rect" : [NSValue valueWithRect:rect],
-  };
+  } mutableCopy];
+  if ([field isEqualToString:@"newPassword"]) {
+    report[@"maxLength"] = Length(d, @"maxLength");
+    report[@"minLength"] = Length(d, @"minLength");
+    report[@"pattern"] = FieldPattern(d);
+  }
+  return report;
 }

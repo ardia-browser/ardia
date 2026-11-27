@@ -62,7 +62,10 @@ const withinContract = (report) =>
     (report.event === "hide" || /^[0-9]{1,16}$/.test(report.token)) &&
     (report.event !== "key" || KEYS.includes(report.key)) &&
     (!["show", "input"].includes(report.event) ||
-      (["username", "password", "code"].includes(report.field) &&
+      (["username", "password", "code", "newPassword"].includes(report.field) &&
+        (report.field === "newPassword"
+          ? [report.maxLength, report.minLength].every((n) => Number.isInteger(n) && n >= 0 && n <= 1024) && typeof report.pattern === "string" && report.pattern.length <= 512
+          : !("maxLength" in report || "minLength" in report || "pattern" in report)) &&
         typeof report.typed === "string" &&
         report.typed.length <= 200 &&
         (report.field === "username" || report.typed === "") &&
@@ -89,12 +92,22 @@ test("a Login list field report keeps its event, token, field, typed value and r
   assert.deepEqual(passwordInput, { event: "passwordInput", token: "3" }, "typing a password keeps nothing of it");
 });
 
+test("a new-password field report keeps its maxlength, minlength and pattern, bounded, and nothing typed", { skip: process.platform !== "darwin" }, () => {
+  const NEW = { ...SHOW, field: "newPassword", typed: "fixture-pw-new", maxLength: 20, minLength: 8, pattern: "[A-Za-z0-9-]+" };
+  const [kept, huge, odd, password] = reports([NEW, { ...NEW, maxLength: 1e9, minLength: -4, pattern: "x".repeat(513) }, { ...NEW, maxLength: true, minLength: "8", pattern: 7 }, { ...SHOW, field: "password", maxLength: 20, pattern: "x" }]);
+  assert.deepEqual(kept, { event: "show", token: "3", field: "newPassword", typed: "", maxLength: 20, minLength: 8, pattern: "[A-Za-z0-9-]+", rect: [10, 20, 300, 30] });
+  assert.deepEqual([huge.maxLength, huge.minLength, huge.pattern], [1024, 0, ""], "lengths are clamped and a pattern past 512 characters is dropped");
+  assert.deepEqual([odd.maxLength, odd.minLength, odd.pattern], [0, 0, ""], "values of the wrong kind count as unset");
+  assert.ok(!("maxLength" in password || "pattern" in password), "only a new-password field carries the field's rules");
+});
+
 test("B1: every hostile value in every field of a Login list report is refused or kept within the report's contract", { skip: process.platform !== "darwin" }, () => {
   const messages = [];
   for (const { value } of HOSTILE_VALUES) {
     messages.push(value);
-    for (const name of [...Object.keys(SHOW), "key"]) {
+    for (const name of [...Object.keys(SHOW), "key", "maxLength", "minLength", "pattern"]) {
       messages.push({ ...SHOW, [name]: value });
+      messages.push({ ...SHOW, field: "newPassword", maxLength: 20, minLength: 8, pattern: "[a-z]+", [name]: value });
       messages.push({ event: "key", token: "3", key: "down", [name]: value });
     }
   }

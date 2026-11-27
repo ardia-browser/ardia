@@ -19,7 +19,8 @@
 //   E24 on save.localhost's /signup, a new-password field lists "Suggest strong password" (strong-password.mjs); picking it
 //       fills both new-password fields with one password Ardia makes (12 characters where maxlength is 12, on
 //       /signup-short), and signing up asks "Save to Apple Passwords?", whose Save keeps that password in the fake;
-//       E24chromium the same in a Chromium tab
+//       E24chromium the same in a Chromium tab, where Chrome shows no generation popup of its own beside it;
+//       E24control proves that check sees one: on Ardia's own password manager, Chrome's popup shows there
 //   E25-E27 Verification codes on a code field (codes.mjs), in that instance, in a WebKit tab and (E25chromium…) a
 //       Chromium one: "Code for example.localhost" fills the fixture code, the account typed on the site's sign-in
 //       page comes first, and an http code field or one holding text gets nothing
@@ -211,6 +212,12 @@ const choose = (manager) =>
 const setExtension = (enabled) =>
   app.eval(`return ac.engine.call("extensions.setEnabled", { profile: "", id: ${JSON.stringify(ICLOUD_PASSWORDS_EXTENSION_ID)}, enabled: ${enabled} }).then(() => true);`);
 
+async function freshChromiumTab(url) {
+  const fake = fakeHelper(path.join(SCRATCH, "E24control", "fake"));
+  await start("E24control", { manifest: fake.manifest });
+  return chromiumTabs(app, { log: note }).open(url);
+}
+
 const inChromium = (checks, names) => Object.fromEntries(names.map((name) => [`${name}chromium`, checks[name]]));
 
 const CHECKS = {
@@ -328,7 +335,7 @@ const CHECKS = {
   ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E12", "E13", "E15", "E34", "E35", "E36", "E37"]),
   ...savingChecks({ paired, sites }),
   ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E19", "E20", "E21", "E22", "E23"]),
-  ...strongPasswordChecks({ paired, sites }),
+  ...strongPasswordChecks({ paired, sites, fresh: freshChromiumTab }),
   ...inChromium(strongPasswordChecks({ paired, sites, engine: "chromium" }), ["E24"]),
   ...codeChecks({ paired, sites }),
   ...inChromium(codeChecks({ paired, sites, engine: "chromium" }), ["E25", "E26", "E27"]),

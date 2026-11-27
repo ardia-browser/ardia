@@ -1063,6 +1063,20 @@
     const checkVisibility = Element.prototype.checkVisibility;
     const getAttribute = Element.prototype.getAttribute;
     const attribute = (el, name) => apply(getAttribute, el, [name]) || "";
+    const NEW_PASSWORD = /(^|\s)new-password(\s|$)/i;
+    const CURRENT_PASSWORD = /(^|\s)current-password(\s|$)/i;
+    const newPasswords = (password) => {
+      if (!password || password.type !== "password") return [];
+      const all = Array.from((password.form || document).querySelectorAll("input[type=password]")).filter(visible);
+      const marked = all.filter((el) => NEW_PASSWORD.test(attribute(el, "autocomplete")));
+      const unmarked = all.filter((el) => !CURRENT_PASSWORD.test(attribute(el, "autocomplete")));
+      const found = marked.length ? marked : unmarked.length < all.length ? unmarked : all.length === 2 ? all : all.length === 3 ? all.slice(1) : [];
+      return found.includes(password) ? found : [];
+    };
+    const passwordRules = (fields, el) => {
+      const limits = fields.map((f) => f.maxLength).filter((n) => n > 0);
+      return { maxLength: limits.length ? Math.min(...limits) : 0, minLength: Math.max(0, ...fields.map((f) => f.minLength)), pattern: attribute(el, "pattern") };
+    };
     const seen = (el) => visible(el) && (typeof checkVisibility !== "function" || apply(checkVisibility, el, [{ opacityProperty: true, visibilityProperty: true }]));
     const asksForCode = (el) => {
       const auto = attribute(el, "autocomplete");
@@ -1095,8 +1109,10 @@
       const rect = inTopViewport(el);
       if (!rect) return hide();
       if (!active || active.el !== el) active = { el, found, token: `${++tokens}` };
-      const field = found.code ? "code" : el.type === "password" ? "password" : "username";
-      send("loginField", { event, token: active.token, field, typed: field === "username" ? String(el.value || "").slice(0, TYPED_MAX) : "", ...rect });
+      const fresh = found.code ? [] : newPasswords(el);
+      const field = found.code ? "code" : fresh.length ? "newPassword" : el.type === "password" ? "password" : "username";
+      const rules = fresh.length ? passwordRules(fresh, el) : {};
+      send("loginField", { event, token: active.token, field, typed: field === "username" ? String(el.value || "").slice(0, TYPED_MAX) : "", ...rules, ...rect });
     };
     const listen = () => {
       if (listening) return;
@@ -1159,6 +1175,15 @@
         const filled = typeof message.code === "string" && CODE_SHAPE.test(message.code) && !!codeField(active.found.code);
         if (filled) {
           put(active.found.code, message.code);
+          open = picking = false;
+        }
+        return send("loginFilled", { ticket, filled });
+      }
+      if (typeof message.newPassword === "string") {
+        const fields = active.el === active.found.password ? newPasswords(active.el) : [];
+        const filled = !!message.newPassword && fields.length > 0;
+        if (filled) {
+          for (const field of fields) put(field, message.newPassword);
           open = picking = false;
         }
         return send("loginFilled", { ticket, filled });

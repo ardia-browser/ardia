@@ -4,12 +4,12 @@ import { ClipView, ContextMenuArea, space, WindowDragRegion } from "../ui";
 import { useTheme } from "../ui/theme";
 import { useSidebarHighContrast } from "../../state/sidebar/textLook";
 import { TintInk } from "../ui/TintInk";
-import { useWindowId, useWindowProfileId } from "../../state/browser/hooks";
+import { useWindowFullScreen, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { useHasDownloads, useNoTiles } from "../../state/sidebar/hooks";
 import { collapsedSidebarHeader, useAddressBarInSidebar, useDownloadsInSidebarFooter, usePageFrameInset, useSidebarCaptionRoom, useSidebarHeaderCollapsed, useToolbarLightsCenter } from "../../state/windows/layout";
 import { closeAnchoredWhenControlsRowChanges } from "../../state/sidebar/controlsRowChange";
 import { DownloadsButton } from "../downloads/DownloadsButton";
-import { profileIndicatorX, ProfileIndicator } from "../profiles/ProfileIndicator";
+import { ProfileIndicator, sidebarProfileRow } from "../profiles/ProfileIndicator";
 import { useWindowChrome } from "../../state/windows/windowButtons";
 import { usePagerPages } from "../../state/windows/profilePager";
 import { PROFILE_DOTS_HEIGHT, ProfileDots, useProfileDotsShown } from "../profiles/ProfileDots";
@@ -34,6 +34,7 @@ import { SidebarRowLookContext, useSidebarRowLookSource } from "./rowLook";
 import { useRevealTabs } from "./useRevealTabs";
 
 const HEADER_RIGHT = space.m;
+const DOWNLOADS_GAP = 2;
 
 export function Sidebar({ width }: { width: number }) {
   const windowId = useWindowId();
@@ -53,7 +54,7 @@ export function Sidebar({ width }: { width: number }) {
   const field = useSidebarField();
   const captionRoom = useSidebarCaptionRoom();
   useWindowChrome();
-  const indicatorX = profileIndicatorX();
+  const fullScreen = useWindowFullScreen(windowId);
   const collapsed = useSidebarHeaderCollapsed();
   const frame = usePageFrameInset();
   const header = collapsed && field !== "top" ? collapsedSidebarHeader(frame) : sidebarHeaderOf(addressBar, lightsY, field === "top");
@@ -63,6 +64,8 @@ export function Sidebar({ width }: { width: number }) {
   const dotsWanted = useProfileDotsShown();
   const dots = dotsWanted && profileShown;
   const footerDownloads = useDownloadsInSidebarFooter() && hasDownloads;
+  const headerDownloads = hasDownloads && !footerDownloads;
+  const profileRow = sidebarProfileRow({ width, fullScreen, edge: HEADER_RIGHT, captionRoom, downloadsRoom: headerDownloads ? SIDEBAR_FOOTER_DOWNLOADS.size + DOWNLOADS_GAP : 0 });
   const band = dots || footerDownloads ? PROFILE_DOTS_HEIGHT : 0;
   const fieldBand = field === "bottom" ? bottomFieldBand() : 0;
   const footer = band + fieldBand;
@@ -150,10 +153,11 @@ export function Sidebar({ width }: { width: number }) {
                     {field === "top" ? <SidebarAddressRow width={width} top={SIDEBAR_FIELD.top} /> : null}
                   </>
                 ) : collapsed ? null : (
-                  <View pointerEvents="box-none" style={{ height: header, flexDirection: "row", alignItems: "flex-start", paddingLeft: indicatorX, paddingRight: HEADER_RIGHT + captionRoom, paddingTop: lightsY - 17 }}>
-                    <ProfileIndicator room={width - indicatorX - HEADER_RIGHT - captionRoom - (hasDownloads && !footerDownloads ? SIDEBAR_FOOTER_DOWNLOADS.size + 2 : 0)} profileShown={profileShown} />
+                  <View pointerEvents="box-none" style={{ height: header, flexDirection: "row", alignItems: "flex-start", paddingLeft: profileRow.left, paddingRight: profileRow.right, paddingTop: lightsY - 17 }}>
+                    {profileRow.centered ? <View pointerEvents="none" style={{ flex: 1 }} /> : null}
+                    <ProfileIndicator room={profileRow.room} profileShown={profileShown} />
                     <View pointerEvents="none" style={{ flex: 1 }} />
-                    {hasDownloads && !footerDownloads ? <DownloadsButton windowId={windowId} /> : null}
+                    {headerDownloads ? <View style={{ marginLeft: DOWNLOADS_GAP }}><DownloadsButton windowId={windowId} /></View> : null}
                   </View>
                 )}
               </View>

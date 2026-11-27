@@ -811,7 +811,7 @@ Plan PlanExport(std::string_view path, char separator) {
 }
 
 Plan PlanSyncedLogin(std::string_view profile, std::string_view origin, std::string_view username,
-                     std::string_view password, bool replacing) {
+                     std::string_view password, std::optional<std::string_view> expected) {
   const std::optional<std::string> normalized = NormalizeOrigin(origin);
   if (!normalized || *normalized != origin) {
     return Invalid("ERR_CREDENTIAL_REQUEST", "The origin is not a valid web origin");
@@ -823,10 +823,16 @@ Plan PlanSyncedLogin(std::string_view profile, std::string_view origin, std::str
   values.push_back(Arg::String(password));
   Plan save = PlanInvoke("ArdiaPasswords.save", values);
   values.clear();
-  if (replacing && save.ok()) {
-    save.service = "ac_passwords_replace";
+  if (!expected || !save.ok()) {
+    return save;
   }
-  return save;
+  if (expected->empty() || !PlainText(*expected, kMaxSecretBytes)) {
+    return Invalid("ERR_CREDENTIAL_REQUEST", "A non-empty password of bounded length is required");
+  }
+  Json json;
+  json.Text("origin", std::string(origin)).Text("username", std::string(username));
+  json.Secret("password", password).Secret("expected", *expected);
+  return Engine("ac_passwords_replace", json, Reply::kOk, {Store::kPasswords});
 }
 
 bool PasswordsSyncUsable(bool skip_undecryptable, bool service, StoreError error) {

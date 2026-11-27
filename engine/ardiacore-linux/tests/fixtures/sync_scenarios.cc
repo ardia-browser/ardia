@@ -245,6 +245,56 @@ JsonValue S(std::string text) {
   return JsonValue::String(std::move(text));
 }
 
+void PasswordSaves(SyncCore& core) {
+  const std::string origin = "https://bank.example";
+  const std::string user = "alice";
+  LoginRead read{true, {}};
+  read.logins.emplace_back(origin, user, Fixture("synced"), 0);
+  read.logins.emplace_back(origin, "bob", Fixture("saved"), 0);
+  auto sealed = core.SealLogins(std::move(read));
+  CHECK(sealed.ok && sealed.value.items.size() == 2);
+  if (!sealed.ok || sealed.value.items.size() != 2) return;
+  const std::string incoming = sealed.value.items[0].Find("sealed")->text;
+  const std::string other = sealed.value.items[1].Find("sealed")->text;
+  LoginRead saved{true, {}};
+  saved.logins.emplace_back(origin, user, Fixture("saved"), 0);
+  auto saved_sealed = core.SealLogins(std::move(saved));
+  CHECK(saved_sealed.ok && saved_sealed.value.items.size() == 1);
+  if (!saved_sealed.ok || saved_sealed.value.items.size() != 1) return;
+  const std::string replaced = saved_sealed.value.items[0].Find("sealed")->text;
+
+  const auto parse = [&](JsonValue replacing) {
+    return ParsePasswordSave({S("default"), S(origin), S(user), S(incoming), std::move(replacing)});
+  };
+  auto adding = parse(JsonValue::Null());
+  CHECK(adding && !adding->replaced);
+  auto legacy_add = parse(JsonValue::Bool(false));
+  CHECK(legacy_add && !legacy_add->replaced);
+  auto empty_add = parse(S(""));
+  CHECK(empty_add && !empty_add->replaced);
+  CHECK(!parse(JsonValue::Bool(true)));
+  CHECK(!parse(S(std::string(kMaxSealedPasswordBytes + 1, 'A'))));
+  CHECK(!parse(JsonValue::Number(1)));
+
+  auto replacing = parse(S(replaced));
+  CHECK(replacing && replacing->replaced == replaced);
+  if (!replacing) return;
+  auto opened = core.OpenLogin(*replacing);
+  CHECK(opened && opened->login.password == Fixture("synced") && opened->replaced &&
+        opened->replaced->password == Fixture("saved") && opened->replaced->realm == origin &&
+        opened->replaced->username == user);
+
+  auto opened_add = core.OpenLogin(*adding);
+  CHECK(opened_add && opened_add->login.password == Fixture("synced") && !opened_add->replaced);
+
+  auto wrong_login = parse(S(other));
+  CHECK(wrong_login && !core.OpenLogin(*wrong_login));
+  std::string tampered = replaced;
+  tampered[10] = tampered[10] == 'A' ? 'B' : 'A';
+  auto broken = parse(S(tampered));
+  CHECK(broken && !core.OpenLogin(*broken));
+}
+
 void Core(const std::string& scratch) {
   const std::string folder = scratch + "/core-folder";
   SyncCore core(MakeFileKeyStore(scratch + "/core-keys"), {folder, "Test Device"});
@@ -279,6 +329,7 @@ void Core(const std::string& scratch) {
   CHECK(read.ok && read.value.Find("files")->items.size() == 1);
   CHECK(read.value.Find("files")->items[0].Find("payload")->text == "{\"v\":1,\"kind\":\"log\"}");
   CHECK(!core.Dispatch("ArdiaSync.read", {S(folder), S("app"), S("not a list")}, now).ok);
+  PasswordSaves(core);
   auto words = core.Dispatch("ArdiaSync.recoveryWords", {}, now);
   CHECK(words.ok && words.value.items.size() == kPhraseWords);
   std::string phrase;

@@ -219,14 +219,20 @@ void Origins() {
 }
 
 void SyncedLogins() {
+  const std::string old_password = FixtureSecret("old \"saved\" \\ ");
   const std::string hex = std::string(R"({"origin":"https://example.com","username":"me","passwordHex":")") + Hex(kPassword) + "\"}";
-  ExpectEngine(PlanSyncedLogin("", "https://example.com", "me", kPassword, true), "ac_passwords_replace", hex, Reply::kOk,
+  const std::string replace = std::string(R"({"origin":"https://example.com","username":"me","passwordHex":")") +
+                              Hex(kPassword) + R"(","expectedHex":")" + Hex(old_password) + "\"}";
+  ExpectEngine(PlanSyncedLogin("", "https://example.com", "me", kPassword, old_password), "ac_passwords_replace", replace,
+               Reply::kOk, {Store::kPasswords});
+  ExpectEngine(PlanSyncedLogin("", "https://example.com", "me", kPassword, std::nullopt), "ac_passwords_add", hex, Reply::kOk,
                {Store::kPasswords});
-  ExpectEngine(PlanSyncedLogin("", "https://example.com", "me", kPassword, false), "ac_passwords_add", hex, Reply::kOk,
-               {Store::kPasswords});
-  ExpectInvalid(PlanSyncedLogin("", "HTTPS://Example.com", "me", kPassword, true), "ERR_CREDENTIAL_REQUEST");
-  ExpectInvalid(PlanSyncedLogin("", "https://example.com", "me", "", true), "ERR_CREDENTIAL_REQUEST");
-  ExpectInvalid(PlanSyncedLogin("", "https://example.com", "me", std::string(kMaxSecretBytes + 1, 'p'), true),
+  ExpectInvalid(PlanSyncedLogin("", "HTTPS://Example.com", "me", kPassword, old_password), "ERR_CREDENTIAL_REQUEST");
+  ExpectInvalid(PlanSyncedLogin("", "https://example.com", "me", "", old_password), "ERR_CREDENTIAL_REQUEST");
+  ExpectInvalid(PlanSyncedLogin("", "https://example.com", "me", kPassword, std::string_view()), "ERR_CREDENTIAL_REQUEST");
+  ExpectInvalid(PlanSyncedLogin("", "https://example.com", "me", kPassword, std::string(kMaxSecretBytes + 1, 'p')),
+                "ERR_CREDENTIAL_REQUEST");
+  ExpectInvalid(PlanSyncedLogin("", "https://example.com", "me", std::string(kMaxSecretBytes + 1, 'p'), old_password),
                 "ERR_CREDENTIAL_REQUEST");
 }
 

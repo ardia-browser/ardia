@@ -266,4 +266,155 @@ final class SyncVaultTests: XCTestCase {
       XCTAssertEqual((error as? SyncVault.RemoveFailed)?.ids, [kept])
     }
   }
+
+  func testChainInNewFolderMakesTheFolderAndItsChain() throws {
+    let fresh = SyncVault(folder: folder.appendingPathComponent("drive/Ardia Sync", isDirectory: true), keys: SyncKeys(entropy: entropy))
+    try fresh.createChainInNewFolder()
+    XCTAssertTrue(fresh.chainExists())
+    try fresh.write(scope: "app", payload: Data("mine".utf8))
+    XCTAssertEqual(try fresh.read(scope: "app", skipping: []).files.count, 1)
+  }
+
+  func testChainInNewFolderNeverWritesIntoAFolderThatIsThere() throws {
+    let other = SyncVault(folder: folder, keys: SyncKeys(entropy: RecoveryPhrase.generateEntropy()))
+    try other.createChain()
+    XCTAssertThrowsError(try vault.createChainInNewFolder()) { XCTAssertTrue($0 is SyncVault.FolderExists) }
+    XCTAssertFalse(vault.chainExists())
+  }
+
+  func testChainInNewFolderLeavesNoFolderWhenTheChainCantBeMade() throws {
+    let target = folder.appendingPathComponent("Ardia Sync", isDirectory: true)
+    let keys = SyncKeys(entropy: entropy)
+    let refusing = ChainHookFileManager(chainTag: keys.chainTag) { _ in throw CocoaError(.fileWriteOutOfSpace) }
+    XCTAssertThrowsError(try SyncVault(folder: target, keys: keys, fileManager: refusing).createChainInNewFolder()) { XCTAssertFalse($0 is SyncVault.FolderExists) }
+    XCTAssertFalse(FileManager.default.fileExists(atPath: target.path), "a failed create leaves no folder behind to block the next try")
+    let retried = SyncVault(folder: target, keys: keys)
+    try retried.createChainInNewFolder()
+    XCTAssertTrue(retried.chainExists())
+  }
+
+  func testChainInNewFolderRefusesAFolderSwappedInWhileTheChainIsMade() throws {
+    let target = folder.appendingPathComponent("Ardia Sync", isDirectory: true)
+    let keys = SyncKeys(entropy: entropy)
+    let other = SyncVault(folder: target, keys: SyncKeys(entropy: RecoveryPhrase.generateEntropy()))
+    let swapping = ChainHookFileManager(chainTag: keys.chainTag) { _ in
+      try? FileManager.default.removeItem(at: target)
+      try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+      try other.createChain()
+    }
+    XCTAssertThrowsError(try SyncVault(folder: target, keys: keys, fileManager: swapping).createChainInNewFolder()) { XCTAssertTrue($0 is SyncVault.FolderExists) }
+    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: target.path), [other.chainURL.lastPathComponent], "the folder that arrived holds only its own chain")
+  }
+
+  func testChainInNewFolderNeverTouchesAFolderThatIsThereWhateverItHolds() throws {
+    let keys = SyncKeys(entropy: entropy)
+    let empty = SyncVault(folder: folder.appendingPathComponent("Empty", isDirectory: true), keys: keys)
+    try FileManager.default.createDirectory(at: empty.folder, withIntermediateDirectories: false)
+    XCTAssertThrowsError(try empty.createChainInNewFolder()) { XCTAssertTrue($0 is SyncVault.FolderExists) }
+    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: empty.folder.path), [])
+
+    let target = folder.appendingPathComponent("Ardia Sync", isDirectory: true)
+    for directory in [".localized", "._notes", ".DS_Store"] {
+      try FileManager.default.createDirectory(at: target.appendingPathComponent(directory, isDirectory: true), withIntermediateDirectories: true)
+      try Data("kept".utf8).write(to: target.appendingPathComponent(directory).appendingPathComponent("notes.txt"))
+    }
+    let named = SyncVault(folder: target, keys: keys)
+    XCTAssertThrowsError(try named.createChainInNewFolder()) { XCTAssertTrue($0 is SyncVault.FolderExists) }
+    XCTAssertFalse(named.chainExists())
+    for directory in [".localized", "._notes", ".DS_Store"] {
+      XCTAssertEqual(try String(contentsOf: target.appendingPathComponent(directory).appendingPathComponent("notes.txt"), encoding: .utf8), "kept")
+    }
+  }
+
+  func testChainInNewFolderFallsBackToAnExclusiveMkdirWhereRenameIsUnsupported() throws {
+    let keys = SyncKeys(entropy: entropy)
+    for code in [ENOTSUP, EINVAL, EXDEV] {
+      let fresh = SyncVault(folder: folder.appendingPathComponent("Sync \(code)", isDirectory: true), keys: keys)
+      fresh.renameExclusive = { _, _ in code }
+      try fresh.createChainInNewFolder()
+      XCTAssertTrue(fresh.chainExists())
+      XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: fresh.folder.path), [keys.chainTag])
+    }
+
+    let there = SyncVault(folder: folder.appendingPathComponent("There", isDirectory: true), keys: keys)
+    try FileManager.default.createDirectory(at: there.folder, withIntermediateDirectories: false)
+    there.renameExclusive = { _, _ in ENOTSUP }
+    XCTAssertThrowsError(try there.createChainInNewFolder()) { XCTAssertTrue($0 is SyncVault.FolderExists) }
+    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: there.folder.path), [])
+
+    let target = folder.appendingPathComponent("Failing", isDirectory: true)
+    let failing = SyncVault(folder: target, keys: keys)
+    failing.renameExclusive = { _, _ in ENOTSUP }
+    failing.inPlaceStep = { step in
+      if step == "opened" { try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: target.path) }
+    }
+    XCTAssertThrowsError(try failing.createChainInNewFolder()) { XCTAssertFalse($0 is SyncVault.FolderExists) }
+    XCTAssertFalse(FileManager.default.fileExists(atPath: target.path), "the fallback removes only the folder it made")
+    let retried = SyncVault(folder: target, keys: keys)
+    retried.renameExclusive = { _, _ in ENOTSUP }
+    try retried.createChainInNewFolder()
+    XCTAssertTrue(retried.chainExists())
+  }
+
+  func testFallbackNeverPutsItsChainInAFolderSwappedInAfterItsMkdir() throws {
+    let keys = SyncKeys(entropy: entropy)
+    let target = folder.appendingPathComponent("Ardia Sync", isDirectory: true)
+    let ours = folder.appendingPathComponent("Moved", isDirectory: true)
+    for step in ["made", "opened"] {
+      try? FileManager.default.removeItem(at: target)
+      try? FileManager.default.removeItem(at: ours)
+      let vault = SyncVault(folder: target, keys: keys)
+      vault.renameExclusive = { _, _ in ENOTSUP }
+      vault.inPlaceStep = { now in
+        guard now == step else { return }
+        try FileManager.default.moveItem(at: target, to: ours)
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+        try Data("kept".utf8).write(to: target.appendingPathComponent("notes.txt"))
+      }
+      XCTAssertThrowsError(try vault.createChainInNewFolder(), step) { XCTAssertTrue($0 is SyncVault.FolderExists, step) }
+      XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: target.path), ["notes.txt"], "the folder that arrived gets no chain (\(step))")
+    }
+  }
+
+  func testFallbackNeverRemovesAChainItDidNotMake() throws {
+    let keys = SyncKeys(entropy: entropy)
+    let target = folder.appendingPathComponent("Ardia Sync", isDirectory: true)
+    let chain = target.appendingPathComponent(keys.chainTag, isDirectory: true)
+    let restoredInPlace = SyncVault(folder: target, keys: keys)
+    restoredInPlace.renameExclusive = { _, _ in ENOTSUP }
+    restoredInPlace.inPlaceStep = { step in
+      if step == "opened" { try FileManager.default.createDirectory(at: chain, withIntermediateDirectories: false) }
+    }
+    XCTAssertThrowsError(try restoredInPlace.createChainInNewFolder()) { XCTAssertTrue($0 is SyncVault.FolderExists) }
+    XCTAssertTrue(restoredInPlace.chainExists(), "a chain that appeared before ours is never removed")
+
+    try FileManager.default.removeItem(at: target)
+    let ours = folder.appendingPathComponent("Moved", isDirectory: true)
+    let swapped = SyncVault(folder: target, keys: keys)
+    swapped.renameExclusive = { _, _ in ENOTSUP }
+    swapped.inPlaceStep = { step in
+      guard step == "opened" else { return }
+      try FileManager.default.moveItem(at: target, to: ours)
+      try FileManager.default.createDirectory(at: chain, withIntermediateDirectories: true)
+    }
+    XCTAssertThrowsError(try swapped.createChainInNewFolder()) { XCTAssertTrue($0 is SyncVault.FolderExists) }
+    XCTAssertTrue(swapped.chainExists(), "the restored folder and its empty chain survive")
+  }
 }
+
+final class ChainHookFileManager: FileManager {
+  let chainTag: String
+  let onChain: (URL) throws -> Void
+
+  init(chainTag: String, onChain: @escaping (URL) throws -> Void) {
+    self.chainTag = chainTag
+    self.onChain = onChain
+    super.init()
+  }
+
+  override func createDirectory(at url: URL, withIntermediateDirectories createIntermediates: Bool, attributes: [FileAttributeKey: Any]? = nil) throws {
+    if url.lastPathComponent == chainTag { try onChain(url) }
+    try super.createDirectory(at: url, withIntermediateDirectories: createIntermediates, attributes: attributes)
+  }
+}
+

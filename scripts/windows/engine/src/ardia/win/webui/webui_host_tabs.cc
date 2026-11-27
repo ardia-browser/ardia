@@ -3,17 +3,22 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "ardia/core/ac_launch_switches.h"
+#include "ardia/linux/ac_linux_find.h"
 #include "ardia/win/profiles.h"
 #include "ardia/win/webui/webui_bridge.h"
 #include "ardia/win/webui/webui_host_internal.h"
 #include "ardia/win/webui/webui_host_view.h"
+#include "ardia/win/webui/webui_page_evaluation.h"
 #include "ardia/win/webui/webui_windows.h"
 #include "base/auto_reset.h"
 #include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/json/json_reader.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
@@ -24,13 +29,18 @@
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/common/chrome_isolated_world_ids.h"
 #include "components/zoom/page_zoom.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/reload_type.h"
+#include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/weak_document_ptr.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/referrer.h"
 #include "content/public/common/page_zoom.h"
+#include "crypto/sha2.h"
+#include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/views/controls/webview/webview.h"
@@ -46,14 +56,35 @@ bool BlankUrl(const GURL& url) {
   return url.is_empty() || url.IsAboutBlank();
 }
 
+bool Scriptable(content::RenderFrameHost* frame) {
+  const GURL& url = frame->GetLastCommittedURL();
+  return url.SchemeIsHTTPOrHTTPS() || url.SchemeIsFile();
+}
+
+std::string Sha256(std::string_view text) {
+  return base::HexEncodeLower(crypto::SHA256HashString(text));
+}
+
+std::optional<base::Value> ParseList(std::string_view json) {
+  auto value = base::JSONReader::Read(json, base::JSON_PARSE_RFC, 4);
+  if (!value || !value->is_list()) {
+    return std::nullopt;
+  }
+  return value;
+}
+
+void Answer(ShellHostView::Done done, webui_page::PageReply reply) {
+  std::move(done).Run(reply.ok, std::move(reply.value));
+}
+
 }
 
 PageBinding* ShellHostView::ClaimedBinding(const base::DictValue& args) const {
   const std::optional<int> id = args.FindInt("id");
   const auto found = id ? bindings_.find(*id) : bindings_.end();
   if (found == bindings_.end() || !found->second->contents() ||
-      found->second->claim.empty() ||
-      found->second->claim != Text(args, "claim")) {
+      found->second->claim().empty() ||
+      found->second->claim() != Text(args, "claim")) {
     return nullptr;
   }
   return found->second.get();
@@ -61,7 +92,7 @@ PageBinding* ShellHostView::ClaimedBinding(const base::DictValue& args) const {
 
 base::DictValue ShellHostView::Identity(PageBinding* binding) const {
   base::DictValue lease;
-  lease.Set("claim", binding->claim);
+  lease.Set("claim", binding->claim());
   lease.Set("rendererGeneration",
             base::NumberToString(binding->renderer_generation));
   lease.Set("bindingGeneration",
@@ -163,12 +194,12 @@ void ShellHostView::CreateTabIn(base::DictValue args,
                        "The tab's profile has no window to live in"));
   }
   if (PageBinding* existing = BindingForKey(key)) {
-    if (!webui_window::CanReclaim(existing->claim, Text(args, "previousClaim"))) {
+    if (!webui_window::CanReclaim(existing->claim(), Text(args, "previousClaim"))) {
       return std::move(done).Run(
           false, base::Value("This tab already has an active owner"));
     }
     if (existing->contents()->GetBrowserContext() == profile) {
-      existing->claim = claim;
+      existing->SetClaim(claim);
       existing->renderer_generation = renderer_generation_;
       ReattachViewports();
       return std::move(done).Run(true, base::Value(Identity(existing)));
@@ -226,7 +257,7 @@ void ShellHostView::CreateTabIn(base::DictValue args,
           member->GetTabStripModel()->count(), std::move(contents),
           AddTabTypes::ADD_NONE);
     }
-    moved->claim = claim;
+    moved->SetClaim(claim);
     moved->renderer_generation = renderer_generation_;
     PageBinding* binding = moved.get();
     bindings_[binding->id()] = std::move(moved);
@@ -269,7 +300,7 @@ void ShellHostView::CreateTabIn(base::DictValue args,
   }
   auto binding = std::make_unique<PageBinding>(this, contents, key,
                                                Text(args, "profile"));
-  binding->claim = claim;
+  binding->SetClaim(claim);
   binding->renderer_generation = renderer_generation_;
   PageBinding* created = binding.get();
   const int id = created->id();
@@ -446,8 +477,83 @@ void ShellHostView::TabCommand(const base::DictValue& args, Done done) {
     }
     return std::move(done).Run(true, base::Value(std::move(entries)));
   }
+  if (command == "find") {
+    if (!values || values->size() != 3 || !(*values)[0].is_string() ||
+        !(*values)[1].is_bool() || !(*values)[2].is_bool()) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_ARGUMENT",
+                         "find requires text, forward and findNext"));
+    }
+    ardiacore::LinuxFind* find = binding->Find();
+    if (!find || !find->Start(base::UTF8ToUTF16((*values)[0].GetString()),
+                              (*values)[1].GetBool())) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_UNAVAILABLE", "Find helper is unavailable"));
+    }
+    return std::move(done).Run(true, base::Value());
+  }
+  if (command == "stopFinding") {
+    if (!values || values->size() != 1 || !(*values)[0].is_bool()) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_ARGUMENT",
+                         "stopFinding requires clearSelection"));
+    }
+    ardiacore::LinuxFind* find = binding->Find();
+    if (!find || !find->Stop((*values)[0].GetBool())) {
+      return std::move(done).Run(
+          false, Failure("ERR_PAGE_UNAVAILABLE", "Find helper is unavailable"));
+    }
+    return std::move(done).Run(true, base::Value());
+  }
+  if (command == "evaluate") {
+    webui_page::PageEvaluationStep step =
+        webui_page::PreparePageEvaluation(values, &Sha256, &ParseList);
+    if (!step.script) {
+      return Answer(std::move(done), std::move(step.refusal));
+    }
+    content::RenderFrameHost* frame = contents->GetPrimaryMainFrame();
+    if (!frame || !frame->IsRenderFrameLive() || !frame->IsActive() ||
+        !Scriptable(frame)) {
+      return Answer(std::move(done), webui_page::PageEvaluationUnavailable());
+    }
+    frame->ExecuteJavaScriptInIsolatedWorld(
+        base::UTF8ToUTF16(*step.script),
+        mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+            base::BindOnce(
+                [](base::WeakPtr<ShellHostView> host, int tab_id,
+                   webui_page::PageEvaluationTicket sent,
+                   content::WeakDocumentPtr document, Done done,
+                   base::Value value) {
+                  Answer(std::move(done),
+                         webui_page::PageEvaluationFinished(
+                             host && host->EvaluationStillCurrent(
+                                         tab_id, sent, document),
+                             value));
+                },
+                GetWeakPtr(), binding->id(), binding->EvaluationTicket(),
+                frame->GetWeakDocumentPtr(), std::move(done)),
+            base::Value()),
+        ISOLATED_WORLD_ID_CHROME_INTERNAL);
+    return;
+  }
   NoteUnhandled("tab.command " + command);
   std::move(done).Run(true, base::Value());
+}
+
+bool ShellHostView::EvaluationStillCurrent(
+    int tab_id,
+    const webui_page::PageEvaluationTicket& sent,
+    const content::WeakDocumentPtr& document) const {
+  const auto found = bindings_.find(tab_id);
+  if (found == bindings_.end() || !found->second->contents()) {
+    return false;
+  }
+  content::RenderFrameHost* frame = document.AsRenderFrameHostIfValid();
+  const bool same_document =
+      frame && frame->IsActive() &&
+      frame == found->second->contents()->GetPrimaryMainFrame();
+  return webui_page::PageEvaluationStillCurrent(
+      sent, found->second->EvaluationTicket(), same_document);
 }
 
 void ShellHostView::ReleaseTab(const base::DictValue& args, Done done) {
@@ -457,10 +563,10 @@ void ShellHostView::ReleaseTab(const base::DictValue& args, Done done) {
     return std::move(done).Run(true, base::Value());
   }
   PageBinding* binding = found->second.get();
-  if (binding->claim != Text(args, "claim")) {
+  if (binding->claim() != Text(args, "claim")) {
     return std::move(done).Run(false, base::Value("No owned live tab"));
   }
-  binding->claim.clear();
+  binding->ClearClaim();
   binding->visible = false;
   binding->presented = false;
   if (binding->viewport) {

@@ -14,7 +14,7 @@ import { codeChecks } from "./codes.mjs";
 import { FIXTURES, fakeHelper } from "./fake.mjs";
 import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
 import { loginListChecks } from "./login-list.mjs";
-import { CONNECT_TITLE, helperAsked, noPrompt, NOT_SAVED_TITLE, promptShown, saveCounts, savesSent, savingChecks, signIn } from "./saving.mjs";
+import { CONNECT_TITLE, handedOver, noPrompt, NOT_SAVED_TITLE, promptShown, saveCounts, savesSent, savingChecks, signIn } from "./saving.mjs";
 import { fixtureSites, PAGE_EVENTS } from "./sites.mjs";
 import { strongPasswordChecks } from "./strong-password.mjs";
 import { chromiumTabs, waitFor, webkitTabs } from "./webkit.mjs";
@@ -216,6 +216,8 @@ async function signInChromium(tabId, url, username, password) {
 }
 
 const passwordPromptOf = (tabId) => `const p = ac.pageState.getState().pages[${JSON.stringify(tabId)}]?.passwordPrompt; return p ? { state: p.state, username: p.username, origin: p.origin } : null;`;
+
+const promptsOf = (tabId) => ({ prompt: () => app.eval(passwordPromptOf(tabId)) });
 
 const extensionView = `
   const s = ac.store.getState();
@@ -491,9 +493,8 @@ const CHECKS = {
     const tab = await openSignIn("example.localhost");
     const login = { username: `chromium-${Date.now()}@example.test`, password: "fixture-pw-chromium-11" };
     await signInChromium(tab.tabId, tab.url, login.username, login.password);
-    const asked = await helperAsked(fake, login.username);
+    const asked = await handedOver(promptsOf(tab.tabId), fake, login.username);
     assert(asked.site === "example.localhost", "Chrome holds the submitted login and Ardia hands it to Apple Passwords on an Apple Passwords profile", asked);
-    assert(!(await app.eval(passwordPromptOf(tab.tabId))), "Ardia shows no prompt of its own", null);
     return { asked: asked.site };
   },
   async E8kept() {
@@ -507,7 +508,7 @@ const CHECKS = {
     await pairApplePasswords(fake);
     const tab = await openSignIn("example.localhost");
     await signInChromium(tab.tabId, tab.url, CHROME_ONLY_LOGIN.username, CHROME_ONLY_LOGIN.password);
-    const asked = await helperAsked(fake, CHROME_ONLY_LOGIN.username);
+    const asked = await handedOver(promptsOf(tab.tabId), fake, CHROME_ONLY_LOGIN.username);
     assert(!asked.update, "a login Ardia's own store already holds is still handed to Apple Passwords as new", asked);
     const saved = fake.savedLogins().find((l) => l.user === CHROME_ONLY_LOGIN.username);
     assert(saved?.password === CHROME_ONLY_LOGIN.password, "Save Password in Apple Passwords' window stores it", { sites: saved?.sites });

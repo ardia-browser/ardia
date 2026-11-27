@@ -1551,6 +1551,12 @@ A page tab shows one address, `ardia://<name><path>`, where the path (at most 51
   documents can call it (a separate `ardiaNavigate` message handler, 4 KB a request, 20 a second); Ardia takes only a
   valid page path for a page of the same panel, and silently refuses anything else, and every call on a page without
   `routes`.
+- **Web pages in the same back list.** A tab can go web page → plugin page → web page → plugin page; going back to a
+  web page brings back its own history when the engine still holds it. The engine keeps one saved history per tab,
+  so only the newest web segment can come back that way: Ardia asks for it as a `segment:` adoption, the Mac engine
+  host compares the restored page's address with the entry's before showing it, and any other answer (an older
+  segment, another host) loads the entry's address instead. One saved history per segment needs the engine to
+  keep them under separate keys, a follow-up.
 - **`navigate` event**: when the tab's address changes to another of the plugin's paths without a reload (back,
   forward, the history menu, a typed or picked address, a command's `path`, `navigate()` itself), Ardia sets
   `window.ardia.path` and fires a plain `navigate` Event on `window.ardia`. The page renders that path; it is never

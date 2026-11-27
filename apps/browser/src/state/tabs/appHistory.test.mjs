@@ -44,7 +44,7 @@ test("web page, then two app pages: back walks them and lands on the web page wi
   goBack(id);
   const tab = S().tabs[id];
   assert.equal(tab.url, "https://a.com/");
-  assert.deepEqual(tab.page, { kind: "adopted", adopt: `restore:${id}`, nav: null }, "the web view comes back from the tab's saved history");
+  assert.deepEqual(tab.page, { kind: "adopted", adopt: `segment:${id}`, nav: null }, "the web view comes back from the tab's saved history, as a segment the engine checks against the entry's address before showing");
   assert.equal(h(id).index, 0);
   assert.equal(h(id).kept, undefined, "the saved history is taken once");
 
@@ -139,7 +139,7 @@ test("the app history goes with a closed tab and comes back when it is reopened"
   goBack(reopened.id);
   assert.equal(at(reopened.id), HISTORY);
   goBack(reopened.id);
-  assert.deepEqual(S().tabs[reopened.id].page, { kind: "adopted", adopt: `restore:${id}`, nav: null }, "the web page's history is asked for by the closed tab's key");
+  assert.deepEqual(S().tabs[reopened.id].page, { kind: "adopted", adopt: `segment:${id}`, nav: null }, "the web page's history is asked for by the closed tab's key");
 });
 
 test("a saved session keeps a tab's app history and drops a damaged one", () => {

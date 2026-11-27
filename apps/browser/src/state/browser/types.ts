@@ -82,7 +82,7 @@ export type AppHistoryEntry = { url: string; title: string };
 
 export type AppHistory = { entries: AppHistoryEntry[]; index: number; kept?: { index: number; key: string } };
 
-export type AdoptKind = "restore" | "clone" | "tab" | "ardiacore" | "webkit" | "link";
+export type AdoptKind = "restore" | "segment" | "clone" | "tab" | "ardiacore" | "webkit" | "link";
 export type AdoptId = `${AdoptKind}:${string}`;
 
 export type Navigation = { url: string; seq: number; userInitiated?: boolean };

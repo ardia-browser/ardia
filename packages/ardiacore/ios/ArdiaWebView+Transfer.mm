@@ -87,6 +87,21 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   return tab;
 }
 
+static NSString *ArdiaWithoutFragment(NSString *url) {
+  NSRange hash = [url rangeOfString:@"#"];
+  NSString *bare = hash.location == NSNotFound ? url : [url substringToIndex:hash.location];
+  return [bare hasSuffix:@"/"] ? [bare substringToIndex:bare.length - 1] : bare;
+}
+
+static BOOL ArdiaRestoredShows(ArdiaCoreTab *tab, NSString *expected) {
+  for (NSDictionary<NSString *, id> *entry in tab.navigationEntries) {
+    if (![entry[@"current"] boolValue]) continue;
+    NSString *shown = [entry[@"url"] isKindOfClass:NSString.class] ? entry[@"url"] : nil;
+    return shown.length && [ArdiaWithoutFragment(shown) isEqualToString:ArdiaWithoutFragment(expected)];
+  }
+  return NO;
+}
+
 @implementation ArdiaWebView (Transfer)
 
 + (void)prepareTransfer:(NSString *)transferKey {
@@ -216,7 +231,8 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
     }
     if (standalone) controller = [ArdiaWindowController standaloneWindowForProfile:profile] ?: controller;
     if (!standalone && [kind isEqualToString:@"clone"] && [view cloneTab:key profile:profile]) return;
-    if (!standalone && [kind isEqualToString:@"restore"] && url.length && !ardia_host::IsPrivateProfile(view->_profile) && controller.coreWindow) {
+    const BOOL segment = [kind isEqualToString:@"segment"];
+    if (!standalone && (segment || [kind isEqualToString:@"restore"]) && url.length && !ardia_host::IsPrivateProfile(view->_profile) && controller.coreWindow) {
       view->_life.resumeCreating();
       view->_life.pendingURL = pending;
       [ArdiaServices call:@"ac_tab_restore_take" profile:view->_profile args:@{@"key" : key}
@@ -230,6 +246,10 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
                   ArdiaCoreTab *tab = nil;
                   now.hostChanges++;
                   if (state.length) tab = [now.coreWindow restoreTab:state profile:profile foreground:NO];
+                  if (tab && segment && !ArdiaRestoredShows(tab, url)) {
+                    [tab closeNow];
+                    tab = nil;
+                  }
                   if (!tab) {
                     if (later->_life.pendingURL == pending) later->_life.pendingURL = nil;
                     tab = [now.coreWindow openTab:url profile:profile foreground:NO];

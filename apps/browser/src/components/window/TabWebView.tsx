@@ -115,7 +115,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
 
   const lastPage = useRef<string | null>(null);
   const restore = useRef<string | null>(null);
-  const reopening = useRef(engine === "chromium" && isAdoptKind(adoptId, "restore"));
+  const reopening = useRef(engine === "chromium" && (isAdoptKind(adoptId, "restore") || isAdoptKind(adoptId, "segment")));
   const pending = useRef<string | null>(navigation?.url ?? (adoptId ? (tab()?.url ?? null) : null));
 
   const seq = navigation?.seq;

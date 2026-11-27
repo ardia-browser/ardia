@@ -1,10 +1,11 @@
 import type { AdoptId, AdoptKind, Tab } from "../browser/types";
 import { wakeOf } from "./pageSession";
 
-const KINDS: readonly AdoptKind[] = ["restore", "clone", "tab", "ardiacore", "webkit", "link"];
+const KINDS: readonly AdoptKind[] = ["restore", "segment", "clone", "tab", "ardiacore", "webkit", "link"];
 
 export const restoreId = (tabId: string): AdoptId => `restore:${tabId}`;
 export const cloneId = (tabId: string): AdoptId => `clone:${tabId}`;
+export const segmentId = (key: string): AdoptId => `segment:${key}`;
 
 export function adoptKind(id: string | undefined): { kind: AdoptKind; key: string } | null {
   const colon = id?.indexOf(":") ?? -1;
@@ -19,5 +20,5 @@ export const isAdoptKind = (id: string | undefined, kind: AdoptKind) => adoptKin
 
 export function pendingRestore(t: Tab | undefined): string | undefined {
   const id = adoptKind(wakeOf(t));
-  return id?.kind === "restore" ? id.key : undefined;
+  return id?.kind === "restore" || id?.kind === "segment" ? id.key : undefined;
 }

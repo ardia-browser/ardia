@@ -3,7 +3,7 @@ import { changedIds } from "../browser/changes";
 import type { AppHistory, Tab, TabLive } from "../browser/types";
 import { isAppPage, tabDestination } from "../pages/urls";
 import { adoptedPage, hasPage, loadedPage } from "./pageSession";
-import { pendingRestore, restoreId } from "./adoptIds";
+import { pendingRestore, segmentId } from "./adoptIds";
 import { appHistoryStep, currentAppEntry, keptAt, movedTo, pushedEntry, takenKept, withCurrentEntry, withoutForward } from "./appHistory";
 
 const store = () => useBrowser.getState();
@@ -101,7 +101,7 @@ export function goToAppEntry(tabId: string, index: number): boolean {
   }
   noteTraversal(tabId);
   if (next.kept?.index === index) {
-    s.updateTab(tabId, { appHistory: takenKept(next), url: entry.url, title: entry.title, favicon: null, page: adoptedPage(restoreId(next.kept.key)) });
+    s.updateTab(tabId, { appHistory: takenKept(next), url: entry.url, title: entry.title, favicon: null, page: adoptedPage(segmentId(next.kept.key)) });
     return true;
   }
   s.updateTab(tabId, { appHistory: next });

@@ -12,7 +12,7 @@ import type { StripItem } from "../../state/sidebar/iconStrip";
 import { noteIconStripPeek, noteIconStripPress } from "../../state/telemetry/dockCounts";
 import { consentToken, type ConsentToken } from "../../state/telemetry/client";
 import { useIsFocusedWindow } from "../../state/windows/hooks";
-import { useDockMotion } from "../../state/windows/dockMotion";
+import { belowStackedLights, useDockMotion } from "../../state/windows/dockMotion";
 import { createStripDrags, createStripHover } from "../sidebar/stripPointer";
 import { IconStrip, type StripActions } from "../sidebar/IconStrip";
 import { ICON_PEEK_DWELL_MS, ICON_STRIP, stripExpandSnap, stripRail } from "../sidebar/iconStripGeometry";
@@ -36,7 +36,9 @@ export function useIconStripInset(windowId: string, beside: boolean, sideInset: 
   return useIconStripShown(windowId) && beside ? dockedCardInset(ICON_STRIP.width, frameInset) : sideInset;
 }
 
-export function IconStripDock({ windowId, right, shown, moving, fullscreen, peek }: { windowId: string; right: boolean; shown: boolean; moving: boolean; fullscreen: boolean; peek: PeekHandle }) {
+type StripDockProps = { windowId: string; right: boolean; shown: boolean; moving: boolean; fullscreen: boolean; peek: PeekHandle; lightsBottom?: number | null };
+
+export function IconStripDock({ windowId, right, shown, moving, fullscreen, peek, lightsBottom = null }: StripDockProps) {
   const hoverConsent = useRef<ConsentToken | null>(null);
   const [hover] = useState(() =>
     createStripHover(ICON_PEEK_DWELL_MS, () => peek.current.live, () => {
@@ -75,7 +77,7 @@ export function IconStripDock({ windowId, right, shown, moving, fullscreen, peek
   const collapsedByChoice = useWindowSettings(windowId, (s) => autoHidesTabsIn(s, windowId));
   const frame = useCardFrame();
   const cardTop = useWindowSettings(windowId, (s) => iconStripTop(s, windowId, frame.inset));
-  const rail = stripRail(cardTop, frame.inset);
+  const rail = stripRail(belowStackedLights(cardTop, lightsBottom), frame.inset);
   const rootSize = useWindowRootSize(windowId);
   const align = useMemo(() => ({ offset: frame.peek.top, paused: peekOut || moving, layoutKey: `${rootSize?.width}x${rootSize?.height}:${rail.top}` }), [frame.peek.top, peekOut, moving, rootSize?.width, rootSize?.height, rail.top]);
   const slide = peek.current.slide;
@@ -93,6 +95,7 @@ export function IconStripDock({ windowId, right, shown, moving, fullscreen, peek
         return consentToken();
       },
       open: (item: StripItem, consent: ConsentToken | null) => {
+        if (item.kind === "group" && item.head) return updateGroup(item.groupId, { collapsed: true });
         showNow(consent);
         if (item.kind === "group") updateGroup(item.groupId, { collapsed: false });
         if (item.kind === "tileFolder") setTimeout(() => void toggleFolderPanel(windowId, item.folderId), SETTLE_MS);

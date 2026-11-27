@@ -47,14 +47,23 @@ export function stripSquare(items: { key: string; divider: boolean }[], rowCente
   return Math.max(STRIP_MIN_SQUARE, Math.min(ICON_STRIP.square, Math.floor(tightest - STRIP_ROW_GAP)));
 }
 
+function dividerTop(items: { key: string; divider: boolean }[], at: number, rowCenters: Readonly<Record<string, number>>, square: number, floor: number): number {
+  const line = rowCenters[items[at]!.key];
+  if (line === undefined) return floor;
+  const following = items.slice(at + 1).find((item) => !item.divider);
+  const nextCenter = following && rowCenters[following.key];
+  const ceiling = nextCenter === undefined ? Infinity : Math.round(nextCenter - square / 2) - STRIP_DIVIDER_HEIGHT;
+  return Math.round(Math.max(floor, Math.min(ceiling, line - STRIP_DIVIDER_HEIGHT / 2)));
+}
+
 export function stripLayout(items: { key: string; divider: boolean; aligned?: boolean }[], rowCenters: Readonly<Record<string, number>>, railTop: number): { slots: StripSlot[]; end: number; square: number } {
   const square = stripSquare(items, rowCenters);
   let next = railTop;
   let lastBottom = railTop;
   let fresh = true;
-  const slots = items.map(({ key, divider, aligned }) => {
+  const slots = items.map(({ key, divider, aligned }, i) => {
     if (divider) {
-      const top = next;
+      const top = dividerTop(items, i, rowCenters, square, next);
       next = top + STRIP_DIVIDER_HEIGHT;
       fresh = true;
       return { top, joinAbove: 0 };
@@ -70,4 +79,21 @@ export function stripLayout(items: { key: string; divider: boolean; aligned?: bo
     return slot;
   });
   return { slots, end: next, square };
+}
+
+export type BarSpan = { color: string | null; top: number; bottom: number };
+
+const BAR_CAP_INSET = 3;
+
+export function stripBarSpans(bars: readonly ({ color: string | null; first: boolean; last: boolean } | null)[], slots: readonly { top: number }[], sizeOf: (index: number) => number): BarSpan[] {
+  const spans: BarSpan[] = [];
+  const open: { color: string | null; top: number }[] = [];
+  bars.forEach((bar, i) => {
+    if (!bar) return;
+    if (bar.first || !open.length) open.push({ color: bar.color, top: slots[i]!.top + BAR_CAP_INSET });
+    if (!bar.last) return;
+    const start = open.pop()!;
+    spans.push({ color: start.color, top: start.top, bottom: slots[i]!.top + sizeOf(i) - BAR_CAP_INSET });
+  });
+  return spans;
 }

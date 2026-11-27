@@ -1,27 +1,29 @@
 import { createContext, memo, useContext, useMemo, useRef, type ReactNode } from "react";
 import { PanResponder, Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { ActivitySpinner, clippedContinuousCorners, ink, radius, Symbol, useHover, WindowDragRegion, withAlpha } from "../ui";
+import { ActivitySpinner, clippedContinuousCorners, ContextMenuArea, ink, radius, Symbol, useHover, WindowDragRegion, withAlpha } from "../ui";
 import { useTheme } from "../ui/theme";
 import { useGroup, useIsActiveTab, useProfile, useTab, useTabLive, useWindowProfileId } from "../../state/browser/hooks";
 import { useAnyShownTab, useIconStripCodes } from "../../state/sidebar/hooks";
 import { useSidebarRowsVersion } from "../../state/sidebar/rowGeometry";
 import { useMuteState } from "../../state/tabs/hooks";
-import { stripItemOf, type StripBar, type StripItem } from "../../state/sidebar/iconStrip";
+import { STRIP_LIST_DIVIDER, stripItemOf, type StripItem } from "../../state/sidebar/iconStrip";
+import type { GroupColor } from "../../state/browser/types";
 import { isIncognitoProfile } from "../../state/browser/model";
 import { openProfileMenu } from "../../state/browser/actions";
+import { openGroupMenu } from "../../state/sidebar/menus";
 import { newTab } from "../../state/tabs/actions";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
 import { TileUnread } from "../unread/UnreadBadge";
 import { ProfileBadge } from "../profiles/ProfileIcons";
+import { useProfileDotsShown } from "../profiles/ProfileDots";
 import { ProfileSwipeArea } from "../window/ProfileSwipe";
 import { INCOGNITO_ICON } from "../ntp/IncognitoHeading";
 import { TabPressArea } from "./TabPressArea";
 import { TabIcon } from "./TabIcon";
-import { FolderOrIcon } from "./AnimatedFolder";
-import { groupTint } from "./tokens";
+import { FolderOrIcon, useFolderInk } from "./AnimatedFolder";
 import { RestingTile } from "./TileFace";
 import { dragGesture } from "./dragGesture";
-import { ICON_STRIP, STRIP_DIVIDER_HEIGHT, stripInset, stripLayout, stripMeasureKey } from "./iconStripGeometry";
+import { ICON_STRIP, STRIP_DIVIDER_HEIGHT, stripBarSpans, stripInset, stripLayout, stripMeasureKey, type BarSpan } from "./iconStripGeometry";
 import { useNewTabAtTop } from "../../state/sidebar/chrome";
 import { useRowCenters } from "./useRowCenters";
 import type { ConsentToken } from "../../state/telemetry/client";
@@ -46,21 +48,30 @@ const ALIGNED = new Set(["tab", "split", "group", "live"]);
 
 export function IconStrip({ windowId, right, top, bottom, actions, align }: { windowId: string; right: boolean; top: number; bottom: number; actions: StripActions; align: RowAlignment }) {
   const profileId = useWindowProfileId();
+  const switcherShown = useProfileDotsShown();
   const codes = useIconStripCodes(windowId, profileId);
   const entries = useMemo(() => codes.map((code) => ({ code, key: keyOf(code), kind: code.slice(0, code.indexOf("\u0001")) })), [codes]);
   const aligned = useMemo(() => entries.filter((e) => ALIGNED.has(e.kind)).map((e) => e.key), [entries]);
   const rowsVersion = useSidebarRowsVersion(windowId);
   const newTabAtTop = useNewTabAtTop();
-  const centers = useRowCenters(windowId, aligned, align.offset, align.paused, stripMeasureKey(align.layoutKey, rowsVersion, newTabAtTop, codes));
-  const layout = useMemo(() => stripLayout(entries.map((e) => ({ key: ALIGNED.has(e.kind) ? e.key : `${e.kind}:${e.key}`, divider: e.kind === "divider", aligned: ALIGNED.has(e.kind) })), centers, top), [entries, centers, top]);
+  const listDivider = entries.some((e) => e.key === STRIP_LIST_DIVIDER) ? STRIP_LIST_DIVIDER : null;
+  const centers = useRowCenters(windowId, aligned, align.offset, align.paused, stripMeasureKey(align.layoutKey, rowsVersion, newTabAtTop, codes), listDivider);
+  const layout = useMemo(() => stripLayout(entries.map((e) => ({ key: ALIGNED.has(e.kind) || e.kind === "divider" ? e.key : `${e.kind}:${e.key}`, divider: e.kind === "divider", aligned: ALIGNED.has(e.kind) })), centers, top), [entries, centers, top]);
+  const spans = useMemo(
+    () => stripBarSpans(entries.map((e) => { const item = stripItemOf(e.code); return "bar" in item ? item.bar : null; }), layout.slots, (i) => (ALIGNED.has(entries[i]!.kind) ? layout.square : SQUARE)),
+    [entries, layout],
+  );
   return (
     <View style={StyleSheet.absoluteFill}>
       <WindowDragRegion style={StyleSheet.absoluteFill} />
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ height: layout.end + SQUARE + ICON_STRIP.gap * 2 }}>
+        {spans.map((span) => (
+          <GroupBar key={`${span.top}`} span={span} right={right} />
+        ))}
         {entries.map((e, i) => (
           <View key={`${e.kind}:${e.key}`} style={{ position: "absolute", left: 0, right: 0, top: layout.slots[i]!.top }}>
             <RowSquare.Provider value={ALIGNED.has(e.kind) ? layout.square : SQUARE}>
-              <StripEntry code={e.code} windowId={windowId} right={right} actions={actions} joinAbove={layout.slots[i]!.joinAbove} />
+              <StripEntry code={e.code} windowId={windowId} right={right} actions={actions} />
             </RowSquare.Provider>
           </View>
         ))}
@@ -69,61 +80,47 @@ export function IconStrip({ windowId, right, top, bottom, actions, align }: { wi
         </View>
       </ScrollView>
       <View style={{ paddingBottom: bottom }}>
-        <StripDivider />
-        <View style={{ height: SQUARE, paddingHorizontal: stripInset }}>
-          <SpaceSquare windowId={windowId} profileId={profileId} actions={actions} />
-        </View>
+        {switcherShown ? (
+          <>
+            <StripDivider />
+            <View style={{ height: SQUARE, paddingHorizontal: stripInset }}>
+              <SpaceSquare windowId={windowId} profileId={profileId} actions={actions} />
+            </View>
+          </>
+        ) : null}
       </View>
       <ProfileSwipeArea surface="strip" style={StyleSheet.absoluteFill} />
     </View>
   );
 }
 
-const StripEntry = memo(function StripEntry({ code, windowId, right, actions, joinAbove }: { code: string; windowId: string; right: boolean; actions: StripActions; joinAbove: number }) {
+const StripEntry = memo(function StripEntry({ code, windowId, right, actions }: { code: string; windowId: string; right: boolean; actions: StripActions }) {
   const item = useMemo(() => stripItemOf(code), [code]);
   if (item.kind === "divider") return <StripDivider />;
-  const bar = "bar" in item ? item.bar : null;
   return (
-    <StripCell bar={bar} right={right} joinAbove={joinAbove}>
+    <StripCell>
       {item.kind === "tile" || item.kind === "tab" ? (
         <TabSquare windowId={windowId} tabId={item.tabId} itemKey={item.key} tile={item.kind === "tile"} actions={actions} />
       ) : item.kind === "split" ? (
         <TabSquare windowId={windowId} tabId={item.tabIds[0]!} itemKey={item.key} tile={false} split={item.tabIds} actions={actions} />
       ) : (
-        <OpenSquare item={item} actions={actions} />
+        <OpenSquare item={item} windowId={windowId} actions={actions} />
       )}
     </StripCell>
   );
 });
 
-function StripCell({ bar, right, joinAbove, children }: { bar: StripBar | null; right: boolean; joinAbove: number; children: ReactNode }) {
+function StripCell({ children }: { children: ReactNode }) {
   const size = useContext(RowSquare);
-  return (
-    <View style={{ height: size, paddingHorizontal: (ICON_STRIP.width - size) / 2 }}>
-      {bar ? <GroupBar bar={bar} right={right} joinAbove={joinAbove} /> : null}
-      {children}
-    </View>
-  );
+  return <View style={{ height: size, paddingHorizontal: (ICON_STRIP.width - size) / 2 }}>{children}</View>;
 }
 
-function GroupBar({ bar, right, joinAbove }: { bar: StripBar; right: boolean; joinAbove: number }) {
-  const theme = useTheme();
-  const tint = groupTint(bar.color) ?? theme.textTertiary;
+function GroupBar({ span, right }: { span: BarSpan; right: boolean }) {
+  const tint = useFolderInk(span.color as GroupColor | null).stroke;
   return (
     <View
       pointerEvents="none"
-      style={{
-        position: "absolute",
-        [right ? "right" : "left"]: BAR.left,
-        width: BAR.width,
-        top: bar.first ? 3 : -joinAbove,
-        bottom: bar.last ? 3 : 0,
-        borderTopLeftRadius: bar.first ? BAR.width : 0,
-        borderTopRightRadius: bar.first ? BAR.width : 0,
-        borderBottomLeftRadius: bar.last ? BAR.width : 0,
-        borderBottomRightRadius: bar.last ? BAR.width : 0,
-        backgroundColor: tint,
-      }}
+      style={{ position: "absolute", [right ? "right" : "left"]: BAR.left, width: BAR.width, top: span.top, height: span.bottom - span.top, borderRadius: BAR.width / 2, backgroundColor: tint }}
     />
   );
 }
@@ -232,28 +229,35 @@ function Badge({ corner, color, name }: { corner: "top" | "bottom"; color: strin
   );
 }
 
-function OpenSquare({ item, actions }: { item: Extract<StripItem, { kind: "group" | "tileFolder" | "live" }>; actions: StripActions }) {
+function OpenSquare({ item, windowId, actions }: { item: Extract<StripItem, { kind: "group" | "tileFolder" | "live" }>; windowId: string; actions: StripActions }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const group = useGroup(item.kind === "group" ? item.groupId : null, (g) => g);
   const handlers = useStripDrag(item.key, actions);
   const pressedWith = useRef<ConsentToken | null>(null);
   const title = item.kind === "group" ? group?.name || "Folder" : item.kind === "tileFolder" ? "Folder" : "Live Folder";
+  const head = item.kind === "group" && item.head;
   return (
     <View {...handlers} {...hoverProps}>
-      <Pressable
-        tooltip={title}
-        onPressIn={() => {
-          pressedWith.current = actions.pressed();
-        }}
-        onPress={() => actions.open(item, pressedWith.current)}
-      >
-        {({ pressed }) => (
-          <SquareFor selected={false} hovered={hovered} pressed={pressed} tile={item.kind === "tileFolder"}>
-            {item.kind === "live" ? <Symbol name="dot.radiowaves.left.and.right" size={13} color={theme.textSecondary} style={{ width: ICON, height: ICON }} /> : <FolderOrIcon icon={group?.icon ?? null} open={item.kind === "group" && item.open} color={item.kind === "group" ? item.color : null} />}
-          </SquareFor>
-        )}
-      </Pressable>
+      <ContextMenuArea onContextMenu={() => void (item.kind === "group" && openGroupMenu(windowId, item.groupId))}>
+        <Pressable
+          tooltip={title}
+          onPressIn={() => {
+            pressedWith.current = actions.pressed();
+          }}
+          onPress={() => actions.open(item, pressedWith.current)}
+        >
+          {({ pressed }) => (
+            <SquareFor selected={false} hovered={hovered} pressed={pressed} tile={item.kind === "tileFolder"}>
+              {head ? null : item.kind === "live" ? (
+                <Symbol name="dot.radiowaves.left.and.right" size={13} color={theme.textSecondary} style={{ width: ICON, height: ICON }} />
+              ) : (
+                <FolderOrIcon icon={group?.icon ?? null} open={item.kind === "group" && item.open} color={item.kind === "group" ? item.color : null} />
+              )}
+            </SquareFor>
+          )}
+        </Pressable>
+      </ContextMenuArea>
     </View>
   );
 }

@@ -35,6 +35,10 @@ enum ChromeWindows {
     }
   }
 
+  static func setTrafficLightsStack(_ stack: CGFloat, in window: NSWindow) {
+    ArdiaChromeWindowHost.setTrafficLightsStack(stack, in: window)
+  }
+
   private static var swapHandlerInstalled = false
   static func onSwap(_ handler: @escaping (NSWindow, NSWindow) -> Void) {
     guard !swapHandlerInstalled else { return }

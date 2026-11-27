@@ -57,6 +57,7 @@ export const shell = defineModuleDomain({
         closeWindow: { args: [["id", "string"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
         animateWindowClose: { args: [["id", "string"], ["after", "string | null", "String?"]], result: "void", async: true, promise: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
         setTrafficLightsCenter: { args: [["id", "string"], ["center", "[number, number] | null", "CGPoint?"], ["trailing", "boolean"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
+        setTrafficLightsStack: { args: [["id", "string"], ["stack", "number"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "absent" },
         watchSidebarEdge: { args: [["id", "string"], ["on", "boolean"], ["hold", "number"], ["right", "boolean"], ["whilePressed", "boolean"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
         focusWindow: { args: [["id", "string"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
         setWindowShown: { args: [["id", "string"], ["shown", "boolean"], ["burst", "boolean"]], result: "void", async: true, queue: "main", optional: true, mac: "custom", desktop: "absent", windows: "absent" },

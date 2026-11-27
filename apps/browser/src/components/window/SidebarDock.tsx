@@ -56,12 +56,13 @@ import {
   setDockMoving,
   setPeekLeaving,
   setPeekShown,
+  stackedLightsBottom,
   useDockMotion,
 } from "../../state/windows/dockMotion";
 import { useTabDrag } from "../../state/drag/tabDrag";
 import { usePeek } from "./usePeek";
 import { useEmptyWindowPeek } from "./useEmptyWindowPeek";
-import { useSidebarLights, useTopStripLights } from "./useDockLights";
+import { useSidebarLights, useStackedLights, useTopStripLights } from "./useDockLights";
 import { useCardFrame } from "./cardFrame";
 import { forgetSidebarDock, noteSidebarDock } from "./sidebarDockCheck";
 
@@ -293,7 +294,8 @@ function SidebarDock({
     () => peek.slide.interpolate({ inputRange: [0, 1], outputRange: [-12 * outward, width * outward] }),
     [peek.slide, width, outward],
   );
-  useSidebarLights(windowId, dock, peek.slide, { width, moving, peeking, fullscreen, lights, right, peekAt }, peek.sampleSlide);
+  const stacked = useStackedLights(windowId, right, fullscreen, lights, peekAt.top);
+  useSidebarLights(windowId, dock, peek.slide, { width, moving, peeking, fullscreen, lights, right, peekAt, stacked }, peek.sampleSlide);
   const edgeSide = right ? "right" : "left";
   const sidebar = useMemo(
     () => (
@@ -333,7 +335,7 @@ function SidebarDock({
 
   return (
     <>
-      <IconStripDock windowId={windowId} right={right} shown={stripShown} moving={moving} fullscreen={fullscreen} peek={latestPeek} />
+      <IconStripDock windowId={windowId} right={right} shown={stripShown} moving={moving} fullscreen={fullscreen} peek={latestPeek} lightsBottom={stacked ? stackedLightsBottom(stacked) : null} />
       {strip.current && !stripShown && (
         <View
           pointerEvents={!open && !fullscreen && !edgeStripOverPage(frame.inset) ? "auto" : "none"}

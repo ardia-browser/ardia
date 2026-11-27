@@ -50,6 +50,7 @@ export type AppWindowsNative = {
   closeWindow(id: string): Promise<void>;
   animateWindowClose(id: string, after: string | null): Promise<void>;
   setTrafficLightsCenter(id: string, center: [number, number] | null, trailing: boolean): Promise<void>;
+  setTrafficLightsStack(id: string, stack: number): Promise<void>;
   watchSidebarEdge(id: string, on: boolean, hold: number, right: boolean, whilePressed: boolean): Promise<void>;
   focusWindow(id: string): Promise<void>;
   setWindowShown?(id: string, shown: boolean, burst: boolean): Promise<void>;

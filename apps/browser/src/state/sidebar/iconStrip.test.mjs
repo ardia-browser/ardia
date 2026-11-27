@@ -30,26 +30,26 @@ test("Top Apps come first as one column, then a divider, then the tabs in sideba
   assert.deepEqual(kinds(items), [`tile:${t.google}`, `tile:${t.youtube}`, "divider", `tab:${t.slack}`, `tab:${t.facebook}`, `tab:${t.netflix}`, `tab:${t.github}`, `tab:${t.docs}`]);
 });
 
-test("every group and folder shows its own icon, and while it's open its tabs follow it with a bar in its colour", () => {
+test("an open group or folder keeps its slot as the top of a bar in its colour that runs down through its tabs, and a closed one shows its icon", () => {
   const t = seeded();
   const group = S().createGroup([t.facebook, t.netflix], { name: "Watch", color: "red" });
   const folder = S().createGroup([t.github, t.docs], { name: "Code" });
   S().updateGroup(folder, { color: null });
   let items = iconStripItems(S(), t.w, t.profile);
   const after = (groupId) => items.slice(items.findIndex((i) => i.kind === "group" && i.groupId === groupId));
-  assert.deepEqual(after(group).slice(0, 3).map((i) => [i.kind, i.kind === "group" ? i.open : i.tabId, i.bar]), [
-    ["group", true, null],
-    ["tab", t.facebook, { color: "red", first: true, last: false }],
+  assert.deepEqual(after(group).slice(0, 3).map((i) => [i.kind, i.kind === "group" ? [i.open, i.head] : i.tabId, i.bar]), [
+    ["group", [true, true], { color: "red", first: true, last: false }],
+    ["tab", t.facebook, { color: "red", first: false, last: false }],
     ["tab", t.netflix, { color: "red", first: false, last: true }],
   ]);
-  assert.deepEqual(after(folder).slice(0, 3).map((i) => [i.kind, i.kind === "group" ? i.open : i.tabId, i.bar]), [
-    ["group", true, null],
-    ["tab", t.github, { color: null, first: true, last: false }],
+  assert.deepEqual(after(folder).slice(0, 3).map((i) => [i.kind, i.kind === "group" ? [i.open, i.head] : i.tabId, i.bar]), [
+    ["group", [true, true], { color: null, first: true, last: false }],
+    ["tab", t.github, { color: null, first: false, last: false }],
     ["tab", t.docs, { color: null, first: false, last: true }],
   ], "a folder without a colour follows the same rule");
   S().updateGroup(group, { collapsed: true });
   items = iconStripItems(S(), t.w, t.profile);
-  assert.deepEqual(after(group)[0].open, false);
+  assert.deepEqual([after(group)[0].open, after(group)[0].head, after(group)[0].bar], [false, false, null], "a closed group draws its icon and no bar of its own");
   assert.equal(items.some((i) => i.kind === "tab" && i.tabId === t.facebook), false, "a closed group keeps its tabs inside");
 });
 
@@ -121,4 +121,12 @@ test("a collapsed group's selected tab stays after its square with the group's b
     const at = items.findIndex((i) => i.kind === "group" && i.groupId === group);
     assert.deepEqual([items[at + 1]?.kind, items[at + 1]?.tabId, items[at + 1]?.bar], ["tab", t.netflix, { color: "red", first: true, last: true }], label);
   }
+});
+
+test("the divider before the list rows is the list divider, and the one between Top Apps and pinned rows isn't", () => {
+  const t = seeded();
+  const dividers = () => iconStripItems(S(), t.w, t.profile).filter((i) => i.kind === "divider").map((i) => i.key);
+  assert.deepEqual(dividers(), ["divider:list"]);
+  S().pinTabs([t.slack], true, true);
+  assert.deepEqual(dividers(), ["divider:tiles", "divider:list"]);
 });

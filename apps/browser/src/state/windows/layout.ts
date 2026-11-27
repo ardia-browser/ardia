@@ -1,10 +1,11 @@
 import { create } from "zustand";
-import { autoHidesTabsIn, sidebarSideOf, tabLayoutOf, tabsShownIn } from "../browser/model";
+import { autoHidesTabsIn, collapsesToIconsIn, sidebarSideOf, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { switchOn } from "../../platform/killSwitches";
-import { ARC_LIGHTS_CENTER, lightsCenter, sidebarLightsCenter, toolbarLightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
+import { ARC_LIGHTS_CENTER, lightsCenter, sidebarLightsCenter, stackedLightsCenter, toolbarLightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
 import { frameCornerRadius, windowFrame, type LightsPlace } from "../../platform/windows";
 import { rootSizeOfFrame } from "../settings/interfaceScale";
-import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
+import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf, pageFrameOf } from "../../lib/windowLayout";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { useSettings, useWindowId } from "../browser/hooks";
 import { useWindowSettings } from "../browser/keyedWatch";
@@ -68,7 +69,14 @@ export function openingLightsCenter(s: BrowserState, windowId: string): LightsPl
     tabsHidden: autoHidesTabsIn(s, windowId),
   });
   const base = sidebarAddressChosen(s.settings) ? ARC_LIGHTS_CENTER : toolbarLightsCenter(s.settings.compactToolbar, frame);
+  if (openingLightsStack(s, windowId)) return stackedLightsCenter(base, pageFrameOf(frame, 0, 0).peek.top);
   return sidebarLightsCenter(sidebarSideOf(s, w.id) === "right", width, open ? 0 : width, 0, base);
+}
+
+export function openingLightsStack(s: BrowserState, windowId: string): number {
+  const w = s.windows[windowId];
+  const stacks = !!w && PLATFORM_FEATURES.stacksTrafficLights && !w.fullScreen && !tabsShownIn(s, windowId) && sidebarSideOf(s, windowId) !== "right" && collapsesToIconsIn(s, windowId);
+  return stacks ? 1 : 0;
 }
 
 export function usePageFrameInset(): number {

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { CARD_INSET } from "../../lib/windowLayout";
+import { CARD_INSET, ICON_STRIP } from "../../lib/windowLayout";
 import { compactLift, toolbarRowOf } from "../../lib/toolbarRow";
 import type { LightsPlace } from "../../platform/windows";
 import { snappedToDevicePixels } from "../settings/interfaceScale";
@@ -16,6 +16,13 @@ export function toolbarLightsCenter(compact: boolean, frame: number = CARD_INSET
 }
 export const ARC_LIGHTS_CENTER: readonly [number, number] = [25, 24];
 export const TOP_STRIP_LIGHTS_CENTER: readonly [number, number] = [20.75, 20.75];
+
+export const LIGHTS_PITCH = 23;
+const LIGHT_SIDE = 14;
+export const STACKED_LIGHTS_GAP = 8;
+export const stackedLightsCenter = (lights: readonly [number, number], peekTop: number): [number, number] => [ICON_STRIP.width / 2, lights[1] + peekTop];
+export const stackedLightsBottom = (red: readonly [number, number]) => red[1] + 2 * LIGHTS_PITCH + LIGHT_SIDE / 2;
+export const belowStackedLights = (top: number, lightsBottom: number | null) => (lightsBottom === null ? top : Math.max(top, Math.ceil(lightsBottom) + STACKED_LIGHTS_GAP));
 
 export function lightsCenter(offset: number, down = 0, base: readonly [number, number] = LIGHTS_CENTER): [number, number] {
   const dx = snappedToDevicePixels(offset);

@@ -21,8 +21,8 @@ const { setActiveLook } = await import("../../lib/activeLook.ts");
 const { layout } = await import("../ui/theme.ts");
 const { useInterfaceScale } = await import("../../state/settings/interfaceScale.ts");
 const { noteSidebarRowMoved, useSidebarRowGeometry } = await import("../../state/sidebar/rowGeometry.ts");
-const { ICON_STRIP, stripLayout, stripMeasureKey } = await import("./iconStripGeometry.ts");
-const { registerSidebarDrag } = await import("./stripDrag.ts");
+const { ICON_STRIP, STRIP_DIVIDER_HEIGHT, stripLayout, stripMeasureKey } = await import("./iconStripGeometry.ts");
+const { registerSidebarDivider, registerSidebarDrag } = await import("./stripDrag.ts");
 const { useRowCenters } = await import("./useRowCenters.ts");
 
 const scene = { keys: Array.from({ length: 8 }, (_, i) => `t:${i}`), above: 0, scale: 1 };
@@ -143,4 +143,33 @@ test("moving the inline New Tab row from the bottom to the top re-measures, thou
   scene.above = 0;
   assert.ok((await measure(false)) <= 1);
   assert.ok(moved <= 1, `the first row moved ${pitch()} pt with the New Tab row and its icon followed (off by ${moved})`);
+});
+
+const withTiles = (n) => [...Array.from({ length: n }, (_, i) => ({ key: `tile:t:${i}`, divider: false })), { key: "divider:list", divider: true }, { key: "a", divider: false, aligned: true }, { key: "b", divider: false, aligned: true }];
+const lineOf = (layout) => layout.slots[4].top + STRIP_DIVIDER_HEIGHT / 2;
+
+test("the divider under Top Apps sits at the sidebar divider's measured height, so it stays put when the sidebar floats out", () => {
+  const packed = stripLayout(withTiles(4), { a: 300, b: 337 }, 9);
+  assert.equal(packed.slots[4].top, 9 + 4 * (ICON_STRIP.square + ICON_STRIP.gap), "unmeasured, it packs under the tiles as before");
+  const measured = stripLayout(withTiles(4), { a: 300, b: 337, "divider:list": 220 }, 9);
+  assert.ok(Math.abs(lineOf(measured) - 220) <= 0.5, `the line is at ${lineOf(measured)}`);
+  assert.equal(measured.slots[5].top, packed.slots[5].top, "the rows keep their places");
+  assert.equal(lineOf(stripLayout(withTiles(4), { a: 300, b: 337, "divider:list": 100 }, 9)), lineOf(packed), "never above the last tile");
+  const low = stripLayout(withTiles(4), { a: 300, b: 337, "divider:list": 299 }, 9);
+  assert.ok(low.slots[4].top + STRIP_DIVIDER_HEIGHT <= low.slots[5].top, "never into the first row");
+});
+
+test("the strip measures the sidebar's divider band with its rows", async () => {
+  const band = { measureInWindow: (cb) => cb(9, 200, 172, 20) };
+  const register = registerSidebarDivider("w");
+  register(band);
+  try {
+    await settled();
+    useRowCenters("w", scene.keys, 0, false, "divider-test", "divider:list");
+    await settled();
+    const centers = useRowCenters("w", scene.keys, 0, false, "divider-test", "divider:list");
+    assert.equal(centers["divider:list"], 210);
+  } finally {
+    register(null);
+  }
 });

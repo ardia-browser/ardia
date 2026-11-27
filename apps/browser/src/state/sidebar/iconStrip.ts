@@ -6,6 +6,8 @@ import { folderIdOfCell } from "../pins/tileFolders";
 import { splitRowPanes } from "../splits/splits";
 import { shownPinnedEntries } from "./pinnedFold";
 
+export const STRIP_LIST_DIVIDER = "divider:list";
+
 export type StripBar = { color: GroupColor | null; first: boolean; last: boolean };
 
 export type StripItem =
@@ -14,7 +16,7 @@ export type StripItem =
   | { kind: "divider"; key: string }
   | { kind: "tab"; key: string; tabId: string; bar: StripBar | null }
   | { kind: "split"; key: string; splitId: string; tabIds: string[]; bar: StripBar | null }
-  | { kind: "group"; key: string; groupId: string; color: GroupColor | null; open: boolean; bar: StripBar | null }
+  | { kind: "group"; key: string; groupId: string; color: GroupColor | null; open: boolean; bar: StripBar | null; head: boolean }
   | { kind: "live"; key: string; liveFolderId: string };
 
 function entryItems(s: BrowserState, windowId: string, profileId: string, entry: string, bar: StripBar | null, out: StripItem[]) {
@@ -29,9 +31,10 @@ function entryItems(s: BrowserState, windowId: string, profileId: string, entry:
   if (kind !== "group") return;
   const g = s.groups[id];
   if (!g) return;
-  out.push({ kind: "group", key: entry, groupId: id, color: g.color, open: !g.collapsed, bar });
   const members = g.collapsed ? keptEntries(s, windowId, profileId, id) : groupEntries(s, id);
-  members.forEach((member, i) => entryItems(s, windowId, profileId, member, { color: g.color, first: i === 0, last: i === members.length - 1 }, out));
+  const head = !g.collapsed && !bar && members.length > 0;
+  out.push({ kind: "group", key: entry, groupId: id, color: g.color, open: !g.collapsed, bar: head ? { color: g.color, first: true, last: false } : bar, head });
+  members.forEach((member, i) => entryItems(s, windowId, profileId, member, { color: g.color, first: i === 0 && !head, last: i === members.length - 1 }, out));
 }
 
 export function iconStripItems(s: BrowserState, windowId: string, profileId: string, pinnedSequence?: string[]): StripItem[] {
@@ -46,8 +49,8 @@ export function iconStripItems(s: BrowserState, windowId: string, profileId: str
   for (const entry of pinned) entryItems(s, windowId, profileId, entry, null, rows);
   const pinnedShown = rows.length;
   for (const entry of list) entryItems(s, windowId, profileId, entry, null, rows);
-  if (out.length && rows.length) out.push({ kind: "divider", key: "divider:tiles" });
-  if (pinnedShown && rows.length > pinnedShown) rows.splice(pinnedShown, 0, { kind: "divider", key: "divider:pinned" });
+  if (out.length && rows.length) out.push({ kind: "divider", key: pinnedShown ? "divider:tiles" : STRIP_LIST_DIVIDER });
+  if (pinnedShown && rows.length > pinnedShown) rows.splice(pinnedShown, 0, { kind: "divider", key: STRIP_LIST_DIVIDER });
   return out.concat(rows);
 }
 
@@ -66,7 +69,7 @@ export const stripItemCode = (item: StripItem): string => {
     case "split":
       return [item.kind, item.key, item.splitId, item.tabIds.join(","), bar].join(SEP);
     case "group":
-      return [item.kind, item.key, item.groupId, item.color ?? "", item.open ? 1 : 0, bar].join(SEP);
+      return [item.kind, item.key, item.groupId, item.color ?? "", item.open ? 1 : 0, bar, item.head ? 1 : 0].join(SEP);
     case "live":
       return [item.kind, item.key, item.liveFolderId].join(SEP);
   }
@@ -79,7 +82,7 @@ const barOf = (code: string | undefined): StripBar | null => {
 };
 
 export function stripItemOf(code: string): StripItem {
-  const [kind, key, a = "", b = "", c = "", d = ""] = code.split(SEP) as [StripItem["kind"], string, ...string[]];
+  const [kind, key, a = "", b = "", c = "", d = "", e = ""] = code.split(SEP) as [StripItem["kind"], string, ...string[]];
   switch (kind) {
     case "tile":
       return { kind, key, tabId: a };
@@ -92,7 +95,7 @@ export function stripItemOf(code: string): StripItem {
     case "split":
       return { kind, key, splitId: a, tabIds: b ? b.split(",") : [], bar: barOf(c) };
     case "group":
-      return { kind, key, groupId: a, color: (b || null) as GroupColor | null, open: c === "1", bar: barOf(d) };
+      return { kind, key, groupId: a, color: (b || null) as GroupColor | null, open: c === "1", bar: barOf(d), head: e === "1" };
     case "live":
       return { kind, key, liveFolderId: a };
   }

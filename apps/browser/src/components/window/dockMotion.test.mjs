@@ -522,3 +522,73 @@ test("a peek's light moves that stay wholly off the window at one height aren't 
   assert.equal(dm.stillOffWindow([-60, 33, "right"], [-30, 33, "right"]), true);
   assert.equal(dm.stillOffWindow([-30, 33, "right"], [10, 33, "right"]), false);
 });
+
+test("in Icons the window buttons stack in the strip's column: red stays put as the peek opens while the others slide into the row, and Full lays them out as before", async () => {
+  const { slidingCenter, slidingStack } = await import("./useDockLights.ts");
+  const { ICON_STRIP } = await import("../../lib/windowLayout.ts");
+  const stacked = dm.stackedLightsCenter(dm.LIGHTS_CENTER, DEFAULT_PEEK.top);
+  assert.deepEqual(stacked, [ICON_STRIP.width / 2, dm.LIGHTS_CENTER[1] + DEFAULT_PEEK.top], "centred in the 46 pt column");
+  const o = (peeking, extra = {}) => ({ width: 227.5, moving: false, peeking, fullscreen: false, lights: dm.LIGHTS_CENTER, right: false, peekAt: DEFAULT_PEEK, stacked, ...extra });
+  assert.deepEqual([slidingCenter(o(false), 0, 0), slidingStack(o(false), 0, 0)], [stacked, 1], "at rest: stacked in the strip");
+  for (const slide of [0, 0.25, 0.5, 0.75, 1]) {
+    assert.deepEqual(slidingCenter(o(true), 0, slide), stacked, `red stays where it is at ${slide}`);
+    assert.equal(slidingStack(o(true), 0, slide), 1 - slide, `yellow and green ride the peek's own slide at ${slide}`);
+  }
+  assert.deepEqual([slidingCenter(o(false), 1, 0), slidingStack(o(false), 1, 0)], [[dm.LIGHTS_CENTER[0], dm.LIGHTS_CENTER[1]], 0], "Full: the usual row");
+  const halfway = slidingCenter(o(false), 0.5, 0);
+  assert.ok(halfway[0] > stacked[0] && halfway[0] < dm.LIGHTS_CENTER[0], "switching to Full carries red across with the dock");
+  for (const other of [{ right: true }, { fullscreen: true }, { stacked: null }]) {
+    assert.equal(slidingStack(o(false, other), 0, 0), 0, JSON.stringify(other));
+    assert.deepEqual(slidingCenter(o(false, other), 0, 0), slidingCenter({ ...o(false, other), stacked: null }, 0, 0), `${JSON.stringify(other)} keeps today's lights`);
+  }
+});
+
+test("the strip's icons start below the stacked green button, and nothing moves where the lights don't stack", () => {
+  const red = dm.stackedLightsCenter(dm.LIGHTS_CENTER, 0);
+  const greenBottom = red[1] + 2 * dm.LIGHTS_PITCH + 7;
+  assert.equal(dm.stackedLightsBottom(red), greenBottom);
+  assert.equal(dm.belowStackedLights(20, dm.stackedLightsBottom(red)), Math.ceil(greenBottom) + dm.STACKED_LIGHTS_GAP);
+  assert.equal(dm.belowStackedLights(20, null), 20);
+});
+
+test("only a sidebar window that collapses to Icons stacks its lights: not Hidden, not Little Ardia, not tabs on top", async () => {
+  const { collapsesToIconsIn } = await import("../../state/browser/model.ts");
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://example.com", frame: [0, 0, 1200, 800] });
+  assert.equal(collapsesToIconsIn(S(), w), false, "Hidden by default");
+  S().updateSettings({ collapsedSidebar: "icons" });
+  assert.equal(collapsesToIconsIn(S(), w), true, "Full with Icons as its collapsed mode, so ⌘S carries the lights");
+  S().updateSettings({ autoHideTabs: true });
+  assert.equal(collapsesToIconsIn(S(), w), true);
+  S().updateSettings({ tabLayout: "top" });
+  assert.equal(collapsesToIconsIn(S(), w), false);
+  S().updateSettings({ tabLayout: "sidebar", collapsedSidebar: "hidden" });
+  assert.equal(collapsesToIconsIn(S(), w), false);
+  const small = S().createWindow({ kind: "small", url: "https://link.example" });
+  S().updateSettings({ collapsedSidebar: "icons" });
+  assert.equal(collapsesToIconsIn(S(), small), false);
+});
+
+test("the lights stack only where the platform has native window buttons to move: the Mac, not Linux or Windows", async () => {
+  const { readFileSync } = await import("node:fs");
+  const flag = (file) => /stacksTrafficLights: (true|false)/.exec(readFileSync(new URL(`../../lib/${file}`, import.meta.url), "utf8"))?.[1];
+  assert.deepEqual([flag("platformFeatures.ts"), flag("platformFeatures.linux.ts"), flag("platformFeatures.win.ts")], ["true", "false", "false"]);
+});
+
+test("an Icons window opens with its buttons already stacked where the strip puts them, so a launch never shows them off the window and back", async () => {
+  const { openingLightsCenter, openingLightsStack } = await import("../../state/windows/layout.ts");
+  const { pageFrameOf, pageFrameInsetOf } = await import("../../lib/windowLayout.ts");
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://example.com", frame: [0, 0, 1200, 800] });
+  S().updateSettings({ autoHideTabs: true, collapsedSidebar: "icons" });
+  const s = S();
+  const frame = pageFrameInsetOf(s.settings.pageFrame, { borderlessMode: s.settings.borderlessMode, zeroInFullScreen: s.settings.pageFrameZeroInFullScreen, fullScreen: false, zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden, tabsHidden: true });
+  assert.equal(openingLightsStack(s, w), 1);
+  assert.deepEqual(openingLightsCenter(s, w), dm.stackedLightsCenter(dm.toolbarLightsCenter(s.settings.compactToolbar, frame), pageFrameOf(frame, 0, 0).peek.top));
+  S().updateSettings({ collapsedSidebar: "hidden" });
+  assert.equal(openingLightsStack(S(), w), 0, "Hidden keeps them off the window");
+  S().updateSettings({ collapsedSidebar: "icons", sidebarSide: "right" });
+  assert.equal(openingLightsStack(S(), w), 0, "a right-side strip keeps the right-side sidebar's lights");
+  S().updateSettings({ sidebarSide: "left", autoHideTabs: false });
+  assert.equal(openingLightsStack(S(), w), 0, "Full lays them out in the row");
+});

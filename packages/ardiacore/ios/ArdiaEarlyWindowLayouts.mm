@@ -20,7 +20,7 @@ using namespace ardia_early_window;
 
 namespace {
 
-constexpr int kLayoutVersion = 6;
+constexpr int kLayoutVersion = 7;
 
 constexpr CGFloat kMinPage = 100;
 
@@ -157,6 +157,7 @@ NSDictionary *WindowLayout(ArdiaWindowController *controller, ArdiaSavedSession 
   if (web.transferKey.length) layout[@"tab"] = web.transferKey;
   if (NSValue *lights = ArdiaTrafficLightsCenter(window))
     layout[@"lights"] = @[ @(lights.pointValue.x), @(lights.pointValue.y), @(ArdiaTrafficLightsTrailing(window)) ];
+  if (const CGFloat stack = ArdiaTrafficLightsStack(window); stack > 0) layout[@"lightsStack"] = @(stack);
   if (window.appearance.name) layout[@"appearance"] = window.appearance.name;
   if (NSColor *color = [web.pageBackgroundColor colorUsingColorSpace:NSColorSpace.sRGBColorSpace])
     layout[@"pageColor"] = @[ @(color.redComponent), @(color.greenComponent), @(color.blueComponent), @(color.alphaComponent) ];

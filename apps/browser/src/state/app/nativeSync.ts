@@ -5,7 +5,8 @@ import { nativeConsent } from "../telemetry/nativeConsent";
 import { onDownload } from "../../platform/downloads";
 import { releaseProfile } from "../../platform/profiles";
 import { closeWindow, onWindowEvent, openWindow, restoreFullScreen, setWindowTitle, windowIds } from "../../platform/windows";
-import { setTrafficLightsCenter } from "../windows/nativeWindow";
+import { setTrafficLightsCenter, setTrafficLightsStack } from "../windows/nativeWindow";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { isDarkAppearance, onAppEvent, onOpenURLs, replyToTerminate } from "../../platform/app";
 import { startNativeSettings } from "../settings/nativeSettings";
 import { startInterfaceScaleRefresh } from "./interfaceScaleRefresh";
@@ -15,7 +16,7 @@ import { useBrowser } from "../browser/store";
 import { setLastTabKeepsWindow } from "../omnibox/newTabBarPolicy";
 import { isUtilityWindowId } from "../settings/settingsWindows";
 import { INTRO_WINDOW_ID } from "../onboarding/introWindow";
-import { openingLightsCenter } from "../windows/layout";
+import { openingLightsCenter, openingLightsStack } from "../windows/layout";
 import { createWindowSync, type WindowPort } from "../windows/windowSync";
 import { closeLittleArdiaForAppLink, openExternalUrls } from "../littleArdia/actions";
 import { noteIncomingLinksRefused } from "../telemetry/externalAppCounts";
@@ -51,6 +52,8 @@ const QUIT_SAVES_WAIT_MS = 3_000;
 const shellWindowPort: WindowPort = {
   open(id, options, lightsCenter) {
     if (options.maximized) noteWindowReopenedMaximized();
+    const stack = PLATFORM_FEATURES.stacksTrafficLights ? openingLightsStack(useBrowser.getState(), id) : 0;
+    if (stack) void setTrafficLightsStack(id, stack);
     void setTrafficLightsCenter(id, lightsCenter);
     void openWindow(id, options);
   },

@@ -196,6 +196,12 @@ export const collapseSidebarTitle = (s: Pick<BrowserState, "windows" | "settings
 
 export const iconStripIn = (s: Pick<BrowserState, "windows" | "settings">, windowId?: string | null): boolean => sidebarModeIn(s, windowId) === "icons";
 
+export function collapsesToIconsIn(s: BrowserState, windowId: string): boolean {
+  const w = s.windows[windowId];
+  if (!w || w.kind === "small" || tabLayoutOf(s, windowId) !== "sidebar") return false;
+  return collapsedStyleIn(s, windowId) === "icons" || (!autoHidesTabsIn(s, windowId) && !!w.iconsForWidth);
+}
+
 export type SidebarSide = "left" | "right";
 
 export function sidebarSideOf(s: BrowserState, windowId?: string | null): SidebarSide {

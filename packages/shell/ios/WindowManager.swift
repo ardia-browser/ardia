@@ -11,6 +11,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   var managed: [String: ManagedWindow] = [:]
   private var pending: [PendingOpen] = []
   private var lightsCenters: [String: (center: NSPoint, trailing: Bool)] = [:]
+  private var lightsStacks: [String: CGFloat] = [:]
   private var hostFitSizes: [String: CGSize] = [:]
   private var landingFits: [String: LittleLandingFit] = [:]
   private var unreportedFrames = Set<ObjectIdentifier>()
@@ -143,6 +144,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   ) {
     let window = entry.window, id = entry.id
     entry.display = display
+    if let stack = lightsStacks[id] { ChromeWindows.setTrafficLightsStack(stack, in: window) }
     if let lights = lightsCenters[id] { ChromeWindows.setTrafficLightsCenter(lights.center, trailing: lights.trailing, in: window) }
     window.title = title
     Self.identify(window, id: id, kind: entry.kind)
@@ -266,6 +268,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
       NotificationCenter.default.addObserver(self, selector: selector, name: name, object: window)
     }
   }
+  func setTrafficLightsStack(id: String, stack: CGFloat) {
+    lightsStacks[id] = stack > 0 ? stack : nil
+    guard let window = window(id) else { return }
+    ChromeWindows.setTrafficLightsStack(stack, in: window)
+  }
   func setTrafficLightsCenter(id: String, center: NSPoint?, trailing: Bool) {
     lightsCenters[id] = center.map { ($0, trailing) }
     guard let window = window(id) else { return }
@@ -384,6 +391,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     landingFits.removeValue(forKey: entry.id)?.stop()
     entry.stopWatchingContent()
     lightsCenters[entry.id] = nil
+    lightsStacks[entry.id] = nil
     entry.takeReveal()?.then.forEach { $0() }
     entry.takeExit()?.forEach { $0() }
   }

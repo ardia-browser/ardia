@@ -233,7 +233,7 @@ void InstallTitlebarReachingLights(Class frameClass) {
       if (!center) return frame;
       NSButton *close = [window standardWindowButton:NSWindowCloseButton];
       const NSSize size = close ? close.frame.size : NSMakeSize(14, 14);
-      const CGFloat reach = ceil(LightsCenter(window, center, size).y + size.height / 2);
+      const CGFloat reach = ceil(LightsCenter(window, center, size).y + size.height / 2 + TrafficLightsStackDrop(window));
       const CGFloat top = frameView.isFlipped ? NSMinY(frame) : NSHeight(frameView.bounds) - NSMaxY(frame);
       const CGFloat grow = reach - top - NSHeight(frame);
       if (grow <= 0) return frame;
@@ -432,6 +432,7 @@ void InsetTrafficLights(NSWindow *window) {
   FollowInterfaceScaleWithLights();
   objc_setAssociatedObject(window, kInsetLightsKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   InstallTrafficLightsOrigin([window.contentView.superview class]);
+  InstallTrafficLightsStack([window.contentView.superview class]);
   InstallTitlebarReachingLights([window.contentView.superview class]);
   InstallTuckAfterButtonLayout([window.contentView.superview class]);
   InstallSharingIndicatorBounds([window.contentView.superview class]);

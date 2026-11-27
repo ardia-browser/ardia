@@ -55,6 +55,9 @@ export function launchLookWriter(read: () => SavedLaunchLook | null, write: (sav
   return { settle: () => flush(false), leave: () => flush(true) };
 }
 
-export type LaunchLookSources = { ready: boolean; syncOffered: boolean; syncLoaded: boolean };
+export type LaunchLookSources = { ready: boolean; syncOffered: boolean; syncLoaded: boolean; needsSync?: boolean };
 
-export const launchLookSourcesLoaded = ({ ready, syncOffered, syncLoaded }: LaunchLookSources) => ready && (!syncOffered || syncLoaded);
+export const launchLookSourcesLoaded = ({ ready, syncOffered, syncLoaded, needsSync = true }: LaunchLookSources) => ready && (!syncOffered || syncLoaded || !needsSync);
+
+export const launchLookNeedsSync = ({ colorChoice, schemeChoice, design }: Pick<LaunchLookState, "colorChoice" | "schemeChoice" | "design">) =>
+  colorChoice === null || (design !== "original" && schemeChoice === "matchMac");

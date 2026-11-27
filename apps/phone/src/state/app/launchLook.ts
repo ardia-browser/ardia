@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { macLookOf } from "../../lib/appearance";
-import { launchLookOf, launchLookSourcesLoaded, launchLookWriter, type SavedLaunchLook } from "../../lib/launchLook";
+import { launchLookNeedsSync, launchLookOf, launchLookSourcesLoaded, launchLookWriter, type SavedLaunchLook } from "../../lib/launchLook";
 import type { PresetSpec } from "../../lib/profileLook";
 import { rememberLaunchLook } from "../../platform/look";
 import { syncOffered } from "../sync/offer";
@@ -15,11 +15,13 @@ let fallback = "";
 
 function currentLaunchLook(): SavedLaunchLook | null {
   const { loaded, status, view, pickedProfileId } = syncData();
-  if (!launchLookSourcesLoaded({ ready: useBoot.getState().ready, syncOffered: syncOffered(), syncLoaded: loaded })) return null;
   const { colorChoice, customTheme, schemeChoice } = currentPreferences();
+  const design = useAppearanceDesign.getState().design;
+  const needsSync = launchLookNeedsSync({ colorChoice, schemeChoice, design });
+  if (!launchLookSourcesLoaded({ ready: useBoot.getState().ready, syncOffered: syncOffered(), syncLoaded: loaded, needsSync })) return null;
   return launchLookOf(
     {
-      design: useAppearanceDesign.getState().design,
+      design,
       schemeChoice,
       colorChoice,
       customTheme,

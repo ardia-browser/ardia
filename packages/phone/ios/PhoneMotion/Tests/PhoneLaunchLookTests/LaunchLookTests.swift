@@ -174,4 +174,19 @@ import Testing
     #expect(saved(intensity: 0.2, translucency: 0).drawsTheSameSpace(as: saved(intensity: 0.9, translucency: 0), appDark: true))
     #expect(!saved(intensity: 0.2, translucency: 1).drawsTheSameSpace(as: saved(intensity: 0.9, translucency: 1), appDark: true))
   }
+
+  @Test func aOneColourThemeIsNotStaleWhenOnlyItsAngleChanged() {
+    func saved(_ stops: [ThemeStop], angle: Double) -> LaunchLook.Recalled {
+      var look = Self.night
+      look.stops = stops
+      look.angle = angle
+      return LaunchLook.recalled(saved: ["color": "#1A0D33", "themeColors": ["#1A0D33"], "themeLooks": ["light": ["look": look.dictionary, "dark": true], "dark": ["look": look.dictionary, "dark": true]]])
+    }
+    let flat = [ThemeStop(color: ThemeColor(r: 0.1, g: 0.05, b: 0.2), x: 0.3, y: 0.3)]
+    let same = flat + [ThemeStop(color: ThemeColor(r: 0.1, g: 0.05, b: 0.2), x: 0.7, y: 0.7)]
+    let two = flat + [ThemeStop(color: ThemeColor(r: 0.6, g: 0.2, b: 0.3), x: 0.7, y: 0.7)]
+    #expect(saved(flat, angle: 45).drawsTheSameSpace(as: saved(flat, angle: 130), appDark: true))
+    #expect(saved(same, angle: 45).drawsTheSameSpace(as: saved(same, angle: 130), appDark: true))
+    #expect(!saved(two, angle: 45).drawsTheSameSpace(as: saved(two, angle: 130), appDark: true))
+  }
 }

@@ -310,6 +310,7 @@ public final class SyncService {
     case .unavailable: return .folderUnavailable
     }
     if let retiring { await retiring.value }
+    guard unchanged(since: generation) else { return .busy }
     let abandoned = await finishPendingRetire(giveUp: true)
     guard unchanged(since: generation) else { return .busy }
     if let old = engine {
@@ -796,7 +797,9 @@ public final class SyncService {
   private func resetFromElsewhere(_ engine: SyncEngine) async {
     meta.outOfSync = true
     saveMeta()
+    let generation = engineGeneration
     await engine.setAside("reset")
+    guard unchanged(since: generation) else { return }
     self.engine = nil
     foregroundLoop?.cancel()
     foregroundLoop = nil

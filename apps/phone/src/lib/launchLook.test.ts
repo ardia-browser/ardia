@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { startingTheme } from "@ardia/core/src/theme.ts";
-import { launchLookFor, launchLookOf, launchLookSourcesLoaded, launchLookWriter, type LaunchLookState, type SavedLaunchLook } from "./launchLook.ts";
+import { launchLookFor, launchLookNeedsSync, launchLookOf, launchLookSourcesLoaded, launchLookWriter, type LaunchLookState, type SavedLaunchLook } from "./launchLook.ts";
 import { customLook, lookOf, nativeLookColors, presetLook, themeLookFor } from "./profileLook.ts";
 
 const presets = [
@@ -77,6 +77,17 @@ test("the launch look waits for sync's first snapshot only where sync is offered
   assert.equal(launchLookSourcesLoaded({ ready: true, syncOffered: true, syncLoaded: true }), true);
   assert.equal(launchLookSourcesLoaded({ ready: true, syncOffered: false, syncLoaded: false }), true);
   assert.equal(launchLookSourcesLoaded({ ready: false, syncOffered: false, syncLoaded: true }), false);
+});
+
+test("a look that needs nothing from sync is saved while sync is stuck, as after picking Blue with sync needing folder access", () => {
+  assert.equal(launchLookSourcesLoaded({ ready: true, syncOffered: true, syncLoaded: false, needsSync: false }), true);
+  assert.equal(launchLookSourcesLoaded({ ready: true, syncOffered: true, syncLoaded: false, needsSync: true }), false);
+  assert.equal(launchLookSourcesLoaded({ ready: false, syncOffered: true, syncLoaded: false, needsSync: false }), false);
+  assert.equal(launchLookNeedsSync({ colorChoice: "blue", schemeChoice: "system", design: "redesigned" }), false);
+  assert.equal(launchLookNeedsSync({ colorChoice: "custom", schemeChoice: "dark", design: "redesigned" }), false);
+  assert.equal(launchLookNeedsSync({ colorChoice: "blue", schemeChoice: "matchMac", design: "original" }), false);
+  assert.equal(launchLookNeedsSync({ colorChoice: null, schemeChoice: "system", design: "redesigned" }), true);
+  assert.equal(launchLookNeedsSync({ colorChoice: "blue", schemeChoice: "matchMac", design: "redesigned" }), true);
 });
 
 test("the launch look takes the space's colours and its appearance from the same space", () => {

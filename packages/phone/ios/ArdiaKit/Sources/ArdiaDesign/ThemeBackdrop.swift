@@ -13,7 +13,16 @@ public struct DrawnTheme: Equatable {
 extension ThemeLook {
   public func drawn(dark: Bool) -> DrawnTheme {
     let grain = grainAlpha
-    return DrawnTheme(under: underRGB(dark: dark), colors: stops.prefix(3).map(\.color), angle: angle, layerAlpha: layerAlpha, texture: grain > 0 ? texture : nil, grainAlpha: grain)
+    let colors = stops.prefix(3).map(\.color)
+    let flat = colors.allSatisfy { $0.r == colors[0].r && $0.g == colors[0].g && $0.b == colors[0].b }
+    return DrawnTheme(
+      under: underRGB(dark: dark),
+      colors: flat ? colors.prefix(1).map { ThemeColor(r: $0.r, g: $0.g, b: $0.b) } : colors,
+      angle: flat ? 0 : angle,
+      layerAlpha: layerAlpha,
+      texture: grain > 0 ? texture : nil,
+      grainAlpha: grain
+    )
   }
 }
 

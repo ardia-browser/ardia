@@ -170,4 +170,30 @@ final class PluginChannelTrafficTests: XCTestCase {
     close(fds[1])
     rig.shutDown()
   }
+
+  func testEachQueueKeepsItsOwnRetiringList() {
+    let pluginQueue = DispatchQueue(label: "plugins")
+    let socketQueue = DispatchQueue(label: "control")
+    XCTAssertTrue(ControlRetirements.of(pluginQueue) === ControlRetirements.of(pluginQueue))
+    XCTAssertFalse(ControlRetirements.of(pluginQueue) === ControlRetirements.of(socketQueue))
+    var fds: [Int32] = []
+    func connection(_ id: Int, on queue: DispatchQueue) -> ControlConnection {
+      var pair: [Int32] = [0, 0]
+      precondition(socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0)
+      fds += pair
+      return ControlConnection(id: id, fd: pair[0], queue: queue, onLine: { _, _ in }, onClose: { _ in }, onWritten: { _ in })
+    }
+    let theirs = connection(0, on: socketQueue)
+    socketQueue.sync { theirs.retiring.add(theirs, keepingAtMost: ControlConnection.maxRetiring) }
+    let mine = (1...ControlConnection.maxRetiring + 1).map { connection($0, on: pluginQueue) }
+    pluginQueue.sync { for c in mine { c.retiring.add(c, keepingAtMost: ControlConnection.maxRetiring) } }
+    XCTAssertTrue(pluginQueue.sync { mine[0].closed }, "the plugin queue's oldest made room")
+    XCTAssertFalse(socketQueue.sync { theirs.closed }, "the control socket's connection isn't touched by the plugin queue's list")
+    XCTAssertTrue(ControlRetirements.of(socketQueue).holds(theirs))
+    XCTAssertFalse(ControlRetirements.of(pluginQueue).holds(theirs))
+    socketQueue.sync { theirs.close() }
+    pluginQueue.sync { mine.forEach { $0.close() } }
+    XCTAssertFalse(ControlRetirements.of(socketQueue).holds(theirs))
+    fds.forEach { close($0) }
+  }
 }

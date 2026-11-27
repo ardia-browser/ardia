@@ -1,6 +1,41 @@
 import Darwin
 import Foundation
 
+final class ControlRetirements {
+  private static let lock = NSLock()
+  private static var byQueue: [ObjectIdentifier: ControlRetirements] = [:]
+
+  static func of(_ queue: DispatchQueue) -> ControlRetirements {
+    lock.withLock {
+      if let known = byQueue[ObjectIdentifier(queue)] { return known }
+      let made = ControlRetirements()
+      byQueue[ObjectIdentifier(queue)] = made
+      return made
+    }
+  }
+
+  private let guarded = NSLock()
+  private var connections: [ControlConnection] = []
+
+  private init() {}
+
+  var count: Int { guarded.withLock { connections.count } }
+
+  func holds(_ connection: ControlConnection) -> Bool { guarded.withLock { connections.contains { $0 === connection } } }
+
+  func add(_ connection: ControlConnection, keepingAtMost limit: Int) {
+    let oldest = guarded.withLock { () -> ControlConnection? in
+      connections.append(connection)
+      return connections.count > limit ? connections.first : nil
+    }
+    oldest?.close()
+  }
+
+  func remove(_ connection: ControlConnection) {
+    guarded.withLock { connections.removeAll { $0 === connection } }
+  }
+}
+
 final class ControlConnection {
   enum RetireReason: String, CaseIterable {
     case lineTooLong = "line_too_long"
@@ -29,7 +64,6 @@ final class ControlConnection {
   static let lineDeadline: TimeInterval = 30
   static let retireDeadline: TimeInterval = 5
   static let maxRetiring = 16
-  private(set) static var retiring: [ControlConnection] = []
   private static let readSize = 65536
   static let pauseAt = ControlOutput.maxBytes / 2
 
@@ -37,6 +71,7 @@ final class ControlConnection {
   let lineLimit: Int
   private let fd: Int32
   private let queue: DispatchQueue
+  let retiring: ControlRetirements
   private let onLine: (ControlConnection, String) -> Void
   private let onClose: (ControlConnection) -> Void
   private let onWritten: ([Int]) -> Void
@@ -75,6 +110,7 @@ final class ControlConnection {
     output = ControlOutput(lineLimit: lineLimit, ceiling: Self.ceiling(lineLimit: lineLimit, paced: paced))
     self.fd = fd
     self.queue = queue
+    retiring = ControlRetirements.of(queue)
     self.onLine = onLine
     self.onClose = onClose
     self.onWritten = onWritten
@@ -134,8 +170,7 @@ final class ControlConnection {
     input = []
     report(output.keepOnlyHead())
     announce()
-    Self.retiring.append(self)
-    if Self.retiring.count > Self.maxRetiring { Self.retiring.first?.close() }
+    retiring.add(self, keepingAtMost: Self.maxRetiring)
     let item = DispatchWorkItem { [weak self] in self?.close() }
     deadline = item
     queue.asyncAfter(deadline: .now() + Self.retireDeadline, execute: item)
@@ -168,7 +203,7 @@ final class ControlConnection {
     input = []
     announce()
     report(unwritten)
-    Self.retiring.removeAll { $0 === self }
+    retiring.remove(self)
   }
 
   private func stopReading() {

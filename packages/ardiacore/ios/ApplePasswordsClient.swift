@@ -408,21 +408,11 @@ final class ApplePasswordsClient: @unchecked Sendable {
     }
   }
 
-  func save(host: String, user: String, password: String, update: Bool, _ done: @escaping (Result<Void, Problem>) -> Void) {
+  func save(host: String, user: String, password: String, _ done: @escaping (Result<Void, Problem>) -> Void) {
     queue.async {
       let body: [String: Any] = ["ACT": 4, "URL": "", "USR": "", "PWD": "", "NURL": host, "NUSR": user, "NPWD": password]
       self.sealed(Self.saveCmd, qid: "CmdSetPassword4LoginName_URL", url: nil, body, wait: Self.saveSeconds, also: 4, kept: [Self.alreadyKeptStatus]) { result in
-        guard case .failure(Failure.unexpected) = result else { return done(result.map { _ in () }.mapError(Self.problem)) }
-        guard !update else {
-          Self.log.notice("update had no readable answer, not saved")
-          return done(.failure(.unreadable))
-        }
-        Self.log.notice("save had no readable answer, reading the list")
-        self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds) { listed in
-          done(listed.mapError(Self.problem).flatMap { answer in
-            ApplePasswordsReply.entries(answer).contains { $0.user == user } ? .success(()) : .failure(.unreadable)
-          })
-        }
+        done(result.map { _ in () }.mapError(Self.problem))
       }
     }
   }

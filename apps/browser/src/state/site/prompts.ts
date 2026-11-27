@@ -36,13 +36,16 @@ export function passwordPromptCopy(prompt: PasswordPrompt): { title: string; mes
     if (prompt.state === "notSaved") {
       return { title: "Not saved to Apple Passwords", message: "Apple Passwords didn't take this login. Unlock the Passwords app, then sign in again to save it." };
     }
-    return update
-      ? { title: "Update in Apple Passwords?", message: `It will be auto-filled on ${site}` }
-      : { title: "Save to Apple Passwords?", message: `It will be auto-filled on ${site} from Apple Passwords` };
+    return { title: "Connect Apple Passwords?", message: `Then Apple Passwords will ask to ${update ? "update" : "save"} this login for ${site}.` };
   }
   return update
     ? { title: "Update saved password?", message: `It will be auto-filled on ${site}` }
     : { title: `Save password for ${site}?`, message: "That way, it'll be auto-filled next time" };
+}
+
+export function passwordPromptAction(prompt: PasswordPrompt): string {
+  if (prompt.target === "applePasswords") return "Connect";
+  return prompt.state === "update" ? "Update" : "Save";
 }
 
 export function showPasswordPrompt(tabId: string, prompt: PasswordPrompt) {

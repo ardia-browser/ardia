@@ -1,6 +1,6 @@
 import { FIXTURES } from "./fake.mjs";
 import { CONNECT, FOOTER, NOT_NOW } from "./login-list.mjs";
-import { SAVE_TITLE, UPDATE_TITLE } from "./saving.mjs";
+import { handedOver } from "./saving.mjs";
 import { PAGE_EVENTS } from "./sites.mjs";
 import { sleep } from "../../../../scripts/lib/instance.mjs";
 import { waitFor } from "./webkit.mjs";
@@ -148,12 +148,11 @@ export function strongPasswordChecks({ paired, sites, engine: engineName = "webk
         await tab.value(`(document.documentElement.dataset.signingIn = "yes")`);
         await tab.click("#go");
         await waitFor("the page after signing up", () => tab.value(`!document.documentElement.dataset.signingIn && location.pathname === "/signed-in" && document.readyState === "complete" || null`), 20_000);
-        const prompt = await waitFor("the save prompt", () => tab.prompt(), 20_000);
-        assert(prompt.state === "save" && prompt.username === user && prompt.copy.title === SAVE_TITLE, `the prompt asks ${SAVE_TITLE} for the new account`, { state: prompt.state, username: prompt.username, title: prompt.copy.title });
-        assert(await tab.answer("save"), "Save is pressed", null);
-        const saved = await waitFor("the new login in Apple Passwords", async () => fake.savedLogins().find((l) => l.user === user) ?? null, 20_000);
-        assert(saved.password === password && saved.sites.includes(SITE), "Apple Passwords keeps the suggested password", { sites: saved.sites, same: saved.password === password });
-        return { engine: engineName, rows: rows.map((r) => r.title), short: shortShape.length, length: made.length, title: prompt.copy.title };
+        const asked = await handedOver(tab, fake, user);
+        assert(!asked.update && asked.site === SITE, "Apple Passwords asks to save the new account", asked);
+        const saved = fake.savedLogins().find((l) => l.user === user);
+        assert(saved?.password === password && saved.sites.includes(SITE), "Apple Passwords keeps the suggested password", { sites: saved?.sites, same: saved?.password === password });
+        return { engine: engineName, rows: rows.map((r) => r.title), short: shortShape.length, length: made.length, asked: asked.site };
       } finally {
         await tab.close();
       }
@@ -162,6 +161,7 @@ export function strongPasswordChecks({ paired, sites, engine: engineName = "webk
       const { fake, tabs } = await session();
       const current = fake.savedLogins().find((l) => l.user === ROTATED_USER);
       assert(current, `the fake keeps ${ROTATED_USER}`, null);
+      const since = fake.asked().length;
       const tab = await tabs.open(sites.url(SITE, "/change-password"));
       try {
         await tab.click("#o");
@@ -175,13 +175,12 @@ export function strongPasswordChecks({ paired, sites, engine: engineName = "webk
         await tab.value(`(document.documentElement.dataset.signingIn = "yes")`);
         await tab.click("#go");
         await waitFor("the page after changing the password", () => tab.value(`!document.documentElement.dataset.signingIn && location.pathname === "/signed-in" && document.readyState === "complete" || null`), 20_000);
-        const prompt = await waitFor("the update prompt", () => tab.prompt(), 20_000);
-        assert(prompt.state === "update" && prompt.username === ROTATED_USER && prompt.copy.title === UPDATE_TITLE, `the prompt asks ${UPDATE_TITLE} for the account`, { state: prompt.state, username: prompt.username, title: prompt.copy.title });
-        assert(await tab.answer("update"), "Update is pressed", null);
-        await waitFor("the suggested password in Apple Passwords", async () => (fake.savedLogins().find((l) => l.user === ROTATED_USER)?.password === password ? true : null), 20_000);
+        const asked = await handedOver(tab, fake, ROTATED_USER, { since });
+        assert(asked.update, "Apple Passwords asks to update the account", asked);
+        assert(fake.savedLogins().find((l) => l.user === ROTATED_USER)?.password === password, "the suggested password is in Apple Passwords", null);
         const copies = fake.savedLogins().filter((l) => l.user === ROTATED_USER);
         assert(copies.length === 1, "the login is changed, not added again", copies.length);
-        return { engine: engineName, title: prompt.copy.title, length: password.length };
+        return { engine: engineName, update: asked.update, length: password.length };
       } finally {
         await tab.close();
       }

@@ -14,7 +14,7 @@ import { codeChecks } from "./codes.mjs";
 import { FIXTURES, fakeHelper } from "./fake.mjs";
 import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
 import { loginListChecks } from "./login-list.mjs";
-import { savingChecks } from "./saving.mjs";
+import { helperAsked, savingChecks } from "./saving.mjs";
 import { fixtureSites, PAGE_EVENTS } from "./sites.mjs";
 import { strongPasswordChecks } from "./strong-password.mjs";
 import { chromiumTabs, waitFor, webkitTabs } from "./webkit.mjs";
@@ -363,9 +363,10 @@ const CHECKS = {
     const tab = await openSignIn("example.localhost");
     const login = { username: `chromium-${Date.now()}@example.test`, password: "fixture-pw-chromium-11" };
     await signInChromium(tab.tabId, tab.url, login.username, login.password);
-    const prompt = await until(passwordPromptOf(tab.tabId), (v) => v?.state === "save", 20_000);
-    assert(prompt.username === login.username, "Chrome holds the submitted login for the save prompt on an Apple Passwords profile", prompt);
-    return { state: prompt.state };
+    const asked = await helperAsked(fake, login.username);
+    assert(asked.site === "example.localhost", "Chrome holds the submitted login and Ardia hands it to Apple Passwords on an Apple Passwords profile", asked);
+    assert(!(await app.eval(passwordPromptOf(tab.tabId))), "Ardia shows no prompt of its own", null);
+    return { asked: asked.site };
   },
   async E8kept() {
     const fake = fakeHelper(path.join(SCRATCH, "E8kept", "fake"));
@@ -378,12 +379,11 @@ const CHECKS = {
     await pairApplePasswords(fake);
     const tab = await openSignIn("example.localhost");
     await signInChromium(tab.tabId, tab.url, CHROME_ONLY_LOGIN.username, CHROME_ONLY_LOGIN.password);
-    const prompt = await until(passwordPromptOf(tab.tabId), (v) => v?.state === "save", 20_000);
-    assert(prompt.username === CHROME_ONLY_LOGIN.username, "a login Ardia's own store already holds is still offered to Apple Passwords", prompt);
-    await app.eval(`return ac.prompts.answerPasswordPrompt(${JSON.stringify(tab.tabId)}, "save")`);
-    const saved = await waitFor("the login in Apple Passwords", async () => fake.savedLogins().find((l) => l.user === CHROME_ONLY_LOGIN.username) ?? null, 20_000);
-    assert(saved.password === CHROME_ONLY_LOGIN.password, "Save puts it in Apple Passwords", { user: saved.user, sites: saved.sites });
-    return { state: prompt.state, sites: saved.sites };
+    const asked = await helperAsked(fake, CHROME_ONLY_LOGIN.username);
+    assert(!asked.update, "a login Ardia's own store already holds is still handed to Apple Passwords as new", asked);
+    const saved = fake.savedLogins().find((l) => l.user === CHROME_ONLY_LOGIN.username);
+    assert(saved?.password === CHROME_ONLY_LOGIN.password, "Save Password in Apple Passwords' window stores it", { sites: saved?.sites });
+    return { asked: asked.site, sites: saved.sites };
   },
   async E44() {
     const missing = path.join(SCRATCH, "E44", "no-such-manifest.json");
@@ -507,7 +507,7 @@ const CHECKS = {
   ...loginListChecks({ paired, sites }),
   ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E41", "E41fetch", "E9", "E10", "E11", "E12", "E13", "E28frame", "E28claim", "E14", "E15", "E16", "E17", "E34", "E34fetches", "E34fresh", "E35", "E36", "E37", "E38"]),
   ...savingChecks({ paired, sites }),
-  ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E18notConnected", "E39", "E19", "E20", "E20unread", "E21", "E22", "E22garbled", "E23"]),
+  ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E18notNow", "E18notConnected", "E39", "E19", "E20", "E20unread", "E21", "E22", "E22garbled", "E23", "E33"]),
   ...strongPasswordChecks({ paired, sites, fresh: freshChromiumTab }),
   ...inChromium(strongPasswordChecks({ paired, sites, engine: "chromium" }), ["E24", "E24pattern", "E24change", "E24notConnected"]),
   ...codeChecks({ paired, sites }),

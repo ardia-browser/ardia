@@ -373,17 +373,32 @@ final class WebKitLogins: NSObject {
     }
     tab.runInWorld("window.__ardiaLogins ? window.__ardiaLogins.formShown(\(WebKitTab.jsString(login.origin)), \(fieldJSON)) : false") { [weak self, weak tab] shown in
       guard let self, self.landings[key] == turn else { return }
-      if (shown as? Bool) != true {
-        self.landings.removeValue(forKey: key)
-        guard let tab else { return }
-        Self.count(login.update ? "autofillUpdateOffer" : "autofillSaveOffer")
-        return tab.emit("passwordPrompt", prompt)
-      }
+      if (shown as? Bool) != true { return self.settled(key, turn: turn, login: login, prompt: prompt, in: tab) }
       guard lastLook else { return lookAgain() }
       self.landings.removeValue(forKey: key)
       self.pending.removeValue(forKey: key)
       Self.count("autofillSaveSuppressed")
     }
+  }
+
+  private func settled(_ key: ObjectIdentifier, turn: Int, login: Pending, prompt: [String: Any], in tab: WebKitTab?) {
+    guard login.applePasswords else { return ask(key, login: login, prompt: prompt, in: tab) }
+    ApplePasswordsSaving.asksBeforeSending { [weak self, weak tab] asks in
+      guard let self, self.landings[key] == turn else { return }
+      if asks { return self.ask(key, login: login, prompt: prompt, in: tab) }
+      self.landings.removeValue(forKey: key)
+      self.pending.removeValue(forKey: key)
+      ApplePasswordsSaving.send(origin: login.origin, username: login.username, password: login.password, engine: "webkit") { [weak tab] told in
+        tab?.emit("passwordPrompt", told)
+      }
+    }
+  }
+
+  private func ask(_ key: ObjectIdentifier, login: Pending, prompt: [String: Any], in tab: WebKitTab?) {
+    landings.removeValue(forKey: key)
+    guard let tab else { return }
+    Self.count(login.update ? "autofillUpdateOffer" : "autofillSaveOffer")
+    tab.emit("passwordPrompt", prompt)
   }
 
   func resolveSave(_ tab: WebKitTab, action: String, username: String?, password: String?) {
@@ -393,8 +408,8 @@ final class WebKitLogins: NSObject {
     let secret = password ?? login.password
     listings.removeValue(forKey: listingKey(profile, login.origin))
     if login.applePasswords, action == "save" || action == "update" {
-      return ApplePasswordsSaving.save(origin: login.origin, username: name, password: secret, update: login.update && name == login.username, engine: "webkit", pairIn: tab) { [weak tab] saved in
-        guard !saved, let tab else { return }
+      return ApplePasswordsSaving.save(origin: login.origin, username: name, password: secret, engine: "webkit", pairIn: tab) { [weak tab] sent in
+        guard !sent, let tab else { return }
         tab.emit(
           "passwordPrompt",
           ApplePasswordsSaving.prompt(ApplePasswordsSaving.notSaved, origin: login.origin, username: name, passwordLength: secret.count, usernames: [name]))

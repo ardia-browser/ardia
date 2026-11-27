@@ -13,7 +13,7 @@ export type ApplePasswordsPairing = "awaitingCode" | "paired" | "wrongCode" | "f
 export type LoginListCount = "shown" | "filled" | "fillFailed" | "listFailed" | "connectShown" | "connectPicked" | "notNow" | "codeFilled" | "codeFillFailed" | "strongPasswordUsed";
 export type ApplePasswordsFailureKind = "notPaired" | "refused" | "helperMissing" | "timedOut" | "unreadable";
 export type LoginListEngine = "chromium" | "webkit";
-export type ApplePasswordsSaveCount = "saved" | "saveFailed";
+export type ApplePasswordsSaveCount = "saveSent" | "saveFailed";
 export type VerificationCodeSetupResult = { opened: boolean; reason?: VerificationCodeRefusal };
 
 const Passwords = nativeModule("ArdiaPasswords");

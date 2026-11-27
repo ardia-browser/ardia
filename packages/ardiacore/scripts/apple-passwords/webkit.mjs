@@ -124,7 +124,7 @@ export function engineTabs(app, { log = () => {}, engine: engineName = "webkit" 
         return evalApp(`return ac.shell.devTypeKeys(${q(windowId)}, ${q(text)}, 20)`, 60_000);
       },
       prompt() {
-        return evalApp(`const p = ac.pageState.getState().pages[${q(id)}]?.passwordPrompt; return p ? { ...p, copy: ac.prompts.passwordPromptCopy(p) } : null`);
+        return evalApp(`const p = ac.pageState.getState().pages[${q(id)}]?.passwordPrompt; return p ? { ...p, copy: ac.prompts.passwordPromptCopy(p), action: ac.prompts.passwordPromptAction(p) } : null`);
       },
       answer(action) {
         return evalApp(`return ac.prompts.answerPasswordPrompt(${q(id)}, ${q(action)})`);

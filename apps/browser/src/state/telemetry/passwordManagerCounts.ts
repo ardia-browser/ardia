@@ -110,7 +110,7 @@ const failureField = (category: FailureCategory, kind: ApplePasswordsFailureKind
 const FAILURE_FIELDS = (["list", "fill", "code", "save"] as const).flatMap((category) => (Object.keys(FAILURE_KINDS) as ApplePasswordsFailureKind[]).map((kind) => failureField(category, kind)));
 
 const SAVE_FIELDS: Record<ApplePasswordsSaveCount, string> = {
-  saved: "apple_passwords_saves_saved",
+  saveSent: "apple_passwords_saves_sent",
   saveFailed: "apple_passwords_saves_failed",
 };
 const saveEngineField = (name: ApplePasswordsSaveCount, engine: LoginListEngine) => `${SAVE_FIELDS[name]}_${engine}`;

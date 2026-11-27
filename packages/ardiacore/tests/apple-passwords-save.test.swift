@@ -19,7 +19,7 @@ private func stored(_ user: String) -> Bool {
 }
 
 private func save(_ host: String, _ user: String, _ password: String) async -> Result<Void, ApplePasswordsClient.Problem> {
-  await withCheckedContinuation { done in client.save(host: host, user: user, password: password, update: false) { done.resume(returning: $0) } }
+  await withCheckedContinuation { done in client.save(host: host, user: user, password: password) { done.resume(returning: $0) } }
 }
 
 @Suite(.serialized) struct ApplePasswordsClientSaves {
@@ -38,5 +38,18 @@ private func save(_ host: String, _ user: String, _ password: String) async -> R
     let sent = lines("requests.jsonl").filter { $0["cmd"] as? Int == ApplePasswordsClient.saveCmd }.compactMap { $0["host"] as? String }
     #expect(sent == ["plain.localhost", "plain.localhost"], "NURL is the bare host, as Apple's extension sends it")
     #expect(lines("asked.jsonl").map { $0["choice"] as? String } == ["notNow", "save"])
+  }
+
+  @Test func `an unreadable save reply is a failure and is never checked against the list`() async throws {
+    try setMode(["garble": ["6": true]])
+    let before = lines("requests.jsonl").count
+    let result = await save("save.localhost", "garbled-new@save.test", "fixture-pw-garbled-new-3")
+    try setMode([:])
+    guard case .failure(.unreadable) = result else {
+      Issue.record("an unreadable reply is .unreadable, got \(result)")
+      return
+    }
+    let after = lines("requests.jsonl").dropFirst(before).compactMap { $0["cmd"] as? Int }
+    #expect(after == [ApplePasswordsClient.saveCmd], "no list read follows to guess whether it was stored")
   }
 }

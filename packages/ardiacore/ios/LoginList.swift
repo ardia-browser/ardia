@@ -384,7 +384,7 @@ final class LoginList: NSObject {
         guard let self, let target, Self.origin(of: target.loginListPage) == current.page else { return }
         switch result {
         case .success(let password):
-          ApplePasswordsSaving.remember(scheme: login.insecure ? "http" : "https", host: current.host, user: login.user, password: password)
+          ApplePasswordsSaving.rememberReadBack(scheme: login.insecure ? "http" : "https", host: current.host, user: login.user, password: password)
           self.remember(login.user, on: ApplePasswordsMatch.site(current.host, domains: current.domains), in: target)
           target.loginListFill(username: login.user, password: password, frameOrigin: current.field.frameOrigin) { filled in
             Self.count(filled ? "filled" : "fillFailed", engine: engine)

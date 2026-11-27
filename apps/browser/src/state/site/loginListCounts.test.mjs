@@ -51,17 +51,17 @@ test("the Login list counts each Connect Apple Passwords row shown, each Connect
   client.setSharing(false, "settings");
 });
 
-test("each login saved to Apple Passwords and each save it refused are counted, only while sharing is on", () => {
+test("each login sent to Apple Passwords to save and each send that failed are counted, only while sharing is on", () => {
   const saveCounts = (counts) => Object.fromEntries(Object.entries(counts).filter(([field]) => /^apple_passwords_saves/.test(field) && !/_(chromium|webkit)$/.test(field)));
   const saved = (name) => native.emitEvent("passwords.applePasswordsSaveCounted", { name, epoch: client.consentEpoch() });
   startLoginListCounts();
   client.setSharing(true, "settings");
   takePasswordManagerCounts();
-  for (const name of ["saved", "saved", "saveFailed"]) saved(name);
-  assert.deepEqual(saveCounts(takePasswordManagerCounts()), { apple_passwords_saves_saved: 2, apple_passwords_saves_failed: 1 });
+  for (const name of ["saveSent", "saveSent", "saveFailed"]) saved(name);
+  assert.deepEqual(saveCounts(takePasswordManagerCounts()), { apple_passwords_saves_sent: 2, apple_passwords_saves_failed: 1 });
   client.setSharing(false, "settings");
-  saved("saved");
-  assert.deepEqual(saveCounts(takePasswordManagerCounts()), { apple_passwords_saves_saved: 0, apple_passwords_saves_failed: 0 });
+  saved("saveSent");
+  assert.deepEqual(saveCounts(takePasswordManagerCounts()), { apple_passwords_saves_sent: 0, apple_passwords_saves_failed: 0 });
 });
 
 test("each Login list count is also counted by the engine of the tab it was in, and an unknown engine counts only the total", () => {
@@ -87,11 +87,11 @@ test("each Apple Passwords save is also counted by the engine of the tab it came
   startLoginListCounts();
   client.setSharing(true, "settings");
   takePasswordManagerCounts();
-  for (const [name, engine] of [["saved", "chromium"], ["saved", "chromium"], ["saveFailed", "chromium"], ["saved", "webkit"], ["saved", "gecko"]]) savedIn(name, engine);
+  for (const [name, engine] of [["saveSent", "chromium"], ["saveSent", "chromium"], ["saveFailed", "chromium"], ["saveSent", "webkit"], ["saveSent", "gecko"]]) savedIn(name, engine);
   const counts = takePasswordManagerCounts();
-  assert.equal(counts.apple_passwords_saves_saved, 4);
-  assert.equal(counts.apple_passwords_saves_saved_chromium, 2);
-  assert.equal(counts.apple_passwords_saves_saved_webkit, 1);
+  assert.equal(counts.apple_passwords_saves_sent, 4);
+  assert.equal(counts.apple_passwords_saves_sent_chromium, 2);
+  assert.equal(counts.apple_passwords_saves_sent_webkit, 1);
   assert.equal(counts.apple_passwords_saves_failed_chromium, 1);
   assert.equal(counts.apple_passwords_saves_failed_webkit, 0);
   assert.ok(!Object.keys(counts).some((field) => field.includes("gecko")), "no field for an engine Ardia doesn't have");

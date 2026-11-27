@@ -27,8 +27,8 @@ const FEATURE_COUNTS = {
   apple_passwords_codes_filled: "how many Verification codes it filled",
   apple_passwords_codes_failed: "how many Verification codes it filled and how many it couldn't",
   apple_passwords_strong_passwords_used: "how many strong passwords it suggested and filled",
-  apple_passwords_saves_saved: "how many logins Ardia saved to Apple Passwords",
-  apple_passwords_saves_failed: "how many saves it didn't take",
+  apple_passwords_saves_sent: "how many logins Ardia asked Apple Passwords to save",
+  apple_passwords_saves_failed: "how many it couldn't ask",
   apple_passwords_pairings_started: "how many times you started connecting Apple Passwords",
   apple_passwords_pairings_paired: "how many of those connected",
   apple_passwords_pairings_failed: "how many didn't and why",
@@ -60,7 +60,7 @@ for (const category of [...Object.values(KIND_CATEGORIES), "save"]) for (const k
 const BY_ENGINE = [
   "apple_passwords_login_list_shown", "apple_passwords_login_list_filled", "apple_passwords_fills_failed", "apple_passwords_login_list_connect_shown",
   "apple_passwords_login_list_connect_picked", "apple_passwords_login_list_not_now", "apple_passwords_codes_filled", "apple_passwords_codes_failed",
-  "apple_passwords_strong_passwords_used", "apple_passwords_saves_saved", "apple_passwords_saves_failed", "apple_passwords_login_list_fetch_failed",
+  "apple_passwords_strong_passwords_used", "apple_passwords_saves_sent", "apple_passwords_saves_failed", "apple_passwords_login_list_fetch_failed",
 ];
 for (const field of BY_ENGINE) for (const engine of ["chromium", "webkit"]) FEATURE_COUNTS[`${field}_${engine}`] = ENGINES;
 const SNAPSHOT_COUNTS = { password_manager_profiles_apple: "how many of your profiles use Ardia's password manager, Apple Passwords, none or a password manager plugin" };
@@ -85,7 +85,7 @@ const LOGIN_LIST = {
   codeFilled: "apple_passwords_codes_filled", codeFillFailed: "apple_passwords_codes_failed", strongPasswordUsed: "apple_passwords_strong_passwords_used",
   listFailed: "apple_passwords_login_list_fetch_failed",
 };
-const SAVES = { saved: "apple_passwords_saves_saved", saveFailed: "apple_passwords_saves_failed" };
+const SAVES = { saveSent: "apple_passwords_saves_sent", saveFailed: "apple_passwords_saves_failed" };
 const PAIRING_FAILURES = {
   wrongCode: "apple_passwords_pairing_failures_wrong_code", failed: "apple_passwords_pairing_failures_failed", refused: "apple_passwords_pairing_failures_refused",
   helperMissing: "apple_passwords_pairing_failures_helper_missing", tooOld: "apple_passwords_pairing_failures_too_old", notEntitled: "apple_passwords_pairing_failures_not_entitled",
@@ -187,7 +187,7 @@ test("S10: no argument a caller or native passes (a site, a username, an unknown
     call("noteLoginList", () => counts.noteLoginList("fillFailed", "webkit", token, value));
     call("noteApplePasswordsSave", () => counts.noteApplePasswordsSave("saveFailed", "webkit", token, value));
     call("noteApplePasswordsSave", () => counts.noteApplePasswordsSave(value, value, token));
-    call("noteApplePasswordsSave", () => counts.noteApplePasswordsSave("saved", value, token));
+    call("noteApplePasswordsSave", () => counts.noteApplePasswordsSave("saveSent", value, token));
     call("noteApplePasswordsPairing", () => counts.noteApplePasswordsPairing(value, token));
     call("noteApplePasswordsPairingFailed", () => counts.noteApplePasswordsPairingFailed(value, token));
     call("noteMeCardSwitch", () => counts.noteMeCardSwitch(value, token));

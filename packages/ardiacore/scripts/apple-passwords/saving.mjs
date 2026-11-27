@@ -1,18 +1,41 @@
 import { FIXTURES } from "./fake.mjs";
-import { NOT_SECURE } from "./login-list.mjs";
 import { waitFor } from "./webkit.mjs";
 
 const q = JSON.stringify;
-export const SAVE_TITLE = "Save to Apple Passwords?";
-export const UPDATE_TITLE = "Update in Apple Passwords?";
+export const CONNECT_TITLE = "Connect Apple Passwords?";
+export const CONNECT_ACTION = "Connect";
 export const NOT_SAVED_TITLE = "Not saved to Apple Passwords";
 const SITE = "save.localhost";
 const PLAIN_SITE = "plain-save.localhost";
 const SETTLED_MS = 6000;
+const HANDED_MS = 2500;
+const SAVE_CMD = 6;
 
 const assert = (ok, message, detail) => {
   if (!ok) throw new Error(`${message}: ${q(detail)}`);
 };
+
+export const helperAsked = (fake, user, { since = 0, timeout = 20_000 } = {}) =>
+  waitFor(`Apple Passwords' own save window asking about ${user}`, async () => fake.asked().slice(since).find((a) => a.user === user) ?? null, timeout);
+
+export const savesSent = (fake) => fake.requests().filter((r) => r.cmd === SAVE_CMD).length;
+
+export async function noPrompt(tab, ms = SETTLED_MS) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    const prompt = await tab.prompt();
+    if (prompt) return prompt;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return null;
+}
+
+export async function handedOver(tab, fake, user, { since = 0 } = {}) {
+  const asked = await helperAsked(fake, user, { since });
+  const shown = await noPrompt(tab, HANDED_MS);
+  assert(!shown, "Ardia shows no prompt of its own and claims nothing once Apple Passwords asks", shown);
+  return asked;
+}
 
 export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
   const session = async () => {
@@ -33,15 +56,6 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
   }
 
   const promptShown = (tab, what = "the save prompt") => waitFor(what, () => tab.prompt(), 20_000);
-  const noPrompt = async (tab, ms = SETTLED_MS) => {
-    const deadline = Date.now() + ms;
-    while (Date.now() < deadline) {
-      const prompt = await tab.prompt();
-      if (prompt) return prompt;
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    return null;
-  };
   const fixture = (user) => FIXTURES.logins.find((l) => l.user === user);
   const applePasswords = (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().state", { timeout: 20_000 });
   const pairingStep = (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().pairing?.step ?? null", { timeout: 20_000 });
@@ -59,16 +73,35 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       const tab = await tabs.open(sites.url(SITE));
       try {
         await signIn(tab, login.user, login.password);
-        const prompt = await promptShown(tab);
-        assert(prompt.state === "save" && prompt.username === login.user, "the prompt offers to save the new login", prompt);
-        assert(prompt.copy.title === SAVE_TITLE, `the prompt asks ${SAVE_TITLE}`, prompt.copy);
-        assert(await tab.answer("save"), "Save is pressed", null);
-        const saved = await waitFor("the login in Apple Passwords", async () => fake.savedLogins().find((l) => l.user === login.user) ?? null, 20_000);
-        assert(saved.password === login.password && saved.sites.includes(SITE), "Save puts the login in Apple Passwords", { user: saved.user, sites: saved.sites });
+        const asked = await handedOver(tab, fake, login.user);
+        assert(asked.site === SITE && !asked.update, "Apple Passwords asks to save the new login for the site", asked);
+        const saved = fake.savedLogins().find((l) => l.user === login.user);
+        assert(saved?.password === login.password && saved.sites.includes(SITE), "Save Password in Apple Passwords' window stores it", { sites: saved?.sites });
         const after = await ardiaStore(app);
         assert(q(after) === q(before), "Ardia's own store is unchanged", { before, after });
-        return { engine: engineName, title: prompt.copy.title, ardiaStore: after.length };
+        return { engine: engineName, asked: asked.site, ardiaStore: after.length };
       } finally {
+        await tab.close();
+      }
+    },
+    async E18notNow() {
+      const { fake, tabs } = await session();
+      const login = { user: `declined-${engineName}-${Date.now()}@save.test`, password: "fixture-pw-declined-20" };
+      const tab = await tabs.open(sites.url(SITE));
+      try {
+        fake.setMode({ saveChoice: "notNow" });
+        await signIn(tab, login.user, login.password);
+        const asked = await handedOver(tab, fake, login.user);
+        assert(asked.choice === "notNow", "the user clicks Not Now in Apple Passwords' window", asked);
+        assert(!fake.savedLogins().some((l) => l.user === login.user), "Not Now leaves nothing in Apple Passwords", null);
+        const since = fake.asked().length;
+        await tab.navigate(sites.url(SITE));
+        await signIn(tab, login.user, login.password);
+        await handedOver(tab, fake, login.user, { since });
+        assert(!fake.savedLogins().some((l) => l.user === login.user), "still nothing stored", null);
+        return { engine: engineName, asked: fake.asked().filter((a) => a.user === login.user).length };
+      } finally {
+        fake.setMode({ saveChoice: "save" });
         await tab.close();
       }
     },
@@ -82,11 +115,9 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       const tab = await tabs.open(sites.url(SITE));
       try {
         await signIn(tab, login.user, login.password);
-        const prompt = await promptShown(tab);
-        assert(prompt.state === "save" && prompt.copy.title === SAVE_TITLE, `with Save and fill passwords stored off, the prompt still asks ${SAVE_TITLE}`, prompt);
-        assert(await tab.answer("save"), "Save is pressed", null);
-        await waitFor("the login in Apple Passwords", async () => fake.savedLogins().find((l) => l.user === login.user) ?? null, 20_000);
-        return { engine: engineName, title: prompt.copy.title };
+        const asked = await handedOver(tab, fake, login.user);
+        assert(fake.savedLogins().some((l) => l.user === login.user), "with Save and fill passwords stored off, the login still reaches Apple Passwords", asked);
+        return { engine: engineName, asked: asked.site };
       } finally {
         await tab.close();
         await choose("ardia");
@@ -102,28 +133,28 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       const tab = await tabs.open(sites.url(SITE));
       try {
         await signIn(tab, kept.user, changed);
-        const prompt = await promptShown(tab, "the update prompt");
-        assert(prompt.state === "update" && prompt.username === kept.user, "the prompt offers to update the saved login", prompt);
-        assert(prompt.copy.title === UPDATE_TITLE, `the prompt asks ${UPDATE_TITLE}`, prompt.copy);
-        assert(await tab.answer("update"), "Update is pressed", null);
-        await waitFor("the changed password in Apple Passwords", async () => (fake.savedLogins().find((l) => l.user === kept.user)?.password === changed ? true : null), 20_000);
+        const asked = await handedOver(tab, fake, kept.user);
+        assert(asked.update, "Apple Passwords asks to update the kept login", asked);
+        assert(fake.savedLogins().find((l) => l.user === kept.user)?.password === changed, "the changed password is in Apple Passwords", null);
         const copies = fake.savedLogins().filter((l) => l.user === kept.user);
         assert(copies.length === 1, "the login is changed, not added again", copies.length);
         const after = await ardiaStore(app);
         assert(q(after) === q(before), "Ardia's own store is unchanged", { before, after });
-        return { engine: engineName, title: prompt.copy.title };
+        return { engine: engineName, update: asked.update };
       } finally {
         await tab.close();
       }
     },
     async E20() {
-      const { tabs } = await session();
+      const { fake, tabs } = await session();
       const kept = fixture("same@save.test");
       const tab = await tabs.open(sites.url(SITE));
       try {
+        const sent = savesSent(fake);
         await signIn(tab, kept.user, kept.password);
         const prompt = await noPrompt(tab);
         assert(!prompt, "signing in with the saved password shows no prompt", prompt);
+        assert(savesSent(fake) === sent, "and sends Apple Passwords no save", null);
         return { engine: engineName, prompt: "none" };
       } finally {
         await tab.close();
@@ -138,6 +169,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         await waitFor("the sign-in form back", () => tab.value(`!!document.getElementById("p") || null`), 10_000);
         const prompt = await noPrompt(tab);
         assert(!prompt, "a sign-in whose form comes back shows no prompt", prompt);
+        assert(!fake.asked().some((a) => a.user === login.user), "Apple Passwords is never asked", null);
         assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing reaches Apple Passwords", null);
         return { engine: engineName, prompt: "none" };
       } finally {
@@ -149,11 +181,8 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       const login = { user: `refused-${Date.now()}@save.test`, password: "fixture-pw-refused-12" };
       const tab = await tabs.open(sites.url(SITE));
       try {
-        await signIn(tab, login.user, login.password);
-        const offered = await promptShown(tab);
-        assert(offered.state === "save" && offered.copy.title === SAVE_TITLE, "the prompt offers to save", offered);
         fake.setMode({ status: { 6: 5 } });
-        assert(await tab.answer("save"), "Save is pressed", null);
+        await signIn(tab, login.user, login.password);
         const told = await promptShown(tab, "the prompt saying it wasn't saved");
         assert(told.copy.title === NOT_SAVED_TITLE && told.state === "notSaved", `the prompt says ${NOT_SAVED_TITLE}`, told);
         assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing reached Apple Passwords", null);
@@ -173,12 +202,10 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       try {
         fake.setMode({ status: { 5: 2 } });
         await signIn(tab, kept.user, changed);
-        const prompt = await promptShown(tab, "the prompt when the kept password can't be read");
-        assert(prompt.state === "update" && prompt.copy.title === UPDATE_TITLE && prompt.username === kept.user, "a sign-in whose kept password can't be read still asks to update", prompt);
-        fake.setMode({ status: {} });
-        assert(await tab.answer("update"), "Update is pressed", null);
-        await waitFor("the new password in Apple Passwords", async () => (fake.savedLogins().find((l) => l.user === kept.user)?.password === changed ? true : null), 20_000);
-        return { engine: engineName, title: prompt.copy.title };
+        const asked = await handedOver(tab, fake, kept.user);
+        assert(asked.update, "a sign-in whose kept password can't be read is still handed to Apple Passwords, which asks to update", asked);
+        assert(fake.savedLogins().find((l) => l.user === kept.user)?.password === changed, "the new password is in Apple Passwords", null);
+        return { engine: engineName, update: asked.update };
       } finally {
         fake.setMode({ status: {} });
         await tab.close();
@@ -188,23 +215,21 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       const { fake, tabs } = await session();
       const kept = fixture("garbled@save.test");
       const changed = `fixture-pw-garbled-${engineName}-${Date.now()}`;
+      const held = fake.savedLogins().find((l) => l.user === kept.user)?.password;
       const tab = await tabs.open(sites.url(SITE));
       try {
-        await signIn(tab, kept.user, changed);
-        const offered = await promptShown(tab, "the update prompt");
-        assert(offered.state === "update" && offered.copy.title === UPDATE_TITLE, "the prompt offers to update the saved login", offered);
         fake.setMode({ garble: { 6: true } });
-        assert(await tab.answer("update"), "Update is pressed", null);
+        await signIn(tab, kept.user, changed);
         const told = await promptShown(tab, "the prompt saying it wasn't saved");
-        assert(told.copy.title === NOT_SAVED_TITLE && told.state === "notSaved", `an unreadable reply to an update says ${NOT_SAVED_TITLE}`, told);
+        assert(told.copy.title === NOT_SAVED_TITLE && told.state === "notSaved", `an unreadable reply to a save says ${NOT_SAVED_TITLE}`, told);
         assert(await tab.answer("dismiss"), "OK closes it", null);
         fake.setMode({ garble: {} });
-        assert(fake.savedLogins().find((l) => l.user === kept.user)?.password === kept.password, "Apple Passwords still holds the old password", null);
+        assert(fake.savedLogins().find((l) => l.user === kept.user)?.password === held, "Apple Passwords still holds the old password", null);
+        const since = fake.asked().length;
         await tab.navigate(sites.url(SITE));
         await signIn(tab, kept.user, changed);
-        const again = await promptShown(tab, "the update prompt again");
-        assert(again.state === "update", "the failed update was not remembered, so signing in with that password asks again", again);
-        assert(await tab.answer("dismiss"), "the second prompt closes", null);
+        const again = await handedOver(tab, fake, kept.user, { since });
+        assert(again.update, "the failed save was not remembered, so signing in with that password asks Apple Passwords again", again);
         return { engine: engineName, title: told.copy.title };
       } finally {
         fake.setMode({ garble: {} });
@@ -220,15 +245,17 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       try {
         await signIn(tab, login.user, login.password);
         const prompt = await promptShown(tab);
-        assert(prompt.state === "save" && prompt.copy.title === SAVE_TITLE && prompt.username === login.user, "signing in while Apple Passwords isn't connected still asks to save", prompt);
-        assert(await tab.answer("save"), "Save is pressed", null);
+        assert(prompt.state === "save" && prompt.copy.title === CONNECT_TITLE && prompt.username === login.user, `signing in while Apple Passwords isn't connected asks ${CONNECT_TITLE}`, prompt);
+        assert(prompt.action === CONNECT_ACTION, `its button reads ${CONNECT_ACTION}`, prompt.action);
+        assert(await tab.answer("save"), `${CONNECT_ACTION} is pressed`, null);
         await waitFor("the Pairing prompt over the page", async () => ((await prompting(app, tab.id)) ? true : null), 10_000);
         await waitFor("the code step", async () => ((await pairingStep(app)) === "code" ? true : null), 20_000);
         assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing is saved before Pairing", null);
         await app.eval(`return ac.applePasswords.submitApplePasswordsCode(ac.applePasswords.pairingCodeSecret(${q(FIXTURES.code)})).then(() => true);`, { timeout: 60_000 });
-        const saved = await waitFor("the login in Apple Passwords once paired", async () => fake.savedLogins().find((l) => l.user === login.user) ?? null, 20_000);
-        assert(saved.password === login.password && saved.sites.includes(SITE), "Pairing there saves the held login", { sites: saved.sites });
-        seen.paired = "saved";
+        await handedOver(tab, fake, login.user);
+        const saved = fake.savedLogins().find((l) => l.user === login.user);
+        assert(saved?.password === login.password && saved.sites.includes(SITE), "once paired, Apple Passwords asks about the held login and stores it", { sites: saved?.sites });
+        seen.paired = "asked";
       } finally {
         await tab.close();
       }
@@ -237,8 +264,8 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       const again = await tabs.open(sites.url(SITE));
       try {
         await signIn(again, cancelled.user, cancelled.password);
-        assert((await promptShown(again)).state === "save", "the prompt asks to save again", null);
-        assert(await again.answer("save"), "Save is pressed", null);
+        assert((await promptShown(again)).copy.title === CONNECT_TITLE, `the prompt asks ${CONNECT_TITLE} again`, null);
+        assert(await again.answer("save"), `${CONNECT_ACTION} is pressed`, null);
         await waitFor("the Pairing prompt over the page", async () => ((await prompting(app, again.id)) ? true : null), 10_000);
         await app.eval("ac.applePasswords.cancelPairing(); return true;");
         const told = await promptShown(again, "the prompt saying it wasn't saved");
@@ -257,35 +284,18 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
     },
     async E33() {
       const { fake, tabs } = await session();
-      const login = { user: `http-${Date.now()}@plain.test`, password: "fixture-pw-http-14" };
-      const signInTab = await tabs.open(sites.url(PLAIN_SITE));
+      const login = { user: `http-${engineName}-${Date.now()}@plain.test`, password: "fixture-pw-http-14" };
+      const tab = await tabs.open(sites.url(PLAIN_SITE));
       try {
-        await signIn(signInTab, login.user, login.password);
-        const prompt = await promptShown(signInTab);
-        assert(prompt.state === "save" && prompt.username === login.user, "the http page offers to save the new login", prompt);
-        assert(await signInTab.answer("save"), "Save is pressed", null);
-        await waitFor("the login in Apple Passwords", async () => fake.savedLogins().find((l) => l.user === login.user) ?? null, 20_000);
+        const sent = savesSent(fake);
+        await signIn(tab, login.user, login.password);
+        const asked = await handedOver(tab, fake, login.user);
+        assert(asked.site === PLAIN_SITE, "a login from an http page goes to Apple Passwords under its bare host, as Apple's extension sends it", asked);
+        const hosts = fake.requests().filter((r) => r.cmd === SAVE_CMD).slice(sent).map((r) => r.host);
+        assert(hosts.length === 1 && hosts[0] === PLAIN_SITE, "the one save request names the bare host", hosts);
+        return { engine: engineName, site: asked.site };
       } finally {
-        await signInTab.close();
-      }
-      const plain = await tabs.open(sites.url(PLAIN_SITE));
-      let plainRows;
-      try {
-        await plain.click("#u");
-        plainRows = await plain.waitRows();
-        const row = plainRows.find((r) => r.title === login.user);
-        assert(row && row.label === `${login.user}, ${NOT_SECURE}`, `the http page offers it, marked ${NOT_SECURE}`, plainRows);
-      } finally {
-        await plain.close();
-      }
-      const secure = await tabs.open(sites.secureUrl(PLAIN_SITE));
-      try {
-        await secure.click("#u");
-        const rows = await secure.waitRows();
-        assert(!rows.some((r) => r.title === login.user), "its https sibling never offers it", rows);
-        return { engine: engineName, http: plainRows.map((r) => r.label), https: rows.map((r) => r.title) };
-      } finally {
-        await secure.close();
+        await tab.close();
       }
     },
     async E23() {
@@ -307,6 +317,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         await signIn(tab, login.user, login.password);
         const prompt = await noPrompt(tab);
         assert(!prompt, "a new login in a private window shows no save prompt", prompt);
+        assert(!fake.asked().some((a) => a.user === login.user), "and Apple Passwords is never asked", null);
         assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing reaches Apple Passwords", null);
         return { engine: engineName, filled: filled.u, prompt: "none" };
       } finally {

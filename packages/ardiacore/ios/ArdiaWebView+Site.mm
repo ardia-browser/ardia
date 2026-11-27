@@ -13,7 +13,8 @@ using namespace ardia_runtime;
 + (void)offerLogin:(NSDictionary<NSString *, NSString *> *)login
            profile:(NSString *)profile
                 on:(id)view
-              show:(void (^)(NSDictionary<NSString *, id> *prompt))show;
+              show:(void (^)(NSDictionary<NSString *, id> *prompt))show
+          notSaved:(void (^)(NSDictionary<NSString *, id> *prompt))notSaved;
 + (NSString *)answer:(NSString *)action
             username:(NSString *)username
                   on:(id)view
@@ -81,13 +82,19 @@ constexpr NSSize kExtensionPopupMaximum = {800, 600};
   NSDictionary<NSString *, NSString *> *login = tab.pendingLogin;
   if (!login) return [tab resolvePasswordPrompt:@"dismiss" username:nil password:nil];
   __weak ArdiaWebView *weakSelf = self;
-  [ApplePasswordsSaving offerLogin:login profile:_profile ?: @"" on:self show:^(NSDictionary<NSString *, id> *offer) {
-    ArdiaWebView *view = weakSelf;
-    if (!view) return;
-    if (offer) return [view emit:@"passwordPrompt" payload:offer];
-    ardia_host::NotePasswordPromptSource(view, nil);
-    [tab resolvePasswordPrompt:@"dismiss" username:nil password:nil];
-  }];
+  [ApplePasswordsSaving offerLogin:login
+      profile:_profile ?: @""
+      on:self
+      show:^(NSDictionary<NSString *, id> *offer) {
+        ArdiaWebView *view = weakSelf;
+        if (!view) return;
+        if (offer) return [view emit:@"passwordPrompt" payload:offer];
+        ardia_host::NotePasswordPromptSource(view, nil);
+        [tab resolvePasswordPrompt:@"dismiss" username:nil password:nil];
+      }
+      notSaved:^(NSDictionary<NSString *, id> *prompt) {
+        [weakSelf emit:@"passwordPrompt" payload:prompt];
+      }];
 }
 
 - (void)resolvePasswordPrompt:(NSString *)action username:(NSString *)username password:(NSString *)password {

@@ -233,3 +233,39 @@ test("a username-first step that grows a password field fills both once pressed 
   assert.deepEqual(await fillReplies(run), [{ ticket: "2", filled: true }]);
   assert.deepEqual(await values(), { u: "ada@example.test", p: "fixture-pw-ada-1" }, "the password field the page grew fills too");
 });
+
+test("typing in a login field looks the form up once, and not at all once the Login list is turned off", { skip: CHROMIUM_MISSING, timeout: 30_000 }, async (t) => {
+  const browser = await launchChromium();
+  t.after(() => browser.close());
+  const { page, run } = await openFixture(browser);
+  await run(() => {
+    window.__lookups = 0;
+    for (const proto of [Document.prototype, Element.prototype]) {
+      const own = proto.querySelectorAll;
+      proto.querySelectorAll = function (...args) {
+        window.__lookups++;
+        return own.apply(this, args);
+      };
+    }
+  });
+  const lookups = () =>
+    run(() => {
+      const made = window.__lookups;
+      window.__lookups = 0;
+      return made;
+    });
+  await page.mouse.click(30, 25);
+  const pressed = await lookups();
+  assert.ok(pressed > 0, "a press on the username field looks the form up");
+  assert.equal((await loginFields(run)).length, 1);
+  await page.keyboard.type("a");
+  assert.equal(await lookups(), pressed, "a keystroke does the same work as a press, once");
+  const typed = await loginFields(run);
+  assert.deepEqual(typed.map((r) => [r.event, r.field, r.typed]), [["input", "username", "a"]], "and still reports the field and what was typed");
+
+  await run(() => window.__ardiaReceive("config", JSON.stringify({ loginList: { on: false } })));
+  await loginFields(run);
+  await page.keyboard.type("bc");
+  assert.equal(await lookups(), 0, "with the Login list off, typing looks nothing up");
+  assert.deepEqual(await loginFields(run), []);
+});

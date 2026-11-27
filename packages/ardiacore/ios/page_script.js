@@ -1124,9 +1124,9 @@
       active = null;
       open = picking = false;
     };
-    const report = (event, el) => {
+    const report = (event, el, login) => {
       if (!on) return;
-      const found = loginField(el) || codeField(el);
+      const found = login || loginField(el) || codeField(el);
       if (!found) return hide();
       const rect = inTopViewport(el);
       if (!rect) return hide();
@@ -1145,9 +1145,10 @@
         "input",
         (e) => {
           const el = e.target;
-          if (!e.isTrusted || !el || el.localName !== "input") return;
+          if (!on || !e.isTrusted || !el || el.localName !== "input") return;
           if (el.type === "password") return open && active && send("loginField", { event: "passwordInput", token: active.token });
-          if (loginField(el)) report("input", el);
+          const login = loginField(el);
+          if (login) report("input", el, login);
           else if (active && active.found.code && el === active.el) hide();
         },
         true,

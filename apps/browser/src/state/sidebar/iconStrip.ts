@@ -4,6 +4,7 @@ import { groupEntries, sidebarEntries } from "./entries";
 import { entryKey, parseEntry } from "./entryKey";
 import { folderIdOfCell } from "../pins/tileFolders";
 import { splitRowPanes } from "../splits/splits";
+import { shownPinnedEntries } from "./pinnedFold";
 
 export type StripBar = { color: GroupColor | null; first: boolean; last: boolean };
 
@@ -34,8 +35,9 @@ function entryItems(s: BrowserState, entry: string, bar: StripBar | null, out: S
   members.forEach((member, i) => entryItems(s, member, { color: g.color, first: i === 0, last: i === members.length - 1 }, out));
 }
 
-export function iconStripItems(s: BrowserState, windowId: string, profileId: string): StripItem[] {
-  const { cells, pinned, list } = sidebarEntries(s, windowId, profileId);
+export function iconStripItems(s: BrowserState, windowId: string, profileId: string, pinnedSequence?: string[]): StripItem[] {
+  const { cells, pinned: pinnedRows, list } = sidebarEntries(s, windowId, profileId);
+  const pinned = shownPinnedEntries(s, windowId, profileId, pinnedSequence ?? pinnedRows);
   const out: StripItem[] = [];
   for (const cell of cells) {
     const folderId = folderIdOfCell(cell);
@@ -43,10 +45,10 @@ export function iconStripItems(s: BrowserState, windowId: string, profileId: str
   }
   const rows: StripItem[] = [];
   for (const entry of pinned) entryItems(s, entry, null, rows);
-  const pinnedRows = rows.length;
+  const pinnedShown = rows.length;
   for (const entry of list) entryItems(s, entry, null, rows);
   if (out.length && rows.length) out.push({ kind: "divider", key: "divider:tiles" });
-  if (pinnedRows && rows.length > pinnedRows) rows.splice(pinnedRows, 0, { kind: "divider", key: "divider:pinned" });
+  if (pinnedShown && rows.length > pinnedShown) rows.splice(pinnedShown, 0, { kind: "divider", key: "divider:pinned" });
   return out.concat(rows);
 }
 
@@ -97,4 +99,4 @@ export function stripItemOf(code: string): StripItem {
   }
 }
 
-export const iconStripCodes = (s: BrowserState, windowId: string, profileId: string): string[] => iconStripItems(s, windowId, profileId).map(stripItemCode);
+export const iconStripCodes = (s: BrowserState, windowId: string, profileId: string, pinnedSequence?: string[]): string[] => iconStripItems(s, windowId, profileId, pinnedSequence).map(stripItemCode);

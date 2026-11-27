@@ -30,3 +30,20 @@ test("a strip drag pressed with sharing off and begun after opting in floats the
   assert.equal(peek.current.live, true);
   assert.equal(counted ?? 0, 0);
 });
+
+test("a folder or group square pressed with sharing off and released after opting in floats the sidebar out without counting a peek", () => {
+  for (const item of [{ kind: "group", key: "g:none", groupId: "none" }, { kind: "live", key: "lf:none", folderId: "none" }]) {
+    const peek = { current: { live: false, show() { this.live = true; }, slide: new Animated.Value(0) } };
+    renderToStaticMarkup(createElement(IconStripDock, { windowId: "w", shown: true, moving: false, fullscreen: false, right: false, peek }));
+    setConsentPeriod(false, null);
+    const actions = globalThis.observedStripActions;
+    const pressedWith = actions.pressed();
+    setConsentPeriod(true, "opted-in-while-held");
+    takeDockCounts();
+    actions.open(item, pressedWith);
+    const counted = takeDockCounts().sidebar_icon_strip_peeks;
+    setConsentPeriod(false, null);
+    assert.equal(peek.current.live, true, item.kind);
+    assert.equal(counted ?? 0, 0, item.kind);
+  }
+});

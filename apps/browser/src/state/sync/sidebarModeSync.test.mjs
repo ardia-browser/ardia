@@ -5,6 +5,8 @@ const { useBrowser } = await import("../browser/store.ts");
 const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
 const { useEditClock } = await import("./editClock.ts");
 const { settingsAdapter, settleSettingsFromSavedSync } = await import("./settingsAdapter.ts");
+const { inTodaysNames } = await import("./adapters.ts");
+const { withSettingEdits } = await import("./settingEdits.ts");
 const { chooseSidebarMode } = await import("../settings/actions.ts");
 const { chosenSidebarMode } = await import("../browser/model.ts");
 
@@ -29,26 +31,32 @@ class Folder {
   }
 }
 
-const MODE = "set:sidebarMode";
-const legacyAdapter = {
-  ...settingsAdapter,
-  extract: (...args) => {
-    const out = settingsAdapter.extract(...args);
-    out.values.delete(MODE);
-    return { values: out.values, ignore: (key) => key === MODE || out.ignore(key) };
+const COLLAPSED = "set:autoHideTabs";
+const STYLE = "set:collapsedSidebar";
+const KEYS = [COLLAPSED, STYLE];
+const appAdapter = withSettingEdits(inTodaysNames(settingsAdapter));
+const mergeBaseAdapter = {
+  ...appAdapter,
+  extract: async (...args) => {
+    const out = await appAdapter.extract(...args);
+    out.values.delete(STYLE);
+    return { ...out, ignore: (key) => key === STYLE || out.ignore(key) };
   },
-  apply: (visible, changed, base, records) => settingsAdapter.apply(new Map([...visible].filter(([k]) => k !== MODE)), new Set([...changed].filter((k) => k !== MODE)), base, records),
+  apply: (visible, changed, base, records) => appAdapter.apply(new Map([...visible].filter(([k]) => k !== STYLE)), new Set([...changed].filter((k) => k !== STYLE)), base, records),
 };
 
 class Device {
-  constructor(id, folder, adapter = settingsAdapter) {
+  constructor(id, folder, { legacy = false, clockAhead = 0 } = {}) {
     this.id = id;
     this.folder = folder;
-    this.adapter = adapter;
+    this.legacy = legacy;
     S().hydrate({});
     this.browser = S();
     this.scope = emptyScope();
-    this.clock = new Clock(id);
+    this.clock = new Clock(id, null, () => Date.now() + clockAhead);
+  }
+  get adapter() {
+    return this.legacy ? mergeBaseAdapter : appAdapter;
   }
   with(fn) {
     useEditClock(this.clock);
@@ -70,169 +78,235 @@ class Device {
       this.browser = S();
     }
   }
-  mode() {
-    return this.with(() => chosenSidebarMode(S().settings));
+  pick(mode, tabsOnTop) {
+    if (this.legacy) this.with(() => S().updateSettings({ autoHideTabs: mode !== "full" }));
+    else this.with(() => chooseSidebarMode(mode, tabsOnTop));
+  }
+  relaunch() {
+    this.with(() => settleSettingsFromSavedSync(this.scope, true));
+  }
+  upgrade() {
+    this.legacy = false;
+    this.relaunch();
+  }
+  state() {
+    return this.with(() => (this.legacy ? { collapsed: S().settings.autoHideTabs } : { collapsed: S().settings.autoHideTabs, style: S().settings.collapsedSidebar, mode: chosenSidebarMode(S().settings) }));
+  }
+  records() {
+    return Object.fromEntries(KEYS.filter((k) => this.scope.records[k]).map((k) => [k, { h: this.scope.records[k].h, v: this.scope.records[k].v }]));
   }
 }
 
-async function joined() {
+async function network(...specs) {
   const folder = new Folder();
-  const a = new Device("A", folder);
-  const b = new Device("B", folder);
-  await a.sync();
-  await b.sync();
-  return { a, b };
+  const devices = specs.map(([id, options]) => new Device(id, folder, options));
+  for (const d of devices) await d.sync();
+  return { folder, devices };
+}
+
+async function settle(devices) {
+  for (let round = 0; round < 3; round++) for (const d of devices) await d.sync();
+}
+
+function assertConverged(devices) {
+  const first = devices[0].records();
+  for (const d of devices) assert.deepEqual(d.records(), first, `${d.id} holds the same records`);
+  const current = devices.filter((d) => !d.legacy);
+  for (const d of current) assert.deepEqual(d.state(), current[0].state(), `${d.id} shows what ${current[0].id} shows`);
+  for (const d of devices) assert.equal(d.state().collapsed, devices[0].state().collapsed, `${d.id} agrees on collapsed`);
 }
 
 async function later() {
   const from = Date.now();
   while (Date.now() <= from + 1) await new Promise((resolve) => setTimeout(resolve, 0));
 }
-const asOlderBuild = (d, patch) =>
-  d.with(() => {
-    S().updateSettings(patch);
-    const { sidebarMode: _, ...chosenAt } = S().settingsMeta.chosenAt ?? {};
-    useBrowser.setState((s) => ({ settingsMeta: { ...s.settingsMeta, chosenAt } }));
+
+test("a pick writes both settings in one change: Icons and Hidden set collapsed and the style, Full only uncollapses", async () => {
+  const { devices } = await network(["A"], ["B"]);
+  const [a, b] = devices;
+  a.pick("icons");
+  await a.sync();
+  const picked = a.records();
+  assert.deepEqual([picked[COLLAPSED].v.v, picked[STYLE].v.v], [true, "icons"]);
+  assert.equal(picked[COLLAPSED].h.split(".").slice(0, 1)[0], picked[STYLE].h.split(".").slice(0, 1)[0], "one change, one moment");
+  await b.sync();
+  assert.equal(b.state().mode, "icons");
+  await later();
+  b.pick("full");
+  await b.sync();
+  await a.sync();
+  assert.deepEqual(a.state(), { collapsed: false, style: "icons", mode: "full" }, "Full keeps the style, so the next ⌘S collapses to Icons");
+  assertConverged(devices);
+});
+
+test("an older Mac's newer Full, which only writes the auto-hide switch, wins over an earlier Icons pick on every Mac", async () => {
+  const { devices } = await network(["A"], ["O", { legacy: true }]);
+  const [a, old] = devices;
+  a.pick("icons");
+  await settle(devices);
+  await later();
+  old.pick("full");
+  await settle(devices);
+  assert.deepEqual(a.state(), { collapsed: false, style: "icons", mode: "full" });
+  assertConverged(devices);
+  old.upgrade();
+  await settle(devices);
+  assertConverged(devices);
+});
+
+test("a Mac that received an Icons pick before it upgraded shows Icons after, and publishes nothing for it", async () => {
+  const { devices } = await network(["A"], ["O", { legacy: true }]);
+  const [a, old] = devices;
+  old.pick("hidden");
+  await settle(devices);
+  await later();
+  a.pick("icons");
+  await settle(devices);
+  assert.equal(old.state().collapsed, true, "the old build only knows collapsed");
+  const before = a.records();
+  old.upgrade();
+  await settle(devices);
+  assert.equal(old.state().mode, "icons");
+  assert.deepEqual(a.records(), before, "the upgrade wrote nothing");
+  assertConverged(devices);
+});
+
+test("an idle sync never republishes Full over a later Hidden pick from another Mac", async () => {
+  const { devices } = await network(["A"], ["B"], ["O", { legacy: true }]);
+  const [a, b] = devices;
+  a.pick("icons");
+  await settle(devices);
+  await later();
+  devices[2].pick("full");
+  await settle(devices);
+  assert.equal(a.state().mode, "full");
+  await later();
+  b.pick("hidden");
+  await b.sync();
+  await settle(devices);
+  assert.deepEqual(a.state(), { collapsed: true, style: "hidden", mode: "hidden" });
+  assertConverged(devices);
+});
+
+test("concurrent picks, Full on one Mac and Hidden on another before it pulls the Full, end the same on every Mac", async () => {
+  const { devices } = await network(["A"], ["B"], ["C"]);
+  const [a, b] = devices;
+  a.pick("icons");
+  await settle(devices);
+  await later();
+  a.pick("full");
+  b.pick("hidden");
+  await a.sync();
+  await b.sync();
+  await settle(devices);
+  assertConverged(devices);
+  for (const d of devices) d.relaunch();
+  await settle(devices);
+  assertConverged(devices);
+});
+
+test("with one Mac's clock five minutes ahead, a pick made after seeing its choice still wins, and a relaunch keeps it", async () => {
+  const { devices } = await network(["A"], ["F", { clockAhead: 5 * 60_000 }]);
+  const [a, fast] = devices;
+  fast.pick("icons");
+  await settle(devices);
+  a.pick("hidden");
+  await settle(devices);
+  assert.deepEqual([a.state().mode, fast.state().mode], ["hidden", "hidden"]);
+  for (const d of devices) d.relaunch();
+  await settle(devices);
+  assert.deepEqual([a.state().mode, fast.state().mode], ["hidden", "hidden"]);
+  assertConverged(devices);
+});
+
+test("two picks in the same millisecond on one Mac go out as the last one, and two Macs picking in the same millisecond converge", async () => {
+  const { devices } = await network(["A"], ["B"]);
+  const [a, b] = devices;
+  const at = Date.now();
+  a.pick("icons");
+  a.pick("hidden");
+  b.pick("icons");
+  assert.ok(Date.now() - at < 5);
+  await settle(devices);
+  assertConverged(devices);
+  for (const d of devices) d.relaunch();
+  await settle(devices);
+  assertConverged(devices);
+  await later();
+  a.pick("hidden");
+  a.pick("icons");
+  await settle(devices);
+  assert.deepEqual([a.state().mode, b.state().mode], ["icons", "icons"]);
+});
+
+test("an idle sync with no pick writes nothing, before or after a pick has synced", async () => {
+  const { folder, devices } = await network(["A"], ["B"], ["O", { legacy: true }]);
+  const written = () => folder.counter;
+  const start = written();
+  await settle(devices);
+  for (const d of devices) d.relaunch();
+  await settle(devices);
+  assert.equal(written(), start, "no pick, no file");
+  assert.deepEqual(devices[0].records(), {});
+  devices[0].pick("icons");
+  await settle(devices);
+  const after = written();
+  for (const d of devices) d.relaunch();
+  await settle(devices);
+  assert.equal(written(), after, "idle and relaunched Macs write nothing more");
+  assertConverged(devices);
+});
+
+test("picking Hidden with tabs across the top leaves the synced style alone", async () => {
+  const { devices } = await network(["A"], ["B"]);
+  const [a, b] = devices;
+  a.pick("icons");
+  await settle(devices);
+  await later();
+  b.pick("full", true);
+  await later();
+  b.pick("hidden", true);
+  await settle(devices);
+  assert.deepEqual(a.state(), { collapsed: true, style: "icons", mode: "icons" });
+  assertConverged(devices);
+});
+
+test("a pick made in the same millisecond as the record it follows still wins on every Mac, and a relaunch keeps it", async () => {
+  const real = Date.now;
+  const frozen = real();
+  Date.now = () => frozen;
+  try {
+    const { devices } = await network(["A"], ["B"]);
+    const [a, b] = devices;
+    a.pick("icons");
+    await settle(devices);
+    b.pick("hidden");
+    await settle(devices);
+    assert.deepEqual([a.state().mode, b.state().mode], ["hidden", "hidden"]);
+    for (const d of devices) d.relaunch();
+    await settle(devices);
+    assert.deepEqual([a.state().mode, b.state().mode], ["hidden", "hidden"]);
+    assertConverged(devices);
+  } finally {
+    Date.now = real;
+  }
+});
+
+for (const apart of [false, true])
+  test(`Full published on one Mac and Hidden picked on another before it pulls it converge${apart ? ", a millisecond apart" : ""}`, async () => {
+    const { devices } = await network(["A"], ["B"], ["O", { legacy: true }]);
+    const [a, b] = devices;
+    a.pick("icons");
+    await settle(devices);
+    await later();
+    a.pick("full");
+    await a.sync();
+    if (apart) await later();
+    b.pick("hidden");
+    await b.sync();
+    await settle(devices);
+    assertConverged(devices);
+    for (const d of devices) d.relaunch();
+    await settle(devices);
+    assertConverged(devices);
   });
-const writerOf = (d) => d.scope.records[MODE]?.o?.[0];
-
-const choice = (d) => d.with(() => [chosenSidebarMode(S().settings), S().settings.collapsedSidebar].join(" "));
-
-test("two Macs picking at once end on one Mac's whole choice, never Full from one and Hidden's style from the other", async () => {
-  const { a, b } = await joined();
-  a.with(() => chooseSidebarMode("icons"));
-  await a.sync();
-  await b.sync();
-  assert.equal(b.mode(), "icons");
-  await later();
-  a.with(() => chooseSidebarMode("full"));
-  await a.sync();
-  b.with(() => chooseSidebarMode("hidden"));
-  await b.sync();
-  await a.sync();
-  await b.sync();
-  assert.equal(choice(a), choice(b), "both Macs agree");
-  assert.ok(["full icons", "hidden hidden"].includes(choice(a)), `one Mac's pick as a whole, got ${choice(a)}`);
-});
-
-test("a newer Full pick keeps the collapsed style both Macs remember, so the next ⌘S collapses to Icons everywhere", async () => {
-  const { a, b } = await joined();
-  a.with(() => chooseSidebarMode("icons"));
-  await a.sync();
-  await b.sync();
-  assert.equal(b.mode(), "icons");
-  await later();
-  b.with(() => chooseSidebarMode("full"));
-  await b.sync();
-  await a.sync();
-  assert.deepEqual([a.mode(), b.mode()], ["full", "full"]);
-  assert.deepEqual([a.with(() => S().settings.collapsedSidebar), b.with(() => S().settings.collapsedSidebar)], ["icons", "icons"]);
-});
-
-test("an older Mac's newer Full, which only writes the auto-hide switch, wins over an earlier Icons pick and keeps Icons as the style", async () => {
-  const folder = new Folder();
-  const a = new Device("A", folder);
-  const old = new Device("O", folder, legacyAdapter);
-  await a.sync();
-  await old.sync();
-  a.with(() => chooseSidebarMode("icons"));
-  await a.sync();
-  await old.sync();
-  assert.equal(old.with(() => S().settings.autoHideTabs), true);
-  old.with(() => S().updateSettings({ autoHideTabs: false }));
-  await old.sync();
-  await a.sync();
-  assert.equal(a.mode(), "full");
-  assert.equal(a.with(() => S().settings.collapsedSidebar), "icons", "⌘S still collapses to Icons");
-});
-
-test("a Mac that pulled an Icons pick before it upgraded shows Icons once it has", async () => {
-  const folder = new Folder();
-  const a = new Device("A", folder);
-  const d = new Device("D", folder, legacyAdapter);
-  await a.sync();
-  await d.sync();
-  a.with(() => chooseSidebarMode("icons"));
-  await a.sync();
-  await d.sync();
-  assert.equal(d.mode(), "hidden", "the old build only knows collapsed");
-  d.adapter = settingsAdapter;
-  d.with(() => settleSettingsFromSavedSync(d.scope, true));
-  await d.sync();
-  assert.equal(d.mode(), "icons");
-});
-
-test("a batch without the sidebar records leaves a pick made since the last publish alone", async () => {
-  S().hydrate({});
-  chooseSidebarMode("full");
-  const visible = new Map([[MODE, { v: { collapsed: true, style: "icons" } }], ["set:autoHideTabs", { v: true }], ["set:searchSuggestions", { v: false }]]);
-  await settingsAdapter.apply(visible, new Set(["set:searchSuggestions"]), () => undefined, { stamp: () => undefined });
-  assert.equal(chosenSidebarMode(S().settings), "full");
-  assert.equal(S().settings.searchSuggestions, false);
-});
-
-
-test("an older Mac that had used Auto Hide upgrades onto another Mac's Icons pick and shows Icons, without publishing over it", async () => {
-  const folder = new Folder();
-  const a = new Device("A", folder);
-  const old = new Device("O", folder, legacyAdapter);
-  await a.sync();
-  await old.sync();
-  asOlderBuild(old, { autoHideTabs: true });
-  await old.sync();
-  await a.sync();
-  await later();
-  a.with(() => chooseSidebarMode("icons"));
-  await a.sync();
-  await old.sync();
-  assert.equal(old.mode(), "hidden", "the old build only knows collapsed");
-  old.adapter = settingsAdapter;
-  old.with(() => settleSettingsFromSavedSync(old.scope, true));
-  await old.sync();
-  await a.sync();
-  assert.deepEqual([a.mode(), old.mode()], ["icons", "icons"]);
-  assert.equal(writerOf(old), "A", "the upgrade published no sidebar mode of its own");
-});
-
-test("an idle sync never publishes Full over a later Hidden pick from another Mac", async () => {
-  const folder = new Folder();
-  const a = new Device("A", folder);
-  const b = new Device("B", folder);
-  const old = new Device("O", folder, legacyAdapter);
-  for (const d of [a, b, old]) await d.sync();
-  a.with(() => chooseSidebarMode("icons"));
-  await a.sync();
-  await b.sync();
-  await old.sync();
-  await later();
-  asOlderBuild(old, { autoHideTabs: false });
-  await old.sync();
-  await a.sync();
-  await b.sync();
-  assert.deepEqual([a.mode(), b.mode()], ["full", "full"]);
-  await later();
-  b.with(() => chooseSidebarMode("hidden"));
-  await b.sync();
-  await a.sync();
-  await b.sync();
-  assert.deepEqual([a.mode(), b.mode()], ["hidden", "hidden"]);
-  assert.equal(writerOf(a), "B");
-});
-
-test("a publish with no local pick of the mode never writes the sidebar mode record", async () => {
-  const folder = new Folder();
-  const a = new Device("A", folder);
-  await a.sync();
-  asOlderBuild(a, { autoHideTabs: true });
-  a.with(() => S().updateSettings({ searchSuggestions: false }));
-  await a.sync();
-  assert.equal(a.scope.records[MODE], undefined);
-  assert.equal(a.scope.records["set:autoHideTabs"]?.v?.v, true, "the auto-hide switch itself still syncs");
-  a.with(() => settleSettingsFromSavedSync(a.scope, true));
-  await a.sync();
-  assert.equal(a.scope.records[MODE], undefined, "nor does a launch reapply");
-  await later();
-  a.with(() => chooseSidebarMode("icons"));
-  await a.sync();
-  assert.deepEqual(a.scope.records[MODE]?.v?.v, { collapsed: true, style: "icons" });
-});

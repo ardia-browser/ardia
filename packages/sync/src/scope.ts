@@ -277,7 +277,6 @@ async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<strin
       rebasing: rebasing(state, adapter),
       landed: (key: string) => void landed.add(key),
       defer: (key: string) => void (mine.has(key) && deferred.add(key)),
-      stamp: (key: string) => state.records[key]?.h,
     };
     ok = held() ? false : await adapter.apply(view, mine, (key) => parseBase(state.base[key]), records);
   } catch (error) {

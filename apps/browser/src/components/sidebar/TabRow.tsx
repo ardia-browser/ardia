@@ -58,7 +58,7 @@ export const TabRowItem = memo(function TabRowItem({
 }) {
   const { wrapper, handle, splitSide } = useDragItem(entryKey("tab", tabId), { kind: "row", tabIds: [tabId], section, parentGroup }, motion?.clip);
   return (
-    <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle}>
+    <Animated.View ref={wrapper.ref} style={wrapper.style} onLayout={wrapper.onLayout} {...handle}>
       <TabRow tabId={tabId} splitSide={splitSide} shift={motion?.shift ?? null} />
     </Animated.View>
   );
@@ -308,7 +308,7 @@ export const SplitRowItem = memo(function SplitRowItem({
   if (tabIds.length < 2) return null;
   const splitBorder = active ? 1 : 0;
   return (
-    <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle}>
+    <Animated.View ref={wrapper.ref} style={wrapper.style} onLayout={wrapper.onLayout} {...handle}>
       <View {...moved} ref={movedRef} {...hoverProps} style={moved.style as object}>
         <SidebarRowSurface
           fill={active ? theme.tabSelected : hovered ? theme.tabHover : ink.clear}

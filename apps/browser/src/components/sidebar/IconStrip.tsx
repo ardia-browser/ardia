@@ -1,4 +1,4 @@
-import { createContext, memo, useContext, useMemo, type ReactNode } from "react";
+import { createContext, memo, useContext, useMemo, useRef, type ReactNode } from "react";
 import { PanResponder, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { ActivitySpinner, clippedContinuousCorners, ink, radius, Symbol, useHover, WindowDragRegion, withAlpha } from "../ui";
 import { useTheme } from "../ui/theme";
@@ -23,10 +23,11 @@ import { RestingTile } from "./TileFace";
 import { dragGesture } from "./dragGesture";
 import { ICON_STRIP, STRIP_DIVIDER_HEIGHT, stripInset, stripLayout } from "./iconStripGeometry";
 import { useRowCenters } from "./useRowCenters";
+import type { ConsentToken } from "../../state/telemetry/client";
 
 export type StripActions = {
-  pressed: () => void;
-  open: (item: StripItem) => void;
+  pressed: () => ConsentToken | null;
+  open: (item: StripItem, consent: ConsentToken | null) => void;
   drag: (key: string) => { press: () => void; begin: (x: number, y: number) => void; move: (x: number, y: number) => void; end: (commit: boolean) => void };
 };
 
@@ -234,13 +235,16 @@ function OpenSquare({ item, actions }: { item: Extract<StripItem, { kind: "group
   const { hovered, hoverProps } = useHover();
   const group = useGroup(item.kind === "group" ? item.groupId : null, (g) => g);
   const handlers = useStripDrag(item.key, actions);
+  const pressedWith = useRef<ConsentToken | null>(null);
   const title = item.kind === "group" ? group?.name || "Folder" : item.kind === "tileFolder" ? "Folder" : "Live Folder";
   return (
     <View {...handlers} {...hoverProps}>
       <Pressable
         tooltip={title}
-        onPressIn={actions.pressed}
-        onPress={() => actions.open(item)}
+        onPressIn={() => {
+          pressedWith.current = actions.pressed();
+        }}
+        onPress={() => actions.open(item, pressedWith.current)}
       >
         {({ pressed }) => (
           <SquareFor selected={false} hovered={hovered} pressed={pressed} tile={item.kind === "tileFolder"}>

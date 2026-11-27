@@ -79,7 +79,7 @@ export const LiveFolderBlock = memo(function LiveFolderBlock({ folderId, windowI
   const keep = liveFolderKeep(rows, strays, activeTab, activeItem);
 
   return (
-    <Animated.View ref={wrapper.ref} style={wrapper.style}>
+    <Animated.View ref={wrapper.ref} style={wrapper.style} onLayout={wrapper.onLayout}>
       <View {...box.hoverProps} style={BOX_ROOM}>
         <Animated.View
           pointerEvents="none"

@@ -31,7 +31,7 @@ import { PageRows } from "./PageRows";
 import { NewTabRow } from "./NewTabRow";
 import { SelectedRowPill, useSelectedRowAway } from "./SelectedRowPill";
 import { withOverscan, type ListViewport } from "./listViewport";
-import { noteSidebarRowsLaidOut } from "../../state/sidebar/rowGeometry";
+import { noteSidebarRowMoved } from "../../state/sidebar/rowGeometry";
 
 const NONE: string[] = [];
 const LIST_PAD = GLOW_ROOM + SCROLL_EDGE.inset;
@@ -226,9 +226,9 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                           showsVerticalScrollIndicator={false}
                           scrollEventThrottle={16}
                           onScroll={onScroll}
-                          onContentSizeChange={(contentWidth, content) => {
+                          onContentSizeChange={(_, content) => {
                             scrollEdgeBelow.measure({ content });
-                            if (page.owns) noteSidebarRowsLaidOut(windowId, { width: contentWidth, height: content });
+                            if (page.owns) noteSidebarRowMoved(windowId);
                             selectedRow.relocate();
                           }}
                           contentContainerStyle={{ flexGrow: 1, width, paddingHorizontal: layout.sidebarInset, paddingTop: LIST_PAD, paddingBottom: docked ? GLOW_ROOM : 0 }}

@@ -90,9 +90,10 @@ export function IconStripDock({ windowId, right, shown, moving, fullscreen, peek
       pressed: () => {
         hover.cancel();
         noteIconStripPress();
+        return consentToken();
       },
-      open: (item: StripItem) => {
-        showNow(consentToken());
+      open: (item: StripItem, consent: ConsentToken | null) => {
+        showNow(consent);
         if (item.kind === "group") updateGroup(item.groupId, { collapsed: false });
         if (item.kind === "tileFolder") setTimeout(() => void toggleFolderPanel(windowId, item.folderId), SETTLE_MS);
       },

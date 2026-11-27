@@ -1,16 +1,21 @@
 import { create } from "zustand";
 
-type LaidOut = { version: number; content: string };
+export const useSidebarRowGeometry = create<Record<string, number>>()(() => ({}));
 
-export const useSidebarRowGeometry = create<Record<string, LaidOut>>()(() => ({}));
+const movedIn = new Set<string>();
 
-export function noteSidebarRowsLaidOut(windowId: string, content: { width: number; height: number }) {
-  const key = `${content.width}x${content.height}`;
-  const was = useSidebarRowGeometry.getState()[windowId];
-  if (was?.content === key) return;
-  useSidebarRowGeometry.setState({ [windowId]: { version: (was?.version ?? 0) + 1, content: key } });
+export function noteSidebarRowMoved(windowId: string) {
+  if (movedIn.has(windowId)) return;
+  movedIn.add(windowId);
+  requestAnimationFrame(() => {
+    if (!movedIn.delete(windowId)) return;
+    useSidebarRowGeometry.setState((s) => ({ [windowId]: (s[windowId] ?? 0) + 1 }));
+  });
 }
 
-export const forgetSidebarRowGeometry = (windowId: string) => useSidebarRowGeometry.setState((s) => Object.fromEntries(Object.entries(s).filter(([id]) => id !== windowId)), true);
+export function forgetSidebarRowGeometry(windowId: string) {
+  movedIn.delete(windowId);
+  useSidebarRowGeometry.setState((s) => Object.fromEntries(Object.entries(s).filter(([id]) => id !== windowId)), true);
+}
 
-export const useSidebarRowsVersion = (windowId: string): number => useSidebarRowGeometry((s) => s[windowId]?.version ?? 0);
+export const useSidebarRowsVersion = (windowId: string): number => useSidebarRowGeometry((s) => s[windowId] ?? 0);

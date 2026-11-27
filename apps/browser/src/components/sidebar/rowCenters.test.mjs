@@ -20,7 +20,7 @@ const { DEFAULT_LOOK, withSidebarText } = await import("../../lib/themeLook.ts")
 const { setActiveLook } = await import("../../lib/activeLook.ts");
 const { layout } = await import("../ui/theme.ts");
 const { useInterfaceScale } = await import("../../state/settings/interfaceScale.ts");
-const { noteSidebarRowsLaidOut, useSidebarRowGeometry } = await import("../../state/sidebar/rowGeometry.ts");
+const { noteSidebarRowMoved, useSidebarRowGeometry } = await import("../../state/sidebar/rowGeometry.ts");
 const { ICON_STRIP, stripLayout } = await import("./iconStripGeometry.ts");
 const { registerSidebarDrag } = await import("./stripDrag.ts");
 const { useRowCenters } = await import("./useRowCenters.ts");
@@ -28,18 +28,18 @@ const { useRowCenters } = await import("./useRowCenters.ts");
 const scene = { keys: Array.from({ length: 8 }, (_, i) => `t:${i}`), above: 0, scale: 1 };
 const pitch = () => layout.rowHeight + layout.rowGap;
 const center = (i) => (120 + scene.above + i * pitch() + layout.rowHeight / 2) * scene.scale;
-const contentOf = () => ({ width: 176, height: Math.round(scene.above + scene.keys.length * pitch()) });
 registerSidebarDrag("w", () => ({
   items: new Map(scene.keys.map((key, i) => [key, { view: { measureInWindow: (cb) => cb(9, center(i) - (layout.rowHeight * scene.scale) / 2, 172, layout.rowHeight * scene.scale) } }])),
 }));
 
-const laidOut = () => noteSidebarRowsLaidOut("w", contentOf());
-const collect = () => useRowCenters("w", scene.keys, 0, false, `1200x800:9:${useSidebarRowGeometry.getState().w?.version ?? 0}`);
+const laidOut = () => noteSidebarRowMoved("w");
+const collect = () => useRowCenters("w", scene.keys, 0, false, `1200x800:9:${useSidebarRowGeometry.getState().w ?? 0}`);
 async function settled() {
   for (let frame = 0; frame < 4; frame++) await new Promise((r) => setTimeout(r, 0));
 }
 
 async function worstOffset() {
+  await settled();
   collect();
   await settled();
   const centers = collect();
@@ -103,11 +103,20 @@ test("every icon follows its row after tabs are added or removed", async () => {
   assert.ok((await alignedAfter(remove, back)) <= 1);
 });
 
-test("the sidebar laying out at the same size again leaves the strip's measurements alone", () => {
-  laidOut();
-  const version = useSidebarRowGeometry.getState().w.version;
-  laidOut();
-  assert.equal(useSidebarRowGeometry.getState().w.version, version);
+test("rows trading places without the list changing size (an equal folder opening as another closes) still move every icon", async () => {
+  const open = () => ((scene.above = 3 * pitch()), laidOut());
+  const swap = () => ((scene.above = 0), laidOut());
+  open();
+  assert.ok((await alignedAfter(swap, open)) <= 1);
+  swap();
+});
+
+test("many rows laying out in one frame bump the strip's measurements once", async () => {
+  await settled();
+  const before = useSidebarRowGeometry.getState().w ?? 0;
+  for (let i = 0; i < 20; i++) laidOut();
+  await settled();
+  assert.equal(useSidebarRowGeometry.getState().w, before + 1);
 });
 
 test("an aligned row the sidebar hasn't measured yet reserves the square it is drawn at, not the full square", () => {

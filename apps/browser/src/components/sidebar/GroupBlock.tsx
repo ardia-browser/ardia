@@ -120,7 +120,7 @@ export const GroupBlock = memo(function GroupBlock({
   const { fill, stroke } = groupSurface(color, tokens);
 
   return (
-    <Animated.View ref={wrapper.ref} style={wrapper.style}>
+    <Animated.View ref={wrapper.ref} style={wrapper.style} onLayout={wrapper.onLayout}>
       <View {...moved} {...box.hoverProps} ref={movedRef} style={[{ paddingVertical: GROUP_BORDER }, moved.style as object]}>
         <Animated.View
           pointerEvents="none"

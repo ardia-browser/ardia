@@ -466,7 +466,6 @@ async function applyAdapter(state            , adapter         , keys           
       rebasing: rebasing(state, adapter),
       landed: (key        ) => void landed.add(key),
       defer: (key        ) => void (mine.has(key) && deferred.add(key)),
-      stamp: (key        ) => state.records[key]?.h,
     };
     ok = held() ? false : await adapter.apply(view, mine, (key) => parseBase(state.base[key]), records);
   } catch (error) {
@@ -1296,7 +1295,6 @@ const emptyScope = ()             => ({
                      
                             
                            
-                                       
   
 
                           

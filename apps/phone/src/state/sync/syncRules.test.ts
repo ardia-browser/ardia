@@ -21,10 +21,13 @@ import {
   shownProfile,
   syncBanner,
   inboxNotice,
+  launchSpace,
+  pickAfterView,
   scanJudge,
   syncedEngineName,
   syncHeroSubtitle,
   syncRowSubtitle,
+  syncViewLoaded,
 } from "./syncRules.ts";
 
 test("the Sync With Mac row and page say what each phase needs, as SyncStatusWords does", () => {
@@ -239,6 +242,27 @@ test("the switcher marks the profile the view shows, even before the user has pi
   assert.equal(shownProfile(view({ shownProfileId: "gone", selectedProfileId: null }), status({ selectedProfileId: null }))?.syncId, "personal");
   assert.equal(shownProfile(view({ shownProfileId: undefined }), status({ selectedProfileId: "work" }))?.syncId, "work");
   assert.equal(shownProfile(view({ shownProfileId: "work" }), status({ isEnabled: false })), null);
+});
+
+test("the launch look follows the space just picked while sync's view still shows the one before", () => {
+  const before = view({ selectedProfileId: "work", shownProfileId: "work" });
+  assert.equal(launchSpace(before, status({ selectedProfileId: "work" }), "personal")?.syncId, "personal");
+  assert.equal(launchSpace(before, status({ selectedProfileId: "personal" }), null)?.syncId, "personal");
+  assert.equal(launchSpace(before, status({ selectedProfileId: "work" }), null)?.syncId, "work");
+  assert.equal(launchSpace(before, status({ selectedProfileId: "work" }), "gone")?.syncId, "work");
+  assert.equal(launchSpace(before, status({ isEnabled: false }), "personal"), null);
+});
+
+test("a picked space is let go once sync's view shows it", () => {
+  assert.equal(pickAfterView("personal", view({ selectedProfileId: "work" })), "personal");
+  assert.equal(pickAfterView("personal", view({ selectedProfileId: "personal" })), null);
+  assert.equal(pickAfterView(null, view()), null);
+});
+
+test("sync's view counts as loaded only once native has read its cached spaces", () => {
+  assert.equal(syncViewLoaded(view({ profiles: [], selectedProfileId: null, cacheRead: false })), false);
+  assert.equal(syncViewLoaded(view({ cacheRead: true })), true);
+  assert.equal(syncViewLoaded(view()), true);
 });
 
 test("a synced group takes its Mac colour by name or hex", () => {

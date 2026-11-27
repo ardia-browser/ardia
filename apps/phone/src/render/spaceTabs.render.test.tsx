@@ -75,7 +75,7 @@ beforeEach(() => {
   counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
   jest.spyOn(haptics, "selection").mockImplementation(() => undefined);
   jest.spyOn(syncActions, "selectProfile").mockImplementation((id) => showSpace(id));
-  jest.spyOn(syncStore, "showSpace").mockImplementation((id) => showSpace(id));
+  jest.spyOn(syncStore, "pickSpace").mockImplementation((id) => showSpace(id));
 });
 
 afterEach(() => {
@@ -273,11 +273,11 @@ test("a new tab lands in the current space, and in the redesign leaves the deck 
 test("opening a tab from another space, as Switch to Tab can, shows its space first; the original never switches", () => {
   setUp("redesigned");
   act(() => browse.openTab("t0"));
-  expect(syncStore.showSpace).toHaveBeenCalledWith("personal");
+  expect(syncStore.pickSpace).toHaveBeenCalledWith("personal");
   expect(currentTabs().selectedId).toBe("t0");
   expect(sorted(deckOrder(currentTabs()).map((t) => t.id))).toEqual(PERSONAL);
-  (syncStore.showSpace as jest.Mock).mockClear();
+  (syncStore.pickSpace as jest.Mock).mockClear();
   setUp("original");
   act(() => browse.openTab("t0"));
-  expect(syncStore.showSpace).not.toHaveBeenCalled();
+  expect(syncStore.pickSpace).not.toHaveBeenCalled();
 });

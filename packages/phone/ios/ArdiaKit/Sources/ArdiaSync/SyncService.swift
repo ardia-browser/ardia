@@ -58,6 +58,7 @@ public final class SyncService {
   public private(set) var pendingDownloads = 0
   public private(set) var lastSynced: Date?
   public private(set) var isEnabled = false
+  public private(set) var hasReadCache = false
   public var isCycleRunning: Bool { running }
   public private(set) var folderName: String?
   public let isDemo: Bool
@@ -177,6 +178,7 @@ public final class SyncService {
     meta = SyncMeta(deviceName: "iPhone", enabled: true)
     deviceName = "iPhone"
     isDemo = true
+    hasReadCache = true
     self.snapshot = snapshot
     phase = .updated
     isEnabled = true
@@ -189,6 +191,19 @@ public final class SyncService {
   public func start() {
     guard !isDemo, engine == nil else { return }
     Self.active = self
+    guard let engine = openEngine() else {
+      hasReadCache = true
+      return
+    }
+    set(\.phase, .starting)
+    Task {
+      if let cached = await engine.cachedSnapshot(), snapshot == .empty { snapshot = cached }
+      hasReadCache = true
+      await runCycle()
+    }
+  }
+
+  private func openEngine() -> SyncEngine? {
     meta = files.loadMeta()
     folderName = meta.folder?.name
     if meta.retiringDeviceId != nil, retiring == nil {
@@ -197,32 +212,27 @@ public final class SyncService {
     if meta.outOfSync {
       set(\.isEnabled, false)
       set(\.phase, .reset)
-      return
+      return nil
     }
     guard meta.enabled, let deviceId = meta.deviceId, let location = meta.folder else {
       set(\.isEnabled, false)
       set(\.phase, .off)
-      return
+      return nil
     }
     set(\.isEnabled, true)
     guard let entropy = keyStore.load(account: deviceId), entropy.count == 32 else {
       set(\.phase, .locked)
-      return
+      return nil
     }
     guard case .resolved(let grant, let refreshed) = SyncFolderAccess.resolve(location) else {
       set(\.phase, .needsFolderAccess)
-      return
+      return nil
     }
     if let refreshed {
       meta.folder = refreshed
       saveMeta()
     }
-    guard let engine = makeEngine(deviceId: deviceId, entropy: entropy, grant: grant) else { return }
-    set(\.phase, .starting)
-    Task {
-      if let cached = await engine.cachedSnapshot(), snapshot == .empty { snapshot = cached }
-      await runCycle()
-    }
+    return makeEngine(deviceId: deviceId, entropy: entropy, grant: grant)
   }
 
   public func check(phrase: String) -> PhraseCheck {

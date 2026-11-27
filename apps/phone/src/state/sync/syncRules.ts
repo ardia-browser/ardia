@@ -158,6 +158,16 @@ export function shownProfile(view: SyncedView, status: Pick<SyncStatus, "isEnabl
   return shown ?? profileOf(view, status.selectedProfileId ?? view.selectedProfileId);
 }
 
+export function launchSpace(view: SyncedView, status: Pick<SyncStatus, "isEnabled" | "selectedProfileId">, picked: string | null): SyncedProfile | null {
+  if (!status.isEnabled) return null;
+  const ahead = picked ?? (status.selectedProfileId !== view.selectedProfileId ? status.selectedProfileId : null);
+  return view.profiles.find((p) => p.syncId === ahead) ?? shownProfile(view, status);
+}
+
+export const pickAfterView = (picked: string | null, view: SyncedView) => (picked !== null && view.selectedProfileId === picked ? null : picked);
+
+export const syncViewLoaded = (view: SyncedView) => view.cacheRead !== false;
+
 export function sendReceivers(view: SyncedView, profileId: string | null): SyncedDevice[] {
   const profile = view.profiles.find((p) => p.syncId === profileId);
   if (!profile) return [];

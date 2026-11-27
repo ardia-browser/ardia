@@ -66,6 +66,39 @@ import Testing
     await relaunched.stopSyncing()
   }
 
+  @Test func aRelaunchHasReadItsCacheOnlyOnceTheCachedSpacesAreBack() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let spaces = j.service.snapshot.profiles.map(\.syncId)
+    try #require(!spaces.isEmpty)
+    await j.service.close()
+
+    let relaunched = makeService(j.sandbox, source: j.source, clock: j.clock)
+    #expect(!relaunched.hasReadCache)
+    relaunched.start()
+    #expect(relaunched.isEnabled)
+    #expect(!relaunched.hasReadCache)
+    #expect(relaunched.snapshot.profiles.isEmpty)
+    let deadline = ContinuousClock.now + .seconds(10)
+    while !relaunched.hasReadCache, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(relaunched.hasReadCache)
+    #expect(relaunched.snapshot.profiles.map(\.syncId) == spaces)
+    await relaunched.syncNow()
+    await relaunched.stopSyncing()
+  }
+
+  @Test func aServiceWithNoCacheToReadHasReadItAtOnce() throws {
+    let sandbox = try Sandbox()
+    defer { sandbox.remove() }
+    let off = makeService(sandbox, source: FakeSource(), clock: TestClock())
+    off.start()
+    #expect(!off.isEnabled)
+    #expect(off.hasReadCache)
+    #expect(SyncService.demo.hasReadCache)
+  }
+
   @Test func aStateThatCantBeReadRightNowIsNeverOverwritten() async throws {
     let j = try await joined()
     defer { j.sandbox.remove() }

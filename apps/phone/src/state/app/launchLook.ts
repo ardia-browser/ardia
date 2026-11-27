@@ -6,17 +6,17 @@ import { syncOffered } from "../sync/offer";
 import { savedPreferredScheme, usePreferredScheme } from "../settings/appearance";
 import { currentPreferences } from "../settings/store";
 import { syncData, useSync } from "../sync/store";
-import { shownProfile } from "../sync/syncRules";
+import { launchSpace } from "../sync/syncRules";
 import { useBoot } from "./boot";
 
 let presets: readonly PresetSpec[] = [];
 let fallback = "";
 
 function currentLaunchLook(): SavedLaunchLook | null {
-  const { loaded, status, view } = syncData();
+  const { loaded, status, view, pickedProfileId } = syncData();
   if (!launchLookSourcesLoaded({ ready: useBoot.getState().ready, syncOffered: syncOffered(), syncLoaded: loaded })) return null;
   const { colorChoice, customTheme } = currentPreferences();
-  const look = lookForApp(colorChoice, status.isEnabled, shownProfile(view, status), presets, fallback, customTheme);
+  const look = lookForApp(colorChoice, status.isEnabled, launchSpace(view, status, pickedProfileId), presets, fallback, customTheme);
   return launchLookFor(look, savedPreferredScheme());
 }
 
@@ -31,7 +31,8 @@ export function useLaunchLook(look: ProfileLook, ready: boolean, lookPresets: re
   fallback = lookFallback;
   const preferred = usePreferredScheme();
   const syncLoaded = useSync((s) => s.loaded);
+  const picked = useSync((s) => s.pickedProfileId);
   useEffect(() => {
     writer.settle();
-  }, [look, preferred, ready, syncLoaded]);
+  }, [look, preferred, ready, syncLoaded, picked]);
 }

@@ -27,6 +27,8 @@ const ROW_LOOK: Record<Design, { glyph: number; favicon: number; switchGlyph: bo
 
 const LEADING: Record<TrayRow["kind"], SymbolName> = { query: "magnifyingglass", page: "globe", calc: "equalCircleFill", paste: "docOnDoc", browseForMe: "sparkleMagnifyingglass" };
 
+const leadingSymbol = (row: TrayRow): SymbolName => (row.kind === "paste" && row.offer === "link" ? "link" : row.kind === "query" && row.past ? "clockArrow" : LEADING[row.kind]);
+
 type Props = {
   row: TrayRow;
   typed: string;
@@ -94,7 +96,7 @@ function RowContent({ row, typed, roles, interactive, onRefine }: { row: TrayRow
   return (
     <>
       <View testID={material ? "materialSearchIconSlot" : undefined} style={material ? styles.materialLeading : styles.leading}>
-        {row.kind === "page" ? <Favicon iconUrl={row.favicon} pageUrl={row.url} size={look.favicon} /> : <Symbol name={row.kind === "paste" && row.offer === "link" ? "link" : LEADING[row.kind]} size={look.glyph} color={roles.rowIcon} />}
+        {row.kind === "page" ? <Favicon iconUrl={row.favicon} pageUrl={row.url} size={look.favicon} /> : <Symbol name={leadingSymbol(row)} size={look.glyph} color={roles.rowIcon} />}
       </View>
       <View style={styles.label}>
         {row.kind === "query" ? (
@@ -163,7 +165,7 @@ function PanelRowContent({ row, typed, roles }: { row: TrayRow; typed: string; r
   return (
     <>
       <View style={styles.panelLeading}>
-        {row.kind === "page" ? <Favicon iconUrl={row.favicon} pageUrl={row.url} size={searchPanel.iconSlot} /> : <Symbol name={row.kind === "paste" && row.offer === "link" ? "link" : LEADING[row.kind]} size={searchPanel.glyph} color={roles.rowIcon} />}
+        {row.kind === "page" ? <Favicon iconUrl={row.favicon} pageUrl={row.url} size={searchPanel.iconSlot} /> : <Symbol name={leadingSymbol(row)} size={searchPanel.glyph} color={roles.rowIcon} />}
       </View>
       <View style={styles.panelLabel}>
         {row.kind === "query" ? (

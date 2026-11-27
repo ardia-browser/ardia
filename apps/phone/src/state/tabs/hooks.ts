@@ -2,7 +2,7 @@ import { useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { recencyOrder, type BrowserTab } from "./tabModels";
 import { isSplit, tabsInSpace } from "./spaces";
-import { archiveDays, findTab, type ArchivedDay } from "./tabsState";
+import { archiveDays, findTab, selectedTab, type ArchivedDay } from "./tabsState";
 import { useTabs } from "./store";
 
 export const useSelectedTabId = () => useTabs((s) => s.selectedId);
@@ -73,6 +73,8 @@ export const useHasTabs = () => useTabs((s) => s.open.length + s.privates.length
 export const usePrivateCount = () => useTabs((s) => s.privates.length);
 
 export const useIncognito = () => useTabs((s) => s.incognito);
+
+export const useBrowsingPrivately = () => useTabs((s) => s.incognito || selectedTab(s)?.isPrivate === true);
 
 export const useCanReopen = () => useTabs((s) => s.undo.length > 0);
 

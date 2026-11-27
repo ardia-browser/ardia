@@ -27,9 +27,11 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Ask Codex for a second opinion** on risky logic (races, lifetimes, security, migrations, sync) and reviews,
   before and after the change. Ask a Codex subagent, not the CLI: T3's `delegate_task` with
   `target: {providerInstanceId: "codex", model: "gpt-6.2-sol", options: {reasoningEffort: "high", serviceTier: "priority"}}`,
-  `role: "review"`, `mode: "async"`, and a new `clientRequestId` per round. Tell it to review only and edit
-  nothing, and give it the full brief each round (it doesn't share your context). It reads more than it runs:
-  reproduce each finding before fixing it. Cap review loops at 5 rounds per PR (stop earlier once approved
+  `role: "review"`, `mode: "async"`, and a new `clientRequestId` per round. Codex may run any command it needs
+  (builds, tests, scripts, hidden instances, captures) in its own target and data dirs, but never writes, edits,
+  formats or stages code. Give it the full brief each round (it doesn't share your context), including what you
+  changed since the last round, how you verified it and which earlier findings you fixed or rejected and why.
+  Reproduce each finding before fixing it. Cap review loops at 5 rounds per PR (stop earlier once approved
   or only nits remain; if blockers stay open after round 5, stop and escalate to the owner).
 - **Worktrees are fine.** Use a git worktree or a scratch clone for isolated feature, PR and full-send work, so
   you can switch branches, reset and stash without touching anyone else. `scripts/agent/guard-git` only blocks

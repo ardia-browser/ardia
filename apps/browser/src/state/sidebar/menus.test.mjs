@@ -257,6 +257,7 @@ test("a group header: new tab, copy, duplicate, then pin, Move to and Customize,
     "Pin Group [pin]",
     "Move to [arrow.up.forward.square] ›",
     "Customize [slider.horizontal.3] ›",
+    "Sort Tabs [arrow.up.arrow.down] (off) ›",
     "---",
     "Sleep Tabs [moon.zzz] (off)",
     "Ungroup [folder.badge.minus]",
@@ -264,6 +265,7 @@ test("a group header: new tab, copy, duplicate, then pin, Move to and Customize,
     "Delete Group [trash] ⌥ (alt)",
   ]);
   assert.deepEqual(sub(groupMenuItems(S(), w, g), "moveTo"), ["Profile [person] ›", "Window [macwindow] ›", "Bookmarks Bar [bookmark]"]);
+  assert.deepEqual(sub(groupMenuItems(S(), w, g), "sortTabs"), ["By Site [globe] (off)", "By Title [textformat] (off)"]);
   assert.deepEqual(sub(groupMenuItems(S(), w, g), "customize"), ["Rename… [pencil]", "Add Icon… [photo]", "Color [paintpalette] ›", "---", "New Nested Group [folder.badge.plus]"]);
   S().moveGroup(g, { pinned: true });
   const pinned = groupMenuItems(S(), w, g);
@@ -301,7 +303,7 @@ test("Move to Window › New Window moves the tab to a new window", async () => 
   assert.equal(S().windowOrder.length >= 2, true);
 });
 
-test("the sidebar background menu: new things, Browser Layout, Close All Tabs last; no setup-only rows", () => {
+test("the sidebar background menu: new things, Browser Layout, then Close Duplicate Tabs and Close All Tabs last; no setup-only rows", () => {
   const { w, ids } = windowWith("a", "b");
   assert.deepEqual(deep(sidebarMenuItems(S(), w)), [
     "New Tab [plus.app] ⌘T",
@@ -313,6 +315,9 @@ test("the sidebar background menu: new things, Browser Layout, Close All Tabs la
     "  Pull Requests [arrow.triangle.pull]",
     "  Documents [doc.text]",
     "Add Shared Folder… [person.2]",
+    "Sort Tabs [arrow.up.arrow.down] (off) ›",
+    "  By Site [globe] (off)",
+    "  By Title [textformat] (off)",
     "---",
     "Browser Layout [sidebar.left] ›",
     "  Sidebar on Left [sidebar.left] ✓",
@@ -327,8 +332,12 @@ test("the sidebar background menu: new things, Browser Layout, Close All Tabs la
     "  Minimalism Mode [rectangle.leftthird.inset.filled] ⌃⌘M",
     "  Bookmarks Bar [bookmark] ⇧⌘B",
     "---",
+    "Close Duplicate Tabs [square.on.square] (off)",
     "Close All Tabs [xmark] ⇧⌘K",
   ]);
+  S().newTab(w, { url: "https://a.com/#again", background: true });
+  assert.ok(top(sidebarMenuItems(S(), w)).includes("Close Duplicate Tabs [square.on.square]"), "on once two tabs show the same page");
+  S().closeTabs([S().windows[w].tabIds.at(-1)]);
   S().updateSettings({ sidebarSide: "right" });
   assert.ok(sub(sidebarMenuItems(S(), w), "browserLayout").includes("Sidebar on Right [sidebar.right] ✓"));
   S().updateSettings({ sidebarSide: "left" });

@@ -45,12 +45,13 @@ import { actionWords, destinationWords, syncWords } from "../../lib/sharedWords"
 import { DoneButton } from "../settings/ExpoSettingsDone";
 import { ExpoSettingsAction } from "../settings/ExpoSettingsParts";
 import { LinkMenuItems, ListLoading, ListRow, opensPage } from "../library/listSheet";
-import { DEFAULT_PROFILE_COLOR, expoSpacesLayout as L, chromeSurface, contentMargins, minListRowHeight, modifierList, PinnedTiles, PROFILE_PRESETS, settingsUIAvailable, shape, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, useIncreasedContrast, useReduceMotion, useTheme } from "../ui";
+import { DEFAULT_PROFILE_COLOR, expoSpacesLayout as L, chromeSurface, contentMargins, minListRowHeight, modifierList, PinnedTiles, PROFILE_PRESETS, settingsUIAvailable, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, useIncreasedContrast, useReduceMotion, useTheme } from "../ui";
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
 const WAITING_FOR_MAC = "Waiting for your Mac…";
-const ROUNDED_FACE = chromeSurface({ shape: "rounded", cornerRadius: shape.control });
+const CIRCLE_FACE = chromeSurface({ shape: "circle" });
+const CAPSULE_FACE = chromeSurface({ shape: "capsule" });
 const BANNER_SYMBOLS: Record<BannerIcon, string> = { folder: "folder.badge.questionmark", lock: "lock.fill", reset: "exclamationmark.arrow.triangle.2.circlepath", warning: "exclamationmark.icloud", offline: "wifi.slash" };
 const deviceSymbol = (kind: string, name: string) => (kind === "phone" ? "iphone" : /book/i.test(name) ? "laptopcomputer" : "desktopcomputer");
 const SPACE_ROW = [listRowBackground("transparent"), listRowSeparator("hidden"), listRowInsets({ top: 0, leading: L.rowInset, bottom: 0, trailing: L.rowInset })];
@@ -118,7 +119,7 @@ function SpacesSheetContent() {
               </TabView.Tab>
             ))}
           </TabView>
-          {view.profiles.length > 1 ? <SpacePageDots count={view.profiles.length} index={view.profiles.indexOf(profile)} modifiers={modifierList(padding({ horizontal: L.dotsPadding }), frame({ height: L.dotsHeight }), chromeSurface({ shape: "rounded", cornerRadius: shape.control, interactive: false }), padding({ top: L.tight }))} /> : null}
+          {view.profiles.length > 1 ? <SpacePageDots count={view.profiles.length} index={view.profiles.indexOf(profile)} modifiers={modifierList(padding({ horizontal: L.dotsPadding }), frame({ height: L.dotsHeight }), chromeSurface({ shape: "capsule", interactive: false }), padding({ top: L.tight }))} /> : null}
         </ZStack>
       ) : (
         <SpacesFallback off={status.phase === "off"} waiting={status.phase !== "off" && !banner} />
@@ -161,9 +162,9 @@ function SpacesHeader({ profiles, current, onSelect }: { profiles: SyncedProfile
       <Spacer />
       <HStack spacing={L.headerGap} modifiers={[dynamicTypeSize({ max: "xxxLarge" })]}>
         <HeaderFace label={destinationWords.archive} onPress={openPreparedArchive}>
-          <Image systemName="archivebox" modifiers={modifierList(font({ textStyle: "body", weight: "medium" }), frame({ width: L.headerCircle, height: L.headerCircle }), ROUNDED_FACE)} />
+          <Image systemName="archivebox" modifiers={modifierList(font({ textStyle: "body", weight: "medium" }), frame({ width: L.headerCircle, height: L.headerCircle }), CIRCLE_FACE)} />
         </HeaderFace>
-        <DoneButton onDone={closeArchive} modifiers={modifierList(buttonStyle("plain"), font({ textStyle: "body", weight: "semibold" }), padding({ horizontal: L.page }), frame({ minWidth: L.headerCircle, minHeight: L.headerCircle }), ROUNDED_FACE)} />
+        <DoneButton onDone={closeArchive} modifiers={modifierList(buttonStyle("plain"), font({ textStyle: "body", weight: "semibold" }), padding({ horizontal: L.page }), frame({ minWidth: L.headerCircle, minHeight: L.headerCircle }), CAPSULE_FACE)} />
       </HStack>
     </HStack>
   );

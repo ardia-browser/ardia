@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ANDROID_MENU_SIZES, IPHONE_MENU_SIZES, menuAt, menuHeight, menuOnTrigger, menuShrink, tallestMenuPage } from "./menuPlace.ts";
+import { ANDROID_MENU_SIZES, IPHONE_MENU_SIZES, menuAt, menuHeight, menuOnTrigger, keepAbove, menuShrink, roomAbove, tallestMenuPage } from "./menuPlace.ts";
 
 const { row: MENU_ROW, heading: MENU_HEADING, divider: MENU_DIVIDER, padding: MENU_PADDING } = IPHONE_MENU_SIZES;
 
@@ -133,4 +133,29 @@ test("a long-press menu stays off a bar below it: opening down, it ends above th
 test("a closing tap menu shrinks to its trigger's size, never past it", () => {
   assert.deepEqual(menuShrink({ x: 336, y: 66, width: 44, height: 44 }, 250, 272), { x: 44 / 250, y: 44 / 272 });
   assert.deepEqual(menuShrink({ x: 16, y: 700, width: 360, height: 52 }, 250, 40), { x: 1, y: 1 });
+});
+
+test("a menu anchored on a tile above the keyboard stays above it: a 12-row folder on an 852 pt phone with the keyboard's top at 517 ends above 517 and scrolls", () => {
+  const phone = { x: 0, y: 0, width: 393, height: 852 };
+  const tile = { x: 16, y: 300, width: 82, height: 56 };
+  const wanted = 12 * MENU_ROW + MENU_PADDING;
+  const free = menuOnTrigger(tile, phone, phone, 250, wanted, 8);
+  assert.ok(free.top + free.height > 517);
+  const bounded = menuOnTrigger(tile, phone, roomAbove(phone, 517), 250, wanted, 8);
+  assert.ok(bounded.top + bounded.height <= 517);
+  assert.ok(bounded.height < wanted);
+  assert.deepEqual(roomAbove(phone, null), phone);
+  assert.deepEqual(roomAbove(phone, 900), phone);
+});
+
+test("the keyboard's top is a hard limit: an anchor measured below it, where the stage's lift hasn't moved it, still gets a menu that ends above the keyboard", () => {
+  const phone = { x: 0, y: 0, width: 393, height: 852 };
+  const unlifted = { x: 16, y: 520, width: 82, height: 56 };
+  const room = roomAbove(phone, 517);
+  const loose = menuOnTrigger(unlifted, phone, room, 250, 12 * MENU_ROW + MENU_PADDING, 8);
+  assert.ok(loose.top + loose.height > 517);
+  const held = keepAbove(loose, 517 - 8, 8);
+  assert.ok(held.top >= 8);
+  assert.ok(held.top + held.height <= 509);
+  assert.deepEqual(keepAbove(loose, null, 8), loose);
 });

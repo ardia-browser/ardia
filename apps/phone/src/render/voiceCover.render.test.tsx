@@ -2,7 +2,8 @@ import { AccessibilityInfo, Platform, StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { presentVoiceSearchFrom, VoiceSearchView } from "../components/search/VoiceSearchView";
-import { ActionButton, overlayInk, press, voiceInk, voiceLayout } from "../components/ui";
+import { ActionButton, AppIcon, appIconLayout, capsule, overlayInk, press, voiceInk, voiceLayout } from "../components/ui";
+import { actionRoleOf, primaryActionRoles } from "../components/ui/tokens";
 import { ChromeFrost, OverlayCancelButton } from "../components/ui/LookViews";
 import { DICTATION_IDLE, type Dictation } from "../state/voice/dictation";
 import * as voiceStore from "../state/voice/store";
@@ -82,6 +83,8 @@ test("the voice actions are the shared action's glass face over the cover's fros
   expect(search.props.frostSource).toBeDefined();
   expect(search.findAll((node) => node.type === ChromeFrost)).toHaveLength(1);
   expect(flat(host(root, "voiceSearch")).borderCurve).toBe("continuous");
+  expect(search.props.capsule).toBe(true);
+  expect(flat(host(root, "voiceSearch")).borderRadius).toBe(capsule(primaryActionRoles[actionRoleOf.regular].height));
   const pressable = search.findAll((node) => typeof node.props.style === "function")[0]!;
   expect(flat(pressable, true).opacity).toBe(press.filledOpacity);
   const plate = root.root.findAll((node) => typeof node.type === "string" && flat(node).backgroundColor === voiceInk.transcript)[0]!;
@@ -112,20 +115,15 @@ test("the voice actions and Cancel keep the frost tint in Glass and take the sol
   act(() => setAppearanceDesign("original"));
 });
 
-test("where the native glass exists the voice actions and Cancel draw it on Android only; iPhone keeps its SwiftUI frost glass, and Cancel keeps its label and action", () => {
+test("where the native glass exists the voice actions and Cancel draw it on both platforms, the same lens as the bar, and Cancel keeps its label and action", () => {
   jest.spyOn(lookModule, "lookIsNative").mockImplementation(() => true);
   jest.spyOn(lookModule, "glassIsNative").mockImplementation(() => true);
   act(() => setAppearanceDesign("redesigned"));
   const root = show({ phase: "finished", transcript: "otters" });
   const glass = root.root.findAll((node) => node.type === lookModule.Glass);
   const frost = root.root.findAll((node) => node.type === lookModule.Frost);
-  if (Platform.OS === "android") {
-    expect(glass).toHaveLength(2);
-    expect(frost.every((node) => glass.some((plate) => plate.findAll((inner) => inner === node).length > 0))).toBe(true);
-  } else {
-    expect(glass).toHaveLength(0);
-    expect(frost).toHaveLength(2);
-  }
+  expect(glass).toHaveLength(2);
+  expect(frost.every((node) => glass.some((plate) => plate.findAll((inner) => inner === node).length > 0))).toBe(true);
   const cancel = root.root.findAll((node) => node.props.testID === "voiceCancel" && node.props.accessibilityRole === "button")[0]!;
   expect(cancel.props.accessibilityLabel).toBe("Cancel");
   act(() => cancel.props.onPress());
@@ -168,4 +166,21 @@ onIPhone("closing voice search gives screen reader focus back to the control tha
   act(() => jest.advanceTimersByTime(100));
   expect(focused).toHaveBeenCalledWith(opener);
   unmount(root);
+});
+
+test("every voice action is a pill, Cancel is a round glass button, and the mark is the app icon on its Welcome tile", () => {
+  const listening = show({ phase: "listening", transcript: "otters" });
+  const done = listening.root.findAll((node) => node.type === ActionButton && node.props.testID === "voiceDone")[0];
+  if (done) expect(done.props.capsule).toBe(true);
+  const icon = listening.root.findAll((node) => node.type === AppIcon)[0]!;
+  expect(icon.props.side).toBe(voiceLayout.appIcon);
+  const tile = flat(host(listening, "voiceAppIcon"));
+  expect(tile).toMatchObject({ padding: appIconLayout.welcomeFrame, backgroundColor: appIconLayout.fill, borderRadius: voiceLayout.appIcon * appIconLayout.corner + appIconLayout.welcomeFrame });
+  const cancel = listening.root.findAll((node) => node.type === OverlayCancelButton)[0]!;
+  const cancelPlate = cancel.findAll((node) => typeof node.type === "string" && flat(node).borderRadius !== undefined).map((node) => flat(node).borderRadius);
+  expect(cancelPlate).toContain(capsule(voiceLayout.cancel));
+  unmount(listening);
+  const failed = show({ phase: "unavailable", problem: "heardNothing" });
+  expect(failed.root.findAll((node) => node.type === ActionButton && node.props.title === "Try Again")[0]!.props.capsule).toBe(true);
+  unmount(failed);
 });

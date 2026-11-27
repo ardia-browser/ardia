@@ -44,7 +44,7 @@ export { FullSheet, SheetBackground, useSheetFrame } from "./FullSheet";
 export { SwipeToDelete } from "./SwipeToDelete";
 export { useIncreasedContrast, useReduceMotion, useReduceTransparency } from "./contrast";
 export { FadingBackdrop } from "./FadingBackdrop";
-export { ChromeSurface, CustomLookBackdrop, DeckLookBackdrop, DeckLookBackdropBase, LookBackdrop, LookBackdropBase, LookFrost, LookGlass, GlassBehind, GlassBranch, GlassSource, PAGE_FROST, START_FROST, SURFACES_FROST, usesGlass } from "./LookViews";
+export { ChromeSurface, CustomLookBackdrop, DeckLookBackdrop, DeckLookBackdropBase, LookBackdrop, LookBackdropBase, LookFrost, LookGlass, GlassBehind, GlassBranch, GlassPrivacy, GlassSource, PAGE_FROST, START_FROST, SURFACES_FROST, usesGlass } from "./LookViews";
 export { appDesign, currentDesign, DesignProvider, designWith, followDesign, materialYouOffered, useDesign, usePageUnderBars } from "./design";
 export { FadeView, fadeIsNative, FrostSource, motionReportsNearEnd, pageObscuresInsets, pageReportsDrawn, PasteButton, pasteButtonIsNative, ScrollActions } from "@ardia/phone-native";
 export { MotionView, type MotionCurve, type MotionTarget } from "@ardia/phone-native";

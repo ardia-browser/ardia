@@ -4,7 +4,9 @@ export const withoutFragment = (url: string) => url.replace(/#.*$/, "");
 
 export const withoutUserInfo = (url: string) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^@/?#]*@/i, "$1");
 
-export const samePage = (a: string, b: string) => withoutFragment(a).replace(/\/$/, "") === withoutFragment(b).replace(/\/$/, "");
+export const samePageKey = (url: string) => withoutFragment(url).replace(/\/$/, "");
+
+export const samePage = (a: string, b: string) => samePageKey(a) === samePageKey(b);
 
 export const isWebPageUrl = (url: string) => /^(https?|file):/i.test(url);
 

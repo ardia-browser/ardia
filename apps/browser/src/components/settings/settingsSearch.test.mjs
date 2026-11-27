@@ -428,3 +428,9 @@ test("with Minimalism mode off, searching favicons or site logos still finds Min
   }
   assert.equal(findSetting("appearance.minimalismPinnedIcons").description.includes("With Letters"), true);
 });
+
+test("searching for hiding or showing the control pill surfaces advanced.showCliPill", () => {
+  for (const query of ["show control pill", "hide control pill", "dismiss control pill"]) {
+    assert.ok(ids(query).includes("advanced.showCliPill"), query);
+  }
+});

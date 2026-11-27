@@ -17,7 +17,7 @@ import { percentile } from "./transport";
 import { reportNativeCrashes } from "./errors";
 import { emitJourneys, journeysEnding, startJourneys } from "./journeys";
 import { commandBarPlacementLabel, takeExternalAppRequests, takeNotificationRequestCounts, takeRecentlyClosedCounts, takeHistoryRemovalCounts, takeOmniboxLatency, takePopupTabCounts, takeSearchSuggests } from "./track";
-import { contextSamples, noteAppMemory, recordContext, takeMainProcessWork, takeContentDriftCounts, takePageMetrics, takeColdTabHoldCounts, takeStopBreathing, startContextSamples, stopContextSamples, watchEngineReports } from "./diagnostics";
+import { contextSamples, noteAppMemory, recordContext, takeMainProcessWork, takeContentDriftCounts, takePageMetrics, takeColdTabHoldCounts, takeStopBreathing, resumeAfterCancelledQuit, startContextSamples, stopContextSamples, watchEngineReports } from "./diagnostics";
 import { emitTabPresses } from "./tabPresses";
 import { takeFreezeCounts } from "./freezes";
 import { switcherSwitchProperties } from "./switcherPresses";
@@ -380,7 +380,7 @@ export function startUsage(continuing = false) {
   onAppEvent((e) => {
     if (e.type === "pipActivationReturn") notePiPActivationReturn(e.success, nativeConsent(e)); else if (e.type === "pipActivationHandBack") notePictureInPictureHandBack(e.again, nativeConsent(e));
     else if (e.type === "willQuit") { clearTimeout(launchCrashRead); stopContextSamples(); sessionEnding(); }
-    else if (e.type === "quitCancelled") startContextSamples();
+    else if (e.type === "quitCancelled") resumeAfterCancelledQuit();
   });
 }
 

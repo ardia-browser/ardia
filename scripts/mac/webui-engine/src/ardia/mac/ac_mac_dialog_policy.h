@@ -158,7 +158,7 @@ inline std::string Trimmed(std::string_view text) {
 struct Response {
   bool accepted = false;
   bool suppressed = false;
-  std::string text;
+  std::string text = {};
   bool forced = false;
 };
 

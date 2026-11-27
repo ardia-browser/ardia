@@ -13,6 +13,7 @@ import { errorText } from "../../lib/errors";
 import { capture, consentToken, type ConsentToken } from "../telemetry/client";
 import { noteWebKitCount } from "../telemetry/engineSwitchCounts";
 import { tabEngine } from "../engines/engines";
+import { translatePageMenu } from "./translateMenu";
 
 export { translation } from "../../platform/text";
 
@@ -24,7 +25,8 @@ const stateOf = (tabId: string) => useTranslate.getState()[tabId] ?? IDLE;
 const set = (tabId: string, state: TranslateState) => useTranslate.setState({ [tabId]: state });
 const toIdle = (tabId: string) => set(tabId, { status: "idle", source: stateOf(tabId).source });
 function setSource(tabId: string, source: string | null) {
-  if (stateOf(tabId).status === "idle") set(tabId, { status: "idle", source });
+  const current = stateOf(tabId);
+  if (current.status === "idle" && current.source !== source) set(tabId, { status: "idle", source });
 }
 export const isTranslated = (tabId: string) => stateOf(tabId).status !== "idle";
 export function translationTarget(tabId: string): string | null {
@@ -32,6 +34,7 @@ export function translationTarget(tabId: string): string | null {
   return state.status === "idle" ? null : state.target;
 }
 export const useTranslateState = (tabId: string) => useTranslate((s) => s[tabId] ?? IDLE);
+export const useTranslatePageMenu = (tabId: string) => useTranslate((s) => translatePageMenu(s[tabId]));
 
 const IN_FLIGHT = 2;
 const FOLLOW_MS = 600;

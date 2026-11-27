@@ -1,3 +1,4 @@
+import ArdiaDesign
 import Foundation
 
 enum UsageConsent {
@@ -40,6 +41,7 @@ enum PendingCounts {
   static let glassShadersFailed = "glass_shaders_failed"
   static let glassCapturesOverBudget = "glass_captures_over_budget"
   static let glassLensBridged = "glass_lens_bridged"
+  static let glassLensWithheld = "glass_lens_withheld"
   private static let suite = "ardia-pending-counts"
   private static let defaults = UserDefaults(suiteName: suite) ?? .standard
 
@@ -47,6 +49,13 @@ enum PendingCounts {
     UsageConsent.lock.withLock {
       guard UsageConsent.windowLocked() != nil else { return }
       defaults.set(defaults.integer(forKey: field) + count, forKey: field)
+    }
+  }
+
+  static func add(_ field: String, sampledWindow: Int?) {
+    UsageConsent.lock.withLock {
+      guard LiquidGlassRules.countsIn(sampledWindow: sampledWindow, currentWindow: UsageConsent.windowLocked()) else { return }
+      defaults.set(defaults.integer(forKey: field) + 1, forKey: field)
     }
   }
 

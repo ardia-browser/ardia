@@ -30,6 +30,7 @@ const SITES: Record<string, Over[]> = {
   "library/LibraryView.tsx": ["sheet", "sheet", "card"],
   "library/MaterialLibrary.tsx": ["sheet"],
   "search/MaterialSearchView.tsx": ["page"],
+  "search/NewTabPins.tsx": ["page"],
   "search/SearchTray.tsx": ["page"],
   "search/StartPage.tsx": ["frostable"],
   "search/StartScreen.tsx": ["frostable"],

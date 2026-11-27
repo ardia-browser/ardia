@@ -26,8 +26,11 @@ export function translateMenuItems({ translated, target, languages, neverTransla
 }
 
 type TranslatePageMenuState = { status: "idle" | "translating" | "translated"; source: string | null };
+export type TranslatePageMenu = "translatePage" | "showOriginal" | null;
 
-export function translatePageMenuItems({ status, source }: TranslatePageMenuState, targetName: string): { id: "translatePage" | "showOriginal"; title: string }[] {
-  if (status !== "idle") return [{ id: "showOriginal", title: "Show Original" }];
-  return source ? [{ id: "translatePage", title: `Translate to ${targetName}` }] : [];
+export const translatePageMenu = (state: TranslatePageMenuState | undefined): TranslatePageMenu => (!state ? null : state.status !== "idle" ? "showOriginal" : state.source ? "translatePage" : null);
+
+export function translatePageMenuItems(menu: TranslatePageMenu, targetName: string): { id: "translatePage" | "showOriginal"; title: string }[] {
+  if (menu === "showOriginal") return [{ id: "showOriginal", title: "Show Original" }];
+  return menu === "translatePage" ? [{ id: "translatePage", title: `Translate to ${targetName}` }] : [];
 }

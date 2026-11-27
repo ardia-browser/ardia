@@ -21,6 +21,7 @@ import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { userClose } from "../tabs/closeActivation";
 import type { CloseOptions } from "../tabs/tabs";
+import { sortKeyOfChoice, sortTabs, sortTabsMenuItem } from "./sortTabsUi";
 
 type GroupChoice = Destination | { kind: "color"; color: GroupColor | null };
 
@@ -88,6 +89,7 @@ export function groupMenuItems(s: BrowserState, windowId: string, groupId: strin
           { id: "nest", title: "New Nested Group", symbol: "folder.badge.plus" },
         ],
       },
+      sortTabsMenuItem(s, { windowId, groupId }),
       ...sharedFolderMenuItems(s, groupId),
       ...(incognito ? [] : pluginMenuItems("group", pluginGroupContext(s, windowId, groupId))),
     ],
@@ -132,6 +134,8 @@ function runGroupChoice(windowId: string, groupId: string, choice: string | Grou
     return;
   }
   if (runSharedFolderChoice(windowId, groupId, choice)) return;
+  const sortKey = sortKeyOfChoice(choice);
+  if (sortKey) return void sortTabs({ windowId, groupId }, sortKey);
   const target = { kind: "group" as const, id: groupId };
   if (choice === "rename") void startRename(windowId, target);
   else if (choice === "icon") void openIconPicker(windowId, target);

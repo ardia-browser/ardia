@@ -46,9 +46,9 @@ internal object LiquidGlassRules {
         lightAngle = (-Math.PI / 4).toFloat(),
         specularWidthDp = 1.25f,
         specularStrength = 1f,
-        oppositeStrength = 0.7f,
+        oppositeStrength = 0.5f,
         specularFalloff = 0.6f,
-        specularSharpness = 2f,
+        specularSharpness = 6f,
         specularOpacity = 0.5f,
     )
 

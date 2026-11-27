@@ -6,17 +6,17 @@ import { pages } from "../platform/pages";
 import { blocking } from "../platform/blocking";
 import { WarmPageMenuHost } from "../components/browsing/PageMenu";
 import { DesignProvider, Sheet } from "../components/ui";
-import { closePageMenu, handleSystemBack, openPageMenu } from "../state/page/actions";
+import { closePageMenu, handleSystemBack, openPageMenu, openSiteSettings, openSiteSettingsSheet } from "../state/page/actions";
 import { usePageUi } from "../state/page/store";
 import { usePages } from "../state/pages/store";
 import { useSettingsNav } from "../state/settings/nav";
 import { useBrowse } from "../state/browse/store";
-import { useLibrary } from "../state/library/store";
-import { pressButton, renderSurface, unmount, updateSurface, withTabs } from "../../test/render/harness";
+import * as telemetry from "../state/telemetry/telemetry";
+import { pressButton, renderSurface, textOf, unmount, updateSurface, withTabs } from "../../test/render/harness";
 import { useMenuModel } from "../state/page/hooks";
 import type { MenuModel } from "../state/page/pageMenu";
 
-const FRAME_MS = 20;
+const BLOCKERS_ROW = "menuToggle:Block Ads and Trackers";
 const SHEET_GONE_MS = 1000;
 
 const navigation = (url: string, isLoading: boolean, blockedRequests = 0) => ({ url, title: "Site 0", canGoBack: false, canGoForward: false, isLoading, pageZoom: 1, isDesktopSite: false, blockedRequests }) as never;
@@ -90,11 +90,11 @@ function ModelProbe({ live, seen }: { live: boolean; seen: (model: MenuModel) =>
 test("a menu armed on a quiet web page builds its page rows while hidden, and opening keeps those same rows", async () => {
   page("https://site0.example/", false);
   const root = host();
-  const nightShade = () => root.root.findAll((node) => typeof node.type === "string" && node.props.testID === "menuToggle:Night Shade")[0];
-  const hidden = nightShade();
+  const pageRow = () => root.root.findAll((node) => typeof node.type === "string" && node.props.testID === BLOCKERS_ROW)[0];
+  const hidden = pageRow();
   expect(hidden).toBeDefined();
   await open();
-  expect(nightShade()).toBe(hidden);
+  expect(pageRow()).toBe(hidden);
   unmount(root);
 });
 
@@ -103,15 +103,15 @@ test("a hidden menu catches up with a page that settles while it is closed, so t
   const root = host();
   await open();
   closeAndSettle();
-  const nightShade = () => root.root.findAll((node) => typeof node.type === "string" && node.props.testID === "menuToggle:Night Shade")[0];
-  expect(nightShade()).toBeUndefined();
+  const pageRow = () => root.root.findAll((node) => typeof node.type === "string" && node.props.testID === BLOCKERS_ROW)[0];
+  expect(pageRow()).toBeUndefined();
   page("https://site0.example/", true, 3);
-  expect(nightShade()).toBeUndefined();
+  expect(pageRow()).toBeUndefined();
   page("https://site0.example/", false, 4);
-  const built = nightShade();
+  const built = pageRow();
   expect(built).toBeDefined();
   await open();
-  expect(nightShade()).toBe(built);
+  expect(pageRow()).toBe(built);
   unmount(root);
 });
 
@@ -177,43 +177,36 @@ test("an earlier showing's late hide neither hides the menu that opened after it
   unmount(root);
 });
 
-test("Site Settings rises over the leaving menu on the next frame, and Back from it closes Settings without bringing the menu back", async () => {
+test("Site Settings opens inside the drawn menu at once, with the site's group first, and system Back returns to the menu's main page", async () => {
+  jest.spyOn(pages, "listsSitePermissions").mockReturnValue(false);
   page("https://site0.example/", false);
   const root = host();
   await open();
   await pressButton(root, "Site Settings");
-  expect(usePageUi.getState().menuOpen).toBe(false);
-  const gate = sheetOf(root).findAll((node) => typeof node.type === "string")[0] as ReactTestInstance;
-  expect(gate.props).toMatchObject({ pointerEvents: "none", importantForAccessibility: "no-hide-descendants", accessibilityElementsHidden: true });
-  act(() => jest.advanceTimersByTime(FRAME_MS));
-  expect(useSettingsNav.getState().stack).toEqual([{ page: "siteSettings" }]);
+  expect(usePageUi.getState()).toMatchObject({ menuOpen: true, menuPage: "siteSettings" });
+  expect(useSettingsNav.getState().open).toBe(false);
+  expect(shownJson(root)).not.toContain("pageMenuWords");
+  const words = textOf(root);
+  expect(words.indexOf("site0.example")).toBeGreaterThanOrEqual(0);
+  expect(words.indexOf("site0.example")).toBeLessThan(words.indexOf("Block Cookie Banners"));
   act(() => {
     handleSystemBack();
   });
-  expect(useSettingsNav.getState().open).toBe(false);
-  expect(usePageUi.getState().menuOpen).toBe(false);
+  expect(usePageUi.getState()).toMatchObject({ menuOpen: true, menuPage: "main" });
+  expect(shownJson(root)).toContain("pageMenuWords");
   unmount(root);
 });
 
-test("Site Settings stays shut when the Library, a sheet or Find takes the page in the frame before it would rise", async () => {
+test("a Site Settings press that lands after the menu has closed opens nothing and counts nothing", async () => {
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
   page("https://site0.example/", false);
   const root = host();
-  const takers = [
-    () => useLibrary.setState({ open: true }),
-    () => useBrowse.setState({ sheet: "archive" }),
-    () => usePageUi.setState({ findOpen: true }),
-  ];
-  for (const take of takers) {
-    await open();
-    await pressButton(root, "Site Settings");
-    act(take);
-    act(() => jest.advanceTimersByTime(FRAME_MS));
-    expect(useSettingsNav.getState().open).toBe(false);
-    act(() => {
-      useLibrary.setState({ open: false });
-      useBrowse.setState({ sheet: null });
-      usePageUi.setState({ findOpen: false });
-    });
-  }
+  await open();
+  closeAndSettle();
+  act(() => openSiteSettings());
+  act(() => openSiteSettingsSheet());
+  expect(usePageUi.getState()).toMatchObject({ menuOpen: false, menuPage: "main", menuSettings: null });
+  expect(useSettingsNav.getState().open).toBe(false);
+  expect(counted.mock.calls.map(([field]) => field)).not.toContain("page_menu_site_settings_opened");
   unmount(root);
 });

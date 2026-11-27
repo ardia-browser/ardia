@@ -58,7 +58,7 @@ extension WebKitTab {
       pageMedia.keptByWindowServer = true
       emit("autoPictureInPictureKept", ArdiaConsentStamp.begin().onto(["appSwitch": false]))
     }
-    switch autoPictureInPictureRule.sight(seen, enabled: autoPictureInPicture, playing: playsMedia) {
+    switch autoPictureInPictureRule.sight(seen, inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia) {
     case .open:
       let stamp = ArdiaConsentStamp.begin()
       let request = autoPictureInPictureRule.openRequests

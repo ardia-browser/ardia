@@ -96,7 +96,7 @@ test("WebKit tabs report why automatic picture in picture held back, as Chromium
 test("leaving opens picture in picture and returning closes it through the page's own player call", () => {
   assert.match(sight, /case \.open:[\s\S]*?setPictureInPicture\(true, automatic: true, overFullScreen: autoPictureInPictureRule\.opensOverFullScreen\)/);
   assert.match(sight, /case \.close: setPictureInPicture\(false\) \{ _ in \}/);
-  assert.match(sight, /autoPictureInPictureRule\.sight\(seen, enabled: autoPictureInPicture, playing: playsMedia\)/);
+  assert.match(sight, /autoPictureInPictureRule\.sight\(seen, inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia\)/);
 });
 
 test("the page's picture in picture reports reach the rule", () => {
@@ -262,4 +262,8 @@ test("leaving a full-screen Space the page was seen in asks the page to pop out 
 
 test("WebKit leaving full screen starts the exit hold, as only entering and in full screen count as on", () => {
   assert.match(read("../ios/WebKitFullscreenPage.swift"), /static func isOn\(_ state: WKWebView\.FullscreenState\) -> Bool \{\n\s+state == \.enteringFullscreen \|\| state == \.inFullscreen\n\s+\}/);
+});
+
+test("the tab tells the rule whether its sight is the inline tab or WebKit's full-screen window", () => {
+  assert.match(sight, /autoPictureInPictureRule\.sight\(seen, inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia\)/);
 });

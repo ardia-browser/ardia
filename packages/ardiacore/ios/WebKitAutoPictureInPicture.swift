@@ -38,8 +38,8 @@ struct WebKitAutoPictureInPicture {
     if cancelledRequest == request { cancelledRequest = nil }
   }
 
-  mutating func sight(_ nowSeen: Bool, enabled: Bool, playing: Bool) -> Action {
-    if nowSeen {
+  mutating func sight(_ nowSeen: Bool, inline: Bool = true, enabled: Bool, playing: Bool) -> Action {
+    if nowSeen && (inline || !settlingFromFullScreen) {
       settlingFromFullScreen = false
       heldWhileAway = false
       seenInFullScreen = fullScreen
@@ -49,8 +49,9 @@ struct WebKitAutoPictureInPicture {
     let slipped = held && autoOpened
     let action = follow(nowSeen || held, enabled: enabled, playing: playing)
     guard held, !heldWhileAway else { return action }
-    if action == .close && slipped {
+    if action == .close {
       heldWhileAway = true
+      guard slipped else { return .none }
       cancelledRequest = openRequests
       return .closeHeldForFullScreen
     }

@@ -98,13 +98,22 @@ struct AutoPictureInPictureRule {
     #expect(rule.sight(false, enabled: true, playing: false) == .none)
   }
 
-  @Test func `a picture in picture opened before full screen is closed but not counted as a held pop out`() {
+  @Test func `a picture in picture the person opened before full screen is left open and not counted as a held pop out`() {
     var rule = WebKitAutoPictureInPicture()
     rule.reported(active: true)
     #expect(rule.sight(false, enabled: false, playing: true) == .none)
     rule.pageFullScreen(true, tab: 1)
-    #expect(rule.sight(false, enabled: true, playing: true) == .close)
-    #expect(rule.sight(false, enabled: true, playing: true) == .heldForFullScreen)
+    #expect(rule.sight(false, enabled: false, playing: true) == .none)
+    #expect(rule.sight(false, enabled: true, playing: true) == .none)
+    #expect(rule.reportedActive)
+  }
+
+  @Test func `full screen starting with automatic Picture in Picture off never closes a manual one`() {
+    var rule = WebKitAutoPictureInPicture()
+    #expect(rule.sight(false, enabled: false, playing: true) == .none)
+    rule.reported(active: true)
+    rule.pageFullScreen(true, tab: 1)
+    #expect(rule.sight(false, enabled: false, playing: true) == .none)
   }
 
   @Test func `the hold lasts until the window is seen again after full screen ends`() {
@@ -245,5 +254,18 @@ struct AutoPictureInPictureRule {
     #expect(rule.sight(false, enabled: true, playing: true) == .none)
     #expect(rule.sight(true, enabled: true, playing: true) == .none)
     #expect(rule.sight(false, enabled: true, playing: true) == .open)
+  }
+
+  @Test func `the exit hold outlasts the departing full-screen window and ends only when the inline tab is seen`() {
+    var rule = WebKitAutoPictureInPicture()
+    rule.pageFullScreen(true, tab: 1)
+    #expect(rule.sight(true, inline: false, enabled: true, playing: true) == .none)
+    rule.pageFullScreen(false, tab: 1)
+    #expect(rule.sight(true, inline: false, enabled: true, playing: true) == .none)
+    #expect(rule.settlingFromFullScreen)
+    #expect(rule.sight(false, inline: true, enabled: true, playing: true) == .heldForFullScreen)
+    #expect(rule.sight(true, inline: true, enabled: true, playing: true) == .none)
+    #expect(!rule.settlingFromFullScreen)
+    #expect(rule.sight(false, inline: true, enabled: true, playing: true) == .open)
   }
 }

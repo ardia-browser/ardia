@@ -301,7 +301,25 @@ NSString *Keys(NSWindow *window, NSString *argument) {
   return [NSString stringWithFormat:@"%@ (first responder %@)", handler, Describe((NSView *)window.firstResponder)];
 }
 
-NSString *AccessibilityTree(NSWindow *window, NSString *) {
+static NSString *AccessibilityBoldRuns(id element) {
+  if (![element respondsToSelector:@selector(accessibilityNumberOfCharacters)] || ![element respondsToSelector:@selector(accessibilityAttributedStringForRange:)]) return nil;
+  NSInteger count = [element accessibilityNumberOfCharacters];
+  NSAttributedString *text = count > 0 ? [element accessibilityAttributedStringForRange:NSMakeRange(0, count)] : nil;
+  if (!text.length) return nil;
+  NSMutableArray<NSString *> *runs = [NSMutableArray array];
+  [text enumerateAttribute:NSAccessibilityFontTextAttribute inRange:NSMakeRange(0, text.length) options:0
+                usingBlock:^(id font, NSRange range, BOOL *) {
+                  if (![font isKindOfClass:NSDictionary.class]) return;
+                  NSString *name = [font[NSAccessibilityFontNameKey] isKindOfClass:NSString.class] ? font[NSAccessibilityFontNameKey] : @"";
+                  NSFont *resolved = [NSFont fontWithName:name size:[font[NSAccessibilityFontSizeKey] doubleValue]];
+                  BOOL bold = (resolved.fontDescriptor.symbolicTraits & NSFontDescriptorTraitBold) || [name rangeOfString:@"bold" options:NSCaseInsensitiveSearch].location != NSNotFound;
+                  if (bold) [runs addObject:[text.string substringWithRange:range]];
+                }];
+  return runs.count ? [@"bold=" stringByAppendingString:[runs componentsJoinedByString:@","]] : nil;
+}
+
+NSString *AccessibilityTree(NSWindow *window, NSString *argument) {
+  BOOL withBold = [argument isEqualToString:@"bold"];
   NSMutableArray<NSString *> *lines = [NSMutableArray array];
   __block void (^walk)(id, NSUInteger);
   __block __weak void (^weakWalk)(id, NSUInteger);
@@ -314,6 +332,8 @@ NSString *AccessibilityTree(NSWindow *window, NSString *) {
       id value = [element respondsToSelector:sel] ? [element valueForKey:key] : nil;
       if ([value isKindOfClass:NSString.class] && [value length]) [text addObject:value];
     }
+    NSString *bold = withBold ? AccessibilityBoldRuns(element) : nil;
+    if (bold) [text addObject:bold];
     [lines addObject:[NSString stringWithFormat:@"%@%@%@", [@"" stringByPaddingToLength:depth withString:@" " startingAtIndex:0],
                                                role ?: @"", text.count ? [@": " stringByAppendingString:[text componentsJoinedByString:@" | "]] : @""]];
     NSArray *children = [element respondsToSelector:@selector(accessibilityChildren)] ? [element accessibilityChildren] : nil;

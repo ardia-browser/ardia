@@ -371,6 +371,24 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       }
       return { engine: engineName, ...seen };
     },
+    async E38() {
+      const tab = await open("filter.localhost", "/login-ready");
+      const bolds = (rows) => rows.map((r) => [r.title, r.bold]);
+      try {
+        await tab.click("#u");
+        const all = await tab.waitRows();
+        assert(all.every((r) => !r.bold), "nothing is bold before typing", bolds(all));
+        const an = await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
+        const wantAn = [["anna@example.test", "an"], ["Ännabel", "Än"], ["joanna.k@mail.test", "an"], [FOOTER, ""]];
+        assert(q(bolds(an)) === q(wantAn), "each row's matched run is bold", bolds(an));
+        const ann = await typedRows(tab, "n", [...FILTERED, FOOTER], "the list for ann");
+        const wantAnn = [["anna@example.test", "ann"], ["Ännabel", "Änn"], ["joanna.k@mail.test", "ann"], [FOOTER, ""]];
+        assert(q(bolds(ann)) === q(wantAnn), "the bold run follows the typing", bolds(ann));
+        return { engine: engineName, an: bolds(an), ann: bolds(ann) };
+      } finally {
+        await tab.close();
+      }
+    },
     async E17() {
       const { app } = await paired();
       const ardiaOnly = "ardia-only@example.test";

@@ -142,14 +142,17 @@ final class LoginList: NSObject {
     .init(id: notNowId, title: notNowTitle, detail: "", symbol: "xmark"),
   ]
 
-  static func rows(_ logins: [ApplePasswordsMatch.Login], notice: String?, connect: Bool = false) -> [WebKitAutofillDropdown.Row] {
+  static func rows(_ logins: [ApplePasswordsMatch.Login], bold: [NSRange] = [], notice: String?, connect: Bool = false) -> [WebKitAutofillDropdown.Row] {
     if connect { return connectRows }
     var rows: [WebKitAutofillDropdown.Row] = []
     if let notice { rows.append(.init(id: "", title: notice, detail: "", symbol: "exclamationmark.circle", enabled: false)) }
     if logins.isEmpty, notice == nil { rows.append(.init(id: "", title: noLogins, detail: "", symbol: "key", enabled: false, appIcon: passwordsApp, iconLabel: iconLabel)) }
-    rows += logins.map { login in
+    rows += logins.enumerated().map { index, login in
       let title = login.user.isEmpty ? "No username" : login.user
-      return .init(id: rowId(login), title: title, detail: login.insecure ? insecure : "", symbol: "key.fill", muted: login.user.isEmpty, appIcon: passwordsApp, iconLabel: iconLabel)
+      let run = bold.indices.contains(index) && bold[index].length > 0 && !login.user.isEmpty ? bold[index] : nil
+      return .init(
+        id: rowId(login), title: title, detail: login.insecure ? insecure : "", symbol: "key.fill", muted: login.user.isEmpty, appIcon: passwordsApp, iconLabel: iconLabel,
+        bold: run)
     }
     rows.append(.init(id: footerId, title: footerTitle, detail: "", symbol: "arrow.up.forward.app"))
     return rows
@@ -157,13 +160,14 @@ final class LoginList: NSObject {
 
   private func present(_ next: Shown, notice: String?) {
     guard let target = next.target else { return }
-    let logins = LoginListFilter.hits(next.logins.map(\.user), typed: next.field.typed).map { next.logins[$0.index] }
+    let hits = LoginListFilter.hits(next.logins.map(\.user), typed: next.field.typed)
+    let logins = hits.map { next.logins[$0.index] }
     let quiet = next.field.trigger == .typing && notice == nil && logins.isEmpty && !next.connect
     guard !quiet, let window = target.loginListWindow else { return close(target) }
     var current = next
     current.logins = logins
     shown = current
-    let rows = Self.rows(logins, notice: notice, connect: next.connect)
+    let rows = Self.rows(logins, bold: hits.map(\.bold), notice: notice, connect: next.connect)
     if LaunchConfig.shared.background { NSLog("[logins] Login list: %ld logins, %ld rows", logins.count, rows.count) }
     dropdown.show(rows, under: next.field.screenRect, in: window)
     sync()

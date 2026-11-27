@@ -11,6 +11,7 @@ final class WebKitAutofillDropdown: NSObject {
     var spokenLabel: String?
     var appIcon: String?
     var iconLabel: String?
+    var bold: NSRange?
   }
 
   private static let rowHeight: CGFloat = 36
@@ -207,9 +208,9 @@ private final class WebKitAutofillRowView: NSView {
       icon.setAccessibilityRole(.image)
       icon.setAccessibilityLabel(iconLabel)
     }
-    title.stringValue = row.title
     title.font = .menuFont(ofSize: enabled ? 13 : 12)
     title.lineBreakMode = .byTruncatingTail
+    title.attributedStringValue = Self.title(row, font: title.font ?? .menuFont(ofSize: 13))
     title.isHidden = !enabled
     detail.stringValue = row.detail
     detail.font = .menuFont(ofSize: 11)
@@ -223,6 +224,16 @@ private final class WebKitAutofillRowView: NSView {
   }
 
   required init?(coder: NSCoder) { nil }
+
+  private static func title(_ row: WebKitAutofillDropdown.Row, font: NSFont) -> NSAttributedString {
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.lineBreakMode = .byTruncatingTail
+    let text = NSMutableAttributedString(string: row.title, attributes: [.font: font, .paragraphStyle: paragraph])
+    if let bold = row.bold, NSMaxRange(bold) <= text.length {
+      text.addAttribute(.font, value: NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask), range: bold)
+    }
+    return text
+  }
 
   override var isFlipped: Bool { true }
 

@@ -104,7 +104,7 @@ function answered<T>(write: Promise<T>, outcome: string, what: string): Promise<
     if (error instanceof OpError) throw error;
     const reason = error instanceof Error ? error.message : String(error);
     if (reason === SYNC_WRITES_CLOSED) throw new OpError("refused", `${outcome}: ${reason}`);
-    throw new OpError("failed", `Ardia couldn't confirm ${what}: ${reason} It may still happen; sync.status shows whether it did.`);
+    throw new OpError("failed", `Ardia couldn't confirm ${what}; it may still happen, so check sync.status before trying again. (${reason})`);
   });
 }
 

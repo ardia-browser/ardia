@@ -1095,9 +1095,10 @@
       if (usernameFor(password) !== el || signUpForm(password.form || document)) return null;
       return { password, username: el };
     };
-    const passwordRules = (fields, el) => {
+    const passwordRules = (fields) => {
       const limits = fields.map((f) => f.maxLength).filter((n) => n > 0);
-      return { maxLength: limits.length ? Math.min(...limits) : 0, minLength: Math.max(0, ...fields.map((f) => f.minLength)), pattern: attribute(el, "pattern") };
+      const pattern = fields.map((f) => attribute(f, "pattern")).find((p) => p) || "";
+      return { maxLength: limits.length ? Math.min(...limits) : 0, minLength: Math.max(0, ...fields.map((f) => f.minLength)), pattern };
     };
     const seen = (el) => visible(el) && (typeof checkVisibility !== "function" || apply(checkVisibility, el, [{ opacityProperty: true, visibilityProperty: true }]));
     const asksForCode = (el) => {
@@ -1133,7 +1134,7 @@
       active = !active || active.el !== el ? { el, found, token: `${++tokens}` } : { ...active, found };
       const fresh = found.code ? [] : newPasswords(el);
       const field = found.code ? "code" : fresh.length ? "newPassword" : el.type === "password" ? "password" : found.password ? "username" : "identifier";
-      const rules = fresh.length ? passwordRules(fresh, el) : {};
+      const rules = fresh.length ? passwordRules(fresh) : {};
       const named = field === "username" || field === "identifier";
       send("loginField", { event, token: active.token, field, signIn: named, typed: named ? String(el.value || "").slice(0, TYPED_MAX) : "", ...rules, ...rect });
     };

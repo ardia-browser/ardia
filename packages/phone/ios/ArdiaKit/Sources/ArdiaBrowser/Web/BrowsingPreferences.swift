@@ -2,6 +2,11 @@ import Foundation
 import Observation
 import WebKit
 
+public enum PageScheme: String, Codable, Sendable {
+  case light
+  case dark
+}
+
 public enum NightShadeMode: String, Codable, Sendable, CaseIterable, Identifiable {
   case disabled
   case automatic
@@ -68,13 +73,22 @@ public final class BrowsingPreferences {
   static let keys = (
     nightShade: "browsing.nightShade", swipe: "browsing.swipeNavigation", appLinks: "browsing.appLinks",
     suggestions: "browsing.searchSuggestions", engine: "browsing.searchEngine", sites: "browsing.sites",
-    translateLanguage: "browsing.translateLanguage", translateConfirmed: "browsing.translateConfirmed"
+    translateLanguage: "browsing.translateLanguage", translateConfirmed: "browsing.translateConfirmed",
+    pageScheme: "browsing.pageScheme"
   )
   static let siteLimit = 500
 
   @ObservationIgnored private let defaults: UserDefaults
   @ObservationIgnored var onNightShadeChange: (@MainActor () -> Void)?
   @ObservationIgnored var onSwipeNavigationChange: (@MainActor () -> Void)?
+  @ObservationIgnored var onPageSchemeChange: (@MainActor () -> Void)?
+
+  public var pageScheme: PageScheme? {
+    didSet {
+      defaults.set(pageScheme?.rawValue, forKey: Self.keys.pageScheme)
+      if pageScheme != oldValue { onPageSchemeChange?() }
+    }
+  }
 
   public var nightShade: NightShadeMode {
     didSet {
@@ -124,6 +138,7 @@ public final class BrowsingPreferences {
   public init(defaults: UserDefaults, sitePermissions: SitePermissions? = nil) {
     self.defaults = defaults
     nightShade = defaults.string(forKey: Self.keys.nightShade).flatMap(NightShadeMode.init(rawValue:)) ?? .disabled
+    pageScheme = defaults.string(forKey: Self.keys.pageScheme).flatMap(PageScheme.init(rawValue:))
     swipeNavigation = defaults.string(forKey: Self.keys.swipe).flatMap(SwipeNavigationMode.init(rawValue:)) ?? .anywhere
     appLinks = defaults.string(forKey: Self.keys.appLinks).flatMap(AppLinkPreference.init(rawValue:)) ?? .ardia
     searchSuggestions = defaults.object(forKey: Self.keys.suggestions) as? Bool ?? true

@@ -2,14 +2,20 @@ import { visible } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
 import { DEVICE_TABS, PROFILE, deviceTabs, profileRecord, profileScope, recordId, type DeviceTabs } from "./records";
 import { deviceKindOf, deviceRecords, isCurrentDevice, offersTabs } from "./devices";
-import { remoteProfileRecord, sharedDataChain } from "./profileLinks";
+import { dormantLink, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { beingRemoved, sharesItsData } from "./profileRemoval";
 import { deviceBeingRemoved } from "./deviceRemoval";
 import { APP_SCOPE, type RemoteProfile, type RemoteTabs, type SyncDoc, type SyncedDevice, type SyncUi } from "./syncDoc";
 
-export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" | "remoteProfiles"> {
+export function firstSyncRunning(doc: SyncDoc): boolean {
   const app = doc.scopes[APP_SCOPE];
-  if (!app) return { devices: [], remoteTabs: {}, remoteProfiles: [] };
+  if (doc.joining || !app?.joined) return true;
+  return Object.entries(doc.profiles).some(([id, link]) => link.enabled && !dormantLink(doc, id) && doc.scopes[profileScope(link.syncId)]?.awaitRemote);
+}
+
+export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" | "remoteProfiles" | "firstSync"> {
+  const app = doc.scopes[APP_SCOPE];
+  if (!app) return { devices: [], remoteTabs: {}, remoteProfiles: [], firstSync: true };
   const lastSeen = new Map<string, number>();
   for (const scope of Object.values(doc.scopes)) {
     for (const [device, at] of Object.entries(scope.seen)) lastSeen.set(device, Math.max(at, lastSeen.get(device) ?? 0));
@@ -45,7 +51,7 @@ export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" |
         tabs: value.tabs.map((t) => ({ url: t.u, title: t.t })),
       }));
   }
-  const linked = new Set(Object.values(doc.profiles).map((l) => l.syncId));
+  const linked = new Set(Object.entries(doc.profiles).flatMap(([id, l]) => (dormantLink(doc, id) ? [] : [l.syncId])));
   const remoteProfiles = [...visible(app, PROFILE)]
     .filter(([k, v]) => !doc.joining && !linked.has(recordId(PROFILE, k)) && !beingRemoved(doc, recordId(PROFILE, k)) && profileRecord(v))
     .map(([k, v]): RemoteProfile => {
@@ -63,5 +69,5 @@ export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" |
         ...(sharesItsData(doc, syncId) ? { sharedByOthers: true as const } : {}),
       };
     });
-  return { devices, remoteTabs, remoteProfiles };
+  return { devices, remoteTabs, remoteProfiles, firstSync: firstSyncRunning(doc) };
 }

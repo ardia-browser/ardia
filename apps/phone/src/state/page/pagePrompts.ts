@@ -181,6 +181,8 @@ export const downloadingToast = (fileName: string) => (fileName ? `Downloading $
 
 export const downloadedToast = (fileName: string) => `Downloaded ${fileName}`;
 
+export const opensInInstaller = (os: string, fileName: string) => os === "android" && /\.apk$/i.test(fileName.trim());
+
 export const downloadFailedToast = (fileName: string) => (fileName ? `Couldn’t Download ${fileName}` : "Couldn’t Download File");
 
 export const stoppedPrivateDownloadsToast = (count: number) => (count === 1 ? "Stopped 1 Private Download" : `Stopped ${count} Private Downloads`);

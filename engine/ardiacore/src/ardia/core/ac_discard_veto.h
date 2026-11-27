@@ -19,6 +19,8 @@ enum class DiscardVeto {
   kCliHold = 103,
 };
 
+inline constexpr int kSleptPastSoftKeeps = 200;
+
 std::vector<DiscardVeto> DiscardVetoesFor(content::WebContents* contents);
 
 void NotePostedDocument(content::NavigationHandle* handle);

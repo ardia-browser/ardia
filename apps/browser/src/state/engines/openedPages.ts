@@ -15,6 +15,9 @@ let unwatch: (() => void) | null = null;
 function forgetReplacedPages() {
   unwatch ??= useBrowser.subscribeTo(["tabs"], (s) => {
     for (const [id, engine] of pageMade) if (!s.tabs[id] || tabEngine(s, id) !== engine) pageMade.delete(id);
+    if (pageMade.size || !unwatch) return;
+    unwatch();
+    unwatch = null;
   });
 }
 

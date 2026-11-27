@@ -29,6 +29,7 @@ class ArdiaVideoOverlayWindow : public VideoOverlayWindowViews {
   ~ArdiaVideoOverlayWindow() override;
 
   void ShowInactive() override;
+  void SetForcedTucking(bool tuck) override;
   void Hide() override;
   void SetMediaPosition(const media_session::MediaPosition& position) override;
   void OnNativeWidgetMove() override;

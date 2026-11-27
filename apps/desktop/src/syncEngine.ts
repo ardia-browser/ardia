@@ -4,6 +4,7 @@ import * as engine from "../../browser/src/state/sync/engine";
 import type { DataType, SendTarget, SyncUi } from "../../browser/src/state/sync/syncDoc";
 import type { FolderInfo, PhraseResult } from "../../browser/src/platform/sync";
 import { pickSyncFolder, type FolderMoveResult, type TurnOnFolder } from "../../browser/src/state/sync/folderMove";
+import type { FolderRecreateResult } from "../../browser/src/state/sync/folderRecovery";
 import { SyncNative } from "../../browser/src/platform/sync";
 import { ardiaHost, type ArdiaHost } from "./host";
 import { syncIdle, syncNowIfIdle, syncNowThrough } from "./syncForward";
@@ -36,6 +37,7 @@ import {
 import { deleteDocument, readDocument, refreshDocument, saveDocument } from "./shims/shellBase";
 import { useBrowser } from "../../browser/src/state/browser/store";
 import { engineProfile } from "../../browser/src/state/browser/model";
+import { forwardProfileDeletions, whenProfileGone } from "./profileRetirement";
 import {
   INTERACTIVE_CALL_TIMEOUT_MS,
   SYNC_CHANNEL,
@@ -170,8 +172,10 @@ function remoteFor(host: ArdiaHost): SyncRemote {
     removeRemoteProfile: (syncId: string) => engine.removeRemoteProfile(syncId),
     removeSyncedDevice: (deviceId: string) => engine.removeSyncedDevice(deviceId),
     adoptProfileTheme: (profileId: string) => engine.adoptProfileTheme(profileId),
+    retireProfile: (profileId: string) => whenProfileGone(useBrowser, profileId, () => engine.retireProfile(profileId)),
     useFolder: (path: string) => engine.setSyncFolder(path),
     moveFolder: (path: string) => engine.moveSyncFolder(path),
+    recreateFolder: () => engine.recreateSyncFolder(),
     sendTargets: (profileIds: string[]) => Object.fromEntries(profileIds.map((profileId) => [profileId, engine.sendTargets(profileId)])),
     sendTab: (tabId: string, deviceId: string) => engine.sendTab(tabId, deviceId),
   };
@@ -223,6 +227,7 @@ export function startLinuxSync(options: { host?: ArdiaHost; candidate: boolean; 
     present: (state) => presentSyncState(state, keyStore),
   });
   authority = started;
+  forwardProfileDeletions(leading, (profileId) => forward("retireProfile", [profileId]), (profileId) => engine.retireProfile(profileId));
   const stopTargets = useSync.subscribe(refreshSendTargets);
   if (typeof addEventListener === "function")
     addEventListener("pagehide", () => {
@@ -284,6 +289,11 @@ export async function moveSyncFolder(path: string): Promise<FolderMoveResult> {
   } catch (error) {
     return { error: "failed", message: error instanceof Error ? error.message : String(error) };
   }
+}
+
+export async function recreateSyncFolder(): Promise<FolderRecreateResult> {
+  if (leading()) return engine.recreateSyncFolder();
+  return forward<FolderRecreateResult>("recreateFolder", [], INTERACTIVE_CALL_TIMEOUT_MS).catch((error: unknown) => ({ error: "failed", message: error instanceof Error ? error.message : String(error) }));
 }
 
 const WRITES_CLOSED: readonly string[] = ["starting", "locked", "off", "unavailable"];
@@ -369,7 +379,7 @@ function refreshSendTargets() {
 
 export const onTabsReceived = engine.onTabsReceived;
 export const takeSnapshotWrites = engine.takeSnapshotWrites;
-export const takeOpenTabSyncCounts = engine.takeOpenTabSyncCounts;
+export const takeSyncDataCounts = engine.takeSyncDataCounts;
 export { whenSyncCore } from "./hostSync.ts";
 
 export function sendTargets(profileId: string): SendTarget[] {

@@ -3,6 +3,7 @@ import type { PageEngine, ProtectedMediaRequest } from "../../platform/tabs";
 import { confirm } from "../../platform/dialogs";
 import { create } from "zustand";
 import { storeTransaction, useBrowser } from "../browser/store";
+import { forgetCommittedDocumentIfGone, notePageCommit, notePageEnded, pageDocumentOf } from "./pageDocuments";
 import { pageOf, patchPage } from "../tabs/pageState";
 import {
   builtInEngine,
@@ -48,25 +49,9 @@ const store = () => useBrowser.getState();
 const declinedSites = new Set<string>();
 const toldInChromiumMode = new Set<string>();
 const webKitSites = new Map<string, string>();
-const committedDocuments = new Map<string, { id: number; at: number }>();
-let nextDocument = 0;
 const hostLabel = (site: string) => new URL(site).hostname.replace(/^www\./, "");
 
-export function notePageCommit(tabId: string, committedAt: number | undefined) {
-  if (typeof committedAt !== "number" || !(committedAt > 0)) return;
-  watchClosedTabs();
-  const last = committedDocuments.get(tabId);
-  if (last && committedAt === last.at) return;
-  committedDocuments.set(tabId, { id: ++nextDocument, at: committedAt });
-}
-
-export function notePageEnded(tabId: string) {
-  watchClosedTabs();
-  const last = committedDocuments.get(tabId);
-  committedDocuments.set(tabId, { id: ++nextDocument, at: last?.at ?? 0 });
-}
-
-export const pageDocumentOf = (tabId: string) => committedDocuments.get(tabId)?.id ?? 0;
+export { forgetCommittedDocumentIfGone, notePageCommit, notePageEnded, pageDocumentOf };
 
 export const useEngineModeSwitch = create<{ pending: EngineMode | null }>()(() => ({ pending: null }));
 
@@ -358,7 +343,6 @@ function watchClosedTabs() {
       visits.close(id);
     }
     for (const id of webKitSites.keys()) if (!s.tabs[id] || tabEngine(s, id) !== "webkit") webKitSites.delete(id);
-    for (const id of committedDocuments.keys()) if (!s.tabs[id]) committedDocuments.delete(id);
   });
 }
 

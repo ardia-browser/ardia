@@ -12,7 +12,7 @@ import type { BrowserTab } from "../../state/tabs/tabModels";
 import { currentTabs } from "../../state/tabs/store";
 import { findTab } from "../../state/tabs/tabsState";
 import { noteWarmDecoded, useWarmPicture, warmDecoded } from "../../state/tabs/warmPictures";
-import { TabFace, useTheme } from "../ui";
+import { TabFace, usePageTheme } from "../ui";
 import { tabSwitchCuts } from "../../state/browse/tabSwitch";
 import { pageReportsDrawn } from "@ardia/phone-native";
 import { PageLoadingPlaceholder } from "./PageLoadingPlaceholder";
@@ -51,7 +51,7 @@ function AtCardScale({ cardWidth, box, children }: { cardWidth: number | null; b
 
 export const PageCover = memo(function PageCover({ tab }: { tab: BrowserTab }) {
   countRender("PageCover");
-  const theme = useTheme();
+  const theme = usePageTheme();
   const tone = usePageTone(tab.id);
   const [frozen] = useState(() => launchArguments().loadFreeze !== null);
   const [picture] = useState(() => findTab(currentTabs(), tab.id)?.snapshotFileName ?? tab.snapshotFileName);
@@ -200,7 +200,7 @@ export const PageCover = memo(function PageCover({ tab }: { tab: BrowserTab }) {
 type DestinationFaceProps = { tab: BrowserTab; cover: string | undefined; statusHeight: number; statusOver: boolean };
 
 export const DestinationFace = memo(function DestinationFace({ tab, cover, statusHeight, statusOver }: DestinationFaceProps) {
-  const theme = useTheme();
+  const theme = usePageTheme();
   const tone = usePageTone(tab.id);
   const viewport = useWindowDimensions();
   const warm = useWarmPicture(tab, viewport, true);

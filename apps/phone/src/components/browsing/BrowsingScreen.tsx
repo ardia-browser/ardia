@@ -50,6 +50,7 @@ import {
   useDesign,
   usePageUnderBars,
   usePresence,
+  usePageTheme,
   useTheme,
   type MenuItem,
   useReduceMotion,
@@ -121,7 +122,7 @@ function PageBodyOwner({ kept }: { kept: boolean }) {
 function DeckAddresses() {
   const open = useTabs((s) => s.open);
   const privates = useTabs((s) => s.privates);
-  const theme = useTheme();
+  const theme = usePageTheme();
   const blank = usePageUnderBars() ? theme.pageSurface : theme.canvas;
   useEffect(() => {
     const table: Record<string, DestinationAddress> = {};
@@ -205,6 +206,7 @@ const BODY_UNDER_DECK = 100_000;
 const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
   countRender("BrowsingScreen");
   const theme = useTheme();
+  const pageTheme = usePageTheme();
   const design = useDesign();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -281,7 +283,7 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
   const failed = useNavigation(tab.id, (n) => n?.failure != null);
   const pageTone = failed ? null : shownTone(tone, tab.themeColorHex);
   const underBar = usePageUnderBars();
-  const blankPage = underBar ? theme.pageSurface : theme.canvas;
+  const blankPage = underBar ? pageTheme.pageSurface : pageTheme.canvas;
   const top = pageTone?.top ?? blankPage;
   const bottom = pageTone?.bottom ?? blankPage;
   const barKept = tabSwitchCuts() && design === "redesigned";
@@ -417,13 +419,13 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
   } : null);
 
   return (
-    <View style={[StyleSheet.absoluteFill, pulls ? null : { backgroundColor: theme.canvas }]} onLayout={() => pageLaidOut(tab.id)}>
+    <View style={[StyleSheet.absoluteFill, pulls ? null : { backgroundColor: pageTheme.canvas }]} onLayout={() => pageLaidOut(tab.id)}>
       <Shade shaded={menuOpen || dockedSearch || readerId === tab.id || pressing || tabsMenu}>
         <Animated.View testID="pageBody" style={[StyleSheet.absoluteFill, bodyStyle]} animatedProps={bodyProps} pointerEvents="box-none" collapsable={false}>
         <HeldFrostSource testID="pageFrostSource" name={PAGE_FROST} animatedProps={barKept ? sourceHold.held : undefined} style={StyleSheet.absoluteFill} pointerEvents="box-none" collapsable={false}>
         <PageStack pulledTab={pulls ? tab.id : null} barTop={barTop}>
         <PagerBackdrop pager={pager} />
-        <Animated.View style={[StyleSheet.absoluteFill, styles.outgoing, { backgroundColor: theme.canvas }, pager.outgoing]}>
+        <Animated.View style={[StyleSheet.absoluteFill, styles.outgoing, { backgroundColor: pageTheme.canvas }, pager.outgoing]}>
           {underBar ? null : <Animated.View testID="pageStatusStrip" style={[{ height: insets.top }, statusStyle]} />}
           <View testID="pageArea" style={[styles.page, { marginBottom: layout.pageBottom }]}>
             <PageSurface key={tab.id} tab={tab} toneBottom={layout.toneBottom} obscured={obscured} summaryBottomInset={summaryBottomInset} pinsSafeArea={pulls ? true : undefined} />
@@ -544,10 +546,12 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
           items={tabsMenuItems(barOrder)}
           place={duoStrip ? { bottom: barCenterFromBottom(insets.bottom, design) - DUO_BAR.button / 2, ...besideStrip(duoStrip, width, tabsLayout.menuWidth, space.l) } : { bottom: barHeight(insets.bottom, design) + space.xs, left: space.l, width: Math.min(tabsLayout.menuWidth, width - space.l * 2) }}
           frost={null}
+          glassSource={PAGE_FROST}
+          privately={tab.isPrivate}
           onDismiss={() => setTabsMenu(false)}
         />
       ) : null}
-      <PressMenu width={width} height={height} />
+      <PressMenu width={width} height={height} glassSource={PAGE_FROST} />
       {materialBarHosted && siteSettingsSheet ? null : pageMenu}
       {reader.shown ? <ReaderView tabId={reader.shown} closing={reader.closing} /> : null}
       <PageRequestHost tabId={tab.id} />

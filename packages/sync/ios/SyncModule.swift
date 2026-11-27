@@ -99,7 +99,11 @@ public class SyncModule: Module, SyncNative {
   func write(_ folder: String, _ scope: String, _ payload: String) throws -> String {
     try self.ensureLocalStateReadable()
     let vault = try self.vault(folder)
-    return try vault.write(scope: scope, payload: LegacyPasswords.restore(Data(payload.utf8), keys: vault.keys))
+    do {
+      return try vault.write(scope: scope, payload: LegacyPasswords.restore(Data(payload.utf8), keys: vault.keys))
+    } catch is SyncVault.ChainMissing {
+      throw Exception(name: "chainMissing", description: "This device's data is gone from the sync folder", code: "ERR_SYNC_CHAIN_MISSING")
+    }
   }
 
   func read(_ folder: String, _ scope: String, _ known: [String]) throws -> [String: Any] {

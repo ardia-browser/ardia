@@ -178,7 +178,7 @@ final class GlassFrames: NSObject {
       let capture = captures.object(forKey: entry.owner) ?? GlassCapture(warmed: warmedOwners.contains(entry.owner))
       captures.setObject(capture, forKey: entry.owner)
       if capture.page.onMainWork == nil {
-        capture.page.onMainWork = { [weak capture] ms in capture?.noteMainThread(ms: ms, now: CACurrentMediaTime(), captured: false) }
+        capture.page.onMainWork = { [weak capture] ms, privately, consentWindow in capture?.noteMainThread(ms: ms, now: CACurrentMediaTime(), captured: false, privately: privately, consentWindow: consentWindow) }
       }
       collect(capture, entry.space, entry.members, owner: entry.owner, blurs: &blurs, now: now, frameMs: frameMs)
       for surface in entry.members {
@@ -186,6 +186,9 @@ final class GlassFrames: NSObject {
       }
     }
     for surface in still { draws += surface.plan(with: nil, space: nil) }
+    let consent = UsageConsent.state()
+    let consentWindow = consent.sharing ? consent.generation : nil
+    for surface in live { surface.noteLensShown(now: now, consentWindow: consentWindow) }
     if PhoneTestBuild.isOn {
       for surface in live where surface.choice.path == .live {
         if surface.showsLens {
@@ -215,21 +218,27 @@ final class GlassFrames: NSObject {
 
   private func collect(_ capture: GlassCapture, _ space: UIView, _ members: [LiquidGlassSurface], owner: AnyObject, blurs: inout [GlassBlurJob], now: CFTimeInterval, frameMs: Double) {
     let started = CACurrentMediaTime()
+    let workPrivately = members.contains(where: \.privately)
+    let consent = UsageConsent.state()
+    let workWindow = consent.sharing ? consent.generation : nil
     var capturedNow = false
+    var landingMs = 0.0
+    var landingCounted = true
     var marks: [String] = []
     func mark(_ name: String) { if PhoneTestBuild.isOn { marks.append("\(name)=\(String(format: "%.1f", (CACurrentMediaTime() - started) * 1000))") } }
     defer {
       let spent = (CACurrentMediaTime() - started) * 1000
       if PhoneTestBuild.isOn, spent > frameMs { NSLog("PAGELAB look glass slow pass %@ %.1f ms: %@", members.map(\.label).joined(separator: ","), spent, marks.joined(separator: " ")) }
-      capture.noteMainThread(ms: spent, now: now, captured: capturedNow)
+      capture.noteMainThread(ms: spent, now: now, captured: capturedNow, privately: workPrivately, consentWindow: workWindow, uncountedMs: landingCounted ? 0 : landingMs)
       if capturedNow { warmedOwners.add(owner) }
       if PhoneTestBuild.isOn { stats.mainMs.append(spent) }
       if capture.overBudget(now: now, frameMs: frameMs), !isOverBudget(owner) {
+        let publiclyOverBudget = capture.overBudgetPublicly(now: now, frameMs: frameMs, consentWindow: workWindow)
         let box = cooldowns.object(forKey: owner) ?? GlassCooldownBox()
         box.cooldown.trip(now: CACurrentMediaTime())
         cooldowns.setObject(box, forKey: owner)
         capture.forgetSamples()
-        PendingCounts.add(PendingCounts.glassCapturesOverBudget)
+        if publiclyOverBudget, !members.contains(where: \.privately) { PendingCounts.add(PendingCounts.glassCapturesOverBudget, sampledWindow: workWindow) }
         NSLog("PAGELAB look glass capture over budget: %@ turns to clear glass for %.0f s (trip %d, last %.1f ms)", members.map(\.label).joined(separator: ","), LiquidGlassRules.budgetCooldown(trips: box.cooldown.trips), box.cooldown.trips, spent)
         members.forEach { $0.needsPath() }
       }
@@ -251,6 +260,10 @@ final class GlassFrames: NSObject {
     let web: WKWebView?
     if sourceWhole {
       web = method == .auto ? GlassSources.page(in: space) : nil
+      if capture.presence.note(present: web != nil), members.contains(where: \.overlay) {
+        capture.drop()
+        for surface in members where surface.overlay { surface.dropLensNow() }
+      }
       if method == .auto, web == nil, GlassSources.holdsPage(in: space) || members.contains(where: \.waitsForPage) {
         capture.drop()
         return
@@ -279,6 +292,7 @@ final class GlassFrames: NSObject {
     }
     if let web, page != nil, capture.page.observe(web, now: now) {
       capture.drop()
+      for surface in members where surface.overlay { surface.dropLensNow() }
       if capture.page.arrived { capture.motion.arrive(now: now) }
       capture.tone = GlassToneGate()
       NotificationCenter.default.post(name: GlassTone.changed, object: web)
@@ -294,7 +308,12 @@ final class GlassFrames: NSObject {
       if PhoneTestBuild.isOn { stats.heldFrames += 1 }
       return
     }
-    if let landed = capture.land(sigma: sigma, blurs: &blurs, now: now) { finish(landed, capture: capture, members: members, pieces: pieces.count, sourceWhole: sourceWhole, page: web != nil) }
+    let landingStarted = CACurrentMediaTime()
+    if let landed = capture.land(sigma: sigma, blurs: &blurs, now: now) {
+      landingMs = (CACurrentMediaTime() - landingStarted) * 1000
+      landingCounted = !capture.landedPrivately && capture.landedWindow == workWindow
+      finish(landed, capture: capture, members: members, pieces: pieces.count, sourceWhole: sourceWhole, page: web != nil)
+    }
     if capture.dropsPageCapture(shiftable: shiftable) {
       capture.drop()
       if PhoneTestBuild.isOn { NSLog("PAGELAB look glass %@ page capture dropped: the page no longer shifts under it", members.map(\.label).joined(separator: ",")) }
@@ -303,8 +322,9 @@ final class GlassFrames: NSObject {
     mark("survey")
     if let web, let page {
       let under = strip.applying(page.transform.inverted())
-      capture.page.request(web, around: under, pixelsPerPoint: pixelsPerPoint, now: now)
-      if let luminance = capture.page.luminance(under: under, of: web), capture.tone.observe(luminance: luminance, now: now), let dark = capture.tone.dark {
+      capture.page.request(web, around: under, pixelsPerPoint: pixelsPerPoint, now: now, privately: workPrivately, consentWindow: workWindow)
+      let toneStrip = GlassFrames.toneStrip(of: members, in: space)
+      if !toneStrip.isNull, let luminance = capture.page.luminance(under: toneStrip.applying(page.transform.inverted()), of: web), capture.tone.observe(luminance: luminance, now: now), let dark = capture.tone.dark {
         NotificationCenter.default.post(name: GlassTone.changed, object: web, userInfo: [GlassTone.darkKey: dark])
         if PhoneTestBuild.isOn {
           stats.toneFlips += 1
@@ -330,7 +350,7 @@ final class GlassFrames: NSObject {
     if let pageOnly {
       let outcome: GlassCapture.Outcome
       if GlassLaunch.offMain {
-        outcome = capture.start(rect: wanted, pixelsPerPoint: pixelsPerPoint, now: now, steps: pageOnly.steps, follow: web)
+        outcome = capture.start(rect: wanted, pixelsPerPoint: pixelsPerPoint, now: now, steps: pageOnly.steps, follow: web, privately: workPrivately, consentWindow: workWindow)
       } else {
         outcome = capture.capture(rect: wanted, pixelsPerPoint: pixelsPerPoint, sigma: sigma, blurs: &blurs, now: now) { context in
           pageOnly.steps.draw(in: context)
@@ -350,7 +370,7 @@ final class GlassFrames: NSObject {
       if let steps = made {
         mark("copy\(steps.layers)")
         if GlassLaunch.copyProbe { GlassCopyProbe.arm(capture, pieces: pieces, rect: wanted, pixelsPerPoint: pixelsPerPoint) }
-        let outcome = capture.start(rect: wanted, pixelsPerPoint: pixelsPerPoint, now: now, steps: steps, follow: shiftable ? web : nil)
+        let outcome = capture.start(rect: wanted, pixelsPerPoint: pixelsPerPoint, now: now, steps: steps, follow: shiftable ? web : nil, privately: workPrivately, consentWindow: workWindow)
         if outcome == .started { capturedNow = true }
         if outcome == .failed { finish(.failed, capture: capture, members: members, pieces: pieces.count, sourceWhole: sourceWhole, page: web != nil) }
         return
@@ -371,6 +391,10 @@ final class GlassFrames: NSObject {
     if outcome == .captured || outcome == .failed { capturedNow = true }
     if outcome == .captured { capture.follow(shiftable ? web : nil) }
     finish(outcome, capture: capture, members: members, pieces: pieces.count, sourceWhole: sourceWhole, page: web != nil)
+  }
+
+  static func toneStrip(of members: [LiquidGlassSurface], in space: UIView) -> CGRect {
+    members.filter { !$0.overlay }.compactMap { member in member.region(in: space).map { $0.insetBy(dx: -member.marginPoints, dy: -member.marginPoints) } }.reduce(CGRect.null) { $0.union($1) }.intersection(space.bounds)
   }
 
   private func finish(_ outcome: GlassCapture.Outcome, capture: GlassCapture, members: [LiquidGlassSurface], pieces: Int, sourceWhole: Bool, page: Bool) {

@@ -7,12 +7,13 @@ import { idleMacTabs, macTabIndex, mergeSyncedHistory, syncedBookmarks } from ".
 import { selectedProfile, syncData } from "../sync/store";
 import { idleRows, remoteSuggestions, searchEngineRevision, setSearchEngine, setSources, setSyncedSearch, suggest, withCurrentEngine, type SuggestContext, type TrayRow } from "./omnibox";
 import { withPasteRow, type PasteOffer } from "./pasteRow";
+import { carriedValues, createRemoteSuggester, type RemoteAnswer } from "./remoteSuggester";
 import { clipboardOffer } from "../../platform/system";
 import { settled } from "../pages/store";
-import { buildSources, recentSearches, sourcesKey } from "./sources";
+import { buildSources, recentSearches, searchKey, searchesByQuery, sourcesKey } from "./sources";
 import { spaceTabs } from "../tabs/tabsState";
 import { browseForMeOffered } from "../browseForMe/offer";
-import { markSearchClosing, markSearchPhase, markSearchPressed } from "./searchTiming";
+import { markSearchClosing, markSearchLocalRows, markSearchPhase, markSearchPressed, markSearchRemoteRows, markSearchTyped } from "./searchTiming";
 import { countUsage } from "../telemetry/telemetry";
 
 export type SearchOrigin = "home" | "start" | "page";
@@ -53,8 +54,9 @@ export const useSearch = create<SearchState>()(() => ({
   editsPage: false,
 }));
 
-let remote: { text: string; values: string[] } = { text: "", values: [] };
-let inFlight: AbortController | null = null;
+const suggester = createRemoteSuggester(remoteSuggestions);
+const remoteScope = () => `${useTabs.getState().incognito}:${searchEngineRevision()}`;
+const carriedRemote = (text: string) => carriedValues(suggester.shown(remoteScope()), text);
 let fedSources = "";
 let context: SuggestContext = { currentUrl: null, currentTabId: null };
 let paste: PasteOffer | null = null;
@@ -86,7 +88,7 @@ function idleRowsNow(): TrayRow[] {
   const scope = idleScope();
   const made = idleMade.get(scope);
   if (made && made.revision === idleRevision()) return made.rows;
-  const rows = useTabs.getState().incognito ? [] : idleRows(recentSearches(history().summary()), idleMacTabs(selectedProfile(), syncData().view.devices));
+  const rows = useTabs.getState().incognito ? [] : markPastSearches(idleRows(recentSearches(history().summary()), idleMacTabs(selectedProfile(), syncData().view.devices)));
   idleMade.delete(scope);
   idleMade.set(scope, { revision: idleRevision(), engine: searchEngineRevision(), rows });
   if (idleMade.size > IDLE_SCOPES_KEPT) idleMade.delete(idleMade.keys().next().value!);
@@ -143,7 +145,7 @@ function refreshAfterOpening(session: number) {
       return;
     }
     if (sourcesStale) feedSourcesQuietly();
-    if (shown.text.trim()) useSearch.setState({ rows: suggestionsFor(shown.text, remote.text && shown.text.startsWith(remote.text) ? remote.values : []).rows });
+    if (shown.text.trim()) useSearch.setState({ rows: suggestionsFor(shown.text, carriedRemote(shown.text)).rows });
     else useSearch.setState({ rows: rowsFor(shown.text, []) });
   };
   refreshFallback = setTimeout(() => searchPresented(session), REFRESH_WITHOUT_PRESENTATION_MS);
@@ -167,14 +169,16 @@ export function feedSources() {
 
 function suggestionsFor(text: string, remoteValues: readonly string[]): { rows: TrayRow[]; completion: string } {
   if (!text.trim()) return { rows: rowsFor(text, remoteValues), completion: "" };
-  return suggest(text, remoteValues, context, macTabIndex(selectedProfile(), syncData().view.devices), browseForMeOffered());
+  const suggested = suggest(text, remoteValues, context, macTabIndex(selectedProfile(), syncData().view.devices), browseForMeOffered());
+  return { ...suggested, rows: markPastSearches(suggested.rows) };
 }
 
 function rowsFor(text: string, remoteValues: readonly string[]): TrayRow[] {
-  const profile = selectedProfile();
-  if (text.trim()) return suggest(text, remoteValues, context, macTabIndex(profile, syncData().view.devices), browseForMeOffered()).rows;
+  if (text.trim()) return suggestionsFor(text, remoteValues).rows;
   return withPasteRow(idleRowsNow(), text, paste);
 }
+
+const markPastSearches = (rows: TrayRow[]): TrayRow[] => rows.map((row) => (row.kind === "query" && canForgetSearch(row.query) ? { ...row, past: true } : row));
 
 function offerPaste(session: number) {
   void settled(() => clipboardOffer(), null).then((offer) => {
@@ -205,6 +209,28 @@ export function endPasteRead(session: number, pasted: boolean): boolean {
 
 export const refreshSearchRows = () => useSearch.setState((state) => ({ rows: rowsFor(state.text, []) }));
 
+let searched: { revision: number; byQuery: Map<string, string[]> } | null = null;
+
+function searchedUrls(query: string): readonly string[] {
+  const revision = history().revision();
+  if (searched?.revision !== revision) searched = { revision, byQuery: searchesByQuery(history().summary()) };
+  return searched.byQuery.get(query.trim().toLowerCase()) ?? [];
+}
+
+export const canForgetSearch = (query: string) => searchedUrls(query).length > 0;
+
+export function forgetSearch(query: string) {
+  const forgotten = query.trim().toLowerCase();
+  if (!forgotten || !history().forget((url) => searchKey(url) === forgotten)) return;
+  if (!useTabs.getState().incognito) countUsage("searches_forgotten");
+  feedSources();
+  const { text } = useSearch.getState();
+  if (!text.trim()) return useSearch.setState({ rows: rowsFor(text, []) });
+  suggester.forget((value) => value.trim().toLowerCase() === forgotten);
+  const suggested = suggestionsFor(text, carriedRemote(text));
+  useSearch.setState({ rows: suggested.rows, completion: suggested.completion, completedFor: text });
+}
+
 export function applySearchEngine() {
   const { status, view } = syncData();
   if (status.isEnabled && view.search) setSyncedSearch(view.search);
@@ -220,10 +246,9 @@ export function whenSearchPresents(hook: ((presenting: SearchPresenting) => stri
 }
 
 export function presentSearch(origin: SearchOrigin, text = "", incognitoOnCancel: boolean | null = null, page: SuggestContext | null = null, arrival: TrayArrival = "rises") {
-  markSearchPressed();
+  markSearchPressed(Date.now(), useTabs.getState().incognito);
   beginInteraction("tray open", INTERACTION_WINDOW_MS.trayOpen);
   dropQueuedDraft();
-  remote = { text: "", values: [] };
   context = page ?? { currentUrl: null, currentTabId: null };
   paste = null;
   const editsPage = page?.currentUrl != null;
@@ -259,15 +284,12 @@ export function dismissSearch(ending: SearchEnding = "cancelled") {
   dropQueuedDraft();
 }
 
-const REMOTE_DELAY_MS = 150;
-
-type Draft = { text: string; session: number; incognito: boolean };
+type Draft = { text: string; session: number; incognito: boolean; typedAt: number };
 
 let typed: Draft | null = null;
 let frame: ReturnType<typeof requestAnimationFrame> | null = null;
-let remoteTimer: ReturnType<typeof setTimeout> | null = null;
 
-const draftNow = (text: string): Draft => ({ text, session: useSearch.getState().session, incognito: useTabs.getState().incognito });
+const draftNow = (text: string, typedAt: number = Date.now()): Draft => ({ text, session: useSearch.getState().session, incognito: useTabs.getState().incognito, typedAt });
 
 const ownsSearch = (draft: Draft) => {
   const state = useSearch.getState();
@@ -278,43 +300,55 @@ function dropQueuedDraft() {
   if (frame !== null) cancelAnimationFrame(frame);
   frame = null;
   typed = null;
-  if (remoteTimer !== null) clearTimeout(remoteTimer);
-  remoteTimer = null;
-  inFlight?.abort();
+  suggester.reset();
 }
 
-function showRows(text: string) {
-  const draft = draftNow(text);
+function showRows(text: string, typedAt: number = Date.now()) {
+  const draft = draftNow(text, typedAt);
+  if (text.trim()) markSearchTyped(typedAt, draft.incognito);
   catchUpSources();
-  const carried = remote.text && text.startsWith(remote.text) ? remote.values : [];
-  const suggested = suggestionsFor(text, carried);
+  const suggested = suggestionsFor(text, carriedRemote(text));
   useSearch.setState({ text, rows: suggested.rows, completion: suggested.completion, completedFor: text });
-  inFlight?.abort();
-  if (remoteTimer) clearTimeout(remoteTimer);
-  if (!text.trim() || !currentPreferences().searchSuggestions) return;
-  remoteTimer = setTimeout(() => {
-    remoteTimer = null;
-    if (!ownsSearch(draft)) return;
-    const controller = new AbortController();
-    inFlight = controller;
-    void remoteSuggestions(text, controller.signal).then((outcome) => {
-      if (controller.signal.aborted || !ownsSearch(draft) || useSearch.getState().text !== text) return;
-      remote = { text, values: outcome.values };
-      const merged = suggestionsFor(text, outcome.values);
-      useSearch.setState({ rows: merged.rows, completion: merged.completion, completedFor: text });
-    });
-  }, REMOTE_DELAY_MS);
+  const scope = remoteScope();
+  if (!text.trim() || !currentPreferences().searchSuggestions) {
+    suggester.prune(scope, "");
+    if (text.trim()) markSearchLocalRows(typedAt);
+    return;
+  }
+  markSearchLocalRows(typedAt);
+  const sentAt = Date.now();
+  suggester.ask({
+    scope,
+    text,
+    remembers: !draft.incognito,
+    current: () => (ownsSearch(draft) && remoteScope() === scope ? useSearch.getState().text : null),
+    show: (answer: RemoteAnswer, cached: boolean) => {
+      const now = useSearch.getState().text;
+      const merged = suggestionsFor(now, carriedValues(answer, now));
+      useSearch.setState({ rows: merged.rows, completion: merged.completion, completedFor: now });
+      if (answer.values.length) markSearchRemoteRows(typedAt, sentAt, cached, draft.incognito);
+    },
+  });
 }
 
 export function typeSearch(text: string) {
-  typed = draftNow(text);
+  typed = draftNow(text, typed?.typedAt ?? Date.now());
   if (frame !== null) return;
   frame = requestAnimationFrame(() => {
     frame = null;
     const next = typed;
     typed = null;
-    if (next !== null && ownsSearch(next)) showRows(next.text);
+    if (next !== null && ownsSearch(next)) showRows(next.text, next.typedAt);
   });
+}
+
+export function searchFieldText(): string {
+  const { text, session } = useSearch.getState();
+  return typed !== null && typed.session === session ? typed.text : text;
+}
+
+export function settleSearchAsSubmitted() {
+  if (!useSearch.getState().open) useSearch.setState({ ending: "submitted" });
 }
 
 export function setSearchText(text: string) {

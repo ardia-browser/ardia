@@ -23,9 +23,9 @@ public struct LiquidGlassParams: Equatable, Sendable {
     lightAngle: -Double.pi / 4,
     specularWidth: 1.25,
     specularStrength: 1,
-    oppositeStrength: 0.7,
+    oppositeStrength: 0.5,
     specularFalloff: 0.6,
-    specularSharpness: 2,
+    specularSharpness: 6,
     specularOpacity: 0.5
   )
 }
@@ -188,12 +188,36 @@ public enum LiquidGlassRules {
     public var at: TimeInterval
     public var ms: Double
     public var cold: Bool
+    public var uncountedMs: Double
+    public var consentWindow: Int?
 
-    public init(at: TimeInterval, ms: Double, cold: Bool = false) {
+    public init(at: TimeInterval, ms: Double, cold: Bool = false, privately: Bool = false, uncountedMs: Double = 0, consentWindow: Int? = 0) {
       self.at = at
       self.ms = ms
       self.cold = cold
+      self.uncountedMs = privately ? ms : min(max(uncountedMs, 0), ms)
+      self.consentWindow = consentWindow
     }
+
+    public var publicMs: Double { ms - uncountedMs }
+  }
+
+  public static func overBudgetPublicly(_ samples: [CaptureSample], now: TimeInterval, frameMs: Double, strikes: Int = 1, consentWindow: Int? = 0) -> Bool {
+    guard consentWindow != nil else { return false }
+    let counted = samples.compactMap { sample in sample.consentWindow == consentWindow && sample.publicMs > 0 ? CaptureSample(at: sample.at, ms: sample.publicMs, cold: sample.cold) : nil }
+    return overBudget(counted, now: now, frameMs: frameMs, strikes: strikes)
+  }
+
+  public struct ShownPrivacy: Equatable, Sendable {
+    public private(set) var privately = false
+
+    public init() {}
+
+    public mutating func shown(privately: Bool) { self.privately = privately }
+
+    public mutating func seen(privately: Bool) { if privately { self.privately = true } }
+
+    public func countsWhenHidden(privatelyNow: Bool) -> Bool { !privately && !privatelyNow }
   }
 
   public static func recentSamples(_ samples: [CaptureSample], now: TimeInterval) -> [CaptureSample] {
@@ -292,6 +316,68 @@ public enum LiquidGlassRules {
   }
 
   public static func acceptsCapture(_ path: Path) -> Bool { path == .live }
+
+  public static let lensWithheldAfter: TimeInterval = 3
+  public static let lensWithheldGap: TimeInterval = 0.25
+
+  public static func countsGlass(privately: Bool, consentWindow: Int?) -> Bool { !privately && consentWindow != nil }
+
+  public static func countsIn(sampledWindow: Int?, currentWindow: Int?) -> Bool { sampledWindow != nil && sampledWindow == currentWindow }
+
+  public struct PagePresence: Equatable, Sendable {
+    public private(set) var present = false
+
+    public init() {}
+
+    public mutating func note(present: Bool) -> Bool {
+      defer { self.present = present }
+      return self.present && !present
+    }
+  }
+
+  public struct LensWithheld: Equatable, Sendable {
+    public private(set) var since: TimeInterval?
+    public private(set) var counted = false
+    private var notedAt = -Double.infinity
+    private var privately = false
+    private var consentWindow: Int?
+
+    public init() {}
+
+    public mutating func lensShown() {
+      since = nil
+      counted = false
+    }
+
+    public mutating func note(path: Path, showsLens: Bool, now: TimeInterval, privately: Bool = false, consentWindow: Int? = 0) -> Bool {
+      defer { notedAt = now }
+      if privately != self.privately || consentWindow != self.consentWindow {
+        self.privately = privately
+        self.consentWindow = consentWindow
+        lensShown()
+      }
+      guard path == .live, !showsLens, LiquidGlassRules.countsGlass(privately: privately, consentWindow: consentWindow) else {
+        lensShown()
+        return false
+      }
+      if since == nil || now - notedAt > lensWithheldGap {
+        since = now
+        counted = false
+      }
+      guard !counted, let since, now - since >= lensWithheldAfter else { return false }
+      counted = true
+      return true
+    }
+  }
+
+  public enum ShadowFade: Equatable, Sendable {
+    case settle
+    case fade(from: Double, to: Double)
+  }
+
+  public static func shadowFade(from: Double, to: Double, animated: Bool) -> ShadowFade {
+    animated && from != to ? .fade(from: from, to: to) : .settle
+  }
 
   public static let captureRetryBase: TimeInterval = 0.05
   public static let captureRetryLongest: TimeInterval = 1

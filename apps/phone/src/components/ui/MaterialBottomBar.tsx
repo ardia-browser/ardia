@@ -42,6 +42,7 @@ type OverviewProps = {
   incognito: boolean;
   privateCount?: number;
   onCloseIncognito?: () => void;
+  onCloseAll?: () => void;
   canReopen: boolean;
   menusShown: boolean;
   onMenu: (open: boolean) => void;
@@ -167,7 +168,7 @@ export function MaterialAddressContent({ address, scheme, testID }: { address: R
   );
 }
 
-function OverviewControls({ scheme, search, incognito, privateCount = 0, onCloseIncognito, canReopen, menusShown, onMenu }: OverviewProps & { scheme: MaterialScheme }) {
+function OverviewControls({ scheme, search, incognito, privateCount = 0, onCloseIncognito, onCloseAll, canReopen, menusShown, onMenu }: OverviewProps & { scheme: MaterialScheme }) {
   const { input, text, change, focus, blur } = search;
   const fabLabel = incognito ? actionWords.newIncognitoTab : actionWords.newTab;
   const closesIncognito = menusShown && privateCount > 0 && onCloseIncognito !== undefined;
@@ -225,7 +226,7 @@ function OverviewControls({ scheme, search, incognito, privateCount = 0, onClose
         {text ? <MaterialBarIconButton testID="materialDeckSearchClear" icon="xmark" label={actionWords.clearText} scheme={scheme} onPress={() => change("")} /> : null}
       </Pressable>
       <MenuTrigger
-        items={plusMenuItems(incognito, canReopen)}
+        items={plusMenuItems(incognito, canReopen, onCloseAll)}
         trigger="longPress"
         frost={null}
         privately={incognito}

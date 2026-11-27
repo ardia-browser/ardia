@@ -111,10 +111,10 @@ BOOL TracingPictureInPicture() {
 
 - (void)notePictureInPictureSight:(NSString *)what {
   ardia_host::NoteFocusChange(
-      [NSString stringWithFormat:@"pip %@ seenByUser=%d seenNow=%d visible=%d appActive=%d key=%d autoActive=%d inPip=%d", what,
+      [NSString stringWithFormat:@"pip %@ seenByUser=%d seenNow=%d visible=%d appActive=%d key=%d autoActive=%d inPip=%d held=%d", what,
                                  _reports.seenByUser, self.seenByUser, _visible, NSApp.isActive,
                                  self.window.isKeyWindow, _reports.autoPictureInPictureActive,
-                                 _reports.inPictureInPicture],
+                                 _reports.inPictureInPicture, _reports.autoPictureInPictureHold.held],
       self.window);
 }
 
@@ -194,6 +194,7 @@ BOOL TracingPictureInPicture() {
 }
 
 - (BOOL)playsForAutoPictureInPicture {
+  if (_reports.autoPictureInPictureHold.held) return NO;
   NSDictionary *np = _reports.nowPlaying.selected;
   return _autoPictureInPicture && ([np[@"playbackState"] isEqual:@"playing"] || _reports.capturing);
 }
@@ -268,6 +269,15 @@ BOOL TracingPictureInPicture() {
   [_tab exitPictureInPicture];
 }
 
+- (void)holdAutoPictureInPictureAfterEnd:(BOOL)appAsked {
+  if (!_reports.autoPictureInPictureHold.ended(appAsked, self.seenByUser)) return;
+  [self notePictureInPictureSight:@"held until back"];
+  [self traceAutoPictureInPicture:@"app: closed while the user was away, held until they are back on the tab"];
+  [self emit:@"autoPictureInPictureKept" payload:[ArdiaConsentStamp.begin onto:@{@"reason" : @"closedWhileAway"}]];
+  __weak ArdiaWebView *weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf autoPictureInPictureInputsChanged]; });
+}
+
 - (void)tab:(ArdiaCoreTab *)tab didChangePictureInPicture:(NSDictionary<NSString *, id> *)state {
   ArdiaConsentStamp *stamp = _pictureInPictureRequestStamp ?: ArdiaConsentStamp.begin;
   if ([state[@"active"] boolValue]) _pictureInPictureRequestStamp = nil;
@@ -286,6 +296,7 @@ BOOL TracingPictureInPicture() {
     payload[@"closedBy"] = state[@"closedBy"];
     payload[@"auto"] = @([state[@"auto"] boolValue]);
   }
+  if (!active && _reports.inPictureInPicture) [self holdAutoPictureInPictureAfterEnd:[state[@"closedBy"] isEqual:@"app"]];
   if (![state[@"kind"] isEqual:@"document"]) {
     if (!active && !_reports.inPictureInPicture) return;
     _reports.inPictureInPicture = active;

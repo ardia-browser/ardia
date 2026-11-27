@@ -33,7 +33,7 @@ export type LookDynamicColor = { dynamic: { light: string; dark: string } };
 
 export type ClassicChrome = { fill?: string | LookDynamicColor; edgeWidth?: number; edge?: string | LookDynamicColor; shadowRadius?: number; shadowY?: number; shadow?: string | LookDynamicColor };
 
-export type GlassProps = FrostProps & { shape?: GlassShape; tint?: string; interactive?: boolean; surface?: GlassSurface; tinted?: boolean; barShadow?: boolean; classicChrome?: ClassicChrome; shown?: boolean; shownMs?: number; sampleHold?: string | null };
+export type GlassProps = FrostProps & { shape?: GlassShape; tint?: string; interactive?: boolean; surface?: GlassSurface; tinted?: boolean; barShadow?: boolean; classicChrome?: ClassicChrome; shown?: boolean; shownMs?: number; sampleHold?: string | null; privately?: boolean; overlay?: boolean };
 
 export type NativeGlassRender = "lens" | "frost" | "clear" | "solid";
 
@@ -148,7 +148,7 @@ const NativeGlass = look<GlassProps>("Glass");
 
 export function Glass(props: GlassProps) {
   if (hasNativeGlass) return createElement(NativeGlass, props);
-  const { shape, tint, interactive, surface, tinted, barShadow, shown, shownMs, sampleHold, ...frost } = props;
+  const { shape, tint, interactive, surface, tinted, barShadow, shown, shownMs, sampleHold, privately, overlay, ...frost } = props;
   const cornerRadius = frost.cornerRadius ?? (shape === "rounded" ? 0 : 999);
   const classic = surface === "classic" || frost.reduceTransparency === true;
   return createElement(Frost, { ...frost, variant: frost.variant ?? "glass", cornerRadius, reduceTransparency: classic ? true : frost.reduceTransparency });

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSystemBars } from "../../state/app/systemBars";
 import { closeReader, readableContent, setReaderSerif, setReaderStep, setReaderTheme, type ReadableContent } from "../../state/page/actions";
 import { useReaderSettings } from "../../state/page/hooks";
+import { useTab } from "../../state/tabs/hooks";
 import { useDarkScheme } from "../../state/settings/appearance";
 import {
   clampReaderStep,
@@ -47,6 +48,7 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
   const { ref: overlayRef, ...overlay } = useModalOverlay({ open: true, closing, onDismiss: closeReader, focus: material ? undefined : done, returnFocusTo: pageMenuOpener });
   const donePress = usePressStyle("text");
   const appearancePress = usePressStyle("icon");
+  const readsPrivately = useTab(tabId)?.isPrivate === true;
   const dark = useDarkScheme();
   const settings = useReaderSettings();
   const shown = readerTheme(settings.theme, dark);
@@ -108,7 +110,7 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
           <MenuTrigger items={items} trigger="tap" fixedOrder frost={null} dark={shown === "dark"} previewRadius={readerLayout.chromeButton / 2} place={{ top: insets.top + readerLayout.chromeBand, left: readerLayout.chromeSide }}>
             {({ onPress }) => (
               <Pressable accessibilityRole="button" accessibilityLabel="Text Appearance" onPress={onPress} style={appearancePress}>
-                <ChromeSurface shape="circle" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} style={styles.circle}>
+                <ChromeSurface shape="circle" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} privately={readsPrivately} style={styles.circle}>
                   <TextSizeGlyph size={readerGlyphs.textSize} color={ink.ink} />
                 </ChromeSurface>
               </Pressable>
@@ -117,7 +119,7 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
         ) : null}
         <View style={styles.fill} />
         <Pressable ref={done} testID="readerDone" accessibilityRole="button" accessibilityLabel={dismissWords.done} onPress={closeReader} style={donePress}>
-          <ChromeSurface shape="capsule" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} style={styles.capsule}>
+          <ChromeSurface shape="capsule" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} privately={readsPrivately} style={styles.capsule}>
             <Text style={[font.body, styles.bold, { color: ink.ink }]}>{dismissWords.done}</Text>
           </ChromeSurface>
         </Pressable>

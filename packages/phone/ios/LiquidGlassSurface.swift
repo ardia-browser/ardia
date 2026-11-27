@@ -14,6 +14,10 @@ final class LiquidGlassSurface: UIView {
   var presentedRadius: (() -> CGFloat?)?
   var followsPresentation = false
   var label: String = "-"
+  var privately = false {
+    didSet { if lensOn == true { shownPrivacy.seen(privately: privately) } }
+  }
+  var overlay = false
 
   private let fillLayer = CALayer()
   private let clearLayer = CALayer()
@@ -41,6 +45,8 @@ final class LiquidGlassSurface: UIView {
   private var lensWanted = false
   private var lensOn: Bool?
   private var lastBridge: CFTimeInterval = 0
+  private var withheld = LiquidGlassRules.LensWithheld()
+  private var shownPrivacy = LiquidGlassRules.ShownPrivacy()
   private var toneDark: Bool?
   private var toneChangedAt: CFTimeInterval = -.infinity
 
@@ -288,10 +294,21 @@ final class LiquidGlassSurface: UIView {
     setLens(on: on, fades: glassy)
   }
 
+  func noteLensShown(now: CFTimeInterval, consentWindow: Int?) {
+    if withheld.note(path: choice.path, showsLens: showsLens, now: now, privately: privately, consentWindow: consentWindow) {
+      PendingCounts.add(PendingCounts.glassLensWithheld, sampledWindow: consentWindow)
+      if PhoneTestBuild.isOn { NSLog("PAGELAB look glass %@ lens withheld over %.1f s: %@", label, LiquidGlassRules.lensWithheldAfter, clearReason) }
+    }
+  }
+
   private func setLens(on: Bool, fades: Bool) {
     guard on != lensOn else { return }
     let now = CACurrentMediaTime()
-    if lensOn == true, !on, choice.path == .live, waitsForPage, now - lastBridge >= 1 {
+    if on {
+      withheld.lensShown()
+      shownPrivacy.shown(privately: privately)
+    }
+    if lensOn == true, !on, choice.path == .live, waitsForPage, shownPrivacy.countsWhenHidden(privatelyNow: privately), now - lastBridge >= 1 {
       lastBridge = now
       PendingCounts.add(PendingCounts.glassLensBridged)
     }
@@ -311,6 +328,17 @@ final class LiquidGlassSurface: UIView {
     } else {
       lensLayer.removeAnimation(forKey: "fade")
     }
+    CATransaction.commit()
+  }
+
+  func dropLensNow() {
+    lens.forget()
+    lensWanted = false
+    lensOn = false
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    lensLayer.removeAnimation(forKey: "fade")
+    lensLayer.opacity = 0
     CATransaction.commit()
   }
 
@@ -481,7 +509,7 @@ final class GlassTarget {
   }
 
   func forget() {
-    guard drawn != nil || drawnLive || needsRetry else { return }
+    guard drawn != nil || drawnLive || needsRetry || pending > 0 else { return }
     drawn = nil
     drawnLive = false
     needsRetry = false

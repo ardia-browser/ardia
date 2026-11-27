@@ -14,7 +14,7 @@ import { dedupeByLanding, displayHost, landingKey } from "../../lib/url.ts";
 import type { PasteOffer } from "./pasteRow.ts";
 
 export type TrayRow =
-  | { key: string; kind: "query"; title: string; url: string; query: string; detail?: string | null }
+  | { key: string; kind: "query"; title: string; url: string; query: string; detail?: string | null; past?: boolean }
   | { key: string; kind: "page"; title: string; detail: string; url: string; favicon: string | null; tabId: string | null; switchesTab: boolean; fromMac?: string | null }
   | { key: string; kind: "calc"; title: string; detail: string; url: string; value: string }
   | { key: string; kind: "paste"; title: string; detail: string; url: string; offer: PasteOffer }
@@ -169,7 +169,15 @@ export const setSyncedSearch = (search: { engineId: string; customURL: string | 
 
 const REMOTE_TIMEOUT_MS = 4000;
 
-export type RemoteOutcome = { values: string[]; status: "ok" | "none" | "http" | "failed" | "timeout" };
+export type RemoteOutcome = { values: string[]; status: "ok" | "none" | "http" | "failed" | "timeout"; code?: number; retryAfterMs?: number };
+
+export function retryAfterMs(header: string | null, now: number = Date.now()): number | undefined {
+  if (!header) return undefined;
+  const seconds = Number(header.trim());
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const at = Date.parse(header);
+  return Number.isFinite(at) && at > now ? at - now : undefined;
+}
 
 export async function remoteSuggestions(text: string, signal: AbortSignal): Promise<RemoteOutcome> {
   const address = mobileSuggestRequest(text);
@@ -184,7 +192,7 @@ export async function remoteSuggestions(text: string, signal: AbortSignal): Prom
   signal.addEventListener("abort", cancel);
   try {
     const response = await fetch(address, { headers: { Accept: "application/json" }, signal: timeout.signal });
-    if (response.status !== 200) return { values: [], status: "http" };
+    if (response.status !== 200) return { values: [], status: "http", code: response.status, retryAfterMs: retryAfterMs(response.headers?.get?.("Retry-After") ?? null) };
     return { values: mobileParseRemote(await response.text()), status: "ok" };
   } catch {
     return { values: [], status: timedOut ? "timeout" : "failed" };

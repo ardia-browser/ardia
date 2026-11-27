@@ -45,7 +45,7 @@ type BarKeyContext = {
   reset(): void;
   removeRow(url: string): void;
   rowsHeld: boolean;
-  releaseRows(): void;
+  releaseRows(followIndex?: number): void;
   forceSearch(): void;
   go(url: string, disposition?: Disposition): void;
   choose(s: Suggestion | undefined, disposition?: Disposition, byEnter?: boolean): void;
@@ -56,7 +56,10 @@ export function barKeyDown(e: BarKeyEvent, k: BarKeyContext) {
   const { bar, items, selectedIndex, current } = k;
   const { scope, typed } = bar;
   const select = (index: number) => bar.dispatch({ kind: "selected", index });
-  const navigate = (index: number) => (k.rowsHeld ? k.releaseRows() : select(index));
+  const navigate = (index: number) => {
+    select(index);
+    if (k.rowsHeld) k.releaseRows(index);
+  };
   const move = (delta: 1 | -1) => {
     const n = items.length;
     navigate(!n ? 0 : (selectedIndex + delta + n) % n);

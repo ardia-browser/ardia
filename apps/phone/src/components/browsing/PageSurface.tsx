@@ -10,11 +10,15 @@ import { useCanReopen } from "../../state/tabs/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { usePreferences } from "../../state/settings/hooks";
 import { pageSwipe } from "../../state/settings/settingsRules";
-import { PageView, useTheme, type PageViewHandle } from "../ui";
+import { nativeLookColors } from "../../lib/profileLook";
+import { PageView, usePageTheme, useProfileLook, useTheme, type PageViewHandle } from "../ui";
 
 export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, topClearance, pinsSafeArea, testID }: { tab: BrowserTab; toneBottom: number; obscured?: { top: number; bottom: number }; summaryBottomInset?: number; topClearance?: number; pinsSafeArea?: boolean; testID?: string }) {
   const handle = useRef<PageViewHandle>(null);
   const theme = useTheme();
+  const pageTheme = usePageTheme();
+  const look = useProfileLook();
+  const summaryLook = useMemo(() => ({ ...nativeLookColors(look, theme.dark), dark: theme.dark }), [look, theme.dark]);
   const id = tab.id;
   const swipe = usePreferences((p) => p.swipeNavigation);
   const canReopen = useCanReopen();
@@ -27,8 +31,8 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
   const tone = usePageTone(id);
   const failed = useNavigation(id, (n) => n?.failure != null);
   const pageTone = failed ? null : shownTone(tone, tab.themeColorHex);
-  const colorTop = pageTone?.top ?? theme.canvas;
-  const colorBottom = pageTone?.bottom ?? theme.canvas;
+  const colorTop = pageTone?.top ?? pageTheme.canvas;
+  const colorBottom = pageTone?.bottom ?? pageTheme.canvas;
   const covers = obscured !== undefined;
   const obscuredColors = useMemo(() => (covers ? { top: colorTop, bottom: colorBottom } : undefined), [covers, colorTop, colorBottom]);
   const obscuredTop = obscured?.top;
@@ -66,6 +70,7 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
       toneInsets={toneInsets}
       obscuredInsets={obscuredInsets}
       summaryBottomInset={summaryBottomInset}
+      summaryLook={summaryLook}
       obscuredColors={obscuredColors}
       topClearance={topClearance}
       pinsSafeArea={pinsSafeArea}
@@ -74,7 +79,7 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
       reopensOnSwipeForward={canReopen}
       onSwipedPastHistory={onSwipedPastHistory}
       pullToRefresh
-      surfaceColor={theme.canvas}
+      surfaceColor={pageTheme.canvas}
       onPageState={onPageState}
       onPageTone={onPageTone}
       onPageDrawn={onPageDrawn}

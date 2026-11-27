@@ -1,7 +1,7 @@
 # Building the engine for Windows
 
-The Windows engine is the same tree as the Mac's (`docs/engine-build.md`): **Chromium 158.0.8127.36**, **Helium**
-0.22.2 (helium-chromium) with **helium-windows** 0.22.2.1 in place of helium-macos, then our patch series. **x64**
+The Windows engine is the same tree as the Mac's (`docs/engine-build.md`): **Chromium 158.0.8127.88**, **Helium**
+0.22.4 (helium-chromium) with **helium-windows** 0.22.4.1 in place of helium-macos, then our patch series. **x64**
 engines are cross-built on a **Linux host**, in **`msi`'s WSL 2 Ubuntu** ([On a Linux host](#on-a-linux-host)):
 Linux is Chromium's supported host for Windows cross builds (`docs/win_cross.md` in the tree). **ARM64** engines
 cannot safely be built on x86_64 hosts (including `msi`'s WSL) while V8's `mksnapshot` arm64 simulator produces
@@ -199,8 +199,8 @@ must not be published, and the repo is public.
 
 ## Helium for Windows
 
-helium-windows 0.22.2.1 (`35ea155`) is Helium's Windows packaging for 0.22.2; its `helium-chromium` submodule is exactly
-the 0.22.2 tag we pin (`f32f2c0`). No Windows engine has been built from it yet: the prebuilt in `prebuilt.json` is from 0.22.1 (its `source`, `38e436c`, pins 0.22.1, and the release source archive follows it), and 0.22.2.1 adds `helium/windows/bundle-hyphenation-data` to the Windows series. The weekly Upstream pins workflow reports that lag as the Windows published engine behind ([engine-build.md](engine-build.md#tracking-upstream)). Under 0.21.1.1 (`d6806de`) the submodule sat one commit past the tag (`42da6c5`, only `devutils/set_quilt_vars`), so
+helium-windows 0.22.4.1 (`4f7143d`) is Helium's Windows packaging for 0.22.4; its `helium-chromium` submodule is exactly
+the 0.22.4 tag we pin (`41a32da`), and its series is the same as 0.22.2.1's. No Windows engine has been built from it yet: the prebuilt in `prebuilt.json` is still Chromium 158.0.8127.36 (its `source` pins Helium 0.22.2, and the release source archive follows it). `prebuilt.json`'s `chromium` may lag the pins like this, never lead them (`upstream-pins.mjs --check`). The weekly Upstream pins workflow reports that lag as the Windows published engine behind ([engine-build.md](engine-build.md#tracking-upstream)). Under 0.21.1.1 (`d6806de`) the submodule sat one commit past the tag (`42da6c5`, only `devutils/set_quilt_vars`), so
 the patches are the same. `helium-pins.ini` pins both. Over helium-chromium's series it adds:
 
 - ungoogled-chromium's Windows patches: build fixes (`windows-fix-*`, `windows-disable-reorder-fix-linking`,
@@ -246,7 +246,7 @@ remade Windows patch, a `take` that moves the ones after it) is refused with the
 `series_win.py rewind` reverses the recorded copies back to that entry, and apply goes on from there. A ledger from
 before the copies (names only) is kept when it is a prefix of the plan the tree still carries, and otherwise needs
 the files the series touches restored from a fresh `03-helium.py` run. `03-helium.py` doesn't touch the ledger, so
-remove `.series-win-applied` and `.series-win-applied.d` beside `src` too before applying again. `series_win_test.py` covers it. `series-win` today: six skips, 24 takes and 23 Windows-only patches ([Windows-only patches](#windows-only-patches)).
+remove `.series-win-applied` and `.series-win-applied.d` beside `src` too before applying again. `series_win_test.py` covers it. `series-win` today: eight skips, 24 takes and 23 Windows-only patches ([Windows-only patches](#windows-only-patches)).
 A shared `chromium` line may end in a platform tag since the Linux port: untagged lines are for every platform, and
 Windows takes those and the `mac` ones (the set it started from), never `linux`. A tag can name several platforms
 joined by commas (`linux,win`); Windows takes a line whose platforms include `mac` or `win`. A `layer` line Windows would
@@ -375,10 +375,9 @@ a Windows build needs.
 | `chromium-enterprise-context-info.patch` | applies | OS-neutral | Shared; `getContextInfo` answers with the device's context in a build without cloud content analysis, which Windows is too (`enterprise_cloud_content_analysis` defaults to false in its tree), so Endpoint Verification gets an answer there as well. Applies strictly to the Windows tree's copy of the file (checked 2026-11-16) |
 | `chromium-ardia-layer.patch` | applies | OS-neutral | It links `chrome/browser/ardia` into the Mac framework only; Windows needs the same link once the `ac_*` layer builds there |
 
-The current plan (`series_win.py`) selects the 90 shared lines a Windows tree takes (untagged and `mac`), skips 4 of
-them, takes 24 `linux` lines and adds 23 Windows patches: 133 in all. On the Windows tree (2026-11-24) 132 apply
-strictly; `chromium-safe-storage-one-key-for-every-data-dir.patch`, a `mac` line, needs fuzz 1 for helium-windows'
-context and can't change without moving the Mac key. The Windows-only patches follow them (`series-win`, [below](#windows-only-patches)). The file classes above come from paths, so a
+The current plan (`series_win.py`) selects the 94 shared lines a Windows tree takes (untagged and `mac`), skips 8 of
+them, takes 24 `linux` lines and adds 24 Windows patches: 134 in all, each applying strictly on the Windows tree at
+158.0.8127.88 (2026-11-26). The Windows-only patches follow them (`series-win`, [below](#windows-only-patches)). The file classes above come from paths, so a
 shared file can still call into Mac-only code: two did (`chrome.dll` failed to link without the guard patch).
 
 ### Windows-only patches
@@ -394,6 +393,8 @@ fails when a line has no row here, a row's Line doesn't match it, a Removable wh
 |---|---|---|---|
 | `chromium-mac-secure-input-window-focus.patch` | skip | Its files are `render_widget_host_view_mac.mm` and its unit test `render_widget_host_view_mac_unittest.mm`, neither of which Windows builds | With the Mac patch, once the Chromium we build has its upstream fix |
 | `chromium-safe-storage-no-silent-reset.patch` | skip | Its context is helium-macos' `prevent-reset-on-keychain-unavailability`, which a Windows tree doesn't have. Windows still needs a counterpart: a DPAPI decrypt failure must not silently replace the key (`dpapi_key_provider.cc`, `os_crypt_win.cc`) | With the Mac patch; a Windows counterpart would be its own `series-win` line |
+| `chromium-safe-storage-one-key-for-every-data-dir.patch` | skip | Its only change is the `KeychainKeyProvider` condition inside `#if BUILDFLAG(IS_MAC)` in `BrowserProcessImpl::PreMainMessageLoopRun`, and its trailing context comes from the Mac-only startup-error callback, so on Windows it went in only with fuzz and changed nothing that compiles | With the Mac patch |
+| `chromium-pref-hash-new-mac-waits-for-safe-storage.patch` | skip | It changes `pref_hash_filter.{h,cc}`, which Windows builds, but the drop it fixes is the Mac's: a migrated Mac keeps its Safe Storage key in the login keychain, and Windows' DPAPI key doesn't move to another PC, so on Windows nothing set aside would verify and the patch would only move the engine key | When Windows profiles carry a key that moves between PCs |
 | `chromium-extension-state-mirror-hooks.patch` | skip | Its hooks feed the WebKit replica of each extension, which is Mac only; BUILD.gn's `if (!is_win)` list keeps the replica's engine calls out of the Windows engine | With the Mac patch |
 | `chromium-embedder-discard-veto.patch` | skip | Its callback seam in `DiscardEligibilityPolicy` is registered only by the Mac layer (`ac_discard_veto.mm`), so on Windows it would do nothing but move the engine key; Windows keeps pages through `chromium-win-discard-asks-the-host.patch` (`g_ardia_keeps_page`) | When Windows takes the Mac's discard veto in place of its own hook (#3860) |
 | `chromium-mac-async-root-frame-sink-teardown.patch` | skip | Its only change, the root frame sink's `maybe_wait_on_destruction` (#3688), is compiled for macOS alone, so taking it would move the Windows engine key and change nothing | With the Mac patch |

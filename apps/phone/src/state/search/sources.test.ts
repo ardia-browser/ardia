@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mobileSetSources, mobileSuggest } from "@ardia/core/src/mobile.ts";
 import type { BrowserTab } from "../tabs/tabModels.ts";
-import { buildSources, recentSearches } from "./sources.ts";
+import { buildSources, recentSearches, searchesByQuery } from "./sources.ts";
 
 const tab = (id: string, url: string, title: string, isPrivate = false): BrowserTab => ({
   id,
@@ -49,4 +49,18 @@ test("an empty tray offers the three most recent distinct searches, newest first
   ];
   assert.deepEqual(recentSearches(rows), ["Lisbon trams", "OTTERS", "tapas"]);
   assert.deepEqual(recentSearches([row("https://example.com/?q=nope", 1)]), []);
+});
+
+test("deleting a past search finds every engine's and every case's visits for it, and nothing else", () => {
+  const row = (url: string) => ({ url, title: "", favicon: null, visits: 1, lastVisit: 1 });
+  const byQuery = searchesByQuery([
+    row("https://www.google.com/search?q=otters"),
+    row("https://www.google.com/search?q=OTTERS&hl=en"),
+    row("https://duckduckgo.com/?q=otters"),
+    row("https://www.google.com/search?q=sea+otters"),
+    row("https://example.com/otters"),
+  ]);
+  assert.deepEqual(byQuery.get("otters"), ["https://www.google.com/search?q=otters", "https://www.google.com/search?q=OTTERS&hl=en", "https://duckduckgo.com/?q=otters"]);
+  assert.deepEqual(byQuery.get("sea otters"), ["https://www.google.com/search?q=sea+otters"]);
+  assert.equal(byQuery.size, 2);
 });

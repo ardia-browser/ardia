@@ -8,6 +8,7 @@
 #include <variant>
 #include <vector>
 
+#include "ardia/core/ac_fatal_note.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/environment.h"
@@ -344,6 +345,7 @@ std::optional<int> ACMainDelegate::BasicStartupComplete() {
                 "Glic,GlicActor,GlicActorUi,ApiGlicPrivate,ContextualCueing,"
                 "GlicZeroStateSuggestions,SettingsGlowupJourneys");
   if (!command_line->HasSwitch(switches::kProcessType)) {
+    NoteFatalMessagesInCrashReports();
     g_ardia_background_instance = BackgroundInstance();
     DecideTestGateAtStartup();
     KeepRealProfileClosed(command_line, "at startup");

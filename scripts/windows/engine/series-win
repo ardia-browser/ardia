@@ -1,5 +1,7 @@
 skip chromium-mac-secure-input-window-focus.patch
 skip chromium-safe-storage-no-silent-reset.patch
+skip chromium-safe-storage-one-key-for-every-data-dir.patch
+skip chromium-pref-hash-new-mac-waits-for-safe-storage.patch
 skip chromium-extension-state-mirror-hooks.patch
 skip chromium-embedder-discard-veto.patch
 skip chromium-mac-async-root-frame-sink-teardown.patch

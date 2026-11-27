@@ -31,7 +31,8 @@ const SHARED_TESTS = [
   "shellPainted.test.mjs", "introMusic.test.mjs", "hostCrashReports.test.mjs", "windowControls.test.mjs",
   "readerService.test.mjs", "hostKillSwitches.test.mjs", "fieldTiming.test.mjs", "launchMeasure.test.mjs",
   "keyringTelemetry.test.mjs", "textInputCaret.test.mjs", "peekStageMotion.test.mjs", "popoverPlacement.test.mjs",
-  "popoverHost.test.mjs", "nativeTrafficLights.test.mjs", "scrollGestures.test.mjs", "liquidGlass.test.mjs", "filmGrain.test.mjs", "backdropTheme.test.mjs"
+  "popoverHost.test.mjs", "nativeTrafficLights.test.mjs", "scrollGestures.test.mjs", "liquidGlass.test.mjs", "filmGrain.test.mjs", "backdropTheme.test.mjs",
+  "nativeSettingsHost.test.mjs", "hostTabClose.test.mjs", "profileRetirement.test.mjs"
 ];
 
 const MODE_TESTS = { linux: ["shortcuts.test.mjs"], win: ["shortcuts.test.mjs"], mac: [] };

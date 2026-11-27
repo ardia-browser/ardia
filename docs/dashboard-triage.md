@@ -129,7 +129,7 @@ freezes (`count()`), time frozen (`sum(freeze_ms)`), the most common thread and 
 three frames from Ardia's own images. Frames read as function names wherever the build's symbols are published; hover
 a place to see each name with its raw offset. The summary line says how many places are named. The names come from
 `sandbox.ardia_frame_symbols`, which the hourly frame-naming job fills (`docs/symbolication.md`). Errors names the native
-frames of the crashes it shows the same way, and each crash row says how many native frames were named. Hermes frames
+frames of the crashes it shows the same way, and each crash row says how many native frames were named. A browser crash that failed an engine check also lists, under **Task posted from:**, the frames of the code that queued the task it was running (`PostedTask` in `$exception_list`, up to 17), below the crash's own 40. Hermes frames
 stay raw.
 
 Android's Material You switch (Settings › General, off by default) is counted as `usage_counts.material_you_turned_on` and `material_you_turned_off`; `app_launched.material_colors` is `not_material` for launches with it off. The counts below are taken only with it on, except `find_closed_bar`.
@@ -137,5 +137,7 @@ Android's Material You switch (Settings › General, off by default) is counted 
 Android search reports full-screen sheet expansions as the consent-gated daily `usage_counts.search_sheet_expanded` count on `ardia-phone`. Incognito expansions do not count. Compare it with `searches` to track use of the expanded result list; neither count includes queries or page content.
 
 Compare `usage_counts.site_settings_sheet_expanded` with `site_settings_sheet_opened` to track use of the full-screen Android address bar menu. Both are consent-gated counts that exclude Incognito.
+
+Android release builds count their update checks on `ardia-phone` as `usage_counts.app_update_checks`, the first time a version puts its dot on the Settings gear (once per version, never for one already seen in Settings › About, never for a check run from About itself) as `app_update_offers_shown`, and a Download tap in the Settings › About row as `app_update_offers_opened`, and a Download nothing on the phone could take (no DownloadManager, no other browser) as `app_update_handoffs_failed`, which should stay near zero. `app_update_installs_started` counts a committed install session for a download whose SHA-256 matched the release, with `app_update_installs_cancelled`, `app_update_installs_failed` and `app_update_installs_completed` for how it ended, and `app_update_checksums_refused` a download deleted because it didn't; that one should stay at zero. Checks should hold steady at about one per active install per 6 hours; shown should rise the day an Android release is published. All three are consent-gated counts, never the version.
 
 Android Find on Page: compare phone `usage_counts.find_closed_bar` with `find_opened_bar`. The close counter counts each non-private session once, whether it ends through Close or Back. Counts require usage sharing.

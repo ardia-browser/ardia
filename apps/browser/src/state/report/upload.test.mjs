@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { sendReport, uploadUrlsFrom, issueNumberOf, resolveUrl, uploadFraction, isBusy, failureClass, failureMessage, restartReason, RETRY_DELAYS_MS } = await import("./upload.ts");
+const { sendReport, uploadUrlsFrom, issueNumberOf, resolveUrl, uploadFraction, isBusy, failureClass, failureMessage, restartReason, NOT_SENT_STATUS, RETRY_DELAYS_MS } = await import("./upload.ts");
 
 const endpoint = { url: "http://127.0.0.1:4319/api/feedback", key: "ak_app_x", keyHeader: "X-Ardia-Key" };
 const files = [
@@ -86,6 +86,20 @@ test("no connection says so", async () => {
   assert.match(result.message, /^Couldn't reach Ardia's report server\. .*draft is kept\.$/);
 });
 
+test("a platform with no uploader for files says it can't send them, not that the network is down, and doesn't retry", async () => {
+  const server = fakeServer();
+  server.deps.putFile = async () => NOT_SENT_STATUS;
+  const { result } = await run(server);
+  assert.equal(result.stage, "upload");
+  assert.equal(result.errorClass, "unsupported");
+  assert.equal(result.status, NOT_SENT_STATUS);
+  assert.equal(result.attempts, 1);
+  assert.deepEqual(server.deps.sleeps, []);
+  assert.doesNotMatch(result.message, /connection/);
+  assert.equal(failureClass(NOT_SENT_STATUS, null), "unsupported");
+  assert.equal(failureClass(0, null), "offline");
+});
+
 test("storage down is retried twice with backoff, then explained in a sentence", async () => {
   const server = fakeServer();
   let answers = 0;
@@ -129,7 +143,7 @@ test("every failure class reads as a full sentence that says the draft is kept",
   assert.equal(failureClass(500, { error: "internal" }), "server");
   assert.equal(failureClass(502, null), "server");
   assert.equal(failureClass(401, { error: "bad_key" }), "rejected");
-  for (const errorClass of ["offline", "storage", "server", "rate_limited", "expired", "rejected"]) {
+  for (const errorClass of ["offline", "unsupported", "storage", "server", "rate_limited", "expired", "rejected"]) {
     const message = failureMessage(errorClass, 400, null);
     assert.match(message, /[.]$/);
     assert.match(message, /draft is kept/i);

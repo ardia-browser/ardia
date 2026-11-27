@@ -14,7 +14,7 @@ import { codeChecks } from "./codes.mjs";
 import { FIXTURES, fakeHelper } from "./fake.mjs";
 import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
 import { loginListChecks } from "./login-list.mjs";
-import { helperAsked, savingChecks } from "./saving.mjs";
+import { helperAsked, NOT_SAVED_TITLE, promptShown, savingChecks, signIn } from "./saving.mjs";
 import { fixtureSites, PAGE_EVENTS } from "./sites.mjs";
 import { strongPasswordChecks } from "./strong-password.mjs";
 import { chromiumTabs, waitFor, webkitTabs } from "./webkit.mjs";
@@ -400,6 +400,28 @@ const CHECKS = {
         const rows = await tab.waitRows(`the ${engine} Login list`);
         assert(rows[0]?.notice && rows[0].label === HELPER_MISSING, `the ${engine} Login list says the helper is missing and how to get it back`, rows);
         seen[engine] = rows[0].label;
+      } finally {
+        await tab.close();
+      }
+    }
+    return seen;
+  },
+  async E22missing() {
+    const missing = path.join(SCRATCH, "E22missing", "no-such-manifest.json");
+    fs.rmSync(missing, { force: true });
+    await start("E22missing", { manifest: missing });
+    await app.eval("return ac.applePasswords.loadApplePasswords().then(() => true)");
+    await choose("apple");
+    await until(pairingView, (v) => v.choice === "apple" && v.state === "helperMissing");
+    const seen = {};
+    for (const [engine, tabs] of [["webkit", webkitTabs(app, { log: note })], ["chromium", chromiumTabs(app, { log: note })]]) {
+      const tab = await tabs.open(sites.url("save.localhost"));
+      try {
+        await signIn(tab, `missing-${engine}-${Date.now()}@save.test`, "fixture-pw-missing-21");
+        const told = await promptShown(tab, `the ${engine} prompt saying it wasn't saved`);
+        assert(told.state === "notSaved" && told.copy.title === NOT_SAVED_TITLE, `${engine}: signing in with the helper missing says ${NOT_SAVED_TITLE}`, told);
+        assert(await tab.answer("dismiss"), "OK closes it", null);
+        seen[engine] = told.copy.title;
       } finally {
         await tab.close();
       }

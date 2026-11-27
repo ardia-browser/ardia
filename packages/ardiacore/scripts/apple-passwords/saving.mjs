@@ -37,6 +37,19 @@ export async function handedOver(tab, fake, user, { since = 0 } = {}) {
   return asked;
 }
 
+export async function signIn(tab, user, password, landing = "/signed-in") {
+  await tab.click("#u");
+  await tab.type(user);
+  await tab.click("#p");
+  await tab.type(password);
+  await waitFor("the Sign in button enabled", () => tab.value(`!document.getElementById("go").disabled || null`), 5000);
+  await tab.value(`(document.documentElement.dataset.signingIn = "yes")`);
+  await tab.click("#go");
+  await waitFor("the page after signing in", () => tab.value(`!document.documentElement.dataset.signingIn && location.pathname === ${q(landing)} && document.readyState === "complete" || null`), 20_000);
+}
+
+export const promptShown = (tab, what = "the save prompt") => waitFor(what, () => tab.prompt(), 20_000);
+
 export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
   const session = async () => {
     const shared = await paired();
@@ -44,18 +57,6 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
   };
   const ardiaStore = async (app) => (await app.eval(`return ac.engine.call("passwords.list", { profile: "" })`, { timeout: 20_000 })).passwords.map((p) => `${p.origin} ${p.username}`).sort();
 
-  async function signIn(tab, user, password, landing = "/signed-in") {
-    await tab.click("#u");
-    await tab.type(user);
-    await tab.click("#p");
-    await tab.type(password);
-    await waitFor("the Sign in button enabled", () => tab.value(`!document.getElementById("go").disabled || null`), 5000);
-    await tab.value(`(document.documentElement.dataset.signingIn = "yes")`);
-    await tab.click("#go");
-    await waitFor("the page after signing in", () => tab.value(`!document.documentElement.dataset.signingIn && location.pathname === ${q(landing)} && document.readyState === "complete" || null`), 20_000);
-  }
-
-  const promptShown = (tab, what = "the save prompt") => waitFor(what, () => tab.prompt(), 20_000);
   const fixture = (user) => FIXTURES.logins.find((l) => l.user === user);
   const applePasswords = (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().state", { timeout: 20_000 });
   const pairingStep = (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().pairing?.step ?? null", { timeout: 20_000 });

@@ -35,7 +35,6 @@ final class ApplePasswordsSaving: NSObject {
       let entries: [ApplePasswordsEntry]
       switch result {
       case .success(let found): entries = found
-      case .failure(.unavailable): return DispatchQueue.main.async { done(nil) }
       case .failure: return DispatchQueue.main.async { done(remembered == nil ? "save" : "update") }
       }
       LoginList.domains(ApplePasswordsMatch.probes([host] + ApplePasswordsMatch.siteHosts(entries)), profile: profile) { domains in
@@ -46,7 +45,6 @@ final class ApplePasswordsSaving: NSObject {
             let saved: String
             switch result {
             case .success(let kept): saved = kept
-            case .failure(.unavailable): return done(nil)
             case .failure: return done("update")
             }
             guard Data(saved.utf8) != Data(password.utf8) else {

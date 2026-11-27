@@ -713,12 +713,24 @@ test("a named target or the page's <base target> counts; _self, _top, _parent an
   assert.deepEqual(newTabLinks(env), ["https://page.example/named", "https://page.example/based"]);
 });
 
-test("a modified, untrusted or non-primary click isn't noted", () => {
+test("a modified, cancelled, untrusted or non-primary click isn't noted", () => {
   const env = environment();
   const blank = (href) => env.link(href, { target: "_blank" });
   for (const keys of [{ meta: true }, { shift: true }, { alt: true }, { ctrl: true }, { meta: true, shift: true }]) env.gesture([blank("/mod")], keys);
   env.fire("click", [blank("/untrusted")], { trusted: false });
   env.fire("click", [blank("/middle")], { button: 1 });
+  env.gesture([blank("/cancelled")], {}, { page: (e) => e.preventDefault() });
+  env.flush();
+  assert.deepEqual(newTabLinks(env), []);
+});
+
+test("a cancelled click that opens no window leaves nothing for a later blank window to borrow", () => {
+  const env = environment();
+  env.gesture([env.link("https://other.example/routed", { target: "_blank" })], {}, { page: (e) => e.preventDefault() });
+  env.flush();
+  env.activation.active = true;
+  env.window.open("", "_blank");
+  env.window.open("about:blank");
   env.flush();
   assert.deepEqual(newTabLinks(env), []);
 });
@@ -738,9 +750,14 @@ test("a new-tab link whose click the page cancels to open a blank window itself 
   env.flush();
   assert.deepEqual(newTabLinks(env), [wrapped]);
   const stopped = env.link("https://other.example/stopped", { target: "_blank" });
-  env.gesture([stopped], {}, { page: (e) => (e.preventDefault(), e.stopPropagation()) });
+  env.gesture([stopped], {}, { page: (e) => (e.preventDefault(), e.stopPropagation(), env.window.open("about:blank")) });
   env.flush();
   assert.deepEqual(newTabLinks(env), [wrapped, "https://other.example/stopped"], "a stopped click is noted once dispatch is over");
+  const late = env.link("https://other.example/late", { target: "_blank" });
+  env.gesture([late], {}, { page: (e) => e.preventDefault() });
+  env.window.open("");
+  env.flush();
+  assert.deepEqual(newTabLinks(env), [wrapped, "https://other.example/stopped"], "a blank window opened after the click's dispatch isn't tied to it");
 });
 
 test("a cancelled click whose page opened its own window with an address is noted once, by that address", () => {

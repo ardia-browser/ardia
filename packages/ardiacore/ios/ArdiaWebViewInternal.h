@@ -181,6 +181,7 @@ struct ArdiaPageFocusState {
   BOOL _pinned;
   NSView *_devtoolsView;
   CFTimeInterval _linkDropAt;
+  CFTimeInterval _autoplayBlockedAt;
   ArdiaElementPick _elementPick;
   NSMutableArray<NSDictionary<NSString *, id> *> *_newTabLinks;
   id _sightObserver;

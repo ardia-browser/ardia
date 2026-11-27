@@ -128,9 +128,17 @@
    ]
   },
   {
+   "id": "chromium-page-message:autoplayBlocked",
+   "source": "frame",
+   "guard": "A count only, from any frame: native takes a number of at least 1, clamps it to 20 and forwards at most one per second per tab; JS clamps again before counting usage_counts.autoplay_plays_blocked",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
    "id": "chromium-page-message:newTabLink",
    "source": "frame",
-   "guard": "Page script sends it only after a trusted click or user activation, http(s) only; native keeps 8 s of notes. Open: notes from any frame (B2)",
+   "guard": "Page script sends it only after a trusted click or user activation, http(s) only; a click the page cancels counts only when the page opened a blank window during that click; native keeps only http(s) notes, for 2 s, and swaps one in for a blank tab's address only when it is http(s). Open: notes from any frame (B2)",
    "checks": [
     "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
    ],
@@ -265,7 +273,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 34,
+   "count": 33,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]

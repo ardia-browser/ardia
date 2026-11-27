@@ -295,7 +295,7 @@ BOOL IsWebAddress(NSString *url) {
 }
 
 - (void)noteNewTabLink:(NSString *)url {
-  if (!url.length) return;
+  if (!IsWebAddress(url)) return;
   [self dropStaleNewTabLinks];
   if (!_newTabLinks) _newTabLinks = [NSMutableArray array];
   [_newTabLinks addObject:@{@"url" : url, @"at" : @(CACurrentMediaTime())}];
@@ -326,7 +326,7 @@ BOOL IsWebAddress(NSString *url) {
           disposition:(NSString *)disposition
               clicked:(nullable NSString *)clicked
              linkWait:(nullable NSString *)linkWait {
-  NSString *url = clicked && !IsWebAddress(tab.url) ? clicked : tab.url;
+  NSString *url = IsWebAddress(clicked) && !IsWebAddress(tab.url) ? clicked : tab.url;
   NSMutableDictionary *payload = [@{
     @"url" : url ?: @"",
     @"disposition" : disposition,

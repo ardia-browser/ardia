@@ -305,11 +305,56 @@
     if (e.isTrusted && !(e.type === "keydown" && (e.key === "Escape" || e.metaKey))) usedHere = true;
   };
   for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteUse, true);
-  const INHERITED_ACTIVATION_MS = 5000;
-  const frameActivated = (active, sinceStart) => active && sinceStart >= INHERITED_ACTIVATION_MS;
-  const frameStartedAt = performance.now();
-  const askedToPlay = () =>
-    usedHere || (!isTop && frameActivated(!!(navigator.userActivation && navigator.userActivation.isActive), performance.now() - frameStartedAt));
+  const INHERITED_ACTIVATION_WINDOW_MS = 1000;
+  const INHERITED_ACTIVATION_POLL_MS = 100;
+  const INHERITED_ACTIVATION_GIVE_UP_MS = 15000;
+  const judgeFrameActivation = (crossOrigin, isActive, now, schedule) => {
+    if (!crossOrigin) return isActive;
+    const startedAt = now();
+    let inherited = false;
+    let watching = false;
+    const look = () => {
+      const age = now() - startedAt;
+      if (inherited && (!isActive() || age > INHERITED_ACTIVATION_GIVE_UP_MS)) inherited = false;
+      else if (!inherited && age < INHERITED_ACTIVATION_WINDOW_MS && isActive()) inherited = true;
+      watching = inherited || age < INHERITED_ACTIVATION_WINDOW_MS;
+      if (watching) schedule(look, INHERITED_ACTIVATION_POLL_MS);
+    };
+    look();
+    return () => {
+      const age = now() - startedAt;
+      if (!isActive()) return false;
+      if (age < INHERITED_ACTIVATION_WINDOW_MS) {
+        inherited = true;
+        if (!watching) look();
+        return false;
+      }
+      return !inherited;
+    };
+  };
+  const transientActivation = () => !!(navigator.userActivation && navigator.userActivation.isActive);
+  const crossOriginFrame = () => {
+    try {
+      return !window.top.document;
+    } catch (e) {
+      return true;
+    }
+  };
+  const frameActivated = isTop
+    ? () => false
+    : judgeFrameActivation(crossOriginFrame(), transientActivation, () => performance.now(), (fn, ms) => setTimeout(guard(fn), ms));
+  const askedToPlay = () => usedHere || frameActivated();
+  let autoplayBlocks = 0;
+  const reportAutoplayBlocks = later(() => {
+    const count = autoplayBlocks;
+    autoplayBlocks = 0;
+    if (count > 0) send("autoplayBlocked", { count });
+  }, 1000);
+  const noteAutoplayBlocked = (count) => {
+    if (count <= 0) return;
+    autoplayBlocks += count;
+    reportAutoplayBlocks();
+  };
   let pipTrace = false;
   let pipHandlerSet = null;
   const playingMedia = new Set();
@@ -320,6 +365,7 @@
     else if (e.type === "pause" || e.type === "ended" || e.type === "emptied") playingMedia.delete(m);
     if (blockAutoplay && e.type === "play" && !askedToPlay()) {
       m.pause();
+      noteAutoplayBlocked(1);
       return;
     }
     if (e.type === "emptied") timeline?.mediaTimes.delete(m);
@@ -358,8 +404,10 @@
       for (const e of mediaEvents) self.addEventListener(e, onMediaEvent);
       for (const watch of detachedMediaWatchers) guard(watch)(self);
     }
-    if (media && blockAutoplay && !askedToPlay())
+    if (media && blockAutoplay && !askedToPlay()) {
+      noteAutoplayBlocked(1);
       return Promise.reject(new DOMException("play() failed because the user didn't interact with the document first.", "NotAllowedError"));
+    }
     return apply(target, self, args);
   });
 
@@ -1606,12 +1654,14 @@
       send("peek", { url, key: "site", origin: pageOrigin, x: clientX(e) * scale, y: clientY(e) * scale, moved: 0 });
     };
     let openingsNoted = 0;
+    let clickInFlight = null;
     const noteOpening = (url) => {
       openingsNoted++;
       send("newTabLink", { url });
     };
-    const noteNewTabLink = (e, link, notedBefore) => {
-      if (replacesPage(link) || (defaultPrevented(e) && openingsNoted !== notedBefore)) return;
+    const noteNewTabLink = (e, link, click) => {
+      if (replacesPage(link)) return;
+      if (defaultPrevented(e) && !(click.openedBlank && openingsNoted === click.notedBefore)) return;
       const url = linkUrl(link);
       if (url && apply(test, /^https?:/i, [url])) noteOpening(url);
     };
@@ -1626,13 +1676,15 @@
         const path = apply(composedPath, e, []);
         const forSite = !!site && timeStamp(e) === site.stamp && apply(includes, path, [site.link]);
         const link = forSite ? site.link : hit.link;
-        const notedBefore = openingsNoted;
+        const click = { notedBefore: openingsNoted, openedBlank: false };
+        clickInFlight = click;
         let decided = false;
         const decide = guard((ev) => {
           if (ev !== e || decided) return;
           decided = true;
+          if (clickInFlight === click) clickInFlight = null;
           if (forSite && replacesPage(link)) return peekSiteLink(e, link);
-          noteNewTabLink(e, link, notedBefore);
+          noteNewTabLink(e, link, click);
         });
         apply(listen, window, ["click", decide]);
         apply(scheduleTimeout, window, [
@@ -1640,8 +1692,9 @@
             apply(unlisten, window, ["click", decide]);
             if (decided) return;
             decided = true;
+            if (clickInFlight === click) clickInFlight = null;
             if (forSite && replacesPage(link)) return trace("the click never reached the window", {});
-            noteNewTabLink(e, link, notedBefore);
+            noteNewTabLink(e, link, click);
           }),
           0,
         ]);
@@ -1684,9 +1737,9 @@
     const openDescriptor = Object.getOwnPropertyDescriptor(window, "open");
     if (tracksActivation && openDescriptor && typeof openDescriptor.value === "function") {
       const openedByUser = (args) => {
-        if (!args.length || args[0] === undefined || args[0] === null || !activated()) return;
-        const raw = `${args[0]}`;
-        if (!raw) return;
+        const raw = !args.length || args[0] === undefined || args[0] === null ? "" : `${args[0]}`;
+        if (clickInFlight && apply(test, /^(about:blank)?$/i, [raw])) clickInFlight.openedBlank = true;
+        if (!raw || !activated()) return;
         const url = new URLCtor(raw, baseURI(document)).href;
         if (apply(test, /^https?:/i, [url])) noteOpening(url);
       };
@@ -1899,7 +1952,7 @@
     if (pipTrace && pipHandlerSet !== null)
       send("pipTrace", { event: "setActionHandler", action: "enterpictureinpicture", set: pipHandlerSet });
     if (blockAutoplay)
-      pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], askedToPlay());
+      noteAutoplayBlocked(pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], askedToPlay()));
     if (config.displayMediaPicker) installDisplayMedia();
     else restoreDisplayMedia();
     if (config.fieldTiming) setFieldTiming(true);

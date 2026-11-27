@@ -164,6 +164,13 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     [self emit:@"selection" payload:@{@"selection" : SelectionState(dict, RootPointsPerLocalPoint(self)) ?: NSNull.null}];
   } else if ([kind isEqualToString:@"newTabLink"] && dict) {
     [self noteNewTabLink:Text(dict, @"url", 8192)];
+  } else if ([kind isEqualToString:@"autoplayBlocked"] && dict) {
+    NSNumber *count = [dict[@"count"] isKindOfClass:NSNumber.class] ? dict[@"count"] : nil;
+    const CFTimeInterval now = CACurrentMediaTime();
+    if (count && count.doubleValue >= 1 && now - _autoplayBlockedAt >= 1) {
+      _autoplayBlockedAt = now;
+      [self emit:@"autoplayBlocked" payload:@{@"count" : @(MIN(count.integerValue, 20))}];
+    }
   } else if ([kind isEqualToString:@"linkDrop"] && main) {
     NSString *url = Text(dict, @"url", 8192);
     NSString *scheme = (url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil) ?: @"";

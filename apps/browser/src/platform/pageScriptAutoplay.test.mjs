@@ -10,17 +10,71 @@ const playableSource = script.match(/const playableMedia = (\(all\) => .*);\n/)?
 assert.ok(playableSource, "page_script.js defines playableMedia");
 const playableMedia = new Function(`return ${playableSource}`)();
 
-const frameActivatedSource = script.match(/const frameActivated = (\(active, sinceStart\) => .*);\n/)?.[1];
-const lifespan = script.match(/const INHERITED_ACTIVATION_MS = (\d+);\n/)?.[1];
-assert.ok(frameActivatedSource && lifespan, "page_script.js defines frameActivated and INHERITED_ACTIVATION_MS");
-const frameActivated = new Function(`const INHERITED_ACTIVATION_MS = ${lifespan}; return ${frameActivatedSource}`)();
+const judgeSource = script.match(/const judgeFrameActivation = (\(crossOrigin, isActive, now, schedule\) => \{[\s\S]*?\n {2}\});\n/)?.[1];
+const judgeConstants = [...script.matchAll(/const (INHERITED_ACTIVATION_[A-Z_]+) = (\d+);\n/g)].map((m) => `const ${m[1]} = ${m[2]};`).join("\n");
+assert.ok(judgeSource && judgeConstants.includes("INHERITED_ACTIVATION_WINDOW_MS"), "page_script.js defines judgeFrameActivation and its constants");
+const judgeFrameActivation = new Function(`${judgeConstants}\nreturn ${judgeSource}`)();
 
-test("an embedded player doesn't take the click that navigated its parent as a request to play (gong.bg's Vbox7, #3883)", () => {
-  assert.equal(frameActivated(true, 0), false, "Chrome hands a new frame the navigating click's activation");
-  assert.equal(frameActivated(true, 100), false);
-  assert.equal(frameActivated(true, 4999), false);
-  assert.equal(frameActivated(true, 5000), true, "past the 5 s activation lifespan the activation is a new one");
-  assert.equal(frameActivated(false, 60000), false);
+function frame({ crossOrigin = true } = {}) {
+  let clock = 0;
+  let active = false;
+  let timers = [];
+  const judge = judgeFrameActivation(crossOrigin, () => active, () => clock, (fn, ms) => timers.push({ at: clock + ms, fn }));
+  const advanceTo = (t) => {
+    for (;;) {
+      timers.sort((a, b) => a.at - b.at);
+      const next = timers[0];
+      if (!next || next.at > t) break;
+      timers = timers.slice(1);
+      clock = next.at;
+      next.fn();
+    }
+    clock = t;
+  };
+  return { judge, advanceTo, setActive: (on) => (active = on), pending: () => timers.length };
+}
+
+test("a cross-origin player doesn't take the click that navigated its parent as a request to play, however late it ends (gong.bg's Vbox7, #3883)", () => {
+  const f = frame();
+  f.advanceTo(100);
+  f.setActive(true);
+  f.advanceTo(400);
+  assert.equal(f.judge(), false, "Chrome hands the new frame the navigating click's activation");
+  f.advanceTo(5050);
+  assert.equal(f.judge(), false, "still the inherited activation past five seconds");
+  f.setActive(false);
+  f.advanceTo(5200);
+  f.setActive(true);
+  assert.equal(f.judge(), true, "once it has run out, a new activation counts");
+  assert.equal(f.pending(), 0, "nothing keeps polling");
+});
+
+test("an inherited activation a play() sees before the first poll is caught too", () => {
+  const f = frame();
+  f.setActive(true);
+  assert.equal(f.judge(), false);
+  f.advanceTo(6000);
+  assert.equal(f.judge(), false);
+  f.setActive(false);
+  f.advanceTo(6100);
+  f.setActive(true);
+  assert.equal(f.judge(), true);
+});
+
+test("a cross-origin frame that inherits nothing honours activation once its first second has passed", () => {
+  const f = frame();
+  f.advanceTo(2000);
+  assert.equal(f.pending(), 0);
+  assert.equal(f.judge(), false);
+  f.setActive(true);
+  assert.equal(f.judge(), true);
+});
+
+test("a frame on the top page's origin plays on a Play button in its parent at once", () => {
+  const f = frame({ crossOrigin: false });
+  f.setActive(true);
+  assert.equal(f.judge(), true);
+  assert.equal(f.pending(), 0);
 });
 
 const media = (playing) => ({ paused: !playing, pause() { this.paused = true; } });

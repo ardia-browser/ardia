@@ -28,6 +28,7 @@ export function Row({
   const { hovered, hoverProps } = useHover();
   const native = useNativeForm();
   const label = accessibilityLabel ?? (typeof title === "string" ? title : undefined);
+  const pressLabel = accessibilityLabel ?? ([label, typeof description === "string" ? description : null].filter(Boolean).join(", ") || undefined);
   const hasControls = children !== undefined && children !== null && children !== false;
   const body = (
     <View
@@ -61,8 +62,7 @@ export function Row({
     <View {...hoverProps}>
       <Pressable
         onPress={onPress}
-        accessibilityLabel={label}
-        accessibilityHint={typeof description === "string" ? description : undefined}
+        accessibilityLabel={pressLabel}
         onAccessibilityTap={onPress}
         {...(hasControls ? {} : { accessibilityRole: "button" as const })}
       >

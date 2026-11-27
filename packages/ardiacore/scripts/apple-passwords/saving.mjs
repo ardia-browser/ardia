@@ -30,8 +30,16 @@ export async function noPrompt(tab, ms = SETTLED_MS) {
   return null;
 }
 
-export async function handedOver(tab, fake, user, { since = 0 } = {}) {
-  const asked = await helperAsked(fake, user, { since });
+export async function handedOver(tab, fake, user, { since = 0, timeout = 20_000 } = {}) {
+  const deadline = Date.now() + timeout;
+  let asked = null;
+  while (!asked) {
+    const early = await tab.prompt();
+    assert(!early, "Ardia shows no prompt of its own before Apple Passwords asks", early);
+    asked = fake.asked().slice(since).find((a) => a.user === user) ?? null;
+    assert(asked || Date.now() < deadline, `Apple Passwords' own save window asks about ${user}`, null);
+    if (!asked) await new Promise((r) => setTimeout(r, 150));
+  }
   const shown = await noPrompt(tab, HANDED_MS);
   assert(!shown, "Ardia shows no prompt of its own and claims nothing once Apple Passwords asks", shown);
   return asked;

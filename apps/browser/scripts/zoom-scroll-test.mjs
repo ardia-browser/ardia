@@ -110,6 +110,7 @@ try {
   await stepCase("slow ⌘ + wheel notches, each under one line, zoom one step each", notches(3, 1, 0.1), 3);
   await stepCase("a quick burst of ⌘ + wheel notches zooms one step per notch", notches(5), 5);
   await stepCase("slow ⌘ + wheel notches the other way zoom out one step each", notches(2, -1, -0.3), -2);
+  await stepCase("a quick burst with one click back the other way nets out (up, up, down, up is two steps)", [...notches(2), ...notches(1, -1), ...notches(1)], 2);
   await rep.check("a trackpad scroll that ended doesn't stop the wheel from zooming", async () => {
     await reset();
     await withCommand(gesture(true));

@@ -233,15 +233,11 @@ NSWindow *AppWindowAt(NSPoint screen) {
   DropStaleCredits(credits, now);
   const CFTimeInterval previousReply = [LastWheelReplies() objectForKey:self].doubleValue;
   [LastWheelReplies() setObject:@(now) forKey:self];
-  const int direction = DirectionOf(-pageDelta);
-  while (credits.count && DirectionOf(credits.firstObject.lastObject.doubleValue) != direction) [credits removeObjectAtIndex:0];
   double delta = 0;
   NSUInteger wheels = 0;
   while (credits.count && (!wheels || credits.firstObject.firstObject.doubleValue <= previousReply)) {
-    const double credit = credits.firstObject.lastObject.doubleValue;
+    delta += credits.firstObject.lastObject.doubleValue;
     [credits removeObjectAtIndex:0];
-    if (DirectionOf(credit) != direction) continue;
-    delta += credit;
     wheels++;
   }
   if (wheels && !Flag(reply, @"handled")) [self zoomByScroll:delta merged:wheels > 1];

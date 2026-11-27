@@ -4,10 +4,11 @@ import { withDeadline } from "../../lib/deadline";
 import { isFields } from "../../lib/decode";
 import { secureRandomHex } from "../../platform/secureRandom";
 import type { SiteTransport } from "./siteRules";
+import { hostFetch } from "./hostIo";
 
 export type SiteContextView = { key: string; plugin: string; origin: string; anchor: string; profile: string; windowId: string };
 
-export const SITE_CONTEXT_LIMITS = { attachMs: 8000, readyMs: 20_000, probeStepMs: 250, idleMs: 60_000, perPlugin: 8 } as const;
+export const SITE_CONTEXT_LIMITS = { attachMs: 8000, readyMs: 20_000, probeStepMs: 250, idleMs: 60_000, perPlugin: 8, preflightMs: 10_000 } as const;
 
 export const useSiteContexts = create<{ contexts: Record<string, SiteContextView> }>()(() => ({ contexts: {} }));
 
@@ -82,12 +83,38 @@ async function waitReady(l: Live): Promise<boolean> {
   return false;
 }
 
+export async function anchorStaysOnOrigin(origin: string): Promise<string | null> {
+  const host = new URL(origin).host;
+  const answer = await hostFetch({ url: anchorOf(origin), method: "GET", headers: {}, timeoutMs: SITE_CONTEXT_LIMITS.preflightMs, allowedHosts: [host] });
+  if (!answer.ok) return `${host} couldn't be reached without your sign-in, or sent Ardia somewhere else (${answer.reason.slice(0, 200)}).`;
+  let landed: string | null = null;
+  try {
+    landed = new URL(answer.url).origin;
+  } catch {}
+  return landed === origin ? null : `${host} sent Ardia to another site, which it never follows with your sign-in.`;
+}
+
+export function noteContextNavigation(key: string, url: string) {
+  const l = live.get(key);
+  if (!l) return;
+  let origin: string | null = null;
+  try {
+    origin = new URL(url).origin;
+  } catch {}
+  if (url && url !== "about:blank" && origin !== l.view.origin) dropContext(key);
+}
+
 export type ContextOutcome = { ok: true; key: string } | { ok: false; reason: string };
 
 export async function openSiteContext(plugin: string, origin: string, profile: string, windowId: string): Promise<ContextOutcome> {
   const found = [...live.values()].find((l) => l.view.plugin === plugin && l.view.origin === origin && l.view.profile === profile && l.view.windowId === windowId);
   let l = found;
   if (!l) {
+    if ([...live.values()].filter((x) => x.view.plugin === plugin).length >= SITE_CONTEXT_LIMITS.perPlugin) return { ok: false, reason: "This plugin has too many sites open at once." };
+    const leaves = await anchorStaysOnOrigin(origin);
+    if (leaves) return { ok: false, reason: leaves };
+    const raced = [...live.values()].find((x) => x.view.plugin === plugin && x.view.origin === origin && x.view.profile === profile && x.view.windowId === windowId);
+    if (raced) return openSiteContext(plugin, origin, profile, windowId);
     if ([...live.values()].filter((x) => x.view.plugin === plugin).length >= SITE_CONTEXT_LIMITS.perPlugin) return { ok: false, reason: "This plugin has too many sites open at once." };
     const key = `s${secureRandomHex(10)}`;
     let end = () => {};

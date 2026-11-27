@@ -24,7 +24,7 @@ const { settledStops, restartProcess } = await import("./process.ts");
 const { consentLines } = await import("./consent.ts");
 const { parsePluginRecords, pluginRecordsJson } = await import("./savedState.ts");
 const { siteTarget, siteHeadersOf, takeToken, setPluginSignIn, activeSiteRequests, setSiteTransport, SITES_LIMITS } = await import("./channelSites.ts");
-const { useSiteContexts, attachSiteContext, liveContextCount, hiddenPageTransport } = await import("./siteContexts.ts");
+const { useSiteContexts, attachSiteContext, liveContextCount, hiddenPageTransport, noteContextNavigation, dropPluginContexts } = await import("./siteContexts.ts");
 const { readManifest: parseManifest } = await import("../../lib/pluginManifest.ts");
 const { takePluginCounts } = await import("../telemetry/pluginCounts.ts");
 const { setConsentPeriod, consentToken } = await import("../telemetry/consentPeriod.ts");
@@ -143,6 +143,8 @@ beforeEach(() => {
   page.cancelHold = null;
   gate.write = null;
   setSiteTransport(hiddenPageTransport);
+  host.fetchResult = null;
+  host.fetches.length = 0;
   page.fetch = () => ({ status: 200, headers: { "content-type": "application/json" }, body: "{}" });
   page.start = () => ({ status: 200, total: 0 });
 });
@@ -589,4 +591,34 @@ test("interim transport: every run checks the page is still the site's own plain
   const script = page.evaluations.find((e) => e.includes("spec.keep"));
   assert.match(script, /credentials: "include"/);
   assert.match(script, /redirect: "manual"/);
+});
+
+test("codex B1: a site whose bootstrap page redirects elsewhere never gets a hidden page with your sign-in", async () => {
+  await enable(NOTES);
+  const run = await activated("notes");
+  dropPluginContexts("notes");
+  page.evaluations.length = 0;
+  host.fetchResult = { ok: false, reason: "it redirected to an address it may not reach: evil.example isn't allowed" };
+  const reply = await ask("notes", "sites.fetch", { url: "https://app.notion.com/api/x" }, run);
+  assert.ok(reply.error, "the fetch fails");
+  assert.equal(Object.keys(useSiteContexts.getState().contexts).length, 0, "no hidden page was ever created");
+  assert.equal(page.evaluations.length, 0);
+  const probe = host.fetches.at(-1);
+  assert.equal(probe.url, "https://app.notion.com/robots.txt");
+  assert.deepEqual(probe.allowedHosts, ["app.notion.com"], "the uncredentialed probe may follow only the site's own host");
+  assert.deepEqual(probe.headers, {}, "the probe carries no credentials");
+  host.fetchResult = { ok: true, status: 200, statusText: "OK", url: "https://app.notion.com/elsewhere.txt", headers: {}, body: "" };
+  assert.ok((await ask("notes", "sites.fetch", { url: "https://app.notion.com/api/x" }, run)).result, "positive control: a same-origin answer bootstraps");
+});
+
+test("codex B1: a hidden page that navigates off its origin is dropped at once", async () => {
+  await enable(NOTES);
+  const run = await activated("notes");
+  assert.ok((await ask("notes", "sites.fetch", { url: "https://app.notion.com/api/x" }, run)).result);
+  const key = Object.keys(useSiteContexts.getState().contexts)[0];
+  assert.ok(key);
+  noteContextNavigation(key, "https://app.notion.com/robots.txt");
+  assert.ok(useSiteContexts.getState().contexts[key], "positive control: its own origin keeps it");
+  noteContextNavigation(key, "https://evil.example/");
+  assert.equal(useSiteContexts.getState().contexts[key], undefined);
 });

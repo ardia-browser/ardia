@@ -113,3 +113,19 @@ test("each Verification code filled and each one Apple Passwords didn't fill are
   inEngine("codeFilled", "webkit");
   assert.equal(takePasswordManagerCounts().apple_passwords_codes_filled, 0);
 });
+
+test("each strong password Ardia suggested and filled is counted, also by the tab's engine, only while sharing is on", () => {
+  const inEngine = (name, engine) => native.emitEvent("passwords.loginListCounted", { name, engine, epoch: client.consentEpoch() });
+  startLoginListCounts();
+  client.setSharing(true, "settings");
+  takePasswordManagerCounts();
+  for (const [name, engine] of [["strongPasswordUsed", "chromium"], ["strongPasswordUsed", "webkit"], ["strongPasswordUsed", "webkit"]]) inEngine(name, engine);
+  const counts = takePasswordManagerCounts();
+  assert.equal(counts.apple_passwords_strong_passwords_used, 3);
+  assert.equal(counts.apple_passwords_strong_passwords_used_chromium, 1);
+  assert.equal(counts.apple_passwords_strong_passwords_used_webkit, 2);
+  assert.equal(counts.apple_passwords_login_list_filled, 0, "a strong password is not a login fill");
+  client.setSharing(false, "settings");
+  inEngine("strongPasswordUsed", "webkit");
+  assert.equal(takePasswordManagerCounts().apple_passwords_strong_passwords_used, 0);
+});

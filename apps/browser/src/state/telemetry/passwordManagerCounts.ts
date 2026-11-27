@@ -88,6 +88,7 @@ const LOGIN_LIST_FIELDS: Record<LoginListCount, string> = {
   notNow: "apple_passwords_login_list_not_now",
   codeFilled: "apple_passwords_codes_filled",
   codeFillFailed: "apple_passwords_codes_failed",
+  strongPasswordUsed: "apple_passwords_strong_passwords_used",
 };
 
 const LOGIN_LIST_ENGINES: readonly LoginListEngine[] = ["chromium", "webkit"];

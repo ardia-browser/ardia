@@ -5,6 +5,7 @@ import { isFields } from "../../lib/decode";
 import { secureRandomHex } from "../../platform/secureRandom";
 import type { SiteTransport } from "./siteRules";
 import { hostFetch } from "./hostIo";
+import { SITES_TRANSPORT_OFF_REASON, sitesTransportOn } from "./siteSwitch";
 
 export type SiteContextView = { key: string; plugin: string; origin: string; anchor: string; profile: string; windowId: string };
 
@@ -15,6 +16,10 @@ export const useSiteContexts = create<{ contexts: Record<string, SiteContextView
 type Live = { view: SiteContextView; handle: WebViewHandle | null; attached: Array<(handle: WebViewHandle | null) => void>; ready: Promise<boolean> | null; busy: number; idle: ReturnType<typeof setTimeout> | null; gone: Promise<null>; end: () => void };
 
 const live = new Map<string, Live>();
+const epochs = new Map<string, number>();
+
+const epochOf = (key: string) => epochs.get(key) ?? 0;
+const bump = (key: string) => void epochs.set(key, epochOf(key) + 1);
 
 export const anchorOf = (origin: string) => `${origin}/robots.txt`;
 
@@ -49,10 +54,12 @@ export function dropContext(key: string) {
 }
 
 export function dropPluginContexts(plugin: string) {
+  bump(`plugin:${plugin}`);
   for (const [key, l] of [...live]) if (l.view.plugin === plugin) dropContext(key);
 }
 
 export function dropWindowContexts(windowId: string) {
+  bump(`window:${windowId}`);
   for (const [key, l] of [...live]) if (l.view.windowId === windowId) dropContext(key);
 }
 
@@ -106,15 +113,19 @@ export function noteContextNavigation(key: string, url: string) {
 
 export type ContextOutcome = { ok: true; key: string } | { ok: false; reason: string };
 
-export async function openSiteContext(plugin: string, origin: string, profile: string, windowId: string): Promise<ContextOutcome> {
+export async function openSiteContext(plugin: string, origin: string, profile: string, windowId: string, stillWanted: () => boolean = () => true): Promise<ContextOutcome> {
+  if (!sitesTransportOn()) return { ok: false, reason: SITES_TRANSPORT_OFF_REASON };
+  const asked = { plugin: epochOf(`plugin:${plugin}`), window: epochOf(`window:${windowId}`) };
+  const stillCurrent = () => sitesTransportOn() && stillWanted() && epochOf(`plugin:${plugin}`) === asked.plugin && epochOf(`window:${windowId}`) === asked.window;
   const found = [...live.values()].find((l) => l.view.plugin === plugin && l.view.origin === origin && l.view.profile === profile && l.view.windowId === windowId);
   let l = found;
   if (!l) {
     if ([...live.values()].filter((x) => x.view.plugin === plugin).length >= SITE_CONTEXT_LIMITS.perPlugin) return { ok: false, reason: "This plugin has too many sites open at once." };
     const leaves = await anchorStaysOnOrigin(origin);
     if (leaves) return { ok: false, reason: leaves };
+    if (!stillCurrent()) return { ok: false, reason: "The plugin stopped, its use of your sign-in ended or the window changed while Ardia checked the site." };
     const raced = [...live.values()].find((x) => x.view.plugin === plugin && x.view.origin === origin && x.view.profile === profile && x.view.windowId === windowId);
-    if (raced) return openSiteContext(plugin, origin, profile, windowId);
+    if (raced) return openSiteContext(plugin, origin, profile, windowId, stillWanted);
     if ([...live.values()].filter((x) => x.view.plugin === plugin).length >= SITE_CONTEXT_LIMITS.perPlugin) return { ok: false, reason: "This plugin has too many sites open at once." };
     const key = `s${secureRandomHex(10)}`;
     let end = () => {};
@@ -170,7 +181,7 @@ async function runChecked<T>(key: string, script: string, ms: number, stop?: Pro
 }
 
 export const hiddenPageTransport: SiteTransport = {
-  open: (plugin, origin, place) => openSiteContext(plugin, origin, place.profile, place.windowId),
+  open: (plugin, origin, place, stillWanted) => openSiteContext(plugin, origin, place.profile, place.windowId, stillWanted),
   run: (key, script, ms, stop) => runChecked(key, script, ms, stop),
   alive: contextAlive,
   dropPlugin: dropPluginContexts,

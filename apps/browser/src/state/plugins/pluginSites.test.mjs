@@ -3,10 +3,14 @@ import { beforeEach, test } from "node:test";
 import { HOSTILE_VALUES } from "../../../../../scripts/security/hostile-inputs.mjs";
 import { shellNativeModules } from "../../test-native/shell.ts";
 
-const gate = { write: null, publish: null, afterPublish: null };
+const gate = { write: null, publish: null, afterPublish: null, preflight: null };
 globalThis.acTestNativeModules = {
   ArdiaPlugins: {
     ...shellNativeModules.ArdiaPlugins,
+    hostFetch: async (spec) => {
+      if (gate.preflight) await gate.preflight;
+      return shellNativeModules.ArdiaPlugins.hostFetch(spec);
+    },
     filesCall: async (spec) => {
       if (gate.write && spec.op === "stage" && !spec.first) await gate.write;
       if (gate.publish && spec.op === "publish") await gate.publish;
@@ -18,6 +22,9 @@ globalThis.acTestNativeModules = {
 };
 
 const stub = await import("../../test-native/index.ts");
+const switchModule = await import("./siteSwitch.ts");
+const offByDefault = { constant: switchModule.SITES_TRANSPORT_ENABLED, on: switchModule.sitesTransportOn() };
+switchModule.enableSitesTransportForTests(true);
 const { useBrowser } = await import("../browser/store.ts");
 const { startPlugins } = await import("./start.ts");
 const { usePlugins } = await import("./store.ts");
@@ -147,6 +154,8 @@ beforeEach(() => {
   gate.write = null;
   gate.publish = null;
   gate.afterPublish = null;
+  gate.preflight = null;
+  switchModule.enableSitesTransportForTests(true);
   setSiteTransport(hiddenPageTransport);
   host.fetchResult = null;
   host.fetches.length = 0;
@@ -678,4 +687,61 @@ test("codex S7: a first part that fails still discards the stage", async () => {
   await settle(20);
   const ops = files.calls.filter((c) => c.path === "first.zip").map((c) => c.op);
   assert.deepEqual(ops, ["stage", "discard"], "the failed first part is followed by a discard");
+});
+
+test("owner B1: the sites transport is off by default, and off it never makes a hidden page", async () => {
+  assert.deepEqual(offByDefault, { constant: false, on: false });
+  await enable(NOTES);
+  const run = await activated("notes");
+  dropPluginContexts("notes");
+  page.evaluations.length = 0;
+  host.fetches.length = 0;
+  switchModule.enableSitesTransportForTests(false);
+  assert.deepEqual((await ask("notes", "sites.available", {}, run)).result, { available: false });
+  const fetched = await ask("notes", "sites.fetch", { url: "https://app.notion.com/x" }, run);
+  assert.equal(fetched.error.code, "unavailable");
+  assert.match(fetched.error.message, /off in this version/);
+  assert.equal((await ask("notes", "sites.download", { url: "https://file.notion.com/x.zip", to: "off.zip" }, run)).error.code, "unavailable");
+  const direct = await hiddenPageTransport.open("notes", "https://app.notion.com", { profile: "p", windowId: "w" }, () => true);
+  assert.equal(direct.ok, false, "even a direct open refuses");
+  await settle(10);
+  assert.equal(Object.keys(useSiteContexts.getState().contexts).length, 0);
+  assert.equal(page.evaluations.length, 0);
+  assert.equal(host.fetches.length, 0, "not even the preflight runs");
+  switchModule.enableSitesTransportForTests(true);
+  assert.deepEqual((await ask("notes", "sites.available", {}, run)).result, { available: true }, "positive control: the code path still works when on");
+});
+
+async function pendingOpen(end) {
+  await enable(NOTES);
+  const run = await activated("notes");
+  dropPluginContexts("notes");
+  let release;
+  gate.preflight = new Promise((resolve) => (release = resolve));
+  const asking = ask("notes", "sites.fetch", { url: "https://app.notion.com/x" }, run);
+  await settle(10);
+  await end(run);
+  release();
+  gate.preflight = null;
+  const reply = await asking.catch(() => null);
+  await settle(10);
+  return reply;
+}
+
+test("owner B1: an open still waiting on its preflight is dropped when the sites switch goes off", async () => {
+  const reply = await pendingOpen(() => assert.ok(setPluginSignIn("notes", false)));
+  assert.ok(reply?.error);
+  assert.equal(Object.keys(useSiteContexts.getState().contexts).length, 0, "no page mounted after the revoke");
+  assert.ok(setPluginSignIn("notes", true));
+});
+
+test("owner B1: an open still waiting on its preflight is dropped when the plugin stops or the window closes", async () => {
+  const { stopPluginSites } = await import("./channelSites.ts");
+  assert.ok((await pendingOpen(() => stopPluginSites("notes")))?.error, "the stopped open fails");
+  assert.equal(Object.keys(useSiteContexts.getState().contexts).length, 0, "stopped: nothing mounted");
+  const reply = await pendingOpen(() => {
+    for (const id of Object.keys(S().windows)) S().closeWindow(id);
+  });
+  assert.equal(Object.keys(useSiteContexts.getState().contexts).length, 0, "window closed: nothing mounted");
+  assert.ok(!reply || reply.error);
 });

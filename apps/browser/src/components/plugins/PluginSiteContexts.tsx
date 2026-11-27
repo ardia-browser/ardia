@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { useWindowId } from "../../state/browser/hooks";
+import { sitesTransportOn } from "../../state/plugins/siteSwitch";
 import { attachSiteContext, dropWindowContexts, noteContextNavigation, useSiteContexts, type SiteContextView } from "../../state/plugins/siteContexts";
 import { WebView, type WebViewHandle } from "../ui";
 
@@ -9,7 +10,7 @@ export function PluginSiteContexts() {
   const windowId = useWindowId();
   const contexts = useSiteContexts(useShallow((s) => Object.values(s.contexts).filter((c) => c.windowId === windowId)));
   useEffect(() => () => dropWindowContexts(windowId), [windowId]);
-  if (!contexts.length) return null;
+  if (!contexts.length || !sitesTransportOn()) return null;
   return (
     <View pointerEvents="none" style={HOLDER} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {contexts.map((c) => (

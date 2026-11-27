@@ -531,6 +531,13 @@ background test instance never sends the event. Counted as `plugin_apple_notes_a
 
 ### sites
 
+**Off in this version.** `SITES_TRANSPORT_ENABLED` (`state/plugins/siteSwitch.ts`) is `false`: for every plugin
+`ardia.sites.available()` answers false and `fetch`, `download` and `session` fail with `unavailable`, and Ardia never
+makes the hidden page, nor runs its preflight. The hidden page's first load carries your cookies, and on that Chromium
+path nothing refuses a redirect to another host before the engine follows it. The switch turns back on once a
+NavigationThrottle in engine/ardiacore cancels any navigation or redirect of the hidden page to an origin the
+manifest doesn't list, before it's dispatched. The rest of this section describes the transport as it works when on.
+
 `permissions.sites` lets a plugin act on a site as you, with the sign-in you already have in Ardia, so it can read
 your own data there (the Notes plugin imports a whole Notion workspace this way). For now only Ardia's own built-in
 official plugins (installed in an official folder, the check `appChecks` makes for `claim`; `official: true` in a

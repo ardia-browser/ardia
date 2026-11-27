@@ -49,7 +49,7 @@ export const decodedBytes = (base64: string) => (base64.length / 4) * 3 - (base6
 export type SitePlace = { profile: string; windowId: string };
 
 export type SiteTransport = {
-  open(plugin: string, origin: string, place: SitePlace): Promise<{ ok: true; key: string } | { ok: false; reason: string }>;
+  open(plugin: string, origin: string, place: SitePlace, stillWanted: () => boolean): Promise<{ ok: true; key: string } | { ok: false; reason: string }>;
   run<T>(key: string, script: string, ms: number, stop?: Promise<unknown>): Promise<T | null>;
   alive(key: string): boolean;
   dropPlugin(plugin: string): void;

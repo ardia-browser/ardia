@@ -18,6 +18,7 @@ import { activeManifest, currentPlugins, NO_RECORD, recordOf } from "./store";
 import { isOfficialFolder } from "./appChecks";
 import { hiddenPageTransport } from "./siteContexts";
 import { admit, SITES_LIMITS, takeToken } from "./siteBudget";
+import { SITES_TRANSPORT_OFF_REASON, sitesTransportOn } from "./siteSwitch";
 
 export { decodedBytes, siteHeadersOf, siteTarget } from "./siteRules";
 export { activeSiteRequests, SITES_LIMITS, takeToken } from "./siteBudget";
@@ -48,7 +49,7 @@ const isBuiltInOfficial = (name: string) => {
   return !!listing?.manifest && isOfficialFolder(listing.folderId);
 };
 
-export const transportFor = (name: string): SiteTransport | null => (transport && isBuiltInOfficial(name) ? transport : null);
+export const transportFor = (name: string): SiteTransport | null => (transport && sitesTransportOn() && isBuiltInOfficial(name) ? transport : null);
 
 export const signInOn = (name: string) => recordOf(currentPlugins(), name).sitesOff !== true;
 
@@ -134,7 +135,7 @@ async function siteFetch(t: SiteTransport, c: Caller, m: PluginManifest, params:
   if (!takeToken(c.name)) return failure("refused", "Too many sign-in requests at once; wait a moment.");
   const release = admit(c.name);
   try {
-    const opened = await t.open(c.name, target.origin, where);
+    const opened = await t.open(c.name, target.origin, where, () => stillAllowed(op, where));
     if (!opened.ok) return failure("failed", opened.reason);
     if (!stillAllowed(op, where)) return refused(ENDED, consent);
     notePlugin("plugin_site_fetches", consent);
@@ -199,7 +200,7 @@ async function runDownload(t: SiteTransport, d: Download, target: SiteTarget, he
   };
   const fail = (code: string, message: string) => finish("failed", { code, error: message });
   const live = () => !d.cancelled && stillAllowed(d, where, true);
-  const opened = await Promise.race([t.open(d.caller.name, target.origin, where), d.halted.then(() => null)]);
+  const opened = await Promise.race([t.open(d.caller.name, target.origin, where, () => live()), d.halted.then(() => null)]);
   if (!opened || !live()) return finish("cancelled");
   if (!opened.ok) return fail("failed", opened.reason);
   d.key = opened.key;
@@ -327,7 +328,7 @@ export function sitesMethod(c: Caller, m: PluginManifest, method: string, params
   if (!m.permissions.sites.length) return refused("sites needs the sites permission.", consent);
   if (!signInOn(c.name)) return refused(SIGNED_OUT_OFF, consent);
   const t = transportFor(c.name);
-  if (!t) return failure("unavailable", NO_TRANSPORT);
+  if (!t) return failure("unavailable", sitesTransportOn() ? NO_TRANSPORT : SITES_TRANSPORT_OFF_REASON);
   if (method === "sites.session") return siteSession(c, consent);
   return method === "sites.fetch" ? siteFetch(t, c, m, params, consent) : siteDownload(t, c, m, params, consent);
 }

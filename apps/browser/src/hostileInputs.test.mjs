@@ -1315,6 +1315,8 @@ test("codex S10: whatever Apple Notes answers reaches a plugin only as capped te
 
 test("codex S10: a hidden sites page keeps its sign-in only on its own origin, whatever address it reports", async () => {
   const { noteContextNavigation, useSiteContexts, openSiteContext, attachSiteContext } = await import("./state/plugins/siteContexts.ts");
+  const { enableSitesTransportForTests } = await import("./state/plugins/siteSwitch.ts");
+  enableSitesTransportForTests(true);
   const keys = [];
   const unsubscribe = useSiteContexts.subscribe((s) => {
     for (const view of Object.values(s.contexts))
@@ -1337,4 +1339,5 @@ test("codex S10: a hidden sites page keeps its sign-in only on its own origin, w
     assert.equal(useSiteContexts.getState().contexts[opened.key], undefined);
   }
   unsubscribe();
+  enableSitesTransportForTests(false);
 });

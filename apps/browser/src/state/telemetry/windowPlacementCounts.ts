@@ -14,6 +14,7 @@ let littleOpenedFloating = 0;
 let utilityOpenedFloating = 0;
 let nativeDrags = 0;
 let dragTakeovers = 0;
+let rememberedTabsGone = 0;
 let pageFullScreenStarts = 0;
 let pageFullScreenSlowStarts = 0;
 export const SLOW_PAGE_FULL_SCREEN_START_MS = 300;
@@ -57,6 +58,7 @@ export function notePageFullScreenTransition(transition: FullScreenTransition | 
 }
 
 export const noteWindowReopenedMaximized = () => void (isSharing() && reopenedMaximized++);
+export const noteRememberedTabGone = () => void (isSharing() && rememberedTabsGone++);
 export function noteWindowClosePinsKept(n: number, renewed: number) {
   closePinsKept += n;
   closePinIdsRenewed += renewed;
@@ -75,7 +77,7 @@ export function noteWindowOpenedFloating(little: boolean, consent: ConsentToken 
 }
 
 export function takeWindowPlacementCounts() {
-  const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_drags_native: nativeDrags, window_drag_takeovers: dragTakeovers, window_close_pins_kept: closePinsKept, window_close_pin_ids_renewed: closePinIdsRenewed, little_ardia_opened_floating: littleOpenedFloating, utility_windows_opened_floating: utilityOpenedFloating, page_full_screen_starts: pageFullScreenStarts, page_full_screen_slow_starts: pageFullScreenSlowStarts, ...linuxCounts };
+  const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_drags_native: nativeDrags, window_drag_takeovers: dragTakeovers, window_close_pins_kept: closePinsKept, window_close_pin_ids_renewed: closePinIdsRenewed, little_ardia_opened_floating: littleOpenedFloating, utility_windows_opened_floating: utilityOpenedFloating, page_full_screen_starts: pageFullScreenStarts, page_full_screen_slow_starts: pageFullScreenSlowStarts, window_remembered_tabs_gone: rememberedTabsGone, ...linuxCounts };
   linuxCounts = { ...NO_LINUX_COUNTS };
   centeredResizes = 0;
   reopenedMaximized = 0;
@@ -89,5 +91,6 @@ export function takeWindowPlacementCounts() {
   closePinIdsRenewed = 0;
   littleOpenedFloating = 0;
   utilityOpenedFloating = 0;
+  rememberedTabsGone = 0;
   return taken;
 }

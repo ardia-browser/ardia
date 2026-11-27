@@ -15,9 +15,7 @@ import { keepsLastPage } from "./pinHomes";
 export type Item = { tab: Tab; group: string | null };
 export type Section = { items: Item[]; groups: Map<string, { group: TabGroup; parent: string | null }>; own: TabGroup[]; duplicate?: boolean; splits?: PinnedSplit[] };
 type PinnedSplit = Pick<SplitView, "orientation" | "slots">;
-
 const isTile = (t: Tab) => pinSection(t) === "tile";
-
 function withSplits(s: Pick<BrowserState, "splits">, w: BrowserWindow, x: Section): Section {
   const keyOf = new Map(x.items.filter((i) => !isTile(i.tab)).map((i) => [i.tab.id, pinKeyOf(i.tab)]));
   const splits = Object.values(s.splits)
@@ -25,7 +23,6 @@ function withSplits(s: Pick<BrowserState, "splits">, w: BrowserWindow, x: Sectio
     .map(({ orientation, slots }): PinnedSplit => ({ orientation, slots: mapSlotIds(slots, (id) => keyOf.get(id)!) }));
   return { ...x, splits };
 }
-
 const splitSig = (v: PinnedSplit) => `S${splitTabIds(v).join("\u0003")}\u0001${v.orientation}\u0001${stackAt(v) < 0 ? "" : stackAt(v)}`;
 
 function innermostPinned(s: Pick<BrowserState, "groups">, own: TabGroup[]): Map<string, TabGroup> {
@@ -308,7 +305,10 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
       ids = placeBlock(ids, ids.filter((id) => splitTabIds(x).includes(id)));
     }
   }
-  const window = { ...w, tabIds: orderSections(ids, tabs, groups) };
+  const remembered = Object.entries(w.activeTabIds);
+  const left = remembered.filter(([, id]) => !gone.includes(id));
+  const activeTabIds = left.length === remembered.length ? w.activeTabIds : Object.fromEntries(left);
+  const window = { ...w, tabIds: orderSections(ids, tabs, groups), activeTabIds };
   groups = syncGroupOrder(groups, window);
   const next: BrowserState = { ...s, tabs, groups, splits, windows: { ...s.windows, [windowId]: window } };
   return gone.length ? removeTabs(next, gone, false) : next;

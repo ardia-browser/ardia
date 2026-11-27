@@ -194,7 +194,8 @@ function openSettingsWindow(params: Record<string, unknown>, call: SocketCall) {
     const { pane: wantedPane, profileId: wantedProfile, detail: wantedDetail } = useSettingsNav.getState();
     const atPlace = () => {
       const nav = useSettingsNav.getState();
-      return nav.pane === wantedPane && nav.profileId === wantedProfile && nav.detail === wantedDetail && (!pane || nav.pane === pane) && (!profile || nav.profileId === profile);
+      const profileShown = !profile || (Object.hasOwn(now().profiles, profile) && shownSettingsProfile(nav) === profile);
+      return nav.pane === wantedPane && nav.profileId === wantedProfile && nav.detail === wantedDetail && (!pane || nav.pane === pane) && profileShown;
     };
     expect(atPlace(), `Settings didn't go to ${pane}.`);
     await waitFor(settingsWindowOpen);

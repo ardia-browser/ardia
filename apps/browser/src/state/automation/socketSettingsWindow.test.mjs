@@ -97,6 +97,27 @@ test("settings.open checks its profile again when its turn comes, after an earli
   assert.notEqual(useSettingsNav.getState().profileId, work);
 });
 
+test("settings.open fails when its profile goes away while the window opens", async () => {
+  const work = S().createProfile({ name: "Work" });
+  let finishOpen;
+  appWindows.openWindow = (id, options) => new Promise((resolve) => (finishOpen = () => resolve(openWindow(id, options))));
+  const reply = fire("settings.open", { pane: "profiles", profile: work });
+  for (let i = 0; i < 20 && !finishOpen; i++) await tick();
+  S().deleteProfile(work);
+  finishOpen();
+  const answer = await reply;
+  assert.equal(answer.error?.code, "failed", JSON.stringify(answer));
+});
+
+test("settings.open at a profile other than the default shows that profile, and a bare reopen keeps it", async () => {
+  const work = S().createProfile({ name: "Work" });
+  const opened = await ok("settings.open", { pane: "profiles", profile: work });
+  assert.deepEqual([opened.pane, opened.profile], ["profiles", work]);
+  await ok("settings.close");
+  const reopened = await ok("settings.open");
+  assert.deepEqual([reopened.pane, reopened.profile], ["profiles", work]);
+});
+
 test("settings.open without a pane brings Settings back where it was, page and profile included", async () => {
   const profile = S().settings.defaultProfileId;
   goToSettingsPane("profiles", profile, "sites");

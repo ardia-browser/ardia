@@ -264,14 +264,14 @@ export function startPasswordManager() {
   const plugins = () => managerPlugins(pluginsView());
 
   let appleProfiles: string | null = null;
-  const pushAppleProfiles = () => {
+  const pushAppleProfiles = (consent: ConsentToken | null) => {
     const chosen = [...modes].filter(([, mode]) => mode === "apple").map(([profile]) => profile).sort();
     const key = JSON.stringify(chosen);
     if (key === appleProfiles) return;
     appleProfiles = key;
     void setApplePasswordsProfiles(chosen).catch((e: unknown) => {
       appleProfiles = null;
-      warnFor(consentToken(), "[passwords] native refused the Apple Passwords profiles", e);
+      warnFor(consent, "[passwords] native refused the Apple Passwords profiles", e);
     });
   };
 
@@ -281,8 +281,9 @@ export function startPasswordManager() {
     const next = engineModes(browser(), current);
     for (const [profile, mode] of next) if (modes.get(profile) !== mode) followMode(profile, mode);
     modes = next;
-    pushAppleProfiles();
-    void pushProviders(providerPlugins(current), consentToken());
+    const consent = consentToken();
+    pushAppleProfiles(consent);
+    void pushProviders(providerPlugins(current), consent);
   };
 
   const syncWindows = () => {

@@ -912,3 +912,36 @@ test("a sleep answer that comes after the tab was opened and loaded again leaves
   noteTabGone(ids[0]);
   webviews.clear();
 });
+
+test("a sleep answer for a tab that closed while the ask was out leaves nothing behind for the tab that takes its id", async (t) => {
+  const { sleepTabsOverBudget, noteShownTabs, noteTabGone } = await import("./loadedTabBudget.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  const { isSleeping } = await import("./sleepingTabs.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 5600 * 60 * minute;
+  const { ids, active } = unusedWorld(1, now);
+  let answer;
+  const asked = [];
+  webviews.clear();
+  webviews.set(active, { sleepIfHidden: () => Promise.resolve([4]) });
+  webviews.set(ids[0], { sleepIfHidden: () => (asked.push(1), asked.length === 1 ? new Promise((resolve) => (answer = resolve)) : Promise.resolve([])) });
+  takeTabSleepCounts();
+  const budget = { tabs: 1, hiddenMs: 30 * minute };
+  noteShownTabs(new Set([active]), now);
+  const sweep = sleepTabsOverBudget(budget, now);
+  await new Promise((resolve) => setImmediate(resolve));
+  noteTabGone(ids[0]);
+  answer([]);
+  assert.deepEqual(await sweep, [], "the old view's answer is dropped");
+  assert.equal(isSleeping(ids[0]), false);
+  noteShownTabs(new Set([active, ids[0]]), now + minute);
+  noteShownTabs(new Set([active]), now + minute);
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.tabs_slept_over_budget, 0);
+  assert.equal(counts.tabs_slept_over_budget_reopened, 0, "showing the replacement isn't a reopen");
+  assert.equal(counts.sleep_kept_reopened_soon, 0);
+  assert.deepEqual(await settleSweep(t, sleepTabsOverBudget({ tabs: 1, hiddenMs: 0 }, now + 40 * minute)), [ids[0]], "no reopen protection keeps the replacement from sleeping later");
+  noteTabGone(ids[0]);
+  webviews.clear();
+});

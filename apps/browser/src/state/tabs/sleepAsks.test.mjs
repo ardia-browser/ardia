@@ -19,18 +19,15 @@ test("an answer for a tab whose view was replaced while the ask was out never co
   noteTabReady("replaced");
   assert.equal(sleepAskedNow("replaced"), false, "the replacement isn't held by the old ask");
   pending.answer([]);
-  const { keptBy, awakeMeanwhile, openedMeanwhile } = await pending.settled();
-  assert.deepEqual(keptBy, []);
-  assert.equal(awakeMeanwhile, true);
-  assert.equal(openedMeanwhile, false, "the old ask doesn't credit the replacement's open as its reopen");
+  assert.equal(await pending.settled(), undefined, "the old ask's answer is dropped: nothing is recorded for the replacement");
 });
 
-test("an ask whose tab was forgotten counts as stale even if no replacement loaded", async () => {
+test("an ask whose tab was forgotten is dropped even if no replacement loaded", async () => {
   const pending = deferredAsk("gone");
   await settle();
   forgetSleepAsks("gone");
   pending.answer([]);
-  assert.equal((await pending.settled()).awakeMeanwhile, true);
+  assert.equal(await pending.settled(), undefined);
 });
 
 test("a replacement's own ask isn't released by the old ask finishing", async () => {
@@ -40,7 +37,7 @@ test("a replacement's own ask isn't released by the old ask finishing", async ()
   const fresh = deferredAsk("swap");
   await settle();
   old.answer([]);
-  await old.settled();
+  assert.equal(await old.settled(), undefined);
   assert.equal(sleepAskedNow("swap"), true, "the fresh ask still holds the tab");
   fresh.answer([]);
   assert.equal((await fresh.settled()).awakeMeanwhile, false);
@@ -59,7 +56,7 @@ test("generations never return to a value a pending ask captured, across tabs an
   noteTabReady("a");
   pending.answer([]);
   fresh.answer([]);
-  assert.equal((await pending.settled()).awakeMeanwhile, true);
+  assert.equal(await pending.settled(), undefined);
   const after = await fresh.settled();
   assert.equal(after.awakeMeanwhile, true, "the replacement became ready while its own ask was out");
   assert.equal(after.openedMeanwhile, false);

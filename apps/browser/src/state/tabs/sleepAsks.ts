@@ -29,9 +29,9 @@ export async function askToSleep(id: string, ask: () => Promise<number[]> | unde
   const readyAt = readyGeneration.get(id) ?? 0;
   try {
     const keptBy = await withDeadline(Promise.resolve().then(ask).catch(() => undefined), ANSWER_WITHIN_MS, undefined);
-    const sameTab = inFlightSleeps.get(id) === ticket;
-    const openedMeanwhile = sameTab && (shownGeneration.get(id) ?? 0) !== shownAt;
-    settle({ keptBy, openedMeanwhile, awakeMeanwhile: !sameTab || openedMeanwhile || (readyGeneration.get(id) ?? 0) !== readyAt });
+    if (inFlightSleeps.get(id) !== ticket) return;
+    const openedMeanwhile = (shownGeneration.get(id) ?? 0) !== shownAt;
+    settle({ keptBy, openedMeanwhile, awakeMeanwhile: openedMeanwhile || (readyGeneration.get(id) ?? 0) !== readyAt });
   } finally {
     if (inFlightSleeps.get(id) === ticket) inFlightSleeps.delete(id);
   }

@@ -26,8 +26,10 @@ never seen by the PrefService), off prefs.tracked_preferences_reset. A record mo
 - restored: the record keeps the exact value it put back, and the next second pass to get the key (that launch's, or a
   later one's if the key was unavailable) checks that value against its encrypted hash again, strictly, with no HMAC
   fallback. If it doesn't verify, the entry is removed and listed, but only while the live entry is still the one it
-  put back (the same first_install_time, or for a value without one the same value), so the writes Chrome and sync
-  make to that entry don't save it, while a reinstall or another value written since is left alone. A later change by sync or the user isn't mistaken for tampering,
+  put back, so the writes Chrome and sync make to that entry don't save it, while a reinstall is left alone: an entry
+  counts as replaced only when both it and the restored value carry a non-empty first_install_time and the two
+  differ (Chrome writes that time at install and never fills one in later); a value that isn't a dictionary counts as
+  replaced when it differs. A later change by sync or the user isn't mistaken for tampering,
   because the check never reads the live value. Then the record is gone. A restore checks first that every step of the
   value's path and of its hashes' paths is a dictionary or absent, and waits otherwise.
 Nothing comes back in the session it was reset in: an extension entry the loader never registered breaks shutdown
@@ -105,7 +107,7 @@ there.
  #include "services/preferences/public/cpp/tracked/pref_names.h"
  #include "services/preferences/public/cpp/tracked/tracked_preference_histogram_names.h"
  #include "services/preferences/tracked/dictionary_hash_store_contents.h"
-@@ -41,6 +44,111 @@
+@@ -41,6 +44,114 @@
  
  namespace {
  
@@ -161,17 +163,20 @@ there.
 +
 +bool SameRestoredEntry(const base::Value& current,
 +                       const base::Value& restored) {
-+  const base::DictValue* current_dict = current.GetIfDict();
 +  const base::DictValue* restored_dict = restored.GetIfDict();
++  if (!restored_dict) {
++    return current == restored;
++  }
++  const base::DictValue* current_dict = current.GetIfDict();
 +  const std::string* current_install =
 +      current_dict ? current_dict->FindString(kFirstInstallTimeKey) : nullptr;
 +  const std::string* restored_install =
-+      restored_dict ? restored_dict->FindString(kFirstInstallTimeKey)
-+                    : nullptr;
-+  if (current_install && restored_install) {
-+    return *current_install == *restored_install;
++      restored_dict->FindString(kFirstInstallTimeKey);
++  if (!current_install || current_install->empty() || !restored_install ||
++      restored_install->empty()) {
++    return true;
 +  }
-+  return current == restored;
++  return *current_install == *restored_install;
 +}
 +
 +bool DictPathUsable(const base::DictValue& root, std::string_view dotted_path) {
@@ -217,7 +222,7 @@ there.
  std::vector<const char*>* GetDeprecatedPrefs() {
    // Add deprecated previously tracked preferences below for them to be cleaned
    // up from both the pref files and the hash store.
-@@ -105,6 +213,8 @@
+@@ -105,6 +216,8 @@
  
  using PrefTrackingStrategy =
      prefs::mojom::TrackedPreferenceMetadata::PrefTrackingStrategy;
@@ -226,7 +231,7 @@ there.
  
  PrefHashFilter::PrefHashFilter(
      std::unique_ptr<PrefHashStore> pref_hash_store,
-@@ -131,7 +241,8 @@
+@@ -131,7 +244,8 @@
            base::MakeRefCounted<base::DeferredSequencedTaskRunner>(
                base::SequencedTaskRunner::GetCurrentDefault())),
        encrypted_hashing_enabled_(
@@ -236,21 +241,21 @@ there.
    // For base::UmaHistogramExactLinear, number of tracked histograms must 100 or
    // below.
    CHECK_LE(reporting_ids_count_, 100u);
-@@ -281,6 +392,13 @@
-   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+@@ -282,6 +396,13 @@
    PrefFilter::OnWriteCallbackPair callback_pair =
        GetOnWriteSynchronousCallbacks(pref_store_contents);
-+
+ 
 +  if (awaiting_safe_storage_.empty()) {
 +    pref_store_contents.Remove(kAwaitingSafeStorageKey);
 +  } else {
 +    pref_store_contents.Set(kAwaitingSafeStorageKey,
 +                            awaiting_safe_storage_.Clone());
 +  }
- 
++
    if (!changed_paths_.empty()) {
      DictionaryHashStoreContents dictionary_contents(pref_store_contents);
-@@ -346,6 +464,17 @@
+     std::unique_ptr<PrefHashStoreTransaction> hash_store_transaction(
+@@ -346,6 +467,17 @@
    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
    std::set<std::string> reset_paths;
    bool did_reset = false;
@@ -268,7 +273,7 @@ there.
  
    // Perform the initial synchronous validation pass (without the encryptor).
    // This validates the super MAC and all individual preference MACs.
-@@ -374,11 +503,26 @@
+@@ -374,11 +506,26 @@
          prefs_altered = true;
        }
      }
@@ -295,20 +300,20 @@ there.
    if (did_reset) {
      pref_store_contents.SetByDottedPath(
          user_prefs::kPreferenceResetTime,
-@@ -395,6 +539,12 @@
+@@ -394,6 +541,12 @@
+     }
    }
    reset_on_load_observer_.reset();
- 
++
 +  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
 +      FROM_HERE,
 +      base::BindOnce(
 +          &PrefHashFilter::UpdateTrackedPreferencesResetListInPrefStore,
 +          weak_ptr_factory_.GetWeakPtr(), pref_store_contents.Clone()));
-+
+ 
    // If encrypted hashing is on, post a deferred task to re-validate with the
    // encryptor once it's available. Pass a clone of the pref store contents
-   // so the task operates on the exact state at load time. Also pass the list of
-@@ -417,15 +567,6 @@
+@@ -417,15 +570,6 @@
      }
    }
  
@@ -324,7 +329,7 @@ there.
    // Immediately call the callback with the original pref_store_contents to
    // allow startup to proceed without waiting for the encryptor.
    std::move(post_filter_on_load_callback)
-@@ -508,6 +649,8 @@
+@@ -508,6 +652,8 @@
      UpdateTrackedPreferencesResetListInPrefStore(pref_store_contents_at_load);
    }
  
@@ -333,13 +338,10 @@ there.
    // This is the final validation pass. Log metrics if we haven't already.
    MaybeRecordTrackedPreferenceResetCount(pref_store_contents_at_load);
  
-@@ -541,9 +684,330 @@
-                            reset_list->Clone());
-   } else {
-     pref_service_->ClearPref(user_prefs::kTrackedPreferencesReset);
-+  }
-+}
-+
+@@ -544,6 +690,327 @@
+   }
+ }
+ 
 +void PrefHashFilter::SetAsideForSafeStorage(
 +    const base::DictValue& contents_before_checks,
 +    base::DictValue& pref_store_contents,
@@ -508,10 +510,10 @@ there.
 +    }
 +    changed = changed || !dropped.empty() || !demoted.empty() ||
 +              !restored.empty();
-   }
++  }
 +  return changed;
- }
- 
++}
++
 +PrefHashFilter::SafeStorageVerdict PrefHashFilter::CheckWithSafeStorage(
 +    const std::string& path,
 +    const std::string* key,

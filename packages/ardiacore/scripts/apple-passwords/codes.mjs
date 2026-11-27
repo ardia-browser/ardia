@@ -41,5 +41,31 @@ export function codeChecks({ paired, sites, engine: engineName = "webkit" }) {
         await tab.close();
       }
     },
+    async E26() {
+      const codes = codesFor(SITE);
+      const typed = codes.at(-1);
+      const tab = await open(SITE, "/login");
+      try {
+        await tab.click("#u");
+        await tab.waitRows();
+        await tab.type(typed.username);
+        await waitFor("the typed account", async () => ((await tab.value(`document.getElementById("u").value`)) === typed.username ? true : null), 5000);
+        await tab.key("escape");
+        await tab.navigate(sites.url(SITE, "/code"));
+        await tab.click("#c");
+        const rows = await tab.waitRows();
+        const others = codes.filter((c) => c !== typed);
+        assert(q(rows.map((r) => r.label)) === q([typed, ...others].map((c) => `${codeTitle(SITE)}, ${c.username}`).concat(FOOTER)), "the typed account's code is first", rows);
+        await tab.pick(codeTitle(SITE));
+        const filled = await waitFor("the filled code", async () => {
+          const page = await codeField(tab);
+          return page?.c ? page : null;
+        });
+        assert(filled.c === typed.code, "the top row fills the typed account's code", { filled: filled.c.length });
+        return { engine: engineName, rows: rows.map((r) => r.label) };
+      } finally {
+        await tab.close();
+      }
+    },
   };
 }

@@ -24,7 +24,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   private(set) var webView: WebKitWebView?
   private var observations: [NSObject] = []
   private var started = false
-  private(set) var closed = false { didSet { if closed { stopWatchingSight() } } }
+  private(set) var closed = false { didSet { if closed { stopWatchingSight(); watchFullscreenSight(false) } } }
   private var navigationQueued = false
   var mediaFrames: [String: WKFrameInfo] {
     get { webView?.mediaFrames ?? [:] }
@@ -63,6 +63,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
+    placeholdersDidArrive(in: window)
     if window != nil { followInterfaceScale() }
     watchSight()
     showNextDialog()
@@ -122,12 +123,13 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     WebKitHub.shared.transfers.unregister(view)
     view.navigationDelegate = nil
     view.uiDelegate = nil
-    view.removeFromSuperview()
+    letGo(view)
     return view
   }
 
   private func emitEverything() {
     emit("ready", [:])
+    publishAdoptedFullscreen()
     queueNavigation()
     emit("progress", ["progress": webView?.estimatedProgress ?? 0])
     emitSecurity()
@@ -146,9 +148,8 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     view.isInspectable = WebKitHub.inspectable && !WebKitStores.isPrivate(profile)
     if let color = pageBackgroundColor ?? life.contentsBackgroundColor { view.underPageBackgroundColor = color }
     listen(to: view)
-    view.frame = bounds
     view.autoresizingMask = [.width, .height]
-    addSubview(view)
+    place(view)
     updateHidden()
     observe(view)
     prepareFirstPaint(view)
@@ -179,15 +180,17 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   func dropViewForDiscard() -> WebKitWebView? {
     guard let view = webView else { return nil }
+    watchFullscreenSight(false)
     observations = []
     webView = nil
     stopListening(to: view)
     return view
   }
 
-  private func updateHidden() {
+  func updateHidden() {
     isHidden = !visible
-    webView?.isHidden = !visible
+    if let view = webView { view.isHidden = WebKitFullscreenPage.hidesPage(view, in: self, visible: visible) }
+    noteFullscreenPageKeptShown()
     paintBackdrop()
   }
 
@@ -208,7 +211,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
       WebKitHub.shared.transfers.unregister(view)
       view.navigationDelegate = nil
       view.uiDelegate = nil
-      view.removeFromSuperview()
+      letGo(view)
       if WebKitHub.shared.transfers.park(view, key: key) { return }
     }
     WebKitHub.close(view)

@@ -42,6 +42,7 @@ import { endPageDocument, forgetPageDocument, notePageDocument } from "../../sta
 import { arrivedOnFirstPage, leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
 import { copyLinkToSelection, searchSelection, setPageSelection } from "../../state/site/selection";
 import { shareFromPage } from "../../state/site/share";
+import { navigateFromPage } from "../../state/tabs/pageCommands";
 import { useAutoPictureInPicture } from "../../state/media/pip";
 import { requestDisplayMedia } from "../../state/media/screenShare";
 import { setNowPlaying, setPictureInPictureState } from "../../state/media/media";
@@ -158,9 +159,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
     };
   }, []);
   const waitsOffScreen = engine === "webkit" && warm && !visible;
-  useEffect(() => {
-    if (waitsOffScreen) noteWebKitPageKeptHidden();
-  }, [waitsOffScreen]);
+  useEffect(() => { if (waitsOffScreen) noteWebKitPageKeptHidden(); }, [waitsOffScreen]);
   const mountedProfile = useRef(profileId);
   const wentRetired = useRef(false);
   useLayoutEffect(() => {
@@ -277,9 +276,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         lastPage.current = withoutFragment(url);
         patchPage(tabId, { themeColorSource: themeColorSource ?? null });
       }}
-      onLoadError={() => {
-        pending.current = null;
-      }}
+      onLoadError={() => { pending.current = null; }}
       onDownloadNavigation={({ committedUrl, skipped }) => {
         pending.current = null;
         downloadNavigated(tabId, committedUrl, skipped);
@@ -364,6 +361,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         else if (command === "hideElement" && point) void startHidingElement(tabId, point);
         else if (command === "translatePage") void translatePage(tabId, defaultTarget(), "page_menu");
         else if (command === "showOriginal") void revertPage(tabId);
+        else if (command === "back" || command === "forward") navigateFromPage(tabId, command);
       }}
       onSelection={(selection) => setPageSelection(tabId, selection)}
       onScroll={(state) => noteScroll(tabId, state)}

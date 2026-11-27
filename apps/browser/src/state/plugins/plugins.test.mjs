@@ -856,10 +856,11 @@ test("a rescan asked for while one runs reports with the token of the change tha
       const scanning = lifecycle.rescanPlugins(first);
       setConsentPeriod(true, "plugins-test-later");
       assert.notEqual(consentToken(), first);
-      void lifecycle.rescanPlugins(consentToken());
+      const queued = lifecycle.rescanPlugins(consentToken());
       host.listFails = true;
       release();
       await scanning;
+      await queued;
     });
     assert.equal(seen.length, 2);
     assert.equal(seen[0], first);

@@ -370,6 +370,10 @@ void Core(const std::string& scratch) {
 
   CHECK(core.Dispatch("ArdiaSync.deleteChain", {S(folder)}, now).ok);
   CHECK(joiner.Dispatch("ArdiaSync.chainStatus", {S(folder)}, now).value.text == "missing");
+  CHECK(core.Dispatch("ArdiaSync.write", {S(folder), S("app"), S("{\"v\":1,\"kind\":\"log\"}")}, now).code == "ERR_SYNC_CHAIN_MISSING");
+  struct stat chain_info;
+  CHECK(stat((folder + "/" + core_keys->chain_tag()).c_str(), &chain_info) != 0 && errno == ENOENT);
+  CHECK(core.Dispatch("ArdiaSync.chainStatus", {S(folder)}, now).value.text == "missing");
   const auto generation = core.generation();
   CHECK(core.Dispatch("ArdiaSync.forget", {S(device)}, now).ok);
   CHECK(!core.unlocked() && core.forgotten_since(generation));

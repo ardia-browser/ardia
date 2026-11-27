@@ -15,6 +15,7 @@ const NONE = {
   sidebar_peek_closes_while_resizing: 0,
   sidebar_screen_edge_crossings: 0,
   sidebar_screen_edge_returns: 0,
+  sidebar_edge_reveals_through_overlay: 0,
   sidebar_full_screen_peeks: 0,
   sidebar_full_screen_peek_quick_closes: 0,
   sidebar_field_remeasures: 0,
@@ -54,6 +55,8 @@ export const noteFullScreenPeek = () => void counts.sidebar_full_screen_peeks++;
 export const noteFullScreenPeekClosed = (shownMs: number) => void (shownMs < QUICK_PEEK_CLOSE_MS && counts.sidebar_full_screen_peek_quick_closes++);
 
 export const noteSidebarPeekFrame = (frameInset: number) => void (frameInset < FRAME_UNDER_OLD_PEEK_GAP && counts.sidebar_thin_frame_peeks++);
+
+export const noteSidebarEdgeRevealThroughOverlay = (consent: ConsentToken | null) => countFor(consent, () => void counts.sidebar_edge_reveals_through_overlay++);
 
 export const noteSidebarFieldRemeasure = () => void counts.sidebar_field_remeasures++;
 

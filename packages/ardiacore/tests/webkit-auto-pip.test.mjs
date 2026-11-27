@@ -65,7 +65,7 @@ test("WebKit tabs keep the autoPictureInPicture flag instead of a stub that read
 });
 
 test("WebKit tabs follow the user's sight of their window the way Chromium views do", () => {
-  assert.match(sight, /return visible && ArdiaChromeWindowHost\.userSees\(window\)/);
+  assert.match(sight, /return WebKitFullscreenPage\.seen\(visible: visible, heldInFullscreen: pageHeldInFullscreen, windowSeen: ArdiaChromeWindowHost\.userSees\(window\), fullscreenWindowSeen: fullscreenWindowSeen\)/);
   assert.match(sight, /forName: (?:NSNotification\.Name\.)?ArdiaWindowSeenDidChange, object: window/);
   assert.match(sight, /return !playingFrames\.isEmpty \|\| view\.cameraCaptureState == \.active \|\| view\.microphoneCaptureState == \.active/);
   assert.match(sight, /playing: playsMedia\)/);
@@ -100,7 +100,7 @@ test("the page's picture in picture reports reach the rule", () => {
 });
 
 test("the sight observer is dropped when the window changes or the tab closes or gives its view away", () => {
-  assert.match(tab, /private\(set\) var closed = false \{ didSet \{ if closed \{ stopWatchingSight\(\) \} \} \}/);
+  assert.match(tab, /private\(set\) var closed = false \{ didSet \{ if closed \{ stopWatchingSight\(\); watchFullscreenSight\(false\) \} \} \}/);
   assert.match(sight, /func watchSight\(\) \{\n\s+stopWatchingSight\(\)/);
   const relinquish = tab.slice(tab.indexOf("func relinquish() -> WebKitWebView? {"), tab.indexOf("\n  }\n", tab.indexOf("func relinquish() -> WebKitWebView? {")));
   assert.match(relinquish, /closed = true/);

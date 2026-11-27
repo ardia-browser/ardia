@@ -29,3 +29,17 @@ test("WebKit page counts from native reach the hourly counts once the app starts
   assert.equal(counts.webkit_context_menus, 1);
   assert.equal(counts.webkit_certificate_interstitials, 1);
 });
+
+test("a WebKit page kept shown, carried along or put back around full screen is counted in the hourly engine counts", () => {
+  startWebKitCounts();
+  takeEngineSwitchCounts();
+  counted("fullscreenKeptShown");
+  counted("fullscreenMovedWithTab");
+  counted("fullscreenMovedWithTab");
+  counted("fullscreenPageReclaimed");
+  const counts = takeEngineSwitchCounts();
+  assert.equal(counts.webkit_fullscreen_pages_kept_shown, 1);
+  assert.equal(counts.webkit_fullscreen_pages_moved_with_tab, 2);
+  assert.equal(counts.webkit_fullscreen_pages_reclaimed, 1);
+  assert.equal(takeEngineSwitchCounts().webkit_fullscreen_pages_moved_with_tab, 0);
+});

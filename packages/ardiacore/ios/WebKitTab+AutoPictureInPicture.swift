@@ -44,7 +44,7 @@ extension WebKitTab {
 
   private var seenByUser: Bool {
     guard let window else { return false }
-    return visible && ArdiaChromeWindowHost.userSees(window)
+    return WebKitFullscreenPage.seen(visible: visible, heldInFullscreen: pageHeldInFullscreen, windowSeen: ArdiaChromeWindowHost.userSees(window), fullscreenWindowSeen: fullscreenWindowSeen)
   }
 
   func updateSight() {

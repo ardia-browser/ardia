@@ -238,9 +238,9 @@ function SidebarDock({
     dismissHoverIn(windowId);
   };
   const peek = usePeek((!open || fullscreen) && !moving, arc, () => edgeOver.current || emptyWindow.held() || peekHeld(windowId), closed, opened);
-  const reveal = () => {
+  const reveal = (throughOverlay = false) => {
     emptyWindow.byHand();
-    if (arm.current.armed) latestPeek.current.show();
+    if (arm.current.armed) latestPeek.current[throughOverlay ? "showThroughOverlay" : "show"]();
     else noteSidebarPeekRevealHeldBack();
   };
   const latestPeek = useRef(peek);
@@ -273,7 +273,7 @@ function SidebarDock({
       edgeOver.current = e.over;
       arm.current = edgeSeen(arm.current, "native", e.over);
       if (e.screenEdge === "crossed") dismissHoverIn(windowId);
-      if (e.over) latestReveal.current.reveal();
+      if (e.over) latestReveal.current.reveal(!!e.overlay);
       else latestPeek.current.hide(e.screenEdge === "crossed");
     });
     watchSidebarEdge(windowId, true, nativeHold, right, holding || draggingTab);

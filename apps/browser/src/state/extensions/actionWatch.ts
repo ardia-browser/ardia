@@ -62,6 +62,19 @@ function flushSoon() {
   flushTimer ??= setTimeout(flushActionChanges, ACTION_EVENT_COALESCE_MS);
 }
 
+function actionInputs(s: BrowserState): string {
+  let key = focusedWindowOf(s) ?? "";
+  for (const windowId of s.windowOrder) key += `\u0001${windowId}\u0002${extensionProfile(s, windowId)}\u0002${activeTabId(s, windowId) ?? ""}`;
+  return key;
+}
+
+function activeReadinessChanged(s: BrowserState, ready: Record<string, number>, before: Record<string, number>): boolean {
+  return s.windowOrder.some((windowId) => {
+    const tabId = activeTabId(s, windowId);
+    return !!tabId && ready[tabId] !== before[tabId];
+  });
+}
+
 export function startActionStates() {
   onProfilesUnloaded((profiles) => {
     for (const profile of profiles) loadedProfiles.delete(profile);
@@ -73,8 +86,13 @@ export function startActionStates() {
     flushSoon();
   });
   AppState.addEventListener("change", (state) => state === "active" && flushSoon());
-  useBrowser.subscribeTo(["windows", "ui", "tabs"], (s, prev) => {
-    if (s.windows !== prev.windows || focusedWindowOf(s) !== focusedWindowOf(prev)) return void refreshActionStates();
+  let inputs = actionInputs(useBrowser.getState());
+  useBrowser.subscribeTo(["windows", "windowOrder", "ui", "tabs", "profiles"], (s, prev) => {
+    const next = actionInputs(s);
+    if (next !== inputs) {
+      inputs = next;
+      return void refreshActionStates();
+    }
     if (s.tabs === prev.tabs) return;
     const navigated = s.windowOrder.filter((id) => {
       const active = activeTabId(s, id);
@@ -90,7 +108,7 @@ export function startActionStates() {
   });
   usePages.subscribe((p, prev) => {
     if (p.ready === prev.ready) return;
-    void refreshActionStates();
+    if (activeReadinessChanged(useBrowser.getState(), p.ready, prev.ready)) void refreshActionStates();
     const actions = useExtensions.getState().actions;
     const gone = Object.keys(actions).filter((id) => !p.ready[id]);
     if (!gone.length) return;

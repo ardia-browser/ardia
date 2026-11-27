@@ -4,6 +4,7 @@ import ArdiaCore
 final class SidebarEdgeWatcher {
   static let shared = SidebarEdgeWatcher()
   static let reach: CGFloat = 24
+  static let revealStrip: CGFloat = 3
 
   var pointerOverride: NSPoint?
   private var backgroundPoint: NSPoint?
@@ -12,6 +13,7 @@ final class SidebarEdgeWatcher {
     let right: Bool
     let whilePressed: Bool
     var hold: CGFloat { InterfaceScale.windowLength(fromRoot: rootHold) }
+    var strip: CGFloat { InterfaceScale.windowLength(fromRoot: SidebarEdgeWatcher.revealStrip) }
   }
 
   private var watched: [String: Watch] = [:]
@@ -22,6 +24,8 @@ final class SidebarEdgeWatcher {
   private var wasPressed = false
   private var crossings: [String: ScreenEdgeCrossing] = [:]
   private var returnedTo: String?
+  private var returnedThroughOverlay = false
+  private var overlaid: Set<String> = []
   private var localMonitor: Any?
   private var globalMonitor: Any?
   private var observers: [NSObjectProtocol] = []
@@ -75,6 +79,7 @@ final class SidebarEdgeWatcher {
   }
 
   private func check(_ point: NSPoint, live: Bool) {
+    overlaid = []
     let screenEdge = crossScreenEdge(point, live: live)
     lazy var onDock = live && NSApp.isActive && isOnDock(point)
     let pressed = buttonHeld || (live && NSEvent.pressedMouseButtons != 0)
@@ -94,6 +99,7 @@ final class SidebarEdgeWatcher {
         || (inColumn && over.contains(id) && onDock)
         || (inColumn && isOver(point, of: window, watch, live: false) && onDock && isTopBeneathDock(point, of: window, right: watch.right))
         || returnedTo == id)
+      let throughOverlay = now && (overlaid.contains(id) || (returnedTo == id && returnedThroughOverlay))
       let fresh = unreported.remove(id) != nil
       let edgeNote = screenEdge[id]
       guard fresh || now != over.contains(id) || edgeNote != nil else { continue }
@@ -101,6 +107,7 @@ final class SidebarEdgeWatcher {
       let inRoot = InterfaceScale.rootPoint(fromScreen: point, in: window)
       var event: [String: Any] = ["type": "sidebarEdge", "id": id, "over": now, "point": [inRoot.x, inRoot.y]]
       if let edgeNote { event["screenEdge"] = edgeNote }
+      if throughOverlay { event["overlay"] = true }
       ShellEvents.send(.window, event)
     }
     if watched.isEmpty { return stop() }
@@ -111,6 +118,7 @@ final class SidebarEdgeWatcher {
     let pressed = buttonHeld || (live && NSEvent.pressedMouseButtons != 0)
     let tracking = !pressed && (!live || (NSApp.isActive && !LaunchConfig.shared.background))
     if let id = returnedTo, !tracking || !nearScreenEdge(point, id, live: live) { returnedTo = nil }
+    if returnedTo == nil { returnedThroughOverlay = false }
     let time = ProcessInfo.processInfo.systemUptime
     for (id, crossing) in crossings where watched[id] == nil && !crossing.awaitingReturn(at: time) { crossings[id] = nil }
     var notes: [String: String] = [:]
@@ -137,8 +145,10 @@ final class SidebarEdgeWatcher {
         if returnedTo == id { returnedTo = nil }
         notes[id] = "crossed"
       case .returned:
+        Self.passedOverlay = false
         guard nearScreenEdge(point, id, live: live) else { continue }
         returnedTo = id
+        returnedThroughOverlay = Self.passedOverlay
         notes[id] = "returned"
       }
     }
@@ -173,10 +183,10 @@ final class SidebarEdgeWatcher {
     watch.right ? point.x >= frame.maxX - watch.hold : point.x < frame.minX + watch.hold
   }
 
-  private static func inBand(_ point: NSPoint, _ frame: NSRect, _ watch: Watch) -> Bool {
-    watch.right
-      ? point.x < frame.maxX && point.x >= frame.maxX - watch.hold
-      : point.x >= frame.minX && point.x < frame.minX + watch.hold
+  private static func inBand(_ point: NSPoint, _ frame: NSRect, right: Bool, width: CGFloat) -> Bool {
+    right
+      ? point.x < frame.maxX && point.x >= frame.maxX - width
+      : point.x >= frame.minX && point.x < frame.minX + width
   }
 
   private static func beyondEdge(_ point: NSPoint, _ frame: NSRect, _ screen: NSRect, _ right: Bool) -> Bool {
@@ -195,17 +205,27 @@ final class SidebarEdgeWatcher {
     let slack = holding ? Self.reach : 0
     guard point.y >= frame.minY - slack, point.y < frame.maxY + slack else { return false }
     let insideY = min(max(point.y, frame.minY), frame.maxY - 1)
-    if Self.inBand(point, frame, watch) {
+    let inHold = Self.inBand(point, frame, right: watch.right, width: watch.hold)
+    let inStrip = !inHold && live && Self.inBand(point, frame, right: watch.right, width: watch.strip)
+    if inHold || inStrip {
       guard live else { return true }
+      Self.passedOverlay = false
       let hit = NSApp.window(withWindowNumber: Self.windowNumber(at: NSPoint(x: point.x, y: insideY)))
-      guard hit === window || hit?.parent === window else { return false }
-      return insideY == point.y || !Self.overAnotherOfOurs(point, besides: window)
+      guard hit === window || hit?.parent === window, !inStrip || Self.passedOverlay else { return false }
+      let through = Self.passedOverlay
+      guard insideY == point.y || !Self.overAnotherOfOurs(point, besides: window) else { return false }
+      if through, let id = watchedID(of: window) { overlaid.insert(id) }
+      return true
     }
     guard Self.beyondEdge(point, frame, screen.frame, watch.right) else { return false }
     guard live else { return true }
+    Self.passedOverlay = false
     guard Self.windowNumber(at: Self.insideEdge(frame, watch.right, y: insideY)) == window.windowNumber else { return false }
+    let through = Self.passedOverlay
     if Self.overAnotherOfOurs(point, besides: window) { return false }
-    return NSApp.isActive || Self.besideScreenEdge(window, screen, right: watch.right)
+    guard NSApp.isActive || Self.besideScreenEdge(window, screen, right: watch.right) else { return false }
+    if through, let id = watchedID(of: window) { overlaid.insert(id) }
+    return true
   }
 
   private static func overAnotherOfOurs(_ point: NSPoint, besides window: NSWindow) -> Bool {
@@ -215,12 +235,45 @@ final class SidebarEdgeWatcher {
 
   private static func windowNumber(at point: NSPoint, below start: Int = 0) -> Int {
     var number = NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: start)
-    while let passThrough = NSApp.window(withWindowNumber: number), passThrough.ignoresMouseEvents {
+    while passesThrough(number, at: point) {
       let below = NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: number)
       guard below != number else { break }
       number = below
     }
     return number
+  }
+
+  private static var passedOverlay = false
+  private static var foreign: [Int: (overlay: ScreenOverlay?, at: TimeInterval)] = [:]
+
+  private static func passesThrough(_ number: Int, at point: NSPoint) -> Bool {
+    if let ours = NSApp.window(withWindowNumber: number) { return ours.ignoresMouseEvents }
+    guard number > 0, let overlay = foreignWindow(number) else { return false }
+    let windows = NSApp.windows.filter { $0.isVisible && $0.parent == nil }.map(\.frame)
+    guard overlay.passesOver(point, displays: NSScreen.screens.map(\.frame), windows: windows, margin: reach) else { return false }
+    passedOverlay = true
+    return true
+  }
+
+  private static func foreignWindow(_ number: Int) -> ScreenOverlay? {
+    let time = ProcessInfo.processInfo.systemUptime
+    if let cached = foreign[number], time - cached.at < 1 { return cached.overlay }
+    if foreign.count > 32 { foreign = [:] }
+    let overlay = readForeignWindow(number)
+    foreign[number] = (overlay, time)
+    return overlay
+  }
+
+  private static func readForeignWindow(_ number: Int) -> ScreenOverlay? {
+    guard let primary = NSScreen.screens.first?.frame,
+      let info = (CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(number)) as? [[String: Any]])?.first,
+      let layer = info[kCGWindowLayer as String] as? Int,
+      let cgBounds = (info[kCGWindowBounds as String] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0) })
+    else { return nil }
+    let owner = (info[kCGWindowOwnerPID as String] as? pid_t).flatMap { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier }
+    let bounds = NSRect(x: cgBounds.minX, y: primary.maxY - cgBounds.maxY, width: cgBounds.width, height: cgBounds.height)
+    let capturable = (info[kCGWindowSharingState as String] as? UInt32).map { $0 != CGWindowSharingType.none.rawValue } ?? true
+    return ScreenOverlay(bounds: bounds, layer: layer, fromSlack: owner == ScreenOverlay.slackBundle, capturable: capturable)
   }
 
   private func isOnDock(_ point: NSPoint) -> Bool {
@@ -292,6 +345,10 @@ final class SidebarEdgeWatcher {
     })
   }
 
+  private func watchedID(of window: NSWindow) -> String? {
+    watched.keys.first { WindowManager.shared.window($0) === window }
+  }
+
   private func isWatched(_ window: NSWindow) -> Bool {
     watched.keys.contains { WindowManager.shared.window($0) === window }
   }
@@ -315,6 +372,7 @@ final class SidebarEdgeWatcher {
         })
       }
       observers.append(center.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+        Self.foreign = [:]
         self?.updateGlobalMonitor()
       })
       observers.append(center.addObserver(forName: .ArdiaInterfaceScaleDidChange, object: nil, queue: .main) { [weak self] _ in
@@ -344,6 +402,7 @@ final class SidebarEdgeWatcher {
 
   private func stop() {
     returnedTo = nil
+    Self.foreign = [:]
     for monitor in [localMonitor, globalMonitor].compactMap({ $0 }) { NSEvent.removeMonitor(monitor) }
     localMonitor = nil
     globalMonitor = nil

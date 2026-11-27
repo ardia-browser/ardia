@@ -769,9 +769,11 @@ public final class SyncService {
       set(\.phase, .stalled(Self.stalledMessage))
       return
     }
+    let generation = engineGeneration
     await broken.retire()
-    engine = nil
     keyStore.delete(account: oldId)
+    guard engineGeneration == generation, isEnabled else { return }
+    engine = nil
     visitsDue = true
     guard makeEngine(deviceId: deviceId, entropy: entropy, grant: grant) != nil else { return }
     again = true

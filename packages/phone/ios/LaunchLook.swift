@@ -6,13 +6,6 @@ struct LaunchSlot: Equatable {
   var dark: Bool
 }
 
-struct DrawnPalette: Equatable {
-  var color: String?
-  var themeColors: [String]
-  var themeLook: ThemeLook?
-  var dark: Bool
-}
-
 enum LaunchLook {
   static let key = "ardia.phone.launchLook"
   static let themeLooksKey = "themeLooks"
@@ -33,16 +26,13 @@ enum LaunchLook {
       return (colors, slot.dark)
     }
 
-    func drawnPalette(appDark: Bool) -> DrawnPalette {
+    func drawnBackdrop(appDark: Bool) -> DrawnBackdrop {
       let drawn = LaunchLook.normalized(self).drawn(appDark: appDark)
-      let dark = drawn.dark ?? appDark
-      let light = drawn.colors.themeColors ?? []
-      let darkColors = drawn.colors.darkThemeColors.flatMap { $0.isEmpty ? nil : $0 }
-      return DrawnPalette(color: drawn.colors.color, themeColors: dark ? (darkColors ?? light) : light, themeLook: drawn.colors.themeLook, dark: dark)
+      return ProfileBackdrop.drawn(look: drawn.colors.look, themeLook: drawn.colors.themeLook, themed: true, dark: drawn.dark ?? appDark)
     }
 
     func drawsTheSameSpace(as other: Recalled, appDark: Bool) -> Bool {
-      drawnPalette(appDark: appDark) == other.drawnPalette(appDark: appDark)
+      drawnBackdrop(appDark: appDark) == other.drawnBackdrop(appDark: appDark)
     }
   }
 

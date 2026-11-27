@@ -160,6 +160,28 @@ import Testing
     #expect(j.service.hasReadCache)
   }
 
+  @Test func stoppingWhileACorruptStateStartsOverLeavesSyncOffAndReady() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    await j.service.close()
+    try Data(repeating: 9, count: 4096).write(to: stateFile(j.sandbox))
+    let keysBefore = j.sandbox.contents(j.sandbox.keys).count
+
+    let relaunched = makeService(j.sandbox, source: j.source, clock: j.clock)
+    relaunched.start()
+    let deadline = ContinuousClock.now + .seconds(10)
+    while j.sandbox.contents(j.sandbox.keys).count <= keysBefore, ContinuousClock.now < deadline {
+      await Task.yield()
+    }
+    try #require(j.sandbox.contents(j.sandbox.keys).count > keysBefore)
+    await relaunched.stopSyncing()
+    for _ in 0..<500 { await Task.yield() }
+    #expect(relaunched.phase == .off)
+    #expect(!relaunched.isEnabled)
+    #expect(relaunched.hasReadCache)
+    await relaunched.close()
+  }
+
   @Test func aServiceWithNoCacheToReadHasReadItAtOnce() throws {
     let sandbox = try Sandbox()
     defer { sandbox.remove() }

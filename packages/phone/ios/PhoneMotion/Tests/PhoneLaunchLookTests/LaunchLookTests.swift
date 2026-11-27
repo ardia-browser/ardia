@@ -134,7 +134,7 @@ import Testing
 
   @Test func aLightLaunchIsNotStaleWhenOnlyTheDarkPaletteChanged() {
     func saved(dark: String) -> LaunchLook.Recalled {
-      LaunchLook.recalled(saved: ["color": "blue", "themeColors": ["#112233"], "darkThemeColors": [dark], "themeLooks": ["light": ["dark": false], "dark": ["dark": true]]])
+      LaunchLook.recalled(saved: ["color": "blue", "themeColors": ["#112233", "#223344"], "darkThemeColors": [dark, "#556677"], "themeLooks": ["light": ["dark": false], "dark": ["dark": true]]])
     }
     #expect(saved(dark: "#445566").drawsTheSameSpace(as: saved(dark: "#778899"), appDark: false))
     #expect(!saved(dark: "#445566").drawsTheSameSpace(as: saved(dark: "#778899"), appDark: true))
@@ -148,5 +148,19 @@ import Testing
     #expect(!LaunchLook.countsAsStale(shown: blue, appDark: false, shownWindow: 2, next: green, currentWindow: 3))
     #expect(!LaunchLook.countsAsStale(shown: blue, appDark: false, shownWindow: 3, next: green, currentWindow: nil))
     #expect(!LaunchLook.countsAsStale(shown: blue, appDark: false, shownWindow: 3, next: blue, currentWindow: 3))
+  }
+
+  @Test func aDarkLaunchIsNotStaleWhenOnlyTheLightVariantOfACustomThemeChanged() {
+    var dawn = Self.sunset
+    dawn.angle = 120
+    dawn.texture = .denim
+    let before = LaunchLook.recalled(saved: Self.themed)
+    let after = LaunchLook.recalled(saved: [
+      "color": "#40A0E0",
+      "themeColors": ["#40A0E0", "#E0A040"],
+      "themeLooks": ["light": ["look": dawn.dictionary, "dark": false], "dark": ["look": Self.night.dictionary, "dark": true]],
+    ])
+    #expect(before.drawsTheSameSpace(as: after, appDark: true))
+    #expect(!before.drawsTheSameSpace(as: after, appDark: false))
   }
 }

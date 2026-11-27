@@ -25,7 +25,7 @@ import {
 } from "../../../state/plugins/actions";
 import { usePluginActive, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginUnsaved, usePluginValues } from "../../../state/plugins/hooks";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, type SettingsPlace } from "../../../state/settings/settingsWindows";
-import { Button, PopUp, Symbol, TextField, Toggle } from "../../ui";
+import { Button, PopUp, space, Symbol, TextField, Toggle } from "../../ui";
 import { Group, Row, SectionHeader } from "../Form";
 import { useTheme } from "../../ui/theme";
 import { PaneSubPage } from "./PaneSubPage";
@@ -288,13 +288,16 @@ function PluginPage({ name }: { name: string }) {
           </Group>
         </>
       )}
-      <Group>
-        <Row title="Remove" description={listing.official ? "Removes its download and its commands on your PATH. Its data stays." : `Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
-          <Button title="Remove…" kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
-        </Row>
-      </Group>
+      <View style={REMOVE}>
+        <Group>
+          <Row title="Remove" description={listing.official ? "Removes its download and its commands on your PATH. Its data stays." : `Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
+            <Button title="Remove…" kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
+          </Row>
+        </Group>
+      </View>
     </PaneSubPage>
   );
 }
 
 const ICON = { width: 18, height: 18 } as const;
+const REMOVE = { marginTop: space.xxl } as const;

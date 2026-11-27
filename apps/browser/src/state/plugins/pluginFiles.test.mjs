@@ -835,6 +835,11 @@ test("codex S3: Apple Notes needs the appleNotes permission, and its sheet says 
   assert.match(appleNotesDisclosure(online), /app\.notion\.com/);
   const any = readManifest(JSON.stringify({ ...NOTES, permissions: { ...NOTES.permissions, network: "*" } })).manifest;
   assert.match(appleNotesDisclosure(any), /the internet/);
+  const tabs = readManifest(JSON.stringify({ ...NOTES, permissions: { ...NOTES.permissions, tabs: "write" } })).manifest;
+  assert.match(appleNotesDisclosure(tabs), /web pages it opens in your tabs/, "codex round 2 S3: tabs write is a way out too");
+  assert.doesNotMatch(appleNotesDisclosure(tabs), /Nothing is sent anywhere/);
+  const commands = readManifest(JSON.stringify({ ...NOTES, permissions: { ...NOTES.permissions, commands: true } })).manifest;
+  assert.match(appleNotesDisclosure(commands), /web pages it opens/);
 });
 
 test("codex round 2 S2: a pick is bound to the identity the panel saw when you chose, not to what a later probe finds", async () => {

@@ -537,9 +537,12 @@ ardia.appleNotes.notes(folder, { offset?, limit? }) // { total, notes: [{ id, na
 It needs `permissions.appleNotes` (without it each call is `refused`). `request` shows Ardia's sheet in a normal
 window: "<Plugin> wants to read your Apple Notes. It copies your notes' titles, text, pictures, folders and dates into
 <Plugin>, in Ardia on this Mac. Nothing is sent anywhere, Apple Notes isn't changed, and locked notes are skipped.
-Next, macOS asks you to let Ardia control the Notes app." (Allow / Cancel). For a plugin that can reach the network or
-a site, "Nothing is sent anywhere." becomes "<Plugin> can also reach <its hosts, or the internet>, so it could send
-what it reads there." A note whose locked flag Notes doesn't answer counts as locked, so its body is never read. Allowed, it lasts until the
+Next, macOS asks you to let Ardia control the Notes app." (Allow / Cancel). For a plugin with any way to send data on,
+"Nothing is sent anywhere." becomes "<Plugin> can send what it reads to …", listing each one it has: the internet or
+its network hosts (and its own program, for a sidecar with network), its sites, web pages it opens in your tabs (tabs
+write, commands or control) and programs it adds to your Mac (appleNotesChannels). Each note is read by its id: Ardia
+checks the note it got is that id, then reads its locked flag and body from that same note; a note whose locked flag
+Notes doesn't answer counts as locked, so its body is never read. Allowed, it lasts until the
 plugin's run ends. The first read then sends Notes an Apple Event, and macOS shows its own Automation prompt, once
 per Mac ("“Ardia” wants access to control “Notes”"), with Ardia's purpose string; refused there (or later in System
 Settings › Privacy & Security › Automation) every read is `refused` and says where to turn it on. Ardia runs only its

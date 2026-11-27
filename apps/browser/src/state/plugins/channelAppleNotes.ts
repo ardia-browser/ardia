@@ -73,10 +73,22 @@ function answerOf(answer: { ok: boolean; json?: string; error?: string; code?: n
   }
 }
 
-export function appleNotesDisclosure(m: PluginManifest): string {
+export function appleNotesChannels(m: PluginManifest): string[] {
   const p = m.permissions;
-  const reaches = p.network === "*" ? "the internet" : [...(p.network || []), ...p.sites].join(", ");
-  const sent = reaches ? `${m.title} can also reach ${reaches}, so it could send what it reads there.` : "Nothing is sent anywhere.";
+  const channels: string[] = [];
+  if (p.network === "*") channels.push(m.sidecar ? "the internet, from Ardia and from its own program" : "the internet");
+  else if (p.network) channels.push(p.network.join(", "));
+  if (p.sites.length) channels.push(`your accounts on ${p.sites.join(", ")}`);
+  if (p.tabs === "write" || p.commands || p.control) channels.push("web pages it opens in your tabs");
+  if (m.contributes.programs.length) channels.push("the programs it adds to your Mac, which run with your access");
+  return channels;
+}
+
+const listed = (items: string[]) => (items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join("; ")} and ${items.at(-1)}`);
+
+export function appleNotesDisclosure(m: PluginManifest): string {
+  const channels = appleNotesChannels(m);
+  const sent = channels.length ? `${m.title} can send what it reads to ${listed(channels)}.` : "Nothing is sent anywhere.";
   return `It copies your notes' titles, text, pictures, folders and dates into ${m.title}, in Ardia on this Mac. ${sent} Apple Notes isn't changed, and locked notes are skipped. Next, macOS asks you to let Ardia control the Notes app.`;
 }
 

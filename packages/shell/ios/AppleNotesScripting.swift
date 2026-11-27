@@ -44,19 +44,18 @@ enum AppleNotesScripting {
       const notes = folder.notes;
       const total = notes.length;
       const ids = notes.id();
-      const names = notes.name();
-      const created = notes.creationDate();
-      const modified = notes.modificationDate();
-      let locked = [];
-      try { locked = notes.passwordProtected(); } catch (e) { locked = []; }
       const out = [];
       const end = Math.min(total, \(max(0, offset)) + \(max(0, min(limit, 200))));
       for (let i = \(max(0, offset)); i < end; i++) {
-        let isLocked = locked[i];
-        if (typeof isLocked !== "boolean") { try { isLocked = notes[i].passwordProtected(); } catch (e) { isLocked = true; } }
-        const note = { id: ids[i], name: names[i], created: +created[i], modified: +modified[i], locked: isLocked !== false, body: "" };
-        if (!note.locked) { try { note.body = notes[i].body(); } catch (e) { note.body = ""; } }
-        out.push(note);
+        const id = ids[i];
+        const note = app.notes.byId(id);
+        try { if (note.id() !== id) continue; } catch (e) { continue; }
+        let locked = true;
+        try { locked = note.passwordProtected() !== false; } catch (e) { locked = true; }
+        const entry = { id, name: "", created: 0, modified: 0, locked, body: "" };
+        try { entry.name = note.name(); entry.created = +note.creationDate(); entry.modified = +note.modificationDate(); } catch (e) {}
+        if (!locked) { try { entry.body = note.body(); } catch (e) { entry.body = ""; } }
+        out.push(entry);
       }
       return JSON.stringify({ total, notes: out });
     })()

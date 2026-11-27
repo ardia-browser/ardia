@@ -277,6 +277,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       await unpaired(app, fake);
       const cancelled = { user: `cancelled-${engineName}-${Date.now()}@save.test`, password: "fixture-pw-cancelled-18" };
       const again = await tabs.open(sites.url(SITE));
+      const counted = await saveCounts(app);
       try {
         await signIn(again, cancelled.user, cancelled.password);
         assert((await promptShown(again)).copy.title === CONNECT_TITLE, `the prompt asks ${CONNECT_TITLE} again`, null);
@@ -286,6 +287,8 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         const told = await promptShown(again, "the prompt saying it wasn't saved");
         assert(told.state === "notSaved" && told.copy.title === NOT_SAVED_TITLE, `Cancel says ${NOT_SAVED_TITLE}`, told);
         assert(!fake.savedLogins().some((l) => l.user === cancelled.user), "nothing reached Apple Passwords", null);
+        const failed = (await counted()).filter((c) => c.name === "saveFailed");
+        assert(failed.length === 1 && failed[0].engine === engineName && failed[0].kind === "notPaired", "Cancel counts one save failure, as not paired", failed);
         assert(await again.answer("dismiss"), "OK closes it", null);
         seen.cancelled = told.copy.title;
       } finally {

@@ -89,19 +89,20 @@ final class ApplePasswordsSaving: NSObject {
   }
 
   private static let waiting = NSMapTable<AnyObject, Waiting>.weakToStrongObjects()
-  private static let pairingOver: Set<String> = ["refused", "helperMissing", "tooOld", "notEntitled"]
+  private static let pairingOver: [String: ApplePasswordsClient.Problem] = Dictionary(
+    uniqueKeysWithValues: [ApplePasswordsClient.Outcome.refused, .helperMissing, .tooOld, .notEntitled].map { ($0.rawValue, .unavailable($0)) })
   private static let watching: NSObjectProtocol = NotificationCenter.default.addObserver(forName: ApplePasswordsClient.changed, object: nil, queue: .main) { note in
     let state = note.userInfo?["state"] as? String ?? ""
-    if state == "connected" { return finishWaiting(sending: true) }
-    if pairingOver.contains(state) { finishWaiting(sending: false) }
+    if state == "connected" { return finishWaiting(failed: nil) }
+    if let problem = pairingOver[state] { finishWaiting(failed: problem) }
   }
 
-  private static func finishWaiting(sending: Bool) {
+  private static func finishWaiting(failed problem: ApplePasswordsClient.Problem?) {
     let held = (waiting.objectEnumerator()?.allObjects as? [Waiting]) ?? []
     waiting.removeAllObjects()
     for login in held {
-      guard sending else {
-        count("saveFailed", engine: login.engine, kind: ApplePasswordsClient.Problem.notConnected.kind)
+      if let problem {
+        count("saveFailed", engine: login.engine, kind: problem.kind)
         login.done(false)
         continue
       }
@@ -111,7 +112,7 @@ final class ApplePasswordsSaving: NSObject {
 
   static func pairingCancelled() {
     dispatchPrecondition(condition: .onQueue(.main))
-    finishWaiting(sending: false)
+    finishWaiting(failed: .notConnected)
   }
 
   static func save(origin: String, username: String, password: String, engine: String, pairIn target: LoginListTarget?, done: @escaping (Bool) -> Void) {
@@ -121,7 +122,7 @@ final class ApplePasswordsSaving: NSObject {
         guard state == "notConnected", let target else { return store(origin: origin, username: username, password: password, engine: engine, done: done) }
         _ = watching
         if let superseded = waiting.object(forKey: target) {
-          count("saveFailed", engine: superseded.engine)
+          count("saveFailed", engine: superseded.engine, kind: ApplePasswordsClient.Problem.notConnected.kind)
           superseded.done(false)
         }
         waiting.setObject(Waiting(origin: origin, username: username, password: password, engine: engine, done: done), forKey: target)

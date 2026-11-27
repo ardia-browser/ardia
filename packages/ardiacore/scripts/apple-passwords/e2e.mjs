@@ -372,6 +372,7 @@ async function pairingRefusedWhileHeld(engine) {
   const fake = fakeHelper(path.join(SCRATCH, name, "fake"));
   await start(name, { manifest: fake.manifest });
   await pairApplePasswords(fake);
+  const counted = await saveCounts(app);
   fake.endPairing();
   await until(pairingView, (v) => v.state === "notConnected", 10_000);
   const tab = await (engine === "chromium" ? chromiumTabs : webkitTabs)(app, { log: note }).open(sites.url("save.localhost"));
@@ -385,6 +386,8 @@ async function pairingRefusedWhileHeld(engine) {
     assert(await tab.answer("save"), "Connect is pressed", null);
     const told = await promptShown(tab, "the prompt saying it wasn't saved");
     assert(told.state === "notSaved" && told.copy.title === NOT_SAVED_TITLE, `Apple Passwords refused during Pairing says ${NOT_SAVED_TITLE}`, told);
+    const failed = await waitFor("the save failure counted", async () => (await counted()).find((c) => c.name === "saveFailed") ?? null, 5000);
+    assert(failed.engine === engine && failed.kind === "refused", "the held save's failure counts as refused, not as not paired", failed);
     const refused = await until(pairingView, (v) => v.state === "refused");
     assert(refused.step === "failed" && refused.error === REFUSED, "the Pairing failed because Apple Passwords refused", refused);
     assert(savesSent(fake) === 0 && !fake.asked().some((a) => a.user === login.user), "Apple Passwords is sent no save and never asks", savesSent(fake));

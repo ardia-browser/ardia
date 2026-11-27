@@ -149,10 +149,11 @@ class TabSleepTests(unittest.TestCase):
         self.assertIn('tab sleep scenarios passed', output)
 
     def test_the_mac_answers_an_asleep_tab_the_same_way(self):
-        mac = (ROOT.parent / 'ardiacore/src/ardia/core/ardiacore_tab.mm').read_text()
-        body = mac[mac.index('- (NSArray<NSNumber*>*)sleepIfHiddenFor:(NSTimeInterval)seconds {'):]
-        body = body[:body.index('\n}\n')]
-        self.assertLess(body.index('if (_contents->WasDiscarded()) {\n    return @[];'), body.index('GetPrimaryPageNodeForWebContents'))
+        view = (ROOT.parents[1] / 'packages/ardiacore/ios/ArdiaWebView+Tab.mm').read_text()
+        for name in ('sleepIfHiddenFor', 'sleepIfUnusedFor'):
+            body = view[view.index(f'- (NSArray<NSNumber *> *){name}:(NSTimeInterval)seconds {{'):]
+            body = body[:body.index('\n}\n')]
+            self.assertIn('_tab.discarded) return @[ @-1 ];', body.splitlines()[1])
 
     def test_the_mac_checks_and_sleeps_an_unused_tab_in_one_call(self):
         mac = (ROOT.parent / 'ardiacore/src/ardia/core/ardiacore_tab.mm').read_text()

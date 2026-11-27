@@ -8,7 +8,6 @@ import { holderOf } from "../pins/pinShare";
 import { consentToken } from "../telemetry/client";
 import type { ConsentToken } from "../telemetry/choice";
 import { noteHoverWakePutBack, noteHoverWokenTabOpened, noteTabWokenOnHover } from "../telemetry/tabSleepCounts";
-import { onFrontTabChanged } from "../windows/frontTabs";
 import { heldByCli } from "./cliHolds";
 import { inUse } from "./loadedTabBudget";
 import { hasPage, restoredLazily, wokenPage } from "./pageSession";
@@ -117,10 +116,21 @@ function putBack(id: string, wake: Wake) {
   if (forgetWake(id, wake)) void putBackHoverWake(id, wake);
 }
 
+export function noteHoverWakesShown(shown: ReadonlySet<string>, now = Date.now()) {
+  for (const id of [...woken.keys()]) if (shown.has(id)) noteHoverWakeOpened(id, now);
+}
+
 function watchOpens() {
   if (watching) return;
   watching = true;
-  onFrontTabChanged((change) => void noteHoverWakeOpened(change.after));
+  useBrowser.subscribeTo(["windows", "splits", "peeks", "tabs"], (s) => {
+    if (woken.size) noteHoverWakesShown(shownTabIds(s));
+  });
+}
+
+export function forgetHoverWakes() {
+  for (const [id, wake] of [...woken]) forgetWake(id, wake);
+  cancelHoverWake();
 }
 
 export async function wakeOnHover(id: string, consent: ConsentToken | null, now = Date.now()): Promise<HoverWake> {

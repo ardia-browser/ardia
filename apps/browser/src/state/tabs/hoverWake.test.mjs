@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { afterEach, test } from "node:test";
 
 globalThis.__DEV__ = false;
 
@@ -8,7 +8,8 @@ const { webviews } = await import("../../platform/webviews.ts");
 const { useLifecycle, noteSleptByHand, forgetSleptByHand } = await import("./sleepingTabs.ts");
 const { setConsentPeriod, consentToken } = await import("../telemetry/consentPeriod.ts");
 const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
-const { HOVER_WAKE_KEPT_MS, HOVER_WAKE_MS, HOVER_WAKE_OPENED_WITHIN_MS, armHoverWake, cancelHoverWake, hoverWakeOf, noteHoverWakeOpened, putBackHoverWake, wakeOnHover } = await import("./hoverWake.ts");
+const { HOVER_WAKE_KEPT_MS, HOVER_WAKE_MS, HOVER_WAKE_OPENED_WITHIN_MS, armHoverWake, cancelHoverWake, forgetHoverWakes, hoverWakeOf, noteHoverWakeOpened, putBackHoverWake, wakeOnHover } = await import("./hoverWake.ts");
+afterEach(() => forgetHoverWakes());
 setConsentPeriod(true, "hover-wake-test");
 
 const S = () => useBrowser.getState();
@@ -226,5 +227,18 @@ test("the wake waits for the pointer to rest, and leaving or moving on first can
   await settle();
   assert.deepEqual(woke, [1], "resting on it wakes it once");
   t.mock.timers.tick(HOVER_WAKE_KEPT_MS);
+  webviews.clear();
+});
+
+test("a hover-woken tab shown in a split pane it doesn't focus counts as opened and isn't put back", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { hidden, active, asked } = sleepingTab(async () => true);
+  takeTabSleepCounts();
+  await wakeOnHover(hidden, consentToken());
+  S().createSplit([active, hidden]);
+  assert.equal(takeTabSleepCounts().hover_woken_tabs_opened, 1);
+  t.mock.timers.tick(HOVER_WAKE_KEPT_MS);
+  await settle();
+  assert.deepEqual(asked, [], "no put-back for a tab on screen");
   webviews.clear();
 });

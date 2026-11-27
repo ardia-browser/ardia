@@ -809,7 +809,8 @@ test("a tab asked to sleep by one sweep isn't asked by another until the answer 
 });
 
 test("an engine that doesn't know the unused-tab call is asked the plain sleep instead", async (t) => {
-  const { askUnusedSleep, sleepUnusedTabs } = await import("./loadedTabBudget.ts");
+  const { sleepUnusedTabs } = await import("./loadedTabBudget.ts");
+  const { askUnusedSleep } = await import("./sleepAsks.ts");
   const { consentToken } = await import("../telemetry/consentPeriod.ts");
   const { webviews } = await import("../../platform/webviews.ts");
   const plain = [];
@@ -843,6 +844,71 @@ test("a slept tab shown in a Peek or a split pane counts as opened", async (t) =
   noteShownTabs(new Set([active, ids[0]]), now + minute);
   assert.equal(takeTabSleepCounts().tabs_slept_over_budget_reopened, 1);
   noteShownTabs(new Set([active]), now + 2 * minute);
+  noteTabGone(ids[0]);
+  webviews.clear();
+});
+
+test("the other sweep never slips in between a sleep's answer and the tab being marked asleep", async (t) => {
+  const { sleepTabsOverBudget, sleepUnusedTabs } = await import("./loadedTabBudget.ts");
+  const { consentToken } = await import("../telemetry/consentPeriod.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 4800 * 60 * minute;
+  const { ids, active } = unusedWorld(1, now);
+  let answer;
+  const unusedAsks = [];
+  webviews.clear();
+  webviews.set(active, { sleepIfHidden: () => Promise.resolve([4]) });
+  webviews.set(ids[0], { sleepIfHidden: () => new Promise((resolve) => (answer = resolve)), sleepIfUnused: () => (unusedAsks.push(1), Promise.resolve([])) });
+  takeTabSleepCounts();
+  const budgetSweep = sleepTabsOverBudget({ tabs: 1, hiddenMs: 30 * minute }, now);
+  await new Promise((resolve) => setImmediate(resolve));
+  answer([]);
+  const unusedSweeps = [];
+  for (let depth = 0; depth < 12; depth++) {
+    unusedSweeps.push(sleepUnusedTabs(() => 60 * minute, consentToken(), now));
+    await Promise.resolve();
+  }
+  await budgetSweep;
+  await Promise.all(unusedSweeps);
+  assert.deepEqual(unusedAsks, [], "at every step after the answer the tab is either still being asked or already asleep");
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.tabs_slept_over_budget, 1);
+  assert.equal(counts.tabs_slept_unused, 0);
+  webviews.clear();
+});
+
+test("a sleep answer that comes after the tab was opened and loaded again leaves it awake and counts the reopen", async (t) => {
+  const { sleepTabsOverBudget, noteShownTabs, noteTabGone } = await import("./loadedTabBudget.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  const { isSleeping } = await import("./sleepingTabs.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 5200 * 60 * minute;
+  const { ids, active } = unusedWorld(1, now);
+  let answer;
+  const asked = [];
+  webviews.clear();
+  webviews.set(active, { sleepIfHidden: () => Promise.resolve([4]) });
+  webviews.set(ids[0], { sleepIfHidden: () => (asked.push(1), asked.length === 1 ? new Promise((resolve) => (answer = resolve)) : Promise.resolve([])) });
+  takeTabSleepCounts();
+  const budget = { tabs: 1, hiddenMs: 30 * minute };
+  noteShownTabs(new Set([active]), now);
+  const sweep = sleepTabsOverBudget(budget, now);
+  await new Promise((resolve) => setImmediate(resolve));
+  lifecycle.noteDiscarded(ids[0]);
+  noteShownTabs(new Set([ids[0]]), now);
+  lifecycle.noteReady(ids[0]);
+  noteShownTabs(new Set([active]), now);
+  answer([]);
+  assert.deepEqual(await sweep, [ids[0]]);
+  assert.equal(isSleeping(ids[0]), false, "the late answer doesn't mark the awake tab asleep");
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.tabs_slept_over_budget, 1);
+  assert.equal(counts.tabs_slept_over_budget_reopened, 1, "the open in between is the reopen of that sleep");
+  assert.deepEqual(await settleSweep(t, sleepTabsOverBudget(budget, now + minute)), [], "and it is kept as a reopened tab");
+  assert.equal(asked.length, 1);
   noteTabGone(ids[0]);
   webviews.clear();
 });

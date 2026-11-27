@@ -11,6 +11,7 @@ import { webviews } from "../../platform/webviews";
 import { forgetSleptByHand, useLifecycle } from "./sleepingTabs";
 import { startMemorySaver } from "./memorySaver";
 import { noteTabGone, pressureChanged, startLoadedTabBudget } from "./loadedTabBudget";
+import { noteTabReady } from "./sleepAsks";
 import { pressureOf } from "./sleepPolicy";
 import { focusedWindowOf } from "../windows/ui";
 import { noteMemoryPressure, noteTabSlept } from "../telemetry/tabSleepCounts";
@@ -33,6 +34,7 @@ const currentSystem = () => (system ? { ...system, ...systemOverride } : null);
 export function noteReady(tabId: string) {
   const tab = store().tabs[tabId];
   if (tab) loadedProfiles.add(engineProfile(useBrowser.getState(), tab.profileId));
+  noteTabReady(tabId);
   forget(tabId);
   noteTabLoaded(tabId);
 }

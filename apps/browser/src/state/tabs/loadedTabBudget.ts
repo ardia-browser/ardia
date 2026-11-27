@@ -2,7 +2,6 @@ import type { SystemState } from "../../platform/performance";
 import { everySlowly, reschedule } from "../../platform/slowTimers";
 import { onWebviewsChanged, webviews } from "../../platform/webviews";
 import { afterFirstRoot } from "../../lib/afterFirstWindow";
-import { withDeadline } from "../../lib/deadline";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { tabEngine } from "../engines/engines";
@@ -19,6 +18,7 @@ import { shownTabIds } from "./shownTabs";
 import { isSleeping, markSleeping, useLifecycle } from "./sleepingTabs";
 import { engineVeto, MINUTE, SLEEPS_PER_TICK, sleepRules, sleepVeto, sleptPastSoftKeeps, tabsToSleep, unusedAfterMs, unusedTabsToSleep, type SleepPlan, type SleepRules, type SleepVeto, type TabSleepFacts } from "./sleepPolicy";
 import { liveOf, onLiveChange } from "./tabLive";
+import { askToSleep, askUnusedSleep, forgetSleepAsks, noteShownAgain, sleepAskedNow } from "./sleepAsks";
 import { countSwitch, forgetSwitchesExcept, switchesOf } from "./tabSwitches";
 import { onFrontTabChanged } from "../windows/frontTabs";
 import { heldByCli } from "./cliHolds";
@@ -28,7 +28,6 @@ type LoadedTabBudget = Pick<SleepRules, "tabs" | "hiddenMs"> & Partial<SleepRule
 const SWEEP_MS = MINUTE;
 const PRESSURE_TICK_MS = 5_000;
 const PRESSURE_ARMS_AFTER_MS = 10_000;
-const ANSWER_WITHIN_MS = 1500;
 const ASK_AGAIN_MS = 10 * MINUTE;
 const KEPT_RECENTLY_MS = 60 * MINUTE;
 const REOPENED_SOON_MS = 30 * MINUTE;
@@ -135,16 +134,6 @@ function vetoNow(id: string, budget: LoadedTabBudget, now: number): SleepVeto | 
 
 const seenAt = new Map<string, number>();
 const reopenedSoon = new Map<string, ConsentToken | null>();
-const inFlightSleeps = new Set<string>();
-
-async function askToSleep(id: string, ask: () => Promise<number[]> | undefined): Promise<number[] | undefined> {
-  inFlightSleeps.add(id);
-  try {
-    return await withDeadline(Promise.resolve().then(ask).catch(() => undefined), ANSWER_WITHIN_MS, undefined);
-  } finally {
-    inFlightSleeps.delete(id);
-  }
-}
 const askAgainAt = new Map<string, number>();
 const unusedAskAgainAt = new Map<string, number>();
 const sleptAt = new Map<string, { at: number; consent: ConsentToken | null }>();
@@ -179,26 +168,28 @@ async function sweepOverBudget(budget: LoadedTabBudget | null, now: number, cons
   try {
     for (const id of asking) {
       if (generation !== pressureGeneration) break;
-      if (inFlightSleeps.has(id)) continue;
+      if (sleepAskedNow(id)) continue;
       const vetoed = vetoNow(id, budget, now);
       if (vetoed) {
         if (vetoed !== "gone") noteVeto(id, vetoed, consent);
         continue;
       }
-      const keptBy = await askToSleep(id, () => webviews.get(id)?.sleepIfHidden(budget.hiddenMs / 1000));
-      const veto = keptBy ? engineVeto(keptBy) : null;
-      if (keptBy?.length === 0) {
-        markSleeping(id);
-        slept.push(id);
-        sleptAt.set(id, { at: now, consent });
-        keptAt.delete(id);
-        noteTabSleptOverBudget(consent, budget.pressure ?? "normal");
-      } else if (veto === "recentlySeen") seenAt.set(id, now);
-      else {
-        noteVeto(id, veto, consent);
-        askAgainAt.set(id, now + ASK_AGAIN_MS);
-        keptAt.set(id, now);
-      }
+      await askToSleep(id, () => webviews.get(id)?.sleepIfHidden(budget.hiddenMs / 1000), ({ keptBy, openedMeanwhile, awakeMeanwhile }) => {
+        const veto = keptBy ? engineVeto(keptBy) : null;
+        if (keptBy?.length === 0) {
+          if (!awakeMeanwhile) markSleeping(id);
+          slept.push(id);
+          sleptAt.set(id, { at: now, consent });
+          keptAt.delete(id);
+          noteTabSleptOverBudget(consent, budget.pressure ?? "normal");
+          if (openedMeanwhile) noteTabOpened(id, now);
+        } else if (veto === "recentlySeen") seenAt.set(id, now);
+        else {
+          noteVeto(id, veto, consent);
+          askAgainAt.set(id, now + ASK_AGAIN_MS);
+          keptAt.set(id, now);
+        }
+      });
     }
   } finally {
     sweeping = false;
@@ -218,6 +209,7 @@ export function noteTabOpened(tabId: string | undefined, now = Date.now()) {
 export function noteTabGone(tabId: string) {
   sleptAt.delete(tabId);
   reopenedSoon.delete(tabId);
+  forgetSleepAsks(tabId);
 }
 
 export function noteTabsSeen(ids: readonly (string | undefined)[], now = Date.now()) {
@@ -231,21 +223,13 @@ export function noteShownTabs(shown: ReadonlySet<string>, now = Date.now()) {
   for (const id of shown) {
     if (shownBefore.has(id)) continue;
     seenAt.set(id, now);
+    noteShownAgain(id);
     noteTabOpened(id, now);
   }
   shownBefore = new Set(shown);
 }
 
 let sweepingUnused = false;
-
-type SleepAsker = { sleepIfHidden(seconds: number): Promise<number[]>; sleepIfUnused?(seconds: number): Promise<number[]> };
-
-export function askUnusedSleep(view: SleepAsker, seconds: number): Promise<number[]> {
-  if (!view.sleepIfUnused) return view.sleepIfHidden(seconds);
-  return Promise.resolve()
-    .then(() => view.sleepIfUnused!(seconds))
-    .catch(() => view.sleepIfHidden(seconds));
-}
 
 function unusedVetoNow(id: string, afterMs: number, now: number): SleepVeto | "gone" | null {
   const s = useBrowser.getState();
@@ -273,28 +257,29 @@ export async function sleepUnusedTabs(afterMsNow: () => number | null, consent: 
     for (const id of plan.sleep.slice(0, SLEEPS_PER_TICK)) {
       const afterMs = afterMsNow();
       if (afterMs === null) break;
-      if (inFlightSleeps.has(id)) continue;
+      if (sleepAskedNow(id)) continue;
       const vetoed = unusedVetoNow(id, afterMs, now);
       if (vetoed) {
         if (vetoed !== "gone" && vetoed !== "recentlySeen") noteVeto(id, vetoed, consent);
         continue;
       }
       const view = webviews.get(id)!;
-      const keptBy = await askToSleep(id, () => askUnusedSleep(view, afterMs / 1000));
-      if (!keptBy) continue;
-      const pastSoftKeeps = sleptPastSoftKeeps(keptBy);
-      if (keptBy.length && !pastSoftKeeps) {
-        const veto = engineVeto(keptBy);
-        if (veto === "recentlySeen") seenAt.set(id, now);
-        else {
-          if (veto) noteVeto(id, veto, consent);
-          unusedAskAgainAt.set(id, now + ASK_AGAIN_MS);
+      await askToSleep(id, () => askUnusedSleep(view, afterMs / 1000), ({ keptBy, awakeMeanwhile }) => {
+        if (!keptBy) return;
+        const pastSoftKeeps = sleptPastSoftKeeps(keptBy);
+        if (keptBy.length && !pastSoftKeeps) {
+          const veto = engineVeto(keptBy);
+          if (veto === "recentlySeen") seenAt.set(id, now);
+          else {
+            if (veto) noteVeto(id, veto, consent);
+            unusedAskAgainAt.set(id, now + ASK_AGAIN_MS);
+          }
+          return;
         }
-        continue;
-      }
-      markSleeping(id);
-      slept.push(id);
-      noteTabSleptUnused(!!useBrowser.getState().tabs[id]?.pin, pastSoftKeeps, consent);
+        if (!awakeMeanwhile) markSleeping(id);
+        slept.push(id);
+        noteTabSleptUnused(!!useBrowser.getState().tabs[id]?.pin, pastSoftKeeps, consent);
+      });
     }
   } finally {
     sweepingUnused = false;

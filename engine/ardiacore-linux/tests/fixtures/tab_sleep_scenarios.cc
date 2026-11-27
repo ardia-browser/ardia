@@ -74,17 +74,18 @@ void SleepsAnEligibleTab() {
   assert(w.discarding.reasons[0] == policies::DiscardEligibilityPolicy::DiscardReason::PROACTIVE);
 }
 
-void AnAsleepTabIsAlreadyDone() {
+void AnAsleepTabIsNeverAFreshSleep() {
   World w;
   assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)).empty());
   w.contents.discarded = true;
-  PerformanceManager::page = nullptr;
+  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)) == kUnavailable);
+  assert(Codes(SleepLinuxTabIfUnused(&w.contents, 3600, {})) == kUnavailable);
   w.eligibility.result = policies::CanDiscardResult::kProtected;
-  w.eligibility.reasons = {policies::CannotDiscardReason::kVisible};
-  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)).empty());
+  w.eligibility.reasons = {policies::CannotDiscardReason::kNotificationsEnabled};
+  assert(Codes(SleepLinuxTabIfUnused(&w.contents, 3600, {})) == kUnavailable);
   assert(w.discarding.discarded.size() == 1);
   PerformanceManager::available = false;
-  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)).empty());
+  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)) == kUnavailable);
 }
 
 void ReportsWhatKeptIt() {
@@ -176,7 +177,7 @@ void UnusedPassesOnlySoftKeeps() {
 int main() {
   ParsesHiddenTime();
   SleepsAnEligibleTab();
-  AnAsleepTabIsAlreadyDone();
+  AnAsleepTabIsNeverAFreshSleep();
   ReportsWhatKeptIt();
   UnavailableWithoutChrome();
   HardKeepsRefuseEvenWhenChromeWouldSleep();

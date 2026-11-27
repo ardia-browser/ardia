@@ -67,8 +67,7 @@ base::ListValue CodesList(const std::vector<int>& codes) {
 enum class SoftKeeps { kKeep, kPass };
 
 base::ListValue SleepLinuxTab(content::WebContents* contents, double seconds, const LinuxTabKeptAwake& kept_awake, SoftKeeps soft) {
-  if (!contents) return Unavailable();
-  if (contents->WasDiscarded()) return base::ListValue();
+  if (!contents || contents->WasDiscarded()) return Unavailable();
   const auto target = TargetFor(contents);
   if (!target) return Unavailable();
   const auto reason = policies::DiscardEligibilityPolicy::DiscardReason::PROACTIVE;

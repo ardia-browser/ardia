@@ -24,6 +24,7 @@ const FEATURE_COUNTS = {
   apple_passwords_login_list_connect_shown: "how many times it offered Connect Apple Passwords after the connection ended",
   apple_passwords_login_list_connect_picked: "how many times you picked Connect there",
   apple_passwords_login_list_not_now: "how many times you picked Not now",
+  apple_passwords_login_list_other_frame_ignored: "how many times it ignored a key or a close from a frame that didn't open it",
   apple_passwords_codes_filled: "how many Verification codes it filled",
   apple_passwords_codes_failed: "how many Verification codes it filled and how many it couldn't",
   apple_passwords_strong_passwords_used: "how many strong passwords it suggested and filled",
@@ -61,6 +62,7 @@ const BY_ENGINE = [
   "apple_passwords_login_list_shown", "apple_passwords_login_list_filled", "apple_passwords_fills_failed", "apple_passwords_login_list_connect_shown",
   "apple_passwords_login_list_connect_picked", "apple_passwords_login_list_not_now", "apple_passwords_codes_filled", "apple_passwords_codes_failed",
   "apple_passwords_strong_passwords_used", "apple_passwords_saves_sent", "apple_passwords_saves_failed", "apple_passwords_login_list_fetch_failed",
+  "apple_passwords_login_list_other_frame_ignored",
 ];
 for (const field of BY_ENGINE) for (const engine of ["chromium", "webkit"]) FEATURE_COUNTS[`${field}_${engine}`] = ENGINES;
 const SNAPSHOT_COUNTS = { password_manager_profiles_apple: "how many of your profiles use Ardia's password manager, Apple Passwords, none or a password manager plugin" };
@@ -83,7 +85,7 @@ const LOGIN_LIST = {
   shown: "apple_passwords_login_list_shown", filled: "apple_passwords_login_list_filled", fillFailed: "apple_passwords_fills_failed",
   connectShown: "apple_passwords_login_list_connect_shown", connectPicked: "apple_passwords_login_list_connect_picked", notNow: "apple_passwords_login_list_not_now",
   codeFilled: "apple_passwords_codes_filled", codeFillFailed: "apple_passwords_codes_failed", strongPasswordUsed: "apple_passwords_strong_passwords_used",
-  listFailed: "apple_passwords_login_list_fetch_failed",
+  listFailed: "apple_passwords_login_list_fetch_failed", otherFrameIgnored: "apple_passwords_login_list_other_frame_ignored",
 };
 const SAVES = { saveSent: "apple_passwords_saves_sent", saveFailed: "apple_passwords_saves_failed" };
 const PAIRING_FAILURES = {

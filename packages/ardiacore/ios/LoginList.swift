@@ -333,6 +333,11 @@ final class LoginList: NSObject {
     fetched = nil
   }
 
+  func ignoredOtherFrame(_ target: LoginListTarget) {
+    guard shown?.target === target || asking === target else { return }
+    Self.count("otherFrameIgnored", in: target)
+  }
+
   private func hide(_ target: LoginListTarget) {
     var kept = fetched
     close(target)

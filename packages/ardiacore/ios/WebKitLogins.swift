@@ -134,9 +134,9 @@ final class WebKitLogins: NSObject {
       listFrames[id] = sender
       show(tab, report: report, origin: origin, frame: frame)
     case "key" where fromListFrame: key(tab, report.key)
-    case "key": return
+    case "key": LoginList.shared.ignoredOtherFrame(tab)
     case "passwordInput" where LoginList.shared.isShown(for: tab): return
-    case "hide" where !fromListFrame: return
+    case "hide" where !fromListFrame: LoginList.shared.ignoredOtherFrame(tab)
     default:
       listFrames.removeValue(forKey: id)
       close(tab)

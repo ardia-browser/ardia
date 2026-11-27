@@ -13,6 +13,7 @@ using namespace ardia_runtime;
 - (void)showLoginListFrom:(NSString *)origin screenRect:(NSRect)rect typing:(BOOL)typing typed:(NSString *)typed field:(NSString *)field rules:(NSDictionary *)rules;
 - (void)keyLoginList:(NSString *)key;
 - (void)closeLoginList;
+- (void)loginListIgnoredOtherFrame;
 @property (nonatomic, readonly) BOOL loginListShown;
 @end
 
@@ -66,6 +67,7 @@ NSDictionary *LoginListConfig(NSString *profile) {
   NSDictionary *current = _loginList.field;
   if (!report || [event isEqualToString:@"hide"]) {
     if (!current || [current[@"frame"] isEqualToString:frameId]) [self endLoginField];
+    else if (report) [self loginListIgnoredOtherFrame];
     return;
   }
   NSString *origin = WebOrigin(sender);
@@ -77,6 +79,7 @@ NSDictionary *LoginListConfig(NSString *profile) {
   }
   if ([event isEqualToString:@"key"]) {
     if (sameField) [self keyLoginList:report[@"key"]];
+    else if (![current[@"frame"] isEqualToString:frameId]) [self loginListIgnoredOtherFrame];
     return;
   }
   const BOOL signIn = [report[@"signIn"] boolValue];

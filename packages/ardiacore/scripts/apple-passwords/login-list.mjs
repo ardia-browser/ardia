@@ -28,6 +28,7 @@ const titles = (rows) => rows.map((r) => r.title);
 
 export function loginListChecks({ paired, sites, engine: engineName = "webkit" }) {
   const COUNTED_SHOWN = `[logins] Login list counted: shown in ${engineName}\n`;
+  const COUNTED_IGNORED = `[logins] Login list counted: otherFrameIgnored in ${engineName}\n`;
   const applePasswords = async (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().state", { timeout: 20_000 });
   const pairingStep = async (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().pairing?.step ?? null", { timeout: 20_000 });
   const prompting = async (app, tabId) => app.eval(`return ac.pageState.getState().pages[${q(tabId)}]?.applePasswordsPairing === true`, { timeout: 20_000 });
@@ -341,6 +342,8 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       return { engine: engineName, ...seen };
     },
     async E28frameHide() {
+      const { app } = await paired();
+      const ignoredCounts = () => app.output().split(COUNTED_IGNORED).length - 1;
       const tab = await open("example.localhost", "/framed-login?frame=example.localhost");
       const framed = () => tab.value(`${PAGE_EVENTS}.filter((e) => e[0] === "framed").map((e) => e.slice(1).join(":"))`);
       const login = FIXTURES.logins.find((l) => l.user === usersFor("example.localhost")[0]);
@@ -351,12 +354,14 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
           return (await framed())?.includes("focusin:u") || null;
         }, 10_000);
         await tab.waitRows("the Login list in the frame");
+        const ignoredBefore = ignoredCounts();
         await tab.click("#u");
         await waitFor("the page's own username field focused", () => tab.value(`document.activeElement?.id === "u" || null`), 5000);
         const rows = await tab.waitRows("the Login list on the page's own username field after the frame's field lost focus", 5000);
         await sleep(800);
         const still = await tab.rows();
         assert(still?.length && q(titles(still)) === q([...usersFor("example.localhost"), FOOTER]), "the frame's field losing focus doesn't close the page's Login list", still);
+        assert(ignoredCounts() > ignoredBefore, "the frame's hide is counted as one from a frame that didn't open the list", ignoredCounts() - ignoredBefore);
         await tab.pick(login.user);
         const filled = await waitFor("the fill in the page", async () => {
           const page = await tab.value(`({ u: document.getElementById("u").value, p: document.getElementById("p").value })`);

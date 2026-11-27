@@ -25,6 +25,7 @@ test("the Login list counts each time it is shown, each fill and each fill that 
     apple_passwords_login_list_connect_picked: 0,
     apple_passwords_login_list_not_now: 0,
     apple_passwords_login_list_fetch_failed: 0,
+    apple_passwords_login_list_other_frame_ignored: 0,
   });
   client.setSharing(false, "settings");
   counted("shown");
@@ -36,6 +37,7 @@ test("the Login list counts each time it is shown, each fill and each fill that 
     apple_passwords_login_list_connect_picked: 0,
     apple_passwords_login_list_not_now: 0,
     apple_passwords_login_list_fetch_failed: 0,
+    apple_passwords_login_list_other_frame_ignored: 0,
   });
 });
 
@@ -62,6 +64,22 @@ test("each login sent to Apple Passwords to save and each send that failed are c
   client.setSharing(false, "settings");
   saved("saveSent");
   assert.deepEqual(saveCounts(takePasswordManagerCounts()), { apple_passwords_saves_sent: 0, apple_passwords_saves_failed: 0 });
+});
+
+test("each key or hide the Login list ignored because it came from a frame that didn't open the list is counted, also by the tab's engine, only while sharing is on", () => {
+  const inEngine = (name, engine) => native.emitEvent("passwords.loginListCounted", { name, engine, epoch: client.consentEpoch() });
+  startLoginListCounts();
+  client.setSharing(true, "settings");
+  takePasswordManagerCounts();
+  for (const [name, engine] of [["otherFrameIgnored", "webkit"], ["otherFrameIgnored", "webkit"], ["otherFrameIgnored", "chromium"]]) inEngine(name, engine);
+  const counts = takePasswordManagerCounts();
+  assert.equal(counts.apple_passwords_login_list_other_frame_ignored, 3);
+  assert.equal(counts.apple_passwords_login_list_other_frame_ignored_webkit, 2);
+  assert.equal(counts.apple_passwords_login_list_other_frame_ignored_chromium, 1);
+  assert.equal(counts.apple_passwords_login_list_shown, 0, "an ignored key or hide is not a list shown");
+  client.setSharing(false, "settings");
+  inEngine("otherFrameIgnored", "webkit");
+  assert.equal(takePasswordManagerCounts().apple_passwords_login_list_other_frame_ignored, 0);
 });
 
 test("each Login list count is also counted by the engine of the tab it was in, and an unknown engine counts only the total", () => {

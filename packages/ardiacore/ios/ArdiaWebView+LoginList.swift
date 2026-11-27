@@ -35,5 +35,7 @@ extension ArdiaWebView: LoginListTarget {
 
   @objc func closeLoginList() { LoginList.shared.close(self) }
 
+  @objc func loginListIgnoredOtherFrame() { LoginList.shared.ignoredOtherFrame(self) }
+
   @objc var loginListShown: Bool { LoginList.shared.isShown(for: self) }
 }

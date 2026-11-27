@@ -1,4 +1,4 @@
-import { AppState, Keyboard, Platform, TextInput } from "react-native";
+import { Platform } from "react-native";
 import { act } from "react-test-renderer";
 import { SearchTray } from "../components/search/SearchTray";
 import { DesignProvider } from "../components/ui";
@@ -7,11 +7,11 @@ import * as browse from "../state/browse/store";
 import { presentSearch } from "../state/search/store";
 import { useStageBar } from "../state/search/stageBar";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
-import type { ReactTestRenderer } from "react-test-renderer";
 
 type StageEvents = { onLift?: (lift: { lift: number; up: boolean; predicted?: boolean }) => void; onReveal?: (reveal: { late: boolean }) => void };
 
 const mockSeen: { props: StageEvents | null } = { props: null };
+const mockWarm = jest.fn<Promise<{ outcome: string; ms?: number }>, []>();
 
 jest.mock("@ardia/phone-native", () => {
   const actual = jest.requireActual("@ardia/phone-native");
@@ -30,16 +30,13 @@ jest.mock("@ardia/phone-native", () => {
     return React.createElement(native.View, { testID: "completingField" });
   });
   const onIPhone = () => native.Platform.OS === "ios";
-  return { ...actual, searchStageIsNative: onIPhone, SearchStage, SearchStagePanel: (props: object) => React.createElement(native.View, props), completingFieldIsNative: onIPhone, CompletingField };
+  const system = { ...actual.system, prepareKeyboardWarmUp: () => undefined, warmKeyboard: () => mockWarm() };
+  return { ...actual, system, searchStageIsNative: onIPhone, SearchStage, SearchStagePanel: (props: object) => React.createElement(native.View, props), completingFieldIsNative: onIPhone, CompletingField };
 });
 
 const onIPhone = Platform.OS === "ios" ? test : test.skip;
 
 let lines: string[];
-let focused: string[];
-let appState = "active";
-
-Object.defineProperty(AppState, "currentState", { configurable: true, get: () => appState });
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -47,12 +44,9 @@ beforeEach(() => {
   browse.useBrowse.setState({ surface: "browsing", sheet: null });
   useStageBar.setState({ onScreen: false, presented: false, morphs: false, landed: false, pills: 0 });
   lines = [];
-  focused = [];
+  mockWarm.mockReset();
   jest.spyOn(console, "log").mockImplementation((line: unknown) => void lines.push(String(line)));
   jest.spyOn(perf, "countRender").mockImplementation(() => undefined);
-  jest.spyOn(TextInput.State, "currentlyFocusedInput").mockReturnValue(null);
-  jest.spyOn(Keyboard, "isVisible").mockReturnValue(false);
-  appState = "active";
 });
 
 afterEach(() => {
@@ -60,8 +54,6 @@ afterEach(() => {
   jest.useRealTimers();
   jest.restoreAllMocks();
 });
-
-const warmField = (root: ReactTestRenderer) => root.root.findAll((node) => node.props.testID === "searchKeyboardWarmUp" && typeof node.type !== "string");
 
 const tray = () =>
   renderSurface(
@@ -71,42 +63,51 @@ const tray = () =>
     { flushTimers: false },
   );
 
-const watchFocus = (root: ReactTestRenderer) => {
-  const [field] = warmField(root);
-  const instance = field.instance as { focus: () => void; blur: () => void };
-  jest.spyOn(instance, "focus").mockImplementation(() => void focused.push("focus"));
-  jest.spyOn(instance, "blur").mockImplementation(() => void focused.push("blur"));
+const settle = async (ms: number) => {
+  await act(async () => {
+    jest.advanceTimersByTime(ms);
+    await Promise.resolve();
+  });
 };
 
-onIPhone("a hidden field takes focus and gives it back once, 2.5 s after launch, so the first search finds the keyboard ready", () => {
+onIPhone("the keyboard is warmed once, 2.5 s after launch, so the first search finds it ready", async () => {
+  mockWarm.mockResolvedValue({ outcome: "warmed", ms: 91 });
   const root = tray();
-  expect(warmField(root).length).toBeGreaterThan(0);
-  watchFocus(root);
-  act(() => jest.advanceTimersByTime(2499));
-  expect(focused).toEqual([]);
-  act(() => jest.advanceTimersByTime(1));
-  expect(focused).toEqual(["focus", "blur"]);
-  expect(lines).toContain("PAGELAB search warm keyboard");
-  expect(warmField(root)).toHaveLength(0);
+  await settle(2499);
+  expect(mockWarm).not.toHaveBeenCalled();
+  await settle(1);
+  expect(mockWarm).toHaveBeenCalledTimes(1);
+  expect(lines).toContain("PAGELAB search warm keyboard warmed 91ms attempt 1");
+  await settle(30_000);
+  expect(mockWarm).toHaveBeenCalledTimes(1);
   unmount(root);
 });
 
-onIPhone("the warm-up never takes focus from search, a page's keyboard or another field, and never runs in the background", () => {
-  for (const block of ["search", "keyboard", "field", "background"] as const) {
-    const root = tray();
-    watchFocus(root);
-    if (block === "search") act(() => presentSearch("home", ""));
-    if (block === "keyboard") jest.spyOn(Keyboard, "isVisible").mockReturnValue(true);
-    if (block === "field") jest.spyOn(TextInput.State, "currentlyFocusedInput").mockReturnValue({} as never);
-    if (block === "background") appState = "background";
-    act(() => jest.advanceTimersByTime(2500));
-    expect(focused).toEqual([]);
-    expect(lines).toContain("PAGELAB search warm keyboard skipped");
-    expect(warmField(root)).toHaveLength(0);
-    unmount(root);
-    lines = [];
-    jest.spyOn(Keyboard, "isVisible").mockReturnValue(false);
-    jest.spyOn(TextInput.State, "currentlyFocusedInput").mockReturnValue(null);
-    appState = "active";
-  }
+onIPhone("a busy moment (focus held, a touch, a scroll, a sheet) waits for a later idle one, six tries at most", async () => {
+  mockWarm.mockResolvedValueOnce({ outcome: "focused" }).mockResolvedValueOnce({ outcome: "scrolling" }).mockResolvedValueOnce({ outcome: "warmed", ms: 80 });
+  const root = tray();
+  await settle(2500);
+  await settle(1500);
+  await settle(1500);
+  expect(mockWarm).toHaveBeenCalledTimes(3);
+  await settle(30_000);
+  expect(mockWarm).toHaveBeenCalledTimes(3);
+  unmount(root);
+  mockWarm.mockReset();
+  mockWarm.mockResolvedValue({ outcome: "touching" });
+  const busy = tray();
+  await settle(2500);
+  for (let step = 0; step < 10; step += 1) await settle(1500);
+  expect(mockWarm).toHaveBeenCalledTimes(6);
+  unmount(busy);
+});
+
+onIPhone("nothing is asked of UIKit while search is open", async () => {
+  mockWarm.mockResolvedValue({ outcome: "warmed", ms: 80 });
+  const root = tray();
+  act(() => presentSearch("home", ""));
+  await settle(2500);
+  expect(mockWarm).not.toHaveBeenCalled();
+  expect(lines).toContain("PAGELAB search warm keyboard searchOpen attempt 1");
+  unmount(root);
 });

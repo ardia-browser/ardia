@@ -191,6 +191,14 @@ public final class SystemModule: Module {
     AsyncFunction("initialLink") { () -> [String: Any]? in
       MainActor.assumeIsolated { PhoneSystemLinks.shared.takeInitial() }
     }.runOnQueue(.main)
+
+    AsyncFunction("prepareKeyboardWarmUp") { () in
+      MainActor.assumeIsolated { KeyboardWarmUp.watchTouches() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("warmKeyboard") { () -> [String: Any] in
+      MainActor.assumeIsolated { KeyboardWarmUp.attempt() }
+    }.runOnQueue(.main)
   }
 }
 

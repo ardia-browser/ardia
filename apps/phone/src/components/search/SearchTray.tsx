@@ -1,11 +1,11 @@
 import { probes } from "../../state/app/launchFlags";
-import { createContext, memo, type ComponentRef, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { labLog, labTrace, markShownFrame, traceSlice } from "../../platform/lab";
-import { hardwareKeyboardShown } from "@ardia/phone-native";
+import { hardwareKeyboardShown, system, type KeyboardWarmUp } from "@ardia/phone-native";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
 import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { countRender } from "../../state/app/interactionPerf";
-import { AppState, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type ViewInstance } from "react-native";
+import { AppState, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ViewInstance } from "react-native";
 import { SheetScrollContext, SheetScrollView, sheetPullTranslation, type SheetScroll } from "../ui/Sheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, FadeIn, FadeOut, runOnJS, runOnUI, useAnimatedProps, useAnimatedReaction, useAnimatedStyle, useDerivedValue, useSharedValue, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
@@ -128,25 +128,32 @@ export function SearchTray() {
 }
 
 const KEYBOARD_WARM_AFTER_LAUNCH_MS = 2500;
-
-const keyboardWarmUpAllowed = () => !searchState().open && AppState.currentState === "active" && !Keyboard.isVisible() && TextInput.State.currentlyFocusedInput() === null;
+const KEYBOARD_WARM_RETRY_MS = 1500;
+const KEYBOARD_WARM_ATTEMPTS = 6;
+const KEYBOARD_WARM_FINAL = new Set(["warmed", "refused", "done", "unsupported", "failed"]);
 
 function FirstKeyboardWarmUp() {
-  const input = useRef<ComponentRef<typeof TextInput>>(null);
-  const [done, setDone] = useState(false);
   useEffect(() => {
-    const start = setTimeout(() => {
-      const field = input.current;
-      setDone(true);
-      if (!field || !keyboardWarmUpAllowed()) return labLog("PAGELAB search warm keyboard skipped");
-      field.focus();
-      field.blur();
-      labLog("PAGELAB search warm keyboard");
-    }, KEYBOARD_WARM_AFTER_LAUNCH_MS);
-    return () => clearTimeout(start);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    let attempts = 0;
+    system.prepareKeyboardWarmUp();
+    const attempt = async () => {
+      timer = null;
+      attempts += 1;
+      const result: KeyboardWarmUp = searchState().open ? { outcome: "searchOpen" } : await system.warmKeyboard();
+      if (stopped) return;
+      labLog(`PAGELAB search warm keyboard ${result.outcome}${typeof result.ms === "number" ? ` ${Math.round(result.ms)}ms` : ""} attempt ${attempts}`);
+      if (KEYBOARD_WARM_FINAL.has(result.outcome) || attempts >= KEYBOARD_WARM_ATTEMPTS) return;
+      timer = setTimeout(attempt, KEYBOARD_WARM_RETRY_MS);
+    };
+    timer = setTimeout(attempt, KEYBOARD_WARM_AFTER_LAUNCH_MS);
+    return () => {
+      stopped = true;
+      if (timer !== null) clearTimeout(timer);
+    };
   }, []);
-  if (done) return null;
-  return <TextInput ref={input} testID="searchKeyboardWarmUp" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" pointerEvents="none" style={styles.warmKeyboard} />;
+  return null;
 }
 
 function SheetTray() {
@@ -1635,7 +1642,6 @@ function ScrubbedRows({ rows, typed, budget, guard, onRefine, onMenu, onContentH
 }
 
 const styles = StyleSheet.create({
-  warmKeyboard: { position: "absolute", left: -1000, top: -1000, width: 1, height: 1, opacity: 0 },
   sheet: {
     position: "absolute",
     elevation: trayShadow.elevation,

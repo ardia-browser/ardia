@@ -2143,7 +2143,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `launch_ms`, `js_ms` (`perf_launch`) | c6ebf08a8 | Cold launch time, process start to first screen, and the JavaScript share of it |
 | `backdrop_ms` (`perf_backdrop`) | e9012f25a's native backdrop | Process start to the themed backdrop's first frame on iPhone; it should sit well under `launch_ms` (about 1,100 against 1,450 ms on the simulator), and rising toward it means the backdrop waits for JavaScript again |
 | `tray_ms` (`perf_launch_tray`) | the launch tray at rest from its first frame | Process start to the launch tray being up. It should sit within a frame or two of `launch_ms`; a gap near 450 ms on Android means the launch tray waits for the keyboard again, and a blank start page catches taps behind an unseen tray |
-| `open_ms` (`perf_search_open`) | #3932 | Press to the search panel presented. It sat near 60 to 80 ms on the simulator; a rise means the open does work before it moves again |
+| `open_ms` (`perf_search_open`) | #3932, #4708 | Press to the search panel presented. It sat near 60 to 80 ms on the simulator; a rise means the open does work before it moves again. The first open of a launch used to pay for UIKit setting up the keyboard (#4708). The keyboard warm-up after launch takes that out, so a jump in the first open alone means the warm-up stopped running or found the app busy every time |
 | `local_ms`, `remote_ms` (`perf_search_suggest`) | #3932 | First letter to the local rows (a frame or two) and to the engine's rows (about one network round trip). A `remote_ms` that grows toward a typing pause means the store waits for the field to go quiet again before asking |
 | `legacy_import_failures` (`app_launched`) | 12a33bf03 | Whether the upgrade import fails in the field, and how many tries it takes |
 | `look_mode` (`app_launched`) | 428c9a18d | How many phones the look's budget turns down, and to what; a share that grows after a release means the look got dearer |
@@ -4275,6 +4275,23 @@ Telemetry to watch:
 Open, from the round-five review: sheet replacement during a swipe-down, Find across a same-URL reload, back-forward
 cache identity for paint proof, keyboard geometry with two scenes, Unicode case in archive search, and cold Search with a
 large History. All of these need a real iPhone: touch-to-screen latency, 120 Hz hitches and Find's keyboard.
+
+#### The keyboard warm-up (#4708)
+
+The first time anything takes focus in a launch, UIKit sets the keyboard up: the keyboard window, input modes and layout. On the simulator that held the first search open for about 110 ms of a 170 ms frame, with the Search field alone over the page. Later opens don't pay it.
+
+`FirstKeyboardWarmUp` in `SearchTray.tsx` asks `KeyboardWarmUp.attempt()` (`packages/phone/ios/KeyboardWarmUp.swift`) to do that work at an idle moment after launch. On the main thread, a hidden 1 pt `UITextField` in the main window takes focus and resigns in the same call. Nothing is drawn.
+
+It skips, and JavaScript tries again 1.5 s later (six tries from 2.5 s after launch, then it gives up), when:
+- anything in any of the app's windows is first responder, a page's form in WebKit included;
+- the app isn't active, or the key window isn't the main window;
+- a finger is down (a passive recognizer on the main window counts touches and never claims them);
+- the run loop is tracking a drag or a deceleration;
+- a view controller is presented or mid-transition.
+
+Lab builds print `PAGELAB search warm keyboard <outcome> [<ms>] attempt <n>`, where `<ms>` is the main-thread time of the warm-up itself.
+
+It runs on every device that takes the staged search panel, an iPad running the iPhone build in compatibility mode included. That is on purpose: the iPhone app there pays the same first-focus cost.
 
 #### Measuring speed on a real iPhone
 

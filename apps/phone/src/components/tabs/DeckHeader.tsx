@@ -79,6 +79,7 @@ export function useDeckSpaces() {
 type MoreProps = ChromeFade & {
   opener?: MenuOpener;
   place: ViewStyle;
+  drawn?: boolean;
   diameter: number;
   testID: string;
   live: boolean;
@@ -91,14 +92,14 @@ type MoreProps = ChromeFade & {
   onMenu?: (open: boolean) => void;
 };
 
-export function DeckMoreButton({ opener, place, diameter, testID, live, originX, originY, hitStyle, dark, underlay = false, menusShown, onMenu, glassShown, glassShownMs, glyphFade }: MoreProps) {
+export function DeckMoreButton({ opener, place, drawn = false, diameter, testID, live, originX, originY, hitStyle, dark, underlay = false, menusShown, onMenu, glassShown, glassShownMs, glyphFade }: MoreProps) {
   const incognito = useIncognito();
   const updateDot = useUpdateDot();
   const syncEnabled = useSyncStatus().isEnabled;
   const items = deckMoreMenuItems({ syncEnabled, archive: false, updateDot });
   return (
     <DeckHitTarget control="more" live={live} originX={originX} originY={originY} style={hitStyle}>
-      <MenuTrigger opener={opener} items={items} trigger="tap" fixedOrder haptic={menuOpenedHaptic} disabled={!menusShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} previewRadius={diameter / 2} place={place}>
+      <MenuTrigger opener={opener} items={items} trigger="tap" fixedOrder haptic={menuOpenedHaptic} disabled={!menusShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} previewRadius={diameter / 2} place={place} drawn={drawn}>
         {({ onPress }) => <GlassCircleButton icon={iconRoles.more} label={actionWords.more} testID={testID} diameter={diameter} incognito={incognito} dark={dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} underlay={underlay} onPress={onPress ?? noop} />}
       </MenuTrigger>
     </DeckHitTarget>

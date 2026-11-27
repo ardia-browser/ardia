@@ -1,5 +1,4 @@
 import { Dimensions, Platform, StyleSheet } from "react-native";
-import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { BrowsingScreen } from "../components/browsing/BrowsingScreen";
 import { FloatingBar } from "../components/browsing/FloatingBar";
@@ -61,7 +60,6 @@ test("an iPhone 17 Pro on its side gets Arc's stack, its card as tall as the ban
   expect(g.safeSide).toBe(59);
   act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
   const root = redesigned(<TabDeck />);
-  expect(hosts(root, "deckStripClip")).toHaveLength(0);
   expect(hosts(root, "deckHeaderLead")).toHaveLength(0);
   expect(hosts(root, "deckHeaderTrail")).toHaveLength(0);
   const card = root.root.findAll((node) => node.props.testID === "deckCard" && typeof node.type === "string")[0]!;
@@ -185,9 +183,7 @@ for (const pose of DUO_POSES) {
     const card = root.root.findAll((node) => node.props.testID === "deckCard" && typeof node.type === "string")[0]!;
     expect(flat(card).width).toBeCloseTo(g.cardWidth, 1);
     expect(deckLeading(g, 0) + g.cardWidth).toBeLessThan(strip);
-    const clip = hosts(root, "deckStripClip")[0]!;
-    expect(flat(clip)).toMatchObject({ left: 0, width: pose.width, overflow: "hidden" });
-    expect(getAnimatedStyle(clip).transform).toEqual([{ translateX: strip - pose.width }]);
+    expect(hosts(root, "deckStripClip")).toHaveLength(0);
     const header = hosts(root, "deckHeader")[0]!;
     expect(flat(header)).toMatchObject({ paddingLeft: 24, paddingRight: pose.insets.right + 12 });
     expect(flat(header).top).toBe(4);

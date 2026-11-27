@@ -247,7 +247,7 @@ export function DeckBottomBar({ searchOpener, moreOpener, shown, barCenterY, dec
   const switchMenuShown = menusShown && privateCount > 0 && closeIncognito.length > 0;
   const incognitoSwitch = (
     <DeckHitTarget control="privacy" live={rowHits} originY={rowTop} style={styles.circleHit}>
-      <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={switchPlace} style={{ width: controlSize.bar, height: controlSize.bar }}>
+      <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={switchPlace} drawn={strip !== null} style={{ width: controlSize.bar, height: controlSize.bar }}>
         {({ onLongPress }) => <IncognitoSwitch incognito={incognito} dark={dark} onLongPress={switchMenuShown ? onLongPress : undefined} {...fade} />}
       </MenuTrigger>
     </DeckHitTarget>
@@ -270,7 +270,7 @@ export function DeckBottomBar({ searchOpener, moreOpener, shown, barCenterY, dec
   const circleFade = useAnimatedStyle(() => ({ opacity: 1 - Math.min(Math.max(growth.value, 0), 1) }));
   const plus = (
     <DeckHitTarget control="plus" live={rowHits} originY={rowTop} style={styles.circleHit}>
-      <PlusMenuButton width={controlSize.bar} label={incognito ? actionWords.newIncognitoTab : actionWords.newTab} testID="deckBarPlus" dark={dark} incognito={incognito} place={plusPlace} menusShown={menusShown} onMenu={onMenu} onCloseAll={onCloseAll} {...fade} />
+      <PlusMenuButton width={controlSize.bar} label={incognito ? actionWords.newIncognitoTab : actionWords.newTab} testID="deckBarPlus" dark={dark} incognito={incognito} place={plusPlace} drawn={strip !== null} menusShown={menusShown} onMenu={onMenu} onCloseAll={onCloseAll} {...fade} />
     </DeckHitTarget>
   );
   const measure = () =>
@@ -309,7 +309,7 @@ export function DeckBottomBar({ searchOpener, moreOpener, shown, barCenterY, dec
       {strip && slots ? <View testID="deckStripIncognito" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: slots.incognito }]}>{incognitoSwitch}</View> : null}
       {strip && slots && slots.more !== null ? (
         <View testID="deckStripMore" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: slots.more }]}>
-          <DeckMoreButton opener={moreOpener} place={besideSlot(slots.more)!} diameter={controlSize.bar} testID="deckBarMore" live={hits} originX={strip.centerX - controlSize.bar / 2} originY={rowTop + slots.more} hitStyle={styles.circleHit} dark={dark} menusShown={menusShown} onMenu={onMenu} {...fade} />
+          <DeckMoreButton opener={moreOpener} place={besideSlot(slots.more)!} drawn diameter={controlSize.bar} testID="deckBarMore" live={hits} originX={strip.centerX - controlSize.bar / 2} originY={rowTop + slots.more} hitStyle={styles.circleHit} dark={dark} menusShown={menusShown} onMenu={onMenu} {...fade} />
         </View>
       ) : null}
     </Animated.View>

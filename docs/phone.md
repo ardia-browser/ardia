@@ -2670,8 +2670,11 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   it mirrors: the closed Duo's `···` stacks in the strip at 24 to 72, the open Duo's leads the header at 96 to 140.
   A plain iPhone keeps `max(left, right)` + 24 on both sides and its leading switcher. The deck's cards keep clear of the strip
   (`deckGeometry`'s `strip`, from `deckStripOf`): Arc's stack is laid out in the screen beside the strip, as if that
-  were the whole screen, and clipped at the strip (`DeckStripClip`), so no card runs under the clock or the sensor; a
-  card growing to the page or shrinking from it is never clipped, and a tap on the strip lands on no card. Closed
+  were the whole screen, so the focused card stays clear of the clock and the sensor. The cards beyond it run on
+  under the strip to the screen edge, below the camera and the clock (the owner, 2026-11-27: a hard edge at the strip
+  looked cut off). A tap on the strip lands on no card. The strip's `+`, Incognito and `···` menus are drawn by the
+  app beside the strip (`MenuTrigger`'s `drawn`), never the system menu, which grows out of the button over the
+  strip's other buttons; the start page's strip `+` does the same. Closed
   (466×678, strip from 382): cards 250×364, the focused one 78 to 328, where it used to run 165 to 470. Open
   (951×669, strip from 867): cards 568×400, the focused one 177 to 745, where it used to run 248 to 871. The strip's
   side gets no pile margin of its own; a plain iPhone, upright or on its side, keeps the whole screen. Nothing new is

@@ -22,8 +22,6 @@ import {
   redesignedBarCenterFromBottom,
   floatingBarCenter,
   deckCardAt,
-  deckClipShift,
-  deckStripClips,
   deckHeaderLeading,
   deckHeaderPlacement,
   deckHeaderIconReveal,
@@ -394,21 +392,19 @@ test("Arc's stack fits a home-button iPhone and an iPhone on its side", () => {
   assert.ok(deckLeading(side, -1) >= 59 - 1e-9, "the card behind clears the side inset");
 });
 
-test("on a Duo the arc stack lays out in the screen left of the sensor strip, so the focused card ends short of the strip and the stack is clipped at it, 78 to 328 on the closed Duo's 466 and 177 to 745 on the open Duo's 951", () => {
+test("on a Duo the arc stack lays out in the screen left of the sensor strip, so the focused card ends short of the strip while the cards beyond it run on under the strip to the screen edge, 78 to 328 on the closed Duo's 466 and 177 to 745 on the open Duo's 951", () => {
   const closed = deckGeometry(466, 678, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "right", inset: 84 });
   assert.equal(closed.cardsRight, 382);
   assert.equal(closed.cardsLeft, 0);
   assert.equal(Math.round(deckLeading(closed, 0)), 78);
   assert.equal(Math.round(deckLeading(closed, 0) + closed.cardWidth), 328);
   assert.equal(Math.round(closed.cardWidth), 250);
-  assert.ok(deckLeading(closed, 1) + deckVisibleWidth(closed, 1, true) <= 382 + 1e-9, "the next card's strip ends at the sensor strip");
+  assert.ok(deckLeading(closed, 1) + deckVisibleWidth(closed, 1, true) > 382, "the next card runs on under the strip");
+  assert.ok(deckLeading(closed, 1) + deckVisibleWidth(closed, 1, true) <= 466 + 1e-9, "and stops at the screen edge");
   const open = deckGeometry(951, 669, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "right", inset: 84 });
   assert.equal(open.cardsRight, 867);
   assert.equal(Math.round(deckLeading(open, 0)), 177);
   assert.equal(Math.round(deckLeading(open, 0) + open.cardWidth), 745);
-  assert.equal(deckStripClips(closed), true);
-  assert.equal(deckClipShift(closed), -84, "the clip window slides 84 off the far edge, so it ends at the strip");
-  assert.equal(deckClipShift(deckGeometry(466, 678, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "left", inset: 84 })), 84);
   assert.equal(deckCardAt(closed, 3, 1, 420, closed.cardCenterY), -1, "a tap on the strip lands on no card");
 });
 
@@ -425,8 +421,6 @@ test("with no strip the stack keeps the whole screen, so a plain iPhone upright 
   const upright = deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc");
   const side = deckGeometry(852, 393, 0, 21, 59, "ios", "redesigned", 48, 55, "arc");
   assert.deepEqual([upright.cardsLeft, upright.cardsRight, side.cardsLeft, side.cardsRight], [0, 402, 0, 852]);
-  assert.equal(deckStripClips(upright), false);
-  assert.equal(deckStripClips(side), false);
   assert.ok(Math.abs(deckLeading(side, 0) - Math.max((852 - side.spacing) / 2 - side.cardWidth * DECK_ARC.focusNudge, 59 + side.cardWidth * DECK_ARC.peek)) < 1e-9);
   assert.ok(Math.abs(side.cardWidth - Math.min(852 * DECK_ARC.cardWidthRatio, (393 - 21 - 11 + 11 - 67 + 24 - (48 + 21 + 20)) / (393 / 852))) < 1e-9);
   assert.deepEqual(deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc", null), upright);

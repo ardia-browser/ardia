@@ -166,7 +166,7 @@ export function deckVisibleWidth(g: DeckGeometry, relative: number, isLast: bool
   "worklet";
   const leading = deckLeading(g, relative);
   const covered = isLast ? g.cardWidth : Math.min(g.cardWidth, Math.max(0, deckLeading(g, relative + 1) - leading));
-  return g.rightReach > 0 || g.stack === "arc" ? Math.min(covered, Math.max(0, g.cardsRight - leading)) : covered;
+  return g.rightReach > 0 || g.stack === "arc" ? Math.min(covered, Math.max(0, g.width - leading)) : covered;
 }
 
 export function swiftRound(value: number): number {
@@ -391,9 +391,7 @@ export function deckSettleVelocity(g: DeckGeometry, scroll: number, target: numb
   return Math.min(Math.max(-velocityX / g.spacing / distance, -30), 30) * distance;
 }
 
-export const deckClipShift = (g: DeckGeometry) => (g.cardsRight < g.width ? g.cardsRight - g.width : g.cardsLeft);
 
-export const deckStripClips = (g: DeckGeometry) => g.cardsLeft > 0 || g.cardsRight < g.width;
 
 export const archiveCardEdgeY = (g: DeckGeometry, aboveBarCenter: number) => g.barCenterY - aboveBarCenter;
 

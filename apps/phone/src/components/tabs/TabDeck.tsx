@@ -115,7 +115,6 @@ import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 import { DECK_PULL, pullTarget, stackPullTarget } from "../../lib/deckPull";
 import { glassFadeMs } from "../ui/motion";
 import { barSpanCenter, deckHeaderSides, deckMoreInStrip, deckStripOf } from "../../lib/bottomBarSpan";
-import { DeckStripClip } from "./DeckStripClip";
 import { useBarGlyphFade, useDeckPulled } from "./deckPulled";
 
 type Phase = { kind: "opening" | "settled" | "closing"; id: string | null };
@@ -1361,7 +1360,6 @@ export const TabDeck = memo(function TabDeck() {
         >
           <GestureDetector gesture={deckGesture}>
             <Animated.View testID="deckCards" style={[styles.touch, { height: g.height }, cardsStyle]} collapsable={false}>
-              <DeckStripClip geometry={g} motion={motion}>
               {containedCards(contained, { ids: shownIds, geometry: g, motion }, shownIds.map((id) => {
                 const flying = leavingCards.find((card) => card.id === id);
                 const tab = flying?.tab ?? tabs.get(id);
@@ -1382,7 +1380,6 @@ export const TabDeck = memo(function TabDeck() {
                   />
                 );
               }))}
-              </DeckStripClip>
             </Animated.View>
           </GestureDetector>
         </ScrollActions>

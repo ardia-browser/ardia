@@ -12,6 +12,7 @@ struct WebKitAutoPictureInPicture {
   private(set) var reportedActive = false
   private(set) var fullScreen = false
   private(set) var settlingFromFullScreen = false
+  private(set) var seenInFullScreen = false
   private(set) var openRequests = 0
   private var heldWhileAway = false
   private var cancelledRequest: Int?
@@ -27,6 +28,7 @@ struct WebKitAutoPictureInPicture {
       settlingFromFullScreen = !on && (fullScreen || settlingFromFullScreen)
     }
     fullScreen = on
+    seenInFullScreen = false
   }
 
   mutating func answered(_ request: Int, opened: Bool) {
@@ -39,9 +41,10 @@ struct WebKitAutoPictureInPicture {
     if nowSeen {
       settlingFromFullScreen = false
       heldWhileAway = false
-      cancelledRequest = nil
+      seenInFullScreen = fullScreen
+      if !fullScreen { cancelledRequest = nil }
     }
-    let held = !nowSeen && (fullScreen || settlingFromFullScreen)
+    let held = !nowSeen && ((fullScreen && !seenInFullScreen) || settlingFromFullScreen)
     let slipped = held && autoOpened
     let action = follow(nowSeen || held, enabled: enabled, playing: playing)
     guard held, !heldWhileAway else { return action }

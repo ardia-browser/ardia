@@ -57,13 +57,35 @@ struct AutoPictureInPictureRule {
     #expect(rule.sight(false, enabled: true, playing: true) == .open)
   }
 
-  @Test func `leaving a page shown full screen keeps it full screen, as Chromium does`() {
+  @Test func `leaving a full-screen page's Space once it has been seen there opens automatic Picture in Picture, as #4504 wants`() {
+    var rule = WebKitAutoPictureInPicture()
+    rule.pageFullScreen(true, tab: 1)
+    #expect(rule.sight(false, enabled: true, playing: true) == .heldForFullScreen)
+    #expect(rule.sight(true, enabled: true, playing: true) == .none)
+    #expect(rule.seenInFullScreen)
+    #expect(rule.sight(false, enabled: true, playing: true) == .open)
+    #expect(rule.sight(true, enabled: true, playing: true) == .close)
+  }
+
+  @Test func `a new full screen holds again until its own window is seen`() {
     var rule = WebKitAutoPictureInPicture()
     rule.pageFullScreen(true, tab: 1)
     #expect(rule.sight(true, enabled: true, playing: true) == .none)
-    #expect(rule.sight(false, enabled: true, playing: true) == .heldForFullScreen)
+    rule.pageFullScreen(false, tab: 1)
     #expect(rule.sight(true, enabled: true, playing: true) == .none)
+    rule.pageFullScreen(true, tab: 1)
+    #expect(!rule.seenInFullScreen)
     #expect(rule.sight(false, enabled: true, playing: true) == .heldForFullScreen)
+  }
+
+  @Test func `a late pop out reported after the full-screen window comes into sight is still closed`() {
+    var rule = WebKitAutoPictureInPicture()
+    #expect(rule.sight(false, enabled: true, playing: true) == .open)
+    rule.pageFullScreen(true, tab: 1)
+    #expect(rule.sight(false, enabled: true, playing: true) == .closeHeldForFullScreen)
+    #expect(rule.sight(true, enabled: true, playing: true) == .none)
+    let closes = rule.reported(active: true)
+    #expect(closes)
   }
 
   @Test func `a pop out that slipped ahead of full screen closes once the page reports it`() {

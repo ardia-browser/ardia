@@ -17,8 +17,7 @@ export function heldIndex(prev: Held | null, items: Suggestion[], typed: string,
 export function heldKey(items: Suggestion[], selectedIndex: number, typed: string): string | null {
   const current = items[selectedIndex];
   if (!current) return null;
-  const openTabRow = !typed.trim() && "tabId" in current && !!current.tabId;
-  return selectedIndex === 0 && !openTabRow ? null : suggestionKey(current);
+  return selectedIndex === 0 && typed.trim() ? null : suggestionKey(current);
 }
 
 export const followedRow = (prev: Held | null, index: number): Held | null => (prev ? { ...prev, key: heldKey(prev.items, index, prev.typed) } : prev);

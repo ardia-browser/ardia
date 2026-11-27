@@ -92,3 +92,10 @@ test("with text typed, the first row stays the first row, whatever arrives", () 
   const held = followedRow({ items: [tabRow, github], typed: "exa", scope: null, key: null }, 0);
   assert.equal(heldIndex(held, [late, tabRow, github], "exa", null, 0), 0);
 });
+
+test("in the sidebar bar's start list, the current page in the first row keeps its place the same way when nothing is typed", () => {
+  const current = { kind: "page", url: "https://current.example/", title: "current" };
+  const recent = { kind: "page", url: "https://recent.example/", title: "recent", visited: true };
+  const held = followedRow({ items: [current, recent], typed: "", scope: null, key: null }, 0);
+  assert.equal(heldIndex(held, [recent, current], "", null, 0), 1);
+});

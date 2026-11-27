@@ -2,6 +2,8 @@ import { Platform } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { SettingsView } from "../components/settings/SettingsView";
 import { pages } from "../platform/pages";
+import { closePageMenu, openPageMenu } from "../state/page/actions";
+import { usePages } from "../state/pages/store";
 import { openSettings, openSettingsPage, settingsNav } from "../state/settings/nav";
 import * as telemetry from "../state/telemetry/telemetry";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
@@ -46,8 +48,22 @@ onIos("on iPhone Site settings reads like the Mac's panes: plain rows with no ic
   expect(titlesIn(page(root))).toEqual(ROW_TITLES);
   expect(within(page(root), (props) => typeof props.title === "string" && typeof props.systemImage === "string")).toHaveLength(0);
   expect(hosts(root, (props) => props.title === "Content blocking" || props.title === "Browsing").map((node) => node.props.title)).toEqual(["Content blocking", "Browsing"]);
-  expect(within(page(root), (props) => typeof props.text === "string").map((node) => node.props.text)).toEqual(expect.arrayContaining(["Change one site from its page menu.", "meet.example", "Camera and Microphone", "Sites you allowed keep access on this iPhone until you revoke it. Private tabs always ask.", "Allowed: Camera and Microphone"]));
+  expect(within(page(root), (props) => typeof props.text === "string").map((node) => node.props.text)).toEqual(expect.arrayContaining(["Change one site from Site Settings in its page menu.", "meet.example", "Camera and Microphone", "Sites you allowed keep access on this iPhone until you revoke it. Private tabs always ask.", "Allowed: Camera and Microphone"]));
   expect(hosts(root, (props) => props.title === "Camera, microphone and location")).toHaveLength(1);
+  unmount(root);
+});
+
+onIos("Site settings opened from Settings has no section for a site, even while a page menu is open on a web page", async () => {
+  act(() => usePages.setState((state) => ({ ...state, navigation: { t0: { url: "https://site0.example/", title: "Site 0", canGoBack: false, canGoForward: false, isLoading: false, pageZoom: 1, isDesktopSite: false, blockedRequests: 0 } as never } })));
+  await act(async () => void (await openPageMenu()));
+  openSettings({ page: "siteSettings" });
+  const root = renderSurface(<SettingsView />);
+  await act(async () => undefined);
+  const texts = within(page(root), (props) => typeof props.text === "string").map((node) => node.props.text);
+  for (const gone of ["site0.example", "Page zoom", "Desktop site", "Desktop Site applies to this tab."]) expect(texts).not.toContain(gone);
+  expect(hosts(root, (props) => props.title === "site0.example")).toHaveLength(0);
+  expect(titlesIn(page(root))).toEqual(ROW_TITLES);
+  act(() => closePageMenu());
   unmount(root);
 });
 

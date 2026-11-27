@@ -39,6 +39,7 @@ beforeEach(() => {
   useDefaultBrowser.setState({ status: { isDefault: false, canAsk: true } });
   useSync.setState((state) => ({ ...state, status: OFF_STATUS, view: { devices: [], profiles: [], search: null, syncedAt: null, selectedProfileId: null, receivers: [] } as never }));
   jest.spyOn(pages, "canPrint").mockReturnValue(true);
+  jest.spyOn(pages, "listsSitePermissions").mockReturnValue(false);
   printed = jest.spyOn(pages, "print").mockResolvedValue(true);
   counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
   usePageSummariesSwitch.setState({ enabled: true });
@@ -118,38 +119,17 @@ test("the redesign's page menu shows every row at once, with no More row: the na
   expect(host(root, "pageMenuRow:More")).toBeUndefined();
   expect(hosts(root, (id) => id.startsWith("pageMenuAction:"))).toHaveLength(4);
   expect(host(root, "pageMenuCapsule")).toBeDefined();
-  expect(wordRows(root)).toEqual(["Summarize Page", "Send to Studio", "Block Ads and Trackers", "Night Shade", "Page Zoom", "Desktop Site", "Translate", "Print", "Site Settings", "History", "Bookmarks", "Downloads", "Open in Default Browser"]);
-  expect(hosts(root, (id) => id === "pageMenuGroup")).toHaveLength(4);
+  expect(wordRows(root)).toEqual(["Summarize Page", "Send to Studio", "Block Ads and Trackers", "Translate", "Print", "Site Settings", "Open in Default Browser"]);
+  expect(hosts(root, (id) => id === "pageMenuGroup")).toHaveLength(3);
   unmount(root);
 });
 
-test("the redesign has main's word rows in main's order, each with its icon, in main's groups, with the Library's rows on both phones", async () => {
+test("the redesign has its word rows in order, each with its icon, in its groups, and no Night Shade, Page Zoom, Desktop Site or Library rows on either phone", async () => {
   const root = await openMenu("redesigned");
-  expect(wordRows(root)).toEqual(["Block Ads and Trackers", "Night Shade", "Page Zoom", "Desktop Site", "Translate", "Print", "Site Settings", "History", "Bookmarks", "Downloads", "Open in Default Browser"]);
-  expect(hosts(root, (id) => id === "pageMenuGroup")).toHaveLength(4);
+  expect(wordRows(root)).toEqual(["Block Ads and Trackers", "Translate", "Print", "Site Settings", "Open in Default Browser"]);
+  expect(hosts(root, (id) => id === "pageMenuGroup")).toHaveLength(3);
+  for (const gone of ["Night Shade", "Page Zoom", "Desktop Site", "History", "Bookmarks", "Downloads"]) expect(textOf(root)).not.toContain(gone);
   for (const row of hosts(root, (id) => id.startsWith("pageMenuRow:") || id.startsWith("menuToggle:"))) expect(symbolsIn(rowAround(row))).toHaveLength(1);
-  unmount(root);
-});
-
-test("on both phones the page menu's History, Bookmarks and Downloads close the menu and open that Library sheet, as main's do", async () => {
-  for (const section of ["history", "bookmarks", "downloads"] as const) {
-    useLibrary.setState({ open: false, section: "history", path: [] });
-    const root = await openMenu("redesigned");
-    const title = section === "history" ? "History" : section === "bookmarks" ? "Bookmarks" : "Downloads";
-    await pressButton(root, title);
-    expect(usePageUi.getState().menuOpen).toBe(false);
-    expect(useLibrary.getState()).toMatchObject({ open: true, section });
-    expect(counted).toHaveBeenCalledWith("library_opened");
-    unmount(root);
-  }
-});
-
-test("opening the Library from an Incognito page isn't counted", async () => {
-  useTabs.setState({ incognito: true });
-  const root = await openMenu("redesigned");
-  await pressButton(root, "History");
-  expect(useLibrary.getState()).toMatchObject({ open: true, section: "history" });
-  expect(counted).not.toHaveBeenCalledWith("library_opened");
   unmount(root);
 });
 
@@ -190,7 +170,7 @@ test("Print shows only where the phone can print", async () => {
   jest.spyOn(pages, "canPrint").mockReturnValue(false);
   const root = await openMenu("redesigned");
   expect(wordRows(root)).not.toContain("Print");
-  expect(wordRows(root).slice(3, 6)).toEqual(["Desktop Site", "Translate", "Site Settings"]);
+  expect(wordRows(root).slice(1, 3)).toEqual(["Translate", "Site Settings"]);
   unmount(root);
 });
 
@@ -342,42 +322,38 @@ test("a print asked for and then given up by reopening the menu doesn't run late
   unmount(root);
 });
 
-test("the drawn redesign's Site Settings closes the menu at once and opens Settings at Site Settings on the next frame, while the menu slides away, without waiting for it to go", async () => {
+test("the drawn redesign's Site Settings opens in the menu's own sheet at once, with nothing rising a frame later or once the menu has gone", async () => {
   const root = await openMenu("redesigned");
   await pressButton(root, "Site Settings");
-  expect(usePageUi.getState().menuOpen).toBe(false);
-  expect(usePageUi.getState().menuPage).toBe("main");
-  expect(useSettingsNav.getState().open).toBe(false);
+  expect(usePageUi.getState()).toMatchObject({ menuOpen: true, menuPage: "siteSettings" });
+  expect(host(root, "pageMenuWords")).toBeUndefined();
+  expect(textOf(root)).toContain("site0.example");
   act(() => jest.advanceTimersByTime(FRAME_MS));
-  expect(useSettingsNav.getState().open).toBe(true);
-  expect(useSettingsNav.getState().stack).toEqual([{ page: "siteSettings" }]);
+  expect(useSettingsNav.getState().open).toBe(false);
+  act(() => usePageUi.setState({ menuOpen: false }));
   act(() => pageMenuHidden());
-  expect(useSettingsNav.getState().stack).toEqual([{ page: "siteSettings" }]);
+  act(() => jest.advanceTimersByTime(FRAME_MS));
+  expect(useSettingsNav.getState().open).toBe(false);
   unmount(root);
 });
 
-test("the drawn redesign's Site Settings opens nothing when the menu reopens or the tab leaves before its frame", async () => {
+test("the drawn redesign reopens on its main page after it was left on Site Settings", async () => {
   const root = await openMenu("redesigned");
   await pressButton(root, "Site Settings");
   await act(async () => {
     await openPageMenu();
   });
-  act(() => jest.advanceTimersByTime(FRAME_MS));
-  expect(useSettingsNav.getState().open).toBe(false);
-  await pressButton(root, "Site Settings");
-  act(() => useTabs.setState({ selectedId: "elsewhere" }));
-  act(() => jest.advanceTimersByTime(FRAME_MS));
-  expect(useSettingsNav.getState().open).toBe(false);
+  expect(usePageUi.getState()).toMatchObject({ menuOpen: true, menuPage: "main" });
+  expect(host(root, "pageMenuWords")).toBeDefined();
   unmount(root);
 });
 
-test("at accessibility text sizes the redesign's title moves under the navigation buttons, the zoom controls stack, and the four action tiles keep their captions in two rows of two", async () => {
+test("at accessibility text sizes the redesign's title moves under the navigation buttons and the four action tiles keep their captions in two rows of two", async () => {
   textSize(2.4, 393);
   const root = await openMenu("redesigned");
   const titlesIn = (testID: string) => host(root, testID)!.findAll((node) => node.props.testID === "pageMenuTitle" && typeof node.type === "string").length;
   expect(titlesIn("pageMenuCapsule")).toBe(1);
   expect(titlesIn("pageMenuCapsuleRow")).toBe(0);
-  expect(StyleSheet.flatten(host(root, "menuZoom")!.props.style).flexDirection).not.toBe("row");
   const nav = host(root, "pageMenuCapsule")!;
   expect(StyleSheet.flatten(nav.props.style)).toMatchObject({ borderRadius: 16, borderCurve: "continuous" });
   const rows = hosts(root, (id) => id === "pageMenuActionRow");
@@ -415,12 +391,10 @@ test("the redesign's action columns follow the menu's width as well as the text 
   unmount(narrow);
 });
 
-test("the redesign's switches that close the menu and reload say so in their hint, and Stop Loading names the in-flight button", async () => {
+test("the redesign's blockers switch says in its hint that it closes the menu and reloads, and Stop Loading names the in-flight button", async () => {
   page("https://site0.example/", true);
   const root = await openMenu("redesigned");
   expect(host(root, "menuToggle:Block Ads and Trackers")!.props.accessibilityHint).toBe("Closes the menu and reloads the page.");
-  expect(host(root, "menuToggle:Desktop Site")!.props.accessibilityHint).toBe("Closes the menu and reloads the page.");
-  expect(host(root, "menuToggle:Night Shade")!.props.accessibilityHint).toBeUndefined();
   expect(labelled(root, "Stop Loading")).toBeDefined();
   expect(labelled(root, "Stop")).toBeUndefined();
   unmount(root);
@@ -428,11 +402,11 @@ test("the redesign's switches that close the menu and reload say so in their hin
 
 test("the redesign's switches are the shared switch: its grey off track, and no second switch inside the row", async () => {
   const root = await openMenu("redesigned");
-  const toggle = host(root, "menuToggle:Night Shade")!;
-  expect(root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "switch" && node.props.accessibilityLabel === "Night Shade")).toHaveLength(1);
-  const track = root.root.findAll((node) => typeof node.type === "string" && node.props.testID === "toggleTrack");
-  expect(track.length).toBeGreaterThan(0);
-  expect(toggle.props.accessibilityState).toMatchObject({ checked: false });
+  const toggle = host(root, "menuToggle:Block Ads and Trackers")!;
+  expect(root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "switch" && node.props.accessibilityLabel === "Block Ads and Trackers")).toHaveLength(1);
+  const track = toggle.findAll((node) => typeof node.type === "string" && node.props.testID === "toggleTrack");
+  expect(track).toHaveLength(1);
+  expect(typeof toggle.props.accessibilityState.checked).toBe("boolean");
   unmount(root);
 });
 
@@ -449,11 +423,14 @@ test("Copy Link in the redesign says Copied Link in the title, and Copied Link W
   unmount(tracked);
 });
 
-test("off a web page the redesign's zoom percentage takes the same disabled ink as the rest of the row", async () => {
+test("off a web page the redesign's Site Settings has no group for a site, since there is no site to zoom, shade or ask for its desktop page", async () => {
   page("about:blank");
   const root = await openMenu("redesigned");
-  const percent = host(root, "menuZoomPercent")!;
-  expect(StyleSheet.flatten(percent.props.style).color).toBe("rgba(60,60,67,0.3)");
+  await pressButton(root, "Site Settings");
+  expect(usePageUi.getState().menuPage).toBe("siteSettings");
+  expect(textOf(root)).toContain("Block Cookie Banners");
+  expect(host(root, "siteSettingsZoom")).toBeUndefined();
+  for (const gone of ["Page Zoom", "Desktop Site", "Desktop Site applies to this tab."]) expect(textOf(root)).not.toContain(gone);
   unmount(root);
 });
 

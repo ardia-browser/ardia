@@ -32,7 +32,12 @@ final class ApplePasswordsSaving: NSObject {
     let remembered = confirmed[key(scheme, host, username)]
     if remembered == digest(password) { return done(nil) }
     ApplePasswordsClient.shared.logins(host: host) { result in
-      guard case .success(let entries) = result else { return DispatchQueue.main.async { done(nil) } }
+      let entries: [ApplePasswordsEntry]
+      switch result {
+      case .success(let found): entries = found
+      case .failure(.unavailable): return DispatchQueue.main.async { done(nil) }
+      case .failure: return DispatchQueue.main.async { done(remembered == nil ? "save" : "update") }
+      }
       LoginList.domains(ApplePasswordsMatch.probes([host] + ApplePasswordsMatch.siteHosts(entries)), profile: profile) { domains in
         let kept = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains).contains { $0.user == username }
         guard kept else { return done(remembered == nil ? "save" : "update") }
@@ -50,8 +55,67 @@ final class ApplePasswordsSaving: NSObject {
     }
   }
 
-  static func save(origin: String, username: String, password: String, update: Bool, engine: String, done: @escaping (Bool) -> Void) {
+  private final class Waiting {
+    let origin: String
+    let username: String
+    let password: String
+    let update: Bool
+    let engine: String
+    let done: (Bool) -> Void
+
+    init(origin: String, username: String, password: String, update: Bool, engine: String, done: @escaping (Bool) -> Void) {
+      self.origin = origin
+      self.username = username
+      self.password = password
+      self.update = update
+      self.engine = engine
+      self.done = done
+    }
+  }
+
+  private static let waiting = NSMapTable<AnyObject, Waiting>.weakToStrongObjects()
+  private static let pairingOver: Set<String> = ["refused", "helperMissing", "tooOld", "notEntitled"]
+  private static let watching: NSObjectProtocol = NotificationCenter.default.addObserver(forName: ApplePasswordsClient.changed, object: nil, queue: .main) { note in
+    let state = note.userInfo?["state"] as? String ?? ""
+    if state == "connected" { return finishWaiting(saving: true) }
+    if pairingOver.contains(state) { finishWaiting(saving: false) }
+  }
+
+  private static func finishWaiting(saving: Bool) {
+    let held = (waiting.objectEnumerator()?.allObjects as? [Waiting]) ?? []
+    waiting.removeAllObjects()
+    for login in held {
+      guard saving else {
+        count("saveFailed", engine: login.engine)
+        login.done(false)
+        continue
+      }
+      store(origin: login.origin, username: login.username, password: login.password, update: login.update, engine: login.engine, done: login.done)
+    }
+  }
+
+  static func pairingCancelled() {
     dispatchPrecondition(condition: .onQueue(.main))
+    finishWaiting(saving: false)
+  }
+
+  static func save(origin: String, username: String, password: String, update: Bool, engine: String, pairIn target: LoginListTarget?, done: @escaping (Bool) -> Void) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    ApplePasswordsClient.shared.status { state in
+      DispatchQueue.main.async {
+        guard state == "notConnected", let target else { return store(origin: origin, username: username, password: password, update: update, engine: engine, done: done) }
+        _ = watching
+        if let superseded = waiting.object(forKey: target) {
+          count("saveFailed", engine: superseded.engine)
+          superseded.done(false)
+        }
+        waiting.setObject(Waiting(origin: origin, username: username, password: password, update: update, engine: engine, done: done), forKey: target)
+        target.loginListConnect()
+      }
+    }
+  }
+
+  private static func store(origin: String, username: String, password: String, update: Bool, engine: String, done: @escaping (Bool) -> Void) {
     guard let (scheme, host) = page(origin), ApplePasswordsMatch.savable(username: username, password: password) != nil else {
       count("saveFailed", engine: engine)
       return done(false)
@@ -127,7 +191,7 @@ final class ApplePasswordsSaving: NSObject {
     held.removeObject(forKey: view)
     guard action == "save" || action == "update" else { return chrome }
     let name = username ?? login.username
-    save(origin: login.origin, username: name, password: login.password, update: login.update && name == login.username, engine: "chromium") { saved in
+    save(origin: login.origin, username: name, password: login.password, update: login.update && name == login.username, engine: "chromium", pairIn: view as? LoginListTarget) { saved in
       guard !saved else { return }
       notSaved(prompt(Self.notSaved, origin: login.origin, username: name, passwordLength: login.password.count, usernames: [name]))
     }

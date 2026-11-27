@@ -43,6 +43,13 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
     return null;
   };
   const fixture = (user) => FIXTURES.logins.find((l) => l.user === user);
+  const applePasswords = (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().state", { timeout: 20_000 });
+  const pairingStep = (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().pairing?.step ?? null", { timeout: 20_000 });
+  const prompting = (app, tabId) => app.eval(`return ac.pageState.getState().pages[${q(tabId)}]?.applePasswordsPairing === true`, { timeout: 20_000 });
+  const unpaired = async (app, fake) => {
+    fake.endPairing();
+    await waitFor("Pairing ended", async () => ((await applePasswords(app)) === "notConnected" ? true : null), 10_000);
+  };
 
   return {
     async E18() {
@@ -162,6 +169,50 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         fake.setMode({ garble: {} });
         await tab.close();
       }
+    },
+    async E18notConnected() {
+      const { app, fake, tabs } = await session();
+      const seen = {};
+      await unpaired(app, fake);
+      const login = { user: `unpaired-${engineName}-${Date.now()}@save.test`, password: "fixture-pw-unpaired-17" };
+      const tab = await tabs.open(sites.url(SITE));
+      try {
+        await signIn(tab, login.user, login.password);
+        const prompt = await promptShown(tab);
+        assert(prompt.state === "save" && prompt.copy.title === SAVE_TITLE && prompt.username === login.user, "signing in while Apple Passwords isn't connected still asks to save", prompt);
+        assert(await tab.answer("save"), "Save is pressed", null);
+        await waitFor("the Pairing prompt over the page", async () => ((await prompting(app, tab.id)) ? true : null), 10_000);
+        await waitFor("the code step", async () => ((await pairingStep(app)) === "code" ? true : null), 20_000);
+        assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing is saved before Pairing", null);
+        await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${q(FIXTURES.code)}).then(() => true);`, { timeout: 60_000 });
+        const saved = await waitFor("the login in Apple Passwords once paired", async () => fake.savedLogins().find((l) => l.user === login.user) ?? null, 20_000);
+        assert(saved.password === login.password && saved.sites.includes(SITE), "Pairing there saves the held login", { sites: saved.sites });
+        seen.paired = "saved";
+      } finally {
+        await tab.close();
+      }
+      await unpaired(app, fake);
+      const cancelled = { user: `cancelled-${engineName}-${Date.now()}@save.test`, password: "fixture-pw-cancelled-18" };
+      const again = await tabs.open(sites.url(SITE));
+      try {
+        await signIn(again, cancelled.user, cancelled.password);
+        assert((await promptShown(again)).state === "save", "the prompt asks to save again", null);
+        assert(await again.answer("save"), "Save is pressed", null);
+        await waitFor("the Pairing prompt over the page", async () => ((await prompting(app, again.id)) ? true : null), 10_000);
+        await app.eval("ac.applePasswords.cancelPairing(); return true;");
+        const told = await promptShown(again, "the prompt saying it wasn't saved");
+        assert(told.state === "notSaved" && told.copy.title === NOT_SAVED_TITLE, `Cancel says ${NOT_SAVED_TITLE}`, told);
+        assert(!fake.savedLogins().some((l) => l.user === cancelled.user), "nothing reached Apple Passwords", null);
+        assert(await again.answer("dismiss"), "OK closes it", null);
+        seen.cancelled = told.copy.title;
+      } finally {
+        await again.close();
+      }
+      await app.eval("return ac.applePasswords.startApplePasswordsPairing(null).then(() => true);", { timeout: 30_000 });
+      await waitFor("the code step", async () => ((await pairingStep(app)) === "code" ? true : null), 20_000);
+      await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${q(FIXTURES.code)}).then(() => true);`, { timeout: 60_000 });
+      await waitFor("Paired again", async () => ((await applePasswords(app)) === "connected" ? true : null), 20_000);
+      return { engine: engineName, ...seen };
     },
     async E33() {
       const { fake, tabs } = await session();

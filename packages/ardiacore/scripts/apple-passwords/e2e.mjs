@@ -20,7 +20,9 @@
 //   E18… saving to Apple Passwords from a WebKit tab (saving.mjs), in the same paired instance; E33 saves on an http page
 //   E18chromium… the same saving checks in a Chromium tab, whose save hands Chrome's pending login to Apple Passwords;
 //       E22garbled (both engines) answers an Update with a reply that doesn't open: "Not saved to Apple Passwords", and the
-//       next sign-in with that password asks to update again
+//       next sign-in with that password asks to update again; E18notConnected (both engines) signs in after Pairing ended:
+//       the prompt still asks to save, Save opens Pairing over the page and saves once paired, and Cancel there says it
+//       wasn't saved
 //   E24 on save.localhost's /signup, a new-password field lists "Suggest strong password" (strong-password.mjs); picking it
 //       fills both new-password fields with one password Ardia makes (12 characters where maxlength is 12, on
 //       /signup-short), and signing up asks "Save to Apple Passwords?", whose Save keeps that password in the fake;
@@ -424,7 +426,7 @@ const CHECKS = {
   ...loginListChecks({ paired, sites }),
   ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E12", "E13", "E15", "E34", "E34fetches", "E35", "E36", "E37"]),
   ...savingChecks({ paired, sites }),
-  ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E19", "E20", "E21", "E22", "E22garbled", "E23"]),
+  ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E18notConnected", "E19", "E20", "E21", "E22", "E22garbled", "E23"]),
   ...strongPasswordChecks({ paired, sites, fresh: freshChromiumTab }),
   ...inChromium(strongPasswordChecks({ paired, sites, engine: "chromium" }), ["E24", "E24change", "E24notConnected"]),
   ...codeChecks({ paired, sites }),

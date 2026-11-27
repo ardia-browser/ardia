@@ -84,7 +84,10 @@ public class PasswordsModule: Module {
       ApplePasswordsClient.shared.finishPairing(code: code) { reply.ok(["outcome": $0.rawValue]) }
     },
     applePasswordsCancelPairing: { _, reply in
-      DispatchQueue.main.async { LoginList.shared.pairingCancelled() }
+      DispatchQueue.main.async {
+        LoginList.shared.pairingCancelled()
+        ApplePasswordsSaving.pairingCancelled()
+      }
       ApplePasswordsClient.shared.cancelPairing { reply.ok(nil) }
     },
     setApplePasswordsProfiles: { args, reply in

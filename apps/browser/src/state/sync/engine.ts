@@ -109,6 +109,7 @@ const clockFor = (device: string) => (editClock().device !== device && startEdit
 
 async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring, forcePasswords }: Required<CycleOptions>) {
   const consent = consentToken();
+  const firstSeen = () => (lossFirstSeen === undefined ? consent : lossFirstSeen);
   const gone = (status: string, seen = consent) => publishChainGone(status, { native, folder, device, consent: seen, wasOffline: useSync.getState().status === "offline", publish: publishUi });
   await stateLoading;
   if (useSync.getState().status === "locked") return;
@@ -116,7 +117,8 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
   const slow = setTimeout(() => useSync.getState().status === "updated" && publishUi({ status: "updating" }), 1000);
   try {
     watchExtensions();
-    if (await gone(await native.chainStatus(folder))) return;
+    const opening = await native.chainStatus(folder);
+    if (opening !== "ok" && (await gone(opening, firstSeen()))) return void (lossFirstSeen = undefined);
     const { transport, confirmChain } = chainCheckedTransport(native, folder), clock = clockFor(device);
     if (doc.reseedScopes?.length) await reseedPendingScopes({ native, doc, folder, device, clock, watchScope, persistJournal, save });
     const app = appScopeOf(doc, consent);
@@ -168,7 +170,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;
     const lost = await folderLossAfter(native, folder, error, lossFirstSeen === undefined);
-    const seen = lossFirstSeen === undefined ? consent : lossFirstSeen;
+    const seen = firstSeen();
     lossFirstSeen = lost === "back" ? consent : undefined;
     if (lost === "back") again = true;
     else if (lost) await gone(lost, seen);

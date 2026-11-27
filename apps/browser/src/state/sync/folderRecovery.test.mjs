@@ -794,3 +794,30 @@ test("a loss first seen while sharing was off is never counted after sharing tur
     telemetry.setSharing(false, "settings");
   }
 });
+
+test("a loss first seen while sharing was off is not counted when the next cycle's opening check finds the data gone after sharing turned on", async () => {
+  reset();
+  const telemetry = await import("../telemetry/client.ts");
+  const engine = await import("./engine.ts?loss-consent-preflight");
+  telemetry.loadChoice();
+  telemetry.setSharing(false, "settings");
+  try {
+    engine.startSync();
+    assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+    await engine.syncNow();
+    engine.takeSnapshotWrites();
+    writeFindsChainGone = true;
+    S().addBookmark({ profileId: "default", url: "https://one.example/", title: "One" });
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, false, "the first look defers its verdict");
+    writeFindsChainGone = false;
+    chainOf(SYNC_FOLDER).delete(OURS);
+    telemetry.setSharing(true, "settings");
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, true, "the opening check reports the data missing");
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 0, "a loss first seen with sharing off is never counted");
+  } finally {
+    writeFindsChainGone = false;
+    telemetry.setSharing(false, "settings");
+  }
+});

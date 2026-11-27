@@ -620,7 +620,9 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
     goes on only if the open folder is the one at the path and empty. It makes the chain inside it with `mkdirat` and
     reports success only if the path still leads to that folder and that chain. Any mismatch, or a chain already there,
     answers that a folder is there, uploads nothing and removes nothing. The one cleanup is an `rmdir` of the folder
-    it made when its chain couldn't be made, and only while that folder is still the one at the path and empty. A failed try leaves
+    it made when its chain couldn't be made, and only while that folder is still the one at the path and empty. A known limit
+    of these volumes: an empty folder put at the path between the mkdir and the open passes that check and gets the
+    chain, since macOS has no exclusive open for a folder and a plain rename replaces an empty one. A failed try leaves
     nothing behind, so it never blocks the next. Linux and Windows serve the call in `hostSync.ts`: they refuse a
     folder that is there and otherwise use the engine's `createChain`, which keeps a short window and can leave an
     empty folder if its second mkdir fails, until their engines get the same call (#4638). Pairing stays off until a

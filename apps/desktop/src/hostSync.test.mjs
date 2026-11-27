@@ -115,6 +115,29 @@ test("saved passwords go only through the typed native path for the window's pro
   assert.equal(syncModuleMethod(host, "ArdiaPasswords", "write"), undefined);
 });
 
+test("a change to a held login names the password the engine holds, never the held one it never saw", async () => {
+  for (const native of [[{ origin: "https://bank.example", username: "alice", sealed: "V1", created: 5 }], []]) {
+    const engineHolds = native[0]?.sealed ?? "";
+    const host = fakeHost((method, { args }) =>
+      method === "ArdiaSync.readPasswords" ? native : method === "ArdiaSync.savePassword" ? args[4] === engineHolds : null,
+    );
+    const io = heldIo();
+    const held = createHeldLogins(io);
+    configureHeldLogins(held);
+    try {
+      assert.equal(await held.hold("", { origin: "https://bank.example", username: "alice", sealed: "LONG", replaced: native[0]?.sealed ?? null }), true);
+      const shown = await syncModuleMethod(host, "ArdiaSync", "readPasswords")("");
+      assert.deepEqual(shown.map((login) => login.sealed), ["LONG"]);
+      assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", "https://bank.example", "alice", "SHORT", "LONG"), true);
+    } finally {
+      configureHeldLogins(null);
+    }
+    const saves = host.calls.filter((call) => call.method === "ArdiaSync.savePassword");
+    assert.deepEqual(saves.map((call) => call.args.args[4]), [engineHolds]);
+    assert.equal(io.docs.has(HELD_LOGINS_DOCUMENT), false, "the saved login is no longer held");
+  }
+});
+
 test("a held login is sealed at rest and hides the local value it replaced across restarts until that value really changes", async () => {
   const io = heldIo();
   const v1 = { origin: "https://bank.example", username: "alice", sealed: "V1", created: 5 };

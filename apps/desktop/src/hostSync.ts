@@ -274,8 +274,11 @@ export function createHeldLogins(io: HeldLoginsIo, limits: { maxLogins?: number;
         await store(next);
         return true;
       }),
-    holds: (profile: string, origin: string, username: string): Promise<boolean> =>
-      inTurn(async () => !!(await load())?.[profile]?.[loginKey(origin, username)]),
+    holds: (profile: string, origin: string, username: string, sealed?: string): Promise<boolean> =>
+      inTurn(async () => {
+        const login = (await load())?.[profile]?.[loginKey(origin, username)];
+        return !!login && (sealed === undefined || login.sealed === sealed);
+      }),
     dropProfiles: (profiles: string[]): Promise<void> =>
       inTurn(async () => {
         if (!profiles.length) return;
@@ -464,13 +467,22 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
     return async (profile: string, origin: string, username: string, sealed: string, replaced: string) => {
       const store = heldLogins;
       const owner = hostProfile(profile, host);
-      const saved = await invoke(host, method)(owner, origin, username, sealed, replaced);
+      const engineHolds = async (): Promise<string | null | undefined> => {
+        const local = (await invoke(host, "readPasswords")(owner)) as SealedLogin[] | null;
+        return local ? (local.find((login) => login.origin === origin && login.username === username)?.sealed ?? null) : undefined;
+      };
+      let expected = replaced;
+      if (replaced && store && (await store.holds(profile, origin, username, replaced))) {
+        const holds = await engineHolds();
+        if (holds === undefined) return false;
+        expected = holds ?? "";
+      }
+      const saved = await invoke(host, method)(owner, origin, username, sealed, expected);
       if (saved === "skipped") {
         if (!store) return false;
-        const local = (await invoke(host, "readPasswords")(owner)) as SealedLogin[] | null;
-        if (!local) return false;
-        const replaced = local.find((login) => login.origin === origin && login.username === username)?.sealed ?? null;
-        return store.hold(profile, { origin, username, sealed, replaced });
+        const holds = await engineHolds();
+        if (holds === undefined) return false;
+        return store.hold(profile, { origin, username, sealed, replaced: holds });
       }
       if (saved === true) await store?.release(profile, origin, username);
       return saved === true;

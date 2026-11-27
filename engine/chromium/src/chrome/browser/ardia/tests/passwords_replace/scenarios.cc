@@ -395,6 +395,16 @@ void LoginDeletedDuringTheWriteStaysDeleted() {
   assert(world.profile_store->rows.empty());
 }
 
+void CopyInTheOtherStoreDoesNotStandInForTheOneWritten() {
+  World world;
+  world.profile_store->Seed({{"https://a.test/", u"me", u"old"}});
+  world.account_store->Seed({{"https://a.test/", u"me", u"remote"}});
+  world.profile_store->before_write = [](FakeStore& store) { store.rows.clear(); };
+  Failed(Replace(world, "https://a.test", "me", "remote", "old"), "The login changed while it was being saved");
+  assert(world.profile_store->rows.empty() && world.profile_store->adds == 0);
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"remote");
+}
+
 void ConcurrentChangeIsKept() {
   World world;
   world.profile_store->Seed({{"https://a.test/", u"me", u"old"}});
@@ -494,6 +504,7 @@ int main() {
   AccountStoreThatDropsTheChangeFails();
   MissingAccountStoreUsesTheProfileStore();
   LoginDeletedDuringTheWriteStaysDeleted();
+  CopyInTheOtherStoreDoesNotStandInForTheOneWritten();
   ConcurrentChangeIsKept();
   StoreThatNeverTakesTheChangeFails();
   UnreadableAndSilentStoresFail();

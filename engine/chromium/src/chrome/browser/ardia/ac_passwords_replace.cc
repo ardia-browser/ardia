@@ -76,6 +76,30 @@ bool HoldsKeyOf(const StoredCredential& credential, const Login& login) {
          credential.username_element.empty() && credential.password_element.empty();
 }
 
+struct Written {
+  bool account;
+  GURL url;
+  std::string signon_realm;
+  std::u16string username_element;
+  std::u16string username_value;
+  std::u16string password_element;
+
+  static Written Of(const StoredCredential& credential, bool account) {
+    return Written{account,
+                   credential.url,
+                   credential.signon_realm,
+                   credential.username_element,
+                   credential.username_value,
+                   credential.password_element};
+  }
+
+  bool IsFormOf(const StoredCredential& credential) const {
+    return credential.url == url && credential.signon_realm == signon_realm &&
+           credential.username_element == username_element && credential.username_value == username_value &&
+           credential.password_element == password_element;
+  }
+};
+
 void Forget(Credentials& credentials) {
   for (StoredCredential& credential : credentials) {
     credential.password_value.clear();
@@ -175,7 +199,7 @@ class Replace : public password_manager::PasswordStoreConsumer {
     return Replaceable(credential, login_) && (!expected_ || credential.password_value == *expected_);
   }
 
-  bool Changes(Credentials& credentials, Credentials& changes) const {
+  bool Changes(Credentials& credentials, Credentials& changes, bool account) {
     bool found = false;
     for (StoredCredential& credential : credentials) {
       if (!Expected(credential)) {
@@ -188,6 +212,7 @@ class Replace : public password_manager::PasswordStoreConsumer {
       credential.password_value = StoredPassword(password_);
       credential.date_password_modified = base::Time::Now();
       credential.password_issues.clear();
+      written_.push_back(Written::Of(credential, account));
       changes.push_back(std::move(credential));
     }
     return found;
@@ -206,8 +231,8 @@ class Replace : public password_manager::PasswordStoreConsumer {
   void Write() {
     Credentials profile_changes;
     Credentials account_changes;
-    const bool in_profile = Changes(*profile_, profile_changes);
-    const bool in_account = Changes(*account_, account_changes);
+    const bool in_profile = Changes(*profile_, profile_changes, false);
+    const bool in_account = Changes(*account_, account_changes, true);
     if (in_profile || in_account) {
       writes_ = !profile_changes.empty() + !account_changes.empty();
       if (writes_ == 0) {
@@ -230,7 +255,9 @@ class Replace : public password_manager::PasswordStoreConsumer {
       return Finish("A blocked or federated entry holds this login");
     }
     writes_ = 1;
-    profile_store_->AddLogin(Added(), Wrote());
+    StoredCredential added = Added();
+    written_.push_back(Written::Of(added, false));
+    profile_store_->AddLogin(std::move(added), Wrote());
   }
 
   StoredCredential Added() const {
@@ -248,18 +275,18 @@ class Replace : public password_manager::PasswordStoreConsumer {
   }
 
   void Verify() {
-    bool found = false;
+    const bool landed = std::ranges::all_of(written_, [this](const Written& written) {
+      return std::ranges::any_of(written.account ? *account_ : *profile_, [&](const StoredCredential& credential) {
+        return written.IsFormOf(credential) && credential.password_value == password_;
+      });
+    });
     bool stale = false;
     for (const Credentials* read : {&*profile_, &*account_}) {
-      for (const StoredCredential& credential : *read) {
-        if (!Replaceable(credential, login_)) {
-          continue;
-        }
-        found = found || credential.password_value == password_;
-        stale = stale || (Expected(credential) && credential.password_value != password_);
-      }
+      stale = stale || std::ranges::any_of(*read, [this](const StoredCredential& credential) {
+                return Expected(credential) && credential.password_value != password_;
+              });
     }
-    Finish(found && !stale ? std::string_view() : std::string_view("The login changed while it was being saved"));
+    Finish(landed && !stale ? std::string_view() : std::string_view("The login changed while it was being saved"));
   }
 
   void Finish(std::string_view error);
@@ -274,6 +301,7 @@ class Replace : public password_manager::PasswordStoreConsumer {
   std::optional<std::u16string> expected_;
   std::optional<Credentials> profile_;
   std::optional<Credentials> account_;
+  std::vector<Written> written_;
   int writes_ = 0;
   Step step_ = Step::kWrite;
   base::OneShotTimer timeout_;

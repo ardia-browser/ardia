@@ -23,6 +23,7 @@ export const FIXTURES = {
   codes: [
     { domain: "example.localhost", username: "ada@example.test", code: "135790" },
     { domain: "example.localhost", username: "grace@example.test", code: "246802" },
+    { domain: "plain.localhost", username: "plain@plain.test", code: "975310" },
   ],
 };
 

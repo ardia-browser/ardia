@@ -89,7 +89,7 @@
   {
    "id": "chromium-page-message:loginField",
    "source": "frame",
-   "guard": "ArdiaLoginListReport keeps only an event, a digit token, a field kind, the username field's typed value (200 characters) and a bounded rect; Apple Passwords profiles only; the frame's origin is the engine's verified one, never the page's, and must be the top page's; trusted pointer or key; the Login list fills only after a native pick, into the frame and field token it was opened for",
+   "guard": "ArdiaLoginListReport keeps only an event, a digit token, a field kind (username, password or code), the username field's typed value (200 characters) and a bounded rect; Apple Passwords profiles only; the frame's origin is the engine's verified one, never the page's, and must be the top page's; trusted pointer or key; the Login list fills only after a native pick, into the frame and field token it was opened for; a Verification code only on https, into an empty, visible code field, and only a code of 4 to 10 letters and digits",
    "checks": [
     "packages/ardiacore/ios/ArdiaLoginListReport.mm#ArdiaLoginListReport",
     "packages/ardiacore/ios/ArdiaWebView+LoginList.mm#loginFieldFromPage"
@@ -282,7 +282,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 41,
+   "count": 42,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -479,7 +479,7 @@
   {
    "id": "webkit-page-message:loginField",
    "source": "frame",
-   "guard": "Main frame only, trusted pointer or key, bound to the page origin; fills only after a native dropdown pick"
+   "guard": "Main frame only, trusted pointer or key, bound to the page origin; fills only after a native dropdown pick; a Verification code only on https, into an empty, visible code field, and only a code of 4 to 10 letters and digits"
   },
   {
    "id": "webkit-page-message:loginSubmit",

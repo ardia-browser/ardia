@@ -55,4 +55,25 @@ private func site(_ host: String) -> String { ApplePasswordsMatch.site(host, dom
     #expect(ApplePasswordsMatch.sameSite("accounts.example.localhost", "example.localhost", domains: chromiumAnswers))
     #expect(!ApplePasswordsMatch.sameSite("other.localhost", "example.localhost", domains: chromiumAnswers))
   }
+
+  private let codes = [
+    ApplePasswordsCode(user: "ann@example.com", domain: "example.localhost", source: "totp", code: ""),
+    ApplePasswordsCode(user: "Bob@Example.com", domain: "accounts.example.localhost", source: "totp", code: ""),
+    ApplePasswordsCode(user: "ann@example.com", domain: "example.localhost", source: "totp", code: ""),
+    ApplePasswordsCode(user: "carl@other.test", domain: "other.localhost", source: "totp", code: ""),
+    ApplePasswordsCode(user: "dee@example.com", domain: "example.localhost", source: "mail", code: ""),
+    ApplePasswordsCode(user: "eve@example.com", domain: "", source: "totp", code: ""),
+  ]
+
+  @Test func `a code field lists each account's time code for the page's site once, never another site's or another kind's`() {
+    let found = ApplePasswordsMatch.codes(codes, host: "example.localhost", domains: chromiumAnswers).map(\.user)
+    #expect(found == ["ann@example.com", "Bob@Example.com", "eve@example.com"])
+  }
+
+  @Test func `the typed account's code comes first, matched without case, and none is dropped`() {
+    let found = ApplePasswordsMatch.codes(codes, host: "example.localhost", domains: chromiumAnswers)
+    #expect(ApplePasswordsMatch.typedFirst(found, user: "bob@example.com").map(\.user) == ["Bob@Example.com", "ann@example.com", "eve@example.com"])
+    #expect(ApplePasswordsMatch.typedFirst(found, user: "zed@example.com").map(\.user) == ["ann@example.com", "Bob@Example.com", "eve@example.com"])
+    #expect(ApplePasswordsMatch.typedFirst(found, user: nil).map(\.user) == ["ann@example.com", "Bob@Example.com", "eve@example.com"])
+  }
 }

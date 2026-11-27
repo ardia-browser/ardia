@@ -95,3 +95,21 @@ test("each Apple Passwords save is also counted by the engine of the tab it came
   assert.ok(!Object.keys(counts).some((field) => field.includes("gecko")), "no field for an engine Ardia doesn't have");
   client.setSharing(false, "settings");
 });
+
+test("each Verification code filled and each one Apple Passwords didn't fill are counted, also by the tab's engine, only while sharing is on", () => {
+  const inEngine = (name, engine) => native.emitEvent("passwords.loginListCounted", { name, engine, epoch: client.consentEpoch() });
+  startLoginListCounts();
+  client.setSharing(true, "settings");
+  takePasswordManagerCounts();
+  for (const [name, engine] of [["codeFilled", "chromium"], ["codeFilled", "webkit"], ["codeFilled", "webkit"], ["codeFillFailed", "chromium"]]) inEngine(name, engine);
+  const counts = takePasswordManagerCounts();
+  assert.equal(counts.apple_passwords_codes_filled, 3);
+  assert.equal(counts.apple_passwords_codes_filled_chromium, 1);
+  assert.equal(counts.apple_passwords_codes_filled_webkit, 2);
+  assert.equal(counts.apple_passwords_codes_failed, 1);
+  assert.equal(counts.apple_passwords_codes_failed_chromium, 1);
+  assert.equal(counts.apple_passwords_login_list_filled, 0, "a code is not a login fill");
+  client.setSharing(false, "settings");
+  inEngine("codeFilled", "webkit");
+  assert.equal(takePasswordManagerCounts().apple_passwords_codes_filled, 0);
+});

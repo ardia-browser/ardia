@@ -45,6 +45,10 @@ export const PAGES = {
   "/search": (host) => page(`Search ${host}`, `<form role="search" action="/signed-in"><input id="q" type="search" name="q" placeholder="Search" style="top:40px"></form>`),
   "/newsletter": (host) =>
     page(`Newsletter on ${host}`, `<form action="/signed-in"><input id="email" type="email" name="email" placeholder="Your email" style="top:40px"><button id="subscribe" style="top:100px">Subscribe</button></form>`),
+  "/code": (host) =>
+    page(`Verify on ${host}`, `<form method="post" action="/signed-in"><input id="c" name="otp" autocomplete="one-time-code" inputmode="numeric" style="top:40px"><button id="go" style="top:100px">Verify</button></form>`),
+  "/code-filled": (host) =>
+    page(`Verify on ${host}`, `<form method="post" action="/signed-in"><input id="c" name="otp" autocomplete="one-time-code" inputmode="numeric" value="12" style="top:40px"><button id="go" style="top:100px">Verify</button></form>`),
   "/framed": (host, { frame }) =>
     page(`Framed on ${host}`, `<iframe id="frame" src="${frame}" style="position:absolute;left:20px;top:20px;width:420px;height:240px;border:0"></iframe>`),
 };

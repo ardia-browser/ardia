@@ -82,3 +82,81 @@ test("Escape reaches native even before the page hears the Login list is open, s
   await page.keyboard.press("Escape");
   assert.deepEqual(await loginFields(run), [{ event: "key", key: "escape", token }]);
 });
+
+const CODE_FIXTURE = `<!doctype html><body style="margin:0">
+<form><input id="c" autocomplete="one-time-code" inputmode="numeric" style="position:absolute;left:10px;top:10px;width:300px;height:30px"></form>
+<script>
+const events = (window.__events = []);
+for (const type of ["input", "change"]) document.addEventListener(type, (e) => events.push(type + ":" + e.target.id), true);
+</script></body>`;
+
+async function openCodeFixture(browser, origin, body = CODE_FIXTURE) {
+  const context = await browser.newContext({ viewport: { width: 800, height: 600 } });
+  await context.addInitScript(`window.__ardiaPosts = []; window.__ardiaReceive = (${pageScript})((kind, json) => window.__ardiaPosts.push([kind, json]));`);
+  await context.route(`${origin}/**`, (route) => route.fulfill({ contentType: "text/html", body }));
+  const page = await context.newPage();
+  await page.goto(`${origin}/verify`);
+  const run = (fn, arg) => page.evaluate(fn, arg);
+  await run(() => window.__ardiaReceive("config", JSON.stringify({ loginList: { on: true } })));
+  const fill = (message) => run((m) => window.__ardiaReceive("loginFill", JSON.stringify(m)), message);
+  const seen = () => run(() => ({ c: document.getElementById("c").value, events: window.__events.splice(0) }));
+  return { page, run, fill, seen, origin };
+}
+
+test("a code field fills only an empty, visible field on https, and only with a code of 4 to 10 letters and digits", { skip: CHROMIUM_MISSING, timeout: 30_000 }, async (t) => {
+  const browser = await launchChromium();
+  t.after(() => browser.close());
+  const { page, run, fill, seen, origin } = await openCodeFixture(browser, "https://page.test");
+  await page.mouse.click(30, 25);
+  const [report] = await loginFields(run);
+  assert.equal(report.field, "code");
+  const { token } = report;
+  for (const [ticket, code] of [["1", "12"], ["2", "12345678901"], ["3", "13 579"], ["4", "<b>1357</b>"]]) await fill({ ticket, token, origin, code });
+  assert.deepEqual(await fillReplies(run), ["1", "2", "3", "4"].map((ticket) => ({ ticket, filled: false })), "a value that isn't a code fills nothing");
+  await run(() => (document.getElementById("c").value = "34"));
+  await fill({ ticket: "5", token, origin, code: "135790" });
+  await run(() => (document.getElementById("c").value = ""));
+  await run(() => (document.getElementById("c").style.visibility = "hidden"));
+  await fill({ ticket: "6", token, origin, code: "135790" });
+  await run(() => (document.getElementById("c").style.visibility = ""));
+  assert.deepEqual(await fillReplies(run), [{ ticket: "5", filled: false }, { ticket: "6", filled: false }], "a field holding text, or hidden, takes no code");
+  assert.deepEqual(await seen(), { c: "", events: [] }, "nothing reaches the page");
+  await page.mouse.click(30, 25);
+  const [again] = (await loginFields(run)).filter((r) => r.event === "show");
+  await fill({ ticket: "7", token: again.token, origin, code: "135790" });
+  assert.deepEqual(await fillReplies(run), [{ ticket: "7", filled: true }]);
+  assert.deepEqual(await seen(), { c: "135790", events: ["input:c", "change:c"] }, "the empty code field it was opened for fills");
+  await page.mouse.click(30, 25);
+  assert.deepEqual((await loginFields(run)).filter((r) => r.event !== "hide"), [], "a code field that holds text asks for no code list");
+});
+
+test("an http page's code field asks for no code list and takes no code", { skip: CHROMIUM_MISSING, timeout: 30_000 }, async (t) => {
+  const browser = await launchChromium();
+  t.after(() => browser.close());
+  const { page, run, fill, seen, origin } = await openCodeFixture(browser, "http://page.test");
+  await page.mouse.click(30, 25);
+  assert.deepEqual((await loginFields(run)).filter((r) => r.event !== "hide"), []);
+  await fill({ ticket: "1", token: "1", origin, code: "135790" });
+  assert.deepEqual(await fillReplies(run), [{ ticket: "1", filled: false }]);
+  assert.deepEqual(await seen(), { c: "", events: [] });
+});
+
+test("a field named for a verification code is a code field even without autocomplete, and a zip or search box isn't", { skip: CHROMIUM_MISSING, timeout: 30_000 }, async (t) => {
+  const browser = await launchChromium();
+  t.after(() => browser.close());
+  const box = (id, attributes, top) => `<input id="${id}" ${attributes} style="position:absolute;left:10px;top:${top}px;width:300px;height:30px">`;
+  const body = `<!doctype html><body style="margin:0"><form>
+${box("named", 'name="verification_code" inputmode="numeric"', 10)}
+${box("otp", 'name="otp_input"', 60)}
+${box("zip", 'name="zip" inputmode="numeric"', 110)}
+${box("search", 'type="search" name="q"', 160)}
+${box("mail", 'name="otp" autocomplete="email"', 210)}
+</form></body>`;
+  const { page, run } = await openCodeFixture(browser, "https://page.test", body);
+  const kinds = {};
+  for (const [id, y] of [["named", 25], ["otp", 75], ["zip", 125], ["search", 175], ["mail", 225]]) {
+    await page.mouse.click(30, y);
+    kinds[id] = (await loginFields(run)).filter((r) => r.event !== "hide").map((r) => r.field)[0] ?? null;
+  }
+  assert.deepEqual(kinds, { named: "code", otp: "code", zip: null, search: null, mail: null });
+});

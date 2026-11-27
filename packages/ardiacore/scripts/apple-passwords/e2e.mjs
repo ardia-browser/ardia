@@ -16,6 +16,9 @@
 //   E5chromium… the same Login list checks in a Chromium tab of that instance
 //   E18… saving to Apple Passwords from a WebKit tab (saving.mjs), in the same paired instance; E33 saves on an http page
 //   E18chromium… the same saving checks in a Chromium tab, whose save hands Chrome's pending login to Apple Passwords
+//   E25-E27 Verification codes on a code field (codes.mjs), in that instance, in a WebKit tab and (E25chromium…) a
+//       Chromium one: "Code for example.localhost" fills the fixture code, the account typed on the site's sign-in
+//       page comes first, and an http code field or one holding text gets nothing
 //   E32 with a stand-in for the iCloud Passwords extension (its id, from icloud-extension.mjs), picking Apple Passwords
 //       turns it off and says so, "Turn it back on" turns it on, and switching to Ardia turns it on only if Ardia turned
 //       it off; it is never uninstalled
@@ -28,6 +31,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { launch, reporter, sleep } from "../../../../scripts/lib/instance.mjs";
+import { codeChecks } from "./codes.mjs";
 import { fakeHelper } from "./fake.mjs";
 import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
 import { loginListChecks } from "./login-list.mjs";
@@ -319,6 +323,8 @@ const CHECKS = {
   ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E12", "E13", "E15", "E34", "E35", "E36", "E37"]),
   ...savingChecks({ paired, sites }),
   ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E19", "E20", "E21", "E22", "E23"]),
+  ...codeChecks({ paired, sites }),
+  ...inChromium(codeChecks({ paired, sites, engine: "chromium" }), ["E25", "E26", "E27"]),
 };
 
 const names = wanted.length ? wanted : Object.keys(CHECKS);

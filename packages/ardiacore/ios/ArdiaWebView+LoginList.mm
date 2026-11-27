@@ -10,7 +10,7 @@ using namespace ardia_runtime;
 @end
 
 @interface ArdiaWebView (LoginListTarget)
-- (void)showLoginListFrom:(NSString *)origin screenRect:(NSRect)rect typing:(BOOL)typing typed:(NSString *)typed;
+- (void)showLoginListFrom:(NSString *)origin screenRect:(NSRect)rect typing:(BOOL)typing typed:(NSString *)typed code:(BOOL)code;
 - (void)keyLoginList:(NSString *)key;
 - (void)closeLoginList;
 @property (nonatomic, readonly) BOOL loginListShown;
@@ -83,7 +83,8 @@ NSDictionary *LoginListConfig(NSString *profile) {
   [self showLoginListFrom:origin
                screenRect:[self loginListScreenRect:[report[@"rect"] rectValue]]
                    typing:[event isEqualToString:@"input"]
-                    typed:report[@"typed"]];
+                    typed:report[@"typed"]
+                     code:[report[@"field"] isEqualToString:@"code"]];
 }
 
 - (void)endLoginField {
@@ -101,7 +102,7 @@ NSDictionary *LoginListConfig(NSString *profile) {
   if (!_loginList.fills) _loginList.fills = [NSMutableDictionary dictionary];
   _loginList.fills[ticket] = @{@"frame" : frame, @"done" : [completion copy]};
   NSMutableDictionary *message = [@{@"ticket" : ticket, @"token" : field[@"token"], @"origin" : origin} mutableCopy];
-  for (NSString *key in @[ @"username", @"password" ])
+  for (NSString *key in @[ @"username", @"password", @"code" ])
     if ([values[key] isKindOfClass:NSString.class]) message[key] = values[key];
   [self callFrame:frame kind:@"loginFill" json:JSONText(message)];
   __weak ArdiaWebView *weakSelf = self;

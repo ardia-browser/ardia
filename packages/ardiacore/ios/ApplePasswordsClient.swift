@@ -24,6 +24,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
   private var generation = UUID()
   private var killed = false
   private var base64 = true
+  private var fillsCodes = false
   private var pending: (srp: ApplePasswordsSRP, reply: String, generation: UUID)?
   private var session: ApplePasswordsSRP?
   private var lastState: String?
@@ -185,7 +186,9 @@ final class ApplePasswordsClient: @unchecked Sendable {
     pending = nil
     do {
       let hello = try exchange(["cmd": 14], cmd: 14, wait: Self.helloSeconds)
-      base64 = (hello["capabilities"] as? [String: Any])?["shouldUseBase64"] as? Bool ?? true
+      let capabilities = hello["capabilities"] as? [String: Any]
+      base64 = capabilities?["shouldUseBase64"] as? Bool ?? true
+      fillsCodes = capabilities?["canFillOneTimeCodes"] as? Bool ?? false
       let srp = ApplePasswordsSRP(base64: base64)
       let m0 = try Self.text(["QID": "m0", "PAKE": srp.first, "HSTBRSR": Self.browserName])
       let reply = try exchange(["cmd": 2, "msg": m0], cmd: 2, wait: Self.pairingSeconds)
@@ -263,6 +266,33 @@ final class ApplePasswordsClient: @unchecked Sendable {
         return password
       }.mapError(Self.problem))
     }
+  }
+
+  static let codesSeconds: TimeInterval = 10
+  static let codeSeconds: TimeInterval = 120
+
+  func codes(page: String, _ done: @escaping (Result<[ApplePasswordsCode], Problem>) -> Void) {
+    queue.async {
+      done(Result {
+        if self.session != nil, !self.fillsCodes { return [] }
+        let answer = try self.sealed(16, qid: "CmdGetOneTimeCodes", url: nil, ["ACT": 5, "TYPE": "oneTimeCodes", "frameURLs": [page]], wait: Self.codesSeconds)
+        return Self.entries(answer).map(Self.code)
+      }.mapError(Self.problem))
+    }
+  }
+
+  func code(page: String, user: String, _ done: @escaping (Result<[ApplePasswordsCode], Problem>) -> Void) {
+    queue.async {
+      done(Result {
+        guard self.session == nil || self.fillsCodes else { throw Problem.failed }
+        let body: [String: Any] = ["ACT": 2, "TYPE": "oneTimeCodes", "frameURLs": [page], "username": user]
+        return Self.entries(try self.sealed(17, qid: "CmdDidFillOneTimeCode", url: nil, body, wait: Self.codeSeconds)).map(Self.code)
+      }.mapError(Self.problem))
+    }
+  }
+
+  private static func code(_ entry: [String: Any]) -> ApplePasswordsCode {
+    ApplePasswordsCode(user: entry["username"] as? String ?? "", domain: entry["domain"] as? String ?? "", source: entry["source"] as? String ?? "totp", code: entry["code"] as? String ?? "")
   }
 
   static func savedSite(host: String, insecure: Bool) -> String { insecure ? "http://\(host)" : host }

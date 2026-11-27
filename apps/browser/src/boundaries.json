@@ -1341,6 +1341,52 @@
    "detected": false
   },
   {
+   "id": "import:notes-plugin",
+   "source": "import",
+   "guard": "The Notes plugin's importers take exports the user picked (zip, tar, enex, JSON, Markdown, HTML, CSV): zip and tar entry names go through cleanEntryName (no absolute paths, drive letters, .. parts or NUL), encrypted and unknown methods are skipped, entries are capped in count, total size and compression ratio and checked against their CRC and declared size while inflating; HTML keeps only known block and inline tags (scripts, styles, frames, forms and media dropped), and every link and image address goes through safeUrl (http, https, mailto and tel only) or resolves to a page or file inside the export",
+   "checks": [
+    "plugins/notes/src/main/import/zip.ts#cleanEntryName",
+    "plugins/notes/src/main/import/ir.ts#safeUrl",
+    "plugins/notes/src/main/import/html.ts#parseDom"
+   ],
+   "detected": false
+  },
+  {
+   "id": "site:notes-notion-crawl",
+   "source": "import",
+   "guard": "The Notes plugin's Notion import reads the user's workspace over their Ardia sign-in (ardia.sites, official plugins only) and only through read endpoints: notionReadUrl refuses any endpoint outside NOTION_READ_ENDPOINTS and any origin but app.notion.com and www.notion.so, so no write (saveTransactions, submitTransaction, enqueueTask) can be sent; every record Notion answers goes through unwrapRecord (objects only, a Notion UUID id that must equal its key, so no __proto__ or made-up keys), the crawl stops at 250,000 records, a 30-minute budget and 400 rounds; files come only from Notion's file hosts after getSignedFileUrls, built-in /icons/ and /images/ paths on the crawl's origin (assetUrl refuses . and .. parts and other paths) and images.unsplash.com, each capped at 64 MiB and 2 GiB in all, under names cleaned by fileName (no slashes, colons, control or bidi characters, or leading dots)",
+   "checks": [
+    "plugins/notes/src/main/import/sources/notionLive.ts#notionReadUrl",
+    "plugins/notes/src/main/import/sources/notionLive.ts#unwrapRecord",
+    "plugins/notes/src/main/import/sources/notionLive.ts#assetUrl",
+    "plugins/notes/src/main/import/sources/notionLive.ts#fileName"
+   ],
+   "detected": false
+  },
+  {
+   "id": "folder:notes-page-share",
+   "source": "sync",
+   "guard": "A Notes page share (or shared workspace) folder is written by the people it's shared with: workspace.json is read at most 4 KB and through parseWorkspaceJson (format, a workspace id, a page id for root or nothing, the name stripped of control and bidi characters and cut to 120), so a root can never point at the owner's private pages, which only the owner's own tree marks as links; attachments come back only when their sha256 matches (getFile), and stopping a share refuses pages whose ids clash with live private pages or whose private copy has content the shared one lacks",
+   "checks": [
+    "plugins/notes/src/main/pageShare.ts#parseWorkspaceJson",
+    "plugins/notes/src/main/notes.ts#stopSharingNow",
+    "plugins/notes/src/main/storage.ts#getFile"
+   ],
+   "detected": false
+  },
+  {
+   "id": "tool:notes-plugin",
+   "source": "socket",
+   "guard": "The Notes plugin's tools (ardia plugins call notes, or another plugin's tools.call) check every input against the action's field spec (checkFields: unknown fields, types, enums and sizes refused), block JSON and Markdown through cleanBlock (known types and props only), link hrefs through safeHref (http, https, mailto, tel and ardia://notes only, also after percent-decoding), media urls to https or file:<sha256>, and database values through cellIn before anything reaches Yjs",
+   "checks": [
+    "plugins/notes/src/main/tools/spec.ts#checkFields",
+    "plugins/notes/src/main/tools/blocks.ts#cleanBlock",
+    "plugins/notes/src/main/tools/blocks.ts#safeHref",
+    "plugins/notes/src/main/tools/database.ts#cellIn"
+   ],
+   "detected": false
+  },
+  {
    "id": "socket-family:core",
    "source": "socket",
    "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",

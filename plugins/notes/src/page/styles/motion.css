@@ -1,0 +1,853 @@
+@keyframes m-pop-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--m-from-x, 0px), var(--m-from-y, 0px)) scale(var(--m-scale));
+  }
+}
+
+@keyframes m-pop-out {
+  to {
+    opacity: 0;
+    transform: translate(var(--m-from-x, 0px), var(--m-from-y, 0px)) scale(var(--m-scale));
+  }
+}
+
+@keyframes m-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes m-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes m-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--m-shift));
+  }
+}
+
+@keyframes m-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--m-shift) * -1));
+  }
+}
+
+@keyframes m-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(var(--m-shift-lg));
+  }
+}
+
+@keyframes m-slide-out-right {
+  to {
+    opacity: 0;
+    transform: translateX(var(--m-shift-lg));
+  }
+}
+
+@keyframes m-panel-in {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes m-panel-out {
+  to {
+    width: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes m-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--m-shift) * -1)) scale(var(--m-scale));
+  }
+}
+
+@keyframes m-modal-out {
+  to {
+    opacity: 0;
+    transform: scale(var(--m-scale));
+  }
+}
+
+@keyframes m-check-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes m-skeleton {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.n-popover,
+.db-pop {
+  --m-from-y: calc(var(--m-shift) * -1);
+  transform-origin: top left;
+  animation: m-pop-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-popover[data-side="bottom"][data-align="end"],
+.db-pop[data-side="bottom"][data-align="end"] {
+  transform-origin: top right;
+}
+
+.n-popover[data-side="top"],
+.db-pop[data-side="top"] {
+  --m-from-y: var(--m-shift);
+  transform-origin: bottom left;
+}
+
+.n-popover[data-side="top"][data-align="end"] {
+  transform-origin: bottom right;
+}
+
+.n-popover[data-side="right"],
+.db-pop[data-side="right"] {
+  --m-from-y: 0px;
+  --m-from-x: calc(var(--m-shift) * -1);
+  transform-origin: top left;
+}
+
+.n-popover[data-side="left"] {
+  --m-from-y: 0px;
+  --m-from-x: var(--m-shift);
+  transform-origin: top right;
+}
+
+.n-ghost {
+  animation-fill-mode: forwards !important;
+}
+
+.n-ghost.is-leaving {
+  animation-name: m-pop-out;
+  animation-timing-function: var(--m-ease-in);
+}
+
+.n-ghost.is-fading {
+  animation-name: m-fade-out;
+  animation-timing-function: var(--m-ease-in);
+}
+
+.n-ghost.is-modal-leaving {
+  animation-name: m-fade-out;
+  animation-timing-function: var(--m-ease-in);
+}
+
+.n-ghost.is-modal-leaving > * {
+  animation: m-modal-out var(--m-exit) var(--m-ease-in) forwards;
+}
+
+.n-ghost.is-row-leaving {
+  animation-name: m-fade-out;
+  animation-timing-function: var(--m-ease-in);
+}
+
+.n-toolbar {
+  --m-from-y: var(--m-shift);
+  transform-origin: bottom center;
+  animation: m-pop-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-sidemenu {
+  animation: m-fade-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-modal-scrim {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-modal-scrim > .n-palette,
+.n-modal-scrim > .n-history {
+  transform-origin: top center;
+  animation: m-modal-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-side-panel {
+  overflow: hidden;
+  animation: m-panel-in var(--m-slow) var(--m-ease-soft) both;
+}
+
+.n-side-panel-inner {
+  flex: 1;
+  min-height: 0;
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+}
+
+.n-side-panel > * {
+  min-width: 380px;
+  animation: m-slide-in-right var(--m-slow) var(--m-ease-soft) both;
+}
+
+.n-side-panel.is-closing {
+  animation: m-panel-out var(--m-fast) var(--m-ease-in) forwards;
+  pointer-events: none;
+}
+
+.n-side-panel.is-closing > * {
+  animation: m-slide-out-right var(--m-fast) var(--m-ease-in) forwards;
+}
+
+.n-toast {
+  animation: m-rise-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-toast.is-leaving {
+  animation: m-fade-out var(--m-exit) var(--m-ease-in) forwards;
+}
+
+@keyframes m-collapse {
+  to {
+    max-height: 0;
+    min-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes m-expand {
+  from {
+    max-height: 0;
+    min-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+  }
+  to {
+    max-height: 80px;
+  }
+}
+
+.n-trash-banner {
+  overflow: hidden;
+  animation: m-expand var(--m-base) var(--m-ease-out) both;
+}
+
+.n-trash-banner.is-closing {
+  animation: m-collapse var(--m-fast) var(--m-ease-in) forwards;
+  pointer-events: none;
+}
+
+.n-main-col.is-entering .n-page,
+.n-main-col.is-entering .n-home,
+.n-main-col.is-entering .n-narrow,
+.n-main-col.is-entering .n-notfound {
+  animation: m-fade-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-ghost.is-page-leaving {
+  background: transparent;
+  animation-name: m-fade-out;
+  animation-timing-function: var(--m-ease-std);
+  z-index: 5 !important;
+  overflow: hidden !important;
+}
+
+.n-app {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-boot {
+  display: flex;
+  height: 100%;
+}
+
+.n-boot-sidebar {
+  width: 240px;
+  flex: none;
+  background: var(--n-group);
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.n-boot-main {
+  flex: 1;
+  padding: 125px max(24px, calc((100% - 708px) / 2)) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.n-boot-bar {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--n-chip);
+  animation: m-skeleton 1.4s var(--m-ease-std) infinite;
+}
+
+.n-boot-bar.is-title {
+  height: 34px;
+  width: 46%;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.n-editor-loading {
+  animation: m-fade-in var(--m-slow) var(--m-ease-out) both;
+}
+
+.n-editor-column .bn-container {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+
+.n-presence-avatar {
+  animation: m-pop-in var(--m-base) var(--m-ease-out) both;
+  --m-from-x: var(--m-shift);
+}
+
+.n-ghost.is-avatar-leaving {
+  animation-name: m-fade-out;
+}
+
+.n-thread,
+.n-page-comments .n-composer {
+  animation: m-rise-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-emoji-grid-scroll,
+.n-cover-scroll {
+  animation: m-fade-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-tree-children {
+  overflow: hidden;
+}
+
+.n-tree-chevron .n-icon {
+  transition: transform var(--m-fast) var(--m-ease-out);
+}
+
+.n-tree-chevron.is-open .n-icon {
+  transform: rotate(90deg);
+}
+
+.n-tree-row {
+  transition:
+    background-color var(--m-hover) var(--m-ease-out),
+    color var(--m-hover) var(--m-ease-out),
+    opacity var(--m-fast) var(--m-ease-out);
+}
+
+.n-tree-row.is-dragging {
+  opacity: 0.4;
+}
+
+.n-tree-row.is-drop-before::before,
+.n-tree-row.is-drop-after::after {
+  animation: m-fade-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-tree-row.is-drop-inside {
+  transition: background-color var(--m-fast) var(--m-ease-out);
+}
+
+.n-column-drop,
+.ProseMirror-dropcursor,
+.bn-drop-cursor {
+  animation: m-fade-in var(--m-fast) var(--m-ease-out) both;
+  transition:
+    left var(--m-hover) var(--m-ease-out),
+    top var(--m-hover) var(--m-ease-out),
+    height var(--m-hover) var(--m-ease-out);
+}
+
+.n-marquee {
+  animation: m-fade-in var(--m-hover) var(--m-ease-out) both;
+}
+
+.n-row,
+.n-menu-item,
+.n-icon-button,
+.n-button,
+.n-ghost-button,
+.n-text-button,
+.n-crumb,
+.n-section-title,
+.n-slash-item,
+.n-tb-button,
+.n-palette-row,
+.n-trash-row,
+.n-history-row,
+.n-emoji-cell,
+.n-emoji-tabs button,
+.n-cover-swatch,
+.n-sidemenu-button,
+.n-code-lang,
+.n-code-action,
+.n-pageblock,
+.n-mention,
+.n-toc-row,
+.n-font-option,
+.n-seg button,
+.n-chip-button,
+.n-callout-icon,
+.n-page-icon-button,
+.n-tree-chevron,
+.n-new-page,
+.n-ws-button,
+.n-urlcard,
+.n-toast button,
+.n-comment-delete,
+.n-send,
+.n-lock-badge,
+.n-banner-button,
+.n-swatch,
+.n-rename-icon,
+.n-linkbar-url,
+.bn-toggle-button,
+.bn-toggle-add-block-button,
+.n-home-card {
+  transition:
+    background-color var(--m-hover) var(--m-ease-out),
+    color var(--m-hover) var(--m-ease-out),
+    box-shadow var(--m-hover) var(--m-ease-out),
+    opacity var(--m-fast) var(--m-ease-out),
+    filter var(--m-hover) var(--m-ease-out);
+}
+
+.n-row:active,
+.n-menu-item:active,
+.n-icon-button:active,
+.n-button:active,
+.n-tb-button:active,
+.n-slash-item:active,
+.n-sidemenu-button:active {
+  transition-duration: 0ms;
+}
+
+.n-menu-item.is-active,
+.n-slash-item.is-active,
+.n-palette-row.is-active {
+  transition-duration: 60ms;
+}
+
+.n-header-controls,
+.n-cover-actions,
+.n-code-bar,
+.n-row-hint,
+.n-hover-only,
+.n-sidebar-top .n-icon-button,
+.n-comment-delete,
+.n-tree-actions {
+  transition: opacity var(--m-fast) var(--m-ease-out);
+}
+
+.n-tree-actions {
+  display: inline-flex !important;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  border-radius: var(--n-r-control);
+}
+
+.n-tree-row:hover .n-tree-actions,
+.n-tree-row.is-menu-open .n-tree-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.n-tree-row:hover .n-row-title,
+.n-tree-row.is-menu-open .n-row-title {
+  padding-right: 48px;
+}
+
+.n-tree-glyph {
+  transition: opacity var(--m-hover) var(--m-ease-out);
+}
+
+.n-tree-chevron {
+  display: inline-flex !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.n-tree-row:hover .n-tree-chevron {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.n-tree-row:hover .n-tree-icon:has(.n-tree-chevron) .n-tree-glyph {
+  visibility: visible !important;
+  opacity: 0;
+}
+
+.n-sidebar {
+  transition: width var(--m-slow) var(--m-ease-soft);
+}
+
+.n-sidebar-resizer {
+  transition: background var(--m-fast) var(--m-ease-out);
+}
+
+.n-topbar > .n-icon-button[aria-label="Open sidebar"] {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-switch,
+.n-switch::after {
+  transition-duration: var(--m-fast);
+  transition-timing-function: var(--m-ease-out);
+}
+
+.n-editor [data-content-type="checkListItem"] input[type="checkbox"] {
+  transition:
+    background-color var(--m-fast) var(--m-ease-out),
+    box-shadow var(--m-fast) var(--m-ease-out);
+}
+
+.n-editor [data-content-type="checkListItem"] input[type="checkbox"]:checked::after {
+  animation: m-check-draw var(--m-base) var(--m-ease-out) both;
+}
+
+.n-editor [data-content-type="checkListItem"] .bn-inline-content {
+  text-decoration-line: line-through;
+  text-decoration-color: transparent;
+  transition:
+    color var(--m-base) var(--m-ease-out),
+    text-decoration-color var(--m-base) var(--m-ease-out);
+}
+
+.n-editor [data-content-type="checkListItem"]:not([data-checked="true"]) .bn-inline-content {
+  text-decoration-color: transparent !important;
+}
+
+.n-editor .bn-toggle-button {
+  transition:
+    transform var(--m-fast) var(--m-ease-out),
+    background-color var(--m-hover) var(--m-ease-out);
+}
+
+.bn-collaboration-cursor__label {
+  transition: opacity var(--m-base) var(--m-ease-out) !important;
+}
+
+.bn-collaboration-cursor__caret {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-file-panel,
+.n-slash,
+.n-inline-menu {
+  animation: m-pop-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-tex,
+.n-mermaid {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-backlinks-list,
+
+
+.n-flash-overlay {
+  animation-timing-function: var(--m-ease-std);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .n-side-panel,
+  .n-side-panel.is-closing {
+    animation-name: m-fade-in;
+  }
+
+  .n-side-panel.is-closing {
+    animation-name: m-fade-out;
+  }
+
+  .n-sidebar {
+    transition: none;
+  }
+}
+
+.db-view {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.db-chip {
+  --m-from-y: 0px;
+  animation: m-pop-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.db-root button,
+.db-tab,
+.db-tr,
+.db-card,
+.db-chip,
+.db-board-collapsed,
+.db-board-lane-head,
+[data-menu-item],
+.db-cal-item,
+.db-tl-bar {
+  transition:
+    background-color var(--m-hover) var(--m-ease-out),
+    color var(--m-hover) var(--m-ease-out),
+    box-shadow var(--m-hover) var(--m-ease-out),
+    opacity var(--m-fast) var(--m-ease-out);
+}
+
+.db-card.is-dragging,
+.db-tr.is-dragging {
+  transition: opacity var(--m-fast) var(--m-ease-out);
+}
+
+.db-ghost {
+  animation: m-pop-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.db-peek-scroll {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-ghost.is-peek-leaving {
+  animation-name: m-fade-out;
+  animation-timing-function: var(--m-ease-in);
+}
+
+.n-ghost.is-peek-leaving .db-peek.is-side {
+  animation: m-slide-out-right 160ms var(--m-ease-in) forwards;
+}
+
+.n-ghost.is-peek-leaving .db-peek.is-center {
+  animation: m-modal-out 160ms var(--m-ease-in) forwards;
+}
+
+.db-board-cols,
+.db-board-column,
+.db-board-collapsed,
+.db-group-rows {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+@keyframes m-strike {
+  from {
+    color: var(--n-text);
+    text-decoration-color: transparent;
+  }
+}
+
+.n-editor [data-content-type="checkListItem"][data-checked="true"] .bn-inline-content {
+  animation: m-strike var(--m-base) var(--m-ease-out) both;
+}
+
+.n-editor .bn-block-outer,
+.n-editor .bn-block-content,
+.n-editor .bn-block-content::before,
+.n-editor .bn-block-group .bn-block-outer::before {
+  transition-duration: var(--m-fast);
+  transition-delay: 0s;
+  transition-timing-function: var(--m-ease-out);
+}
+
+.n-save-slot {
+  position: relative;
+  width: 0;
+  height: 22px;
+  flex: none;
+}
+
+.n-save {
+  position: absolute;
+  right: 2px;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  margin-right: 6px;
+  border-radius: var(--n-r-control);
+  font-size: 12px;
+  color: var(--n-text-3);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(calc(var(--m-shift) * -0.5));
+  pointer-events: none;
+  transition:
+    opacity var(--m-base) var(--m-ease-in),
+    transform var(--m-base) var(--m-ease-in),
+    color var(--m-base) var(--m-ease-out),
+    background-color var(--m-base) var(--m-ease-out);
+}
+
+.n-save.is-on {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition-timing-function: var(--m-ease-out);
+}
+
+.n-save.is-unsaved {
+  color: var(--n-warning);
+  background: color-mix(in srgb, var(--n-warning) 12%, transparent);
+}
+
+.n-save.is-unsaved .n-icon {
+  animation: m-spin 1.2s linear infinite;
+}
+
+.n-save.is-blocked {
+  color: var(--n-danger, var(--n-warning));
+  background: color-mix(in srgb, var(--n-danger, var(--n-warning)) 14%, transparent);
+}
+
+@keyframes m-spin {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .n-save.is-unsaved .n-icon {
+    animation: none;
+  }
+}
+
+.n-dev-tools {
+  position: fixed;
+  left: 12px;
+  bottom: 56px;
+  z-index: 4000;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: var(--n-r-tile);
+  background: var(--n-panel);
+  box-shadow: 0 0 0 0.5px var(--n-panel-border), var(--n-shadow);
+  font-size: 12px;
+}
+
+.n-slash.is-retired {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--m-exit) var(--m-ease-in);
+}
+
+:root {
+  --m-menu-scale: 0.96;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --m-menu-scale: 1;
+  }
+}
+
+@keyframes m-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--m-shift) * -1)) scale(var(--m-menu-scale));
+  }
+}
+
+.n-slash,
+.n-inline-menu {
+  transform-origin: top left;
+  animation: m-menu-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-title[data-empty="true"]::before {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-ws-button > .n-ws-tile,
+.n-ws-name {
+  animation: m-fade-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-callout,
+.n-callout-icon,
+.n-editor .bn-inline-content [data-text-color],
+.n-editor .bn-inline-content [data-background-color],
+.n-editor .bn-block-content[data-background-color],
+.n-editor .bn-block-content[data-text-color] {
+  transition:
+    background-color var(--m-base) var(--m-ease-out),
+    color var(--m-base) var(--m-ease-out),
+    box-shadow var(--m-base) var(--m-ease-out);
+}
+
+.n-emoji-group,
+.n-emoji-upload,
+.n-emoji-loading {
+  animation: m-fade-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-trash-row .n-button.is-danger,
+.n-inline-form,
+.n-name-form,
+.n-search-empty,
+.n-menu-empty {
+  animation: m-fade-in var(--m-fast) var(--m-ease-out) both;
+}
+
+.n-name-form {
+  --m-from-y: calc(var(--m-shift) * -1);
+  animation-name: m-pop-in;
+}
+
+.n-tree-empty {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.db-cal-cell {
+  transition: background-color var(--m-hover) var(--m-ease-out);
+}
+
+.db-board-column {
+  transition: box-shadow var(--m-hover) var(--m-ease-out);
+}
+
+.db-tl-placeholder {
+  animation: m-fade-in var(--m-hover) var(--m-ease-out) both;
+}
+
+.n-ws-tree.is-entering {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-ghost.is-ws-leaving {
+  animation: m-fade-out var(--m-fast) var(--m-ease-in) forwards;
+}
+
+.n-editor img,
+.n-cover img,
+.db-gallery-card img,
+.db-card img {
+  animation: m-fade-in var(--m-base) var(--m-ease-out) both;
+}
+
+.n-ghost img {
+  animation: none !important;
+}
+
+.db-filter-reveal {
+  min-width: 0;
+}

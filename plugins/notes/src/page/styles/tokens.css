@@ -1,0 +1,185 @@
+:root {
+  --n-bg: transparent;
+  --n-window-tint: color-mix(in srgb, var(--ardia-window-tint-top, var(--ardia-background-solid, light-dark(#f4eef0, #2a2224))), var(--ardia-window-tint-bottom, var(--ardia-background-solid, light-dark(#f4eef0, #2a2224))));
+  --n-glass-panel: var(--ardia-glass-panel, light-dark(rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.05)));
+  --n-glass-panel-edge: var(--ardia-glass-panel-edge, light-dark(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.1)));
+  --n-glass-lit: light-dark(color-mix(in srgb, var(--n-window-tint), #ffffff 62%), color-mix(in srgb, var(--n-window-tint), #9a9a9a 24%));
+  --n-card: var(--ardia-background, light-dark(rgba(255, 255, 255, 0.7), rgba(18, 18, 18, 0.5)));
+  --n-surface: light-dark(color-mix(in srgb, var(--n-glass-lit), #ffffff 70%), color-mix(in srgb, var(--n-glass-lit), #121212 50%));
+  --n-tab-selected: var(--ardia-tab-selected, light-dark(rgba(255, 255, 255, 0.7), rgba(18, 18, 18, 0.5)));
+  --n-tab-selected-text: var(--ardia-tab-selected-text, var(--n-text));
+  --n-tab-selected-ring: inset 0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.15)), inset 0 0.5px 0 light-dark(rgba(255, 255, 255, 0.98), transparent);
+  --n-tab-selected-shadow: 0 1px 5px light-dark(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.18));
+  --n-tab-hover: var(--ardia-tab-hover, light-dark(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.16)));
+  --n-tab-pressed: var(--ardia-tab-pressed, light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.31)));
+  --n-text-tab: var(--ardia-text-tab, light-dark(#000000ad, #ffffffc7));
+  --n-text: var(--ardia-text, light-dark(#000000, #ffffff));
+  --n-text-2: var(--ardia-text-secondary, light-dark(#00000080, #ffffff80));
+  --n-text-3: var(--ardia-text-tertiary, light-dark(#00000059, #ffffff59));
+  --n-placeholder: var(--ardia-placeholder, light-dark(#00000066, #ffffff87));
+  --n-icon: var(--ardia-icon, light-dark(#000000c6, #f7f5ffc6));
+  --n-divider: var(--ardia-divider, light-dark(rgba(0, 0, 0, 0.09), rgba(255, 255, 255, 0.09)));
+  --n-hover: var(--ardia-row-hover, light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.07)));
+  --n-pressed: var(--ardia-popover-row-pressed, light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.12)));
+  --n-selected: var(--ardia-row-selected, light-dark(rgba(15, 24, 44, 0.08), rgba(255, 255, 255, 0.22)));
+  --n-accent: var(--ardia-accent, light-dark(#6395fc, #4a77d4));
+  --n-form-accent: var(--ardia-form-accent, light-dark(#007aff, #0a84ff));
+  --n-on-accent: var(--ardia-on-accent, #ffffff);
+  --n-selection: var(--ardia-selection, light-dark(rgba(120, 125, 134, 0.4), rgba(120, 125, 134, 0.7)));
+  --n-popover-tint: var(--ardia-popover-tint, light-dark(rgba(255, 255, 255, 0.7), rgba(38, 38, 38, 0.72)));
+  --n-panel: linear-gradient(var(--n-popover-tint), var(--n-popover-tint)), var(--n-surface);
+  --n-panel-solid: var(--n-surface);
+  --n-toast: linear-gradient(var(--ardia-toast-fill, light-dark(rgba(255, 255, 255, 0.92), rgba(44, 42, 43, 0.9))), var(--ardia-toast-fill, light-dark(rgba(255, 255, 255, 0.92), rgba(44, 42, 43, 0.9)))), var(--n-surface);
+  --n-tooltip-ring: var(--ardia-tooltip-ring, light-dark(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.4)));
+  --n-tool-hover: var(--ardia-toolbar-hover, light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.1)));
+  --n-tool-pressed: var(--ardia-toolbar-pressed, light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.18)));
+  --n-control-pressed: var(--ardia-control-pressed, light-dark(#ebebeb, rgba(255, 255, 255, 0.2)));
+  --n-prompt: var(--ardia-prompt-fill, light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.1)));
+  --n-prompt-hover: var(--ardia-prompt-fill-hover, light-dark(rgba(0, 0, 0, 0.09), rgba(255, 255, 255, 0.14)));
+  --n-prompt-pressed: var(--ardia-prompt-fill-pressed, light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.18)));
+  --n-go: var(--ardia-go-button, light-dark(#0f182c, #dccbd8));
+  --n-go-hover: var(--ardia-go-button-hover, light-dark(#1b2640, #e6d8e2));
+  --n-go-pressed: var(--ardia-go-button-pressed, light-dark(#26314a, #c9b8c5));
+  --n-on-go: var(--ardia-on-primary, light-dark(#ffffff, #000000));
+  --n-pill: var(--ardia-url-pill, light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.07)));
+  --n-chip-border: var(--ardia-chip-border, light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.15)));
+  --n-badge: var(--ardia-badge-fill, light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.15)));
+  --n-knob-border: var(--ardia-knob-border, rgba(0, 0, 0, 0.12));
+  --n-panel-border: var(--ardia-popover-border, light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.14)));
+  --n-scrim: var(--ardia-scrim, light-dark(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.35)));
+  --n-group: var(--ardia-group-fill, light-dark(rgba(0, 0, 0, 0.028), rgba(255, 255, 255, 0.045)));
+  --n-group-border: var(--ardia-group-border, light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.07)));
+  --n-raised: var(--ardia-group-fill, light-dark(rgba(0, 0, 0, 0.028), rgba(255, 255, 255, 0.045)));
+  --n-control: var(--ardia-control, light-dark(#ffffff, rgba(255, 255, 255, 0.1)));
+  --n-control-hover: var(--ardia-control-hover, light-dark(#f7f7f7, rgba(255, 255, 255, 0.14)));
+  --n-control-border: var(--ardia-control-border, light-dark(rgba(0, 0, 0, 0.14), rgba(255, 255, 255, 0.08)));
+  --n-field: var(--ardia-field, light-dark(#ffffff, rgba(0, 0, 0, 0.25)));
+  --n-field-border: var(--ardia-field-border, light-dark(rgba(0, 0, 0, 0.14), rgba(255, 255, 255, 0.12)));
+  --n-chip: var(--ardia-chip-fill, light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.1)));
+  --n-destructive: var(--ardia-destructive, light-dark(#ff3b30, #ff453a));
+  --n-warning: var(--ardia-warning, light-dark(#ff9500, #ff9f0a));
+  --n-success: var(--ardia-success, light-dark(#34c759, #30d158));
+  --n-flash: var(--ardia-search-flash, light-dark(rgba(0, 122, 255, 0.16), rgba(10, 132, 255, 0.22)));
+  --n-tooltip: var(--ardia-tooltip-fill, light-dark(#ffffff, #262626));
+  --n-tooltip-text: var(--ardia-tooltip-text, light-dark(rgba(0, 0, 0, 0.85), rgba(255, 255, 255, 0.85)));
+  --n-code-bg: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.06));
+  --n-inline-code: light-dark(#c0392b, #ff7b72);
+  --n-shadow-color: light-dark(rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.45));
+  --n-shadow-sheet-color: light-dark(rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.5));
+  --n-shadow-card-color: light-dark(rgba(0, 0, 0, 0.144), rgba(0, 0, 0, 0.4));
+  --n-shadow-tooltip-color: light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.15));
+  --n-shadow: 0 8px 18px var(--n-shadow-color);
+  --n-shadow-sheet: 0 8px 20px var(--n-shadow-sheet-color);
+  --n-shadow-peek: 0 6px 20px var(--n-shadow-sheet-color);
+  --n-shadow-card: 0 6px 16px var(--n-shadow-card-color);
+  --n-shadow-tooltip: 0 1px 4px var(--n-shadow-tooltip-color);
+
+  --n-gray: light-dark(#787774, #9b9b9b);
+  --n-brown: light-dark(#9f6b53, #ba856f);
+  --n-orange: light-dark(#d9730d, #c77d48);
+  --n-yellow: light-dark(#cb912f, #ca9849);
+  --n-green: light-dark(#448361, #529e72);
+  --n-blue: light-dark(#337ea9, #5e87c9);
+  --n-purple: light-dark(#9065b0, #9d68d3);
+  --n-pink: light-dark(#c14c8a, #d15796);
+  --n-red: light-dark(#d44c47, #df5452);
+  --n-gray-bg: light-dark(rgba(120, 119, 116, 0.1), rgba(255, 255, 255, 0.07));
+  --n-brown-bg: light-dark(rgba(159, 107, 83, 0.1), rgba(184, 101, 69, 0.15));
+  --n-orange-bg: light-dark(rgba(217, 115, 13, 0.1), rgba(233, 126, 35, 0.15));
+  --n-yellow-bg: light-dark(rgba(203, 145, 47, 0.12), rgba(250, 177, 67, 0.13));
+  --n-green-bg: light-dark(rgba(68, 131, 97, 0.1), rgba(45, 153, 100, 0.15));
+  --n-blue-bg: light-dark(rgba(51, 126, 169, 0.1), rgba(51, 126, 169, 0.2));
+  --n-purple-bg: light-dark(rgba(144, 101, 176, 0.1), rgba(154, 109, 215, 0.17));
+  --n-pink-bg: light-dark(rgba(193, 76, 138, 0.1), rgba(220, 76, 145, 0.16));
+  --n-red-bg: light-dark(rgba(212, 76, 71, 0.1), rgba(222, 85, 83, 0.16));
+
+  --n-font: var(--ardia-font, -apple-system), BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+  --n-font-serif: ui-serif, "New York", Georgia, "Times New Roman", serif;
+  --n-font-mono: var(--ardia-font-mono, ui-monospace), ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+
+  --n-glass-blur: var(--ardia-glass-blur, 30px);
+  --n-glass-sat: var(--ardia-glass-saturation, 1.8);
+  --n-glass-rim: var(--ardia-glass-rim, light-dark(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.08)));
+  --n-glass-filter: blur(var(--n-glass-blur)) saturate(var(--n-glass-sat));
+  --n-glass-base: light-dark(rgba(246, 246, 246, 0.6), rgba(58, 58, 58, 0.6));
+  --n-glass: linear-gradient(var(--n-popover-tint), var(--n-popover-tint)), var(--n-glass-base);
+  --n-sheet-tint: color-mix(in srgb, var(--n-surface) 86%, transparent);
+  --n-glass-sheet: linear-gradient(var(--n-glass-panel), var(--n-glass-panel)), var(--n-sheet-tint);
+  --n-ntp-bar: var(--ardia-ntp-bar-solid, light-dark(#feffff, #2d2d2d));
+  --n-ntp-bar-border: var(--ardia-ntp-bar-border, light-dark(rgba(0, 0, 0, 0.07), rgba(120, 125, 134, 0.32)));
+  --n-ntp-bar-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.08), 0 2px 1px rgba(0, 0, 0, 0.04);
+  --n-glass-sheet-filter: blur(40px) saturate(1.8);
+  --n-peek-fill: linear-gradient(var(--n-glass-panel), var(--n-glass-panel)), color-mix(in srgb, var(--n-card) 55%, transparent);
+  --n-glass-toast: var(--ardia-toast-fill, light-dark(rgba(255, 255, 255, 0.92), rgba(44, 42, 43, 0.9)));
+  --n-glass-edge: 0 0 0 0.5px var(--n-panel-border), inset 0 0.5px 0 var(--n-glass-rim);
+
+  --n-r-control: var(--ardia-radius-control, 4px);
+  --n-r-toolbar: var(--ardia-radius-toolbar, 7px);
+  --n-r-tile: var(--ardia-radius-tile, 8px);
+  --n-r-panel: var(--ardia-radius-panel, 12px);
+  --n-r-sheet: var(--ardia-radius-sheet, 16px);
+  --n-r-hero: var(--ardia-radius-hero, 20px);
+  --n-r-row: max(0px, calc(var(--n-r-panel) - 6px));
+  --n-r-list: var(--n-r-tile);
+
+  --n-t-caption: var(--ardia-text-caption, 11px);
+  --n-t-small: var(--ardia-text-small, 12px);
+  --n-t-body: var(--ardia-text-body, 13px);
+  --n-t-title: var(--ardia-text-title, 15px);
+  --n-t-large: var(--ardia-text-large, 17px);
+  --n-w-medium: var(--ardia-weight-medium, 500);
+  --n-w-semibold: var(--ardia-weight-semibold, 600);
+
+  --m-hover: 90ms;
+  --m-fast: 120ms;
+  --m-base: 160ms;
+  --m-exit: 90ms;
+  --m-slow: 260ms;
+  --m-slower: 320ms;
+  --m-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --m-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --m-ease-std: cubic-bezier(0.2, 0, 0.2, 1);
+  --m-ease-soft: cubic-bezier(0.32, 0.72, 0, 1);
+  --m-shift: 4px;
+  --m-shift-lg: 12px;
+  --m-scale: 0.98;
+  --n-fast: var(--m-fast);
+  --n-base: var(--m-base);
+  --n-slow: var(--m-slow);
+  --n-ease: var(--m-ease-std);
+  --n-ease-out: var(--m-ease-out);
+
+  --n-page-width: 708px;
+  --n-page-wide: 900px;
+  --n-sidebar: 240px;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --n-glass: var(--n-panel);
+    --n-glass-sheet: var(--n-glass-lit);
+    --n-peek-fill: var(--n-glass-lit);
+    --n-glass-toast: var(--n-toast);
+    --n-glass-filter: none;
+    --n-glass-sheet-filter: none;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --n-glass: var(--n-panel);
+    --n-glass-sheet: var(--n-glass-lit);
+    --n-peek-fill: var(--n-glass-lit);
+    --n-glass-toast: var(--n-toast);
+    --n-glass-filter: none;
+    --n-glass-sheet-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --m-shift: 0px;
+    --m-shift-lg: 0px;
+    --m-scale: 1;
+  }
+}

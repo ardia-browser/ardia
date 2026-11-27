@@ -417,3 +417,27 @@ test("recreateSyncFolder creates nothing once the app is quitting, and puts the 
   }
 });
 
+test("a folder that is there but lost this device's data waits without offering Recreate, and pairing stays off until the data is back", async () => {
+  reset();
+  const engine = await import("./engine.ts?data-missing");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  S().addBookmark({ profileId: "default", url: "https://kept.example/", title: "Kept" });
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().dataMissing, false);
+
+  const chain = chainOf(SYNC_FOLDER).get(OURS);
+  chainOf(SYNC_FOLDER).delete(OURS);
+  await engine.syncNow();
+  const waiting = engine.useSync.getState();
+  assert.equal(waiting.status, "stalled", "the folder is there, so this is not the folder-unavailable state that offers Recreate");
+  assert.equal(waiting.enabled, true, "sync keeps its setup while it waits");
+  assert.equal(waiting.dataMissing, true, "pairing is gated while the folder has none of this device's data");
+  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" }, "recreate never makes a chain in a folder that is there");
+  assert.equal(chainOf(SYNC_FOLDER).has(OURS), false);
+
+  chainOf(SYNC_FOLDER).set(OURS, chain);
+  await engine.syncNow();
+  assert.equal(engine.useSync.getState().status, "updated");
+  assert.equal(engine.useSync.getState().dataMissing, false);
+});

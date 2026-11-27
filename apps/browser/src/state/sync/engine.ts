@@ -55,6 +55,7 @@ function publishUi(patch: Partial<SyncUi> = {}) {
     enabled: doc.enabled,
     joining: doc.enabled && doc.joining,
     reseeding: doc.enabled && !!doc.reseedScopes?.length,
+    dataMissing: false,
     folder: doc.folder,
     types: { ...doc.types },
     profiles: { ...doc.profiles },
@@ -121,7 +122,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       if (useSync.getState().status !== "offline") noteFolderUnavailable(consent);
       return publishUi({ status: "offline", error: unavailableFolderError((await native.folderInfo?.(folder).catch(() => null)) ?? null) });
     }
-    if (noteChainStatus(consent, device, status) === "missing") return publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT });
+    if (noteChainStatus(consent, device, status) === "missing") return publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT, dataMissing: true });
     const transport = folderTransport(native, folder), clock = clockFor(device);
     if (doc.reseedScopes?.length) await reseedPendingScopes({ native, doc, folder, device, clock, watchScope, persistJournal, save });
     const app = appScopeOf(doc);
@@ -169,7 +170,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     const code = (error as { code?: unknown } | null)?.code;
     if (code === "ERR_SYNC_CHAIN_MISSING") {
       noteChainStatus(consent, device, "missing");
-      publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT });
+      publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT, dataMissing: true });
     } else if (code === "ERR_SYNC_FOLDER_UNREADABLE") {
       publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
     } else if (useSync.getState().status !== "locked") {

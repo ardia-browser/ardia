@@ -170,6 +170,7 @@ function SyncOn({ info, onReload }: { info: FolderInfo | null; onReload: () => P
   const locked = status === "locked";
   const offline = status === "offline";
   const reseeding = useSync((s) => s.reseeding);
+  const dataMissing = useSync((s) => s.dataMissing);
   const cloudDriveOff = !!info && info.inICloud && !info.iCloudAvailable;
   const folderMissing = offline && !!info && !info.exists && !cloudDriveOff;
   useEffect(() => {
@@ -239,7 +240,7 @@ function SyncOn({ info, onReload }: { info: FolderInfo | null; onReload: () => P
           ) : folderMissing ? (
             <Button title={recreating ? "Recreating…" : "Recreate Folder…"} kind="primary" disabled={recreating} onPress={() => void recreate()} />
           ) : (
-            <Button title="Connect Another Device…" disabled={offline || reseeding} onPress={showConnectDevice} />
+            <Button title="Connect Another Device…" disabled={offline || reseeding || dataMissing} onPress={showConnectDevice} />
           )}
           <Button title="Advanced…" onPress={() => void advanced()} />
         </Row>

@@ -45,7 +45,7 @@ let cycle: Promise<void> | null = null;
 let again = false;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
-const { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
+const { read, loadState, persistJournal, persistApplying, watchScope, save, saveDocNow, startOver, checkpoint } = syncFiles(() => doc);
 
 const load = () => { const loaded = read(); if (loaded) doc = loaded; };
 
@@ -244,7 +244,7 @@ export const recreateSyncFolder = (): Promise<FolderRecreateResult> => {
   return runFolderOp<FolderRecreateResult>(
     (native, folder) =>
       doc.deviceId
-        ? recreateChainFolder({ native, doc, folder, device: doc.deviceId, clock: clockFor(doc.deviceId), watchScope, persistJournal, save, consent, onUpdating: () => publishUi({ status: "updating", error: null }), onUploadError: (error) => publishUi({ status: "stalled", error }) })
+        ? recreateChainFolder({ native, doc, folder, device: doc.deviceId, clock: clockFor(doc.deviceId), watchScope, persistJournal, save, saveNow: saveDocNow, consent, onUpdating: () => publishUi({ status: "updating", error: null }), onUploadError: (error) => publishUi({ status: "stalled", error }) })
         : Promise.resolve({ error: "busy" }),
     async (result) => {
       if ("ok" in result && doc.enabled && !stopping && useSync.getState().status !== "locked") await runCycle({ forcePasswords: true });

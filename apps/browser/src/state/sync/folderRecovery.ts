@@ -108,7 +108,7 @@ export async function reseedPendingScopes({ native, doc, folder, device, clock, 
 }
 
 export async function recreateChainFolder(
-  ctx: ReseedContext & { consent: ConsentToken | null; onUpdating: () => void; onUploadError: (message: string) => void },
+  ctx: ReseedContext & { saveNow: () => Promise<void>; consent: ConsentToken | null; onUpdating: () => void; onUploadError: (message: string) => void },
 ): Promise<FolderRecreateResult> {
   const { native, doc, folder, consent, onUpdating, onUploadError } = ctx;
   let created = false;
@@ -128,23 +128,25 @@ export async function recreateChainFolder(
       noteFolderRecreate("failed", consent);
       return { error: "exists" };
     }
+    const queued = doc.reseedScopes;
     const scopes = Object.entries(doc.scopes)
       .filter(([, state]) => hasScopeData(state))
       .map(([scope]) => scope);
-    if (scopes.length) {
-      doc.reseedScopes = scopes;
-      ctx.save();
-    }
     try {
+      if (scopes.length) {
+        doc.reseedScopes = [...new Set([...(queued ?? []), ...scopes])];
+        await ctx.saveNow();
+      }
       await native.createChain(folder);
     } catch (error) {
-      delete doc.reseedScopes;
+      if (queued) doc.reseedScopes = queued;
+      else delete doc.reseedScopes;
       ctx.save();
       throw error;
     }
     created = true;
     onUpdating();
-    if (scopes.length) await reseedPendingScopes(ctx);
+    if (doc.reseedScopes?.length) await reseedPendingScopes(ctx);
     noteFolderRecreate("recreated", consent);
     return { ok: "recreated" };
   } catch (error) {

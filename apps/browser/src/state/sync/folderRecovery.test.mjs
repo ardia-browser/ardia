@@ -87,6 +87,8 @@ const reset = () => {
   createChainError = null;
   onCreateChain = null;
   afterChainStatus = null;
+  shell.heldSaves.on = false;
+  shell.heldSaves.queue.length = 0;
   shell.docs.clear();
   useBrowser.setState({ bookmarks: { nodes: {} } });
   S().hydrate({});
@@ -304,7 +306,7 @@ test("recreateSyncFolder refuses concurrent calls and locked state", async () =>
   assert.deepEqual(await engine.recreateSyncFolder(), { error: "locked" });
 });
 
-test("recreateSyncFolder saves the reseed queue before the chain exists, so a quit mid-create still uploads on relaunch", async () => {
+test("recreateSyncFolder waits for the reseed queue to land on disk before creating the chain, and a failed create keeps an earlier queue", async () => {
   reset();
   const engine = await import("./engine.ts?quit-mid-create");
   engine.startSync();
@@ -317,14 +319,28 @@ test("recreateSyncFolder saves the reseed queue before the chain exists, so a qu
 
   let queuedWhenCreated = null;
   onCreateChain = () => (queuedWhenCreated = JSON.parse(shell.docs.get("sync.json")).reseedScopes ?? null);
-  assert.deepEqual(await engine.recreateSyncFolder(), { ok: "recreated" });
+  shell.heldSaves.on = true;
+  const recreating = engine.recreateSyncFolder();
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(folders.has(SYNC_FOLDER), false, "the chain waits while the queue is still being written");
+  shell.heldSaves.on = false;
+  shell.heldSaves.queue.splice(0).forEach((land) => land());
+  assert.deepEqual(await recreating, { ok: "recreated" });
   assert.ok(queuedWhenCreated?.includes(scope), "the queue is on disk before the chain is created");
 
   onCreateChain = null;
   folders.delete(SYNC_FOLDER);
+  await engine.syncNow();
+  writeFailsAfter = 0;
+  assert.equal((await engine.recreateSyncFolder()).error, "uploadFailed");
+  const owed = JSON.parse(shell.docs.get("sync.json")).reseedScopes;
+  assert.ok(owed?.length, "a partial upload leaves scopes owed");
+  writeFailsAfter = Infinity;
+
+  folders.delete(SYNC_FOLDER);
   createChainError = new Error("Read-only file system");
   assert.equal((await engine.recreateSyncFolder()).error, "failed");
-  assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedScopes, undefined, "a chain that was never created leaves no queue behind");
+  assert.deepEqual(JSON.parse(shell.docs.get("sync.json")).reseedScopes, owed, "a failed create keeps what an earlier attempt still owes");
 });
 
 test("recreateSyncFolder refuses a folder that reappears after the status check", async () => {

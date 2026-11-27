@@ -318,6 +318,11 @@ export function syncFiles(current: () => SyncDoc) {
     void serial(saveState);
   }
 
+  async function saveDocNow() {
+    saveDoc();
+    if (docFile.json) await saveDocument(DOC, docFile.json);
+  }
+
   function startOver() {
     saveDoc();
     void serial(async () => {
@@ -335,5 +340,5 @@ export function syncFiles(current: () => SyncDoc) {
     });
   }
 
-  return { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint };
+  return { read, loadState, persistJournal, persistApplying, watchScope, save, saveDocNow, startOver, checkpoint };
 }

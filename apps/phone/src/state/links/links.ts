@@ -103,8 +103,9 @@ const LINK_DEADLINE_MS = 8_000;
 
 const inOrder = serialQueue(LINK_DEADLINE_MS, () => countUsage("links_given_up"));
 
-const take = (link: IncomingLink) => {
-  const leftBefore = timesLeftScreen();
+const leftScreenWhenReceived = new WeakMap<IncomingLink, number>();
+
+const take = (link: IncomingLink, leftBefore = timesLeftScreen()) => {
   void inOrder((expired) => run(timesLeftScreen() === leftBefore ? link : replayed(link), expired));
 };
 
@@ -144,6 +145,7 @@ export function listenForLinks() {
       take(link);
       return;
     }
+    leftScreenWhenReceived.set(link, timesLeftScreen());
     waiting.push(link);
     keepWaitingLinks();
   });
@@ -155,11 +157,11 @@ export function startLinks() {
   listenForLinks();
   void settled(() => initialLink(), null).then((link) => {
     const waitedThroughFailure = useBoot.getState().failures > 0 ? replayed : (waited: IncomingLink) => waited;
-    if (link) take(waitedThroughFailure(link));
+    if (link) take(waitedThroughFailure(link), 0);
     const queued = waiting ?? [];
     waiting = null;
     if (queued.length) quietlyOnDatabase(() => writePreference(browserDatabase(), KEPT_KEY, null));
-    for (const later of queued) take(waitedThroughFailure(later));
+    for (const later of queued) take(waitedThroughFailure(later), leftScreenWhenReceived.get(later));
   });
   useOnboarding.subscribe((state) => {
     if (state.showing || !heldLinks().length) return;

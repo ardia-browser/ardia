@@ -31,21 +31,41 @@ export const STRIP_DIVIDER_HEIGHT = 1 + ICON_STRIP.gap * 2;
 
 export type StripSlot = { top: number; joinAbove: number };
 
-export function stripLayout(items: { key: string; divider: boolean }[], rowCenters: Readonly<Record<string, number>>, railTop: number): { slots: StripSlot[]; end: number } {
+export const STRIP_ROW_GAP = 2;
+export const STRIP_MIN_SQUARE = 20;
+
+export function stripSquare(items: { key: string; divider: boolean }[], rowCenters: Readonly<Record<string, number>>): number {
+  let tightest = Infinity;
+  let previous: number | undefined;
+  for (const { key, divider } of items) {
+    const center = divider ? undefined : rowCenters[key];
+    if (center !== undefined && previous !== undefined) tightest = Math.min(tightest, center - previous);
+    previous = center;
+  }
+  return Math.max(STRIP_MIN_SQUARE, Math.min(ICON_STRIP.square, Math.floor(tightest - STRIP_ROW_GAP)));
+}
+
+export function stripLayout(items: { key: string; divider: boolean }[], rowCenters: Readonly<Record<string, number>>, railTop: number): { slots: StripSlot[]; end: number; square: number } {
+  const square = stripSquare(items, rowCenters);
   let next = railTop;
   let lastBottom = railTop;
+  let fresh = true;
   const slots = items.map(({ key, divider }) => {
     if (divider) {
       const top = next;
       next = top + STRIP_DIVIDER_HEIGHT;
+      fresh = true;
       return { top, joinAbove: 0 };
     }
     const center = rowCenters[key];
-    const top = Math.round(center === undefined ? next : Math.max(next, center - ICON_STRIP.square / 2));
+    const floor = fresh ? next : center === undefined ? next : lastBottom + STRIP_ROW_GAP;
+    const size = center === undefined ? ICON_STRIP.square : square;
+    const top = Math.round(center === undefined ? floor : Math.max(floor, center - size / 2));
     const slot = { top, joinAbove: top - lastBottom };
-    lastBottom = top + ICON_STRIP.square;
+    lastBottom = top + size;
     next = lastBottom + ICON_STRIP.gap;
+    fresh = false;
     return slot;
   });
-  return { slots, end: next };
+  return { slots, end: next, square };
 }

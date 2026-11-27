@@ -61,3 +61,16 @@ test("the control socket reports the window's own choice as tabsShown and what i
   S().toggleSidebar(a);
   assert.deepEqual([windowRow(S(), a).tabsShown, windowRow(S(), a).sidebarMode], [false, "hidden"]);
 });
+
+test("with Hidden set for every window, a tab torn out of a window snapped to Icons opens in Icons", () => {
+  const a = fresh();
+  chooseSidebarMode("hidden");
+  const second = S().newTab(a, { url: "https://second.example", background: true });
+  collapseWindowToIcons(a);
+  assert.equal(S().windows[a].autoHideTabs, undefined, "collapsed like the setting, so only its style is its own");
+  assert.equal(sidebarModeIn(S(), a), "icons");
+  const torn = S().createWindow({ tabIds: [second] });
+  assert.equal(sidebarModeIn(S(), torn), "icons");
+  const small = S().createWindow({ kind: "small", url: "https://link.example" });
+  assert.equal(S().windows[small].collapsedSidebar, undefined, "Little Ardia takes nothing");
+});

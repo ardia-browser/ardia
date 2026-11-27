@@ -168,9 +168,9 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
         ? { ...smallWindow(id, profileId, o.frame ?? null), ...(o.linkPointer ? { linkPointer: o.linkPointer } : {}), ...(o.linkApp ? { linkApp: o.linkApp } : {}) }
         : { ...emptyWindow(id, profileId, kind, o.frame ?? null), ...(o.chromeWindow ? { chromeWindow: o.chromeWindow } : {}), ...(o.opensBehind && kind === "main" ? { opensBehind: o.opensBehind } : {}) };
     const from = o.tabIds?.length && !small ? s.windows[s.tabs[o.tabIds[0]!]?.windowId ?? ""] : undefined;
+    if (from?.collapsedSidebar && !isSmallWindow(from)) w.collapsedSidebar = from.collapsedSidebar;
     if (from?.autoHideTabs !== undefined && !isSmallWindow(from)) {
       w.autoHideTabs = from.autoHideTabs;
-      if (from.collapsedSidebar) w.collapsedSidebar = from.collapsedSidebar;
       noteTornOffWindowKeptAutoHide();
     }
     let next = withWindow(s, w);

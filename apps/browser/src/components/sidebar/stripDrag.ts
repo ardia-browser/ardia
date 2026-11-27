@@ -1,3 +1,4 @@
+import { AppState } from "react-native";
 import type { DragController } from "./dragController";
 import { boxed, measure, type Item } from "./dragModel";
 import { handoffPoint } from "./iconStripGeometry";
@@ -14,11 +15,15 @@ export function registerSidebarDrag(windowId: string, controller: () => DragCont
 
 export const sidebarDragOf = (windowId: string): DragController | null => controllers.get(windowId)?.() ?? null;
 
-export type StripDragTarget = { begin: (x: number, y: number) => void; move: (x: number, y: number) => void; end: (commit: boolean) => void; cancel: () => void };
+export type StripDragTarget = { press: () => void; begin: (x: number, y: number) => void; move: (x: number, y: number) => void; end: (commit: boolean) => void; cancel: () => void };
 
 type Handoff = Pick<DragController, "begin" | "move" | "end" | "interrupt"> & { items: Map<string, Pick<Item, "kind" | "view" | "header">> };
 
 export const grabbedView = (item: Pick<Item, "kind" | "view" | "header">) => (boxed(item as Item) ? (item.header ?? item.view) : item.view);
+
+let handoffs = 0;
+
+type Run = { id: number; phase: "waiting" | "handed" | "ended"; pointer: { x: number; y: number }; consent: ConsentToken | null; handed: Handoff | null; timer?: ReturnType<typeof setTimeout>; release: () => void };
 
 export function stripDragHandoff(
   windowId: string,
@@ -28,63 +33,77 @@ export function stripDragHandoff(
   controllerOf: (windowId: string) => Handoff | null = sidebarDragOf,
   right = false,
 ): StripDragTarget {
-  let pointer = { x: 0, y: 0 };
-  let phase: "idle" | "waiting" | "handed" | "ended" = "idle";
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let consent: ConsentToken | null = null;
-  let handed: Handoff | null = null;
-  let escape: { remove: () => void } | null = null;
-  const release = () => {
-    clearTimeout(timer);
-    escape?.remove();
-    escape = null;
-    captureEscape(`stripDrag:${windowId}`, false);
+  let run: Run | null = null;
+  let pressed: { consent: ConsentToken | null } | null = null;
+  const live = (r: Run) => run === r && r.phase !== "ended";
+  const stop = (r: Run) => {
+    r.phase = "ended";
+    r.release();
   };
-  const stillThere = (controller: Handoff, item: unknown) => phase === "waiting" && controllerOf(windowId) === controller && controller.items.get(key) === item;
-  const start = async () => {
-    if (phase !== "waiting") return;
+  const start = async (r: Run) => {
+    if (!live(r) || r.phase !== "waiting") return;
     const controller = controllerOf(windowId);
     const item = controller?.items.get(key);
-    if (!controller || !item) return stop();
+    if (!controller || !item) return stop(r);
     const frame = await measure(grabbedView(item));
-    if (!stillThere(controller, item)) return stop();
-    phase = "handed";
-    handed = controller;
-    const at = handoffPoint(frame, pointer, right);
-    await controller.begin(key, at.x, at.y, consent);
-    if (phase === "handed" && handed === controller) controller.move(pointer.x, pointer.y);
+    if (!live(r) || r.phase !== "waiting" || controllerOf(windowId) !== controller || controller.items.get(key) !== item) return stop(r);
+    r.phase = "handed";
+    r.handed = controller;
+    const at = handoffPoint(frame, r.pointer, right);
+    await controller.begin(key, at.x, at.y, r.consent);
+    if (live(r) && r.handed === controller) controller.move(r.pointer.x, r.pointer.y);
   };
-  const stop = () => {
-    phase = "ended";
-    release();
+  const stopWaiting = (r: Run) => {
+    if (run !== r || r.phase !== "waiting") return;
+    run = null;
+    pressed = null;
+    stop(r);
   };
   const cancel = () => {
-    const was = handed;
-    phase = "ended";
-    handed = null;
-    release();
-    if (was) was.interrupt();
+    const r = run;
+    run = null;
+    pressed = null;
+    if (!r || r.phase === "ended") return;
+    const was = r.handed;
+    stop(r);
+    was?.interrupt();
   };
   return {
+    press() {
+      pressed = { consent: consentToken() };
+    },
     begin(x, y) {
-      pointer = { x, y };
-      phase = "waiting";
-      consent = consentToken();
-      captureEscape(`stripDrag:${windowId}`, true);
-      escape = onAppEvent((e) => e.type === "dragEscape" && phase === "waiting" && cancel());
+      const consent = pressed ? pressed.consent : consentToken();
+      cancel();
+      const id = ++handoffs;
+      const owner = `stripDrag:${windowId}:${id}`;
+      const r: Run = { id, phase: "waiting", pointer: { x, y }, consent, handed: null, release: () => {} };
+      run = r;
+      captureEscape(owner, true);
+      const escape = onAppEvent((e) => e.type === "dragEscape" && stopWaiting(r));
+      const active = AppState.addEventListener("change", (state) => state !== "active" && stopWaiting(r));
+      r.release = () => {
+        clearTimeout(r.timer);
+        escape.remove();
+        active.remove();
+        captureEscape(owner, false);
+      };
       reveal();
-      clearTimeout(timer);
-      timer = setTimeout(() => void start(), settleMs);
+      r.timer = setTimeout(() => void start(r), settleMs);
     },
     move(x, y) {
-      pointer = { x, y };
-      if (phase === "handed") handed?.move(x, y);
+      const r = run;
+      if (!r) return;
+      r.pointer = { x, y };
+      if (r.phase === "handed") r.handed?.move(x, y);
     },
     end(commit) {
-      const controller = phase === "handed" ? handed : null;
-      phase = "ended";
-      handed = null;
-      release();
+      const r = run;
+      run = null;
+      pressed = null;
+      if (!r || r.phase === "ended") return;
+      const controller = r.phase === "handed" ? r.handed : null;
+      stop(r);
       if (!controller) return;
       if (commit) void controller.end(true);
       else controller.interrupt();

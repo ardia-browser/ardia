@@ -58,10 +58,22 @@ export const settingsAdapter: Adapter = {
     }
     return { values, ignore: (key) => !values.has(key) };
   },
-  apply: (visible, changed) => applySettingRecords(visible, changed),
+  apply: (visible, changed, _base, records) => applySettingRecords(visible, changed, records?.stamp),
 };
 
-function applySettingRecords(visible: ReadonlyMap<string, unknown>, changedKeys: Iterable<string>) {
+type Stamp = (key: string) => string | undefined;
+
+function sidebarModeTarget(visible: ReadonlyMap<string, unknown>, stamp: Stamp | undefined, remembered: Settings["collapsedSidebar"]): SidebarModeRecord | null {
+  const mode = sidebarModeOf((visible.get(SIDEBAR_MODE_KEY) as { v?: unknown } | undefined)?.v);
+  const legacy = (visible.get(recordKey("autoHideTabs")) as { v?: unknown } | undefined)?.v;
+  if (typeof legacy !== "boolean") return mode;
+  const modeAt = stamp?.(SIDEBAR_MODE_KEY);
+  const legacyAt = stamp?.(recordKey("autoHideTabs"));
+  if (mode && (!modeAt || !legacyAt || modeAt >= legacyAt)) return mode;
+  return { collapsed: legacy, style: mode?.style ?? remembered };
+}
+
+function applySettingRecords(visible: ReadonlyMap<string, unknown>, changedKeys: Iterable<string>, stamp?: Stamp) {
   const changed = [...changedKeys];
   const patch: Record<string, unknown> = {};
   for (const key of changed) {
@@ -71,10 +83,11 @@ function applySettingRecords(visible: ReadonlyMap<string, unknown>, changedKeys:
     const value = fromRecord(name, record.v);
     if (validSettingValue(name as SettingKey, value)) patch[name] = value;
   }
-  const sidebarMode = sidebarModeOf((visible.get(SIDEBAR_MODE_KEY) as { v?: unknown } | undefined)?.v);
+  const sidebarChanged = changed.includes(SIDEBAR_MODE_KEY) || changed.includes(recordKey("autoHideTabs"));
+  const current = store().settings;
+  const sidebarMode = sidebarChanged ? sidebarModeTarget(visible, stamp, current.collapsedSidebar) : null;
   if (sidebarMode) {
     delete patch.autoHideTabs;
-    const current = store().settings;
     if (current.autoHideTabs !== sidebarMode.collapsed) patch.autoHideTabs = sidebarMode.collapsed;
     if (current.collapsedSidebar !== sidebarMode.style) patch.collapsedSidebar = sidebarMode.style;
   }
@@ -92,6 +105,15 @@ function applySettingRecords(visible: ReadonlyMap<string, unknown>, changedKeys:
 
 export const settingSyncedIn = (records: Record<string, SyncRecord>, name: SettingKey) => records[recordKey(name)] !== undefined;
 
+function sidebarModeToReapply(records: Record<string, SyncRecord>, chosen: ReadonlySet<string>): string[] {
+  const settings = store().settings;
+  const stored = records[SIDEBAR_MODE_KEY];
+  if (!stored || chosen.has("collapsedSidebar")) return [];
+  const visible = new Map<string, unknown>(Object.entries(records).filter(([key]) => key === SIDEBAR_MODE_KEY || key === recordKey("autoHideTabs")).map(([key, record]) => [key, fromLegacy(record.v)]));
+  const target = sidebarModeTarget(visible, (key) => records[key]?.h, settings.collapsedSidebar);
+  return target && (target.collapsed !== settings.autoHideTabs || target.style !== settings.collapsedSidebar) ? [SIDEBAR_MODE_KEY] : [];
+}
+
 export function settingsToReapply(records: Record<string, SyncRecord>): string[] {
   const settings = store().settings;
   const meta = store().settingsMeta;
@@ -102,7 +124,7 @@ export function settingsToReapply(records: Record<string, SyncRecord>): string[]
     const value = fromRecord(name, (fromLegacy(records[key]?.v) as { v?: unknown } | null | undefined)?.v);
     if ((chosen.has(name) && !inferredMode(name)) || !validSettingValue(name, value)) return [];
     return canonical(value) === canonical(settings[name]) ? [] : [key];
-  });
+  }).concat(sidebarModeToReapply(records, chosen));
 }
 
 export function retiredDefaultsHeldBySync(records: Record<string, SyncRecord>): Map<string, { v: unknown }> {

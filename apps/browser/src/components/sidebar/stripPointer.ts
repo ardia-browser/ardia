@@ -31,6 +31,7 @@ export function createStripDrags() {
   return {
     track(target: StripDragTarget): StripDragTarget {
       return {
+        press: () => target.press(),
         begin(x, y) {
           if (active && active !== target) active.cancel();
           active = target;

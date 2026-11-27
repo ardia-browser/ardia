@@ -138,14 +138,15 @@ test("a measurement that lands after cancel starts nothing, and mouse-up after a
   assert.deepEqual(current.calls, []);
 });
 
-test("the hand-off carries the consent period of the press, not the one current when the sidebar has settled", async () => {
+test("the hand-off carries the consent period of the press, not the one current when the pointer crossed the drag threshold or the sidebar settled", async () => {
   const { setConsentPeriod } = await import("../../state/telemetry/consentPeriod.ts");
   setConsentPeriod(false, null);
   const controller = slowController();
   controller.release();
   const drag = stripDragHandoff("w", "t:a", () => {}, 5, () => controller);
-  drag.begin(20, 80);
+  drag.press();
   setConsentPeriod(true, "later-opt-in");
+  drag.begin(20, 80);
   await tick(20);
   drag.end(true);
   setConsentPeriod(false, null);
@@ -183,14 +184,86 @@ test("a drag begun later with the token of a press from another consent period i
 });
 
 test("each tab's icon sits on its row's centre in the floating sidebar, and never closer than the gap to the icon above", async () => {
-  const { stripLayout, STRIP_DIVIDER_HEIGHT } = await import("./iconStripGeometry.ts");
+  const { stripLayout, STRIP_DIVIDER_HEIGHT, STRIP_ROW_GAP } = await import("./iconStripGeometry.ts");
   const items = [{ key: "tile", divider: false }, { key: "d", divider: true }, { key: "t:new", divider: false }, { key: "t:slack", divider: false }, { key: "t:fb", divider: false }];
   const centers = { "t:new": 189, "t:slack": 226, "t:fb": 263 };
   const { slots, end } = stripLayout(items, centers, 9);
   assert.deepEqual(slots.map((s) => s.top), [9, 9 + 30 + 4, 189 - 15, 226 - 15, 263 - 15]);
   assert.equal(slots[3].joinAbove, 226 - 15 - (189 + 15), "a group bar spans the room to the icon above");
   assert.equal(end, 263 + 15 + 4);
-  const crowded = stripLayout(items, { "t:new": 20, "t:slack": 30 }, 9).slots;
-  assert.equal(crowded[2].top, 9 + 34 + STRIP_DIVIDER_HEIGHT, "a row the strip can't reach yet just follows");
-  assert.equal(crowded[3].top, crowded[2].top + 34);
+  const crowded = stripLayout(items, { "t:new": 20, "t:slack": 30 }, 9);
+  assert.equal(crowded.slots[2].top, 9 + 34 + STRIP_DIVIDER_HEIGHT, "a row the strip can't reach yet just follows");
+  assert.equal(crowded.slots[3].top, crowded.slots[2].top + crowded.square + STRIP_ROW_GAP, "and the next keeps the row gap");
+});
+
+const { shellNativeModules } = await import("../../test-native/shell.ts");
+const RN = await import("react-native");
+
+function escapeCapture() {
+  const calls = [];
+  const focus = shellNativeModules.ArdiaFocus;
+  const real = focus.setDragEscapeCapture;
+  focus.setDragEscapeCapture = (on) => (calls.push(on), Promise.resolve());
+  return { on: () => calls.at(-1) === true, restore: () => void (focus.setDragEscapeCapture = real) };
+}
+
+test("a first drag's late measurement never starts a second drag of the same icon before its own settle", async () => {
+  const controller = slowController();
+  const drag = stripDragHandoff("w", "t:a", () => {}, 30, () => controller);
+  drag.begin(20, 80);
+  await tick(40);
+  drag.end(true);
+  drag.begin(20, 90);
+  controller.release();
+  await tick(5);
+  assert.deepEqual(controller.calls, [], "the second drag waits for its own settle");
+  await tick(60);
+  assert.equal(controller.calls[0]?.[0], "begin");
+  drag.end(true);
+});
+
+test("cancelling one icon's pending hand-off keeps Escape captured for another icon's pending one", async () => {
+  const capture = escapeCapture();
+  try {
+    const controller = fakeController();
+    const a = stripDragHandoff("w", "t:a", () => {}, 50, () => controller);
+    const b = stripDragHandoff("w", "t:b", () => {}, 50, () => controller);
+    a.begin(20, 80);
+    b.begin(20, 120);
+    a.cancel();
+    assert.equal(capture.on(), true, "b still needs Escape");
+    b.cancel();
+    assert.equal(capture.on(), false);
+  } finally {
+    capture.restore();
+  }
+});
+
+test("the app resigning active cancels a pending hand-off", async () => {
+  const listeners = [];
+  const real = RN.AppState.addEventListener;
+  RN.AppState.addEventListener = (_type, listener) => (listeners.push(listener), { remove: () => listeners.splice(listeners.indexOf(listener), 1) });
+  try {
+    const controller = fakeController();
+    const drag = stripDragHandoff("w", "t:a", () => {}, 10, () => controller);
+    drag.begin(20, 80);
+    listeners.forEach((l) => l("inactive"));
+    await tick(30);
+    drag.end(true);
+    assert.deepEqual(controller.calls, []);
+    assert.equal(listeners.length, 0, "the listener goes with the hand-off");
+  } finally {
+    RN.AppState.addEventListener = real;
+  }
+});
+
+test("rows packed tighter than a square plus its gap shrink the square, so every icon stays on its row", async () => {
+  const { stripLayout, STRIP_ROW_GAP } = await import("./iconStripGeometry.ts");
+  const items = Array.from({ length: 8 }, (_, i) => ({ key: `t:${i}`, divider: false }));
+  const centers = Object.fromEntries(items.map((item, i) => [item.key, 120 + i * 30]));
+  const { slots, square } = stripLayout(items, centers, 9);
+  assert.equal(square, 30 - STRIP_ROW_GAP);
+  slots.forEach((slot, i) => assert.equal(slot.top + square / 2, 120 + i * 30, `row ${i} on its centre`));
+  const roomy = stripLayout(items, Object.fromEntries(items.map((item, i) => [item.key, 120 + i * 37])), 9);
+  assert.equal(roomy.square, 30, "rows with room keep the full square");
 });

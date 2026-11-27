@@ -1,4 +1,4 @@
-import { memo, useMemo, type ReactNode } from "react";
+import { createContext, memo, useContext, useMemo, type ReactNode } from "react";
 import { PanResponder, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { ActivitySpinner, clippedContinuousCorners, ink, radius, Symbol, useHover, WindowDragRegion, withAlpha } from "../ui";
 import { useTheme } from "../ui/theme";
@@ -26,10 +26,11 @@ import { useRowCenters } from "./useRowCenters";
 export type StripActions = {
   pressed: () => void;
   open: (item: StripItem) => void;
-  drag: (key: string) => { begin: (x: number, y: number) => void; move: (x: number, y: number) => void; end: (commit: boolean) => void };
+  drag: (key: string) => { press: () => void; begin: (x: number, y: number) => void; move: (x: number, y: number) => void; end: (commit: boolean) => void };
 };
 
 const SQUARE = ICON_STRIP.square;
+const RowSquare = createContext<number>(SQUARE);
 const ICON = 16;
 const BAR = { width: 3, left: 2 } as const;
 const BADGE = 11;
@@ -53,7 +54,9 @@ export function IconStrip({ windowId, right, top, bottom, actions, align }: { wi
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ height: layout.end + SQUARE + ICON_STRIP.gap * 2 }}>
         {entries.map((e, i) => (
           <View key={`${e.kind}:${e.key}`} style={{ position: "absolute", left: 0, right: 0, top: layout.slots[i]!.top }}>
-            <StripEntry code={e.code} windowId={windowId} right={right} actions={actions} joinAbove={layout.slots[i]!.joinAbove} />
+            <RowSquare.Provider value={ALIGNED.has(e.kind) ? layout.square : SQUARE}>
+              <StripEntry code={e.code} windowId={windowId} right={right} actions={actions} joinAbove={layout.slots[i]!.joinAbove} />
+            </RowSquare.Provider>
           </View>
         ))}
         <View style={{ position: "absolute", left: 0, right: 0, top: layout.end }}>
@@ -89,8 +92,9 @@ const StripEntry = memo(function StripEntry({ code, windowId, right, actions, jo
 });
 
 function StripCell({ bar, right, joinAbove, children }: { bar: StripBar | null; right: boolean; joinAbove: number; children: ReactNode }) {
+  const size = useContext(RowSquare);
   return (
-    <View style={{ height: SQUARE, paddingHorizontal: stripInset }}>
+    <View style={{ height: size, paddingHorizontal: (ICON_STRIP.width - size) / 2 }}>
       {bar ? <GroupBar bar={bar} right={right} joinAbove={joinAbove} /> : null}
       {children}
     </View>
@@ -137,11 +141,12 @@ function useSquareFill(state: { selected: boolean; hovered: boolean; pressed: bo
 }
 
 function Square({ fill, stroke, children }: { fill: string; stroke?: string; children: ReactNode }) {
+  const size = useContext(RowSquare);
   return (
     <View
       style={{
-        width: SQUARE,
-        height: SQUARE,
+        width: size,
+        height: size,
         ...clippedContinuousCorners(radius.chrome),
         backgroundColor: fill,
         borderWidth: stroke ? StyleSheet.hairlineWidth : 0,
@@ -158,7 +163,7 @@ function Square({ fill, stroke, children }: { fill: string; stroke?: string; chi
 function useStripDrag(key: string, actions: StripActions) {
   return useMemo(() => {
     const target = actions.drag(key);
-    return PanResponder.create(dragGesture(true, target)).panHandlers;
+    return PanResponder.create({ ...dragGesture(true, target), onStartShouldSetPanResponderCapture: () => (target.press(), false) }).panHandlers;
   }, [key, actions]);
 }
 

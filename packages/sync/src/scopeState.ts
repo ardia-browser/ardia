@@ -86,6 +86,7 @@ export type ApplyRecords = {
   held(): boolean;
   landed(key: string): void;
   defer(key: string): void;
+  stamp?(key: string): HLC | undefined;
 };
 
 export interface Adapter {

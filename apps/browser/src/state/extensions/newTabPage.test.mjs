@@ -194,7 +194,7 @@ test("#1126: an older New Tab extension turned back on keeps its place in Chromi
   assert.equal(shownUrl(unranked), `chrome-extension://${CADRAN}/cadran.html`, "only an entry missing from Preferences counts as newest, so the Mac ranks every entry it lists, active or not");
 });
 
-test("#1126: typing in the New Tab page's search field cancels the late extension page, so the draft stays", async () => {
+test("#1126: typing in the New Tab page's search field cancels the late extension page, so the draft stays", () => {
   const w = reset({}, []);
   const profile = engineProfile(S(), S().windows[w].profileId);
   useExtensions.setState({ lists: {} });
@@ -204,7 +204,38 @@ test("#1126: typing in the New Tab page's search field cancels the late extensio
   useExtensions.setState({ lists: { [profile]: [extension(SPEED_DIAL, "dial.html")] } });
   assert.equal(S().tabs[drafting].url, "", "the tab with a draft keeps the New Tab page");
   assert.equal(S().tabs[untouched].url, `chrome-extension://${SPEED_DIAL}/dial.html`, "another waiting tab still gets the page");
+});
+
+test("#1126: a right-click Paste, Cut or Delete in the New Tab search field, and every other draft edit, cancels the late extension page; moving the selection doesn't", async () => {
+  globalThis.require ??= (id) => ({ asset: id });
+  const { cancelsLateOverride } = await import("../../components/omnibox/useBarText.ts");
+  const w = reset({}, []);
+  const profile = engineProfile(S(), S().windows[w].profileId);
+  const edits = [
+    { kind: "edited", text: "pasted draft", caret: 12 },
+    { kind: "typed", text: "a", suppress: false, selected: 0 },
+    { kind: "caretAccepted", text: "ab" },
+    { kind: "tabAccepted", text: "ab" },
+    { kind: "calculated", text: "4" },
+    { kind: "completionDropped" },
+    { kind: "enteredScope", scope: { kind: "history" }, from: "" },
+    { kind: "leftScope", restore: null },
+    { kind: "reset" },
+  ];
+  const moves = [{ kind: "selected", index: 1 }, { kind: "select", selection: { start: 0, end: 1 } }, { kind: "selectionApplied" }];
+  for (const event of [...edits, ...moves]) {
+    useExtensions.setState({ lists: {} });
+    const id = S().newTab(w, { newTabCommand: true });
+    const reduced = [];
+    cancelsLateOverride(true, id, (e) => reduced.push(e))(event);
+    cancelsLateOverride(false, "elsewhere", () => {})(event);
+    useExtensions.setState({ lists: { [profile]: [extension(SPEED_DIAL, "dial.html")] } });
+    assert.deepEqual(reduced, [event], `${event.kind} still reaches the bar`);
+    const keepsDraft = edits.includes(event);
+    assert.equal(S().tabs[id].url, keepsDraft ? "" : `chrome-extension://${SPEED_DIAL}/dial.html`, event.kind);
+  }
   const { readFileSync } = await import("node:fs");
-  const omnibox = readFileSync(new URL("../../components/omnibox/Omnibox.tsx", import.meta.url), "utf8");
-  assert.match(omnibox, /if \(change\.echo\) \{[\s\S]*?return;\s*\}\s*if \(hero\) cancelLateNewTabOverride\(tabId\);/, "the New Tab field cancels on a real edit, after inline-completion echoes are set aside");
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  assert.match(read("../../components/omnibox/useBarText.ts"), /useState\(\(\) => cancelsLateOverride\(hero, tabId, reduce\)\)/, "the bar's only dispatch is the one that cancels");
+  assert.match(read("../../components/omnibox/Omnibox.tsx"), /if \(pick\?\.kind === "edit"\) \{\s*previewSelection\.edited\(\);\s*dispatch\(\{ kind: "edited"/, "the field menu's Paste, Cut and Delete go through that dispatch as an edited event");
 });

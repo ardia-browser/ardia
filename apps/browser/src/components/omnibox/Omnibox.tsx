@@ -16,7 +16,6 @@ import { createBangSubmitter, mayBeBang } from "../../state/omnibox/bangs";
 import { traceOmnibox, useOmniboxDriver } from "./devDriver";
 import { claimFocusTag, commandBarFocus, heroBarFocus } from "../../state/focus/focusClaims";
 import { registerHeroBar, saveNtpQuery, type BarDismissal, type BarSnapshot, type HeroBarFocus } from "../../state/omnibox/barState";
-import { cancelLateNewTabOverride } from "../../state/tabs/newTabHome";
 import { barSplitsFrom, openFromBar, otherOpenTabs, switchFromBar, type Disposition } from "../../state/omnibox/openFromBar";
 import { openFromNewTabBar } from "../../state/omnibox/newTabBar";
 import { isBookmarklet, runBookmarklet } from "../../state/bookmarks/bookmarklets";
@@ -250,7 +249,6 @@ export function Omnibox({
       if (!change.stale && !previewing) selection.note({ start: change.inline.typed.length, end: next.length });
       return;
     }
-    if (hero) cancelLateNewTabOverride(tabId);
     keystroke();
     const bySpace = scope ? null : keywordBySpace(previewing ? value : typed, next);
     const keyword = bySpace ? keywordScope(bySpace.keyword, windowId) : null;

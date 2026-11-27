@@ -104,15 +104,38 @@ test("saved passwords go only through the typed native path for the window's pro
   configureHeldLogins(createHeldLogins(heldIo()));
   try {
     assert.deepEqual(await read("work"), sealedList);
-    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", "https://bank.example", "alice", "AdGh", true), true);
+    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", "https://bank.example", "alice", "AdGh", "OldS"), true);
   } finally {
     configureHeldLogins(null);
   }
   assert.deepEqual(host.calls, [
     { method: "ArdiaSync.readPasswords", args: { args: ["work"] } },
-    { method: "ArdiaSync.savePassword", args: { args: ["default", "https://bank.example", "alice", "AdGh", true] } },
+    { method: "ArdiaSync.savePassword", args: { args: ["default", "https://bank.example", "alice", "AdGh", "OldS"] } },
   ]);
   assert.equal(syncModuleMethod(host, "ArdiaPasswords", "write"), undefined);
+});
+
+test("a change to a held login names the password the engine holds, never the held one it never saw", async () => {
+  for (const native of [[{ origin: "https://bank.example", username: "alice", sealed: "V1", created: 5 }], []]) {
+    const engineHolds = native[0]?.sealed ?? "";
+    const host = fakeHost((method, { args }) =>
+      method === "ArdiaSync.readPasswords" ? native : method === "ArdiaSync.savePassword" ? args[4] === engineHolds : null,
+    );
+    const io = heldIo();
+    const held = createHeldLogins(io);
+    configureHeldLogins(held);
+    try {
+      assert.equal(await held.hold("", { origin: "https://bank.example", username: "alice", sealed: "LONG", replaced: native[0]?.sealed ?? null }), true);
+      const shown = await syncModuleMethod(host, "ArdiaSync", "readPasswords")("");
+      assert.deepEqual(shown.map((login) => login.sealed), ["LONG"]);
+      assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", "https://bank.example", "alice", "SHORT", "LONG"), true);
+    } finally {
+      configureHeldLogins(null);
+    }
+    const saves = host.calls.filter((call) => call.method === "ArdiaSync.savePassword");
+    assert.deepEqual(saves.map((call) => call.args.args[4]), [engineHolds]);
+    assert.equal(io.docs.has(HELD_LOGINS_DOCUMENT), false, "the saved login is no longer held");
+  }
 });
 
 test("a held login is sealed at rest and hides the local value it replaced across restarts until that value really changes", async () => {
@@ -200,6 +223,18 @@ test("the sync module keeps device ids local and sends every other call as a typ
   assert.deepEqual(host.calls, [
     { method: "ArdiaSync.folderInfo", args: { args: [null] } },
     { method: "ArdiaSync.enterPhrase", args: { args: ["aaaaaaaaaaaaaaaaaaaaaaaaaa", PHRASE, "/sync"] } },
+  ]);
+});
+
+test("Recreate's exclusive create is served here: it refuses a folder that is there and otherwise makes the chain through the engine's createChain", async () => {
+  const host = fakeHost((method, args) => (method === "ArdiaSync.folderInfo" ? { exists: args.args[0] === "/there" } : null));
+  const create = resolveHostModule(host, "ArdiaSync", "createChainInNewFolder");
+  await create("/new");
+  await assert.rejects(create("/there"), { code: "ERR_SYNC_FOLDER_EXISTS" });
+  assert.deepEqual(host.calls, [
+    { method: "ArdiaSync.folderInfo", args: { args: ["/new"] } },
+    { method: "ArdiaSync.createChain", args: { args: ["/new"] } },
+    { method: "ArdiaSync.folderInfo", args: { args: ["/there"] } },
   ]);
 });
 

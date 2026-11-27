@@ -652,6 +652,94 @@ test("windows webui native update policy keeps every hostile input and call argu
   }
 });
 
+test("windows webui window policy refuses hostile claims, keys, rects and adopt ids, and drops a tab's find helper whenever its claim changes", (t) => {
+  const { spawnSync } = process.getBuiltinModule("node:child_process");
+  const { mkdtempSync, rmSync } = process.getBuiltinModule("node:fs");
+  const { tmpdir } = process.getBuiltinModule("node:os");
+  const { join } = process.getBuiltinModule("node:path");
+  const { fileURLToPath } = process.getBuiltinModule("node:url");
+  const repo = fileURLToPath(new URL("../../../", import.meta.url));
+  const compiler = ["c++", "clang++", "g++"].find((name) => spawnSync(name, ["--version"], { stdio: "ignore" }).status === 0);
+  if (!compiler) {
+    if (process.env.CI) assert.fail("no C++ compiler to build scripts/windows/engine/tests/webui_window_policy_test.cc");
+    return t.skip("no C++ compiler");
+  }
+  const scratch = mkdtempSync(join(tmpdir(), "ardia-window-policy-"));
+  try {
+    const binary = join(scratch, "webui_window_policy_test");
+    const build = spawnSync(compiler, ["-std=c++20", "-UNDEBUG", "-I", join(repo, "scripts/windows/engine/src"), join(repo, "scripts/windows/engine/tests/webui_window_policy_test.cc"), "-o", binary], { encoding: "utf8" });
+    assert.equal(build.status, 0, build.stderr);
+    const run = spawnSync(binary, [], { encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr || run.stdout);
+    assert.match(run.stdout, /webui_window_policy_test: all assertions passed/);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("windows webui tab.command evaluate refuses every hostile script before the frame and answers the shell only a bounded string or null", (t) => {
+  const { spawnSync } = process.getBuiltinModule("node:child_process");
+  const { mkdirSync, mkdtempSync, readFileSync: readSource, rmSync, writeFileSync } = process.getBuiltinModule("node:fs");
+  const { tmpdir } = process.getBuiltinModule("node:os");
+  const { dirname, join } = process.getBuiltinModule("node:path");
+  const { fileURLToPath } = process.getBuiltinModule("node:url");
+  const repo = fileURLToPath(new URL("../../../", import.meta.url));
+  const compiler = ["c++", "clang++", "g++"].find((name) => spawnSync(name, ["--version"], { stdio: "ignore" }).status === 0);
+  if (!compiler) {
+    if (process.env.CI) assert.fail("no C++ compiler to build scripts/windows/engine/tests/webui_page_evaluation_test.cc");
+    return t.skip("no C++ compiler");
+  }
+  const fixture = join(repo, "engine/ardiacore-linux/tests/fixtures/page_state.h");
+  const helper = join(repo, "engine/ardiacore-linux/src/ardia/linux/ac_linux_page_evaluation.cc");
+  const testSource = join(repo, "scripts/windows/engine/tests/webui_page_evaluation_test.cc");
+  const sources = [
+    helper,
+    join(repo, "engine/ardiacore-linux/src/ardia/linux/ac_linux_page_evaluation.h"),
+    join(repo, "engine/ardiacore-linux/src/ardia/linux/ac_linux_page_operations.h"),
+    join(repo, "scripts/windows/engine/src/ardia/win/webui/webui_page_evaluation.h"),
+    testSource,
+  ];
+  const scratch = mkdtempSync(join(tmpdir(), "ardia-page-evaluation-"));
+  try {
+    const shims = join(scratch, "shims");
+    for (const source of sources) {
+      for (const [, include] of readSource(source, "utf8").matchAll(/#include "([^"]+)"/g)) {
+        if (include.startsWith("ardia/")) continue;
+        mkdirSync(dirname(join(shims, include)), { recursive: true });
+        writeFileSync(join(shims, include), `#include "${fixture}"\n#include <limits>\n`);
+      }
+    }
+    const binary = join(scratch, "webui_page_evaluation_test");
+    const build = spawnSync(compiler, ["-std=c++20", "-Wall", "-Wextra", "-Werror", "-Wno-mismatched-tags", "-I", shims, "-I", join(repo, "scripts/windows/engine/src"), "-I", join(repo, "engine/ardiacore-linux/src"), helper, testSource, "-o", binary], { encoding: "utf8" });
+    assert.equal(build.status, 0, build.stderr);
+    const describe = (value) => {
+      if (value === null || value === undefined) return "z:";
+      if (typeof value === "boolean") return "b:";
+      if (typeof value === "number") return Number.isInteger(value) && Math.abs(value) <= 2 ** 31 - 1 ? `i:${value}` : `d:${value}`;
+      if (typeof value === "string") return `s:${Buffer.from(value, "utf8").toString("hex")}`;
+      return Array.isArray(value) ? "a:" : "o:";
+    };
+    const wire = (value) => JSON.parse(JSON.stringify({ args: value }) ?? "{}").args;
+    const lines = HOSTILE_VALUES.map(({ value }) => {
+      const single = JSON.parse(JSON.stringify([value]))[0];
+      const args = wire(value);
+      const whole = args === undefined ? "O" : Array.isArray(args) ? `L${args.map(describe).join(",")}` : "N";
+      return `${describe(single)}|${whole}`;
+    });
+    const strings = HOSTILE_VALUES.filter(({ value }) => typeof JSON.parse(JSON.stringify([value]))[0] === "string").length;
+    assert.ok(strings >= HOSTILE_STRINGS.length);
+    const corpus = join(scratch, "hostile.txt");
+    writeFileSync(corpus, lines.join("\n") + "\n");
+    const run = spawnSync(binary, ["--hostile", corpus], { encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr || run.stdout);
+    assert.match(run.stdout, new RegExp(`hostile: ${HOSTILE_VALUES.length} values, ${strings} strings, ${HOSTILE_VALUES.length * 2} refused before the frame, \\d+ string results unchanged, \\d+ other results null, controls reached the sink`));
+    const unit = spawnSync(binary, [], { encoding: "utf8" });
+    assert.equal(unit.status, 0, unit.stderr || unit.stdout);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
 test("#650: a clipboard another app filled reaches the address field only as one line of plain text, and a file address only as a file: URL", async (t) => {
   const { spawnSync } = process.getBuiltinModule("node:child_process");
   const { mkdtempSync, rmSync, writeFileSync } = process.getBuiltinModule("node:fs");

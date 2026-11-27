@@ -882,6 +882,8 @@ key's `key-inputs.json`, so a change to one moves the Windows key too:
 | --- | --- | --- |
 | `bootstrap.js` + `generate_bootstrap.py` | as is | the `chrome.send` bridge, `window.__ardiaHost` |
 | `ac_linux_session.{h,cc}` | as is | `MergeLinuxSession` for `session.read`/`session.write` |
+| `ac_linux_find.{h,cc}` | as is | `LinuxFind`, the `FindTabHelper` observer behind `tab.command` `find`/`stopFinding` and the `find` page event |
+| `ac_linux_page_evaluation.{h,cc}` + `ac_linux_page_operations.h` | as is | `LinuxPageEvaluationScript` (the allow-list of page operations) and `LinuxPageEvaluationResult` for `tab.command` `evaluate` |
 | `ac_desktop_routes.h` (from `engine/ardiacore-desktop`) | as is | generated `kRoutes` (37 routes): `engine.call` names to `ac_*` services |
 | `ac_desktop_policy.h` (from `engine/ardiacore-desktop`) | as is | the shared `StoredRead` type (`kFound`/`kMissing`/`kFailed`) the document store answers with; the Windows rules are in `webui_policy.h`, not here: `ReadAsset` calls `ValidWindowsAssetPath`, and the document store calls `ValidWindowsDocumentName`, `ReservedWindowsDocumentName` and `WindowsDocumentLimit` |
 | `ac_desktop_window_state.h` (from `engine/ardiacore-desktop`) | as is | `ArdiaShell.windowState`/`windowButtonLayout` names |
@@ -956,12 +958,24 @@ in `webui_frame.cc`: top-edge resize, `HTMAXBUTTON` over the shell's maximize bu
 - Host calls served there: `tab.create` (with `adoptId`, `previousClaim` and transfers between windows after
   `ArdiaTabs.prepareTransfer`), `tab.viewport`, `tab.presentations`, `tab.command` (`loadUrl`, `goBack`,
   `goForward`, `goToOffset`, `reload`, `forceReload`, `stopLoading`, `focus`, `blur`, `zoomStep`, `setMuted`,
-  `close`, `navigationEntries`), `tab.release`, `tab.close`, `ArdiaTabs.unclaimedTabs` and the `unclaimed` event,
+  `close`, `navigationEntries`, `find`, `stopFinding`, `evaluate`), `tab.release`, `tab.close`, `ArdiaTabs.unclaimedTabs` and the `unclaimed` event,
   `ArdiaTabs.claimLaunchTab`, `ArdiaShell.setActiveProfile`, `openWindow`, `focusWindow`, `windowIdentity`,
   `windowIds`, `privateWindows`, `toggleFullScreen`, `pickFolder`, `pickFiles`, `copyText`, `readText`,
   `listenForOpenURLs` with `onOpenURLs` (a second launch's URLs), `documents.watch`/`unwatch`/`commit`/`flush` with
   `documents.changed` (the shared `LinuxDocumentService` from `engine/ardiacore-linux`, compiled as is), and
   `profiles.loaded`; plus everything the pilot served (documents, session, telemetry, platform calls, routes).
+- `find` and `stopFinding` drive Chromium's `FindTabHelper` through the shared `LinuxFind` (`ac_linux_find.*`), one per
+  page, and each result reaches the shell as the page event `find` with `{count, active, final}`, which the app's find bar
+  shows, Reading Mode included. `evaluate` runs only the page operations `LinuxPageEvaluationScript` allows (a script whose
+  SHA-256 is not on its list fails with `ERR_PAGE_EVALUATION_REFUSED`), in `ISOLATED_WORLD_ID_CHROME_INTERNAL`, and
+  answers with the operation's result as a string, or `null` when the page can't run it; Reading Mode's article check
+  and `F9` depend on it. `webui_page_evaluation.h` holds that reply (`PreparePageEvaluation`, `PageEvaluationAnswered`):
+  only a string of at most 4 MiB reaches the shell, anything else answers `null`, an answer for a page whose
+  document, claim or binding changed while the script ran answers `null` (`EvaluationStillCurrent`), and
+  `tests/webui_page_evaluation_test.cc` sends the shared hostile corpus through it (`windows-webui-page:evaluate` in
+  `apps/browser/src/boundaries.json`). A page's find lives in its claim (`ClaimBound` in `webui_window_policy.h`): a
+  release, a reclaim, a renderer exit, a move to another window, a rebind or a close drops it, so an earlier search never
+  reports under a new claim.
 - #4107's widened hooks are set in WebUI mode only (`InstallWebUIShellHooks`; the RNW host leaves them null):
   `g_ardia_linux_is_companion`, `g_ardia_linux_companion_owner` (a companion's tab-modal dialogs and permission
   prompts show in the visible window), `g_ardia_linux_present_companion` (a companion's `Show`/`Activate` focuses
@@ -1321,7 +1335,7 @@ In order, as the next PRs:
    guards that change behavior, which it turns on behind the WebUI shell.
 4. The host calls the pilot stubs (logged as `unhandled host call` at start: `ArdiaShell.readDocument`/`writeDocument`,
    `setActiveProfile`, `openWindow`, `setMenuBookmarks`, `setMenuState`, `shellPainted`, `ArdiaTabs.unclaimedTabs`/
-   `claimLaunchTab`, `tab.presentations`, `tab.command` `setMuted`/`evaluate`/`capturePicture`, and the `engine.call`s
+   `claimLaunchTab`, `tab.presentations`, `tab.command` `capturePicture`, and the `engine.call`s
    `documents.watch`, `profiles.loaded`, `engine.info`, `downloads.list`, `engine.memorySaver`, `engine.systemState`,
    `tabs.strips`, `search.setEngineName`, `webView.*`, `webKit.setFraudWarnings`), then Track 3's
    generated routes so the list stops being hand-kept.

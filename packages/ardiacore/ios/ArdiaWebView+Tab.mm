@@ -147,7 +147,7 @@ BOOL IsBlankAddress(NSString *url) {
   [self tabDidChangeFavicon:tab];
   if (_tabIndex >= 0) [self placeTab];
   if (ArdiaWindowController *controller = self.controller)
-    [ArdiaTabStrip changedInWindow:controller profile:tab.profile cause:NSNull.null];
+    [ArdiaTabStrip changedInWindow:controller profile:tab.profile cause:NSNull.null note:@{@"trigger" : @"attach"}];
   [self settleFirstShowFocus];
 }
 

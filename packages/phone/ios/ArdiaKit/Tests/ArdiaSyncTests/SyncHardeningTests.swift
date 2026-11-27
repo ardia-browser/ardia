@@ -66,6 +66,197 @@ import Testing
     await relaunched.stopSyncing()
   }
 
+  @Test func aRelaunchHasReadItsCacheOnlyOnceTheCachedSpacesAreBack() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let spaces = j.service.snapshot.profiles.map(\.syncId)
+    try #require(!spaces.isEmpty)
+    await j.service.close()
+
+    let relaunched = makeService(j.sandbox, source: j.source, clock: j.clock)
+    #expect(!relaunched.hasReadCache)
+    relaunched.start()
+    #expect(relaunched.isEnabled)
+    #expect(!relaunched.hasReadCache)
+    #expect(relaunched.snapshot.profiles.isEmpty)
+    let deadline = ContinuousClock.now + .seconds(10)
+    while !relaunched.hasReadCache, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(relaunched.hasReadCache)
+    #expect(relaunched.snapshot.profiles.map(\.syncId) == spaces)
+    await relaunched.syncNow()
+    await relaunched.stopSyncing()
+  }
+
+  @Test func theCachedSnapshotTellsAMissingCacheFromOneThatWontOpen() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let spaces = j.service.snapshot.profiles.map(\.syncId)
+    try #require(!spaces.isEmpty)
+    await j.service.close()
+    let (grant, _) = try SyncFolderAccess.grant(picked: j.sandbox.root)
+    let engine = try SyncEngine(directory: j.sandbox.state, deviceId: j.device, entropy: j.entropy, folder: grant)
+    let snapshotFile = j.sandbox.state.appendingPathComponent("sync-snapshot.nns")
+
+    guard case .read(let cached) = await engine.cachedSnapshot() else { Issue.record("the saved snapshot did not read"); return }
+    #expect(cached.profiles.map(\.syncId) == spaces)
+
+    try Data(repeating: 7, count: 512).write(to: snapshotFile)
+    #expect(await engine.cachedSnapshot() == .unreadable)
+
+    try FileManager.default.removeItem(at: snapshotFile)
+    #expect(await engine.cachedSnapshot() == .missing)
+    await engine.retire()
+  }
+
+  @Test func aLockedServiceNeverSaysItKnowsItsSpaces() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    await j.service.close()
+    FileKeyStore(directory: j.sandbox.keys).delete(account: j.device)
+
+    let relaunched = makeService(j.sandbox, source: j.source, clock: j.clock)
+    relaunched.start()
+    #expect(relaunched.phase == .locked)
+    #expect(relaunched.isEnabled)
+    #expect(!relaunched.hasReadCache)
+    #expect(relaunched.snapshot.profiles.isEmpty)
+  }
+
+  @Test func aFolderGrantedAgainReadsTheLocalCacheEvenWhenItsFirstCycleFails() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let spaces = j.service.snapshot.profiles.map(\.syncId)
+    try #require(!spaces.isEmpty)
+
+    let relaunched = makeService(j.sandbox, source: j.source, clock: j.clock)
+    relaunched.start()
+    #expect(relaunched.isEnabled)
+    #expect(!relaunched.hasReadCache)
+    await j.service.close()
+
+    #expect(await relaunched.changeFolder(j.sandbox.root) == .connected)
+    try FileManager.default.moveItem(at: j.sandbox.folder, to: j.sandbox.root.appendingPathComponent("Away", isDirectory: true))
+    let deadline = ContinuousClock.now + .seconds(10)
+    while !relaunched.hasReadCache, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(relaunched.hasReadCache)
+    #expect(relaunched.snapshot.profiles.map(\.syncId) == spaces)
+    await relaunched.close()
+  }
+
+  @Test func comingBackToTheForegroundWhileStoppingLeavesSyncOff() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let stop = Task { await j.service.stopSyncing() }
+    for _ in 0..<1000 where j.service.isEnabled { await Task.yield() }
+    try #require(!j.service.isEnabled)
+    j.service.appBecameActive()
+    await stop.value
+    #expect(j.service.phase == .off)
+    #expect(!j.service.isEnabled)
+    #expect(j.service.hasReadCache)
+  }
+
+  @Test func stoppingWhileACorruptStateStartsOverLeavesSyncOffAndReady() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    await j.service.close()
+    try Data(repeating: 9, count: 4096).write(to: stateFile(j.sandbox))
+    let keysBefore = j.sandbox.contents(j.sandbox.keys).count
+
+    let relaunched = makeService(j.sandbox, source: j.source, clock: j.clock)
+    relaunched.start()
+    let deadline = ContinuousClock.now + .seconds(10)
+    while j.sandbox.contents(j.sandbox.keys).count <= keysBefore, ContinuousClock.now < deadline {
+      await Task.yield()
+    }
+    try #require(j.sandbox.contents(j.sandbox.keys).count > keysBefore)
+    await relaunched.stopSyncing()
+    for _ in 0..<500 { await Task.yield() }
+    #expect(relaunched.phase == .off)
+    #expect(!relaunched.isEnabled)
+    #expect(relaunched.hasReadCache)
+    await relaunched.close()
+  }
+
+  @MainActor final class Gate {
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private var opened = false
+    private(set) var arrived = 0
+
+    func wait() async {
+      guard !opened else { return }
+      arrived += 1
+      await withCheckedContinuation { waiting.append($0) }
+    }
+
+    func open() {
+      opened = true
+      waiting.forEach { $0.resume() }
+      waiting = []
+    }
+  }
+
+  func expectOffAndReady(_ service: SyncService) {
+    #expect(service.phase == .off)
+    #expect(!service.isEnabled)
+    #expect(service.hasReadCache)
+  }
+
+  @Test func changingTheFolderWhileStoppingLeavesSyncOff() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let gate = Gate()
+    j.service.holdFolderCheck = { await gate.wait() }
+    let change = Task { await j.service.changeFolder(j.sandbox.root) }
+    while gate.arrived == 0 { await Task.yield() }
+    await j.service.stopSyncing()
+    gate.open()
+    #expect(await change.value != .connected)
+    for _ in 0..<200 { await Task.yield() }
+    expectOffAndReady(j.service)
+  }
+
+  @Test func enteringThePhraseWhileStoppingLeavesSyncOff() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let gate = Gate()
+    j.service.holdFolderCheck = { await gate.wait() }
+    let words = RecoveryPhrase.words(for: j.entropy).joined(separator: " ")
+    let connect = Task { await j.service.connect(phrase: words, folder: j.sandbox.root) }
+    while gate.arrived == 0 { await Task.yield() }
+    await j.service.stopSyncing()
+    gate.open()
+    #expect(await connect.value != .connected)
+    for _ in 0..<200 { await Task.yield() }
+    expectOffAndReady(j.service)
+  }
+
+  @Test func startingAndStoppingAtOnceLeavesSyncOff() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    await j.service.close()
+    let relaunched = makeService(j.sandbox, source: j.source, clock: j.clock)
+    relaunched.start()
+    await relaunched.stopSyncing()
+    relaunched.appBecameActive()
+    for _ in 0..<200 { await Task.yield() }
+    expectOffAndReady(relaunched)
+  }
+
+  @Test func aServiceWithNoCacheToReadHasReadItAtOnce() throws {
+    let sandbox = try Sandbox()
+    defer { sandbox.remove() }
+    let off = makeService(sandbox, source: FakeSource(), clock: TestClock())
+    off.start()
+    #expect(!off.isEnabled)
+    #expect(off.hasReadCache)
+    #expect(SyncService.demo.hasReadCache)
+  }
+
   @Test func aStateThatCantBeReadRightNowIsNeverOverwritten() async throws {
     let j = try await joined()
     defer { j.sandbox.remove() }

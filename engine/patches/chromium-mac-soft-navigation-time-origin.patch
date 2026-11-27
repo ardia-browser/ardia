@@ -1,0 +1,19 @@
+A tab no longer crashes when a soft navigation's interaction comes before its document's navigation start (#4318).
+`SoftNavigationHeuristics::ReportSoftNavigationToMetrics` checked `CHECK_GT(context->TimeOrigin(),
+loader->GetTiming().ReferenceMonotonicTime())`, and on macOS an input event's timestamp can be older than the reference
+time, so the renderer trapped while painting (28 crashes on 3 Macs on 0.2.48). Chromium 158 already logs and returns
+early on Fuchsia; the Mac now takes the same early return, and upstream main returns early on every platform
+(crbug.com/585428860, `SoftNavigationOutcome::kInvalidTimeOrigin`). Removable when the Chromium we build has upstream's
+fix.
+
+--- a/third_party/blink/renderer/core/timing/soft_navigation_heuristics.cc
++++ b/third_party/blink/renderer/core/timing/soft_navigation_heuristics.cc
+@@ -608,7 +608,7 @@ void SoftNavigationHeuristics::ReportSoftNavigationToMetrics(
+   CHECK_EQ(context->GetSoftNavigationHeuristics(), this);
+ 
+   if (LocalFrameClient* frame_client = frame->Client()) {
+-#if BUILDFLAG(IS_FUCHSIA)
++#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_MAC)
+     if (context->TimeOrigin() <= loader->GetTiming().ReferenceMonotonicTime()) {
+       LOG(ERROR) << "SoftNavigationHeuristics: TimeOrigin ("
+                  << context->TimeOrigin().since_origin().InMicroseconds()

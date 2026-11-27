@@ -20,4 +20,5 @@ export { useSystemReduceMotion, useSystemReduceTransparency } from "@ardia/phone
 
 export const overrideColorScheme = (scheme: "light" | "dark" | null) => Appearance.setColorScheme(scheme ?? "unspecified");
 
+export { rememberLaunchLook } from "@ardia/phone-native";
 export const overridePageScheme = (scheme: "light" | "dark" | null): Promise<boolean | null> => pages.setPageScheme(scheme).catch(() => null);

@@ -275,7 +275,8 @@ using PreferredStyleImp = NSScrollerStyle (*)(id, SEL);
 PreferredStyleImp g_system_scroller_style = nullptr;
 
 NSScrollerStyle ArdiaPreferredScrollerStyle(id self, SEL command) {
-  if (g_thin_scroll_bars) {
+  if (g_thin_scroll_bars &&
+      ![[NSUserDefaults.standardUserDefaults stringForKey:@"AppleShowScrollBars"] isEqualToString:@"Always"]) {
     return NSScrollerStyleOverlay;
   }
   return g_system_scroller_style ? g_system_scroller_style(self, command) : NSScrollerStyleLegacy;

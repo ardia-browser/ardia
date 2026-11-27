@@ -27,6 +27,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { launch, reporter, sleep } from "../../../../scripts/lib/instance.mjs";
+import { codeChecks } from "./codes.mjs";
 import { fakeHelper } from "./fake.mjs";
 import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
 import { loginListChecks } from "./login-list.mjs";
@@ -317,6 +318,7 @@ const CHECKS = {
   ...loginListChecks({ paired, sites }),
   ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E12", "E13", "E15", "E34", "E35", "E36", "E37"]),
   ...savingChecks({ paired, sites }),
+  ...codeChecks({ paired, sites }),
 };
 
 const names = wanted.length ? wanted : Object.keys(CHECKS);

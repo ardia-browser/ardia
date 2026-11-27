@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { BOOTSTRAP, clientPackages, DESKTOP_ROUTES, desktopDeadlines, desktopRoutes, loadDesktopHost, loadDomains, loadModuleDomains, MANIFEST, outputs, realOutputs, ROOT, spliceDeadlines, validate, validateDesktopHost, validateModuleDomain, validateModuleNames, validateTopics } from "./generate.mjs";
+import { BOOTSTRAP, clientPackages, DESKTOP_OMITTED, DESKTOP_ROUTES, desktopDeadlines, desktopRoutes, loadDesktopHost, loadDomains, loadModuleDomains, MANIFEST, outputs, realOutputs, ROOT, spliceDeadlines, validate, validateDesktopHost, validateModuleDomain, validateModuleNames, validateTopics } from "./generate.mjs";
 
 const GENERATOR = fileURLToPath(new URL("./generate.mjs", import.meta.url));
 const runAt = (generator, ...args) => spawnSync(process.execPath, [generator, ...args], { encoding: "utf8" });
@@ -20,6 +20,23 @@ test("every generated file matches the schema byte for byte", async () => {
   const result = run("--check");
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, `up to date: ${(await realOutputs()).size} files\n`);
+});
+
+test("the desktop's left-out list holds exactly the module functions and constants that are optional and absent on the desktop, sorted", () => {
+  const modules = {
+    demo: moduleDomain({
+      ArdiaDemo: {
+        functions: { probe: fn({ async: false, optional: true }), hold: fn(), served: fn({ desktop: "host", optional: true }), counts: fn({ async: false, optional: true, mac: "absent", windows: "custom" }) },
+        constants: { shownOnly: { type: "boolean", optional: true, mac: "custom", desktop: "absent", windows: "absent" }, size: { type: "number", mac: "custom", desktop: "absent", windows: "absent" } },
+        events: {},
+      },
+    }),
+  };
+  assert.equal(outputs({}, modules).get(DESKTOP_OMITTED), 'export const DESKTOP_OMITTED: readonly string[] = [\n  "ArdiaDemo.counts",\n  "ArdiaDemo.probe",\n  "ArdiaDemo.shownOnly",\n];\n');
+  assert.equal(outputs({}, {}).get(DESKTOP_OMITTED), "export const DESKTOP_OMITTED: readonly string[] = [\n];\n");
+  const real = readFileSync(ROOT + DESKTOP_OMITTED, "utf8");
+  for (const name of ["ArdiaSync.takeOpenFailures", "ArdiaSync.takeFileCounts", "ArdiaDialogs.dismissesShownOnly"]) assert.ok(real.includes(`"${name}",`), name);
+  assert.ok(!real.includes('"ArdiaAppWindows.windowIds"'), "a required function the desktop serves through an alias stays reachable");
 });
 
 test("the generator takes exactly one mode", () => {

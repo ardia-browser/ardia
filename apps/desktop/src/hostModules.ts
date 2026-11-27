@@ -14,6 +14,7 @@ import { cliModuleMethod } from "./hostCli.ts";
 import { configModuleMethod } from "./hostConfig.ts";
 import { glassAppearanceSupported } from "./liquidGlassSupport.ts";
 import { BOOKMARKS_EXPORT_CALL, bookmarksExportCall } from "./hostBookmarksExport.ts";
+import { DESKTOP_OMITTED } from "../../../packages/ardiacore/src/engine/generated/desktopOmitted.ts";
 
 const synchronousDefaults: Record<string, Record<string, unknown>> = {
   ArdiaApp: { apiVersion: 0 },
@@ -41,10 +42,13 @@ const pageOptionCalls: ReadonlySet<string> = new Set(PAGE_OPTION_CALLS);
 const SHARED_FOLDER_LOCATION = "ArdiaSharedFolders.location";
 const NO_SHARED_LOCATION = { path: "", iCloudAvailable: false, iCloudPath: "" };
 
+const desktopOmitted: ReadonlySet<string> = new Set(DESKTOP_OMITTED);
+export const omittedOnDesktop = (module: string, member: string) => desktopOmitted.has(`${module}.${member}`);
+
 const nativeFallthroughs = new WeakSet<object>();
 export const reachesNativeHostUnchecked = (resolved: unknown) => typeof resolved === "function" && nativeFallthroughs.has(resolved);
 
-export function resolveHostModule(host: ArdiaHost, name: string, method: string): unknown {
+export function resolveHostModule(host: ArdiaHost, name: string, method: string, requested: string = name): unknown {
   if (name === "ArdiaApp" && method === "launchConfig") return () => hostLaunchConfig(host);
   if (name === "ArdiaSharedFolders" && method === "location" && hostSupports(SHARED_FOLDER_LOCATION, host)) {
     return () => host.bootstrap.nativeModules?.ArdiaSharedFolders?.location ?? NO_SHARED_LOCATION;
@@ -105,6 +109,7 @@ export function resolveHostModule(host: ArdiaHost, name: string, method: string)
   if (constants && method in constants) return constants[method];
   const defaults = synchronousDefaults[name];
   if (defaults && method in defaults) return defaults[method];
+  if (omittedOnDesktop(requested, method) && !hostSupports(`${name}.${method}`, host)) return null;
   const fallthrough = hostModuleMethod(name, method, host);
   nativeFallthroughs.add(fallthrough);
   return fallthrough;

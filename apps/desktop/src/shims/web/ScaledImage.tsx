@@ -15,7 +15,15 @@ const ScaledImageView = forwardRef<View, ImageProps>(function ScaledImage(props,
   return <View {...(rest as ComponentProps<typeof View>)} ref={ref} role={props.accessibilityLabel ? "img" : undefined} style={[TILE_BOX, box as never, tile as never]} />;
 });
 
+export const resolveAssetSource = (source: unknown): { uri: string } | null => {
+  if (typeof source === "string") return { uri: source };
+  if (Array.isArray(source)) return resolveAssetSource(source[0]);
+  const uri = source && typeof source === "object" ? (source as { uri?: unknown }).uri : undefined;
+  return typeof uri === "string" ? { uri } : null;
+};
+
 export const ScaledImage = Object.assign(ScaledImageView, {
+  resolveAssetSource,
   getSize: WebImage.getSize,
   prefetch: WebImage.prefetch,
   queryCache: WebImage.queryCache,

@@ -1,6 +1,7 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import type { Plugin, UserConfig } from "vite";
@@ -108,6 +109,16 @@ function lazyComponents(): Plugin {
 
 const analyze = !!process.env.ARDIA_DESKTOP_ANALYZE;
 
+const PROJECT = fileURLToPath(new URL("../browser/macos/Ardia.xcodeproj/project.pbxproj", import.meta.url));
+
+export function builtAppVersion(env: Record<string, string | undefined> = process.env, project: () => string = () => readFileSync(PROJECT, "utf8")): string {
+  const given = env.ARDIA_APP_VERSION?.trim();
+  if (given) return given;
+  const marketing = /MARKETING_VERSION = "?([^";]+)"?;/.exec(project())?.[1]?.trim();
+  if (!marketing) throw new Error(`no MARKETING_VERSION in ${PROJECT}; set ARDIA_APP_VERSION to build the desktop UI`);
+  return marketing;
+}
+
 export const resolveExtensions = (mode: DesktopMode): string[] => [
   ...platformSuffixes(mode).flatMap((suffix) => [`${suffix}.tsx`, `${suffix}.ts`]),
   ".web.tsx", ".web.ts", ".web.js", ".tsx", ".ts", ".mjs", ".js", ".jsx", ".json",
@@ -128,6 +139,7 @@ export function webShellConfig(mode: DesktopMode, options: { plugins?: Plugin[];
     ],
     define: {
       __DEV__: "false",
+      __ARDIA_APP_VERSION__: JSON.stringify(builtAppVersion()),
       global: "globalThis",
     },
     resolve: {

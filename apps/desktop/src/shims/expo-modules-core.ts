@@ -92,7 +92,7 @@ function nativeModule(name: string): object {
           if (value !== undefined) return value;
         }
         if (ardiaHost) {
-          return resolveHostModule(ardiaHost, target, key);
+          return resolveHostModule(ardiaHost, target, key, name);
         }
         const values = moduleValues[target];
         if (values && key in values) return values[key];

@@ -224,6 +224,8 @@ jobs:
           Write-Host "::error::pnpm install failed $attempts times"
           exit 1
       - name: Build the desktop UI for Windows
+        env:
+          ARDIA_APP_VERSION: ${{ env.VERSION }}
         run: pnpm -C apps/desktop build:win
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:

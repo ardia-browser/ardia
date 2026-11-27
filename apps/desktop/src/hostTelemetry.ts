@@ -22,6 +22,8 @@ import { startTelemetryLeadership, TELEMETRY_CHANNEL, type LeaderChannel, type L
 import { TELEMETRY_DOCUMENTS, TELEMETRY_STATE_DOC as STATE_DOC } from "./telemetryDocuments.ts";
 import { createEndLedger, setTelemetrySettle } from "./telemetrySettle.ts";
 import { parseChoiceChange, shownAfter } from "./telemetryChoice.ts";
+import { endSessionAtNativeClose } from "./nativeCloseTelemetry.ts";
+import { useBrowser } from "../../browser/src/state/browser/store";
 import { applyChoiceDurably, followerChoiceSaved } from "./telemetryChoiceApply.ts";
 
 const TELEMETRY_POST = "ArdiaTelemetry.post";
@@ -67,6 +69,13 @@ export const reportRecoverableRender = (error: unknown) => captureException(reco
 
 let sessionEnded = false;
 const ends = createEndLedger();
+
+function endAtNativeClose() {
+  if (sessionEnded) return;
+  sessionEnding();
+  sessionEnded = true;
+  ends.end();
+}
 
 async function saveState() {
   await saveQueueNow(END_TIMEOUT_MS);
@@ -201,6 +210,7 @@ export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolea
   setInterval(() => {
     if (!current.leading()) emitWindowUsage(consentNow());
   }, WINDOW_USAGE_MS);
+  endSessionAtNativeClose({ host, windowId: host.bootstrap.windowId, leading: () => current.leading(), windowOrder: () => useBrowser.getState().windowOrder, end: endAtNativeClose });
   if (isLinuxUtility(options.host.bootstrap.windowId)) setCountsRelayNow((consent) => {
     if (!current.leading()) emitWindowUsage(consent);
   });

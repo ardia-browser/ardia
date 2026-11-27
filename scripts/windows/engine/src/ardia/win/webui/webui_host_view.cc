@@ -5,6 +5,7 @@
 #include <dwmapi.h>
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <optional>
 #include <set>
@@ -30,6 +31,7 @@
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/process/kill.h"
+#include "base/process/process.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -1539,6 +1541,11 @@ std::string ShellHostView::BootstrapJson() const {
   info.Set("locale", "en-US");
   info.Set("updates", false);
   info.Set("isolatedInstance", true);
+  if (const base::Time started = base::Process::Current().CreationTime();
+      !started.is_null()) {
+    info.Set("processStart",
+             std::floor(started.InMillisecondsFSinceUnixEpochIgnoringNull()));
+  }
   base::ListValue capabilities;
   for (std::string_view capability : HostCapabilities(is_utility())) {
     capabilities.Append(capability);

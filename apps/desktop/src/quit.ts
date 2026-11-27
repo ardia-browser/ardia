@@ -2,6 +2,8 @@ import type { ConfirmOptions, DialogsNative } from "@ardia-real/shell";
 import { useBrowser } from "../../browser/src/state/browser/store";
 import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
 import { PLATFORM_TERMS } from "../../browser/src/lib/platformTerms";
+import { closesWithoutDrain } from "./nativeCloseTelemetry.ts";
+import { reopenTelemetry, settleTelemetry } from "./telemetrySettle.ts";
 
 export const QUIT_COMMAND = "quit";
 export const QUIT_LOCK = "ardia.linux.quit";
@@ -64,6 +66,16 @@ const browserLocks = (): QuitLocks | undefined => typeof navigator === "undefine
 const QUIT_ROUTE = "ArdiaShell.quit";
 const DOWNLOADS_IN_PROGRESS = "ArdiaShell.downloadsInProgress";
 
+export async function quitEndingTelemetry(host: ArdiaHost, settle = settleTelemetry, reopen = reopenTelemetry) {
+  const ended = closesWithoutDrain(host) ? await settle(true).catch(() => null) : null;
+  try {
+    return await invokeHost("ArdiaShell.quit", { args: [] }, host);
+  } catch (error) {
+    if (ended) await reopen(ended).catch(() => {});
+    throw error;
+  }
+}
+
 export function createHostQuit(host: ArdiaHost, ask: QuitAsk, locks: QuitLocks | undefined = browserLocks()) {
   if (!hostSupports(QUIT_ROUTE, host))
     return () => Promise.reject(quitError("ERR_UNAVAILABLE", `Quitting isn't available in this ${PLATFORM_TERMS.os} build`));
@@ -78,7 +90,7 @@ export function createHostQuit(host: ArdiaHost, ask: QuitAsk, locks: QuitLocks |
       if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) throw quitError("ERR_QUIT", "The download count is unreadable");
       return count;
     },
-    quit: () => invokeHost("ArdiaShell.quit", { args: [] }, host),
+    quit: () => quitEndingTelemetry(host),
     locks,
   });
 }

@@ -119,28 +119,28 @@ final class WebKitLogins: NSObject {
     }
   }
 
-  func fieldPressed(_ tab: WebKitTab, data: [String: Any], origin: WKSecurityOrigin) {
-    guard let frame = WebKitLoginsReport.frameOrigin(origin, claimed: data["origin"]), let report = WebKitLoginsReport.read(data) else { return close(tab) }
-    pressed(tab, report: report, origin: frame)
+  func fieldPressed(_ tab: WebKitTab, data: [String: Any], frame: WKFrameInfo) {
+    guard let origin = WebKitLoginsReport.frameOrigin(frame.securityOrigin, claimed: data["origin"]), let report = WebKitLoginsReport.read(data) else { return close(tab) }
+    pressed(tab, report: report, origin: origin, frame: frame)
   }
 
-  private func pressed(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String) {
+  private func pressed(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String, frame: WKFrameInfo) {
     switch report.event {
-    case "show", "input": show(tab, report: report, origin: origin)
+    case "show", "input": show(tab, report: report, origin: origin, frame: frame)
     case "key": key(tab, report.key)
     case "passwordInput" where LoginList.shared.isShown(for: tab): return
     default: close(tab)
     }
   }
 
-  private func show(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String) {
+  private func show(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String, frame: WKFrameInfo) {
     ticket += 1
     let asked = ticket
     Self.verdict(.fill, for: tab.profile) { [weak self, weak tab] verdict in
       guard let self, let tab, asked == self.ticket else { return }
       switch verdict {
-      case .ardia where report.kind != .code: self.showFilling(tab, report: report, origin: origin)
-      case .applePasswords: self.showApplePasswords(tab, report: report, origin: origin)
+      case .ardia where report.kind != .code && frame.isMainFrame: self.showFilling(tab, report: report, origin: origin)
+      case .applePasswords: self.showApplePasswords(tab, report: report, origin: origin, frame: frame)
       default: self.close(tab)
       }
     }
@@ -151,8 +151,9 @@ final class WebKitLogins: NSObject {
     return NSRect(x: page.minX * zoom, y: page.minY * zoom, width: page.width * zoom, height: page.height * zoom)
   }
 
-  private func showApplePasswords(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String) {
+  private func showApplePasswords(_ tab: WebKitTab, report: WebKitLoginsReport, origin: String, frame: WKFrameInfo) {
     guard let view = tab.webView, let window = tab.window, Self.pageOrigin(tab) == origin else { return close(tab) }
+    tab.loginListFrame = frame.isMainFrame ? nil : frame
     var field = LoginListField(
       frameOrigin: origin, screenRect: window.convertToScreen(tab.convert(Self.fieldRect(report.rect, in: view), to: nil)),
       trigger: report.event == "input" ? .typing : .press, typed: report.typed, kind: report.kind)

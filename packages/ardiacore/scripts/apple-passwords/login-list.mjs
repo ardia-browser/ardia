@@ -224,6 +224,34 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await tab.close();
       }
     },
+    async E28frame() {
+      const seen = {};
+      for (const frameHost of ["example.localhost"]) {
+        const tab = await open("example.localhost", `/framed?frame=${frameHost}`);
+        const framed = () => tab.value(`${PAGE_EVENTS}.filter((e) => e[0] === "framed").map((e) => e.slice(1).join(":"))`);
+        try {
+          const frame = await waitFor("the frame", () => tab.value(`(() => { const r = document.getElementById("frame").getBoundingClientRect(); return { x: r.x, y: r.y } })()`), 5000);
+          await waitFor(`the sign-in page framed from ${frameHost}`, async () => {
+            await tab.clickAt(frame.x + 190, frame.y + 55);
+            return (await framed())?.includes("focusin:u") || null;
+          }, 10_000);
+          const rows = await tab.waitRows(`the Login list in a frame from ${frameHost}`);
+          assert(q(titles(rows)) === q([...usersFor("example.localhost"), FOOTER]), `a sign-in frame from ${frameHost} on example.localhost lists the site's logins`, rows);
+          await tab.pick(usersFor("example.localhost")[0]);
+          const events = await waitFor(`the fill in the frame from ${frameHost}`, async () => {
+            const now = await framed();
+            return now?.includes("change:p") ? now : null;
+          }, 10_000).catch(async () => {
+            throw new Error(`the picked login fills the frame from ${frameHost}: saw ${q(await framed())}`);
+          });
+          assert(q(events.filter((e) => !e.startsWith("focusin")).slice(-4)) === q(["input:u", "change:u", "input:p", "change:p"]), `the frame from ${frameHost} hears input and change`, events);
+          seen[frameHost] = titles(rows);
+        } finally {
+          await tab.close();
+        }
+      }
+      return { engine: engineName, ...seen };
+    },
     async E14() {
       const tab = await open("plain.localhost");
       try {

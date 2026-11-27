@@ -54,6 +54,18 @@ extension WebKitLogins {
   };
   const codeField = (el) =>
     location.protocol === "https:" && !!el && el.tagName === "INPUT" && /^(text|tel|number|)$/i.test(attribute(el, "type")) && !el.value && seen(el) && asksForCode(el);
+  const inTopViewport = (el) => {
+    const r = el.getBoundingClientRect();
+    let x = r.left, y = r.top;
+    for (let view = el.ownerDocument.defaultView; view && view !== view.top; view = view.parent) {
+      const host = view.frameElement;
+      if (!host) return null;
+      const at = host.getBoundingClientRect();
+      x += at.left + host.clientLeft;
+      y += at.top + host.clientTop;
+    }
+    return { x, y, width: r.width, height: r.height };
+  };
   let active = null;
   let open = false;
   let picking = false;
@@ -66,12 +78,13 @@ extension WebKitLogins {
     if (!found && !code) return hide();
     const isPassword = el.type === "password";
     const fresh = isPassword ? newPasswords(el) : [];
+    const r = inTopViewport(el);
+    if (!r) return hide();
     active = { el, found, code, fresh };
-    const r = el.getBoundingClientRect();
     post("loginField", {
       event, origin: location.origin, password: isPassword, code, newPassword: fresh.length > 0, ...(fresh.length ? passwordRules(fresh) : {}),
       value: isPassword || code ? "" : String(el.value || "").slice(0, 200),
-      x: r.left, y: r.top, width: r.width, height: r.height,
+      x: r.x, y: r.y, width: r.width, height: r.height,
     });
   };
   addEventListener("pointerdown", (e) => {

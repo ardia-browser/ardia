@@ -36,6 +36,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   }
   private(set) var muted = false
   var pageMedia = WebKitPageMedia()
+  var loginListFrame: WKFrameInfo?
   var life = WebKitTabLife()
   var sightObserver: NSObjectProtocol?
   var errorURL: URL?

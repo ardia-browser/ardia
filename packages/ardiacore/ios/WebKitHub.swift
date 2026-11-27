@@ -81,7 +81,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     controller.addUserScript(WKUserScript(source: WebKitPageScript.source, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: Self.world))
     controller.add(self, contentWorld: Self.world, name: "ardia")
     controller.addUserScript(WKUserScript(source: WebKitPageScript.mediaBridge, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page))
-    controller.addUserScript(WKUserScript(source: WebKitLogins.script, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: Self.world))
+    controller.addUserScript(WKUserScript(source: WebKitLogins.script, injectionTime: .atDocumentEnd, forMainFrameOnly: false, in: Self.world))
     WebKitAutofill.attach(controller)
     controller.addUserScript(WKUserScript(source: WebKitNotifications.worldBridge, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: Self.world))
     controller.addUserScript(WKUserScript(source: WebKitNotifications.pageShim, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))

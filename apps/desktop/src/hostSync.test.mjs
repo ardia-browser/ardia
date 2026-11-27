@@ -252,6 +252,26 @@ test("a skipped login isn't held while a key reset has the held store suspended"
   assert.deepEqual(await held.merge("", []), []);
 });
 
+test("a skipped save that began before a key reset holds nothing after the reset finished", async () => {
+  const origin = "https://bank.example";
+  const held = createHeldLogins(heldIo());
+  const host = fakeHost(async (method) => {
+    if (method === "ArdiaSync.readPasswords") return [];
+    if (method !== "ArdiaSync.savePassword") return null;
+    held.suspend();
+    await held.clear();
+    held.resume();
+    return "skipped";
+  });
+  configureHeldLogins(held);
+  try {
+    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", origin, "alice", "LONG", ""), false);
+  } finally {
+    configureHeldLogins(null);
+  }
+  assert.deepEqual(await held.merge("", []), []);
+});
+
 test("a held login is sealed at rest and hides the local value it replaced across restarts until that value really changes", async () => {
   const io = heldIo();
   const v1 = { origin: "https://bank.example", username: "alice", sealed: "V1", created: 5 };

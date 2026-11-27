@@ -197,6 +197,7 @@ export function createHeldLogins(io: HeldLoginsIo, limits: { maxLogins?: number;
   const maxBytes = limits.maxBytes ?? HELD_LOGINS_MAX_BYTES;
   let held: HeldByProfile | null = null;
   let suspended = 0;
+  let resets = 0;
   let queue: Promise<unknown> = Promise.resolve();
   const refused = new Set<string>();
   const inTurn = <T>(change: () => Promise<T>): Promise<T> => {
@@ -264,13 +265,18 @@ export function createHeldLogins(io: HeldLoginsIo, limits: { maxLogins?: number;
         ];
       }),
     hold: (profile: string, login: HeldLogin): Promise<boolean> => inTurn(() => put(profile, login)),
-    holdIf: (profile: string, login: HeldLogin, before: HeldLogin | null, stillCurrent: () => Promise<boolean>): Promise<boolean> =>
+    holdIf: (
+      profile: string,
+      login: HeldLogin,
+      before: { held: HeldLogin | null; resets: number },
+      stillCurrent: () => Promise<boolean>,
+    ): Promise<boolean> =>
       inTurn(async () => {
-        if (suspended) return false;
+        if (suspended || resets !== before.resets) return false;
         const current = await load();
-        if (!current) return false;
+        if (!current || suspended || resets !== before.resets) return false;
         const now = current[profile]?.[loginKey(login.origin, login.username)] ?? null;
-        if (now?.sealed !== before?.sealed || now?.replaced !== before?.replaced) return false;
+        if (now?.sealed !== before.held?.sealed || now?.replaced !== before.held?.replaced) return false;
         return (await stillCurrent()) && put(profile, login);
       }),
     release: (profile: string, origin: string, username: string): Promise<boolean> =>
@@ -305,7 +311,9 @@ export function createHeldLogins(io: HeldLoginsIo, limits: { maxLogins?: number;
       }),
     suspend() {
       suspended++;
+      resets++;
     },
+    resets: () => resets,
     resume() {
       suspended = Math.max(0, suspended - 1);
     },
@@ -482,6 +490,7 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
     return async (profile: string, origin: string, username: string, sealed: string, replaced: string) => {
       const store = heldLogins;
       const owner = hostProfile(profile, host);
+      const resets = store?.resets() ?? 0;
       const heldNow = store ? await store.heldFor(profile, origin, username) : null;
       const engineHad = heldNow?.sealed === replaced ? heldNow.replaced : replaced || null;
       const saved = await invoke(host, method)(owner, origin, username, sealed, engineHad ?? "");
@@ -490,7 +499,7 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
         return saved === true;
       }
       if (!store) return false;
-      return store.holdIf(profile, { origin, username, sealed, replaced: engineHad }, heldNow, async () => {
+      return store.holdIf(profile, { origin, username, sealed, replaced: engineHad }, { held: heldNow, resets }, async () => {
         const local = (await invoke(host, "readPasswords")(owner)) as SealedLogin[] | null;
         return !!local && (local.find((login) => login.origin === origin && login.username === username)?.sealed ?? null) === engineHad;
       });

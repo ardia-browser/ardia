@@ -5,7 +5,7 @@ import { curve, duration } from "../ui/motion";
 import { ARC_PEEK_OUT_MS, PEEK_IN_MS } from "./tokens";
 import { backgroundInstance } from "../../state/app/appSettings";
 import { consentToken, type ConsentToken } from "../../state/telemetry/client";
-import { noteSidebarPeekPastTarget } from "../../state/telemetry/dockCounts";
+import { noteSidebarEdgeRevealThroughOverlay, noteSidebarPeekPastTarget } from "../../state/telemetry/dockCounts";
 
 const SLIDE_MS = duration.base;
 const appInFront = () => backgroundInstance || AppState.currentState === "active";
@@ -24,6 +24,7 @@ export function usePeek(
   const heldBack = useRef(false);
   const out = useRef(false);
   const waitingForFocus = useRef(false);
+  const overlayPending = useRef(false);
   const reveal = useRef<{ consent: ConsentToken | null; pastTarget: boolean } | null>(null);
   const animate = (to: number, done?: () => void) =>
     (to > 0
@@ -42,10 +43,11 @@ export function usePeek(
       setLeaving(false);
     });
   };
-  const show = () => {
+  const open = (throughOverlay: boolean) => {
     clearTimeout(hideTimer.current);
     heldBack.current = false;
     if (!enabled) return;
+    overlayPending.current = throughOverlay || (waitingForFocus.current && overlayPending.current);
     if (!out.current && !appInFront()) {
       waitingForFocus.current = true;
       return;
@@ -53,15 +55,20 @@ export function usePeek(
     waitingForFocus.current = false;
     if (!out.current) {
       reveal.current = { consent: consentToken(), pastTarget: false };
+      if (overlayPending.current) noteSidebarEdgeRevealThroughOverlay(reveal.current.consent);
       onOpen(live);
     }
+    overlayPending.current = false;
     out.current = true;
     setLeaving(false);
     setLive(true);
     animate(1);
   };
+  const show = () => open(false);
+  const showThroughOverlay = () => open(true);
   const cancelPending = (pointerStillAtEdge = false) => {
     waitingForFocus.current &&= pointerStillAtEdge;
+    overlayPending.current &&= waitingForFocus.current;
   };
   const hide = (now = false) => {
     clearTimeout(hideTimer.current);
@@ -83,7 +90,7 @@ export function usePeek(
     out.current = false;
     reveal.current = null;
     heldBack.current = false;
-    waitingForFocus.current = false;
+    waitingForFocus.current = overlayPending.current = false;
     setLive(false);
     setLeaving(false);
   };
@@ -101,10 +108,10 @@ export function usePeek(
   }, []);
   useEffect(() => {
     if (enabled) return;
-    waitingForFocus.current = false;
+    waitingForFocus.current = overlayPending.current = false;
     clearTimeout(hideTimer.current);
     if (live) slideOut();
   }, [enabled]);
   useEffect(() => () => clearTimeout(hideTimer.current), []);
-  return { slide, live, leaving, show, hide, recheck, cancelPending, reset, sampleSlide };
+  return { slide, live, leaving, show, showThroughOverlay, hide, recheck, cancelPending, reset, sampleSlide };
 }

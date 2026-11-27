@@ -1,0 +1,31 @@
+Ardia is a web browser for iPhone. If you use Ardia on a Mac, it is also that Mac's browser in your pocket, with the same Spaces, the same pinned sites and the tabs you left open there. It works fine without a Mac too. There's no account and nothing to sign in to.
+
+YOUR TABS AS A DECK
+Swipe up from the bar and every open tab shows as a card. Swipe a card up to close it. Tabs you haven't opened in a day move to the Archive, so the deck stays short and nothing is lost. You pick how long in Settings.
+
+PINCH TO SUMMARIZE
+Pinch in on a page. It folds into a card and your iPhone writes a summary under it, a line at a time. Apple Intelligence writes it on the phone. Turn it on in Settings › Experimental.
+
+BROWSE FOR ME
+Type a question and tap Browse for Me. Ardia reads the top pages for you and writes one answer, with a numbered source after each claim so you can check it. Apple Intelligence writes the answer on your iPhone. On an iPhone without it, you get the most relevant sentences from those pages, each one cited. Talk to Me reads the answer aloud in a voice that also runs on the phone, after a one-time download.
+
+FROM YOUR MAC
+Connect to Ardia on your Mac by scanning a code, and its open tabs show up in Spaces under the Mac's name. Send a page to the Mac from the page menu, or save it to the Mac's bookmarks with Pin to Mac. Sync runs through an iCloud Drive folder you pick, locked with a key that only your devices hold.
+
+SEARCH, WITH YOUR PINNED SITES
+Tap + and the space's pinned sites sit above the search field, one tap away. Search with the engine you choose, or with your voice.
+
+ALSO
+- Blocks ads, trackers and cookie banners, and takes your own filter lists
+- Reader view for long articles
+- Incognito tabs that keep no history
+- Can be your default browser
+- Widgets, Control Center controls and Home Screen quick actions
+- Open in Ardia from any app's share sheet
+
+PRIVACY
+Your tabs, history and settings stay on your iPhone. Summaries and answers are written on the phone. Usage stats are off unless you turn them on, and then they're only counts and timings, never the sites you visit or what you type. Ardia has no server of its own that your browsing passes through.
+
+You can connect your own ChatGPT plan in Settings › Experimental › Browse for Me if you want its answers instead. Only then do your question and the text of the pages it read go to OpenAI, straight from your iPhone. The settings page says so before you connect.
+
+Ardia is free and open source: github.com/ardia-browser/ardia

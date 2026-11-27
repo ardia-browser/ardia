@@ -35,10 +35,12 @@ constexpr CFTimeInterval kTakeOverLendSeconds = 1;
   const BOOL heldFocus = [responder isKindOfClass:NSView.class] && [(NSView *)responder isDescendantOf:page];
   if (heldFocus) [window makeFirstResponder:nil];
   _standIn.lentTo = holder;
+  _standIn.lentSince = now;
   holder->_standIn.page = page;
   holder->_standIn.tab = _tab;
   holder->_standIn.lender = self;
   holder->_standIn.closes = NO;
+  holder->_standIn.heldSince = now;
   WithoutActions(^{
     page.frame = holder.bounds;
     if (covers) [holder addSubview:page positioned:NSWindowAbove relativeTo:nil];
@@ -62,6 +64,7 @@ constexpr CFTimeInterval kTakeOverLendSeconds = 1;
   ArdiaWebView *holder = _standIn.lentTo;
   if (!page || !self.window || (!holder && page.superview)) return;
   _standIn.lentTo = nil;
+  _standIn.lentSince = 0;
   if (holder && holder->_standIn.page == page) [holder cancelStandIn];
   if (page.superview == self) return;
   if (page.window != self.window) [page removeFromSuperview];
@@ -74,12 +77,16 @@ constexpr CFTimeInterval kTakeOverLendSeconds = 1;
 
 - (void)clearStandIn {
   ArdiaWebView *lender = _standIn.lender;
-  if (lender && lender->_standIn.lentTo == self) lender->_standIn.lentTo = nil;
+  if (lender && lender->_standIn.lentTo == self) {
+    lender->_standIn.lentTo = nil;
+    lender->_standIn.lentSince = 0;
+  }
   _standIn.page = nil;
   _standIn.tab = nil;
   _standIn.lender = nil;
   _standIn.closes = NO;
   _standIn.leaving = NO;
+  _standIn.heldSince = 0;
   _standIn.generation++;
 }
 

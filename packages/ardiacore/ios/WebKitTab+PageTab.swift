@@ -114,7 +114,14 @@ extension WebKitTab: PageTab {
 
   func takeControlPress(clickAt: Double, control: Int) -> Bool { true }
 
-  func exitPictureInPicture() { setPictureInPicture(false) { _ in } }
+  func exitPictureInPicture() {
+    autoPictureInPictureRule.noteRequestedClose()
+    let view = webView
+    setPictureInPicture(false) { [weak self, weak view] answer in
+      guard let self, let view, self.webView === view, answer == .failed else { return }
+      view.autoPictureInPictureRule.requestedCloseFailed()
+    }
+  }
 
   func armElementPick() -> Double { 0 }
 
@@ -147,4 +154,8 @@ extension WebKitTab: PageTab {
   func discard(unload: Bool) -> String { discardPage(unload: unload) }
 
   func sleepIfHidden(for seconds: Double) -> [NSNumber] { [-1] }
+
+  func sleepIfUnused(for seconds: Double) -> [NSNumber] { [-1] }
+
+  func wakeIfSleeping() -> Bool { false }
 }

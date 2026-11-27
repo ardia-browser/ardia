@@ -84,6 +84,8 @@ source_set("core") {
     "ac_fake_media.mm",
     "ac_host_visibility.h",
     "ac_host_visibility.mm",
+    "ac_fatal_note.cc",
+    "ac_fatal_note.h",
     "ac_hooks.h",
     "ac_icon_fetch.mm",
     "ac_installed_bubble.h",

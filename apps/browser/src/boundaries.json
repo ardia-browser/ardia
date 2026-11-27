@@ -10,6 +10,7 @@
   "native": "the browser's own native layer, relaying OS input",
   "import": "a file or browser profile the user chose to import",
   "update": "a release manifest, its signature and the package the browser downloaded for the self-updater, trusted only once the release key's signature verifies",
+  "extension": "a Chrome extension the user installed, through its manifest read from its install folder",
   "release-list": "GitHub's public API, read unauthenticated by the Android app: the repo's android-v release tags and each release's details, which anyone on the network path or a GitHub outage could make malformed"
  },
  "customEvents": {
@@ -33,7 +34,7 @@
   {
    "id": "chromium-page-message:commandWheel",
    "source": "frame",
-   "guard": "Spends only native wheel credits the browser recorded; a page can at most stop a zoom",
+   "guard": "Spends only native wheel credits the browser recorded, each once: a reply takes the oldest credit plus those that arrived before the previous reply (inferred as the wheels Chromium merged into the event it answers, since Chromium sends the next wheel only after the page handled the last) and zooms by their signed sum; the reply's dy must be finite but moves nothing, so a page can at most stop a zoom",
    "checks": [
     "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
    ]
@@ -127,9 +128,26 @@
    ]
   },
   {
+   "id": "chromium-page-message:trustedInput",
+   "source": "frame",
+   "guard": "No payload is read: subframes only, keyed by the frame's verified http(s) origin, at most 16 origins per tab, cleared on each new top document; native answers a later frame of that same origin with how many ms ago it was, only within 5 s, as config.embedInputAgeMs, which the page script takes only as a finite number from 0 to 5000; Linux keeps the same bounded store (LinuxTrustedInputs) and config field",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_page_messages.cc"
+   ]
+  },
+  {
+   "id": "chromium-page-message:autoplayBlocked",
+   "source": "frame",
+   "guard": "A count only, from any frame: AutoplayBlockedCount takes a finite number of at least 1 (not a boolean), clamps it to 20, and the receiver forwards at most one per second per tab; JS clamps again before counting usage_counts.autoplay_plays_blocked",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
    "id": "chromium-page-message:newTabLink",
    "source": "frame",
-   "guard": "Page script sends it only after a trusted click or user activation, http(s) only; native keeps 8 s of notes. Open: notes from any frame (B2)",
+   "guard": "Page script sends it only after a trusted click or user activation, http(s) only; a click the page cancels counts only when, while the click is still being dispatched, window.open returned a new blank window this page opened; native keeps a note only when IsWebAddress takes it (an http:// or https:// address with a host, no credentials, no whitespace or control characters), for 2 s, and swaps one in only for an empty or about:blank tab address. Open: notes from any frame (B2)",
    "checks": [
     "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
    ],
@@ -408,7 +426,7 @@
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 66,
+   "count": 68,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -489,7 +507,10 @@
   {
    "id": "webkit-page-message:pip",
    "source": "frame",
-   "guard": "Boolean only"
+   "guard": "Strict booleans only: a payload whose active is missing or not a real boolean, or whose unloaded is present and not one, is dropped whole; keyed to the posting frame's script id: a close counts only from a frame that reported open, once the last such frame leaves; an unload never arms the closed-while-away hold; at most 8 frames are kept and a dead content process clears them (WebKitAutoPictureInPicture.swift)",
+   "checks": [
+    "packages/ardiacore/tests/webkit-auto-pip.test.mjs#shared hostile inputs"
+   ]
   },
   {
    "id": "webkit-page-message:scroll",
@@ -790,6 +811,17 @@
    "guard": "App lifecycle events from AppKit"
   },
   {
+   "id": "native-page-event:fullScreenTransition",
+   "source": "native",
+   "guard": "The window's report of a page full-screen transition it started: fullScreenTransitionOf passes only a boolean entering, a finite non-negative waitedMs and a string consent epoch and drops anything else as null; notePageFullScreenTransition counts only a way in whose epoch is the current sharing period, so a transition begun with sharing off or in an earlier period is never counted",
+   "checks": [
+    "packages/ardiacore/src/pageEvents.ts#fullScreenTransitionOf",
+    "apps/browser/src/state/telemetry/windowPlacementCounts.ts#notePageFullScreenTransition",
+    "apps/browser/src/hostileInputs.test.mjs"
+   ],
+   "detected": false
+  },
+  {
    "id": "native-channel:notificationResponse",
    "source": "other-app",
    "guard": "A click on a notification the browser showed; routed by the browser's own notification id"
@@ -998,6 +1030,14 @@
    "guard": "sendRecord decoder; sendableUrl lets only http(s) open",
    "checks": [
     "apps/browser/src/state/sync/sentTabsAdapter.ts#sentTabsAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:settingEdits.ts#withSettingEdits",
+   "source": "sync",
+   "guard": "Delegates extraction and every remote read to the wrapped settings adapter, whose SYNCED_SETTINGS and validSettingValue checks guard the records; keepLocal only compares the store's settingsMeta.chosenAt times with record stamps",
+   "checks": [
+    "apps/browser/src/state/sync/settingsAdapter.ts#settingsAdapter"
    ]
   },
   {
@@ -1513,6 +1553,17 @@
    ],
    "findings": [
     "D5"
+   ],
+   "detected": false
+  },
+  {
+   "id": "extension-manifest:newTabPage",
+   "source": "extension",
+   "guard": "chrome_url_overrides.newtab opens only as a path inside its own extension: a 32-letter a-p id, no scheme, whitespace, backslash, control or separator characters, no empty, . or .. segments, at most 1024 characters, only while the extension is enabled, and never in a private window; the Preferences rank is a finite number used only to order enabled overrides",
+   "checks": [
+    "apps/browser/src/state/extensions/newTabPage.ts#extensionNewTabPage",
+    "packages/ardiacore/ios/ArdiaExtensionPackage.mm#ReadManifest",
+    "packages/ardiacore/ios/ArdiaExtensionPackage.mm#NewTabOverrideRanks"
    ],
    "detected": false
   },

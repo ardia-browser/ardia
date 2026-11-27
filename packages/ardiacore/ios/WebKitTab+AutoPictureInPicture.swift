@@ -24,7 +24,7 @@ extension WebKitTab {
     return !playingFrames.isEmpty || view.cameraCaptureState == .active || view.microphoneCaptureState == .active
   }
 
-  var playsForAutoPictureInPicture: Bool { autoPictureInPicture && playsMedia }
+  var playsForAutoPictureInPicture: Bool { autoPictureInPicture && playsMedia && !autoPictureInPictureRule.heldUntilBack }
 
   func watchSight() {
     stopWatchingSight()
@@ -44,11 +44,12 @@ extension WebKitTab {
 
   private var seenByUser: Bool {
     guard let window else { return false }
-    return visible && ArdiaChromeWindowHost.userSees(window)
+    return WebKitFullscreenPage.seen(visible: visible, heldInFullscreen: pageHeldInFullscreen, windowSeen: ArdiaChromeWindowHost.userSees(window), fullscreenWindowSeen: fullscreenWindowSeen)
   }
 
   func updateSight() {
     guard !closed, let window else { return }
+    followPageFullScreen()
     let seen = seenByUser
     let kept = seen && ArdiaChromeWindowHost.userSeesOnlyThroughWindowServer(window)
     if !kept {
@@ -57,18 +58,51 @@ extension WebKitTab {
       pageMedia.keptByWindowServer = true
       emit("autoPictureInPictureKept", ArdiaConsentStamp.begin().onto(["appSwitch": false]))
     }
-    switch autoPictureInPictureRule.sight(seen, enabled: autoPictureInPicture, playing: playsMedia) {
+    let wasHeld = autoPictureInPictureRule.heldUntilBack
+    switch autoPictureInPictureRule.sight(seen, userIn: !ArdiaChromeWindowHost.userInAnotherApp(), inline: !pageHeldInFullscreen, enabled: autoPictureInPicture, playing: playsMedia) {
     case .open:
       let stamp = ArdiaConsentStamp.begin()
-      setPictureInPicture(true, automatic: true) { [weak self] answer in if answer == .nothingPlaying { self?.emit("autoPictureInPictureKept", stamp.onto(["reason": "nothingPlaying"])) } }
+      let request = autoPictureInPictureRule.openRequests
+      let view = webView
+      setPictureInPicture(true, automatic: true, overFullScreen: autoPictureInPictureRule.opensOverFullScreen) { [weak self, weak view] answer in
+        guard let self, let view, !self.closed, self.webView === view else { return }
+        view.autoPictureInPictureRule.answered(request, opened: answer == .opened)
+        if answer == .nothingPlaying { self.emit("autoPictureInPictureKept", stamp.onto(["reason": "nothingPlaying"])) }
+      }
     case .close: setPictureInPicture(false) { _ in }
+    case .heldForFullScreen: ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "autoPictureInPictureFullscreenHold"]))
+    case .closeHeldForFullScreen:
+      setPictureInPicture(false) { _ in }
+      ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "autoPictureInPictureFullscreenHold"]))
     case .none: break
     }
+    if wasHeld && !autoPictureInPictureRule.heldUntilBack { autoPictureInPictureInputsChanged() }
+  }
+
+  private func followPageFullScreen() {
+    autoPictureInPictureRule.pageFullScreen(WebKitFullscreenPage.isOn(webView?.fullscreenState ?? .notInFullscreen), tab: browserId)
   }
 
   private func noteStayedOnAppSwitch() {
     guard !closed, visible, !autoPictureInPictureRule.reportedActive, seenByUser, playsForAutoPictureInPicture else { return }
     emit("autoPictureInPictureKept", ArdiaConsentStamp.begin().onto(["appSwitch": true]))
+  }
+
+  func notePictureInPicture(_ data: [String: Any]?, frame: String) {
+    let wasHeld = autoPictureInPictureRule.heldUntilBack
+    guard let (active, reported) = autoPictureInPictureRule.report(data, from: frame) else { return }
+    if reported.closeAgain { setPictureInPicture(false) { _ in } }
+    if reported.heldNow {
+      emit("autoPictureInPictureKept", ArdiaConsentStamp.begin().onto(["reason": "closedWhileAway"]))
+      autoPictureInPictureInputsChanged()
+    } else if wasHeld && !autoPictureInPictureRule.heldUntilBack {
+      autoPictureInPictureInputsChanged()
+    }
+    emit("pictureInPicture", ["kind": "video", "active": active])
+  }
+
+  func pictureInPicturePageGone() {
+    if autoPictureInPictureRule.pageGone() { emit("pictureInPicture", ["kind": "video", "active": false]) }
   }
 
   func autoPictureInPictureInputsChanged() {

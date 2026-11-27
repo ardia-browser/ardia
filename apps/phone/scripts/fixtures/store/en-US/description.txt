@@ -1,0 +1,3 @@
+Ardia is a web browser for iPhone.
+
+Spaces keep your tabs apart.

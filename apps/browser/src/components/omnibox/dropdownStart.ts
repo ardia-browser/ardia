@@ -11,24 +11,35 @@ import { commandBarTabLimit, keepsOpenTab } from "../../state/omnibox/commandBar
 
 const RECENT = 4;
 
+type Visited = { url: string; lastVisit: number };
+
+export function recentPages<H extends Visited>(history: readonly H[], shownUrl: string, count: number): H[] {
+  const shown = shownUrl ? withoutFragment(shownUrl) : null;
+  const top: { key: string; row: H }[] = [];
+  for (const row of history) {
+    if (top.length === count && row.lastVisit <= top[count - 1]!.row.lastVisit) continue;
+    const key = withoutFragment(row.url);
+    if (key === shown) continue;
+    const same = top.findIndex((t) => t.key === key);
+    if (same >= 0) {
+      if (row.lastVisit <= top[same]!.row.lastVisit) continue;
+      top.splice(same, 1);
+    }
+    let at = top.length;
+    while (at > 0 && top[at - 1]!.row.lastVisit < row.lastVisit) at--;
+    top.splice(at, 0, { key, row });
+    if (top.length > count) top.pop();
+  }
+  return top.map((t) => t.row);
+}
+
 export function useDropdownStart(enabled: boolean, tabId: string, profileId: string): Suggestion[] {
   const url = useTab(tabId, (t) => (enabled ? (t?.url ?? "") : ""));
   const title = useTab(tabId, (t) => (enabled ? (t?.title ?? "") : ""));
   const favicon = useTab(tabId, (t) => (enabled ? (t?.favicon ?? null) : null));
   const historyOn = useSettings((st) => st.commandBarHistory);
   const history = useSuggestionHistory(enabled && historyOn ? profileId : null);
-  const recent = useMemo(() => {
-    const seen = new Set(url ? [withoutFragment(url)] : []);
-    const out: Suggestion[] = [];
-    for (const h of [...history].sort((a, b) => b.lastVisit - a.lastVisit)) {
-      const key = withoutFragment(h.url);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ kind: "page", url: h.url, title: h.title, favicon: h.favicon, visited: true });
-      if (out.length === RECENT) break;
-    }
-    return out;
-  }, [history, url]);
+  const recent = useMemo(() => recentPages(history, url, RECENT).map((h): Suggestion => ({ kind: "page", url: h.url, title: h.title, favicon: h.favicon, visited: true })), [history, url]);
   return useMemo(() => (url ? [{ kind: "page" as const, url, title, favicon }, ...recent] : recent), [url, title, favicon, recent]);
 }
 

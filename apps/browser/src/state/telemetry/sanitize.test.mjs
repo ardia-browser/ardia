@@ -471,3 +471,45 @@ test("ordinary words, identifiers and error text keep reading the same", () => {
     "Couldn't save the sync state; can't retry",
   ]) assert.equal(scrubText(text), text);
 });
+
+test("a crash with the engine's posted-task frames sends them as their own entry after the crash, never on their own", () => {
+  const { exceptions } = nativeCrashExceptions({
+    signal: "SIGTRAP",
+    exceptionType: "EXC_BREAKPOINT",
+    frames: [{ image: "Chromium Framework", offset: 0x896a2b8 }],
+    postedFrames: [{ image: "Chromium Framework", offset: 0x83ab024 }, { image: "Chromium Framework", offset: 0x2b092fc }],
+  });
+  assert.deepEqual(exceptions.map((e) => e.type), ["EXC_BREAKPOINT", "PostedTask"]);
+  assert.deepEqual(exceptions[1].frames.map((f) => f.function), ["Chromium Framework + 0x2b092fc", "Chromium Framework + 0x83ab024"]);
+  assert.deepEqual(nativeCrashExceptions({ frames: [], postedFrames: [] }).exceptions.map((e) => e.type), ["Crash"]);
+});
+
+test("a crash's source places keep their file name through cleanProperties, and anything else in those fields is dropped", () => {
+  assert.deepEqual(cleanProperties({ crash_fatal_at: "logging.cc:843", crash_posted_from: "login_handler.cc:430" }), {
+    crash_fatal_at: "logging.cc:843",
+    crash_posted_from: "login_handler.cc:430",
+  });
+  assert.deepEqual(cleanProperties({ crash_fatal_at: "https://example.com/a.cc:1", crash_posted_from: "/Users/someone/a.cc:2" }), {
+    crash_fatal_at: null,
+    crash_posted_from: null,
+  });
+  for (const host of ["127.0.0.1:443", "example.com:443", "10.0.0.2:8080", "localhost:3000", "internal.example.rs:8443", "a.cc:0"]) {
+    assert.deepEqual(cleanProperties({ crash_fatal_at: host, crash_posted_from: host }), { crash_fatal_at: null, crash_posted_from: null }, host);
+  }
+  const long = `${"soft_navigation_heuristics_".padEnd(57, "x")}.cc:123`;
+  assert.equal(long.length, 64);
+  for (const place of ["task_annotator.cc:91", "RCTScrollView.m:1536", "ac_seams.mm:12", "CrashReports.swift:310", "lib.rs:4", long]) {
+    assert.equal(cleanProperties({ crash_posted_from: place }).crash_posted_from, place);
+  }
+});
+
+test("posted-task frames keep their image names exactly, underscores, spaces and percent signs included", () => {
+  const { exceptions } = nativeCrashExceptions({
+    frames: [{ image: "Chromium Framework", offset: 1 }],
+    postedFrames: [{ image: "libfoo_bar.dylib", offset: 0x20 }, { image: "100% sure", offset: 0x30 }, { image: "Ardia Core", offset: 0x10 }, { image: "/Users/someone/x.dylib", offset: 1 }],
+  });
+  const posted = exceptions.find((e) => e.type === "PostedTask");
+  assert.deepEqual(posted.frames.slice(1).map((f) => f.module), ["Ardia Core", "100% sure", "libfoo_bar.dylib"]);
+  assert.deepEqual(posted.frames.slice(1).map((f) => f.function), ["Ardia Core + 0x10", "100% sure + 0x30", "libfoo_bar.dylib + 0x20"]);
+  assert.ok(!posted.frames[0].module.includes("/Users"), "a path still goes through the path scrubber");
+});

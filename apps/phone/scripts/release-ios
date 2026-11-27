@@ -7,10 +7,12 @@
 #
 # The Expo counterpart of main's scripts/release-ios.sh, which archives the SwiftUI app. Same app record, same
 # bundle ids and extensions, same version scheme: the release version is --version (a stable 0.2.47 or a
-# nightly 0.2.47-nightly.2), without it the Mac app's MARKETING_VERSION. Every target's
-# CFBundleShortVersionString is its Apple form and the app's ArdiaReleaseVersion key carries the release
-# version, so the Settings footer reads "Ardia 0.2.47 Nightly 2 (10)" from TestFlight. The build number must
-# be above the highest App Store Connect holds (apps/phone/scripts/asc.mjs next-build).
+# nightly 0.2.47-nightly.2), without it the Mac app's MARKETING_VERSION. An upload takes the iPhone's pinned
+# version, apps/phone/ios/Config/release-version, which the App Store submission shares, refuses any other
+# --version, and refuses a build below apps/phone/ios/Config/first-iphone-only-build. Every target's
+# CFBundleShortVersionString is its Apple form and the app's ArdiaReleaseVersion key carries the release version,
+# so the Settings footer reads "Ardia 0.2.47 Nightly 2 (10)" from TestFlight. The build number must be above the
+# highest App Store Connect holds (apps/phone/scripts/asc.mjs next-build).
 #
 # The JavaScript is REV's (default HEAD), from a git export as build-sim-app does, compiled with Hermes with
 # the lab off, and handed to the archive's bundle phase through ARDIA_PREBUILT_BUNDLE with a stamp
@@ -66,6 +68,14 @@ while [ $# -gt 0 ]; do
 done
 [[ "$build" =~ ^[1-9][0-9]*$ ]] || die "the build number must be a positive integer (apps/phone/scripts/release-ios --help)"
 [ "$development" = 0 ] || [ "$unsigned" = 0 ] || die "--development signs the build: it can't go with --unsigned"
+
+if [ "$upload" = 1 ]; then
+  pinned="$(node "$here/asc.mjs" version)" || die "the iPhone's pinned version can't be read (above)"
+  firstBuild="$(node "$here/asc.mjs" version --first-build)" || die "the first iPhone-only build can't be read (above)"
+  [ -n "$release_version" ] || release_version="$pinned"
+  [ "$release_version" = "$pinned" ] || die "an upload takes the pinned iPhone version $pinned (apps/phone/ios/Config/release-version), not $release_version: change the pin in a commit"
+  [ "$build" -ge "$firstBuild" ] || die "build $build is below $firstBuild, the first iPhone-only build (apps/phone/ios/Config/first-iphone-only-build)"
+fi
 
 if [ -z "$release_version" ]; then
   release_version="$(mac_marketing_version)"

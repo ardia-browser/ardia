@@ -405,6 +405,67 @@ try {
     }
   });
 
+  await check("call-closed-stays-closed", async () => {
+    const call = await joinedCall();
+    const n = await engine("tabs.devWindowNumber", { tabId: call.tab });
+    const win = (action) => engine("windows.dev", { window: n, action });
+    const appActive = async (on) => {
+      const r = await win(`fakeAppActive:${on ? 1 : 0}`);
+      if (r !== (on ? "1" : "0")) throw new Error(`fakeAppActive: ${JSON.stringify(r)}`);
+    };
+    const out = {};
+    try {
+      await win("fakeOcclusion:visible");
+      await win("fakeWindowServer:shows");
+      await sleep(800);
+      const base = (await pipState(call.t)).pip;
+      await appActive(false);
+      await win("fakeWindowServer:hides");
+      await win("fakeOcclusion:occluded");
+      await until("the call popped out once the window was out of sight", async () => {
+        const p = await pipState(call.t);
+        return p.pip > base && p.open ? p : null;
+      }, 8000);
+      await js(call.t, "documentPictureInPicture.window.close(); true");
+      const closed = await until("the call's window closed", async () => {
+        const p = await pipState(call.t);
+        return !p.open ? p : null;
+      }, 8000);
+      if (closed.camera !== "live") throw new Error(`closing the window ended the call: ${JSON.stringify(closed)}`);
+      for (let round = 0; round < 2; round++) {
+        await win("fakeWindowServer:shows");
+        await win("fakeOcclusion:visible");
+        await sleep(1500);
+        await win("fakeWindowServer:hides");
+        await win("fakeOcclusion:occluded");
+        await sleep(2500);
+        const p = await pipState(call.t);
+        if (p.pip !== closed.pip || p.open) throw new Error(`a glimpse of the window reopened the call closed while away (round ${round}): ${JSON.stringify(p)}`);
+      }
+      out.glimpsesKeptClosed = 2;
+      await win("fakeOcclusion:visible");
+      await appActive(true);
+      await sleep(800);
+      const back = await pipState(call.t);
+      if (back.pip !== closed.pip || back.open) throw new Error(`coming back reopened the call's window: ${JSON.stringify(back)}`);
+      await appActive(false);
+      await win("fakeOcclusion:occluded");
+      await until("popped out again once the person came back and left", async () => {
+        const p = await pipState(call.t);
+        return p.pip > closed.pip && p.open ? p : null;
+      }, 8000);
+      out.popsOutAfterBack = true;
+      await win("fakeOcclusion:visible");
+      await appActive(true);
+      await until("closed on coming back", async () => !(await pipState(call.t)).open, 8000);
+      return out;
+    } finally {
+      await appActive(true).catch(() => null);
+      for (const action of ["fakeWindowServer:hides", "fakeOcclusion:off"]) await win(action).catch(() => null);
+      await closeTab(call.tab);
+    }
+  });
+
   async function appSwitchPopsOutOnlyIfHidden(call, win) {
     const appActive = async (on) => {
       const r = await win(`fakeAppActive:${on ? 1 : 0}`);

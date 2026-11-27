@@ -8,13 +8,13 @@ import { useMenuModel, useMenuOpen, useMenuOpening, useMenuPage, usePageQuiet, u
 import { markMenuPhase } from "../../state/page/menuTiming";
 import { settingsUIAvailable } from "../ui";
 import type { Design } from "../../lib/design";
-import { LibraryNavigation } from "../library/ExpoLibrary";
+import { SettingsNavigation } from "../settings/ExpoSettingsStack";
 import { PageMenuWords, usePageMenuInk } from "./PageMenuWords";
 
 const contentLaidOut = () => markMenuPhase("laidOut");
 const presentationIgnored = () => undefined;
 const UNMEASURED_DETENTS: PresentationDetent[] = ["medium", "large"];
-const LIBRARY_SHEET = [presentationDetents(["large"], { selection: "large" }), presentationDragIndicator("automatic")];
+const FULL_SHEET = [presentationDetents(["large"], { selection: "large" }), presentationDragIndicator("automatic")];
 
 let lastMenuHeight: number | null = null;
 
@@ -64,10 +64,10 @@ function SystemPageMenuContent({ tabId, scroll }: { tabId: string; scroll: RefOb
     lastMenuHeight = fitted;
     setMenuHeight((now) => (now === fitted ? now : fitted));
   };
-  if (page === "library") {
+  if (page === "siteSettings") {
     return (
-      <Group modifiers={LIBRARY_SHEET}>
-        <LibraryNavigation />
+      <Group testID="systemPageMenuSiteSettings" modifiers={FULL_SHEET}>
+        <SettingsNavigation />
       </Group>
     );
   }

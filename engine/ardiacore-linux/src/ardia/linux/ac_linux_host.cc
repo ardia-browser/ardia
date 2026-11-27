@@ -198,6 +198,7 @@
 #include "chrome/common/chrome_switches.h"
 #include "components/search_engines/template_url.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
+#include "components/download/public/common/download_item.h"
 #include "components/input/native_web_keyboard_event.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -208,7 +209,10 @@
 #include "components/sessions/core/session_id.h"
 #include "components/version_info/version_info.h"
 #include "components/zoom/zoom_controller.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/download_item_utils.h"
+#include "content/public/browser/download_manager.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/navigation_entry.h"
@@ -340,6 +344,23 @@ extern void (*g_ardia_linux_tiled_edges_changed)(views::Widget* widget);
 
 namespace ardia {
 namespace {
+
+bool RunsDownload(content::WebContents* contents) {
+  content::DownloadManager* manager = contents->GetBrowserContext()->GetDownloadManager();
+  if (!manager) return false;
+  content::DownloadManager::DownloadVector items;
+  manager->GetAllDownloads(&items);
+  for (download::DownloadItem* item : items) {
+    if (item->GetState() == download::DownloadItem::IN_PROGRESS && content::DownloadItemUtils::GetOriginalWebContents(item) == contents) return true;
+  }
+  return false;
+}
+
+ardiacore::LinuxTabKeptAwake KeptAwake(content::WebContents* contents) {
+  if (!contents || contents->WasDiscarded()) return {};
+  const content::NavigationEntry* entry = contents->GetController().GetLastCommittedEntry();
+  return {.posted_document = entry && entry->GetHasPostData(), .before_unload = contents->NeedToFireBeforeUnload(), .download = RunsDownload(contents)};
+}
 
 constexpr size_t kDocumentLimit = desktop_policy::kDocumentLimit;
 constexpr size_t kAssetLimit = 32 * 1024 * 1024;
@@ -1837,6 +1858,7 @@ class ShellHostView : public views::View,
   base::ListValue UnclaimedTabsForShell() const;
   bool HandsTabsToShell() const;
   TabBinding* Binding(int id);
+  bool TabIsGone(int id);
   TabBinding* ClaimedBinding(const base::DictValue& args);
   std::optional<std::string> MoveTabOffscreen(TabBinding* binding);
   struct PageCommandAuthority {
@@ -5408,6 +5430,16 @@ TabBinding* ShellHostView::Binding(int id) {
   return found == bindings_.end() ? nullptr : found->second.get();
 }
 
+bool ShellHostView::TabIsGone(int id) {
+  if (id <= 0) return false;
+  auto* binding = Binding(id);
+  for (auto& [current, candidate] : bindings_) {
+    if (binding) break;
+    if (std::ranges::find(candidate->replaced_ids, id) != candidate->replaced_ids.end()) binding = candidate.get();
+  }
+  return ardiacore::linux_contract::ReleasedTabIsGone(binding != nullptr, binding && binding->contents());
+}
+
 TabBinding* ShellHostView::ClaimedBinding(const base::DictValue& args) {
   const int id = args.FindInt("id").value_or(0);
   auto* binding = Binding(id);
@@ -6559,7 +6591,11 @@ void ShellHostView::TabCommand(
   } else if (command == "sleepIfHidden") {
     const auto seconds = ardiacore::ParseLinuxSleepSeconds(values);
     if (!seconds) return std::move(done).Run(false, base::Value("sleepIfHidden requires a hidden time in seconds"));
-    return std::move(done).Run(true, base::Value(ardiacore::SleepLinuxTabIfHidden(contents, *seconds)));
+    return std::move(done).Run(true, base::Value(ardiacore::SleepLinuxTabIfHidden(contents, *seconds, KeptAwake(contents))));
+  } else if (command == "sleepIfUnused") {
+    const auto seconds = ardiacore::ParseLinuxSleepSeconds(values);
+    if (!seconds) return std::move(done).Run(false, base::Value("sleepIfUnused requires an unused time in seconds"));
+    return std::move(done).Run(true, base::Value(ardiacore::SleepLinuxTabIfUnused(contents, *seconds, KeptAwake(contents))));
   } else if (command == "setFrozen") {
     const auto frozen = ardiacore::ParseLinuxFrozen(values);
     if (!frozen) return std::move(done).Run(false, base::Value("setFrozen requires a boolean"));
@@ -7704,6 +7740,7 @@ void ShellHostView::Invoke(
     if (!binding && offscreen_released_.erase(args.FindInt("id").value_or(0))) {
       return std::move(done).Run(true, base::Value());
     }
+    if (!binding && TabIsGone(args.FindInt("id").value_or(0))) return std::move(done).Run(true, base::Value());
     if (!binding) return std::move(done).Run(false, base::Value("No owned live tab"));
     binding->ResetPageCommands();
     if (binding->temporary) {

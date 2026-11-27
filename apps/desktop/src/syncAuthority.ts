@@ -24,6 +24,7 @@ export const REMOTE_METHODS = [
   "removeRemoteProfile",
   "removeSyncedDevice",
   "adoptProfileTheme",
+  "retireProfile",
   "useFolder",
   "moveFolder",
   "sendTargets",

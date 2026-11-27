@@ -6,16 +6,6 @@ import { cardHoverProps } from "../sidebar/hoverController";
 import { useHoverCardOrigin } from "../sidebar/hoverMotion";
 import { measureRow, setSidebarUi, type Anchor } from "../../state/sidebar/sidebarUi";
 import { MINI_PLAYER_HEIGHT, MINI_PLAYER_WIDTH, MiniPlayer } from "./MiniPlayer";
-import { useMedia, usePinnedWithMediaControls } from "../../state/media/media";
-
-export function useShowsMiniPlayer(tabId: string | undefined): boolean {
-  const pinned = usePinnedWithMediaControls(tabId);
-  const hasSession = useMedia((s) => {
-    const session = tabId ? s.sessions[tabId] : undefined;
-    return !!session && session.controllable && session.playbackState !== "none" && !!(session.title || session.artwork);
-  });
-  return pinned && hasSession;
-}
 
 export function HoverPlayer({ tabId, windowId, anchor }: { tabId: string; windowId: string; anchor: Anchor }) {
   const origin = useHoverCardOrigin(anchor);

@@ -9,8 +9,10 @@ struct WebKitReportedTheme {
 final class WebKitWebView: WKWebView {
   var onFocus: (() -> Void)?
   var onPressRefused: (() -> Void)?
+  var onNavigate: ((WebKitPagePresses.Navigation) -> Void)?
   private var presses = WebKitPagePresses()
   var mediaFrames: [String: WKFrameInfo] = [:]
+  var fullscreenPlaceholders: [NSView] = []
   var scriptFrames: [String: WKFrameInfo] = [:]
   var playingFrames = Set<String>()
   let nowPlaying = ArdiaNowPlaying()
@@ -57,9 +59,12 @@ final class WebKitWebView: WKWebView {
     case .pass:
       notePress(event)
       return true
-    case .drop: return false
+    case .drop, .swallow: return false
     case .refuse:
       onPressRefused?()
+      return false
+    case .navigate(let direction):
+      onNavigate?(direction)
       return false
     }
   }

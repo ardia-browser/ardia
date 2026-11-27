@@ -5,6 +5,7 @@ import { withShownTab } from "../groups/shownTabs";
 import { inPinnedContainer, isIncognitoProfile, isPinnedRow, newId, pinKeyOf } from "../browser/model";
 import { splitOf, splitTabIdsOf, withSplitRows } from "../splits/splits";
 import { markPinned } from "./pinChoices";
+import { withMirrorsUnpinned } from "../groups/sharedUngroupSplits";
 import type { BrowserWindow, Tab, TabGroup } from "../browser/types";
 
 export type GroupPlacement = { pinned: boolean; beforeId?: string | null; parentId?: string | null };
@@ -122,6 +123,11 @@ export function canMoveGroup(groups: Record<string, TabGroup>, groupId: string, 
 }
 
 export function movingGroup(s: BrowserState, groupId: string, p: GroupPlacement): Partial<BrowserState> {
+  const local = movingGroupHere(s, groupId, p);
+  return s.groups[groupId]?.pinned && local.groups?.[groupId]?.pinned === false ? withMirrorsUnpinned(s, { ...s, ...local }, groupId) : local;
+}
+
+export function movingGroupHere(s: BrowserState, groupId: string, p: GroupPlacement): Partial<BrowserState> {
   const g = s.groups[groupId];
   const w = g && s.windows[g.windowId];
   if (!g || !w || !canMoveGroup(s.groups, groupId, p)) return {};

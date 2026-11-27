@@ -311,8 +311,10 @@ void LinuxPageChannel::Greet(content::RenderFrameHost& frame) {
       LinuxAutoplayBlocked(frame.GetOutermostMainFrame()->GetLastCommittedURL(), frame.GetBrowserContext());
   const bool main = frame.IsInPrimaryMainFrame();
   const bool other_sites = main && PeeksOtherSites();
+  const std::optional<int> embed_input_age_ms =
+      main ? std::nullopt : trusted_inputs_.AgeMs(frame.GetLastCommittedOrigin().Serialize(), Now());
   Call(&frame, "peekConfig", Json(base::Value(Options().PeekConfig(other_sites))));
-  Call(&frame, "config", Json(base::Value(Options().PageConfig(main, block_autoplay, other_sites))));
+  Call(&frame, "config", Json(base::Value(Options().PageConfig(main, block_autoplay, other_sites, embed_input_age_ms))));
 }
 
 void LinuxPageChannel::PushOptions() {
@@ -351,8 +353,13 @@ void LinuxPageChannel::Post(const std::string& kind, const std::string& json) {
 void LinuxPageChannel::Accept(content::RenderFrameHost& frame, LinuxPageMessage message) {
   switch (message.kind) {
     case LinuxPageMessageKind::kHello:
+      if (frame.IsInPrimaryMainFrame()) trusted_inputs_.Reset();
+      return Greet(frame);
     case LinuxPageMessageKind::kPeekHello:
       return Greet(frame);
+    case LinuxPageMessageKind::kTrustedInput:
+      if (!frame.IsInPrimaryMainFrame()) trusted_inputs_.Note(frame.GetLastCommittedOrigin().Serialize(), Now());
+      return;
     case LinuxPageMessageKind::kPeekGone:
       return;
     case LinuxPageMessageKind::kPeek:
@@ -483,6 +490,7 @@ void LinuxPageChannel::RenderFrameHostChanged(content::RenderFrameHost* old_host
 }
 
 void LinuxPageChannel::PrimaryPageChanged(content::Page& page) {
+  trusted_inputs_.Reset();
   ForgetDocument();
   Watch(page.GetMainDocument().GetRenderWidgetHost());
   if (!hooks_) return;

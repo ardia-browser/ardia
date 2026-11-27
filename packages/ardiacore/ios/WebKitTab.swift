@@ -427,7 +427,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
       emit("nowPlaying", ["state": view.nowPlaying.noteFrame(frame, page: data, main: main) ?? NSNull()])
     case "pip":
       let active = dict?["active"] as? Bool ?? false
-      autoPictureInPictureRule.reported(active: active)
+      if autoPictureInPictureRule.reported(active: active) { setPictureInPicture(false) { _ in } }
       emit("pictureInPicture", ["kind": "video", "active": active])
     case "mediaFault":
       if let fault = WebKitMediaFaults.event(dict, from: frameInfo, muted: muted, blockerActive: WebKitContentBlocker.shared.isFiltering && !blocked.exemptLoad) { emit("mediaFault", fault) }

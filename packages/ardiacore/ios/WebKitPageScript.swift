@@ -387,6 +387,7 @@ enum WebKitPageScript {
             return false;
           }
           if (d.fullscreenElement || d.webkitFullscreenElement) return true;
+          for (const v of d.querySelectorAll?.("video") ?? []) if (v.webkitDisplayingFullscreen || v.webkitPresentationMode === "fullscreen") return true;
           if (w === w.parent || w === w.top) return false;
         }
       };

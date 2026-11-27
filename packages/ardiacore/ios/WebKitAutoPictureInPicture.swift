@@ -14,6 +14,7 @@ struct WebKitAutoPictureInPicture {
   private(set) var settlingFromFullScreen = false
   private(set) var openRequests = 0
   private var heldWhileAway = false
+  private var cancelledRequest: Int?
   private var followingTab: Int32?
 
   mutating func pageFullScreen(_ on: Bool, tab: Int32) {
@@ -29,13 +30,16 @@ struct WebKitAutoPictureInPicture {
   }
 
   mutating func answered(_ request: Int, opened: Bool) {
-    if request == openRequests && !opened { autoOpened = false }
+    guard request == openRequests, !opened else { return }
+    autoOpened = false
+    if cancelledRequest == request { cancelledRequest = nil }
   }
 
   mutating func sight(_ nowSeen: Bool, enabled: Bool, playing: Bool) -> Action {
     if nowSeen {
       settlingFromFullScreen = false
       heldWhileAway = false
+      cancelledRequest = nil
     }
     let held = !nowSeen && (fullScreen || settlingFromFullScreen)
     let slipped = held && autoOpened
@@ -43,6 +47,7 @@ struct WebKitAutoPictureInPicture {
     guard held, !heldWhileAway else { return action }
     if action == .close && slipped {
       heldWhileAway = true
+      cancelledRequest = openRequests
       return .closeHeldForFullScreen
     }
     guard action == .none, enabled, playing else { return action }
@@ -64,8 +69,15 @@ struct WebKitAutoPictureInPicture {
     return .close
   }
 
-  mutating func reported(active: Bool) {
-    if !active && reportedActive { autoOpened = false }
+  @discardableResult
+  mutating func reported(active: Bool) -> Bool {
+    if !active && reportedActive {
+      autoOpened = false
+      cancelledRequest = nil
+    }
     reportedActive = active
+    guard active, cancelledRequest == openRequests, fullScreen || settlingFromFullScreen else { return false }
+    cancelledRequest = nil
+    return true
   }
 }

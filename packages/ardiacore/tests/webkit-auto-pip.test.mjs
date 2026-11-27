@@ -100,7 +100,7 @@ test("leaving opens picture in picture and returning closes it through the page'
 });
 
 test("the page's picture in picture reports reach the rule", () => {
-  assert.match(tab, /case "pip":\n\s+let active = dict\?\["active"\] as\? Bool \?\? false\n\s+autoPictureInPictureRule\.reported\(active: active\)/);
+  assert.match(tab, /case "pip":\n\s+let active = dict\?\["active"\] as\? Bool \?\? false\n\s+if autoPictureInPictureRule\.reported\(active: active\) \{ setPictureInPicture\(false\) \{ _ in \} \}/);
 });
 
 test("the sight observer is dropped when the window changes or the tab closes or gives its view away", () => {
@@ -220,4 +220,26 @@ test("the tab tells the rule whether its automatic open request actually opened"
   assert.match(sight, /case \.open:\n\s+let stamp = ArdiaConsentStamp\.begin\(\)\n\s+let request = autoPictureInPictureRule\.openRequests\n\s+let view = webView/);
   assert.match(sight, /setPictureInPicture\(true, automatic: true\) \{ \[weak self, weak view\] answer in\n\s+guard let self, let view, !self\.closed, self\.webView === view else \{ return \}\n\s+view\.autoPictureInPictureRule\.answered\(request, opened: answer == \.opened\)/);
   assert.match(sight, /if answer == \.nothingPlaying \{ self\.emit\("autoPictureInPictureKept", stamp\.onto\(\["reason": "nothingPlaying"\]\)\) \}/);
+});
+
+test("a video in its own native full screen holds an automatic picture in picture, here or in a page above, and a manual one still opens", () => {
+  for (const shown of [{ webkitPresentationMode: "fullscreen" }, { webkitDisplayingFullscreen: true }]) {
+    const playing = video("playing", { paused: false });
+    const native = Object.assign(video("native", { paused: false }), shown);
+    assert.equal(pageWithVideos([playing, native]).pictureInPicture(true, true), false);
+    assert.equal(playing.entered || native.entered, false);
+    const framed = video("framed", { paused: false });
+    const top = { document: { querySelectorAll: () => [Object.assign(video("top", { paused: false }), shown)] } };
+    top.top = top;
+    top.parent = top;
+    assert.equal(pageWithVideos([framed], {}, top).pictureInPicture(true, true), false);
+    assert.equal(framed.entered, false);
+    const asked = video("asked", { paused: false });
+    assert.equal(pageWithVideos([asked, Object.assign(video("other", { paused: true }), shown)]).pictureInPicture(true), true);
+    assert.equal(asked.entered, true);
+  }
+});
+
+test("a pop out the page reports open after full screen cancelled it is closed again", () => {
+  assert.match(tab, /if autoPictureInPictureRule\.reported\(active: active\) \{ setPictureInPicture\(false\) \{ _ in \} \}/);
 });

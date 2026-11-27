@@ -154,4 +154,51 @@ struct AutoPictureInPictureRule {
     rule.pageFullScreen(false, tab: 2)
     #expect(rule.settlingFromFullScreen)
   }
+
+  @Test func `a pop out the page reports open after full screen cancelled it is closed again, once`() {
+    var rule = WebKitAutoPictureInPicture()
+    #expect(rule.sight(false, enabled: true, playing: true) == .open)
+    rule.pageFullScreen(true, tab: 1)
+    #expect(rule.sight(false, enabled: true, playing: true) == .closeHeldForFullScreen)
+    rule.answered(rule.openRequests, opened: true)
+    let closes1 = rule.reported(active: true)
+    #expect(closes1)
+    let closes2 = rule.reported(active: true)
+    #expect(!closes2)
+  }
+
+  @Test func `a picture in picture the person opens in full screen after the cancelled one ended stays open`() {
+    var rule = WebKitAutoPictureInPicture()
+    #expect(rule.sight(false, enabled: true, playing: true) == .open)
+    rule.answered(rule.openRequests, opened: true)
+    let closes3 = rule.reported(active: true)
+    #expect(!closes3)
+    rule.pageFullScreen(true, tab: 1)
+    #expect(rule.sight(false, enabled: true, playing: true) == .closeHeldForFullScreen)
+    let closes4 = rule.reported(active: false)
+    #expect(!closes4)
+    let closes5 = rule.reported(active: true)
+    #expect(!closes5)
+  }
+
+  @Test func `a cancelled pop out the page never opened doesn't close a later one`() {
+    var rule = WebKitAutoPictureInPicture()
+    #expect(rule.sight(false, enabled: true, playing: true) == .open)
+    rule.pageFullScreen(true, tab: 1)
+    #expect(rule.sight(false, enabled: true, playing: true) == .closeHeldForFullScreen)
+    rule.answered(rule.openRequests, opened: false)
+    let closes6 = rule.reported(active: true)
+    #expect(!closes6)
+  }
+
+  @Test func `a late report after the person is back, or once full screen is over and seen, is left alone`() {
+    var rule = WebKitAutoPictureInPicture()
+    #expect(rule.sight(false, enabled: true, playing: true) == .open)
+    rule.pageFullScreen(true, tab: 1)
+    #expect(rule.sight(false, enabled: true, playing: true) == .closeHeldForFullScreen)
+    rule.pageFullScreen(false, tab: 1)
+    #expect(rule.sight(true, enabled: true, playing: true) == .none)
+    let closes7 = rule.reported(active: true)
+    #expect(!closes7)
+  }
 }

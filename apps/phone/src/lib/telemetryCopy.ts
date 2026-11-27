@@ -50,6 +50,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["material_colors"],
       },
       {
+        text: "On Android, with each launch, how many text colors in your wallpaper palette Ardia had to darken or lighten because they were too close to the color behind them to read. Never the colors",
+        fields: ["material_inks_fixed"],
+      },
+      {
         text: "With each launch, whether Ardia last left the screen normally, was still in front when it stopped (a crash, a forced quit or the system ending it), or there was nothing to compare, because this is the first launch or sharing was off then",
         fields: ["previous_session"],
       },
@@ -60,6 +64,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
       {
         text: "In the same daily counts: how many errors in Ardia’s own code it recovered from without stopping. A count only, never the error",
         fields: ["js_errors"],
+      },
+      {
+        text: "In the same daily counts: how many downloads were saved, how many stopped partway, and how many Ardia couldn’t start because of the kind of link. Counts only, never the file, its name or the site, and never from a private tab",
+        fields: ["downloads_saved", "downloads_failed", "downloads_refused"],
       },
       {
         text: "How long Ardia took to open, from when the system started it to its first screen, and how much of that passed before its code began to run",

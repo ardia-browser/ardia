@@ -104,6 +104,38 @@ test("Material You keeps its own snackbar plate, the inverse surface, with the n
   unmount(root);
 });
 
+test("Material You's toast reads on a wallpaper palette whose inverse text nearly matches its fill, in light and in dark", () => {
+  const { DesignProvider } = require("../components/ui") as typeof import("../components/ui");
+  const { setDynamicScheme } = require("../state/app/dynamicScheme") as typeof import("../state/app/dynamicScheme");
+  const { SEEDED_SCHEMES } = require("../lib/material/schemes") as typeof import("../lib/material/schemes");
+  const { contrastBetween } = require("../lib/color") as typeof import("../lib/color");
+  const { currentPreferences, setPreference } = require("../state/settings/store") as typeof import("../state/settings/store");
+  const choiceWas = currentPreferences().colorChoice;
+  const schemeWas = currentPreferences().schemeChoice;
+  setPreference("colorChoice", null);
+  setDynamicScheme({
+    light: { ...SEEDED_SCHEMES.purple.light, inverseSurface: "#131318", inverseOnSurface: "#25252F" },
+    dark: { ...SEEDED_SCHEMES.purple.dark, inverseSurface: "#F5F7FF", inverseOnSurface: "#FFFFFF" },
+  });
+  for (const scheme of ["light", "dark"] as const) {
+    setPreference("schemeChoice", scheme);
+    act(() => useToasts.setState({ toast: null }));
+    const root = renderSurface(
+      <DesignProvider design="material">
+        <ToastHost />
+      </DesignProvider>,
+    );
+    act(() => showToast("Couldn’t Download otter.pdf", "warning"));
+    const fill = StyleSheet.flatten(root.root.findAll((node) => node.props.testID === "toastPlate" && typeof node.type === "string")[0]!.props.style).backgroundColor as string;
+    const ink = StyleSheet.flatten(root.root.findAll((node) => typeof node.type === "string" && node.props.children === "Couldn’t Download otter.pdf")[0]!.props.style).color as string;
+    expect(contrastBetween(fill, ink)).toBeGreaterThanOrEqual(4.5);
+    unmount(root);
+  }
+  setDynamicScheme(null);
+  setPreference("colorChoice", choiceWas);
+  setPreference("schemeChoice", schemeWas);
+});
+
 test("in Incognito the toast's shared plate and ink take the private look, never the profile tint, though the host sits outside the deck", () => {
   const nativeModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
   const glass = jest.spyOn(nativeModule, "glassIsNative").mockImplementation(() => true);

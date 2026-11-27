@@ -90,6 +90,7 @@
   if (baked && baked.host === host) start(baked);
   else if (bridge) {
     const answer = (event) => {
+      if (typeof event.data === "string" && event.data.startsWith("ardiaBlob:")) return;
       bridge.removeEventListener("message", answer);
       const [nextMode, verdict] = String(event.data).split(" ");
       start({ mode: nextMode, verdict });

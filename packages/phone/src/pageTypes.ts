@@ -207,6 +207,7 @@ export type PageEngineEvent =
       mimeType: string | null;
       contentLength: number | null;
       isPrivate: boolean;
+      failure?: DownloadFailure | null;
     }
   | { name: "page.longPress"; pageId: string; target: PressTarget; x: number; y: number }
   | { name: "page.closeRequested"; pageId: string }
@@ -250,7 +251,7 @@ export type DownloadFailure =
 
 export type DownloadEvent =
   | { name: "downloads.progress"; downloads: DownloadProgress[] }
-  | { name: "downloads.finished"; fileName: string; uri: string | null; failure: DownloadFailure | null };
+  | { name: "downloads.finished"; fileName: string; uri: string | null; failure: DownloadFailure | null; isPrivate?: boolean };
 
 export type BlockingCategory = "ads" | "trackers" | "cookieBanners";
 

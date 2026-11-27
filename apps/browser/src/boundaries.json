@@ -2773,6 +2773,23 @@
     "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateHandoff.kt#noteInstallRequest"
    ],
    "detected": false
+  },
+  {
+   "id": "phone-page:ardiaBlob",
+   "source": "frame",
+   "guard": "Android's page downloads that a page builds itself (blob: and data: addresses). Bridge messages from any frame are read only with the ardiaBlob: prefix and in their exact shape (PageMadeDownloads.parse): request tokens are 128-bit SecureRandom hex made per download, sizes and chunk indexes are bounded digits, a chunk is at most 262,144 base64 characters decoded strictly to at most 192 KiB, MIME types are cleaned to type/subtype tokens and names go through DownloadRules.safeFileName, which also drops bidi, zero-width, separator and lone-surrogate characters. A frame with an opaque origin is never asked; a request goes only to frames whose origin is the blob's own origin, the first that answers is bound and every later chunk must come from that frame for the index native asked for, so nothing queues up; a blob over 512 MiB, more bytes than declared, a malformed chunk, the frame failing or going away, the tab closing and 5 s without a first answer, 15 s without a chunk or 10 minutes in all end the download as Failed. A file name announced from a page is taken for a blob only from the blob's origin and for a data address only from the top frame, and kept 30 s. Data addresses are decoded natively (DataUrls.parse), with a 1,024-character header and the same size cap. The shared hostile list runs through every guard in PageMadeDownloadsTest",
+   "checks": [
+    "packages/phone/android/src/main/java/com/ardia/browser/PageMadeDownloads.kt#fun parse",
+    "packages/phone/android/src/main/java/com/ardia/browser/PageMadeDownloads.kt#fun blobOrigin",
+    "packages/phone/android/src/main/java/com/ardia/browser/PageMadeDownloads.kt#fun decodeChunk",
+    "packages/phone/android/src/main/java/com/ardia/browser/PageMadeDownloads.kt#fun cleanMimeType",
+    "packages/phone/android/src/main/java/com/ardia/browser/PageBlobs.kt#fun heard",
+    "packages/phone/android/src/main/java/com/ardia/browser/DataUrls.kt#fun parse",
+    "packages/phone/android/src/main/java/com/ardia/browser/DownloadRules.kt#fun safeFileName",
+    "packages/phone/android/src/test/java/com/ardia/browser/PageMadeDownloadsTest.kt#everySharedHostileValueReachesTheSinksCleanOrNotAtAll",
+    "packages/phone/android/src/test/java/com/ardia/browser/PageBlobsTest.kt#onlyFramesOfTheBlobsOriginAreAskedAndOnlyTheyCanAnswer"
+   ],
+   "detected": false
   }
  ]
 }

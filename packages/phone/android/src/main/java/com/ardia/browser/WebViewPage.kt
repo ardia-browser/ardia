@@ -17,6 +17,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.MimeTypeMap
 import android.webkit.URLUtil
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -94,6 +95,7 @@ internal class WebViewPage(
     private var scrollSource: String? = ROOT_SCROLLER
     private var isNavigatingHistory = false
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val blobs = PageBlobs({ mainHandler.post(it) })
     private val clearHistoryNavigationRunnable = Runnable {
         isNavigatingHistory = false
         webView?.let {
@@ -506,11 +508,13 @@ internal class WebViewPage(
         installNightShade(web, mutableState.value.url)
         if (engine.supportsDocumentStartScripts && engine.supportsMessageListener) {
             WebViewCompat.addDocumentStartJavaScript(web, TouchScrollers.script, setOf("*"))
+            WebViewCompat.addDocumentStartJavaScript(web, PageBlobs.script, setOf("*"))
         }
         if (engine.supportsMessageListener) {
             WebViewCompat.addWebMessageListener(web, PageScripts.BRIDGE_NAME, setOf("*")) { _, message, origin, isMainFrame, reply ->
                 val data = message.data
                 when {
+                    blobs.heard(data, origin.toString(), isMainFrame, reply) { reply.postMessage(it) } -> Unit
                     data == PageScripts.NIGHT_SHADE_MESSAGE -> {
                         val host = BrowserUrl.host(origin.toString())
                         val sites = engine.sitePreferences
@@ -601,6 +605,7 @@ internal class WebViewPage(
         nightShadeHandler = null
         nightShadeSource = null
         nightShadeUrl = null
+        blobs.reset()
         installedStart = null
         installedEnd = null
         installedBundle = null
@@ -942,13 +947,23 @@ internal class WebViewPage(
     }
 
     private fun emitDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?, contentLength: Long) {
-        val linkName = if (mimeType == null && contentDisposition == null) DownloadRules.linkName(url, null, null) { null } else null
-        val fileName = (linkName ?: URLUtil.guessFileName(url, contentDisposition, mimeType))
+        val isBlob = PageMadeDownloads.isBlob(url)
+        val isData = DataUrls.isData(url)
+        val pageMade = isBlob || isData
+        val fallbackName = engine.appContext.getString(R.string.download_fallback_name)
+        val linkName = if (!pageMade && mimeType == null && contentDisposition == null) DownloadRules.linkName(url, null, null) { null } else null
+        val guessedName = (if (isData) fallbackName else linkName ?: URLUtil.guessFileName(url, contentDisposition, mimeType))
             .replace('/', '-')
             .replace(':', '-')
             .trim()
             .trim('.')
-            .ifEmpty { engine.appContext.getString(R.string.download_fallback_name) }
+            .ifEmpty { fallbackName }
+        val announcedName = if (pageMade) blobs.announcedName(url) else null
+        val fileName = if (pageMade) {
+            DownloadRules.pageMadeName(announcedName, guessedName, mimeType, fallbackName) { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
+        } else {
+            guessedName
+        }
         mutableEvents.tryEmit(
             PageEvent.Download(
                 PageDownload(
@@ -957,7 +972,8 @@ internal class WebViewPage(
                     mimeType = mimeType?.ifBlank { null },
                     contentLength = contentLength,
                     userAgent = userAgent,
-                    contentDisposition = contentDisposition,
+                    contentDisposition = announcedName?.let(PageMadeDownloads::dispositionFor) ?: contentDisposition,
+                    source = if (isBlob) blobs.sourceFor(url) else null,
                     referer = mutableState.value.url?.takeIf(BrowserUrl::isWeb),
                     isPrivate = isPrivate,
                     privateSession = if (isPrivate) engine.currentPrivateSession() else null,

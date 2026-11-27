@@ -66,6 +66,23 @@ function contrastRatio(a: readonly number[], b: readonly number[]): number {
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }
 
+export const contrastBetween = (first: string, second: string) =>
+  contrastRatio(parseColor(first).slice(0, 3).map((channel) => channel / 255), parseColor(second).slice(0, 3).map((channel) => channel / 255));
+
+export function readableInkOn(fill: string, ink: string, target = 4.5): string {
+  if (contrastBetween(fill, ink) >= target) return ink;
+  const backdrop = parseColor(fill).slice(0, 3).map((channel) => channel / 255);
+  const origin = parseColor(ink).slice(0, 3).map((channel) => channel / 255);
+  const destination = contrastRatio([1, 1, 1], backdrop) >= contrastRatio([0, 0, 0], backdrop) ? 1 : 0;
+  let candidate = origin;
+  let amount = 0;
+  while (contrastRatio(candidate, backdrop) < target && amount < 1) {
+    amount = Math.min(1, amount + 0.02);
+    candidate = origin.map((channel) => channel + (destination - channel) * amount);
+  }
+  return toHex(candidate.map((channel) => channel * 255));
+}
+
 export function legibleInk(tint: string, dark: boolean, increasedContrast = false): string {
   const target = increasedContrast ? 7 : 4.5;
   const surface = dark ? DARK_SURFACE : LIGHT_SURFACE;

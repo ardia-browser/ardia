@@ -11,6 +11,7 @@ import com.ardia.browser.DevelopmentWebViewEngine
 import com.ardia.browser.DownloadFailure
 import com.ardia.browser.DownloadOutcome
 import com.ardia.browser.DownloadProgress
+import com.ardia.browser.DownloadStart
 import com.ardia.browser.Page
 import com.ardia.browser.PageEvent
 import com.ardia.browser.PageSetup
@@ -459,11 +460,12 @@ object PhonePages {
             }
             is PageEvent.Download -> {
                 val download = event.download
-                val downloadId = downloads.enqueue(download)
+                val started = downloads.start(download)
                 send(
                     id,
                     "page.download",
-                    "downloadId" to downloadId?.toString(),
+                    "downloadId" to (started as? DownloadStart.Started)?.id?.toString(),
+                    "failure" to (started as? DownloadStart.Refused)?.failure?.let(::downloadFailure),
                     "url" to download.url,
                     "fileName" to download.fileName,
                     "mimeType" to download.mimeType,
@@ -502,8 +504,8 @@ object PhonePages {
     )
 
     private fun finished(outcome: DownloadOutcome): Map<String, Any?> = when (outcome) {
-        is DownloadOutcome.Finished -> mapOf("name" to "downloads.finished", "fileName" to outcome.fileName, "uri" to outcome.uri?.toString(), "failure" to null)
-        is DownloadOutcome.Failed -> mapOf("name" to "downloads.finished", "fileName" to outcome.fileName, "uri" to null, "failure" to downloadFailure(outcome.reason))
+        is DownloadOutcome.Finished -> mapOf("name" to "downloads.finished", "fileName" to outcome.fileName, "uri" to outcome.uri?.toString(), "failure" to null, "isPrivate" to outcome.isPrivate)
+        is DownloadOutcome.Failed -> mapOf("name" to "downloads.finished", "fileName" to outcome.fileName, "uri" to null, "failure" to downloadFailure(outcome.reason), "isPrivate" to outcome.isPrivate)
     }
 
     private fun downloadFailure(failure: DownloadFailure): String = when (failure) {

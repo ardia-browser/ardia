@@ -160,6 +160,14 @@ export const focusHandoffCounts = {
   },
 };
 export const pressRepeated: { earlier: { landedOn: string; ms: number } | null } = { earlier: null };
+export const fieldBlurCauses = new Map<number, ("keyLoss" | "inWindow")[]>();
+export const watchedFieldBlurs = new Set<number>();
+const takeFieldBlur = (fieldTag: number) => {
+  const queued = fieldBlurCauses.get(fieldTag);
+  const cause = queued?.shift() ?? "inWindow";
+  if (queued && !queued.length) fieldBlurCauses.delete(fieldTag);
+  return cause;
+};
 
 const focus: Modules["ArdiaFocus"] = {
   setSwitcherCapture: () => Promise.resolve(),
@@ -167,6 +175,8 @@ const focus: Modules["ArdiaFocus"] = {
   saveKeyResponder: () => Promise.resolve(0),
   restoreKeyResponder: () => Promise.resolve(false),
   discardKeyResponder: () => Promise.resolve(),
+  fieldBlurCause: takeFieldBlur,
+  watchFieldBlurs: (fieldTag, watch) => void (watch ? watchedFieldBlurs.add(fieldTag) : watchedFieldBlurs.delete(fieldTag)),
   takeEditKeyAcks: () => editKeyAcks.take(),
   takeInputSourceKeys: () => inputSourceKeys.take(),
   switcherPointerMoved: () => true,

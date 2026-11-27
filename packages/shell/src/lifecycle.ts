@@ -12,7 +12,6 @@ export type AppEvent =
   | { type: "appearance"; dark: boolean }
   | { type: "quitWarningSuppressed" }
   | { type: "resignActive" }
-  | { type: "windowResignedKey"; windowId: string }
   | { type: "screenLocked" }
   | { type: "lockedOrAsleep" }
   | { type: "switcherReleased"; afterMenu?: boolean }

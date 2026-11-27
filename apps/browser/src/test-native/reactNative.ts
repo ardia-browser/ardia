@@ -194,7 +194,7 @@ export const LayoutAnimation = {
   configureNext: (config: unknown) => void layoutAnimations.push(config),
 };
 
-export const findNodeHandle = () => null;
+export const findNodeHandle = (node?: { _nativeTag?: number } | null) => node?._nativeTag ?? null;
 
 export const unstable_batchedUpdates = (update: () => void) => update();
 

@@ -1,7 +1,7 @@
 import { displayUrl, asksForBackspace, keywordBySpace, resolveInput, searchUrl, scopedSearchUrl, suggestionKey, type Suggestion } from "@ardia/core";
 import { Symbol, useTheme } from "../ui";
 import { copyText, pickFiles } from "../../state/app/system";
-import { deferBlurCancel } from "../../state/app/appActive";
+import { barBlurred, barRefocused, useHeldBarCancel } from "../../state/omnibox/barKeyLoss";
 import { chooseFromMenu } from "../../state/app/menuChoice";
 import { dictationAvailable, startDictation } from "../../state/omnibox/textInput";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -279,8 +279,6 @@ export function Omnibox({
     );
 
   const focused = useRef(false);
-  const blurCancel = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(blurCancel.current), []);
   const focusOnce = () => {
     if (focused.current) return;
     focused.current = true;
@@ -290,7 +288,6 @@ export function Omnibox({
     claimFocusTag(windowId, hero ? heroBarFocus(tabId) : commandBarFocus, () => findNodeHandle(input.current));
     journeyBarFocused(tabId);
   };
-
   const field = (
     <BarField
       inputRef={input}
@@ -300,6 +297,7 @@ export function Omnibox({
       incognito={incognito}
       onLayout={focusOnce}
       claim={{ windowId, destination: hero ? heroBarFocus(tabId) : commandBarFocus }}
+      watchBlurs={!!onCancel}
       value={value}
       focusEcho={focusEcho}
       onSelection={(next) => {
@@ -311,8 +309,8 @@ export function Omnibox({
       }}
       onChangeText={onChangeText}
       onSubmitEditing={() => choose(current, "current", true)}
-      onFocus={() => (clearTimeout(blurCancel.current), (editing.current = true), setListAway(false), hero && markNewTabBar("focused", tabId))}
-      onBlur={() => ((editing.current = false), (focusEcho.current = false), clearTimeout(blurCancel.current), onCancel && (blurCancel.current = deferBlurCancel(windowId, () => editing.current, () => latest.current.onCancel?.())))}
+      onFocus={() => ((editing.current = true), setListAway(false), onCancel && barRefocused(windowId, findNodeHandle(input.current)), hero && markNewTabBar("focused", tabId))}
+      onBlur={() => ((editing.current = false), (focusEcho.current = false), onCancel && barBlurred(windowId, findNodeHandle(input.current), cancelHeld))}
       keyDownEvents={barKeyDownEvents(asksForBackspace(scope), isRemovable(current))}
       onKeyDown={onKeyDown}
     />
@@ -320,6 +318,7 @@ export function Omnibox({
 
   const latest = useRef({ choose, profileId, go, current, onCancel, tabId, windowId, releaseRows });
   latest.current = { choose, profileId, go, current, onCancel, tabId, windowId, releaseRows };
+  const cancelHeld = useHeldBarCancel(() => latest.current);
   const [barActions] = useState(() => ({
     go: (url: string) => latest.current.go(url),
     openTabOrFile: () => void openTabOrFile(latest.current.windowId, latest.current.tabId, (url) => latest.current.go(url)),

@@ -13,7 +13,7 @@ import { noteCommandBarKeyDismissal } from "../telemetry/inlineCompletionCounts"
 import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { navigateTyped, noteTypedOpen } from "../plugins/typedAddresses";
 import { focusHeroBar } from "./barState";
-import { startAppActive } from "../app/appActive";
+import { heldBarDismissed } from "./barKeyLoss";
 
 export { isEmptyCardTab };
 
@@ -125,15 +125,18 @@ function noteLaunchCards() {
 
 function dismissBars(except?: string) {
   const s = store();
-  for (const [windowId, ui] of Object.entries(s.windowUi)) if (windowId !== except && ui.panel.newTab) s.closePanel(windowId);
+  for (const [windowId, ui] of Object.entries(s.windowUi)) {
+    if (windowId === except || !ui.panel.newTab) continue;
+    heldBarDismissed(windowId);
+    s.closePanel(windowId);
+  }
 }
 
 export function startNewTabBar() {
-  startAppActive();
   for (const id of Object.keys(store().tabs)) launchTabs.add(id);
   queueMicrotask(noteLaunchCards);
   onAppEvent((e) => {
-    if (e.type === "screenLocked" || (NEW_TAB_BAR_POLICY.dismissOnWindowDeactivation && e.type === "resignActive")) dismissBars();
+    if (e.type === "screenLocked" || (e.type === "resignActive" && NEW_TAB_BAR_POLICY.dismissOnWindowDeactivation)) dismissBars();
   });
   onWindowEvent((e) => {
     if (e.type === "focus") dismissBars(e.id);

@@ -7,6 +7,7 @@ import { PASTED_TYPES } from "./omniboxKeys";
 import { useHeldEscape } from "../ui/fieldKeys";
 import { useClaimFollowsFocus, type FocusClaim } from "./claimFollowsFocus";
 import { useRevertRepair } from "./useRevertRepair";
+import { watchBarField } from "../../state/omnibox/barKeyLoss";
 import { BAR, BAR_TYPE } from "./tokens";
 
 type InputProps = ComponentProps<typeof TextInput>;
@@ -20,6 +21,7 @@ export function BarField({
   focusEcho,
   onSelection,
   claim,
+  watchBlurs = false,
   ...events
 }: {
   inputRef: RefObject<TextInput | null>;
@@ -30,6 +32,7 @@ export function BarField({
   scope: SearchScope | null;
   incognito: boolean;
   claim?: FocusClaim;
+  watchBlurs?: boolean;
 } & Pick<InputProps, "value" | "onLayout" | "onChangeText" | "onSubmitEditing" | "onFocus" | "onBlur" | "keyDownEvents" | "onKeyDown" | "keyUpEvents" | "onKeyUp">) {
   const theme = useTheme();
   const heldEscape = useHeldEscape();
@@ -42,7 +45,8 @@ export function BarField({
   useLayoutEffect(() => {
     const mounted = tag();
     barFieldMarks.field("mount", variant, mounted);
-    return () => barFieldMarks.field("unmount", variant, mounted);
+    const unwatch = watchBlurs ? watchBarField(mounted) : () => {};
+    return () => (barFieldMarks.field("unmount", variant, mounted), unwatch());
   }, []);
   const claimOnFocus = useClaimFollowsFocus(inputRef, claim);
   const repair = useRevertRepair(inputRef, variant, events.value, events.onChangeText, onSelection);

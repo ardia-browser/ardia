@@ -18,7 +18,7 @@ NSUInteger gZoomScrolls = 0;
 NSUInteger gZoomCandidates = 0;
 constexpr NSTimeInterval kSwitchPrewarmGapSeconds = 0.1;
 constexpr double kZoomStepDelta = 30;
-constexpr double kWheelLineDelta = 30;
+constexpr int kMaxZoomStepsPerWheel = 8;
 constexpr CFTimeInterval kCommandWheelCreditSeconds = 0.5;
 constexpr CFTimeInterval kCommandWheelRearmSeconds = 1;
 constexpr NSUInteger kCommandWheelCreditLimit = 64;
@@ -85,6 +85,21 @@ int DirectionOf(double delta) {
   return (delta > 0) - (delta < 0);
 }
 
+double CommandWheelDelta(NSEvent *event) {
+  if (event.hasPreciseScrollingDeltas) return event.scrollingDeltaY;
+  return DirectionOf(event.scrollingDeltaY) * kZoomStepDelta;
+}
+
+int TakeZoomSteps(double delta) {
+  gZoomScrolls++;
+  if (DirectionOf(delta) && DirectionOf(delta) != DirectionOf(gZoomAccumulated)) gZoomAccumulated = 0;
+  gZoomAccumulated += delta;
+  const int direction = DirectionOf(gZoomAccumulated);
+  const int steps = (int)MIN(floor(fabs(gZoomAccumulated) / kZoomStepDelta), (double)kMaxZoomStepsPerWheel);
+  gZoomAccumulated = steps == kMaxZoomStepsPerWheel ? 0 : gZoomAccumulated - direction * steps * kZoomStepDelta;
+  return direction * steps;
+}
+
 NSView *EnginePageViewAt(NSWindow *window, NSPoint inWindow) {
   NSView *content = window.contentView;
   NSView *hit = content ? [content hitTest:[content.superview convertPoint:inWindow fromView:nil]] : nil;
@@ -98,11 +113,8 @@ ArdiaWebView *PageViewAt(NSWindow *window, NSPoint inWindow) {
 }
 
 void ZoomWebKitPageByScroll(NSView<ArdiaScrollZoomPage> *page, double delta) {
-  gZoomScrolls++;
-  gZoomAccumulated += delta;
-  if (fabs(gZoomAccumulated) < kZoomStepDelta) return;
-  [page zoomByCommandScroll:gZoomAccumulated > 0 ? 1 : -1];
-  gZoomAccumulated = 0;
+  const int steps = TakeZoomSteps(delta);
+  for (int i = 0; i < abs(steps); i++) [page zoomByCommandScroll:DirectionOf(steps)];
 }
 
 NSView *VisibleWebKitPage(NSWindow *window) {
@@ -216,18 +228,19 @@ NSWindow *AppWindowAt(NSPoint screen) {
   DropStaleCredits(credits, CACurrentMediaTime());
   const int direction = DirectionOf(-pageDelta);
   while (credits.count && DirectionOf(credits.firstObject.lastObject.doubleValue) != direction) [credits removeObjectAtIndex:0];
-  if (!credits.count) return;
-  const double delta = credits.firstObject.lastObject.doubleValue;
-  [credits removeObjectAtIndex:0];
-  if (!Flag(reply, @"handled")) [self zoomByScroll:delta];
+  double delta = 0;
+  NSUInteger wheels = 0;
+  while (credits.count && DirectionOf(credits.firstObject.lastObject.doubleValue) == direction) {
+    delta += credits.firstObject.lastObject.doubleValue;
+    [credits removeObjectAtIndex:0];
+    wheels++;
+  }
+  if (wheels && !Flag(reply, @"handled")) [self zoomByScroll:delta merged:wheels > 1];
 }
 
-- (void)zoomByScroll:(double)delta {
-  gZoomScrolls++;
-  gZoomAccumulated += delta;
-  if (fabs(gZoomAccumulated) < kZoomStepDelta) return;
-  [self zoomStep:gZoomAccumulated > 0 ? 1 : -1];
-  gZoomAccumulated = 0;
+- (void)zoomByScroll:(double)delta merged:(BOOL)merged {
+  const int steps = TakeZoomSteps(delta);
+  for (int i = 0; i < abs(steps); i++) [self zoomStep:DirectionOf(steps) scroll:merged ? @"merged" : @"wheel"];
 }
 
 + (void)installScrollZoom {
@@ -275,7 +288,7 @@ NSWindow *AppWindowAt(NSPoint screen) {
     if (hit && ![hit isKindOfClass:ArdiaWebView.class]) {
       if (event.phase == NSEventPhaseBegan) gZoomAccumulated = 0;
       gZoomCandidates++;
-      ZoomWebKitPageByScroll((NSView<ArdiaScrollZoomPage> *)hit, event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.scrollingDeltaY * kWheelLineDelta);
+      ZoomWebKitPageByScroll((NSView<ArdiaScrollZoomPage> *)hit, CommandWheelDelta(event));
       return nil;
     }
     ArdiaWebView *view = (ArdiaWebView *)hit;
@@ -284,10 +297,10 @@ NSWindow *AppWindowAt(NSPoint screen) {
                                                 [window.contentView hitTest:[window.contentView.superview convertPoint:point fromView:nil]]];
     if (!view || !view->_tab) return event;
     if (event.phase == NSEventPhaseBegan) gZoomAccumulated = 0;
-    const double delta = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.scrollingDeltaY * kWheelLineDelta;
+    const double delta = CommandWheelDelta(event);
     gZoomCandidates++;
     if (![view runsPageScript]) {
-      [view zoomByScroll:delta];
+      [view zoomByScroll:delta merged:NO];
       return nil;
     }
     [view offerCommandWheel:delta];
@@ -353,7 +366,8 @@ NSWindow *AppWindowAt(NSPoint screen) {
     CGEventRef cg = CGEventCreateScrollWheelEvent2(NULL, wheel ? kCGScrollEventUnitLine : kCGScrollEventUnitPixel, 1, dy, 0, 0);
     CGEventSetFlags(cg, kCGEventFlagMaskCommand);
     CGEventSetIntegerValueField(cg, kCGScrollWheelEventIsContinuous, !wheel);
-    if (!wheel) CGEventSetDoubleValueField(cg, kCGScrollWheelEventFixedPtDeltaAxis1, dy);
+    NSNumber *lines = wheel && [step[@"lines"] isKindOfClass:NSNumber.class] ? step[@"lines"] : nil;
+    if (!wheel || lines) CGEventSetDoubleValueField(cg, kCGScrollWheelEventFixedPtDeltaAxis1, lines ? lines.doubleValue : dy);
     if ([phase isEqualToString:@"momentum"]) CGEventSetIntegerValueField(cg, kCGScrollWheelEventMomentumPhase, kCGMomentumScrollPhaseContinue);
     else if (!wheel)
       CGEventSetIntegerValueField(cg, kCGScrollWheelEventScrollPhase,

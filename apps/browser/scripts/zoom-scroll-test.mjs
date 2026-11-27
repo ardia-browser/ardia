@@ -63,7 +63,26 @@ try {
     { phase: "ended", dy: 0, trackpad },
     ...Array.from({ length: 3 }, () => ({ phase: "momentum", dy: 30 })),
   ];
-  const notches = (n, dy = 1) => Array.from({ length: n }, () => ({ phase: "wheel", dy }));
+  const notches = (n, dy = 1, lines) => Array.from({ length: n }, () => ({ phase: "wheel", dy, ...(lines === undefined ? {} : { lines }) }));
+  const stepsOf = async (n) => {
+    await reset();
+    for (let i = 0; i < Math.abs(n); i++) await ac(`return ac.webviews.get("t1")?.zoomStep(${Math.sign(n)});`);
+    let level = 1;
+    for (let i = 0; i < 20 && (level = await zoom()) === 1; i++) await sleep(200);
+    await sleep(400);
+    level = await zoom();
+    await reset();
+    return level;
+  };
+  const stepCase = (name, steps, count) => rep.check(name, async () => {
+    const want = await stepsOf(count);
+    const { zoomed } = await withCommand(steps);
+    const after = await zoom();
+    const scrollY = await page("scrollY");
+    const detail = `${steps.length} wheel events, taken as a zoom ${JSON.stringify(zoomed)}, zoom ${after} (${count} steps is ${want}), scrollY ${scrollY}`;
+    if (after !== want || scrollY !== 0) throw new Error(detail);
+    return detail;
+  });
 
   const scrollCase = (name, steps, expectZoom) => rep.check(name, async () => {
     await reset();
@@ -78,6 +97,9 @@ try {
   await scrollCase("⌘ + two-finger trackpad scroll scrolls (and its momentum too)", gesture(true), false);
   await scrollCase("⌘ + Magic Mouse scroll zooms", gesture(false), true);
   await scrollCase("⌘ + wheel-mouse notches zoom, and the page doesn't scroll", notches(2), true);
+  await stepCase("slow ⌘ + wheel notches, each under one line, zoom one step each", notches(3, 1, 0.1), 3);
+  await stepCase("a quick burst of ⌘ + wheel notches zooms one step per notch", notches(5), 5);
+  await stepCase("slow ⌘ + wheel notches the other way zoom out one step each", notches(2, -1, -0.3), -2);
   await rep.check("a trackpad scroll that ended doesn't stop the wheel from zooming", async () => {
     await reset();
     await withCommand(gesture(true));

@@ -34,6 +34,7 @@ import { shallowEqual, useBrowserWhile, useProfilesValue, useTabValue } from "..
 import { isIncognitoProfile, navigationTo } from "../../state/browser/model";
 import type { Tab } from "../../state/browser/types";
 import { zoomChangedByUser } from "../../state/site/zoomBubble";
+import { noteCommandScrollZoom } from "../../state/telemetry/commandScrollZoomCounts";
 import { markTabReady, patchPage, pageOf } from "../../state/tabs/pageState";
 import { popupBlocked, showAutofillPrompt, showExternalApp, showPasswordPrompt } from "../../state/site/prompts";
 import { fieldProviderHint, fieldProviderOpened, verificationCodeFound, type FieldProviderHint, type FieldProviderOpened, type VerificationCodeFound } from "../../state/site/passwordManager";
@@ -283,9 +284,10 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         downloadNavigated(tabId, committedUrl, skipped);
       }}
       onProgress={(progress) => !prewarmOnly() && !heldBySwap(tabId, { progress }) && setPageProgress(tabId, progress)}
-      onZoom={({ zoom, user }) => {
+      onZoom={({ zoom, user, scroll }) => {
         updateTab(tabId, { zoom });
         if (user) zoomChangedByUser(tabId);
+        noteCommandScrollZoom(scroll);
       }}
       onFindResult={({ count, active }) => setFind(tabId, { count, active })}
       onFavicon={(favicon) => {

@@ -55,7 +55,7 @@ function publishUi(patch: Partial<SyncUi> = {}) {
     enabled: doc.enabled,
     joining: doc.enabled && doc.joining,
     reseeding: doc.enabled && !!doc.reseedScopes?.length,
-    dataMissing: false,
+    dataMissing: doc.enabled && useSync.getState().dataMissing,
     folder: doc.folder,
     types: { ...doc.types },
     profiles: { ...doc.profiles },
@@ -120,9 +120,9 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     const status = await native.chainStatus(folder);
     if (status === "unavailable") {
       if (useSync.getState().status !== "offline") noteFolderUnavailable(consent);
-      return publishUi({ status: "offline", error: unavailableFolderError((await native.folderInfo?.(folder).catch(() => null)) ?? null) });
+      return publishUi({ status: "offline", error: unavailableFolderError((await native.folderInfo?.(folder).catch(() => null)) ?? null), dataMissing: false });
     }
-    if (noteChainStatus(consent, device, status) === "missing") return publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT, dataMissing: true });
+    if (status === "missing") return (noteChainStatus(consent, device, status), publishUi({ status: "stalled", error: CHAIN_MISSING_TEXT, dataMissing: true }));
     const transport = folderTransport(native, folder), clock = clockFor(device);
     if (doc.reseedScopes?.length) await reseedPendingScopes({ native, doc, folder, device, clock, watchScope, persistJournal, save });
     const app = appScopeOf(doc);
@@ -165,7 +165,8 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     }
     doc.clock = clock.last;
     doc.lastSyncedAt = Date.now();
-    publishUi({ status: "updated", error: null, pending });
+    noteChainStatus(consent, device, "ok");
+    publishUi({ status: "updated", error: null, pending, dataMissing: false });
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;
     if (code === "ERR_SYNC_CHAIN_MISSING") {

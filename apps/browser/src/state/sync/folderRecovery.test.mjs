@@ -14,6 +14,7 @@ let writeFailsAfter = Infinity;
 let createChainError = null;
 let onCreateChain = null;
 let afterChainStatus = null;
+let writeFindsChainGone = false;
 
 const chainOf = (folder) => folders.get(folder);
 const scopeOf = (folder, chain, scope) => {
@@ -57,6 +58,7 @@ const native = {
   },
   deleteChain: async (folder) => void chainOf(folder)?.delete(OURS),
   write: async (folder, scope, payload) => {
+    if (writeFindsChainGone) throw Object.assign(new Error("This device's data is gone from the sync folder"), { code: "ERR_SYNC_CHAIN_MISSING" });
     if (writeFailsAfter-- <= 0) throw new Error("disk full");
     const id = `f${++ids}`;
     scopeOf(folder, OURS, scope).set(id, payload);
@@ -92,6 +94,7 @@ const reset = () => {
   createChainError = null;
   onCreateChain = null;
   afterChainStatus = null;
+  writeFindsChainGone = false;
   heldDocSaves.on = false;
   heldDocSaves.queue.length = 0;
   shell.docs.clear();
@@ -433,6 +436,10 @@ test("a folder that is there but lost this device's data waits without offering 
   assert.equal(waiting.status, "stalled", "the folder is there, so this is not the folder-unavailable state that offers Recreate");
   assert.equal(waiting.enabled, true, "sync keeps its setup while it waits");
   assert.equal(waiting.dataMissing, true, "pairing is gated while the folder has none of this device's data");
+  engine.setTypeSynced("history", false);
+  assert.equal(engine.useSync.getState().dataMissing, true, "a settings change while the data is missing keeps pairing off");
+  engine.setTypeSynced("history", true);
+  assert.equal(engine.useSync.getState().dataMissing, true);
   assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" }, "recreate never makes a chain in a folder that is there");
   assert.equal(chainOf(SYNC_FOLDER).has(OURS), false);
 
@@ -440,4 +447,39 @@ test("a folder that is there but lost this device's data waits without offering 
   await engine.syncNow();
   assert.equal(engine.useSync.getState().status, "updated");
   assert.equal(engine.useSync.getState().dataMissing, false);
+});
+
+test("a retry that sees the chain but finds it gone on write counts no return; a return counts once a cycle completes", async () => {
+  reset();
+  const telemetry = await import("../telemetry/client.ts");
+  const engine = await import("./engine.ts?chain-counts");
+  telemetry.loadChoice();
+  telemetry.setSharing(true, "settings");
+  try {
+    engine.startSync();
+    assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+    await engine.syncNow();
+    engine.takeSnapshotWrites();
+
+    const chain = chainOf(SYNC_FOLDER).get(OURS);
+    chainOf(SYNC_FOLDER).delete(OURS);
+    await engine.syncNow();
+    chainOf(SYNC_FOLDER).set(OURS, chain);
+    writeFindsChainGone = true;
+    for (const title of ["One", "Two"]) {
+      S().addBookmark({ profileId: "default", url: `https://${title.toLowerCase()}.example/`, title });
+      await engine.syncNow();
+      assert.equal(engine.useSync.getState().dataMissing, true);
+    }
+    const retried = engine.takeSnapshotWrites();
+    assert.deepEqual({ missing: retried.chainMissing, returned: retried.chainReturned }, { missing: 1, returned: 0 }, "one missing stretch, no return while every write still finds the chain gone");
+
+    writeFindsChainGone = false;
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().status, "updated");
+    const back = engine.takeSnapshotWrites();
+    assert.deepEqual({ missing: back.chainMissing, returned: back.chainReturned }, { missing: 0, returned: 1 });
+  } finally {
+    telemetry.setSharing(false, "settings");
+  }
 });

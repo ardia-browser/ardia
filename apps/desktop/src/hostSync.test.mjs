@@ -159,7 +159,7 @@ test("a password edited here after sync read the held login is neither replaced 
   assert.deepEqual((await held.merge("", native)).map((login) => login.sealed), ["EDITED"]);
 });
 
-test("a login the engine can't take is held against the password sync compared, so an edit made since still shows", async () => {
+test("a login the engine can't take isn't held over a password edited here meanwhile, so the edit still shows", async () => {
   const origin = "https://bank.example";
   const native = [{ origin, username: "alice", sealed: "V1", created: 5 }];
   const host = fakeHost((method) => {
@@ -171,11 +171,47 @@ test("a login the engine can't take is held against the password sync compared, 
   const held = createHeldLogins(heldIo());
   configureHeldLogins(held);
   try {
-    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", origin, "alice", "LONG", "V1"), true);
+    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", origin, "alice", "LONG", "V1"), false);
   } finally {
     configureHeldLogins(null);
   }
   assert.deepEqual((await held.merge("", native)).map((login) => login.sealed), ["EDITED"]);
+});
+
+test("a login the engine skips is held and shown in place of the engine's copy while that copy is unchanged", async () => {
+  const origin = "https://bank.example";
+  for (const native of [[{ origin, username: "alice", sealed: "V1", created: 5 }], []]) {
+    const host = fakeHost((method) => (method === "ArdiaSync.readPasswords" ? native : method === "ArdiaSync.savePassword" ? "skipped" : null));
+    const held = createHeldLogins(heldIo());
+    configureHeldLogins(held);
+    try {
+      assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", origin, "alice", "LONG", native[0]?.sealed ?? ""), true);
+    } finally {
+      configureHeldLogins(null);
+    }
+    assert.deepEqual((await held.merge("", native)).map((login) => login.sealed), ["LONG"]);
+  }
+});
+
+test("a login deleted here while a held change was saving stays deleted when the engine skips it", async () => {
+  const origin = "https://bank.example";
+  const native = [{ origin, username: "alice", sealed: "V1", created: 5 }];
+  const held = createHeldLogins(heldIo());
+  const host = fakeHost(async (method) => {
+    if (method === "ArdiaSync.readPasswords") return native;
+    if (method !== "ArdiaSync.savePassword") return null;
+    native.length = 0;
+    await held.release("", origin, "alice");
+    return "skipped";
+  });
+  configureHeldLogins(held);
+  try {
+    assert.equal(await held.hold("", { origin, username: "alice", sealed: "LONG", replaced: "V1" }), true);
+    assert.equal(await syncModuleMethod(host, "ArdiaSync", "savePassword")("", origin, "alice", "LONGER", "LONG"), false);
+  } finally {
+    configureHeldLogins(null);
+  }
+  assert.deepEqual(await held.merge("", native), []);
 });
 
 test("a held login is sealed at rest and hides the local value it replaced across restarts until that value really changes", async () => {

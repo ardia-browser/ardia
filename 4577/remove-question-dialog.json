@@ -1,0 +1,13 @@
+{
+  "cancelTitle" : "Cancel",
+  "confirmTitle" : "Remove",
+  "destructive" : true,
+  "dismissKey" : "socket-8-1",
+  "kind" : "confirm",
+  "message" : "It leaves this list on all your devices. A device that still has this profile keeps it, and it comes back here.",
+  "onlyIfShown" : true,
+  "sheetOnly" : false,
+  "suppression" : null,
+  "title" : "Remove “Work” from Sync?",
+  "windowId" : "w-mwz6e9aldlwp-1"
+}

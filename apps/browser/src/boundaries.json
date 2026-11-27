@@ -282,7 +282,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 41,
+   "count": 42,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]

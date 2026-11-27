@@ -1156,10 +1156,12 @@
       const ticket = message && typeof message.ticket === "string" ? message.ticket : "";
       if (!fillable(message)) return send("loginFilled", { ticket, filled: false });
       if (active.found.code) {
-        if (typeof message.code !== "string" || !CODE_SHAPE.test(message.code) || !codeField(active.found.code)) return send("loginFilled", { ticket, filled: false });
-        put(active.found.code, message.code);
-        open = picking = false;
-        return send("loginFilled", { ticket, filled: true });
+        const filled = typeof message.code === "string" && CODE_SHAPE.test(message.code) && !!codeField(active.found.code);
+        if (filled) {
+          put(active.found.code, message.code);
+          open = picking = false;
+        }
+        return send("loginFilled", { ticket, filled });
       }
       const { username, password } = active.found;
       if (username && typeof message.username === "string" && message.username) put(username, message.username);

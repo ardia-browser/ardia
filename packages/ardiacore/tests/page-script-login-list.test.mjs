@@ -121,7 +121,9 @@ test("a code field fills only an empty, visible field on https, and only with a 
   await run(() => (document.getElementById("c").style.visibility = ""));
   assert.deepEqual(await fillReplies(run), [{ ticket: "5", filled: false }, { ticket: "6", filled: false }], "a field holding text, or hidden, takes no code");
   assert.deepEqual(await seen(), { c: "", events: [] }, "nothing reaches the page");
-  await fill({ ticket: "7", token, origin, code: "135790" });
+  await page.mouse.click(30, 25);
+  const [again] = (await loginFields(run)).filter((r) => r.event === "show");
+  await fill({ ticket: "7", token: again.token, origin, code: "135790" });
   assert.deepEqual(await fillReplies(run), [{ ticket: "7", filled: true }]);
   assert.deepEqual(await seen(), { c: "135790", events: ["input:c", "change:c"] }, "the empty code field it was opened for fills");
   await page.mouse.click(30, 25);

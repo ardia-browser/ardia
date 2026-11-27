@@ -55,6 +55,17 @@ Separately, a profile can turn on "Use my Me card from Contacts". The Me card th
 29. As a user who has no saved login for a site, I want the Login list to say so and offer "Open Passwords app", so that I know the list isn't broken.
 30. As a user, I want the Login list never to appear with no clear reason (a newsletter box, a search field), so that it doesn't get in the way.
 
+### Filtering as you type
+
+69. As a user typing in a username or email field, I want the Login list to narrow with every keystroke to the logins whose account name contains what I typed, ignoring case and accents, so that I find mine in a long list.
+70. As that user, I want logins whose account name starts with what I typed listed first, then those where a word starts with it (after `@`, `.`, `_`, `-` or a space), then the rest, so that the likeliest match is on top.
+71. As a user, I want the part of each account name that matches what I typed shown in bold, so that I see why a row is there.
+72. As a user whose typing matches no login, I want the list to close, and to come back as soon as deleting text makes something match again, so that it never shows an empty box or stays gone.
+73. As a user, I want typing never to pick a row by itself: Enter fills only after I've moved onto a row with the arrow keys, and otherwise reaches the page as usual, so that pressing Enter to submit never fills something I didn't choose.
+74. As a user, I want Escape to close the list and keep what I typed, so that dismissing it never erases my input.
+75. As a user, I want the Connect, failure, "Suggest strong password", code and "Open Passwords app" rows never filtered away, so that the list's actions are always there.
+76. As a user typing in a password field, I want the list not to filter by what I type there, so that my password is never matched against account names.
+
 ### Saving
 
 31. As a user who signs in with a new login, I want Ardia's existing save prompt to ask "Save to Apple Passwords?", so that new logins land in the place I chose.
@@ -123,7 +134,7 @@ Separately, a profile can turn on "Use my Me card from Contacts". The Me card th
 - **Apple Passwords client module.** One deep native module owns the helper process, Pairing, the serialized request queue, timeouts and the mapping of helper statuses to a small set of outcomes (paired, needs pairing, wrong code, locked, refused, helper missing, macOS too old, not entitled). Callers see logins, a password fill, a save outcome and codes; they never see protocol details. A launch-time environment override points it at a fake helper; release builds refuse the override.
 - **Entitlement gate.** Apple Passwords is offered only when the running app carries `com.apple.developer.web-browser.public-key-credential`, read from the process at launch, and only on macOS 15.4 or later.
 - **Password manager choice.** The per-profile choice gains an `apple` value next to `ardia`, `none` and plugin choices, stored and shared the same way. The native password gate gains the matching state, so both engines stop Chrome's and Ardia's own fill and save when it is picked. Chrome's own password list is suppressed for such profiles with the engine hook already drafted for vault profiles.
-- **One Login list for both engines.** The WebKit login list becomes the Login list for both engines. Chromium tabs feed it through the same page-script relay the WebKit path uses, with the frame origin supplied by the engine. Rows: login rows (account name, Apple key icon, "Not secure" on http), a Connect row, a failure row, a Suggest strong password row, a Code row, and an "Open Passwords app" footer. It opens on a trusted click, typing in a username field, or ArrowDown, never on page load, with no animation.
+- **One Login list for both engines.** The WebKit login list becomes the Login list for both engines. Chromium tabs feed it through the same page-script relay the WebKit path uses, with the frame origin supplied by the engine. Rows: login rows (account name, Apple key icon, "Not secure" on http), a Connect row, a failure row, a Suggest strong password row, a Code row, and an "Open Passwords app" footer. It opens on a trusted click, typing in a username field, or ArrowDown, never on page load, with no animation. Typing in a username or email field filters the login rows on every keystroke: case- and accent-insensitive "contains" on the account name, ranked starts-with, then word-start, then anywhere, stable within each group, the matched run in bold; action rows are never filtered; typing in a password field doesn't filter; no row is selected until an arrow key moves onto one. Address and Me card lists keep Chrome's own matching (the field's value as a prefix of the entry or of one of its words) in both engines, so they behave the same in Chromium and WebKit tabs.
 - **Fill.** A picked row re-checks at fill time that the target frame's scheme, host and port and the focused field are unchanged, then fills through the native value setter with input and change events. Credentials cross into the page as encoded data, never spliced into script source, and stay a `Secret` in JS.
 - **Matching.** Logins match on registrable domain (public-suffix aware). Cross-site frames get no Apple Passwords rows. http pages get only http logins; codes only on https.
 - **Saving.** The existing save prompt and its sign-in-settled check are reused for both engines; when the profile's Password manager is Apple Passwords the title, the target and the outcome text change, and the save goes through the client. "Already saved" counts as success. Private profiles never offer saving.
@@ -189,6 +200,11 @@ Each test is one red → green cycle, written and run one at a time in the order
 | E15 | 1 | When the fake ends Pairing, the next click shows "Connect Apple Passwords" first; Pairing there brings the rows back; "Not now" keeps it away on that site | re-Pairing in place | — |
 | E16 | 1 | A locked or refused password fetch shows a failure row and fills nothing | silent failure | — |
 | E17 | 1 | An Apple Passwords profile with a login for the site in Ardia's own store lists only the Apple Passwords login | quietly falling back to Ardia's store | — |
+| E34 | 1 | With fixture logins `anna@example.test`, `joanna.k@mail.test`, `Ännabel` and `bob`, typing `an` lists `anna@…`, `Ännabel`, then `joanna.k@…`, and `bob` is gone; typing `n` more narrows again (both engines) | contains matching, accent folding and the ranking | — |
+| E35 | 1 | Typing `zzz` closes the list; Backspace back to `an` brings it back with the same rows (both engines) | a list that stays gone or shows empty | — |
+| E36 | 1 | After typing, Enter with no row moved onto submits the form and fills nothing; Down then Enter fills the first row; Escape closes the list and the field still holds the typed text (both engines) | typing that picks a row by itself; Escape erasing input | — |
+| E37 | 1 | Typing in the password field doesn't change the listed rows, and the Connect and "Open Passwords app" rows stay while filtering (both engines) | matching a password against names; filtered-away actions | — |
+| E38 | 1 | Each filtered row exposes the matched run as bold in its accessibility attributes | no visible reason for a match | how bold looks (checked by eye) |
 
 **Slice 3: saving and strong passwords**
 

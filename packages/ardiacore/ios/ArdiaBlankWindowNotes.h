@@ -22,17 +22,16 @@ class Pairing {
     Expire(now);
     tabs_.push_back({tab, now, std::nullopt});
     while (tabs_.size() > kTabsKept) tabs_.pop_front();
-    Bind();
   }
 
   void Noted(std::string url, double now) {
     Expire(now);
     notes_.push_back({std::move(url), now});
     while (notes_.size() > kNotesKept) notes_.pop_front();
-    Bind();
   }
 
   std::optional<std::string> Take(std::uint64_t tab, double now) {
+    Bind();
     Expire(now);
     const auto found = std::find_if(tabs_.begin(), tabs_.end(), [tab](const Tab& t) { return t.id == tab; });
     if (found == tabs_.end() || !found->url) return std::nullopt;
@@ -59,18 +58,37 @@ class Pairing {
     double at;
   };
 
+  bool NoteNear(double at) const {
+    return std::any_of(notes_.begin(), notes_.end(), [at](const Note& n) { return std::fabs(n.at - at) <= kPairWithinSeconds; });
+  }
+
+  bool OpenTabNear(double at) const {
+    return std::any_of(tabs_.begin(), tabs_.end(), [at](const Tab& t) { return !t.url && std::fabs(t.at - at) <= kPairWithinSeconds; });
+  }
+
   void Expire(double now) {
-    std::erase_if(tabs_, [now](const Tab& t) { return !t.url && now - t.at > kUnboundSeconds; });
-    std::erase_if(notes_, [now](const Note& n) { return now - n.at > kUnboundSeconds; });
+    std::erase_if(tabs_, [&](const Tab& t) { return !t.url && now - t.at > kUnboundSeconds && !NoteNear(t.at); });
+    std::erase_if(notes_, [&](const Note& n) { return now - n.at > kUnboundSeconds && !OpenTabNear(n.at); });
   }
 
   void Bind() {
-    for (Tab& tab : tabs_) {
-      if (tab.url) continue;
-      const auto note = std::find_if(notes_.begin(), notes_.end(), [&tab](const Note& n) { return std::fabs(n.at - tab.at) <= kPairWithinSeconds; });
-      if (note == notes_.end()) continue;
-      tab.url = std::move(note->url);
-      notes_.erase(note);
+    for (;;) {
+      Tab* closest_tab = nullptr;
+      auto closest_note = notes_.end();
+      double closest = kPairWithinSeconds;
+      for (Tab& tab : tabs_) {
+        if (tab.url) continue;
+        for (auto note = notes_.begin(); note != notes_.end(); ++note) {
+          const double gap = std::fabs(note->at - tab.at);
+          if (gap > closest || (closest_tab && gap == closest)) continue;
+          closest = gap;
+          closest_tab = &tab;
+          closest_note = note;
+        }
+      }
+      if (!closest_tab) return;
+      closest_tab->url = std::move(closest_note->url);
+      notes_.erase(closest_note);
     }
   }
 

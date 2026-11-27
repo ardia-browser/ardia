@@ -73,6 +73,21 @@ static void NoteArrivingAfterAFirstTryStillMatches() {
   CHECK(pairing.pending_tabs() == 0 && pairing.pending_notes() == 1);
 }
 
+static void ANoteGoesToThePopupOpenedWithItNotAnOlderOne() {
+  Pairing pairing;
+  pairing.OpenedBlank(7, 0.000);
+  pairing.OpenedBlank(1, 0.100);
+  pairing.Noted("https://a.example/", 0.102);
+  CHECK(pairing.Take(7, 0.500) == std::nullopt);
+  CHECK(pairing.Take(1, 0.500) == std::optional<std::string>("https://a.example/"));
+  Pairing early;
+  early.OpenedBlank(7, 0.000);
+  early.Noted("https://a.example/", 0.098);
+  early.OpenedBlank(1, 0.100);
+  CHECK(early.Take(7, 0.300) == std::nullopt);
+  CHECK(early.Take(1, 0.300) == std::optional<std::string>("https://a.example/"));
+}
+
 static void CapacityIsBounded() {
   Pairing pairing;
   for (std::uint64_t i = 0; i < 40; i++) pairing.OpenedBlank(i, 0.001 * static_cast<double>(i));
@@ -89,6 +104,7 @@ int main() {
   NoteWithNoTabExpires();
   UnboundTabExpiresButABoundOneWaits();
   NoteArrivingAfterAFirstTryStillMatches();
+  ANoteGoesToThePopupOpenedWithItNotAnOlderOne();
   CapacityIsBounded();
   if (failures) return 1;
   std::printf("blank-window-notes: ok\n");

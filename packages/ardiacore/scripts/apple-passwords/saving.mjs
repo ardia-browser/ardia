@@ -15,6 +15,10 @@ const assert = (ok, message, detail) => {
 };
 
 export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
+  const session = async () => {
+    const shared = await paired();
+    return { ...shared, tabs: engineName === "chromium" ? shared.chromium : shared.tabs };
+  };
   const ardiaStore = async (app) => (await app.eval(`return ac.engine.call("passwords.list", { profile: "" })`, { timeout: 20_000 })).passwords.map((p) => `${p.origin} ${p.username}`).sort();
 
   async function signIn(tab, user, password, landing = "/signed-in") {
@@ -42,7 +46,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
 
   return {
     async E18() {
-      const { app, fake, tabs } = await paired();
+      const { app, fake, tabs } = await session();
       const login = { user: `new-${Date.now()}@save.test`, password: "fixture-pw-new-9" };
       const before = await ardiaStore(app);
       const tab = await tabs.open(sites.url(SITE));
@@ -62,7 +66,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       }
     },
     async E19() {
-      const { fake, tabs } = await paired();
+      const { fake, tabs } = await session();
       const kept = fixture("changed@save.test");
       const changed = "fixture-pw-changed-10";
       const tab = await tabs.open(sites.url(SITE));
@@ -81,7 +85,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       }
     },
     async E20() {
-      const { tabs } = await paired();
+      const { tabs } = await session();
       const kept = fixture("same@save.test");
       const tab = await tabs.open(sites.url(SITE));
       try {
@@ -94,7 +98,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       }
     },
     async E21() {
-      const { fake, tabs } = await paired();
+      const { fake, tabs } = await session();
       const login = { user: `typo-${Date.now()}@save.test`, password: "fixture-pw-typo-11" };
       const tab = await tabs.open(sites.url(SITE, "/login-fails"));
       try {
@@ -109,7 +113,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       }
     },
     async E22() {
-      const { fake, tabs } = await paired();
+      const { fake, tabs } = await session();
       const login = { user: `refused-${Date.now()}@save.test`, password: "fixture-pw-refused-12" };
       const tab = await tabs.open(sites.url(SITE));
       try {
@@ -130,7 +134,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       }
     },
     async E33() {
-      const { fake, tabs } = await paired();
+      const { fake, tabs } = await session();
       const login = { user: `http-${Date.now()}@plain.test`, password: "fixture-pw-http-14" };
       const signInTab = await tabs.open(sites.url(PLAIN_SITE));
       try {
@@ -163,7 +167,7 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       }
     },
     async E23() {
-      const { fake, tabs } = await paired();
+      const { fake, tabs } = await session();
       const kept = fixture("same@save.test");
       const login = { user: `private-${Date.now()}@save.test`, password: "fixture-pw-private-13" };
       const tab = await tabs.open(sites.url(SITE), { kind: "private" });

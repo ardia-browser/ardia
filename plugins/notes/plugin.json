@@ -9,7 +9,7 @@
   "memoryMB": 512,
   "keywords": ["notes", "docs", "notion", "wiki", "database", "pages"],
   "activationEvents": ["onStartupFinished"],
-  "permissions": { "storage": true, "files": true, "folders": true, "commands": true, "sites": ["app.notion.com", "file.notion.com", "file.notion.so", "www.notion.so", "images.unsplash.com"], "siteHeaders": ["x-notion-active-user-header"] },
+  "permissions": { "storage": true, "files": true, "folders": true, "appleNotes": true, "app": true, "commands": true, "sites": ["app.notion.com", "file.notion.com", "file.notion.so", "www.notion.so", "images.unsplash.com"], "siteHeaders": ["x-notion-active-user-header"] },
   "contributes": {
     "commands": [
       { "name": "open", "title": "Open Notes", "icon": "doc.richtext", "open": "tab", "keywords": ["notion", "docs"] },

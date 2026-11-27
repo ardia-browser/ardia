@@ -26,6 +26,7 @@ import { ExpoExperimentalPane, ExpoGeneralPane, ExpoSearchPane, ExpoTabsPane } f
 import { ExpoSettingsDone } from "./ExpoSettingsDone";
 import { SettingsHostedContext } from "./SettingsKit";
 import { SettingsPageFor } from "./SettingsView";
+import { SettingsPageOpenedContext } from "./settingsOpened";
 
 const CONVERTED: Partial<Record<SettingsRoute["page"], (props: { route: SettingsRoute }) => React.JSX.Element>> = {
   general: ExpoGeneralPane,
@@ -154,12 +155,22 @@ export const HERO_TITLED = new Set<SettingsRoute["page"]>(["sync", "syncConnect"
 
 export const placeholderTitle = (page: SettingsRoute["page"]) => (HERO_TITLED.has(page) ? "" : TITLES[page]);
 
+const READS_AS_IT_DRAWS = new Set<SettingsRoute["page"]>(["sync", "syncConnect", "syncWords", "clearData"]);
+
+export const drawnBeforePush = (page: SettingsRoute["page"]) => CONVERTED[page] !== undefined && !READS_AS_IT_DRAWS.has(page);
+
 function Destination({ routeKey, pushed }: { routeKey: string; pushed: boolean }) {
   const route = settingsRouteFromKey(routeKey);
   if (!route) return null;
-  if (!pushed) return <VStack modifiers={modifierList(navigationTitle(placeholderTitle(route.page)), navigationBarTitleDisplayMode("inline"), settingsChrome(), accessibilityHidden(true))}>{null}</VStack>;
   const Converted = CONVERTED[route.page];
-  if (Converted) return <Converted route={route} />;
+  if (Converted && (pushed || drawnBeforePush(route.page))) {
+    return (
+      <SettingsPageOpenedContext.Provider value={pushed}>
+        <Converted route={route} />
+      </SettingsPageOpenedContext.Provider>
+    );
+  }
+  if (!pushed) return <VStack modifiers={modifierList(navigationTitle(placeholderTitle(route.page)), navigationBarTitleDisplayMode("inline"), settingsChrome(), accessibilityHidden(true))}>{null}</VStack>;
   return (
     <VStack modifiers={modifierList(navigationTitle(TITLES[route.page]), navigationBarTitleDisplayMode("inline"), ignoreSafeArea({ edges: "bottom" }), settingsChrome())}>
       <RNHostView>

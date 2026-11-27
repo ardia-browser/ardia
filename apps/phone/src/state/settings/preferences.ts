@@ -7,6 +7,9 @@ export type SwipeNavigationMode = "anywhere" | "screenEdges" | "disabled";
 export type AppLinkPreference = "ardia" | "app";
 export type PresetColor = "plum" | "blue" | "purple" | "pink" | "red" | "orange" | "yellow" | "green" | "neutral";
 export type ColorChoice = PresetColor | "custom";
+export type PresetThemes = Partial<Record<PresetColor, ProfileTheme>>;
+
+export const PRESET_COLORS: readonly PresetColor[] = ["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral"];
 
 export type Preferences = {
   autoArchiveInterval: AutoArchiveInterval;
@@ -22,6 +25,7 @@ export type Preferences = {
   tabSwipeHintShown: boolean;
   colorChoice: ColorChoice | null;
   customTheme: ProfileTheme | null;
+  presetThemes: PresetThemes;
   dynamicColors: boolean | null;
   materialYou: boolean;
   interfaceStyle: InterfaceStyleChoice;
@@ -46,6 +50,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   tabSwipeHintShown: false,
   colorChoice: null,
   customTheme: null,
+  presetThemes: {},
   dynamicColors: null,
   materialYou: false,
   interfaceStyle: "matchMac",
@@ -70,6 +75,7 @@ export const PREFERENCE_KEYS: Record<keyof Preferences, string> = {
   tabSwipeHintShown: "tabs.swipeHintShown",
   colorChoice: "settings.color",
   customTheme: "settings.customTheme",
+  presetThemes: "settings.presetThemes",
   dynamicColors: "settings.dynamicColors",
   materialYou: "settings.materialYou",
   interfaceStyle: "settings.interfaceStyle",
@@ -93,6 +99,21 @@ function storedTheme(raw: string): ProfileTheme | undefined {
   }
 }
 
+function storedPresetThemes(raw: string): PresetThemes | undefined {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const kept: PresetThemes = {};
+    for (const color of PRESET_COLORS) {
+      const theme = sanitizeTheme((parsed as Record<string, unknown>)[color]);
+      if (theme) kept[color] = theme;
+    }
+    return kept;
+  } catch {
+    return undefined;
+  }
+}
+
 const flag = (raw: string) => (raw === "true" ? true : raw === "false" ? false : undefined);
 
 const PARSERS: { [K in keyof Preferences]: (raw: string) => Preferences[K] | undefined } = {
@@ -107,8 +128,9 @@ const PARSERS: { [K in keyof Preferences]: (raw: string) => Preferences[K] | und
   hasFinishedOnboarding: flag,
   archiveCardShown: flag,
   tabSwipeHintShown: flag,
-  colorChoice: oneOf<ColorChoice>(["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral", "custom"]),
+  colorChoice: oneOf<ColorChoice>([...PRESET_COLORS, "custom"]),
   customTheme: storedTheme,
+  presetThemes: storedPresetThemes,
   dynamicColors: flag,
   materialYou: flag,
   interfaceStyle: oneOf<InterfaceStyleChoice>(["matchMac", "glass", "classic"]),

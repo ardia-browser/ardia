@@ -4383,10 +4383,16 @@ Custom theme (the Mac's custom profile theme on the phone, 2026-11-22):
 - Settings › Appearance has a Custom swatch after the presets on iPhone and in the hand-built Settings Android keeps.
   With Material You on, Android's Material Settings and its Appearance page offer the presets only. Custom themes apply to Glass and Classic. The swatch shows the saved theme's colours, or a hue wheel before there is one. Choosing it sets
   `colorChoice` to `custom`. If no theme is saved yet, it saves one first: the Mac's full theme when Match My Mac was
-  showing one, otherwise the Mac's `startingTheme` seeded from the current look's swatch. Then it opens the Theme
-  page. While Custom is chosen, an "Edit Theme" row under the swatches opens the page again. Choosing a preset keeps
+  showing one, otherwise the Mac's `startingTheme` seeded from the current look's swatch. Choosing a preset keeps
   the saved theme, so Custom brings it back. Turning Match My Mac off while the Mac shows a full theme copies that
   theme into Custom.
+- Picking a theme behaves as the Mac's theme picker does (#4066, `ThemePicker` in `apps/browser/.../ThemeEditor.tsx`):
+  a swatch, Custom included, applies in place and never opens a page. "Edit theme" sits under the swatches for
+  whatever is picked, as the Mac's editor sits under its swatches. Edits belong to the swatch they were made on: a
+  preset's edits are kept per preset (`settings.presetThemes`, each sanitized on read like `customTheme`), its swatch
+  shows them and is read as "Blue, edited", and "Reset to Blue" returns it, as the Mac's `presetThemes` and Reset do.
+  Editing with Match My Mac on starts from the Mac's theme and saves it as Custom. Material You ignores preset edits.
+  `theme_edits` counts edits to Custom and to presets alike.
 - The Theme page (`components/settings/ThemePage.tsx`, `ThemeControls.tsx`, route `theme`) follows the Mac's
   `ThemeEditor.tsx` and the native port on d3fc4c02c. It has a preview of the shown look, the colour pad (hue around,
   saturation outward, 1 to 3 knobs, tap a knob to select it, tap elsewhere to move the selected one), a brightness
@@ -4827,6 +4833,17 @@ This was `docs/ios.md`'s, for main's SwiftUI app; since the clean-up the workflo
   CryptoKit; everything else is Apple's own (HTTPS, CryptoKit hashes). `ITSAppUsesNonExemptEncryption` is still false,
   which assumed Apple's encryption only: the owner decides whether the Rust core changes that answer before the next
   TestFlight upload.
+
+#### Scroll bounce (#4066)
+
+One rule, set where each scroll view is made. Menus, panels, pagers, sheets of fixed content and Settings' forms
+never bounce (`neverBounces()` on SwiftUI, `bounces={false}` with `overScrollMode="never"` in React Native). Long
+lists of the user's own things bounce only when they are longer than their view, which is UIKit's own rule with
+`alwaysBounceVertical` off (`bouncesWhenLong()`, or `bounces alwaysBounceVertical={false} overScrollMode="auto"`):
+Library (History, Bookmarks, Downloads, folders), Archive, Trusted Sites, Open Source Licenses, the tab grid and the
+Theme page. The web page and anything that pulls to refresh keep their bounce; a list inside a sheet that drags down
+to close keeps none, since the sheet's pull is its top end. `scrollBounce.test.ts` holds both lists, and lab builds
+log each guarded scroll view as `PAGELAB scroll never|whenLong …` (`-ArdiaScrollProbe <seconds>` dumps them all).
 
 #### Launch arguments on iPhone
 

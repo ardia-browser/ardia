@@ -64,7 +64,7 @@ function ThemeEditor({ stored }: { stored: ProfileTheme }) {
   const live = (field: "intensity" | "translucency" | "grain") => (value: number, settle: boolean) => change({ ...theme, [field]: value }, settle);
   const kept = keptReadable(theme, dark);
   const body = (
-    <LegacyScrollView ref={scroll} style={styles.fill} contentContainerStyle={styles.content}>
+    <LegacyScrollView ref={scroll} bounces alwaysBounceVertical={false} overScrollMode="auto" style={styles.fill} contentContainerStyle={styles.content}>
       <Group>
         <CustomLookBackdrop testID="themePreview" look={preview} dark={dark} style={styles.preview} />
       </Group>

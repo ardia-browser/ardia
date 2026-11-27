@@ -31,7 +31,7 @@ beforeEach(() => {
   withTabs(1);
   overrides.length = 0;
   act(() => {
-    usePreferences.setState({ interfaceStyle: "matchMac", schemeChoice: "matchMac", colorChoice: null, customTheme: null });
+    usePreferences.setState({ interfaceStyle: "matchMac", schemeChoice: "matchMac", colorChoice: null, customTheme: null, presetThemes: {} });
     useThemeDraft.setState({ draft: null });
     useSync.setState((state) => ({ ...state, status: status({ isEnabled: false, phase: "off" }), view: view({ profiles: [] }) }));
     setAppearanceDesign("redesigned");
@@ -87,25 +87,46 @@ function drag(id: string, points: { x: number; y: number }[]) {
   flush();
 }
 
-onAndroid("Custom sits after the presets on the hand-built Appearance, starts from the Mac's starting theme for the current look and opens the Theme page", () => {
+onAndroid("picking a swatch on the hand-built Appearance applies it in place, as the Mac's theme picker does, and Edit Theme opens the editor for whatever is picked", () => {
   openSettings({ page: "appearance" });
   const root = inDesign(<SettingsView />);
   const custom = root.root.findAll((node) => node.props.accessibilityRole === "radio" && typeof node.props.onPress === "function").map((node) => node.props.accessibilityLabel);
   expect(custom[custom.length - 1]).toBe("Custom");
+  expect(textOf(root)).toContain("Edit Theme");
   press(root, "Custom");
   act(() => jest.runOnlyPendingTimers());
   expect(usePreferences.getState().colorChoice).toBe("custom");
   expect(stored()).toEqual(startingTheme("#C07A98"));
-  expect(settingsNav().stack.map((route) => route.page)).toEqual(["root", "appearance", "theme"]);
-  const text = textOf(root);
-  for (const line of ["2 of 3 colors", "Intensity", "Pass-Through Blur", "Noise", "Texture", "Grain", "Direction", "135°", "Appearance", "Match System"]) expect(text).toContain(line);
-  act(() => void popSettings());
-  act(() => jest.runOnlyPendingTimers());
-  expect(textOf(root)).toContain("Edit Theme");
+  expect(settingsNav().stack.map((route) => route.page)).toEqual(["root", "appearance"]);
   press(root, "Blue");
   expect(usePreferences.getState().colorChoice).toBe("blue");
   expect(usePreferences.getState().customTheme).not.toBeNull();
-  expect(textOf(root)).not.toContain("Edit Theme");
+  expect(settingsNav().stack.map((route) => route.page)).toEqual(["root", "appearance"]);
+  press(root, "Edit Theme");
+  act(() => jest.runOnlyPendingTimers());
+  expect(settingsNav().stack.map((route) => route.page)).toEqual(["root", "appearance", "theme"]);
+  const text = textOf(root);
+  for (const line of ["2 of 3 colors", "Intensity", "Pass-Through Blur", "Noise", "Texture", "Direction", "Appearance"]) expect(text).toContain(line);
+  unmount(root);
+});
+
+onAndroid("an edited preset keeps its edits on its own swatch, leaves Custom alone, and Reset brings the preset back", () => {
+  withCustom();
+  act(() => usePreferences.setState({ colorChoice: "green" }));
+  const editor = inDesign(<ThemePage />);
+  press(editor, "Add Color");
+  unmount(editor);
+  const edits = usePreferences.getState().presetThemes.green!;
+  expect(edits.stops.length).toBe(3);
+  expect(usePreferences.getState().colorChoice).toBe("green");
+  expect(usePreferences.getState().customTheme).toEqual(blue);
+  openSettings({ page: "appearance" });
+  const root = inDesign(<SettingsView />);
+  expect(pressable(root, "Green, edited")).toBeDefined();
+  press(root, "Reset to Green");
+  expect(usePreferences.getState().presetThemes.green).toBeUndefined();
+  expect(usePreferences.getState().colorChoice).toBe("green");
+  expect(textOf(root)).not.toContain("Reset to Green");
   unmount(root);
 });
 

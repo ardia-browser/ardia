@@ -5,8 +5,6 @@ export { ICON_STRIP };
 
 export const ICONS_SNAP = 40;
 
-export const ICON_PEEK_DWELL_MS = 180;
-
 export const stripInset = (ICON_STRIP.width - ICON_STRIP.square) / 2;
 
 export const stripPitch = ICON_STRIP.square + ICON_STRIP.gap;
@@ -27,73 +25,42 @@ export function stripPointerOver(x: number, right: boolean, windowWidth: number)
   return right ? x >= windowWidth - ICON_STRIP.width : x < ICON_STRIP.width;
 }
 
-export const stripMeasureKey = (layoutKey: string, rowsVersion: number, newTabAtTop: boolean, codes: readonly string[]) => `${layoutKey}:${rowsVersion}:${newTabAtTop ? "top" : "bottom"}:${codes.join("|")}`;
-
 export const STRIP_DIVIDER_HEIGHT = 1 + ICON_STRIP.gap * 2;
 
-export type StripSlot = { top: number; joinAbove: number };
+export type StripLayoutItem = { divider: boolean; bars: readonly { group: string }[] };
 
-export const STRIP_ROW_GAP = 2;
-export const STRIP_MIN_SQUARE = 20;
-
-export function stripSquare(items: { key: string; divider: boolean }[], rowCenters: Readonly<Record<string, number>>): number {
-  let tightest = Infinity;
-  let previous: number | undefined;
-  for (const { key, divider } of items) {
-    const center = divider ? undefined : rowCenters[key];
-    if (center !== undefined && previous !== undefined) tightest = Math.min(tightest, center - previous);
-    previous = center;
-  }
-  return Math.max(STRIP_MIN_SQUARE, Math.min(ICON_STRIP.square, Math.floor(tightest - STRIP_ROW_GAP)));
-}
-
-function dividerTop(items: { key: string; divider: boolean }[], at: number, rowCenters: Readonly<Record<string, number>>, square: number, floor: number): number {
-  const line = rowCenters[items[at]!.key];
-  if (line === undefined) return floor;
-  const following = items.slice(at + 1).find((item) => !item.divider);
-  const nextCenter = following && rowCenters[following.key];
-  const ceiling = nextCenter === undefined ? Infinity : Math.round(nextCenter - square / 2) - STRIP_DIVIDER_HEIGHT;
-  return Math.round(Math.max(floor, Math.min(ceiling, line - STRIP_DIVIDER_HEIGHT / 2)));
-}
-
-export function stripLayout(items: { key: string; divider: boolean; aligned?: boolean }[], rowCenters: Readonly<Record<string, number>>, railTop: number): { slots: StripSlot[]; end: number; square: number } {
-  const square = stripSquare(items, rowCenters);
+export function stripLayout(items: readonly StripLayoutItem[], railTop: number): { tops: number[]; end: number } {
   let next = railTop;
-  let lastBottom = railTop;
-  let fresh = true;
-  const slots = items.map(({ key, divider, aligned }, i) => {
+  let before: readonly { group: string }[] = [];
+  const tops = items.map(({ divider, bars }) => {
     if (divider) {
-      const top = dividerTop(items, i, rowCenters, square, next);
+      const top = next;
       next = top + STRIP_DIVIDER_HEIGHT;
-      fresh = true;
-      return { top, joinAbove: 0 };
+      before = [];
+      return top;
     }
-    const center = rowCenters[key];
-    const floor = fresh ? next : center === undefined ? next : lastBottom + STRIP_ROW_GAP;
-    const size = center === undefined && !aligned ? ICON_STRIP.square : square;
-    const top = Math.round(center === undefined ? floor : Math.max(floor, center - size / 2));
-    const slot = { top, joinAbove: top - lastBottom };
-    lastBottom = top + size;
-    next = lastBottom + ICON_STRIP.gap;
-    fresh = false;
-    return slot;
+    if (bars.length && before.length && bars[0]!.group !== before[0]!.group) next += ICON_STRIP.gap;
+    const top = next;
+    next = top + ICON_STRIP.square + ICON_STRIP.gap;
+    before = bars;
+    return top;
   });
-  return { slots, end: next, square };
+  return { tops, end: next };
 }
 
-export type BarSpan = { color: string | null; top: number; bottom: number };
+export type BarSpan = { group: string; color: string | null; depth: number; top: number; bottom: number };
 
 const BAR_CAP_INSET = 3;
 
-export function stripBarSpans(bars: readonly ({ color: string | null; first: boolean; last: boolean } | null)[], slots: readonly { top: number }[], sizeOf: (index: number) => number): BarSpan[] {
-  const spans: BarSpan[] = [];
-  const open: { color: string | null; top: number }[] = [];
-  bars.forEach((bar, i) => {
-    if (!bar) return;
-    if (bar.first || !open.length) open.push({ color: bar.color, top: slots[i]!.top + BAR_CAP_INSET });
-    if (!bar.last) return;
-    const start = open.pop()!;
-    spans.push({ color: start.color, top: start.top, bottom: slots[i]!.top + sizeOf(i) - BAR_CAP_INSET });
-  });
-  return spans;
+export function stripBarSpans(items: readonly { bars: readonly { group: string; color: string | null }[] }[], tops: readonly number[]): BarSpan[] {
+  const spans = new Map<string, BarSpan>();
+  items.forEach(({ bars }, i) =>
+    bars.forEach((bar, depth) => {
+      const bottom = tops[i]! + ICON_STRIP.square - BAR_CAP_INSET;
+      const span = spans.get(bar.group);
+      if (span) span.bottom = bottom;
+      else spans.set(bar.group, { group: bar.group, color: bar.color, depth, top: tops[i]! + BAR_CAP_INSET, bottom });
+    }),
+  );
+  return [...spans.values()].sort((a, b) => a.depth - b.depth);
 }

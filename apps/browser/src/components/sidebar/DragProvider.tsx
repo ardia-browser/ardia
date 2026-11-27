@@ -16,7 +16,6 @@ import { WindowDropGlow } from "../tabstrip/WindowDropGlow";
 import { dragGesture } from "./dragGesture";
 import { FoldedAway } from "./hoverController";
 import { useWindowId } from "../../state/browser/hooks";
-import { noteSidebarRowMoved } from "../../state/sidebar/rowGeometry";
 
 const dropGlowPlace = perLook(() => ({ left: 5, right: 5, top: 44, bottom: 6, ...continuousCorners(radius.chrome) }));
 
@@ -134,8 +133,6 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
     },
     [item],
   );
-  const windowId = useWindowId();
-  const onLayout = useCallback(() => noteSidebarRowMoved(windowId), [windowId]);
   const headerRef = useCallback(
     (view: View | null) => {
       if (item) item.header = view;
@@ -158,5 +155,5 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
       ? restingTail()
       : {};
   const splitSide: SplitHalfMark["side"] | null = !scoped ? null : mark & SPLIT_LEFT ? "left" : mark & SPLIT_RIGHT ? "right" : null;
-  return { wrapper: { ref, style, onLayout }, handle: responder.panHandlers, headerRef, dragging: source, gap: item?.gap, splitSide };
+  return { wrapper: { ref, style }, handle: responder.panHandlers, headerRef, dragging: source, gap: item?.gap, splitSide };
 }

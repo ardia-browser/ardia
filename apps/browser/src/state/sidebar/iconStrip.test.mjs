@@ -30,27 +30,27 @@ test("Top Apps come first as one column, then a divider, then the tabs in sideba
   assert.deepEqual(kinds(items), [`tile:${t.google}`, `tile:${t.youtube}`, "divider", `tab:${t.slack}`, `tab:${t.facebook}`, `tab:${t.netflix}`, `tab:${t.github}`, `tab:${t.docs}`]);
 });
 
-test("an open group or folder keeps its slot as the top of a bar in its colour that runs down through its tabs, and a closed one shows its icon", () => {
+test("an open folder has no square of its own: its tabs follow in its place, each carrying the folder for the bar beside them, and a closed one shows its icon", () => {
   const t = seeded();
   const group = S().createGroup([t.facebook, t.netflix], { name: "Watch", color: "red" });
   const folder = S().createGroup([t.github, t.docs], { name: "Code" });
   S().updateGroup(folder, { color: null });
   let items = iconStripItems(S(), t.w, t.profile);
-  const after = (groupId) => items.slice(items.findIndex((i) => i.kind === "group" && i.groupId === groupId));
-  assert.deepEqual(after(group).slice(0, 3).map((i) => [i.kind, i.kind === "group" ? [i.open, i.head] : i.tabId, i.bar]), [
-    ["group", [true, true], { color: "red", first: true, last: false }],
-    ["tab", t.facebook, { color: "red", first: false, last: false }],
-    ["tab", t.netflix, { color: "red", first: false, last: true }],
+  assert.equal(items.some((i) => i.kind === "group"), false, "no square for an open folder");
+  const rows = items.filter((i) => i.kind === "tab").map((i) => [i.tabId, i.bars]);
+  assert.deepEqual(rows, [
+    [t.slack, []],
+    [t.facebook, [{ group, color: "red" }]],
+    [t.netflix, [{ group, color: "red" }]],
+    [t.github, [{ group: folder, color: null }]],
+    [t.docs, [{ group: folder, color: null }]],
   ]);
-  assert.deepEqual(after(folder).slice(0, 3).map((i) => [i.kind, i.kind === "group" ? [i.open, i.head] : i.tabId, i.bar]), [
-    ["group", [true, true], { color: null, first: true, last: false }],
-    ["tab", t.github, { color: null, first: false, last: false }],
-    ["tab", t.docs, { color: null, first: false, last: true }],
-  ], "a folder without a colour follows the same rule");
   S().updateGroup(group, { collapsed: true });
   items = iconStripItems(S(), t.w, t.profile);
-  assert.deepEqual([after(group)[0].open, after(group)[0].head, after(group)[0].bar], [false, false, null], "a closed group draws its icon and no bar of its own");
+  const closed = items.find((i) => i.kind === "group");
+  assert.deepEqual([closed.groupId, closed.open, closed.bars], [group, false, []], "a closed folder draws its icon");
   assert.equal(items.some((i) => i.kind === "tab" && i.tabId === t.facebook), false, "a closed group keeps its tabs inside");
+  S().updateGroup(group, { collapsed: false });
 });
 
 test("every item survives its string code, so the strip re-renders only when one changes", () => {
@@ -74,7 +74,9 @@ function sidebarRenders(s, w, profileId) {
   const add = (entry) => {
     rows.push(entry);
     const group = entry.startsWith("g:") ? s.groups[entry.slice(2)] : null;
-    if (group) (group.collapsed ? keptEntries(s, w, profileId, group.id) : groupEntries(s, group.id)).forEach(add);
+    const members = group ? (group.collapsed ? keptEntries(s, w, profileId, group.id) : groupEntries(s, group.id)) : [];
+    if (group && !group.collapsed && members.length) rows.pop();
+    members.forEach(add);
   };
   shownPinnedEntries(s, w, profileId, pinnedSequence(s, live.folders, live.folderOrder, w, profileId)).forEach(add);
   list.forEach(add);
@@ -87,7 +89,7 @@ function stripShows(w, profileId) {
   return { tiles: items.filter((i) => i.kind === "tile" || i.kind === "tileFolder").length, rows: items.filter((i) => !["tile", "tileFolder", "divider"].includes(i.kind)).map((i) => i.key) };
 }
 
-test("the strip shows exactly the rows the sidebar renders, live folders and the folded pinned section included", () => {
+test("the strip shows exactly the rows the sidebar renders, an open folder by its tabs alone, live folders and the folded pinned section included", () => {
   const t = seeded();
   S().pinTabs([t.slack], true, true);
   const group = S().createGroup([t.github, t.docs], { name: "Code", color: "blue" });
@@ -119,7 +121,7 @@ test("a collapsed group's selected tab stays after its square with the group's b
     assert.deepEqual(stripShows(t.w, t.profile), sidebarRenders(S(), t.w, t.profile), label);
     const items = iconStripItems(S(), t.w, t.profile, pinnedSequence(S(), useLive.getState().folders, useLive.getState().folderOrder, t.w, t.profile));
     const at = items.findIndex((i) => i.kind === "group" && i.groupId === group);
-    assert.deepEqual([items[at + 1]?.kind, items[at + 1]?.tabId, items[at + 1]?.bar], ["tab", t.netflix, { color: "red", first: true, last: true }], label);
+    assert.deepEqual([items[at + 1]?.kind, items[at + 1]?.tabId, items[at + 1]?.bars], ["tab", t.netflix, [{ group, color: "red" }]], label);
   }
 });
 

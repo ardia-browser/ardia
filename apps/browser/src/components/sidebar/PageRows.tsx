@@ -12,7 +12,6 @@ import { ClearDivider } from "./ClearDivider";
 import { DragScope, useDragController, useDragItem } from "./DragProvider";
 import { Fold, useFold } from "./Fold";
 import { SidebarEntry } from "./GroupBlock";
-import { registerSidebarDivider } from "./stripDrag";
 import { GhostSlot, ListMotionContext, useListMotion } from "./ListMotion";
 import { PinnedGrid } from "./PinnedGrid";
 import { usePinnedSequence } from "../../state/sidebar/pinnedOrder";
@@ -50,7 +49,6 @@ const DOCKED_TILES_GAP = SCROLL_EDGE.gap + SCROLL_EDGE.line + SCROLL_EDGE.inset;
 
 export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, underDockedTiles, innerWidth, inlineNewTab, controller, geometry, regions, viewport }: PageRowsProps) {
   const [captured] = useState(newCapture);
-  const dividerRef = useMemo(() => registerSidebarDivider(windowId), [windowId]);
   const pluginViews = usePluginChrome(PLUGIN_CHROME.sidebar);
   const { list: all } = useCapturedSidebarEntries(windowId, profileId, captured);
   const [mountedRows, setMountedRows] = useState(() => firstPaintEntriesNow(windowId, profileId, all, lazy));
@@ -124,7 +122,6 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
             clear={clearable}
             tidy={tidy}
             pinned={pinnedSection ? { collapsed, open: pinnedFold.open } : null}
-            bandRef={current ? dividerRef : undefined}
           />
         ) : null}
         <View

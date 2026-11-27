@@ -29,12 +29,13 @@ test("a folder without a colour draws its bar in the same colour as its folder i
   assert.doesNotMatch(bar, /textTertiary|groupTint/, "and no fallback of its own");
 });
 
-test("an open group's slot draws no folder, keeps its press, drag and context menu, and a closed one draws its icon", () => {
+test("a folder's bar takes its menu on a right-click and closes the folder on a click, and a closed folder's icon still opens it", () => {
+  const bar = functionText("GroupBar");
+  assert.match(bar, /onContextMenu=\{\(\) => void openGroupMenu\(windowId, span\.group\)\}/);
+  assert.match(bar, /onPress=\{\(\) => updateGroup\(span\.group, \{ collapsed: true \}\)\}/);
   const square = functionText("OpenSquare");
-  assert.match(square, /head \? null :/, "an open group's head slot shows no icon");
+  assert.match(square, /onPress=\{\(\) => actions\.open\(item\)\}/);
   assert.match(square, /onContextMenu=\{\(\) => void \(item\.kind === "group" && openGroupMenu\(windowId, item\.groupId\)\)\}/);
-  assert.match(square, /onPress=\{\(\) => actions\.open\(item, pressedWith\.current\)\}/);
-  assert.match(square, /\{\.\.\.handlers\}/);
 });
 
 test("the profile switcher and its divider show at the strip's foot only when the full sidebar shows profile dots", () => {
@@ -46,15 +47,15 @@ test("the profile switcher and its divider show at the strip's foot only when th
   assert.equal(strip.split("<SpaceSquare").length - 1, 1, "no badge outside the gate");
 });
 
-test("each group's bar is one piece from the top of its first slot to the bottom of its last, and a nested group's sits over its parent's", async () => {
-  const { stripBarSpans } = await import("./iconStripGeometry.ts");
-  const slots = [0, 34, 68, 102, 136, 170].map((top) => ({ top }));
-  const blue = (first, last) => ({ color: "blue", first, last });
-  const red = (first, last) => ({ color: "red", first, last });
-  const spans = stripBarSpans([null, blue(true, false), blue(false, false), red(true, true), blue(false, true), null], slots, () => 30);
-  assert.deepEqual(spans, [
-    { color: "red", top: 105, bottom: 129 },
-    { color: "blue", top: 37, bottom: 163 },
+test("each folder's bar is one piece beside its tabs, and a nested folder's draws over its parent's", async () => {
+  const { stripBarSpans, ICON_STRIP } = await import("./iconStripGeometry.ts");
+  const outer = { group: "o", color: "blue" };
+  const inner = { group: "i", color: "red" };
+  const items = [{ bars: [] }, { bars: [outer] }, { bars: [outer, inner] }, { bars: [outer, inner] }, { bars: [outer] }, { bars: [] }];
+  const tops = [0, 34, 68, 102, 136, 170];
+  const end = (top) => top + ICON_STRIP.square - 3;
+  assert.deepEqual(stripBarSpans(items, tops), [
+    { group: "o", color: "blue", depth: 0, top: 37, bottom: end(136) },
+    { group: "i", color: "red", depth: 1, top: 71, bottom: end(102) },
   ]);
-  assert.deepEqual(stripBarSpans([null, { color: null, first: true, last: true }], slots, () => 28), [{ color: null, top: 37, bottom: 59 }], "a single kept tab gets its own short bar");
 });

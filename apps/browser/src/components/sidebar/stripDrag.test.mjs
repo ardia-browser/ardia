@@ -185,19 +185,6 @@ test("a drag begun later with the token of a press from another consent period i
   setConsentPeriod(false, null);
 });
 
-test("each tab's icon sits on its row's centre in the floating sidebar, and never closer than the gap to the icon above", async () => {
-  const { stripLayout, STRIP_DIVIDER_HEIGHT, STRIP_ROW_GAP } = await import("./iconStripGeometry.ts");
-  const items = [{ key: "tile", divider: false }, { key: "d", divider: true }, { key: "t:new", divider: false }, { key: "t:slack", divider: false }, { key: "t:fb", divider: false }];
-  const centers = { "t:new": 189, "t:slack": 226, "t:fb": 263 };
-  const { slots, end } = stripLayout(items, centers, 9);
-  assert.deepEqual(slots.map((s) => s.top), [9, 9 + 30 + 4, 189 - 15, 226 - 15, 263 - 15]);
-  assert.equal(slots[3].joinAbove, 226 - 15 - (189 + 15), "a group bar spans the room to the icon above");
-  assert.equal(end, 263 + 15 + 4);
-  const crowded = stripLayout(items, { "t:new": 20, "t:slack": 30 }, 9);
-  assert.equal(crowded.slots[2].top, 9 + 34 + STRIP_DIVIDER_HEIGHT, "a row the strip can't reach yet just follows");
-  assert.equal(crowded.slots[3].top, crowded.slots[2].top + crowded.square + STRIP_ROW_GAP, "and the next keeps the row gap");
-});
-
 const { shellNativeModules } = await import("../../test-native/shell.ts");
 const RN = await import("react-native");
 
@@ -259,13 +246,3 @@ test("the app resigning active cancels a pending hand-off", async () => {
   }
 });
 
-test("rows packed tighter than a square plus its gap shrink the square, so every icon stays on its row", async () => {
-  const { stripLayout, STRIP_ROW_GAP } = await import("./iconStripGeometry.ts");
-  const items = Array.from({ length: 8 }, (_, i) => ({ key: `t:${i}`, divider: false }));
-  const centers = Object.fromEntries(items.map((item, i) => [item.key, 120 + i * 30]));
-  const { slots, square } = stripLayout(items, centers, 9);
-  assert.equal(square, 30 - STRIP_ROW_GAP);
-  slots.forEach((slot, i) => assert.equal(slot.top + square / 2, 120 + i * 30, `row ${i} on its centre`));
-  const roomy = stripLayout(items, Object.fromEntries(items.map((item, i) => [item.key, 120 + i * 37])), 9);
-  assert.equal(roomy.square, 30, "rows with room keep the full square");
-});

@@ -36,7 +36,6 @@ import { currentBasePalette } from "./state/config/basePalette";
 import { focusedWindowOf } from "./state/windows/ui";
 import { SETTLE_MS, useSettled } from "./components/ui/useSettled";
 import { forgetWindowRootSize, setWindowRootSize } from "./state/windows/rootSize";
-import { forgetSidebarRowGeometry } from "./state/sidebar/rowGeometry";
 import { usePagerPages } from "./state/windows/profilePager";
 
 provideProfileLooks({ accent: profileAccent, theme: (profile, appDark, source) => profileTheme(profile, appDark, source, currentBasePalette()) });
@@ -87,13 +86,7 @@ function BrowserWindow() {
   const cardTop = useCardTopInset(frame);
   const [width, setWidth] = useState(0);
   const settleWidth = useSettled(setWidth, topTabs ? 0 : SETTLE_MS);
-  useEffect(
-    () => () => {
-      forgetWindowRootSize(windowId);
-      forgetSidebarRowGeometry(windowId);
-    },
-    [windowId],
-  );
+  useEffect(() => () => forgetWindowRootSize(windowId), [windowId]);
   const card = useMemo(
     () => (
       <>

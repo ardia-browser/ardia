@@ -1,16 +1,16 @@
-import { createContext, memo, useContext, useMemo, useRef, type ReactNode } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import { PanResponder, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { ActivitySpinner, clippedContinuousCorners, ContextMenuArea, ink, radius, Symbol, useHover, WindowDragRegion, withAlpha } from "../ui";
 import { useTheme } from "../ui/theme";
 import { useGroup, useIsActiveTab, useProfile, useTab, useTabLive, useWindowProfileId } from "../../state/browser/hooks";
 import { useAnyShownTab, useIconStripCodes } from "../../state/sidebar/hooks";
-import { useSidebarRowsVersion } from "../../state/sidebar/rowGeometry";
 import { useMuteState } from "../../state/tabs/hooks";
-import { STRIP_LIST_DIVIDER, stripItemOf, type StripItem } from "../../state/sidebar/iconStrip";
+import { stripItemOf, type StripItem } from "../../state/sidebar/iconStrip";
 import type { GroupColor } from "../../state/browser/types";
 import { isIncognitoProfile } from "../../state/browser/model";
 import { openProfileMenu } from "../../state/browser/actions";
 import { openGroupMenu } from "../../state/sidebar/menus";
+import { updateGroup } from "../../state/groups/actions";
 import { newTab } from "../../state/tabs/actions";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
 import { TileUnread } from "../unread/UnreadBadge";
@@ -23,57 +23,41 @@ import { TabIcon } from "./TabIcon";
 import { FolderOrIcon, useFolderInk } from "./AnimatedFolder";
 import { RestingTile } from "./TileFace";
 import { dragGesture } from "./dragGesture";
-import { ICON_STRIP, STRIP_DIVIDER_HEIGHT, stripBarSpans, stripInset, stripLayout, stripMeasureKey, type BarSpan } from "./iconStripGeometry";
-import { useNewTabAtTop } from "../../state/sidebar/chrome";
-import { useRowCenters } from "./useRowCenters";
-import type { ConsentToken } from "../../state/telemetry/client";
+import { ICON_STRIP, STRIP_DIVIDER_HEIGHT, stripBarSpans, stripInset, stripLayout, type BarSpan } from "./iconStripGeometry";
 
 export type StripActions = {
-  pressed: () => ConsentToken | null;
-  open: (item: StripItem, consent: ConsentToken | null) => void;
+  pressed: () => void;
+  open: (item: StripItem) => void;
   drag: (key: string) => { press: () => void; begin: (x: number, y: number) => void; move: (x: number, y: number) => void; end: (commit: boolean) => void };
 };
 
 const SQUARE = ICON_STRIP.square;
-const RowSquare = createContext<number>(SQUARE);
 const ICON = 16;
-const BAR = { width: 3, left: 2 } as const;
+const BAR = { width: 3, left: 2, reach: (ICON_STRIP.width - ICON_STRIP.square) / 2 } as const;
 const BADGE = 11;
 const DIVIDER_INSET = 5;
 
-type RowAlignment = { offset: number; paused: boolean; layoutKey: string };
-
 const keyOf = (code: string) => code.split("\u0001")[1] ?? code;
-const ALIGNED = new Set(["tab", "split", "group", "live"]);
 
-export function IconStrip({ windowId, right, top, bottom, actions, align }: { windowId: string; right: boolean; top: number; bottom: number; actions: StripActions; align: RowAlignment }) {
+export function IconStrip({ windowId, right, top, bottom, actions }: { windowId: string; right: boolean; top: number; bottom: number; actions: StripActions }) {
   const profileId = useWindowProfileId();
   const switcherShown = useProfileDotsShown();
   const codes = useIconStripCodes(windowId, profileId);
-  const entries = useMemo(() => codes.map((code) => ({ code, key: keyOf(code), kind: code.slice(0, code.indexOf("\u0001")) })), [codes]);
-  const aligned = useMemo(() => entries.filter((e) => ALIGNED.has(e.kind)).map((e) => e.key), [entries]);
-  const rowsVersion = useSidebarRowsVersion(windowId);
-  const newTabAtTop = useNewTabAtTop();
-  const listDivider = entries.some((e) => e.key === STRIP_LIST_DIVIDER) ? STRIP_LIST_DIVIDER : null;
-  const centers = useRowCenters(windowId, aligned, align.offset, align.paused, stripMeasureKey(align.layoutKey, rowsVersion, newTabAtTop, codes), listDivider);
-  const layout = useMemo(() => stripLayout(entries.map((e) => ({ key: ALIGNED.has(e.kind) || e.kind === "divider" ? e.key : `${e.kind}:${e.key}`, divider: e.kind === "divider", aligned: ALIGNED.has(e.kind) })), centers, top), [entries, centers, top]);
-  const spans = useMemo(
-    () => stripBarSpans(entries.map((e) => { const item = stripItemOf(e.code); return "bar" in item ? item.bar : null; }), layout.slots, (i) => (ALIGNED.has(entries[i]!.kind) ? layout.square : SQUARE)),
-    [entries, layout],
-  );
+  const entries = useMemo(() => codes.map((code) => ({ code, key: keyOf(code), item: stripItemOf(code) })), [codes]);
+  const placed = useMemo(() => entries.map(({ item }) => ({ divider: item.kind === "divider", bars: "bars" in item ? item.bars : [] })), [entries]);
+  const layout = useMemo(() => stripLayout(placed, top), [placed, top]);
+  const spans = useMemo(() => stripBarSpans(placed, layout.tops), [placed, layout]);
   return (
     <View style={StyleSheet.absoluteFill}>
       <WindowDragRegion style={StyleSheet.absoluteFill} />
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ height: layout.end + SQUARE + ICON_STRIP.gap * 2 }}>
-        {spans.map((span) => (
-          <GroupBar key={`${span.top}`} span={span} right={right} />
-        ))}
         {entries.map((e, i) => (
-          <View key={`${e.kind}:${e.key}`} style={{ position: "absolute", left: 0, right: 0, top: layout.slots[i]!.top }}>
-            <RowSquare.Provider value={ALIGNED.has(e.kind) ? layout.square : SQUARE}>
-              <StripEntry code={e.code} windowId={windowId} right={right} actions={actions} />
-            </RowSquare.Provider>
+          <View key={`${e.item.kind}:${e.key}`} style={{ position: "absolute", left: 0, right: 0, top: layout.tops[i]! }}>
+            <StripEntry code={e.code} windowId={windowId} right={right} actions={actions} />
           </View>
+        ))}
+        {spans.map((span) => (
+          <GroupBar key={span.group} span={span} windowId={windowId} right={right} />
         ))}
         <View style={{ position: "absolute", left: 0, right: 0, top: layout.end }}>
           <NewTabSquare windowId={windowId} actions={actions} />
@@ -111,17 +95,21 @@ const StripEntry = memo(function StripEntry({ code, windowId, right, actions }: 
 });
 
 function StripCell({ children }: { children: ReactNode }) {
-  const size = useContext(RowSquare);
-  return <View style={{ height: size, paddingHorizontal: (ICON_STRIP.width - size) / 2 }}>{children}</View>;
+  return <View style={{ height: SQUARE, paddingHorizontal: stripInset }}>{children}</View>;
 }
 
-function GroupBar({ span, right }: { span: BarSpan; right: boolean }) {
+function GroupBar({ span, windowId, right }: { span: BarSpan; windowId: string; right: boolean }) {
   const tint = useFolderInk(span.color as GroupColor | null).stroke;
+  const side = right ? "right" : "left";
   return (
-    <View
-      pointerEvents="none"
-      style={{ position: "absolute", [right ? "right" : "left"]: BAR.left, width: BAR.width, top: span.top, height: span.bottom - span.top, borderRadius: BAR.width / 2, backgroundColor: tint }}
-    />
+    <ContextMenuArea
+      onContextMenu={() => void openGroupMenu(windowId, span.group)}
+      style={{ position: "absolute", [side]: 0, width: BAR.reach, top: span.top, height: span.bottom - span.top }}
+    >
+      <Pressable tooltip="Close folder" onPress={() => updateGroup(span.group, { collapsed: true })} style={StyleSheet.absoluteFill}>
+        <View pointerEvents="none" style={{ position: "absolute", [side]: BAR.left, width: BAR.width, top: 0, bottom: 0, borderRadius: BAR.width / 2, backgroundColor: tint }} />
+      </Pressable>
+    </ContextMenuArea>
   );
 }
 
@@ -143,7 +131,7 @@ function useSquareFill(state: { selected: boolean; hovered: boolean; pressed: bo
 }
 
 function Square({ fill, stroke, children }: { fill: string; stroke?: string; children: ReactNode }) {
-  const size = useContext(RowSquare);
+  const size = SQUARE;
   return (
     <View
       style={{
@@ -234,22 +222,18 @@ function OpenSquare({ item, windowId, actions }: { item: Extract<StripItem, { ki
   const { hovered, hoverProps } = useHover();
   const group = useGroup(item.kind === "group" ? item.groupId : null, (g) => g);
   const handlers = useStripDrag(item.key, actions);
-  const pressedWith = useRef<ConsentToken | null>(null);
   const title = item.kind === "group" ? group?.name || "Folder" : item.kind === "tileFolder" ? "Folder" : "Live Folder";
-  const head = item.kind === "group" && item.head;
   return (
     <View {...handlers} {...hoverProps}>
       <ContextMenuArea onContextMenu={() => void (item.kind === "group" && openGroupMenu(windowId, item.groupId))}>
         <Pressable
           tooltip={title}
-          onPressIn={() => {
-            pressedWith.current = actions.pressed();
-          }}
-          onPress={() => actions.open(item, pressedWith.current)}
+          onPressIn={actions.pressed}
+          onPress={() => actions.open(item)}
         >
           {({ pressed }) => (
             <SquareFor selected={false} hovered={hovered} pressed={pressed} tile={item.kind === "tileFolder"}>
-              {head ? null : item.kind === "live" ? (
+              {item.kind === "live" ? (
                 <Symbol name="dot.radiowaves.left.and.right" size={13} color={theme.textSecondary} style={{ width: ICON, height: ICON }} />
               ) : (
                 <FolderOrIcon icon={group?.icon ?? null} open={item.kind === "group" && item.open} color={item.kind === "group" ? item.color : null} />

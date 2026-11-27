@@ -74,3 +74,16 @@ test("with Hidden set for every window, a tab torn out of a window snapped to Ic
   const small = S().createWindow({ kind: "small", url: "https://link.example" });
   assert.equal(S().windows[small].collapsedSidebar, undefined, "Little Ardia takes nothing");
 });
+
+test("the toolbar's sidebar button and ⌘S switch an Icons window to Full and back, with no floating sidebar in between", async () => {
+  const { readFileSync } = await import("node:fs");
+  const toolbar = readFileSync(new URL("../../components/toolbar/Toolbar.tsx", import.meta.url), "utf8");
+  assert.match(toolbar, /const toggleTabs = useCallback\(\(\) => toggleSidebar\(windowId\), \[windowId\]\);/, "the button runs the same toggle as ⌘S");
+  const a = fresh();
+  chooseSidebarMode("icons");
+  assert.equal(sidebarModeIn(S(), a), "icons");
+  S().toggleSidebar(a);
+  assert.equal(sidebarModeIn(S(), a), "full");
+  S().toggleSidebar(a);
+  assert.equal(sidebarModeIn(S(), a), "icons");
+});

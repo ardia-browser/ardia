@@ -22,9 +22,9 @@ const ACTIONS_DIVIDER = { marginLeft: space.m } as const;
 
 type PinnedFold = { collapsed: boolean; open: Animated.Value };
 
-type DividerProps = { windowId: string; profileId: string; lift: number; clear: boolean; tidy: boolean; pinned: PinnedFold | null; bandRef?: (view: View | null) => void };
+type DividerProps = { windowId: string; profileId: string; lift: number; clear: boolean; tidy: boolean; pinned: PinnedFold | null };
 
-export const ClearDivider = memo(function ClearDivider({ windowId, profileId, lift, clear, tidy, pinned, bandRef }: DividerProps) {
+export const ClearDivider = memo(function ClearDivider({ windowId, profileId, lift, clear, tidy, pinned }: DividerProps) {
   const theme = useTheme();
   const { hovered: shown, hoverProps } = useHover();
   const [lineWidth, setLineWidth] = useState(0);
@@ -33,7 +33,6 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
   return (
     <ContextMenuArea onContextMenu={() => void openSidebarMenu(windowId)}>
       <View
-        ref={bandRef}
         {...hoverProps}
         onLayout={(e) => setLineWidth(Math.max(0, e.nativeEvent.layout.width - 2 * PADDING))}
         style={{

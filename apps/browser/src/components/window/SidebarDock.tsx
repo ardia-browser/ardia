@@ -240,13 +240,13 @@ function SidebarDock({
   };
   const latestPeek = useRef(peek);
   latestPeek.current = peek;
-  const emptyWindow = useEmptyWindowPeek(windowId, !open && !moving && !fullscreen, latestPeek);
+  const stripShown = useIconStripShown(windowId) && !fullscreen;
+  const emptyWindow = useEmptyWindowPeek(windowId, !open && !moving && !fullscreen && !stripShown, latestPeek);
   useEffect(() => {
     if (open && !fullscreen) latestPeek.current.reset();
   }, [open, fullscreen]);
   useEffect(() => (peek.live ? watchHolds("peek", () => latestPeek.current.recheck()) : undefined), [peek.live]);
   const state = dockState({ open, fullscreen, moving, peekLive: peek.live, peekLeaving: peek.leaving });
-  const stripShown = useIconStripShown(windowId) && !fullscreen;
   const band = draggingTab ? dragEdgeBand(stripShown) : PEEK_EDGE_STRIP;
   const latestReveal = useRef({ state, right, windowWidth, band, reveal });
   latestReveal.current = { state, right, windowWidth, band, reveal };

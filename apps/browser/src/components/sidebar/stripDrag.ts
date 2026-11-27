@@ -1,4 +1,4 @@
-import { AppState, type View } from "react-native";
+import { AppState } from "react-native";
 import type { DragController } from "./dragController";
 import { boxed, measure, type Item } from "./dragModel";
 import { handoffPoint } from "./iconStripGeometry";
@@ -15,17 +15,6 @@ export function registerSidebarDrag(windowId: string, controller: () => DragCont
 
 export const sidebarDragOf = (windowId: string): DragController | null => controllers.get(windowId)?.() ?? null;
 
-const dividers = new Map<string, View>();
-
-export function registerSidebarDivider(windowId: string): (view: View | null) => void {
-  let mine: View | null = null;
-  return (view) => {
-    if (view) dividers.set(windowId, (mine = view));
-    else if (mine && dividers.get(windowId) === mine) dividers.delete(windowId);
-  };
-}
-
-export const sidebarDividerOf = (windowId: string): View | null => dividers.get(windowId) ?? null;
 
 export type StripDragTarget = { press: () => void; begin: (x: number, y: number) => void; move: (x: number, y: number) => void; end: (commit: boolean) => void; cancel: () => void };
 

@@ -106,8 +106,8 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["search_tile_taps", "voice_tile_taps", "incognito_tile_taps"],
       },
       {
-        text: "In the same daily counts: how often you tapped Archive or Spaces on the start page, the button that takes the place of Tabs when no tabs are open. Counts only, and never while browsing privately",
-        fields: ["start_no_tabs_button_taps"],
+        text: "In the same daily counts: how often you tapped Archive or Spaces on the start page, the button that takes the place of Tabs when no tabs are open, and how often you tapped Spaces in the tab switcher’s bottom bar. Counts only, and never while browsing privately",
+        fields: ["start_no_tabs_button_taps", "deck_spaces_button_taps"],
       },
       {
         text: "In the same daily counts, on Android: how often a page opened with Night Shade already knowing from an earlier visit whether that site is light or dark, how often it had to learn that on this visit, and how often a site had changed so what it knew was wrong. Counts only, never which site, and never while browsing privately",

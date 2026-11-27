@@ -965,6 +965,11 @@ export const openSpaces = () => {
   if (syncOffered()) useBrowse.setState({ sheet: "spaces" });
 };
 
+export const openSpacesFromDeck = () => {
+  if (!useTabs.getState().incognito) countUsage("deck_spaces_button_taps");
+  openSpaces();
+};
+
 export function reopenArchived(tab: BrowserTab) {
   if (!restoreArchivedTab(tab)) return;
   openTab(tab.id);

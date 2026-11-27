@@ -15,6 +15,7 @@ import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuOpener } from "../
 import { SpaceTitle, spaceMenuSymbol } from "../search/StartSpaces";
 import { FadingGlyphs, GlassCircleButton, type ChromeFade } from "./ChromeButtons";
 import { DeckHitTarget } from "./DeckHitTarget";
+import { IncognitoSwitchMenu, SPACES_HINT } from "./DeckBottomBar";
 import { useUpdateDot } from "../../state/appUpdate/store";
 
 type Props = {
@@ -25,6 +26,7 @@ type Props = {
   onMenu?: (open: boolean) => void;
   moreOpener?: MenuOpener;
   spacesOpener?: MenuOpener;
+  privacy?: { privateCount: number; onCloseIncognito?: () => void };
   underlay?: boolean;
   hits?: boolean;
 } & ChromeFade;
@@ -73,7 +75,7 @@ export function useDeckSpaces() {
   return { syncEnabled: status.isEnabled, spaces, current, spaceItems };
 }
 
-export function DeckHeader({ safeTop, safeSide, sideInset, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
+export function DeckHeader({ safeTop, safeSide, sideInset, menusShown = true, onMenu, moreOpener, spacesOpener, privacy, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
   const theme = useTheme();
   const incognito = useIncognito();
   const updateDot = useUpdateDot();
@@ -92,7 +94,7 @@ export function DeckHeader({ safeTop, safeSide, sideInset, menusShown = true, on
         <MenuTrigger opener={spacesOpener} items={spaceItems} {...menu} previewRadius={deckLook.switcherCorner} place={{ top: below, left: side, width: tabsLayout.menuWidth }}>
           {({ onPress }) => (
             <ChromeSurface testID="deckSwitcherGlass" shape="capsule" cornerRadius={deckLook.switcherCorner} incognito={incognito} dark={theme.dark} shown={glassShown} shownMs={glassShownMs} underlay={underlay}>
-              <Tappable kind="text" label={`Space, ${current.name}`} hint="Shows your Mac’s spaces." onPress={onPress ?? noop} style={styles.switcherPress}>
+              <Tappable kind="text" label={`Space, ${current.name}`} hint={SPACES_HINT} onPress={onPress ?? noop} style={styles.switcherPress}>
                 <FadingGlyphs testID="deckSwitcher" fade={glyphFade}>
                   <SpaceTitle space={current} dark={theme.dark} showsChevron />
                 </FadingGlyphs>
@@ -115,6 +117,24 @@ export function DeckHeader({ safeTop, safeSide, sideInset, menusShown = true, on
         </FadingGlyphs>
       )}
       <View style={styles.spacer} />
+      {privacy ? (
+        <IncognitoSwitchMenu
+          incognito={incognito}
+          dark={theme.dark}
+          privateCount={privacy.privateCount}
+          onCloseIncognito={privacy.onCloseIncognito}
+          menusShown={menusShown}
+          onMenu={onMenu}
+          place={{ top: below, right: side, width: tabsLayout.menuWidth }}
+          hits={hits}
+          originY={rowTop}
+          diameter={deckChromeLayout.headerCircle}
+          underlay={underlay}
+          glassShown={glassShown}
+          glassShownMs={glassShownMs}
+          glyphFade={glyphFade}
+        />
+      ) : null}
       <DeckHitTarget control="more" live={hits} originY={rowTop}>
         <MenuTrigger opener={moreOpener} items={moreItems} {...menu} previewRadius={deckChromeLayout.headerCircle / 2} place={{ top: below, right: side, width: tabsLayout.menuWidth }}>
           {({ onPress }) => <GlassCircleButton icon={iconRoles.more} label={actionWords.more} testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} incognito={incognito} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} underlay={underlay} onPress={onPress ?? noop} />}

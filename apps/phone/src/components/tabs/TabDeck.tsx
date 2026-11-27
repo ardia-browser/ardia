@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
 import { DeckLookProbe } from "./DeckLookProbe";
-import { deckHitAccepted, newTab as openNewTab, switchDeckIncognito } from "../../state/browse/store";
+import { deckHitAccepted, newTab as openNewTab, openSpacesFromDeck, switchDeckIncognito } from "../../state/browse/store";
 import { actionWords, destinationWords, incognitoWords } from "../../lib/sharedWords";
 import { IncognitoLook } from "../ui/theme";
 import { GlassPrivacy } from "../ui/LookViews";
@@ -1032,6 +1032,7 @@ export const TabDeck = memo(function TabDeck() {
     else if (hit.control === "search") searchOpener.current?.();
     else if (hit.control === "plus") pressDeckPlus(hit.turn, openNewTab);
     else if (hit.control === "privacy") switchDeckIncognito();
+    else if (hit.control === "sheet") openSpacesFromDeck();
   };
   const openOnTurn = (at: number, tappedAt?: number, posedTurn?: number, lift?: DeckCardLift) => {
     const id = order[at];
@@ -1437,6 +1438,7 @@ export const TabDeck = memo(function TabDeck() {
                     <DeckHeader
                       moreOpener={moreOpener}
                       spacesOpener={spacesOpener}
+                      privacy={deckBarLayout.strip?.ends ? undefined : { privateCount, onCloseIncognito: confirmLeaveIncognito }}
                       underlay={chromeGlassHeld}
                       hits={pulls}
                       safeTop={g.safeTop}

@@ -339,7 +339,7 @@ export function MaterialSheet({ open, onDismiss, onTapAway, onBack, onHidden, ex
     };
   });
   const grip = (
-    <View testID="materialSheetGrip" collapsable={false}>
+    <View testID="materialSheetGrip">
       <DragHandle onPress={onDismiss} />
     </View>
   );

@@ -1418,7 +1418,7 @@ internal object FrostSources {
 
     fun allSources(): List<FrostSourceView> = synchronized(sources) { sources.values.mapNotNull { it.get() } }
 
-    fun anyFrostCanBlur(id: String?): Boolean = id != null && frosts().any { it.source == id && it.isAttachedToWindow && it.wantsSource() }
+    fun anyFrostCanBlur(id: String?): Boolean = id != null && frosts().any { it.source == id && it.isAttachedToWindow && it.isShown && it.alpha > 0.01f && it.wantsSource() }
 
     fun sourceChanged(id: String?) {
         find(id)?.let {
@@ -1634,9 +1634,13 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
 
     private var stripsBehind = false
     private var lastPageRecordNs = 0L
+    private var lastRecordedScroll: Long? = null
+    private var skippedSinceRecord = false
     private var settleScheduled = false
     private val settleRecord = Runnable {
         settleScheduled = false
+        val scrollChanged = pageScroll() != lastRecordedScroll
+        if (!skippedSinceRecord && !scrollChanged) return@Runnable
         lastPageRecordNs = 0L
         if (strips.isNotEmpty()) stripsBehind = true
         invalidate()
@@ -1657,6 +1661,7 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
     private val beforeDraw = ViewTreeObserver.OnPreDrawListener {
         if (stripsBehind) {
             if (holdsPage && lastPageRecordNs != 0L && System.nanoTime() - lastPageRecordNs < PAGE_RECORD_INTERVAL_NS) {
+                skippedSinceRecord = true
                 scheduleSettle()
             } else {
                 refreshStrips()
@@ -1794,11 +1799,13 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
         val fresh = recorder == null
         val existing = recorder
         if (!fresh && holdsPage && existing != null && existing.hasDisplayList() && strips.isNotEmpty() && lastPageRecordNs != 0L && System.nanoTime() - lastPageRecordNs < PAGE_RECORD_INTERVAL_NS) {
+            skippedSinceRecord = true
             scheduleSettle()
             super.dispatchDraw(canvas)
             return
         }
         cancelSettle()
+        skippedSinceRecord = false
         val node = existing ?: RenderNode("ardiaFrostSource:${sourceId ?: "unnamed"}").also { recorder = it }
         LookActivity.sourceRecordings += 1
         node.setPosition(0, 0, width, height)
@@ -1809,7 +1816,10 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
         } finally {
             node.endRecording()
         }
-        if (holdsPage) lastPageRecordNs = System.nanoTime()
+        if (holdsPage) {
+            lastPageRecordNs = System.nanoTime()
+            lastRecordedScroll = pageScroll()
+        }
         canvas.drawRenderNode(node)
         if (fresh) LookTrace.flag(recordingCounter, true)
         if (fresh) FrostSources.redrawFrostsOf(this) else FrostSources.wakeFrostsWaitingOn(this)

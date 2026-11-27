@@ -60,7 +60,7 @@ let heldFrostSource: ReturnType<typeof makeHeldFrostSource> | null = null;
 
 export function FrostSource(props: FrostSourceProps) {
   if (!useNativeLook()) {
-    const { name: _name, heldFill: _heldFill, heldUntil: _heldUntil, ...rest } = props;
+    const { name: _name, heldFill: _heldFill, heldUntil: _heldUntil, collapsable: _collapsable, ...rest } = props;
     return <View {...rest} />;
   }
   return <NativeFrostSource {...props} />;
@@ -73,7 +73,6 @@ export function HeldFrostSource(props: ComponentProps<ReturnType<typeof makeHeld
         testID={props.testID as string | undefined}
         style={props.style as StyleProp<ViewStyle>}
         pointerEvents={props.pointerEvents as ComponentProps<typeof View>["pointerEvents"]}
-        collapsable={props.collapsable as boolean | undefined}
       >
         {props.children as ReactNode}
       </View>

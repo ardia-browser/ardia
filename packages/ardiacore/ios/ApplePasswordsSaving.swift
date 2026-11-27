@@ -4,6 +4,7 @@ import Foundation
 @objc(ApplePasswordsSaving)
 final class ApplePasswordsSaving: NSObject {
   static let target = "applePasswords"
+  static let notSaved = "notSaved"
   private static var confirmed: [String: SHA256.Digest] = [:]
 
   private static func key(_ host: String, _ user: String) -> String { "\(ApplePasswordsMatch.normalized(host))\u{1}\(user)" }

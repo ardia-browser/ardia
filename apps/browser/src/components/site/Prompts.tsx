@@ -156,6 +156,7 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
   const guard = usePromptInputGuard(prompt ? `${prompt.origin}|${prompt.username}|${prompt.state}` : null);
   if (!prompt) return null;
   const update = prompt.state === "update";
+  const notSaved = prompt.state === "notSaved";
   const copy = passwordPromptCopy(prompt);
   const username = chosen ?? prompt.username;
   const answer = guard((action: PasswordPromptAnswer) => {
@@ -191,9 +192,15 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
             )
           }
         >
-          {!update && <Button variant="pill" title="Never on This Site" onPress={() => answer("never")} />}
-          <Button variant="pill" title="Not Now" onPress={() => answer(update ? "nope" : "dismiss")} />
-          <Button variant="pill" title={update ? "Update" : "Save"} primary onPress={() => answer(update ? "update" : "save")} />
+          {notSaved ? (
+            <Button variant="pill" title="OK" primary onPress={() => answer("dismiss")} />
+          ) : (
+            <>
+              {!update && <Button variant="pill" title="Never on This Site" onPress={() => answer("never")} />}
+              <Button variant="pill" title="Not Now" onPress={() => answer(update ? "nope" : "dismiss")} />
+              <Button variant="pill" title={update ? "Update" : "Save"} primary onPress={() => answer(update ? "update" : "save")} />
+            </>
+          )}
         </PromptBody>
         <PanelCloseButton onPress={() => answer("dismiss")} />
       </View>

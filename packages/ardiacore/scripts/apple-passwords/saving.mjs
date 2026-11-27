@@ -4,6 +4,7 @@ import { waitFor } from "./webkit.mjs";
 const q = JSON.stringify;
 export const SAVE_TITLE = "Save to Apple Passwords?";
 export const UPDATE_TITLE = "Update in Apple Passwords?";
+export const NOT_SAVED_TITLE = "Not saved to Apple Passwords";
 const SITE = "save.localhost";
 const SETTLED_MS = 6000;
 
@@ -102,6 +103,27 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
         assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing reaches Apple Passwords", null);
         return { engine: engineName, prompt: "none" };
       } finally {
+        await tab.close();
+      }
+    },
+    async E22() {
+      const { fake, tabs } = await paired();
+      const login = { user: `refused-${Date.now()}@save.test`, password: "fixture-pw-refused-12" };
+      const tab = await tabs.open(sites.url(SITE));
+      try {
+        await signIn(tab, login.user, login.password);
+        const offered = await promptShown(tab);
+        assert(offered.state === "save" && offered.copy.title === SAVE_TITLE, "the prompt offers to save", offered);
+        fake.setMode({ status: { 6: 5 } });
+        assert(await tab.answer("save"), "Save is pressed", null);
+        const told = await promptShown(tab, "the prompt saying it wasn't saved");
+        assert(told.copy.title === NOT_SAVED_TITLE && told.state === "notSaved", `the prompt says ${NOT_SAVED_TITLE}`, told);
+        assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing reached Apple Passwords", null);
+        assert(await tab.answer("dismiss"), "OK closes it", null);
+        assert(!(await tab.prompt()), "the prompt is gone", null);
+        return { engine: engineName, title: told.copy.title, message: told.copy.message };
+      } finally {
+        fake.setMode({ status: {} });
         await tab.close();
       }
     },

@@ -33,6 +33,9 @@ export function passwordPromptCopy(prompt: PasswordPrompt): { title: string; mes
   const site = hostOrOrigin(prompt.origin);
   const update = prompt.state === "update";
   if (prompt.target === "applePasswords") {
+    if (prompt.state === "notSaved") {
+      return { title: "Not saved to Apple Passwords", message: "Apple Passwords didn't take this login. Unlock the Passwords app, then sign in again to save it." };
+    }
     return update
       ? { title: "Update in Apple Passwords?", message: `It will be auto-filled on ${site}` }
       : { title: "Save to Apple Passwords?", message: `It will be auto-filled on ${site} from Apple Passwords` };

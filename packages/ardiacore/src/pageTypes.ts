@@ -153,7 +153,7 @@ export type ZoomState = { zoom: number; host: string; isDefault: boolean; pinchS
 export type ContentBlockedState = { count: number; url: string };
 
 export type PasswordPrompt = {
-  state: "save" | "update" | "saved";
+  state: "save" | "update" | "saved" | "notSaved";
   origin: string;
   username: string;
   passwordLength: number;

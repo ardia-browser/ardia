@@ -361,6 +361,18 @@ public final class PageViewModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("setPageScheme") { (scheme: String?) -> Bool in
+      try MainActor.assumeIsolated {
+        let parsed = try scheme.map { raw in
+          guard let value = PageScheme(rawValue: raw) else { throw PagePayloads.badArgs("Unknown page scheme \(raw)") }
+          return value
+        }
+        let engine = PhonePages.shared.engine
+        if engine.preferences.pageScheme != parsed { engine.preferences.pageScheme = parsed } else { engine.applyPageStyle() }
+        return engine.pageIsDark
+      }
+    }.runOnQueue(.main)
+
     AsyncFunction("setNightShade") { (mode: String?, host: String?, isPrivate: Bool?) in
       try MainActor.assumeIsolated {
         let parsed = try mode.map(PagePayloads.nightShadeMode)

@@ -17,6 +17,10 @@ using namespace ardia_runtime;
 }
 
 - (void)emitZoomByUser:(BOOL)user {
+  [self emitZoomByUser:user scroll:nil];
+}
+
+- (void)emitZoomByUser:(BOOL)user scroll:(NSString *)scroll {
   const double zoom = _tab ? _tab.zoomFactor : 1;
   [self emit:@"zoom"
       payload:@{
@@ -25,6 +29,7 @@ using namespace ardia_runtime;
         @"isDefault" : @(fabs(zoom - 1) < 0.001),
         @"pinchScale" : @(_reports.pinchScale ?: 1),
         @"user" : @(user),
+        @"scroll" : scroll ?: @"",
       }];
 }
 
@@ -51,10 +56,14 @@ using namespace ardia_runtime;
 }
 
 - (void)zoomStep:(NSInteger)direction {
+  [self zoomStep:direction scroll:nil];
+}
+
+- (void)zoomStep:(NSInteger)direction scroll:(NSString *)scroll {
   if (!_tab) return;
   const double before = _tab.zoomFactor;
   [_tab zoomStep:(int)direction];
-  if (fabs(_tab.zoomFactor - before) > 1e-6) [self emitZoomByUser:YES];
+  if (fabs(_tab.zoomFactor - before) > 1e-6) [self emitZoomByUser:YES scroll:scroll];
 }
 
 - (void)find:(NSString *)text forward:(BOOL)forward findNext:(BOOL)findNext {

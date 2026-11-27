@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { appearanceSummary, appliedDark, chromeStyle, macLookOf, preferredScheme, type ChromeStyle, type PreferredScheme } from "../../lib/appearance";
 import type { Design } from "../../lib/design";
 import { activeCustomLook, themedScheme, type CustomLook } from "../../lib/profileLook";
-import { overrideColorScheme } from "../../platform/look";
+import { overrideColorScheme, overridePageScheme } from "../../platform/look";
 import { useReduceTransparency } from "../app/systemLook";
 import { syncData, useSync } from "../sync/store";
 import { shownProfile } from "../sync/syncRules";
@@ -13,6 +13,10 @@ import { currentCustomTheme, useCustomTheme, useThemeDraft } from "./themeDraft"
 import { syncOffered } from "../../platform/system";
 
 export const useAppearanceDesign = create<{ design: Design }>()(() => ({ design: "original" }));
+
+export const usePageDark = create<{ dark: boolean | null }>()(() => ({ dark: null }));
+
+export const notePageDark = (dark: boolean) => usePageDark.setState({ dark });
 
 export const useMacLook = () => useSync((s) => macLookOf(s.status.isEnabled, s.view.look));
 
@@ -38,16 +42,30 @@ export function usePreferredScheme(): PreferredScheme {
   return schemeFor(design, preferredScheme(design, choice, useMacLook()), custom);
 }
 
-function currentPreferredScheme(theme = currentCustomTheme()): PreferredScheme {
+function currentChosenScheme(): PreferredScheme {
   const { status, view } = syncData();
-  const design = useAppearanceDesign.getState().design;
-  return schemeFor(design, preferredScheme(design, currentPreferences().schemeChoice, macLookOf(status.isEnabled, view.look)), currentActiveCustomLook(theme));
+  return preferredScheme(useAppearanceDesign.getState().design, currentPreferences().schemeChoice, macLookOf(status.isEnabled, view.look));
+}
+
+function currentPreferredScheme(theme = currentCustomTheme()): PreferredScheme {
+  return schemeFor(useAppearanceDesign.getState().design, currentChosenScheme(), currentActiveCustomLook(theme));
 }
 
 export const savedPreferredScheme = (): PreferredScheme => currentPreferredScheme(currentPreferences().customTheme);
 
+export const themeFixesScheme = (): boolean => currentPreferredScheme() !== currentChosenScheme();
+
 export function currentDarkScheme(): boolean {
   return appliedDark(currentPreferredScheme(), Appearance.getColorScheme() === "dark");
+}
+
+export function usePageDarkScheme(): boolean {
+  const reported = usePageDark((s) => s.dark);
+  const design = useAppearanceDesign((s) => s.design);
+  const choice = usePreferences((p) => p.schemeChoice);
+  const chosen = preferredScheme(design, choice, useMacLook());
+  const system = useColorScheme() === "dark";
+  return reported ?? appliedDark(chosen, system);
 }
 
 export function useDarkScheme(): boolean {
@@ -70,9 +88,17 @@ export function useAppearanceSummary(colorName: (choice: string) => string): str
 }
 
 let overridden: PreferredScheme = null;
+let pageScheme: PreferredScheme | undefined;
 let following = false;
 
 function applyColorScheme() {
+  const pages = currentChosenScheme();
+  if (pages !== pageScheme) {
+    pageScheme = pages;
+    void overridePageScheme(pages).then((dark) => {
+      if (dark !== null && pageScheme === pages) notePageDark(dark);
+    });
+  }
   const next = currentPreferredScheme();
   if (next === overridden) return;
   overridden = next;

@@ -49,7 +49,7 @@ export const refusedSyncs = { on: false };
 export const linkedButUnsynced = { on: false };
 export const heldCopies = { on: false, queue: [] as (() => void)[] };
 export const heldSaves = { on: false, queue: [] as (() => void)[] };
-export const refusedSaves = { on: false };
+export const refusedSaves = { on: false, of: new Set<string>() };
 export const refusedWrites = { on: false, returnsFalse: false, landingFails: false };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
 export const appInfo: Partial<SystemInfo> = { appVersion: "1.0" };
@@ -272,6 +272,7 @@ const documents: Modules["ArdiaDocuments"] = {
   },
   saveDocument: (name, contents) =>
     new Promise((resolve, reject) => {
+      if (refusedSaves.of.has(name)) return reject(new Error("save refused"));
       stagedDocs.set(name, contents);
       if (refusedSaves.on) return reject(new Error("save refused"));
       const land = () => {

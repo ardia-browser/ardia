@@ -21,7 +21,6 @@ import {
   menuForward,
   menuReload,
   menuStop,
-  resetZoom,
   openInDefaultBrowser,
   pinCurrentToMac,
   sendCurrentTab,
@@ -32,8 +31,6 @@ import {
   type MenuPresentation,
   pageMenuHidden,
   setBlockersOn,
-  setDesktopSite,
-  setNightShadeOn,
   shareCurrentPage,
   showFind,
   showDockedFind,
@@ -42,20 +39,19 @@ import {
   askTranslation,
   cancelTranslationAsk,
   confirmTranslation,
-  zoomIn,
-  zoomOut,
 } from "../../state/page/actions";
 import { menuSwitchHint, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
 import { useMenuDocked, useMenuModel, useMenuOpen, useMenuOpening, useMenuPage, useMenuTitle, usePageQuiet, useTitleFeedback, useTranslationAsk } from "../../state/page/hooks";
 import { endMenuTiming, markMenuPhase } from "../../state/page/menuTiming";
 import { pageUi, type MenuPage } from "../../state/page/store";
-import { SiteSettingsGroups } from "../settings/SitePages";
+import { AllowedSites, SiteSettingsGroups } from "../settings/SitePages";
+import { ThisSiteGroup } from "../settings/ThisSite";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { useSearchFromDockedMenu, useSearchOpen, useSearchSession } from "../../state/search/hooks";
 import { cancelSearch } from "../../state/browse/store";
 import { useTab } from "../../state/tabs/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { ConfirmDialog, FloatingMenu, font, iconRoles, MaterialIconButton, menuLayout, PressInPlace, shape, Sheet, slotSide, smoothCorners, space, stroke, Symbol, tabsMotion, ToggleRow as SharedToggleRow, useDesign, usePressStyle, useTheme, type PressKind, type SymbolName } from "../ui";
+import { ConfirmDialog, FloatingMenu, font, iconRoles, MaterialIconButton, menuLayout, PressInPlace, shape, Sheet, smoothCorners, space, stroke, Symbol, tabsMotion, ToggleRow as SharedToggleRow, useDesign, usePressStyle, useTheme, type SymbolName } from "../ui";
 import { MaterialPageMenu, MaterialPageMenuItems, MaterialSiteSettingsContent, MaterialSiteSettingsHeader } from "./MaterialPageMenu";
 import { countSearchExpansion, MaterialSearchField, MaterialSearchResults, useMaterialSheetSearch } from "../search/MaterialSearchView";
 import { barAddress } from "./FloatingBar";
@@ -149,7 +145,11 @@ function DrawnPageMenu({ tabId, model, open, onHidden }: PageMenuProps & { model
     return (
       <Sheet open={open} onDismiss={closePageMenu} onHidden={hidden} onShown={menuArrived} fill={ink.solid} onTapAway={tappedAway} grabber floating={FLOATING_MENU} catchUpPingMs={MENU_CATCH_UP_PING_MS}>
         {confirmation}
-        <PageMenuWords tabId={tabId} model={model} onTranslate={translate} showing={opening} />
+        <LayoutAnimationConfig skipEntering>
+          <Animated.View key={page} entering={FadeIn.duration(tabsMotion.surfaceFade)} exiting={FadeOut.duration(tabsMotion.surfaceFade)} style={styles.subpageSwap}>
+            {page === "siteSettings" ? <MenuSiteSettings /> : <PageMenuWords tabId={tabId} model={model} onTranslate={translate} showing={opening} />}
+          </Animated.View>
+        </LayoutAnimationConfig>
       </Sheet>
     );
   }
@@ -313,18 +313,6 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
         <>
           <Group>
             <ToggleRow
-              which="nightShade"
-              icon={model.nightShadeOn ? "moonFill" : "moon"}
-              title="Night Shade"
-              value={model.nightShadeOn}
-              enabled={model.siteSwitches}
-              onChange={setNightShadeOn}
-            />
-            <ZoomRow percent={model.zoomPercent} canZoomOut={model.zoomOut} canZoomIn={model.zoomIn} enabled={model.isWebPage} stacked={large} />
-            <ToggleRow which="desktopSite" icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} divider={false} onChange={setDesktopSite} />
-          </Group>
-          <Group>
-            <ToggleRow
               which="blockers"
               icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"}
               title={blockingWords.blockAdsAndTrackers}
@@ -355,10 +343,13 @@ function MenuSiteSettings() {
         </Text>
         <View style={styles.subpageBalance} />
       </View>
+      <ThisSiteGroup />
       <SiteSettingsGroups openRoute={openSiteSettingsRoute} />
+      <AllowedSites />
     </ScrollView>
   );
 }
+
 
 function NavigationCapsule({ tabId }: { tabId: string }) {
   const theme = useTheme();
@@ -527,59 +518,12 @@ function ToggleRow({ which, icon, title, value, enabled, detail, divider = true,
   );
 }
 
-function ZoomSegment({ kind, label, value, enabled, onPress, style, children }: { kind: PressKind; label: string; value?: string; enabled: boolean; onPress: () => void; style: object; children: ReactNode }) {
-  const pressStyle = usePressStyle(kind, { style });
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityValue={value ? { text: value } : undefined} accessibilityState={{ disabled: !enabled }} disabled={!enabled} onPress={onPress} style={pressStyle}>
-      {children}
-    </Pressable>
-  );
-}
-
-function ZoomRow({ percent, canZoomOut, canZoomIn, enabled, stacked }: { percent: string; canZoomOut: boolean; canZoomIn: boolean; enabled: boolean; stacked: boolean }) {
-  const theme = useTheme();
-  const enabledInk = (on: boolean) => (on ? theme.label : theme.tertiaryLabel);
-  const heading = (
-    <>
-      <View style={styles.icon}>
-        <Symbol name="textformatSize" size={classicPageMenu.rowGlyph} color={theme.secondaryLabel} />
-      </View>
-      <Text style={[font.body, styles.rowTitle, { color: enabledInk(enabled) }]}>Page Zoom</Text>
-    </>
-  );
-  return (
-    <View>
-      <View testID="menuZoom" style={stacked ? styles.zoomStacked : styles.row}>
-        {stacked ? <View style={styles.zoomHeading}>{heading}</View> : heading}
-        <View testID="menuZoomControls" style={styles.zoom}>
-          <View pointerEvents="none" style={[styles.zoomPlate, { backgroundColor: theme.tertiaryFill }]} />
-          <ZoomSegment kind="icon" label="Zoom Out" enabled={canZoomOut} onPress={zoomOut} style={styles.zoomButton}>
-            <Symbol name="minus" size={classicPageMenu.zoomGlyph} color={enabledInk(canZoomOut)} />
-          </ZoomSegment>
-          <ZoomSegment kind="text" label="Reset Zoom" value={percent} enabled={enabled} onPress={resetZoom} style={styles.zoomReset}>
-            <Text testID="menuZoomPercent" style={[font.subheadline, styles.digits, styles.medium, { color: enabledInk(enabled) }]}>
-              {percent}
-            </Text>
-          </ZoomSegment>
-          <ZoomSegment kind="icon" label="Zoom In" enabled={canZoomIn} onPress={zoomIn} style={styles.zoomButton}>
-            <Symbol name="plus" size={classicPageMenu.zoomGlyph} color={enabledInk(canZoomIn)} />
-          </ZoomSegment>
-        </View>
-      </View>
-      <Divider />
-    </View>
-  );
-}
-
-const ZOOM_SLOT = slotSide(menuLayout.zoomButton.width);
-const ZOOM_SLOT_HEIGHT = slotSide(menuLayout.zoomButton.height);
-const ZOOM_PLATE_INSET = (ZOOM_SLOT - menuLayout.zoomButton.width) / 2;
-
 const ACCESSIBILITY_TEXT = 1.6;
 const TITLE_IN = FadeIn.duration(tabsMotion.fade);
 const TITLE_OUT = FadeOut.duration(tabsMotion.fade);
 
 const styles = StyleSheet.create({
+  subpageSwap: { flexShrink: 1 },
   siteAddressBar: { flex: 1, flexDirection: "row", alignItems: "center", borderRadius: materialShape.full, paddingRight: 4, overflow: "hidden" },
   dockedTitleSlot: { flex: 1, minWidth: 0, height: "100%" },
   dockedTitleButton: { flex: 1, justifyContent: "center", paddingHorizontal: 4 },
@@ -625,12 +569,6 @@ const styles = StyleSheet.create({
   rowTitle: { flex: 1, paddingVertical: space.s },
   divider: { height: stroke.hairline, marginLeft: space.l + menuLayout.iconSlot + space.m },
   digits: { fontVariant: ["tabular-nums"] },
-  zoom: { flexDirection: "row", alignItems: "center", height: ZOOM_SLOT_HEIGHT },
-  zoomPlate: { position: "absolute", left: ZOOM_PLATE_INSET, right: ZOOM_PLATE_INSET, top: (ZOOM_SLOT_HEIGHT - menuLayout.zoomButton.height) / 2, height: menuLayout.zoomButton.height, borderRadius: shape.control, ...smoothCorners },
-  zoomStacked: { paddingHorizontal: space.l, paddingVertical: space.m, gap: space.s, alignItems: "flex-start" },
-  zoomHeading: { flexDirection: "row", alignItems: "center", gap: space.m, alignSelf: "stretch" },
-  zoomButton: { width: ZOOM_SLOT, height: ZOOM_SLOT_HEIGHT, alignItems: "center", justifyContent: "center" },
-  zoomReset: { minWidth: menuLayout.zoomReset - 2 * ZOOM_PLATE_INSET, height: ZOOM_SLOT_HEIGHT, alignItems: "center", justifyContent: "center" },
   toggleRow: { minHeight: menuLayout.rowHeight, paddingHorizontal: space.l, paddingVertical: space.none, gap: space.m },
   toggleWords: { flexDirection: "row", alignItems: "center", gap: space.m },
 });

@@ -14,6 +14,7 @@ import { designFor, type Design } from "../lib/design";
 import { haptics } from "../state/app/haptics";
 import { useArchiveCard } from "../state/browse/archiveCard";
 import * as browse from "../state/browse/store";
+import { useLibrary } from "../state/library/store";
 import * as settingsNav from "../state/settings/nav";
 import * as syncActions from "../state/sync/actions";
 import { OFF_STATUS, useSync, type SyncedProfile } from "../state/sync/store";
@@ -177,26 +178,22 @@ test("without spaces the switcher reads Tabs; with one space it is that space's 
   unmount(many);
 });
 
-test("the ··· menu holds New Incognito Tab, Close All Tabs and Settings, adding Spaces with sync on and Reopen Closed Tab when there is one; the Archive lives in Settings, not the deck", () => {
+test("the ··· menu holds History, Bookmarks, Downloads and Settings, adding Spaces with sync on, and no tab actions whatever there is to reopen; the Archive lives in Settings, not the deck", () => {
+  jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
   const plain = deck();
   act(() => pressable(plain, "More").props.onPress());
-  expect(menuLabels(plain)).toEqual(["New Incognito Tab", "Close All Tabs", "Settings"]);
+  expect(menuLabels(plain)).toEqual(["History", "Bookmarks", "Downloads", "Settings"]);
   unmount(plain);
   withSpaces([profile("work", "Work")]);
-  jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
   const full = deck();
   act(() => pressable(full, "More").props.onPress());
-  expect(menuLabels(full)).toEqual(["Spaces", "New Incognito Tab", "Reopen Closed Tab", "Close All Tabs", "Settings"]);
+  expect(menuLabels(full)).toEqual(["Spaces", "History", "Bookmarks", "Downloads", "Settings"]);
   unmount(full);
 });
 
-test("each ··· row does its action: the Spaces sheet, a private tab, reopening, Settings, and Close All asks first", () => {
+test("each ··· row does its action: the Spaces sheet, each Library section and Settings", () => {
   withSpaces([profile("work", "Work")]);
-  jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
-  const incognito = jest.spyOn(browse, "newIncognitoTab").mockImplementation(() => undefined);
-  const reopen = jest.spyOn(browse, "reopenLastClosed").mockImplementation(() => undefined);
   const settings = jest.spyOn(settingsNav, "openSettings").mockImplementation(() => undefined);
-  const closeAll = jest.spyOn(browse, "closeAllFromDeck").mockImplementation(() => undefined);
   const root = deck();
   const choose = (label: string) => {
     act(() => pressable(root, "More").props.onPress());
@@ -205,18 +202,15 @@ test("each ··· row does its action: the Spaces sheet, a private tab, reopenin
   choose("Spaces");
   expect(browse.useBrowse.getState().sheet).toBe("spaces");
   act(() => browse.useBrowse.setState({ sheet: null }));
-  choose("New Incognito Tab");
-  expect(incognito).toHaveBeenCalledTimes(1);
-  choose("Reopen Closed Tab");
-  expect(reopen).toHaveBeenCalledTimes(1);
+  const sections = ["History", "Bookmarks", "Downloads"].map((label) => {
+    choose(label);
+    const { open, section } = useLibrary.getState();
+    act(() => useLibrary.setState({ open: false }));
+    return open ? section : null;
+  });
+  expect(sections).toEqual(["history", "bookmarks", "downloads"]);
   choose("Settings");
   expect(settings).toHaveBeenCalledTimes(1);
-  choose("Close All Tabs");
-  expect(closeAll).not.toHaveBeenCalled();
-  const sheet = root.root.findAll((node) => node.type === ConfirmSheet)[0]!;
-  expect(sheet.props.confirmation.title).toBe("Close 9 Tabs?");
-  act(() => pressable(root, "Close All Tabs").props.onPress());
-  expect(closeAll).toHaveBeenCalledTimes(1);
   unmount(root);
 });
 
@@ -499,15 +493,30 @@ test("the original deck keeps its private tabs among the others, as before the s
   unmount(root);
 });
 
-test("the plus opens a tab, and holding it offers a private tab and reopening without Close All, which lives in the ··· menu", () => {
+test("the plus opens a tab, and holding it offers a private tab, reopening and Close All Tabs, which asks first", () => {
   jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
   const opened = jest.spyOn(browse, "newTab").mockImplementation(() => undefined);
+  const incognito = jest.spyOn(browse, "newIncognitoTab").mockImplementation(() => undefined);
+  const reopen = jest.spyOn(browse, "reopenLastClosed").mockImplementation(() => undefined);
+  const closeAll = jest.spyOn(browse, "closeAllFromDeck").mockImplementation(() => undefined);
   const root = deck();
-  const plus = root.root.findAll((node) => node.props.accessibilityLabel === "New Tab" && typeof node.props.onLongPress === "function")[0]!;
-  act(() => plus.props.onPress());
+  const plus = () => root.root.findAll((node) => node.props.accessibilityLabel === "New Tab" && typeof node.props.onLongPress === "function")[0]!;
+  act(() => plus().props.onPress());
   expect(opened).toHaveBeenCalledTimes(1);
-  act(() => plus.props.onLongPress());
-  expect(menuLabels(root)).toEqual(["New Incognito Tab", "Reopen Closed Tab"]);
+  act(() => plus().props.onLongPress());
+  expect(menuLabels(root)).toEqual(["New Incognito Tab", "Reopen Closed Tab", "Close All Tabs"]);
+  pickMenu(root, "New Incognito Tab");
+  expect(incognito).toHaveBeenCalledTimes(1);
+  act(() => plus().props.onLongPress());
+  pickMenu(root, "Reopen Closed Tab");
+  expect(reopen).toHaveBeenCalledTimes(1);
+  act(() => plus().props.onLongPress());
+  pickMenu(root, "Close All Tabs");
+  expect(closeAll).not.toHaveBeenCalled();
+  const sheet = root.root.findAll((node) => node.type === ConfirmSheet)[0]!;
+  expect(sheet.props.confirmation.title).toBe("Close 9 Tabs?");
+  act(() => pressable(root, "Close All Tabs").props.onPress());
+  expect(closeAll).toHaveBeenCalledTimes(1);
   unmount(root);
 });
 

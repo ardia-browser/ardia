@@ -4,7 +4,7 @@ import { notePeekOutsideClosePress } from "../telemetry/usage";
 import { dismissPeek } from "./actions";
 import { pressPeekScrim } from "./gesturePresses";
 import { shownPeek } from "./peek";
-import { notePressSwitchesShownPage, pressSwitchedShownPage } from "./pressSwitches";
+import { notePressKeepsPeek, pressKeptPeek } from "./keptPresses";
 
 export const OUTSIDE_CLICK_SLOP = 10;
 const PRIMARY_BUTTON = 0;
@@ -25,7 +25,7 @@ function closeShownPeek(windowId: string) {
 }
 
 export function startPeekOutsidePress(windowId: string, at: Point, button: number | undefined) {
-  pressSwitchedShownPage(windowId);
+  pressKeptPeek(windowId);
   const peekTabId = shownPeekTab(windowId);
   if (peekTabId && (button ?? PRIMARY_BUTTON) === PRIMARY_BUTTON) held.set(windowId, { peekTabId, at, strayed: false });
   else held.delete(windowId);
@@ -39,14 +39,14 @@ export function movePeekOutsidePress(windowId: string, at: Point) {
 export function endPeekOutsidePress(windowId: string, at: Point) {
   const press = held.get(windowId);
   held.delete(windowId);
-  const switched = pressSwitchedShownPage(windowId);
-  if (!press || switched || press.strayed || strays(press.at, at)) return;
+  const kept = pressKeptPeek(windowId);
+  if (!press || kept || press.strayed || strays(press.at, at)) return;
   if (shownPeekTab(windowId) === press.peekTabId) closeShownPeek(windowId);
 }
 
 export function cancelPeekOutsidePress(windowId: string) {
   held.delete(windowId);
-  pressSwitchedShownPage(windowId);
+  pressKeptPeek(windowId);
 }
 
 export function pressPeekOutsideOnDragRegion(windowId: string) {
@@ -54,5 +54,6 @@ export function pressPeekOutsideOnDragRegion(windowId: string) {
 }
 
 export function notePressSwitchesProfile(windowId: string, profileId: string) {
-  if (useBrowser.getState().windows[windowId]?.profileId !== profileId) notePressSwitchesShownPage(windowId);
+  const current = useBrowser.getState().windows[windowId]?.profileId;
+  if (current && current !== profileId) notePressKeepsPeek(windowId);
 }

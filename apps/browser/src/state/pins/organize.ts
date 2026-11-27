@@ -30,6 +30,9 @@ export type OrganizeSlice = {
   setPinnedUrl(tabId: string, url?: string): void;
 };
 
+export const opensInActiveGroup = (s: BrowserState, mods: ClickMods) => !!mods.altKey && !!mods.shiftKey && !mods.metaKey && s.settings.optShiftClickOpensInGroup;
+export const clickActivates = (s: BrowserState, windowId: string, tabId: string, mods: ClickMods = {}) => opensInActiveGroup(s, mods) || !clickedSelection(s, windowId, tabId, mods);
+
 export function selectedTabIds(s: BrowserState, windowId: string): string[] {
   const view = viewTabIds(s, windowId);
   const selected = (s.selection[windowId] ?? []).filter((id) => view.includes(id));
@@ -111,7 +114,7 @@ export const createOrganizeSlice: StateCreator<BrowserState, [], [], OrganizeSli
 
   clickTab(windowId, tabId, mods = {}) {
     const s = get();
-    const intoGroup = !!mods.altKey && !!mods.shiftKey && !mods.metaKey && s.settings.optShiftClickOpensInGroup;
+    const intoGroup = opensInActiveGroup(s, mods);
     const picked = intoGroup ? null : clickedSelection(s, windowId, tabId, mods);
     if (intoGroup) openInActiveGroup(s, windowId, tabId);
     get().setSelection(windowId, picked?.selection ?? []);

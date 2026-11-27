@@ -9,7 +9,8 @@ import { focusHeroBar } from "../omnibox/barState";
 import { ancestorIds } from "../groups/groups";
 import { activeTabId, bookmarkProfileId, familyKeyOf, inPinnedContainer, ownTabTitle, pinSection, tabLayoutOf, tabsShownIn, tabTitle } from "../browser/model";
 import { anchorOutdated, type ClickMods } from "../drag/drops";
-import { selectedTabIds } from "../pins/organize";
+import { clickActivates, selectedTabIds } from "../pins/organize";
+import { notePressKeepsPeek } from "../peek/keptPresses";
 import { groupLabel, groupOf } from "../pins/tabGrouping";
 import type { Tab } from "../browser/types";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
@@ -34,6 +35,7 @@ const store = () => useBrowser.getState();
 export function clickTab(windowId: string, tabId: string, mods: ClickMods = {}) {
   const ranging = !!mods.shiftKey && !mods.metaKey;
   const fromShownTab = ranging && anchorOutdated(store(), windowId);
+  if (activeTabId(store(), windowId) !== tabId && clickActivates(store(), windowId, tabId, mods)) notePressKeepsPeek(windowId);
   store().clickTab(windowId, tabId, mods);
   if (ranging && store().selection[windowId]?.length) noteRangeSelect(fromShownTab);
 }

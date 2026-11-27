@@ -12,7 +12,8 @@ const { activeTabId } = await import("../browser/model.ts");
 const { forgetPeekStage, notePeekStageState } = await import("./gesturePresses.ts");
 const { shownPeek } = await import("./peek.ts");
 const { cancelPeekOutsidePress, endPeekOutsidePress, movePeekOutsidePress, notePressSwitchesProfile, OUTSIDE_CLICK_SLOP, pressPeekOutsideOnDragRegion, startPeekOutsidePress } = await import("./outsidePresses.ts");
-const { notePressSwitchesShownPage } = await import("./pressSwitches.ts");
+const { notePressKeepsPeek } = await import("./keptPresses.ts");
+const { clickTab } = await import("../sidebar/actions.ts");
 after(() => client.setSharing(false, "settings"));
 const S = () => useBrowser.getState();
 const AT = { x: 40, y: 300 };
@@ -81,11 +82,22 @@ test("a click on another tab whose switch lands later (a pinned page handed over
   client.setSharing(true, "onboarding");
   const before = await sentCloses();
   const { w, a, shown } = windowWithTwoPeeks();
-  click(w, AT, 0, () => notePressSwitchesShownPage(w));
+  click(w, AT, 0, () => notePressKeepsPeek(w));
   assert.equal(S().peeks[a]?.tabId, shown, "the store still shows the same Peek, but the press asked for another page");
   assert.equal((await sentCloses()) - before, 0);
   click(w);
   assert.equal(S().peeks[a], undefined, "the switch mark lasts one press");
+});
+
+test("a click on another tab that asks for it keeps the Peek even while the store still shows the source, and one that only selects it is a click outside", () => {
+  const { w, a, b, shown } = windowWithTwoPeeks();
+  click(w, AT, 0, () => (clickTab(w, b), S().activate(a)));
+  assert.equal(S().peeks[a]?.tabId, shown, "a plain click on tab b asked to show it, as a pinned page from another window does before it lands");
+  click(w, AT, 0, () => (clickTab(w, b, { altKey: true }), S().activate(a)));
+  assert.equal(S().peeks[a]?.tabId, shown, "an ⌥-click on tab b activates it too");
+  click(w, AT, 0, () => clickTab(w, b, { metaKey: true }));
+  assert.equal(activeTabId(S(), w), a, "a ⌘-click only selected tab b");
+  assert.equal(S().peeks[a], undefined, "so it was a click outside");
 });
 
 test("a profile dot keeps the Peek only when it switches to another space", () => {
@@ -98,7 +110,7 @@ test("a profile dot keeps the Peek only when it switches to another space", () =
 
 test("a switch mark left by a press outside the sidebar never blocks the next outside click", () => {
   const { w, a } = windowWithTwoPeeks();
-  notePressSwitchesShownPage(w);
+  notePressKeepsPeek(w);
   click(w);
   assert.equal(S().peeks[a], undefined);
 });

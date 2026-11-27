@@ -7,7 +7,9 @@ final class ApplePasswordsSaving: NSObject {
   static let notSaved = "notSaved"
   private static var confirmed: [String: SHA256.Digest] = [:]
 
-  private static func key(_ host: String, _ user: String) -> String { "\(ApplePasswordsMatch.normalized(host))\u{1}\(user)" }
+  private static func key(_ scheme: String, _ host: String, _ user: String) -> String {
+    "\(scheme.lowercased())://\(ApplePasswordsMatch.normalized(host))\u{1}\(user)"
+  }
 
   private static func digest(_ password: String) -> SHA256.Digest { SHA256.hash(data: Data(password.utf8)) }
 
@@ -18,16 +20,16 @@ final class ApplePasswordsSaving: NSObject {
     return (scheme, host)
   }
 
-  static func remember(host: String, user: String, password: String) {
+  static func remember(scheme: String, host: String, user: String, password: String) {
     dispatchPrecondition(condition: .onQueue(.main))
-    confirmed[key(host, user)] = digest(password)
+    confirmed[key(scheme, host, user)] = digest(password)
   }
 
   @objc(decideForOrigin:profile:username:password:completion:)
   static func decide(origin: String, profile: String, username: String, password: String, done: @escaping (String?) -> Void) {
     dispatchPrecondition(condition: .onQueue(.main))
     guard let (scheme, host) = page(origin) else { return done(nil) }
-    let remembered = confirmed[key(host, username)]
+    let remembered = confirmed[key(scheme, host, username)]
     if remembered == digest(password) { return done(nil) }
     ApplePasswordsClient.shared.logins(host: host) { result in
       guard case .success(let entries) = result else { return DispatchQueue.main.async { done(nil) } }
@@ -38,7 +40,7 @@ final class ApplePasswordsSaving: NSObject {
           DispatchQueue.main.async {
             guard case .success(let saved) = result else { return done(nil) }
             guard Data(saved.utf8) != Data(password.utf8) else {
-              remember(host: host, user: username, password: password)
+              remember(scheme: scheme, host: host, user: username, password: password)
               return done(nil)
             }
             done("update")
@@ -51,14 +53,14 @@ final class ApplePasswordsSaving: NSObject {
   @objc(saveForOrigin:username:password:completion:)
   static func save(origin: String, username: String, password: String, done: @escaping (Bool) -> Void) {
     dispatchPrecondition(condition: .onQueue(.main))
-    guard let (_, host) = page(origin) else {
+    guard let (scheme, host) = page(origin) else {
       count("saveFailed")
       return done(false)
     }
-    ApplePasswordsClient.shared.save(host: host, user: username, password: password) { result in
+    ApplePasswordsClient.shared.save(host: host, insecure: scheme == "http", user: username, password: password) { result in
       DispatchQueue.main.async {
         let saved = (try? result.get()) != nil
-        if saved { remember(host: host, user: username, password: password) }
+        if saved { remember(scheme: scheme, host: host, user: username, password: password) }
         count(saved ? "saved" : "saveFailed")
         done(saved)
       }

@@ -263,13 +263,15 @@ final class ApplePasswordsClient: @unchecked Sendable {
     }
   }
 
-  func save(host: String, user: String, password: String, _ done: @escaping (Result<Void, Problem>) -> Void) {
+  static func savedSite(host: String, insecure: Bool) -> String { insecure ? "http://\(host)" : host }
+
+  func save(host: String, insecure: Bool, user: String, password: String, _ done: @escaping (Result<Void, Problem>) -> Void) {
     queue.async {
       done(Result {
         do {
           _ = try self.sealed(
             Self.saveCmd, qid: "CmdSetPassword4LoginName_URL", url: nil,
-            ["ACT": 4, "URL": "", "USR": "", "PWD": "", "NURL": host, "NUSR": user, "NPWD": password],
+            ["ACT": 4, "URL": "", "USR": "", "PWD": "", "NURL": Self.savedSite(host: host, insecure: insecure), "NUSR": user, "NPWD": password],
             wait: Self.saveSeconds, also: 4, kept: [Self.alreadyKeptStatus])
         } catch Failure.unexpected {
           Self.log.notice("save had no readable answer, reading the list")

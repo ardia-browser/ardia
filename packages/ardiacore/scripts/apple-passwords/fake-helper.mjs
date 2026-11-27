@@ -145,7 +145,8 @@ function answer(cmd, body) {
     return login ? { STATUS: 0, Entries: [{ USR: login.user, sites: login.sites, PWD: login.password }] } : { STATUS: 3, Entries: [] };
   }
   if (cmd === 6) {
-    const kept = logins.find((l) => l.user === body.NUSR && sameSite(l.sites, host));
+    const insecure = (site) => site.startsWith("http://");
+    const kept = logins.find((l) => l.user === body.NUSR && sameSite(l.sites.filter((site) => insecure(site) === insecure(host)), bare(host)));
     if (kept?.password === body.NPWD) return { STATUS: 7 };
     const rest = logins.filter((l) => l !== kept);
     fs.writeFileSync(file("fixtures.json"), JSON.stringify({ ...fixtures(), logins: [...rest, { user: body.NUSR, password: body.NPWD, sites: [host] }] }, null, 2));

@@ -64,7 +64,7 @@ export function reactNativeMembers(path, text) {
         const api = element.dotDotDotToken ? null : bindingKey(element);
         if (api && ts.isIdentifier(element.name)) {
           locals.set(element.name.text, api);
-          destructured.set(element.name.text, { api, member: null, optional: !!element.initializer });
+          destructured.set(element.name.text, { api, member: null, defaulted: !!element.initializer });
         }
       }
     }
@@ -100,7 +100,7 @@ export function reactNativeMembers(path, text) {
             if (!member) continue;
             const optional = !!element.initializer;
             used.push({ api, member, kind: "read", optional, at: at(element) });
-            if (ts.isIdentifier(element.name)) destructured.set(element.name.text, { api, member, optional });
+            if (ts.isIdentifier(element.name)) destructured.set(element.name.text, { api, member, defaulted: optional });
           }
         }
       }
@@ -108,8 +108,8 @@ export function reactNativeMembers(path, text) {
     if (ts.isIdentifier(node) && destructured.has(node.text) && !ts.isBindingElement(node.parent)) {
       const use = useOf(node);
       if (use.kind === "call") {
-        const { api, member, optional } = destructured.get(node.text);
-        used.push({ api, member, kind: "call", optional: optional || use.optional, at: at(node) });
+        const { api, member, defaulted } = destructured.get(node.text);
+        used.push({ api, member, kind: "call", optional: use.optional, defaulted, at: at(node) });
       }
     }
     ts.forEachChild(node, visit);
@@ -122,7 +122,7 @@ const absent = (value) => value === undefined || value === null;
 
 export function missingFromShim(shim, used, lookupMaps = LOOKUP_MAPS) {
   const missing = [];
-  for (const { api, member, kind, optional, at } of used) {
+  for (const { api, member, kind, optional, defaulted, at } of used) {
     if (lookupMaps.has(api)) continue;
     const exported = shim[api];
     const value = member === null ? exported : absent(exported) ? undefined : exported[member];
@@ -132,7 +132,8 @@ export function missingFromShim(shim, used, lookupMaps = LOOKUP_MAPS) {
       continue;
     }
     if (kind === "call") {
-      if (optional ? !absent(value) && typeof value !== "function" : typeof value !== "function") missing.push(name);
+      const tolerated = optional ? absent(value) : defaulted ? value === undefined : false;
+      if (!tolerated && typeof value !== "function") missing.push(name);
     } else if (!optional && value === undefined) {
       missing.push(name);
     }
@@ -159,7 +160,7 @@ test("the scan reads value uses of a react-native import and skips type position
     "const { isHighContrastEnabled: check } = A11y; (check!)(); (check as never)?.();",
     "const { Share, Clipboard: Board = null } = RN; Share(); Share.share(); Board?.();",
   ].join("\n");
-  const shape = ({ api, member, kind, optional }) => `${api}${member === null ? "" : `.${member}`}:${kind}${optional ? "?" : ""}`;
+  const shape = ({ api, member, kind, optional, defaulted }) => `${api}${member === null ? "" : `.${member}`}:${kind}${optional ? "?" : ""}${defaulted ? "=" : ""}`;
   assert.deepEqual(reactNativeMembers("demo.ts", text).map(shape), [
     "AccessibilityInfo.isHighContrastEnabled:call",
     "Animated.timing:call",
@@ -167,7 +168,7 @@ test("the scan reads value uses of a react-native import and skips type position
     "AccessibilityInfo.isScreenReaderEnabled:read",
     "AccessibilityInfo.fetch:read?",
     "AccessibilityInfo.isScreenReaderEnabled:call",
-    "AccessibilityInfo.fetch:call?",
+    "AccessibilityInfo.fetch:call=",
     "Keyboard.dismiss:call",
     "Keyboard:read",
     "Linking.openURL:call?",
@@ -185,7 +186,7 @@ test("the scan reads value uses of a react-native import and skips type position
     "Clipboard:read?",
     "Share:call",
     "Share.share:call",
-    "Clipboard:call?",
+    "Clipboard:call?=",
   ]);
 });
 
@@ -212,6 +213,18 @@ test("calls through destructured and namespace-destructured bindings are checked
   const shim = { AccessibilityInfo: { notAFunction: true }, Flag: false };
   assert.deepEqual(missingFromShim(shim, reactNativeMembers("demo.ts", text), new Set()), ["AccessibilityInfo.notAFunction() (demo.ts:3)", "Flag() (demo.ts:4)"]);
   assert.deepEqual(missingFromShim({ AccessibilityInfo: { notAFunction: () => {} }, Flag: () => {} }, reactNativeMembers("demo.ts", text), new Set()), []);
+});
+
+test("a destructuring default stands in only for undefined, so a null member still fails its call while ?. tolerates it", () => {
+  const text = [
+    'import { AccessibilityInfo as A11y } from "react-native";',
+    "const { fetch = () => null } = A11y; fetch();",
+    "const { other = () => null } = A11y; other?.();",
+  ].join("\n");
+  const used = reactNativeMembers("demo.ts", text);
+  assert.deepEqual(missingFromShim({ AccessibilityInfo: { fetch: null, other: null } }, used, new Set()), ["AccessibilityInfo.fetch() (demo.ts:2)"]);
+  assert.deepEqual(missingFromShim({ AccessibilityInfo: {} }, used, new Set()), []);
+  assert.deepEqual(missingFromShim({ AccessibilityInfo: { fetch: 1, other: () => {} } }, used, new Set()), ["AccessibilityInfo.fetch() (demo.ts:2)"]);
 });
 
 test("every react-native API member the shared UI uses at run time exists in the desktop react-native shim with a value of the kind it is used as", async () => {

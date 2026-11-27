@@ -75,6 +75,24 @@ test("asked by the native shell before it closes the last window, the UI ends th
   assert.deepEqual(steps, ["settle true native-1", "resume native-1"], "a cancelled quit asks the telemetry leader to resume the session that token ended");
 });
 
+test("the acknowledgement waits for the settle to finish, so the native close never starts while the session is still being saved", async () => {
+  const shell = nativeShell();
+  let finishSettle;
+  answerSessionEnds({
+    host: shell.host,
+    settle: () => new Promise((resolve) => { finishSettle = resolve; }),
+    resume: async () => {},
+    report: (error) => assert.fail(String(error)),
+  });
+  shell.emit("shell.sessionEnding", { token: "native-6" });
+  await settled();
+  assert.equal(typeof finishSettle, "function", "the settle started");
+  assert.deepEqual(shell.sent, [], "no acknowledgement while the settle is pending");
+  finishSettle("end-6");
+  await settled();
+  assert.deepEqual(shell.sent, [{ method: SESSION_ENDED_METHOD, args: ["native-6"] }]);
+});
+
 test("a failed or timed-out settle still acknowledges, and a later resume still reaches the leader, so the session the leader did end reopens", async () => {
   const shell = nativeShell();
   const reported = [];

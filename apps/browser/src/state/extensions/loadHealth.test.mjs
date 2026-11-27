@@ -26,6 +26,9 @@ async function loadedEvents() {
   return fresh;
 }
 
+const freshModule = () => import(`./loadHealth.ts?saved=${Math.random()}`);
+const savedDoc = () => JSON.parse(stub.docs.get(LOAD_HEALTH_DOC));
+
 const health = { a: { dropped: 0, enabled: 3, disabled: {} } };
 stub.extensionAnswers.loadHealth = async (profile) => {
   const answer = health[profile];
@@ -39,7 +42,7 @@ test("a reset list that keeps last launch's entries counts none of them as new",
   assert.deepEqual(loadChange(null, 6), { dropped_new: 0, enabled_last_launch: -1 });
 });
 
-test("the first report on a data folder has no last launch, and records this one for the next", async () => {
+test("the first report on a data folder has no last launch, and records this one under the current consent for the next", async () => {
   stub.docs.delete(LOAD_HEALTH_DOC);
   reportExtensionsLoaded("a");
   await settle();
@@ -48,12 +51,12 @@ test("the first report on a data folder has no last launch, and records this one
   assert.equal(event.enabled, 3);
   assert.equal(event.dropped_new, 0);
   assert.equal(event.enabled_last_launch, -1);
-  assert.deepEqual(JSON.parse(stub.docs.get(LOAD_HEALTH_DOC)), { version: 1, profiles: { a: { dropped: 0, enabled: 3 } } });
+  assert.deepEqual(savedDoc(), { version: 2, consent: client.consentToken(), profiles: { a: { dropped: 0, enabled: 3 } } });
 });
 
 test("a launch that lost every extension reports how many were enabled the launch before and how many are newly dropped", async () => {
-  stub.docs.set(LOAD_HEALTH_DOC, JSON.stringify({ version: 1, profiles: { b: { dropped: 1, enabled: 3 } } }));
-  const fresh = await import(`./loadHealth.ts?saved=${Date.now()}`);
+  stub.docs.set(LOAD_HEALTH_DOC, JSON.stringify({ version: 2, consent: client.consentToken(), profiles: { b: { dropped: 1, enabled: 3 } } }));
+  const fresh = await freshModule();
   health.b = { dropped: 7, enabled: 0, disabled: {} };
   fresh.reportExtensionsLoaded("b");
   await settle();
@@ -61,19 +64,56 @@ test("a launch that lost every extension reports how many were enabled the launc
   assert.equal(event.dropped, 7);
   assert.equal(event.dropped_new, 6);
   assert.equal(event.enabled_last_launch, 3);
-  assert.deepEqual(JSON.parse(stub.docs.get(LOAD_HEALTH_DOC)).profiles.b, { dropped: 7, enabled: 0 });
+  assert.deepEqual(savedDoc().profiles.b, { dropped: 7, enabled: 0 });
 });
 
-test("an unreadable or newer document reads as no last launch and is replaced", async () => {
-  for (const saved of ["{", JSON.stringify({ version: 9, profiles: { c: { dropped: 0, enabled: 2 } } }), JSON.stringify({ version: 1, profiles: { c: { dropped: -1, enabled: "2" } } })]) {
+test("an unreadable or newer document, one from before consent was recorded, or one from another consent period reads as no last launch and is replaced", async () => {
+  const docs = [
+    "{",
+    JSON.stringify({ version: 9, consent: client.consentToken(), profiles: { c: { dropped: 0, enabled: 2 } } }),
+    JSON.stringify({ version: 2, consent: client.consentToken(), profiles: { c: { dropped: -1, enabled: "2" } } }),
+    JSON.stringify({ version: 1, profiles: { c: { dropped: 0, enabled: 2 } } }),
+    JSON.stringify({ version: 2, consent: "an-earlier-period", profiles: { c: { dropped: 0, enabled: 2 } } }),
+  ];
+  for (const saved of docs) {
     stub.docs.set(LOAD_HEALTH_DOC, saved);
-    const fresh = await import(`./loadHealth.ts?saved=${Math.random()}`);
+    const fresh = await freshModule();
     health.c = { dropped: 2, enabled: 1, disabled: {} };
     fresh.reportExtensionsLoaded("c");
     await settle();
     const [event] = await loadedEvents();
-    assert.equal(event.dropped_new, 0);
-    assert.equal(event.enabled_last_launch, -1);
-    assert.deepEqual(JSON.parse(stub.docs.get(LOAD_HEALTH_DOC)), { version: 1, profiles: { c: { dropped: 2, enabled: 1 } } });
+    assert.equal(event.dropped_new, 0, saved);
+    assert.equal(event.enabled_last_launch, -1, saved);
+    assert.deepEqual(savedDoc(), { version: 2, consent: client.consentToken(), profiles: { c: { dropped: 2, enabled: 1 } } });
   }
+});
+
+test("a launch while sharing is off keeps no baseline, so the next shared launch reports nothing from it", async () => {
+  stub.docs.delete(LOAD_HEALTH_DOC);
+  client.setSharing(false, "settings");
+  health.d = { dropped: 0, enabled: 4, disabled: {} };
+  (await freshModule()).reportExtensionsLoaded("d");
+  await settle();
+  assert.equal(stub.docs.has(LOAD_HEALTH_DOC), false);
+  client.setSharing(true, "settings");
+  health.d = { dropped: 5, enabled: 0, disabled: {} };
+  (await freshModule()).reportExtensionsLoaded("d");
+  await settle();
+  seen = 0;
+  const [event] = (await loadedEvents()).filter((e) => e.dropped === 5);
+  assert.equal(event.enabled_last_launch, -1);
+  assert.equal(event.dropped_new, 0);
+});
+
+test("a load that began in one consent period and answers in the next writes no baseline for either", async () => {
+  stub.docs.delete(LOAD_HEALTH_DOC);
+  let answer;
+  health.e = new Promise((resolve) => (answer = resolve));
+  stub.extensionAnswers.loadHealth = async (profile) => health[profile];
+  (await freshModule()).reportExtensionsLoaded("e");
+  client.setSharing(false, "settings");
+  client.setSharing(true, "settings");
+  answer({ dropped: 0, enabled: 2, disabled: {} });
+  await settle();
+  assert.equal(stub.docs.has(LOAD_HEALTH_DOC), false);
 });

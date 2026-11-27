@@ -80,14 +80,14 @@ export function chainCheckedTransport(native: SyncNativeApi, folder: string): { 
   return { transport: { ...transport, read }, confirmChain };
 }
 
-export type FolderLoss = "unavailable" | "missing" | "retry" | null;
+export type FolderLoss = "unavailable" | "missing" | "back" | null;
 
-export async function folderLossAfter(native: SyncNativeApi, folder: string, error: unknown, mayRetry: boolean): Promise<FolderLoss> {
+export async function folderLossAfter(native: SyncNativeApi, folder: string, error: unknown, firstLook: boolean): Promise<FolderLoss> {
   const code = (error as { code?: unknown } | null)?.code;
   if (code !== "ERR_SYNC_CHAIN_MISSING" && code !== "ERR_SYNC_FOLDER") return null;
   const status = await native.chainStatus(folder).catch(() => null);
   if (status === "unavailable" || status === "missing") return status;
-  if (status === "ok" && mayRetry) return "retry";
+  if (status === "ok" && firstLook) return "back";
   return code === "ERR_SYNC_CHAIN_MISSING" ? "missing" : null;
 }
 

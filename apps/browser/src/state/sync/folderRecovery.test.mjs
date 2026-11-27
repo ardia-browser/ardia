@@ -769,3 +769,28 @@ for (const desktop of [false, true]) {
     assert.match(state.error ?? "", /sync folder is missing/i);
   });
 }
+
+test("a loss first seen while sharing was off is never counted after sharing turns on, even when its verdict waits a cycle", async () => {
+  reset();
+  const telemetry = await import("../telemetry/client.ts");
+  const engine = await import("./engine.ts?loss-consent-carried");
+  telemetry.loadChoice();
+  telemetry.setSharing(false, "settings");
+  try {
+    engine.startSync();
+    assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+    await engine.syncNow();
+    engine.takeSnapshotWrites();
+    writeFindsChainGone = true;
+    S().addBookmark({ profileId: "default", url: "https://one.example/", title: "One" });
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, false, "the first look defers its verdict");
+    telemetry.setSharing(true, "settings");
+    await engine.syncNow();
+    assert.equal(engine.useSync.getState().dataMissing, true, "the second look reports the data missing");
+    assert.equal(engine.takeSnapshotWrites().chainMissing, 0, "counted under the consent of the cycle that first saw it");
+  } finally {
+    writeFindsChainGone = false;
+    telemetry.setSharing(false, "settings");
+  }
+});

@@ -44,7 +44,7 @@ export const currentSyncFolder = () => useSync.getState().folder;
 let doc: SyncDoc = emptyDoc();
 let cycle: Promise<void> | null = null;
 let again = false;
-let retriedAfterLoss = false;
+let lossFirstSeen: ConsentToken | null | undefined;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let stateLoading: Promise<unknown> = Promise.resolve();
@@ -109,7 +109,7 @@ const clockFor = (device: string) => (editClock().device !== device && startEdit
 
 async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring, forcePasswords }: Required<CycleOptions>) {
   const consent = consentToken();
-  const gone = (status: string) => publishChainGone(status, { native, folder, device, consent, wasOffline: useSync.getState().status === "offline", publish: publishUi });
+  const gone = (status: string, seen = consent) => publishChainGone(status, { native, folder, device, consent: seen, wasOffline: useSync.getState().status === "offline", publish: publishUi });
   await stateLoading;
   if (useSync.getState().status === "locked") return;
   clearTimeout(timer);
@@ -163,14 +163,15 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     delete doc.reseedCycleOwed;
     doc.lastSyncedAt = Date.now();
     noteChainStatus(consent, device, "ok");
-    retriedAfterLoss = false;
+    lossFirstSeen = undefined;
     publishUi({ status: "updated", error: null, pending, dataMissing: false });
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;
-    const lost = await folderLossAfter(native, folder, error, !retriedAfterLoss);
-    retriedAfterLoss = lost === "retry";
-    if (lost === "retry") again = true;
-    else if (lost) await gone(lost);
+    const lost = await folderLossAfter(native, folder, error, lossFirstSeen === undefined);
+    const seen = lossFirstSeen === undefined ? consent : lossFirstSeen;
+    lossFirstSeen = lost === "back" ? consent : undefined;
+    if (lost === "back") again = true;
+    else if (lost) await gone(lost, seen);
     else if (code === "ERR_SYNC_FOLDER_UNREADABLE") {
       publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
     } else if (useSync.getState().status !== "locked") {

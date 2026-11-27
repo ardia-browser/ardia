@@ -13,6 +13,8 @@ export type DeckGeometry = {
   leftReach: number;
   rightReach: number;
   stack: DeckStack;
+  cardsLeft: number;
+  cardsRight: number;
   tail: number;
   cardCorner: number;
   cardCenterY: number;
@@ -38,6 +40,8 @@ export const DECK = {
 export const DECK_REDESIGN = { barReserve: 67, chromeGap: 21, minSafeBottom: 20, barAboveSafeBottom: 11, cardWidthRatio: 0.56, stepRatio: 0.33, pileEdge: 8 } as const;
 
 export type DeckStack = "pile" | "arc";
+
+export type DeckStrip = { side: "left" | "right"; inset: number };
 
 export const DECK_ARC = { cardWidthRatio: 0.655, step: 0.844, peek: 0.264, tail: 0.091, focusNudge: 0.03, centerRatio: 0.514, cardCorner: 20, nearShrink: 0.02, farShrink: 0.07, leastScale: 0.6 } as const;
 
@@ -71,7 +75,7 @@ function reach(peek: number, spacing: number): number {
   return value;
 }
 
-export function deckGeometry(width: number, height: number, safeTop: number, safeBottom: number, safeSide = 0, os: string = "android", design: Design = "original", chromeHeight = 0, screenCorner: number = DECK.displayCornerRadius, stack: DeckStack = "pile"): DeckGeometry {
+export function deckGeometry(width: number, height: number, safeTop: number, safeBottom: number, safeSide = 0, os: string = "android", design: Design = "original", chromeHeight = 0, screenCorner: number = DECK.displayCornerRadius, stack: DeckStack = "pile", strip: DeckStrip | null = null): DeckGeometry {
   const w = Math.max(width, 1);
   const h = Math.max(height, 1);
   const redesigned = design === "redesigned";
@@ -80,7 +84,7 @@ export function deckGeometry(width: number, height: number, safeTop: number, saf
   const bandBottom = redesigned ? h - barCenter + DECK_REDESIGN.barAboveSafeBottom - DECK_REDESIGN.barReserve + 24 : h - barCenter + BAR_GAP - DECK.barReserve + 24;
   const band = Math.max(bandBottom - bandTop, 120);
   const aspect = h / w;
-  if (redesigned && stack === "arc") return arcGeometry(w, h, safeTop, safeBottom, safeSide, bandTop, bandBottom, band, aspect, barCenter, screenCorner);
+  if (redesigned && stack === "arc") return arcGeometry(w, h, safeTop, safeBottom, safeSide, bandTop, bandBottom, band, aspect, barCenter, screenCorner, strip);
   const cardWidth = Math.min(w * (redesigned ? DECK_REDESIGN.cardWidthRatio : DECK.cardWidthRatio), band / aspect);
   const focusLeading = redesigned ? (w - cardWidth) / 2 : w * DECK.focusLeadingRatio;
   const spacing = Math.min(cardWidth, w * (redesigned ? DECK_REDESIGN.stepRatio : DECK.stepRatio));
@@ -99,6 +103,8 @@ export function deckGeometry(width: number, height: number, safeTop: number, saf
     leftReach,
     rightReach,
     stack: "pile",
+    cardsLeft: 0,
+    cardsRight: w,
     tail: 0,
     cardCorner: DECK.cardRadius,
     cardCenterY: bandTop + band / 2,
@@ -108,8 +114,12 @@ export function deckGeometry(width: number, height: number, safeTop: number, saf
   };
 }
 
-function arcGeometry(w: number, h: number, safeTop: number, safeBottom: number, safeSide: number, bandTop: number, bandBottom: number, band: number, aspect: number, barCenter: number, screenCorner: number): DeckGeometry {
-  const cardWidth = Math.min(w * DECK_ARC.cardWidthRatio, band / aspect);
+function arcGeometry(w: number, h: number, safeTop: number, safeBottom: number, safeSide: number, bandTop: number, bandBottom: number, band: number, aspect: number, barCenter: number, screenCorner: number, strip: DeckStrip | null): DeckGeometry {
+  const cardsLeft = strip?.side === "left" ? strip.inset : 0;
+  const cardsRight = strip?.side === "right" ? w - strip.inset : w;
+  const room = Math.max(cardsRight - cardsLeft, 1);
+  const pileClearance = strip ? 0 : safeSide;
+  const cardWidth = Math.min(room * DECK_ARC.cardWidthRatio, band / aspect);
   const cardHeight = cardWidth * aspect;
   const spacing = cardWidth * DECK_ARC.step;
   const tail = cardWidth * DECK_ARC.tail;
@@ -122,11 +132,13 @@ function arcGeometry(w: number, h: number, safeTop: number, safeBottom: number, 
     safeSide,
     cardWidth,
     cardHeight,
-    focusLeading: Math.max((w - spacing) / 2 - cardWidth * DECK_ARC.focusNudge, safeSide + cardWidth * DECK_ARC.peek),
+    focusLeading: cardsLeft + Math.max((room - spacing) / 2 - cardWidth * DECK_ARC.focusNudge, pileClearance + cardWidth * DECK_ARC.peek),
     spacing,
     leftReach: reach(cardWidth * DECK_ARC.peek - tail, spacing - tail),
     rightReach: 0,
     stack: "arc",
+    cardsLeft,
+    cardsRight,
     tail,
     cardCorner: DECK_ARC.cardCorner,
     cardCenterY: centred,
@@ -154,7 +166,7 @@ export function deckVisibleWidth(g: DeckGeometry, relative: number, isLast: bool
   "worklet";
   const leading = deckLeading(g, relative);
   const covered = isLast ? g.cardWidth : Math.min(g.cardWidth, Math.max(0, deckLeading(g, relative + 1) - leading));
-  return g.rightReach > 0 || g.stack === "arc" ? Math.min(covered, Math.max(0, g.width - leading)) : covered;
+  return g.rightReach > 0 || g.stack === "arc" ? Math.min(covered, Math.max(0, g.cardsRight - leading)) : covered;
 }
 
 export function swiftRound(value: number): number {
@@ -187,7 +199,7 @@ export function deckShouldClose(translation: number, velocity: number, cardHeigh
 
 export function deckCardAt(g: DeckGeometry, count: number, scroll: number, x: number, y: number, mountedAround: number = scroll, mountedReach: number = Infinity): number {
   "worklet";
-  if (count <= 0) return -1;
+  if (count <= 0 || ((g.cardsLeft > 0 || g.cardsRight < g.width) && (x < g.cardsLeft || x > g.cardsRight))) return -1;
   const half = g.cardHeight / 2;
   if (y < g.cardCenterY - half || y > g.cardCenterY + half) return -1;
   for (let index = count - 1; index >= 0; index--) {
@@ -378,6 +390,10 @@ export function deckSettleVelocity(g: DeckGeometry, scroll: number, target: numb
   if (Math.abs(distance) <= 0.001) return 0;
   return Math.min(Math.max(-velocityX / g.spacing / distance, -30), 30) * distance;
 }
+
+export const deckClipShift = (g: DeckGeometry) => (g.cardsRight < g.width ? g.cardsRight - g.width : g.cardsLeft);
+
+export const deckStripClips = (g: DeckGeometry) => g.cardsLeft > 0 || g.cardsRight < g.width;
 
 export const archiveCardEdgeY = (g: DeckGeometry, aboveBarCenter: number) => g.barCenterY - aboveBarCenter;
 

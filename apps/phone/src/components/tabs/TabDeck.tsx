@@ -114,7 +114,8 @@ import { cardHitSeq, currentPhoneGeneration, DECK_HIT_LABELS, deckAwaitsEntrance
 import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 import { DECK_PULL, pullTarget, stackPullTarget } from "../../lib/deckPull";
 import { glassFadeMs } from "../ui/motion";
-import { barSpanCenter } from "../../lib/bottomBarSpan";
+import { barSpanCenter, deckStripOf } from "../../lib/bottomBarSpan";
+import { DeckStripClip } from "./DeckStripClip";
 import { useBarGlyphFade, useDeckPulled } from "./deckPulled";
 
 type Phase = { kind: "opening" | "settled" | "closing"; id: string | null };
@@ -178,9 +179,12 @@ export const TabDeck = memo(function TabDeck() {
   const { tabs: allTabs, selectedId: heldSelected } = useHeldDeckOrder();
   const archiveOffered = useArchiveCardShowing();
   const archiveCard = archiveOffered && !side && !redesigned;
+  const deckStrip = deckStripOf(deckBarLayout, insets);
+  const stripSide = deckStrip?.side ?? null;
+  const stripInset = deckStrip?.inset ?? 0;
   const g = useMemo(
-    () => (material ? materialDeckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, deckHeaderBottom(), DECK_SCREEN_CORNER()) : deckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, design, deckHeaderBottom(), DECK_SCREEN_CORNER(), "arc")),
-    [width, height, insets.top, insets.bottom, safeSide, design],
+    () => (material ? materialDeckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, deckHeaderBottom(), DECK_SCREEN_CORNER()) : deckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, design, deckHeaderBottom(), DECK_SCREEN_CORNER(), "arc", stripSide ? { side: stripSide, inset: stripInset } : null)),
+    [width, height, insets.top, insets.bottom, safeSide, design, stripSide, stripInset],
   );
   useEffect(() => labTrace(`PAGELAB deck frame ${Math.round(width)}x${Math.round(height)} window ${Math.round(window.width)}x${Math.round(window.height)} insets ${insets.top}/${insets.bottom}`), [width, height, window.width, window.height, insets.top, insets.bottom]);
   const [deckHeight, setDeckHeight] = useState(height);
@@ -1356,6 +1360,7 @@ export const TabDeck = memo(function TabDeck() {
         >
           <GestureDetector gesture={deckGesture}>
             <Animated.View testID="deckCards" style={[styles.touch, { height: g.height }, cardsStyle]} collapsable={false}>
+              <DeckStripClip geometry={g} motion={motion}>
               {containedCards(contained, { ids: shownIds, geometry: g, motion }, shownIds.map((id) => {
                 const flying = leavingCards.find((card) => card.id === id);
                 const tab = flying?.tab ?? tabs.get(id);
@@ -1376,6 +1381,7 @@ export const TabDeck = memo(function TabDeck() {
                   />
                 );
               }))}
+              </DeckStripClip>
             </Animated.View>
           </GestureDetector>
         </ScrollActions>

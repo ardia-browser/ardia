@@ -50,6 +50,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["glass_render"],
       },
       {
+        text: "With each launch, whether Page Border is on in Appearance and its corner radius in points. Both can be changed only on iPad, so other devices send the defaults",
+        fields: ["page_border", "page_corner_radius"],
+      },
+      {
         text: "On Android, with each launch, whether the Material You design was off, and with it on, whether Dynamic Colors used your wallpaper, Ardia used your custom color, or the phone gave no wallpaper palette and Ardia used its own",
         fields: ["material_colors"],
       },

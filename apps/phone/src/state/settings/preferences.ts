@@ -30,7 +30,13 @@ export type Preferences = {
   keyboardHeights: string;
   readerSerif: boolean;
   readerTheme: "light" | "sepia" | "dark" | null;
+  pageBorder: boolean;
+  pageCornerRadius: number;
 };
+
+export const PAGE_CORNER_RADIUS = Object.freeze({ min: 0, max: 24, standard: 16 });
+
+export const clampPageCornerRadius = (radius: number) => (Number.isFinite(radius) ? Math.min(PAGE_CORNER_RADIUS.max, Math.max(PAGE_CORNER_RADIUS.min, Math.round(radius))) : PAGE_CORNER_RADIUS.standard);
 
 export const DEFAULT_PREFERENCES: Preferences = {
   autoArchiveInterval: STANDARD_AUTO_ARCHIVE,
@@ -54,6 +60,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   keyboardHeights: "",
   readerSerif: true,
   readerTheme: null,
+  pageBorder: true,
+  pageCornerRadius: PAGE_CORNER_RADIUS.standard,
 };
 
 export const PREFERENCE_KEYS: Record<keyof Preferences, string> = {
@@ -78,6 +86,8 @@ export const PREFERENCE_KEYS: Record<keyof Preferences, string> = {
   keyboardHeights: "search.keyboardHeights",
   readerSerif: "reader.serif",
   readerTheme: "reader.theme",
+  pageBorder: "browsing.pageBorder",
+  pageCornerRadius: "browsing.pageCornerRadius",
 };
 
 const oneOf =
@@ -117,6 +127,8 @@ const PARSERS: { [K in keyof Preferences]: (raw: string) => Preferences[K] | und
   keyboardHeights: (raw) => (/^(\d{1,4}x\d{1,4}=\d{1,4})?(;\d{1,4}x\d{1,4}=\d{1,4}){0,3}$/.test(raw) ? raw : undefined),
   readerSerif: flag,
   readerTheme: oneOf<"light" | "sepia" | "dark">(["light", "sepia", "dark"]),
+  pageBorder: flag,
+  pageCornerRadius: (raw) => (/^-?\d{1,4}(\.\d+)?$/.test(raw) ? clampPageCornerRadius(Number(raw)) : undefined),
 };
 
 export const acceptsPreference = (name: keyof Preferences, raw: string) => PARSERS[name](raw) !== undefined;

@@ -82,6 +82,8 @@ export const EVENT_FIELDS = {
     color_choice: { kind: "enum", values: ["match_mac", "preset", "custom"] },
     theme_fixed_scheme: { kind: "flag" },
     glass_render: { kind: "enum", values: ["lens", "frost", "clear", "solid", "classic", "native", "none"] },
+    page_border: { kind: "flag" },
+    page_corner_radius: { kind: "count" },
     previous_session: { kind: "enum", values: PREVIOUS_SESSIONS },
   },
   perf_launch: { launch_ms: { kind: "ms" }, js_ms: { kind: "ms" } },

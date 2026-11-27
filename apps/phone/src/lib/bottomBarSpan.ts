@@ -1,4 +1,4 @@
-import { FLOATING_BAR_PLACE } from "./deckGeometry.ts";
+import { FLOATING_BAR_PLACE, type DeckStrip } from "./deckGeometry.ts";
 
 export type BarSpan = { left: number; right: number };
 
@@ -47,6 +47,8 @@ export function duoFieldReach(width: number, layout: BottomBarLayout, side: numb
   return { side: strip.side === "right" ? "marginLeft" : "marginRight", rest: Math.max(width - span.left - span.right - DUO_BAR.button, 0), open: 0, typing: side - far };
 }
 
+export const barSwipeSpan = (width: number, layout: BottomBarLayout) => (layout.strip?.ends ? Math.min(Math.max(width - layout.span.left - layout.span.right, 0), width) : width);
+
 export const barSpanCenter = (width: number, span: BarSpan) => (span.left + width - span.right) / 2;
 
 export function besideStrip(strip: DuoStrip, width: number, menuWidth: number, margin: number) {
@@ -55,3 +57,5 @@ export function besideStrip(strip: DuoStrip, width: number, menuWidth: number, m
   const fitted = Math.max(Math.min(menuWidth, room), 0);
   return strip.side === "right" ? { right: width - strip.centerX + away, width: fitted } : { left: strip.centerX + away, width: fitted };
 }
+
+export const deckStripOf = (layout: BottomBarLayout, insets: { left: number; right: number }): DeckStrip | null => (layout.strip ? { side: layout.strip.side, inset: layout.strip.side === "left" ? insets.left : insets.right } : null);

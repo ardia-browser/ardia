@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { besideStrip, bottomBarLayout, DUO_PLUS_ABOVE, duoFieldReach, duoSqueeze, isOpenDuo } from "./bottomBarSpan.ts";
+import { barSwipeSpan, besideStrip, bottomBarLayout, deckStripOf, DUO_PLUS_ABOVE, duoFieldReach, duoSqueeze, isOpenDuo } from "./bottomBarSpan.ts";
+import { pagerCommitDistance, snapTarget } from "./pagerPhysics.ts";
 
 test("with no hinge every bottom bar pads by the larger side inset plus its own side, on both sides, and nothing goes to a strip", () => {
   assert.deepEqual(bottomBarLayout(402, { left: 0, right: 0 }, "none", 24), { span: { left: 24, right: 24 }, strip: null });
@@ -106,4 +107,31 @@ test("Duo's strip control is the shared 48-point bar control, not a second defin
   assert.equal(DUO_BAR.button, FLOATING_BAR_PLACE.control);
   assert.match(source, /button: FLOATING_BAR_PLACE\.control/);
   assert.equal(DUO_BAR.axis, 48);
+});
+
+test("a sideways swipe on the bar commits at half the drag span the bar offers: half the screen on an iPhone and the closed Duo, as before, and half the 400-wide capsule on the open Duo, so a swipe that stays on the capsule can switch tabs", () => {
+  const commitOn = (width: number, insets: { left: number; right: number }, hinge: "none" | "closed" | "fullyOpen") => pagerCommitDistance(barSwipeSpan(width, bottomBarLayout(width, insets, hinge, 24)));
+  assert.equal(commitOn(402, { left: 0, right: 0 }, "none"), 201);
+  assert.equal(commitOn(852, { left: 59, right: 59 }, "none"), 426);
+  assert.equal(commitOn(466, { left: 0, right: 84 }, "closed"), 233);
+  assert.equal(commitOn(951, { left: 0, right: 84 }, "fullyOpen"), 200);
+  assert.equal(commitOn(951, { left: 84, right: 0 }, "fullyOpen"), 200);
+  assert.equal(commitOn(951, { left: 0, right: 0 }, "fullyOpen"), 475.5, "a pose with no strip keeps the plain bar and its threshold");
+  assert.ok(commitOn(951, { left: 0, right: 84 }, "fullyOpen") < 400, "reachable within the capsule");
+  const open = commitOn(951, { left: 0, right: 84 }, "fullyOpen");
+  assert.equal(snapTarget(230, 0, 951, true, true, open), 1, "a slow 230 point pan to the right commits");
+  assert.equal(snapTarget(-230, 0, 951, true, true, open), -1);
+  assert.equal(snapTarget(370, 200, 951, true, true, open), 1);
+  assert.equal(snapTarget(150, 0, 951, true, true, open), 0, "a short drag still springs back");
+  assert.equal(snapTarget(230, -400, 951, true, true, open), 0, "a drag let go moving back does not switch");
+  assert.equal(snapTarget(230, 0, 951, true, true), 0, "the old half-screen threshold refused it");
+  assert.equal(snapTarget(230, 0, 402, true, true), 1);
+  assert.equal(snapTarget(190, 0, 402, true, true), 0);
+});
+
+test("the deck's cards keep clear of the Duo's strip on whichever side it is, and a plain iPhone has none", () => {
+  assert.deepEqual(deckStripOf(bottomBarLayout(466, { left: 0, right: 84 }, "closed", 24), { left: 0, right: 84 }), { side: "right", inset: 84 });
+  assert.deepEqual(deckStripOf(bottomBarLayout(951, { left: 84, right: 0 }, "fullyOpen", 24), { left: 84, right: 0 }), { side: "left", inset: 84 });
+  assert.equal(deckStripOf(bottomBarLayout(852, { left: 59, right: 59 }, "none", 24), { left: 59, right: 59 }), null);
+  assert.equal(deckStripOf(bottomBarLayout(466, { left: 0, right: 20 }, "closed", 24), { left: 0, right: 20 }), null);
 });

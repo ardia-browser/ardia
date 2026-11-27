@@ -1,4 +1,5 @@
 import { Dimensions, Platform, StyleSheet } from "react-native";
+import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { BrowsingScreen } from "../components/browsing/BrowsingScreen";
 import { FloatingBar } from "../components/browsing/FloatingBar";
@@ -60,6 +61,7 @@ test("an iPhone 17 Pro on its side gets Arc's stack, its card as tall as the ban
   expect(g.safeSide).toBe(59);
   act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
   const root = redesigned(<TabDeck />);
+  expect(hosts(root, "deckStripClip")).toHaveLength(0);
   const card = root.root.findAll((node) => node.props.testID === "deckCard" && typeof node.type === "string")[0]!;
   const shown = deckGeometry(852, 393, 0, 21, 59, Platform.OS, "redesigned", deckHeaderBottom(), 55, "arc");
   expect(flat(card).width).toBeCloseTo(shown.cardWidth, 1);
@@ -168,6 +170,29 @@ for (const pose of DUO_POSES) {
     expect(holds(hosts(start, "startStripPlus")[0]!, "startBarPlus")).toBe(true);
     expect(holds(hosts(start, "startStripTabs")[0]!, "startBarTabs")).toBe(true);
     unmount(start);
+  });
+}
+
+for (const pose of DUO_POSES) {
+  test(`on the ${pose.name} Duo the deck's cards, header and grid keep clear of the strip, which starts ${pose.width - pose.insets.right} across`, () => {
+    onDuo(pose);
+    const strip = pose.width - pose.insets.right;
+    act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
+    const root = redesigned(<TabDeck />);
+    const g = deckGeometry(pose.width, pose.height, pose.insets.top, pose.insets.bottom, pose.insets.right, Platform.OS, "redesigned", deckHeaderBottom(), 55, "arc", { side: "right", inset: pose.insets.right });
+    const card = root.root.findAll((node) => node.props.testID === "deckCard" && typeof node.type === "string")[0]!;
+    expect(flat(card).width).toBeCloseTo(g.cardWidth, 1);
+    expect(deckLeading(g, 0) + g.cardWidth).toBeLessThan(strip);
+    const clip = hosts(root, "deckStripClip")[0]!;
+    expect(flat(clip)).toMatchObject({ left: 0, width: pose.width, overflow: "hidden" });
+    expect(getAnimatedStyle(clip).transform).toEqual([{ translateX: strip - pose.width }]);
+    const header = root.root.findAll((node) => typeof node.type === "string" && node.props.testID === "deckHeader");
+    expect(flat(header[0]!).paddingHorizontal).toBe(pose.insets.right + 24);
+    if (Platform.OS !== "ios") return unmount(root);
+    act(() => deckGrid.setDeckGrid(true));
+    act(() => jest.advanceTimersByTime(1000));
+    expect(StyleSheet.flatten(hosts(root, "tabGridScroll")[0]!.props.contentContainerStyle).paddingHorizontal).toBe(pose.insets.right + 16);
+    unmount(root);
   });
 }
 

@@ -33,12 +33,18 @@ export function resolvedOffset(raw: number, hasLeft: boolean, hasRight: boolean,
   return 0;
 }
 
-export function snapTarget(offset: number, velocity: number, width: number, hasLeft: boolean, hasRight: boolean): number {
+export function pagerCommitDistance(dragSpan: number): number {
+  "worklet";
+  return Math.max(dragSpan, 0) * PAGER.commitFraction;
+}
+
+export function snapTarget(offset: number, velocity: number, width: number, hasLeft: boolean, hasRight: boolean, commitAt?: number): number {
   "worklet";
   if (width <= 0) return 0;
+  const commit = commitAt ?? pagerCommitDistance(width);
   const projected = offset + velocity * PAGER.projectionTime;
-  if (hasLeft && projected > width * PAGER.commitFraction && velocity > -PAGER.opposingVelocity) return 1;
-  if (hasRight && projected < -width * PAGER.commitFraction && velocity < PAGER.opposingVelocity) return -1;
+  if (hasLeft && projected > commit && velocity > -PAGER.opposingVelocity) return 1;
+  if (hasRight && projected < -commit && velocity < PAGER.opposingVelocity) return -1;
   return 0;
 }
 

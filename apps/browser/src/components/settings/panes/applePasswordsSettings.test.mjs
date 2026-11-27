@@ -203,3 +203,34 @@ test("S6: when Pairing has ended the status reads Not connected, with a Connect 
   assert.equal(statusOf(profileId).text, "Connected");
   assert.equal(storedChoice(profileId), "apple");
 });
+
+test("story 3: Pairing in one profile picks Apple Passwords for every profile sharing its browser data, and Settings says so", async () => {
+  await settingsOn("notConnected");
+  const work = S().createProfile({ name: "Work" });
+  const shared = S().createProfile({ name: "Shared", shareWith: work });
+  const own = S().createProfile({ name: "Own" });
+  managerMenu(work).onChange("apple");
+  await flush();
+  const sheet = pairingSheet();
+  sheet.type(native.applePasswords.code);
+  sheet.press("Connect");
+  await flush();
+  assert.equal(storedChoice(work), "apple");
+  assert.equal(storedChoice(shared), "apple", "the profile sharing Work's data shares the choice");
+  assert.notEqual(storedChoice(own), "apple", "a profile with its own data keeps its own");
+  assert.equal(managerMenu(shared).value, "apple");
+  assert.equal(statusOf(shared)?.text, "Connected");
+  const [row] = find(rowFor(shared), (n) => n.type === form.Row && n.props.anchor === "profiles.passwordManager");
+  assert.match(row.props.description, /Also applies to Work/);
+});
+
+test("story 6: a profile from before the update stays on Ardia once Apple Passwords is offered", async () => {
+  native.applePasswords.calls.length = 0;
+  const profileId = await settingsOn("notConnected");
+  assert.equal(storedChoice(profileId), undefined, "an existing profile has no stored choice");
+  const menu = managerMenu(profileId);
+  assert.ok(offersApple(menu), "Apple Passwords is offered");
+  assert.equal(menu.value, "ardia", "but the profile reads Ardia");
+  assert.equal(statusOf(profileId), null, "and shows no Apple Passwords status");
+  assert.deepEqual(native.applePasswords.calls.filter((c) => c === "pair"), [], "nothing starts Pairing by itself");
+});

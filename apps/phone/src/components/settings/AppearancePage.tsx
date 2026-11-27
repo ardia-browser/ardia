@@ -10,6 +10,7 @@ import { syncOffered } from "../../state/sync/offer";
 import { setColorChoice, setDynamicColors, setInterfaceStyle, setSchemeChoice } from "../../state/settings/actions";
 import { useAppearanceSummary } from "../../state/settings/appearance";
 import { chooseCustomTheme, resetPresetTheme } from "../../state/settings/customTheme";
+import { selectedSwatch } from "../../state/settings/themeDraft";
 import { usePreferences } from "../../state/settings/hooks";
 import { popSettings, pushSettings } from "../../state/settings/nav";
 import { matchMyMac } from "../../state/sync/actions";
@@ -118,8 +119,9 @@ export function ColorRow({ labelled = true, plainIcon = false, customAvailable =
   const look = useProfileLook();
   const choice = usePreferences((p) => p.colorChoice);
   const material = useDesign() === "material";
-  const selected = material ? choice ?? "plum" : look.preset;
-  const custom = !material && choice === "custom";
+  const picked = usePreferences((p) => selectedSwatch(p, look));
+  const selected = material ? choice ?? "plum" : picked;
+  const custom = !material && picked === "custom";
   const editedPreset = usePreferences((p) => (!material && p.colorChoice && p.colorChoice !== "custom" && p.presetThemes[p.colorChoice] ? p.colorChoice : null));
   return (
     <>

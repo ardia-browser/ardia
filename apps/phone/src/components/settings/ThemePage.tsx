@@ -7,17 +7,21 @@ import { editedLook, keptReadable, TEXTURE_NAMES, THEME_MODES } from "../../lib/
 import { dropThemeDraft, editCustomTheme, editedChoice, startingCustomTheme } from "../../state/settings/customTheme";
 import { popSettings } from "../../state/settings/nav";
 import { useCustomTheme } from "../../state/settings/themeDraft";
-import { capsule, CustomLookBackdrop, font, settingsLayout, slotAround, space, Symbol, themeEditorLayout as L, useProfileLook, useTheme } from "../ui";
-import { Group, PickerRow, SettingsHostedContext, SettingsPage } from "./SettingsKit";
+import { capsule, CustomLookBackdrop, font, press, settingsLayout, slotAround, space, Symbol, themeEditorLayout as L, useProfileLook, useTheme } from "../ui";
+import { ButtonRow, Group, PickerRow, SettingsHostedContext, SettingsPage } from "./SettingsKit";
 import { themeStepperLayout } from "./settingsTokens";
 import { ColorPad, DirectionDial, LightnessBar, ThemeSlider, type BlockedScroll } from "./ThemeControls";
 import { usePreferences } from "../../state/settings/hooks";
 import { SettingsPageOpenedContext } from "./settingsOpened";
 import type { ColorChoice } from "../../state/settings/preferences";
 import { useSyncEnabled } from "../../state/sync/hooks";
+import { matchMyMac } from "../../state/sync/actions";
 
-function useLiveTheme(stored: ProfileTheme, target: ColorChoice) {
-  const opened = useContext(SettingsPageOpenedContext);
+const FOLLOWING_MAC = "Following your Mac's theme.";
+const STOP_MATCHING = "Stop matching to edit";
+
+function useLiveTheme(stored: ProfileTheme, target: ColorChoice | null) {
+  const opened = useContext(SettingsPageOpenedContext) && target !== null;
   const [local, setLocal] = useState<ProfileTheme | null>(null);
   const frame = useRef<number | null>(null);
   const pending = useRef<ProfileTheme | null>(null);
@@ -44,7 +48,7 @@ function useLiveTheme(stored: ProfileTheme, target: ColorChoice) {
       frame.current = null;
       pending.current = null;
       setLocal(null);
-      editCustomTheme(next, true, targetNow.current);
+      if (targetNow.current) editCustomTheme(next, true, targetNow.current);
       return;
     }
     setLocal(next);
@@ -61,17 +65,21 @@ function useLiveTheme(stored: ProfileTheme, target: ColorChoice) {
   return { theme: local ?? stored, change, cancel };
 }
 
+const MATCHING_MAC = "matchMac";
+
 export function ThemePage() {
   const look = useProfileLook();
   const stored = useCustomTheme();
-  const matchingMac = useSyncEnabled() && usePreferences((p) => p.colorChoice === null);
-  const editing = editedChoice(usePreferences((p) => p.colorChoice), look, matchingMac);
+  const colorChoice = usePreferences((p) => p.colorChoice);
+  const syncEnabled = useSyncEnabled();
+  const matchingMac = syncEnabled && colorChoice === null;
+  const target = matchingMac ? null : editedChoice(colorChoice, look);
   const saved = stored !== null;
-  const fallback = useMemo(() => (saved ? null : startingCustomTheme(look)), [editing, saved, look]);
-  return <ThemeEditor key={editing} stored={stored ?? fallback!} target={editing} />;
+  const fallback = useMemo(() => (saved ? null : startingCustomTheme(look)), [target, saved, look]);
+  return <ThemeEditor key={target ?? MATCHING_MAC} stored={stored ?? fallback!} target={target} onStopMatching={() => matchMyMac(false, look)} />;
 }
 
-function ThemeEditor({ stored, target }: { stored: ProfileTheme; target: ColorChoice }) {
+function ThemeEditor({ stored, target, onStopMatching }: { stored: ProfileTheme; target: ColorChoice | null; onStopMatching: () => void }) {
   const ui = useTheme();
   const dark = ui.dark;
   const { theme: editing, editsDark } = editedLook(stored, dark);
@@ -85,53 +93,61 @@ function ThemeEditor({ stored, target }: { stored: ProfileTheme; target: ColorCh
   const set = (patch: Partial<ProfileTheme>) => change({ ...theme, ...patch }, true);
   const live = (field: "intensity" | "translucency" | "grain") => (value: number, settle: boolean) => change({ ...theme, [field]: value }, settle);
   const kept = keptReadable(theme, dark);
+  const locked = target === null;
   const body = (
     <LegacyScrollView ref={scroll} bounces alwaysBounceVertical={false} overScrollMode="auto" style={styles.fill} contentContainerStyle={styles.content}>
-      <Group>
+      <Group footer={locked ? FOLLOWING_MAC : null}>
         <CustomLookBackdrop testID="themePreview" look={preview} dark={dark} style={styles.preview} />
       </Group>
-      <Group header="Colors" footer={editsDark === null ? null : `Separate light and dark looks. Editing keeps the ${editsDark ? "dark" : "light"} one.`}>
-        <View style={styles.colors}>
-          <ColorPad theme={theme} selected={index} onSelect={setSelected} onChange={change} onCancel={cancel} blocks={blocks} />
-          <LightnessBar theme={theme} index={index} onChange={change} onCancel={cancel} blocks={blocks} />
-          <View style={styles.count}>
-            <Text style={[font.body, styles.fill, { color: ui.secondaryLabel }]}>
-              {theme.stops.length} of {MAX_THEME_STOPS} colors
-            </Text>
-            <Stepper
-              icon="minus"
-              label="Remove Color"
-              enabled={theme.stops.length > 1}
-              onPress={() => {
-                change(withoutStop(theme, index), true);
-                setSelected(Math.max(0, index - 1));
-              }}
-            />
-            <Stepper
-              icon="plus"
-              label="Add Color"
-              enabled={theme.stops.length < MAX_THEME_STOPS}
-              onPress={() => {
-                change(withAddedStop(theme), true);
-                setSelected(theme.stops.length);
-              }}
-            />
+      {locked ? (
+        <Group>
+          <ButtonRow title={STOP_MATCHING} onPress={onStopMatching} />
+        </Group>
+      ) : null}
+      <View collapsable={false} pointerEvents={locked ? "none" : "auto"} accessibilityElementsHidden={locked} importantForAccessibility={locked ? "no-hide-descendants" : "auto"} style={locked ? styles.locked : null}>
+        <Group header="Colors" footer={editsDark === null ? null : `Separate light and dark looks. Editing keeps the ${editsDark ? "dark" : "light"} one.`}>
+          <View style={styles.colors}>
+            <ColorPad theme={theme} selected={index} onSelect={setSelected} onChange={change} onCancel={cancel} blocks={blocks} />
+            <LightnessBar theme={theme} index={index} onChange={change} onCancel={cancel} blocks={blocks} />
+            <View style={styles.count}>
+              <Text style={[font.body, styles.fill, { color: ui.secondaryLabel }]}>
+                {theme.stops.length} of {MAX_THEME_STOPS} colors
+              </Text>
+              <Stepper
+                icon="minus"
+                label="Remove Color"
+                enabled={!locked && theme.stops.length > 1}
+                onPress={() => {
+                  change(withoutStop(theme, index), true);
+                  setSelected(Math.max(0, index - 1));
+                }}
+              />
+              <Stepper
+                icon="plus"
+                label="Add Color"
+                enabled={!locked && theme.stops.length < MAX_THEME_STOPS}
+                onPress={() => {
+                  change(withAddedStop(theme), true);
+                  setSelected(theme.stops.length);
+                }}
+              />
+            </View>
           </View>
-        </View>
-      </Group>
-      <Group>
-        <ThemeSlider title="Intensity" value={theme.intensity} onChange={live("intensity")} onCancel={cancel} blocks={blocks} />
-        <ThemeSlider title="Pass-Through Blur" value={theme.translucency} onChange={live("translucency")} onCancel={cancel} blocks={blocks} />
-        <ThemeSlider title="Noise" value={theme.grain} onChange={live("grain")} onCancel={cancel} blocks={blocks} />
-        <PickerRow<ThemeTexture> title="Texture" options={THEME_TEXTURES.map((id) => ({ id, title: TEXTURE_NAMES[id] }))} selected={theme.texture} divider onSelect={(texture) => change(withTexture(theme, texture), true)} />
-        <Row title="Direction">
-          <Text style={[font.body, styles.degrees, { color: ui.secondaryLabel }]}>{Math.round(lookAngle(theme))}°</Text>
-          <DirectionDial angle={lookAngle(theme)} onChange={(angle, settle) => change(withAngle(theme, angle), settle)} onCancel={cancel} blocks={blocks} />
-        </Row>
-      </Group>
-      <Group footer={kept ? `Kept ${dark ? "dark" : "light"} so text stays readable.` : null}>
-        <PickerRow<ThemeMode> title="Appearance" options={[...THEME_MODES]} selected={theme.mode} onSelect={(mode) => set({ mode })} />
-      </Group>
+        </Group>
+        <Group>
+          <ThemeSlider title="Intensity" value={theme.intensity} onChange={live("intensity")} onCancel={cancel} blocks={blocks} />
+          <ThemeSlider title="Pass-Through Blur" value={theme.translucency} onChange={live("translucency")} onCancel={cancel} blocks={blocks} />
+          <ThemeSlider title="Noise" value={theme.grain} onChange={live("grain")} onCancel={cancel} blocks={blocks} />
+          <PickerRow<ThemeTexture> title="Texture" options={THEME_TEXTURES.map((id) => ({ id, title: TEXTURE_NAMES[id] }))} selected={theme.texture} divider onSelect={(texture) => change(withTexture(theme, texture), true)} />
+          <Row title="Direction">
+            <Text style={[font.body, styles.degrees, { color: ui.secondaryLabel }]}>{Math.round(lookAngle(theme))}°</Text>
+            <DirectionDial angle={lookAngle(theme)} onChange={(angle, settle) => change(withAngle(theme, angle), settle)} onCancel={cancel} blocks={blocks} />
+          </Row>
+        </Group>
+        <Group footer={kept ? `Kept ${dark ? "dark" : "light"} so text stays readable.` : null}>
+          <PickerRow<ThemeMode> title="Appearance" options={[...THEME_MODES]} selected={theme.mode} onSelect={(mode) => set({ mode })} />
+        </Group>
+      </View>
     </LegacyScrollView>
   );
   return (
@@ -173,6 +189,7 @@ function Stepper({ icon, label, enabled, onPress }: { icon: "minus" | "plus"; la
 }
 
 const styles = StyleSheet.create({
+  locked: { opacity: press.disabledOpacity },
   fill: { flex: 1 },
   content: { paddingTop: space.m, paddingBottom: space.huge, gap: space.xxl },
   preview: { height: L.preview },

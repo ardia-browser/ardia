@@ -9,6 +9,7 @@ import { INTERFACE_STYLE_NAMES, INTERFACE_STYLES, offeredInterfaceStyle, offered
 import { setColorChoice, setInterfaceStyle, setSchemeChoice } from "../../state/settings/actions";
 import { usePreferences } from "../../state/settings/hooks";
 import { chooseCustomTheme, resetPresetTheme } from "../../state/settings/customTheme";
+import { selectedSwatch } from "../../state/settings/themeDraft";
 import { settingsRouteKey } from "../../state/settings/nav";
 import { CUSTOM_CHOICE } from "../../lib/profileLook";
 import type { PresetColor } from "../../state/settings/preferences";
@@ -35,6 +36,7 @@ export function ExpoAppearancePage() {
   const chosen = usePreferences((p) => p.colorChoice);
   const edited = usePreferences((p) => (p.colorChoice && p.colorChoice !== CUSTOM_CHOICE ? Boolean(p.presetThemes[p.colorChoice]) : false));
   const look = useProfileLook();
+  const picked = usePreferences((p) => selectedSwatch(p, look));
   return (
     <Form modifiers={modifierList(navigationTitle("Appearance"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       <Section>
@@ -42,14 +44,14 @@ export function ExpoAppearancePage() {
           <Text>{actionWords.color}</Text>
           <HStack spacing={0}>
             {COLORS.slice(0, ROW_LENGTH).map((color) => (
-              <Swatch key={color} color={color} selected={color === look.preset} />
+              <Swatch key={color} color={color} selected={color === picked} />
             ))}
           </HStack>
           <HStack spacing={0}>
             {COLORS.slice(ROW_LENGTH).map((color) => (
-              <Swatch key={color} color={color} selected={color === look.preset} />
+              <Swatch key={color} color={color} selected={color === picked} />
             ))}
-            <CustomSwatch selected={chosen === "custom"} />
+            <CustomSwatch selected={picked === "custom"} />
           </HStack>
         </VStack>
         <NavigationLink value={settingsRouteKey({ page: "theme" })}>

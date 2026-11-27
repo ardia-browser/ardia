@@ -13,7 +13,7 @@ import { editCustomTheme, resetPresetTheme } from "../state/settings/customTheme
 import { usePreferences } from "../state/settings/store";
 import { useThemeDraft } from "../state/settings/themeDraft";
 import { useSync } from "../state/sync/store";
-import { renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
+import { pressButton, renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
 import { status, view } from "../../test/syncFixture";
 
 const overrides: ("light" | "dark" | null)[] = [];
@@ -32,6 +32,7 @@ const lookModule = require("@ardia/phone-native/src/look") as typeof import("@ar
 type Root = ReturnType<typeof renderSurface>;
 
 const onAndroid = Platform.OS === "android" ? test : test.skip;
+const onIos = Platform.OS === "ios" ? test : test.skip;
 
 const blue = startingTheme("#4691C3");
 
@@ -189,29 +190,89 @@ function matchMac(profile: Record<string, unknown>) {
   act(() => useSync.setState((state) => ({ ...state, status: status({ selectedProfileId: "work" }), view: view({ profiles: [shown as never], selectedProfileId: "work" }) })));
 }
 
-test("an edit while matching a Mac on stock Green edits a copy in Custom and never the phone's own edited Green", () => {
+const sliderValue = (root: Root, label: string) => root.root.findAll((node) => node.props.accessibilityLabel === label && node.props.accessibilityValue?.now !== undefined)[0]!.props.accessibilityValue.now;
+
+test("while Match My Mac is on, the Theme page shows the Mac's look locked: no control writes anything, Custom and the phone's presets stay as they were", () => {
   const phoneGreen = { ...blue, grain: 0.91 };
-  act(() => usePreferences.setState({ colorChoice: null, presetThemes: { green: phoneGreen } }));
+  act(() => usePreferences.setState({ colorChoice: null, customTheme: blue, presetThemes: { green: phoneGreen } }));
   matchMac({ color: "green", theme: null });
   const editor = inDesign(<ThemePage />);
+  expect(textOf(editor)).toContain("Following your Mac");
+  expect(pressable(editor, "Add Color")!.props.disabled).toBe(true);
   press(editor, "Add Color");
-  expect(usePreferences.getState().presetThemes.green).toEqual(phoneGreen);
-  expect(usePreferences.getState().colorChoice).toBe("custom");
-  expect(stored().stops.length).toBe(3);
-  expect(stored().grain).not.toBe(phoneGreen.grain);
+  layOut(editor, "Noise", 226);
+  drag("themeTrack:Noise", [{ x: 13, y: 10 }, { x: 213, y: 10 }]);
+  expect(usePreferences.getState().colorChoice).toBeNull();
+  expect(usePreferences.getState().customTheme).toEqual(blue);
+  expect(usePreferences.getState().presetThemes).toEqual({ green: phoneGreen });
+  expect(useThemeDraft.getState().draft).toBeNull();
   unmount(editor);
 });
 
-test("while matching the Mac, the Theme page starts from the Mac's current look, also after the Mac's theme changes", () => {
+test("Stop matching to edit turns Match My Mac off and opens the editor, unlocked, on the look that was showing", async () => {
+  act(() => usePreferences.setState({ colorChoice: null, customTheme: blue }));
+  matchMac({ color: "green", theme: null });
+  const editor = inDesign(<ThemePage />);
+  await pressButton(editor, "Stop matching to edit");
+  expect(usePreferences.getState().colorChoice).toBe("green");
+  expect(usePreferences.getState().customTheme).toEqual(blue);
+  expect(textOf(editor)).not.toContain("Following your Mac");
+  expect(pressable(editor, "Add Color")!.props.disabled).toBe(false);
+  press(editor, "Add Color");
+  expect(usePreferences.getState().presetThemes.green!.stops.length).toBe(3);
+  unmount(editor);
+});
+
+test("while matching the Mac, the Theme page shows the Mac's current look, also after the Mac's theme changes", () => {
   act(() => usePreferences.setState({ colorChoice: null }));
   const macTheme = (grain: number) => ({ colors: ["#5CD6D3", "#5C71D6"], darkColors: null, mode: "auto" as const, look: { ...blue, grain }, dark: null });
   matchMac({ theme: macTheme(0.15) });
   const editor = inDesign(<ThemePage />);
+  expect(sliderValue(editor, "Noise")).toBe(15);
   matchMac({ theme: macTheme(0.85) });
-  press(editor, "Add Color");
-  expect(usePreferences.getState().colorChoice).toBe("custom");
-  expect(stored().grain).toBe(0.85);
+  expect(sliderValue(editor, "Noise")).toBe(85);
   unmount(editor);
+});
+
+test("sync turning on or off while the Theme page is open re-renders it without a crash and locks or unlocks it", () => {
+  act(() => usePreferences.setState({ colorChoice: null }));
+  const editor = inDesign(<ThemePage />);
+  expect(textOf(editor)).not.toContain("Following your Mac");
+  matchMac({ color: "green", theme: null });
+  expect(textOf(editor)).toContain("Following your Mac");
+  act(() => useSync.setState((state) => ({ ...state, status: status({ isEnabled: false, phase: "off" }) })));
+  expect(textOf(editor)).not.toContain("Following your Mac");
+  unmount(editor);
+});
+
+onAndroid("with stock Green on the Mac and an edited Green on the phone, Appearance selects no swatch, since neither draws the look in use", () => {
+  act(() => usePreferences.setState({ colorChoice: null, presetThemes: { green: { ...blue, grain: 0.91 } } }));
+  matchMac({ color: "green", theme: null });
+  openSettings({ page: "appearance" });
+  const root = inDesign(<SettingsView />);
+  const selected = root.root.findAll((node) => node.props.accessibilityRole === "radio" && node.props.accessibilityState?.selected === true && typeof node.props.onPress === "function").map((node) => node.props.accessibilityLabel);
+  expect(selected).toEqual([]);
+  act(() => usePreferences.setState({ presetThemes: {} }));
+  const now = root.root.findAll((node) => node.props.accessibilityRole === "radio" && node.props.accessibilityState?.selected === true && typeof node.props.onPress === "function").map((node) => node.props.accessibilityLabel);
+  expect(now).toEqual(["Green"]);
+  unmount(root);
+});
+
+const iosSelectedSwatches = (root: Root) =>
+  root.root
+    .findAll((node) => typeof node.type === "string" && Array.isArray(node.props.modifiers) && JSON.stringify(node.props.modifiers).includes("isSelected"))
+    .map((node) => JSON.stringify(node.props.modifiers).match(/"(Plum|Blue|Purple|Pink|Red|Orange|Yellow|Green|Neutral|Custom)(, edited)?"/)?.[0])
+    .filter(Boolean);
+
+onIos("on iPhone too, with stock Green on the Mac and an edited Green on the phone, Appearance selects no swatch", () => {
+  act(() => usePreferences.setState({ colorChoice: null, presetThemes: { green: { ...blue, grain: 0.91 } } }));
+  matchMac({ color: "green", theme: null });
+  openSettings({ page: "appearance" });
+  const root = renderSurface(<SettingsView />);
+  expect(iosSelectedSwatches(root)).toEqual([]);
+  act(() => usePreferences.setState({ presetThemes: {} }));
+  expect(iosSelectedSwatches(root)).toEqual(['"Green"']);
+  unmount(root);
 });
 
 test("a slider drag the system cancels saves nothing and leaves no draft", () => {

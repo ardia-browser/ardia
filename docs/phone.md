@@ -103,10 +103,15 @@ as addresses only Chromium can read, so `SystemDownloads` used to refuse them. A
 (`DataUrls`: percent-encoded or forgiving base64, a 1,024-character header, at most 512 MiB). A `blob:` link is read
 back from the page: `PageBlobs.script`, a document-start script in every frame, says `ardiaBlob:hello` over the
 `ardiaPage` listener, remembers the `Blob` behind each `URL.createObjectURL` (kept 60 s after the page revokes it, so
-`a.click(); URL.revokeObjectURL(url)` still saves) and reports an `<a download>` name when the link is clicked. For a
+`a.click(); URL.revokeObjectURL(url)` still saves; the newest revoked blob always, older ones only up to 64 MiB and 16
+blobs) and reports an `<a download>` name when the link is clicked. For a
 blob, native sends `fetch <token> <url>` to the frames of the blob's own origin (never to an opaque one); the first
 frame that answers `start` with the size, type and name is bound, and native pulls 192 KiB base64 chunks one at a time
-(`next`/`chunk`), writing them through the same MediaStore entry as a web download. A blob no frame holds fails as
+(`next`/`chunk`), writing them through the same MediaStore entry as a web download. Every frame asked hears `cancel`
+when the request ends, a frame that answers an ended request is told `cancel` too, and the page drops a blob it was
+sending after 60 s idle. A new top document replaces the frames native knows (iframes are capped at 32, the top frame
+is never dropped), and a page restored from the back-forward cache says `hello` again. A private download is published
+under the same lock that ends private sessions, and deleted if the session ended while it was published. A blob no frame holds fails as
 `server`, frames that never answer (5 s), a page that stops sending (15 s), goes away (`pagehide`), a closed tab and a
 private session ending all end as `Failed`. Names: the link's `download` attribute, then the `File`'s name, then
 WebView's guess with the extension of the blob's type. A download refused before it starts now says why in

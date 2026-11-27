@@ -12,7 +12,7 @@ class PageBlobs(
     private val totalMillis: Long = TOTAL_MILLIS,
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
 ) {
-    private class Frame(val origin: String, val send: (String) -> Unit)
+    private class Frame(val origin: String, val isMain: Boolean, val send: (String) -> Unit)
 
     private class Named(val name: String, val at: Long)
 
@@ -30,22 +30,26 @@ class PageBlobs(
         data object Closed : Piece
     }
 
-    private inner class Request(val token: String, val url: String, val origin: String, val asked: Int) {
-        val pieces = LinkedBlockingQueue<Piece>()
+    private inner class Request(val token: String, val url: String, val origin: String, val asked: Map<Any, Frame>) {
+        val pieces = LinkedBlockingQueue<Piece>(QUEUED_PIECES)
         var bound: Any? = null
         var boundSend: ((String) -> Unit)? = null
-        var missing = 0
+        val missing: MutableSet<Any> = java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
         var awaiting = -1
         var ended = false
+        var terminated = false
+
+        fun finish(piece: Piece) {
+            if (terminated) return
+            terminated = true
+            pieces.offer(piece)
+        }
 
         fun heard(message: BlobMessage.ForRequest, key: Any, send: (String) -> Unit) {
             when (message) {
-                is BlobMessage.Missing -> if (bound == null) {
-                    missing += 1
-                    if (missing >= asked) pieces.offer(Piece.AllMissing)
-                }
+                is BlobMessage.Missing -> if (bound == null && asked.containsKey(key) && missing.add(key) && missing.size >= asked.size) finish(Piece.AllMissing)
                 is BlobMessage.Start -> when {
-                    bound == null -> {
+                    bound == null && !terminated -> {
                         bound = key
                         boundSend = send
                         pieces.offer(Piece.Start(message))
@@ -56,7 +60,7 @@ class PageBlobs(
                     awaiting = -1
                     pieces.offer(Piece.Chunk(message.base64))
                 }
-                is BlobMessage.Fail -> if (bound === key) pieces.offer(Piece.Failed)
+                is BlobMessage.Fail -> if (bound === key) finish(Piece.Failed)
             }
         }
     }
@@ -66,17 +70,16 @@ class PageBlobs(
     private val names = LinkedHashMap<String, Named>()
     private val requests = HashMap<String, Request>()
 
+    internal val queuedPieces: Int get() = synchronized(lock) { requests.values.sumOf { it.pieces.size } }
+
     fun heard(text: String?, sourceOrigin: String, isMainFrame: Boolean, key: Any, send: (String) -> Unit): Boolean {
         if (text == null || !text.startsWith(PageMadeDownloads.PREFIX)) return false
+        if (text.length - PageMadeDownloads.PREFIX.length > PageMadeDownloads.MAX_MESSAGE_CHARS) return true
         val origin = PageMadeDownloads.webOrigin(sourceOrigin) ?: return true
         val message = PageMadeDownloads.parse(text.substring(PageMadeDownloads.PREFIX.length)) ?: return true
         synchronized(lock) {
             when (message) {
-                BlobMessage.Hello -> {
-                    frames.remove(key)
-                    frames[key] = Frame(origin, send)
-                    while (frames.size > MAX_FRAMES) frames.remove(frames.keys.first())
-                }
+                BlobMessage.Hello -> remember(key, Frame(origin, isMainFrame, send))
                 is BlobMessage.Name -> {
                     val fromItsOrigin = if (PageMadeDownloads.isBlob(message.key)) PageMadeDownloads.blobOrigin(message.key) == origin else isMainFrame
                     if (fromItsOrigin) {
@@ -85,10 +88,25 @@ class PageBlobs(
                         while (names.size > MAX_NAMES) names.remove(names.keys.first())
                     }
                 }
-                is BlobMessage.ForRequest -> requests[message.token]?.takeIf { it.origin == origin }?.heard(message, key, send)
+                is BlobMessage.ForRequest -> {
+                    val request = requests[message.token]
+                    when {
+                        request != null && request.origin == origin -> request.heard(message, key, send)
+                        message is BlobMessage.Start -> runCatching { send("${PageMadeDownloads.PREFIX}cancel ${message.token}") }
+                    }
+                }
             }
         }
         return true
+    }
+
+    private fun remember(key: Any, frame: Frame) {
+        if (frame.isMain) frames.clear() else frames.remove(key)
+        frames[key] = frame
+        while (frames.size > MAX_FRAMES) {
+            val oldest = frames.entries.firstOrNull { !it.value.isMain }?.key ?: break
+            frames.remove(oldest)
+        }
     }
 
     fun announcedName(url: String): String? {
@@ -107,29 +125,27 @@ class PageBlobs(
     }
 
     fun reset() {
-        val ended = synchronized(lock) {
+        synchronized(lock) {
             frames.clear()
             names.clear()
-            requests.values.toList().also { requests.clear() }
+            for (request in requests.values) request.finish(Piece.Closed)
+            requests.clear()
         }
-        for (request in ended) request.pieces.offer(Piece.Closed)
     }
 
     private fun open(url: String, origin: String, call: DownloadCall): DownloadResponse {
         val token = PageMadeDownloads.newToken()
-        val (request, targets) = synchronized(lock) {
-            val targets = frames.values.filter { it.origin == origin }
+        val request = synchronized(lock) {
+            val targets = frames.filterValues { it.origin == origin }
             if (targets.isEmpty()) throw DownloadRefused(DownloadFailure.Server)
-            val request = Request(token, url, origin, targets.size)
-            requests[token] = request
-            request to targets
+            Request(token, url, origin, targets).also { requests[token] = it }
         }
         try {
             call.register {
-                request.pieces.offer(Piece.Cancelled)
+                synchronized(lock) { request.finish(Piece.Cancelled) }
                 end(request, "cancel")
             }
-            onMain(Runnable { for (frame in targets) runCatching { frame.send("${PageMadeDownloads.PREFIX}fetch $token $url") } })
+            onMain(Runnable { for (frame in request.asked.values) runCatching { frame.send("${PageMadeDownloads.PREFIX}fetch $token $url") } })
             val start = awaitStart(request, call)
             if (start.size > PageMadeDownloads.MAX_BYTES) throw DownloadRefused(DownloadFailure.Unsupported)
             val headers = buildMap<String, List<String>> {
@@ -155,7 +171,7 @@ class PageBlobs(
                 Piece.Cancelled -> throw DownloadCancelled()
                 null -> {
                     call.ensureActive()
-                    val anyMissing = synchronized(lock) { request.missing > 0 }
+                    val anyMissing = synchronized(lock) { request.missing.isNotEmpty() }
                     throw DownloadRefused(if (anyMissing) DownloadFailure.Server else DownloadFailure.Network)
                 }
                 else -> throw DownloadRefused(DownloadFailure.Network)
@@ -164,13 +180,15 @@ class PageBlobs(
     }
 
     private fun end(request: Request, verb: String) {
-        val send = synchronized(lock) {
+        val sends = synchronized(lock) {
             if (request.ended) return
             request.ended = true
             requests.remove(request.token)
-            request.boundSend
-        } ?: return
-        onMain(Runnable { runCatching { send("${PageMadeDownloads.PREFIX}$verb ${request.token}") } })
+            val bound = request.bound
+            request.asked.filterKeys { it !== bound }.values.map { it.send to "cancel" } +
+                listOfNotNull(request.boundSend?.let { it to verb })
+        }
+        onMain(Runnable { for ((send, said) in sends) runCatching { send("${PageMadeDownloads.PREFIX}$said ${request.token}") } })
     }
 
     private inner class Body(private val request: Request, private val size: Long, private val call: DownloadCall) : InputStream() {
@@ -233,7 +251,11 @@ class PageBlobs(
         const val NAME_KEEP_MILLIS = 30_000L
         private const val MAX_FRAMES = 32
         private const val MAX_NAMES = 16
+        private const val QUEUED_PIECES = 4
         private const val KEEP_AFTER_REVOKE_MILLIS = 60_000
+        private const val KEPT_AFTER_REVOKE_BYTES = 64L * 1024 * 1024
+        private const val KEPT_AFTER_REVOKE_COUNT = 16
+        private const val SENDING_IDLE_MILLIS = 60_000
 
         val script: String = """
 (() => {
@@ -244,18 +266,29 @@ class PageBlobs(
   const chunkBytes = ${PageMadeDownloads.CHUNK_BYTES};
   const edge = ${PageMadeDownloads.DATA_KEY_EDGE};
   const keepAfterRevoke = $KEEP_AFTER_REVOKE_MILLIS;
+  const keptBytesCap = $KEPT_AFTER_REVOKE_BYTES;
+  const keptCountCap = $KEPT_AFTER_REVOKE_COUNT;
+  const sendingIdle = $SENDING_IDLE_MILLIS;
   const made = new Map();
+  const kept = [];
+  let keptBytes = 0;
   const named = new Map();
   const sending = new Map();
+  let sweeping = 0;
   const say = (text) => { try { bridge.postMessage(prefix + text); } catch (error) {} };
   const create = URL.createObjectURL;
   const revoke = URL.revokeObjectURL;
+  const forget = (key, entry) => {
+    const at = kept.indexOf(entry);
+    if (at >= 0) { kept.splice(at, 1); keptBytes -= entry.size; }
+    if (made.get(key) === entry) made.delete(key);
+  };
   URL.createObjectURL = function createObjectURL(object) {
     const url = create.call(URL, object);
     try {
       if (object instanceof Blob) {
-        made.set(url, { blob: object, revoked: false });
-        if (made.size > 256) for (const [key, entry] of made) { if (made.size <= 256) break; if (entry.revoked) made.delete(key); }
+        made.set(url, { key: url, blob: object, size: object.size, revoked: false });
+        if (made.size > 256) for (const [key, entry] of made) { if (made.size <= 256) break; if (entry.revoked) forget(key, entry); }
       }
     } catch (error) {}
     return url;
@@ -266,7 +299,10 @@ class PageBlobs(
       const entry = made.get(key);
       if (entry && !entry.revoked) {
         entry.revoked = true;
-        setTimeout(() => { if (made.get(key) === entry) made.delete(key); }, keepAfterRevoke);
+        kept.push(entry);
+        keptBytes += entry.size;
+        while (kept.length > 1 && (keptBytes > keptBytesCap || kept.length > keptCountCap)) forget(kept[0].key, kept[0]);
+        setTimeout(() => forget(key, entry), keepAfterRevoke);
       }
     } catch (error) {}
     return revoke.call(URL, url);
@@ -287,13 +323,25 @@ class PageBlobs(
   HTMLAnchorElement.prototype.click = function () { note(this); return click.apply(this, arguments); };
   const dispatch = EventTarget.prototype.dispatchEvent;
   EventTarget.prototype.dispatchEvent = function (event) {
-    if (event && event.type === "click" && this instanceof HTMLAnchorElement) note(this);
+    try { if (this instanceof HTMLAnchorElement && event instanceof MouseEvent && event.type === "click") note(this); } catch (error) {}
     return dispatch.apply(this, arguments);
   };
   addEventListener("click", (event) => {
-    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
-    for (const node of path) if (node instanceof HTMLAnchorElement) { note(node); break; }
+    try {
+      const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+      for (const node of path) if (node instanceof HTMLAnchorElement) { note(node); break; }
+    } catch (error) {}
   }, true);
+  const sweep = () => {
+    sweeping = 0;
+    const now = Date.now();
+    for (const [token, entry] of sending) if (now - entry.at > sendingIdle) sending.delete(token);
+    if (sending.size) sweeping = setTimeout(sweep, sendingIdle);
+  };
+  const hold = (token, blob) => {
+    sending.set(token, { blob, at: Date.now() });
+    if (!sweeping) sweeping = setTimeout(sweep, sendingIdle);
+  };
   const answer = async (token, url) => {
     let blob = null;
     const entry = made.get(url);
@@ -305,20 +353,21 @@ class PageBlobs(
       } catch (error) {}
     }
     if (!blob) { say("missing " + token); return; }
-    sending.set(token, blob);
+    hold(token, blob);
     const name = (typeof File !== "undefined" && blob instanceof File && blob.name) || named.get(url) || "";
     say("start " + token + " " + blob.size + " " + encodeURIComponent(blob.type || "") + " " + encodeURIComponent(name));
   };
   const send = (token, index) => {
-    const blob = sending.get(token);
-    if (!blob || !(index >= 0)) { say("fail " + token); return; }
+    const entry = sending.get(token);
+    if (!entry || !(index >= 0)) { say("fail " + token); return; }
+    entry.at = Date.now();
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result);
       say("chunk " + token + " " + index + " " + text.slice(text.indexOf(",") + 1));
     };
     reader.onerror = () => { sending.delete(token); say("fail " + token); };
-    reader.readAsDataURL(blob.slice(index * chunkBytes, (index + 1) * chunkBytes));
+    reader.readAsDataURL(entry.blob.slice(index * chunkBytes, (index + 1) * chunkBytes));
   };
   bridge.addEventListener("message", (event) => {
     const data = typeof event.data === "string" ? event.data : "";
@@ -334,6 +383,7 @@ class PageBlobs(
     for (const token of sending.keys()) say("fail " + token);
     sending.clear();
   });
+  addEventListener("pageshow", (event) => { if (event.persisted) say("hello"); });
   say("hello");
 })();
 """.trim()

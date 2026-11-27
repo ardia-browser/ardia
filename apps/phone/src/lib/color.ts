@@ -74,13 +74,13 @@ export function readableInkOn(fill: string, ink: string, target = 4.5): string {
   const backdrop = parseColor(fill).slice(0, 3).map((channel) => channel / 255);
   const origin = parseColor(ink).slice(0, 3).map((channel) => channel / 255);
   const destination = contrastRatio([1, 1, 1], backdrop) >= contrastRatio([0, 0, 0], backdrop) ? 1 : 0;
-  let candidate = origin;
   let amount = 0;
-  while (contrastRatio(candidate, backdrop) < target && amount < 1) {
+  let candidate = toHex(origin.map((channel) => channel * 255));
+  while (contrastBetween(fill, candidate) < target && amount < 1) {
     amount = Math.min(1, amount + 0.02);
-    candidate = origin.map((channel) => channel + (destination - channel) * amount);
+    candidate = toHex(origin.map((channel) => (channel + (destination - channel) * amount) * 255));
   }
-  return toHex(candidate.map((channel) => channel * 255));
+  return candidate;
 }
 
 export function legibleInk(tint: string, dark: boolean, increasedContrast = false): string {

@@ -60,18 +60,18 @@ test("ending incognito with three private downloads in flight gives one toast fo
   expect(shown.mock.calls.map(([message]) => message)).toEqual(["Stopped 3 Private Downloads"]);
   expect(useToasts.getState().toast?.icon).toBe("warning");
   finished({ failure: "network" });
-  expect(useToasts.getState().toast?.message).toBe("Couldn’t Download otter.pdf. Check your connection and try again.");
+  expect(useToasts.getState().toast?.message).toBe("Check your connection and try again. Couldn’t Download otter.pdf.");
   unsubscribe();
 });
 
 test("a failed download says why in words, and one refused at the start names the kind of link", () => {
   const root = renderSurface(<ToastHost />);
   finished({ fileName: "seal.zip", failure: "noSpace" });
-  expect(useToasts.getState().toast).toMatchObject({ message: "Couldn’t Download seal.zip. Your phone is out of space.", icon: "warning" });
+  expect(useToasts.getState().toast).toMatchObject({ message: "Your phone is out of space. Couldn’t Download seal.zip.", icon: "warning" });
   finished({ fileName: "seal.zip", failure: "server" });
-  expect(useToasts.getState().toast?.message).toBe("Couldn’t Download seal.zip. The site didn’t send the file.");
+  expect(useToasts.getState().toast?.message).toBe("The site didn’t send the file. Couldn’t Download seal.zip.");
   page({ downloadId: null, fileName: "report.pdf", failure: "unsupported" });
-  expect(useToasts.getState().toast?.message).toBe("Couldn’t Download report.pdf. Ardia can’t save this kind of link.");
+  expect(useToasts.getState().toast?.message).toBe("Ardia can’t save this kind of link. Couldn’t Download report.pdf.");
   page({ downloadId: null, fileName: "report.pdf" });
   expect(useToasts.getState().toast?.message).toBe("Couldn’t Download report.pdf");
   unmount(root);

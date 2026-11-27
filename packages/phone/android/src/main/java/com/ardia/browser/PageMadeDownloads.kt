@@ -31,6 +31,14 @@ object PageMadeDownloads {
     private const val TOKEN_BYTES = 16
     private const val MAX_SIZE_DIGITS = 15
     private const val MAX_INDEX_DIGITS = 7
+    private const val MAX_VERB_CHARS = 7
+    private const val TOKEN_CHARS = 32
+    private const val MAX_MIME_FIELD_CHARS = 512
+    private val TOKEN_FIELDS = intArrayOf(TOKEN_CHARS)
+    private val NAME_FIELDS = intArrayOf(MAX_KEY_CHARS * 3, MAX_NAME_CHARS * 3)
+    private val START_FIELDS = intArrayOf(TOKEN_CHARS, MAX_SIZE_DIGITS, MAX_MIME_FIELD_CHARS, MAX_NAME_CHARS * 3)
+    private val CHUNK_FIELDS = intArrayOf(TOKEN_CHARS, MAX_INDEX_DIGITS, MAX_CHUNK_CHARS)
+    val MAX_MESSAGE_CHARS = listOf(TOKEN_FIELDS, NAME_FIELDS, START_FIELDS, CHUNK_FIELDS).maxOf { it.sum() + it.size } + MAX_VERB_CHARS
     private val tokenPattern = Regex("[0-9a-f]{32}")
     private val digits = Regex("[0-9]+")
     private val mimeToken = Regex("[a-z0-9][a-z0-9!#$&^_.+-]{0,126}")
@@ -83,40 +91,58 @@ object PageMadeDownloads {
 
     fun parse(text: String): BlobMessage? {
         if (text == "hello") return BlobMessage.Hello
-        val verb = text.substringBefore(' ')
-        val rest = text.substringAfter(' ', "")
+        val space = text.indexOf(' ')
+        if (space !in 1..MAX_VERB_CHARS) return null
+        val verb = text.substring(0, space)
+        val limits = when (verb) {
+            "name" -> NAME_FIELDS
+            "missing", "fail" -> TOKEN_FIELDS
+            "start" -> START_FIELDS
+            "chunk" -> CHUNK_FIELDS
+            else -> return null
+        }
+        if (text.length - space - 1 > limits.sum() + limits.size - 1) return null
+        val parts = fields(text, space + 1, limits) ?: return null
         return when (verb) {
             "name" -> {
-                val parts = rest.split(' ')
-                if (parts.size != 2 || parts[0].length > MAX_KEY_CHARS * 3 || parts[1].length > MAX_NAME_CHARS * 3) return null
                 val key = decoded(parts[0])?.takeIf { it.isNotEmpty() && it.length <= MAX_KEY_CHARS } ?: return null
                 val name = decoded(parts[1])?.takeIf { it.length <= MAX_NAME_CHARS }?.let(::cleanName) ?: return null
                 BlobMessage.Name(key, name)
             }
-            "missing" -> token(rest)?.let(BlobMessage::Missing)
-            "fail" -> token(rest)?.let(BlobMessage::Fail)
+            "missing" -> token(parts[0])?.let(BlobMessage::Missing)
+            "fail" -> token(parts[0])?.let(BlobMessage::Fail)
             "start" -> {
-                val parts = rest.split(' ')
-                if (parts.size != 4) return null
                 val token = token(parts[0]) ?: return null
-                val size = parts[1].takeIf { it.length <= MAX_SIZE_DIGITS && digits.matches(it) }?.toLongOrNull() ?: return null
-                if (parts[2].length > 512 || parts[3].length > MAX_NAME_CHARS * 3) return null
+                val size = parts[1].takeIf { digits.matches(it) }?.toLongOrNull() ?: return null
                 val mimeType = cleanMimeType(decoded(parts[2]))
                 val name = decoded(parts[3])?.takeIf { it.length <= MAX_NAME_CHARS }?.let(::cleanName)
                 BlobMessage.Start(token, size, mimeType, name)
             }
-            "chunk" -> {
-                val first = rest.indexOf(' ')
-                val second = rest.indexOf(' ', first + 1)
-                if (first < 0 || second < 0) return null
-                val token = token(rest.substring(0, first)) ?: return null
-                val index = rest.substring(first + 1, second).takeIf { it.length <= MAX_INDEX_DIGITS && digits.matches(it) }?.toIntOrNull() ?: return null
-                val base64 = rest.substring(second + 1)
-                if (base64.isEmpty() || base64.length > MAX_CHUNK_CHARS) return null
-                BlobMessage.Chunk(token, index, base64)
+            else -> {
+                val token = token(parts[0]) ?: return null
+                val index = parts[1].takeIf { digits.matches(it) }?.toIntOrNull() ?: return null
+                if (parts[2].isEmpty()) return null
+                BlobMessage.Chunk(token, index, parts[2])
             }
-            else -> null
         }
+    }
+
+    private fun fields(text: String, from: Int, limits: IntArray): List<String>? {
+        val parts = ArrayList<String>(limits.size)
+        var start = from
+        for (index in limits.indices) {
+            val limit = limits[index]
+            val windowEnd = minOf(text.length, start + limit + 1)
+            var end = start
+            while (end < windowEnd && text[end] != ' ') end += 1
+            val isLast = index == limits.lastIndex
+            if (end - start > limit) return null
+            if (isLast && end != text.length) return null
+            if (!isLast && (end >= text.length || text[end] != ' ')) return null
+            parts += text.substring(start, end)
+            start = end + 1
+        }
+        return parts
     }
 
     fun decodeChunk(base64: String): ByteArray? {

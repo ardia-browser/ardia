@@ -270,6 +270,33 @@ class SystemDownloadsTest {
         assertNull(runBlocking { withTimeoutOrNull(500) { downloads.outcomes.first() } })
     }
 
+    @Test
+    fun aPrivateSessionEndingRightBeforePublishLeavesNothingInDownloads() {
+        val name = "private-${System.nanoTime()}.txt"
+        var bodyEnded = false
+        var checksAfterBody = 0
+        val sessions = object : DownloadSessions {
+            override fun privateCookieHeader(url: String, session: String): String? = null
+
+            override fun isPrivateSessionLive(session: String): Boolean = !bodyEnded || ++checksAfterBody <= 1
+
+            override fun addPrivateSessionEndListener(listener: (String) -> Unit): AutoCloseable? = null
+        }
+        val body = object : java.io.InputStream() {
+            private var left = "hello".toByteArray().inputStream()
+
+            override fun read(): Int = left.read().also { if (it < 0) bodyEnded = true }
+
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int = left.read(buffer, offset, length).also { if (it < 0) bodyEnded = true }
+        }
+        val source = DownloadSource { DownloadResponse(200, mapOf("content-length" to listOf("5"), "content-type" to listOf("text/plain")), body) }
+        val downloads = SystemDownloads(harness.context, sessions = sessions)
+        val held = download("blob:https://a.example/p", name, isPrivate = true).copy(privateSession = "s1", source = source)
+        val outcome = DownloadHarness.run(downloads, held).also(created::add)
+        assertEquals(DownloadOutcome.Failed(name, DownloadFailure.PrivateSessionEnded, isPrivate = true), outcome)
+        assertFalse(name in storedNames())
+    }
+
     private fun storedNames(): Set<String> {
         val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val arguments = Bundle().apply {

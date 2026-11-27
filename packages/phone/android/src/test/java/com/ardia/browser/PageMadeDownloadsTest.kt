@@ -61,6 +61,23 @@ class PageMadeDownloadsTest {
     }
 
     @Test
+    fun oversizedOrOverSplitMessagesAreRefusedWithoutSplittingThem() {
+        assertNull(PageMadeDownloads.parse("name " + "a ".repeat(1_000_000)))
+        assertNull(PageMadeDownloads.parse("start " + " ".repeat(1_000_000)))
+        assertNull(PageMadeDownloads.parse("name " + "a".repeat(PageMadeDownloads.MAX_KEY_CHARS * 3 + 1) + " b.txt"))
+        assertNull(PageMadeDownloads.parse("start $token 1 text%2Fplain " + "a".repeat(PageMadeDownloads.MAX_NAME_CHARS * 3 + 1)))
+        assertNull(PageMadeDownloads.parse("chunk $token 0 " + "A".repeat(PageMadeDownloads.MAX_CHUNK_CHARS + 4)))
+        assertNull(PageMadeDownloads.parse("missing $token extra"))
+        assertNull(PageMadeDownloads.parse("verylongverb $token"))
+        val fullChunk = "chunk $token 9999999 " + "A".repeat(PageMadeDownloads.MAX_CHUNK_CHARS)
+        assertTrue(fullChunk.length <= PageMadeDownloads.MAX_MESSAGE_CHARS)
+        assertEquals(BlobMessage.Chunk(token, 9_999_999, "A".repeat(PageMadeDownloads.MAX_CHUNK_CHARS)), PageMadeDownloads.parse(fullChunk))
+        val started = System.nanoTime()
+        repeat(200) { PageMadeDownloads.parse("name " + "a ".repeat(100_000)) }
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 2_000)
+    }
+
+    @Test
     fun chunksDecodeOnlyAsStrictBase64WithinTheChunkSize() {
         assertEquals("hi", String(PageMadeDownloads.decodeChunk("aGk=")!!))
         assertNull(PageMadeDownloads.decodeChunk("aGk"))

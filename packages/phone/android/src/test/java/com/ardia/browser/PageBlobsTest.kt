@@ -21,7 +21,7 @@ class PageBlobsTest {
     private var clock = 0L
     private val blobs = PageBlobs(onMain = { it.run() }, firstAnswerMillis = 1_000, chunkIdleMillis = 1_000, now = { System.nanoTime() / 1_000_000 + clock })
 
-    private inner class Frame(val origin: String, val files: Map<String, ByteArray> = emptyMap(), val answers: Boolean = true, val main: Boolean = true, val type: String = "text/plain", val name: String = "") {
+    private inner class Frame(val origin: String, val files: Map<String, ByteArray> = emptyMap(), val answers: Boolean = true, val main: Boolean = false, val type: String = "text/plain", val name: String = "") {
         val heard = LinkedBlockingQueue<String>()
         private val serving = HashMap<String, ByteArray>()
 
@@ -271,11 +271,95 @@ class PageBlobsTest {
     }
 
     @Test
-    fun theFrameListStaysBounded() {
+    fun theFrameListStaysBoundedButNeverDropsTheTopFrame() {
+        Frame("https://top.example", main = true).hello()
         Frame("https://first.example").hello()
         repeat(40) { Frame("https://f$it.example").hello() }
+        assertNotNull(blobs.sourceFor("blob:https://top.example/1"))
         assertNull(blobs.sourceFor("blob:https://first.example/1"))
         assertNotNull(blobs.sourceFor("blob:https://f39.example/1"))
+    }
+
+    @Test
+    fun aNewTopDocumentDropsTheOldDocumentsFrames() {
+        Frame("https://old.example", main = true).hello()
+        Frame("https://ads.example").hello()
+        Frame("https://new.example", main = true).hello()
+        assertNull(blobs.sourceFor("blob:https://old.example/1"))
+        assertNull(blobs.sourceFor("blob:https://ads.example/1"))
+        assertNotNull(blobs.sourceFor("blob:https://new.example/1"))
+        Frame("https://ads.example").hello()
+        assertNotNull(blobs.sourceFor("blob:https://ads.example/1"))
+    }
+
+    @Test
+    fun oneFrameRepeatingMissingDoesNotSpeakForTheOthers() {
+        val url = "blob:https://a.example/1"
+        val empty = Frame("https://a.example", answers = false).also { it.hello() }
+        val owner = Frame("https://a.example", answers = false).also { it.hello() }
+        val pending = openAsync(url)
+        val token = empty.next("fetch")[1]
+        owner.next("fetch")
+        repeat(3) { empty.say("missing $token") }
+        owner.say("start $token 2  ")
+        assertEquals(2L, pending.get(10, TimeUnit.SECONDS).contentLength)
+    }
+
+    @Test
+    fun repeatedRepliesNeverQueueUp() {
+        val url = "blob:https://a.example/1"
+        val owner = Frame("https://a.example", answers = false).also { it.hello() }
+        val other = Frame("https://a.example", answers = false).also { it.hello() }
+        val pending = openAsync(url)
+        val token = owner.next("fetch")[1]
+        owner.say("start $token 2  ")
+        val response = pending.get(10, TimeUnit.SECONDS)
+        repeat(10_000) {
+            owner.say("fail $token")
+            owner.say("start $token 2  ")
+            other.say("start $token 2  ")
+            other.say("missing $token")
+        }
+        assertTrue("${blobs.queuedPieces} pieces queued", blobs.queuedPieces <= 1)
+        assertTrue(readAsync(response).cause() is IOException)
+    }
+
+    @Test
+    fun cancellingBeforeAnyAnswerTellsEveryFrameAsked() {
+        val first = Frame("https://a.example", answers = false).also { it.hello() }
+        val second = Frame("https://a.example", answers = false).also { it.hello() }
+        val call = DownloadCall()
+        val pending = openAsync("blob:https://a.example/1", call)
+        val token = first.next("fetch")[1]
+        second.next("fetch")
+        call.cancel()
+        assertTrue(pending.cause() is DownloadCancelled)
+        assertEquals(token, first.next("cancel")[1])
+        assertEquals(token, second.next("cancel")[1])
+    }
+
+    @Test
+    fun aFrameThatAnswersAfterTheRequestEndedIsToldToLetGo() {
+        val url = "blob:https://a.example/1"
+        val owner = Frame("https://a.example", mapOf(url to "ok".toByteArray())).also { it.hello() }
+        val late = Frame("https://a.example", answers = false).also { it.hello() }
+        val response = openAsync(url).get(10, TimeUnit.SECONDS)
+        response.use { assertEquals("ok", String(it.body.readBytes())) }
+        val token = late.next("fetch")[1]
+        assertEquals(token, late.next("cancel")[1])
+        late.say("start $token 2  ")
+        assertEquals(token, late.next("cancel")[1])
+        assertTrue(owner.heard.any { it == "${prefix}done $token" })
+    }
+
+    @Test
+    fun anOversizedMessageIsDroppedBeforeItIsParsed() {
+        val frame = Frame("https://a.example", answers = false).also { it.hello() }
+        val pending = openAsync("blob:https://a.example/1")
+        val token = frame.next("fetch")[1]
+        frame.say("start $token 2 " + " ".repeat(PageMadeDownloads.MAX_MESSAGE_CHARS) + "x")
+        frame.say("name " + "a ".repeat(1_000_000))
+        assertEquals(DownloadFailure.Network, (pending.cause() as DownloadRefused).failure)
     }
 
     @Test
@@ -290,7 +374,7 @@ class PageBlobsTest {
         assertNull(blobs.announcedName(blob))
         Frame("https://ads.example", main = false).say("name ${encode(dataKey)} evil.apk")
         assertNull(blobs.announcedName(data))
-        Frame("https://a.example").say("name ${encode(dataKey)} hello.txt")
+        Frame("https://a.example", main = true).say("name ${encode(dataKey)} hello.txt")
         assertEquals("hello.txt", blobs.announcedName(data))
         Frame("https://a.example").say("name ${encode(blob)} late.txt")
         clock += PageBlobs.NAME_KEEP_MILLIS + 1

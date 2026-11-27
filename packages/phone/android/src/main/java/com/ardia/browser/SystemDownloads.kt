@@ -217,9 +217,7 @@ class SystemDownloads(
                     }
                 }
             }
-            call.ensureActive()
-            if (!isLive()) throw DownloadRefused(DownloadFailure.PrivateSessionEnded)
-            publish(target!!)
+            publishWhileLive(entry, target!!, isLive)
             return DownloadOutcome.Finished(name, target)
         } catch (error: DownloadRefused) {
             target?.let(::discard)
@@ -231,6 +229,23 @@ class SystemDownloads(
             target?.let(::discard)
             if (call.isCancelled) throw DownloadCancelled()
             return DownloadOutcome.Failed(name, if (target == null) DownloadFailure.Network else DownloadFailure.Storage)
+        }
+    }
+
+    private fun publishWhileLive(entry: Entry, target: Uri, isLive: () -> Boolean) {
+        if (!entry.download.isPrivate) {
+            entry.call.ensureActive()
+            publish(target)
+            return
+        }
+        synchronized(sessionLock) {
+            entry.call.ensureActive()
+            if (entry.endedWithSession || !isLive()) throw DownloadRefused(DownloadFailure.PrivateSessionEnded)
+            publish(target)
+            if (!isLive()) {
+                discard(target)
+                throw DownloadRefused(DownloadFailure.PrivateSessionEnded)
+            }
         }
     }
 

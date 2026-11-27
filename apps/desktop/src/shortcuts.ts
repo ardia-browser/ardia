@@ -3,7 +3,7 @@ import { commandSpec, LINUX_STANDARD_ITEMS, shortcutSources } from "./commandCat
 import { resolveShortcuts, type ShortcutOverrides } from "./shortcutFormat";
 import { BROWSER_WINDOW_COMMANDS } from "./browserCommandRoute";
 import { KEY_REPEAT_IGNORED_COMMANDS } from "../../browser/src/state/commands/commandInteraction";
-import { COMMAND_PRESSED, CONTROL_PRESSED, EDITS_TEXT, MODIFIER_FLAGS } from "@platform/shortcutKeys";
+import { ALTGR_IS_CONTROL_ALT, COMMAND_PRESSED, CONTROL_PRESSED, EDITS_TEXT, MODIFIER_FLAGS } from "@platform/shortcutKeys";
 
 export type Binding = { keyCode: number; modifiers: number; command: BrowserCommand; arg: string | null; notInText: boolean };
 
@@ -91,7 +91,22 @@ const UTILITY_SHORTCUT_COMMANDS: ReadonlySet<string> = new Set(["closeTab", "ope
 
 export const utilityBindings = (bindings: Binding[]) => bindings.filter((binding) => UTILITY_SHORTCUT_COMMANDS.has(binding.command));
 
-export function keyboardCombo(event: Pick<KeyboardEvent, "code" | "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">) {
+type KeyInput = Pick<KeyboardEvent, "code" | "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey"> & { getModifierState?: (key: string) => boolean };
+
+let baseKeys: ReadonlyMap<string, string> = new Map();
+
+export async function readKeyboardLayout(keyboard = (globalThis.navigator as { keyboard?: { getLayoutMap?: () => Promise<ReadonlyMap<string, string>> } } | undefined)?.keyboard) {
+  baseKeys = await keyboard?.getLayoutMap?.().catch(() => null) ?? baseKeys;
+}
+
+const controlAlt = (event: KeyInput): KeyInput => {
+  if (!ALTGR_IS_CONTROL_ALT || !event.getModifierState?.("AltGraph")) return event;
+  const base = baseKeys.get(event.code);
+  return { code: event.code, key: base && base.length === 1 ? base : event.key, ctrlKey: true, metaKey: event.metaKey, altKey: true, shiftKey: event.shiftKey };
+};
+
+export function keyboardCombo(input: KeyInput) {
+  const event = controlAlt(input);
   const key = layoutKey(event) ?? keyOf(event.code)?.[0] ?? (event.key.length === 1 ? event.key.toLowerCase() : "");
   const modifiers: ShortcutModifier[] = [];
   if (COMMAND_PRESSED(event)) modifiers.push("command");
@@ -101,7 +116,8 @@ export function keyboardCombo(event: Pick<KeyboardEvent, "code" | "key" | "ctrlK
   return { key, modifiers, keyCode: codeOf(key), flags: modifiers.reduce((flags, mod) => flags | MODIFIER_FLAGS[mod], 0) };
 }
 
-export function recordableShortcut(event: Pick<KeyboardEvent, "code" | "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">) {
+export function recordableShortcut(input: KeyInput) {
+  const event = controlAlt(input);
   return !!keyboardCombo(event).key && (event.ctrlKey || event.metaKey || event.altKey || /^F\d+$/.test(event.code));
 }
 

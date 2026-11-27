@@ -4,7 +4,7 @@ import { consentEpoch } from "../../browser/src/state/telemetry/client";
 import { emitNativeEvent, provideNativeModuleProvider } from "./shims/expo-modules-core";
 import { ardiaHost, reportHostError, type ArdiaHost } from "./host";
 import { MODIFIER_FLAGS, MODIFIER_KEYS } from "@platform/shortcutKeys";
-import { composingKey, dispatchesKeyPress, keyboardCombo, linuxBindings, linuxNativeBindings, recordableShortcut, utilityBindings, type Binding } from "./shortcuts";
+import { composingKey, dispatchesKeyPress, keyboardCombo, linuxBindings, linuxNativeBindings, readKeyboardLayout, recordableShortcut, utilityBindings, type Binding } from "./shortcuts";
 
 let capturing = false;
 let holding = 0;
@@ -116,8 +116,10 @@ export async function startLinuxShortcuts(host: ArdiaHost) {
     if (flag && holding & flag || holdingCode && keyboardCombo(event).keyCode === holdingCode) releaseSwitcher();
   }, true);
   window.addEventListener("blur", () => { releaseSwitcher(); void cancelShortcutRecording(); });
+  window.addEventListener("focus", () => void readKeyboardLayout());
   window.addEventListener("pointermove", () => { pointerMoved = true; }, true);
   window.addEventListener("pointerup", () => { if (capturing) appEvent({ type: "switcherMouseUp" }); }, true);
   useBrowser.subscribe(() => { void update().catch(reportHostError); });
+  void readKeyboardLayout();
   await update();
 }

@@ -37,3 +37,5 @@ export const DEFAULT_KEYS: Readonly<Record<string, readonly string[]>> = {
 export const SHORTCUTS_SHOWN_AS_GLYPHS = false;
 
 export const EDITS_TEXT = (_keyCode: number, _modifiers: number): boolean => false;
+
+export const ALTGR_IS_CONTROL_ALT = false;

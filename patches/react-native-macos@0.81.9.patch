@@ -21,6 +21,18 @@ index 72266bd2fa7e3a8a64dc6abc88b1a1a00cf0b614..e25055dfc5bbdc02028ee537fe7e9a8a
        ref={mergedRef}
        style={typeof style === 'function' ? style({pressed}) : style}
        collapsable={false}>
+diff --git a/Libraries/Components/ScrollView/ScrollViewNativeComponent.js b/Libraries/Components/ScrollView/ScrollViewNativeComponent.js
+index 16d98c235863fd52fb07387efea0e87687558fed..2cd1ef7a1c5241f390b33104d43f3e6a4be951e1 100644
+--- a/Libraries/Components/ScrollView/ScrollViewNativeComponent.js
++++ b/Libraries/Components/ScrollView/ScrollViewNativeComponent.js
+@@ -144,6 +144,7 @@ export const __INTERNAL_VIEW_CONFIG: PartialViewConfig =
+           endDraggingSensitivityMultiplier: true,
+           directionalLockEnabled: true,
+           disableIntervalMomentum: true,
++          hasOverlayStyleIndicator: true,
+           indicatorStyle: true,
+           inverted: true,
+           keyboardDismissMode: true,
 diff --git a/Libraries/Components/TextInput/RCTTextInputViewConfig.js b/Libraries/Components/TextInput/RCTTextInputViewConfig.js
 index 253c2a49e4ed04ef7cce283ae905e218d438a007..90bdecb170c2aaf8848d1551727e1855097102f0 100644
 --- a/Libraries/Components/TextInput/RCTTextInputViewConfig.js
@@ -4019,10 +4031,45 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..c75665485afa81574f2f0be0829c1f3a
 +@end
 +#endif // macOS]
 diff --git a/React/Views/ScrollView/RCTScrollView.m b/React/Views/ScrollView/RCTScrollView.m
-index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..d06ebb9e6949046c5fd546edc77556b749f055df 100644
+index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..5f0aff14856085d411049d93b86536a133eefbd0 100644
 --- a/React/Views/ScrollView/RCTScrollView.m
 +++ b/React/Views/ScrollView/RCTScrollView.m
-@@ -702,6 +702,10 @@ - (void)layoutSubviews
+@@ -50,6 +50,7 @@ + (BOOL)isCompatibleWithResponsiveScrolling;
+ @property (nonatomic, assign, getter=isInverted) BOOL inverted;
+ @property (nonatomic, assign, getter=isScrollEnabled) BOOL scrollEnabled;
+ @property (nonatomic, strong) NSPanGestureRecognizer *panGestureRecognizer;
++@property (nonatomic, assign) BOOL keepsOverlayScrollers;
+ #endif // macOS]
+ @end
+ 
+@@ -302,6 +303,11 @@ - (void)setDocumentView:(__kindof NSView *)documentView
+   [super setDocumentView:documentView];
+   [documentView setAccessibilityLabel:[self accessibilityLabel]];
+ }
++
++- (void)setScrollerStyle:(NSScrollerStyle)scrollerStyle
++{
++  [super setScrollerStyle:_keepsOverlayScrollers ? NSScrollerStyleOverlay : scrollerStyle];
++}
+ #endif // macOS]
+ 
+ - (BOOL)shouldGroupAccessibilityChildren
+@@ -535,11 +541,9 @@ - (void)setInverted:(BOOL)inverted
+ 
+ - (void)setHasOverlayStyleIndicator:(BOOL)hasOverlayStyle
+ {
+-  if (hasOverlayStyle == true) {
+-    self.scrollView.scrollerStyle = NSScrollerStyleOverlay;
+-  } else {
+-    self.scrollView.scrollerStyle = NSScrollerStyleLegacy;
+-  }
++  _hasOverlayStyleIndicator = hasOverlayStyle;
++  _scrollView.keepsOverlayScrollers = hasOverlayStyle;
++  _scrollView.scrollerStyle = hasOverlayStyle ? NSScrollerStyleOverlay : [NSScroller preferredScrollerStyle];
+ }
+ #endif // macOS]
+ 
+@@ -702,6 +706,10 @@ - (void)layoutSubviews
  
  - (void)updateClippedSubviews
  {
@@ -4033,7 +4080,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..d06ebb9e6949046c5fd546edc77556b7
    // Find a suitable view to use for clipping
    RCTPlatformView *clipView = [self react_findClipView]; // [macOS]
    if (!clipView) {
-@@ -730,6 +734,7 @@ - (void)updateClippedSubviews
+@@ -730,6 +738,7 @@ - (void)updateClippedSubviews
      [self react_updateClippedSubviewsWithClipRect:clipRect relativeToView:clipView];
      _lastClippedToRect = bounds;
    }
@@ -4041,7 +4088,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..d06ebb9e6949046c5fd546edc77556b7
  }
  
  #if TARGET_OS_OSX // [macOS
-@@ -740,13 +745,23 @@ - (void)viewDidMoveToWindow
+@@ -740,13 +749,23 @@ - (void)viewDidMoveToWindow
    NSNotificationCenter *defaultCenter = [NSNotificationCenter defaultCenter];
    if ([self window] == nil) {
      // Unregister for bounds change notifications
@@ -4066,7 +4113,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..d06ebb9e6949046c5fd546edc77556b7
      // Register for bounds change notifications so we can track scrolling
      [defaultCenter addObserver:self
                        selector:@selector(scrollViewDocumentViewBoundsDidChange:)
-@@ -886,8 +901,13 @@ - (void)flashScrollIndicators
+@@ -886,8 +905,13 @@ - (void)flashScrollIndicators
  #pragma mark - ScrollView delegate
  
  #if TARGET_OS_OSX // [macOS
@@ -4081,6 +4128,18 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..d06ebb9e6949046c5fd546edc77556b7
    if (_disableScrollEvents) {
      return;
    }
+diff --git a/React/Views/ScrollView/RCTScrollViewManager.m b/React/Views/ScrollView/RCTScrollViewManager.m
+index fbd215c2b3d86a76d5519382fd9e03fc4ba30540..ab500b1fa9cef5db91fe00779d620557c183b53e 100644
+--- a/React/Views/ScrollView/RCTScrollViewManager.m
++++ b/React/Views/ScrollView/RCTScrollViewManager.m
+@@ -109,6 +109,7 @@ - (RCTPlatformView *)view // [macOS]
+ RCT_EXPORT_VIEW_PROPERTY(onMomentumScrollEnd, RCTDirectEventBlock)
+ RCT_EXPORT_OSX_VIEW_PROPERTY(onInvertedDidChange, RCTDirectEventBlock) // [macOS]
+ RCT_EXPORT_OSX_VIEW_PROPERTY(onPreferredScrollerStyleDidChange, RCTDirectEventBlock) // [macOS]
++RCT_EXPORT_OSX_VIEW_PROPERTY(hasOverlayStyleIndicator, BOOL) // [macOS]
+ RCT_EXPORT_VIEW_PROPERTY(inverted, BOOL)
+ RCT_EXPORT_VIEW_PROPERTY(automaticallyAdjustsScrollIndicatorInsets, BOOL)
+ #if !TARGET_OS_OSX // [macOS]
 diff --git a/React/Views/UIView+React.m b/React/Views/UIView+React.m
 index 30c4f1e53e7b94016c8ed1b425587753fc80c2ce..1fe8dd641c9c0135f43960e4cc57a0fae4cc8655 100644
 --- a/React/Views/UIView+React.m

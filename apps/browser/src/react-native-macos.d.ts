@@ -7,6 +7,9 @@ declare module "react-native" {
   interface TextProps {
     ardiaCentersCapitals?: boolean;
   }
+  interface ScrollViewProps {
+    hasOverlayStyleIndicator?: boolean;
+  }
   interface TextInputProps {
     pastedTypes?: PastedTypesType;
     ardiaCentersCapitals?: boolean;

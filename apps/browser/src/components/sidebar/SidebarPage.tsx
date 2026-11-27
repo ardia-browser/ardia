@@ -28,6 +28,7 @@ import { clearlyOverflows, DOCK_SHARE, DOCKED_ROW_PAD, dockedAfter, GLOW_ROOM, p
 import { noteNewTabDocked } from "../../state/telemetry/sidebarScrollCounts";
 import { noteSidebarPlayerStayedAcrossPages } from "../../state/telemetry/mediaCardCounts";
 import { PageRows } from "./PageRows";
+import { SIDEBAR_SCROLLER } from "../../platform/sidebarScroller";
 import { NewTabRow } from "./NewTabRow";
 import { SelectedRowPill, useSelectedRowAway } from "./SelectedRowPill";
 import { withOverscan, type ListViewport } from "./listViewport";
@@ -222,7 +223,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                             if (page.owns) sharedGeometry.current.laidOut?.();
                           }}
                           style={{ flex: 1, transform: [{ translateY: playerMotion.listUnclip }] }}
-                          showsVerticalScrollIndicator={false}
+                          {...SIDEBAR_SCROLLER}
                           scrollEventThrottle={16}
                           onScroll={onScroll}
                           onContentSizeChange={(_, content) => {

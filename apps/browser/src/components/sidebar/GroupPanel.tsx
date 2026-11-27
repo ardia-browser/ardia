@@ -3,6 +3,7 @@ import { discardKeyResponder, restoreKeyResponder, saveKeyResponder } from "../.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent, type TextInput } from "react-native";
 import { ago } from "../../lib/time";
+import { SIDEBAR_SCROLLER } from "../../platform/sidebarScroller";
 import { useGroup } from "../../state/browser/hooks";
 import { sharedTabsForPanel } from "../../state/sidebar/current";
 import { useGroupPanelTabIds, useTabsById } from "../../state/sidebar/hooks";
@@ -160,7 +161,7 @@ export function GroupPanel({ groupId, windowId, anchor, windowHeight }: { groupI
         ref={scroll}
         style={{ height: listHeight }}
         contentContainerStyle={{ paddingVertical: LIST_PAD }}
-        showsVerticalScrollIndicator={false}
+        {...SIDEBAR_SCROLLER}
         scrollEventThrottle={16}
         onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
           offset.current = e.nativeEvent.contentOffset.y;

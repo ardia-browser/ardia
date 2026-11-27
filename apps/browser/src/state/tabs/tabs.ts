@@ -320,7 +320,7 @@ function withKeptPageCopied(tabs: Record<string, Tab>, kept: string[], unloaded:
     const key = pinKeyOf(t);
     for (const other of Object.values(tabs)) {
       if (other.id === id || unloaded.has(other.id) || other.profileId !== t.profileId || pinKeyOf(other) !== key || hasPage(other) || other.url === t.url) continue;
-      tabs[other.id] = { ...other, url: t.url, title: t.title, favicon: t.favicon };
+      tabs[other.id] = { ...other, url: t.url, title: t.title, favicon: t.favicon, page: withWake(other.page, undefined) };
       copied.push(other.id);
     }
   }

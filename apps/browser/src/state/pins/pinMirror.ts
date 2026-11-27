@@ -2,7 +2,7 @@ import type { BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { ancestorIds, depthsIn, orderSections, placeBlock, syncGroupOrder, withParent } from "../groups/groups";
 import { isIncognitoProfile, isPinnedRow, makeTab, newId, pinHomeOf, pinKeyOf, pinSection, TILE_PIN, without } from "../browser/model";
-import { ASLEEP, hasPage, holderOfPage } from "../tabs/pageSession";
+import { ASLEEP, hasPage, holderOfPage, withWake } from "../tabs/pageSession";
 import { mapSlotIds, normalized, removeFromSplits, splitTabIds, stackAt } from "../splits/splits";
 import { sharedListTab, sharesTabs } from "../tabs/tabShare";
 import { removeTabs } from "../tabs/tabs";
@@ -250,7 +250,7 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
     };
     patch.pinnedUrl = src.pinnedUrl || (tile ? src.url : null) || null;
     const target = tile ? pinHomeOf(src) : src.pinnedUrl && t.pinnedUrl && !sameAddress(t.pinnedUrl, src.pinnedUrl) ? src.pinnedUrl : null;
-    if (target && !hasPage(t) && !sameAddress(t.url, target) && !keepsLastPage(s.settings, { ...t, reopenAtPinnedUrl: src.reopenAtPinnedUrl })) Object.assign(patch, { url: target, title: src.title, favicon: src.favicon });
+    if (target && !hasPage(t) && !sameAddress(t.url, target) && !keepsLastPage(s.settings, { ...t, reopenAtPinnedUrl: src.reopenAtPinnedUrl })) Object.assign(patch, { url: target, title: src.title, favicon: src.favicon, page: withWake(t.page, undefined) });
     tabs[t.id] = { ...t, ...patch };
     return t.id;
   };

@@ -295,3 +295,34 @@ test("a hash-only pinned URL edit on a pinned group's tab moves its sleeping cop
   S().activate(copy);
   assert.equal(shownUrl(copy), AWAY, "and opens the new route");
 });
+
+test("a sleeping copy that takes the kept page drops the history it would have restored, so it opens that page", () => {
+  pinnedAt(HOME, AWAY);
+  const p = copyIn(S().windowOrder[0], HOME);
+  const second = S().createWindow();
+  const copy = copyIn(second, HOME);
+  assert.equal(S().tabs[copy].url, HOME);
+  S().updateSettings({ pinnedTabsReopenAtPinnedUrl: false });
+  try {
+    S().updateTab(copy, { page: { kind: "asleep", wake: `restore:${copy}` } });
+    S().closeTab(p);
+    assert.equal(S().tabs[copy].url, AWAY);
+    assert.equal(S().tabs[copy].page.wake, undefined, "its own old entry isn't restored");
+    S().activate(copy);
+    assert.equal(shownUrl(copy), AWAY);
+  } finally {
+    S().updateSettings({ pinnedTabsReopenAtPinnedUrl: true });
+  }
+});
+
+test("a sleeping copy a hash-only edit moves drops the history it would have restored", () => {
+  const { p } = pinnedAt(HOME, HOME);
+  const second = S().createWindow();
+  const copy = copyIn(second, HOME);
+  S().closeTab(p);
+  S().updateTab(copy, { page: { kind: "asleep", wake: `restore:${copy}` } });
+  S().setPinnedUrl(p, AWAY);
+  S().updateTab(p, { url: AWAY });
+  assert.equal(S().tabs[copy].url, AWAY);
+  assert.equal(S().tabs[copy].page.wake, undefined);
+});

@@ -28,3 +28,10 @@ export const developerBarShown = (chrome: CardChrome, pane: { developerMode: boo
 
 export const paneHandleShown = (chrome: CardChrome, pane: { inSplit: boolean; visible: boolean; fullscreen: boolean; covered: boolean; lingering: boolean }): boolean =>
   chrome.kind === "none" && pane.inSplit && pane.visible && !pane.fullscreen && !pane.covered && !pane.lingering;
+
+export type PaneHandleDrag = "own" | "other" | null;
+
+export function paneHandleVisible(o: { always: boolean; hovered: boolean; drag: PaneHandleDrag; wasVisible: boolean }): boolean {
+  if (o.drag === "own") return o.wasVisible;
+  return o.drag === null && (o.always || o.hovered);
+}

@@ -24,7 +24,6 @@ import { addressFieldShownIn, revealToolbar } from "../../state/windows/toolbarA
 import { TabWebView } from "./TabWebView";
 import { withoutFragment } from "../../lib/url";
 import { developerBarShown, paneBar, paneHandleShown, type CardChrome } from "./paneChrome";
-import { PaneHandle } from "../split/PaneHandle";
 import { DeveloperBar } from "../toolbar/DeveloperBar";
 import { useDeveloperMode } from "../../state/site/developerMode";
 import { PluginPageBar } from "../plugins/PluginPageBar";
@@ -129,6 +128,7 @@ export const TabPane = memo(function TabPane({
   const doc = withoutFragment(own.url);
   const handle = paneHandleShown(chrome, { inSplit, visible, fullscreen, covered, lingering });
   const [hovered, setHovered] = useState(false);
+  if (hovered && !handle) setHovered(false);
   const motion = useToolbarMotion({ enabled: autoLayout, mode, extra: bookmarksBar ? barHeight : 0, doc });
   useEffect(() => {
     if (visible) revealToolbar(tabId);
@@ -186,6 +186,7 @@ export const TabPane = memo(function TabPane({
                 popovers={popovers}
                 cliPill={!peekShown && (fullscreen || focused || !inSplit)}
                 loadingPill={!addressFieldShown && !sidebarFieldShown && !small}
+                paneHandle={handle ? { hovered } : null}
               />
             )}
           </View>
@@ -195,7 +196,6 @@ export const TabPane = memo(function TabPane({
         </View>
       </Animated.View>
       {hideBar && <AutoHideBackdrop tabId={tabId} mode={mode} motion={motion} />}
-      {handle && <PaneHandle tabId={tabId} hovered={hovered} />}
       {autoLayout && bar.bar === "pane" && <AutoHideToolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} mode={mode} motion={motion} />}
     </View>
   );

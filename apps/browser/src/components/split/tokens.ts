@@ -1,5 +1,6 @@
 import { curve, duration } from "../ui/motion";
-import { radius, type ColorRoles } from "../ui/tokens";
+import { radius, space, type ColorRoles } from "../ui/tokens";
+import { LOADING_PILL } from "../window/tokens";
 import { over } from "../../lib/color";
 
 const DARK = {
@@ -36,7 +37,7 @@ export const SPLIT_MOTION = {
   paneHandle: { show: { duration: duration.fast, easing: curve.enter }, hide: { duration: duration.fast, easing: curve.exit } },
 } as const;
 
-export const PANE_HANDLE = { top: 8, height: 30, button: 26 } as const;
+export const PANE_HANDLE = { top: LOADING_PILL.top + LOADING_PILL.height + space.xs, height: 30, button: 26 } as const;
 
 export const TOAST_MS = 2600;
 export const TOAST_ACTION_MS = 4000;

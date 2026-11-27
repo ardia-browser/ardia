@@ -7,6 +7,8 @@ export const APPLE_ICON = "Apple Passwords";
 export const FOOTER = "Open Passwords app";
 export const NO_LOGINS = "No saved logins";
 export const NOT_SECURE = "Not secure";
+export const CONNECT = "Connect Apple Passwords";
+export const NOT_NOW = "Not now";
 export const FILL_FAILED = "Apple Passwords didn't fill this login. Unlock the Passwords app and try again.";
 const OPENED_PASSWORDS = "[logins] Passwords app (background mode, not opened)";
 
@@ -23,6 +25,26 @@ const assert = (ok, message, detail) => {
 const titles = (rows) => rows.map((r) => r.title);
 
 export function loginListChecks({ paired, sites, engine: engineName = "webkit" }) {
+  const applePasswords = async (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().state", { timeout: 20_000 });
+  const pairingStep = async (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().pairing?.step ?? null", { timeout: 20_000 });
+  const endPairing = async (app, fake) => {
+    fake.endPairing();
+    await waitFor("Pairing ended", async () => ((await applePasswords(app)) === "notConnected" ? true : null), 10_000);
+  };
+  const pairAgain = async (app, fake) => {
+    await waitFor("the code step", async () => ((await pairingStep(app)) === "code" ? true : null), 20_000);
+    await app.eval(`return ac.applePasswords.submitApplePasswordsCode(${q(FIXTURES.code)}).then(() => true);`, { timeout: 60_000 });
+    await waitFor("Paired again", async () => ((await applePasswords(app)) === "connected" ? true : null), 20_000);
+  };
+  const connectRows = async (tab) => {
+    await tab.click("#u");
+    const rows = await tab.waitRows();
+    assert(rows[0]?.title === CONNECT && !rows[0].notice, `the list starts with ${CONNECT}`, rows);
+    assert(rows.some((r) => r.title === NOT_NOW && !r.notice), `the list offers ${NOT_NOW}`, rows);
+    assert(!rows.some((r) => FIXTURES.logins.some((l) => l.user === r.title)), "no login rows while Pairing has ended", rows);
+    return rows;
+  };
+
   const open = async (host, pathname = "/login") => {
     const { tabs } = await paired();
     return tabs.open(sites.url(host, pathname));
@@ -164,6 +186,51 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       } finally {
         await tab.close();
       }
+    },
+    async E15() {
+      const { app, fake } = await paired();
+      const seen = {};
+      await endPairing(app, fake);
+      const tab = await open("example.localhost");
+      try {
+        seen.ended = titles(await connectRows(tab));
+        await tab.pick(CONNECT);
+        await pairAgain(app, fake);
+        const back = await tab.waitRows("the logins after Pairing");
+        assert(q(titles(back.slice(0, -1))) === q(usersFor("example.localhost")), "Pairing there brings the site's logins back", back);
+        seen.paired = titles(back);
+        await tab.key("escape");
+        await endPairing(app, fake);
+        await connectRows(tab);
+        await tab.pick(NOT_NOW);
+        assert(!(await tab.noList(800)), `${NOT_NOW} closes the list`, null);
+        await tab.click("#u");
+        const away = await tab.noList(1500);
+        assert(!away, `${NOT_NOW} keeps the row away on that site`, away);
+        seen.notNow = "no list";
+      } finally {
+        await tab.close();
+      }
+      const other = await open("other.localhost");
+      try {
+        seen.otherSite = titles(await connectRows(other));
+        await other.key("escape");
+      } finally {
+        await other.close();
+      }
+      await app.eval("return ac.applePasswords.startApplePasswordsPairing(null).then(() => true);", { timeout: 30_000 });
+      await pairAgain(app, fake);
+      await endPairing(app, fake);
+      const again = await open("example.localhost");
+      try {
+        seen.nextEnd = titles(await connectRows(again));
+        await again.pick(CONNECT);
+        await pairAgain(app, fake);
+        await again.waitRows("the logins after Pairing again");
+      } finally {
+        await again.close();
+      }
+      return { engine: engineName, ...seen };
     },
     async E16() {
       const { fake } = await paired();

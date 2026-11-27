@@ -7,7 +7,8 @@
 //   E2  a helper killed at launch makes Pairing say "Apple Passwords isn't available"
 //   E3  with no helper manifest, Pairing says how to get the helper back
 //   E4  a Release build ignores the fake-helper override: the fake never starts (needs --release)
-//   E5… the Login list in a WebKit tab (login-list.mjs), in one paired instance shared by those checks
+//   E5… the Login list in a WebKit tab (login-list.mjs), in one paired instance shared by those checks; E15 ends the
+//       fake's Pairing and pairs again from the Login list, leaving that instance paired
 //   E32 with a stand-in for the iCloud Passwords extension (its id, from icloud-extension.mjs), picking Apple Passwords
 //       turns it off and says so, "Turn it back on" turns it on, and switching to Ardia turns it on only if Ardia turned
 //       it off; it is never uninstalled

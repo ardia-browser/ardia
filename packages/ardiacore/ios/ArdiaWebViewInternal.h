@@ -3,6 +3,7 @@
 #import "ArdiaNowPlaying.h"
 #import "ArdiaTabLifecycle.h"
 #include "ArdiaAutoPictureInPictureHold.h"
+#include "ArdiaBlankWindowNotes.h"
 
 enum class ArdiaPageFocus { Unknown, Page, DevTools, Elsewhere };
 
@@ -185,6 +186,7 @@ struct ArdiaPageFocusState {
   NSMutableDictionary<NSString *, NSNumber *> *_trustedInputAt;
   ArdiaElementPick _elementPick;
   NSMutableArray<NSDictionary<NSString *, id> *> *_newTabLinks;
+  ardia_blank_window_notes::Pairing _blankWindowNotes;
   id _sightObserver;
   id _interfaceScaleObserver;
 }

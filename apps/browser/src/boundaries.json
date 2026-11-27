@@ -130,9 +130,10 @@
   {
    "id": "chromium-page-message:trustedInput",
    "source": "frame",
-   "guard": "No payload is read: subframes only, keyed by the frame's verified http(s) origin, at most 16 origins per tab, cleared on each new top document; native answers a later frame of that same origin with how many ms ago it was, only within 5 s, as config.embedInputAgeMs, which the page script takes only as a finite number from 0 to 5000",
+   "guard": "No payload is read: subframes only, keyed by the frame's verified http(s) origin, at most 16 origins per tab, cleared on each new top document; native answers a later frame of that same origin with how many ms ago it was, only within 5 s, as config.embedInputAgeMs, which the page script takes only as a finite number from 0 to 5000; Linux keeps the same bounded store (LinuxTrustedInputs) and config field",
    "checks": [
-    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_page_messages.cc"
    ]
   },
   {

@@ -44,6 +44,9 @@ class PageMessageTests(unittest.TestCase):
     def test_only_the_current_primary_main_document_drives_tab_state(self):
         self.run_case('senders')
 
+    def test_a_subframe_press_is_kept_per_origin_bounded_and_reset_with_the_page(self):
+        self.run_case('trusted-inputs')
+
     def test_payloads_are_rebuilt_from_validated_fields(self):
         self.run_case('normalization')
 

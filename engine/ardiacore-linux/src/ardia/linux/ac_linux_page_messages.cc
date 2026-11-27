@@ -124,6 +124,7 @@ std::optional<LinuxPageMessageKind> LinuxPageMessageKindOf(std::string_view kind
   if (kind == "linkDrop") return LinuxPageMessageKind::kLinkDrop;
   if (kind == "nowPlaying") return LinuxPageMessageKind::kNowPlaying;
   if (kind == "newTabLink") return LinuxPageMessageKind::kNewTabLink;
+  if (kind == "trustedInput") return LinuxPageMessageKind::kTrustedInput;
   return std::nullopt;
 }
 
@@ -161,6 +162,7 @@ std::optional<LinuxPageMessage> NormalizeLinuxPageMessage(LinuxPageMessageKind k
     case LinuxPageMessageKind::kHello:
     case LinuxPageMessageKind::kPeekHello:
     case LinuxPageMessageKind::kPeekGone:
+    case LinuxPageMessageKind::kTrustedInput:
       return Message(kind, base::Value(base::DictValue()));
     case LinuxPageMessageKind::kPeek:
       return dict ? Peek(*dict) : std::nullopt;
@@ -213,6 +215,29 @@ void LinuxPageMessageBudget::Reset() {
   *this = LinuxPageMessageBudget();
 }
 
+bool LinuxTrustedInputOrigin(std::string_view origin) {
+  return origin.size() <= 1024 && origin.find('\0') == std::string_view::npos && IsLinuxPageHttpUrl(origin);
+}
+
+void LinuxTrustedInputs::Note(std::string_view origin, double now_seconds) {
+  if (!LinuxTrustedInputOrigin(origin) || !std::isfinite(now_seconds)) return;
+  const auto found = std::find_if(inputs_.begin(), inputs_.end(), [&](const auto& input) { return input.first == origin; });
+  if (found != inputs_.end()) {
+    found->second = now_seconds;
+    return;
+  }
+  if (inputs_.size() >= kOriginsKept) inputs_.clear();
+  inputs_.emplace_back(std::string(origin), now_seconds);
+}
+
+std::optional<int> LinuxTrustedInputs::AgeMs(std::string_view origin, double now_seconds) const {
+  const auto found = std::find_if(inputs_.begin(), inputs_.end(), [&](const auto& input) { return input.first == origin; });
+  if (found == inputs_.end()) return std::nullopt;
+  const double age = now_seconds - found->second;
+  if (!(age >= 0 && age < kLifespanSeconds)) return std::nullopt;
+  return static_cast<int>(age * 1000);
+}
+
 bool LinuxAutoplayDecision(bool site_blocks, bool site_is_default, bool block_everywhere) {
   return site_blocks || (block_everywhere && site_is_default);
 }
@@ -251,8 +276,10 @@ base::DictValue LinuxPageOptions::PeekConfig(bool other_sites) const {
       .Set("otherSites", other_sites);
 }
 
-base::DictValue LinuxPageOptions::PageConfig(bool main, bool block_autoplay, bool other_sites) const {
+base::DictValue LinuxPageOptions::PageConfig(bool main, bool block_autoplay, bool other_sites,
+                                             std::optional<int> embed_input_age_ms) const {
   base::DictValue config;
+  if (!main && embed_input_age_ms) config.Set("embedInputAgeMs", *embed_input_age_ms);
   config.Set("peek", peek);
   config.Set("split", EffectiveSplit());
   if (main && other_sites) config.Set("peekOtherSites", true);

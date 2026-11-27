@@ -9,6 +9,7 @@ namespace {
 
 const char kPageReportsKey = 0;
 const char kPopupTabKey = 0;
+const char kBlankLinkTabKey = 0;
 BOOL gLittleArdiaOpensNewTabLinks = NO;
 BOOL gPopupsOpenAsTabs = NO;
 const CFTimeInterval kNewTabLinkSeconds = 2;
@@ -250,6 +251,7 @@ BOOL IsBlankAddress(NSString *url) {
                     tries:(int)tries {
   if (tab.closed) return;
   NSString *url = tab.url;
+  if (link && tries == 0 && IsBlankAddress(url)) [self noteBlankLinkTab:tab];
   if ((!url.length || [url isEqualToString:@"about:blank"]) && tries < 20) {
     __weak ArdiaWebView *weakSelf = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 25 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
@@ -269,7 +271,7 @@ BOOL IsBlankAddress(NSString *url) {
                tries:(int)tries {
   if (tab.closed) return;
   NSString *clicked = _tab ? [self takeNewTabLinkFor:@[ firstURL, tab.url ?: @"" ]] : nil;
-  if (!clicked && hidden && _tab) clicked = [self takeNewTabLinkNoted:kHiddenNewTabLinkSeconds];
+  if (!clicked && hidden && _tab) clicked = [self takeBlankWindowNoteFor:tab] ?: [self takeNewTabLinkNoted:kHiddenNewTabLinkSeconds];
   if (clicked && self.opensNewTabLinksInPlace && ([clicked isEqualToString:tab.url ?: @""] || IsBlankAddress(tab.url))) {
     if ([ArdiaTabRegistry takeOffered:adoptId] == tab) [tab close];
     [self emit:@"openWindow" payload:@{@"url" : clicked, @"disposition" : @"current", @"userGesture" : @YES, @"linkWait" : @"matched"}];
@@ -307,9 +309,10 @@ BOOL IsBlankAddress(NSString *url) {
 
 - (void)noteNewTabLink:(NSString *)url blankWindow:(BOOL)blankWindow {
   if (!IsWebAddress(url)) return;
+  if (blankWindow) return _blankWindowNotes.Noted(url.UTF8String, CACurrentMediaTime());
   [self dropStaleNewTabLinks];
   if (!_newTabLinks) _newTabLinks = [NSMutableArray array];
-  [_newTabLinks addObject:@{@"url" : url, @"at" : @(CACurrentMediaTime()), @"blankWindow" : @(blankWindow)}];
+  [_newTabLinks addObject:@{@"url" : url, @"at" : @(CACurrentMediaTime())}];
   if (_newTabLinks.count > kNewTabLinksKept) [_newTabLinks removeObjectsInRange:NSMakeRange(0, _newTabLinks.count - kNewTabLinksKept)];
 }
 
@@ -326,21 +329,24 @@ BOOL IsBlankAddress(NSString *url) {
 
 - (nullable NSString *)takeNewTabLinkNoted:(CFTimeInterval)within {
   [self dropStaleNewTabLinks];
-  const CFTimeInterval now = CACurrentMediaTime();
-  for (NSUInteger i = 0; i < _newTabLinks.count; i++) {
-    NSDictionary *link = _newTabLinks[i];
-    if (![link[@"blankWindow"] boolValue] || now - [link[@"at"] doubleValue] > within) continue;
-    [_newTabLinks removeObjectAtIndex:i];
-    return link[@"url"];
-  }
-  for (NSUInteger i = _newTabLinks.count; i > 0; i--) {
-    NSDictionary *link = _newTabLinks[i - 1];
-    if ([link[@"blankWindow"] boolValue]) continue;
-    if (now - [link[@"at"] doubleValue] > within) return nil;
-    [_newTabLinks removeObjectAtIndex:i - 1];
-    return link[@"url"];
-  }
-  return nil;
+  NSDictionary *newest = _newTabLinks.lastObject;
+  if (!newest || CACurrentMediaTime() - [newest[@"at"] doubleValue] > within) return nil;
+  [_newTabLinks removeLastObject];
+  return newest[@"url"];
+}
+
+- (void)noteBlankLinkTab:(ArdiaCoreTab *)tab {
+  static std::uint64_t opened = 0;
+  objc_setAssociatedObject(tab, &kBlankLinkTabKey, @(++opened), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  _blankWindowNotes.OpenedBlank(opened, CACurrentMediaTime());
+}
+
+- (nullable NSString *)takeBlankWindowNoteFor:(ArdiaCoreTab *)tab {
+  NSNumber *opened = objc_getAssociatedObject(tab, &kBlankLinkTabKey);
+  if (!opened) return nil;
+  objc_setAssociatedObject(tab, &kBlankLinkTabKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  const std::optional<std::string> url = _blankWindowNotes.Take(opened.unsignedLongLongValue, CACurrentMediaTime());
+  return url ? @(url->c_str()) : nil;
 }
 
 - (void)emitOpenedTab:(ArdiaCoreTab *)tab

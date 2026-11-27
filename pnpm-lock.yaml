@@ -174,7 +174,7 @@ settings:
 patchedDependencies:
   expo-constants@18.0.14: 3f8b2c29ae86b933377cfad3fe90c5fef442c0547389feee513a4a0cdfd9c914
   expo-modules-core@3.0.30: 337a95f8c8d761424dcab431b793da289b11d26d5748341e27ea6b66b3430719
-  react-native-macos@0.81.9: 878051ed5c94d8a04bc31248a62cf019ad6eb74a3d2cf10c4a49bac462becd80
+  react-native-macos@0.81.9: 384bdea418a6062985808f87260ccd1f007e8da8e94cb4173ec8723c3b1a148b
   react-native-web@0.21.4: d42ea91bfb8729962845a63e1cc346b9ac7715c5302d3315372b86ab4ef7bcb2
 
 importers:
@@ -225,7 +225,7 @@ importers:
         version: 0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@20.2.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.4)(supports-color@8.1.1)
       react-native-macos:
         specifier: 0.81.9
-        version: 0.81.9(patch_hash=878051ed5c94d8a04bc31248a62cf019ad6eb74a3d2cf10c4a49bac462becd80)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@20.2.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.1.17)(react-native@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@20.2.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.4)(supports-color@8.1.1))(react@19.1.4)(supports-color@8.1.1)
+        version: 0.81.9(patch_hash=384bdea418a6062985808f87260ccd1f007e8da8e94cb4173ec8723c3b1a148b)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@20.2.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.1.17)(react-native@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@20.2.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.4)(supports-color@8.1.1))(react@19.1.4)(supports-color@8.1.1)
       zustand:
         specifier: ^5.0.8
         version: 5.0.15(@types/react@19.1.17)(react@19.1.4)
@@ -7855,7 +7855,7 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-native-macos@0.81.9(patch_hash=878051ed5c94d8a04bc31248a62cf019ad6eb74a3d2cf10c4a49bac462becd80)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@20.2.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.1.17)(react-native@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@20.2.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.4)(supports-color@8.1.1))(react@19.1.4)(supports-color@8.1.1):
+  react-native-macos@0.81.9(patch_hash=384bdea418a6062985808f87260ccd1f007e8da8e94cb4173ec8723c3b1a148b)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@20.2.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.1.17)(react-native@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@20.2.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.4)(supports-color@8.1.1))(react@19.1.4)(supports-color@8.1.1):
     dependencies:
       '@jest/create-cache-key-function': 29.7.0
       '@react-native-macos/virtualized-lists': 0.81.9(@types/react@19.1.17)(react-native@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@20.2.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.1.17)(react@19.1.4)(supports-color@8.1.1))(react@19.1.4)

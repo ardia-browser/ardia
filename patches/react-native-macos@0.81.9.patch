@@ -4045,7 +4045,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..c75665485afa81574f2f0be0829c1f3a
 +@end
 +#endif // macOS]
 diff --git a/React/Views/ScrollView/RCTScrollView.m b/React/Views/ScrollView/RCTScrollView.m
-index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..84706871cfc883eb44a1d79c4f9cdb25c283bca4 100644
+index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..258aadfb7a0b8e6007de7eceebf7c6a538c5fd77 100644
 --- a/React/Views/ScrollView/RCTScrollView.m
 +++ b/React/Views/ScrollView/RCTScrollView.m
 @@ -50,10 +50,16 @@ + (BOOL)isCompatibleWithResponsiveScrolling;
@@ -4129,7 +4129,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..84706871cfc883eb44a1d79c4f9cdb25
 +  if (NSHeight(self.documentView.frame) <= NSHeight(self.contentView.bounds)) {
 +    return NO;
 +  }
-+  NSRect visible = self.visibleRect;
++  NSRect visible = NSIntersectionRect(self.bounds, self.visibleRect);
 +  NSPoint point = [self convertPoint:self.window.mouseLocationOutsideOfEventStream fromView:nil];
 +  CGFloat edge = NSMaxX(self.bounds) - self.scrollerInsets.right;
 +  CGFloat reach = [NSScroller scrollerWidthForControlSize:NSControlSizeRegular scrollerStyle:NSScrollerStyleOverlay];

@@ -191,10 +191,23 @@ for (const pose of DUO_POSES) {
     const header = hosts(root, "deckHeader")[0]!;
     expect(flat(header)).toMatchObject({ paddingLeft: 24, paddingRight: pose.insets.right + 12 });
     expect(flat(header).top).toBe(4);
-    expect(holds(hosts(root, "deckHeaderTrail")[0]!, "deckHeaderMore")).toBe(true);
-    expect(holds(hosts(root, "deckHeaderLead")[0]!, "deckHeaderMore")).toBe(false);
     expect(flat(hosts(root, "deckHeaderLead")[0]!)).toMatchObject({ flex: 1, flexBasis: 0, minWidth: 44 });
-    expect(flat(hosts(root, "deckHeaderTrail")[0]!)).toMatchObject({ flex: 1, flexBasis: 0, minWidth: 44, justifyContent: "flex-end" });
+    expect(flat(hosts(root, "deckHeaderTrail")[0]!)).toMatchObject({ flex: 1, flexBasis: 0, minWidth: 44 });
+    const hitMore = hosts(root, "deckHit-more");
+    expect(hitMore).toHaveLength(1);
+    if (pose.ends) {
+      expect(holds(header, "deckHeaderMore")).toBe(true);
+      expect(flat(hitMore[0]!)).toMatchObject({ position: "absolute", top: 0, right: pose.insets.right + 12 });
+      expect(hosts(root, "deckStripMore")).toHaveLength(0);
+    } else {
+      expect(holds(header, "deckHeaderMore")).toBe(false);
+      const stripMore = hosts(root, "deckStripMore")[0]!;
+      expect(flat(stripMore)).toMatchObject({ top: -110, left: pose.stripX - 24, width: 48 });
+      expect(holds(stripMore, "deckBarMore")).toBe(true);
+      expect(holds(stripMore, "deckHit-more")).toBe(true);
+      expect(root.root.findAll((node) => node.props.testID === "deckBarMore" && node.props.shape === "circle")[0]!.props.cornerRadius).toBe(24);
+      expect(root.root.findAll((node) => node.props.accessibilityLabel === "More" && typeof node.type === "string").length).toBeGreaterThan(0);
+    }
     if (Platform.OS !== "ios") return unmount(root);
     act(() => deckGrid.setDeckGrid(true));
     act(() => jest.advanceTimersByTime(1000));
@@ -203,14 +216,14 @@ for (const pose of DUO_POSES) {
   });
 }
 
-test("with the strip on the leading side the deck mirrors: the header's ··· leads beside the strip, and Incognito and + stack in the strip 48 from the left edge", () => {
+test("with the strip on the leading side the closed Duo deck mirrors: the header holds only the switcher, and ···, Incognito and + stack in the strip 48 from the left edge", () => {
   const [closed] = DUO_POSES;
   onDuo({ ...closed, insets: { top: 0, bottom: 34, left: 84, right: 0 } } as unknown as (typeof DUO_POSES)[number]);
   act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
   const root = redesigned(<TabDeck />);
   expect(flat(hosts(root, "deckHeader")[0]!)).toMatchObject({ paddingLeft: 96, paddingRight: 24 });
-  expect(holds(hosts(root, "deckHeaderLead")[0]!, "deckHeaderMore")).toBe(true);
-  expect(holds(hosts(root, "deckHeaderTrail")[0]!, "deckHeaderMore")).toBe(false);
+  expect(holds(hosts(root, "deckHeader")[0]!, "deckHeaderMore")).toBe(false);
+  expect(flat(hosts(root, "deckStripMore")[0]!)).toMatchObject({ top: -110, left: 24, width: 48 });
   expect(flat(hosts(root, "deckBottomBar")[0]!)).toMatchObject({ paddingLeft: 96, paddingRight: 24 });
   expect(flat(hosts(root, "deckStripIncognito")[0]!)).toMatchObject({ top: -55, left: 24, width: 48 });
   expect(flat(hosts(root, "deckStripPlus")[0]!)).toMatchObject({ top: 0, left: 24, width: 48 });

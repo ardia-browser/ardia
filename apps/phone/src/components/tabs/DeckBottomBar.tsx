@@ -19,10 +19,13 @@ import { useKeyboardTopFromBottom } from "../search/useKeyboardHeight";
 import { FadingGlyphs, PlusMenuButton, type ChromeFade } from "./ChromeButtons";
 import { besideStrip, deckStripSlots, duoFieldReach, type BottomBarLayout } from "../../lib/bottomBarSpan";
 import { DeckHitTarget } from "./DeckHitTarget";
+import { DeckMoreButton } from "./DeckHeader";
+import type { MenuOpener } from "../ui/MenuTrigger";
 import { claimDeckSearchFocus } from "../../state/browse/deckTurn";
 
 type Props = {
   searchOpener?: MutableRefObject<(() => void) | null>;
+  moreOpener?: MenuOpener;
   shown: boolean;
   barCenterY: number;
   deckHeight: number;
@@ -186,7 +189,7 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, rest
   );
 }
 
-export function DeckBottomBar({ searchOpener, shown, barCenterY, deckHeight, width, layout, incognito, privateCount = 0, onCloseIncognito, onCloseAll, onQuery, menusShown = true, onMenu, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
+export function DeckBottomBar({ searchOpener, moreOpener, shown, barCenterY, deckHeight, width, layout, incognito, privateCount = 0, onCloseIncognito, onCloseAll, onQuery, menusShown = true, onMenu, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
   const fade = { glassShown, glassShownMs, glyphFade };
   const roles = useTheme();
   const dark = roles.dark || incognito;
@@ -304,6 +307,11 @@ export function DeckBottomBar({ searchOpener, shown, barCenterY, deckHeight, wid
       </View>
       {strip ? <View testID="deckStripPlus" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: plusTop }]}>{plus}</View> : null}
       {strip && slots ? <View testID="deckStripIncognito" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: slots.incognito }]}>{incognitoSwitch}</View> : null}
+      {strip && slots && slots.more !== null ? (
+        <View testID="deckStripMore" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: slots.more }]}>
+          <DeckMoreButton opener={moreOpener} place={besideSlot(slots.more)!} diameter={controlSize.bar} testID="deckBarMore" live={hits} originX={strip.centerX - controlSize.bar / 2} originY={rowTop + slots.more} hitStyle={styles.circleHit} dark={dark} menusShown={menusShown} onMenu={onMenu} {...fade} />
+        </View>
+      ) : null}
     </Animated.View>
   );
 }

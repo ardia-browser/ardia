@@ -2642,9 +2642,11 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   fully or partly open one at 600 wide or more is the open bar.
   - **Closed** (under 600 wide): Tabs on the bar's centre line, `+` 55 above it. The bar row keeps only the address
     capsule with its `···`, from 24 to 12 short of the strip (24 to 370 on 466). The start bar keeps Settings in that
-    span; the deck bar keeps only Search Tabs there (24 to 370, where the address capsule sits), its `+` in the strip
-    on the bar's line and the Incognito switch 55 above it, as the page's Tabs and `+` stack (`deckStripSlots`; the
-    owner, 2026-11-27; on 466×678, Incognito 394 to 442 by 554 to 602, `+` 394 to 442 by 609 to 657). It
+    span; the deck bar keeps only Search Tabs there (24 to 370, where the address capsule sits), and stacks three 48
+    circles in the strip as the open Duo does (`deckStripSlots`; the owner, 2026-11-27): `+` on the bar's line, the
+    Incognito switch 55 above it and the deck's `···` 110 above it, within reach of the thumb (on 466×678, all at x
+    394 to 442: `···` y 499 to 547, Incognito 554 to 602, `+` 609 to 657). `···` opens its menu beside the strip
+    (`besideStrip`), keeps the `deckHit-more` target for taps during the deck's pull and reads "More". It
     never squeezes: with Collapse Bottom Bar on it folds into the host pill as any iPhone does, strip buttons
     included, and with it off it never collapses.
   - **Open** (600 wide or more), from the owner's sketch: three fixed slots, `+` 110 and Tabs 55 above the bar's line
@@ -2661,9 +2663,11 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
     the capsule's width and off to its left. Each open Duo collapse counts in `bottom_bar_collapses`. The deck's grid and the search tray keep
   the side insets (grid 84 + 16, both sides). The deck's header spans the top bar on either Duo, from 24 to 12 short of the strip, the
   bar row's own span (`deckHeaderSides`, the owner, 2026-11-27): the space switcher is centred between two equal flanks
-  (197 on the closed Duo) and `···` ends where Search Tabs ends (326 to 370 closed, 811 to 855 open, y 4 to 48). It
-  can't go in the strip: the Duo's camera sits at the top of it (about 397 to 439, y 26 to 68 closed, seen on the
-  simulator at b166025, where `···` in the strip was half under it). With the strip on the left, `···` leads, 96 to 140.
+  (on 197 closed, 439.5 open). On the closed Duo the header holds the switcher alone, its `···` being in the strip
+  stack above; on the open Duo `···` ends where Search Tabs ends (811 to 855, y 4 to 48), pinned there so the switcher
+  stays centred. Neither goes in the strip's top: the Duo's camera sits there (about 397 to 439, y 26 to 68 closed,
+  seen on the simulator at b166025, where `···` in the strip was half under it). With the strip on the left all of
+  it mirrors: the closed Duo's `···` stacks in the strip at 24 to 72, the open Duo's leads the header at 96 to 140.
   A plain iPhone keeps `max(left, right)` + 24 on both sides and its leading switcher. The deck's cards keep clear of the strip
   (`deckGeometry`'s `strip`, from `deckStripOf`): Arc's stack is laid out in the screen beside the strip, as if that
   were the whole screen, and clipped at the strip (`DeckStripClip`), so no card runs under the clock or the sensor; a

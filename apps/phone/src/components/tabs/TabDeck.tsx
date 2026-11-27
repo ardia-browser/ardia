@@ -114,7 +114,7 @@ import { cardHitSeq, currentPhoneGeneration, DECK_HIT_LABELS, deckAwaitsEntrance
 import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 import { DECK_PULL, pullTarget, stackPullTarget } from "../../lib/deckPull";
 import { glassFadeMs } from "../ui/motion";
-import { barSpanCenter, deckHeaderSides, deckStripOf } from "../../lib/bottomBarSpan";
+import { barSpanCenter, deckHeaderSides, deckMoreInStrip, deckStripOf } from "../../lib/bottomBarSpan";
 import { DeckStripClip } from "./DeckStripClip";
 import { useBarGlyphFade, useDeckPulled } from "./deckPulled";
 
@@ -1449,6 +1449,7 @@ export const TabDeck = memo(function TabDeck() {
                       safeTop={g.safeTop}
                       sides={headerSides}
                       stripSide={stripSide}
+                      showsMore={!deckMoreInStrip(deckBarLayout)}
                       width={width}
                       menusShown={shown && phase.kind === "settled"}
                       onMenu={setChromeMenu}
@@ -1460,6 +1461,7 @@ export const TabDeck = memo(function TabDeck() {
                   <HeldChrome held={chromeGlassHeld} style={heldBarStyle}>
                     <DeckBottomBar
                       searchOpener={searchOpener}
+                      moreOpener={moreOpener}
                       hits={pulls}
                       shown={shown}
                       barCenterY={g.barCenterY}

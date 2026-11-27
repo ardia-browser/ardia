@@ -69,4 +69,8 @@ export function deckHeaderSides(insets: { left: number; right: number }, side: n
   return strip.side === "left" ? { left: beside, right: insets.right + side } : { left: insets.left + side, right: beside };
 }
 
-export const deckStripSlots = (strip: DuoStrip) => (strip.ends ? { plus: strip.plus, incognito: strip.tabs } : { plus: strip.tabs, incognito: strip.plus });
+export type DeckStripSlots = { plus: number; incognito: number; more: number | null };
+
+export const deckStripSlots = (strip: DuoStrip): DeckStripSlots => (strip.ends ? { plus: strip.plus, incognito: strip.tabs, more: null } : { plus: strip.tabs, incognito: strip.plus, more: strip.plus - DUO_PLUS_ABOVE });
+
+export const deckMoreInStrip = (layout: BottomBarLayout) => layout.strip !== null && deckStripSlots(layout.strip).more !== null;

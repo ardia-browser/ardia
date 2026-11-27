@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { barSwipeSpan, besideStrip, bottomBarLayout, deckHeaderSides, deckStripOf, deckStripSlots, DUO_PLUS_ABOVE, duoFieldReach, duoSqueeze, isOpenDuo } from "./bottomBarSpan.ts";
+import { barSwipeSpan, besideStrip, bottomBarLayout, deckHeaderSides, deckMoreInStrip, deckStripOf, deckStripSlots, DUO_PLUS_ABOVE, duoFieldReach, duoSqueeze, isOpenDuo } from "./bottomBarSpan.ts";
 import { pagerCommitDistance, snapTarget } from "./pagerPhysics.ts";
 
 test("with no hinge every bottom bar pads by the larger side inset plus its own side, on both sides, and nothing goes to a strip", () => {
@@ -149,8 +149,12 @@ test("on a Duo the deck header takes the whole top bar, the strip's inset ignore
 
 test("the deck puts + and Incognito in the strip: on the closed Duo + on the bar's line and Incognito 55 above it, so Search Tabs spans 24 to 370 as the page's address capsule does; on the open Duo + in the top slot and Incognito in the middle one", () => {
   const closed = bottomBarLayout(466, { left: 0, right: 84 }, "closed", 24);
-  assert.deepEqual(deckStripSlots(closed.strip!), { plus: 0, incognito: -55 });
+  assert.deepEqual(deckStripSlots(closed.strip!), { plus: 0, incognito: -55, more: -110 });
+  assert.equal(deckMoreInStrip(closed), true);
+  assert.equal(deckMoreInStrip(bottomBarLayout(466, { left: 84, right: 0 }, "closed", 24)), true);
   assert.deepEqual([closed.span.left, 466 - closed.span.right], [24, 370]);
   const open = bottomBarLayout(951, { left: 0, right: 84 }, "fullyOpen", 24);
-  assert.deepEqual(deckStripSlots(open.strip!), { plus: -110, incognito: -55 });
+  assert.deepEqual(deckStripSlots(open.strip!), { plus: -110, incognito: -55, more: null });
+  assert.equal(deckMoreInStrip(open), false, "the open Duo keeps ··· in the header");
+  assert.equal(deckMoreInStrip(bottomBarLayout(402, { left: 0, right: 0 }, "none", 24)), false);
 });

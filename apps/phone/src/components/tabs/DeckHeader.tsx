@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
 import { openArchive, openSpaces } from "../../state/browse/store";
@@ -22,6 +22,7 @@ type Props = {
   safeTop: number;
   sides: BarSpan;
   stripSide?: "left" | "right" | null;
+  showsMore?: boolean;
   width: number;
   menusShown?: boolean;
   onMenu?: (open: boolean) => void;
@@ -75,35 +76,69 @@ export function useDeckSpaces() {
   return { syncEnabled: status.isEnabled, spaces, current, spaceItems };
 }
 
-export function DeckHeader({ safeTop, sides, stripSide = null, width, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
-  const theme = useTheme();
+type MoreProps = ChromeFade & {
+  opener?: MenuOpener;
+  place: ViewStyle;
+  diameter: number;
+  testID: string;
+  live: boolean;
+  originX?: number;
+  originY: number;
+  hitStyle?: StyleProp<ViewStyle>;
+  dark: boolean;
+  underlay?: boolean;
+  menusShown: boolean;
+  onMenu?: (open: boolean) => void;
+};
+
+export function DeckMoreButton({ opener, place, diameter, testID, live, originX, originY, hitStyle, dark, underlay = false, menusShown, onMenu, glassShown, glassShownMs, glyphFade }: MoreProps) {
   const incognito = useIncognito();
   const updateDot = useUpdateDot();
-  const { syncEnabled, spaces, current, spaceItems } = useDeckSpaces();
+  const syncEnabled = useSyncStatus().isEnabled;
+  const items = deckMoreMenuItems({ syncEnabled, archive: false, updateDot });
+  return (
+    <DeckHitTarget control="more" live={live} originX={originX} originY={originY} style={hitStyle}>
+      <MenuTrigger opener={opener} items={items} trigger="tap" fixedOrder haptic={menuOpenedHaptic} disabled={!menusShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} previewRadius={diameter / 2} place={place}>
+        {({ onPress }) => <GlassCircleButton icon={iconRoles.more} label={actionWords.more} testID={testID} diameter={diameter} incognito={incognito} dark={dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} underlay={underlay} onPress={onPress ?? noop} />}
+      </MenuTrigger>
+    </DeckHitTarget>
+  );
+}
+
+export function DeckHeader({ safeTop, sides, stripSide = null, showsMore = true, width, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
+  const theme = useTheme();
+  const incognito = useIncognito();
+  const { spaces, current, spaceItems } = useDeckSpaces();
   const below = safeTop + deckHeaderBottom() + deckChromeLayout.menuGap;
   const opened = () => onMenu?.(true);
   const closed = () => onMenu?.(false);
   const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, onOpen: opened, onClose: closed };
-  const moreItems = deckMoreMenuItems({ syncEnabled, archive: false, updateDot });
   const rowTop = safeTop + deckChromeLayout.headerCenter - browseLayout.hitTarget / 2;
   const padding = sides.left === sides.right ? { paddingHorizontal: sides.left } : { paddingLeft: sides.left, paddingRight: sides.right };
   const centred = stripSide !== null;
   const moreLeads = stripSide === "left";
   const spacesLeft = centred ? Math.max((sides.left + width - sides.right - tabsLayout.menuWidth) / 2, sides.left) : sides.left;
-  const more = (
-    <DeckHitTarget control="more" live={hits} originY={rowTop}>
-      <MenuTrigger opener={moreOpener} items={moreItems} {...menu} previewRadius={deckChromeLayout.headerCircle / 2} place={moreLeads ? { top: below, left: sides.left, width: tabsLayout.menuWidth } : { top: below, right: sides.right, width: tabsLayout.menuWidth }}>
-        {({ onPress }) => <GlassCircleButton icon={iconRoles.more} label={actionWords.more} testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} incognito={incognito} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} underlay={underlay} onPress={onPress ?? noop} />}
-      </MenuTrigger>
-    </DeckHitTarget>
-  );
+  const more = showsMore ? (
+    <DeckMoreButton
+      opener={moreOpener}
+      place={moreLeads ? { top: below, left: sides.left, width: tabsLayout.menuWidth } : { top: below, right: sides.right, width: tabsLayout.menuWidth }}
+      diameter={deckChromeLayout.headerCircle}
+      testID="deckHeaderMore"
+      live={hits}
+      originY={rowTop}
+      hitStyle={centred ? [styles.pinned, moreLeads ? { left: sides.left } : { right: sides.right }] : undefined}
+      dark={theme.dark}
+      underlay={underlay}
+      menusShown={menusShown}
+      onMenu={onMenu}
+      glassShown={glassShown}
+      glassShownMs={glassShownMs}
+      glyphFade={glyphFade}
+    />
+  ) : null;
   return (
     <View testID="deckHeader" pointerEvents="box-none" style={[styles.row, { top: rowTop }, padding]}>
-      {centred ? (
-        <View testID="deckHeaderLead" pointerEvents="box-none" style={styles.flank}>
-          {moreLeads ? more : null}
-        </View>
-      ) : null}
+      {centred ? <View testID="deckHeaderLead" pointerEvents="none" style={styles.flank} /> : null}
       {current && spaces.length > 1 ? (
         <DeckHitTarget control="spaces" live={hits} originY={rowTop} style={styles.switcher}>
         <MenuTrigger opener={spacesOpener} items={spaceItems} {...menu} previewRadius={deckLook.switcherCorner} place={{ top: below, left: spacesLeft, width: tabsLayout.menuWidth }}>
@@ -132,9 +167,10 @@ export function DeckHeader({ safeTop, sides, stripSide = null, width, menusShown
         </FadingGlyphs>
       )}
       {centred ? (
-        <View testID="deckHeaderTrail" pointerEvents="box-none" style={[styles.flank, styles.trail]}>
-          {moreLeads ? null : more}
-        </View>
+        <>
+          <View testID="deckHeaderTrail" pointerEvents="none" style={styles.flank} />
+          {more}
+        </>
       ) : (
         <>
           <View style={styles.spacer} />
@@ -152,7 +188,7 @@ const styles = StyleSheet.create({
   switcher: { flexShrink: 1 },
   switcherPress: { height: deckLook.switcherHeight, justifyContent: "center", paddingLeft: deckLook.switcherLead, paddingRight: deckLook.switcherTrail },
   spacer: { flex: 1 },
-  flank: { flex: 1, flexBasis: 0, minWidth: deckChromeLayout.headerCircle, flexDirection: "row", alignItems: "center" },
-  trail: { justifyContent: "flex-end" },
+  flank: { flex: 1, flexBasis: 0, minWidth: deckChromeLayout.headerCircle },
+  pinned: { position: "absolute", top: 0 },
   fallback: { fontWeight: "600" },
 });

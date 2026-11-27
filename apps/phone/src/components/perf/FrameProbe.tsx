@@ -1,12 +1,12 @@
-import { useEffect } from "react";
-import { useFrameCallback, useSharedValue } from "react-native-reanimated";
+import { useEffect, useRef, useState } from "react";
+import { useFrameCallback, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { setUiFrameRecorder } from "../../state/app/interactionPerf";
+import { countUsage } from "../../state/telemetry/telemetry";
 
 const MAX_UI_FRAMES = 600;
 
-export function FrameProbe() {
-  const deltas = useSharedValue<number[]>([]);
-  const probe = useFrameCallback((frame) => {
+function ActiveFrameProbe({ deltas }: { deltas: SharedValue<number[]> }) {
+  useFrameCallback((frame) => {
     "worklet";
     const since = frame.timeSincePreviousFrame;
     if (since === null) return;
@@ -15,19 +15,33 @@ export function FrameProbe() {
       if (list.length < MAX_UI_FRAMES) list.push(since);
       return list;
     });
-  }, false);
+  }, true);
+  return null;
+}
+
+export function FrameProbe() {
+  const deltas = useSharedValue<number[]>([]);
+  const [active, setActive] = useState(false);
+  const activeRef = useRef(false);
   useEffect(() => {
     setUiFrameRecorder({
       start: () => {
         deltas.value = [];
-        probe.setActive(true);
+        if (!activeRef.current) {
+          activeRef.current = true;
+          setActive(true);
+          countUsage("frame_probe_recordings");
+        }
       },
       stop: () => {
-        probe.setActive(false);
+        if (activeRef.current) {
+          activeRef.current = false;
+          setActive(false);
+        }
         return [...deltas.value];
       },
     });
     return () => setUiFrameRecorder(null);
-  }, [deltas, probe]);
-  return null;
+  }, [deltas]);
+  return active ? <ActiveFrameProbe deltas={deltas} /> : null;
 }

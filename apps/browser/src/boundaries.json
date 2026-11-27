@@ -2805,6 +2805,35 @@
     "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateHandoff.kt#noteInstallRequest"
    ],
    "detected": false
+  },
+  {
+   "id": "apple-passwords-helper:replies",
+   "source": "other-app",
+   "guard": "Apple's helper is found through a native-messaging manifest any same-user app can write, so its replies are taken as hostile: a frame past 1 MB ends the helper before it is buffered (ApplePasswordsPipe.frames); only a JSON object is a message; login names, sites, passwords and Verification code fields are used only as text a save would take (1,024 UTF-16 units, no NUL, no lone surrogate), at most 1,000 entries and 100 sites each, and a code only of 4 to 10 letters and digits (ApplePasswordsReply); a Pairing round refuses a salt past 64 bytes or a number past the 3072-bit group's 384 before any arithmetic; sealed messages open only under the session key",
+   "checks": [
+    "packages/ardiacore/ios/ApplePasswordsPipe.swift#static func frames",
+    "packages/ardiacore/ios/ApplePasswordsMatch.swift#enum ApplePasswordsReply",
+    "packages/ardiacore/ios/ApplePasswordsSRP.swift#Self.saltMax",
+    "packages/ardiacore/tests/apple-passwords-replies.test.swift"
+   ],
+   "findings": [
+    "B3"
+   ],
+   "detected": false
+  },
+  {
+   "id": "contacts:me-card",
+   "source": "other-app",
+   "guard": "The Me card is whatever any app with Contacts access last wrote to it: meCardEntries takes only strings, drops NUL and lone surrogates, trims, cuts each field at 1,000 UTF-16 units on a character boundary, takes the first email and phone of an array and at most 20 addresses that are objects, before anything reaches Chrome's address store",
+   "checks": [
+    "packages/shell/ios/ContactsModule.swift#func meCard",
+    "apps/browser/src/state/site/meCard.ts#function meCardEntries",
+    "apps/browser/src/components/settings/panes/meCard.test.mjs#B4"
+   ],
+   "findings": [
+    "B4"
+   ],
+   "detected": false
   }
  ]
 }

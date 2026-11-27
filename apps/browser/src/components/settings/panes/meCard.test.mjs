@@ -178,3 +178,42 @@ test("story 56: each Me card entry carries the card's first email and first phon
     ],
   );
 });
+
+const { HOSTILE_VALUES } = await import("../../../../../../scripts/security/hostile-inputs.mjs");
+const FIELD_MAX = 1000;
+const ADDRESSES_MAX = 20;
+const clean = (text) => typeof text === "string" && text.length <= FIELD_MAX && !/\u0000|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text);
+
+test("B4: every hostile value anywhere in a Me card from Contacts reaches the address store only as bounded text, or not at all", async () => {
+  const { meCardEntries } = await import("../../../state/site/meCard.ts");
+  const ADDRESS = { street: "1 Home Road", city: "Bath", state: "", postalCode: "BA1 1AA", country: "GB" };
+  const base = { name: "Ada Lovelace", organization: "Analytical Engines", emails: ["ada@example.com"], phones: ["+44 20 7946 0000"], addresses: [ADDRESS] };
+  assert.deepEqual(meCardEntries(base).map((e) => [e.name, e.email, e.street]), [["Ada Lovelace", "ada@example.com", "1 Home Road"]], "positive control");
+  const cards = (value) => [
+    { ...base, name: value },
+    { ...base, organization: value },
+    { ...base, emails: [value] },
+    { ...base, phones: [value] },
+    { ...base, emails: value },
+    { ...base, phones: value },
+    { ...base, addresses: value },
+    { ...base, addresses: [value] },
+    ...Object.keys(ADDRESS).map((key) => ({ ...base, addresses: [{ ...ADDRESS, [key]: value }] })),
+    { ...base, addresses: Array.from({ length: 500 }, () => ({ ...ADDRESS, street: value })) },
+  ];
+  const problems = [];
+  for (const { id, value } of HOSTILE_VALUES) {
+    for (const [i, card] of cards(value).entries()) {
+      let entries;
+      try {
+        entries = meCardEntries(card);
+      } catch (e) {
+        problems.push(`${id} #${i} threw ${e.message}`);
+        continue;
+      }
+      if (entries.length > ADDRESSES_MAX) problems.push(`${id} #${i} made ${entries.length} entries`);
+      for (const entry of entries) for (const [field, text] of Object.entries(entry)) if (!clean(text)) problems.push(`${id} #${i} ${field}`);
+    }
+  }
+  assert.deepEqual([...new Set(problems)].slice(0, 20), []);
+});

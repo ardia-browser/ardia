@@ -192,6 +192,7 @@ struct ApplePasswordsSRP {
   """)
   static let g = SRPNumber(5)
   static let length = 384
+  static let saltMax = 64
 
   enum Failure: Error, Equatable {
     case wrongCode, unexpected, refused
@@ -263,8 +264,8 @@ struct ApplePasswordsSRP {
   mutating func second(after reply: String, code: String) throws -> String {
     guard let message = Self.unpake(reply), message["TID"] as? String == tid,
               message["MSG"] as? Int == 1, message["ErrCode"] == nil,
-              let s = (message["s"] as? String).flatMap(bytes),
-              let b = (message["B"] as? String).flatMap(bytes)
+              let s = (message["s"] as? String).flatMap(bytes), (1...Self.saltMax).contains(s.count),
+              let b = (message["B"] as? String).flatMap(bytes), (1...Self.length).contains(b.count)
     else { throw Failure.unexpected }
     let proto = message["PROTO"] as? Int ?? 0
     guard proto == 1 else { throw Failure.refused }

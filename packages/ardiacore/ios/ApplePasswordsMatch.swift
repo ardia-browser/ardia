@@ -12,6 +12,46 @@ struct ApplePasswordsCode: Equatable {
   let code: String
 }
 
+enum ApplePasswordsReply {
+  static let placeholderUser = "Passwords\u{a0}not\u{a0}saved"
+  static let noPassword = "Not Included"
+  static let entriesMax = 1000
+  static let sitesMax = 100
+
+  static func list(_ answer: [String: Any]) -> [[String: Any]] {
+    if let list = answer["Entries"] as? [[String: Any]] { return Array(list.prefix(entriesMax)) }
+    return Array(answer.keys.filter { $0.hasPrefix("Entry_") }.sorted().compactMap { answer[$0] as? [String: Any] }.prefix(entriesMax))
+  }
+
+  static func text(_ value: Any?) -> String? {
+    guard let text = value as? NSString, ApplePasswordsMatch.fits(text) else { return nil }
+    return text as String
+  }
+
+  static func entries(_ answer: [String: Any]) -> [ApplePasswordsEntry] {
+    list(answer).compactMap { entry in
+      guard let user = text(entry["USR"]), user != placeholderUser else { return nil }
+      let sites = (entry["sites"] as? [Any] ?? []).prefix(sitesMax).compactMap(text)
+      return ApplePasswordsEntry(user: user, sites: sites)
+    }
+  }
+
+  static func password(_ answer: [String: Any], host: String, user: String) -> String? {
+    let entries = list(answer)
+    let entry = entries.first { ($0["sites"] as? [Any] ?? []).contains { $0 as? String == host } && text($0["USR"]) == user } ?? entries.first { text($0["USR"]) == user }
+    guard let password = text(entry?["PWD"]), !password.isEmpty, password != noPassword else { return nil }
+    return password
+  }
+
+  static func codes(_ answer: [String: Any]) -> [ApplePasswordsCode] {
+    list(answer).compactMap { entry in
+      guard let user = text(entry["username"] ?? ""), let domain = text(entry["domain"] ?? ""), let source = text(entry["source"] ?? ApplePasswordsMatch.timeCodeSource) else { return nil }
+      let code = text(entry["code"]).flatMap { $0.range(of: "^[A-Za-z0-9]{4,10}$", options: .regularExpression) == nil ? nil : $0 } ?? ""
+      return ApplePasswordsCode(user: user, domain: domain, source: source, code: code)
+    }
+  }
+}
+
 enum ApplePasswordsMatch {
   static let timeCodeSource = "totp"
 
@@ -31,7 +71,7 @@ enum ApplePasswordsMatch {
     return (username as String, password as String)
   }
 
-  private static func fits(_ text: NSString) -> Bool {
+  static func fits(_ text: NSString) -> Bool {
     guard text.length <= savedMax else { return false }
     var i = 0
     while i < text.length {

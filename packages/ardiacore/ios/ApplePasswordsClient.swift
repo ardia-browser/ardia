@@ -347,18 +347,11 @@ final class ApplePasswordsClient: @unchecked Sendable {
   static let passwordSeconds: TimeInterval = 120
   static let successStatuses: Set<Int> = [0, 3]
   static let sessionOverStatus = 9
-  static let placeholderUser = "Passwords\u{a0}not\u{a0}saved"
-  static let noPassword = "Not Included"
 
   func logins(host: String, _ done: @escaping (Result<[ApplePasswordsEntry], Problem>) -> Void) {
     queue.async {
       self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds) { result in
-        done(result.map { answer in
-          Self.entries(answer).compactMap { entry in
-            guard let user = entry["USR"] as? String, user != Self.placeholderUser else { return nil }
-            return ApplePasswordsEntry(user: user, sites: entry["sites"] as? [String] ?? [])
-          }
-        }.mapError(Self.problem))
+        done(result.map(ApplePasswordsReply.entries).mapError(Self.problem))
       }
     }
   }
@@ -367,11 +360,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
     queue.async {
       self.sealed(5, qid: "CmdGetPassword4LoginName", url: host, ["ACT": 2, "URL": host, "USR": user], wait: Self.passwordSeconds) { result in
         done(result.mapError(Self.problem).flatMap { answer in
-          let entries = Self.entries(answer)
-          let entry = entries.first { ($0["sites"] as? [String] ?? []).contains(host) && $0["USR"] as? String == user }
-            ?? entries.first { $0["USR"] as? String == user }
-          guard let password = entry?["PWD"] as? String, password != Self.noPassword else { return .failure(.unreadable) }
-          return .success(password)
+          ApplePasswordsReply.password(answer, host: host, user: user).map { .success($0) } ?? .failure(.unreadable)
         })
       }
     }
@@ -384,7 +373,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
     queue.async {
       if self.session != nil, !self.fillsCodes { return done(.success([])) }
       self.sealed(16, qid: "CmdGetOneTimeCodes", url: nil, ["ACT": 5, "TYPE": "oneTimeCodes", "frameURLs": [page]], wait: Self.codesSeconds) { result in
-        done(result.map { Self.entries($0).map(Self.code) }.mapError(Self.problem))
+        done(result.map(ApplePasswordsReply.codes).mapError(Self.problem))
       }
     }
   }
@@ -394,13 +383,9 @@ final class ApplePasswordsClient: @unchecked Sendable {
       guard self.session == nil || self.fillsCodes else { return done(.failure(.refused)) }
       let body: [String: Any] = ["ACT": 2, "TYPE": "oneTimeCodes", "frameURLs": [page], "username": user]
       self.sealed(17, qid: "CmdDidFillOneTimeCode", url: nil, body, wait: Self.codeSeconds) { result in
-        done(result.map { Self.entries($0).map(Self.code) }.mapError(Self.problem))
+        done(result.map(ApplePasswordsReply.codes).mapError(Self.problem))
       }
     }
-  }
-
-  private static func code(_ entry: [String: Any]) -> ApplePasswordsCode {
-    ApplePasswordsCode(user: entry["username"] as? String ?? "", domain: entry["domain"] as? String ?? "", source: entry["source"] as? String ?? "totp", code: entry["code"] as? String ?? "")
   }
 
   static func savedSite(host: String, insecure: Bool) -> String { insecure ? "http://\(host)" : host }
@@ -417,7 +402,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
         Self.log.notice("save had no readable answer, reading the list")
         self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds) { listed in
           done(listed.mapError(Self.problem).flatMap { answer in
-            Self.entries(answer).contains(where: { $0["USR"] as? String == user }) ? .success(()) : .failure(.unreadable)
+            ApplePasswordsReply.entries(answer).contains { $0.user == user } ? .success(()) : .failure(.unreadable)
           })
         }
       }
@@ -426,10 +411,6 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   private static func problem(_ error: Error) -> Problem { error as? Problem ?? .unreadable }
 
-  private static func entries(_ answer: [String: Any]) -> [[String: Any]] {
-    if let list = answer["Entries"] as? [[String: Any]] { return list }
-    return answer.keys.filter { $0.hasPrefix("Entry_") }.sorted().compactMap { answer[$0] as? [String: Any] }
-  }
 
   private func sealed(
     _ cmd: Int, qid: String, url: String?, _ body: [String: Any], wait: TimeInterval, also: Int? = nil, kept: Set<Int> = [],

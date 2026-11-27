@@ -82,18 +82,29 @@ final class ApplePasswordsPipe: @unchecked Sendable {
     }
   }
 
-  private func take(_ data: Data) {
+  static func frames(_ buffer: inout Data) -> [[String: Any]]? {
     var heard: [[String: Any]] = []
-    lock.withLock {
-      buffer.append(data)
-      while buffer.count >= 4 {
-        let length = Int(buffer.prefix(4).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian })
-        guard buffer.count >= 4 + length else { break }
-        let body = buffer.subdata(in: buffer.startIndex + 4..<buffer.startIndex + 4 + length)
-        buffer.removeSubrange(buffer.startIndex..<buffer.startIndex + 4 + length)
-        if let message = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] { heard.append(message) }
-      }
+    while buffer.count >= 4 {
+      let length = Int(buffer.prefix(4).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian })
+      guard length <= maxMessageBytes else { return nil }
+      guard buffer.count >= 4 + length else { break }
+      let body = buffer.subdata(in: buffer.startIndex + 4..<buffer.startIndex + 4 + length)
+      buffer.removeSubrange(buffer.startIndex..<buffer.startIndex + 4 + length)
+      if let message = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] { heard.append(message) }
     }
+    return heard
+  }
+
+  private func take(_ data: Data) {
+    let heard = lock.withLock { () -> [[String: Any]]? in
+      buffer.append(data)
+      guard let heard = Self.frames(&buffer) else {
+        buffer.removeAll()
+        return nil
+      }
+      return heard
+    }
+    guard let heard else { return stop() }
     heard.forEach { onMessage?($0) }
   }
 

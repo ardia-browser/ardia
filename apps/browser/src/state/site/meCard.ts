@@ -58,10 +58,30 @@ async function askForContacts(): Promise<Pick<ContactsAccessRequest, "status" | 
   return requestContactsAccess().catch((e: unknown) => ({ status: contactsAuthorization(), error: e instanceof Error ? e.message : String(e) }));
 }
 
+const ME_CARD_FIELD_MAX = 1000;
+const ME_CARD_ADDRESSES_MAX = 20;
+const UNPAIRED_OR_NUL = /\u0000|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+function cardText(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const text = value.replace(UNPAIRED_OR_NUL, "").trim();
+  if (text.length <= ME_CARD_FIELD_MAX) return text;
+  const cut = text.slice(0, ME_CARD_FIELD_MAX);
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+}
+
+const firstText = (list: unknown) => (Array.isArray(list) ? cardText(list[0]) : "");
+
+const cardAddresses = (list: unknown): Record<string, unknown>[] =>
+  Array.isArray(list) ? list.filter((a): a is Record<string, unknown> => isFields(a)).slice(0, ME_CARD_ADDRESSES_MAX) : [];
+
 export function meCardEntries(card: MeCard): AddressInput[] {
-  const contact = { name: card.name.trim(), organization: card.organization.trim(), email: card.emails[0]?.trim() ?? "", phone: card.phones[0]?.trim() ?? "" };
-  const entries = card.addresses.length ? card.addresses.map((a) => ({ ...contact, street: a.street, city: a.city, state: a.state, postalCode: a.postalCode, country: a.country })) : [contact];
-  return entries.filter((entry) => Object.values(entry).some((value) => value.trim()));
+  const contact = { name: cardText(card.name), organization: cardText(card.organization), email: firstText(card.emails), phone: firstText(card.phones) };
+  const addresses = cardAddresses(card.addresses);
+  const entries = addresses.length
+    ? addresses.map((a) => ({ ...contact, street: cardText(a.street), city: cardText(a.city), state: cardText(a.state), postalCode: cardText(a.postalCode), country: cardText(a.country) }))
+    : [contact];
+  return entries.filter((entry) => Object.values(entry).some((value) => value));
 }
 
 const patch = (key: "hints" | "asking", profile: string, value: unknown) => useMeCard.setState((s) => ({ [key]: { ...s[key], [profile]: value } }));

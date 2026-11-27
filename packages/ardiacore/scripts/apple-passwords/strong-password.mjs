@@ -124,6 +124,21 @@ export function strongPasswordChecks({ paired, sites, engine: engineName = "webk
         await tab.close();
       }
     },
+    async E24confirmPattern() {
+      const { tabs } = await session();
+      const tab = await tabs.open(sites.url(SITE, "/signup-confirm-pattern"));
+      try {
+        const marked = await tab.value(`({ p: document.getElementById("p").hasAttribute("pattern"), c: document.getElementById("c").getAttribute("pattern") })`);
+        assert(!marked.p && marked.c, "only the confirm field has a pattern", marked);
+        await suggested(tab);
+        const password = await pickSuggestion(tab, ["p", "c"]);
+        const made = shape(password);
+        assert(made.length === 16 && !password.includes("-") && made.alphabet && made.digit && made.upper && made.lower, "a pattern on the confirm field alone still gets 16 letters and digits with no hyphens", made);
+        return { engine: engineName, length: made.length };
+      } finally {
+        await tab.close();
+      }
+    },
     async E24() {
       const { fake, tabs } = await session();
       const short = await tabs.open(sites.url(SITE, "/signup-short"));

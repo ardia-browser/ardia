@@ -56,6 +56,19 @@ NSArray<NSDictionary *> *KnownHosts() {
         @"chrome-extension://gcllgfdnfnllodcaambdaknbipemelie/",
       ],
     },
+    @{
+      @"name" : @"com.adguard.browser_extension_host.nm",
+      @"description" : @"AdGuard Native message connector",
+      @"path" : @"/Applications/Adguard.app/Contents/MacOS/adguard-nm",
+      @"type" : @"stdio",
+      @"allowed_origins" : @[
+        @"chrome-extension://fbohpolgemkbfphodcfgnpjcmedcjhpn/",
+        @"chrome-extension://hhaeiccdiaojoofohjiennalnphobkaf/",
+        @"chrome-extension://mkphddcgnalfkgjbklbepofehokofiek/",
+        @"chrome-extension://lcelghcpbepaoamjahfegdgocagfgpdi/",
+        @"chrome-extension://calilkfbhgibagenlbchfbiafnacldki/",
+      ],
+    },
   ];
 }
 

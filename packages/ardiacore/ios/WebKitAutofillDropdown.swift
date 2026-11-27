@@ -41,19 +41,20 @@ final class WebKitAutofillDropdown: NSObject {
 
   func show(_ rows: [Row], under field: NSRect, in window: NSWindow) {
     let kept = selectedRow
-    self.rows = rows
     let panel = panel ?? makePanel()
     self.panel = panel
     let width = min(Self.maxWidth, max(Self.minWidth, field.width))
     let content = rows.map(Self.height(of:)).reduce(0, +)
     let visible = rows.prefix(Self.maxRows).map(Self.height(of:)).reduce(0, +)
     let height = visible + Self.inset * 2
+    let unchanged = isShown && rows == self.rows && panel.frame.size == NSSize(width: width, height: height)
+    self.rows = rows
     let screen = Self.screen(showing: field, in: window)
     var origin = NSPoint(x: field.minX, y: field.minY - Self.gap - height)
     if origin.y < screen.minY, field.maxY + Self.gap + height <= screen.maxY { origin.y = field.maxY + Self.gap }
     origin.x = max(screen.minX, min(origin.x, screen.maxX - width))
     panel.setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)), display: false)
-    build(width: width, height: height, content: content)
+    if !unchanged { build(width: width, height: height, content: content) }
     select(kept.flatMap { rows.firstIndex(of: $0) }, notify: false)
     if parent !== window { watch(window) }
     if panel.parent !== window {
@@ -196,8 +197,8 @@ private final class WebKitAutofillRowView: NSView {
     muted = row.muted
     notice = row.enabled ? "" : row.title
     super.init(frame: .zero)
-    if let app = row.appIcon.flatMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }) {
-      icon.image = NSWorkspace.shared.icon(forFile: app.path)
+    if let image = row.appIcon.flatMap(Self.appIcon) {
+      icon.image = image
       icon.imageScaling = .scaleProportionallyUpOrDown
     } else {
       icon.image = NSImage(systemSymbolName: row.symbol, accessibilityDescription: nil)
@@ -224,6 +225,16 @@ private final class WebKitAutofillRowView: NSView {
   }
 
   required init?(coder: NSCoder) { nil }
+
+  private static var appIcons: [String: NSImage] = [:]
+
+  private static func appIcon(_ bundle: String) -> NSImage? {
+    if let cached = appIcons[bundle] { return cached }
+    guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return nil }
+    let image = NSWorkspace.shared.icon(forFile: app.path)
+    appIcons[bundle] = image
+    return image
+  }
 
   private static func title(_ row: WebKitAutofillDropdown.Row, font: NSFont) -> NSAttributedString {
     let paragraph = NSMutableParagraphStyle()

@@ -46,8 +46,9 @@ function savedLastLoads(): LastLoads {
 }
 
 function lastLoadFor(profile: string, consent: ConsentToken | null): LastLoad | null {
+  if (consent === null || !stillValid(consent)) return null;
   const last = savedLastLoads();
-  return consent !== null && last.consent === consent ? (last.loads.get(profile) ?? null) : null;
+  return last.consent === consent ? (last.loads.get(profile) ?? null) : null;
 }
 
 function rememberLoad(profile: string, load: LastLoad, consent: ConsentToken | null) {

@@ -6,6 +6,7 @@ const stub = await import("../../test-native/index.ts");
 globalThis.fetch = async () => ({ status: 503 });
 
 const client = await import("../telemetry/client.ts");
+const local = await import("../telemetry/localStore.ts");
 const { LOAD_HEALTH_DOC, loadChange, reportExtensionsLoaded } = await import("./loadHealth.ts");
 
 client.loadChoice();
@@ -116,4 +117,23 @@ test("a load that began in one consent period and answers in the next writes no 
   answer({ dropped: 0, enabled: 2, disabled: {} });
   await settle();
   assert.equal(stub.docs.has(LOAD_HEALTH_DOC), false);
+});
+
+test("a load that began in one consent period and answers in the next keeps that period's baseline out of the local diagnostics", async () => {
+  stub.extensionAnswers.loadHealth = async (profile) => health[profile];
+  const earlier = client.consentToken();
+  stub.docs.set(LOAD_HEALTH_DOC, JSON.stringify({ version: 2, consent: earlier, profiles: { f: { dropped: 1, enabled: 6 } } }));
+  let answer;
+  health.f = new Promise((resolve) => (answer = resolve));
+  (await freshModule()).reportExtensionsLoaded("f");
+  client.setSharing(false, "settings");
+  client.setSharing(true, "settings");
+  answer({ dropped: 4, enabled: 0, disabled: {} });
+  await settle();
+  local.flushLocal();
+  const [record] = stub.telemetryLocal.records().filter((r) => r.event === "extensions_loaded" && r.properties?.dropped === 4);
+  assert.ok(record, "the load is kept locally");
+  assert.equal(record.properties.enabled_last_launch, -1);
+  assert.equal(record.properties.dropped_new, 0);
+  assert.equal(JSON.stringify(stub.telemetryLocal.records()).includes('"enabled_last_launch":6'), false);
 });

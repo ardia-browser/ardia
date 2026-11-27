@@ -7,26 +7,31 @@ the encrypted hash, which the migrated "Ardia Safe Storage" item still verifies,
 (extensions_loaded, 14 days to 2026-11-26) every fresh drop checked was an install's first launch on different
 hardware (M4 to M6, M4 Pro to M5 Pro, M1 to M5, M2 to M6, M3 Max to M5 Max), not an app update.
 
-The first pass still resets whatever fails its HMAC before the preferences are published, so nothing unverified
-reaches the extension loader or anything else at startup. What it resets that carries an encrypted hash is set aside
-instead of lost: the value and its encrypted hash are kept in the protected store's own file under
-ardia_awaiting_safe_storage (written by this filter on every write and never seen by the PrefService), and left off
-prefs.tracked_preferences_reset. When the Safe Storage key arrives, the second pass checks each set-aside value against
-its own encrypted hash with the same check Chrome applies to protected preferences. One that doesn't verify is dropped
-and listed in prefs.tracked_preferences_reset, as before. One that does is given this machine's HMAC and put back by
-the next launch's first pass, after that pass's own checks and before anything is published, only where nothing has
-taken its place, with its encrypted hash and an HMAC stamped through the transaction, so it loads like any other
-installed extension and the second pass checks it again. Nothing comes back in the session it was reset in: an
-extension entry the loader never registered breaks shutdown (PreferenceAPI clears content settings for every
-extension in the preferences). Until the key arrives nothing is judged and nothing waits for it: with the Keychain
-locked or access denied, or an encryptor with no usable key, the values stay set aside for a later launch and
-startup goes on without them. With kEncryptedPrefHashing off, or without OSCrypt, there is no second pass and nothing
-is set aside. The reset list is now posted to the PrefService before the second pass is, so a reset the second pass
-lists isn't overwritten by the first pass's list when the key is already there.
+The first pass can't wait for the key: the startup profile loads synchronously (ProfileManager::CreateProfileHelper,
+CreateMode::kSynchronous), PrefService::InitFromStorage CHECKs that a synchronous read finishes synchronously, and the
+key arrives as a task posted to the same thread, or never while the Keychain is unreadable. So the first pass still
+resets whatever fails its HMAC before anything is published, and what it resets that carries an encrypted hash is set
+aside instead of lost, in the protected store's own file under ardia_awaiting_safe_storage (written by this filter,
+never seen by the PrefService), off prefs.tracked_preferences_reset. A record moves through three states:
+- pending: the value and its encrypted hash. The second pass decrypts the hash with the Safe Storage key and checks it
+  against the value with Chrome's check. A key that is temporarily unavailable leaves it pending; a hash that doesn't
+  verify drops it into prefs.tracked_preferences_reset.
+- verified: it passed, and carries this machine's HMAC. The next launch's first pass puts it back, after that pass's
+  own checks and before anything is published, only where nothing has taken its place, with its encrypted hash and
+  an HMAC stamped through the transaction, so it loads like any installed extension.
+- restored: the second pass of that launch checks the restored value against its encrypted hash again, strictly,
+  with no HMAC fallback, and removes it and lists it if it doesn't verify. Then the record is gone.
+Nothing comes back in the session it was reset in: an extension entry the loader never registered breaks shutdown
+(PreferenceAPI clears content settings for every extension in the preferences). A pending or verified record is never
+trusted on its own: the verified step is the HMAC Chrome's first pass already accepts for every protected value, and
+the restored value is held to the Safe Storage key in its own launch. With kEncryptedPrefHashing off, or without
+OSCrypt, there is no second pass and nothing is set aside. The reset list is now posted to the PrefService before the
+second pass is, so a reset the second pass lists isn't overwritten by the first pass's list when the key is already
+there.
 
 --- a/services/preferences/tracked/pref_hash_filter.h
 +++ b/services/preferences/tracked/pref_hash_filter.h
-@@ -197,7 +197,21 @@
+@@ -197,7 +197,29 @@
    // complete.
    void UpdateTrackedPreferencesResetListInPrefStore(
        const base::DictValue& pref_store_contents_at_load);
@@ -39,6 +44,14 @@ lists isn't overwritten by the first pass's list when the key is already there.
 +                                     PrefHashStoreTransaction* transaction);
 +
 +  void VerifyAwaitingSafeStorage();
++
++  enum class SafeStorageVerdict { kVerified, kRejected, kUnavailable };
++
++  SafeStorageVerdict CheckWithSafeStorage(
++      const std::string& path,
++      const std::string* key,
++      const base::Value& value,
++      const std::string& encrypted_hash) const;
  
 +  bool VerifiedBySafeStorage(const std::string& path,
 +                             const std::string* key,
@@ -48,7 +61,7 @@ lists isn't overwritten by the first pass's list when the key is already there.
    // Callback to be invoked only once (and subsequently reset) on the next
    // FilterOnLoad event. It will be allowed to modify the |prefs| handed to
    // FilterOnLoad before handing them back to this PrefHashFilter.
-@@ -247,6 +261,8 @@
+@@ -247,6 +269,8 @@
    raw_ptr<PrefService> pref_service_ = nullptr;
  
    const bool encrypted_hashing_enabled_;
@@ -59,7 +72,15 @@ lists isn't overwritten by the first pass's list when the key is already there.
  
 --- a/services/preferences/tracked/pref_hash_filter.cc
 +++ b/services/preferences/tracked/pref_hash_filter.cc
-@@ -41,6 +41,35 @@
+@@ -10,6 +10,7 @@
+ #include <memory>
+ #include <utility>
+ 
++#include "base/base64.h"
+ #include "base/check_is_test.h"
+ #include "base/check_op.h"
+ #include "base/functional/bind.h"
+@@ -41,6 +42,50 @@
  
  namespace {
  
@@ -69,12 +90,16 @@ lists isn't overwritten by the first pass's list when the key is already there.
 +constexpr char kAwaitingValueKey[] = "value";
 +constexpr char kAwaitingHashKey[] = "hash";
 +constexpr char kAwaitingHmacKey[] = "hmac";
++constexpr char kAwaitingStateKey[] = "state";
++constexpr char kStateVerified[] = "verified";
++constexpr char kStateRestored[] = "restored";
 +constexpr char kAwaitingAtomicKey[] = "";
 +
 +struct AwaitingFields {
 +  const base::Value* value = nullptr;
 +  const std::string* encrypted_hash = nullptr;
 +  const std::string* hmac = nullptr;
++  const std::string* state = nullptr;
 +};
 +
 +AwaitingFields FieldsOf(const base::Value& entry) {
@@ -83,7 +108,18 @@ lists isn't overwritten by the first pass's list when the key is already there.
 +    return {};
 +  }
 +  return {fields->Find(kAwaitingValueKey), fields->FindString(kAwaitingHashKey),
-+          fields->FindString(kAwaitingHmacKey)};
++          fields->FindString(kAwaitingHmacKey),
++          fields->FindString(kAwaitingStateKey)};
++}
++
++bool InState(const AwaitingFields& fields, std::string_view state) {
++  return fields.state && *fields.state == state;
++}
++
++base::DictValue RestoredRecord(const std::string& encrypted_hash) {
++  return base::DictValue()
++      .Set(kAwaitingStateKey, kStateRestored)
++      .Set(kAwaitingHashKey, encrypted_hash);
 +}
 +
 +void AppendOnce(base::ListValue& list, std::string entry) {
@@ -95,7 +131,7 @@ lists isn't overwritten by the first pass's list when the key is already there.
  std::vector<const char*>* GetDeprecatedPrefs() {
    // Add deprecated previously tracked preferences below for them to be cleaned
    // up from both the pref files and the hash store.
-@@ -105,6 +134,8 @@
+@@ -105,6 +150,8 @@
  
  using PrefTrackingStrategy =
      prefs::mojom::TrackedPreferenceMetadata::PrefTrackingStrategy;
@@ -104,7 +140,7 @@ lists isn't overwritten by the first pass's list when the key is already there.
  
  PrefHashFilter::PrefHashFilter(
      std::unique_ptr<PrefHashStore> pref_hash_store,
-@@ -131,7 +162,8 @@
+@@ -131,7 +178,8 @@
            base::MakeRefCounted<base::DeferredSequencedTaskRunner>(
                base::SequencedTaskRunner::GetCurrentDefault())),
        encrypted_hashing_enabled_(
@@ -114,21 +150,21 @@ lists isn't overwritten by the first pass's list when the key is already there.
    // For base::UmaHistogramExactLinear, number of tracked histograms must 100 or
    // below.
    CHECK_LE(reporting_ids_count_, 100u);
-@@ -281,6 +313,13 @@
-   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+@@ -282,6 +330,13 @@
    PrefFilter::OnWriteCallbackPair callback_pair =
        GetOnWriteSynchronousCallbacks(pref_store_contents);
-+
+ 
 +  if (awaiting_safe_storage_.empty()) {
 +    pref_store_contents.Remove(kAwaitingSafeStorageKey);
 +  } else {
 +    pref_store_contents.Set(kAwaitingSafeStorageKey,
 +                            awaiting_safe_storage_.Clone());
 +  }
- 
++
    if (!changed_paths_.empty()) {
      DictionaryHashStoreContents dictionary_contents(pref_store_contents);
-@@ -346,6 +385,17 @@
+     std::unique_ptr<PrefHashStoreTransaction> hash_store_transaction(
+@@ -346,6 +401,17 @@
    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
    std::set<std::string> reset_paths;
    bool did_reset = false;
@@ -146,7 +182,7 @@ lists isn't overwritten by the first pass's list when the key is already there.
  
    // Perform the initial synchronous validation pass (without the encryptor).
    // This validates the super MAC and all individual preference MACs.
-@@ -374,11 +424,26 @@
+@@ -374,10 +440,25 @@
          prefs_altered = true;
        }
      }
@@ -158,22 +194,21 @@ lists isn't overwritten by the first pass's list when the key is already there.
      if (hash_store_transaction->StampSuperHmac()) {
        prefs_altered = true;
      }
-   }
- 
++  }
++
 +  if (did_reset && contents_before_checks) {
 +    SetAsideForSafeStorage(*contents_before_checks, pref_store_contents,
 +                           reset_paths);
-+  }
+   }
 +  if (!awaiting_safe_storage_.empty()) {
 +    pref_store_contents.Set(kAwaitingSafeStorageKey,
 +                            awaiting_safe_storage_.Clone());
 +    prefs_altered = true;
 +  }
-+
+ 
    if (did_reset) {
      pref_store_contents.SetByDottedPath(
-         user_prefs::kPreferenceResetTime,
-@@ -395,6 +460,12 @@
+@@ -395,6 +476,12 @@
    }
    reset_on_load_observer_.reset();
  
@@ -186,11 +221,10 @@ lists isn't overwritten by the first pass's list when the key is already there.
    // If encrypted hashing is on, post a deferred task to re-validate with the
    // encryptor once it's available. Pass a clone of the pref store contents
    // so the task operates on the exact state at load time. Also pass the list of
-@@ -416,15 +487,6 @@
-       std::move(on_deferred_revalidation_complete_for_testing_).Run();
+@@ -417,15 +504,6 @@
      }
    }
--
+ 
 -  // The PrefService initialization is asynchronous. Post a task to
 -  // patch the live PrefService with the resets found in the
 -  // sync pass.
@@ -199,10 +233,11 @@ lists isn't overwritten by the first pass's list when the key is already there.
 -      base::BindOnce(
 -          &PrefHashFilter::UpdateTrackedPreferencesResetListInPrefStore,
 -          weak_ptr_factory_.GetWeakPtr(), pref_store_contents.Clone()));
- 
+-
    // Immediately call the callback with the original pref_store_contents to
    // allow startup to proceed without waiting for the encryptor.
-@@ -508,6 +570,8 @@
+   std::move(post_filter_on_load_callback)
+@@ -508,6 +586,8 @@
      UpdateTrackedPreferencesResetListInPrefStore(pref_store_contents_at_load);
    }
  
@@ -211,7 +246,7 @@ lists isn't overwritten by the first pass's list when the key is already there.
    // This is the final validation pass. Log metrics if we haven't already.
    MaybeRecordTrackedPreferenceResetCount(pref_store_contents_at_load);
  
-@@ -541,9 +605,221 @@
+@@ -541,9 +621,299 @@
                             reset_list->Clone());
    } else {
      pref_service_->ClearPref(user_prefs::kTrackedPreferencesReset);
@@ -298,64 +333,97 @@ lists isn't overwritten by the first pass's list when the key is already there.
 +      continue;
 +    }
 +    const std::string hash_path = base::StrCat({path, kEncryptedHashSuffix});
-+    std::vector<std::string> settled;
-+    if (preference->GetType() == TrackedPreferenceType::SPLIT) {
-+      bool restored = false;
-+      for (const auto [key, entry] : *entries) {
-+        const AwaitingFields fields = FieldsOf(entry);
-+        if (!fields.value || !fields.encrypted_hash || !fields.hmac) {
++    const bool split = preference->GetType() == TrackedPreferenceType::SPLIT;
++    std::vector<std::string> dropped;
++    std::vector<std::pair<std::string, std::string>> restored;
++    for (const auto [key, entry] : *entries) {
++      const AwaitingFields fields = FieldsOf(entry);
++      if (!InState(fields, kStateVerified)) {
++        continue;
++      }
++      const std::string reported_path =
++          split ? base::StrCat({path, ".", key}) : path;
++      if (!fields.value || !fields.encrypted_hash || !fields.hmac ||
++          pref_hash_store_->ComputeHmac(reported_path, fields.value) !=
++              *fields.hmac) {
++        dropped.push_back(key);
++        list_reset(reported_path);
++        continue;
++      }
++      if (!split) {
++        if (pref_store_contents.FindByDottedPath(path)) {
++          dropped.push_back(key);
 +          continue;
 +        }
-+        settled.push_back(key);
-+        const std::string keyed_path = base::StrCat({path, ".", key});
-+        if (pref_hash_store_->ComputeHmac(keyed_path, fields.value) !=
-+            *fields.hmac) {
-+          list_reset(keyed_path);
++        if (!pref_store_contents.SetByDottedPath(path, fields.value->Clone())) {
 +          continue;
 +        }
-+        base::DictValue* live = pref_store_contents.FindDictByDottedPath(path);
-+        if (live && live->contains(key)) {
-+          continue;
-+        }
-+        if (!live) {
-+          live = &pref_store_contents.SetByDottedPath(path, base::DictValue())
-+                      ->GetDict();
-+        }
-+        live->Set(key, fields.value->Clone());
 +        DictionaryHashStoreContents(pref_store_contents)
-+            .SetSplitPrefAuthenticator(hash_path, key, *fields.encrypted_hash);
-+        restored = true;
++            .SetAtomicPrefAuthenticator(hash_path, *fields.encrypted_hash);
++        transaction->StoreHmac(path,
++                               pref_store_contents.FindByDottedPath(path));
++        restored.emplace_back(key, *fields.encrypted_hash);
++        continue;
 +      }
-+      if (restored) {
-+        transaction->StoreSplitHmac(
-+            path, pref_store_contents.FindDictByDottedPath(path));
++      base::DictValue* live = pref_store_contents.FindDictByDottedPath(path);
++      if (live && live->contains(key)) {
++        dropped.push_back(key);
++        continue;
 +      }
-+    } else if (const base::Value* entry = entries->Find(kAwaitingAtomicKey)) {
-+      const AwaitingFields fields = FieldsOf(*entry);
-+      if (fields.value && fields.encrypted_hash && fields.hmac) {
-+        settled.push_back(kAwaitingAtomicKey);
-+        if (pref_hash_store_->ComputeHmac(path, fields.value) != *fields.hmac) {
-+          list_reset(path);
-+        } else if (!pref_store_contents.FindByDottedPath(path)) {
-+          pref_store_contents.SetByDottedPath(path, fields.value->Clone());
-+          DictionaryHashStoreContents(pref_store_contents)
-+              .SetAtomicPrefAuthenticator(hash_path, *fields.encrypted_hash);
-+          transaction->StoreHmac(path,
-+                                 pref_store_contents.FindByDottedPath(path));
++      if (!live) {
++        if (pref_store_contents.FindByDottedPath(path)) {
++          continue;
 +        }
++        base::Value* created =
++            pref_store_contents.SetByDottedPath(path, base::DictValue());
++        if (!created || !created->is_dict()) {
++          continue;
++        }
++        live = &created->GetDict();
 +      }
++      live->Set(key, fields.value->Clone());
++      DictionaryHashStoreContents(pref_store_contents)
++          .SetSplitPrefAuthenticator(hash_path, key, *fields.encrypted_hash);
++      restored.emplace_back(key, *fields.encrypted_hash);
 +    }
-+    for (const std::string& key : settled) {
++    if (split && !restored.empty()) {
++      transaction->StoreSplitHmac(
++          path, pref_store_contents.FindDictByDottedPath(path));
++    }
++    for (const std::string& key : dropped) {
 +      entries->Remove(key);
++    }
++    for (const auto& [key, encrypted_hash] : restored) {
++      entries->Set(key, RestoredRecord(encrypted_hash));
 +    }
 +    if (entries->empty()) {
 +      awaiting_safe_storage_.Remove(path);
 +    }
-+    changed = changed || !settled.empty();
++    changed = changed || !dropped.empty() || !restored.empty();
    }
 +  return changed;
  }
  
++PrefHashFilter::SafeStorageVerdict PrefHashFilter::CheckWithSafeStorage(
++    const std::string& path,
++    const std::string* key,
++    const base::Value& value,
++    const std::string& encrypted_hash) const {
++  std::optional<std::vector<uint8_t>> sealed =
++      base::Base64Decode(encrypted_hash);
++  if (!sealed) {
++    return SafeStorageVerdict::kRejected;
++  }
++  os_crypt_async::Encryptor::DecryptFlags flags;
++  if (!encryptor_->DecryptData(*sealed, &flags)) {
++    return flags.temporarily_unavailable ? SafeStorageVerdict::kUnavailable
++                                         : SafeStorageVerdict::kRejected;
++  }
++  return VerifiedBySafeStorage(path, key, value, encrypted_hash)
++             ? SafeStorageVerdict::kVerified
++             : SafeStorageVerdict::kRejected;
++}
++
 +bool PrefHashFilter::VerifiedBySafeStorage(
 +    const std::string& path,
 +    const std::string* key,
@@ -397,27 +465,72 @@ lists isn't overwritten by the first pass's list when the key is already there.
 +    if (!entries) {
 +      continue;
 +    }
-+    const bool split =
-+        preference->GetType() == TrackedPreferenceType::SPLIT;
-+    std::vector<std::string> failed;
++    const bool split = preference->GetType() == TrackedPreferenceType::SPLIT;
++    const PrefService::Preference* pref = pref_service_->FindPreference(path);
++    std::optional<base::DictValue> live;
++    if (split && pref && pref->GetValue()->is_dict()) {
++      live = pref->GetValue()->GetDict().Clone();
++    }
++    bool live_changed = false;
++    std::vector<std::string> settled;
 +    for (auto [key, entry] : *entries) {
 +      const AwaitingFields fields = FieldsOf(entry);
-+      if (fields.hmac) {
-+        continue;
-+      }
 +      const std::string reported_path =
 +          split ? base::StrCat({path, ".", key}) : path;
-+      if (!fields.value || !fields.encrypted_hash ||
-+          !VerifiedBySafeStorage(path, split ? &key : nullptr, *fields.value,
-+                                 *fields.encrypted_hash)) {
-+        failed.push_back(key);
++      const std::string* split_key = split ? &key : nullptr;
++      if (InState(fields, kStateVerified)) {
++        continue;
++      }
++      if (InState(fields, kStateRestored)) {
++        const base::Value* current =
++            split ? (live ? live->Find(key) : nullptr)
++                  : (pref && pref->HasUserSetting() ? pref->GetValue()
++                                                    : nullptr);
++        if (!current || !fields.encrypted_hash) {
++          settled.push_back(key);
++          continue;
++        }
++        const SafeStorageVerdict verdict = CheckWithSafeStorage(
++            path, split_key, *current, *fields.encrypted_hash);
++        if (verdict == SafeStorageVerdict::kUnavailable) {
++          continue;
++        }
++        settled.push_back(key);
++        if (verdict == SafeStorageVerdict::kRejected) {
++          AppendOnce(reset_list, reported_path);
++          if (split) {
++            live->Remove(key);
++            live_changed = true;
++          } else {
++            pref_service_->ClearPref(path);
++          }
++        }
++        continue;
++      }
++      if (!fields.value || !fields.encrypted_hash) {
++        settled.push_back(key);
 +        AppendOnce(reset_list, reported_path);
 +        continue;
 +      }
-+      entry.GetDict().Set(kAwaitingHmacKey, pref_hash_store_->ComputeHmac(
-+                                                reported_path, fields.value));
++      const SafeStorageVerdict verdict = CheckWithSafeStorage(
++          path, split_key, *fields.value, *fields.encrypted_hash);
++      if (verdict == SafeStorageVerdict::kUnavailable) {
++        continue;
++      }
++      if (verdict == SafeStorageVerdict::kRejected) {
++        settled.push_back(key);
++        AppendOnce(reset_list, reported_path);
++        continue;
++      }
++      const std::string hmac =
++          pref_hash_store_->ComputeHmac(reported_path, fields.value);
++      entry.GetDict().Set(kAwaitingStateKey, kStateVerified);
++      entry.GetDict().Set(kAwaitingHmacKey, hmac);
 +    }
-+    for (const std::string& key : failed) {
++    if (live_changed) {
++      pref_service_->SetDict(path, std::move(*live));
++    }
++    for (const std::string& key : settled) {
 +      entries->Remove(key);
 +    }
 +    if (entries->empty()) {

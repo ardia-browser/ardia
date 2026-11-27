@@ -40,7 +40,7 @@
 //   launch(log, test, args, opts) · appUp(log)   (re)start the app on the run's data dir; `exited` is set once it's gone
 //   onScreenWindows() · firstPixel(png) · writePopupExtension(opts) · fixtureCrx()
 import { execFileSync } from "node:child_process";
-import { accessSync, constants as fsConstants, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import { basename, join, resolve } from "node:path";
@@ -6315,32 +6315,26 @@ try {
       "me.proton.pass.nm": "/Applications/Proton Pass.app/Contents/Resources/assets/proton_pass_nm_host",
       "com.adguard.browser_extension_host.nm": "/Applications/Adguard.app/Contents/MacOS/adguard-nm",
     };
-    const runnable = (path) => {
-      if (typeof path !== "string" || !path.startsWith("/") || !existsSync(path) || !statSync(path).isFile()) return false;
-      try {
-        accessSync(path, fsConstants.X_OK);
-        return true;
-      } catch {
-        return false;
-      }
-    };
-    const usable = (m, name) => m?.name === name && m.type === "stdio" && Array.isArray(m.allowed_origins) && runnable(m.path);
-    const chromeSystemManifest = (name) => {
-      try {
-        return JSON.parse(readFileSync(join("/Library/Google/Chrome/NativeMessagingHosts", `${name}.json`), "utf8"));
-      } catch {
-        return null;
-      }
-    };
-    const expected = [
-      ...Object.keys(known).filter((name) => usable(chromeSystemManifest(name), name) || runnable(known[name])),
-      ...["com.apple.passwordmanager"].filter((name) => usable(chromeSystemManifest(name), name)),
-    ].sort();
+    const hosts = JSON.parse(execFileSync("osascript", ["-l", "JavaScript", "-e",
+      `ObjC.import("Foundation");
+       const fm = $.NSFileManager.defaultManager;
+       const builtIn = ${JSON.stringify(known)};
+       const read = (path) => {
+         const data = $.NSData.dataWithContentsOfFile(path);
+         return data.isNil() ? null : ObjC.deepUnwrap($.NSJSONSerialization.JSONObjectWithDataOptionsError(data, 0, null));
+       };
+       const runnable = (path) => typeof path === "string" && $(path).isAbsolutePath && fm.isExecutableFileAtPath(path);
+       const usable = (m, name) => !!m && typeof m === "object" && !Array.isArray(m) && m.name === name && m.type === "stdio" && Array.isArray(m.allowed_origins) && runnable(m.path);
+       const system = (name) => read("/Library/Google/Chrome/NativeMessagingHosts/" + name + ".json");
+       const expected = [
+         ...Object.keys(builtIn).filter((name) => usable(system(name), name) || runnable(builtIn[name])),
+         ...["com.apple.passwordmanager"].filter((name) => usable(system(name), name)),
+       ].sort();
+       const copied = (name) => read(${JSON.stringify(dir)} + "/" + name + ".json");
+       JSON.stringify({ expected, unusable: expected.filter((name) => !usable(copied(name), name)).map((name) => ({ name, manifest: copied(name) })) })`]).toString());
+    const expected = hosts.expected;
+    if (hosts.unusable.length) throw new Error(`unusable copies: ${JSON.stringify(hosts.unusable)}`);
     const managed = JSON.parse(existsSync(join(dir, ".ardia-managed.json")) ? readFileSync(join(dir, ".ardia-managed.json"), "utf8") : "[]");
-    for (const name of expected) {
-      const manifest = JSON.parse(readFileSync(join(dir, `${name}.json`), "utf8"));
-      if (manifest.name !== name || manifest.type !== "stdio" || !existsSync(manifest.path)) throw new Error(`${name}: ${JSON.stringify(manifest)}`);
-    }
     if (JSON.stringify(managed.slice().sort()) !== JSON.stringify(expected)) throw new Error(`managed ${JSON.stringify(managed)}, expected ${JSON.stringify(expected)}`);
 
     const ext = join(scratch, "fixture-ext-nm");

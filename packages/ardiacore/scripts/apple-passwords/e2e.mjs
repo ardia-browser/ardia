@@ -14,7 +14,7 @@ import { codeChecks } from "./codes.mjs";
 import { FIXTURES, fakeHelper } from "./fake.mjs";
 import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
 import { loginListChecks } from "./login-list.mjs";
-import { helperAsked, noPrompt, NOT_SAVED_TITLE, promptShown, saveCounts, savesSent, savingChecks, signIn } from "./saving.mjs";
+import { CONNECT_TITLE, helperAsked, noPrompt, NOT_SAVED_TITLE, promptShown, saveCounts, savesSent, savingChecks, signIn } from "./saving.mjs";
 import { fixtureSites, PAGE_EVENTS } from "./sites.mjs";
 import { strongPasswordChecks } from "./strong-password.mjs";
 import { chromiumTabs, waitFor, webkitTabs } from "./webkit.mjs";
@@ -354,6 +354,48 @@ async function notSavedWhenUnavailable(name) {
   return seen;
 }
 
+async function stopHelper(fake) {
+  const pid = fake.stop();
+  await waitFor("the helper gone", async () => {
+    try {
+      process.kill(pid, 0);
+      return null;
+    } catch {
+      return true;
+    }
+  }, 5000);
+  await sleep(500);
+}
+
+async function pairingRefusedWhileHeld(engine) {
+  const name = engine === "chromium" ? "E18pairingRefusedchromium" : "E18pairingRefused";
+  const fake = fakeHelper(path.join(SCRATCH, name, "fake"));
+  await start(name, { manifest: fake.manifest });
+  await pairApplePasswords(fake);
+  fake.endPairing();
+  await until(pairingView, (v) => v.state === "notConnected", 10_000);
+  const tab = await (engine === "chromium" ? chromiumTabs : webkitTabs)(app, { log: note }).open(sites.url("save.localhost"));
+  const login = { user: `pairing-refused-${engine}-${Date.now()}@save.test`, password: "fixture-pw-pairing-refused-26" };
+  try {
+    await signIn(tab, login.user, login.password);
+    const prompt = await promptShown(tab);
+    assert(prompt.state === "save" && prompt.copy.title === CONNECT_TITLE, `signing in while Apple Passwords isn't connected asks ${CONNECT_TITLE}`, prompt);
+    fake.setMode({ killedAtLaunch: true });
+    await stopHelper(fake);
+    assert(await tab.answer("save"), "Connect is pressed", null);
+    const told = await promptShown(tab, "the prompt saying it wasn't saved");
+    assert(told.state === "notSaved" && told.copy.title === NOT_SAVED_TITLE, `Apple Passwords refused during Pairing says ${NOT_SAVED_TITLE}`, told);
+    const refused = await until(pairingView, (v) => v.state === "refused");
+    assert(refused.step === "failed" && refused.error === REFUSED, "the Pairing failed because Apple Passwords refused", refused);
+    assert(savesSent(fake) === 0 && !fake.asked().some((a) => a.user === login.user), "Apple Passwords is sent no save and never asks", savesSent(fake));
+    assert(!fake.savedLogins().some((l) => l.user === login.user), "nothing reaches Apple Passwords", null);
+    assert(await tab.answer("dismiss"), "OK closes it", null);
+    return { engine, title: told.copy.title, state: refused.state };
+  } finally {
+    await tab.close();
+  }
+}
+
 const inChromium = (checks, names) => Object.fromEntries(names.map((name) => [`${name}chromium`, checks[name]]));
 
 const CHECKS = {
@@ -472,6 +514,8 @@ const CHECKS = {
     return seen;
   },
   ...Object.fromEntries(Object.keys(UNAVAILABLE_SAVES).map((name) => [name, () => notSavedWhenUnavailable(name)])),
+  E18pairingRefused: () => pairingRefusedWhileHeld("webkit"),
+  E18pairingRefusedchromium: () => pairingRefusedWhileHeld("chromium"),
   async E22timedOut() {
     const deadline = 3;
     const fake = fakeHelper(path.join(SCRATCH, "E22timedOut", "fake"));

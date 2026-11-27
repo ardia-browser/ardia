@@ -182,6 +182,7 @@ struct ArdiaPageFocusState {
   NSView *_devtoolsView;
   CFTimeInterval _linkDropAt;
   CFTimeInterval _autoplayBlockedAt;
+  NSMutableDictionary<NSString *, NSNumber *> *_trustedInputAt;
   ArdiaElementPick _elementPick;
   NSMutableArray<NSDictionary<NSString *, id> *> *_newTabLinks;
   id _sightObserver;
@@ -339,6 +340,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (BOOL)sameSiteFrame:(BOOL)main origin:(NSString *)origin;
 - (void)callFrame:(NSString *)frameId kind:(NSString *)kind json:(NSString *)json;
 - (void)resetPageMedia;
+- (nullable NSNumber *)trustedInputAgeMsForOrigin:(NSString *)origin;
 @end
 
 @interface ArdiaWebView (PeekInternal)

@@ -5,12 +5,20 @@ import { test } from "node:test";
 const script = readFileSync(new URL("../../../../packages/ardiacore/ios/page_script.js", import.meta.url), "utf8");
 const source = script.match(/const pauseUnasked = (\(media, activated\) => \{[\s\S]*?\n {2}\});\n/)?.[1];
 assert.ok(source, "page_script.js defines pauseUnasked");
-const pauseUnasked = new Function(`return ${source}`)();
+const nativePaused = function () {
+  if (!(this instanceof Media)) throw new TypeError("Illegal invocation");
+  return this.state === "paused";
+};
+const nativePause = function () {
+  if (!(this instanceof Media)) throw new TypeError("Illegal invocation");
+  this.state = "paused";
+};
+const pauseUnasked = new Function("pausedState", "pauseMedia", "apply", `return ${source}`)(nativePaused, nativePause, Reflect.apply);
 const playableSource = script.match(/const playableMedia = (\(all\) => .*);\n/)?.[1];
 assert.ok(playableSource, "page_script.js defines playableMedia");
 const playableMedia = new Function(`return ${playableSource}`)();
 
-const judgeSource = script.match(/const judgeFrameActivation = (\(guarded, isActive, embedFocused, now, embedStartedAt, schedule\) => \{[\s\S]*?\n {2}\});\n/)?.[1];
+const judgeSource = script.match(/const judgeFrameActivation = (\(guarded, isActive, inputInEmbed, now, embedStartedAt, schedule\) => \{[\s\S]*?\n {2}\});\n/)?.[1];
 const judgeConstants = [...script.matchAll(/const (INHERITED_ACTIVATION_[A-Z_]+) = (\d+);\n/g)].map((m) => `const ${m[1]} = ${m[2]};`).join("\n");
 assert.ok(judgeSource && judgeConstants.includes("INHERITED_ACTIVATION_SETTLED_MS"), "page_script.js defines judgeFrameActivation and its constants");
 const judgeFrameActivation = new Function(`${judgeConstants}\nreturn ${judgeSource}`)();
@@ -18,9 +26,9 @@ const judgeFrameActivation = new Function(`${judgeConstants}\nreturn ${judgeSour
 function frame({ guarded = true, embedStartedAt = 0, startAt = embedStartedAt, pollDelay = (ms) => ms, activeAtStart = false } = {}) {
   let clock = startAt;
   let active = activeAtStart;
-  let focused = false;
+  let input = false;
   let timers = [];
-  const judge = judgeFrameActivation(guarded, () => active, () => focused, () => clock, embedStartedAt, (fn, ms) => timers.push({ at: clock + pollDelay(ms), fn }));
+  const judge = judgeFrameActivation(guarded, () => active, () => input, () => clock, embedStartedAt, (fn, ms) => timers.push({ at: clock + pollDelay(ms), fn }));
   const advanceTo = (t) => {
     for (;;) {
       timers.sort((a, b) => a.at - b.at);
@@ -32,7 +40,7 @@ function frame({ guarded = true, embedStartedAt = 0, startAt = embedStartedAt, p
     }
     clock = t;
   };
-  return { judge, advanceTo, setActive: (on) => (active = on), setFocused: (on) => (focused = on), pending: () => timers.length };
+  return { judge, advanceTo, setActive: (on) => (active = on), setInput: (on) => (input = on), pending: () => timers.length };
 }
 
 test("a cross-origin player doesn't take the click that navigated its parent as a request to play, however late it ends (gong.bg's Vbox7, #3883)", () => {
@@ -79,11 +87,11 @@ test("past the settled bound nothing inherited can still be on, so activation co
   assert.equal(f.judge(), true);
 });
 
-test("a media frame that a same-origin controller frame starts on Play plays at once, while focus is in that embed", () => {
+test("a media frame that a same-origin controller frame starts on Play plays at once after a trusted input in that embed, and nothing else unlocks it", () => {
   const f = frame({ embedStartedAt: 0, startAt: 3000, activeAtStart: true });
-  assert.equal(f.judge(), false, "an activation with focus outside the embed is still suspect");
-  f.setFocused(true);
-  assert.equal(f.judge(), true, "the user clicked inside the embed");
+  assert.equal(f.judge(), false, "an inherited activation with no input in the embed stays suspect, wherever focus is");
+  f.setInput(true);
+  assert.equal(f.judge(), true, "the user pressed something inside the embed");
 });
 
 test("a cross-origin frame that inherits nothing honours activation once its first second has passed", () => {
@@ -102,7 +110,18 @@ test("a frame in the top page's origin chain plays on a Play button in its paren
   assert.equal(f.pending(), 0);
 });
 
-const media = (playing) => ({ paused: !playing, pause() { this.paused = true; } });
+class Media {
+  constructor(playing) {
+    this.state = playing ? "playing" : "paused";
+  }
+  get paused() {
+    return this.state === "paused";
+  }
+  pause() {
+    this.state = "paused";
+  }
+}
+const media = (playing) => new Media(playing);
 
 test("media playing before the config came is paused", () => {
   const video = media(true), audio = media(true), idle = media(false);
@@ -114,6 +133,17 @@ test("the same element listed twice (the active one, then from the DOM) is pause
   const video = media(true);
   assert.equal(pauseUnasked([video, video, null], false), 1);
   assert.ok(video.paused);
+});
+
+test("a page that overrides an element's paused and pause still has its unasked playback paused and counted once", () => {
+  const video = media(true);
+  let pageCalls = 0;
+  Object.defineProperty(video, "paused", { get: () => true });
+  video.pause = () => pageCalls++;
+  assert.equal(pauseUnasked([video], false), 1);
+  assert.equal(video.state, "paused");
+  assert.equal(pageCalls, 0, "the page's own pause never ran");
+  assert.equal(pauseUnasked([video, { paused: false, pause() {} }], false), 0, "already paused, and a stranger that isn't media is left alone");
 });
 
 test("one blocked attempt counts once: the config pauses it, then its queued play event finds it paused", () => {

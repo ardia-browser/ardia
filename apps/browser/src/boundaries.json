@@ -128,6 +128,14 @@
    ]
   },
   {
+   "id": "chromium-page-message:trustedInput",
+   "source": "frame",
+   "guard": "No payload is read: subframes only, keyed by the frame's verified http(s) origin, at most 16 origins per tab, cleared on each new top document; native answers a later frame of that same origin with how many ms ago it was, only within 5 s, as config.embedInputAgeMs, which the page script takes only as a finite number from 0 to 5000",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
    "id": "chromium-page-message:autoplayBlocked",
    "source": "frame",
    "guard": "A count only, from any frame: AutoplayBlockedCount takes a finite number of at least 1 (not a boolean), clamps it to 20, and the receiver forwards at most one per second per tab; JS clamps again before counting usage_counts.autoplay_plays_blocked",
@@ -273,7 +281,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 33,
+   "count": 34,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -417,7 +425,7 @@
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 66,
+   "count": 67,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]

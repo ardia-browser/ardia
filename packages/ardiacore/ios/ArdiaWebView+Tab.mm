@@ -270,7 +270,7 @@ BOOL IsBlankAddress(NSString *url) {
   if (tab.closed) return;
   NSString *clicked = _tab ? [self takeNewTabLinkFor:@[ firstURL, tab.url ?: @"" ]] : nil;
   if (!clicked && hidden && _tab) clicked = [self takeNewTabLinkNoted:kHiddenNewTabLinkSeconds];
-  if (clicked && self.opensNewTabLinksInPlace) {
+  if (clicked && self.opensNewTabLinksInPlace && ([clicked isEqualToString:tab.url ?: @""] || IsBlankAddress(tab.url))) {
     if ([ArdiaTabRegistry takeOffered:adoptId] == tab) [tab close];
     [self emit:@"openWindow" payload:@{@"url" : clicked, @"disposition" : @"current", @"userGesture" : @YES, @"linkWait" : @"matched"}];
     return;

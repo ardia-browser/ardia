@@ -794,9 +794,17 @@ test("a cancelled click is tied only to a new blank window it opened while the c
   env.window.open("");
   env.flush();
   assert.deepEqual(newTabLinks(env), [], "an opening after a stopped click's dispatch, before its cleanup, isn't tied to it");
+  const named = { opener: env.window, location: { href: "about:blank" }, history: { length: 1 } };
+  env.window.openResult = named;
+  cancelled("https://other.example/first", () => env.window.open("", "_blank"));
+  cancelled("https://other.example/named-again", () => env.window.open("", "_blank"));
+  delete env.window.openResult;
+  cancelled("https://other.example/named-target", () => env.window.open("", "results"));
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/first"], "a window window.open already returned, or a named target, is never a new tab");
   cancelled("https://other.example/fresh", () => env.window.open("", "_blank"));
   env.flush();
-  assert.deepEqual(newTabLinks(env), ["https://other.example/fresh"]);
+  assert.deepEqual(newTabLinks(env), ["https://other.example/first", "https://other.example/fresh"]);
 });
 
 test("a cancelled click whose page opened its own window with an address is noted once, by that address", () => {

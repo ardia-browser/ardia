@@ -1102,6 +1102,7 @@ test("a page's autoplayBlocked count and new-tab link reach native sinks only as
   const tab = readFileSync(new URL("ArdiaWebView+Tab.mm", ios), "utf8");
   assert.match(tab, /- \(void\)noteNewTabLink:\(NSString \*\)url \{\n {2}if \(!IsWebAddress\(url\)\) return;/, "notes are kept only when IsWebAddress takes them");
   assert.match(tab, /NSString \*url = IsWebAddress\(clicked\) && IsBlankAddress\(tab\.url\) \? clicked : tab\.url;/, "a note stands in only for a blank tab's address");
+  assert.match(tab, /if \(clicked && self\.opensNewTabLinksInPlace && \(\[clicked isEqualToString:tab\.url \?: @""\] \|\| IsBlankAddress\(tab\.url\)\)\) \{/, "Little Ardia closes and replaces a tab only when it is going to the noted link or still blank");
   const scratch = mkdtempSync(join(tmpdir(), "ardia-receivers-"));
   try {
     const probe = join(scratch, "probe.mm");
@@ -1170,4 +1171,24 @@ int main(int argc, char **argv) {
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+});
+
+test("a trustedInput message is only a same-origin stamp, and the age native hands back is taken only as 0 to 5000 ms", () => {
+  const receiver = readFileSync(new URL("../../../packages/ardiacore/ios/ArdiaWebView+PageMessages.mm", import.meta.url), "utf8");
+  assert.match(receiver, /\[kind isEqualToString:@"trustedInput"\] && !main\) \{\n {4}if \(\[VerifiedOrigin\(verifiedOrigin\) hasPrefix:@"http"\]\) \[self noteTrustedInputFrom:VerifiedOrigin\(verifiedOrigin\)\];\n/, "no payload is read, only the frame's verified origin");
+  assert.match(receiver, /if \(!main && sender\.length\)\n\s+if \(NSNumber \*age = \[\[ArdiaTabRegistry viewForTab:to\] trustedInputAgeMsForOrigin:sender\]\) config\[@"embedInputAgeMs"\] = age;/, "a frame hears only about its own origin");
+  const script = readFileSync(new URL("../../../packages/ardiacore/ios/page_script.js", import.meta.url), "utf8");
+  const lifespan = /const TRUSTED_INPUT_LIFESPAN_MS = (\d+);/.exec(script)?.[1];
+  const source = /const embedInputAge = (\(age\) => .*);\n/.exec(script)?.[1];
+  assert.ok(lifespan && source, "page_script.js defines embedInputAge");
+  const embedInputAge = new Function(`const TRUSTED_INPUT_LIFESPAN_MS = ${lifespan}; return ${source}`)();
+  assert.equal(embedInputAge(0), 0);
+  assert.equal(embedInputAge(4999), 4999);
+  for (const { id, value } of HOSTILE_VALUES) {
+    const age = embedInputAge(value);
+    if (age === null) continue;
+    assert.equal(typeof value, "number", id);
+    assert.ok(Number.isFinite(age) && age >= 0 && age < 5000, `${id}: ${show(value)}`);
+  }
+  for (const value of [5000, -1, NaN, Infinity, "10", [10], { valueOf: () => 10 }, true]) assert.equal(embedInputAge(value), null, show(value));
 });

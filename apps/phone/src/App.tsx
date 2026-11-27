@@ -37,6 +37,7 @@ import { startLinks } from "./state/links/links";
 import { useBaseSystemBars, useSystemBars } from "./state/app/systemBars";
 import { useSearchFromDockedMenu, useSearchOpen } from "./state/search/hooks";
 import { useLeavingTab, useOpeningTab, useSheet, useSurface } from "./state/browse/hooks";
+import { reportShownPage, startShownPage } from "./state/browse/shownPageSource";
 import { appBecameActive, appWillResignActive, closeArchive, deckPullInFlight, goBackToStartIfEmpty, keepFrontPictureCurrent, startBrowser, type Surface } from "./state/browse/store";
 import { refreshHiddenDeck, resizeRoot } from "./state/browse/deckHold";
 import { useDeckStandbyWanted } from "./state/browse/deckStandby";
@@ -78,6 +79,7 @@ export default function App() {
       followDesign(applyDesign);
       startTelemetry();
       startBrowser(applyLaunchSettings);
+      startShownPage();
       startPageUi();
       startSettingsSources();
       if (syncOffered()) startSync();
@@ -112,6 +114,7 @@ export default function App() {
       if (!useBoot.getState().ready) return;
       if (next === "active") appBecameActive();
       else appWillResignActive();
+      reportShownPage();
     });
     return () => {
       back.remove();

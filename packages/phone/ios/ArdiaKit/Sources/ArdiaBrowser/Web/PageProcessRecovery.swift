@@ -26,15 +26,17 @@ public struct PageProcessRecovery: Equatable, Sendable {
     }
     isReloading = false
     awaitsReload = true
-    return shown ? beginReload() : .wait
+    return shown ? .reload : .wait
   }
 
-  public mutating func pageShown() -> Step {
-    awaitsReload ? beginReload() : .wait
+  public func pageShown() -> Step {
+    awaitsReload ? .reload : .wait
   }
 
-  public mutating func navigationAsked() {
-    if awaitsReload { _ = beginReload() }
+  public mutating func reloadStarted() {
+    guard awaitsReload else { return }
+    awaitsReload = false
+    isReloading = true
   }
 
   public mutating func loadFinished() -> PageProcessOutcome? {
@@ -46,10 +48,12 @@ public struct PageProcessRecovery: Equatable, Sendable {
   public mutating func loadFailed() {
     isReloading = false
   }
+}
 
-  private mutating func beginReload() -> Step {
-    awaitsReload = false
-    isReloading = true
-    return .reload
+@MainActor
+enum WebViewCallbackRoute {
+  static func owner<Owner: AnyObject, View: AnyObject>(_ owner: Owner?, of view: View, current: (Owner) -> View?) -> Owner? {
+    guard let owner, let live = current(owner), live === view else { return nil }
+    return owner
   }
 }

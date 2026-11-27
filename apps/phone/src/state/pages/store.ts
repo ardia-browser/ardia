@@ -183,6 +183,8 @@ export const openPageInBackground = (id: string, url: string, isPrivate: boolean
 
 export const livePageIds = (): Promise<string[]> => settled(() => pages.ids(), []);
 
+export const setShownPage = (pageId: string | null) => void settled(() => pages.setShownPage(pageId), undefined);
+
 export function listenToPages(listener: (event: PageEngineEvent) => void) {
   try {
     return pages.addListener(listener);

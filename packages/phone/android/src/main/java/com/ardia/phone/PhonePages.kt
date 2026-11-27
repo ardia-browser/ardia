@@ -105,6 +105,7 @@ object PhonePages {
             }
         }
         shared = made
+        made.show(shownPageId)
         downloads = SystemDownloads(context, made)
         host?.get()?.let { activity -> actAsOldWebView(made, activity) }
         host?.get()?.let(made::attach)
@@ -182,6 +183,13 @@ object PhonePages {
     }
 
     fun require(pageId: String): Page = page(pageId) ?: throw CodedException("ERR_NO_PAGE", "No page is open with id $pageId", null)
+
+    private var shownPageId: String? = null
+
+    fun setShownPage(pageId: String?) {
+        shownPageId = pageId
+        shared?.show(pageId)
+    }
 
     fun activate(pageId: String) {
         val engine = shared ?: return

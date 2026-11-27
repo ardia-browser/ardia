@@ -260,6 +260,8 @@ class PageViewModule : Module() {
 
         AsyncFunction("livePageIds") { -> PhonePages.livePageIds() }.runOnQueue(Queues.MAIN)
 
+        AsyncFunction("setShownPage") { pageId: String? -> PhonePages.setShownPage(pageId) }.runOnQueue(Queues.MAIN)
+
         AsyncFunction("saveState") { pageId: String -> PhonePages.saveState(pageId) }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("answerRequest") { pageId: String, requestId: String, answer: RequestAnswerRecord, promise: Promise ->

@@ -119,7 +119,7 @@ public final class WebTab: DiscardablePage, Identifiable {
       self.url = url
       return
     }
-    processRecovery.navigationAsked()
+    processRecovery.reloadStarted()
     webView.load(URLRequest(url: url))
   }
 
@@ -171,13 +171,13 @@ public final class WebTab: DiscardablePage, Identifiable {
   public func goBack() {
     failure = nil
     guard let webView = webViewForNavigation(), webView.goBack() != nil else { return }
-    processRecovery.navigationAsked()
+    processRecovery.reloadStarted()
   }
 
   public func goForward() {
     failure = nil
     guard let webView = webViewForNavigation(), webView.goForward() != nil else { return }
-    processRecovery.navigationAsked()
+    processRecovery.reloadStarted()
   }
 
   public func reload() {
@@ -186,8 +186,7 @@ public final class WebTab: DiscardablePage, Identifiable {
       engine?.revive(self)
       return
     }
-    processRecovery.navigationAsked()
-    reloadDocument(in: webView)
+    restartAfterProcessEnded(in: webView)
   }
 
   private func webViewForNavigation() -> WKWebView? {
@@ -195,20 +194,20 @@ public final class WebTab: DiscardablePage, Identifiable {
     return webView
   }
 
-  private func reloadDocument(in webView: WKWebView) {
+  private func restartAfterProcessEnded(in webView: WKWebView) {
+    failure = nil
+    processRecovery.reloadStarted()
     if webView.url == nil, let url { webView.load(URLRequest(url: url)) } else { webView.reload() }
   }
 
   var isShownToUser: Bool {
-    guard let webView, webView.window != nil else { return false }
+    guard let engine, engine.shownTabID == id, let webView, webView.window != nil else { return false }
     return UIApplication.shared.applicationState == .active
   }
 
   public func pageShown() {
-    guard processRecovery.awaitsReload, isShownToUser, let webView else { return }
-    guard processRecovery.pageShown() == .reload else { return }
-    failure = nil
-    reloadDocument(in: webView)
+    guard processRecovery.pageShown() == .reload, isShownToUser, let webView else { return }
+    restartAfterProcessEnded(in: webView)
   }
 
   public func stopLoading() {
@@ -297,6 +296,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     engine.installPageScripts(on: configuration.userContentController, host: host, isPrivate: isPrivate)
     self.webView = webView
     observe(webView)
+    if !isPopup { processRecovery.reloadStarted() }
     let stored = engine.tabs.tab(id)
     if let zoom = engine.preferences.settings(for: host, isPrivate: isPrivate).pageZoom {
       pageZoom = zoom
@@ -334,7 +334,6 @@ public final class WebTab: DiscardablePage, Identifiable {
     request = nil
     coordinator = nil
     self.webView = nil
-    processRecovery = PageProcessRecovery()
     isLoading = false
     progress = 0
   }
@@ -562,8 +561,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     snapshotTask = nil
     switch processRecovery.processEnded(shown: isShownToUser) {
     case .reload:
-      failure = nil
-      if let webView { reloadDocument(in: webView) }
+      if let webView { restartAfterProcessEnded(in: webView) }
     case .showFailure:
       failure = .crashed
       engine?.onPageProcess?(id, .failed, isPrivate)
@@ -665,8 +663,12 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
     self.tab = tab
   }
 
+  private func current(_ webView: WKWebView) -> WebTab? {
+    WebViewCallbackRoute.owner(tab, of: webView) { $0.webView }
+  }
+
   func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, preferences: WKWebpagePreferences) async -> (WKNavigationActionPolicy, WKWebpagePreferences) {
-    guard let tab else { return (.cancel, preferences) }
+    guard let tab = current(webView) else { return (.cancel, preferences) }
     if let engine = tab.engine, let target = navigationAction.request.url, navigationAction.navigationType == .linkActivated,
        navigationAction.targetFrame?.isMainFrame ?? true, let targetHost = BrowserURL.host(of: target.absoluteString), targetHost != tab.host,
        engine.preferences.appLinks(for: targetHost, isPrivate: tab.isPrivate) == .app, let open = engine.openUniversalLink, await open(target) {
@@ -676,44 +678,44 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
   }
 
   func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async -> WKNavigationResponsePolicy {
-    tab?.decidePolicy(for: navigationResponse) ?? .cancel
+    current(webView)?.decidePolicy(for: navigationResponse) ?? .cancel
   }
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-    tab?.didStartNavigation()
+    current(webView)?.didStartNavigation()
   }
 
   func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-    tab?.didCommit()
+    current(webView)?.didCommit()
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-    tab?.didFinish()
+    current(webView)?.didFinish()
   }
 
   func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
-    tab?.didFail(error, provisional: true)
+    current(webView)?.didFail(error, provisional: true)
   }
 
   func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
-    tab?.didFail(error, provisional: false)
+    current(webView)?.didFail(error, provisional: false)
   }
 
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-    tab?.processTerminated()
+    current(webView)?.processTerminated()
   }
 
   func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
-    tab?.engine?.downloads.track(download)
+    current(webView)?.engine?.downloads.track(download)
   }
 
   func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
-    tab?.engine?.downloads.track(download)
+    current(webView)?.engine?.downloads.track(download)
   }
 
   func webView(_ webView: WKWebView, respondTo challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
     let method = challenge.protectionSpace.authenticationMethod
-    guard let tab, [NSURLAuthenticationMethodHTTPBasic, NSURLAuthenticationMethodHTTPDigest, NSURLAuthenticationMethodNTLM].contains(method) else {
+    guard let tab = current(webView), [NSURLAuthenticationMethodHTTPBasic, NSURLAuthenticationMethodHTTPDigest, NSURLAuthenticationMethodNTLM].contains(method) else {
       return (.performDefaultHandling, nil)
     }
     let space = challenge.protectionSpace
@@ -727,7 +729,7 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
   }
 
   func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-    guard let tab, let engine = tab.engine, let url = navigationAction.request.url else { return nil }
+    guard let tab = current(webView), let engine = tab.engine, let url = navigationAction.request.url else { return nil }
     if case .external(let app) = ExternalLinks.route(url) {
       tab.handle(PageRequest(kind: .openExternal(url, app: app), host: tab.host ?? "") { [weak engine] answer in
         if case .accepted = answer { engine?.openExternalURL?(url) }
@@ -738,19 +740,19 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
   }
 
   func webViewDidClose(_ webView: WKWebView) {
-    guard let tab, let engine = tab.engine else { return }
+    guard let tab = current(webView), let engine = tab.engine else { return }
     if let onCloseRequested = engine.onCloseRequested { onCloseRequested(tab.id) } else { engine.tabs.close(tab.id) }
   }
 
   func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async {
-    guard let tab else { return }
+    guard let tab = current(webView) else { return }
     await withCheckedContinuation { continuation in
       tab.handle(PageRequest(kind: .alert(message: message), host: frame.securityOrigin.host) { _ in continuation.resume() })
     }
   }
 
   func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async -> Bool {
-    guard let tab else { return false }
+    guard let tab = current(webView) else { return false }
     let answer: PageRequest.Answer = await withCheckedContinuation { continuation in
       tab.handle(PageRequest(kind: .confirm(message: message), host: frame.securityOrigin.host) { continuation.resume(returning: $0) })
     }
@@ -759,7 +761,7 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
   }
 
   func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo) async -> String? {
-    guard let tab else { return nil }
+    guard let tab = current(webView) else { return nil }
     let answer: PageRequest.Answer = await withCheckedContinuation { continuation in
       tab.handle(PageRequest(kind: .prompt(message: prompt, defaultText: defaultText ?? ""), host: frame.securityOrigin.host) { continuation.resume(returning: $0) })
     }
@@ -768,7 +770,7 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
   }
 
   func webView(_ webView: WKWebView, decideMediaCapturePermissionsFor origin: WKSecurityOrigin, initiatedBy frame: WKFrameInfo, type: WKMediaCaptureType) async -> WKPermissionDecision {
-    guard let tab, let engine = tab.engine else { return .deny }
+    guard let tab = current(webView), let engine = tab.engine else { return .deny }
     let site = SitePermissions.origin(scheme: origin.protocol, host: origin.host, port: origin.port)
     let kind: MediaCaptureKind = switch type {
     case .camera: .camera
@@ -795,7 +797,7 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
   }
 
   func webView(_ webView: WKWebView, requestGeolocationPermissionFor origin: WKSecurityOrigin, initiatedBy frame: WKFrameInfo) async -> WKPermissionDecision {
-    guard let tab, let engine = tab.engine else { return .deny }
+    guard let tab = current(webView), let engine = tab.engine else { return .deny }
     let site = SitePermissions.origin(scheme: origin.protocol, host: origin.host, port: origin.port)
     if engine.isCaptureGranted([.location], origin: site, isPrivate: tab.isPrivate) {
       tab.noteCapture([.location], origin: site)
@@ -812,7 +814,7 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
   }
 
   func webView(_ webView: WKWebView, contextMenuConfigurationFor elementInfo: WKContextMenuElementInfo) async -> UIContextMenuConfiguration? {
-    guard let tab, let engine = tab.engine, let link = elementInfo.linkURL, ExternalLinks.route(link) == .web else { return nil }
+    guard let tab = current(webView), let engine = tab.engine, let link = elementInfo.linkURL, ExternalLinks.route(link) == .web else { return nil }
     let tabID = tab.id
     return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak engine] suggested in
       let open = UIMenu(options: .displayInline, children: [

@@ -119,6 +119,8 @@ export function startBrowser(beforeOpening: () => void = () => undefined) {
 
 let appActive = true;
 
+export const appIsActive = () => appActive;
+
 const SCROLL_REST_IS_REPORTED = Platform.OS === "ios";
 
 function frontPageId() {

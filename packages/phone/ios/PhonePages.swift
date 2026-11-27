@@ -30,6 +30,7 @@ final class PhonePages {
   private var blockingGeneration = 0
   var shareGeneration = 0
   private var videoFloat: WebVideoFloat?
+  private var shownPageID: String?
 
   private struct PendingPopup {
     var tabID: UUID?
@@ -98,8 +99,13 @@ final class PhonePages {
 
   func discardBackgroundPages(keeping: String?) {
     if let keeping, let tabID = tabIDs[keeping] { engine.tabs.select(tabID) }
-    engine.discardBackgroundTabs()
+    engine.discardBackgroundTabs(keepingShown: false)
     if let keeping { _ = activate(keeping) }
+  }
+
+  func setShownPage(_ pageID: String?) {
+    shownPageID = pageID
+    engine.show(pageID.flatMap { tabIDs[$0] })
   }
 
   func loadHTML(_ pageID: String, html: String, baseURL: String) throws {
@@ -191,6 +197,7 @@ final class PhonePages {
     if let saved { engine.tabs.saveInteractionState(saved, for: tab.id) }
     tabIDs[pageID] = tab.id
     pageIDs[tab.id] = pageID
+    if shownPageID == pageID { engine.show(tab.id) }
     guard let page = engine.webTab(for: tab.id) else {
       forget(pageID)
       throw PagePayloads.error("ERR_NO_PAGE", "The page \(pageID) could not be opened")
@@ -351,6 +358,7 @@ final class PhonePages {
       guard engine.tabs.tab(tabID) != nil, let page = engine.webTab(for: tabID) else { return false }
       tabIDs[pageID] = tabID
       pageIDs[tabID] = pageID
+      if shownPageID == pageID { engine.show(tabID) }
       watch(pageID, page)
       return true
     }

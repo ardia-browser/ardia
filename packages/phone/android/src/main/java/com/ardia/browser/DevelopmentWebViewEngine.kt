@@ -106,6 +106,15 @@ class DevelopmentWebViewEngine(
 
     override val livePageIds: List<String> get() = roster.liveIds
 
+    var shownPageId: String? = null
+        private set
+
+    fun show(id: String?) {
+        if (shownPageId == id) return
+        shownPageId = id
+        if (id != null && roster.page(id)?.awaitsProcessReload == true) roster.activate(id)
+    }
+
     init {
         Executors.newSingleThreadExecutor().also { executor ->
             executor.execute { runCatching { scripts.preload() } }

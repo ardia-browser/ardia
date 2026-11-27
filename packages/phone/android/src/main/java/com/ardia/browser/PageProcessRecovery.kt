@@ -22,11 +22,13 @@ internal class PageProcessRecovery {
         }
         isReloading = false
         awaitsReload = true
-        return if (shown) beginReload() else Step.Wait
+        return if (shown) Step.Reload else Step.Wait
     }
 
-    fun navigationAsked() {
-        if (awaitsReload) beginReload()
+    fun reloadStarted() {
+        if (!awaitsReload) return
+        awaitsReload = false
+        isReloading = true
     }
 
     fun loadFinished(): PageProcessOutcome? {
@@ -37,11 +39,5 @@ internal class PageProcessRecovery {
 
     fun loadFailed() {
         isReloading = false
-    }
-
-    private fun beginReload(): Step {
-        awaitsReload = false
-        isReloading = true
-        return Step.Reload
     }
 }

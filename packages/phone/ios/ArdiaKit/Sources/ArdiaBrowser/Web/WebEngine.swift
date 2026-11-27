@@ -27,6 +27,7 @@ public final class WebEngine {
   @ObservationIgnored public var onPopup: (@MainActor (_ opener: WebTab, _ popup: WebTab) -> Void)?
   @ObservationIgnored public var onOpenLink: (@MainActor (_ url: URL, _ opener: UUID, _ inBackground: Bool) -> Void)?
   @ObservationIgnored public var onPrivateBrowsingEnded: (@MainActor () -> Void)?
+  @ObservationIgnored public private(set) var shownTabID: UUID?
   @ObservationIgnored public var onPageProcess: (@MainActor (_ tab: UUID, _ outcome: PageProcessOutcome, _ isPrivate: Bool) -> Void)?
   @ObservationIgnored public var omnibox: Omnibox?
   @ObservationIgnored private let pageScriptControllers = NSHashTable<WKUserContentController>.weakObjects()
@@ -202,9 +203,14 @@ public final class WebEngine {
     }
   }
 
-  public func discardBackgroundTabs() {
-    let shown = roster.liveIDs.filter { roster.page($0)?.webView?.window != nil }
-    roster.discardAll(keeping: Set(shown + [tabs.selectedTabID].compactMap { $0 }))
+  public func discardBackgroundTabs(keepingShown: Bool = true) {
+    roster.discardAll(keeping: Set([tabs.selectedTabID, keepingShown ? shownTabID : nil].compactMap { $0 }))
+  }
+
+  public func show(_ id: UUID?) {
+    guard shownTabID != id else { return }
+    shownTabID = id
+    if let id { roster.page(id)?.pageShown() }
   }
 
   public func saveAll() {
@@ -235,7 +241,7 @@ public final class WebEngine {
   }
 
   private func pagesShown() {
-    for id in roster.liveIDs { roster.page(id)?.pageShown() }
+    if let shownTabID { roster.page(shownTabID)?.pageShown() }
   }
 
   isolated deinit {

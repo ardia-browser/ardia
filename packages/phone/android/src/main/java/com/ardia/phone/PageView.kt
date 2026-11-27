@@ -308,16 +308,6 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
         applyObscuredInsets()
     }
 
-    override fun onWindowVisibilityChanged(visibility: Int) {
-        super.onWindowVisibilityChanged(visibility)
-        if (visibility == View.VISIBLE) reviveIfShown()
-    }
-
-    private fun reviveIfShown() {
-        val bound = page ?: return
-        if (isShown && !bound.state.value.isLive) PhonePages.activate(bound.id)
-    }
-
     override fun onDetachedFromWindow() {
         dismissSummary(animated = false)
         viewTreeObserver.removeOnPreDrawListener(asksWhenShown)
@@ -485,7 +475,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
 
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
-        if (!isShown) dismissSummary(animated = false) else reviveIfShown()
+        if (!isShown) dismissSummary(animated = false)
     }
 
     private var watchedDocument = Long.MIN_VALUE

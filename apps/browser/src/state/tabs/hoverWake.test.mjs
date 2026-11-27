@@ -263,3 +263,22 @@ test("a put-back answer that comes after the tab loaded again leaves it awake", 
   assert.equal(takeTabSleepCounts().hover_wakes_put_back, 1);
   webviews.clear();
 });
+
+test("a second hover while the first wake is still on its way keeps the first wake and its put-back", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let finish;
+  let wakes = 0;
+  const { hidden, asked } = sleepingTab(() => (wakes++, new Promise((resolve) => (finish = resolve))));
+  takeTabSleepCounts();
+  const first = wakeOnHover(hidden, consentToken(), 1_000_000);
+  assert.equal(await wakeOnHover(hidden, consentToken(), 1_000_050), null, "no second wake");
+  assert.equal(wakes, 1);
+  finish(true);
+  assert.equal(await first, "discarded");
+  useLifecycle.setState({ discarded: {} });
+  t.mock.timers.tick(HOVER_WAKE_KEPT_MS);
+  await settle();
+  assert.deepEqual(asked, [0], "the first wake's put-back still runs");
+  assert.equal(takeTabSleepCounts().tabs_woken_on_hover, 1);
+  webviews.clear();
+});

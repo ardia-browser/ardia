@@ -136,6 +136,7 @@ export function forgetHoverWakes() {
 }
 
 export async function wakeOnHover(id: string, consent: ConsentToken | null, now = Date.now()): Promise<HoverWake> {
+  if (woken.has(id)) return null;
   const s = useBrowser.getState();
   const kind = hoverWakeOf(factsOf(s, id));
   if (!kind) return null;

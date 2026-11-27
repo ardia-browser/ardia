@@ -790,3 +790,59 @@ test("a rebase leaves adapters that don't read the session alone, and stays on f
   await a.sync();
   assert.equal(a.store.get("x:9"), "nine");
 });
+
+test("a joining scope whose only file from another device never downloads still joins after a day, instead of waiting for good", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  await a.sync();
+  for (const entry of folder.scope("s").values()) entry.hiddenFrom.add("b");
+  const b = new Device("b", folder);
+  b.state.awaitRemote = true;
+  b.settings.set("set:theme", "light");
+  await b.sync();
+  assert.equal(b.state.joined, false);
+  folder.now += 86_400_000 - 1;
+  await b.sync();
+  assert.equal(b.state.joined, false, "within a day it keeps waiting");
+  folder.now += 3 * 86_400_000;
+  await b.sync();
+  assert.equal(b.state.joined, true, "past a day the scope joins, though no file from another device was ever read");
+  assert.equal(b.state.awaitRemote, undefined);
+  assert.equal(b.state.awaitSince, undefined);
+});
+
+test("a joining scope's wait survives a relaunch and a clock set back, and still ends a day after it began", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  await a.sync();
+  for (const entry of folder.scope("s").values()) entry.hiddenFrom.add("b");
+  const b = new Device("b", folder);
+  b.state.awaitRemote = true;
+  folder.now = 10 * 86_400_000;
+  await b.sync();
+  b.relaunch();
+  folder.now = 5 * 86_400_000;
+  await b.sync();
+  assert.equal(b.state.joined, false, "a clock set back restarts the wait from now instead of ending it");
+  folder.now += 86_400_001;
+  await b.sync();
+  assert.equal(b.state.joined, true);
+});
+
+test("a cycle reports how many session-backed base writes it made, and only those", async () => {
+  const folder = new Folder();
+  const a = new SessionDevice("a", folder);
+  a.store.set("x:1", "one");
+  a.settings.set("set:theme", "dark");
+  const first = await a.sync();
+  assert.equal(first.sessionBaseWrites, 1, "x: is session-backed here, set: isn't");
+  const idle = await a.sync();
+  assert.equal(idle.sessionBaseWrites, 0, "a cycle that changes nothing reports none");
+  const b = new Device("b", folder);
+  b.store.set("x:2", "two");
+  await b.sync();
+  const pulled = await a.sync();
+  assert.equal(pulled.sessionBaseWrites, 1, "applying a record from another device counts too");
+});

@@ -14,6 +14,7 @@ import { openTabsAdapters, openTabsPinPageWrites, type OpenTabCloses, type OpenT
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { removedRecordKeys } from "./profileRemoval";
 import { alsoDeleting, removedDeviceKeys } from "./deviceRemoval";
+import type { ConsentToken } from "../telemetry/consentPeriod";
 
 const fromSession = (adapter: Adapter): Adapter => ({ ...adapter, sessionBacked: true });
 
@@ -85,7 +86,7 @@ export function openTabCloses(doc: SyncDoc, scope: string): OpenTabCloses {
   };
 }
 
-export function profileAdapters(doc: SyncDoc, profileId: string, retiring: boolean, forcePasswords: boolean): Adapter[] {
+export function profileAdapters(doc: SyncDoc, profileId: string, retiring: boolean, forcePasswords: boolean, consent: ConsentToken | null = null): Adapter[] {
   const id = doc.deviceId!;
   if (retiring) return [deviceTabsAdapter(profileId, id, deviceName, true)];
   const synced = (type: DataType) => typeSynced(doc, type, profileId);
@@ -95,7 +96,7 @@ export function profileAdapters(doc: SyncDoc, profileId: string, retiring: boole
   const flag = () => doc.scopes[APP_SCOPE]?.records[`${PROFILE_OPEN_TABS}${doc.profiles[profileId]!.syncId}`]?.h;
   const state = (doc.scopes[scope] ??= emptyScope());
   const mode = openTabsMode(doc, profileId);
-  const openTabs = openTabsAdapters(profileId, state, mode, openTabCloses(doc, scope), flag);
+  const openTabs = openTabsAdapters(profileId, state, mode, openTabCloses(doc, scope), flag, consent);
   return [
     ...(synced("pinned") ? pinnedAreaAdapters(profileId, openTabsPinPageWrites(profileId, state, mode, flag)).map(fromSession) : []),
     ...openTabs,

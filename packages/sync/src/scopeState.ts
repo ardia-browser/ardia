@@ -35,6 +35,7 @@ export type ScopeState = {
   seen: Record<string, number>;
   joined: boolean;
   awaitRemote?: boolean;
+  awaitSince?: number;
   rebase?: string[];
   applyAs?: Record<string, "joined" | "joining">;
   applying?: ApplyBatch[];

@@ -11,9 +11,9 @@ import { APP_SCOPE, emptyDoc, emptyUi, typeSyncedFor, type DataType, type SendTa
 import { syncFiles } from "./syncFiles";
 import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
-import { addSyncedProfile, appScopeOf, linkProfiles, readyToPair, retireOnDelete } from "./profileLinks";
+import { addSyncedProfile, appScopeOf, linkProfiles, readyToPair, retireDeletedProfile } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { markSession } from "./sessionMarks";
+import { markedAfter, markNewSync, settleLaunchMark } from "./sessionMarks";
 import { noteChainStatus, noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
@@ -23,6 +23,7 @@ import { queueSend, sendTargetsIn } from "./sentTabs";
 import { errorText } from "../../lib/errors";
 import { isQuitting, saveBeforeQuit } from "../app/quit";
 import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
+import { onProfileDeleted } from "../profiles/profiles";
 export { takeSyncDataCounts } from "../telemetry/syncSafetyCounts";
 import { markOpenTabsSynced, openTabsClosed, recordOpenTabCloses } from "./openTabCloses";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
@@ -133,7 +134,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     if (freezeRemovals(doc)) save();
     const appSettled = watchScope(APP_SCOPE, app, clock);
     try {
-      noteCycle(consent, await syncScope({
+      noteCycle(consent, markedAfter(doc, save)(await syncScope({
         scope: APP_SCOPE,
         state: app,
         transport,
@@ -141,7 +142,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
         clock,
         device,
         options: { persist: persistJournal(APP_SCOPE), persistApplying: persistApplying(APP_SCOPE), holdApply: isQuitting },
-      }));
+      })));
     } finally {
       await appSettled();
     }
@@ -158,15 +159,15 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       const state = (doc.scopes[scope] ??= emptyScope());
       const settled = watchScope(scope, state, clock);
       try {
-        noteCycle(consent, await syncScope({
+        noteCycle(consent, markedAfter(doc, save)(await syncScope({
           scope,
           state,
           transport,
-          adapters: profileAdapters(doc, profileId, retire, forcePasswords),
+          adapters: profileAdapters(doc, profileId, retire, forcePasswords, consent),
           clock,
           device,
           options: { expired: historyExpired, persist: persistJournal(scope), persistApplying: persistApplying(scope), holdApply: isQuitting },
-        }));
+        })));
       } finally {
         await settled();
       }
@@ -205,16 +206,14 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
   }
 }
 
-export function adoptProfileTheme(profileId: string) {
-  if (!themeChosenHere(doc, profileId)) return;
-  save();
-  if (doc.enabled) scheduleSync(AFTER_EDIT_MS);
-}
+export const adoptProfileTheme = (profileId: string): void => void (themeChosenHere(doc, profileId) && (save(), doc.enabled && scheduleSync(AFTER_EDIT_MS)));
+
+export const retireProfile = (profileId: string): void => void (doc.enabled && retireDeletedProfile(doc, profileId) && (cycle || save(), scheduleSync()));
 
 async function loadSavedState(consent: ConsentToken | null = null) {
   const loading = doc;
   const installed = await loadState(loading);
-  if (installed && doc === loading && doc.enabled) (markSession(doc, { atLaunch: true, consent }), save());
+  if (installed && doc === loading && doc.enabled) await settleLaunchMark(doc, consent, { checkpoint, save });
   startEditClock(doc.deviceId ?? "", doc.clock);
   settleSettingsFromSavedSync(doc.scopes[APP_SCOPE], installed && doc === loading && doc.enabled && !stopping && typeSyncedFor(doc.types, "settings", true));
   settleThemeAdoption(doc.profiles, doc.scopes[APP_SCOPE], false);
@@ -253,7 +252,7 @@ async function movingTo(native: NonNullable<typeof SyncNative>, from: string, to
 
 function begin(folder: string, deviceId: string, joining: boolean) {
   doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining };
-  markSession(doc, { atLaunch: false });
+  markNewSync(doc);
   startOver();
   publishUi({ status: "starting", error: null });
   scheduleSync(0);
@@ -381,8 +380,8 @@ export function startSync() {
         publishUi({ status: "stalled", error: errorText(error) });
       });
   }
-  saveBeforeQuit(checkpoint);
-  retireOnDelete(() => doc, () => (cycle || save(), scheduleSync()));
+  saveBeforeQuit(async () => void (await checkpoint()));
+  onProfileDeleted(retireProfile);
   onProfilesOpened(() => {
     if (!doc.enabled || !doc.deviceId) return;
     watchExtensions();

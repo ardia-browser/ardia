@@ -198,9 +198,16 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
 - **Rebase when the session went back in time** (#1577). The base lives in `sync.json` and the data it
   describes partly in `session.json` (pins, settings, profiles and their looks), so a session restored from
   a backup, an older build's own session file or a fresh start leaves the base ahead of the store, and the
-  three-way rule would read every pin the session lacks as deleted here and delete it on every Mac. Each
-  launch writes a new mark to both files (`syncMark` in the session, `sessionMark` in `sync.json`); when
-  they differ at launch, every scope starts a rebase (`startRebase`). While an adapter that reads the
+  three-way rule would read every pin the session lacks as deleted here and delete it on every Mac. Both
+  files carry a mark (`syncMark` in the session, `sessionMark` in `sync.json`). It is a revision, not a
+  launch id: a cycle that writes the base of a session-backed adapter (a pin applied or sent, a setting, a
+  profile look) moves it on, in `sync.json` before that cycle's base is journalled, and in the store, so the
+  session saved next carries it (not while quitting, so the session saved at quit still matches). A backup or
+  an older build's file from earlier in the same launch therefore holds an older mark too. When the marks
+  differ at launch, every scope starts a rebase (`startRebase`), the sealed state holding the rebase flags is
+  saved, and only once that save landed are the marks made equal again; a crash in between rebases again on
+  the next launch, and a rebase already under way when the app stops carries on from its saved flags, though
+  the marks then match. While an adapter that reads the
   session (`sessionBacked`: the pinned area, settings and the profile, theme, Top Apps and All Open Tabs
   records) rebases, it publishes only keys no device has a record of and no deletions, and the cycle applies
   every record it has, tombstones included, so the store takes the synced state back. The rebase ends for an
@@ -208,11 +215,13 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   Bookmarks, history, passwords and extensions live in Chrome's own files and aren't affected; open tabs
   already send only closes made here. A mark that differs only because a save didn't land before a crash
   costs one rebase and loses nothing (tested in `packages/sync/src/scope.test.ts` and
-  `state/sync/syncDataLoss.test.mjs`).
+  `state/sync/syncDataLoss.test.mjs`: an older session, a backup from the same launch, and a rebase cut short).
 - **Joining.** A scope set to wait for the other devices (`awaitRemote`: the app scope of a Mac
   that connected with a recovery phrase, and each profile scope it paired) joins once it has read
   a file from another device and nothing in it is still downloading or damaged, or a day after
-  that held it back (#1945; before, the first file from another device was enough, so a Mac whose
+  that held it back, and in any case a day after the scope first waited (`awaitSince`), so a scope whose
+  only file from another device never downloads doesn't wait for good (#1945; before, the first file from
+  another device was enough, so a Mac whose
   iCloud Drive was still downloading published its own settings, colours and switches over the
   ones still on their way). Local data is published before remote data is applied, so joining is a union: no
   local bookmark, visit or password is lost. Settings and profile names are the exception
@@ -306,8 +315,12 @@ Profiles).
 - A profile missing from this Mac's session keeps its link (#1577): a build that reads an older or newer `session.json`
   than the one sync last saw, or a session restored from a backup, can lack profiles `sync.json` still links. The link
   stays, its scope is left alone, the profile is offered as Add to This Mac, and adding it gives it back its old id, so a
-  session that still has it lines up again. A link retires only when the profile is deleted on this Mac (the store's
-  `deleteProfile` tells the engine). Before, a missing profile was taken out of sync at once and came back under a new
+  session that still has it lines up again. The scope starts over from what's synced, but keeps its sequence number,
+  outbox and journal, so the other devices take this Mac's next batch instead of reading it as one they already have.
+  When the old id can't be reused (its data is still waiting to be deleted), the link moves to the new id. A link
+  retires only when the profile is deleted on this Mac (the store's `deleteProfile` tells the engine; on Linux and
+  Windows a window that isn't the sync authority forwards it as `retireProfile`, which the authority applies once the
+  deletion reaches its own store). Before, a missing profile was taken out of sync at once and came back under a new
   sync id, a second copy on every Mac.
 - A synced profile this Mac lacks is offered as "Add to This Mac", with "Add All" when there are several.
 - Profiles that share another's data (Dia's "Share data with another profile") sync their tabs;

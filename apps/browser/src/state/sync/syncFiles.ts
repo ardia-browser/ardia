@@ -282,15 +282,15 @@ export function syncFiles(current: () => SyncDoc) {
     return countedParts() >= JOURNAL_PARTS_LIMIT || journal.bytes >= JOURNAL_BYTES_LIMIT || Date.now() - state.savedAt >= STATE_EVERY_MS;
   }
 
-  async function saveState() {
+  async function saveState(): Promise<boolean> {
     const consent = consentToken();
     const doc = current();
     if (!doc.enabled) {
       if (state.onDisk || state.wanted) writeDocument(STATE, "");
       Object.assign(state, { json: "", onDisk: false, wanted: false });
-      return;
+      return false;
     }
-    if (!stateDue()) return;
+    if (!stateDue()) return false;
     state.wanted = false;
     state.loaded = true;
     const covers = journal.lastId;
@@ -301,16 +301,17 @@ export function syncFiles(current: () => SyncDoc) {
     if (json !== state.json) {
       try {
         const sealed = await SyncNative?.sealLocal(`{"covers":${covers},"clock":${JSON.stringify(seen.last)},"scopes":${json},"version":${CHECKPOINT_VERSION}}`);
-        if (!sealed) return;
+        if (!sealed) return false;
         await saveDocument(STATE, sealed);
       } catch (error) {
         warnFor(consent, "[sync] couldn't save the sync state", error);
-        return;
+        return false;
       }
       Object.assign(state, { json, onDisk: true });
     }
     state.savedAt = Date.now();
     dropCoveredBatches(seqs);
+    return true;
   }
 
   function save() {
@@ -327,11 +328,11 @@ export function syncFiles(current: () => SyncDoc) {
     });
   }
 
-  function checkpoint() {
+  function checkpoint(): Promise<boolean> {
     saveDoc();
     return serial(async () => {
       if (state.loaded && current().enabled) state.wanted = true;
-      await saveState();
+      return await saveState();
     });
   }
 

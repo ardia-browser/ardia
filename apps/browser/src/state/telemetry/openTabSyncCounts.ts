@@ -1,3 +1,5 @@
+import { counted, type ConsentToken } from "./consentPeriod";
+
 let published = 0;
 let opened = 0;
 let closed = 0;
@@ -13,7 +15,7 @@ export const noteOpenTabsPublished = (n: number) => void (published += n);
 
 export const noteOpenTabsWoke = () => void wakes++;
 
-export const noteOpenTabClosesSent = (n: number) => void (n >= MASS_CLOSE && massCloseSends++);
+export const noteOpenTabClosesSent = (consent: ConsentToken | null, n: number) => counted(consent, () => void (n >= MASS_CLOSE && massCloseSends++));
 
 export function noteOpenTabsApplied(counts: { opened: number; closed: number; updated: number }) {
   opened += counts.opened;

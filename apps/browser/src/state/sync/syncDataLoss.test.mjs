@@ -102,18 +102,23 @@ async function relaunch(mac, tag, browser = mac.browser) {
   return engine;
 }
 
-function pin(urls) {
-  const w = Object.keys(S().windows)[0] ?? S().createWindow({});
-  const tabs = urls.map((url) => S().newTab(w, { url, background: true }));
+function pin(urls, profileId = "default") {
+  const w = Object.values(S().windows).find((win) => win.profileId === profileId)?.id ?? S().createWindow({ profileId });
+  const tabs = urls.map((url) => S().newTab(w, { url, background: true, profileId }));
   S().pinTabs(tabs, true);
   return tabs;
 }
 
 const pinnedUrls = (profileId = "default") =>
-  Object.values(S().tabs)
-    .filter((t) => t.profileId === profileId && t.pin)
-    .map((t) => t.url)
-    .sort();
+  [...Object.values(S().tabs).filter((t) => t.profileId === profileId && t.pin), ...(S().parkedPins[profileId]?.tabs ?? [])].map((t) => t.url).sort();
+
+const withoutProfile = (mac, id, extra = {}) =>
+  mac.with(() => {
+    const { [id]: _gone, ...profiles } = S().profiles;
+    S().hydrate({ profiles, profileOrder: S().profileOrder.filter((p) => p !== id), syncMark: S().syncMark, ...extra });
+    useBrowser.setState({ bookmarksReady: { "": true } });
+    return S();
+  });
 
 test("#1945: a Mac that joins while the file with a profile is still downloading pairs it by name instead of publishing a duplicate, and takes its colour", async () => {
   folder.clear();
@@ -313,5 +318,145 @@ test("#1577: a session restored from an older copy publishes no pin deletions an
   await b.with(async () => {
     await engineB.syncNow();
     assert.equal(pinnedUrls().includes("https://two.example/"), false, "an unpin made after the rebase still reaches the other Mac");
+  });
+});
+
+test("#1577: a backup from the same launch, older than the pins synced since, publishes no pin deletions", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const b = new Mac();
+  const engineA1 = await import("./engine.ts?sameA1");
+  const engineB = await import("./engine.ts?sameB");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  const backup = a.browser;
+  await a.with(async () => {
+    pin(["https://two.example/", "https://three.example/"]);
+    await engineA1.syncNow();
+    await engineA1.syncNow();
+  });
+  assert.notEqual(a.browser.syncMark, backup.syncMark, "the session's mark moved on with what sync saved");
+  await b.with(() => S().createWindow({}));
+  await join(b, engineB);
+  await b.with(async () => {
+    await engineB.syncNow();
+    await engineB.syncNow();
+  });
+  const tombstonesBefore = published("pin:t:").filter((op) => op.v === null).length;
+  const engineA2 = await relaunch(a, "sameA2", backup);
+  await a.with(async () => {
+    await engineA2.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://three.example/", "https://two.example/"]);
+  });
+  assert.equal(published("pin:t:").filter((op) => op.v === null).length, tombstonesBefore, "no pin is deleted for the other Macs");
+  await b.with(async () => {
+    await engineB.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://three.example/", "https://two.example/"]);
+  });
+});
+
+test("#1577: a rebase cut short by a quit or crash right after launch still runs on the next launch, though the marks then match", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const b = new Mac();
+  const engineA1 = await import("./engine.ts?cutA1");
+  const engineB = await import("./engine.ts?cutB");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  const older = a.browser;
+  const engineA2 = await relaunch(a, "cutA2");
+  await a.with(async () => {
+    pin(["https://two.example/", "https://three.example/"]);
+    await engineA2.syncNow();
+    await engineA2.syncNow();
+  });
+  await b.with(() => S().createWindow({}));
+  await join(b, engineB);
+  await b.with(async () => {
+    await engineB.syncNow();
+    await engineB.syncNow();
+  });
+  const tombstonesBefore = published("pin:t:").filter((op) => op.v === null).length;
+
+  a.browser = older;
+  const engineA3 = await import("./engine.ts?cutA3");
+  await a.with(async () => {
+    engineA3.startSync();
+    await settle();
+  });
+  assert.equal(JSON.parse(a.docs.get("sync.json")).sessionMark, a.browser.syncMark, "the launch advanced both marks before any cycle ran");
+
+  const engineA4 = await relaunch(a, "cutA4", a.browser);
+  await a.with(async () => {
+    await engineA4.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://three.example/", "https://two.example/"], "the rebase picks up where it stopped");
+  });
+  assert.equal(published("pin:t:").filter((op) => op.v === null).length, tombstonesBefore, "no pin is deleted for the other Macs");
+});
+
+test("#1577: a profile added back from sync keeps its scope's sequence, so the other Mac takes its next edit", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const b = new Mac();
+  const engineA1 = await import("./engine.ts?seqA1");
+  const engineB = await import("./engine.ts?seqB");
+  let work;
+  await a.with(() => {
+    work = S().createProfile({ name: "Work" });
+  });
+  await turnOn(a, engineA1);
+  await a.with(async () => {
+    pin(["https://one.example/"], work);
+    await engineA1.syncNow();
+    await engineA1.syncNow();
+  });
+  const workSyncId = await a.with(() => syncIdOf(engineA1, "Work"));
+  await join(b, engineB);
+  let workOnB;
+  await b.with(async () => {
+    workOnB = engineB.addRemoteProfile(workSyncId);
+    S().createWindow({ profileId: workOnB });
+    await engineB.syncNow();
+    await engineB.syncNow();
+    assert.deepEqual(pinnedUrls(workOnB), ["https://one.example/"]);
+  });
+
+  const engineA2 = await relaunch(a, "seqA2", await withoutProfile(a, work));
+  await a.with(async () => {
+    assert.equal(engineA2.addRemoteProfile(workSyncId), work);
+    await engineA2.syncNow();
+    await engineA2.syncNow();
+    pin(["https://two.example/"], work);
+    await engineA2.syncNow();
+  });
+  await b.with(async () => {
+    await engineB.syncNow();
+    await engineB.syncNow();
+    assert.deepEqual(pinnedUrls(workOnB), ["https://one.example/", "https://two.example/"], "the pin made after adding Work back reaches the other Mac");
+  });
+});
+
+test("#1577: a profile added back under a new id, because its old one can't be reused, leaves one link to its scope", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engine1 = await import("./engine.ts?fallback1");
+  let work;
+  await a.with(() => {
+    work = S().createProfile({ name: "Work" });
+  });
+  await turnOn(a, engine1);
+  const workSyncId = await a.with(() => syncIdOf(engine1, "Work"));
+  const engine2 = await relaunch(a, "fallback2", await withoutProfile(a, work, { orphanedProfileData: [work] }));
+  await a.with(async () => {
+    const added = engine2.addRemoteProfile(workSyncId);
+    assert.notEqual(added, work, "the old id's data is waiting to be deleted, so the profile gets a new one");
+    const links = Object.entries(syncDoc().profiles).filter(([, link]) => link.syncId === workSyncId);
+    assert.deepEqual(links.map(([id]) => id), [added], "one link, under the new id");
+    await engine2.syncNow();
+    assert.deepEqual(Object.entries(syncDoc().profiles).filter(([, link]) => link.syncId === workSyncId).map(([id]) => id), [added]);
   });
 });

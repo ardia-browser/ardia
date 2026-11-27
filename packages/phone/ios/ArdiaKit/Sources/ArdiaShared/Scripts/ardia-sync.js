@@ -485,7 +485,7 @@ async function compact(state            , transport           , scope        , d
   return true;
 }
 
-                                                                                                                                         
+                                                                                                                                                                    
 
 async function syncScope(args   
                 
@@ -501,6 +501,8 @@ async function syncScope(args
   const now = args.now ?? Date.now;
   startApplying(state, now(), options);
   await settleOwedRetirements(state, options);
+  const sessionPrefixes = adapters.filter((a) => a.sessionBacked).map((a) => a.prefix);
+  const sessionWritesBefore = sessionPrefixes.map((prefix) => baseWritesUnder(state, prefix));
   let published = 0;
   const stamps = new Map                 ();
   for (const adapter of adapters) {
@@ -539,15 +541,19 @@ async function syncScope(args
     if (applied) for (const key of deferred) unapplied.push(key);
   }
   state.unapplied = [...unapplied, ...[...keys].filter((k) => !adapters.some((a) => k.startsWith(a.prefix)))];
-  if (!heldApply && (!state.awaitRemote || (!held && Object.keys(state.seen).some((d) => d !== device)))) {
+  if (state.awaitRemote) state.awaitSince = Math.min(state.awaitSince ?? now(), now());
+  const waitedOut = !!state.awaitRemote && now() - state.awaitSince  > (options?.damagedGiveUp ?? DEFAULTS.damagedGiveUp);
+  if (!heldApply && (!state.awaitRemote || waitedOut || (!held && Object.keys(state.seen).some((d) => d !== device)))) {
     state.joined = true;
     delete state.awaitRemote;
+    delete state.awaitSince;
   }
   await flush(state, transport, scope, device, now(), options);
   if (journalFailed) throw new Error("[sync] couldn't journal what this cycle was about to apply");
   const compacted = await compact(state, transport, scope, device, now(), options);
   const snapshotBytes = compacted ? (newestSnapshot(Object.entries(state.files), device)?.[1].b ?? 0) : 0;
-  return { published, changed: changed.size, pending: state.pending, compacted, snapshotBytes, reapplied: takeReapplied(state) };
+  const sessionBaseWrites = sessionPrefixes.reduce((n, prefix, i) => n + baseWritesUnder(state, prefix) - sessionWritesBefore[i] , 0);
+  return { published, changed: changed.size, pending: state.pending, compacted, snapshotBytes, reapplied: takeReapplied(state), sessionBaseWrites };
 }
 
 });
@@ -1206,6 +1212,7 @@ __define("packages/sync/src/scopeState.ts", function (exports, __require) {
                                
                   
                         
+                      
                     
                                                  
                           

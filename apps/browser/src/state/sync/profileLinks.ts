@@ -2,7 +2,6 @@ import { emptyScope, holdsBack, SyncNative, visible, type ScopeState } from "../
 import { useBrowser } from "../browser/store";
 import { isIncognitoProfile } from "../browser/model";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
-import { onProfileDeleted } from "../profiles/profiles";
 import { PROFILE, PROFILE_OPEN_TABS, PROFILE_TOP_APPS, SHARE, openTabsRecord, profileRecord, profileScope, recordId, shareRecord, topAppsRecord } from "./records";
 import type { ProfileRecord } from "./profileAdapters";
 import { APP_SCOPE, type SyncDoc } from "./syncDoc";
@@ -93,13 +92,12 @@ export function linkProfiles(doc: SyncDoc, app: ScopeState) {
   doc.joining = false;
 }
 
-export const retireOnDelete = (current: () => SyncDoc, retired: () => void) =>
-  onProfileDeleted((profileId) => {
-    const link = current().enabled ? current().profiles[profileId] : undefined;
-    if (!link || link.retire) return;
-    link.retire = true;
-    retired();
-  });
+export function retireDeletedProfile(doc: SyncDoc, profileId: string): boolean {
+  const link = doc.profiles[profileId];
+  if (!link || link.retire) return false;
+  link.retire = true;
+  return true;
+}
 
 export const dormantLink = (doc: SyncDoc, id: string) => !!doc.profiles[id] && !doc.profiles[id]!.retire && !useBrowser.getState().profiles[id];
 
@@ -118,8 +116,15 @@ export function addLinkedProfile(doc: SyncDoc, syncId: string, record: ProfileRe
   const id = startedBySync(() => useBrowser.getState().createProfile({ id: missing, name: record.n, color: record.c, icon: record.i, shareWith, shareTopApps }));
   if (shareTopApps) noteTopAppsSharingFromSync(useBrowser.getState(), "linked_profile_created", true);
   if (remoteOpenTabs(doc, syncId)?.on) useBrowser.getState().updateProfile(id, { syncTabs: true });
+  if (missing && missing !== id) delete doc.profiles[missing];
   doc.profiles[id] = { syncId, enabled: true };
   pairTheme(doc.scopes[APP_SCOPE], id, doc.profiles[id]!, record);
-  doc.scopes[profileScope(syncId)] = { ...emptyScope(), awaitRemote: true };
+  doc.scopes[profileScope(syncId)] = freshScopeAfter(doc.scopes[profileScope(syncId)]);
   return id;
+}
+
+function freshScopeAfter(before: ScopeState | undefined): ScopeState {
+  const fresh: ScopeState = { ...emptyScope(), awaitRemote: true };
+  if (!before) return fresh;
+  return { ...fresh, seq: before.seq, outbox: before.outbox, ...(before.journal?.length ? { journal: before.journal } : {}) };
 }

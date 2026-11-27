@@ -3,6 +3,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { pinKeyOf } from "../browser/model";
 import { fromSync } from "../pins/pinOrderChoices";
 import { noteOpenTabClosesSent, noteOpenTabsPublished, noteOpenTabsWoke } from "../telemetry/openTabSyncCounts";
+import type { ConsentToken } from "../telemetry/consentPeriod";
 import { holdsOpenTabs, localOpenTabs, regularChain } from "./openTabsLocal";
 import { OPEN_GROUP, OPEN_TAB, OPEN_TABS, OPEN_TABS_ON, openGroupValue, openTabValue, openTabsOn, type OpenGroupValue, type OpenTabValue } from "./openTabRecords";
 import { applyOpenTabs } from "./openTabsApply";
@@ -72,7 +73,7 @@ const baseIn = (state: ScopeState) => (key: string) => {
   return json === undefined ? null : openTabValue(JSON.parse(json));
 };
 
-function extractOpenTabs(profileId: string, state: ScopeState, closes: OpenTabCloses, base: (key: string) => unknown, remote: (key: string) => unknown): Extraction {
+function extractOpenTabs(profileId: string, state: ScopeState, closes: OpenTabCloses, base: (key: string) => unknown, remote: (key: string) => unknown, consent: ConsentToken | null): Extraction {
   const s = store();
   const { synced, pinned } = localOpenTabs(s, profileId);
   const closed = new Set(closes.keys());
@@ -138,13 +139,13 @@ function extractOpenTabs(profileId: string, state: ScopeState, closes: OpenTabCl
       const tabs = [...keys].filter((k) => k.startsWith(OPEN_TAB)).map((k) => k.slice(OPEN_TAB.length));
       noteOpenTabsPublished(tabs.length);
       const sent = tabs.filter((key) => closed.has(key));
-      noteOpenTabClosesSent(sent.length);
+      noteOpenTabClosesSent(consent, sent.length);
       closes.settle(sent);
     },
   };
 }
 
-function closesOnly(profileId: string, state: ScopeState, closes: OpenTabCloses, base: (key: string) => unknown): Extraction | null {
+function closesOnly(profileId: string, state: ScopeState, closes: OpenTabCloses, base: (key: string) => unknown, consent: ConsentToken | null): Extraction | null {
   forgetClosedPages(state, (key) => openTabValue(base(`${OPEN_TAB}${key}`)));
   forgetPinPagesNoCopyShows(store(), profileId, pinPagesFromSyncIn(pagesSeenIn(state)));
   const closed = new Set(closes.keys());
@@ -155,7 +156,7 @@ function closesOnly(profileId: string, state: ScopeState, closes: OpenTabCloses,
     ignore: (k) => !isClosed(k),
     published: (keys) => {
       const sent = [...keys].filter(isClosed).map((k) => k.slice(OPEN_TAB.length));
-      noteOpenTabClosesSent(sent.length);
+      noteOpenTabClosesSent(consent, sent.length);
       closes.settle(sent);
     },
   };
@@ -237,7 +238,7 @@ function retire(state: ScopeState): Adapter {
 
 const waiting: Adapter = { prefix: OPEN_TABS, extract: () => null, apply: () => false };
 
-export function openTabsAdapters(profileId: string, state: ScopeState, mode: OpenTabsMode, closes: OpenTabCloses, flag: () => HLC | undefined): Adapter[] {
+export function openTabsAdapters(profileId: string, state: ScopeState, mode: OpenTabsMode, closes: OpenTabCloses, flag: () => HLC | undefined, consent: ConsentToken | null = null): Adapter[] {
   if (mode !== "on" && closes.keys().length) closes.settle([...closes.keys()]);
   if (mode === "off") {
     forget(state);
@@ -247,12 +248,12 @@ export function openTabsAdapters(profileId: string, state: ScopeState, mode: Ope
   if (switchedLater(state, false, flag())) return [waiting];
   settleCloses(profileId, state, closes);
   const off = () => switchedLater(state, false, flag());
-  if (!holdsOpenTabs(store(), profileId)) return [{ prefix: OPEN_TABS, extract: (base) => (off() ? null : closesOnly(profileId, state, closes, base)), apply: () => false }];
+  if (!holdsOpenTabs(store(), profileId)) return [{ prefix: OPEN_TABS, extract: (base) => (off() ? null : closesOnly(profileId, state, closes, base, consent)), apply: () => false }];
   bringBackMissing(profileId, state, new Set(closes.keys()));
   return [
     {
       prefix: OPEN_TABS,
-      extract: (base, _queued, _now, _known, remote) => (off() ? null : extractOpenTabs(profileId, state, closes, base, remote)),
+      extract: (base, _queued, _now, _known, remote) => (off() ? null : extractOpenTabs(profileId, state, closes, base, remote, consent)),
       apply: (visible, changed) => !off() && applyOpenTabs(profileId, visible, changed, new Set(closes.keys()), pagesSeenIn(state)),
     },
   ];

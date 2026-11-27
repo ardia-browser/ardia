@@ -155,8 +155,13 @@ export function appBecameActive() {
   archiveDueTabs();
 }
 
+let resignations = 0;
+
+export const timesLeftScreen = () => resignations;
+
 export function appWillResignActive() {
   appActive = false;
+  resignations += 1;
   tabFromAnotherApp = null;
   if (archiveTimer) clearInterval(archiveTimer);
   archiveTimer = null;

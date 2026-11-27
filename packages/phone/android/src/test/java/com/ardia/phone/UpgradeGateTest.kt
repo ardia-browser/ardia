@@ -191,6 +191,18 @@ class UpgradeGateTest {
     }
 
     @Test
+    fun aLinkAnEarlierVersionHeldIsReleasedAsHeldNotAsAFreshLink() {
+        composeDatabase()
+        HeldLinks.write(UpgradeGate.heldLinksFile(app), listOf(mapOf("kind" to "open", "url" to "https://example.com/older", "source" to "web")))
+        UpgradeGate.install(app)
+        val sources = ArrayList<String?>()
+        PhoneSystemLinks.listen { sources += it["source"] as String? }
+        UpgradeGate.writeMarker(app, receipt)
+        UpgradeGate.open(app)
+        assertEquals(listOf("held"), sources)
+    }
+
+    @Test
     fun aLinkHeldBeforeStartWithoutThemOpensWhenTheAppStarts() {
         composeDatabase()
         UpgradeGate.install(app)

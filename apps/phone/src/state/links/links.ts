@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 import { addLinkListener, initialLink, type SystemLink } from "../../platform/links";
-import { openPage, openPageFromAnotherApp, openSpaces, openTab, reopenArchived, searchFor, showDeck, useBrowse } from "../browse/store";
+import { openPage, openPageFromAnotherApp, openSpaces, openTab, reopenArchived, searchFor, showDeck, timesLeftScreen, useBrowse } from "../browse/store";
 import { readPreferences, writePreference } from "../store/browserDatabase";
 import { browserDatabase } from "../store/database";
 import { useOnboarding } from "../onboarding/store";
@@ -103,7 +103,10 @@ const LINK_DEADLINE_MS = 8_000;
 
 const inOrder = serialQueue(LINK_DEADLINE_MS, () => countUsage("links_given_up"));
 
-const take = (link: IncomingLink) => void inOrder((expired) => run(link, expired));
+const take = (link: IncomingLink) => {
+  const leftBefore = timesLeftScreen();
+  void inOrder((expired) => run(timesLeftScreen() === leftBefore ? link : replayed(link), expired));
+};
 
 let waiting: IncomingLink[] | null = null;
 

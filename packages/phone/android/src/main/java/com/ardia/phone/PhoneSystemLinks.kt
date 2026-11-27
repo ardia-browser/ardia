@@ -29,7 +29,7 @@ object PhoneSystemLinks {
     fun keepHeldIn(file: java.io.File) = synchronized(lock) {
         heldFile = file
         held.clear()
-        held.addAll(HeldLinks.read(file).takeLast(QUEUE_LIMIT))
+        held.addAll(HeldLinks.read(file).takeLast(QUEUE_LIMIT).map { it + ("source" to HELD_SOURCE) })
     }
 
     private fun persistHeld() {

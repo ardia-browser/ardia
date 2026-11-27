@@ -25,6 +25,7 @@ async function onboardingOn({ apple = "notConnected", features = MAC, fresh = tr
   Object.assign(PLATFORM_FEATURES, features);
   native.applePasswords.state = apple;
   native.applePasswords.calls.length = 0;
+  native.applePasswords.pairOutcome = "awaitingCode";
   native.contacts.status = "notDetermined";
   native.contacts.answer = "authorized";
   native.contacts.requests = 0;
@@ -119,7 +120,7 @@ test("S11: accepting Apple Passwords pairs right in the step with the Passwords 
   useOnboarding.setState({ windowId: null });
 });
 
-test("S11: skipping while Pairing cancels it, leaves the Password manager as it was, and declines the offer", async () => {
+test("S11: skipping while Pairing cancels it, leaves the Password manager as it was, and leaves the Apple Passwords offer open for next time", async () => {
   const profile = await onboardingOn();
   step.toggleAutofillOffer("applePasswords");
   await step.continueAutofillStep();
@@ -130,7 +131,43 @@ test("S11: skipping while Pairing cancels it, leaves the Password manager as it 
   assert.equal(currentPasswordManager(profile), "ardia");
   assert.equal(useOnboarding.getState().step, "home");
   const again = await onboardingOn({ fresh: false });
-  assert.deepEqual(offers.openAutofillOffers(again), [], "the Me card offered beside it is declined too");
+  assert.deepEqual(offers.openAutofillOffers(again), ["applePasswords"], "a cancelled Pairing isn't an answer; the Me card offered beside it is declined");
+  useOnboarding.setState({ windowId: null });
+});
+
+test("S11: a wrong code and then Skip leaves the Apple Passwords offer open for next time", async () => {
+  const profile = await onboardingOn({ apple: "notConnected" });
+  step.toggleAutofillOffer("applePasswords");
+  step.toggleAutofillOffer("meCard");
+  native.contacts.card = { name: "Ada Lovelace", organization: "", emails: ["ada@example.test"], phones: [], addresses: [] };
+  await step.continueAutofillStep();
+  assert.equal(await step.submitAutofillPairingCode(ap.pairingCodeSecret("111111")), false);
+  step.skipAutofillStep();
+  await flush();
+  const again = await onboardingOn({ fresh: false });
+  assert.deepEqual(offers.openAutofillOffers(again), ["applePasswords"]);
+  await setMeCardFor(engine(profile), false);
+  native.contacts.card = null;
+  useOnboarding.setState({ windowId: null });
+});
+
+test("S11: a Pairing that fails moves on without Apple Passwords, keeps the Me card accepted beside it, and offers Apple Passwords again next time", async () => {
+  const profile = await onboardingOn();
+  native.applePasswords.pairOutcome = "failed";
+  native.contacts.card = { name: "Ada Lovelace", organization: "", emails: ["ada@example.test"], phones: [], addresses: [] };
+  step.toggleAutofillOffer("applePasswords");
+  step.toggleAutofillOffer("meCard");
+  await step.continueAutofillStep();
+  assert.equal(useApplePasswords.getState().pairing?.step, "failed");
+  step.finishAutofillPairing();
+  await flush();
+  assert.equal(currentPasswordManager(profile), "ardia");
+  assert.equal(useOnboarding.getState().step, "home");
+  assert.deepEqual(useOnboarding.getState().picked.autofill, ["Fills forms from your Me card"], "only what took effect is listed as picked");
+  const again = await onboardingOn({ fresh: false });
+  assert.deepEqual(offers.openAutofillOffers(again), ["applePasswords"], "the failed offer stays open; the accepted Me card doesn't return");
+  await setMeCardFor(engine(profile), false);
+  native.contacts.card = null;
   useOnboarding.setState({ windowId: null });
 });
 

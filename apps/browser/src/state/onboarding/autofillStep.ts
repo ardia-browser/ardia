@@ -1,6 +1,6 @@
 import type { Secret } from "@ardia/core";
 import { create } from "zustand";
-import { cancelPairing, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords } from "../site/applePasswords";
+import { applePasswordsConnected, cancelPairing, startApplePasswordsPairing, submitApplePasswordsCode, useApplePasswords } from "../site/applePasswords";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { noteOnboardingOffer } from "../telemetry/passwordManagerCounts";
 import { useBrowser } from "../browser/store";
@@ -64,33 +64,41 @@ export async function continueAutofillStep() {
   if (!picked.includes("applePasswords")) return finish(offered, picked);
   useAutofillStep.setState({ phase: "pairing" });
   await startApplePasswordsPairing(id);
-  if (now().phase === "pairing" && inStep() && !useApplePasswords.getState().pairing) finishPicked();
+  if (now().phase === "pairing" && inStep() && !useApplePasswords.getState().pairing) finishPicked(applePasswordsConnected());
 }
 
-function finishPicked() {
+function answered(paired: boolean) {
   const offered = autofillStepOffers(profile());
-  finish(offered, offerPicks(now().picks, offered));
+  const unanswered = (offer: AutofillOffer) => offer === "applePasswords" && !paired && !!now().picks.applePasswords;
+  const kept = offered.filter((offer) => !unanswered(offer));
+  return { offered: kept, accepted: offerPicks(now().picks, kept) };
+}
+
+function finishPicked(paired: boolean) {
+  const { offered, accepted } = answered(paired);
+  finish(offered, accepted);
 }
 
 export async function submitAutofillPairingCode(code: Secret<"pairingCode">): Promise<boolean> {
   if (now().phase !== "pairing" || !inStep()) return false;
   const paired = await submitApplePasswordsCode(code);
-  if (paired && now().phase === "pairing") finishPicked();
+  if (paired && now().phase === "pairing") finishPicked(true);
   return paired;
 }
 
 export function finishAutofillPairing() {
   if (now().phase !== "pairing" || !inStep()) return;
   if (useApplePasswords.getState().pairing) cancelPairing();
-  finishPicked();
+  finishPicked(false);
 }
 
 export function skipAutofillStep() {
   if (!inStep()) return;
-  const offered = autofillStepOffers(profile());
-  if (now().phase === "pairing") cancelPairing();
+  const pairing = now().phase === "pairing";
+  const { offered, accepted } = pairing ? answered(false) : { offered: autofillStepOffers(profile()), accepted: [] };
+  if (pairing) cancelPairing();
   const consent = now().consent ?? consentToken();
   resetAutofillStep();
   skipStep();
-  record(offered, [], consent);
+  record(offered, accepted, consent);
 }

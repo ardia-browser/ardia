@@ -173,12 +173,13 @@ const providerFakes = {
 export const applePasswords = {
   state: "notEntitled" as CallResult<"passwords.applePasswordsStatus">["state"],
   code: "246810",
+  pairOutcome: "awaitingCode" as CallResult<"passwords.applePasswordsPair">["outcome"],
   calls: [] as string[],
   hold: null as Promise<void> | null,
 };
 const applePasswordsFakes = {
   applePasswordsStatus: () => ({ state: applePasswords.state }),
-  applePasswordsPair: () => (applePasswords.calls.push("pair"), { outcome: "awaitingCode" as const }),
+  applePasswordsPair: () => (applePasswords.calls.push("pair"), { outcome: applePasswords.pairOutcome }),
   applePasswordsCancelPairing: () => (applePasswords.calls.push("cancelPairing"), null),
   applePasswordsPairCode: async ({ code }: { code: string }) => {
     applePasswords.calls.push("pairCode");

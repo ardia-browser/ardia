@@ -1,7 +1,7 @@
 import { startingTheme, type ProfileTheme } from "@ardia/core/src/theme.ts";
 import { CUSTOM_CHOICE, type ProfileLook } from "../../lib/profileLook";
 import { countUsage } from "../telemetry/telemetry";
-import type { PresetColor, PresetThemes } from "./preferences";
+import { PRESET_COLORS, type ColorChoice, type PresetColor, type PresetThemes } from "./preferences";
 import { currentPreferences, setPreference } from "./store";
 import { chosenOwnTheme, useThemeDraft } from "./themeDraft";
 
@@ -17,19 +17,27 @@ export function chooseCustomTheme(look: ProfileLook) {
   countUsage("custom_theme_chosen");
 }
 
-export function editCustomTheme(theme: ProfileTheme, settle: boolean) {
+const isPresetColor = (key: string | null): key is PresetColor => PRESET_COLORS.includes(key as PresetColor);
+
+export function editedChoice(colorChoice: ColorChoice | null, look: ProfileLook | null): ColorChoice {
+  if (colorChoice !== null) return colorChoice;
+  return look && !look.custom && isPresetColor(look.preset) ? look.preset : CUSTOM_CHOICE;
+}
+
+export function editCustomTheme(theme: ProfileTheme, settle: boolean, look: ProfileLook | null = null) {
   if (!settle) {
     useThemeDraft.setState({ draft: theme });
     return;
   }
   useThemeDraft.setState({ draft: null });
   const { colorChoice, presetThemes } = currentPreferences();
-  if (colorChoice !== null && colorChoice !== CUSTOM_CHOICE) {
-    setPreference("presetThemes", { ...presetThemes, [colorChoice]: theme });
+  const edited = editedChoice(colorChoice, look);
+  if (edited !== CUSTOM_CHOICE) {
+    setPreference("presetThemes", { ...presetThemes, [edited]: theme });
   } else {
     setPreference("customTheme", theme);
-    setPreference("colorChoice", CUSTOM_CHOICE);
   }
+  setPreference("colorChoice", edited);
   countUsage("theme_edits");
 }
 

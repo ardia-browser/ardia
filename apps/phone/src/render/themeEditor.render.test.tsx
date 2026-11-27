@@ -8,7 +8,8 @@ import { ThemePage } from "../components/settings/ThemePage";
 import { DeckLookBackdrop, DesignProvider, LookBackdrop, useTheme } from "../components/ui";
 import type { Design } from "../lib/design";
 import { setAppearanceDesign } from "../state/settings/appearance";
-import { openSettings, popSettings, settingsNav } from "../state/settings/nav";
+import { openSettings, popSettings, pushSettings, settingsNav } from "../state/settings/nav";
+import { editCustomTheme, resetPresetTheme } from "../state/settings/customTheme";
 import { usePreferences } from "../state/settings/store";
 import { useThemeDraft } from "../state/settings/themeDraft";
 import { useSync } from "../state/sync/store";
@@ -137,6 +138,50 @@ onAndroid("an edited preset keeps its edits on its own swatch, leaves Custom alo
   expect(usePreferences.getState().colorChoice).toBe("green");
   expect(textOf(root)).not.toContain("Reset to Green");
   unmount(root);
+});
+
+test("Reset on an edited preset makes the open Theme page start from the preset again, so the next edit can't bring the old edits back", () => {
+  const oldEdits = { ...blue, stops: [blue.stops[0]!], grain: 0.9 };
+  act(() => usePreferences.setState({ colorChoice: "green", presetThemes: { green: oldEdits } }));
+  const editor = inDesign(<ThemePage />);
+  expect(textOf(editor)).toContain("1 of 3 colors");
+  act(() => resetPresetTheme("green"));
+  expect(textOf(editor)).toContain("2 of 3 colors");
+  press(editor, "Add Color");
+  const saved = usePreferences.getState().presetThemes.green!;
+  expect(saved.stops.length).toBe(3);
+  expect(saved.grain).not.toBe(oldEdits.grain);
+  unmount(editor);
+});
+
+test("leaving the Theme page while an edit is still a draft drops the draft, and the saved preset stays as it was", () => {
+  act(() => usePreferences.setState({ colorChoice: "green" }));
+  openSettings({ page: "appearance" });
+  const root = inDesign(<SettingsView />);
+  act(() => pushSettings({ page: "theme" }));
+  flush();
+  act(() => editCustomTheme({ ...blue, grain: 0.9 }, false));
+  expect(useThemeDraft.getState().draft).not.toBeNull();
+  act(() => {
+    popSettings();
+  });
+  flush();
+  expect(settingsNav().stack.map((route) => route.page)).toEqual(["root", "appearance"]);
+  expect(useThemeDraft.getState().draft).toBeNull();
+  expect(usePreferences.getState().presetThemes).toEqual({});
+  expect(usePreferences.getState().colorChoice).toBe("green");
+  unmount(root);
+});
+
+test("with no color chosen, editing the Plum the Appearance page shows edits Plum, as the Mac does, and leaves Custom alone", () => {
+  withCustom();
+  act(() => usePreferences.setState({ colorChoice: null }));
+  const editor = inDesign(<ThemePage />);
+  press(editor, "Add Color");
+  expect(usePreferences.getState().colorChoice).toBe("plum");
+  expect(usePreferences.getState().presetThemes.plum!.stops.length).toBe(3);
+  expect(usePreferences.getState().customTheme).toEqual(blue);
+  unmount(editor);
 });
 
 test("the Theme page adds up to three colours and removes down to one", () => {

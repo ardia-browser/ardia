@@ -145,7 +145,7 @@ export function SettingsNavigation() {
       <StackRoot route={shown[0]} />
       {destinations.map((key) => (
         <NavigationDestination key={key} value={key}>
-          <Destination routeKey={key} pushed={seen.current.keys.has(key)} opened={onPath.has(key)} />
+          <Destination routeKey={key} pushed={seen.current.keys.has(key)} opened={onPath.has(key)} showing={open && onPath.has(key)} />
         </NavigationDestination>
       ))}
     </NavigationStack>
@@ -173,7 +173,7 @@ const HELD_UNTIL_PUSHED = new Set<SettingsRoute["page"]>(["sync", "syncConnect",
 
 export const drawnBeforePush = (page: SettingsRoute["page"]) => CONVERTED[page] !== undefined && !HELD_UNTIL_PUSHED.has(page);
 
-function Destination({ routeKey, pushed, opened }: { routeKey: string; pushed: boolean; opened: boolean }) {
+function Destination({ routeKey, pushed, opened, showing }: { routeKey: string; pushed: boolean; opened: boolean; showing: boolean }) {
   const route = settingsRouteFromKey(routeKey);
   if (!route) return null;
   const Converted = CONVERTED[route.page];
@@ -190,7 +190,9 @@ function Destination({ routeKey, pushed, opened }: { routeKey: string; pushed: b
       <RNHostView>
         <View style={styles.fill}>
           <SettingsHostedContext.Provider value>
-            <SettingsPageFor route={route} />
+            <SettingsPageOpenedContext.Provider value={showing}>
+              <SettingsPageFor route={route} />
+            </SettingsPageOpenedContext.Provider>
           </SettingsHostedContext.Provider>
         </View>
       </RNHostView>

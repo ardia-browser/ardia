@@ -2,9 +2,9 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView, LegacyScrollView } from "react-native-gesture-handler";
 import { lookAngle, MAX_THEME_STOPS, THEME_TEXTURES, withAddedStop, withAngle, withoutStop, withTexture, type ProfileTheme, type ThemeMode, type ThemeTexture } from "@ardia/core/src/theme.ts";
-import { customLook } from "../../lib/profileLook";
+import { customLook, type ProfileLook } from "../../lib/profileLook";
 import { editedLook, keptReadable, TEXTURE_NAMES, THEME_MODES } from "../../lib/themeEditor";
-import { dropThemeDraft, editCustomTheme, startingCustomTheme } from "../../state/settings/customTheme";
+import { dropThemeDraft, editCustomTheme, editedChoice, startingCustomTheme } from "../../state/settings/customTheme";
 import { popSettings } from "../../state/settings/nav";
 import { useCustomTheme } from "../../state/settings/themeDraft";
 import { capsule, CustomLookBackdrop, font, settingsLayout, slotAround, space, Symbol, themeEditorLayout as L, useProfileLook, useTheme } from "../ui";
@@ -12,52 +12,63 @@ import { Group, PickerRow, SettingsHostedContext, SettingsPage } from "./Setting
 import { themeStepperLayout } from "./settingsTokens";
 import { ColorPad, DirectionDial, LightnessBar, ThemeSlider, type BlockedScroll } from "./ThemeControls";
 import { usePreferences } from "../../state/settings/hooks";
+import { SettingsPageOpenedContext } from "./settingsOpened";
 
-function useLiveTheme(stored: ProfileTheme) {
+function useLiveTheme(stored: ProfileTheme, look: ProfileLook) {
+  const opened = useContext(SettingsPageOpenedContext);
   const [local, setLocal] = useState<ProfileTheme | null>(null);
   const frame = useRef<number | null>(null);
   const pending = useRef<ProfileTheme | null>(null);
-  useEffect(
-    () => () => {
-      if (frame.current !== null) cancelAnimationFrame(frame.current);
-      dropThemeDraft();
-    },
-    [],
-  );
+  const showing = useRef(opened);
+  const lookNow = useRef(look);
+  lookNow.current = look;
+  const endDraft = useCallback(() => {
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    pending.current = null;
+    dropThemeDraft();
+  }, []);
+  useEffect(() => endDraft, [endDraft]);
+  useEffect(() => {
+    showing.current = opened;
+    if (opened) return;
+    endDraft();
+    setLocal(null);
+  }, [opened, endDraft]);
   const change = useCallback((next: ProfileTheme, settle: boolean) => {
+    if (!showing.current) return;
     if (settle) {
       if (frame.current !== null) cancelAnimationFrame(frame.current);
       frame.current = null;
       pending.current = null;
       setLocal(null);
-      editCustomTheme(next, true);
+      editCustomTheme(next, true, lookNow.current);
       return;
     }
     setLocal(next);
     pending.current = next;
     frame.current ??= requestAnimationFrame(() => {
       frame.current = null;
-      if (pending.current) editCustomTheme(pending.current, false);
+      if (pending.current && showing.current) editCustomTheme(pending.current, false);
     });
   }, []);
   return { theme: local ?? stored, change };
 }
 
-const MATCHING_MAC = "matchMac";
-
 export function ThemePage() {
   const look = useProfileLook();
   const stored = useCustomTheme();
-  const editing = usePreferences((p) => p.colorChoice) ?? MATCHING_MAC;
-  const fallback = useMemo(() => startingCustomTheme(look), [editing]);
-  return <ThemeEditor key={editing} stored={stored ?? fallback} />;
+  const editing = editedChoice(usePreferences((p) => p.colorChoice), look);
+  const saved = stored !== null;
+  const fallback = useMemo(() => (saved ? null : startingCustomTheme(look)), [editing, saved]);
+  return <ThemeEditor key={editing} stored={stored ?? fallback!} look={look} />;
 }
 
-function ThemeEditor({ stored }: { stored: ProfileTheme }) {
+function ThemeEditor({ stored, look }: { stored: ProfileTheme; look: ProfileLook }) {
   const ui = useTheme();
   const dark = ui.dark;
   const { theme: editing, editsDark } = editedLook(stored, dark);
-  const { theme, change } = useLiveTheme(editing);
+  const { theme, change } = useLiveTheme(editing, look);
   const [selected, setSelected] = useState(0);
   const index = Math.min(selected, theme.stops.length - 1);
   const scroll = useRef(null);

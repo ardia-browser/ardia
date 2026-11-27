@@ -1,5 +1,5 @@
 import { asSecret, reveal, type Secret } from "@ardia/core";
-import { emptyScope, EXTENSION_PREFIX, folderTransport, syncScope, SyncNative, visible, type FolderInfo, type PhraseResult } from "../../platform/sync";
+import { emptyScope, EXTENSION_PREFIX, syncScope, SyncNative, visible, type FolderInfo, type PhraseResult } from "../../platform/sync";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
@@ -16,7 +16,7 @@ import { markNewSync, sessionMarkHooks, settleLaunchMark } from "./sessionMarks"
 import { noteChainStatus, noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
-import { chainStatusAfterMissingWrite, publishChainGone, recreateChainFolder, reseedPendingScopes, type FolderRecreateResult } from "./folderRecovery";
+import { chainCheckedTransport, chainStatusAfterMissingWrite, publishChainGone, recreateChainFolder, reseedPendingScopes, type FolderRecreateResult } from "./folderRecovery";
 import { freezeRemovals, markDeviceRemoved, markRemoved, settleRemovals } from "./profileRemoval";
 import { profileScope } from "./records";
 import { queueSend, sendTargetsIn } from "./sentTabs";
@@ -116,7 +116,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
   try {
     watchExtensions();
     if (await gone(await native.chainStatus(folder))) return;
-    const transport = folderTransport(native, folder), clock = clockFor(device);
+    const transport = chainCheckedTransport(native, folder), clock = clockFor(device);
     if (doc.reseedScopes?.length) await reseedPendingScopes({ native, doc, folder, device, clock, watchScope, persistJournal, save });
     const app = appScopeOf(doc, consent);
     if (freezeRemovals(doc)) save();
@@ -157,7 +157,6 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       }
     }
     doc.clock = clock.last;
-    if (await gone(await native.chainStatus(folder))) return;
     delete doc.reseedScopes;
     delete doc.reseedCycleOwed;
     doc.lastSyncedAt = Date.now();

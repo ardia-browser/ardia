@@ -1,4 +1,4 @@
-import { compact, folderTransport, type Clock, type FolderInfo, type LogFile, type ScopeState, type SyncNative } from "../../platform/sync";
+import { compact, folderTransport, type Clock, type FolderInfo, type LogFile, type ScopeState, type SyncNative, type Transport } from "../../platform/sync";
 import { errorText } from "../../lib/errors";
 import { isQuitting } from "../app/quit";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
@@ -61,6 +61,18 @@ export async function publishChainGone(status: string, { native, folder, device,
   publish({ status: "stalled", error: CHAIN_MISSING_TEXT, dataMissing: true });
   return true;
 }
+
+export const chainCheckedTransport = (native: SyncNativeApi, folder: string): Transport => {
+  const transport = folderTransport(native, folder);
+  const read: Transport["read"] = async (scope, known) => {
+    const listing = await transport.read(scope, known);
+    if (known.length && !listing.present.length && (await native.chainStatus(folder)) !== "ok") {
+      throw Object.assign(new Error("This device's data is gone from the sync folder"), { code: "ERR_SYNC_CHAIN_MISSING" });
+    }
+    return listing;
+  };
+  return { ...transport, read };
+};
 
 export const chainStatusAfterMissingWrite = (native: SyncNativeApi, folder: string) =>
   native.chainStatus(folder).then((status) => (status === "unavailable" ? status : "missing"), () => "missing");

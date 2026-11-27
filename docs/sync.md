@@ -598,8 +598,9 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
     syncing · last synced %@", plus "Sync folder unavailable" when the folder itself isn't there (a drive is
     unplugged, iCloud Drive is off, or the folder was deleted), with the reason under the row. Downloads still to come
     add "· waiting for N files to download". A cycle that finds the folder or this phrase's data gone at any point,
-    at its start, on a write or a read, or in its last check before "updated", reports that state and never
-    "updated": a whole folder gone is "Sync folder unavailable", this phrase's folder gone from a folder that is
+    at its start, on a write or on a read, reports that state and never "updated" (the Mac's read reports a missing
+    chain itself; on Linux and Windows, whose engine reads a missing chain as an empty folder, a read that comes back
+    empty for a scope whose files this computer knew checks the chain before it is used): a whole folder gone is "Sync folder unavailable", this phrase's folder gone from a folder that is
     there is the waiting state below.
   - **Recreate Folder…** takes the place of Connect Another Device… when the folder is missing, or when it is there but
     vacant (empty, or holding only Finder metadata such as `.DS_Store`, as an earlier failed try can leave it)

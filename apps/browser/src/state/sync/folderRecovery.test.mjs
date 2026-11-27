@@ -12,6 +12,8 @@ let iCloudAvailable = true;
 let inICloud = true;
 let writeFailsAfter = Infinity;
 let createChainError = null;
+let onCreateChain = null;
+let afterChainStatus = null;
 
 const chainOf = (folder) => folders.get(folder);
 const scopeOf = (folder, chain, scope) => {
@@ -42,8 +44,13 @@ const native = {
     hasSyncData: (chainOf(path)?.size ?? 0) > 0,
   }),
   chooseFolder: async () => null,
-  chainStatus: async (folder) => (!folders.has(folder) ? "unavailable" : chainOf(folder).has(OURS) ? "ok" : "missing"),
+  chainStatus: async (folder) => {
+    const status = !folders.has(folder) ? "unavailable" : chainOf(folder).has(OURS) ? "ok" : "missing";
+    afterChainStatus?.(folder);
+    return status;
+  },
   createChain: async (folder) => {
+    onCreateChain?.(folder);
     if (createChainError) throw createChainError;
     if (chainOf(folder)?.has(OURS)) throw new Error("the chain already exists");
     plant(folder, OURS);
@@ -78,6 +85,8 @@ const reset = () => {
   inICloud = true;
   writeFailsAfter = Infinity;
   createChainError = null;
+  onCreateChain = null;
+  afterChainStatus = null;
   shell.docs.clear();
   useBrowser.setState({ bookmarks: { nodes: {} } });
   S().hydrate({});
@@ -198,11 +207,13 @@ test("recreateSyncFolder handles iCloud off, already-reappeared folder, existing
   assert.match(partial.message, /disk full/);
   assert.equal(engine.useSync.getState().status, "stalled");
   assert.ok(JSON.parse(shell.docs.get("sync.json")).reseedScopes?.includes(scope), "unseeded scope stays queued for retry");
+  assert.equal(engine.useSync.getState().reseeding, true, "pairing stays off while the new folder still lacks this device's data");
 
   writeFailsAfter = Infinity;
   await engine.syncNow();
   assert.equal(engine.useSync.getState().status, "updated");
   assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedScopes, undefined, "reseed queue clears once complete");
+  assert.equal(engine.useSync.getState().reseeding, false);
 
   const phoneTransport = {
     write: (s, payload) => native.write(SYNC_FOLDER, s, payload),
@@ -291,4 +302,41 @@ test("recreateSyncFolder refuses concurrent calls and locked state", async () =>
 
   engine.useSync.setState({ status: "locked" });
   assert.deepEqual(await engine.recreateSyncFolder(), { error: "locked" });
+});
+
+test("recreateSyncFolder saves the reseed queue before the chain exists, so a quit mid-create still uploads on relaunch", async () => {
+  reset();
+  const engine = await import("./engine.ts?quit-mid-create");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  S().addBookmark({ profileId: "default", url: "https://kept.example/", title: "Kept" });
+  await engine.syncNow();
+  const scope = `p:${JSON.parse(shell.docs.get("sync.json")).profiles.default.syncId}`;
+  folders.delete(SYNC_FOLDER);
+  await engine.syncNow();
+
+  let queuedWhenCreated = null;
+  onCreateChain = () => (queuedWhenCreated = JSON.parse(shell.docs.get("sync.json")).reseedScopes ?? null);
+  assert.deepEqual(await engine.recreateSyncFolder(), { ok: "recreated" });
+  assert.ok(queuedWhenCreated?.includes(scope), "the queue is on disk before the chain is created");
+
+  onCreateChain = null;
+  folders.delete(SYNC_FOLDER);
+  createChainError = new Error("Read-only file system");
+  assert.equal((await engine.recreateSyncFolder()).error, "failed");
+  assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedScopes, undefined, "a chain that was never created leaves no queue behind");
+});
+
+test("recreateSyncFolder refuses a folder that reappears after the status check", async () => {
+  reset();
+  const engine = await import("./engine.ts?reappears");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  await engine.syncNow();
+  folders.delete(SYNC_FOLDER);
+  await engine.syncNow();
+
+  afterChainStatus = (folder) => plant(folder, "other-chain");
+  assert.deepEqual(await engine.recreateSyncFolder(), { error: "exists" });
+  assert.ok(!chainOf(SYNC_FOLDER).has(OURS), "nothing is written next to the chain that arrived");
 });

@@ -101,6 +101,7 @@ export type SyncUi = {
   status: SyncStatus;
   enabled: boolean;
   joining: boolean;
+  reseeding: boolean;
   folder: string | null;
   types: Record<DataType, boolean>;
   profiles: Record<string, ProfileLink>;
@@ -116,6 +117,7 @@ export const emptyUi = (status: SyncStatus): SyncUi => ({
   status,
   enabled: false,
   joining: false,
+  reseeding: false,
   folder: null,
   types: defaultTypes(),
   profiles: {},

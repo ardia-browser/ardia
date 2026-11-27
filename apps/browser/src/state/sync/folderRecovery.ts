@@ -124,8 +124,10 @@ export async function recreateChainFolder(
       noteFolderRecreate("failed", consent);
       return { error: "cloudDriveOff" };
     }
-    await native.createChain(folder);
-    created = true;
+    if (info?.exists) {
+      noteFolderRecreate("failed", consent);
+      return { error: "exists" };
+    }
     const scopes = Object.entries(doc.scopes)
       .filter(([, state]) => hasScopeData(state))
       .map(([scope]) => scope);
@@ -133,6 +135,14 @@ export async function recreateChainFolder(
       doc.reseedScopes = scopes;
       ctx.save();
     }
+    try {
+      await native.createChain(folder);
+    } catch (error) {
+      delete doc.reseedScopes;
+      ctx.save();
+      throw error;
+    }
+    created = true;
     onUpdating();
     if (scopes.length) await reseedPendingScopes(ctx);
     noteFolderRecreate("recreated", consent);

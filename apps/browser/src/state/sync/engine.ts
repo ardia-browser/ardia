@@ -54,6 +54,7 @@ function publishUi(patch: Partial<SyncUi> = {}) {
   useSync.setState({
     enabled: doc.enabled,
     joining: doc.enabled && doc.joining,
+    reseeding: doc.enabled && !!doc.reseedScopes?.length,
     folder: doc.folder,
     types: { ...doc.types },
     profiles: { ...doc.profiles },

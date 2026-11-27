@@ -82,7 +82,7 @@ class PageBlobs(
                 BlobMessage.Hello -> remember(key, Frame(origin, isMainFrame, send))
                 BlobMessage.Bye -> frames.remove(key)
                 is BlobMessage.Name -> {
-                    heardFrom(key)
+                    heardFrom(key, Frame(origin, isMainFrame, send))
                     val fromItsOrigin = if (PageMadeDownloads.isBlob(message.key)) PageMadeDownloads.blobOrigin(message.key) == origin else isMainFrame
                     if (fromItsOrigin) {
                         names.remove(message.key)
@@ -91,7 +91,7 @@ class PageBlobs(
                     }
                 }
                 is BlobMessage.ForRequest -> {
-                    heardFrom(key)
+                    heardFrom(key, Frame(origin, isMainFrame, send))
                     val request = requests[message.token]
                     when {
                         request != null && request.origin == origin -> request.heard(message, key, send)
@@ -110,9 +110,9 @@ class PageBlobs(
         while (frames.size > MAX_FRAMES) frames.remove(evictable() ?: break)
     }
 
-    private fun heardFrom(key: Any) {
-        val frame = frames.remove(key) ?: return
-        frames[key] = frame
+    private fun heardFrom(key: Any, frame: Frame) {
+        val known = frames.remove(key)
+        if (known != null) frames[key] = known else remember(key, frame)
     }
 
     private fun evictable(): Any? {

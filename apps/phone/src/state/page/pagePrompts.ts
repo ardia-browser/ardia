@@ -197,14 +197,14 @@ const DOWNLOAD_FAILURE_WHY: Record<Exclude<DownloadFailure, "privateSessionEnded
 const SHOWN_NAME_LIMIT = 32;
 
 export function shownFileName(fileName: string) {
-  const name = fileName.trim();
-  if (name.length <= SHOWN_NAME_LIMIT) return name;
-  const dot = name.lastIndexOf(".");
-  const extension = dot > 0 && name.length - dot <= 8 ? name.slice(dot) : "";
+  const characters = Array.from(fileName.trim());
+  if (characters.length <= SHOWN_NAME_LIMIT) return characters.join("");
+  const dot = characters.lastIndexOf(".");
+  const extension = dot > 0 && characters.length - dot <= 8 ? characters.slice(dot) : [];
+  const stem = characters.slice(0, characters.length - extension.length);
   const room = SHOWN_NAME_LIMIT - extension.length - 1;
-  const stem = name.slice(0, name.length - extension.length);
   const head = Math.ceil(room / 2);
-  return `${stem.slice(0, head)}…${stem.slice(stem.length - (room - head))}${extension}`;
+  return [...stem.slice(0, head), "…", ...stem.slice(stem.length - (room - head)), ...extension].join("");
 }
 
 export function downloadFailedToast(fileName: string, failure: DownloadFailure | null = null) {

@@ -313,6 +313,17 @@ class PageBlobsTest {
     }
 
     @Test
+    fun aLiveFrameCrowdedOutBySilentSameOriginOnesComesBackWhenItSpeaks() {
+        val url = "blob:https://reports.example/1"
+        Frame("https://top.example", main = true).hello()
+        val live = Frame("https://reports.example", files = mapOf(url to "report".toByteArray()), name = "report.txt").also { it.hello() }
+        repeat(127) { Frame("https://reports.example", answers = false).hello() }
+        live.say("name ${encode(url)} report.txt")
+        val response = openAsync(url).get(10, TimeUnit.SECONDS)
+        assertEquals("report", response.body.readBytes().decodeToString())
+    }
+
+    @Test
     fun aLongTypeParameterStillLetsTheDownloadStart() {
         val url = "blob:https://a.example/1"
         val frame = Frame("https://a.example", answers = false).also { it.hello() }

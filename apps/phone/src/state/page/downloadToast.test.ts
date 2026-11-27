@@ -10,6 +10,14 @@ test("a long file name is shortened in the middle and keeps its extension, so th
   assert.equal(shownFileName("a".repeat(60)).length, 32);
 });
 
+test("shortening never splits an emoji into a lone surrogate", () => {
+  for (let at = 0; at < 40; at++) {
+    const shown = shownFileName(`${"r".repeat(at)}😀${"e".repeat(40)}😀report.pdf`);
+    assert.equal(Array.from(shown).length, 32);
+    assert.doesNotMatch(shown, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+  }
+});
+
 test("the reason comes first, so a long name can only push itself out of view", () => {
   assert.equal(downloadFailedToast("otter.pdf", "noSpace"), "Your phone is out of space. Couldn’t Download otter.pdf.");
   assert.equal(downloadFailedToast("", "server"), "The site didn’t send the file. Couldn’t Download File.");

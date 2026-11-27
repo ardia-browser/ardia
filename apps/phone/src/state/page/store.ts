@@ -10,7 +10,7 @@ export type MenuTranslation = { languageName: string | null; confirmed: boolean 
 
 export type Press = { tabId: string; target: PressTarget; x: number; y: number };
 
-export type MenuPage = "main" | "siteSettings" | "library";
+export type MenuPage = "main" | "siteSettings";
 
 type PageUi = {
   menuOpen: boolean;

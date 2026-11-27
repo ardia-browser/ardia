@@ -8,8 +8,7 @@ import { copyLink, openExternal, preferredLanguage, pressHaptic, shareLink, shar
 import { cancelSearch, closeArchive, deckPullCommitted, openTab, showDeck, takeSheetFromSettings, useBrowse } from "../browse/store";
 import { display } from "../search/omnibox";
 import { prepareSearch, presentSearch, searchState } from "../search/store";
-import { currentPreferences, setPreference } from "../settings/store";
-import { designFor } from "../../lib/design";
+import { setPreference } from "../settings/store";
 import { Platform } from "react-native";
 import { listenToPages, openPageInBackground, pageHandle, pageIsFullscreen, pageRequest, settled, storeFind, storeFullscreen, storeRequest, usePages } from "../pages/store";
 import { closeTabById, currentTabs, openNewTab, useTabs } from "../tabs/store";
@@ -20,7 +19,7 @@ import { backLayer, downloadedToast, downloadFailedToast, downloadingToast, open
 import { installDownloadedPackage } from "../appUpdate/store";
 import { onboardingBack } from "../onboarding/store";
 import { refreshSettings } from "../settings/actions";
-import { openSettings, openSettingsPage, popSettings, settingsNav, type SettingsRoute } from "../settings/nav";
+import { closeSettings, openSettings, openSettingsPage, popSettings, settingsNav, useSettingsNav, type SettingsRoute } from "../settings/nav";
 import { pinToMac, sendTab } from "../sync/actions";
 import type { SyncedDevice } from "../../platform/sync";
 import { linkToCopy } from "./linkCopy";
@@ -37,7 +36,7 @@ import { copy } from "../../lib/platformCopy";
 import { launchValues } from "../../platform/launch";
 import { actionWords } from "../../lib/sharedWords";
 import { syncData } from "../sync/store";
-import { closeLibrary, libraryBack, openLibrary, useLibrary, type LibrarySection } from "../library/store";
+import { libraryBack } from "../library/store";
 import { showToast, TOAST_LONG_DURATION_MS } from "../toasts/store";
 import { syncOffered } from "../../platform/system";
 
@@ -252,7 +251,7 @@ export function pageMenuPresentation({ phase, token }: MenuPresentation) {
   pageMenuHidden(token);
   if (!isCurrentShowing(token) || pageUi().menuOpen) return;
   endMenuTiming();
-  if (pageUi().menuPage === "library") usePageUi.setState({ menuPage: "main" });
+  if (pageUi().menuPage !== "main") usePageUi.setState({ menuPage: "main" });
 }
 
 export function askTranslation() {
@@ -280,11 +279,6 @@ export function releaseTranslationAsk(asked: TranslationAsk | null) {
   setTimeout(() => {
     if (asked && pageUi().translationAsk === asked) usePageUi.setState({ translationAsk: null });
   }, 0);
-}
-
-export function openLibraryInMenu(section: LibrarySection) {
-  usePageUi.setState({ menuPage: "library" });
-  openLibrary(section);
 }
 
 export const shareOverPageMenu = () => {
@@ -373,44 +367,33 @@ export function sendCurrentTab(device: SyncedDevice) {
   if (tab) void sendTab(tab, device);
 }
 
-export function openSiteSettings() {
-  usePageUi.setState({ menuPage: "siteSettings" });
-  if (materialDesign()) void refreshSettings();
+function countSiteSettingsOpened() {
+  markMenuPhase("siteSettingsOpened");
+  if (!selectedTab()?.isPrivate) countUsage("page_menu_site_settings_opened");
 }
 
-const materialDesign = () => designFor(Platform.OS, false, currentPreferences().materialYou) === "material";
+export function openSiteSettings() {
+  if (!pageUi().menuOpen) return;
+  usePageUi.setState({ menuPage: "siteSettings" });
+  countSiteSettingsOpened();
+  void refreshSettings();
+}
 
 export const openDockedSiteSettings = () => showPageMenu(true);
 
 export const closeMenuSubpage = () => usePageUi.setState({ menuPage: "main" });
 
 export function openSiteSettingsSheet() {
-  afterPageMenu(() => openSettingsPage({ page: "siteSettings" }), { sameDocument: false });
+  if (!pageUi().menuOpen) return;
+  usePageUi.setState({ menuPage: "siteSettings" });
+  openSettingsPage({ page: "siteSettings" });
+  countSiteSettingsOpened();
 }
 
-function somethingElseOverPage(tabId: string) {
-  const ui = pageUi();
-  const browse = useBrowse.getState();
-  return pageRequest(tabId) !== null || pageIsFullscreen(tabId) || ui.menuOpen || ui.findOpen || ui.readerTabId !== null || ui.press !== null || browse.surface !== "browsing" || browse.sheet !== null || searchState().open || settingsNav().open || useLibrary.getState().open || useVoice.getState().presented;
-}
+export const siteSettingsInMenu = (ui: { menuOpen: boolean; menuPage: string } = pageUi()) => ui.menuOpen && ui.menuPage === "siteSettings";
 
-export function openSiteSettingsOverMenu() {
-  const document = currentDocument();
-  markMenuPhase("siteSettingsPressed");
-  afterMenu = null;
-  closePageMenu();
-  const open = () => {
-    markMenuPhase("siteSettingsOpened");
-    openSettingsPage({ page: "siteSettings" });
-  };
-  if (!document) {
-    open();
-    return;
-  }
-  requestAnimationFrame(() => {
-    if (opening?.id !== document.opening || selectedId() !== document.tabId || somethingElseOverPage(document.tabId)) return;
-    open();
-  });
+function countSiteChange(field: "site_settings_zoom_changed" | "site_settings_night_shade_changed" | "site_settings_desktop_site_changed") {
+  if (siteSettingsInMenu() && !selectedTab()?.isPrivate) countUsage(field);
 }
 
 export function openSiteSettingsRoute(route: SettingsRoute, { direct = false } = {}) {
@@ -597,6 +580,7 @@ export function setNightShadeOn(on: boolean) {
   if (!target) return;
   const { tab, site, host, url } = target;
   const mode: NightShadeMode = on ? "always" : "disabled";
+  countSiteChange("site_settings_night_shade_changed");
   const next = { ...site, nightShade: mode };
   const revision = writeSite(next);
   usePageUi.setState({ menuSite: next });
@@ -605,11 +589,17 @@ export function setNightShadeOn(on: boolean) {
     .catch(() => siteWriteFailed(next, revision, url));
 }
 
-export const zoomOut = () => withPage((id) => pages.zoomOut(id));
-export const zoomIn = () => withPage((id) => pages.zoomIn(id));
-export const resetZoom = () => withPage((id) => pages.setPageZoom(id, 1));
+const zoomed = (run: (id: string) => Promise<unknown>) => {
+  countSiteChange("site_settings_zoom_changed");
+  withPage(run);
+};
+
+export const zoomOut = () => zoomed((id) => pages.zoomOut(id));
+export const zoomIn = () => zoomed((id) => pages.zoomIn(id));
+export const resetZoom = () => zoomed((id) => pages.setPageZoom(id, 1));
 
 export function setDesktopSite(on: boolean) {
+  countSiteChange("site_settings_desktop_site_changed");
   closePageMenu();
   withPage((id) => pages.setDesktopSite(id, on));
 }
@@ -881,11 +871,10 @@ usePages.subscribe((pagesNow, pagesBefore) => {
   if (!before || before.isLoading || before.url !== navigation.url) prepareSearch();
 });
 
-useLibrary.subscribe((library, before) => {
-  const ui = pageUi();
-  if (before.open && !library.open && ui.menuOpen && ui.menuPage === "library") closePageMenu();
+useSettingsNav.subscribe((nav, before) => {
+  if (before.open && !nav.open && siteSettingsInMenu()) closePageMenu();
 });
 
 usePageUi.subscribe((ui, before) => {
-  if (before.menuOpen && !ui.menuOpen && ui.menuPage === "library" && useLibrary.getState().open) closeLibrary();
+  if (siteSettingsInMenu(before) && !siteSettingsInMenu(ui) && settingsNav().open) closeSettings();
 });

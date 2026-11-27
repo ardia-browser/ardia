@@ -185,6 +185,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         text: "In the same daily counts, on Android: how often you turned the Material You design on or off in Settings, how often you closed the find bar, and with Material You on, how often you closed a tab with its card’s close button, went back with the system’s back swipe, opened Archive from the bottom bar, opened the page menu from the address bar, and pulled Search or the page menu up to full screen. Counts only, never which page, and never while browsing privately",
         fields: ["find_closed_bar", "card_close_tapped", "material_back_swiped", "archive_bar_opened", "site_settings_sheet_opened", "search_sheet_expanded", "site_settings_sheet_expanded", "material_you_turned_on", "material_you_turned_off"],
       },
+      {
+        text: "In the same daily counts: how often you opened Site Settings from the page menu, how often you changed a site’s Page Zoom, Night Shade or Desktop Site there, and how often you opened History, Bookmarks or Downloads from the tab switcher’s menu, never while browsing privately. Counts only, never which site",
+        fields: ["page_menu_site_settings_opened", "site_settings_zoom_changed", "site_settings_night_shade_changed", "site_settings_desktop_site_changed", "deck_menu_history_opened", "deck_menu_bookmarks_opened", "deck_menu_downloads_opened"],
+      },
     ],
   },
 ];

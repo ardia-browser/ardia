@@ -199,3 +199,37 @@ test("a new-password field reports its form's rules, and a strong password fills
   assert.deepEqual(await fillReplies(run), [{ ticket: "5", filled: true }]);
   assert.deepEqual(await values(), { u: "", p: "Abcd-Efgh-2345-Jkmn", c: "Abcd-Efgh-2345-Jkmn", old: "", new: "Pqrs-Tuvw-6789-Xyza", again: "Pqrs-Tuvw-6789-Xyza" });
 });
+
+const IDENTIFIER_FIXTURE = `<!doctype html><body style="margin:0">
+<form id="f"><input id="u" type="email" autocomplete="username" style="position:absolute;left:10px;top:10px;width:300px;height:30px"></form>
+<script>
+const events = (window.__events = []);
+for (const type of ["input", "change"]) document.addEventListener(type, (e) => events.push(type + ":" + e.target.id), true);
+window.__grow = () => {
+  const p = document.createElement("input");
+  p.id = "p";
+  p.type = "password";
+  p.setAttribute("style", "position:absolute;left:10px;top:60px;width:300px;height:30px");
+  document.getElementById("f").append(p);
+};
+</script></body>`;
+
+test("a username-first step that grows a password field fills both once pressed again, and a fill with nothing to fill reports it", { skip: CHROMIUM_MISSING, timeout: 30_000 }, async (t) => {
+  const browser = await launchChromium();
+  t.after(() => browser.close());
+  const { page, run, fill } = await openCodeFixture(browser, "https://page.test", IDENTIFIER_FIXTURE);
+  const values = () => run(() => ({ u: document.getElementById("u").value, p: document.getElementById("p")?.value ?? null }));
+  await page.mouse.click(30, 25);
+  const [first] = (await loginFields(run)).filter((r) => r.event !== "hide");
+  assert.equal(first.field, "identifier");
+  await fill({ ticket: "1", token: first.token, origin: "https://page.test", username: "", password: "" });
+  assert.deepEqual(await fillReplies(run), [{ ticket: "1", filled: false }], "nothing to put in the page is no fill");
+  await run(() => window.__grow());
+  await page.mouse.click(30, 25);
+  const [again] = (await loginFields(run)).filter((r) => r.event !== "hide");
+  assert.equal(again.field, "username", "the same field is now a sign-in form's username");
+  assert.equal(again.token, first.token, "and keeps its token");
+  await fill({ ticket: "2", token: again.token, origin: "https://page.test", username: "ada@example.test", password: "fixture-pw-ada-1" });
+  assert.deepEqual(await fillReplies(run), [{ ticket: "2", filled: true }]);
+  assert.deepEqual(await values(), { u: "ada@example.test", p: "fixture-pw-ada-1" }, "the password field the page grew fills too");
+});

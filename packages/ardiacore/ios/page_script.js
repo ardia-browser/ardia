@@ -1130,7 +1130,7 @@
       if (!found) return hide();
       const rect = inTopViewport(el);
       if (!rect) return hide();
-      if (!active || active.el !== el) active = { el, found, token: `${++tokens}` };
+      active = !active || active.el !== el ? { el, found, token: `${++tokens}` } : { ...active, found };
       const fresh = found.code ? [] : newPasswords(el);
       const field = found.code ? "code" : fresh.length ? "newPassword" : el.type === "password" ? "password" : found.password ? "username" : "identifier";
       const rules = fresh.length ? passwordRules(fresh, el) : {};
@@ -1204,9 +1204,11 @@
     };
     const fillLogin = (message) => {
       const { username, password } = active.found;
-      if (username && typeof message.username === "string" && message.username) put(username, message.username);
-      if (password && typeof message.password === "string" && message.password) put(password, message.password);
-      return true;
+      const user = !!username && typeof message.username === "string" && !!message.username;
+      const secret = !!password && typeof message.password === "string" && !!message.password;
+      if (user) put(username, message.username);
+      if (secret) put(password, message.password);
+      return user || secret;
     };
     const fill = (message) => {
       const ticket = message && typeof message.ticket === "string" ? message.ticket : "";

@@ -1,4 +1,5 @@
 import { FIXTURES } from "./fake.mjs";
+import { NOT_SECURE } from "./login-list.mjs";
 import { waitFor } from "./webkit.mjs";
 
 const q = JSON.stringify;
@@ -6,6 +7,7 @@ export const SAVE_TITLE = "Save to Apple Passwords?";
 export const UPDATE_TITLE = "Update in Apple Passwords?";
 export const NOT_SAVED_TITLE = "Not saved to Apple Passwords";
 const SITE = "save.localhost";
+const PLAIN_SITE = "plain-save.localhost";
 const SETTLED_MS = 6000;
 
 const assert = (ok, message, detail) => {
@@ -125,6 +127,39 @@ export function savingChecks({ paired, sites, engine: engineName = "webkit" }) {
       } finally {
         fake.setMode({ status: {} });
         await tab.close();
+      }
+    },
+    async E33() {
+      const { fake, tabs } = await paired();
+      const login = { user: `http-${Date.now()}@plain.test`, password: "fixture-pw-http-14" };
+      const signInTab = await tabs.open(sites.url(PLAIN_SITE));
+      try {
+        await signIn(signInTab, login.user, login.password);
+        const prompt = await promptShown(signInTab);
+        assert(prompt.state === "save" && prompt.username === login.user, "the http page offers to save the new login", prompt);
+        assert(await signInTab.answer("save"), "Save is pressed", null);
+        await waitFor("the login in Apple Passwords", async () => fake.savedLogins().find((l) => l.user === login.user) ?? null, 20_000);
+      } finally {
+        await signInTab.close();
+      }
+      const plain = await tabs.open(sites.url(PLAIN_SITE));
+      let plainRows;
+      try {
+        await plain.click("#u");
+        plainRows = await plain.waitRows();
+        const row = plainRows.find((r) => r.title === login.user);
+        assert(row && row.label === `${login.user}, ${NOT_SECURE}`, `the http page offers it, marked ${NOT_SECURE}`, plainRows);
+      } finally {
+        await plain.close();
+      }
+      const secure = await tabs.open(sites.secureUrl(PLAIN_SITE));
+      try {
+        await secure.click("#u");
+        const rows = await secure.waitRows();
+        assert(!rows.some((r) => r.title === login.user), "its https sibling never offers it", rows);
+        return { engine: engineName, http: plainRows.map((r) => r.label), https: rows.map((r) => r.title) };
+      } finally {
+        await secure.close();
       }
     },
     async E23() {

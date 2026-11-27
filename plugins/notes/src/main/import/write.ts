@@ -3,7 +3,7 @@ import { addOption, addProperty, deleteProperty, DEFAULT_TAGS, initDatabase, rea
 import { blocksOf, childrenOf, createPage, newId, orderBetween } from "../../shared/model";
 import { IMPORT_LIMITS, ImportCancelled } from "./limits";
 import { exportPageId, notionPageFamilies, pickPageId } from "./notionIds";
-import { bodyPrint, EMPTY_BODY, printOf, Rebase, seedBody } from "./rebase";
+import { bodyPrint, EMPTY_BODY, printOf, Rebase, writeFirstBody } from "./rebase";
 import { safeUrl, textOf, type Block, type Column, type ImportNode, type Inline, type Marks } from "./ir";
 
 export type Sink = {
@@ -363,7 +363,7 @@ function writeBody(doc: Y.Doc, blocks: Block[], resolved: Resolved, existed: boo
   let write = false;
   target.tree.transact(() => (write = target.rebase.body(target.page, target.entry, current, incoming, existed)));
   if (!write) return;
-  if (!fragment.length) return seedBody(doc, target.page, incoming, (scratch) => writeImportedBlocks(scratch, blocks, resolved, ids()));
+  if (!fragment.length) return writeFirstBody(doc, incoming, () => writeImportedBlocks(doc, blocks, resolved, ids()));
   doc.transact(() => fragment.delete(0, fragment.length));
   writeImportedBlocks(doc, blocks, resolved, ids());
 }
@@ -472,6 +472,7 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
           continue;
         }
         createPage(sink.tree, { id, parent, kind: n.kind, title, icon: n.icon, order: orderAfter(parent), by: sink.by, now: n.createdAt && Number.isFinite(n.createdAt) ? n.createdAt : now });
+        rebase.created(id);
         const made = syncing ? pagesMap.get(id) : undefined;
         if (made) for (const [k, v] of [["title", title], ["icon", n.icon ?? ""], ["archivedAt", 0], ["parent", parent]] as const) rebase.remember(made, k, v);
       }
@@ -545,8 +546,12 @@ export async function writePlan(plan: Plan, sink: Sink, root: { title: string; i
       const icon = (n.icon ?? "").slice(0, 16);
       if (entry)
         sink.tree.transact(() => {
-          if (n.title !== before.title) rebase.field(id, entry, "title", entry.get("title") ?? "", title, () => entry.set("title", title));
-          if (n.icon !== before.icon) rebase.field(id, entry, "icon", entry.get("icon") ?? "", icon, () => entry.set("icon", icon));
+          const merge = (key: string, value: string) => {
+            if (syncing) rebase.field(id, entry, key, entry.get(key) ?? "", value, () => entry.set(key, value));
+            else if (entry.get(key) !== value) entry.set(key, value);
+          };
+          if (n.title !== before.title) merge("title", title);
+          if (n.icon !== before.icon) merge("icon", icon);
         });
     }
     if (blocks === null) {

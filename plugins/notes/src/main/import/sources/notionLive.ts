@@ -84,7 +84,8 @@ class TooLarge extends Error {}
 class Stop extends Error {}
 
 const SIGNED_OUT = "Your Notion sign-in ended. Sign in to Notion in Ardia again, then retry.";
-const TERMINAL_CODES = new Set(["refused", "no_window", "bad_request", "not_found", "unavailable", "quota", "exists"]);
+const TERMINAL_CODES = new Set(["refused", "no_window", "bad_request", "not_found", "unavailable", "unsupported", "quota", "exists"]);
+const UNSUPPORTED_CODES = new Set(["unavailable", "unsupported"]);
 
 export function retryAfterMs(value: string | undefined, now: number): number {
   if (!value) return 0;
@@ -973,7 +974,7 @@ export class NotionLive {
         }
         lastError = error instanceof Error ? error.message : String(error);
         const code = String((error as { code?: unknown })?.code ?? "");
-        if (TERMINAL_CODES.has(code)) return { account: code === "unavailable" ? { state: "unsupported" } : { state: "unavailable", reason: lastError }, origin: null, answer: null };
+        if (TERMINAL_CODES.has(code)) return { account: UNSUPPORTED_CODES.has(code) ? { state: "unsupported" } : { state: "unavailable", reason: lastError }, origin: null, answer: null };
       }
     }
     return { account: signedOut ? { state: "signedOut" } : { state: "unavailable", reason: lastError || "Notion didn't answer." }, origin: null, answer: null };

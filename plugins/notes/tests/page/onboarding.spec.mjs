@@ -369,6 +369,22 @@ for (const name of BROWSERS) {
       await context.close();
     });
 
+    test("with sites unsupported, Notion shows the export flow and says live import is coming", async () => {
+      const { context, page } = await open("empty&notion=unsupported");
+      await page.getByTestId("onboarding").waitFor({ timeout: 30_000 });
+      await page.getByTestId("onboarding-name").press("Enter");
+      await until(async () => (await step(page)) === "import", "import step");
+      await page.getByTestId("import-source-notion").click();
+      await page.getByTestId("import-detail").waitFor();
+      await page.getByTestId("import-detail-note").waitFor();
+      assert.equal(await page.getByTestId("import-detail-note").innerText(), "Live import from Notion is coming soon — import a Notion export instead.");
+      assert.equal(await page.getByTestId("notion-account").count(), 0);
+      assert.equal(await page.getByTestId("notion-import").count(), 0);
+      assert.equal(await page.getByTestId("import-choose").isEnabled(), true);
+      assert.deepEqual(page.errors, []);
+      await context.close();
+    });
+
     test("keyboard: Enter, arrows in the grid, Esc goes back", async () => {
       const { context, page } = await open("empty");
       await page.getByTestId("onboarding").waitFor({ timeout: 30_000 });

@@ -39,7 +39,7 @@ import { readImports, type Sink, type WriteProgress } from "../write";
 import { Sha256 } from "../../sha256";
 import { READ_AHEAD_COUNT, ReadAhead } from "../readAhead";
 import { isNotionUuid, knownPageIds, notionPageFamilies, pickPageId, recordsOnlyFamily } from "../notionIds";
-import { bodyPrint, EMPTY_BODY, printOf, Rebase, seedBody } from "../rebase";
+import { bodyPrint, EMPTY_BODY, Rebase, writeFirstBody } from "../rebase";
 
 type Rec = Record<string, any>;
 type Seg = [string, any[]?];
@@ -741,6 +741,7 @@ export class NotionRecordsImport {
       seen.add(id);
       const rec = this.blocks.get(id);
       if (!rec) {
+        if (this.unreadBlocks.has(id)) this.bodyIncomplete = true;
         this.counts.skipped++;
         continue;
       }
@@ -1532,6 +1533,7 @@ export class NotionRecordsImport {
             for (const [k, v] of Object.entries(dbProps)) props.set(k, v);
             entry.set("props", props);
             pagesOf(tree).set(n.id, entry);
+            rebase.created(n.id);
             for (const k of MERGED_FIELDS) rebase.remember(entry, k, fields[k] ?? null);
             rebase.remember(entry, "place", [n.parent, n.order]);
           }
@@ -1591,9 +1593,10 @@ export class NotionRecordsImport {
       }
       const doc = await docFor(n.id);
       usedBlockIds = new Set();
+      this.bodyIncomplete = false;
       const blocks = rec ? await this.convertList(rec.content ?? [], 0, new Set([rec.id])) : [];
       const limited = capBlocks(blocks, IMPORT_LIMITS.blocksPerPage);
-      this.writeBody(n.id, doc, limited, existed.has(n.id));
+      if (!(this.bodyIncomplete && existed.has(n.id))) this.writeBody(n.id, doc, limited, existed.has(n.id));
       this.counts.pages++;
       if (done % 25 === 0) await yieldNow();
     }
@@ -1619,12 +1622,18 @@ export class NotionRecordsImport {
   }
 
   private readonly rebase = new Rebase();
+  private bodyIncomplete = false;
+  private unreadBlocksSet: Set<string> | null = null;
+
+  private get unreadBlocks(): Set<string> {
+    this.unreadBlocksSet ??= new Set(this.records.incomplete?.blocks ?? []);
+    return this.unreadBlocksSet;
+  }
 
   private writeBody(page: string, doc: Y.Doc, blocks: Block[], existed: boolean) {
     const fresh = new Y.Doc();
     if (blocks.length) blocksOf(fresh).insert(0, [buildGroup(blocks)]);
     const incoming = bodyPrint(blocksOf(fresh));
-    const exact = printOf(blocksOf(fresh).toString());
     fresh.destroy();
     const fragment = blocksOf(doc);
     const current = fragment.length ? bodyPrint(fragment) : EMPTY_BODY;
@@ -1633,7 +1642,7 @@ export class NotionRecordsImport {
     this.sink.tree.transact(() => (write = this.rebase.body(page, entry, current, incoming, existed)));
     if (!write) return;
     if (!fragment.length) {
-      if (blocks.length) seedBody(doc, page, exact, (scratch) => blocksOf(scratch).insert(0, [buildGroup(blocks)]));
+      if (blocks.length) writeFirstBody(doc, incoming, (target) => target.insert(0, [buildGroup(blocks)]));
       return;
     }
     doc.transact(() => {

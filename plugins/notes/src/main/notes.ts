@@ -61,6 +61,7 @@ import { instantiateTemplate, templateById } from "../shared/templates";
 import { templateUseCount } from "../shared/templates/counts";
 import { Imports, type PickedFile } from "./import/jobs";
 import { ImportError } from "./import/limits";
+import { IMPORT_SEEDS, reconcileSeeds } from "./import/rebase";
 import { NotionLive, type SitesApi } from "./import/sources/notionLive";
 import { AgentDemos } from "./agentDemo";
 import { makeHandlers } from "./tools";
@@ -528,7 +529,16 @@ export class Notes {
         if (origin instanceof View || origin === "restore") this.touch(space, page);
       }
     });
-    if (page) this.scheduleText(space, page, doc, 0);
+    if (page) {
+      const settle = () => {
+        if (!space.closed && !doc.isDestroyed) reconcileSeeds(doc);
+      };
+      doc.on("afterTransaction", (tr: Y.Transaction) => {
+        if (!tr.local && doc.share.has(IMPORT_SEEDS)) queueMicrotask(settle);
+      });
+      settle();
+      this.scheduleText(space, page, doc, 0);
+    }
     if (name === "ws") this.scheduleTree(space);
   }
 
@@ -1960,7 +1970,7 @@ export class Notes {
     const homeTree = await this.tree(home);
     const link = getPage(homeTree, root);
     if (!link || !isShareLink(link) || link.sharedIn !== workspace) throw new Error("This shared page isn't linked from your private workspace any more.");
-    await share.store.rescan();
+    if (!(await share.store.rescan())) throw new Error("Notes couldn't read the shared folder, so sharing didn't stop. Try again in a moment.");
     await share.store.loadAll();
     await share.store.flush();
     if (share.store.hasPending()) throw new Error("Notes couldn't save everything before bringing the page back.");

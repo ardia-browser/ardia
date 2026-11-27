@@ -464,3 +464,37 @@ test("a page whose ancestor sits in Notion's trash is not a root, while one unde
   assert.ok(r.rootIds.includes(SHARED), "a page under an unreadable parent is kept");
   assert.equal(r.blocks["a0000000-0000-4000-8000-0000000000ff"]?.alive, false, "the trashed ancestor travels along so the importer can tell");
 });
+
+test("when Ardia reports sites unsupported, Notion live import says so once, never calls Notion and never retries", async () => {
+  const calls = [];
+  const unsupported = () => Object.assign(new Error("Sites aren't available to plugins in this version of Ardia."), { code: "unsupported" });
+  const sites = {
+    available: async () => {
+      calls.push("available");
+      throw unsupported();
+    },
+    session: async () => {
+      calls.push("session");
+      throw unsupported();
+    },
+    fetch: async () => {
+      calls.push("fetch");
+      throw unsupported();
+    },
+    download: async () => {
+      calls.push("download");
+      throw unsupported();
+    },
+  };
+  const { notion, sleeps } = live(sites, null);
+  assert.deepEqual(await notion.account(true), { state: "unsupported" });
+  assert.deepEqual(await notion.account(), { state: "unsupported" }, "the answer is cached");
+  await assert.rejects(notion.start("11111111-1111-4111-8111-111111111111"), /Choose a file instead/);
+  assert.deepEqual(calls.filter((c) => c !== "available"), [], "nothing past the availability check is called");
+  assert.ok(calls.length <= 2, `availability was asked ${calls.length} times`);
+  assert.deepEqual(sleeps, [], "no retry waits");
+  assert.equal(notion.busy(), false);
+
+  const answers = { available: async () => true, session: async () => "s1", fetch: async () => Promise.reject(unsupported()), download: async () => Promise.reject(unsupported()) };
+  assert.deepEqual(await live(answers, null).notion.account(true), { state: "unsupported" }, "a fetch refused as unsupported reads the same");
+});

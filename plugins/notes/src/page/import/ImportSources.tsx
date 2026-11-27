@@ -125,13 +125,18 @@ export function SourceDetail(props: SourceDetailProps) {
   return <GenericSourceDetail {...props} />;
 }
 
-export function GenericSourceDetail({ source, onStart, busy }: SourceDetailProps) {
+export function GenericSourceDetail({ source, onStart, busy, note }: SourceDetailProps & { note?: string }) {
   const [primary, secondary] = source.picks;
   return (
     <div className="n-imp-detail" data-testid="import-detail" key={source.id}>
       <SourceIcon source={source} size={42} />
       <div className="n-imp-detail-text">
         <div className="n-imp-detail-title">{source.title}</div>
+        {note ? (
+          <p className="n-imp-detail-hint" data-testid="import-detail-note">
+            {note}
+          </p>
+        ) : null}
         <p className="n-imp-detail-hint">{source.hint}</p>
       </div>
       <div className="n-imp-detail-actions">

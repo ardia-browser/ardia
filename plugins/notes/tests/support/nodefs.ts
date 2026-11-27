@@ -27,7 +27,7 @@ export type NodeFiles = FilesApi & {
   emit(root: string, paths: string[]): void;
   calls: number;
   bytesRead: number;
-  faults: { mutate?: (root: string, path: string, data: Buffer) => Buffer | Uint8Array; delay?: (root: string, path: string) => number; append?: (root: string, path: string, size: number) => number | null; write?: (root: string, path: string, size: number) => boolean };
+  faults: { mutate?: (root: string, path: string, data: Buffer) => Buffer | Uint8Array; delay?: (root: string, path: string) => number; append?: (root: string, path: string, size: number) => number | null; write?: (root: string, path: string, size: number) => boolean; read?: (root: string, path: string) => boolean; list?: (root: string, path: string) => boolean };
   detach(): void;
 };
 
@@ -64,7 +64,7 @@ export function nodeFiles(roots: Record<string, string>, options: { latencyMs?: 
       await delay();
       const dir = dirOf(opts.root);
       const p = safe(path);
-      if (hidden(dir).has(p)) fail("unavailable", `${p} is in iCloud`);
+      if (hidden(dir).has(p) || api.faults.read?.(opts.root ?? "data", p)) fail("unavailable", `${p} is in iCloud`);
       const full = join(dir, p);
       if (!existsSync(full) || statSync(full).isDirectory()) return { found: false };
       const fd = openSync(full, "r");
@@ -139,6 +139,7 @@ export function nodeFiles(roots: Record<string, string>, options: { latencyMs?: 
       const slow = api.faults.delay?.(opts.root ?? "data", `${dirPath}/`) ?? 0;
       if (slow) await pause(slow);
       const dir = dirOf(opts.root);
+      if (api.faults.list?.(opts.root ?? "data", dirPath)) fail("unavailable", `listing ${dirPath} failed`);
       const base = join(dir, safe(dirPath));
       if (!existsSync(base)) fail("not_found", `there's no folder ${dirPath}`);
       const out: FileEntry[] = [];

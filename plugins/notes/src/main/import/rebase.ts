@@ -1,5 +1,6 @@
 import * as Y from "yjs";
 import { hex } from "../../shared/bytes";
+import { blocksOf } from "../../shared/model";
 import { Sha256 } from "../sha256";
 
 const BASE_KEY = "imported";
@@ -36,29 +37,74 @@ function emptyBlock(node: unknown): boolean {
   return content instanceof Y.XmlElement && content.nodeName === "paragraph" && content.toArray().every((c) => c instanceof Y.XmlText && c.length === 0);
 }
 
-export function bodyPrint(fragment: Y.XmlFragment): string {
-  const parts: string[] = [];
-  for (const top of fragment.toArray()) {
-    if (top instanceof Y.XmlElement && top.nodeName === "blockGroup") {
-      const kids = top.toArray();
-      while (kids.length && emptyBlock(kids[kids.length - 1])) kids.pop();
-      parts.push(...kids.map(canonical));
-    } else parts.push(canonical(top));
+function topPart(top: unknown): string {
+  if (top instanceof Y.XmlElement && top.nodeName === "blockGroup") {
+    const kids = top.toArray();
+    while (kids.length && emptyBlock(kids[kids.length - 1])) kids.pop();
+    return kids.map(canonical).join("");
   }
-  return printOf(parts.join(""));
+  return canonical(top);
+}
+
+export function bodyPrint(fragment: Y.XmlFragment): string {
+  return printOf(fragment.toArray().map(topPart).join(""));
 }
 
 export const EMPTY_BODY = printOf("");
 
-export function seedBody(doc: Y.Doc, page: string, print: string, fill: (scratch: Y.Doc) => void) {
-  const scratch = new Y.Doc();
-  scratch.clientID = (parseInt(printOf(`seed:${page}:${print}`).slice(0, 8), 16) >>> 1) + 1;
-  try {
-    fill(scratch);
-    Y.applyUpdate(doc, Y.encodeStateAsUpdate(scratch));
-  } finally {
-    scratch.destroy();
-  }
+export const IMPORT_SEEDS = "importSeeds";
+
+type Seed = { print: string; client: number; clock: number };
+
+const itemKey = (node: unknown) => {
+  const id = (node as { _item?: { id?: { client: number; clock: number } } })._item?.id;
+  return id ? `${id.client}:${id.clock}` : "";
+};
+
+function randomSeedId(): string {
+  const bytes = new Uint8Array(8);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function writeFirstBody(doc: Y.Doc, print: string, fill: (fragment: Y.XmlFragment) => void) {
+  const fragment = blocksOf(doc);
+  doc.transact(() => {
+    const before = fragment.length;
+    fill(fragment);
+    if (fragment.length !== before + 1) return;
+    const group = fragment.get(0);
+    const key = itemKey(group).split(":");
+    if (key.length !== 2) return;
+    const seed: Seed = { print, client: Number(key[0]), clock: Number(key[1]) };
+    doc.getMap<Seed>(IMPORT_SEEDS).set(randomSeedId(), seed);
+  });
+}
+
+export function reconcileSeeds(doc: Y.Doc): boolean {
+  if (!doc.share.has(IMPORT_SEEDS)) return false;
+  const seeds = doc.getMap<Seed>(IMPORT_SEEDS);
+  if (seeds.size < 2) return false;
+  const fragment = blocksOf(doc);
+  const top = fragment.toArray();
+  if (top.length < 2) return false;
+  const byItem = new Map(top.map((node) => [itemKey(node), node]));
+  const pristine = new Map<string, { seed: string; node: unknown }[]>();
+  seeds.forEach((seed, id) => {
+    const node = seed && typeof seed === "object" ? byItem.get(`${seed.client}:${seed.clock}`) : undefined;
+    if (!node || printOf(topPart(node)) !== seed.print) return;
+    (pristine.get(seed.print) ?? pristine.set(seed.print, []).get(seed.print)!).push({ seed: id, node });
+  });
+  const extra = [...pristine.values()].flatMap((copies) => copies.sort((a, b) => (a.seed < b.seed ? -1 : 1)).slice(1));
+  if (!extra.length) return false;
+  doc.transact(() => {
+    for (const copy of extra) {
+      const at = fragment.toArray().indexOf(copy.node as Y.XmlElement);
+      if (at >= 0) fragment.delete(at, 1);
+      seeds.delete(copy.seed);
+    }
+  });
+  return true;
 }
 
 function baseOf(entry: Y.Map<unknown>): Y.Map<unknown> {
@@ -77,6 +123,11 @@ const peekBase = (entry: Y.Map<unknown>, key: string): string | undefined => {
 
 export class Rebase {
   readonly conflicts = new Set<string>();
+  private readonly born = new Set<string>();
+
+  created(page: string) {
+    this.born.add(page);
+  }
 
   remember(entry: Y.Map<unknown>, key: string, value: unknown) {
     const print = valuePrint(value);
@@ -91,7 +142,15 @@ export class Rebase {
       if (base !== inc) baseOf(entry).set(`f:${key}`, inc);
     };
     if (inc === cur) return keep();
-    if (base === undefined || base === cur) {
+    if (this.born.has(page)) {
+      apply();
+      return keep();
+    }
+    if (base === undefined) {
+      this.conflicts.add(page);
+      return keep();
+    }
+    if (base === cur) {
       apply();
       return keep();
     }
@@ -103,12 +162,13 @@ export class Rebase {
     const keep = () => {
       if (entry && base !== incoming) baseOf(entry).set("body", incoming);
     };
-    if (!existed || incoming === current || current === EMPTY_BODY) {
+    if (!existed || incoming === current) {
       keep();
       return incoming !== current;
     }
     if (base === undefined) {
       keep();
+      if (current === EMPTY_BODY) return true;
       this.conflicts.add(page);
       return false;
     }

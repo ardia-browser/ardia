@@ -37,5 +37,6 @@ export * as fflate from "fflate";
 export { NotionLive, spacesFrom, rootsFrom, retryAfterMs, isReadEndpoint, needsSigning, assetUrl, downloadable, fileName, fileRefsOf, notionReadUrl, unwrapRecord as crawlUnwrapRecord, NOTION_READ_ENDPOINTS } from "../../src/main/import/sources/notionLive";
 export { importNotionRecords, NotionRecordsImport, unwrapRecord as unwrapNotionRecord, notionColor, notionIconEmoji, notionCoverFallback, codeLanguage, readRecordsJson, sniffExt, notionRecordId } from "../../src/main/import/sources/notionRecords";
 export { recordImport, readImports, undoImport } from "../../src/main/import/write";
+export { reconcileSeeds, bodyPrint } from "../../src/main/import/rebase";
 export { RECORDS_FILE } from "../../src/main/import/jobs";
 export { readDoc } from "../../src/main/tools/blocks";

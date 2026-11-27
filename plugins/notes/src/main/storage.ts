@@ -200,11 +200,12 @@ export class WorkspaceStore {
   private watcher: Disposable | null = null;
   private rescanTimer: unknown = null;
   private rescanSoonTimer: unknown = null;
-  private rescanning: Promise<void> | null = null;
+  private rescanning: Promise<boolean> | null = null;
   private rescanAgain = false;
   private pendingPaths = new Map<string, Set<string>>();
   private pathTimer: unknown = null;
   private placeholders = new Map<string, number>();
+  private readonly unread = new Set<string>();
   private presenceFiles = new Map<string, PresenceFile>();
   private presenceMine: { name: string; color: string; page: string | null } | null = null;
   private presenceTimer: unknown = null;
@@ -249,7 +250,7 @@ export class WorkspaceStore {
 
   waitingFor(names: string[]): string[] {
     const wanted = new Set(names);
-    return [...this.placeholders.keys()].filter((path) => path.startsWith("docs/") && wanted.has(path.split("/")[1]!));
+    return [...new Set([...this.placeholders.keys(), ...this.unread])].filter((path) => path.startsWith("docs/") && wanted.has(path.split("/")[1]!));
   }
 
   async filesDownloading(shas: string[]): Promise<string[]> {
@@ -419,17 +420,19 @@ export class WorkspaceStore {
     for (const e of all) e.doc.destroy();
   }
 
-  async rescan(): Promise<void> {
-    if (this.closed) return;
+  async rescan(): Promise<boolean> {
+    if (this.closed) return false;
     if (this.rescanning) {
       this.rescanAgain = true;
       return this.rescanning;
     }
     this.rescanning = (async () => {
+      let ok = false;
       do {
         this.rescanAgain = false;
-        await this.rescanOnce();
+        ok = await this.rescanOnce();
       } while (this.rescanAgain && !this.closed);
+      return ok && !this.closed;
     })().finally(() => (this.rescanning = null));
     return this.rescanning;
   }
@@ -613,6 +616,7 @@ export class WorkspaceStore {
       return await this.fs.read(path, range);
     } catch (error) {
       if (errorCode(error) === "unavailable") {
+        this.unread.add(path);
         this.notePlaceholder(path);
         return null;
       }
@@ -626,6 +630,7 @@ export class WorkspaceStore {
     try {
       res = await readBlob(this.fs, path, { maxBytes: device === this.deviceId ? Number.MAX_SAFE_INTEGER : this.maxDocBytes });
     } catch (error) {
+      if (errorCode(error) === "unavailable" || errorCode(error) === "damaged") this.unread.add(path);
       if (errorCode(error) === "unavailable") return this.notePlaceholder(path);
       if (errorCode(error) === "damaged") {
         this.report(error, "snap");
@@ -635,24 +640,27 @@ export class WorkspaceStore {
       throw error;
     }
     if (!res.found) {
+      this.unread.delete(path);
       entry.snaps.delete(device);
       this.admit(entry, device, 0, entry.sizes.get(device)?.log ?? 0);
       return;
     }
     const mark = entry.snaps.get(device);
-    if (mark && mark.mtimeMs === res.mtimeMs && mark.size === res.size) return;
+    if (mark && mark.mtimeMs === res.mtimeMs && mark.size === res.size) return void this.unread.delete(path);
     this.placeholders.delete(path);
     if ("tooLarge" in res) return this.reject(entry.name, `a snapshot from ${device} is ${res.size} bytes`);
     if (!this.admit(entry, device, res.size, 0)) return;
     if (res.data.length > 0) {
       const failed = applyUpdates(entry.doc, [res.data], DISK_ORIGIN);
       if (failed) {
+        this.unread.add(path);
         this.report(new Error(`A snapshot of ${entry.name} from ${device} didn't read; it will be read again when it changes.`), "snap");
         if (device === this.deviceId) entry.needsCompaction = true;
         return;
       }
     }
     if (device === this.deviceId) entry.ownSnap = res.pointer;
+    this.unread.delete(path);
     entry.snaps.set(device, { mtimeMs: res.mtimeMs, size: res.size });
     const reader = entry.logs.get(device);
     if (reader) {
@@ -780,6 +788,7 @@ export class WorkspaceStore {
         if (!res || !res.found) return;
       }
       this.placeholders.delete(path);
+      this.unread.delete(path);
       let start = reader.offset;
       let body = res.data;
       if (start === 0) {
@@ -1000,14 +1009,14 @@ export class WorkspaceStore {
     return grouped;
   }
 
-  private async rescanOnce(): Promise<void> {
+  private async rescanOnce(): Promise<boolean> {
     let listing: FileEntry[];
     try {
       listing = await this.fs.list("docs", { recursive: true });
     } catch (error) {
       this.report(error, "rescan");
       this.setState("missing");
-      return;
+      return false;
     }
     if (this.stateValue === "missing") this.setState("ready");
     const grouped = this.group(listing);
@@ -1057,6 +1066,7 @@ export class WorkspaceStore {
     for (const path of [...this.placeholders.keys()]) if (path.startsWith("docs/") && !seenPlaceholders.has(path)) this.placeholders.delete(path);
     await this.readAllPresence();
     this.options.onState?.();
+    return true;
   }
 
   private notePlaceholder(path: string) {

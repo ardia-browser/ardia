@@ -32,6 +32,8 @@ export function notionCrawlFraction(job: NotionCrawl): number | null {
 
 type Loaded = { account: NotionAccount | null };
 
+export const NOTION_LIVE_UNSUPPORTED = "Live import from Notion is coming soon — import a Notion export instead.";
+
 const running = (job: NotionCrawl | null) => job?.stage === "reading" || job?.stage === "downloading" || job?.stage === "cancelling";
 
 export function NotionDetail(props: SourceDetailProps) {
@@ -131,7 +133,7 @@ export function NotionDetail(props: SourceDetailProps) {
   );
 
   const account = loaded.account;
-  if (account?.state === "unsupported" && !running(job)) return <GenericSourceDetail {...props} />;
+  if (account?.state === "unsupported" && !running(job)) return <GenericSourceDetail {...props} note={NOTION_LIVE_UNSUPPORTED} />;
   let body: React.ReactNode;
   if (job && (running(job) || job.stage === "ready")) {
     const fraction = notionCrawlFraction(job);

@@ -7,7 +7,9 @@ const SPACES = [
 
 export function createMockNotion() {
   let job: NotionCrawl | null = null;
-  let signedIn = !/notion=signedout/.test(typeof location === "undefined" ? "" : location.search);
+  const search = typeof location === "undefined" ? "" : location.search;
+  let signedIn = !/notion=signedout/.test(search);
+  const unsupported = /notion=unsupported/.test(search);
   let timer: ReturnType<typeof setInterval> | null = null;
   const stop = () => {
     if (timer) clearInterval(timer);
@@ -15,6 +17,7 @@ export function createMockNotion() {
   };
   return {
     account(): NotionAccount {
+      if (unsupported) return { state: "unsupported" };
       return signedIn ? { state: "signedIn", user: { id: "u1", name: "Ada Lovelace", email: "ada@example.com" }, spaces: SPACES } : { state: "signedOut" };
     },
     signIn() {

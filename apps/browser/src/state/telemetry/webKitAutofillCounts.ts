@@ -23,7 +23,7 @@ onConsentPeriodChange(() => (tally = none()));
 export const isWebKitAutofillCount = (name: string): name is WebKitAutofillCount => Object.hasOwn(WIRE, name);
 
 export function noteWebKitAutofillCount(name: WebKitAutofillCount, consent: ConsentToken | null) {
-  counted(consent, () => void tally[WIRE[name]]++);
+  if (isWebKitAutofillCount(name)) counted(consent, () => void tally[WIRE[name]]++);
 }
 
 export function takeWebKitAutofillCounts(): Record<Wire, number> {

@@ -15,6 +15,7 @@ final class WebKitLogins: NSObject {
     let password: String
     let update: Bool
     let field: [String: String]
+    var applePasswords = false
   }
 
   private struct Listing {
@@ -388,8 +389,34 @@ final class WebKitLogins: NSObject {
 
   private func submitted(_ tab: WebKitTab, data: [String: Any], frame origin: String) {
     Self.verdict(.offerToSave, for: tab.profile) { [weak self, weak tab] verdict in
-      guard let self, let tab, verdict == .ardia else { return }
-      self.submittedWhileSaving(tab, data: data, origin: origin)
+      guard let self, let tab else { return }
+      switch verdict {
+      case .ardia: self.submittedWhileSaving(tab, data: data, origin: origin)
+      case .applePasswords: self.submittedToApplePasswords(tab, data: data, origin: origin)
+      default: break
+      }
+    }
+  }
+
+  private func submittedToApplePasswords(_ tab: WebKitTab, data: [String: Any], origin: String) {
+    guard let password = data["password"] as? String, !password.isEmpty,
+      origin.hasPrefix("https://") || origin.hasPrefix("http://"),
+      !neverSaved.contains(origin)
+    else { return }
+    let username = data["username"] as? String ?? ""
+    let field = Self.submittedField(data["field"])
+    let url = Self.pageOrigin(tab) == origin ? tab.webView?.url?.absoluteString ?? origin + "/" : origin + "/"
+    let profile = tab.profile
+    ArdiaServices.neverSaveOrigins(profile: profile) { [weak self, weak tab] value, _ in
+      let refused = ((value as? [String: Any])?["origins"] as? [String] ?? []).map(Self.normalized)
+      DispatchQueue.main.async {
+        guard self != nil, !refused.contains(origin) else { return }
+        ApplePasswordsSaving.decide(origin: origin, profile: profile, username: username, password: password) { [weak self, weak tab] state in
+          guard let self, let tab, let state else { return }
+          let login = Pending(url: url, origin: origin, username: username, password: password, update: state == "update", field: field, applePasswords: true)
+          self.offer(login, usernames: [username], in: tab)
+        }
+      }
     }
   }
 
@@ -444,10 +471,14 @@ final class WebKitLogins: NSObject {
     landingTurns += 1
     let turn = landingTurns
     landings[key] = turn
-    let prompt: [String: Any] = [
-      "state": login.update ? "update" : "save", "origin": login.origin, "username": login.username, "passwordLength": login.password.count,
-      "federation": "", "usernames": usernames,
-    ]
+    let state = login.update ? "update" : "save"
+    let prompt: [String: Any] =
+      login.applePasswords
+      ? ApplePasswordsSaving.prompt(state, origin: login.origin, username: login.username, passwordLength: login.password.count, usernames: usernames)
+      : [
+        "state": state, "origin": login.origin, "username": login.username, "passwordLength": login.password.count,
+        "federation": "", "usernames": usernames,
+      ]
     let deadline = Date().addingTimeInterval(Self.landingSeconds)
     DispatchQueue.main.asyncAfter(deadline: .now() + Self.navigationGrace) { [weak self, weak tab] in
       self?.land(key, turn: turn, prompt: prompt, deadline: deadline, in: tab)
@@ -492,6 +523,9 @@ final class WebKitLogins: NSObject {
     let name = username ?? login.username
     let secret = password ?? login.password
     listings.removeValue(forKey: listingKey(profile, login.origin))
+    if login.applePasswords, action == "save" || action == "update" {
+      return ApplePasswordsSaving.save(origin: login.origin, username: name, password: secret) { _ in }
+    }
     switch action {
     case "save":
       ArdiaServices.savePassword(profile: profile, origin: login.origin, username: name, password: secret) { _, error in

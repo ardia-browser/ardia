@@ -148,7 +148,7 @@ final class ApplePasswordsClient: @unchecked Sendable {
 
   private enum Failure: Error { case missing, ended, timedOut, unexpected }
 
-  private func exchange(_ message: [String: Any], cmd: Int, wait: TimeInterval, keepsHelper: Bool = false) throws -> [String: Any] {
+  private func exchange(_ message: [String: Any], cmd: Int, also: Int? = nil, wait: TimeInterval, keepsHelper: Bool = false) throws -> [String: Any] {
     let pipe = try running()
     try pipe.write(message)
     let deadline = Date().addingTimeInterval(wait)
@@ -158,14 +158,14 @@ final class ApplePasswordsClient: @unchecked Sendable {
         owed[got] = late - 1
         continue
       }
-      if got == cmd { return reply }
+      if got == cmd || got == also { return reply }
     }
     if pipe.hasEnded { throw Failure.ended }
     guard keepsHelper else {
       pipe.stop()
       throw Failure.timedOut
     }
-    owed[cmd, default: 0] += 1
+    if cmd != Self.saveCmd { owed[cmd, default: 0] += 1 }
     throw Failure.timedOut
   }
 
@@ -228,6 +228,9 @@ final class ApplePasswordsClient: @unchecked Sendable {
     case failed
   }
 
+  static let saveCmd = 6
+  static let saveSeconds: TimeInterval = 120
+  static let alreadyKeptStatus = 7
   static let listSeconds: TimeInterval = 10
   static let passwordSeconds: TimeInterval = 120
   static let successStatuses: Set<Int> = [0, 3]
@@ -260,6 +263,23 @@ final class ApplePasswordsClient: @unchecked Sendable {
     }
   }
 
+  func save(host: String, user: String, password: String, _ done: @escaping (Result<Void, Problem>) -> Void) {
+    queue.async {
+      done(Result {
+        do {
+          _ = try self.sealed(
+            Self.saveCmd, qid: "CmdSetPassword4LoginName_URL", url: nil,
+            ["ACT": 4, "URL": "", "USR": "", "PWD": "", "NURL": host, "NUSR": user, "NPWD": password],
+            wait: Self.saveSeconds, also: 4, kept: [Self.alreadyKeptStatus])
+        } catch Failure.unexpected {
+          Self.log.notice("save had no readable answer, reading the list")
+          let answer = try self.sealed(4, qid: "CmdGetLoginNames4URL", url: host, ["ACT": 5, "URL": host], wait: Self.listSeconds)
+          guard Self.entries(answer).contains(where: { $0["USR"] as? String == user }) else { throw Problem.failed }
+        }
+      }.mapError(Self.problem))
+    }
+  }
+
   private static func problem(_ error: Error) -> Problem { error as? Problem ?? .failed }
 
   private static func entries(_ answer: [String: Any]) -> [[String: Any]] {
@@ -267,26 +287,30 @@ final class ApplePasswordsClient: @unchecked Sendable {
     return answer.keys.filter { $0.hasPrefix("Entry_") }.sorted().compactMap { answer[$0] as? [String: Any] }
   }
 
-  private func sealed(_ cmd: Int, qid: String, url: String, _ body: [String: Any], wait: TimeInterval) throws -> [String: Any] {
+  private func sealed(
+    _ cmd: Int, qid: String, url: String?, _ body: [String: Any], wait: TimeInterval, also: Int? = nil, kept: Set<Int> = []
+  ) throws -> [String: Any] {
     if let barrier = barrier() { throw Problem.unavailable(barrier) }
     guard let session, pipe?.hasEnded == false else { throw Problem.notConnected }
     let id = generation
     let smsg = try session.seal(body)
     let payload = try Self.text(["QID": qid, "SMSG": smsg])
+    var message: [String: Any] = ["cmd": cmd, "tabId": 0, "frameId": 0, "payload": payload]
+    if let url { message["url"] = url }
     let reply: [String: Any]
     do {
-      reply = try exchange(["cmd": cmd, "tabId": 0, "frameId": 0, "url": url, "payload": payload], cmd: cmd, wait: wait, keepsHelper: true)
+      reply = try exchange(message, cmd: cmd, also: also, wait: wait, keepsHelper: true)
     } catch {
       if killed { throw Problem.unavailable(.refused) }
       throw generation == id && self.session != nil ? Problem.failed : Problem.notConnected
     }
-    guard let answer = session.open(ApplePasswordsSRP.object(reply["payload"])?["SMSG"]) else { throw Problem.failed }
+    guard let answer = session.open(ApplePasswordsSRP.object(reply["payload"])?["SMSG"]) else { throw Failure.unexpected }
     let status = answer["STATUS"] as? Int ?? 1
     if status == Self.sessionOverStatus {
       drop(id, why: "status \(status)")
       throw Problem.notConnected
     }
-    guard Self.successStatuses.contains(status) else {
+    guard Self.successStatuses.contains(status) || kept.contains(status) else {
       Self.log.notice("request \(cmd, privacy: .public) refused with status \(status, privacy: .public)")
       throw Problem.refused
     }

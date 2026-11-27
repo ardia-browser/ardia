@@ -42,12 +42,19 @@ export function webkitTabs(app, { log = () => {} } = {}) {
     await evalApp(`const s = ac.store.getState(); s.updateSettings({ websiteEngines: { ...s.settings.websiteEngines, ${origins.map((o) => `${q(o)}: "webkit"`).join(", ")} } }); return true`);
   }
 
-  async function open(url) {
+  async function open(url, { kind } = {}) {
     const origin = new URL(url).origin;
     await useWebKit([origin]);
-    const windowId = await evalApp("return ac.store.getState().windowOrder[0]");
-    const id = await evalApp(`return ac.store.getState().newTab(${q(windowId)}, { url: ${q(url)} })`);
-    const tab = handle(id, windowId);
+    let windowId;
+    let id;
+    if (kind) {
+      windowId = await evalApp(`return ac.actions.openWindow({ kind: ${q(kind)}, url: ${q(url)} })`);
+      id = await waitFor(`the ${kind} window's tab`, () => evalApp(`return ac.store.getState().windows[${q(windowId)}]?.tabIds[0] ?? null`), 15_000);
+    } else {
+      windowId = await evalApp("return ac.store.getState().windowOrder[0]");
+      id = await evalApp(`return ac.store.getState().newTab(${q(windowId)}, { url: ${q(url)} })`);
+    }
+    const tab = handle(id, windowId, kind);
     await tab.loaded();
     if (await engine("tabs.devBrowserId", { tabId: id }).catch(() => null)) throw new Error(`${url} opened in Chromium`);
     if ((await tab.value("document.title")) === "Privacy error") {
@@ -63,13 +70,16 @@ export function webkitTabs(app, { log = () => {} } = {}) {
     return tab;
   }
 
-  function handle(id, windowId) {
+  function handle(id, windowId, kind) {
     const raw = (expr) => evalApp(`return ac.webviews.get(${q(id)})?.evaluate(${q(`post("result", JSON.stringify(${expr}))`)}) ?? null`);
     const value = async (expr) => {
       return raw(expr);
     };
     const windowNumber = () =>
-      waitFor("the window number", async () => (await engine("windows.list", {})).find((w) => w.visible && w.hasRoot && !w.parentWindow)?.window ?? null, 15_000);
+      waitFor("the window number", async () => {
+        const windows = (await engine("windows.list", {})).filter((w) => w.visible && w.hasRoot && !w.parentWindow);
+        return ((kind && windows.find((w) => w.key)) || windows[0])?.window ?? null;
+      }, 15_000);
     const act = async (window, action) => engine("windows.dev", { window, action });
     const panel = async () => {
       const children = JSON.parse((await act(await windowNumber(), "children")) || "[]");
@@ -101,6 +111,16 @@ export function webkitTabs(app, { log = () => {} } = {}) {
       async click(selector) {
         const rect = await waitFor(`the element ${selector}`, () => value(`(() => { const r = document.querySelector(${q(selector)})?.getBoundingClientRect(); return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null })()`), 5000);
         return tab.clickAt(rect.x + Math.min(20, rect.width / 2), rect.y + rect.height / 2);
+      },
+      async type(text) {
+        await tab.front();
+        return evalApp(`return ac.shell.devTypeKeys(${q(windowId)}, ${q(text)}, 20)`, 60_000);
+      },
+      prompt() {
+        return evalApp(`const p = ac.pageState.getState().pages[${q(id)}]?.passwordPrompt; return p ? { ...p, copy: ac.prompts.passwordPromptCopy(p) } : null`);
+      },
+      answer(action) {
+        return evalApp(`return ac.prompts.answerPasswordPrompt(${q(id)}, ${q(action)})`);
       },
       async key(name) {
         const [key, keyCode] = KEYS[name];
@@ -135,6 +155,7 @@ export function webkitTabs(app, { log = () => {} } = {}) {
         return act(shown.number, `click:40,${y}`);
       },
       async close() {
+        if (kind) return evalApp(`ac.store.getState().closeWindow(${q(windowId)}); return true`).catch(() => null);
         await evalApp(`ac.store.getState().closeTab(${q(id)}); return true`).catch(() => null);
       },
     };

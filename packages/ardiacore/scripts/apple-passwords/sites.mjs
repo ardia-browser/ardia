@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import path from "node:path";
 
-export const SECURE_HOSTS = ["example.localhost", "accounts.example.localhost", "other.localhost", "empty.localhost"];
+export const SECURE_HOSTS = ["example.localhost", "accounts.example.localhost", "other.localhost", "empty.localhost", "save.localhost"];
 export const PLAIN_HOSTS = ["plain.localhost"];
 export const PAGE_EVENTS = `JSON.parse(document.documentElement.dataset.events || "[]")`;
 
@@ -21,7 +21,7 @@ const page = (title, body, script = "") => `<!doctype html><meta charset="utf-8"
 body{margin:0;font:14px system-ui}input,button{position:absolute;left:40px;width:300px;height:30px;box-sizing:border-box}
 </style><body>${body}<script>${recorder}${script}</script></body>`;
 
-const loginForm = `<form method="post" action="/signed-in">
+const loginForm = (action = "/signed-in") => `<form method="post" action="${action}">
 <input id="u" name="username" autocomplete="username" style="top:40px">
 <input id="p" name="password" type="password" autocomplete="current-password" style="top:100px">
 <button id="go" disabled style="top:160px">Sign in</button></form>`;
@@ -32,7 +32,8 @@ const ready = () => (go.disabled = !(document.getElementById("u").value && docum
 document.addEventListener("input", ready, true);`;
 
 export const PAGES = {
-  "/login": (host) => page(`Sign in to ${host}`, loginForm, enableWhenFilled),
+  "/login": (host) => page(`Sign in to ${host}`, loginForm(), enableWhenFilled),
+  "/login-fails": (host) => page(`Sign in to ${host}`, loginForm("/login-fails"), enableWhenFilled),
   "/signed-in": (host) => page(`Signed in to ${host}`, "<p>Welcome</p>"),
   "/search": (host) => page(`Search ${host}`, `<form role="search" action="/signed-in"><input id="q" type="search" name="q" placeholder="Search" style="top:40px"></form>`),
   "/newsletter": (host) =>

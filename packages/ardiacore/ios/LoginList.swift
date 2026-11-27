@@ -75,7 +75,7 @@ final class LoginList: NSObject {
     }
   }
 
-  private static func domains(_ hosts: [String], profile: String, done: @escaping ([String: String]) -> Void) {
+  static func domains(_ hosts: [String], profile: String, done: @escaping ([String: String]) -> Void) {
     DispatchQueue.main.async {
       ArdiaServices.call("ac_registrable_domains", profile: ArdiaHost.baseProfile(of: profile), args: ["hosts": hosts]) { result in
         let answers = result["domains"] as? [String] ?? []
@@ -163,6 +163,7 @@ final class LoginList: NSObject {
         guard let self, let target, Self.origin(of: target.loginListPage) == current.page else { return }
         switch result {
         case .success(let password):
+          ApplePasswordsSaving.remember(host: current.host, user: login.user, password: password)
           target.loginListFill(username: login.user, password: password, frameOrigin: current.field.frameOrigin) { filled in
             Self.count(filled ? "filled" : "fillFailed")
           }

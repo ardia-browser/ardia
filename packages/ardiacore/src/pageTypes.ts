@@ -160,6 +160,7 @@ export type PasswordPrompt = {
   federation: string;
   usernames: string[];
   offer?: string;
+  target?: "applePasswords";
 };
 export type PasswordPromptAnswer = "save" | "update" | "never" | "nope" | "dismiss";
 export type AutofillPrompt = {

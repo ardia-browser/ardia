@@ -13,6 +13,8 @@ export const FIXTURES = {
     { user: "linus@other.test", password: "fixture-pw-linus-3", sites: ["other.localhost"] },
     { user: "plain@plain.test", password: "fixture-pw-plain-4", sites: ["http://plain.localhost"] },
     { user: "secure@plain.test", password: "fixture-pw-secure-5", sites: ["plain.localhost"] },
+    { user: "changed@save.test", password: "fixture-pw-changed-7", sites: ["save.localhost"] },
+    { user: "same@save.test", password: "fixture-pw-same-8", sites: ["save.localhost"] },
   ],
   codes: [
     { domain: "example.localhost", username: "ada@example.test", code: "135790" },

@@ -6,6 +6,7 @@ import type { ExternalAppRequest } from "../../platform/siteSettings";
 import { currentEngineProfile, currentTab } from "../browser/current";
 import { noteExternalApp } from "../telemetry/externalAppCounts";
 import { noteExternalAppRequest } from "../telemetry/track";
+import { hostOrOrigin } from "../../lib/url";
 
 async function shouldPromptForPopups(profile: string, origin: string): Promise<boolean> {
   try {
@@ -27,6 +28,19 @@ const passwordPromptIds = new WeakMap<PasswordPrompt, string>();
 let passwordPromptSerial = 0;
 
 export const passwordPromptId = (prompt: PasswordPrompt) => passwordPromptIds.get(prompt) ?? null;
+
+export function passwordPromptCopy(prompt: PasswordPrompt): { title: string; message: string } {
+  const site = hostOrOrigin(prompt.origin);
+  const update = prompt.state === "update";
+  if (prompt.target === "applePasswords") {
+    return update
+      ? { title: "Update in Apple Passwords?", message: `It will be auto-filled on ${site}` }
+      : { title: "Save to Apple Passwords?", message: `It will be auto-filled on ${site} from Apple Passwords` };
+  }
+  return update
+    ? { title: "Update saved password?", message: `It will be auto-filled on ${site}` }
+    : { title: `Save password for ${site}?`, message: "That way, it'll be auto-filled next time" };
+}
 
 export function showPasswordPrompt(tabId: string, prompt: PasswordPrompt) {
   if (prompt.state !== "saved") passwordPromptIds.set(prompt, `pw${++passwordPromptSerial}`);

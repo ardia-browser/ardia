@@ -8,13 +8,14 @@
 //   E3  with no helper manifest, Pairing says how to get the helper back
 //   E4  a Release build ignores the fake-helper override: the fake never starts (needs --release)
 //   E5… the Login list in a WebKit tab (login-list.mjs), in one paired instance shared by those checks
+//   E18… saving to Apple Passwords from a WebKit tab (saving.mjs), in the same paired instance
 //   E32 with a stand-in for the iCloud Passwords extension (its id, from icloud-extension.mjs), picking Apple Passwords
 //       turns it off and says so, "Turn it back on" turns it on, and switching to Ardia turns it on only if Ardia turned
 //       it off; it is never uninstalled
 //
 // Each check launches its own instance (scripts/lib/instance.mjs) with ARDIA_TEST applePasswordsManifest at the fake's
 // manifest and the fixture sites (sites.mjs: https example.localhost, accounts.example.localhost, other.localhost and
-// empty.localhost, http plain.localhost, all on loopback with their ports), drives the same Settings state the Password manager menu and Pairing sheet use (ac.applePasswords), and
+// empty.localhost, save.localhost, http plain.localhost, all on loopback with their ports), drives the same Settings state the Password manager menu and Pairing sheet use (ac.applePasswords), and
 // prints one PASS or FAIL line; details go to <scratch dir>/e2e.log. METRO_PORT picks the Metro serving this tree.
 // Exit code 1 if any check failed.
 import fs from "node:fs";
@@ -23,6 +24,7 @@ import { launch, reporter, sleep } from "../../../../scripts/lib/instance.mjs";
 import { fakeHelper } from "./fake.mjs";
 import { ICLOUD_PASSWORDS_EXTENSION_ID, iCloudExtensionStandIn } from "./icloud-extension.mjs";
 import { loginListChecks } from "./login-list.mjs";
+import { savingChecks } from "./saving.mjs";
 import { fixtureSites } from "./sites.mjs";
 import { webkitTabs } from "./webkit.mjs";
 
@@ -204,6 +206,7 @@ const CHECKS = {
     return Object.fromEntries(Object.entries(steps).map(([k, v]) => [k, v.enabled]));
   },
   ...loginListChecks({ paired, sites }),
+  ...savingChecks({ paired, sites }),
 };
 
 const names = wanted.length ? wanted : Object.keys(CHECKS);

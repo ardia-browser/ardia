@@ -1,5 +1,5 @@
 import { setSiteSetting } from "../../state/site/siteSettings";
-import { answerAutofillPrompt, answerExternalApp, answerPasswordPrompt } from "../../state/site/prompts";
+import { answerAutofillPrompt, answerExternalApp, answerPasswordPrompt, passwordPromptCopy } from "../../state/site/prompts";
 import { acceptVerificationCode, declineVerificationCode, verificationCodeCopy } from "../../state/site/verificationCodes";
 import {
   type AutofillPromptAnswer,
@@ -155,8 +155,8 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
   const [chosen, setChosen] = useState<string | null>(null);
   const guard = usePromptInputGuard(prompt ? `${prompt.origin}|${prompt.username}|${prompt.state}` : null);
   if (!prompt) return null;
-  const site = hostOrOrigin(prompt.origin);
   const update = prompt.state === "update";
+  const copy = passwordPromptCopy(prompt);
   const username = chosen ?? prompt.username;
   const answer = guard((action: PasswordPromptAnswer) => {
     answerPasswordPrompt(tabId, action, username, prompt);
@@ -168,8 +168,8 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
       <View>
         <PromptBody
           icons={["key.fill"]}
-          title={update ? "Update saved password?" : `Save password for ${site}?`}
-          message={update ? `It will be auto-filled on ${site}` : "That way, it'll be auto-filled next time"}
+          title={copy.title}
+          message={copy.message}
           detail={
             choices.length ? (
               <Well list>

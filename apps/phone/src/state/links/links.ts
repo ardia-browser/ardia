@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 import { addLinkListener, initialLink, type SystemLink } from "../../platform/links";
-import { openPage, openSpaces, openTab, reopenArchived, searchFor, showDeck, useBrowse } from "../browse/store";
+import { openPage, openPageFromAnotherApp, openSpaces, openTab, reopenArchived, searchFor, showDeck, useBrowse } from "../browse/store";
 import { readPreferences, writePreference } from "../store/browserDatabase";
 import { browserDatabase } from "../store/database";
 import { useOnboarding } from "../onboarding/store";
@@ -54,7 +54,8 @@ async function run(link: IncomingLink, expired: () => boolean = () => false) {
       return;
     case "openUrl":
       setIncognito(false);
-      openPage(action.url, action.origin);
+      if (action.fromAnotherApp) openPageFromAnotherApp(action.url, action.origin);
+      else openPage(action.url, action.origin);
       return;
     case "searchNow":
       searchFor(action.query);

@@ -6,9 +6,18 @@ const kinds: Record<string, "open" | "private" | "archived"> = { t1: "open", p1:
 const browsing: LinkState = { onboarding: false, syncEnabled: true, canSearchByVoice: false, sharesAsShare: false, tabKind: (id) => kinds[id] ?? null };
 
 test("a web link from another app opens in a new tab in front; anything else is ignored", () => {
-  assert.deepEqual(linkAction({ kind: "open", url: " https://example.com/a " }, browsing), { kind: "openUrl", url: "https://example.com/a", origin: "link" });
+  assert.deepEqual(linkAction({ kind: "open", url: " https://example.com/a " }, browsing), { kind: "openUrl", url: "https://example.com/a", origin: "link", fromAnotherApp: false });
   assert.deepEqual(linkAction({ kind: "open", url: "javascript:alert(1)" }, browsing), { kind: "none" });
   assert.deepEqual(linkAction({ kind: "open", url: "file:///etc/hosts" }, browsing), { kind: "none" });
+});
+
+test("a link another app sent is marked so Back can return to that app; Ardia's own links are not", () => {
+  for (const source of ["web", "share", "intent"]) {
+    assert.deepEqual(linkAction({ kind: "open", url: "https://x.com/jack/status/20", source }, browsing), { kind: "openUrl", url: "https://x.com/jack/status/20", origin: "link", fromAnotherApp: true });
+  }
+  for (const source of ["system", "shortcut", undefined]) {
+    assert.equal((linkAction({ kind: "open", url: "https://example.com/", source }, browsing) as { fromAnotherApp: boolean }).fromAnotherApp, false);
+  }
 });
 
 test("search, voice search and incognito open the tray, with the query filled when given", () => {
@@ -77,8 +86,8 @@ test("an empty search link keeps the tray it reopens, voice keeps its screen, an
 
 test("words from a link search at once, a page shared on iPhone keeps the share origin, and a tab link restores an archived tab but never opens a private one", () => {
   assert.deepEqual(linkAction({ kind: "search", query: "   " }, browsing), { kind: "tray", query: "", incognito: false });
-  assert.deepEqual(linkAction({ kind: "open", url: "https://example.com/", source: "share" }, { ...browsing, sharesAsShare: true }), { kind: "openUrl", url: "https://example.com/", origin: "share" });
-  assert.deepEqual(linkAction({ kind: "open", url: "https://example.com/", source: "share" }, browsing), { kind: "openUrl", url: "https://example.com/", origin: "link" });
+  assert.deepEqual(linkAction({ kind: "open", url: "https://example.com/", source: "share" }, { ...browsing, sharesAsShare: true }), { kind: "openUrl", url: "https://example.com/", origin: "share", fromAnotherApp: true });
+  assert.deepEqual(linkAction({ kind: "open", url: "https://example.com/", source: "share" }, browsing), { kind: "openUrl", url: "https://example.com/", origin: "link", fromAnotherApp: true });
   assert.deepEqual(linkAction({ kind: "tab", id: "a1" }, browsing), { kind: "restoreTab", id: "a1" });
   assert.deepEqual(linkAction({ kind: "tab", id: "p1" }, browsing), { kind: "none" });
 });

@@ -177,6 +177,21 @@ export function openPage(url: string, origin: TabOrigin) {
   const tab = openNewTab({ url, origin });
   if (origin === "search" && !tab.isPrivate) countUsage("searches");
   useBrowse.setState({ surface: "browsing", sheet: null, frozenOrder: null });
+  return tab;
+}
+
+const tabsFromOtherApps = new Set<string>();
+
+export function openPageFromAnotherApp(url: string, origin: TabOrigin) {
+  tabsFromOtherApps.add(openPage(url, origin).id);
+}
+
+export function closeTabBackToOpeningApp(id: string): boolean {
+  if (!tabsFromOtherApps.delete(id)) return false;
+  const closing = findTab(currentTabs(), id);
+  closeTabGoingBack(id);
+  if (closing && !closing.isPrivate) countUsage("tabs_returned_to_app");
+  return true;
 }
 
 export function submitSearch(text: string): boolean {
@@ -925,10 +940,14 @@ export function swipedPastHistory(id: string, direction: "back" | "forward") {
     return;
   }
   const closing = findTab(currentTabs(), id);
+  closeTabGoingBack(id);
+  if (closing && !closing.isPrivate) countUsage("tabs_swiped_closed");
+}
+
+function closeTabGoingBack(id: string) {
   const previous = tabBefore(currentTabs(), id);
   if (previous) selectTabById(previous.id);
   closeTabById(id);
-  if (closing && !closing.isPrivate) countUsage("tabs_swiped_closed");
   if (previous) openTab(previous.id);
   else show("start");
 }
